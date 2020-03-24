@@ -15,14 +15,14 @@ WORKDIR /go/src/github.com/sensoroni/sensoroni
 RUN ./build.sh "$VERSION"
 
 FROM alpine:latest
-ARG UID=1000
-ARG GID=1000
+ARG UID=939
+ARG GID=939
 ARG VERSION=0.0.0
 RUN apk update && apk add tzdata ca-certificates && update-ca-certificates
-RUN addgroup --gid "$GID" sensoroni
-RUN adduser -D -u "$UID" -G sensoroni -g '' sensoroni
-RUN mkdir -p /opt/sensoroni/jobs && chown sensoroni:sensoroni /opt/sensoroni/jobs
-RUN mkdir -p /opt/sensoroni/logs && chown sensoroni:sensoroni /opt/sensoroni/logs
+RUN addgroup --gid "$GID" socore
+RUN adduser -D -u "$UID" -G socore -g '' socore
+RUN mkdir -p /opt/sensoroni/jobs && chown socore:socore /opt/sensoroni/jobs
+RUN mkdir -p /opt/sensoroni/logs && chown socore:socore /opt/sensoroni/logs
 WORKDIR /opt/sensoroni
 COPY --from=builder /go/src/github.com/sensoroni/sensoroni/sensoroni .
 COPY --from=builder /go/src/github.com/sensoroni/sensoroni/html ./html
@@ -31,7 +31,7 @@ COPY --from=builder /go/src/github.com/sensoroni/sensoroni/LICENSE .
 COPY --from=builder /go/src/github.com/sensoroni/sensoroni/README.md .
 COPY --from=builder /go/src/github.com/sensoroni/sensoroni/sensoroni.json .
 RUN find . -name \*.html -exec sed -i -e "s/VERSION_PLACEHOLDER/$VERSION/g" {} \;
-USER sensoroni
+USER socore
 EXPOSE 9822/tcp
 VOLUME /opt/sensoroni/jobs
 VOLUME /opt/sensoroni/logs
