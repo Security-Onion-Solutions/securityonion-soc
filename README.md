@@ -1,6 +1,8 @@
-# Sensoroni
+# Security Onion Console
 
-Sensoroni is a software system for monitoring and interrogating remote servers or devices.
+Security Onion Console is a customized fork of Sensoroni. This product provides the new primary user interface for the Security Onion product suite in addition to managing the environment's security sensors, as was the original intention of Sensoroni. The following information is from the original Sensoroni readme which is currently still applicable:
+
+# Sensoroni
 
 This system is comprised of a server and one or more agents. An agent runs on a remote server or device and performs jobs that have been queued on the server. The server provides a user interface for administrators to perform various tasks, such as:
 
