@@ -19,15 +19,15 @@ FROM alpine:latest
 
 ENV DSN=sqlite:///kratos-data/db.sqlite?_fk=true
 
-ARG UID=939
-ARG GID=939
+ARG UID=929
+ARG GID=929
 
-RUN addgroup --gid "$GID" -S socore; \
-    adduser -u "$UID" -S socore -G socore -D -H -s /bin/nologin
+RUN addgroup --gid "$GID" -S kratos; \
+    adduser -u "$UID" -S kratos -G kratos -D -H -s /bin/nologin
 RUN apk add -U --no-cache ca-certificates
 
 COPY --from=builder /go/src/github.com/ory/kratos/kratos /usr/bin/kratos
-USER socore
+USER kratos
 
 EXPOSE 4433
 EXPOSE 4434
