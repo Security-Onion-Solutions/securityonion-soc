@@ -1,0 +1,79 @@
+<!doctype html>
+<!--
+  Copyright 2020 Security Onion Solutions. All rights reserved.
+
+  This program is distributed under the terms of version 2 of the
+  GNU General Public License.  See LICENSE for further details.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+-->
+
+<html lang="en">
+  <head>
+    <base href="../">
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link rel="icon" sizes="24x24" href="images/onion.png?v=VERSION_PLACEHOLDER">
+    <link rel="stylesheet" href="css/external/vuetify-v2.2.18.min.css">
+    <link rel="stylesheet" href="css/app.css?v=VERSION_PLACEHOLDER">
+    <title>Security Onion</title>
+  </head>
+  <body style="background-color: #242424;">
+    <v-app id="app" style="display:none">
+      <v-app-bar clipped-left app >
+        <router-link id="title" to="/">
+          <img class="pt-1" :title="i18n.product" :alt="i18n.product" src="images/security_onion_small.png"></v-img>
+        </router-link>
+      </v-app-bar>
+      <v-content>
+        <v-progress-linear v-if="loading" :active="loading" indeterminate></v-progress-linear>
+        <v-alert dismissible type="warning" icon="fa-exclamation-triangle" v-model="error" transition="scale-transition">{{ i18n.error }} ({{ errorMessage }})</v-alert>
+        <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition">{{ infoMessage }}</v-alert>
+        <router-view></router-view>
+      </v-content>
+      <v-footer app inset>
+        <v-spacer></v-spacer>
+        <span class="center overline text-no-wrap">
+          &copy; {{ new Date().getFullYear() }} <a class="footer" href="https://securityonionsolutions.com/">Security Onion Solutions, LLC</a>
+        </span>
+        <v-spacer></v-spacer>
+      </v-footer>
+    </v-app>
+    
+    <script type="text/x-template" id="page-login">
+      <v-card v-if="showLoginForm" class="mt-12 mx-auto" max-width="600">
+        <v-card-title class="lighten-4 py-4 title" v-text="i18n.loginTitle"></v-card-title>
+        <v-form v-model="form.valid" method="post" :action="authLoginUrl">
+          <v-container grid-list-sm class="pa-4">
+            <v-row>
+              <v-col xs12>
+                <v-text-field name="identifier" v-model="form.email" :placeholder="i18n.email" :hint="i18n.emailHelp" autofocus="true" :rules="[rules.required]"></v-text-field>
+                <v-text-field name="password" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'mdi-eye' : 'mdi-eye-off'" :rules="[rules.required]"></v-text-field>
+                <v-text-field name="csrf_token" v-model="form.csrfToken" class="d-none"></v-text-field>
+              </v-col>
+            </v-row>
+          </v-container>
+          <v-card-actions>
+            <v-spacer></v-spacer>
+            <v-btn type="submit" :disabled="!form.valid" text color="primary" v-text="i18n.login"></v-btn>
+          </v-card-actions>
+        </v-form>
+      </v-card>
+    </script>
+
+    <script src="js/external/jquery-3.4.1.min.js"></script>
+    <script src="js/external/vue-2.6.11.min.js"></script>
+    <script src="js/external/vue-router-3.1.6.min.js"></script>
+    <script src="js/external/vuetify-v2.2.18.min.js"></script>
+    <script src="js/external/axios-0.19.2.min.js"></script>
+    <script src="js/external/moment-2.24.0.min.js"></script>
+    <script src="js/external/fontawesome-5.12.1.min.js"></script>
+
+    <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/login.js?v=VERSION_PLACEHOLDER"></script>
+  </body>
+</html>

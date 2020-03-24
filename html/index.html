@@ -1,0 +1,408 @@
+<!doctype html>
+<!--
+  Copyright 2019 Jason Ertel (jertel). All rights reserved.
+
+  This program is distributed under the terms of version 2 of the
+  GNU General Public License.  See LICENSE for further details.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+-->
+
+<html lang="en">
+  <head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link rel="icon" sizes="24x24" href="images/onion.png?v=VERSION_PLACEHOLDER">
+    <link rel="stylesheet" href="css/external/vuetify-v2.2.18.min.css">
+    <link rel="stylesheet" href="css/app.css?v=VERSION_PLACEHOLDER">
+    <title>Security Onion</title>
+  </head>
+  <body style="background-color: #242424;">
+    <v-app id="app" style="display:none" :key="timestamp">
+      <v-navigation-drawer v-model="toolbar" width="200" clipped overflow app>
+        <v-list dense>
+          <v-list-item @click="" to="/">
+            <v-list-item-action>
+              <v-icon>fa-home</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>
+              <v-list-item-title v-text="i18n.home"></v-list-item-title>
+            </v-list-item-content>
+          </v-list-item>
+          <v-list-item @click="" to="/jobs">
+            <v-list-item-action>
+              <v-icon>fa-tasks</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>
+              <v-list-item-title v-text="i18n.jobs"></v-list-item-title>
+            </v-list-item-content>
+          </v-list-item>
+          <v-list-item @click="" to="/sensors">
+            <v-list-item-action>
+              <v-icon>fa-ethernet</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>
+              <v-list-item-title v-text="i18n.sensors"></v-list-item-title>
+            </v-list-item-content>
+          </v-list-item>
+        </v-list>
+        <v-divider></v-divider>
+        <v-list subheader dense>
+          <v-subheader>Tools</v-subheader>
+          <v-list-item target="so-kibana" href="/kibana/">
+            <v-list-item-action>
+              <v-icon>fa-external-link-alt</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>
+              <v-list-item-title v-text="i18n.launch_kibana"></v-list-item-title>
+            </v-list-item-content>
+          </v-list-item>
+          <v-list-item target="so-grafana" href="/grafana/">
+            <v-list-item-action>
+              <v-icon>fa-external-link-alt</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>
+              <v-list-item-title v-text="i18n.launch_grafana"></v-list-item-title>
+            </v-list-item-content>
+          </v-list-item>
+          <v-list-item target="so-playbook" href="/playbook/">
+            <v-list-item-action>
+              <v-icon>fa-external-link-alt</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>
+              <v-list-item-title v-text="i18n.launch_playbook"></v-list-item-title>
+            </v-list-item-content>
+          </v-list-item>
+          <v-list-item target="so-fleet" href="/fleet/">
+            <v-list-item-action>
+              <v-icon>fa-external-link-alt</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>
+              <v-list-item-title v-text="i18n.launch_fleet"></v-list-item-title>
+            </v-list-item-content>
+          </v-list-item>
+          <v-list-item target="so-thehive" href="/thehive/">
+            <v-list-item-action>
+              <v-icon>fa-external-link-alt</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>
+              <v-list-item-title v-text="i18n.launch_thehive"></v-list-item-title>
+            </v-list-item-content>
+          </v-list-item>
+          <v-list-item target="so-ossquery" link="/ossquery/">
+            <v-list-item-action>
+              <v-icon>fa-external-link-alt</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>
+              <v-list-item-title v-text="i18n.launch_osquery"></v-list-item-title>
+            </v-list-item-content>
+          </v-list-item>
+        </v-list>
+      </v-navigation-drawer>
+      <v-app-bar clipped-left app >
+        <v-app-bar-nav-icon @click.stop="toolbar = !toolbar">
+          <v-icon>fa-bars</v-icon>
+        </v-app-bar-nav-icon>
+        <v-toolbar-title>
+          <router-link id="title" to="/">
+            <img class="pt-1" :title="i18n.product" :alt="i18n.product" src="images/security_onion_small.png"></v-img>
+          </router-link>
+        </v-toolbar-title>
+        <v-spacer></v-spacer>
+        <v-btn icon text right app target="so-help" href="https://github.com/Security-Onion-Solutions/securityonion-saltstack/wiki/FAQ" :title="i18n.help">
+          <v-icon>fa-question-circle</v-icon>
+        </v-btn>
+        <v-btn icon text right app target="so-blog" href="https://blog.securityonion.net/" :title="i18n.blog">
+          <v-icon>fa-info-circle</v-icon>
+        </v-btn>
+        <v-btn icon text right app @click.stop="toggleTheme" :title="i18n.darkMode">
+          <v-icon>fa-adjust</v-icon>
+        </v-btn>
+        <v-btn icon text right app :href="authUrl + 'logout'" :title="i18n.logout">
+          <v-icon>fa-sign-out-alt</v-icon>
+        </v-btn>
+      </v-app-bar>
+      <v-content>
+        <v-progress-linear v-if="loading" :active="loading" indeterminate></v-progress-linear>
+        <v-alert dismissible type="warning" icon="fa-exclamation-triangle" v-model="error" transition="scale-transition">{{ i18n.error }} ({{ errorMessage }})</v-alert>
+        <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition">{{ infoMessage }}</v-alert>
+        <router-view></router-view>
+      </v-content>
+      <v-footer app>
+        <span class="overline text-no-wrap">
+          {{ i18n.version }}: <a id="versionLink" class="footer" :href="versionLink">{{ version }}</a>
+        </span>
+        <v-spacer></v-spacer>
+        <span class="overline text-no-wrap">
+          &copy; {{ new Date().getFullYear() }} <a class="footer" href="https://securityonionsolutions.com/">Security Onion Solutions, LLC</a>
+        </span>
+        <v-spacer></v-spacer>
+        <span class="overline text-no-wrap">
+          <router-link id="termsLink" to="/terms" class="footer">{{ i18n.terms }}</router-link>
+        </span>
+      </v-footer>
+    </v-app>
+
+    <script type="text/x-template" id="page-home">
+      <v-container fluid>
+        <v-row>
+          <v-col>
+            <h2 v-text="i18n.home"></h2>
+          </v-col>
+        </v-row>
+        <v-row>
+          <v-col class="mx-auto px-12" v-html="i18n.introduction">
+          </v-col>
+          <v-col class="mx-auto text-center" v-html="i18n.sponsors">
+          </v-col>
+        </v-row>
+      </v-container>
+    </script>
+
+    <script type="text/x-template" id="page-terms">
+      <v-container fluid>
+        <v-row>
+          <v-col>
+            <h2 v-text="i18n.terms"></h2>
+            This product is licensed under the GNU General Public License version 2.0 (<a id="licenseLink" target="new" href="licenseLink">GPLv2)</a>
+          </v-col>
+        </v-row>
+        <v-row>
+          <v-col v-html="i18n.termDetails">
+          </v-col>
+        </v-row>
+      </v-container>
+    </script>
+
+    <script type="text/x-template" id="page-jobs">
+      <v-container fluid>
+        <v-row>
+          <v-col>
+            <h2 v-text="i18n.jobs"></h2>
+          </v-col>
+        </v-row>
+        <v-row>
+          <v-col>
+            <v-toolbar class="elevation-0" fixed>
+              <v-btn class="action" color="blue" @click.stop="dialog = !dialog">
+                <v-icon>fa-plus</v-icon>
+              </v-btn>
+            </v-toolbar>
+            <v-data-table :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps" :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="jobs">
+              <template v-slot:item="props">
+                <router-link :to="{ name: 'job', params: {jobId: props.item.id}}" tag="tr">
+                  <td v-text="props.item.id"></td>
+                  <td>{{ props.item.createTime | formatDateTime }}</td>
+                  <td>{{ props.item | formatJobUpdateTime | formatDateTime }}</td>
+                  <td v-text="props.item.sensorId"></td>
+                  <td><v-chip :color="props.item | colorJobStatus">{{ props.item | formatJobStatus }}</v-chip></td>
+                </router-link>
+              </template>
+            </v-data-table>
+            <v-dialog v-model="dialog" width="800px">
+              <v-card>
+                <v-card-title class="lighten-4 py-4 title" v-text="i18n.addJob"></v-card-title>
+                <v-form v-model="form.valid">
+                  <v-container grid-list-sm class="pa-4">
+                    <v-row>
+                      <v-col xs12>
+                        <v-text-field v-model="form.sensorId" :placeholder="i18n.sensorId" :hint="i18n.sensorIdHelp"></v-text-field>
+                        <v-text-field v-model="form.srcIp" :placeholder="i18n.srcIp" :hint="i18n.srcIpHelp"></v-text-field>
+                        <v-text-field v-model="form.srcPort" :placeholder="i18n.srcPort" :hint="i18n.srcPortHelp"></v-text-field>
+                        <v-text-field v-model="form.dstIp" :placeholder="i18n.dstIp" :hint="i18n.dstIpHelp"></v-text-field>
+                        <v-text-field v-model="form.dstPort" :placeholder="i18n.dstPort" :hint="i18n.dstPortHelp"></v-text-field>
+                        <v-text-field v-model="form.beginTime" :placeholder="i18n.beginTime" :hint="i18n.beginTimeHelp"></v-text-field>
+                        <v-text-field v-model="form.endTime" :placeholder="i18n.endTime" :hint="i18n.endTimeHelp"></v-text-field>
+                      </v-col>
+                    </v-row>
+                  </v-container>
+                  <v-card-actions>
+                    <v-spacer></v-spacer>
+                    <v-btn text @click="dialog = false">Cancel</v-btn>
+                    <v-btn :disabled="!form.valid" text color="primary" @click="submitAddJob" v-text="i18n.addJob"></v-btn>
+                  </v-card-actions>
+                </v-form>
+              </v-card>
+            </v-dialog>
+          </v-col>
+        </v-row>
+      </v-container>
+    </script>
+
+    <script type="text/x-template" id="page-new">
+      <v-container fluid>
+      </v-container>
+    </script>
+
+    <script type="text/x-template" id="page-job">
+      <v-container fluid>
+        <v-row>
+          <v-col>
+            <h2>{{ i18n.viewJob }}</h2>
+          </v-col>
+        </v-row>
+        <v-row>
+          <v-col>
+            <v-expansion-panels>
+              <v-expansion-panel>
+                <v-expansion-panel-header>
+                  <v-chip disabled>
+                      {{ i18n.id }}: {{ job.id }}
+                  </v-chip>
+                  <v-chip disabled>
+                      <v-avatar>
+                      <v-icon>fa-ethernet</v-icon>
+                      </v-avatar>
+                      {{ job.sensorId }}
+                  </v-chip>
+                </v-expansion-panel-header>
+                <v-expansion-panel-content>
+                  <v-container fluid grid-list-sm class="pa-4">
+                    <v-row>
+                      <v-col>
+                        <div class="details"><span class="filter label">{{ i18n.dateQueued }}:</span> <span v-if="job.filter" class="filter value">{{ job.createTime | formatDateTime}}</span></div>
+                        <div class="details"><span class="filter label">{{ i18n.dateCompleted }}:</span> <span v-if="job.filter" class="filter value">{{ job.completeTime | formatDateTime}}</span></div>
+                        <div class="details"><span class="filter label">{{ i18n.srcIp }}:</span> <span v-if="job.filter" class="filter value">{{ job.filter.srcIp }}</span></div>
+                        <div class="details"><span class="filter label">{{ i18n.srcPort }}:</span> <span v-if="job.filter" class="filter value">{{ job.filter.srcPort }}</span></div>
+                        <div class="details"><span class="filter label">{{ i18n.dstIp }}:</span> <span v-if="job.filter" class="filter value">{{ job.filter.dstIp }}</span></div>
+                        <div class="details"><span class="filter label">{{ i18n.dstPort }}:</span> <span v-if="job.filter" class="filter value">{{ job.filter.dstPort }}</span></div>
+                        <div class="details"><span class="filter label">{{ i18n.beginTime }}:</span> <span v-if="job.filter" class="filter value">{{ job.filter.beginTime | formatTimestamp }}</span></div>
+                        <div class="details"><span class="filter label">{{ i18n.endTime }}:</span> <span v-if="job.filter" class="filter value">{{ job.filter.endTime | formatTimestamp }}</span></div>
+                      </v-col>
+                    </v-row>
+                  </v-container>
+                </v-expansion-panel-content>
+              </v-expansion-panel>
+            </v-expansion-panels>
+          </v-col>
+        </v-row>
+        <v-row v-if="job.status == 0" row>
+          <v-col>
+            <v-alert :value="true" color="info" icon="fa-info">
+              {{ i18n.jobInProgress }}
+            </v-alert>
+          </v-col>
+        </v-row>
+        <v-row v-if="job.status == 1">
+          <v-col>
+            <v-toolbar fixed>
+              <v-text-field v-model="search" append-icon="fa-search" :label="i18n.filterPackets" single-line hide-details></v-text-field>
+              <v-spacer></v-spacer>
+              <v-btn-toggle v-model="captureLayout" class="transparent" mandatory>
+                <v-btn value="packets" icon :title="i18n.showPacketsHelp" text>
+                  <v-icon>fa-list</v-icon>
+                </v-btn>
+                <v-btn value="stream" icon :title="i18n.showStreamHelp" text @click="captureLayoutAsStream()">
+                  <v-icon>fa-stream</v-icon>
+                </v-btn>
+              </v-btn-toggle>
+              <v-spacer></v-spacer>
+              <v-btn-toggle v-model="packetView" class="transparent" mandatory>
+                <v-btn value="hex" :title="i18n.hexHelp" text>
+                  {{ i18n.hex }}
+                </v-btn>
+                <v-btn value="ascii" :title="i18n.asciiHelp" text>
+                  {{ i18n.ascii }}
+                </v-btn>
+              </v-btn-toggle>
+              <v-spacer></v-spacer>
+              <v-btn icon @click="expandPackets(false)" :title="i18n.collapseHelp" text>
+                <v-icon>fa-window-minimize</v-icon>
+              </v-btn>
+              <v-btn icon @click="expandPackets(true)" :title="i18n.expandHelp" text>
+                <v-icon>fa-window-maximize</v-icon>
+              </v-btn>
+              <v-spacer></v-spacer>
+              <v-btn text icon :href="downloadUrl()" download :title="i18n.download">
+                <v-icon>fa-download</v-icon>
+              </v-btn>
+            </v-toolbar>
+            <v-data-table ref="packetTable" :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :items-per-page.sync="itemsPerPage" :search="search" :footer-props="footerProps" must-sort :headers="headers" :hide-default-header="captureLayout != 'packets'" :items="packets" item-key="number" :loading="packetsLoading" :expanded="expanded">
+              <template v-slot:item="props">
+                <tr @click="expandRow(props.item)" v-if="captureLayout == 'packets'">
+                  <td v-text="props.item.number"></td>
+                  <td>{{ props.item.timestamp | formatTimestamp }}</td>
+                  <td><v-chip :color="props.item.type | colorType">{{ props.item.type }}</v-chip></td>
+                  <td>{{ props.item.srcIp }}:{{ props.item.srcPort }}</td>
+                  <td>{{ props.item.dstIp }}:{{ props.item.dstPort }}</td>
+                  <td><v-chip v-for="flag in props.item.flags" :color="flag | colorFlag" :key="flag">{{ flag }}</v-chip></td>
+                  <td>{{ props.item.length }}</td>
+                </tr>
+              </template>
+              <template v-slot:expanded-item="props">
+                <tr v-if="captureLayout == 'packets' || props.item.payloadOffset > 0">
+                  <td :colspan="getPacketColumnSpan()">
+                    <pre :class="getPacketClass(props.item)">{{ props.item | formatPacketView }}</pre>
+                  </td>
+                </tr>
+              </template>
+              <template v-slot:no-results>
+                <v-alert :value="true" color="info" icon="fa-info">
+                  {{ i18n.noSearchResults }}
+                </v-alert>
+              </template>
+            </v-data-table>
+            <div class="text-xs-center pt-2">
+                <v-btn v-text="i18n.loadMore" @click="loadPackets()"></v-btn>
+            </div>
+          </v-col>
+        </v-row>
+        <v-row v-if="job.status == 2">
+          <v-col>
+            <v-alert :value="true" color="info" icon="fa-exclamation-triangle">
+              {{ i18n.jobIncomplete }}
+              <hr>
+              {{ job.failTime | formatDateTime }}
+              <br>
+              {{ i18n.attempt }} {{ job.failCount }}: {{ job.failure }}
+            </v-alert>
+          </v-col>
+        </v-row>
+      </v-container>
+    </script>
+
+    <script type="text/x-template" id="page-sensors">
+      <v-container fluid>
+        <v-row>
+          <v-col>
+            <h2 v-text="i18n.sensors"></h2>
+          </v-col>
+        </v-row>
+        <v-row>
+          <v-col>
+            <v-data-table :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps"  :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="sensors">
+              <template v-slot:item="props">
+                <td v-text="props.item.id"></td>
+                <td v-text="props.item.description"></td>
+                <td v-text="props.item.version"></td>
+                <td>{{ props.item.onlineTime | formatDateTime }}</td>
+                <td>{{ props.item.updateTime | formatDateTime }}</td>
+                <td>{{ props.item.epochTime | formatDateTime }}</td>
+                <td>{{ props.item.uptimeSeconds | formatDuration }}</td>
+              </template>
+            </v-data-table>
+          </v-col>
+        </v-row>
+      </v-container>
+    </script>
+
+    <script src="js/external/jquery-3.4.1.min.js"></script>
+    <script src="js/external/vue-2.6.11.min.js"></script>
+    <script src="js/external/vue-router-3.1.6.min.js"></script>
+    <script src="js/external/vuetify-v2.2.18.min.js"></script>
+    <script src="js/external/axios-0.19.2.min.js"></script>
+    <script src="js/external/moment-2.24.0.min.js"></script>
+    <script src="js/external/fontawesome-5.12.1.min.js"></script>
+
+    <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/home.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/jobs.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/job.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/sensors.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/terms.js?v=VERSION_PLACEHOLDER"></script>
+  </body>
+</html>

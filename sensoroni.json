@@ -1,0 +1,29 @@
+{
+  "logLevel": "info",
+  "logFilename": "logs/soc.log",
+  "server": {
+    "bindAddress": "0.0.0.0:9822",
+    "baseUrl": "/",
+    "maxPacketCount": 5000,
+    "htmlDir": "html",
+    "modules": {
+      "filedatastore": {
+        "jobDir": "jobs"
+      },
+      "statickeyauth": {
+        "anonymousCidr": "0.0.0.0/0",
+        "apiKey": "samplekey"
+      }    
+    }
+  },
+  "agent": {
+    "pollIntervalMs": 10000,
+    "serverUrl": "http://0.0.0.0:9822",
+    "verifyCert": true,
+    "modules": {
+      "statickeyauth": {
+        "apiKey": "samplekey"
+      }
+    }
+  }
+}
