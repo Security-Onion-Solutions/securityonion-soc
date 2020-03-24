@@ -19,8 +19,8 @@ FROM alpine:latest
 
 ENV DSN=sqlite:///kratos-data/db.sqlite?_fk=true
 
-ARG UID=929
-ARG GID=929
+ARG UID=928
+ARG GID=928
 
 RUN addgroup --gid "$GID" -S kratos; \
     adduser -u "$UID" -S kratos -G kratos -D -H -s /bin/nologin
