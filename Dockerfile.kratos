@@ -1,0 +1,38 @@
+FROM golang:alpine AS builder
+
+RUN addgroup -S ory; \
+    adduser -S ory -G ory -D -H -s /bin/nologin
+RUN apk -U --no-cache add build-base git gcc
+
+RUN mkdir -p /go/src/github.com/ory
+WORKDIR /go/src/github.com/ory
+RUN git clone https://github.com/ory/kratos.git
+
+WORKDIR /go/src/github.com/ory/kratos
+RUN go mod download
+
+RUN GO111MODULE=on go install github.com/gobuffalo/packr/v2/packr2
+RUN packr2
+RUN CGO_ENABLED=1 go build -tags sqlite -a
+
+FROM alpine:latest
+
+ENV DSN=sqlite:///kratos-data/db.sqlite?_fk=true
+
+ARG UID=939
+ARG GID=939
+
+RUN addgroup --gid "$GID" -S socore; \
+    adduser -u "$UID" -S socore -G socore -D -H -s /bin/nologin
+RUN apk add -U --no-cache ca-certificates
+
+COPY --from=builder /go/src/github.com/ory/kratos/kratos /usr/bin/kratos
+USER socore
+
+EXPOSE 4433
+EXPOSE 4434
+
+VOLUME ["/kratos-conf", "/kratos-data", "/kratos-log"]
+
+ENTRYPOINT ["kratos"]
+CMD ["serve", "-c", "/kratos-conf/kratos.yaml"]
