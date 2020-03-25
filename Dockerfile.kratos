@@ -18,6 +18,8 @@ RUN CGO_ENABLED=1 go build -tags sqlite -a
 FROM alpine:latest
 
 ENV DSN=sqlite:///kratos-data/db.sqlite?_fk=true
+ENV SQA_OPT_OUT=true
+ENV DISABLE_TELEMETRY=true
 
 ARG UID=928
 ARG GID=928
