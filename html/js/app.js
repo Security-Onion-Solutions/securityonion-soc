@@ -46,7 +46,7 @@ $(document).ready(function() {
       toolbar: null,
       wsUrl: (location.protocol == 'https:' ?  'wss://' : 'ws://') + location.host + location.pathname + 'ws',
       apiUrl: location.origin + location.pathname + 'api/',
-      authUrl: 'http://127.0.0.1:4455/.ory/kratos/public/self-service/browser/flows/',
+      authUrl: '/auth/self-service/browser/flows/',
       version: '0.0',
       versionLink: 'https://github.com/security-onion-solutions/securityonion-soc/releases/',
       license: '',
