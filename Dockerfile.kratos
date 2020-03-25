@@ -29,10 +29,10 @@ RUN addgroup --gid "$GID" -S kratos; \
 RUN apk add -U --no-cache ca-certificates
 
 RUN echo "#!/bin/sh" > /start-kratos.sh
-RUN echo "kratos -c /kratos-conf/kratos.yaml migrate sql -e --yes >> /kratos-log/kratos.log" >> /start-kratos.sh
+RUN echo "kratos -c /kratos-conf/kratos.yaml migrate sql -e --yes >> /kratos-log/kratos-migrate.log 2>&1" >> /start-kratos.sh
 RUN echo "chown kratos:kratos /kratos-data/db.sqlite" >> /start-kratos.sh
 RUN echo "chmod 600 /kratos-data/db.sqlite" >> /start-kratos.sh
-RUN echo "kratos -c /kratos-conf/kratos.yaml serve >> /kratos-log/kratos.log" >> /start-kratos.sh
+RUN echo "kratos -c /kratos-conf/kratos.yaml serve >> /kratos-log/kratos.log 2>&1" >> /start-kratos.sh
 RUN chmod a+x /start-kratos.sh
 
 COPY --from=builder /go/src/github.com/ory/kratos/kratos /usr/bin/kratos
