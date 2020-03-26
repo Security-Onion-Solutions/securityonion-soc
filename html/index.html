@@ -17,6 +17,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <link rel="icon" sizes="24x24" href="images/onion.png?v=VERSION_PLACEHOLDER">
     <link rel="stylesheet" href="css/external/vuetify-v2.2.18.min.css">
+    <link rel="stylesheet" href="css/external/all-5.13.0.min.css">
     <link rel="stylesheet" href="css/app.css?v=VERSION_PLACEHOLDER">
     <title>Security Onion</title>
   </head>
@@ -92,12 +93,20 @@
               <v-list-item-title v-text="i18n.launch_thehive"></v-list-item-title>
             </v-list-item-content>
           </v-list-item>
-          <v-list-item target="so-ossquery" link="/ossquery/">
+          <v-list-item target="so-ossquery" href="/ossquery/">
             <v-list-item-action>
               <v-icon>fa-external-link-alt</v-icon>
             </v-list-item-action>
             <v-list-item-content>
               <v-list-item-title v-text="i18n.launch_osquery"></v-list-item-title>
+            </v-list-item-content>
+          </v-list-item>
+          <v-list-item target="so-navigator" href="/navigator/">
+            <v-list-item-action>
+              <v-icon>fa-external-link-alt</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>
+              <v-list-item-title v-text="i18n.launch_navigator"></v-list-item-title>
             </v-list-item-content>
           </v-list-item>
         </v-list>
@@ -137,7 +146,7 @@
         </span>
         <v-spacer></v-spacer>
         <span class="overline text-no-wrap">
-          &copy; {{ new Date().getFullYear() }} <a class="footer" href="https://securityonionsolutions.com/">Security Onion Solutions, LLC</a>
+          &copy; {{ new Date().getFullYear() }} <a class="footer" target="sos" href="https://securityonionsolutions.com/">Security Onion Solutions, LLC</a>
         </span>
         <v-spacer></v-spacer>
         <span class="overline text-no-wrap">
@@ -156,7 +165,11 @@
         <v-row>
           <v-col class="mx-auto px-12" v-html="i18n.introduction">
           </v-col>
-          <v-col class="mx-auto text-center" v-html="i18n.sponsors">
+          <v-col class="mx-auto text-center">
+            <div v-html="i18n.sponsorsIntro"></div>
+            <a target="sos" href="https://securityonionsolutions.com/">
+              <img src="images/security_onion_solutions_rings.png">
+            </a>
           </v-col>
         </v-row>
       </v-container>
@@ -395,7 +408,7 @@
     <script src="js/external/vuetify-v2.2.18.min.js"></script>
     <script src="js/external/axios-0.19.2.min.js"></script>
     <script src="js/external/moment-2.24.0.min.js"></script>
-    <script src="js/external/fontawesome-5.12.1.min.js"></script>
+    <scsript src="js/external/fontawesome-5.12.1.min.js"></scsript>
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>
