@@ -163,7 +163,11 @@
           </v-col>
         </v-row>
         <v-row>
-          <v-col class="mx-auto px-12" v-html="i18n.introduction">
+          <v-col class="mx-auto px-12">
+            <div  class="title" v-html="changeDetails.title"></div>
+            <ul>
+              <li v-for="change in changeDetails.changes" :key="change.summary" v-html="change.summary"></li>
+            </ul>
           </v-col>
           <v-col class="mx-auto text-center">
             <div v-html="i18n.sponsorsIntro"></div>
@@ -408,7 +412,6 @@
     <script src="js/external/vuetify-v2.2.18.min.js"></script>
     <script src="js/external/axios-0.19.2.min.js"></script>
     <script src="js/external/moment-2.24.0.min.js"></script>
-    <scsript src="js/external/fontawesome-5.12.1.min.js"></scsript>
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>

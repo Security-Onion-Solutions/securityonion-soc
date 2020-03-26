@@ -11,11 +11,23 @@ routes.push({ path: '/', name: 'home', component: {
   template: '#page-home',
   data() { return {
     i18n: this.$root.i18n,
+    changeDetails: {},
   }},
   created() {
+    this.loadChanges();
   },
   watch: {
   },
   methods: {
+    async loadChanges() {
+      try {
+        let response = await axios.create().get('changes.json?v=' + Date.now());
+        if (response.data) {
+          this.changeDetails = response.data;
+        }
+      } catch (error) {
+        this.$root.showError(error);
+      }
+    },
   }
 }});
