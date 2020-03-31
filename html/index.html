@@ -49,6 +49,14 @@
               <v-list-item-title v-text="i18n.sensors"></v-list-item-title>
             </v-list-item-content>
           </v-list-item>
+          <v-list-item @click="" to="/downloads">
+            <v-list-item-action>
+              <v-icon>fa-download</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>
+              <v-list-item-title v-text="i18n.downloads"></v-list-item-title>
+            </v-list-item-content>
+          </v-list-item>
         </v-list>
         <v-divider></v-divider>
         <v-list subheader dense>
@@ -184,11 +192,39 @@
         <v-row>
           <v-col>
             <h2 v-text="i18n.terms"></h2>
-            This product is licensed under the GNU General Public License version 2.0 (<a id="licenseLink" target="new" href="licenseLink">GPLv2)</a>
+            {{ i18n.licenseInfo }} (<a id="licenseLink" target="new" href="https://raw.githubusercontent.com/security-onion-solutions/securityonion-soc/master/LICENSE">GPLv2)</a>
           </v-col>
         </v-row>
         <v-row>
           <v-col v-html="i18n.termDetails">
+          </v-col>
+        </v-row>
+      </v-container>
+    </script>
+
+    <script type="text/x-template" id="page-downloads">
+      <v-container fluid>
+        <v-row>
+          <v-col>
+            <h2 v-text="i18n.downloads"></h2>
+            <div v-html="i18n.downloadsInfo"></div>
+          </v-col>
+        </v-row>
+        <v-row>
+          <v-col>
+            <h3 v-text="i18n.downloadsOsqueryPackages"></h3>
+            <ul>
+              <li><a href="/packages/launcher.msi" download="msi-launcher.msi">MSI (Windows)</a></li>
+              <li><a href="/packages/launcher.deb" download="deb-launcher.deb">DEB (Debian)</a></li>
+              <li><a href="/packages/launcher.rpm" download="rpm-launcher.rpm">RPM (RPM)</a></li>
+              <li><a href="/packages/launcher.pkg" download="pkg-launcher.pkg">PKG (MacOS)</a></li>
+            </ul>
+            <p></p>
+            <h3 v-text="i18n.downloadsOsqueryConfigs"></h3>
+            <ul>
+              <li><a href="/packages/launcher.flags" download="launcher.flags.txt">RPM & DEB Flag File</a></li>
+              <li><a href="/packages/launcher-msi.flags" download="launcher-msi.flags.txt">MSI Flag File</a></li>
+            </ul>
           </v-col>
         </v-row>
       </v-container>
@@ -415,6 +451,7 @@
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/downloads.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/home.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/jobs.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/job.js?v=VERSION_PLACEHOLDER"></script>

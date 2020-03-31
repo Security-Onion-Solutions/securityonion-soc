@@ -49,8 +49,6 @@ $(document).ready(function() {
       authUrl: '/auth/self-service/browser/flows/',
       version: '0.0',
       versionLink: 'https://github.com/security-onion-solutions/securityonion-soc/releases/',
-      license: '',
-      licenseLink: 'https://raw.githubusercontent.com/security-onion-solutions/securityonion-soc/master/LICENSE',
       papi: null,
       connectionTimeout: 5000,
       socket: null,
