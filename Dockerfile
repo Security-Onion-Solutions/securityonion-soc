@@ -10,8 +10,8 @@
 FROM golang:alpine as builder
 ARG VERSION=0.0.0
 RUN apk update && apk add libpcap-dev bash git musl-dev gcc
-COPY . /go/src/github.com/sensoroni/sensoroni
-WORKDIR /go/src/github.com/sensoroni/sensoroni
+COPY . /build
+WORKDIR /build
 RUN ./build.sh "$VERSION"
 
 FROM alpine:latest
@@ -24,12 +24,12 @@ RUN adduser -D -u "$UID" -G socore -g '' socore
 RUN mkdir -p /opt/sensoroni/jobs && chown socore:socore /opt/sensoroni/jobs
 RUN mkdir -p /opt/sensoroni/logs && chown socore:socore /opt/sensoroni/logs
 WORKDIR /opt/sensoroni
-COPY --from=builder /go/src/github.com/sensoroni/sensoroni/sensoroni .
-COPY --from=builder /go/src/github.com/sensoroni/sensoroni/html ./html
-COPY --from=builder /go/src/github.com/sensoroni/sensoroni/COPYING .
-COPY --from=builder /go/src/github.com/sensoroni/sensoroni/LICENSE .
-COPY --from=builder /go/src/github.com/sensoroni/sensoroni/README.md .
-COPY --from=builder /go/src/github.com/sensoroni/sensoroni/sensoroni.json .
+COPY --from=builder /build/sensoroni .
+COPY --from=builder /build/html ./html
+COPY --from=builder /build/COPYING .
+COPY --from=builder /build/LICENSE .
+COPY --from=builder /build/README.md .
+COPY --from=builder /build/sensoroni.json .
 RUN find . -name \*.html -exec sed -i -e "s/VERSION_PLACEHOLDER/$VERSION/g" {} \;
 USER socore
 EXPOSE 9822/tcp

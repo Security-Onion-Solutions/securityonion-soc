@@ -12,8 +12,8 @@ package server
 import (
   "errors"
   "net/http"
-  "github.com/sensoroni/sensoroni/model"
-  "github.com/sensoroni/sensoroni/web"
+  "github.com/security-onion-solutions/securityonion-soc/model"
+  "github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type SensorHandler struct {

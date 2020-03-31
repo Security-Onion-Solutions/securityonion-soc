@@ -66,7 +66,7 @@ $(document).ready(function() {
           try {
             const response = await this.papi.get('info');
             this.version = response.data.version;
-            this.versionLink = "https://github.com/sensoroni/sensoroni/releases/tag/" + this.version;
+            this.versionLink = "https://github.com/security-onion-solutions/securityonion-soc/releases/tag/" + this.version;
             this.license = response.data.license;
           } catch (error) {
             this.showError(error);

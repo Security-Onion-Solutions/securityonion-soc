@@ -10,10 +10,10 @@
 package modules
 
 import (
-  "github.com/sensoroni/sensoroni/agent"
-  "github.com/sensoroni/sensoroni/agent/modules/statickeyauth"
-  "github.com/sensoroni/sensoroni/agent/modules/stenoquery"
-  "github.com/sensoroni/sensoroni/module"
+  "github.com/security-onion-solutions/securityonion-soc/agent"
+  "github.com/security-onion-solutions/securityonion-soc/agent/modules/statickeyauth"
+  "github.com/security-onion-solutions/securityonion-soc/agent/modules/stenoquery"
+  "github.com/security-onion-solutions/securityonion-soc/module"
 )
 
 func BuildModuleMap(agt *agent.Agent) map[string]module.Module {

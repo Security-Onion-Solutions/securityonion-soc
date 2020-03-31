@@ -14,7 +14,7 @@ import (
   "github.com/google/gopacket"
   "github.com/google/gopacket/layers"
   "github.com/google/gopacket/pcap"
-  "github.com/sensoroni/sensoroni/model"
+  "github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 var SupportedLayerTypes = [...]gopacket.LayerType {

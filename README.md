@@ -17,18 +17,18 @@ Sensoroni is is distributed under the terms of version 2 of the GNU General Publ
 
 Only version 2 of the GNU GPL license applies to Sensoroni. No other GNU GPL version applies.
 
-See [LICENSE](https://raw.githubusercontent.com/sensoroni/sensoroni/master/LICENSE) for more information.
+See [LICENSE](https://raw.githubusercontent.com/security-onion-solutions/securityonion-soc/master/LICENSE) for more information.
 
 ## Screenshots
 
 Sensor Status List
-![Sensor list](https://raw.githubusercontent.com/sensoroni/sensoroni/master/screenshots/sensoroni-sensors.png)
+![Sensor list](https://raw.githubusercontent.com/security-onion-solutions/securityonion-soc/master/screenshots/sensoroni-sensors.png)
 
 Job Status List
-![Job list](https://raw.githubusercontent.com/sensoroni/sensoroni/master/screenshots/sensoroni-jobs.png)
+![Job list](https://raw.githubusercontent.com/security-onion-solutions/securityonion-soc/master/screenshots/sensoroni-jobs.png)
 
 Job Details and Results
-![Job Details and Results](https://raw.githubusercontent.com/sensoroni/sensoroni/master/screenshots/sensoroni-job.png)
+![Job Details and Results](https://raw.githubusercontent.com/security-onion-solutions/securityonion-soc/master/screenshots/sensoroni-job.png)
 
 ## Design
 

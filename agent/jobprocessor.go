@@ -12,7 +12,7 @@ package agent
 import (
   "io"
   "time"
-  "github.com/sensoroni/sensoroni/model"
+  "github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type JobProcessor interface {

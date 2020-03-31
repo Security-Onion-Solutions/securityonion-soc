@@ -11,9 +11,9 @@ package statickeyauth
 
 import (
   "testing"
-  "github.com/sensoroni/sensoroni/config"
-  "github.com/sensoroni/sensoroni/module"
-  "github.com/sensoroni/sensoroni/server"
+  "github.com/security-onion-solutions/securityonion-soc/config"
+  "github.com/security-onion-solutions/securityonion-soc/module"
+  "github.com/security-onion-solutions/securityonion-soc/server"
 )
 
 func TestAuthInit(tester *testing.T) {

@@ -11,8 +11,8 @@ package server
 
 import (
   "github.com/apex/log"
-  "github.com/sensoroni/sensoroni/config"
-  "github.com/sensoroni/sensoroni/web"
+  "github.com/security-onion-solutions/securityonion-soc/config"
+  "github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type Server struct {

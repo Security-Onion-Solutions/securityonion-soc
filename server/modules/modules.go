@@ -10,11 +10,11 @@
 package modules
 
 import (
-  "github.com/sensoroni/sensoroni/module"
-  "github.com/sensoroni/sensoroni/server"
-  "github.com/sensoroni/sensoroni/server/modules/filedatastore"
-  "github.com/sensoroni/sensoroni/server/modules/securityonion"
-  "github.com/sensoroni/sensoroni/server/modules/statickeyauth"
+  "github.com/security-onion-solutions/securityonion-soc/module"
+  "github.com/security-onion-solutions/securityonion-soc/server"
+  "github.com/security-onion-solutions/securityonion-soc/server/modules/filedatastore"
+  "github.com/security-onion-solutions/securityonion-soc/server/modules/securityonion"
+  "github.com/security-onion-solutions/securityonion-soc/server/modules/statickeyauth"
 )
 
 func BuildModuleMap(srv *server.Server) map[string]module.Module {

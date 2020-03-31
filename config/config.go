@@ -11,7 +11,7 @@ package config
 
 import (
   "time"
-  "github.com/sensoroni/sensoroni/json"
+  "github.com/security-onion-solutions/securityonion-soc/json"
 )
 
 type Config struct {

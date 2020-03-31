@@ -12,7 +12,7 @@ package packet
 import (
   "testing"
   "github.com/google/gopacket"
-  "github.com/sensoroni/sensoroni/model"
+  "github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 func TestOverrideType(tester *testing.T) {

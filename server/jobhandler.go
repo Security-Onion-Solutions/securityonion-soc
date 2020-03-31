@@ -13,8 +13,8 @@ import (
   "errors"
   "net/http"
   "strconv"
-  "github.com/sensoroni/sensoroni/model"
-  "github.com/sensoroni/sensoroni/web"
+  "github.com/security-onion-solutions/securityonion-soc/model"
+  "github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type JobHandler struct {

@@ -19,9 +19,9 @@ import (
   "path/filepath"
   "time"
   "github.com/apex/log"
-  "github.com/sensoroni/sensoroni/agent"
-  "github.com/sensoroni/sensoroni/model"
-  "github.com/sensoroni/sensoroni/module"
+  "github.com/security-onion-solutions/securityonion-soc/agent"
+  "github.com/security-onion-solutions/securityonion-soc/model"
+  "github.com/security-onion-solutions/securityonion-soc/module"
 )
 
 const DEFAULT_EXECUTABLE_PATH = "stenoread"

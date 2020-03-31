@@ -12,7 +12,7 @@ package filedatastore
 import (
   "os"
   "testing"
-  "github.com/sensoroni/sensoroni/module"
+  "github.com/security-onion-solutions/securityonion-soc/module"
 )
 
 func TestFileDatastoreInit(tester *testing.T) {

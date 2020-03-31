@@ -22,8 +22,8 @@ import (
   "strings"
   "time"
   "github.com/apex/log"
-  "github.com/elastic/go-elasticsearch"
-  "github.com/sensoroni/sensoroni/model"
+  "github.com/elastic/go-elasticsearch/v7"
+  "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/tidwall/gjson"
 )
 

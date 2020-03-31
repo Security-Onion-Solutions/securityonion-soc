@@ -14,7 +14,7 @@ import (
   "io"
   "net/http"
   "strconv"
-  "github.com/sensoroni/sensoroni/web"
+  "github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type StreamHandler struct {

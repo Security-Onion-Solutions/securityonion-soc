@@ -12,8 +12,8 @@ package statickeyauth
 import (
   "errors"
   "net/http"
-  "github.com/sensoroni/sensoroni/agent"
-  "github.com/sensoroni/sensoroni/module"
+  "github.com/security-onion-solutions/securityonion-soc/agent"
+  "github.com/security-onion-solutions/securityonion-soc/module"
 )
 
 type StaticKeyAuth struct {

@@ -19,12 +19,12 @@ import (
   "github.com/apex/log"
   "github.com/apex/log/handlers/logfmt"
   "github.com/apex/log/handlers/text"
-  "github.com/sensoroni/sensoroni/agent"
-  agentModules "github.com/sensoroni/sensoroni/agent/modules"
-  "github.com/sensoroni/sensoroni/config"
-  "github.com/sensoroni/sensoroni/module"
-  "github.com/sensoroni/sensoroni/server"
-  serverModules "github.com/sensoroni/sensoroni/server/modules"
+  "github.com/security-onion-solutions/securityonion-soc/agent"
+  agentModules "github.com/security-onion-solutions/securityonion-soc/agent/modules"
+  "github.com/security-onion-solutions/securityonion-soc/config"
+  "github.com/security-onion-solutions/securityonion-soc/module"
+  "github.com/security-onion-solutions/securityonion-soc/server"
+  serverModules "github.com/security-onion-solutions/securityonion-soc/server/modules"
 )
 
 var (

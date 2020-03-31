@@ -15,7 +15,7 @@ import (
   "sync"
   "time"
   "github.com/apex/log"
-  "github.com/sensoroni/sensoroni/model"
+  "github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type JobManager struct {

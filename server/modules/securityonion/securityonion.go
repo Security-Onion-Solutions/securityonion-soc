@@ -10,8 +10,8 @@
 package securityonion
 
 import (
-  "github.com/sensoroni/sensoroni/module"
-  "github.com/sensoroni/sensoroni/server"
+  "github.com/security-onion-solutions/securityonion-soc/module"
+  "github.com/security-onion-solutions/securityonion-soc/server"
 )
 
 const DEFAULT_TIME_SHIFT_MS = 120000

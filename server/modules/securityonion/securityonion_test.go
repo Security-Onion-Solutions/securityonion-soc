@@ -12,7 +12,7 @@ package securityonion
 import (
   "net/http"
   "testing"
-  "github.com/sensoroni/sensoroni/module"
+  "github.com/security-onion-solutions/securityonion-soc/module"
 )
 
 func TestSecurityOnionInit(tester *testing.T) {

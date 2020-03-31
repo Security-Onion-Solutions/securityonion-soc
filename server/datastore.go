@@ -11,7 +11,7 @@ package server
 
 import (
   "io"
-  "github.com/sensoroni/sensoroni/model"
+  "github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type Datastore interface {

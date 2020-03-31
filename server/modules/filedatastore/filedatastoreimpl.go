@@ -19,10 +19,10 @@ import (
   "sync"
   "time"
   "github.com/apex/log"
-  "github.com/sensoroni/sensoroni/json"
-  "github.com/sensoroni/sensoroni/model"
-  "github.com/sensoroni/sensoroni/module"
-  "github.com/sensoroni/sensoroni/packet"
+  "github.com/security-onion-solutions/securityonion-soc/json"
+  "github.com/security-onion-solutions/securityonion-soc/model"
+  "github.com/security-onion-solutions/securityonion-soc/module"
+  "github.com/security-onion-solutions/securityonion-soc/packet"
   "github.com/kennygrant/sanitize"
 )
 

@@ -11,7 +11,7 @@ package server
 
 import (
   "testing"
-  "github.com/sensoroni/sensoroni/config"
+  "github.com/security-onion-solutions/securityonion-soc/config"
 )
 
 func TestNewServer(tester *testing.T) {

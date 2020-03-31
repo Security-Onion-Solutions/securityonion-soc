@@ -11,7 +11,7 @@ package config
 
 import (
   "errors"
-  "github.com/sensoroni/sensoroni/module"
+  "github.com/security-onion-solutions/securityonion-soc/module"
   "strings"
 )
 

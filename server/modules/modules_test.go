@@ -11,7 +11,7 @@ package modules
 
 import (
   "testing"
-  "github.com/sensoroni/sensoroni/module"
+  "github.com/security-onion-solutions/securityonion-soc/module"
 )
 
 func TestBuildModuleMap(tester *testing.T) {
