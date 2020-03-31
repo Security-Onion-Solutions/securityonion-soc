@@ -103,7 +103,7 @@ func (elastic *SoElastic) Search(index string, query string) (string, error) {
 func (elastic *SoElastic) LookupEsId(esId string) (string, *model.Filter, error) {
   var outputSensorId string
   filter := model.NewFilter()
-  index := "*:logstash-*"
+  index := "*:so-*"
   query := fmt.Sprintf(`{"query" : { "bool": { "must": { "match" : { "_id" : "%s" }}}}}`, esId)
   json, err := elastic.Search(index, query)
   if err == nil {
