@@ -31,15 +31,17 @@ type SoElastic struct {
   esConfig		elasticsearch.Config
   esClient		*elasticsearch.Client
   timeShiftMs	int
+  index       string
 }
 
 func NewSoElastic() *SoElastic {
   return &SoElastic{}
 }
 
-func (elastic *SoElastic) Init(host string, user string, pass string, verifyCert bool, timeShiftMs int) error {
+func (elastic *SoElastic) Init(host string, user string, pass string, verifyCert bool, timeShiftMs int, index string) error {
   hosts := make([]string, 1)
   elastic.timeShiftMs = timeShiftMs
+  elastic.index = index
   hosts[0] = host
   elastic.esConfig = elasticsearch.Config {
     Addresses: hosts,
@@ -65,6 +67,7 @@ func (elastic *SoElastic) Init(host string, user string, pass string, verifyCert
     "Host": hosts[0],
     "Username": elastic.esConfig.Username,
     "Password": maskedPassword,
+    "Index": index,
   }
   if err == nil {
     elastic.esClient = esClient
@@ -75,11 +78,12 @@ func (elastic *SoElastic) Init(host string, user string, pass string, verifyCert
   return err
 }
 
-func (elastic *SoElastic) Search(index string, query string) (string, error) {
+func (elastic *SoElastic) Search(query string) (string, error) {
+  indexes := strings.Split(elastic.index, ",")
   var json string
   res, err := elastic.esClient.Search(
     elastic.esClient.Search.WithContext(context.Background()),
-    elastic.esClient.Search.WithIndex(index),
+    elastic.esClient.Search.WithIndex(indexes...),
     elastic.esClient.Search.WithBody(strings.NewReader(query)),
     elastic.esClient.Search.WithTrackTotalHits(true),
     elastic.esClient.Search.WithPretty(),
@@ -103,9 +107,8 @@ func (elastic *SoElastic) Search(index string, query string) (string, error) {
 func (elastic *SoElastic) LookupEsId(esId string) (string, *model.Filter, error) {
   var outputSensorId string
   filter := model.NewFilter()
-  index := "*:so-*"
   query := fmt.Sprintf(`{"query" : { "bool": { "must": { "match" : { "_id" : "%s" }}}}}`, esId)
-  json, err := elastic.Search(index, query)
+  json, err := elastic.Search(query)
   if err == nil {
     hits := gjson.Get(json, "hits.total").Int()
     if hits > 0 {
@@ -145,7 +148,7 @@ func (elastic *SoElastic) LookupEsId(esId string) (string, *model.Filter, error)
         endTime := timestamp.Add(time.Duration(30) * time.Minute).Unix() * 1000
         query = fmt.Sprintf(`{"query":{"bool":{"must":[{"query_string":{"query":"event_type:%s AND %s","analyze_wildcard":true}},{"range":{"@timestamp":{"gte":"%d","lte":"%d","format":"epoch_millis"}}}]}}}`,
           esType, broQuery, startTime, endTime)
-        json, err = elastic.Search(index, query)
+        json, err = elastic.Search(query)
         if err == nil {
           hits = gjson.Get(json, "hits.total").Int()
           if hits > 0 {

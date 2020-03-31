@@ -15,6 +15,7 @@ import (
 )
 
 const DEFAULT_TIME_SHIFT_MS = 120000
+const DEFAULT_INDEX = "*:so-*"
 
 type SecurityOnion struct {
   config			module.ModuleConfig
@@ -40,7 +41,8 @@ func (somodule *SecurityOnion) Init(cfg module.ModuleConfig) error {
   username := module.GetStringDefault(cfg, "elasticsearchUsername", "")
   password := module.GetStringDefault(cfg, "elasticsearchPassword", "")
   timeShiftMs := module.GetIntDefault(cfg, "timeShiftMs", DEFAULT_TIME_SHIFT_MS)
-  return somodule.elastic.Init(host, username, password, verifyCert, timeShiftMs)
+  index := module.GetStringDefault(cfg, "index", DEFAULT_INDEX)
+  return somodule.elastic.Init(host, username, password, verifyCert, timeShiftMs, index)
 }
 
 func (somodule *SecurityOnion) Start() error {

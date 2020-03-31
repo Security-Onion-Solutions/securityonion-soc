@@ -37,4 +37,7 @@ func TestSecurityOnionInit(tester *testing.T) {
   if so.elastic.timeShiftMs != DEFAULT_TIME_SHIFT_MS {
     tester.Errorf("expected timeShiftMs %d but got %d", DEFAULT_TIME_SHIFT_MS, so.elastic.timeShiftMs)
   }
+  if so.elastic.index != DEFAULT_INDEX {
+    tester.Errorf("expected index %s but got %s", DEFAULT_INDEX, so.elastic.esConfig.Addresses)
+  }
 }

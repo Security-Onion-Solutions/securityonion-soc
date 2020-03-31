@@ -3,3 +3,4 @@ config.json
 sensoroni.log
 sensoroni
 jobs/
+.vscode/
