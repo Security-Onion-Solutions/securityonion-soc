@@ -38,7 +38,7 @@ func NewSoElastic() *SoElastic {
   return &SoElastic{}
 }
 
-func (elastic *SoElastic) Init(host string, user string, pass string, verifyCert bool, timeShiftMs int, index string) error {
+func (elastic *SoElastic) Init(host string, user string, pass string, verifyCert bool, timeShiftMs int, timeoutMs int, index string) error {
   hosts := make([]string, 1)
   elastic.timeShiftMs = timeShiftMs
   elastic.index = index
@@ -49,8 +49,8 @@ func (elastic *SoElastic) Init(host string, user string, pass string, verifyCert
     Password: pass,
     Transport: &http.Transport{
       MaxIdleConnsPerHost:   10,
-      ResponseHeaderTimeout: time.Second,
-      DialContext:           (&net.Dialer{Timeout: time.Second}).DialContext,
+      ResponseHeaderTimeout: time.Duration(timeoutMs) * time.Millisecond,
+      DialContext:           (&net.Dialer{Timeout: time.Duration(timeoutMs) * time.Millisecond}).DialContext,
       TLSClientConfig: &tls.Config{
         InsecureSkipVerify: !verifyCert,
       },
@@ -68,6 +68,7 @@ func (elastic *SoElastic) Init(host string, user string, pass string, verifyCert
     "Username": elastic.esConfig.Username,
     "Password": maskedPassword,
     "Index": index,
+    "TimeoutMs": timeoutMs,
   }
   if err == nil {
     elastic.esClient = esClient
@@ -190,7 +191,7 @@ func (elastic *SoElastic) LookupEsId(esId string) (string, *model.Filter, error)
             duration := int64(math.Round(durationFloat * 1000.0))
             filter.BeginTime = closestTimestamp.Add(time.Duration(-duration - int64(elastic.timeShiftMs)) * time.Millisecond)
             filter.EndTime = closestTimestamp.Add(time.Duration(duration + int64(elastic.timeShiftMs)) * time.Millisecond)
-            outputSensorId = gjson.Get(json, "hits.hits." + idxStr + "._source.sensor_name").String()
+            outputSensorId = gjson.Get(json, "hits.hits." + idxStr + "._source.observer.name").String()
             log.WithFields(log.Fields{
               "sensorId": outputSensorId,
               }).Info("Obtained output parameters")
