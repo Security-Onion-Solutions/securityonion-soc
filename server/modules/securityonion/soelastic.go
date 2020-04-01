@@ -109,48 +109,56 @@ func (elastic *SoElastic) LookupEsId(esId string) (string, *model.Filter, error)
   filter := model.NewFilter()
   query := fmt.Sprintf(`{"query" : { "bool": { "must": { "match" : { "_id" : "%s" }}}}}`, esId)
   json, err := elastic.Search(query)
+  log.WithFields(log.Fields{
+    "query": query,
+    "response": json,
+    }).Debug("Elasticsearch primary search finished")
   if err == nil {
-    hits := gjson.Get(json, "hits.total").Int()
+    hits := gjson.Get(json, "hits.total.value").Int()
     if hits > 0 {
       timestampStr := gjson.Get(json, "hits.hits.0._source.\\@timestamp").String()
       var timestamp time.Time
       timestamp, err = time.Parse(time.RFC3339, timestampStr)
       if err == nil {
-        srcIp := gjson.Get(json, "hits.hits.0._source.source_ip").String()
-        srcPort := gjson.Get(json, "hits.hits.0._source.source_port").Int()
-        dstIp := gjson.Get(json, "hits.hits.0._source.destination_ip").String()
-        dstPort := gjson.Get(json, "hits.hits.0._source.destination_port").Int()
-        uid := gjson.Get(json, "hits.hits.0._source.uid").String()
-        x509id := gjson.Get(json, "hits.hits.0._source.id").String()
-        fuid := gjson.Get(json, "hits.hits.0._source.fuid").String()
+        srcIp := gjson.Get(json, "hits.hits.0._source.source.ip").String()
+        srcPort := gjson.Get(json, "hits.hits.0._source.source.port").Int()
+        dstIp := gjson.Get(json, "hits.hits.0._source.destination.ip").String()
+        dstPort := gjson.Get(json, "hits.hits.0._source.destination.port").Int()
+        uid := gjson.Get(json, "hits.hits.0._source.log.id.uid").String()
+        x509id := gjson.Get(json, "hits.hits.0._source.log.id.id").String()
+        fuid := gjson.Get(json, "hits.hits.0._source.log.id.fuid").String()
 
         // Select first uid if multiple were provided
         if len(uid) > 0 && uid[0] == '[' {
-          uid = gjson.Get(json, "hits.hits.0._source.uid.0").String()
+          uid = gjson.Get(json, "hits.hits.0._source.log.id.uid.0").String()
         }
 
         // Initialize default query params
-        esType := "bro_conn"
+        esType := "conn"
         broQuery := fmt.Sprintf("%s AND %d AND %s AND %d", srcIp, srcPort, dstIp, dstPort)
 
         // Override the defaults with special search queries
         if len(uid) > 0 && uid[0] == 'C' {
           broQuery = uid
         } else if len(x509id) > 0 && x509id[0] == 'F' {
-          esType = "bro_files"
+          esType = "files"
           broQuery = x509id
         } else if len(fuid) > 0 && fuid[0] == 'F' {
-          esType = "bro_files"
+          esType = "files"
           broQuery = fuid
         }
 
         startTime := timestamp.Add(time.Duration(-30) * time.Minute).Unix() * 1000
         endTime := timestamp.Add(time.Duration(30) * time.Minute).Unix() * 1000
-        query = fmt.Sprintf(`{"query":{"bool":{"must":[{"query_string":{"query":"event_type:%s AND %s","analyze_wildcard":true}},{"range":{"@timestamp":{"gte":"%d","lte":"%d","format":"epoch_millis"}}}]}}}`,
+        query = fmt.Sprintf(`{"query":{"bool":{"must":[{"query_string":{"query":"event.module:zeek AND event.dataset:%s AND %s","analyze_wildcard":true}},{"range":{"@timestamp":{"gte":"%d","lte":"%d","format":"epoch_millis"}}}]}}}`,
           esType, broQuery, startTime, endTime)
         json, err = elastic.Search(query)
+        log.WithFields(log.Fields{
+          "query": query,
+          "response": json,
+          }).Debug("Elasticsearch secondary search finished")
         if err == nil {
-          hits = gjson.Get(json, "hits.total").Int()
+          hits = gjson.Get(json, "hits.total.value").Int()
           if hits > 0 {
             results := gjson.Get(json, "hits.hits.#._source.\\@timestamp").Array()
             closestIdx := 0
@@ -174,11 +182,11 @@ func (elastic *SoElastic) LookupEsId(esId string) (string, *model.Filter, error)
               }
             }
             idxStr := strconv.Itoa(closestIdx)
-            filter.SrcIp = gjson.Get(json, "hits.hits." + idxStr + "._source.source_ip").String()
-            filter.SrcPort = int(gjson.Get(json, "hits.hits." + idxStr + "._source.source_port").Int())
-            filter.DstIp = gjson.Get(json, "hits.hits." + idxStr + "._source.destination_ip").String()
-            filter.DstPort = int(gjson.Get(json, "hits.hits." + idxStr + "._source.destination_port").Int())
-            durationFloat := gjson.Get(json, "hits.hits." + idxStr + "._source.duration").Float()
+            filter.SrcIp = gjson.Get(json, "hits.hits." + idxStr + "._source.source.ip").String()
+            filter.SrcPort = int(gjson.Get(json, "hits.hits." + idxStr + "._source.source.port").Int())
+            filter.DstIp = gjson.Get(json, "hits.hits." + idxStr + "._source.destination.ip").String()
+            filter.DstPort = int(gjson.Get(json, "hits.hits." + idxStr + "._source.destination.port").Int())
+            durationFloat := gjson.Get(json, "hits.hits." + idxStr + "._source.event.duration").Float()
             duration := int64(math.Round(durationFloat * 1000.0))
             filter.BeginTime = closestTimestamp.Add(time.Duration(-duration - int64(elastic.timeShiftMs)) * time.Millisecond)
             filter.EndTime = closestTimestamp.Add(time.Duration(duration + int64(elastic.timeShiftMs)) * time.Millisecond)
@@ -192,6 +200,10 @@ func (elastic *SoElastic) LookupEsId(esId string) (string, *model.Filter, error)
     } else {
       err = errors.New("EsId not found in Elasticsearch: " + esId)
     }
+  }
+
+  if err != nil {
+    log.WithError(err).Warn("Failed to lookup elasticsearch document")
   }
 
   return outputSensorId, filter, err
