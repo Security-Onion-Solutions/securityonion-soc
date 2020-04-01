@@ -31,6 +31,7 @@ type SoElastic struct {
   esConfig		elasticsearch.Config
   esClient		*elasticsearch.Client
   timeShiftMs	int
+  timeoutMs   time.Duration
   index       string
 }
 
@@ -42,6 +43,7 @@ func (elastic *SoElastic) Init(host string, user string, pass string, verifyCert
   hosts := make([]string, 1)
   elastic.timeShiftMs = timeShiftMs
   elastic.index = index
+  elastic.timeoutMs = time.Duration(timeoutMs) * time.Millisecond
   hosts[0] = host
   elastic.esConfig = elasticsearch.Config {
     Addresses: hosts,
@@ -49,8 +51,8 @@ func (elastic *SoElastic) Init(host string, user string, pass string, verifyCert
     Password: pass,
     Transport: &http.Transport{
       MaxIdleConnsPerHost:   10,
-      ResponseHeaderTimeout: time.Duration(timeoutMs) * time.Millisecond,
-      DialContext:           (&net.Dialer{Timeout: time.Duration(timeoutMs) * time.Millisecond}).DialContext,
+      ResponseHeaderTimeout: elastic.timeoutMs,
+      DialContext:           (&net.Dialer{Timeout: elastic.timeoutMs}).DialContext,
       TLSClientConfig: &tls.Config{
         InsecureSkipVerify: !verifyCert,
       },
