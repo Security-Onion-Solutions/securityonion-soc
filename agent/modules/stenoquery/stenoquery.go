@@ -113,7 +113,7 @@ func (steno *StenoQuery) ProcessJob(job *model.Job, reader io.ReadCloser) (io.Re
     log.WithFields(log.Fields {
       "executablePath": steno.executablePath,
       "query": query,
-      "output": output,
+      "output": string(output),
       "pcapFilepath": pcapFilepath,
       "err": err,
       }).Debug("Executed stenoread")
