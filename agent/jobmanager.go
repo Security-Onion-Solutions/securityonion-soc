@@ -10,6 +10,7 @@
 package agent
 
 import (
+  "errors"
   "io"
   "strconv"
   "sync"
@@ -114,7 +115,10 @@ func (mgr *JobManager) updateDataEpoch() {
 }
 
 func (mgr *JobManager) StreamJobResults(job *model.Job, reader io.ReadCloser) error {
-  _, err := mgr.agent.Client.SendAuthorizedRequest("POST", "/api/stream?jobId=" + strconv.Itoa(job.Id), "application/octet-stream", reader)
+  resp, err := mgr.agent.Client.SendAuthorizedRequest("POST", "/api/stream?jobId=" + strconv.Itoa(job.Id), "application/octet-stream", reader)
+  if resp.StatusCode != 200 {
+    err = errors.New("Unable to submit job results (" + strconv.Itoa(resp.StatusCode) + "): " + resp.Status)
+  }
   return err
 }
 
