@@ -86,6 +86,14 @@ func (client *Client) SendAuthorizedRequest(method string, path string, contentT
         resp, err = client.impl.Do(req)
         if err != nil {
           log.WithError(err).Warn("Failed to submit request")
+        } else {
+          log.WithFields(log.Fields {
+            "url": formattedUrl,
+            "method": method,
+            "statusCode": resp.StatusCode,
+            "status": resp.Status,
+            "contentLength": resp.ContentLength,
+          }).Info("HTTP request finished")
         }
       }
     }
