@@ -57,6 +57,17 @@
               <v-list-item-title v-text="i18n.downloads"></v-list-item-title>
             </v-list-item-content>
           </v-list-item>
+          <v-list-group value="true" prepend-icon="fa-shield-alt">
+            <template v-slot:activator>
+              <v-list-item-title v-text="i18n.admin"></v-list-item-title>
+            </template>
+            <v-list-item @click="" to="/users">
+              <v-list-item-icon>
+                <v-icon>fa-users</v-icon>
+              </v-list-item-icon>
+              <v-list-item-title v-text="i18n.users"></v-list-item-title>
+            </v-list-item>
+          </v-list-item-group>
         </v-list>
         <v-divider></v-divider>
         <v-list subheader dense>
@@ -222,6 +233,103 @@
       </v-container>
     </script>
 
+    <script type="text/x-template" id="page-user">
+      <v-container fluid>
+        <v-row>
+          <v-col>
+            <h2 v-text="i18n.user"></h2>
+          </v-col>
+        </v-row>
+        <v-row>
+          <v-col>
+              <v-card>
+                <v-form v-model="form.valid">
+                  <v-container grid-list-sm class="pa-4">
+                    <v-row>
+                      <v-col xs12>
+                        <v-text-field v-model="form.email" :placeholder="i18n.email" autofocus="true" :rules="[rules.required]"></v-text-field>
+                        <v-text-field v-model="form.firstName" :placeholder="i18n.firstName"></v-text-field>
+                        <v-text-field v-model="form.lastName" :placeholder="i18n.lastName"></v-text-field>
+                      </v-col>
+                    </v-row>
+                  </v-container>
+                  <v-card-actions>
+                    <v-spacer></v-spacer>
+                    <v-btn :disabled="!form.valid" text color="primary" @click="updateUser" v-text="i18n.update"></v-btn>
+                  </v-card-actions>
+                </v-form>
+              </v-card>
+            </v-dialog>
+          </v-col>
+        </v-row>
+      </v-container>
+    </script>
+
+    <script type="text/x-template" id="page-users">
+      <v-container fluid>
+        <v-row>
+          <v-col>
+            <h2 v-text="i18n.users"></h2>
+          </v-col>
+        </v-row>
+        <v-row>
+          <v-col>
+            <v-toolbar class="elevation-0" class="d-none">
+              <v-btn class="action" color="blue" @click.stop="dialog = !dialog">
+                <v-icon>fa-plus</v-icon>
+              </v-btn>
+            </v-toolbar>
+            <v-dialog v-model="deleteUserDialog" persistent max-width="390">
+              <v-card>
+                <v-card-title class="headline" v-text="i18n.deleteUserTitle"></v-card-title>
+                <v-card-text v-text="i18n.deleteUserConfirm"></v-card-text>
+                <v-card-text v-text="deleteUserEmail"></v-card-text>
+                <v-card-text v-text="i18n.continue"></v-card-text>
+                <v-card-actions>
+                  <v-spacer></v-spacer>
+                  <v-btn text @click.stop="hideDeleteConfirm()" v-text="i18n.cancel"></v-btn>
+                  <v-btn color="warning" text @click.stop="removeUser(deleteUserId)" v-text="i18n.delete"></v-btn>
+                </v-card-actions>
+              </v-card>
+            </v-dialog>
+            <v-data-table :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps" :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="users">
+              <template v-slot:item="props">
+                <router-link :to="{ name: 'user', params: {id: props.item.id}}" tag="tr" :style="{ cursor: 'pointer'}">
+                  <td v-text="props.item.email"></td>
+                  <td v-text="props.item.firstName"></td>
+                  <td v-text="props.item.lastName"></td>
+                  <td><v-icon v-title="i18n.delete" @click.stop="showDeleteConfirm(props.item)">fa-times-circle</v-icon></td>
+                </router-link>
+              </template>
+            </v-data-table>
+            <v-dialog v-model="dialog" width="800px">
+              <v-card>
+                <v-card-title class="lighten-4 py-4 title" v-text="i18n.addUser"></v-card-title>
+                <v-form v-model="form.valid">
+                  <v-container grid-list-sm class="pa-4">
+                    <v-row>
+                      <v-col xs12>
+                        <v-text-field v-model="form.email" :placeholder="i18n.email" autofocus="true" :rules="[rules.required]"></v-text-field>
+                        <v-text-field v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'mdi-eye' : 'mdi-eye-off'" :rules="[rules.required]"></v-text-field>
+                        <v-text-field v-model="form.firstName" :placeholder="i18n.firstName"></v-text-field>
+                        <v-text-field v-model="form.lastName" :placeholder="i18n.lastName"></v-text-field>
+                        <v-text-field name="csrf_token" v-model="form.csrfToken" class="d-none"></v-text-field>
+                      </v-col>
+                    </v-row>
+                  </v-container>
+                  <v-card-actions>
+                    <v-spacer></v-spacer>
+                    <v-btn text @click="dialog = false">Cancel</v-btn>
+                    <v-btn :disabled="!form.valid" text color="primary" @click="submitAddUser" v-text="i18n.addUser"></v-btn>
+                  </v-card-actions>
+                </v-form>
+              </v-card>
+            </v-dialog>
+          </v-col>
+        </v-row>
+      </v-container>
+    </script>
+
     <script type="text/x-template" id="page-jobs">
       <v-container fluid>
         <v-row>
@@ -238,7 +346,7 @@
             </v-toolbar>
             <v-data-table :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps" :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="jobs">
               <template v-slot:item="props">
-                <router-link :to="{ name: 'job', params: {jobId: props.item.id}}" tag="tr">
+                <router-link :to="{ name: 'job', params: {jobId: props.item.id}}" tag="tr" :style="{ cursor: 'pointer'}">
                   <td v-text="props.item.id"></td>
                   <td>{{ props.item.createTime | formatDateTime }}</td>
                   <td>{{ props.item | formatJobUpdateTime | formatDateTime }}</td>
@@ -277,10 +385,6 @@
       </v-container>
     </script>
 
-    <script type="text/x-template" id="page-new">
-      <v-container fluid>
-      </v-container>
-    </script>
 
     <script type="text/x-template" id="page-job">
       <v-container fluid>
@@ -449,5 +553,7 @@
     <script src="js/routes/job.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/sensors.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/terms.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/user.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/users.js?v=VERSION_PLACEHOLDER"></script>
   </body>
 </html>

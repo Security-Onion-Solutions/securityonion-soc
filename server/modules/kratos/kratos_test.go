@@ -1,4 +1,4 @@
-// Copyright 2019 Jason Ertel (jertel). All rights reserved.
+// Copyright 2020 Security Onion Solutions. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -7,7 +7,7 @@
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-package statickeyauth
+package kratos
 
 import (
   "testing"
@@ -16,25 +16,22 @@ import (
   "github.com/security-onion-solutions/securityonion-soc/server"
 )
 
-func TestAuthInit(tester *testing.T) {
+func TestInit(tester *testing.T) {
   scfg := &config.ServerConfig{}
   srv := server.NewServer(scfg, "")
-  auth := NewStaticKeyAuth(srv)
+  kratos := NewKratos(srv)
   cfg := make(module.ModuleConfig)
-  err := auth.Init(cfg)
+  err := kratos.Init(cfg)
   if err == nil {
     tester.Errorf("expected Init error")
   }
 
-  cfg["apiKey"] = "abc"
-  err = auth.Init(cfg)
+  cfg["hostUrl"] = "abc"
+  err = kratos.Init(cfg)
   if err != nil {
     tester.Errorf("unexpected Init error")
   }
-  if auth.impl.anonymousNetwork.String() != "0.0.0.0/0" {
-    tester.Errorf("expected anonymousNetwork %s but got %s", "0.0.0.0/0", auth.impl.anonymousNetwork.String())
-  }
-  if auth.server.Host.Auth == nil {
-    tester.Errorf("expected non-nil Host.Auth")
+  if kratos.server.Userstore == nil {
+    tester.Errorf("expected non-nil Userstore")
   }
 }

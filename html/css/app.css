@@ -36,8 +36,16 @@
   font-size: 18px !important;
 }
 
-.v-list-item__action {
-  margin-right: 20px !important;
+.v-list-item__action, .v-list-item__icon:first-child {
+  margin-right: 10px !important;
+}
+
+.v-list-group__header__append-icon {
+  display: none;
+}
+
+.v-list-group__items .v-list-item {
+  margin-left: 20px !important;
 }
 
 .v-list-item__title {

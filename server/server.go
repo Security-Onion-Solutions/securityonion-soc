@@ -19,6 +19,7 @@ type Server struct {
   Config 			*config.ServerConfig
   Host				*web.Host
   Datastore 	Datastore
+  Userstore   Userstore
   stoppedChan chan bool
 }
 
@@ -43,6 +44,8 @@ func (server *Server) Start() {
     server.Host.Register("/api/jobs", NewJobsHandler(server))
     server.Host.Register("/api/sensor", NewSensorHandler(server))
     server.Host.Register("/api/sensors", NewSensorsHandler(server))
+    server.Host.Register("/api/user/", NewUserHandler(server))
+    server.Host.Register("/api/users/", NewUsersHandler(server))
 
     server.Host.Start()
   }

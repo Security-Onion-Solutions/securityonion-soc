@@ -17,6 +17,7 @@ import (
 func TestBuildModuleMap(tester *testing.T) {
   mm := BuildModuleMap(nil)
   findModule(tester, mm, "filedatastore")
+  findModule(tester, mm, "kratos")
   findModule(tester, mm, "securityonion")
   findModule(tester, mm, "statickeyauth")
 }

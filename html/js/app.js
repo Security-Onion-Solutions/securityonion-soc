@@ -13,7 +13,7 @@ $(document).ready(function() {
     el: '#app',
     vuetify: new Vuetify({
       icons: {
-        iconfont: 'faSvg',
+        iconfont: 'fa',
       },
       theme: {
         dark: true,

@@ -17,6 +17,7 @@ import (
   "net/http"
   "reflect"
   "strings"
+  "time"
   "github.com/apex/log"
 )
 
@@ -33,6 +34,7 @@ func (handler *BaseHandler) Handle(responseWriter http.ResponseWriter, request *
   var statusCode, contentLength int
   var err error
   defer request.Body.Close()
+  start := time.Now()
   if handler.Host.Auth == nil {
     err = errors.New("Agent auth module has not been initialized; ensure a valid auth module has been defined in the configuration")
   } else {
@@ -48,15 +50,19 @@ func (handler *BaseHandler) Handle(responseWriter http.ResponseWriter, request *
       }
     }
   }
+  stop := time.Now()
+  elapsed := stop.Sub(start).Milliseconds()
 
   if err != nil {
     log.WithError(err).WithFields(log.Fields{
       "sourceIp": request.RemoteAddr,
       "path": request.URL.Path,
+      "query": request.URL.Query(),
       "impl": reflect.TypeOf(handler.Impl),
       "statusCode": statusCode,
       "contentLength": contentLength,
       "method": request.Method,
+      "elapsedMs": elapsed,
     }).Error("Failed request")
   
     if statusCode < http.StatusBadRequest {
@@ -67,10 +73,12 @@ func (handler *BaseHandler) Handle(responseWriter http.ResponseWriter, request *
     log.WithFields(log.Fields{
       "sourceIp": request.RemoteAddr,
       "path": request.URL.Path,
+      "query": request.URL.Query(),
       "impl": reflect.TypeOf(handler.Impl),
       "statusCode": statusCode,
       "contentLength": contentLength,
       "method": request.Method,
+      "elaspsedMs": elapsed,
     }).Info("Handled request")
   }
 }
@@ -101,4 +109,13 @@ func (handler *BaseHandler) WriteJson(responseWriter http.ResponseWriter, reques
 
 func (handler *BaseHandler) ReadJson(request *http.Request, obj interface{}) error {
   return json.NewDecoder(request.Body).Decode(obj)
+}
+
+func (handler *BaseHandler) GetPathParameter(path string, paramIndex int) string {
+  p := strings.Split(path, "/")
+  if paramIndex < 0 || paramIndex + 1 >= len(p) {
+    return ""
+  } else {
+    return p[paramIndex + 1]
+  }
 }

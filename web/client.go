@@ -43,11 +43,15 @@ func NewClient(url string, verifyCert bool) *Client {
 }
 
 func (client *Client) SendAuthorizedObject(method string, path string, obj interface{}, returnedObj interface{}) (bool, error) {
+  return client.SendObject(method, path, obj, returnedObj, true)
+}
+
+func (client *Client) SendObject(method string, path string, obj interface{}, returnedObj interface{}, auth bool) (bool, error) {
   objectAvailable := false
   data, err := json.Marshal(obj)
   if err == nil {
     var resp *http.Response
-    resp, err = client.SendAuthorizedRequest(method, path, "application/json", bytes.NewReader(data))
+    resp, err = client.SendRequest(method, path, "application/json", bytes.NewReader(data), auth)
     if err == nil {
       defer resp.Body.Close()
       if resp.StatusCode < 200 || resp.StatusCode > 299 {
@@ -67,9 +71,13 @@ func (client *Client) SendAuthorizedObject(method string, path string, obj inter
 }
 
 func (client *Client) SendAuthorizedRequest(method string, path string, contentType string, reader io.Reader) (*http.Response, error) {
+  return client.SendRequest(method, path, contentType, reader, true)
+}
+
+func (client *Client) SendRequest(method string, path string, contentType string, reader io.Reader, auth bool) (*http.Response, error) {
   var err error
   var resp *http.Response
-  if client.Auth == nil {
+  if client.Auth == nil && auth {
     err = errors.New("Agent auth module has not been initialized; ensure a valid auth module has been defined in the configuration")
   } else {
     var req *http.Request
@@ -77,12 +85,17 @@ func (client *Client) SendAuthorizedRequest(method string, path string, contentT
     req, err = http.NewRequest(method, formattedUrl, reader)
     req.Header.Add("Content-Type", contentType)
     if err == nil {
-      err = client.Auth.Authorize(req)
+      if auth {
+        err = client.Auth.Authorize(req)
+        if err == nil {
+          log.WithFields(log.Fields {
+            "url": formattedUrl,
+            "method": method,
+          }).Debug("Sending authorized request")
+        }
+      }
+
       if err == nil {
-        log.WithFields(log.Fields {
-          "url": formattedUrl,
-          "method": method,
-        }).Debug("Sending authorized request")
         resp, err = client.impl.Do(req)
         if err != nil {
           log.WithError(err).Warn("Failed to submit request")

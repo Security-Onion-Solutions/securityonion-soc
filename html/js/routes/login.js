@@ -19,7 +19,6 @@ routes.push({ path: '*', name: 'login', component: {
       password: null,
       csrfToken: null,
     },
-    requestId: null,
     rules: {
       required: value => !!value || this.$root.i18n.required,
     },
