@@ -35,26 +35,6 @@ func (kratos* KratosUserstore) fetchUser(id string) (*KratosUser, error) {
   return kratosUser, err
 }
 
-func (kratos* KratosUserstore) convertToUser(kratosUser *KratosUser) *model.User {
-  user := &model.User {
-    Id: kratosUser.Id,
-    Email: kratosUser.Traits.Email,
-    FirstName: kratosUser.Traits.FirstName,
-    LastName: kratosUser.Traits.LastName,
-    Role: kratosUser.Traits.Role,
-  }
-  return user
-}
-
-func (kratos* KratosUserstore) copyToKratosUser(user *model.User, kratosUser *KratosUser) {
-  kratosUser.Traits.Email = user.Email
-  kratosUser.Traits.FirstName = user.FirstName
-  kratosUser.Traits.LastName = user.LastName
-  kratosUser.Traits.Role = user.Role
-  kratosUser.Addresses[0].Value = user.Email
-  kratosUser.Addresses[0].Verified = true
-}
-
 func (kratos *KratosUserstore) GetUsers() ([]*model.User, error) {
   kratosUsers := make([]*KratosUser, 0, 0)
   _, err := kratos.client.SendObject("GET", "/identities", "", &kratosUsers, false)
@@ -64,7 +44,8 @@ func (kratos *KratosUserstore) GetUsers() ([]*model.User, error) {
   }
   users := make([]*model.User, 0, 0)
   for _, kratosUser := range kratosUsers {
-    user := kratos.convertToUser(kratosUser)
+    user := model.NewUser()
+    kratosUser.copyToUser(user)
     users = append(users, user)
   }
   return users, nil
@@ -85,7 +66,9 @@ func (kratos *KratosUserstore) GetUser(id string) (*model.User, error) {
     log.WithError(err).Error("Failed to fetch user from Kratos")
     return nil, err
   }
-  return kratos.convertToUser(kratosUser), nil
+  user := model.NewUser()
+  kratosUser.copyToUser(user)
+  return user, nil
 }
 
 func (kratos *KratosUserstore) UpdateUser(id string, user *model.User) error {
@@ -93,7 +76,7 @@ func (kratos *KratosUserstore) UpdateUser(id string, user *model.User) error {
   if err != nil {
     log.WithError(err).Error("Original user not found")
   } else {
-    kratos.copyToKratosUser(user, kratosUser)
+    kratosUser.copyFromUser(user)
     _, err = kratos.client.SendObject("PUT", "/identities/" + id, kratosUser, nil, false)
     if err != nil {
       log.WithError(err).Error("Failed to update user in Kratos")

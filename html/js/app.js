@@ -61,6 +61,18 @@ $(document).ready(function() {
       log(msg) {
         console.log(msg);
       },
+      redirectIfAuthCompleted() {
+        if (!location.pathname.startsWith("/login")) {
+          destUri = this.getCookie("AUTH_REDIRECT");
+          if (destUri) {
+            this.log("Redirecting to auth destination: " + destUri);
+            this.deleteCookie("AUTH_REDIRECT");
+            location.pathname = destUri;
+            return true;
+          }
+        }
+        return false;
+      },
       async loadInfo() {
         if (document.getElementById("versionLink")) {
           try {
@@ -198,10 +210,32 @@ $(document).ready(function() {
           timeout: this.connectionTimeout,
           withCredentials: true,
         });
+      },
+      setCookie(name, value, ageSecs) {
+        let maxAge = "";
+        if (ageSecs) {
+          maxAge = ";Max-Age=" + ageSecs;
+        }
+        document.cookie = name + "=" + value + maxAge + ";Path=/";
+      },
+      getCookie(name) {
+        let cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            let cookie = cookies[i].trim();
+            let pair = cookie.split("=", 2);
+            if (pair.length == 2 && pair[0] == name) {
+              return pair[1];
+            }
+        }
+        return null;
+      },
+      deleteCookie(name) {
+        this.setCookie(name, "", -1);
       }
     },
     created() {
       this.log("Initializing");
+      if (this.redirectIfAuthCompleted()) return;
       this.loadLocalSettings();
       Vue.filter('formatDateTime', this.formatDateTime);
       Vue.filter('formatDuration', this.formatDuration);
