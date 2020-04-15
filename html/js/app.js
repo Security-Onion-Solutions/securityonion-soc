@@ -64,7 +64,7 @@ $(document).ready(function() {
       redirectIfAuthCompleted() {
         if (!location.pathname.startsWith("/login")) {
           destUri = this.getCookie("AUTH_REDIRECT");
-          if (destUri) {
+          if (destUri && destUri != "/") {
             this.log("Redirecting to auth destination: " + destUri);
             this.deleteCookie("AUTH_REDIRECT");
             location.pathname = destUri;
