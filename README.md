@@ -68,7 +68,7 @@ Manage users stored within the Kratos identity management server. Currently supp
 
 ## Reverse Proxy
 
-Since Sensoroni does not provide a user management system it is recommended that all deployments place the server behind a reverse proxy, such as [NGINX](https://www.nginx.com/), where the users have already been authenticated via an alternate authorization system.
+While the integration to an identity server is in progress, the current state of Sensoroni continues to require a reverse proxy, such as [NGINX](https://www.nginx.com/), be deployed in front of the Sensoroni server. 
 
 ## Configuration
 
