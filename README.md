@@ -64,7 +64,7 @@ Integrates with [Google Stenographer](https://github.com/google/stenographer) fo
 
 ### kratos
 
-Manage users stored within the Kratos identity management server. Currently supports listing and deleting users. Updates to users is still in progress.
+Manage users stored within the Kratos identity management server. Currently supports listing and deleting users. Updates to users is still in progress. The kratos module requires a hostUrl config parameter, which represents the Kratos admin URL.
 
 ## Reverse Proxy
 
