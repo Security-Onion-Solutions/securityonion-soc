@@ -62,6 +62,10 @@ A custom module that integrates Sensoroni with  [Security Onion](https://securit
 
 Integrates with [Google Stenographer](https://github.com/google/stenographer) for retrieving PCAP files from remote sensors.
 
+### kratos
+
+Manage users stored within the Kratos identity management server. Currently supports listing and deleting users. Updates to users is still in progress.
+
 ## Reverse Proxy
 
 Since Sensoroni does not provide a user management system it is recommended that all deployments place the server behind a reverse proxy, such as [NGINX](https://www.nginx.com/), where the users have already been authenticated via an alternate authorization system.
