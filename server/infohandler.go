@@ -40,6 +40,7 @@ func (infoHandler *InfoHandler) get(writer http.ResponseWriter, request *http.Re
   info := &model.Info{
     Version: infoHandler.Host.Version,
     License: "GPL v2",
+    Parameters: &infoHandler.server.Config.ClientParams,
   }
   return http.StatusOK, info, nil
 }

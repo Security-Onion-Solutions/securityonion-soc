@@ -54,9 +54,9 @@ Implements the Datastore module by using the local file system for persisting in
 
 Implements the Auth module by specifying a shared key that both the agents and the server will utilize, as well as an optional CIDR block that, if specified, allows the server to bypass the key verification if the request originates from a network in the CIDR block.
 
-### securityonion (server)
+### elastic (server)
 
-A custom module that integrates Sensoroni with  [Security Onion](https://securityonion.net). This module provides a new endpoint, /securityonion/joblookup?esid=xyz, where xyz is the Elasticsearch document ID containing the desired packet source, target, and date ranges to retrieve.
+A custom module that integrates Sensoroni with [Elasticsearch](https://elastic.co). This module provides a new endpoint, /joblookup?esid=xyz, where xyz is the Elasticsearch document ID containing the desired packet source, target, and date ranges to retrieve.
 
 ### stenoquery (agent)
 
@@ -88,11 +88,11 @@ Sample sensoroni.json file:
       "filedatastore": {
         "jobDir": "jobs"
       },
-      "securityonion": {
-        "elasticsearchHost": "http://10.66.166.100:9200",
-        "elasticsearchUsername": "",
-        "elasticsearchPassword": "",
-        "elasticsearchVerifyCert": false
+      "elastic": {
+        "hostUrl": "http://10.66.166.100:9200",
+        "username": "",
+        "password": "",
+        "verifyCert": false
       },
       "statickeyauth": {
         "anonymousCidr": "192.168.2.103/0",

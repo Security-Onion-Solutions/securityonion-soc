@@ -16,6 +16,7 @@ import (
 const JobStatusPending = 0
 const JobStatusCompleted = 1
 const JobStatusIncomplete = 2
+const JobStatusDeleted = 3
 
 type Job struct {
   Id												int											`json:"id"`

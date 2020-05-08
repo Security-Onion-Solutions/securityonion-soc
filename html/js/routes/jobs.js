@@ -6,6 +6,10 @@
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+const JobStatusPending = 0;
+const JobStatusCompleted = 1;
+const JobStatusIncomplete = 2;
+const JobStatusDeleted = 3;
 
 routes.push({ path: '/jobs', name: 'jobs', component: {
   template: '#page-jobs',
@@ -18,6 +22,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       { text: this.$root.i18n.dateUpdated, value: 'updateTime' },
       { text: this.$root.i18n.sensorId, value: 'sensorId' },
       { text: this.$root.i18n.status, value: 'status' },
+      { text: this.$root.i18n.actions },
     ],
     sortBy: 'id',
     sortDesc: false,
@@ -39,7 +44,10 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
     Vue.filter('formatJobStatus', this.formatJobStatus);
     Vue.filter('formatJobUpdateTime', this.formatJobUpdateTime);
     Vue.filter('colorJobStatus', this.colorJobStatus);
-    this.loadData()
+    this.loadData();
+  },
+  destroyed() {
+    this.$root.unsubscribe("job", this.updateJob);
   },
   watch: {
     '$route': 'loadData',
@@ -75,7 +83,11 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
     updateJob(job) {
       for (var i = 0; i < this.jobs.length; i++) {
         if (this.jobs[i].id == job.id) {
-          this.$set(this.jobs, i, job);
+          if (job.status == JobStatusDeleted) {
+            this.jobs.splice(i, 1);
+          } else {
+            this.$set(this.jobs, i, job);
+          }
           break;
         }
       }
@@ -113,30 +125,43 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
          this.$root.showError(error);
       }
     },
+    async deleteJob(job) {
+      try {
+        if (job) {
+          await this.$root.papi.delete('job/' + job.id);
+        }
+      } catch (error) {
+         this.$root.showError(error);
+      }
+    },
     formatJobUpdateTime(job) {
       var time = "";
-      if (job.status == 1) {
+      if (job.status == JobStatusCompleted) {
         time = job.completeTime;
-      } else if (job.status == 2) {
+      } else if (job.status == JobStatusIncomplete) {
         time = job.failTime;
       }
       return time;
     },
     formatJobStatus(job) {
       var status = this.i18n.pending;
-      if (job.status == 1) {
+      if (job.status == JobStatusCompleted) {
         status = this.i18n.completed;
-      } else if (job.status == 2) {
+      } else if (job.status == JobStatusIncomplete) {
         status = this.i18n.incomplete;
+      } else if (job.status == JobStatusDeleted) {
+        status = this.i18n.deleted;
       }
       return status;
     },
     colorJobStatus(job) {
       var color = "gray";
-      if (job.status == 1) {
+      if (job.status == JobStatusCompleted) {
         color = "success";
-      } else if (job.status == 2) {
+      } else if (job.status == JobStatusIncomplete) {
         color = "info";
+      } else if (job.status == JobStatusDeleted) {
+        color = "warning";
       }
       return color;
     }

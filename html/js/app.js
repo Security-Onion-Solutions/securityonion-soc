@@ -9,7 +9,7 @@
 const routes = [];
 
 $(document).ready(function() {
-  const vmMain = new Vue({
+  new Vue({
     el: '#app',
     vuetify: new Vuetify({
       icons: {
@@ -24,12 +24,14 @@ $(document).ready(function() {
           light: {
             nav_background: '#12110d',
             nav: '#ffffff',
-            background: '#f2f2f2',
+            drawer_background: '#f7f7f1',
+            background: '#ffffff',
           },
           dark: {
             nav_background: '#12110d',
             nav: '#ffffff',
-            background: '#242424',
+            drawer_background: '#35342b',
+            background: '#1e1e1e',
           },
         },
       },
@@ -47,19 +49,22 @@ $(document).ready(function() {
       wsUrl: (location.protocol == 'https:' ?  'wss://' : 'ws://') + location.host + location.pathname + 'ws',
       apiUrl: location.origin + location.pathname + 'api/',
       authUrl: '/auth/self-service/browser/flows/',
-      version: '0.0',
-      versionLink: 'https://github.com/security-onion-solutions/securityonion-soc/releases/',
+      version: '0.0.0',
       papi: null,
-      connectionTimeout: 5000,
+      connectionTimeout: 300000,
       socket: null,
       subscriptions: [],
+      parameters: {},
+      parametersLoaded: false,
+      parameterCallback: null,
+      parameterSection: null,
     },
     watch: {
       '$vuetify.theme.dark': 'saveLocalSettings',
     },
     methods: {
       log(msg) {
-        console.log(msg);
+        console.log(moment().format() + " | " + msg);
       },
       redirectIfAuthCompleted() {
         if (!location.pathname.startsWith("/login")) {
@@ -73,41 +78,61 @@ $(document).ready(function() {
         }
         return false;
       },
-      async loadInfo() {
-        if (document.getElementById("versionLink")) {
+      async loadServerSettings() {
+        if (document.getElementById("version")) {
           try {
             const response = await this.papi.get('info');
             this.version = response.data.version;
-            this.versionLink = "https://github.com/security-onion-solutions/securityonion-soc/releases/tag/" + this.version;
             this.license = response.data.license;
+            this.parameters = response.data.parameters;
+
+            if (this.parameterCallback != null) {
+              this.parameterCallback(this.parameters[this.parameterSection]);
+              this.parameterCallback = null;
+            }
+            this.parametersLoaded = true;
           } catch (error) {
             this.showError(error);
           }
+        }
+      },
+      loadParameters(section, callback) {
+        if (this.parametersLoaded) {
+          callback(this.parameters[section])
+        } else {
+          this.parameterSection = section;
+          this.parameterCallback = callback;
         }
       },
       toggleTheme() {
         this.$vuetify.theme.dark = !this.$vuetify.theme.dark
         this.timestamp=Date.now();
       },
+      drawAttention(elementId) {
+        var element = $(elementId);
+        element.removeClass('waggle');
+        setTimeout(function() {
+          element.addClass('waggle');
+        }, 100);
+      },
       makeHeader(label, value) {
         return { text: label, value: value };
       },
       formatDateTime(date) {
-        var formatted = this.i18n.dateUnknown;
-        if (date) {
-          const dateObj = moment(String(date));
-          if (dateObj.isAfter('1000-01-01')) {
-            formatted = dateObj.format(this.i18n.dateTimeFormat);
-          }
-        }
-        return formatted;
+        return this.formatDate(date, this.i18n.dateTimeFormat, this.i18n.dateUnknown);
       },
       formatTimestamp(date) {
-        var formatted = this.i18n.dateUnknown;
+        return this.formatDate(date, this.i18n.timestampFormat, this.i18n.dateUnknown);
+      },
+      formatTimelineLabel(date) {
+        return this.formatDate(date, this.i18n.timelineFormat, date);
+      },
+      formatDate(date, format, dflt) {
+        var formatted = dflt;
         if (date) {
           const dateObj = moment(String(date));
           if (dateObj.isAfter('1000-01-01')) {
-            formatted = dateObj.format(this.i18n.timestampFormat);
+            formatted = dateObj.format(format);
           }
         }
         return formatted;
@@ -119,7 +144,22 @@ $(document).ready(function() {
       },
       showError(msg) {
         this.error = true;
-        this.errorMessage = msg;
+        var localized = this.i18n[msg];
+        if (!localized) {
+          if (msg.response && msg.response.data) {
+            localized = this.i18n[msg.response.data];
+            if (!localized) {
+              var details = msg.response.data;
+              if (details.length > 200) {
+                details = details.substring(0, 200);
+              }
+              localized = msg + " (" + details + ")";
+            }
+          } else {
+            localized = msg;
+          }
+        }
+        this.errorMessage = localized;
       },
       showInfo(msg) {
         this.info = true;
@@ -148,7 +188,18 @@ $(document).ready(function() {
           list = [];
           this.subscriptions[kind] = list;
         }
-        list.push(fn);
+        if (list.indexOf(fn) == -1) {
+          list.push(fn);
+        }
+      },
+      unsubscribe(kind, fn) {
+        var list = this.subscriptions[kind];
+        if (list != undefined) {
+          var idx = list.indexOf(fn);
+          if (idx > -1) {
+            list.splice(idx, 1);
+          }
+        }
       },
       publish(kind, obj) {
         var listeners = this.subscriptions[kind];
@@ -192,7 +243,7 @@ $(document).ready(function() {
         return response;
       },
       apiFailureCallback(error) {
-        if (error.response.status === 401) {
+        if (error.response && error.response.status === 401) {
           this.showLogin();
         }
         throw error;
@@ -231,19 +282,62 @@ $(document).ready(function() {
       },
       deleteCookie(name) {
         this.setCookie(name, "", -1);
+      },
+      registerChart(chartType, chartName) {
+        var app = this;
+        Vue.component(chartName, {
+          extends: chartType,
+          props: {
+            chartdata: { type: Object },
+            options: { type: Object }
+          },
+          mounted () {
+            this.renderChart(this.chartdata, this.options)
+            this.chartdata.obj = this;
+          }
+        })
+      },
+      setupCharts() {
+        this.registerChart(VueChartJs.Bar, 'bar-chart'); 
+        this.registerChart(VueChartJs.Line, 'line-chart'); 
+      },
+      getColor(colorName, percent = 0) {
+        percent = this.$root.$vuetify.theme.dark ? percent * -1 : percent;
+        var color = this.$root.$vuetify.theme.currentTheme[colorName];
+        if (!color) {
+          color = colorName;
+        }
+        var R = parseInt(color.substring(1,3),16);
+        var G = parseInt(color.substring(3,5),16);
+        var B = parseInt(color.substring(5,7),16);
+    
+        R = parseInt(R * (100 + percent) / 100);
+        G = parseInt(G * (100 + percent) / 100);
+        B = parseInt(B * (100 + percent) / 100);
+    
+        R = (R<255)?R:255;  
+        G = (G<255)?G:255;  
+        B = (B<255)?B:255;  
+    
+        var RR = ((R.toString(16).length==1)?"0"+R.toString(16):R.toString(16));
+        var GG = ((G.toString(16).length==1)?"0"+G.toString(16):G.toString(16));
+        var BB = ((B.toString(16).length==1)?"0"+B.toString(16):B.toString(16));
+        
+        return "#"+RR+GG+BB;
       }
     },
     created() {
-      this.log("Initializing");
+      this.log("Initializing application components");
       if (this.redirectIfAuthCompleted()) return;
+      this.setupApi();
+      this.setupAuth();
+      this.setupCharts();
+      this.loadServerSettings();
       this.loadLocalSettings();
       Vue.filter('formatDateTime', this.formatDateTime);
       Vue.filter('formatDuration', this.formatDuration);
       Vue.filter('formatTimestamp', this.formatTimestamp);
       $('#app')[0].style.display = "block";
-      this.setupApi();
-      this.setupAuth();
-      this.loadInfo();
       this.log("Initialization complete");
     },
   });

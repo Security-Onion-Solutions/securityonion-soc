@@ -69,6 +69,7 @@ func (handler *BaseHandler) Handle(responseWriter http.ResponseWriter, request *
       statusCode = http.StatusInternalServerError
     }
     responseWriter.WriteHeader(statusCode)
+    responseWriter.Write([]byte(err.Error()))
   } else {
     log.WithFields(log.Fields{
       "sourceIp": request.RemoteAddr,
