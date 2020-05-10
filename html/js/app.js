@@ -58,6 +58,7 @@ $(document).ready(function() {
       parametersLoaded: false,
       parameterCallback: null,
       parameterSection: null,
+      chartsInitialized: false,
     },
     watch: {
       '$vuetify.theme.dark': 'saveLocalSettings',
@@ -297,9 +298,11 @@ $(document).ready(function() {
           }
         })
       },
-      setupCharts() {
+      initializeCharts() {
+        if (this.chartsInitialized) return;
         this.registerChart(VueChartJs.Bar, 'bar-chart'); 
-        this.registerChart(VueChartJs.Line, 'line-chart'); 
+        this.registerChart(VueChartJs.Line, 'line-chart');
+        this.chartsInitialized = true; 
       },
       getColor(colorName, percent = 0) {
         percent = this.$root.$vuetify.theme.dark ? percent * -1 : percent;
@@ -331,7 +334,6 @@ $(document).ready(function() {
       if (this.redirectIfAuthCompleted()) return;
       this.setupApi();
       this.setupAuth();
-      this.setupCharts();
       this.loadServerSettings();
       this.loadLocalSettings();
       Vue.filter('formatDateTime', this.formatDateTime);

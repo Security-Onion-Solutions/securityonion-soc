@@ -59,6 +59,9 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     roundTripTimeSecs: 0,
     mruQueries: [],
   }},
+  created() {
+    this.$root.initializeCharts();
+  },
   mounted() {
     this.$root.loadParameters("hunt", this.initHunt);
   },
