@@ -16,9 +16,15 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
+func NewTestStore() *ElasticEventstore {
+	return &ElasticEventstore{
+		fieldDefs: make(map[string]*FieldDefinition),
+	}
+}
+
 func TestMakeAggregation(tester *testing.T) {
 	keys := []string{"one","two","three"}
-	agg := makeAggregation("groupby|one", keys, 10, false)
+	agg := makeAggregation(NewTestStore(), "groupby|one", keys, 10, false)
 	if agg["terms"] == nil {
 		tester.Errorf("aggregation missing terms")
 	}
@@ -72,7 +78,7 @@ func TestMakeTimeline(tester *testing.T) {
 
 func TestConvertToElasticRequestEmptyCriteria(tester *testing.T) {
 	criteria := model.NewEventSearchCriteria()
-	actualJson, err := convertToElasticRequest(criteria)
+	actualJson, err := convertToElasticRequest(NewTestStore(), criteria)
   if err != nil {
     tester.Errorf("unexpected conversion error: %s", err)
 	}
@@ -86,7 +92,7 @@ func TestConvertToElasticRequestEmptyCriteria(tester *testing.T) {
 func TestConvertToElasticRequestGroupByCriteria(tester *testing.T) {
 	criteria := model.NewEventSearchCriteria()
 	criteria.Populate("abc AND def | groupby ghi jkl", "2020-01-02T12:13:14Z - 2020-01-02T13:13:14Z", time.RFC3339, "America/New_York", "10", "25")
-	actualJson, err := convertToElasticRequest(criteria)
+	actualJson, err := convertToElasticRequest(NewTestStore(), criteria)
   if err != nil {
     tester.Errorf("unexpected conversion error: %s", err)
 	}
@@ -104,7 +110,7 @@ func TestConvertFromElasticResultsSuccess(tester *testing.T) {
 	}
 	
 	results := model.NewEventSearchResults()
-	err = convertFromElasticResults(string(esData), results)
+	err = convertFromElasticResults(NewTestStore(), string(esData), results)
 	if err != nil {
 		tester.Errorf("unexpected conversion error: %s", err)
 	}
@@ -148,7 +154,7 @@ func TestConvertFromElasticResultsSuccess(tester *testing.T) {
 
 func TestConvertFromElasticResultsTimedOut(tester *testing.T) {
  	results := model.NewEventSearchResults()
-	err := convertFromElasticResults(`{ "took": 123, "timed_out": true, "hits": {} }`, results)
+	err := convertFromElasticResults(NewTestStore(), `{ "took": 123, "timed_out": true, "hits": {} }`, results)
 	if err == nil {
 		tester.Errorf("Expected timed out results")
 	}
@@ -160,7 +166,7 @@ func TestConvertFromElasticResultsTimedOut(tester *testing.T) {
 
 func TestConvertFromElasticResultsInvalid(tester *testing.T) {
 	results := model.NewEventSearchResults()
- err := convertFromElasticResults(`{ }`, results)
+ err := convertFromElasticResults(NewTestStore(), `{ }`, results)
  if err == nil {
 	 tester.Errorf("Expected invalid results error")
  }
