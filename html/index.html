@@ -252,7 +252,7 @@
         </v-row>
         <v-row align="start">
           <v-col cols="12" md="7">
-            <v-textarea clearable :disabled="loading()" @change="notifyInputsChanged" class="mx-2" v-model="query" :hint="i18n.queryHelp" rows="1" persistent-hint="true" 
+            <v-textarea clearable auto-grow :disabled="loading()" @change="notifyInputsChanged" class="mx-2" v-model="query" :hint="i18n.queryHelp" rows="1" persistent-hint="true" 
               autofocus="true" prepend-icon="fa-search" @keydown.enter.prevent="hunt">
               <template v-slot:prepend-inner>
                 <v-menu dense bottom three-line offset-y="true">
