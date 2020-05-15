@@ -61,8 +61,9 @@ func (queryHandler *QueryHandler) get(writer http.ResponseWriter, request *http.
 	case "filtered": 
 		field := request.Form.Get("field") 
 		value := request.Form.Get("value")
+		scalar := request.Form.Get("scalar") == "true"
 		include := request.Form.Get("include") == "true"
-		alteredQuery, err = query.Filter(field, value, include)
+		alteredQuery, err = query.Filter(field, value, scalar, include)
 	case "grouped": 
 		field := request.Form.Get("field") 
 		alteredQuery, err = query.Group(field)

@@ -17,7 +17,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
-func makeAggregation(name string, keys []string, count int, ascending bool) map[string]interface{} {
+func makeAggregation(store *ElasticEventstore, name string, keys []string, count int, ascending bool) map[string]interface{} {
 	agg := make(map[string]interface{})
 	orderFields := make(map[string]interface{})
 	orderFields["_count"] = "desc"
@@ -25,14 +25,14 @@ func makeAggregation(name string, keys []string, count int, ascending bool) map[
 		orderFields["_count"] = "asc"
 	}
 	aggFields := make(map[string]interface{})
-	aggFields["field"] = keys[0]
+	aggFields["field"] = store.mapElasticField(keys[0])
 	aggFields["size"] = count
 	aggFields["order"] = orderFields
 	agg["terms"] = aggFields
 	if len(keys) > 1 {
 		inner := make(map[string]interface{})
 		name = name + "|" + keys[1]
-		inner[name] = makeAggregation(name, keys[1:], count, ascending)
+		inner[name] = makeAggregation(store, name, keys[1:], count, ascending)
 		agg["aggs"] = inner
 	}
 	return agg
@@ -48,7 +48,7 @@ func makeTimeline(interval string) map[string]interface{} {
 	return timeline
 }
 
-func makeQuery(criteria *model.EventSearchCriteria) map[string]interface{} {
+func makeQuery(store *ElasticEventstore, criteria *model.EventSearchCriteria) map[string]interface{} {
 	searchString := ""
 	segment := criteria.ParsedQuery.NamedSegment(model.SegmentKind_Search)
 	if segment != nil {
@@ -91,13 +91,13 @@ func makeQuery(criteria *model.EventSearchCriteria) map[string]interface{} {
 	return clause
 }
 
-func convertToElasticRequest(criteria *model.EventSearchCriteria) (string, error) {
+func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSearchCriteria) (string, error) {
 	var err error
 	var esJson string
 
 	esMap := make(map[string]interface{})
 	esMap["size"] = criteria.EventLimit
-	esMap["query"] = makeQuery(criteria)
+	esMap["query"] = makeQuery(store, criteria)
 
 	aggregations := make(map[string]interface{})
 	esMap["aggs"] = aggregations
@@ -109,8 +109,8 @@ func convertToElasticRequest(criteria *model.EventSearchCriteria) (string, error
 		fields := groupBySegment.Fields()
 		if len(fields) > 0 {
 			name := "groupby|" + fields[0]
-			aggregations[name] = makeAggregation(name, fields, criteria.MetricLimit, false)
-			aggregations["bottom"] = makeAggregation("", fields[0:1], criteria.MetricLimit, true)
+			aggregations[name] = makeAggregation(store, name, fields, criteria.MetricLimit, false)
+			aggregations["bottom"] = makeAggregation(store, "", fields[0:1], criteria.MetricLimit, true)
 		}
 	}
 
@@ -156,25 +156,25 @@ func parseAggregation(name string, aggObj interface{}, keys []interface{}, resul
 	}
 }
 
-func flattenKeyValue(fieldMap map[string]interface{}, prefix string, value map[string]interface{}) {
+func flattenKeyValue(store *ElasticEventstore, fieldMap map[string]interface{}, prefix string, value map[string]interface{}) {
 	for key, value := range value {
 		flattenedKey := prefix + key
 		switch value.(type) {
 		case map[string]interface{}:
-			flattenKeyValue(fieldMap, flattenedKey + ".", value.(map[string]interface{}))
+			flattenKeyValue(store, fieldMap, flattenedKey + ".", value.(map[string]interface{}))
 		default:
-			fieldMap[flattenedKey] = value
+			fieldMap[store.unmapElasticField(flattenedKey)] = value
 		}
 	}
 }
 
-func flatten(data map[string]interface{}) map[string]interface{} {
+func flatten(store *ElasticEventstore, data map[string]interface{}) map[string]interface{} {
 	fieldMap := make(map[string]interface{})
-	flattenKeyValue(fieldMap, "", data)
+	flattenKeyValue(store, fieldMap, "", data)
 	return fieldMap
 }
 
-func convertFromElasticResults(esJson string, results *model.EventSearchResults) error {
+func convertFromElasticResults(store *ElasticEventstore, esJson string, results *model.EventSearchResults) error {
 	esResults := make(map[string]interface{})
 	err := json.LoadJson([]byte(esJson), &esResults)
 	if esResults["took"] == nil || esResults["timed_out"] == nil || esResults["hits"] == nil {
@@ -203,7 +203,7 @@ func convertFromElasticResults(esJson string, results *model.EventSearchResults)
 		event.Id = esRecord["_id"].(string)
 		event.Type = esRecord["_type"].(string)
 		event.Score = esRecord["_score"].(float64)
-		event.Payload = flatten(esRecord["_source"].(map[string]interface{}))
+		event.Payload = flatten(store, esRecord["_source"].(map[string]interface{}))
 		event.Timestamp, _ = time.Parse(time.RFC3339, event.Payload["@timestamp"].(string))
 		results.Events = append(results.Events, event)
 	}

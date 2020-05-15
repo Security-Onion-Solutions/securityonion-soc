@@ -123,7 +123,7 @@ func (mgr *JobManager) StreamJobResults(job *model.Job, reader io.ReadCloser) er
 }
 
 func (mgr *JobManager) UpdateJob(job *model.Job) error {
-  _, err := mgr.agent.Client.SendAuthorizedObject("PUT", "/api/job", job, nil)
+  _, err := mgr.agent.Client.SendAuthorizedObject("PUT", "/api/job/", job, nil)
   return err
 }
 

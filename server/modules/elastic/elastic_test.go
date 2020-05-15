@@ -41,6 +41,9 @@ func TestElasticInit(tester *testing.T) {
   if elastic.store.timeoutMs != time.Duration(DEFAULT_TIMEOUT_MS) * time.Millisecond {
     tester.Errorf("expected timeoutMs %d but got %d", DEFAULT_TIMEOUT_MS, elastic.store.timeoutMs)
   }
+  if elastic.store.cacheMs != time.Duration(DEFAULT_CACHE_MS) * time.Millisecond {
+    tester.Errorf("expected cacheMs %d but got %d", DEFAULT_CACHE_MS, elastic.store.cacheMs)
+  }
   if elastic.store.index != DEFAULT_INDEX {
     tester.Errorf("expected index %s but got %s", DEFAULT_INDEX, elastic.store.esConfig.Addresses)
   }

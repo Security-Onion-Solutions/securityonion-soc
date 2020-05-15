@@ -176,10 +176,16 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     },
     async filterQuery(field, value, include) {
       try {
+        const valueType = typeof value;
+        var scalar = false;
+        if (valueType == "boolean" || valueType == "number" || valueType == "bigint") {
+          scalar = true;
+        }
         const response = await this.$root.papi.get('query/filtered', { params: { 
           query: this.query,
           field: field,
           value: value,
+          scalar: scalar,
           include: include,
         }});
         this.query = response.data;
@@ -345,7 +351,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     async lookupPcap(id, newTab) {
       this.$root.startLoading();
       try {
-        const response = await this.$root.papi.post('job/', { params: { eventId: id }});
+        const response = await this.$root.papi.post('job/', null, { params: { eventId: id }});
         if (response.data.id) {
           if (newTab) {
             window.open('/#/job/' + response.data.id, '_blank');

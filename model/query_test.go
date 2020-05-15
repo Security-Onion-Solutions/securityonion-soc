@@ -32,6 +32,7 @@ func validateQuery(tester *testing.T, args ...string) {
 func TestQueries(tester *testing.T) {
 	validateQuery(tester, "abc")
 	validateQuery(tester, "abc def")
+	validateQuery(tester, "abc:'def'", "abc: 'def'")
 	validateQuery(tester, "   abc0   def  ", "abc0 def")
 	validateQuery(tester, "'abc1' def")
 	validateQuery(tester, "'abc2 def'")
@@ -86,10 +87,10 @@ func TestGroup(tester *testing.T) {
 	validateGroup(tester, "a|groupby b", "b", "a | groupby b")
 }
 
-func validateFilter(tester *testing.T, orig string, key string, value string, include bool, expected string) {
+func validateFilter(tester *testing.T, orig string, key string, value string, scalar bool, include bool, expected string) {
 	query := NewQuery()
 	query.Parse(orig)
-	actual, err := query.Filter(key, value, include)
+	actual, err := query.Filter(key, value, scalar, include)
 	if err != nil {
 		actual = err.Error()
 	}
@@ -99,7 +100,8 @@ func validateFilter(tester *testing.T, orig string, key string, value string, in
 }
 
 func TestFilter(tester *testing.T) {
-	validateFilter(tester, "a", "b", "c", true, "a AND b:\"c\"")
-	validateFilter(tester, "a", "b", "c", false, "a AND NOT b:\"c\"")
-	validateFilter(tester, "", "b", "c", true, "b:\"c\"")
+	validateFilter(tester, "a", "b", "c", false, true, "a AND b:\"c\"")
+	validateFilter(tester, "a", "b", "c", false, false, "a AND NOT b:\"c\"")
+	validateFilter(tester, "", "b", "c", false, true, "b:\"c\"")
+	validateFilter(tester, "", "b", "1", true, true, "b:1")
 }

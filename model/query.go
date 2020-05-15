@@ -109,7 +109,7 @@ func (segment *SearchSegment) String() string {
 	return segment.TermsAsString()
 }
 
-func (segment *SearchSegment) AddFilter(field string, value string, inclusive bool) error {
+func (segment *SearchSegment) AddFilter(field string, value string, scalar bool, inclusive bool) error {
 	alreadyFiltered := false
 	for _, term := range segment.terms {
 		if term.String() == field {
@@ -126,7 +126,18 @@ func (segment *SearchSegment) AddFilter(field string, value string, inclusive bo
 			term, _ := NewQueryTerm("NOT")
 			segment.terms = append(segment.terms, term)	
 		}
-		term, err := NewQueryTerm(field + ":\"" + value + "\"")
+
+		var strBuilder strings.Builder
+		strBuilder.WriteString(field)
+		strBuilder.WriteRune(':')
+		if !scalar {
+			strBuilder.WriteRune('"')
+		}
+		strBuilder.WriteString(value)
+		if !scalar {
+			strBuilder.WriteRune('"')
+		}
+		term, err := NewQueryTerm(strBuilder.String())
 		if err == nil {
 			segment.terms = append(segment.terms, term)
 		}
@@ -221,6 +232,14 @@ func (query *Query) Parse(str string) error {
     if !quoting {
 			if !grouping {
 				if ch == '"' || ch == '\'' {
+					if currentTermBuilder.Len() > 0 {
+						term, err := NewQueryTerm(currentTermBuilder.String())
+						if err != nil {
+							return err
+						}
+						currentSegmentTerms = append(currentSegmentTerms, term)
+						currentTermBuilder.Reset()
+					}
 					quoting = true
 					quotingChar = ch
 				} else if ch == '|' {
@@ -336,7 +355,7 @@ func (query *Query) String() string {
   return queryBuilder.String()
 }
 
-func (query *Query) Filter(field string, value string, include bool) (string, error) {
+func (query *Query) Filter(field string, value string, scalar bool, include bool) (string, error) {
 	var err error
 
 	segment := query.NamedSegment(SegmentKind_Search)
@@ -345,7 +364,7 @@ func (query *Query) Filter(field string, value string, include bool) (string, er
 		query.Segments = append(query.Segments, segment)
 	}
 	searchSegment := segment.(*SearchSegment)
-	err = searchSegment.AddFilter(field, value, include)
+	err = searchSegment.AddFilter(field, value, scalar, include)
 	
 	return query.String(), err
 }
