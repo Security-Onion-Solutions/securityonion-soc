@@ -46,7 +46,7 @@ func TestFieldMapping(tester *testing.T) {
 	}
 }
 
-func TestRefreshCache(tester *testing.T) {
+func TestFieldMappingCache(tester *testing.T) {
 	store := &ElasticEventstore{}
 
 	json, err := ioutil.ReadFile("indexpattern_response.json")

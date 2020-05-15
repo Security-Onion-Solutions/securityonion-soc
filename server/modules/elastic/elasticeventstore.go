@@ -171,12 +171,14 @@ func (store *ElasticEventstore) indexSearch(query string, indexes []string) (str
 
 func (store *ElasticEventstore) refreshCache() {
   if store.cacheTime.IsZero() || time.Now().Sub(store.cacheTime) > store.cacheMs {
-    store.refreshCacheFromIndexPatterns()
-    store.cacheTime = time.Now()
+    err := store.refreshCacheFromIndexPatterns()
+    if err == nil {
+      store.cacheTime = time.Now()
+    }
   }
 }
 
-func (store *ElasticEventstore) refreshCacheFromIndexPatterns() {
+func (store *ElasticEventstore) refreshCacheFromIndexPatterns() error {
   query := fmt.Sprintf(`{"query" : { "bool": { "must": { "match" : { "type" : "index-pattern" }}}}}`)
   json, err := store.indexSearch(query, []string{".kibana*"})
   if err != nil {
@@ -184,6 +186,7 @@ func (store *ElasticEventstore) refreshCacheFromIndexPatterns() {
   } else {
     store.cacheFieldsFromJson(json)
   }
+  return err
 }
 
 func (store *ElasticEventstore) cacheFieldsFromJson(json string) {
