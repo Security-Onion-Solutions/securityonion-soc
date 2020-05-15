@@ -13,7 +13,7 @@ This system is comprised of a server and one or more agents. An agent runs on a 
 
 ## License
 
-Sensoroni is is distributed under the terms of version 2 of the GNU General Public License (GPL).
+Sensoroni is distributed under the terms of version 2 of the GNU General Public License (GPL).
 
 Only version 2 of the GNU GPL license applies to Sensoroni. No other GNU GPL version applies.
 
