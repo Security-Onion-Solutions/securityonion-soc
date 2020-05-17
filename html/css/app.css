@@ -91,6 +91,14 @@
   }
 }
 
+.theme--dark.v-data-table tr:nth-of-type(even) {
+  background-color: rgba(45, 45, 45, 0.25);
+ }
+
+ .theme--light.v-data-table tr:nth-of-type(even) {
+  background-color: rgba(230, 230, 230, 0.25);
+ }
+
 /* Sensoroni-specific element styles */
 .hardwrap {
   word-wrap: break-word;
