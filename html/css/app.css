@@ -92,10 +92,6 @@
 }
 
 /* Sensoroni-specific element styles */
-.inlineBlock {
-  display: inline-block;
-}
-
 .hardwrap {
   word-wrap: break-word;
   white-space: normal;

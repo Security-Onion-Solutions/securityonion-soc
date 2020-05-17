@@ -6,6 +6,12 @@
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+const  RELATIVE_TIME_SECONDS = 10;
+const  RELATIVE_TIME_MINUTES = 20;
+const  RELATIVE_TIME_HOURS   = 30;
+const  RELATIVE_TIME_DAYS    = 40;
+const  RELATIVE_TIME_WEEKS   = 50;
+const  RELATIVE_TIME_MONTHS  = 60;
 
 routes.push({ path: '/hunt', name: 'hunt', component: {
   template: '#page-hunt',
@@ -15,6 +21,10 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     queries: [],
     eventFields: {},
     dateRange: '',
+    relativeTimeEnabled: true,
+    relativeTimeValue: 24,
+    relativeTimeUnit: RELATIVE_TIME_HOURS,
+    relativeTimeUnits: [],
     dateRangeInitialized: false,
     dateRangeMinutes: 1440,
     loaded: false,
@@ -61,6 +71,14 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
   }},
   created() {
     this.$root.initializeCharts();
+    this.relativeTimeUnits = [
+      { text: this.i18n.seconds, value: RELATIVE_TIME_SECONDS },
+      { text: this.i18n.minutes, value: RELATIVE_TIME_MINUTES },
+      { text: this.i18n.hours, value: RELATIVE_TIME_HOURS },
+      { text: this.i18n.days, value: RELATIVE_TIME_DAYS },
+      { text: this.i18n.weeks, value: RELATIVE_TIME_WEEKS },
+      { text: this.i18n.months, value: RELATIVE_TIME_MONTHS }
+    ];
   },
   mounted() {
     this.$root.loadParameters("hunt", this.initHunt);
@@ -75,6 +93,8 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     'sortDesc': 'saveLocalSettings',
     'itemsPerPage': 'saveLocalSettings',
     'eventLimit': 'saveLocalSettings',
+    'relativeTimeValue': 'saveLocalSettings',
+    'relativeTimeUnit': 'saveLocalSettings',
   },
   methods: {
     loading() {
@@ -120,6 +140,9 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
         // When navigating to the same URL, simply refresh data
         route.loadData(); 
       };
+      if (this.relativeTimeEnabled) {
+        this.dateRange = this.getStartDate().format(this.i18n.timePickerFormat) + " - " + this.getEndDate().format(this.i18n.timePickerFormat);
+      }
       this.$router.push({ name: 'hunt', query: { q: this.query, t: this.dateRange, el: this.eventLimit, gl: this.groupByLimit }}, onSuccess, onFail);
     },
     huntQuery(query) {
@@ -367,19 +390,38 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       this.$root.stopLoading();
     },
     showDateRangePicker() {
+      if (this.relativeTimeEnabled) return;
       $('#huntdaterange').click();
     },
     hideDateRangePicker() {
+      if (this.relativeTimeEnabled) return;
       this.dateRange = $('#huntdaterange')[0].value;
       this.notifyInputsChanged();
     },
+    getEndDate() {
+      return moment();
+    },
+    getStartDate() {
+      var unit = "hour";
+      switch (this.relativeTimeUnit) {
+        case RELATIVE_TIME_SECONDS: unit = "seconds"; break;
+        case RELATIVE_TIME_MINUTES: unit = "minutes"; break;
+        case RELATIVE_TIME_HOURS: unit = "hours"; break;
+        case RELATIVE_TIME_DAYS: unit = "days"; break;
+        case RELATIVE_TIME_WEEEKS: unit = "weeks"; break;
+        case RELATIVE_TIME_MONTHS: unit = "months"; break;
+      }
+      return moment().subtract(this.relativeTimeValue, unit);
+    },
     setupDateRangePicker() {
+      if (this.relativeTimeEnabled) return;
+      
       range = document.getElementById('huntdaterange');
       $('#huntdaterange').daterangepicker({
         timePicker: true,
         timePickerSeconds: true,
-        endDate: moment().startOf('hour'),
-        startDate: moment().startOf('hour').subtract(this.dateRangeMinutes, 'minute'),
+        endDate: this.getEndDate(),
+        startDate: this.getStartDate(),
         locale: {
           format: this.i18n.timePickerFormat
         }
@@ -389,6 +431,13 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       $('#huntdaterange').on('hide.daterangepicker', function(ev, picker) { 
         route.hideDateRangePicker();
       });
+    },
+    showAbsoluteTime() {
+      this.relativeTimeEnabled = false;
+      setTimeout(this.setupDateRangePicker, 10);
+    },
+    showRelativeTime() {
+      this.relativeTimeEnabled = true;
     },
     setupCharts() {
       this.setupBarChart(this.topChartOptions, this.topChartData, this.i18n.chartTitleTop);
@@ -458,6 +507,8 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       localStorage['settings.hunt.itemsPerPage'] = this.itemsPerPage;
       localStorage['settings.hunt.eventLimit'] = this.eventLimit;
       localStorage['settings.hunt.mruQueries'] = JSON.stringify(this.mruQueries);
+      localStorage['settings.hunt.relativeTimeValue'] = this.relativeTimeValue;
+      localStorage['settings.hunt.relativeTimeUnit'] = this.relativeTimeUnit;
     },
     loadLocalSettings() {
       if (localStorage['settings.hunt.groupBySortBy']) this.groupBySortBy = localStorage['settings.hunt.groupBySortBy'];
@@ -469,6 +520,8 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       if (localStorage['settings.hunt.itemsPerPage']) this.itemsPerPage = parseInt(localStorage['settings.hunt.itemsPerPage']);
       if (localStorage['settings.hunt.eventLimit']) this.eventLimit = parseInt(localStorage['settings.hunt.eventLimit']);
       if (localStorage['settings.hunt.mruQueries']) this.mruQueries = JSON.parse(localStorage['settings.hunt.mruQueries']);
+      if (localStorage['settings.hunt.relativeTimeValue']) this.relativeTimeValue = parseInt(localStorage['settings.hunt.relativeTimeValue']);
+      if (localStorage['settings.hunt.relativeTimeUnit']) this.relativeTimeUnit = parseInt(localStorage['settings.hunt.relativeTimeUnit']);
     },
   }
 }});

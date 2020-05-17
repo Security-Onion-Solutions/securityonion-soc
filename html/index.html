@@ -292,8 +292,30 @@
             </v-textarea>
           </v-col>
           <v-col cols="12" md="5" class="d-flex flex-nowrap align-center">
-            <v-text-field :disabled="loading()" id="huntdaterange" @change="notifyInputsChanged" class="mx-2" v-model="dateRange" :hint="i18n.timePickerHelp" persistent-hint="true" 
-              prepend-icon="fa-clock" prepend-inner-icon="fa-angle-down" @click:prepend-inner="showDateRangePicker"></v-text-field>
+            <v-text-field :disabled="loading()" v-if="relativeTimeEnabled" id="huntrelativetimevalue" @change="notifyInputsChanged" class="mx-2" 
+                v-model="relativeTimeValue" :hint="i18n.relativeTimeHelp" persistent-hint="true" type="number">
+              <template v-slot:prepend>
+                <b-btn v-if="relativeTimeEnabled" icon x-small @click="showAbsoluteTime">
+                  <v-icon>fa-history</v-icon>
+                </b-btn>
+                <div v-if="relativeTimeEnabled" class="pt-1 px-4"">
+                  {{ i18n.last }}
+                </div>
+              </template>
+              <template v-slot:append-outer>
+                <v-select class="my-n1 py-0" :disabled="loading()" v-if="relativeTimeEnabled" id="huntrelativetimeunit" @change="notifyInputsChanged"
+                  v-model="relativeTimeUnit" :items="relativeTimeUnits"></v-select>
+              </template>
+            </v-text-field>
+            <v-text-field :disabled="loading()" v-if="!relativeTimeEnabled" id="huntdaterange" @change="notifyInputsChanged" class="mx-2" 
+              v-model="dateRange" :hint="i18n.timePickerHelp" persistent-hint="true" 
+              prepend-inner-icon="fa-angle-down" @click:prepend-inner="showDateRangePicker">
+              <template v-slot:prepend>
+                <b-btn v-if="!relativeTimeEnabled" icon x-small @click="showRelativeTime">
+                  <v-icon>fa-calendar-alt</v-icon>
+                </b-btn>
+              </template>
+            </v-text-field>
             <v-btn id="hunt" :disabled="loading()" color="primary" @click.stop="hunt">
               <span class="d-sm-none d-lg-inline">{{ i18n.hunt }}&nbsp;</span>
               <v-icon>fa-crosshairs</v-icon>
@@ -341,7 +363,7 @@
                     {{ item.count.toLocaleString() }}
                   </td>
                   <td v-for="field in groupByHeaders.slice(1)">
-                    <div class="inlineBlock semi-transparent">
+                    <div class="d-inline-block semi-transparent">
                       <v-btn v-if="canQuery(field.value)" icon x-small @click="filterQuery(field.value, item[field.value], true)">
                         <v-icon :alt="i18n.filterInclude" :title="i18n.filterIncludeHelp">fa-search-plus</v-icon>
                       </v-btn>
@@ -349,7 +371,7 @@
                         <v-icon :alt="i18n.filterExclude" :title="i18n.filterExcludeHelp">fa-search-minus</v-icon>
                       </v-btn>
                     </div>
-                    <div class="inlineBlock" v-text="item[field.value]"></div>
+                    <div class="d-inline-block" v-text="item[field.value]"></div>
                   </td>
                 </tr>
               </template>
@@ -393,7 +415,7 @@
                     </a>
                   </td>
                   <td v-for="field in eventHeaders">
-                    <div class="inlineBlock semi-transparent">
+                    <div class="d-inline-block semi-transparent">
                       <v-btn v-if="canQuery(field.value)" icon x-small @click="filterQuery(field.value, item[field.value], true)">
                         <v-icon :alt="i18n.filterInclude" :title="i18n.filterIncludeHelp">fa-search-plus</v-icon>
                       </v-btn>
@@ -401,7 +423,7 @@
                         <v-icon :alt="i18n.filterExclude" :title="i18n.filterExcludeHelp">fa-search-minus</v-icon>
                       </v-btn>
                     </div>
-                    <div class="inlineBlock" v-text="item[field.value]"></div>
+                    <div class="d-inline-block" v-text="item[field.value]"></div>
                   </td>
                 </tr>
               </template>
@@ -411,15 +433,15 @@
                     <template v-slot:item="{ item }">
                       <tr>
                         <td class="expansion">
-                          <div class="inlineBlock semi-transparent">
+                          <div class="d-inline-block semi-transparent">
                             <v-btn :disabled="!canQuery(item.key)" icon x-small @click="groupQuery(item.key)">
                               <v-icon :alt="i18n.groupInclude" :title="i18n.groupIncludeHelp">fa-layer-group</v-icon>
                             </v-btn>
                           </div>
-                          <div class="inlineBlock expansion" v-text="item.key"></div>
+                          <div class="d-inline-block expansion" v-text="item.key"></div>
                         </td>
                         <td class="expansion">
-                          <div class="inlineBlock semi-transparent">
+                          <div class="d-inline-block semi-transparent">
                             <v-btn :disabled="!canQuery(item.key)" icon x-small @click="filterQuery(item.key, item.value, true)">
                               <v-icon :alt="i18n.filterInclude" :title="i18n.filterIncludeHelp">fa-search-plus</v-icon>
                             </v-btn>
@@ -427,7 +449,7 @@
                               <v-icon :alt="i18n.filterExclude" :title="i18n.filterExcludeHelp">fa-search-minus</v-icon>
                             </v-btn>
                           </div>
-                          <div class="inlineBlock expansion hardwrap" v-text="item.value"></div>
+                          <div class="d-inline-block expansion hardwrap" v-text="item.value"></div>
                         </td>
                       </tr>
                     </template>
