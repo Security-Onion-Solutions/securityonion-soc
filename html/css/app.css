@@ -22,6 +22,10 @@
   color: var(--v-nav-base) !important;
 }
 
+.v-navigation-drawer {
+  background-color: var(--v-drawer_background-base) !important;
+}
+
 .v-footer {
   background-color: var(--v-nav_background-base) !important;
   color: var(--v-nav-base) !important;
@@ -52,7 +56,68 @@
   font-size: 15px !important;
 }
 
+/* animations */
+.waggle {
+  animation-name: waggle;
+  animation-timing-function: ease-out;
+  animation-delay: 0s;
+  animation-duration: 1s;
+}
+
+@keyframes waggle {
+  0% {
+    transform: none;
+  }
+  50% {
+    transform: rotateZ(-20deg) scale(1.2);
+  }
+  60% {
+    transform: rotateZ(25deg) scale(1.2);
+  }
+  67.5% {
+    transform: rotateZ(-15deg) scale(1.2);
+  }
+  75% {
+    transform: rotateZ(15deg) scale(1.2);
+  }
+  82.5% {
+    transform: rotateZ(-12deg) scale(1.2);
+  }
+  85% {
+    transform: rotateZ(0) scale(1.2);
+  }
+  100% {
+    transform: rotateZ(0) scale(1);
+  }
+}
+
+.theme--dark.v-data-table tr:nth-of-type(even) {
+  background-color: rgba(45, 45, 45, 0.25);
+ }
+
+ .theme--light.v-data-table tr:nth-of-type(even) {
+  background-color: rgba(230, 230, 230, 0.25);
+ }
+
 /* Sensoroni-specific element styles */
+.hardwrap {
+  word-wrap: break-word;
+  white-space: normal;
+  word-break: break-all;
+  overflow-x: hidden;
+  padding-right: 50px;
+}
+
+.semi-transparent {
+  opacity: 0.5;
+}
+
+.expansion {
+  padding-left: 0px;
+  vertical-align: top;
+  overflow-x: hidden;
+}
+
 a#title, a#title:visited, a#title:active, a#title:hover {
   text-decoration: none;
   color: inherit;

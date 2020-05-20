@@ -40,6 +40,9 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     Vue.filter('colorFlag', this.colorFlag);
     this.loadData();
   },
+  destroyed() {
+    this.$root.unsubscribe("job", this.updateJob);
+  },
   watch: {
     '$route': 'loadData',
     'packets': 'packetsUpdated',

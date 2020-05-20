@@ -7,12 +7,13 @@
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-package securityonion
+package elastic
 
 import (
   "bytes"
   "context"
   "crypto/tls"
+  "encoding/json"
   "errors"
   "fmt"
   "math"
@@ -27,53 +28,64 @@ import (
   "github.com/tidwall/gjson"
 )
 
-type SoElastic struct {
+type FieldDefinition struct {
+  name          string
+  fieldType     string
+  aggregatable  bool
+  searchable    bool
+}
+
+type ElasticEventstore struct {
   esConfig		elasticsearch.Config
   esClient		*elasticsearch.Client
   timeShiftMs	int
   timeoutMs   time.Duration
   index       string
+  cacheMs     time.Duration
+  cacheTime   time.Time
+  fieldDefs   map[string]*FieldDefinition
 }
 
-func NewSoElastic() *SoElastic {
-  return &SoElastic{}
+func NewElasticEventstore() *ElasticEventstore {
+  return &ElasticEventstore{}
 }
 
-func (elastic *SoElastic) Init(host string, user string, pass string, verifyCert bool, timeShiftMs int, timeoutMs int, index string) error {
+func (store *ElasticEventstore) Init(hostUrl string, user string, pass string, verifyCert bool, timeShiftMs int, timeoutMs int, cacheMs int, index string) error {
   hosts := make([]string, 1)
-  elastic.timeShiftMs = timeShiftMs
-  elastic.index = index
-  elastic.timeoutMs = time.Duration(timeoutMs) * time.Millisecond
-  hosts[0] = host
-  elastic.esConfig = elasticsearch.Config {
+  store.timeShiftMs = timeShiftMs
+  store.index = index
+  store.timeoutMs = time.Duration(timeoutMs) * time.Millisecond
+  store.cacheMs = time.Duration(cacheMs) * time.Millisecond
+  hosts[0] = hostUrl
+  store.esConfig = elasticsearch.Config {
     Addresses: hosts,
     Username: user,
     Password: pass,
     Transport: &http.Transport{
       MaxIdleConnsPerHost:   10,
-      ResponseHeaderTimeout: elastic.timeoutMs,
-      DialContext:           (&net.Dialer{Timeout: elastic.timeoutMs}).DialContext,
+      ResponseHeaderTimeout: store.timeoutMs,
+      DialContext:           (&net.Dialer{Timeout: store.timeoutMs}).DialContext,
       TLSClientConfig: &tls.Config{
         InsecureSkipVerify: !verifyCert,
       },
     },
   }
   maskedPassword := "*****"
-  if len(elastic.esConfig.Password) == 0 {
+  if len(store.esConfig.Password) == 0 {
     maskedPassword = ""
   }
 
-  esClient, err := elasticsearch.NewClient(elastic.esConfig)
+  esClient, err := elasticsearch.NewClient(store.esConfig)
   fields := log.Fields {
     "InsecureSkipVerify": !verifyCert,
-    "Host": hosts[0],
-    "Username": elastic.esConfig.Username,
+    "HostUrl": hosts[0],
+    "Username": store.esConfig.Username,
     "Password": maskedPassword,
     "Index": index,
     "TimeoutMs": timeoutMs,
   }
   if err == nil {
-    elastic.esClient = esClient
+    store.esClient = esClient
     log.WithFields(fields).Info("Initialized Elasticsearch Client")
   } else {
     log.WithFields(fields).Error("Failed to initialize Elasticsearch Client")
@@ -81,15 +93,60 @@ func (elastic *SoElastic) Init(host string, user string, pass string, verifyCert
   return err
 }
 
-func (elastic *SoElastic) Search(query string) (string, error) {
-  indexes := strings.Split(elastic.index, ",")
+func (store *ElasticEventstore) mapElasticField(field string) string {
+  mappedField := store.fieldDefs[field]
+  if mappedField != nil && !mappedField.aggregatable {
+    keyword := field + ".keyword"
+    mappedField = store.fieldDefs[keyword]
+    if mappedField != nil && mappedField.aggregatable {
+      field = keyword
+    }
+  }
+  return field
+}
+
+func (store *ElasticEventstore) unmapElasticField(field string) string {
+  suffix := ".keyword"
+  if strings.HasSuffix(field, suffix) {
+    newField := strings.TrimSuffix(field, suffix)
+    mappedField := store.fieldDefs[newField]
+    if mappedField != nil && !mappedField.aggregatable {
+      field = newField
+    }
+  }
+  return field
+}
+
+func (store *ElasticEventstore) Search(criteria *model.EventSearchCriteria) (*model.EventSearchResults, error) {
+  results := model.NewEventSearchResults()
+  query, err := convertToElasticRequest(store, criteria)
+  if err == nil {
+    var response string
+    store.refreshCache()
+    response, err = store.luceneSearch(query)
+    if err == nil {
+      err = convertFromElasticResults(store, response, results)
+      results.Criteria = criteria
+    }
+  }
+
+  results.Complete()
+  return results, err
+}
+
+func (store *ElasticEventstore) luceneSearch(query string) (string, error) {
+  return store.indexSearch(query, strings.Split(store.index, ","))
+}
+
+func (store *ElasticEventstore) indexSearch(query string, indexes []string) (string, error) {
+  log.WithField("query", query).Debug("Searching Elasticsearch")
   var json string
-  res, err := elastic.esClient.Search(
-    elastic.esClient.Search.WithContext(context.Background()),
-    elastic.esClient.Search.WithIndex(indexes...),
-    elastic.esClient.Search.WithBody(strings.NewReader(query)),
-    elastic.esClient.Search.WithTrackTotalHits(true),
-    elastic.esClient.Search.WithPretty(),
+  res, err := store.esClient.Search(
+    store.esClient.Search.WithContext(context.Background()),
+    store.esClient.Search.WithIndex(indexes...),
+    store.esClient.Search.WithBody(strings.NewReader(query)),
+    store.esClient.Search.WithTrackTotalHits(true),
+    store.esClient.Search.WithPretty(),
   )
   if err == nil {
     defer res.Body.Close()
@@ -101,17 +158,99 @@ func (elastic *SoElastic) Search(query string) (string, error) {
     if res.IsError() {
       errorType := gjson.Get(json, "error.type").String()
       errorReason := gjson.Get(json, "error.reason").String()
-      err = errors.New(errorType + ": " + errorReason)
+      errorDetails := json
+      if len(json) > 255 {
+        errorDetails = json[0:512]
+      }
+      err = errors.New(errorType + ": " + errorReason + " -> " + errorDetails)
     }
   }
+  log.WithFields(log.Fields{"response": json}).Debug("Search Finished")
   return json, err
 }
 
-func (elastic *SoElastic) LookupEsId(esId string) (string, *model.Filter, error) {
+func (store *ElasticEventstore) refreshCache() {
+  if store.cacheTime.IsZero() || time.Now().Sub(store.cacheTime) > store.cacheMs {
+    err := store.refreshCacheFromIndexPatterns()
+    if err == nil {
+      store.cacheTime = time.Now()
+    }
+  }
+}
+
+func (store *ElasticEventstore) refreshCacheFromIndexPatterns() error {
+  query := fmt.Sprintf(`{"query" : { "bool": { "must": { "match" : { "type" : "index-pattern" }}}}}`)
+  json, err := store.indexSearch(query, []string{".kibana*"})
+  if err != nil {
+    log.WithError(err).Error("Failed to refresh cache from index patterns")
+  } else {
+    store.cacheFieldsFromJson(json)
+  }
+  return err
+}
+
+func (store *ElasticEventstore) cacheFieldsFromJson(json string) {
+  store.fieldDefs = make(map[string]*FieldDefinition)
+  gjson.Get(json, "hits.hits.#._source.index-pattern.fields").ForEach(store.cacheFields)
+}
+
+func (store *ElasticEventstore) cacheFields(name gjson.Result, fields gjson.Result) bool {
+  fieldList := make([]map[string]interface{}, 0, 0)
+  json.NewDecoder(strings.NewReader(fields.String())).Decode(&fieldList)
+  for _, field := range fieldList {
+    name := field["name"].(string)
+    fieldType := field["type"].(string)
+
+    fieldDef := &FieldDefinition {
+      name: name, 
+      fieldType: fieldType, 
+      aggregatable: field["aggregatable"].(bool), 
+      searchable: field["searchable"].(bool),
+    }
+    store.fieldDefs[name] = fieldDef
+
+    log.WithFields(log.Fields {
+      "name": name,
+      "type": fieldType,
+    }).Debug("Added field definition")
+  }
+  return true
+}
+
+func (store *ElasticEventstore) clusterState() (string, error) {
+  log.WithField("cacheMs", store.cacheMs).Debug("Refreshing field definitions")
+  indexes := strings.Split(store.index, ",")
+  var json string
+  res, err := store.esClient.Cluster.State(
+    store.esClient.Cluster.State.WithContext(context.Background()),
+    store.esClient.Cluster.State.WithIndex(indexes...),
+  )
+  if err == nil {
+    defer res.Body.Close()
+
+    var b bytes.Buffer
+    b.ReadFrom(res.Body)
+    json = b.String()
+
+    if res.IsError() {
+      errorType := gjson.Get(json, "error.type").String()
+      errorReason := gjson.Get(json, "error.reason").String()
+      errorDetails := json
+      if len(json) > 255 {
+        errorDetails = json[0:512]
+      }
+      err = errors.New(errorType + ": " + errorReason + " -> " + errorDetails)
+    }
+  }
+  log.WithFields(log.Fields{"response": json}).Debug("Refresh Finished")
+  return json, err
+}
+
+func (store *ElasticEventstore) PopulateJobFromEventId(esId string, job *model.Job) error {
   var outputSensorId string
   filter := model.NewFilter()
   query := fmt.Sprintf(`{"query" : { "bool": { "must": { "match" : { "_id" : "%s" }}}}}`, esId)
-  json, err := elastic.Search(query)
+  json, err := store.luceneSearch(query)
   log.WithFields(log.Fields{
     "query": query,
     "response": json,
@@ -155,7 +294,7 @@ func (elastic *SoElastic) LookupEsId(esId string) (string, *model.Filter, error)
         endTime := timestamp.Add(time.Duration(30) * time.Minute).Unix() * 1000
         query = fmt.Sprintf(`{"query":{"bool":{"must":[{"query_string":{"query":"event.module:zeek AND event.dataset:%s AND %s","analyze_wildcard":true}},{"range":{"@timestamp":{"gte":"%d","lte":"%d","format":"epoch_millis"}}}]}}}`,
           esType, broQuery, startTime, endTime)
-        json, err = elastic.Search(query)
+        json, err = store.luceneSearch(query)
         log.WithFields(log.Fields{
           "query": query,
           "response": json,
@@ -191,8 +330,8 @@ func (elastic *SoElastic) LookupEsId(esId string) (string, *model.Filter, error)
             filter.DstPort = int(gjson.Get(json, "hits.hits." + idxStr + "._source.destination.port").Int())
             durationFloat := gjson.Get(json, "hits.hits." + idxStr + "._source.event.duration").Float()
             duration := int64(math.Round(durationFloat * 1000.0))
-            filter.BeginTime = closestTimestamp.Add(time.Duration(-duration - int64(elastic.timeShiftMs)) * time.Millisecond)
-            filter.EndTime = closestTimestamp.Add(time.Duration(duration + int64(elastic.timeShiftMs)) * time.Millisecond)
+            filter.BeginTime = closestTimestamp.Add(time.Duration(-duration - int64(store.timeShiftMs)) * time.Millisecond)
+            filter.EndTime = closestTimestamp.Add(time.Duration(duration + int64(store.timeShiftMs)) * time.Millisecond)
             outputSensorId = gjson.Get(json, "hits.hits." + idxStr + "._source.observer.name").String()
             log.WithFields(log.Fields{
               "sensorId": outputSensorId,
@@ -207,8 +346,11 @@ func (elastic *SoElastic) LookupEsId(esId string) (string, *model.Filter, error)
 
   if err != nil {
     log.WithError(err).Warn("Failed to lookup elasticsearch document")
+  } else {
+    job.SensorId = outputSensorId
+    job.Filter = filter
   }
 
-  return outputSensorId, filter, err
+  return err
 }
 

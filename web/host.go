@@ -83,6 +83,7 @@ func (host *Host) AddConnection(conn *websocket.Conn) {
   host.lock.Lock();
   defer host.lock.Unlock()
   host.connections = append(host.connections, conn);
+  log.WithField("Connections", len(host.connections)).Debug("Added WebSocket connection")
 }
 
 func (host *Host) RemoveConnection(conn *websocket.Conn) {
@@ -94,16 +95,18 @@ func (host *Host) RemoveConnection(conn *websocket.Conn) {
       host.connections = append(host.connections, connection)
     }
   }
+  log.WithField("Connections", len(host.connections)).Debug("Removed WebSocket connection")
 }
 
 func (host *Host) Broadcast(kind string, obj interface{}) {
   host.lock.RLock()
   defer host.lock.RUnlock()
+  msg := &WebSocketMessage{
+    Kind: kind,
+    Object: obj,
+  }
   for _, connection := range host.connections {
-    msg := &WebSocketMessage{
-      Kind: kind,
-      Object: obj,
-    }
     connection.WriteJSON(msg)
+    log.WithField("kind", kind).Debug("Broadcasted message to WebSocket connection")
   }
 }

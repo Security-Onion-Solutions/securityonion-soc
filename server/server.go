@@ -20,6 +20,7 @@ type Server struct {
   Host				*web.Host
   Datastore 	Datastore
   Userstore   Userstore
+  Eventstore  Eventstore
   stoppedChan chan bool
 }
 
@@ -37,13 +38,15 @@ func (server *Server) Start() {
   } else {
     log.Info("Starting server")
 
+    server.Host.Register("/api/events/", NewEventHandler(server))
     server.Host.Register("/api/info", NewInfoHandler(server))
-    server.Host.Register("/api/stream", NewStreamHandler(server))
+    server.Host.Register("/api/job/", NewJobHandler(server))
+    server.Host.Register("/api/jobs/", NewJobsHandler(server))
     server.Host.Register("/api/packets", NewPacketHandler(server))
-    server.Host.Register("/api/job", NewJobHandler(server))
-    server.Host.Register("/api/jobs", NewJobsHandler(server))
+    server.Host.Register("/api/query/", NewQueryHandler(server))
     server.Host.Register("/api/sensor", NewSensorHandler(server))
     server.Host.Register("/api/sensors", NewSensorsHandler(server))
+    server.Host.Register("/api/stream", NewStreamHandler(server))
     server.Host.Register("/api/user/", NewUserHandler(server))
     server.Host.Register("/api/users/", NewUsersHandler(server))
 

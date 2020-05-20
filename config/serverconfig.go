@@ -24,6 +24,7 @@ type ServerConfig struct {
   MaxPacketCount									int																`json:"maxPacketCount"`
   Modules													module.ModuleConfigMap						`json:"modules"`
   ModuleFailuresIgnored						bool															`json:"moduleFailuresIgnored"`
+  ClientParams  									ClientParameters 								  `json:"client"`
 }
 
 func (config *ServerConfig) Verify() error {
@@ -39,6 +40,9 @@ func (config *ServerConfig) Verify() error {
   }
   if config.BaseUrl[len(config.BaseUrl)-1] != '/' {
     config.BaseUrl = config.BaseUrl + "/"
+  }
+  if err == nil {
+    err = config.ClientParams.Verify()
   }
   return err
 }

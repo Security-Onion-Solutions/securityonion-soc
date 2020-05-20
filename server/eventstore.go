@@ -7,14 +7,13 @@
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-package model
+package server
 
 import (
-  "github.com/security-onion-solutions/securityonion-soc/config"
+  "github.com/security-onion-solutions/securityonion-soc/model"
 )
 
-type Info struct {
-  Version		  	string		                `json:"version"`
-  License			  string	            	    `json:"license"`	
-  Parameters    *config.ClientParameters  `json:"parameters"`
+type Eventstore interface {
+	PopulateJobFromEventId(id string, job *model.Job) error
+	Search(criteria *model.EventSearchCriteria) (*model.EventSearchResults, error)
 }

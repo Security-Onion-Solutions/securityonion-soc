@@ -18,6 +18,7 @@
     <link rel="icon" sizes="24x24" href="images/onion.png?v=VERSION_PLACEHOLDER">
     <link rel="stylesheet" href="css/external/vuetify-v2.2.18.min.css">
     <link rel="stylesheet" href="css/external/all-5.13.0.min.css">
+    <link rel="stylesheet" href="css/external/daterangepicker-3.0.5.css">
     <link rel="stylesheet" href="css/app.css?v=VERSION_PLACEHOLDER">
     <title>Security Onion</title>
   </head>
@@ -31,6 +32,14 @@
             </v-list-item-action>
             <v-list-item-content>
               <v-list-item-title v-text="i18n.home"></v-list-item-title>
+            </v-list-item-content>
+          </v-list-item>
+          <v-list-item @click="" to="/hunt">
+            <v-list-item-action>
+              <v-icon>fa-crosshairs</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>
+              <v-list-item-title v-text="i18n.hunt"></v-list-item-title>
             </v-list-item-content>
           </v-list-item>
           <v-list-item @click="" to="/jobs">
@@ -57,7 +66,7 @@
               <v-list-item-title v-text="i18n.downloads"></v-list-item-title>
             </v-list-item-content>
           </v-list-item>
-          <v-list-group value="true" prepend-icon="fa-shield-alt">
+          <v-list-group :value="false" prepend-icon="fa-shield-alt">
             <template v-slot:activator>
               <v-list-item-title v-text="i18n.admin"></v-list-item-title>
             </template>
@@ -86,6 +95,14 @@
             </v-list-item-action>
             <v-list-item-content>
               <v-list-item-title v-text="i18n.launch_grafana"></v-list-item-title>
+            </v-list-item-content>
+          </v-list-item>
+          <v-list-item target="so-cyberchef" href="/cyberchef/">
+            <v-list-item-action>
+              <v-icon>fa-external-link-alt</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>
+              <v-list-item-title v-text="i18n.launch_cyberchef"></v-list-item-title>
             </v-list-item-content>
           </v-list-item>
           <v-list-item target="so-playbook" href="/playbook/">
@@ -132,32 +149,65 @@
           </router-link>
         </v-toolbar-title>
         <v-spacer></v-spacer>
-        <v-btn icon text right app target="so-help" href="https://github.com/Security-Onion-Solutions/securityonion-saltstack/wiki/FAQ" :title="i18n.help">
-          <v-icon>fa-question-circle</v-icon>
-        </v-btn>
-        <v-btn icon text right app target="so-blog" href="https://blog.securityonion.net/" :title="i18n.blog">
-          <v-icon>fa-info-circle</v-icon>
-        </v-btn>
-        <v-btn icon text right app @click.stop="toggleTheme" :title="i18n.darkMode">
-          <v-icon>fa-adjust</v-icon>
-        </v-btn>
-        <v-btn icon text right app :href="authUrl + 'logout'" :title="i18n.logout">
-          <v-icon>fa-sign-out-alt</v-icon>
-        </v-btn>
+        <v-menu bottom left offset-y="true">
+          <template v-slot:activator="{ on }">
+            <v-btn icon v-on="on">
+              <v-icon>fa-user</v-icon>
+            </v-btn>
+          </template>
+          <v-list>
+            <v-list-item @click.stop="toggleTheme">
+              <v-list-item-action>
+                <v-icon>fa-adjust</v-icon>
+              </v-list-item-action>
+              <v-list-item-content>
+                <v-list-item-title v-text="i18n.darkMode"></v-list-item-title>
+              </v-list-item-content>
+            </v-list-item>
+            <v-list-item target="so-help" href="https://github.com/Security-Onion-Solutions/securityonion-saltstack/wiki/FAQ">
+              <v-list-item-action>
+                <v-icon>fa-question</v-icon>
+              </v-list-item-action>
+              <v-list-item-content>
+                <v-list-item-title v-text="i18n.help"></v-list-item-title>
+              </v-list-item-content>
+            </v-list-item>
+            <v-list-item target="so-blog" href="https://blog.securityonion.net/">
+              <v-list-item-action>
+                <v-icon>fa-info</v-icon>
+              </v-list-item-action>
+              <v-list-item-content>
+                <v-list-item-title v-text="i18n.blog"></v-list-item-title>
+              </v-list-item-content>
+            </v-list-item>
+            <v-divider></v-divider>
+            <v-list-item :href="authUrl + 'logout'">
+              <v-list-item-action>
+                <v-icon>fa-sign-out-alt</v-icon>
+              </v-list-item-action>
+              <v-list-item-content>
+                <v-list-item-title v-text="i18n.logout"></v-list-item-title>
+              </v-list-item-content>
+            </v-list-item>
+          </v-list>
+        </v-menu>
       </v-app-bar>
       <v-content>
-        <v-progress-linear v-if="loading" :active="loading" indeterminate></v-progress-linear>
-        <v-alert dismissible type="warning" icon="fa-exclamation-triangle" v-model="error" transition="scale-transition">{{ i18n.error }} ({{ errorMessage }})</v-alert>
-        <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition">{{ infoMessage }}</v-alert>
+        <v-progress-linear v-if="loading" height="10" :active="loading" indeterminate></v-progress-linear>
+        <v-alert dismissible type="warning" icon="fa-exclamation-triangle" v-model="error" transition="scale-transition" v-text="errorMessage"></v-alert>
+        <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" v-text="infoMessage"></v-alert>
         <router-view></router-view>
       </v-content>
       <v-footer app>
-        <span class="overline text-no-wrap">
-          {{ i18n.version }}: <a id="versionLink" class="footer" :href="versionLink">{{ version }}</a>
+        <span id="version" class="overline text-no-wrap">
+          {{ i18n.version }}: {{ version }}
         </span>
         <v-spacer></v-spacer>
         <span class="overline text-no-wrap">
-          &copy; {{ new Date().getFullYear() }} <a class="footer" target="sos" href="https://securityonionsolutions.com/">Security Onion Solutions, LLC</a>
+          &copy; {{ new Date().getFullYear() }} 
+          <a class="footer" target="sos" href="https://securityonionsolutions.com/">
+            Security Onion Solutions, LLC
+          </a>
         </span>
         <v-spacer></v-spacer>
         <span class="overline text-no-wrap">
@@ -186,6 +236,231 @@
               <img src="images/security_onion_solutions_rings.png">
             </a>
           </v-col>
+        </v-row>
+      </v-container>
+    </script>
+
+    <script type="text/x-template" id="page-hunt">
+      <v-container fluid>
+        <v-row>
+          <v-col cols="3">
+            <h2 v-text="i18n.hunt"></h2>
+          </v-col>
+          <v-col cols="9" align="right">
+            <h4 v-if="loaded">{{ i18n.eventTotal }} {{ totalEvents.toLocaleString() }}</h4>
+          </v-col>
+        </v-row>
+        <v-row align="start">
+          <v-col cols="12" md="7">
+            <v-textarea clearable auto-grow :disabled="loading()" @change="notifyInputsChanged" class="mx-2" v-model="query" :hint="i18n.queryHelp" rows="1" persistent-hint="true" 
+              autofocus="true" prepend-icon="fa-search" @keydown.enter.prevent="hunt">
+              <template v-slot:prepend-inner>
+                <v-menu dense bottom three-line offset-y="true">
+                  <template v-slot:activator="{ on: menu }">
+                    <v-tooltip bottom>
+                      <template v-slot:activator="{ on: tooltip }">
+                        <v-btn icon small v-on="{ ...tooltip, ...menu }">
+                          <v-icon>fa-angle-down</v-icon>
+                        </v-btn>
+                      </template>
+                      <span>{{ i18n.queriesHelp }}</span>
+                    </v-tooltip>
+                  </template>
+                  <v-list dense class="overflow-y-auto" style="max-height: 600px">
+                    <v-list-item v-for="query in mruQueries">
+                      <v-list-item-content @click="huntQuery(query)" :style="{ cursor: 'pointer'}">
+                        <v-list-item-title v-text="query"></v-list-item-title>
+                        <v-list-item-subtitle>
+                          <span class="text-primary">{{ i18n.mruQuery }} &mdash;</span>
+                          {{ i18n.mruQueryHelp }}
+                        </v-list-item-subtitle>
+                      </v-list-item-content>
+                    </v-list-item>
+                    <v-divider></v-divider>
+                    <v-list-item v-for="query in queries">
+                      <v-list-item-content @click="huntQuery(query.query)" :style="{ cursor: 'pointer'}">
+                        <v-list-item-title v-text="query.query"></v-list-item-title>
+                        <v-list-item-subtitle>
+                          <span v-if="query.name.length > 0" class="text-primary">{{ query.name }} &mdash;</span>
+                          {{ query.description }}
+                        </v-list-item-subtitle>
+                      </v-list-item-content>
+                    </v-list-item>
+                  </v-list>
+                </v-menu>
+              </template>
+            </v-textarea>
+          </v-col>
+          <v-col cols="12" md="5" class="d-flex flex-nowrap align-center">
+            <v-text-field :disabled="loading()" v-if="relativeTimeEnabled" id="huntrelativetimevalue" @change="notifyInputsChanged" class="mx-2" 
+                v-model="relativeTimeValue" :hint="i18n.relativeTimeHelp" persistent-hint="true" type="number">
+              <template v-slot:prepend>
+                <b-btn v-if="relativeTimeEnabled" icon x-small @click="showAbsoluteTime">
+                  <v-icon>fa-history</v-icon>
+                </b-btn>
+                <div v-if="relativeTimeEnabled" class="pt-1 px-4"">
+                  {{ i18n.last }}
+                </div>
+              </template>
+              <template v-slot:append-outer>
+                <v-select class="my-n1 py-0" :disabled="loading()" v-if="relativeTimeEnabled" id="huntrelativetimeunit" @change="notifyInputsChanged"
+                  v-model="relativeTimeUnit" :items="relativeTimeUnits"></v-select>
+              </template>
+            </v-text-field>
+            <v-text-field :disabled="loading()" v-if="!relativeTimeEnabled" id="huntdaterange" @change="notifyInputsChanged" class="mx-2" 
+              v-model="dateRange" :hint="i18n.timePickerHelp" persistent-hint="true" 
+              prepend-inner-icon="fa-angle-down" @click:prepend-inner="showDateRangePicker">
+              <template v-slot:prepend>
+                <b-btn v-if="!relativeTimeEnabled" icon x-small @click="showRelativeTime">
+                  <v-icon>fa-calendar-alt</v-icon>
+                </b-btn>
+              </template>
+            </v-text-field>
+            <v-btn id="hunt" :disabled="loading()" color="primary" @click.stop="hunt">
+              <span class="d-sm-none d-lg-inline">{{ i18n.hunt }}&nbsp;</span>
+              <v-icon>fa-crosshairs</v-icon>
+            </v-btn>
+          </v-col>
+        </v-row>
+        <v-row v-if="loaded && !metricsEnabled">
+          <v-col cols="12">
+            <line-chart :height="chartHeight" :chartdata="timelineChartData" :options="timelineChartOptions"/>
+          </v-col>
+        </v-row>
+        <v-row v-if="metricsEnabled">
+          <v-col cols="12" md="4">
+            <bar-chart id="topChart" :height="chartHeight" :chartdata="topChartData" :options="topChartOptions"/>
+          </v-col>
+          <v-col cols="12" md="4">
+            <line-chart id="timelineChart" :height="chartHeight" :chartdata="timelineChartData" :options="timelineChartOptions"/>
+          </v-col>
+          <v-col cols="12" md="4">
+            <bar-chart id="bottomChart":height="chartHeight" :chartdata="bottomChartData" :options="bottomChartOptions"/>
+          </v-col>
+        </v-row>
+        <v-row v-if="metricsEnabled">
+          <v-col cols="12">
+            <v-data-table :search="groupByFilter" dense :sort-by.sync="groupBySortBy" :sort-desc.sync="groupBySortDesc" :footer-props="groupByFooters" 
+              :items-per-page.sync="groupByItemsPerPage" must-sort :headers="groupByHeaders" :items="groupByData">
+              <template v-slot:top>
+                <v-container fluid>
+                  <v-row>
+                    <v-col cols="4">
+                      <h3>{{ i18n.groups }}</h3>
+                    </v-col>
+                    <v-col cols="2">
+                      <v-select :disabled="loading()" @change="notifyInputsChanged" v-model="groupByLimit" :items="groupByLimitOptions" :label="i18n.fetchLimit"></v-text-field>
+                    </v-col>
+                    <v-col cols="6">
+                      <v-text-field v-model="groupByFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
+                    </v-col>
+                  </v-row>
+                </v-container>        
+              </template>
+              <template v-slot:item="{ item }">
+                <tr>
+                  <td>
+                    {{ item.count.toLocaleString() }}
+                  </td>
+                  <td v-for="field in groupByHeaders.slice(1)">
+                    <div class="d-inline-block semi-transparent">
+                      <v-btn v-if="canQuery(field.value)" icon x-small @click="filterQuery(field.value, item[field.value], true)">
+                        <v-icon :alt="i18n.filterInclude" :title="i18n.filterIncludeHelp">fa-search-plus</v-icon>
+                      </v-btn>
+                      <v-btn v-if="canQuery(field.value)" icon x-small @click="filterQuery(field.value, item[field.value], false)">
+                        <v-icon :alt="i18n.filterExclude" :title="i18n.filterExcludeHelp">fa-search-minus</v-icon>
+                      </v-btn>
+                    </div>
+                    <div class="d-inline-block" v-text="item[field.value]"></div>
+                  </td>
+                </tr>
+              </template>
+
+            </v-data-table>
+          </v-col>
+        </v-row>
+        <v-row v-if="loaded">
+          <v-col cols="12">
+            <v-data-table :search="eventFilter" :sort-by.sync="sortBy" item-key="soc_id" :expanded.sync="expanded" :sort-desc.sync="sortDesc" :footer-props="footerProps" 
+              :items-per-page.sync="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" show-expand>
+              <template v-slot:top>
+                <v-container fluid>
+                  <v-row>
+                    <v-col cols="4">
+                      <h3>{{ i18n.events }}</h3>
+                    </v-col>
+                    <v-col cols="2">
+                      <v-select :disabled="loading()" @change="notifyInputsChanged" v-model="eventLimit" :items="eventLimitOptions" :label="i18n.fetchLimit"></v-text-field>
+                    </v-col>
+                    <v-col cols="6">
+                      <v-text-field v-model="eventFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
+                    </v-col>
+                  </v-row>
+                </v-container>
+              </template>        
+              <template v-slot:item="{ item }">
+                <tr>
+                  <td>
+                    <v-btn icon small @click="expand(item)">
+                      <v-icon v-if="isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-up</v-icon>
+                      <v-icon v-if="!isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-down</v-icon>
+                    </v-btn>
+                    &nbsp;
+                    <a :title="i18n.pcapOpenInSameTab" :alt="i18n.pcapOpenInSameTab" @click.stop="lookupPcap(item.soc_id)">
+                      {{ i18n.pcap }}
+                    </a>
+                    &nbsp;
+                    <a :title="i18n.pcapOpenInNewTab" :alt="i18n.pcapOpenInNewTab" @click.stop="lookupPcap(item.soc_id, true)">
+                      <v-icon>fa-external-link-alt</v-icon>
+                    </a>
+                  </td>
+                  <td v-for="field in eventHeaders">
+                    <div class="d-inline-block semi-transparent">
+                      <v-btn v-if="canQuery(field.value)" icon x-small @click="filterQuery(field.value, item[field.value], true)">
+                        <v-icon :alt="i18n.filterInclude" :title="i18n.filterIncludeHelp">fa-search-plus</v-icon>
+                      </v-btn>
+                      <v-btn v-if="canQuery(field.value)" icon x-small @click="filterQuery(field.value, item[field.value], false)">
+                        <v-icon :alt="i18n.filterExclude" :title="i18n.filterExcludeHelp">fa-search-minus</v-icon>
+                      </v-btn>
+                    </div>
+                    <div class="d-inline-block" v-text="item[field.value]"></div>
+                  </td>
+                </tr>
+              </template>
+              <template v-slot:expanded-item="{ headers, item }">
+                <td :colspan="headers.length" class="py-2">
+                  <v-data-table dense disable-pagination hide-default-header hide-default-footer must-sort :headers="expandedHeaders" :items="getExpandedData()">
+                    <template v-slot:item="{ item }">
+                      <tr>
+                        <td class="expansion">
+                          <div class="d-inline-block semi-transparent">
+                            <v-btn :disabled="!canQuery(item.key)" icon x-small @click="groupQuery(item.key)">
+                              <v-icon :alt="i18n.groupInclude" :title="i18n.groupIncludeHelp">fa-layer-group</v-icon>
+                            </v-btn>
+                          </div>
+                          <div class="d-inline-block expansion" v-text="item.key"></div>
+                        </td>
+                        <td class="expansion">
+                          <div class="d-inline-block semi-transparent">
+                            <v-btn :disabled="!canQuery(item.key)" icon x-small @click="filterQuery(item.key, item.value, true)">
+                              <v-icon :alt="i18n.filterInclude" :title="i18n.filterIncludeHelp">fa-search-plus</v-icon>
+                            </v-btn>
+                            <v-btn :disabled="!canQuery(item.key)" icon x-small @click="filterQuery(item.key, item.value, false)">
+                              <v-icon :alt="i18n.filterExclude" :title="i18n.filterExcludeHelp">fa-search-minus</v-icon>
+                            </v-btn>
+                          </div>
+                          <div class="d-inline-block expansion hardwrap" v-text="item.value"></div>
+                        </td>
+                      </tr>
+                    </template>
+                  </v-data-table>
+                </td>
+              </template>
+            </v-data-table>
+          </v-col>
+        </v-row>
+        <v-row v-if="loaded">
+          <v-subheader inset>{{ i18n.eventFetchTook }} {{ fetchTimeSecs }} {{ i18n.seconds }}. {{ i18n.eventRoundTripTook }} {{ roundTripTimeSecs }} {{ i18n.seconds }}.</v-subheader>
         </v-row>
       </v-container>
     </script>
@@ -292,14 +567,20 @@
                 </v-card-actions>
               </v-card>
             </v-dialog>
-            <v-data-table :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps" :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="users">
+            <v-data-table :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps" 
+              :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="users">
               <template v-slot:item="props">
-                <router-link :to="{ name: 'user', params: {id: props.item.id}}" tag="tr" :style="{ cursor: 'pointer'}">
+                <tr>
                   <td v-text="props.item.email"></td>
                   <td v-text="props.item.firstName"></td>
                   <td v-text="props.item.lastName"></td>
-                  <td><v-icon v-title="i18n.delete" @click.stop="showDeleteConfirm(props.item)">fa-times-circle</v-icon></td>
-                </router-link>
+                  <td>
+                    <router-link :to="{ name: 'user', params: {id: props.item.id}}" :style="{ cursor: 'pointer'}">
+                      <v-icon class="mr-2" v-title="i18n.edit">fa-edit</v-icon>
+                    </router-link>
+                    <v-icon class="mr-2" v-title="i18n.delete" @click.stop="showDeleteConfirm(props.item)">fa-times-circle</v-icon>
+                  </td>
+                </tr>
               </template>
             </v-data-table>
             <v-dialog v-model="dialog" width="800px">
@@ -310,7 +591,9 @@
                     <v-row>
                       <v-col xs12>
                         <v-text-field v-model="form.email" :placeholder="i18n.email" autofocus="true" :rules="[rules.required]"></v-text-field>
-                        <v-text-field v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'mdi-eye' : 'mdi-eye-off'" :rules="[rules.required]"></v-text-field>
+                        <v-text-field v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" 
+                          @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'mdi-eye' : 'mdi-eye-off'" 
+                          :rules="[rules.required]"></v-text-field>
                         <v-text-field v-model="form.firstName" :placeholder="i18n.firstName"></v-text-field>
                         <v-text-field v-model="form.lastName" :placeholder="i18n.lastName"></v-text-field>
                         <v-text-field name="csrf_token" v-model="form.csrfToken" class="d-none"></v-text-field>
@@ -340,19 +623,30 @@
         <v-row>
           <v-col>
             <v-toolbar class="elevation-0" fixed>
-              <v-btn class="action" color="blue" @click.stop="dialog = !dialog">
+              <v-btn color="primary" @click.stop="dialog = !dialog">
                 <v-icon>fa-plus</v-icon>
               </v-btn>
             </v-toolbar>
-            <v-data-table :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps" :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="jobs">
+            <v-data-table :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps" :items-per-page.sync="itemsPerPage" 
+              must-sort :headers="headers" :items="jobs">
               <template v-slot:item="props">
-                <router-link :to="{ name: 'job', params: {jobId: props.item.id}}" tag="tr" :style="{ cursor: 'pointer'}">
-                  <td v-text="props.item.id"></td>
+                <tr>
+                  <td>
+                    <router-link :to="{ name: 'job', params: {jobId: props.item.id}}" :style="{ cursor: 'pointer'}">
+                      {{ props.item.id }}
+                    </router-link>
+                  </td>
                   <td>{{ props.item.createTime | formatDateTime }}</td>
                   <td>{{ props.item | formatJobUpdateTime | formatDateTime }}</td>
                   <td v-text="props.item.sensorId"></td>
                   <td><v-chip :color="props.item | colorJobStatus">{{ props.item | formatJobStatus }}</v-chip></td>
-                </router-link>
+                  <td>
+                    <router-link :to="{ name: 'job', params: {jobId: props.item.id}}" :style="{ cursor: 'pointer'}">
+                      <v-icon class="mr-2" v-title="i18n.edit">fa-binoculars</v-icon>
+                    </router-link>
+                    <v-icon class="mr-2" v-title="i18n.delete" @click.stop="deleteJob(props.item)">fa-times-circle</v-icon>
+                  </td>
+                </tr>
               </template>
             </v-data-table>
             <v-dialog v-model="dialog" width="800px">
@@ -438,7 +732,7 @@
         <v-row v-if="job.status == 1">
           <v-col>
             <v-toolbar fixed>
-              <v-text-field v-model="search" append-icon="fa-search" :label="i18n.filterPackets" single-line hide-details></v-text-field>
+              <v-text-field v-model="search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
               <v-spacer></v-spacer>
               <v-btn-toggle v-model="captureLayout" class="transparent" mandatory>
                 <v-btn value="packets" icon :title="i18n.showPacketsHelp" text>
@@ -469,7 +763,9 @@
                 <v-icon>fa-download</v-icon>
               </v-btn>
             </v-toolbar>
-            <v-data-table ref="packetTable" :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :items-per-page.sync="itemsPerPage" :search="search" :footer-props="footerProps" must-sort :headers="headers" :hide-default-header="captureLayout != 'packets'" :items="packets" item-key="number" :loading="packetsLoading" :expanded="expanded">
+            <v-data-table ref="packetTable" :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :items-per-page.sync="itemsPerPage" 
+              :search="search" :footer-props="footerProps" must-sort :headers="headers" :hide-default-header="captureLayout != 'packets'" 
+              :items="packets" item-key="number" :loading="packetsLoading" :expanded="expanded">
               <template v-slot:item="props">
                 <tr @click="expandRow(props.item)" v-if="captureLayout == 'packets'">
                   <td v-text="props.item.number"></td>
@@ -522,7 +818,8 @@
         </v-row>
         <v-row>
           <v-col>
-            <v-data-table :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps"  :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="sensors">
+            <v-data-table :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps" 
+              :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="sensors">
               <template v-slot:item="props">
                 <td v-text="props.item.id"></td>
                 <td v-text="props.item.description"></td>
@@ -544,11 +841,16 @@
     <script src="js/external/vuetify-v2.2.18.min.js"></script>
     <script src="js/external/axios-0.19.2.min.js"></script>
     <script src="js/external/moment-2.24.0.min.js"></script>
+    <script src="js/external/moment-timezone-data-0.5.28.js"></script>
+    <script src="js/external/chart-2.7.1.min.js"></script>
+    <script src="js/external/vue-chartjs-2.7.1.min.js"></script>
+    <script src="js/external/daterangepicker-3.0.5.min.js"></script>
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/downloads.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/home.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/hunt.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/jobs.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/job.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/sensors.js?v=VERSION_PLACEHOLDER"></script>

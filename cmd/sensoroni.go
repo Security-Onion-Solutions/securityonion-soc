@@ -45,7 +45,7 @@ func InitLogging(logFilename string, logLevel string) (*os.File, error) {
 }
 
 func main() {
-  configFilename := flag.String("config", "sensoroni.json", "Configuration file, in JSON format")
+  configFilename := flag.String("c", "sensoroni.json", "Configuration file, in JSON format")
   flag.Parse()
 
   buildTime, err := time.Parse("2006-01-02T15:04:05", BuildTime)

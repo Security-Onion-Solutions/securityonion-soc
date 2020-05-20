@@ -26,7 +26,12 @@ routes.push({ path: '/sensors', name: 'sensors', component: {
     itemsPerPage: 10,
     footerProps: { 'items-per-page-options': [10,50,250,1000] },
   }},
-  created() { this.loadData() },
+  created() { 
+    this.loadData() 
+  },
+  destroyed() {
+    this.$root.unsubscribe("sensor", this.updateSensor);
+  },
   watch: {
     '$route': 'loadData',
     'sortBy': 'saveLocalSettings',

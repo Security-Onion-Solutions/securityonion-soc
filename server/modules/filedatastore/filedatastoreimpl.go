@@ -182,6 +182,27 @@ func (datastore *FileDatastoreImpl) getJobById(jobId int) *model.Job {
   return datastore.jobsById[jobId]
 }
 
+func (datastore *FileDatastoreImpl) DeleteJob(job *model.Job) error {
+  err := datastore.deleteJob(job)
+  if err == nil {
+    job.Status = model.JobStatusDeleted
+    filename := fmt.Sprintf("%d.json", job.Id)
+    folder := filepath.Join(datastore.jobDir, sanitize.Name(job.SensorId))
+    err = os.Remove(filepath.Join(folder, filename))
+    if err == nil {
+      filename = fmt.Sprintf("%d.bin", job.Id)
+      os.Remove(filepath.Join(folder, filename))
+
+      log.WithFields(log.Fields {
+        "id": job.Id,
+        "folder": folder,
+        "filename": filename,
+      }).Info("Permanently deleted job and job files")
+    }
+  }
+  return err
+}
+
 func (datastore *FileDatastoreImpl) deleteJob(job *model.Job) error {
   var err error
   existingJob := datastore.getJobById(job.Id)
@@ -200,7 +221,7 @@ func (datastore *FileDatastoreImpl) deleteJob(job *model.Job) error {
     log.WithFields(log.Fields {
       "id": job.Id,
       "sensor": job.SensorId,
-    }).Debug("Deleted job")
+    }).Debug("Deleted job from list")
   }
   return err
 }

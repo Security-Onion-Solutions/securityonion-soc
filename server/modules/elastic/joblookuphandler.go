@@ -7,7 +7,7 @@
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-package securityonion
+package elastic
 
 import (
   "errors"
@@ -17,36 +17,34 @@ import (
   "github.com/security-onion-solutions/securityonion-soc/web"
 )
 
-type SoJobLookupHandler struct {
+type JobLookupHandler struct {
   web.BaseHandler
   server							*server.Server
-  elastic 						*SoElastic
+  store    						*ElasticEventstore
 }
 
-func NewSoJobLookupHandler(srv *server.Server, elastic *SoElastic) *SoJobLookupHandler {
-  handler := &SoJobLookupHandler {}
+func NewJobLookupHandler(srv *server.Server, store *ElasticEventstore) *JobLookupHandler {
+  handler := &JobLookupHandler {}
   handler.Host = srv.Host
   handler.server = srv
   handler.BaseHandler.Impl = handler
-  handler.elastic = elastic
+  handler.store = store
   return handler
 }
 
-func (handler *SoJobLookupHandler) HandleNow(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (handler *JobLookupHandler) HandleNow(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   switch request.Method {
     case http.MethodGet: return handler.get(writer, request)
   }
   return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
 
-func (handler *SoJobLookupHandler) get(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (handler *JobLookupHandler) get(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   statusCode := http.StatusBadRequest
   esId := request.URL.Query().Get("esid")
-  sensorId, filter, err := handler.elastic.LookupEsId(esId)
+  job := handler.server.Datastore.CreateJob()
+  err := handler.store.PopulateJobFromEventId(esId, job)
   if err == nil {
-    job := handler.server.Datastore.CreateJob()
-    job.SensorId = sensorId
-    job.Filter = filter
     err = handler.server.Datastore.AddJob(job)
     if err == nil {
       handler.Host.Broadcast("job", job)
