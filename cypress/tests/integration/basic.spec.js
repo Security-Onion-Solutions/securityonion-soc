@@ -1,6 +1,6 @@
 
 beforeEach(() => {
-    cy.visit('192.168.9.125:9822')
+    cy.visit('localhost:9822')
 })
 
 describe('Page navigation', () => {
