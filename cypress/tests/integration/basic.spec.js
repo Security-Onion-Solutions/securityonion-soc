@@ -4,9 +4,7 @@ describe('Page navigation', () => {
     })
 
     it('should start on overview page', () => {
-        cy.get('.v-content__wrap')
-            .find('.container')
-            .find('h2')
+        cy.get('h2')
             .contains('Overview')
     })
     
@@ -30,27 +28,21 @@ describe('Page navigation', () => {
     it('should nav to onionhunt clicked', () => {
         cy.get('i.fa-crosshairs')
             .click()
-        cy.get('.v-content__wrap')
-            .find('.container')
-            .find('h2')
+        cy.get('h2')
             .contains('Hunt')
     })
     
     it('should nav to pcap page when clicked', () => {
         cy.get('i.fa-tasks')
             .click()
-        cy.get('.v-content__wrap')
-            .find('.container')
-            .find('h2')
+        cy.get('h2')
             .contains('PCAP')
     })
     
     it('should nav to sensors page when clicked', () => {
         cy.get('i.fa-ethernet')
             .click()
-        cy.get('.v-content__wrap')
-            .find('.container')
-            .find('h2')
+        cy.get('h2')
             .contains('Sensors')
     })
 })
