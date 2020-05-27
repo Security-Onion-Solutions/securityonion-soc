@@ -79,7 +79,7 @@
           </v-list-item-group>
         </v-list>
         <v-divider></v-divider>
-        <v-list subheader dense id='external-tools-list'>
+        <v-list subheader dense id="external-tools-list">
           <v-subheader>Tools</v-subheader>
           <v-list-item target="so-kibana" href="/kibana/">
             <v-list-item-action>
@@ -155,7 +155,7 @@
               <v-icon>fa-user</v-icon>
             </v-btn>
           </template>
-          <v-list id='top-menu'>
+          <v-list id="top-menu">
             <v-list-item @click.stop="toggleTheme">
               <v-list-item-action>
                 <v-icon>fa-adjust</v-icon>
@@ -259,7 +259,7 @@
                   <template v-slot:activator="{ on: menu }">
                     <v-tooltip bottom>
                       <template v-slot:activator="{ on: tooltip }">
-                        <v-btn icon small v-on="{ ...tooltip, ...menu }" id='hunt-query-dropdown-button'>
+                        <v-btn icon small v-on="{ ...tooltip, ...menu }" id="hunt-query-dropdown-button">
                           <v-icon>fa-angle-down</v-icon>
                         </v-btn>
                       </template>
@@ -490,7 +490,7 @@
         </v-row>
         <v-row>
           <v-col>
-            <h3 v-text="i18n.downloadsOsqueryPackages" id='osquery-packages'></h3>
+            <h3 v-text="i18n.downloadsOsqueryPackages" id="osquery-packages"></h3>
             <ul>
               <li><a href="/packages/launcher.msi" download="msi-launcher.msi">MSI (Windows)</a></li>
               <li><a href="/packages/launcher.deb" download="deb-launcher.deb">DEB (Debian)</a></li>
@@ -498,7 +498,7 @@
               <li><a href="/packages/launcher.pkg" download="pkg-launcher.pkg">PKG (MacOS)</a></li>
             </ul>
             <p></p>
-            <h3 v-text="i18n.downloadsOsqueryConfigs" id='osquery-configs'></h3>
+            <h3 v-text="i18n.downloadsOsqueryConfigs" id="osquery-configs"></h3>
             <ul>
               <li><a href="/packages/launcher.flags" download="launcher.flags.txt">RPM & DEB Flag File</a></li>
               <li><a href="/packages/launcher-msi.flags" download="launcher-msi.flags.txt">MSI Flag File</a></li>
@@ -623,7 +623,7 @@
         <v-row>
           <v-col>
             <v-toolbar class="elevation-0" fixed>
-              <v-btn color="primary" @click.stop="dialog = !dialog" id='add-pcap-job-button'>
+              <v-btn color="primary" @click.stop="dialog = !dialog" id="add-pcap-job-button">
                 <v-icon>fa-plus</v-icon>
               </v-btn>
             </v-toolbar>
@@ -650,7 +650,7 @@
               </template>
             </v-data-table>
             <v-dialog v-model="dialog" width="800px">
-              <v-card id='pcap-job-dialog'>
+              <v-card id="pcap-job-dialog">
                 <v-card-title class="lighten-4 py-4 title" v-text="i18n.addJob"></v-card-title>
                 <v-form v-model="form.valid">
                   <v-container grid-list-sm class="pa-4">
