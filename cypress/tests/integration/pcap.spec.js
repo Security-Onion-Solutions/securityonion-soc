@@ -15,7 +15,7 @@ describe(('PCAP job creation'), () => {
         ]
         cy.get('#add-pcap-job-button')
             .click()
-        .get('#pcap-job-dialog')
+        cy.get('#pcap-job-dialog')
             .should('be.visible')
             .children('form')
             .find('input')
