@@ -1,0 +1,13 @@
+{
+    "$schema": "https://on.cypress.io/cypress.schema.json",
+    "viewportWidth": 1920,
+    "viewportHeight": 1080,
+    "video": false,
+    "nodeVersion": "system",
+    "fixturesFolder": "fixtures",
+    "integrationFolder": "tests",
+    "screenshotsFolder": "artifacts/screenshots",
+    "videosFolder": "artifacts/videos",
+    "pluginsFile": false,
+    "supportFile": false
+}

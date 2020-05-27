@@ -79,7 +79,7 @@
           </v-list-item-group>
         </v-list>
         <v-divider></v-divider>
-        <v-list subheader dense>
+        <v-list subheader dense id='external-tools-list'>
           <v-subheader>Tools</v-subheader>
           <v-list-item target="so-kibana" href="/kibana/">
             <v-list-item-action>
@@ -155,7 +155,7 @@
               <v-icon>fa-user</v-icon>
             </v-btn>
           </template>
-          <v-list>
+          <v-list id='top-menu'>
             <v-list-item @click.stop="toggleTheme">
               <v-list-item-action>
                 <v-icon>fa-adjust</v-icon>
@@ -224,7 +224,7 @@
           </v-col>
         </v-row>
         <v-row>
-          <v-col class="mx-auto px-12">
+          <v-col class="mx-auto px-12" id="change-details">
             <div  class="title" v-html="changeDetails.title"></div>
             <ul>
               <li v-for="change in changeDetails.changes" :key="change.summary" v-html="change.summary"></li>
@@ -253,20 +253,20 @@
         <v-row align="start">
           <v-col cols="12" md="7">
             <v-textarea clearable auto-grow :disabled="loading()" @change="notifyInputsChanged" class="mx-2" v-model="query" :hint="i18n.queryHelp" rows="1" persistent-hint="true" 
-              autofocus="true" prepend-icon="fa-search" @keydown.enter.prevent="hunt">
+              autofocus="true" prepend-icon="fa-search" @keydown.enter.prevent="hunt" id="hunt-query-input">
               <template v-slot:prepend-inner>
                 <v-menu dense bottom three-line offset-y="true">
                   <template v-slot:activator="{ on: menu }">
                     <v-tooltip bottom>
                       <template v-slot:activator="{ on: tooltip }">
-                        <v-btn icon small v-on="{ ...tooltip, ...menu }">
+                        <v-btn icon small v-on="{ ...tooltip, ...menu }" id='hunt-query-dropdown-button'>
                           <v-icon>fa-angle-down</v-icon>
                         </v-btn>
                       </template>
                       <span>{{ i18n.queriesHelp }}</span>
                     </v-tooltip>
                   </template>
-                  <v-list dense class="overflow-y-auto" style="max-height: 600px">
+                  <v-list dense class="overflow-y-auto" style="max-height: 600px" id="hunt-query-dropdown-list">
                     <v-list-item v-for="query in mruQueries">
                       <v-list-item-content @click="huntQuery(query)" :style="{ cursor: 'pointer'}">
                         <v-list-item-title v-text="query"></v-list-item-title>
@@ -295,10 +295,10 @@
             <v-text-field :disabled="loading()" v-if="relativeTimeEnabled" id="huntrelativetimevalue" @change="notifyInputsChanged" class="mx-2" 
                 v-model="relativeTimeValue" :hint="i18n.relativeTimeHelp" persistent-hint="true" type="number">
               <template v-slot:prepend>
-                <b-btn v-if="relativeTimeEnabled" icon x-small @click="showAbsoluteTime">
+                <b-btn v-if="relativeTimeEnabled" icon x-small @click="showAbsoluteTime" id="show-absolute-time">
                   <v-icon>fa-history</v-icon>
                 </b-btn>
-                <div v-if="relativeTimeEnabled" class="pt-1 px-4"">
+                <div v-if="relativeTimeEnabled" class="pt-1 px-4">
                   {{ i18n.last }}
                 </div>
               </template>
@@ -311,7 +311,7 @@
               v-model="dateRange" :hint="i18n.timePickerHelp" persistent-hint="true" 
               prepend-inner-icon="fa-angle-down" @click:prepend-inner="showDateRangePicker">
               <template v-slot:prepend>
-                <b-btn v-if="!relativeTimeEnabled" icon x-small @click="showRelativeTime">
+                <b-btn v-if="!relativeTimeEnabled" icon x-small @click="showRelativeTime" id="show-relative-time">
                   <v-icon>fa-calendar-alt</v-icon>
                 </b-btn>
               </template>
@@ -490,7 +490,7 @@
         </v-row>
         <v-row>
           <v-col>
-            <h3 v-text="i18n.downloadsOsqueryPackages"></h3>
+            <h3 v-text="i18n.downloadsOsqueryPackages" id='osquery-packages'></h3>
             <ul>
               <li><a href="/packages/launcher.msi" download="msi-launcher.msi">MSI (Windows)</a></li>
               <li><a href="/packages/launcher.deb" download="deb-launcher.deb">DEB (Debian)</a></li>
@@ -498,7 +498,7 @@
               <li><a href="/packages/launcher.pkg" download="pkg-launcher.pkg">PKG (MacOS)</a></li>
             </ul>
             <p></p>
-            <h3 v-text="i18n.downloadsOsqueryConfigs"></h3>
+            <h3 v-text="i18n.downloadsOsqueryConfigs" id='osquery-configs'></h3>
             <ul>
               <li><a href="/packages/launcher.flags" download="launcher.flags.txt">RPM & DEB Flag File</a></li>
               <li><a href="/packages/launcher-msi.flags" download="launcher-msi.flags.txt">MSI Flag File</a></li>
@@ -623,7 +623,7 @@
         <v-row>
           <v-col>
             <v-toolbar class="elevation-0" fixed>
-              <v-btn color="primary" @click.stop="dialog = !dialog">
+              <v-btn color="primary" @click.stop="dialog = !dialog" id='add-pcap-job-button'>
                 <v-icon>fa-plus</v-icon>
               </v-btn>
             </v-toolbar>
@@ -650,7 +650,7 @@
               </template>
             </v-data-table>
             <v-dialog v-model="dialog" width="800px">
-              <v-card>
+              <v-card id='pcap-job-dialog'>
                 <v-card-title class="lighten-4 py-4 title" v-text="i18n.addJob"></v-card-title>
                 <v-form v-model="form.valid">
                   <v-container grid-list-sm class="pa-4">

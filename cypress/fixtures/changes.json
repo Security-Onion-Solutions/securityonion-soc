@@ -1,0 +1,8 @@
+{
+  "title": "Test changes.json",
+  "changes": [
+    { "summary": "First change" },
+    { "summary": "Second change" },
+    { "summary": "Third change" }
+  ]
+}
