@@ -9,5 +9,6 @@
     "screenshotsFolder": "artifacts/screenshots",
     "videosFolder": "artifacts/videos",
     "pluginsFile": false,
-    "supportFile": false
+    "supportFile": false,
+    "baseUrl": "http://localhost:9822"
 }
