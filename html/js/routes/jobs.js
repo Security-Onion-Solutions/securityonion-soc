@@ -108,7 +108,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
         if (!sensorId) {
           this.$root.showError(this.i18n.sensorIdRequired);
         } else {
-          const response = await this.$root.papi.post('job', {
+          const response = await this.$root.papi.post('job/', {
             sensorId: sensorId,
             filter: {
               srcIp: srcIp,
