@@ -113,28 +113,3 @@ describe('Top menu', () => {
             })
     })
 })
-
-describe('Changes list', () => {
-    beforeEach(() => {
-        cy.visit('/#/')
-    })
-    
-    it('should have correct title', () => {
-        cy.fixture('changes.json').its('title').then((title) => {
-            cy.get('#change-details')
-                .find('.title')
-                .contains(title)
-        })
-        
-    })
-    it('should have correct number of items', () => {
-        cy.fixture('changes.json').its('changes').then((changes) => {
-            cy.get('#change-details')
-                .find('ul')
-                .children('li')
-                .each((el, index) => {
-                    cy.get(el).contains(changes[index].summary)
-                })
-        })
-    })
-})

@@ -5,11 +5,7 @@ describe('OQL input', () => {
     })
     
     it('should contain the default query', () => {
-        cy.fixture('soc.json').its('server.client.hunt.queries').then((queries) => {
-            const queryString = queries.find(({ name }) => name === 'Default Query').query
-
-            cy.get('#hunt-query-input').should('have.value', queryString)
-        })
+        cy.get('#hunt-query-input').should('have.value', "* | groupby observer.name")
     })
     
     it.skip('should push run query to recent query list', () => {
@@ -22,35 +18,12 @@ describe('OQL input', () => {
     })
 
     it('should have correct number of items in the dropdown', () => {
-        cy.fixture('soc.json').its('server.client.hunt.queries').then((queries) => {
-            cy.get('#hunt-query-dropdown-button')
+        cy.get('#hunt-query-dropdown-button')
                 .click()
-            cy.get('#hunt-query-dropdown-list')
-                .find('hr')
-                .nextAll('div')
-                .should('have.length', queries.length)
-        })
-    })
-
-    it('should have correct items in dropdown', () => {
-        cy.fixture('soc.json').its('server.client.hunt.queries').then((queries) => {
-            cy.get('#hunt-query-dropdown-button')
-                .click()
-            cy.get('#hunt-query-dropdown-list')
-                .should('be.visible')
-                .find('hr')
-                .nextAll('div')
-                .each((el, index) => {
-                    cy
-                        .get(el)
-                        .contains(queries[index].name)
-                        .get(el)
-                        .find('div').next()
-                        .should('contain.text', queries[index].description)
-                        .get(el)
-                        .contains(queries[index].query)
-                })
-        })
+        cy.get('#hunt-query-dropdown-list')
+            .find('hr')
+            .nextAll('div')
+            .should('have.length', 61)
     })
 })
 
