@@ -779,8 +779,8 @@
               </template>
               <template v-slot:expanded-item="props">
                 <tr v-if="captureLayout == 'packets' || props.item.payloadOffset > 0">
-                  <td :colspan="getPacketColumnSpan()">
-                    <pre :class="getPacketClass(props.item)">{{ props.item | formatPacketView }}</pre>
+                  <td :colspan="getPacketColumnSpan()" :class="getPacketClass(props.item)">
+                    <pre>{{ props.item | formatPacketView }}</pre>
                   </td>
                 </tr>
               </template>

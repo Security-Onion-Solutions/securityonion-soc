@@ -124,12 +124,12 @@ a#title, a#title:visited, a#title:active, a#title:hover {
 }
 
 .src {
-  color: var(--v-info-base);
+  border-left: 3px solid var(--v-info-base);
   font-weight: bold;
 }
 
 .dst {
-  color: var(--v-error-base);
+  border-left: 3px solid var(--v-error-base);
   font-weight: bold;
 }
 

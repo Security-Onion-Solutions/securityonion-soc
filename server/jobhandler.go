@@ -99,15 +99,20 @@ func (jobHandler *JobHandler) delete(writer http.ResponseWriter, request *http.R
     return http.StatusBadRequest, nil, errors.New("Invalid id")
 	}
   statusCode := http.StatusBadRequest
-  job := model.NewJob()
-  var err error
-  job.Id, err = strconv.Atoi(id)
+
+  jobId, err := strconv.Atoi(id)
   if err == nil {
-    err = jobHandler.server.Datastore.DeleteJob(job)
-    if err == nil {
-      jobHandler.Host.Broadcast("job", job)
-      statusCode = http.StatusOK
+    job := jobHandler.server.Datastore.GetJob(int(jobId))
+    if job != nil {
+      err = jobHandler.server.Datastore.DeleteJob(job)
+      if err == nil {
+        jobHandler.Host.Broadcast("job", job)
+        statusCode = http.StatusOK
+      }
+    } else {
+      statusCode = http.StatusNotFound
     }
   }
+
   return statusCode, nil, err
 }
