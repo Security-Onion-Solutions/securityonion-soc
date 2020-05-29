@@ -79,7 +79,7 @@ func (handler *BaseHandler) Handle(responseWriter http.ResponseWriter, request *
       "statusCode": statusCode,
       "contentLength": contentLength,
       "method": request.Method,
-      "elaspsedMs": elapsed,
+      "elapsedMs": elapsed,
     }).Info("Handled request")
   }
 }
