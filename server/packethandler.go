@@ -39,6 +39,13 @@ func (packetHandler *PacketHandler) HandleNow(writer http.ResponseWriter, reques
 func (packetHandler *PacketHandler) get(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   statusCode := http.StatusBadRequest
   jobId, err := strconv.ParseInt(request.URL.Query().Get("jobId"), 10, 32)
+  if err != nil {
+    return statusCode, nil, err
+  }
+  unwrap, err := strconv.ParseBool(request.URL.Query().Get("unwrap"))
+  if err != nil {
+    return statusCode, nil, err
+  }
   offset, err := strconv.ParseInt(request.URL.Query().Get("offset"), 10, 32)
   if offset <= 0 || err != nil {
     offset = 0
@@ -51,7 +58,7 @@ func (packetHandler *PacketHandler) get(writer http.ResponseWriter, request *htt
       count = tmpCount
     }
   }
-  packets, err := packetHandler.server.Datastore.GetPackets(int(jobId), int(offset), count)
+  packets, err := packetHandler.server.Datastore.GetPackets(int(jobId), int(offset), count, unwrap)
   if err == nil {
     statusCode = http.StatusOK
   } else {

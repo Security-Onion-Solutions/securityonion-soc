@@ -731,24 +731,18 @@
         </v-row>
         <v-row v-if="job.status == 1">
           <v-col>
-            <v-toolbar fixed>
+            <v-toolbar fixed class="elevation-0">
               <v-text-field v-model="search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
               <v-spacer></v-spacer>
-              <v-btn-toggle v-model="captureLayout" class="transparent" mandatory>
-                <v-btn value="packets" icon :title="i18n.showPacketsHelp" text>
+              <v-btn-toggle v-model="packetOptions" class="transparent" multiple>
+                <v-btn value="packets" icon :title="i18n.packetStreamHelp" text @click="captureLayoutAsStream()">
                   <v-icon>fa-list</v-icon>
                 </v-btn>
-                <v-btn value="stream" icon :title="i18n.showStreamHelp" text @click="captureLayoutAsStream()">
-                  <v-icon>fa-stream</v-icon>
-                </v-btn>
-              </v-btn-toggle>
-              <v-spacer></v-spacer>
-              <v-btn-toggle v-model="packetView" class="transparent" mandatory>
                 <v-btn value="hex" :title="i18n.hexHelp" text>
                   {{ i18n.hex }}
                 </v-btn>
-                <v-btn value="ascii" :title="i18n.asciiHelp" text>
-                  {{ i18n.ascii }}
+                <v-btn value="unwrap" :title="i18n.unwrapHelp" text @click="toggleWrap">
+                  <v-icon>fa-envelope-open-text</v-icon>
                 </v-btn>
               </v-btn-toggle>
               <v-spacer></v-spacer>
@@ -759,15 +753,15 @@
                 <v-icon>fa-window-maximize</v-icon>
               </v-btn>
               <v-spacer></v-spacer>
-              <v-btn text icon :href="downloadUrl()" download :title="i18n.download">
+              <v-btn text icon :href="downloadUrl()" download :title="i18n.downloadPackets">
                 <v-icon>fa-download</v-icon>
               </v-btn>
             </v-toolbar>
             <v-data-table ref="packetTable" :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :items-per-page.sync="itemsPerPage" 
-              :search="search" :footer-props="footerProps" must-sort :headers="headers" :hide-default-header="captureLayout != 'packets'" 
+              :search="search" :footer-props="footerProps" must-sort :headers="headers" :hide-default-header="!isOptionEnabled('packets')" 
               :items="packets" item-key="number" :loading="packetsLoading" :expanded="expanded">
               <template v-slot:item="props">
-                <tr @click="expandRow(props.item)" v-if="captureLayout == 'packets'">
+                <tr @click="expandRow(props.item)" v-if="isOptionEnabled('packets')">
                   <td v-text="props.item.number"></td>
                   <td>{{ props.item.timestamp | formatTimestamp }}</td>
                   <td><v-chip :color="props.item.type | colorType">{{ props.item.type }}</v-chip></td>
@@ -778,7 +772,7 @@
                 </tr>
               </template>
               <template v-slot:expanded-item="props">
-                <tr v-if="captureLayout == 'packets' || props.item.payloadOffset > 0">
+                <tr v-if="isOptionEnabled('packets') || props.item.payloadOffset > 0">
                   <td :colspan="getPacketColumnSpan()" :class="getPacketClass(props.item)">
                     <pre>{{ props.item | formatPacketView }}</pre>
                   </td>

@@ -26,7 +26,7 @@ type Datastore interface {
   AddJob(job *model.Job) error
   UpdateJob(job *model.Job) error
   DeleteJob(job *model.Job) error
-  GetPackets(jobId int, offset int, count int) ([]*model.Packet, error)
+  GetPackets(jobId int, offset int, count int, unwrap bool) ([]*model.Packet, error)
   SavePacketStream(jobId int, reader io.ReadCloser) error
-  GetPacketStream(jobId int) (io.ReadCloser, string, error)
+  GetPacketStream(jobId int, unwrap bool) (io.ReadCloser, string, int64, error)
 }
