@@ -181,6 +181,14 @@
               </v-list-item-content>
             </v-list-item>
             <v-divider></v-divider>
+            <v-list-item :href="settingsUrl">
+              <v-list-item-action>
+                <v-icon>fa-user-edit</v-icon>
+              </v-list-item-action>
+              <v-list-item-content>
+                <v-list-item-title v-text="i18n.settings"></v-list-item-title>
+              </v-list-item-content>
+            </v-list-item>
             <v-list-item :href="authUrl + 'logout'">
               <v-list-item-action>
                 <v-icon>fa-sign-out-alt</v-icon>
@@ -194,7 +202,8 @@
       </v-app-bar>
       <v-content>
         <v-progress-linear v-if="loading" height="10" :active="loading" indeterminate></v-progress-linear>
-        <v-alert dismissible type="warning" icon="fa-exclamation-triangle" v-model="error" transition="scale-transition" v-text="errorMessage"></v-alert>
+        <v-alert dismissible type="error" icon="fa-exclamation-triangle" v-model="error" transition="scale-transition" v-text="errorMessage"></v-alert>
+        <v-alert dismissible type="warning" icon="fa-exclamation" v-model="warning" transition="scale-transition" v-text="warningMessage"></v-alert>
         <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" v-text="infoMessage"></v-alert>
         <router-view></router-view>
       </v-content>
@@ -576,7 +585,7 @@
                   <td v-text="props.item.lastName"></td>
                   <td>
                     <router-link :to="{ name: 'user', params: {id: props.item.id}}" :style="{ cursor: 'pointer'}">
-                      <v-icon class="mr-2" v-title="i18n.edit">fa-edit</v-icon>
+                      <v-icon class="mr-2 d-none" v-title="i18n.edit">fa-edit</v-icon>
                     </router-link>
                     <v-icon class="mr-2" v-title="i18n.delete" @click.stop="showDeleteConfirm(props.item)">fa-times-circle</v-icon>
                   </td>
@@ -592,7 +601,7 @@
                       <v-col xs12>
                         <v-text-field v-model="form.email" :placeholder="i18n.email" autofocus="true" :rules="[rules.required]"></v-text-field>
                         <v-text-field v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" 
-                          @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'mdi-eye' : 'mdi-eye-off'" 
+                          @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" 
                           :rules="[rules.required]"></v-text-field>
                         <v-text-field v-model="form.firstName" :placeholder="i18n.firstName"></v-text-field>
                         <v-text-field v-model="form.lastName" :placeholder="i18n.lastName"></v-text-field>
@@ -829,6 +838,36 @@
       </v-container>
     </script>
 
+    <script type="text/x-template" id="page-settings">
+        <v-form v-model="form.valid" method="post" :action="authSettingsUrl">
+          <v-container v-if="showSettingsForm" fluid>
+            <v-row>
+              <v-col>
+                <h2 v-text="i18n.settingsTitle"></h2>
+              </v-col>
+            </v-row>
+            <v-row>
+              <v-col>
+                <div v-text="i18n.settingsInstructions"></div>
+              </v-col>
+            </v-row>
+            <v-row>
+              <v-col>
+                <v-text-field name="password" v-model="form.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required]"></v-text-field>
+                <v-text-field :placeholder="i18n.passwordConfirm" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.matches]"></v-text-field>
+                <v-text-field name="csrf_token" v-model="form.csrfToken" class="d-none"></v-text-field>
+              </v-col>
+            </v-row>
+            <v-row>
+              <v-col>
+                <v-btn type="submit" :disabled="!form.valid" text color="primary" v-text="i18n.save"></v-btn>
+              </v-col>
+            </v-row>
+          </v-container>
+        </v-form>
+      </v-card>
+    </script>
+
     <script src="js/external/jquery-3.4.1.min.js"></script>
     <script src="js/external/vue-2.6.11.min.js"></script>
     <script src="js/external/vue-router-3.1.6.min.js"></script>
@@ -847,6 +886,7 @@
     <script src="js/routes/hunt.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/jobs.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/job.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/settings.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/sensors.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/terms.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/user.js?v=VERSION_PLACEHOLDER"></script>
