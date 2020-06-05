@@ -39,7 +39,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     topChartData: {},
     bottomChartOptions: {},
     bottomChartData: {},
-    groupByLimitOptions: [10,25,50,100],
+    groupByLimitOptions: [10,25,50,100,200,500],
     groupByLimit: 10,
     groupByFilter: '',
     groupByData: [],
@@ -47,7 +47,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     groupBySortBy: 'timestamp',
     groupBySortDesc: true,
     groupByItemsPerPage: 10,
-    groupByFooters: { 'items-per-page-options': [10,25,50,250,1000] },
+    groupByFooters: { 'items-per-page-options': [10,25,50,100,200,500] },
 
     eventLimitOptions: [10,25,50,100,200,500,1000,2000,5000],
     eventLimit: 100,
@@ -57,7 +57,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     sortBy: 'timestamp',
     sortDesc: true,
     itemsPerPage: 10,
-    footerProps: { 'items-per-page-options': [10,25,50,250,1000] },
+    footerProps: { 'items-per-page-options': [10,25,50,100,200,500,1000] },
 
     expandedHeaders: [
       { text: "key", value: "key" },
@@ -87,12 +87,12 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     '$route': 'loadData',
     'groupBySortBy': 'saveLocalSettings',
     'groupBySortDesc': 'saveLocalSettings',
-    'groupByItemsPerPage': 'saveLocalSettings',
-    'groupByLimit': 'saveLocalSettings',
+    'groupByItemsPerPage': 'groupByItemsPerPageChanged',
+    'groupByLimit': 'groupByLimitChanged',
     'sortBy': 'saveLocalSettings',
     'sortDesc': 'saveLocalSettings',
-    'itemsPerPage': 'saveLocalSettings',
-    'eventLimit': 'saveLocalSettings',
+    'itemsPerPage': 'itemsPerPageChanged',
+    'eventLimit': 'eventLimitChanged',
     'relativeTimeValue': 'saveLocalSettings',
     'relativeTimeUnit': 'saveLocalSettings',
   },
@@ -496,6 +496,30 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
           hour: 'MMM D hA',
         }
       };
+    },
+    groupByLimitChanged() {
+      if (this.groupByItemsPerPage > this.groupByLimit) {
+        this.groupByItemsPerPage = this.groupByLimit;
+      }
+      this.saveLocalSettings();
+    },
+    groupByItemsPerPageChanged() {
+      if (this.groupByLimit < this.groupByItemsPerPage) {
+        this.groupByLimit = this.groupByItemsPerPage;
+      }
+      this.saveLocalSettings();
+    },
+    eventLimitChanged() {
+      if (this.itemsPerPage > this.eventLimit) {
+        this.itemsPerPage = this.eventLimit;
+      }
+      this.saveLocalSettings();
+    },
+    itemsPerPageChanged() {
+      if (this.eventLimit < this.itemsPerPage) {
+        this.eventLimit = this.itemsPerPage;
+      }
+      this.saveLocalSettings();
     },
     saveLocalSettings() {
       localStorage['settings.hunt.groupBySortBy'] = this.groupBySortBy;
