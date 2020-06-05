@@ -52,7 +52,7 @@ func (queryHandler *QueryHandler) get(writer http.ResponseWriter, request *http.
   queryStr := request.Form.Get("query") 
 	query := model.NewQuery()
 	err = query.Parse(queryStr)
-  if err != nil {
+	if err != nil {
 		return http.StatusBadRequest, nil, errors.New("Invalid query input")
 	}
 
@@ -60,10 +60,23 @@ func (queryHandler *QueryHandler) get(writer http.ResponseWriter, request *http.
 	switch operation {
 	case "filtered": 
 		field := request.Form.Get("field") 
-		value := request.Form.Get("value")
 		scalar := request.Form.Get("scalar") == "true"
 		include := request.Form.Get("include") == "true"
-		alteredQuery, err = query.Filter(field, value, scalar, include)
+		value := request.Form.Get("value")
+		if len(value) > 0 {
+			alteredQuery, err = query.Filter(field, value, scalar, include)
+		} else {
+			values := request.Form["value[]"]
+			for _, value := range values {
+				alteredQuery, err = query.Filter(field, value, scalar, include)
+				queryStr = query.String()
+				query = model.NewQuery()
+				err = query.Parse(queryStr)
+				if err != nil {
+					return http.StatusBadRequest, nil, errors.New("Invalid query after filter applied")
+				}
+			}
+		}
 	case "grouped": 
 		field := request.Form.Get("field") 
 		alteredQuery, err = query.Group(field)
