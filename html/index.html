@@ -494,24 +494,27 @@
         <v-row>
           <v-col>
             <h2 v-text="i18n.downloads"></h2>
-            <div v-html="i18n.downloadsInfo"></div>
           </v-col>
         </v-row>
         <v-row>
           <v-col>
+            <h3 v-text="i18n.downloadsLoggers" id="download-loggers"></h3>
+            <ul>
+              <li><a href="https://artifacts.elastic.co/downloads/beats/winlogbeat/winlogbeat-oss-7.7.1-windows-x86_64.msi" download="winlogbeat-oss-7.7.1-windows-x86_64.msi">Winlogbeat</a></li>
+            </ul>
+            <p></p>
             <h3 v-text="i18n.downloadsOsqueryPackages" id="osquery-packages"></h3>
+            <div v-html="i18n.downloadsInfo"></div>
+            <p></p>
             <ul>
               <li><a href="/packages/launcher.msi" download="msi-launcher.msi">MSI (Windows)</a></li>
               <li><a href="/packages/launcher.deb" download="deb-launcher.deb">DEB (Debian)</a></li>
               <li><a href="/packages/launcher.rpm" download="rpm-launcher.rpm">RPM (RPM)</a></li>
               <li><a href="/packages/launcher.pkg" download="pkg-launcher.pkg">PKG (MacOS)</a></li>
+              <li><a href="/packages/launcher.flags" download="launcher.flags.txt">RPM & DEB Config Flag File</a></li>
+              <li><a href="/packages/launcher-msi.flags" download="launcher-msi.flags.txt">MSI Config Flag File</a></li>
             </ul>
             <p></p>
-            <h3 v-text="i18n.downloadsOsqueryConfigs" id="osquery-configs"></h3>
-            <ul>
-              <li><a href="/packages/launcher.flags" download="launcher.flags.txt">RPM & DEB Flag File</a></li>
-              <li><a href="/packages/launcher-msi.flags" download="launcher-msi.flags.txt">MSI Flag File</a></li>
-            </ul>
           </v-col>
         </v-row>
       </v-container>
