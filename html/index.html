@@ -504,8 +504,6 @@
             </ul>
             <p></p>
             <h3 v-text="i18n.downloadsOsqueryPackages" id="osquery-packages"></h3>
-            <div v-html="i18n.downloadsInfo"></div>
-            <p></p>
             <ul>
               <li><a href="/packages/launcher.msi" download="msi-launcher.msi">MSI (Windows)</a></li>
               <li><a href="/packages/launcher.deb" download="deb-launcher.deb">DEB (Debian)</a></li>
@@ -515,6 +513,7 @@
               <li><a href="/packages/launcher-msi.flags" download="launcher-msi.flags.txt">MSI Config Flag File</a></li>
             </ul>
             <p></p>
+            <div v-html="i18n.downloadsInfo"></div>
           </v-col>
         </v-row>
       </v-container>

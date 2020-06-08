@@ -41,7 +41,7 @@ const i18n = {
       deleteUserConfirm: 'You are about to permanently delete this user:',
       description: 'Description',
       downloads: 'Downloads',
-      downloadsInfo: 'The packages and configs below are osquery files, customized for this specific Fleet install and will only be generated after the Fleet setup script has been run. If you want vanilla osquery packages, you can get them directly from <a href="https://osquery.io/downloads">osquery.io</a>. These files are not signed.',
+      downloadsInfo: 'These packages and configs are osquery files, customized for this specific Fleet install and will only be generated after the Fleet setup script has been run. If you want vanilla osquery packages, you can get them directly from <a href="https://osquery.io/downloads">osquery.io</a>. These files are not signed.',
       downloadsLoggers: 'Logging Utilities',
       downloadsOsqueryPackages: 'Packages and Configs (osquery)',
       downloadPackets: 'Download the packets as a PCAP file',
