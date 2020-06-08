@@ -52,6 +52,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     eventLimitOptions: [10,25,50,100,200,500,1000,2000,5000],
     eventLimit: 100,
     eventData: [],
+    eventFilter: '',  
     eventHeaders: [],
     sortBy: 'timestamp',
     sortDesc: true,
@@ -67,6 +68,8 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     fetchTimeSecs: 0,
     roundTripTimeSecs: 0,
     mruQueries: [],
+
+    autohunt: false
   }},
   created() {
     this.$root.initializeCharts();
@@ -95,6 +98,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     'eventLimit': 'eventLimitChanged',
     'relativeTimeValue': 'saveLocalSettings',
     'relativeTimeUnit': 'saveLocalSettings',
+    'autohunt': 'saveLocalSettings',
   },
   methods: {
     loading() {
@@ -115,13 +119,17 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       this.setupCharts();
       this.$root.stopLoading();
 
-      if (this.$route.query.q) {
+      if (this.$route.query.q || (this.autohunt && this.query)) {
         this.loadData();
       }
     },
     notifyInputsChanged() {
       if (!this.loading()) {
-        this.$root.drawAttention('#hunt');
+        if (this.autohunt) {
+          this.hunt();
+        } else {
+          this.$root.drawAttention('#hunt');
+        }
       }
     },
     addMRUQuery(query) {
@@ -535,6 +543,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       localStorage['settings.hunt.mruQueries'] = JSON.stringify(this.mruQueries);
       localStorage['settings.hunt.relativeTimeValue'] = this.relativeTimeValue;
       localStorage['settings.hunt.relativeTimeUnit'] = this.relativeTimeUnit;
+      localStorage['settings.hunt.autohunt'] = this.autohunt;
     },
     loadLocalSettings() {
       if (localStorage['settings.hunt.groupBySortBy']) this.groupBySortBy = localStorage['settings.hunt.groupBySortBy'];
@@ -548,6 +557,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       if (localStorage['settings.hunt.mruQueries']) this.mruQueries = JSON.parse(localStorage['settings.hunt.mruQueries']);
       if (localStorage['settings.hunt.relativeTimeValue']) this.relativeTimeValue = parseInt(localStorage['settings.hunt.relativeTimeValue']);
       if (localStorage['settings.hunt.relativeTimeUnit']) this.relativeTimeUnit = parseInt(localStorage['settings.hunt.relativeTimeUnit']);
+      if (localStorage['settings.hunt.autohunt']) this.autohunt = localStorage['settings.hunt.autohunt'] == 'true';
     },
   }
 }});

@@ -252,10 +252,10 @@
     <script type="text/x-template" id="page-hunt">
       <v-container fluid>
         <v-row>
-          <v-col cols="3">
+          <v-col cols="9">
             <h2 v-text="i18n.hunt"></h2>
           </v-col>
-          <v-col cols="9" align="right">
+          <v-col cols="3" align="end">
             <h4 v-if="loaded">{{ i18n.eventTotal }} {{ totalEvents.toLocaleString() }}</h4>
           </v-col>
         </v-row>
@@ -469,7 +469,13 @@
           </v-col>
         </v-row>
         <v-row v-if="loaded">
-          <v-subheader inset>{{ i18n.eventFetchTook }} {{ fetchTimeSecs }} {{ i18n.seconds }}. {{ i18n.eventRoundTripTook }} {{ roundTripTimeSecs }} {{ i18n.seconds }}.</v-subheader>
+          <v-col cols="6">
+            <v-subheader inset>{{ i18n.eventFetchTook }} {{ fetchTimeSecs }} {{ i18n.seconds }}. {{ i18n.eventRoundTripTook }} {{ roundTripTimeSecs }} {{ i18n.seconds }}.</v-subheader>
+          </v-col>
+          <v-spacer></v-spacer>
+          <v-col>
+            <v-switch id="auto-hunt" :disabled="loading()" v-model="autohunt" dense label="Auto-Hunt" persistent-hint="true" hint="Automatically Hunt after changing filters, groupings, and date-ranges"></v-switch>
+          </v-col>
         </v-row>
       </v-container>
     </script>
