@@ -15,6 +15,8 @@ const i18n = {
       addUser: 'Add User',
       admin: 'Administration',
       attempt: 'Attempt',
+      autohunt: 'Auto-Hunt',
+      autohuntHint: 'Automatically Hunt after changing filters, groupings, and date-ranges',
       beginTime: 'Filter Begin',
       beginTimeHelp: 'The beginning date and time to include in this job filter (YYYY-MM-DD HH:mm:ss.SSS Z)',
       blog: 'Blog',

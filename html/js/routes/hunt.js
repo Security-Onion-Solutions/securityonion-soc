@@ -82,6 +82,12 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       { text: this.i18n.months, value: RELATIVE_TIME_MONTHS }
     ];
   },
+  beforeUpdate() {
+    this.$root.setSubtitle(this.query);
+  },
+  beforeDestroy() {
+    this.$root.setSubtitle("");
+  },
   mounted() {
     this.$root.startLoading();
     this.$root.loadParameters("hunt", this.initHunt);

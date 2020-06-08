@@ -62,6 +62,7 @@ $(document).ready(function() {
       parameterCallback: null,
       parameterSection: null,
       chartsInitialized: false,
+      subtitle: '',
     },
     watch: {
       '$vuetify.theme.dark': 'saveLocalSettings',
@@ -120,6 +121,13 @@ $(document).ready(function() {
       toggleTheme() {
         this.$vuetify.theme.dark = !this.$vuetify.theme.dark
         this.timestamp=Date.now();
+      },
+      setSubtitle(subtitle) {
+        var title = "Security Onion";
+        if (subtitle && subtitle.length > 0) {
+          title += " - " + subtitle;
+        }
+        document.title = title;
       },
       drawAttention(elementId) {
         var element = $(elementId);

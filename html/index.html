@@ -474,7 +474,7 @@
           </v-col>
           <v-spacer></v-spacer>
           <v-col>
-            <v-switch id="auto-hunt" :disabled="loading()" v-model="autohunt" dense label="Auto-Hunt" persistent-hint="true" hint="Automatically Hunt after changing filters, groupings, and date-ranges"></v-switch>
+            <v-switch id="auto-hunt" :disabled="loading()" v-model="autohunt" dense :label="i18n.autohunt" persistent-hint="true" :hint="i18n.autohuntHint"></v-switch>
           </v-col>
         </v-row>
       </v-container>
