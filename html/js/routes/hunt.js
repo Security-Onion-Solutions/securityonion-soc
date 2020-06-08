@@ -51,7 +51,6 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
 
     eventLimitOptions: [10,25,50,100,200,500,1000,2000,5000],
     eventLimit: 100,
-    eventFilter: '',
     eventData: [],
     eventHeaders: [],
     sortBy: 'timestamp',
@@ -81,6 +80,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     ];
   },
   mounted() {
+    this.$root.startLoading();
     this.$root.loadParameters("hunt", this.initHunt);
   },
   watch: {
@@ -113,6 +113,8 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       this.loadLocalSettings();
       this.setupDateRangePicker();
       this.setupCharts();
+      this.$root.stopLoading();
+
       if (this.$route.query.q) {
         this.loadData();
       }
