@@ -9,7 +9,7 @@ WORKDIR /go/src/github.com/ory
 RUN git clone https://github.com/ory/kratos.git
 
 WORKDIR /go/src/github.com/ory/kratos
-RUN git checkout fca0f234ec8841c5daa892cdb7261179c4a930ed
+RUN git checkout v0.3.0-alpha.1
 RUN go mod download
 
 RUN GO111MODULE=on go install github.com/gobuffalo/packr/v2/packr2

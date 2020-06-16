@@ -79,7 +79,7 @@
           </v-list-item-group>
         </v-list>
         <v-divider></v-divider>
-        <v-list subheader dense>
+        <v-list subheader dense id="external-tools-list">
           <v-subheader>Tools</v-subheader>
           <v-list-item target="so-kibana" href="/kibana/">
             <v-list-item-action>
@@ -155,7 +155,7 @@
               <v-icon>fa-user</v-icon>
             </v-btn>
           </template>
-          <v-list>
+          <v-list id="top-menu">
             <v-list-item @click.stop="toggleTheme">
               <v-list-item-action>
                 <v-icon>fa-adjust</v-icon>
@@ -181,6 +181,14 @@
               </v-list-item-content>
             </v-list-item>
             <v-divider></v-divider>
+            <v-list-item :href="settingsUrl">
+              <v-list-item-action>
+                <v-icon>fa-user-edit</v-icon>
+              </v-list-item-action>
+              <v-list-item-content>
+                <v-list-item-title v-text="i18n.settings"></v-list-item-title>
+              </v-list-item-content>
+            </v-list-item>
             <v-list-item :href="authUrl + 'logout'">
               <v-list-item-action>
                 <v-icon>fa-sign-out-alt</v-icon>
@@ -194,7 +202,8 @@
       </v-app-bar>
       <v-content>
         <v-progress-linear v-if="loading" height="10" :active="loading" indeterminate></v-progress-linear>
-        <v-alert dismissible type="warning" icon="fa-exclamation-triangle" v-model="error" transition="scale-transition" v-text="errorMessage"></v-alert>
+        <v-alert dismissible type="error" icon="fa-exclamation-triangle" v-model="error" transition="scale-transition" v-text="errorMessage"></v-alert>
+        <v-alert dismissible type="warning" icon="fa-exclamation" v-model="warning" transition="scale-transition" v-text="warningMessage"></v-alert>
         <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" v-text="infoMessage"></v-alert>
         <router-view></router-view>
       </v-content>
@@ -224,7 +233,7 @@
           </v-col>
         </v-row>
         <v-row>
-          <v-col class="mx-auto px-12">
+          <v-col class="mx-auto px-12" id="change-details">
             <div  class="title" v-html="changeDetails.title"></div>
             <ul>
               <li v-for="change in changeDetails.changes" :key="change.summary" v-html="change.summary"></li>
@@ -243,30 +252,30 @@
     <script type="text/x-template" id="page-hunt">
       <v-container fluid>
         <v-row>
-          <v-col cols="3">
+          <v-col cols="9">
             <h2 v-text="i18n.hunt"></h2>
           </v-col>
-          <v-col cols="9" align="right">
+          <v-col cols="3" align="end">
             <h4 v-if="loaded">{{ i18n.eventTotal }} {{ totalEvents.toLocaleString() }}</h4>
           </v-col>
         </v-row>
         <v-row align="start">
           <v-col cols="12" md="7">
             <v-textarea clearable auto-grow :disabled="loading()" @change="notifyInputsChanged" class="mx-2" v-model="query" :hint="i18n.queryHelp" rows="1" persistent-hint="true" 
-              autofocus="true" prepend-icon="fa-search" @keydown.enter.prevent="hunt">
+              autofocus="true" prepend-icon="fa-search" @keydown.enter.prevent="hunt" id="hunt-query-input">
               <template v-slot:prepend-inner>
                 <v-menu dense bottom three-line offset-y="true">
                   <template v-slot:activator="{ on: menu }">
                     <v-tooltip bottom>
                       <template v-slot:activator="{ on: tooltip }">
-                        <v-btn icon small v-on="{ ...tooltip, ...menu }">
+                        <v-btn icon small v-on="{ ...tooltip, ...menu }" id="hunt-query-dropdown-button">
                           <v-icon>fa-angle-down</v-icon>
                         </v-btn>
                       </template>
                       <span>{{ i18n.queriesHelp }}</span>
                     </v-tooltip>
                   </template>
-                  <v-list dense class="overflow-y-auto" style="max-height: 600px">
+                  <v-list dense class="overflow-y-auto" style="max-height: 600px" id="hunt-query-dropdown-list">
                     <v-list-item v-for="query in mruQueries">
                       <v-list-item-content @click="huntQuery(query)" :style="{ cursor: 'pointer'}">
                         <v-list-item-title v-text="query"></v-list-item-title>
@@ -295,10 +304,10 @@
             <v-text-field :disabled="loading()" v-if="relativeTimeEnabled" id="huntrelativetimevalue" @change="notifyInputsChanged" class="mx-2" 
                 v-model="relativeTimeValue" :hint="i18n.relativeTimeHelp" persistent-hint="true" type="number">
               <template v-slot:prepend>
-                <b-btn v-if="relativeTimeEnabled" icon x-small @click="showAbsoluteTime">
+                <b-btn v-if="relativeTimeEnabled" icon x-small @click="showAbsoluteTime" id="show-absolute-time">
                   <v-icon>fa-history</v-icon>
                 </b-btn>
-                <div v-if="relativeTimeEnabled" class="pt-1 px-4"">
+                <div v-if="relativeTimeEnabled" class="pt-1 px-4">
                   {{ i18n.last }}
                 </div>
               </template>
@@ -311,7 +320,7 @@
               v-model="dateRange" :hint="i18n.timePickerHelp" persistent-hint="true" 
               prepend-inner-icon="fa-angle-down" @click:prepend-inner="showDateRangePicker">
               <template v-slot:prepend>
-                <b-btn v-if="!relativeTimeEnabled" icon x-small @click="showRelativeTime">
+                <b-btn v-if="!relativeTimeEnabled" icon x-small @click="showRelativeTime" id="show-relative-time">
                   <v-icon>fa-calendar-alt</v-icon>
                 </b-btn>
               </template>
@@ -460,7 +469,13 @@
           </v-col>
         </v-row>
         <v-row v-if="loaded">
-          <v-subheader inset>{{ i18n.eventFetchTook }} {{ fetchTimeSecs }} {{ i18n.seconds }}. {{ i18n.eventRoundTripTook }} {{ roundTripTimeSecs }} {{ i18n.seconds }}.</v-subheader>
+          <v-col cols="6">
+            <v-subheader inset>{{ i18n.eventFetchTook }} {{ fetchTimeSecs }} {{ i18n.seconds }}. {{ i18n.eventRoundTripTook }} {{ roundTripTimeSecs }} {{ i18n.seconds }}.</v-subheader>
+          </v-col>
+          <v-spacer></v-spacer>
+          <v-col>
+            <v-switch id="auto-hunt" :disabled="loading()" v-model="autohunt" dense :label="i18n.autohunt" persistent-hint="true" :hint="i18n.autohuntHint"></v-switch>
+          </v-col>
         </v-row>
       </v-container>
     </script>
@@ -485,24 +500,26 @@
         <v-row>
           <v-col>
             <h2 v-text="i18n.downloads"></h2>
-            <div v-html="i18n.downloadsInfo"></div>
           </v-col>
         </v-row>
         <v-row>
           <v-col>
-            <h3 v-text="i18n.downloadsOsqueryPackages"></h3>
+            <h3 v-text="i18n.downloadsLoggers" id="download-loggers"></h3>
+            <ul>
+              <li><a href="https://artifacts.elastic.co/downloads/beats/winlogbeat/winlogbeat-oss-7.7.1-windows-x86_64.msi" download="winlogbeat-oss-7.7.1-windows-x86_64.msi">Winlogbeat</a></li>
+            </ul>
+            <p></p>
+            <h3 v-text="i18n.downloadsOsqueryPackages" id="osquery-packages"></h3>
             <ul>
               <li><a href="/packages/launcher.msi" download="msi-launcher.msi">MSI (Windows)</a></li>
               <li><a href="/packages/launcher.deb" download="deb-launcher.deb">DEB (Debian)</a></li>
               <li><a href="/packages/launcher.rpm" download="rpm-launcher.rpm">RPM (RPM)</a></li>
               <li><a href="/packages/launcher.pkg" download="pkg-launcher.pkg">PKG (MacOS)</a></li>
+              <li><a href="/packages/launcher.flags" download="launcher.flags.txt">RPM & DEB Config Flag File</a></li>
+              <li><a href="/packages/launcher-msi.flags" download="launcher-msi.flags.txt">MSI Config Flag File</a></li>
             </ul>
             <p></p>
-            <h3 v-text="i18n.downloadsOsqueryConfigs"></h3>
-            <ul>
-              <li><a href="/packages/launcher.flags" download="launcher.flags.txt">RPM & DEB Flag File</a></li>
-              <li><a href="/packages/launcher-msi.flags" download="launcher-msi.flags.txt">MSI Flag File</a></li>
-            </ul>
+            <div v-html="i18n.downloadsInfo"></div>
           </v-col>
         </v-row>
       </v-container>
@@ -576,7 +593,7 @@
                   <td v-text="props.item.lastName"></td>
                   <td>
                     <router-link :to="{ name: 'user', params: {id: props.item.id}}" :style="{ cursor: 'pointer'}">
-                      <v-icon class="mr-2" v-title="i18n.edit">fa-edit</v-icon>
+                      <v-icon class="mr-2 d-none" v-title="i18n.edit">fa-edit</v-icon>
                     </router-link>
                     <v-icon class="mr-2" v-title="i18n.delete" @click.stop="showDeleteConfirm(props.item)">fa-times-circle</v-icon>
                   </td>
@@ -592,7 +609,7 @@
                       <v-col xs12>
                         <v-text-field v-model="form.email" :placeholder="i18n.email" autofocus="true" :rules="[rules.required]"></v-text-field>
                         <v-text-field v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" 
-                          @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'mdi-eye' : 'mdi-eye-off'" 
+                          @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" 
                           :rules="[rules.required]"></v-text-field>
                         <v-text-field v-model="form.firstName" :placeholder="i18n.firstName"></v-text-field>
                         <v-text-field v-model="form.lastName" :placeholder="i18n.lastName"></v-text-field>
@@ -623,7 +640,7 @@
         <v-row>
           <v-col>
             <v-toolbar class="elevation-0" fixed>
-              <v-btn color="primary" @click.stop="dialog = !dialog">
+              <v-btn color="primary" @click.stop="dialog = !dialog" id="add-pcap-job-button">
                 <v-icon>fa-plus</v-icon>
               </v-btn>
             </v-toolbar>
@@ -650,7 +667,7 @@
               </template>
             </v-data-table>
             <v-dialog v-model="dialog" width="800px">
-              <v-card>
+              <v-card id="pcap-job-dialog">
                 <v-card-title class="lighten-4 py-4 title" v-text="i18n.addJob"></v-card-title>
                 <v-form v-model="form.valid">
                   <v-container grid-list-sm class="pa-4">
@@ -731,24 +748,18 @@
         </v-row>
         <v-row v-if="job.status == 1">
           <v-col>
-            <v-toolbar fixed>
+            <v-toolbar fixed class="elevation-0">
               <v-text-field v-model="search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
               <v-spacer></v-spacer>
-              <v-btn-toggle v-model="captureLayout" class="transparent" mandatory>
-                <v-btn value="packets" icon :title="i18n.showPacketsHelp" text>
+              <v-btn-toggle v-model="packetOptions" class="transparent" multiple>
+                <v-btn value="packets" icon :title="i18n.packetStreamHelp" text @click="captureLayoutAsStream()">
                   <v-icon>fa-list</v-icon>
                 </v-btn>
-                <v-btn value="stream" icon :title="i18n.showStreamHelp" text @click="captureLayoutAsStream()">
-                  <v-icon>fa-stream</v-icon>
-                </v-btn>
-              </v-btn-toggle>
-              <v-spacer></v-spacer>
-              <v-btn-toggle v-model="packetView" class="transparent" mandatory>
                 <v-btn value="hex" :title="i18n.hexHelp" text>
                   {{ i18n.hex }}
                 </v-btn>
-                <v-btn value="ascii" :title="i18n.asciiHelp" text>
-                  {{ i18n.ascii }}
+                <v-btn value="unwrap" :title="i18n.unwrapHelp" text @click="toggleWrap">
+                  <v-icon>fa-envelope-open-text</v-icon>
                 </v-btn>
               </v-btn-toggle>
               <v-spacer></v-spacer>
@@ -759,15 +770,15 @@
                 <v-icon>fa-window-maximize</v-icon>
               </v-btn>
               <v-spacer></v-spacer>
-              <v-btn text icon :href="downloadUrl()" download :title="i18n.download">
+              <v-btn text icon :href="downloadUrl()" download :title="i18n.downloadPackets">
                 <v-icon>fa-download</v-icon>
               </v-btn>
             </v-toolbar>
             <v-data-table ref="packetTable" :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :items-per-page.sync="itemsPerPage" 
-              :search="search" :footer-props="footerProps" must-sort :headers="headers" :hide-default-header="captureLayout != 'packets'" 
+              :search="search" :footer-props="footerProps" must-sort :headers="headers" :hide-default-header="!isOptionEnabled('packets')" 
               :items="packets" item-key="number" :loading="packetsLoading" :expanded="expanded">
               <template v-slot:item="props">
-                <tr @click="expandRow(props.item)" v-if="captureLayout == 'packets'">
+                <tr @click="expandRow(props.item)" v-if="isOptionEnabled('packets')">
                   <td v-text="props.item.number"></td>
                   <td>{{ props.item.timestamp | formatTimestamp }}</td>
                   <td><v-chip :color="props.item.type | colorType">{{ props.item.type }}</v-chip></td>
@@ -778,9 +789,9 @@
                 </tr>
               </template>
               <template v-slot:expanded-item="props">
-                <tr v-if="captureLayout == 'packets' || props.item.payloadOffset > 0">
-                  <td :colspan="getPacketColumnSpan()">
-                    <pre :class="getPacketClass(props.item)">{{ props.item | formatPacketView }}</pre>
+                <tr v-if="isOptionEnabled('packets') || props.item.payloadOffset > 0">
+                  <td :colspan="getPacketColumnSpan()" :class="getPacketClass(props.item)">
+                    <pre>{{ props.item | formatPacketView }}</pre>
                   </td>
                 </tr>
               </template>
@@ -835,6 +846,36 @@
       </v-container>
     </script>
 
+    <script type="text/x-template" id="page-settings">
+        <v-form v-model="form.valid" method="post" :action="authSettingsUrl">
+          <v-container v-if="showSettingsForm" fluid>
+            <v-row>
+              <v-col>
+                <h2 v-text="i18n.settingsTitle"></h2>
+              </v-col>
+            </v-row>
+            <v-row>
+              <v-col>
+                <div v-text="i18n.settingsInstructions"></div>
+              </v-col>
+            </v-row>
+            <v-row>
+              <v-col>
+                <v-text-field name="password" v-model="form.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required]"></v-text-field>
+                <v-text-field :placeholder="i18n.passwordConfirm" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.matches]"></v-text-field>
+                <v-text-field name="csrf_token" v-model="form.csrfToken" class="d-none"></v-text-field>
+              </v-col>
+            </v-row>
+            <v-row>
+              <v-col>
+                <v-btn type="submit" :disabled="!form.valid" text color="primary" v-text="i18n.save"></v-btn>
+              </v-col>
+            </v-row>
+          </v-container>
+        </v-form>
+      </v-card>
+    </script>
+
     <script src="js/external/jquery-3.4.1.min.js"></script>
     <script src="js/external/vue-2.6.11.min.js"></script>
     <script src="js/external/vue-router-3.1.6.min.js"></script>
@@ -853,6 +894,7 @@
     <script src="js/routes/hunt.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/jobs.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/job.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/settings.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/sensors.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/terms.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/user.js?v=VERSION_PLACEHOLDER"></script>

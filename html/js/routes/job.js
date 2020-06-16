@@ -12,12 +12,11 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
   data() { return {
     i18n: this.$root.i18n,
     job: {},
-    packetView: 'hex',
     packetsLoading: false,
     search: '',
     expandAll: false,
     expanded: [],
-    captureLayout: 'packets',
+    packetOptions: ['packets', 'hex', 'unwrap'],
     packets: [],
     headers: [
       { text: this.$root.i18n.number, value: 'number' },
@@ -46,16 +45,15 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
   watch: {
     '$route': 'loadData',
     'packets': 'packetsUpdated',
-    'packetView': 'saveLocalSettings',
+    'packetOptions': 'saveLocalSettings',
     'expandAll': 'saveLocalSettings',
-    'captureLayout': 'saveLocalSettings',
     'sortBy': 'saveLocalSettings',
     'sortDesc': 'saveLocalSettings',
     'itemsPerPage': 'saveLocalSettings',
   },
   methods: {
     getPacketColumnSpan() {
-        return this.captureLayout == 'packets' ? this.headers.length : 1;
+        return this.isOptionEnabled('packets') ? this.headers.length : 1;
     },
     getPacketClass(packet) {
       var cls = "default";
@@ -83,10 +81,27 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
           this.expandRow(this.packets[i]);
         }
       } else {
-        this.captureLayout = 'packets';
+        this.enableOption('packets');
       }
     },
+    enableOption(option) {
+      var idx = this.packetOptions.indexOf(option);
+      if (idx == -1) {
+        this.packetOptions.push(option);
+      }
+    },
+    disableOption(option) {
+      var idx = this.packetOptions.indexOf(option);
+      if (idx != -1) {
+        this.packetOptions.slice(idx, 1);
+      }
+    },
+    isOptionEnabled(option) {
+      return this.packetOptions.indexOf(option) != -1;
+    },
     captureLayoutAsStream() {
+      if (!this.isOptionEnabled('packets')) return;
+
       this.expandPackets(true);
       this.sortBy = 'number';
       this.sortDesc = false;
@@ -97,22 +112,25 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       }
     },
     downloadUrl() {
-      return this.$root.apiUrl + "stream?jobId=" + this.job.id;
+      return this.$root.apiUrl + "stream?jobId=" + this.job.id + "&ext=pcap&unwrap=" + this.isOptionEnabled('unwrap');
     },
-    showAll() {
-
+    toggleWrap() {
+      this.packets = [];
+      var unwrap = !this.isOptionEnabled('unwrap'); // option hasn't been flipped yet
+      var route = this;
+      setTimeout(function() { route.loadPackets(unwrap); }, 0); // run async to this event
     },
-    async loadPackets() {
+    async loadPackets(unwrap) {
       this.packetsLoading = true;
       try {
         const response = await this.$root.papi.get('packets', { params: {
           jobId: this.$route.params.jobId,
           offset: this.packets.length,
-          count: this.count
+          count: this.count,
+          unwrap: unwrap
         }});
         if (response.data) {
           this.packets = this.packets.concat(response.data);
-          this.loadLocalSettings();
         }
       } catch (error) {
         if (error.response != undefined && error.response.status == 404) {
@@ -124,12 +142,14 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     },
     async loadData() {
       this.$root.startLoading();
+      this.loadLocalSettings();
+
       try {
         const response = await this.$root.papi.get('job', { params: {
             jobId: this.$route.params.jobId
         }});
         this.job = response.data;
-        this.loadPackets();
+        this.loadPackets(this.isOptionEnabled('unwrap'));
       } catch (error) {
         if (error.response != undefined && error.response.status == 404) {
           this.$root.showError(this.i18n.jobNotFound);
@@ -142,8 +162,7 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     },
     saveLocalSettings() {
       if (!this.packetsLoading) {
-        localStorage['settings.job.packetView'] = this.packetView;
-        localStorage['settings.job.captureLayout'] = this.captureLayout;
+        localStorage['settings.job.packetOptions'] = this.packetOptions;
         localStorage['settings.job.expandAll'] = this.expandAll;
         localStorage['settings.job.sortBy'] = this.sortBy;
         localStorage['settings.job.sortDesc'] = this.sortDesc;
@@ -152,8 +171,10 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     },
     loadLocalSettings() {
       if (localStorage['settings.job.sortBy']) {
-        this.packetView = localStorage['settings.job.packetView'];
-        this.captureLayout = localStorage['settings.job.captureLayout'];
+        var options = localStorage['settings.job.packetOptions'];
+        if (options != null) {
+          this.packetOptions = options.split(",");
+        }
         this.expandAll = localStorage['settings.job.expandAll'] == "true";
         this.sortBy = localStorage['settings.job.sortBy'];
         this.sortDesc = localStorage['settings.job.sortDesc'] == "true";
@@ -162,7 +183,7 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     },
     updateJob(job) {
       if (this.job.status != job.status) {
-        this.loadPackets();
+        this.loadPackets(this.isOptionEnabled('unwrap'));
       }
       this.job = job;
     },
@@ -180,16 +201,17 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       if (flag == "PSH") return "primary";
       if (flag == "RST") return "error";
       if (flag == "FIN") return "warning";
+      if (flag == "VXLAN") return "accent";
       return "";
     },
     formatPacketView(packet) {
       var view = "";
       if (packet.payload) {
         var bytes = atob(packet.payload);
-        if (this.captureLayout != 'packets' && packet.payloadOffset > 0) {
+        if (!this.isOptionEnabled('packets') && packet.payloadOffset > 0) {
           bytes = bytes.slice(packet.payloadOffset);
         }
-        if (this.packetView == 'hex') {
+        if (this.isOptionEnabled('hex')) {
           view = this.formatHexView(bytes);
         } else {
           view = this.formatAsciiView(bytes);

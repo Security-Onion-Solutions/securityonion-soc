@@ -39,7 +39,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     topChartData: {},
     bottomChartOptions: {},
     bottomChartData: {},
-    groupByLimitOptions: [10,25,50,100],
+    groupByLimitOptions: [10,25,50,100,200,500],
     groupByLimit: 10,
     groupByFilter: '',
     groupByData: [],
@@ -47,17 +47,17 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     groupBySortBy: 'timestamp',
     groupBySortDesc: true,
     groupByItemsPerPage: 10,
-    groupByFooters: { 'items-per-page-options': [10,25,50,250,1000] },
+    groupByFooters: { 'items-per-page-options': [10,25,50,100,200,500] },
 
     eventLimitOptions: [10,25,50,100,200,500,1000,2000,5000],
     eventLimit: 100,
-    eventFilter: '',
     eventData: [],
+    eventFilter: '',  
     eventHeaders: [],
     sortBy: 'timestamp',
     sortDesc: true,
     itemsPerPage: 10,
-    footerProps: { 'items-per-page-options': [10,25,50,250,1000] },
+    footerProps: { 'items-per-page-options': [10,25,50,100,200,500,1000] },
 
     expandedHeaders: [
       { text: "key", value: "key" },
@@ -68,6 +68,8 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     fetchTimeSecs: 0,
     roundTripTimeSecs: 0,
     mruQueries: [],
+
+    autohunt: false
   }},
   created() {
     this.$root.initializeCharts();
@@ -80,21 +82,29 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       { text: this.i18n.months, value: RELATIVE_TIME_MONTHS }
     ];
   },
+  beforeUpdate() {
+    this.$root.setSubtitle(this.query);
+  },
+  beforeDestroy() {
+    this.$root.setSubtitle("");
+  },
   mounted() {
+    this.$root.startLoading();
     this.$root.loadParameters("hunt", this.initHunt);
   },
   watch: {
     '$route': 'loadData',
     'groupBySortBy': 'saveLocalSettings',
     'groupBySortDesc': 'saveLocalSettings',
-    'groupByItemsPerPage': 'saveLocalSettings',
-    'groupByLimit': 'saveLocalSettings',
+    'groupByItemsPerPage': 'groupByItemsPerPageChanged',
+    'groupByLimit': 'groupByLimitChanged',
     'sortBy': 'saveLocalSettings',
     'sortDesc': 'saveLocalSettings',
-    'itemsPerPage': 'saveLocalSettings',
-    'eventLimit': 'saveLocalSettings',
+    'itemsPerPage': 'itemsPerPageChanged',
+    'eventLimit': 'eventLimitChanged',
     'relativeTimeValue': 'saveLocalSettings',
     'relativeTimeUnit': 'saveLocalSettings',
+    'autohunt': 'saveLocalSettings',
   },
   methods: {
     loading() {
@@ -113,13 +123,19 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       this.loadLocalSettings();
       this.setupDateRangePicker();
       this.setupCharts();
-      if (this.$route.query.q) {
+      this.$root.stopLoading();
+
+      if (this.$route.query.q || (this.autohunt && this.query)) {
         this.loadData();
       }
     },
     notifyInputsChanged() {
       if (!this.loading()) {
-        this.$root.drawAttention('#hunt');
+        if (this.autohunt) {
+          this.hunt();
+        } else {
+          this.$root.drawAttention('#hunt');
+        }
       }
     },
     addMRUQuery(query) {
@@ -497,6 +513,30 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
         }
       };
     },
+    groupByLimitChanged() {
+      if (this.groupByItemsPerPage > this.groupByLimit) {
+        this.groupByItemsPerPage = this.groupByLimit;
+      }
+      this.saveLocalSettings();
+    },
+    groupByItemsPerPageChanged() {
+      if (this.groupByLimit < this.groupByItemsPerPage) {
+        this.groupByLimit = this.groupByItemsPerPage;
+      }
+      this.saveLocalSettings();
+    },
+    eventLimitChanged() {
+      if (this.itemsPerPage > this.eventLimit) {
+        this.itemsPerPage = this.eventLimit;
+      }
+      this.saveLocalSettings();
+    },
+    itemsPerPageChanged() {
+      if (this.eventLimit < this.itemsPerPage) {
+        this.eventLimit = this.itemsPerPage;
+      }
+      this.saveLocalSettings();
+    },
     saveLocalSettings() {
       localStorage['settings.hunt.groupBySortBy'] = this.groupBySortBy;
       localStorage['settings.hunt.groupBySortDesc'] = this.groupBySortDesc;
@@ -509,6 +549,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       localStorage['settings.hunt.mruQueries'] = JSON.stringify(this.mruQueries);
       localStorage['settings.hunt.relativeTimeValue'] = this.relativeTimeValue;
       localStorage['settings.hunt.relativeTimeUnit'] = this.relativeTimeUnit;
+      localStorage['settings.hunt.autohunt'] = this.autohunt;
     },
     loadLocalSettings() {
       if (localStorage['settings.hunt.groupBySortBy']) this.groupBySortBy = localStorage['settings.hunt.groupBySortBy'];
@@ -522,6 +563,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       if (localStorage['settings.hunt.mruQueries']) this.mruQueries = JSON.parse(localStorage['settings.hunt.mruQueries']);
       if (localStorage['settings.hunt.relativeTimeValue']) this.relativeTimeValue = parseInt(localStorage['settings.hunt.relativeTimeValue']);
       if (localStorage['settings.hunt.relativeTimeUnit']) this.relativeTimeUnit = parseInt(localStorage['settings.hunt.relativeTimeUnit']);
+      if (localStorage['settings.hunt.autohunt']) this.autohunt = localStorage['settings.hunt.autohunt'] == 'true';
     },
   }
 }});

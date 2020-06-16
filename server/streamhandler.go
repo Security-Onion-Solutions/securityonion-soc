@@ -13,7 +13,10 @@ import (
   "errors"
   "io"
   "net/http"
+  "regexp"
   "strconv"
+  "strings"
+  "github.com/apex/log"
   "github.com/security-onion-solutions/securityonion-soc/web"
 )
 
@@ -41,18 +44,44 @@ func (streamHandler *StreamHandler) HandleNow(writer http.ResponseWriter, reques
 func (streamHandler *StreamHandler) get(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   statusCode := http.StatusBadRequest
   jobId, err := strconv.ParseInt(request.URL.Query().Get("jobId"), 10, 32)
-  reader, filename, err := streamHandler.server.Datastore.GetPacketStream(int(jobId))
+  if err != nil {
+    return statusCode, nil, err
+  }
+  unwrap, err := strconv.ParseBool(request.URL.Query().Get("unwrap"))
+  if err != nil {
+    return statusCode, nil, err
+  }
+  reader, filename, length, err := streamHandler.server.Datastore.GetPacketStream(int(jobId), unwrap)
+  extension := request.URL.Query().Get("ext")
+  if len(extension) > 0 {
+    safe, _ := regexp.MatchString(`^[a-zA-Z0-9-_]+$`, extension)
+    if !safe {
+      return http.StatusBadRequest, nil, errors.New("Invalid extension")
+    }
+    filename = strings.TrimSuffix(filename, ".bin") + "." + extension
+  }
+
   if err == nil {
     defer reader.Close()
     statusCode = http.StatusOK
-    writer.Header().Set("Content-Type", "application/octet-stream")
-    writer.Header().Set("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+    writer.Header().Set("Content-Type", "vnd.tcpdump.pcap")
+    writer.Header().Set("Content-Length", strconv.FormatInt(length, 10))
+    writer.Header().Set("Content-Disposition", "inline; filename=\"" + filename + "\"");
     writer.Header().Set("Content-Transfer-Encoding", "binary");
-    io.Copy(writer, reader)
+    written, err := io.Copy(writer, reader)
+    if err != nil {
+      log.WithError(err).WithFields(log.Fields {
+        "name": filename,
+      }).Error("Failed to copy stream")
+    }
+    log.WithFields(log.Fields {
+      "name": filename,
+      "size": written,
+    }).Info("Copied stream to response")
   } else {
     statusCode = http.StatusNotFound
   }
-  return statusCode, reader, err
+  return statusCode, nil, err
 }
 
 func (streamHandler *StreamHandler) post(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {

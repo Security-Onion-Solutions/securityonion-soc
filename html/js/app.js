@@ -42,13 +42,16 @@ $(document).ready(function() {
       i18n: i18n.getLocalizedTranslations(navigator.language),
       loading: false,
       error: false,
+      warning: false,
       info: false,
       errorMessage: "",
+      warningMessage: "",
       infoMessage: "",
       toolbar: null,
       wsUrl: (location.protocol == 'https:' ?  'wss://' : 'ws://') + location.host + location.pathname + 'ws',
       apiUrl: location.origin + location.pathname + 'api/',
       authUrl: '/auth/self-service/browser/flows/',
+      settingsUrl: null,
       version: '0.0.0',
       papi: null,
       connectionTimeout: 300000,
@@ -59,6 +62,7 @@ $(document).ready(function() {
       parameterCallback: null,
       parameterSection: null,
       chartsInitialized: false,
+      subtitle: '',
     },
     watch: {
       '$vuetify.theme.dark': 'saveLocalSettings',
@@ -78,6 +82,15 @@ $(document).ready(function() {
           }
         }
         return false;
+      },
+      redirectRoute() {
+        if (location.search.indexOf("?r=%2F") == 0) {
+          var stopIdx = location.search.indexOf("&");
+          if (stopIdx == -1) {
+            stopIdx = undefined;
+          }
+          location.hash = '#/' + location.search.substring(6, stopIdx);
+        }
       },
       async loadServerSettings() {
         if (document.getElementById("version")) {
@@ -108,6 +121,13 @@ $(document).ready(function() {
       toggleTheme() {
         this.$vuetify.theme.dark = !this.$vuetify.theme.dark
         this.timestamp=Date.now();
+      },
+      setSubtitle(subtitle) {
+        var title = "Security Onion";
+        if (subtitle && subtitle.length > 0) {
+          title += " - " + subtitle;
+        }
+        document.title = title;
       },
       drawAttention(elementId) {
         var element = $(elementId);
@@ -143,8 +163,7 @@ $(document).ready(function() {
           return moment.duration(duration,"s").humanize();
         }
       },
-      showError(msg) {
-        this.error = true;
+      localizeMessage(msg) {
         var localized = this.i18n[msg];
         if (!localized) {
           if (msg.response && msg.response.data) {
@@ -160,7 +179,15 @@ $(document).ready(function() {
             localized = msg;
           }
         }
-        this.errorMessage = localized;
+        return localized;
+      },
+      showError(msg) {
+        this.error = true;
+        this.errorMessage = this.localizeMessage(msg);
+      },
+      showWarning(msg) {
+        this.warning = true;
+        this.warningMessage = this.localizeMessage(msg);
       },
       showInfo(msg) {
         this.info = true;
@@ -169,6 +196,7 @@ $(document).ready(function() {
       startLoading() {
         this.loading = true;
         this.error = false;
+        this.warning = false;
         this.info = false;
       },
       stopLoading() {
@@ -262,6 +290,7 @@ $(document).ready(function() {
           timeout: this.connectionTimeout,
           withCredentials: true,
         });
+        this.settingsUrl = this.authUrl + 'settings';
       },
       setCookie(name, value, ageSecs) {
         let maxAge = "";
@@ -332,6 +361,7 @@ $(document).ready(function() {
     created() {
       this.log("Initializing application components");
       if (this.redirectIfAuthCompleted()) return;
+      if (this.redirectRoute()) return;
       this.setupApi();
       this.setupAuth();
       this.loadServerSettings();

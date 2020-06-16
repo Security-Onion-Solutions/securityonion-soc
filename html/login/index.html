@@ -31,7 +31,8 @@
       </v-app-bar>
       <v-content>
         <v-progress-linear v-if="loading" :active="loading" indeterminate></v-progress-linear>
-        <v-alert dismissible type="warning" icon="fa-exclamation-triangle" v-model="error" transition="scale-transition">{{ i18n.error }} ({{ errorMessage }})</v-alert>
+        <v-alert dismissible type="error" icon="fa-exclamation-triangle" v-model="error" transition="scale-transition" v-text="errorMessage"></v-alert>
+        <v-alert dismissible type="warning" icon="fa-exclamation" v-model="warning" transition="scale-transition" v-text="warningMessage"></v-alert>
         <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition">{{ infoMessage }}</v-alert>
         <router-view></router-view>
       </v-content>

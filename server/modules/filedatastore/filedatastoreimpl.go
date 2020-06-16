@@ -192,6 +192,8 @@ func (datastore *FileDatastoreImpl) DeleteJob(job *model.Job) error {
     if err == nil {
       filename = fmt.Sprintf("%d.bin", job.Id)
       os.Remove(filepath.Join(folder, filename))
+      filename = fmt.Sprintf("%d.bin.unwrapped", job.Id)
+      os.Remove(filepath.Join(folder, filename))
 
       log.WithFields(log.Fields {
         "id": job.Id,
@@ -290,13 +292,13 @@ func (datastore *FileDatastoreImpl) loadJobs() error {
   return err
 }
 
-func (datastore *FileDatastoreImpl) GetPackets(jobId int, offset int, count int) ([]*model.Packet, error) {
+func (datastore *FileDatastoreImpl) GetPackets(jobId int, offset int, count int, unwrap bool) ([]*model.Packet, error) {
   var packets []*model.Packet
   var err error
   job := datastore.GetJob(jobId)
   if job != nil {
     if job.Status == model.JobStatusCompleted {
-      packets, err = packet.ParsePcap(datastore.getStreamFilename(job), offset, count)
+      packets, err = packet.ParsePcap(datastore.getStreamFilename(job), offset, count, unwrap)
       if err != nil {
         log.WithError(err).WithField("jobId", job.Id).Warn("Failed to parse captured packets")
         err = nil
@@ -333,29 +335,51 @@ func (datastore *FileDatastoreImpl) SavePacketStream(jobId int, reader io.ReadCl
   return err
 }
 
-func (datastore *FileDatastoreImpl) GetPacketStream(jobId int) (io.ReadCloser, string, error) {
+func (datastore *FileDatastoreImpl) GetPacketStream(jobId int, unwrap bool) (io.ReadCloser, string, int64, error) {
   var reader io.ReadCloser
   var filename string
+  var length int64
   var err error
   job := datastore.GetJob(jobId)
   if job != nil {
     if job.Status == model.JobStatusCompleted {
       filename = fmt.Sprintf("sensoroni_%s_%d.%s", sanitize.Name(job.SensorId), job.Id, job.FileExtension);
-      reader, err = os.Open(datastore.getStreamFilename(job))
+      file, err := os.Open(datastore.getModifiedStreamFilename(job, unwrap))
       if err != nil {
         log.WithError(err).WithField("jobId", job.Id).Error("Failed to open packet stream")
-        err = nil
+      }
+      reader = file
+      info, err := file.Stat()
+      length = info.Size()
+      log.WithFields(log.Fields {
+        "size": length,
+        "name": info.Name(),
+      }).Info("Streaming file")
+      if err != nil {
+        log.WithError(err).WithField("jobId", job.Id).Error("Failed to open file stats")
       }
     }
   } else {
     err = errors.New("Job not found")
   }
 
-  return reader, filename, err
+  return reader, filename, length, err
 }
 
 func (datastore *FileDatastoreImpl) getStreamFilename(job *model.Job) string {
   filename := fmt.Sprintf("%d.bin", job.Id)
   folder := filepath.Join(datastore.jobDir, sanitize.Name(job.SensorId))
   return filepath.Join(folder, filename)
+}
+
+func (datastore *FileDatastoreImpl) getModifiedStreamFilename(job *model.Job, unwrap bool) string {
+  filename := datastore.getStreamFilename(job)
+  if unwrap {
+    unwrappedFilename := filename + ".unwrapped"
+    unwrapped := packet.UnwrapPcap(filename, unwrappedFilename)
+    if unwrapped {
+      filename = unwrappedFilename
+    }
+  }
+  return filename
 }
