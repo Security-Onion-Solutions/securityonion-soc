@@ -24,13 +24,13 @@ $(document).ready(function() {
           light: {
             nav_background: '#12110d',
             nav: '#ffffff',
-            drawer_background: '#f7f7f1',
+            drawer_background: '#f4f4f4',
             background: '#ffffff',
           },
           dark: {
             nav_background: '#12110d',
             nav: '#ffffff',
-            drawer_background: '#35342b',
+            drawer_background: '#353535',
             background: '#1e1e1e',
           },
         },
