@@ -32,6 +32,7 @@ COPY --from=builder /build/LICENSE .
 COPY --from=builder /build/README.md .
 COPY --from=builder /build/sensoroni.json .
 RUN chmod u+x scripts/*
+RUN chown 939:939 scripts/*
 RUN find . -name \*.html -exec sed -i -e "s/VERSION_PLACEHOLDER/$VERSION/g" {} \;
 USER socore
 EXPOSE 9822/tcp
