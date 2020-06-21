@@ -1,7 +1,7 @@
 #!/bin/sh
 
 CERTPATH=${STENO_CERTS:-/etc/stenographer/certs}
-URL=${STENO_URL:-https://steno:1234/query}
+URL=${STENO_URL:-https://127.0.0.1:1234/query}
 TIMEOUT=${STENO_TIMEOUT:-890}
 
 if [ $# -lt 1 ]; then
