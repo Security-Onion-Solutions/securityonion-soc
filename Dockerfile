@@ -18,18 +18,20 @@ FROM alpine:latest
 ARG UID=939
 ARG GID=939
 ARG VERSION=0.0.0
-RUN apk update && apk add tzdata ca-certificates && update-ca-certificates
+RUN apk update && apk add tzdata ca-certificates curl tcpdump && update-ca-certificates
 RUN addgroup --gid "$GID" socore
 RUN adduser -D -u "$UID" -G socore -g '' socore
 RUN mkdir -p /opt/sensoroni/jobs && chown socore:socore /opt/sensoroni/jobs
 RUN mkdir -p /opt/sensoroni/logs && chown socore:socore /opt/sensoroni/logs
 WORKDIR /opt/sensoroni
 COPY --from=builder /build/sensoroni .
+COPY --from=builder /build/scripts ./scripts
 COPY --from=builder /build/html ./html
 COPY --from=builder /build/COPYING .
 COPY --from=builder /build/LICENSE .
 COPY --from=builder /build/README.md .
 COPY --from=builder /build/sensoroni.json .
+RUN chmod u+x scripts/*
 RUN find . -name \*.html -exec sed -i -e "s/VERSION_PLACEHOLDER/$VERSION/g" {} \;
 USER socore
 EXPOSE 9822/tcp
