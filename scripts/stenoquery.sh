@@ -18,7 +18,7 @@ shift
     --cacert "$CERTPATH/ca_cert.pem" \
     --silent \
     --max-time $TIMEOUT \
-    --show-error "" \
+    --show-error \
     -d "$query" \
     "$URL" |
     /usr/sbin/tcpdump -r /dev/stdin -s 0 "$@"
