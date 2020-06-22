@@ -19,6 +19,6 @@ shift
     --silent \
     --max-time $TIMEOUT \
     --show-error "" \
-    -d $query \
+    -d "$query" \
     "$URL" |
     /usr/sbin/tcpdump -r /dev/stdin -s 0 "$@"
