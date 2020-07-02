@@ -117,7 +117,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       this.mruQueryLimit = params["mostRecentlyUsedLimit"];
       this.queries = params["queries"];
       this.eventFields = params["eventFields"];
-      if (this.queries.length > 0) {
+      if (this.queries != null && this.queries.length > 0) {
         this.query = this.queries[0].query;
       }
       this.loadLocalSettings();

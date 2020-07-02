@@ -127,8 +127,8 @@ func TestConvertFromElasticResultsSuccess(tester *testing.T) {
 		tester.Errorf("Unexpected returned event count: %d", len(results.Events))
 	}
 
-	if results.Events[0].Timestamp.Format(time.RFC3339) != "2020-04-24T03:00:55Z" {
-		tester.Errorf("Unexpected timestamp: %-v", results.Events[0].Timestamp.Format(time.RFC3339))
+	if results.Events[0].Timestamp != "2020-04-24T03:00:55.300Z" {
+		tester.Errorf("Unexpected timestamp: %-v", results.Events[0].Timestamp)
 	}
 
 	if results.Events[0].Source != "so16:logstash-bro-2020.04.24" {

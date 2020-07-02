@@ -81,7 +81,7 @@ type EventMetric struct {
 
 type EventRecord struct {
   Source        string                  `json:"source"`
-  Timestamp     time.Time               `json:"timestamp"`
+  Timestamp     string                  `json:"timestamp"`
   Id            string                  `json:"id"`
   Type          string                  `json:"type"`
   Score         float64                 `json:"score"`
