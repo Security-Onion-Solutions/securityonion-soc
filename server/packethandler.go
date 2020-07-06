@@ -44,7 +44,7 @@ func (packetHandler *PacketHandler) get(writer http.ResponseWriter, request *htt
   }
   unwrap, err := strconv.ParseBool(request.URL.Query().Get("unwrap"))
   if err != nil {
-    return statusCode, nil, err
+    unwrap = false
   }
   offset, err := strconv.ParseInt(request.URL.Query().Get("offset"), 10, 32)
   if offset <= 0 || err != nil {

@@ -90,7 +90,9 @@ func (steno *StenoQuery) getDataLagDate() time.Time {
 
 func (steno *StenoQuery) ProcessJob(job *model.Job, reader io.ReadCloser) (io.ReadCloser, error) {
   var err error
-  if job.Filter == nil || job.Filter.EndTime.Before(steno.GetDataEpoch()) || job.Filter.EndTime.After(steno.getDataLagDate()) {
+  if len(job.Filter.ImportId) > 0 {
+    return reader, nil
+  } else if job.Filter == nil || job.Filter.EndTime.Before(steno.GetDataEpoch()) || job.Filter.EndTime.After(steno.getDataLagDate()) {
     err = errors.New("No data available for the requested dates")
   } else {
     job.FileExtension = "pcap"

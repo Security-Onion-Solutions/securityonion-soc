@@ -290,6 +290,12 @@ func (store *ElasticEventstore) PopulateJobFromEventId(esId string, job *model.J
           broQuery = fuid
         }
 
+        // Start with initial ES hit's observer name, but this can be overriden by secondary ES search.
+        outputSensorId = gjson.Get(json, "hits.hits.0._source.observer.name").String()
+
+        // Lookup import ID, in case this PCAP was imported from a file rather than intercepted via the network
+        filter.ImportId = gjson.Get(json, "hits.hits.0._source.import.id").String()
+
         startTime := timestamp.Add(time.Duration(-30) * time.Minute).Unix() * 1000
         endTime := timestamp.Add(time.Duration(30) * time.Minute).Unix() * 1000
         query = fmt.Sprintf(`{"query":{"bool":{"must":[{"query_string":{"query":"event.module:zeek AND event.dataset:%s AND %s","analyze_wildcard":true}},{"range":{"@timestamp":{"gte":"%d","lte":"%d","format":"epoch_millis"}}}]}}}`,
