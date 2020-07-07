@@ -164,20 +164,18 @@ $(document).ready(function() {
         }
       },
       localizeMessage(msg) {
+        if (msg.response && msg.response.data) {
+          msg = msg.response.data;
+          if (msg.error && msg.error.reason) {
+            msg = msg.error.reason;
+          }
+        }
         var localized = this.i18n[msg];
         if (!localized) {
-          if (msg.response && msg.response.data) {
-            localized = this.i18n[msg.response.data];
-            if (!localized) {
-              var details = msg.response.data;
-              if (details.length > 200) {
-                details = details.substring(0, 200);
-              }
-              localized = msg + " (" + details + ")";
-            }
-          } else {
-            localized = msg;
+          if (msg.length > 200) {
+            msg = details.substring(0, 200) + "...";
           }
+          localized = msg;
         }
         return localized;
       },
