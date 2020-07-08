@@ -38,6 +38,12 @@ func TestElasticInit(tester *testing.T) {
   if elastic.store.timeShiftMs != DEFAULT_TIME_SHIFT_MS {
     tester.Errorf("expected timeShiftMs %d but got %d", DEFAULT_TIME_SHIFT_MS, elastic.store.timeShiftMs)
   }
+  if elastic.store.defaultDurationMs != DEFAULT_DURATION_MS {
+    tester.Errorf("expected defaultDurationMs %d but got %d", DEFAULT_DURATION_MS, elastic.store.defaultDurationMs)
+  }
+  if elastic.store.esSearchOffsetMs != DEFAULT_ES_SEARCH_OFFSET_MS {
+    tester.Errorf("expected esSearchOffsetMs %d but got %d", DEFAULT_ES_SEARCH_OFFSET_MS, elastic.store.esSearchOffsetMs)
+  }
   if elastic.store.timeoutMs != time.Duration(DEFAULT_TIMEOUT_MS) * time.Millisecond {
     tester.Errorf("expected timeoutMs %d but got %d", DEFAULT_TIMEOUT_MS, elastic.store.timeoutMs)
   }

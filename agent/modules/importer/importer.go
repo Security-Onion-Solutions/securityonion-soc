@@ -77,6 +77,10 @@ func (importer *Importer) IsRunning() bool {
 func (importer *Importer) ProcessJob(job *model.Job, reader io.ReadCloser) (io.ReadCloser, error) {
   var err error
   if len(job.Filter.ImportId) == 0 {
+    log.WithFields(log.Fields {
+      "jobId": job.Id,
+      "importId": job.Filter.ImportId,
+    }).Debug("Skipping import processor due to missing importId")
     return reader, nil
   } else {
     job.FileExtension = "pcap"

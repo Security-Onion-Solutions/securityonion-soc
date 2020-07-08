@@ -36,23 +36,27 @@ type FieldDefinition struct {
 }
 
 type ElasticEventstore struct {
-  esConfig		elasticsearch.Config
-  esClient		*elasticsearch.Client
-  timeShiftMs	int
-  timeoutMs   time.Duration
-  index       string
-  cacheMs     time.Duration
-  cacheTime   time.Time
-  fieldDefs   map[string]*FieldDefinition
+  esConfig		      elasticsearch.Config
+  esClient		      *elasticsearch.Client
+  timeShiftMs	      int
+  defaultDurationMs int
+  esSearchOffsetMs  int
+  timeoutMs         time.Duration
+  index             string
+  cacheMs           time.Duration
+  cacheTime         time.Time
+  fieldDefs         map[string]*FieldDefinition
 }
 
 func NewElasticEventstore() *ElasticEventstore {
   return &ElasticEventstore{}
 }
 
-func (store *ElasticEventstore) Init(hostUrl string, user string, pass string, verifyCert bool, timeShiftMs int, timeoutMs int, cacheMs int, index string) error {
+func (store *ElasticEventstore) Init(hostUrl string, user string, pass string, verifyCert bool, timeShiftMs int, defaultDurationMs int, esSearchOffsetMs int, timeoutMs int, cacheMs int, index string) error {
   hosts := make([]string, 1)
   store.timeShiftMs = timeShiftMs
+  store.defaultDurationMs = defaultDurationMs
+  store.esSearchOffsetMs = esSearchOffsetMs
   store.index = index
   store.timeoutMs = time.Duration(timeoutMs) * time.Millisecond
   store.cacheMs = time.Duration(cacheMs) * time.Millisecond
@@ -246,6 +250,27 @@ func (store *ElasticEventstore) clusterState() (string, error) {
   return json, err
 }
 
+func (store *ElasticEventstore) parseFirst(json string, name string) string {
+  result := gjson.Get(json, "hits.hits.0._source." + name).String()
+  // Select first uid if multiple were provided
+  if len(result) > 0 && result[0] == '[' {
+    result = gjson.Get(json, "hits.hits.0._source." + name + ".0").String()
+  }
+  return result
+}
+
+/**
+ * Fetch record via provided Elasticsearch document ID.
+ * If the record has a tunnel_parent, search for a UID=tunnel_parent[0]
+ *   - If found, discard original record and replace with the new record
+ * If the record has source IP/port and destination IP/port, use it as the filter.
+ * Else if the record has a Zeek x509 "ID" search for the first Zeek record with this ID.
+ * Else if the record has a Zeek file "FUID" search for the first Zeek record with this FUID.
+ * Search for the Zeek record with a matching log.id.uid equal to the UID from the previously found record
+ *   - If multiple UIDs exist in the record, use the first UID in the list.
+ * Review the results from the Zeek search and find the record with the timestamp nearest
+   to the original ES ID record and use the IP/port details as the filter.
+ */
 func (store *ElasticEventstore) PopulateJobFromEventId(esId string, job *model.Job) error {
   var outputSensorId string
   filter := model.NewFilter()
@@ -255,108 +280,191 @@ func (store *ElasticEventstore) PopulateJobFromEventId(esId string, job *model.J
     "query": query,
     "response": json,
     }).Debug("Elasticsearch primary search finished")
-  if err == nil {
+  if err != nil {
+    log.WithField("esId", esId).WithError(err).Error("Unable to lookup initial document record")
+    return err
+  }
+
+  hits := gjson.Get(json, "hits.total.value").Int()
+  if hits == 0 {
+    log.WithField("esId", esId).Error("Pivoted document record was not found")
+    return errors.New("Unable to locate document record")
+  }
+
+  // Check if user has pivoted to a PCAP that is encapsulated in a tunnel. The best we 
+  // can do in this situation is respond with the tunnel PCAP data, which could be excessive.
+  tunnelParent := gjson.Get(json, "hits.hits.0._source.log.id.tunnel_parents").String()
+  if len(tunnelParent) > 0 {
+    log.Info("Document is inside of a tunnel; attempting to lookup tunnel connection log")
+    if tunnelParent[0] == '[' {
+      tunnelParent = gjson.Get(json, "hits.hits.0._source.log.id.tunnel_parents.0").String()
+    }
+    query := fmt.Sprintf(`{"query" : { "bool": { "must": { "match" : { "log.id.uid" : "%s" }}}}}`, tunnelParent)
+    json, err = store.luceneSearch(query)
+    log.WithFields(log.Fields{
+      "query": query,
+      "response": json,
+      }).Debug("Elasticsearch tunnel search finished")
+    if err != nil {
+      log.WithField("esId", esId).WithError(err).Error("Unable to lookup tunnel record")
+      return err
+    }
     hits := gjson.Get(json, "hits.total.value").Int()
-    if hits > 0 {
-      timestampStr := gjson.Get(json, "hits.hits.0._source.\\@timestamp").String()
-      var timestamp time.Time
-      timestamp, err = time.Parse(time.RFC3339, timestampStr)
-      if err == nil {
-        srcIp := gjson.Get(json, "hits.hits.0._source.source.ip").String()
-        srcPort := gjson.Get(json, "hits.hits.0._source.source.port").Int()
-        dstIp := gjson.Get(json, "hits.hits.0._source.destination.ip").String()
-        dstPort := gjson.Get(json, "hits.hits.0._source.destination.port").Int()
-        uid := gjson.Get(json, "hits.hits.0._source.log.id.uid").String()
-        x509id := gjson.Get(json, "hits.hits.0._source.log.id.id").String()
-        fuid := gjson.Get(json, "hits.hits.0._source.log.id.fuid").String()
+    if hits == 0 {
+      log.WithField("esId", esId).Error("Tunnel record was not found")
+      return errors.New("Unable to locate encapsulating tunnel record")
+    }
+  }
 
-        // Select first uid if multiple were provided
-        if len(uid) > 0 && uid[0] == '[' {
-          uid = gjson.Get(json, "hits.hits.0._source.log.id.uid.0").String()
-        }
+  timestampStr := gjson.Get(json, "hits.hits.0._source.\\@timestamp").String()
+  var timestamp time.Time
+  timestamp, err = time.Parse(time.RFC3339, timestampStr)
+  if err != nil {
+    log.WithFields(log.Fields {
+      "esId": esId,
+      "timestamp": timestamp,
+    }).WithError(err).Error("Unable to parse document timestamp")
+    return err
+  }
 
-        // Initialize default query params
-        esType := "conn"
-        broQuery := fmt.Sprintf("%s AND %d AND %s AND %d", srcIp, srcPort, dstIp, dstPort)
+  filter.ImportId = gjson.Get(json, "hits.hits.0._source.import.id").String()
+  filter.SrcIp = gjson.Get(json, "hits.hits.0._source.source.ip").String()
+  filter.SrcPort = int(gjson.Get(json, "hits.hits.0._source.source.port").Int())
+  filter.DstIp = gjson.Get(json, "hits.hits.0._source.destination.ip").String()
+  filter.DstPort = int(gjson.Get(json, "hits.hits.0._source.destination.port").Int())
+  uid := store.parseFirst(json, "log.id.uid")
+  x509id := store.parseFirst(json, "log.id.id")
+  fuid := store.parseFirst(json, "log.id.fuid")
+  outputSensorId = gjson.Get(json, "hits.hits.0._source.observer.name").String()
+  duration := int64(store.defaultDurationMs)
 
-        // Override the defaults with special search queries
-        if len(uid) > 0 && uid[0] == 'C' {
-          broQuery = uid
-        } else if len(x509id) > 0 && x509id[0] == 'F' {
-          esType = "files"
-          broQuery = x509id
-        } else if len(fuid) > 0 && fuid[0] == 'F' {
-          esType = "files"
-          broQuery = fuid
-        }
+  // If source and destination IP/port details aren't available search ES again for a correlating Zeek record
+  if len(filter.SrcIp) == 0 || len(filter.DstIp) == 0 || filter.SrcPort == 0 || filter.DstPort == 0 {
+    startTime := timestamp.Add(time.Duration(-store.esSearchOffsetMs) * time.Millisecond).Unix() * 1000
+    endTime := timestamp.Add(time.Duration(store.esSearchOffsetMs) * time.Millisecond).Unix() * 1000
 
-        // Start with initial ES hit's observer name, but this can be overriden by secondary ES search.
-        outputSensorId = gjson.Get(json, "hits.hits.0._source.observer.name").String()
+    if len(uid) == 0 || uid[0] != 'C' {
+      zeekFileQuery := ""
+      if len(x509id) > 0 && x509id[0] == 'F' {
+        zeekFileQuery = x509id
+      } else if len(fuid) > 0 && fuid[0] == 'F' {
+        zeekFileQuery = fuid
+      }
 
-        // Lookup import ID, in case this PCAP was imported from a file rather than intercepted via the network
-        filter.ImportId = gjson.Get(json, "hits.hits.0._source.import.id").String()
-
-        startTime := timestamp.Add(time.Duration(-30) * time.Minute).Unix() * 1000
-        endTime := timestamp.Add(time.Duration(30) * time.Minute).Unix() * 1000
-        query = fmt.Sprintf(`{"query":{"bool":{"must":[{"query_string":{"query":"event.module:zeek AND event.dataset:%s AND %s","analyze_wildcard":true}},{"range":{"@timestamp":{"gte":"%d","lte":"%d","format":"epoch_millis"}}}]}}}`,
-          esType, broQuery, startTime, endTime)
+      if len(zeekFileQuery) > 0 {
+        query = fmt.Sprintf(`{"query":{"bool":{"must":[{"query_string":{"query":"event.module:zeek AND event.dataset:file AND %s","analyze_wildcard":true}},{"range":{"@timestamp":{"gte":"%d","lte":"%d","format":"epoch_millis"}}}]}}}`,
+          zeekFileQuery, startTime, endTime)
         json, err = store.luceneSearch(query)
         log.WithFields(log.Fields{
           "query": query,
           "response": json,
-          }).Debug("Elasticsearch secondary search finished")
-        if err == nil {
-          hits = gjson.Get(json, "hits.total.value").Int()
-          if hits > 0 {
-            results := gjson.Get(json, "hits.hits.#._source.\\@timestamp").Array()
-            closestIdx := 0
-            var closestDeltaNs int64
-            var closestTimestamp time.Time
-            closestDeltaNs = 0
-            for idx, ts := range results {
-              var matchTs time.Time
-              matchTs, err = time.Parse(time.RFC3339, ts.String())
-              if err == nil {
-                delta := timestamp.Sub(matchTs)
-                deltaNs := delta.Nanoseconds()
-                if deltaNs < 0 {
-                  deltaNs = -deltaNs
-                }
-                if closestDeltaNs == 0 || deltaNs < closestDeltaNs {
-                  closestDeltaNs = deltaNs
-                  closestIdx = idx
-                  closestTimestamp = matchTs
-                }
-              }
-            }
-            idxStr := strconv.Itoa(closestIdx)
-            filter.SrcIp = gjson.Get(json, "hits.hits." + idxStr + "._source.source.ip").String()
-            filter.SrcPort = int(gjson.Get(json, "hits.hits." + idxStr + "._source.source.port").Int())
-            filter.DstIp = gjson.Get(json, "hits.hits." + idxStr + "._source.destination.ip").String()
-            filter.DstPort = int(gjson.Get(json, "hits.hits." + idxStr + "._source.destination.port").Int())
+          }).Debug("Elasticsearch Zeek File search finished")
+
+        if err != nil {
+          log.WithFields(log.Fields {
+            "esId": esId,
+            "zeekFileQuery": zeekFileQuery,
+          }).WithError(err).Error("Unable to lookup Zeek File record")
+          return err
+        }
+
+        hits = gjson.Get(json, "hits.total.value").Int()
+        if hits == 0 {
+          log.WithFields(log.Fields {
+            "esId": esId,
+            "zeekFileQuery": zeekFileQuery,
+          }).Error("Zeek File record was not found")
+          return errors.New("Unable to locate Zeek File record")
+        }
+
+        uid = store.parseFirst(json, "log.id.uid")
+      }
+    }
+
+    if len(uid) == 0 {
+      return errors.New("No valid Zeek connection ID found")
+    }
+
+    // Search for the Zeek connection ID
+    query = fmt.Sprintf(`{"query":{"bool":{"must":[{"query_string":{"query":"event.module:zeek AND %s","analyze_wildcard":true}},{"range":{"@timestamp":{"gte":"%d","lte":"%d","format":"epoch_millis"}}}]}}}`,
+      uid, startTime, endTime)
+    json, err = store.luceneSearch(query)
+    log.WithFields(log.Fields{
+      "query": query,
+      "response": json,
+      }).Debug("Elasticsearch Zeek search finished")
+
+    if err != nil {
+      log.WithFields(log.Fields {
+        "esId": esId,
+        "uid": uid,
+      }).WithError(err).Error("Unable to lookup Zeek record")
+      return err
+    }
+
+    hits = gjson.Get(json, "hits.total.value").Int()
+    if hits == 0 {
+      log.WithFields(log.Fields {
+        "esId": esId,
+        "uid": uid,
+      }).Error("Zeek record was not found")
+      return errors.New("Unable to locate Zeek record")
+    }
+
+    results := gjson.Get(json, "hits.hits.#._source.\\@timestamp").Array()
+    var closestDeltaNs int64
+    closestDeltaNs = 0
+    for idx, ts := range results {
+      var matchTs time.Time
+      matchTs, err = time.Parse(time.RFC3339, ts.String())
+      if err == nil {
+        idxStr := strconv.Itoa(idx)
+        srcIp := gjson.Get(json, "hits.hits." + idxStr + "._source.source.ip").String()
+        srcPort := int(gjson.Get(json, "hits.hits." + idxStr + "._source.source.port").Int())
+        dstIp := gjson.Get(json, "hits.hits." + idxStr + "._source.destination.ip").String()
+        dstPort := int(gjson.Get(json, "hits.hits." + idxStr + "._source.destination.port").Int())
+
+        if len(srcIp) > 0 && len(dstIp) > 0 && srcPort > 0 && dstPort > 0 {
+          delta := timestamp.Sub(matchTs)
+          deltaNs := delta.Nanoseconds()
+          if deltaNs < 0 {
+            deltaNs = -deltaNs
+          }
+          if closestDeltaNs == 0 || deltaNs < closestDeltaNs {
+            closestDeltaNs = deltaNs
+
+            timestamp = matchTs
+            filter.SrcIp = srcIp
+            filter.SrcPort = srcPort
+            filter.DstIp = dstIp
+            filter.DstPort = dstPort
             durationFloat := gjson.Get(json, "hits.hits." + idxStr + "._source.event.duration").Float()
-            duration := int64(math.Round(durationFloat * 1000.0))
-            filter.BeginTime = closestTimestamp.Add(time.Duration(-duration - int64(store.timeShiftMs)) * time.Millisecond)
-            filter.EndTime = closestTimestamp.Add(time.Duration(duration + int64(store.timeShiftMs)) * time.Millisecond)
-            outputSensorId = gjson.Get(json, "hits.hits." + idxStr + "._source.observer.name").String()
-            log.WithFields(log.Fields{
-              "sensorId": outputSensorId,
-              }).Info("Obtained output parameters")
+            if durationFloat > 0 {
+              duration = int64(math.Round(durationFloat * 1000.0))
+            }
           }
         }
       }
-    } else {
-      err = errors.New("EsId not found in Elasticsearch: " + esId)
     }
+    
+    log.WithFields(log.Fields{
+      "sensorId": outputSensorId,
+      }).Info("Obtained output parameters")
   }
 
-  if err != nil {
-    log.WithError(err).Warn("Failed to lookup elasticsearch document")
-  } else {
-    job.SensorId = outputSensorId
-    job.Filter = filter
+  if len(filter.SrcIp) == 0 || len(filter.DstIp) == 0 || filter.SrcPort == 0 || filter.DstPort == 0 {
+    log.WithFields(log.Fields {
+      "esId": esId,
+      "uid": uid,
+    }).Warn("Unable to lookup PCAP due to missing TCP/UDP parameters")
+    return errors.New("No TCP/UDP record was found for retrieving PCAP")
   }
 
-  return err
+  filter.BeginTime = timestamp.Add(time.Duration(-duration - int64(store.timeShiftMs)) * time.Millisecond)
+  filter.EndTime = timestamp.Add(time.Duration(duration + int64(store.timeShiftMs)) * time.Millisecond)
+  job.SensorId = outputSensorId
+  job.Filter = filter
+
+  return nil
 }
 
