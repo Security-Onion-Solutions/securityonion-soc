@@ -122,6 +122,22 @@ $(document).ready(function() {
         this.$vuetify.theme.dark = !this.$vuetify.theme.dark
         this.timestamp=Date.now();
       },
+      setFavicon() {
+        const colorSchemeString = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? '-dark'
+          : '';
+    
+        const svgFavicon = document.querySelector('.so-favicon[type="image/svg+xml"]'),
+              pngFavicon = document.querySelector('.so-favicon[type="image/png"]');
+    
+        if (pngFavicon && svgFavicon) {
+          const darkTagIndex = svgFavicon.href.indexOf("-dark.svg"),
+                baseText = svgFavicon.href.substring(0, darkTagIndex !== -1 ? darkTagIndex : svgFavicon.href.lastIndexOf("."));
+          
+          pngFavicon.href = `${baseText}${colorSchemeString}.png`;
+          svgFavicon.href = `${baseText}${colorSchemeString}.svg`;
+        }
+      },
       setSubtitle(subtitle) {
         var title = "Security Onion";
         if (subtitle && subtitle.length > 0) {
@@ -369,6 +385,10 @@ $(document).ready(function() {
       Vue.filter('formatTimestamp', this.formatTimestamp);
       $('#app')[0].style.display = "block";
       this.log("Initialization complete");
+    },
+    mounted() {
+      this.setFavicon();
+      window.matchMedia('(prefers-color-scheme: dark)').addListener(() => this.setFavicon());
     },
   });
 });
