@@ -379,10 +379,14 @@ func (store *ElasticEventstore) PopulateJobFromEventId(esId string, job *model.J
 
         uid = store.parseFirst(json, "log.id.uid")
       }
-    }
 
-    if len(uid) == 0 {
-      return errors.New("No valid Zeek connection ID found")
+      if len(uid) == 0 {
+        log.WithFields(log.Fields {
+          "esId": esId,
+          "zeekFileQuery": zeekFileQuery,
+        }).Warn("Zeek File record is missing a UID")
+        return errors.New("No valid Zeek connection ID found")
+      }
     }
 
     // Search for the Zeek connection ID
