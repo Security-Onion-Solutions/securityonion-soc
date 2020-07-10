@@ -131,11 +131,15 @@ $(document).ready(function() {
               pngFavicon = document.querySelector('.so-favicon[type="image/png"]');
     
         if (pngFavicon && svgFavicon) {
-          const darkTagIndex = svgFavicon.href.indexOf("-dark.svg"),
-                baseText = svgFavicon.href.substring(0, darkTagIndex !== -1 ? darkTagIndex : svgFavicon.href.lastIndexOf("."));
+          const svgExt = '.svg',
+                darkTagExt = '-dark.svg';
+          const darkTagIndex = svgFavicon.href.indexOf(darkTagExt),
+                svgIndex = svgFavicon.href.indexOf(svgExt),
+                baseText = svgFavicon.href.substring(0, darkTagIndex !== -1 ? darkTagIndex : svgIndex),
+                queryParam = svgFavicon.href.substring(darkTagIndex !== -1 ? ( darkTagIndex + darkTagExt.length ) : ( svgIndex + svgExt.length));
           
-          pngFavicon.href = `${baseText}${colorSchemeString}.png`;
-          svgFavicon.href = `${baseText}${colorSchemeString}.svg`;
+          pngFavicon.href = `${baseText}${colorSchemeString}.png${queryParam}`;
+          svgFavicon.href = `${baseText}${colorSchemeString}.svg${queryParam}`;
         }
       },
       setSubtitle(subtitle) {
