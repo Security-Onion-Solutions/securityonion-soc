@@ -193,7 +193,7 @@ $(document).ready(function() {
         var localized = this.i18n[msg];
         if (!localized) {
           if (msg.length > 200) {
-            msg = details.substring(0, 200) + "...";
+            msg = msg.substring(0, 200) + "...";
           }
           localized = msg;
         }

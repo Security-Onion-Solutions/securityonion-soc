@@ -126,6 +126,11 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       this.$root.stopLoading();
 
       if (this.$route.query.q || (this.autohunt && this.query)) {
+        if (this.$route.query.q) {
+          // This page was either refreshed, or opened from an existing hunt hyperlink, 
+          // so switch to absolute time since the URL has the absolute time defined.
+          this.relativeTimeEnabled = false;
+        }
         this.loadData();
       }
     },
