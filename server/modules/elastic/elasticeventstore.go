@@ -21,6 +21,7 @@ import (
   "net/http"
   "strconv"
   "strings"
+  "sync"
   "time"
   "github.com/apex/log"
   "github.com/elastic/go-elasticsearch/v7"
@@ -45,6 +46,7 @@ type ElasticEventstore struct {
   index             string
   cacheMs           time.Duration
   cacheTime         time.Time
+  cacheLock         sync.Mutex
   fieldDefs         map[string]*FieldDefinition
 }
 
@@ -122,11 +124,12 @@ func (store *ElasticEventstore) unmapElasticField(field string) string {
 }
 
 func (store *ElasticEventstore) Search(criteria *model.EventSearchCriteria) (*model.EventSearchResults, error) {
+  store.refreshCache()
+
   results := model.NewEventSearchResults()
   query, err := convertToElasticRequest(store, criteria)
   if err == nil {
     var response string
-    store.refreshCache()
     response, err = store.luceneSearch(query)
     if err == nil {
       err = convertFromElasticResults(store, response, results)
@@ -174,6 +177,8 @@ func (store *ElasticEventstore) indexSearch(query string, indexes []string) (str
 }
 
 func (store *ElasticEventstore) refreshCache() {
+  store.cacheLock.Lock()
+  defer store.cacheLock.Unlock()
   if store.cacheTime.IsZero() || time.Now().Sub(store.cacheTime) > store.cacheMs {
     err := store.refreshCacheFromIndexPatterns()
     if err == nil {
