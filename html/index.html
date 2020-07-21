@@ -15,7 +15,9 @@
     <!-- Required meta tags -->
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <link rel="icon" sizes="24x24" href="images/onion.png?v=VERSION_PLACEHOLDER">
+    <link rel="mask-icon" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
+    <link rel="alternate icon" class="so-favicon" type="image/png" href="images/favicon/onion.png?v=VERSION_PLACEHOLDER">
+    <link rel="icon" class="so-favicon" type="image/svg+xml" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
     <link rel="stylesheet" href="css/external/vuetify-v2.2.18.min.css">
     <link rel="stylesheet" href="css/external/all-5.13.0.min.css">
     <link rel="stylesheet" href="css/external/daterangepicker-3.0.5.css">
@@ -89,7 +91,7 @@
               <v-list-item-title v-text="i18n.launch_kibana"></v-list-item-title>
             </v-list-item-content>
           </v-list-item>
-          <v-list-item target="so-grafana" href="/grafana/">
+          <v-list-item target="so-grafana" href="/grafana/d/so_overview">
             <v-list-item-action>
               <v-icon>fa-external-link-alt</v-icon>
             </v-list-item-action>
@@ -105,7 +107,7 @@
               <v-list-item-title v-text="i18n.launch_cyberchef"></v-list-item-title>
             </v-list-item-content>
           </v-list-item>
-          <v-list-item target="so-playbook" href="/playbook/">
+          <v-list-item target="so-playbook" href="/playbook/projects/detection-playbooks/issues/">
             <v-list-item-action>
               <v-icon>fa-external-link-alt</v-icon>
             </v-list-item-action>
@@ -145,7 +147,7 @@
         </v-app-bar-nav-icon>
         <v-toolbar-title>
           <router-link id="title" to="/">
-            <img class="pt-1" :title="i18n.product" :alt="i18n.product" src="images/security_onion_small.png"></v-img>
+            <img class="pt-1" :title="i18n.product" :alt="i18n.product" height="45" src="images/so-logo.svg"></v-img>
           </router-link>
         </v-toolbar-title>
         <v-spacer></v-spacer>
@@ -164,7 +166,7 @@
                 <v-list-item-title v-text="i18n.darkMode"></v-list-item-title>
               </v-list-item-content>
             </v-list-item>
-            <v-list-item target="so-help" href="https://github.com/Security-Onion-Solutions/securityonion-saltstack/wiki/FAQ">
+            <v-list-item target="so-help" href="https://docs.securityonion.net/en/2.0/">
               <v-list-item-action>
                 <v-icon>fa-question</v-icon>
               </v-list-item-action>
@@ -242,7 +244,8 @@
           <v-col class="mx-auto text-center">
             <div v-html="i18n.sponsorsIntro"></div>
             <a target="sos" href="https://securityonionsolutions.com/">
-              <img src="images/security_onion_solutions_rings.png">
+              <img v-if="!$vuetify.theme.dark" height="200" src="images/sos-logo.svg">
+              <img v-if="$vuetify.theme.dark" height="200" src="images/sos-logo-white.svg">
             </a>
           </v-col>
         </v-row>

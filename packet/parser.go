@@ -97,10 +97,10 @@ func parsePcapFile(filename string, handler func(int, gopacket.Packet) bool) err
     index := 0
     for pcapPacket := range packetSource.Packets() {
       if pcapPacket != nil {
-        index++
         if !handler(index, pcapPacket) {
           break
         }
+        index++
       }
     }
   }

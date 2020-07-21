@@ -14,6 +14,7 @@ import (
 )
 
 type Filter struct {
+  ImportId                  string                  `json:"importId"`
   BeginTime             		time.Time 							`json:"beginTime"`
   EndTime             			time.Time 							`json:"endTime"`
   SrcIp											string									`json:"srcIp"`

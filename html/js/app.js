@@ -24,13 +24,13 @@ $(document).ready(function() {
           light: {
             nav_background: '#12110d',
             nav: '#ffffff',
-            drawer_background: '#f7f7f1',
+            drawer_background: '#f4f4f4',
             background: '#ffffff',
           },
           dark: {
             nav_background: '#12110d',
             nav: '#ffffff',
-            drawer_background: '#35342b',
+            drawer_background: '#353535',
             background: '#1e1e1e',
           },
         },
@@ -122,6 +122,26 @@ $(document).ready(function() {
         this.$vuetify.theme.dark = !this.$vuetify.theme.dark
         this.timestamp=Date.now();
       },
+      setFavicon() {
+        const colorSchemeString = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? '-dark'
+          : '';
+    
+        const svgFavicon = document.querySelector('.so-favicon[type="image/svg+xml"]'),
+              pngFavicon = document.querySelector('.so-favicon[type="image/png"]');
+    
+        if (pngFavicon && svgFavicon) {
+          const svgExt = '.svg',
+                darkTagExt = '-dark.svg';
+          const darkTagIndex = svgFavicon.href.indexOf(darkTagExt),
+                svgIndex = svgFavicon.href.indexOf(svgExt),
+                baseText = svgFavicon.href.substring(0, darkTagIndex !== -1 ? darkTagIndex : svgIndex),
+                queryParam = svgFavicon.href.substring(darkTagIndex !== -1 ? ( darkTagIndex + darkTagExt.length ) : ( svgIndex + svgExt.length));
+          
+          pngFavicon.href = `${baseText}${colorSchemeString}.png${queryParam}`;
+          svgFavicon.href = `${baseText}${colorSchemeString}.svg${queryParam}`;
+        }
+      },
       setSubtitle(subtitle) {
         var title = "Security Onion";
         if (subtitle && subtitle.length > 0) {
@@ -164,20 +184,18 @@ $(document).ready(function() {
         }
       },
       localizeMessage(msg) {
+        if (msg.response && msg.response.data) {
+          msg = msg.response.data;
+          if (msg.error && msg.error.reason) {
+            msg = msg.error.reason;
+          }
+        }
         var localized = this.i18n[msg];
         if (!localized) {
-          if (msg.response && msg.response.data) {
-            localized = this.i18n[msg.response.data];
-            if (!localized) {
-              var details = msg.response.data;
-              if (details.length > 200) {
-                details = details.substring(0, 200);
-              }
-              localized = msg + " (" + details + ")";
-            }
-          } else {
-            localized = msg;
+          if (msg.length > 200) {
+            msg = msg.substring(0, 200) + "...";
           }
+          localized = msg;
         }
         return localized;
       },
@@ -371,6 +389,10 @@ $(document).ready(function() {
       Vue.filter('formatTimestamp', this.formatTimestamp);
       $('#app')[0].style.display = "block";
       this.log("Initialization complete");
+    },
+    mounted() {
+      this.setFavicon();
+      window.matchMedia('(prefers-color-scheme: dark)').addListener(() => this.setFavicon());
     },
   });
 });

@@ -90,7 +90,20 @@ func (steno *StenoQuery) getDataLagDate() time.Time {
 
 func (steno *StenoQuery) ProcessJob(job *model.Job, reader io.ReadCloser) (io.ReadCloser, error) {
   var err error
-  if job.Filter == nil || job.Filter.EndTime.Before(steno.GetDataEpoch()) || job.Filter.EndTime.After(steno.getDataLagDate()) {
+  if len(job.Filter.ImportId) > 0 {
+    log.WithFields(log.Fields {
+      "jobId": job.Id,
+      "importId": job.Filter.ImportId,
+    }).Debug("Skipping steno processor due to presence of importId")
+    return reader, nil
+  } else if job.Filter == nil || job.Filter.EndTime.Before(steno.GetDataEpoch()) || job.Filter.BeginTime.After(steno.getDataLagDate()) {
+    log.WithFields(log.Fields {
+      "jobId": job.Id,
+      "availableDataBeginDate": steno.GetDataEpoch(),
+      "availableDataEndDate": steno.getDataLagDate(),
+      "jobBeginDate": job.Filter.BeginTime,
+      "jobEndDate": job.Filter.EndTime,
+    }).Info("Skipping steno processor due to date range conflict")
     err = errors.New("No data available for the requested dates")
   } else {
     job.FileExtension = "pcap"

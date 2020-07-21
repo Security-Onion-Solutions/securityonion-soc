@@ -37,6 +37,8 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     Vue.filter('formatPacketView', this.formatPacketView);
     Vue.filter('colorType', this.colorType);
     Vue.filter('colorFlag', this.colorFlag);
+  },
+  mounted() {
     this.loadData();
   },
   destroyed() {

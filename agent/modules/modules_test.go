@@ -16,6 +16,7 @@ import (
 
 func TestBuildModuleMap(tester *testing.T) {
   mm := BuildModuleMap(nil)
+  findModule(tester, mm, "importer")
   findModule(tester, mm, "statickeyauth")
   findModule(tester, mm, "stenoquery")
 }

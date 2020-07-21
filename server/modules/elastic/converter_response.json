@@ -61,7 +61,7 @@
             "bro"
           ],
           "respond_packets": 0,
-          "@timestamp": "2020-04-24T03:00:55.038Z",
+          "@timestamp": "2020-04-24T03:00:55.3Z",
           "port": 50784,
           "syslog-tags": ".source.s_bro_conn",
           "syslog-host_from": "so16",

@@ -15,6 +15,8 @@ import (
 )
 
 const DEFAULT_TIME_SHIFT_MS = 120000
+const DEFAULT_DURATION_MS = 1800000
+const DEFAULT_ES_SEARCH_OFFSET_MS = 1800000
 const DEFAULT_TIMEOUT_MS = 120000
 const DEFAULT_CACHE_MS = 86400000
 const DEFAULT_INDEX = "*:so-*"
@@ -43,10 +45,12 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
   username := module.GetStringDefault(cfg, "username", "")
   password := module.GetStringDefault(cfg, "password", "")
   timeShiftMs := module.GetIntDefault(cfg, "timeShiftMs", DEFAULT_TIME_SHIFT_MS)
+  defaultDurationMs := module.GetIntDefault(cfg, "defaultDurationMs", DEFAULT_DURATION_MS)
+  esSearchOffsetMs := module.GetIntDefault(cfg, "esSearchOffsetMs", DEFAULT_ES_SEARCH_OFFSET_MS)
   timeoutMs := module.GetIntDefault(cfg, "timeoutMs", DEFAULT_TIMEOUT_MS)
   cacheMs := module.GetIntDefault(cfg, "cacheMs", DEFAULT_CACHE_MS)
   index := module.GetStringDefault(cfg, "index", DEFAULT_INDEX)
-  err := elastic.store.Init(host, username, password, verifyCert, timeShiftMs, timeoutMs, cacheMs, index)
+  err := elastic.store.Init(host, username, password, verifyCert, timeShiftMs, defaultDurationMs, esSearchOffsetMs, timeoutMs, cacheMs, index)
   if err == nil && elastic.server != nil {
     elastic.server.Eventstore = elastic.store
   }
