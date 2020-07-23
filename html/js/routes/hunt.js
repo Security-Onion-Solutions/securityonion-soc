@@ -83,9 +83,6 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       { text: this.i18n.months, value: RELATIVE_TIME_MONTHS }
     ];
   },
-  beforeUpdate() {
-    this.$root.setSubtitle(this.query);
-  },
   beforeDestroy() {
     this.$root.setSubtitle("");
   },
@@ -168,6 +165,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
         this.dateRange = this.getStartDate().format(this.i18n.timePickerFormat) + " - " + this.getEndDate().format(this.i18n.timePickerFormat);
       }
       this.$router.push({ name: 'hunt', query: { q: this.query, t: this.dateRange, z: this.zone, el: this.eventLimit, gl: this.groupByLimit }}, onSuccess, onFail);
+      this.$root.setSubtitle(this.query);
     },
     huntQuery(query) {
       this.query = query;
