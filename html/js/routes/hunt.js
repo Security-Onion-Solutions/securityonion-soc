@@ -30,6 +30,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     loaded: false,
     expanded: [],
     chartHeight: 200,
+    zone: '',
 
     timelineChartOptions: {},
     timelineChartData: {},
@@ -120,6 +121,8 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       if (this.queries != null && this.queries.length > 0) {
         this.query = this.queries[0].query;
       }
+      this.zone = moment.tz.guess();
+
       this.loadLocalSettings();
       this.setupDateRangePicker();
       this.setupCharts();
@@ -164,7 +167,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       if (this.relativeTimeEnabled) {
         this.dateRange = this.getStartDate().format(this.i18n.timePickerFormat) + " - " + this.getEndDate().format(this.i18n.timePickerFormat);
       }
-      this.$router.push({ name: 'hunt', query: { q: this.query, t: this.dateRange, el: this.eventLimit, gl: this.groupByLimit }}, onSuccess, onFail);
+      this.$router.push({ name: 'hunt', query: { q: this.query, t: this.dateRange, z: this.zone, el: this.eventLimit, gl: this.groupByLimit }}, onSuccess, onFail);
     },
     huntQuery(query) {
       this.query = query;
@@ -181,6 +184,9 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       if (this.$route.query.t) {
         this.dateRange = this.$route.query.t;
       }
+      if (this.$route.query.z) {
+        this.zone = this.$route.query.z;
+      }
       if (this.$route.query.el) {
         this.eventLimit = parseInt(this.$route.query.el);
       }
@@ -188,12 +194,11 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
         this.groupByLimit = parseInt(this.$route.query.gl);
       }
       try {
-        var zone = moment.tz.guess();
         const response = await this.$root.papi.get('events', { params: { 
           query: this.query, 
           range: this.dateRange, 
           format: this.i18n.timePickerSample, 
-          zone: zone, 
+          zone: this.zone, 
           metricLimit: this.groupByLimit, 
           eventLimit: this.eventLimit 
         }});
