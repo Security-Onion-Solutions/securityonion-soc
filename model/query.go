@@ -5,11 +5,15 @@ import (
 	"strings"
 )
 
+const FILTER_INCLUDE = "INCLUDE"
+const FILTER_EXCLUDE = "EXCLUDE"
+const FILTER_EXACT = "EXACT"
+
 type QueryTerm struct {
-	Raw   			string
-	Quoted			bool
-	Quote				rune
-	Grouped			bool
+	Raw     string
+	Quoted  bool
+	Quote   rune
+	Grouped bool
 }
 
 func sanitize(field string) string {
@@ -22,9 +26,9 @@ func NewQueryTerm(str string) (*QueryTerm, error) {
 	if len(field) == 0 {
 		return nil, errors.New("QUERY_INVALID__TERM_MISSING")
 	}
-	
-  term := &QueryTerm {
-    Raw: sanitize(field),
+
+	term := &QueryTerm{
+		Raw: sanitize(field),
 	}
 	return term, nil
 }
@@ -44,16 +48,16 @@ func (term *QueryTerm) String() string {
 	if term.Grouped {
 		builder.WriteString(")")
 	}
-  return builder.String()
+	return builder.String()
 }
 
 type QuerySegment interface {
-	String()		string
-	Kind()			string
+	String() string
+	Kind() string
 }
-	
+
 type BaseSegment struct {
-	terms     []*QueryTerm
+	terms []*QueryTerm
 }
 
 const SegmentKind_Search = "search"
@@ -61,21 +65,27 @@ const SegmentKind_GroupBy = "groupby"
 
 func NewSegment(kind string, terms []*QueryTerm) (QuerySegment, error) {
 	switch kind {
-	case SegmentKind_Search: return NewSearchSegment(terms)
-	case SegmentKind_GroupBy: return NewGroupBySegment(terms)
+	case SegmentKind_Search:
+		return NewSearchSegment(terms)
+	case SegmentKind_GroupBy:
+		return NewGroupBySegment(terms)
 	}
 	return nil, errors.New("QUERY_INVALID__SEGMENT_UNSUPPORTED")
 }
 
 func (segment *BaseSegment) TermsAsString() string {
-  var segmentBuilder strings.Builder
-  for termIdx, term := range segment.terms {
-    if termIdx > 0 {
-      segmentBuilder.WriteString(" ")
-    }
-    segmentBuilder.WriteString(term.String())
-  }
-  return segmentBuilder.String()
+	var segmentBuilder strings.Builder
+	for termIdx, term := range segment.terms {
+		if termIdx > 0 {
+			segmentBuilder.WriteString(" ")
+		}
+		segmentBuilder.WriteString(term.String())
+	}
+	return segmentBuilder.String()
+}
+
+func (segment *BaseSegment) Clear() {
+	segment.terms = make([]*QueryTerm, 0, 0)
 }
 
 type SearchSegment struct {
@@ -83,8 +93,8 @@ type SearchSegment struct {
 }
 
 func NewSearchSegmentEmpty() *SearchSegment {
-	return &SearchSegment {
-		&BaseSegment {
+	return &SearchSegment{
+		&BaseSegment{
 			terms: make([]*QueryTerm, 0, 0),
 		},
 	}
@@ -120,11 +130,11 @@ func (segment *SearchSegment) AddFilter(field string, value string, scalar bool,
 	if !alreadyFiltered {
 		if len(segment.terms) > 0 {
 			term, _ := NewQueryTerm("AND")
-			segment.terms = append(segment.terms, term)	
+			segment.terms = append(segment.terms, term)
 		}
 		if !inclusive {
 			term, _ := NewQueryTerm("NOT")
-			segment.terms = append(segment.terms, term)	
+			segment.terms = append(segment.terms, term)
 		}
 
 		var strBuilder strings.Builder
@@ -150,8 +160,8 @@ type GroupBySegment struct {
 }
 
 func NewGroupBySegmentEmpty() *GroupBySegment {
-	return &GroupBySegment {
-		&BaseSegment {
+	return &GroupBySegment{
+		&BaseSegment{
 			terms: make([]*QueryTerm, 0, 0),
 		},
 	}
@@ -203,19 +213,19 @@ func (segment *GroupBySegment) AddGrouping(group string) error {
 }
 
 type Query struct {
-	Segments    []QuerySegment
+	Segments []QuerySegment
 }
 
 func NewQuery() *Query {
-  return &Query {
-    Segments: make([]QuerySegment, 0, 0),
-  }
+	return &Query{
+		Segments: make([]QuerySegment, 0, 0),
+	}
 }
 
 func (query *Query) NamedSegment(name string) QuerySegment {
 	for _, segment := range query.Segments {
 		if segment.Kind() == name {
-			return segment;
+			return segment
 		}
 	}
 	return nil
@@ -227,9 +237,9 @@ func (query *Query) Parse(str string) error {
 	var currentTermBuilder strings.Builder
 	quoting := false
 	grouping := false
-  quotingChar := ' '
-  for _, ch := range str {
-    if !quoting {
+	quotingChar := ' '
+	for _, ch := range str {
+		if !quoting {
 			if !grouping {
 				if ch == '"' || ch == '\'' {
 					if currentTermBuilder.Len() > 0 {
@@ -265,7 +275,7 @@ func (query *Query) Parse(str string) error {
 					query.Segments = append(query.Segments, segment)
 					currentSegmentKind = ""
 					currentSegmentTerms = make([]*QueryTerm, 0, 0)
-				} else if (ch == ' ' || ch == ',' || ch == '\n' || ch == '\t') {
+				} else if ch == ' ' || ch == ',' || ch == '\n' || ch == '\t' {
 					if currentTermBuilder.Len() > 0 {
 						term, err := NewQueryTerm(currentTermBuilder.String())
 						if err != nil {
@@ -277,13 +287,13 @@ func (query *Query) Parse(str string) error {
 				} else if ch == '(' {
 					grouping = true
 				} else if ch == ')' {
-					return errors.New("QUERY_INVALID__GROUP_NOT_STARTED")	
+					return errors.New("QUERY_INVALID__GROUP_NOT_STARTED")
 				} else {
 					currentTermBuilder.WriteRune(ch)
 				}
 			} else if ch == ')' {
-				if currentTermBuilder.Len() ==  0 {
-					return errors.New("QUERY_INVALID__GROUP_EMPTY")	
+				if currentTermBuilder.Len() == 0 {
+					return errors.New("QUERY_INVALID__GROUP_EMPTY")
 				}
 				term, err := NewQueryTerm(currentTermBuilder.String())
 				if err != nil {
@@ -296,27 +306,27 @@ func (query *Query) Parse(str string) error {
 			} else {
 				currentTermBuilder.WriteRune(ch)
 			}
-    } else if ch == quotingChar {
+		} else if ch == quotingChar {
 			term, err := NewQueryTerm(currentTermBuilder.String())
 			if err != nil {
 				return err
 			}
 			term.Quoted = quoting
 			term.Quote = quotingChar
-      currentSegmentTerms = append(currentSegmentTerms, term)
-      currentTermBuilder.Reset()
+			currentSegmentTerms = append(currentSegmentTerms, term)
+			currentTermBuilder.Reset()
 			quoting = false
-    } else {
-      currentTermBuilder.WriteRune(ch)
-    }
+		} else {
+			currentTermBuilder.WriteRune(ch)
+		}
 	}
 	if quoting {
-		return errors.New("QUERY_INVALID__QUOTE_INCOMPLETE")	
+		return errors.New("QUERY_INVALID__QUOTE_INCOMPLETE")
 	}
 	if grouping {
-		return errors.New("QUERY_INVALID__GROUP_INCOMPLETE")	
+		return errors.New("QUERY_INVALID__GROUP_INCOMPLETE")
 	}
-  if currentTermBuilder.Len() > 0 {
+	if currentTermBuilder.Len() > 0 {
 		term, err := NewQueryTerm(currentTermBuilder.String())
 		if err != nil {
 			return err
@@ -324,7 +334,7 @@ func (query *Query) Parse(str string) error {
 		term.Quoted = quoting
 		term.Grouped = grouping
 		term.Quote = quotingChar
-    currentSegmentTerms = append(currentSegmentTerms, term)
+		currentSegmentTerms = append(currentSegmentTerms, term)
 	}
 	if len(currentSegmentTerms) > 0 {
 		if currentSegmentKind == "" {
@@ -345,17 +355,17 @@ func (query *Query) Parse(str string) error {
 }
 
 func (query *Query) String() string {
-  var queryBuilder strings.Builder
-  for idx, segment := range query.Segments {
-    if idx > 0 {
-      queryBuilder.WriteString(" | ")
-    }
-    queryBuilder.WriteString(segment.String())
-  }
-  return queryBuilder.String()
+	var queryBuilder strings.Builder
+	for idx, segment := range query.Segments {
+		if idx > 0 {
+			queryBuilder.WriteString(" | ")
+		}
+		queryBuilder.WriteString(segment.String())
+	}
+	return queryBuilder.String()
 }
 
-func (query *Query) Filter(field string, value string, scalar bool, include bool) (string, error) {
+func (query *Query) Filter(field string, value string, scalar bool, mode string) (string, error) {
 	var err error
 
 	segment := query.NamedSegment(SegmentKind_Search)
@@ -364,8 +374,14 @@ func (query *Query) Filter(field string, value string, scalar bool, include bool
 		query.Segments = append(query.Segments, segment)
 	}
 	searchSegment := segment.(*SearchSegment)
+
+	if mode == FILTER_EXACT {
+		searchSegment.Clear()
+	}
+
+	include := mode != FILTER_EXCLUDE
 	err = searchSegment.AddFilter(field, value, scalar, include)
-	
+
 	return query.String(), err
 }
 
@@ -379,6 +395,6 @@ func (query *Query) Group(field string) (string, error) {
 	}
 	groupBySegment := segment.(*GroupBySegment)
 	err = groupBySegment.AddGrouping(field)
-	
+
 	return query.String(), err
 }

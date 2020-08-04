@@ -355,7 +355,7 @@
         <v-row v-if="metricsEnabled">
           <v-col cols="12">
             <v-data-table :search="groupByFilter" dense :sort-by.sync="groupBySortBy" :sort-desc.sync="groupBySortDesc" :footer-props="groupByFooters" 
-              :items-per-page.sync="groupByItemsPerPage" must-sort :headers="groupByHeaders" :items="groupByData">
+              :items-per-page.sync="groupByItemsPerPage" must-sort :headers="groupByHeaders" :items="groupByData" :page.sync="groupByPage">
               <template v-slot:top>
                 <v-container fluid>
                   <v-row>
@@ -396,7 +396,7 @@
         <v-row v-if="loaded">
           <v-col cols="12">
             <v-data-table :search="eventFilter" :sort-by.sync="sortBy" item-key="soc_id" :expanded.sync="expanded" :sort-desc.sync="sortDesc" :footer-props="footerProps" 
-              :items-per-page.sync="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" show-expand>
+              :items-per-page.sync="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" show-expand :page.sync="eventPage">
               <template v-slot:top>
                 <v-container fluid>
                   <v-row>
@@ -416,8 +416,8 @@
                 <tr>
                   <td>
                     <v-btn icon small @click="expand(item)">
-                      <v-icon v-if="isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-up</v-icon>
-                      <v-icon v-if="!isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-down</v-icon>
+                      <v-icon v-if="isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-down</v-icon>
+                      <v-icon v-if="!isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-right</v-icon>
                     </v-btn>
                     &nbsp;
                     <a :title="i18n.pcapOpenInSameTab" :alt="i18n.pcapOpenInSameTab" @click.stop="lookupPcap(item.soc_id)">
@@ -430,11 +430,14 @@
                   </td>
                   <td v-for="field in eventHeaders">
                     <div class="d-inline-block semi-transparent">
-                      <v-btn v-if="canQuery(field.value)" icon x-small @click="filterQuery(field.value, item[field.value], true)">
+                      <v-btn v-if="item[field.value] != null && canQuery(field.value)" icon x-small @click="filterQuery(field.value, item[field.value], FILTER_INCLUDE)">
                         <v-icon :alt="i18n.filterInclude" :title="i18n.filterIncludeHelp">fa-search-plus</v-icon>
                       </v-btn>
-                      <v-btn v-if="canQuery(field.value)" icon x-small @click="filterQuery(field.value, item[field.value], false)">
+                      <v-btn v-if="item[field.value] != null && canQuery(field.value)" icon x-small @click="filterQuery(field.value, item[field.value], FILTER_EXCLUDE)">
                         <v-icon :alt="i18n.filterExclude" :title="i18n.filterExcludeHelp">fa-search-minus</v-icon>
+                      </v-btn>
+                      <v-btn v-if="item[field.value] != null && canQuery(field.value)" icon x-small @click="filterQuery(field.value, item[field.value], FILTER_EXACT)">
+                        <v-icon :alt="i18n.filterExact" :title="i18n.filterExactHelp">fa-search</v-icon>
                       </v-btn>
                     </div>
                     <div class="d-inline-block" v-text="item[field.value]"></div>
@@ -456,11 +459,14 @@
                         </td>
                         <td class="expansion">
                           <div class="d-inline-block semi-transparent">
-                            <v-btn :disabled="!canQuery(item.key)" icon x-small @click="filterQuery(item.key, item.value, true)">
+                            <v-btn :disabled="!canQuery(item.key)" icon x-small @click="filterQuery(item.key, item.value, FILTER_INCLUDE)">
                               <v-icon :alt="i18n.filterInclude" :title="i18n.filterIncludeHelp">fa-search-plus</v-icon>
                             </v-btn>
-                            <v-btn :disabled="!canQuery(item.key)" icon x-small @click="filterQuery(item.key, item.value, false)">
+                            <v-btn :disabled="!canQuery(item.key)" icon x-small @click="filterQuery(item.key, item.value, FILTER_EXCLUDE)">
                               <v-icon :alt="i18n.filterExclude" :title="i18n.filterExcludeHelp">fa-search-minus</v-icon>
+                            </v-btn>
+                            <v-btn :disabled="!canQuery(item.key)" icon x-small @click="filterQuery(item.key, item.value, FILTER_EXACT)">
+                              <v-icon :alt="i18n.filterExact" :title="i18n.filterExactHelp">fa-search</v-icon>
                             </v-btn>
                           </div>
                           <div class="d-inline-block expansion hardwrap" v-text="item.value"></div>
@@ -715,27 +721,42 @@
               <v-expansion-panel>
                 <v-expansion-panel-header>
                   <v-chip disabled>
-                      {{ i18n.id }}: {{ job.id }}
+                    <v-avatar>
+                      <v-icon>fa-hashtag</v-icon>
+                    </v-avatar>
+                    &nbsp;
+                    {{ job.id }}
                   </v-chip>
                   <v-chip disabled>
-                      <v-avatar>
+                    <v-avatar>
                       <v-icon>fa-ethernet</v-icon>
-                      </v-avatar>
-                      {{ job.sensorId }}
+                    </v-avatar>
+                    &nbsp;
+                    {{ job.sensorId }}
+                  </v-chip>
+                  <v-chip disabled v-if="job.filter">
+                    <v-avatar>
+                      <v-icon>fa-file-export</v-icon>
+                    </v-avatar>
+                    &nbsp;
+                    {{ job.filter.srcIp }}:{{ job.filter.srcPort }}
+                  </v-chip>
+                  <v-chip disabled v-if="job.filter">
+                    <v-avatar>
+                      <v-icon>fa-file-import</v-icon>
+                    </v-avatar>
+                    &nbsp;
+                    {{ job.filter.dstIp }}:{{ job.filter.dstPort }}
                   </v-chip>
                 </v-expansion-panel-header>
                 <v-expansion-panel-content>
                   <v-container fluid grid-list-sm class="pa-4">
                     <v-row>
                       <v-col>
-                        <div class="details"><span class="filter label">{{ i18n.dateQueued }}:</span> <span v-if="job.filter" class="filter value">{{ job.createTime | formatDateTime}}</span></div>
-                        <div class="details"><span class="filter label">{{ i18n.dateCompleted }}:</span> <span v-if="job.filter" class="filter value">{{ job.completeTime | formatDateTime}}</span></div>
-                        <div class="details"><span class="filter label">{{ i18n.srcIp }}:</span> <span v-if="job.filter" class="filter value">{{ job.filter.srcIp }}</span></div>
-                        <div class="details"><span class="filter label">{{ i18n.srcPort }}:</span> <span v-if="job.filter" class="filter value">{{ job.filter.srcPort }}</span></div>
-                        <div class="details"><span class="filter label">{{ i18n.dstIp }}:</span> <span v-if="job.filter" class="filter value">{{ job.filter.dstIp }}</span></div>
-                        <div class="details"><span class="filter label">{{ i18n.dstPort }}:</span> <span v-if="job.filter" class="filter value">{{ job.filter.dstPort }}</span></div>
-                        <div class="details"><span class="filter label">{{ i18n.beginTime }}:</span> <span v-if="job.filter" class="filter value">{{ job.filter.beginTime | formatTimestamp }}</span></div>
-                        <div class="details"><span class="filter label">{{ i18n.endTime }}:</span> <span v-if="job.filter" class="filter value">{{ job.filter.endTime | formatTimestamp }}</span></div>
+                        <div><span class="filter label">{{ i18n.dateQueued }}:</span> <span v-if="job.filter" class="filter value">{{ job.createTime | formatDateTime}}</span></div>
+                        <div><span class="filter label">{{ i18n.dateCompleted }}:</span> <span v-if="job.filter" class="filter value">{{ job.completeTime | formatDateTime}}</span></div>
+                        <div><span class="filter label">{{ i18n.beginTime }}:</span> <span v-if="job.filter" class="filter value">{{ job.filter.beginTime | formatTimestamp }}</span></div>
+                        <div><span class="filter label">{{ i18n.endTime }}:</span> <span v-if="job.filter" class="filter value">{{ job.filter.endTime | formatTimestamp }}</span></div>
                       </v-col>
                     </v-row>
                   </v-container>

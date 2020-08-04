@@ -73,6 +73,8 @@ const i18n = {
       field_soc_id: 'Event ID',
       field_soc_timestamp: 'Timestamp',
 
+      filterExact: 'Only',
+      filterExactHelp: 'Filters for only this value',
       filterExclude: 'Include',
       filterExcludeHelp: 'Excludes this value from the search',
       filterInclude: 'Exclude',

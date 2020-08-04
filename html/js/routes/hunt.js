@@ -12,6 +12,9 @@ const  RELATIVE_TIME_HOURS   = 30;
 const  RELATIVE_TIME_DAYS    = 40;
 const  RELATIVE_TIME_WEEKS   = 50;
 const  RELATIVE_TIME_MONTHS  = 60;
+const  FILTER_INCLUDE = 'INCLUDE';
+const  FILTER_EXCLUDE = 'EXCLUDE';
+const  FILTER_EXACT = 'EXACT';
 
 routes.push({ path: '/hunt', name: 'hunt', component: {
   template: '#page-hunt',
@@ -49,12 +52,14 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     groupBySortDesc: true,
     groupByItemsPerPage: 10,
     groupByFooters: { 'items-per-page-options': [10,25,50,100,200,500] },
+    groupByPage: 1,
 
     eventLimitOptions: [10,25,50,100,200,500,1000,2000,5000],
     eventLimit: 100,
     eventData: [],
     eventFilter: '',  
     eventHeaders: [],
+    eventPage: 1,
     sortBy: 'timestamp',
     sortDesc: true,
     itemsPerPage: 10,
@@ -70,7 +75,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     roundTripTimeSecs: 0,
     mruQueries: [],
 
-    autohunt: false
+    autohunt: true
   }},
   created() {
     this.$root.initializeCharts();
@@ -200,6 +205,8 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
           metricLimit: this.groupByLimit, 
           eventLimit: this.eventLimit 
         }});
+        this.eventPage = 1;
+        this.groupByPage = 1;
         this.totalEvents = response.data.totalEvents;
         this.fetchTimeSecs = response.data.fetchElapsedMs / 1000;
         this.roundTripTimeSecs = Math.abs(moment(response.data.completeTime) - moment(response.data.createTime)) / 1000;
@@ -221,7 +228,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       }
       this.$root.stopLoading();
     },
-    async filterQuery(field, value, include) {
+    async filterQuery(field, value, filterMode) {
       try {
         const valueType = typeof value;
         var scalar = false;
@@ -233,7 +240,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
           field: field,
           value: value,
           scalar: scalar,
-          include: include,
+          mode: filterMode,
         }});
         this.query = response.data;
         this.notifyInputsChanged();

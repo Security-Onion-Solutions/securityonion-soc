@@ -133,11 +133,6 @@ a#title, a#title:visited, a#title:active, a#title:hover {
   font-weight: bold;
 }
 
-.details {
-  white-space: nowrap;
-  overflow-y: scroll;
-}
-
 .filter.label {
   display: inline-block;
   padding-right: 10px;
