@@ -43,6 +43,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     topChartData: {},
     bottomChartOptions: {},
     bottomChartData: {},
+    groupByFields: '',
     groupByLimitOptions: [10,25,50,100,200,500],
     groupByLimit: 10,
     groupByFilter: '',
@@ -228,7 +229,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       }
       this.$root.stopLoading();
     },
-    async filterQuery(field, value, filterMode) {
+    async filterQuery(field, value, filterMode, notify = true) {
       try {
         const valueType = typeof value;
         var scalar = false;
@@ -243,19 +244,23 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
           mode: filterMode,
         }});
         this.query = response.data;
-        this.notifyInputsChanged();
+        if (notify) {
+          this.notifyInputsChanged();
+        }
       } catch (error) {
         this.$root.showError(error);
       }
     },
-    async groupQuery(field) {
+    async groupQuery(field, notify = true) {
       try {
         const response = await this.$root.papi.get('query/grouped', { params: { 
           query: this.query,
           field: field,
         }});
         this.query = response.data;
-        this.notifyInputsChanged();
+        if (notify) {
+          this.notifyInputsChanged();
+        }
       } catch (error) {
         this.$root.showError(error);
       }
@@ -306,6 +311,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       var fields = key.split("|");
       if (fields.length > 1 && fields[0] == "groupby") {
         fields.shift();
+        this.groupByFields = [...fields];
         this.groupByData = this.constructGroupByRows(fields, metrics[key])
         fields.unshift("count");
         this.groupByHeaders = this.constructHeaders(fields);
@@ -347,7 +353,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
         chart.datasets[0].data.push(item.value);
       });
       if (chart.obj) {
-        chart.obj.renderChart(chart.obj.chartdata, chart.obj.options);
+        setTimeout(function() { chart.obj.renderChart(chart.obj.chartdata, chart.obj.options); }, 100);
       }
     },
     expand(item) {
@@ -479,6 +485,8 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       var fontColor = this.$root.getColor("#888888", -40);
       var dataColor = this.$root.getColor("primary");
       var gridColor = this.$root.getColor("#888888", 65);
+      options.events = ['click'];
+      options.onClick = this.handleChartClick;
       options.responsive = true;
       options.maintainAspectRatio = false;
       options.legend = {
@@ -527,6 +535,23 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
           hour: 'MMM D hA',
         }
       };
+    },
+    async handleChartClick(e, activeElement) {
+      if (activeElement.length > 0) {
+        var clickedValue = activeElement[0]._model.label;
+        if (clickedValue && clickedValue.length > 0) {
+          if (this.canQuery(clickedValue)) {
+            this.query = "*";
+            for (var index = 1; index < this.groupByFields.length; index++) {
+              var field = this.groupByFields[index];
+              await this.groupQuery(field, false);
+            }
+            this.filterQuery(this.groupByFields[0], clickedValue, FILTER_EXACT, true);
+          }
+        }
+        return true;
+      }
+      return false;
     },
     groupByLimitChanged() {
       if (this.groupByItemsPerPage > this.groupByLimit) {
