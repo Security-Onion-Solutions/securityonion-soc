@@ -858,13 +858,15 @@
             <v-data-table :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps" 
               :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="sensors">
               <template v-slot:item="props">
-                <td v-text="props.item.id"></td>
-                <td v-text="props.item.description"></td>
-                <td v-text="props.item.version"></td>
-                <td>{{ props.item.onlineTime | formatDateTime }}</td>
-                <td>{{ props.item.updateTime | formatDateTime }}</td>
-                <td>{{ props.item.epochTime | formatDateTime }}</td>
-                <td>{{ props.item.uptimeSeconds | formatDuration }}</td>
+                <tr>
+                  <td v-text="props.item.id"></td>
+                  <td v-text="props.item.description"></td>
+                  <td v-text="props.item.version"></td>
+                  <td>{{ props.item.onlineTime | formatDateTime }}</td>
+                  <td>{{ props.item.updateTime | formatDateTime }}</td>
+                  <td>{{ props.item.epochTime | formatDateTime }}</td>
+                  <td>{{ props.item.uptimeSeconds | formatDuration }}</td>
+                </tr>
               </template>
             </v-data-table>
           </v-col>
