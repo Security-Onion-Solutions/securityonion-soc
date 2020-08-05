@@ -56,6 +56,10 @@
   font-size: 15px !important;
 }
 
+.v-chip .v-avatar {
+  margin-right: 6px;
+}
+
 /* animations */
 .waggle {
   animation-name: waggle;

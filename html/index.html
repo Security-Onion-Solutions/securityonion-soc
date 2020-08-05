@@ -378,11 +378,14 @@
                   </td>
                   <td v-for="field in groupByHeaders.slice(1)">
                     <div class="d-inline-block semi-transparent">
-                      <v-btn v-if="canQuery(field.value)" icon x-small @click="filterQuery(field.value, item[field.value], true)">
+                      <v-btn v-if="canQuery(field.value)" icon x-small @click="filterQuery(field.value, item[field.value], FILTER_INCLUDE)">
                         <v-icon :alt="i18n.filterInclude" :title="i18n.filterIncludeHelp">fa-search-plus</v-icon>
                       </v-btn>
-                      <v-btn v-if="canQuery(field.value)" icon x-small @click="filterQuery(field.value, item[field.value], false)">
+                      <v-btn v-if="canQuery(field.value)" icon x-small @click="filterQuery(field.value, item[field.value], FILTER_EXCLUDE)">
                         <v-icon :alt="i18n.filterExclude" :title="i18n.filterExcludeHelp">fa-search-minus</v-icon>
+                      </v-btn>
+                      <v-btn v-if="canQuery(field.value)" icon x-small @click="filterQuery(field.value, item[field.value], FILTER_EXACT)">
+                        <v-icon :alt="i18n.filterExact" :title="i18n.filterExactHelp">fa-search</v-icon>
                       </v-btn>
                     </div>
                     <div class="d-inline-block" v-text="item[field.value]"></div>
@@ -725,29 +728,25 @@
                     <v-avatar>
                       <v-icon>fa-hashtag</v-icon>
                     </v-avatar>
-                    &nbsp;
-                    {{ job.id }}
+                    <span id="jobDetailsId">{{ job.id }}</span>
                   </v-chip>
                   <v-chip disabled>
                     <v-avatar>
                       <v-icon>fa-ethernet</v-icon>
                     </v-avatar>
-                    &nbsp;
-                    {{ job.sensorId }}
+                    <span id="jobDetailsSensorId">{{ job.sensorId }}</span>
                   </v-chip>
                   <v-chip disabled v-if="job.filter">
                     <v-avatar>
                       <v-icon>fa-file-export</v-icon>
                     </v-avatar>
-                    &nbsp;
-                    {{ job.filter.srcIp }}:{{ job.filter.srcPort }}
+                    <span id="jobDetailsSrc">{{ job.filter.srcIp }}:{{ job.filter.srcPort }}</span>
                   </v-chip>
                   <v-chip disabled v-if="job.filter">
                     <v-avatar>
                       <v-icon>fa-file-import</v-icon>
                     </v-avatar>
-                    &nbsp;
-                    {{ job.filter.dstIp }}:{{ job.filter.dstPort }}
+                    <span id="jobDetailsDst">{{ job.filter.dstIp }}:{{ job.filter.dstPort }}</span>
                   </v-chip>
                 </v-expansion-panel-header>
                 <v-expansion-panel-content>
