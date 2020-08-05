@@ -320,7 +320,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     populateEventTable(events) {
       var records = [];
       var fields = [];
-      var eventType = null;
+      var eventType = "default";
       if (events != null && events.length > 0) {
         events.forEach(function(event, index) {
           var record = event.payload;
@@ -331,9 +331,14 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
           record.soc_source = event.source;
           records.push(record);
 
-          if (eventType == null) {
-            eventType = record["event_type"];
-          } else if (eventType != record["event_type"]) {
+          var currentType = record["event.module"];
+          if (record["event.dataset"]) {
+            currentType = currentType + ":" + record["event.dataset"];
+          }
+          if (eventType == "default" && currentType) {
+            eventType = currentType;
+          } else if (eventType != currentType) {
+            // Variety of events returned in this query, can't show event-specific fields
             eventType = "default";
           }
         });
