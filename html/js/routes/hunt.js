@@ -265,11 +265,17 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
         this.$root.showError(error);
       }
     },
-    filterVisibleFields(eventType, fields) {
+    filterVisibleFields(eventModule, eventDataset, fields) {
       if (this.eventFields) {
         var filteredFields = null;
-        if (eventType) {
-          filteredFields = this.eventFields[eventType.toLowerCase()];
+        if (eventModule && eventDataset) {
+          filteredFields = this.eventFields[":" + eventModule + ":" + eventDataset];
+        }
+        if (!filteredFields && eventDataset) {
+          filteredFields = this.eventFields["::" + eventDataset];
+        }
+        if (!filteredFields && eventModule) {
+          filteredFields = this.eventFields[":" + eventModule + ":"];
         }
         if (!filteredFields) {
           filteredFields = this.eventFields["default"];
@@ -320,7 +326,8 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     populateEventTable(events) {
       var records = [];
       var fields = [];
-      var eventType = "default";
+      var eventModule;
+      var eventDataset;
       if (events != null && events.length > 0) {
         events.forEach(function(event, index) {
           var record = event.payload;
@@ -331,22 +338,23 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
           record.soc_source = event.source;
           records.push(record);
 
-          var currentType = record["event.module"];
-          if (record["event.dataset"]) {
-            currentType = currentType + ":" + record["event.dataset"];
-          }
-          if (eventType == "default" && currentType) {
-            eventType = currentType;
-          } else if (eventType != currentType) {
-            // Variety of events returned in this query, can't show event-specific fields
-            eventType = "default";
+          var currentModule = record["event.module"];
+          var currentDataset = record["event.dataset"];
+          if (eventModule == null && currentModule) {
+            eventModule = currentModule.toLowerCase();
+            if (currentDataset) {
+              eventDataset = currentDataset.toLowerCase();
+            }
+          } else if (eventModule != currentModule || eventDataset != currentDataset) {
+            // A variety of events returned in this query, can't show event-specific fields
+            inconsistentEvents = true;
           }
         });
         for (const key in records[0]) {
           fields.push(key);
         }
       }
-      this.eventHeaders = this.constructHeaders(this.filterVisibleFields(eventType, fields));
+      this.eventHeaders = this.constructHeaders(this.filterVisibleFields(eventModule, eventDataset, fields));
       this.eventData = records;
     },
     populateChart(chart, data) {
