@@ -24,9 +24,9 @@ func validateQuery(tester *testing.T, args ...string) {
 	if err != nil {
 		actual = err.Error()
 	}
-  if actual != expected {
-    tester.Errorf("Expected [%s], but got [%s]", expected, actual)
-  }
+	if actual != expected {
+		tester.Errorf("Expected [%s], but got [%s]", expected, actual)
+	}
 }
 
 func TestQueries(tester *testing.T) {
@@ -37,7 +37,7 @@ func TestQueries(tester *testing.T) {
 	validateQuery(tester, "'abc1' def")
 	validateQuery(tester, "'abc2 def'")
 	validateQuery(tester, `"abc3' def"`)
-	
+
 	validateQuery(tester, "abc5,def", "abc5 def")
 	validateQuery(tester, "abc def | groupby jkl")
 	validateQuery(tester, "abc def | groupby 'jkl'")
@@ -45,7 +45,7 @@ func TestQueries(tester *testing.T) {
 	validateQuery(tester, "abcA|", "abcA")
 	validateQuery(tester, "abcA|groupby\njjj", "abcA | groupby jjj")
 	validateQuery(tester, "abcA|\ngroupby\tjjj", "abcA | groupby jjj")
-	
+
 	validateQuery(tester, "'abc4 def", "QUERY_INVALID__QUOTE_INCOMPLETE")
 	validateQuery(tester, "'abc9|", "QUERY_INVALID__QUOTE_INCOMPLETE")
 
@@ -76,9 +76,9 @@ func validateGroup(tester *testing.T, orig string, group string, expected string
 	if err != nil {
 		actual = err.Error()
 	}
-  if actual != expected {
-    tester.Errorf("Expected [%s], but got [%s]", expected, actual)
-  }
+	if actual != expected {
+		tester.Errorf("Expected [%s], but got [%s]", expected, actual)
+	}
 }
 
 func TestGroup(tester *testing.T) {
@@ -87,21 +87,21 @@ func TestGroup(tester *testing.T) {
 	validateGroup(tester, "a|groupby b", "b", "a | groupby b")
 }
 
-func validateFilter(tester *testing.T, orig string, key string, value string, scalar bool, include bool, expected string) {
+func validateFilter(tester *testing.T, orig string, key string, value string, scalar bool, mode string, expected string) {
 	query := NewQuery()
 	query.Parse(orig)
-	actual, err := query.Filter(key, value, scalar, include)
+	actual, err := query.Filter(key, value, scalar, mode)
 	if err != nil {
 		actual = err.Error()
 	}
-  if actual != expected {
-    tester.Errorf("Expected [%s], but got [%s]", expected, actual)
-  }
+	if actual != expected {
+		tester.Errorf("Expected [%s], but got [%s]", expected, actual)
+	}
 }
 
 func TestFilter(tester *testing.T) {
-	validateFilter(tester, "a", "b", "c", false, true, "a AND b:\"c\"")
-	validateFilter(tester, "a", "b", "c", false, false, "a AND NOT b:\"c\"")
-	validateFilter(tester, "", "b", "c", false, true, "b:\"c\"")
-	validateFilter(tester, "", "b", "1", true, true, "b:1")
+	validateFilter(tester, "a", "b", "c", false, FILTER_INCLUDE, "a AND b:\"c\"")
+	validateFilter(tester, "a", "b", "c", false, FILTER_EXCLUDE, "a AND NOT b:\"c\"")
+	validateFilter(tester, "", "b", "c", false, FILTER_INCLUDE, "b:\"c\"")
+	validateFilter(tester, "", "b", "1", true, FILTER_INCLUDE, "b:1")
 }

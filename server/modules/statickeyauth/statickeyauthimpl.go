@@ -10,51 +10,64 @@
 package statickeyauth
 
 import (
-  "net"
-  "net/http"
-  "strings"
-  "github.com/apex/log"
+	"net"
+	"net/http"
+	"strings"
+
+	"github.com/apex/log"
 )
 
 type StaticKeyAuthImpl struct {
-  apiKey							string
-  anonymousNetwork		*net.IPNet
+	apiKey           string
+	anonymousNetwork *net.IPNet
 }
 
 func NewStaticKeyAuthImpl() *StaticKeyAuthImpl {
-  return &StaticKeyAuthImpl {
-  }
+	return &StaticKeyAuthImpl{}
 }
 
-func (auth* StaticKeyAuthImpl) Init(apiKey string, anonymousCidr string) error {
-  var err error
-  auth.apiKey = apiKey
-  _, auth.anonymousNetwork, err = net.ParseCIDR(anonymousCidr)
-  return err
+func (auth *StaticKeyAuthImpl) Init(apiKey string, anonymousCidr string) error {
+	var err error
+	auth.apiKey = apiKey
+	_, auth.anonymousNetwork, err = net.ParseCIDR(anonymousCidr)
+	return err
 }
 
 func (auth *StaticKeyAuthImpl) IsAuthorized(request *http.Request) bool {
-  ipStr := request.RemoteAddr
-  pieces := strings.Split(ipStr, ":")
-  if pieces != nil && len(pieces) > 0 {
-    ipStr = pieces[0]
-  }
-  remoteIp := net.ParseIP(ipStr)
-  isAnonymousIp := auth.anonymousNetwork.Contains(remoteIp)
-  isApiKeyAccepted := auth.validateApiKey(request.Header.Get("Authorization"))
-  log.WithFields(log.Fields{
-    "anonymousNetwork": auth.anonymousNetwork,
-    "remoteIp": remoteIp,
-    "isApiKeyAccepted": isApiKeyAccepted,
-    "isAnonymousIp": isAnonymousIp,
-  }).Debug("Authorization check")
-  return isAnonymousIp || isApiKeyAccepted
+	apiKey := request.Header.Get("Authorization")
+	remoteIp := request.RemoteAddr
+	return auth.validateAuthorization(apiKey, remoteIp)
+}
+
+func (auth *StaticKeyAuthImpl) validateAuthorization(key string, ipStr string) bool {
+	// If API key has been provided, it must match
+	if len(key) > 0 {
+		isApiKeyAccepted := auth.validateApiKey(key)
+		log.WithFields(log.Fields{
+			"isApiKeyAccepted": isApiKeyAccepted,
+		}).Debug("Authorization check via API key")
+		return isApiKeyAccepted
+	}
+
+	// API Key was not provided, check for anon network access
+	pieces := strings.Split(ipStr, ":")
+	if pieces != nil && len(pieces) > 0 {
+		ipStr = pieces[0]
+	}
+	remoteIp := net.ParseIP(ipStr)
+	isAnonymousIp := auth.anonymousNetwork.Contains(remoteIp)
+	log.WithFields(log.Fields{
+		"anonymousNetwork": auth.anonymousNetwork,
+		"remoteIp":         remoteIp,
+		"isAnonymousIp":    isAnonymousIp,
+	}).Debug("Authorization check via remote IP")
+	return isAnonymousIp
 }
 
 func (auth *StaticKeyAuthImpl) validateApiKey(key string) bool {
-  pieces := strings.Split(key, " ")
-  if pieces != nil && len(pieces) > 0 {
-    key = pieces[len(pieces) - 1]
-  }
-  return key == auth.apiKey
+	pieces := strings.Split(key, " ")
+	if pieces != nil && len(pieces) > 0 {
+		key = pieces[len(pieces)-1]
+	}
+	return key == auth.apiKey
 }
