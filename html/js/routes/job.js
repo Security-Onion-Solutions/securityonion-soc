@@ -147,7 +147,7 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       this.loadLocalSettings();
 
       try {
-        const response = await this.$root.papi.get('job', { params: {
+        const response = await this.$root.papi.get('job/', { params: {
             jobId: this.$route.params.jobId
         }});
         this.job = response.data;

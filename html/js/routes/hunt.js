@@ -198,7 +198,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
         this.groupByLimit = parseInt(this.$route.query.gl);
       }
       try {
-        const response = await this.$root.papi.get('events', { params: { 
+        const response = await this.$root.papi.get('events/', { params: { 
           query: this.query, 
           range: this.dateRange, 
           format: this.i18n.timePickerSample, 
