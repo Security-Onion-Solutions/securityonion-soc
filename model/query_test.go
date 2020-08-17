@@ -43,6 +43,11 @@ func TestQueries(tester *testing.T) {
 	validateQuery(tester, "abc def | groupby 'jkl'")
 	validateQuery(tester, "'abc8 | groupby'")
 	validateQuery(tester, "abcA|", "abcA")
+
+	validateQuery(tester, "(abc AND def)")
+	validateQuery(tester, "((abc AND def))")
+	validateQuery(tester, "((abc AND def:\"ghi\") AND (xyz=\"123\"))")
+
 	validateQuery(tester, "abcA|groupby\njjj", "abcA | groupby jjj")
 	validateQuery(tester, "abcA|\ngroupby\tjjj", "abcA | groupby jjj")
 

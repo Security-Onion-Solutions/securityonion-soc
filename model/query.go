@@ -236,11 +236,11 @@ func (query *Query) Parse(str string) error {
 	currentSegmentKind := SegmentKind_Search
 	var currentTermBuilder strings.Builder
 	quoting := false
-	grouping := false
+	grouping := 0
 	quotingChar := ' '
 	for _, ch := range str {
 		if !quoting {
-			if !grouping {
+			if grouping == 0 {
 				if ch == '"' || ch == '\'' {
 					if currentTermBuilder.Len() > 0 {
 						term, err := NewQueryTerm(currentTermBuilder.String())
@@ -285,13 +285,13 @@ func (query *Query) Parse(str string) error {
 						currentTermBuilder.Reset()
 					}
 				} else if ch == '(' {
-					grouping = true
+					grouping++
 				} else if ch == ')' {
 					return errors.New("QUERY_INVALID__GROUP_NOT_STARTED")
 				} else {
 					currentTermBuilder.WriteRune(ch)
 				}
-			} else if ch == ')' {
+			} else if ch == ')' && grouping == 1 {
 				if currentTermBuilder.Len() == 0 {
 					return errors.New("QUERY_INVALID__GROUP_EMPTY")
 				}
@@ -299,11 +299,16 @@ func (query *Query) Parse(str string) error {
 				if err != nil {
 					return err
 				}
-				term.Grouped = grouping
+				term.Grouped = true
 				currentSegmentTerms = append(currentSegmentTerms, term)
 				currentTermBuilder.Reset()
-				grouping = false
+				grouping = 0
 			} else {
+				if ch == '(' {
+					grouping++
+				} else if ch == ')' {
+					grouping--
+				}
 				currentTermBuilder.WriteRune(ch)
 			}
 		} else if ch == quotingChar {
@@ -323,7 +328,7 @@ func (query *Query) Parse(str string) error {
 	if quoting {
 		return errors.New("QUERY_INVALID__QUOTE_INCOMPLETE")
 	}
-	if grouping {
+	if grouping > 0 {
 		return errors.New("QUERY_INVALID__GROUP_INCOMPLETE")
 	}
 	if currentTermBuilder.Len() > 0 {
@@ -332,7 +337,7 @@ func (query *Query) Parse(str string) error {
 			return err
 		}
 		term.Quoted = quoting
-		term.Grouped = grouping
+		term.Grouped = grouping > 0
 		term.Quote = quotingChar
 		currentSegmentTerms = append(currentSegmentTerms, term)
 	}
