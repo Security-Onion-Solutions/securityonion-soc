@@ -121,9 +121,11 @@ func (segment *SearchSegment) String() string {
 
 func (segment *SearchSegment) AddFilter(field string, value string, scalar bool, inclusive bool) error {
 	alreadyFiltered := false
-	for _, term := range segment.terms {
-		if term.String() == field {
-			alreadyFiltered = true
+	if len(field) > 0 {
+		for _, term := range segment.terms {
+			if term.String() == field {
+				alreadyFiltered = true
+			}
 		}
 	}
 	var err error
@@ -138,8 +140,10 @@ func (segment *SearchSegment) AddFilter(field string, value string, scalar bool,
 		}
 
 		var strBuilder strings.Builder
-		strBuilder.WriteString(field)
-		strBuilder.WriteRune(':')
+		if len(field) > 0 {
+			strBuilder.WriteString(field)
+			strBuilder.WriteRune(':')
+		}
 		if !scalar {
 			strBuilder.WriteRune('"')
 		}

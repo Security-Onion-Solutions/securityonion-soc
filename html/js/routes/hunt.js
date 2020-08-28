@@ -238,7 +238,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
         }
         const response = await this.$root.papi.get('query/filtered', { params: { 
           query: this.query,
-          field: field,
+          field: filterMode == FILTER_EXACT ? "" : field,
           value: value,
           scalar: scalar,
           mode: filterMode,
