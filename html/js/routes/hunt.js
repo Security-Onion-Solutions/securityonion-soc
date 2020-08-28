@@ -76,7 +76,12 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     roundTripTimeSecs: 0,
     mruQueries: [],
 
-    autohunt: true
+    autohunt: true,
+
+    filterRouteInclude: "",
+    filterRouteExclude: "",
+    filterRouteExact: "",
+    quickActionElement: null,
   }},
   created() {
     this.$root.initializeCharts();
@@ -141,6 +146,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       }
     },
     notifyInputsChanged() {
+      this.toggleQuickAction();
       if (!this.loading()) {
         if (this.autohunt) {
           this.hunt();
@@ -291,6 +297,41 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
         }
       } catch (error) {
         this.$root.showError(error);
+      }
+    },
+    toggleQuickAction(event, field, value) {
+      if (!event) {
+        if (this.quickActionElement) {
+          this.quickActionElement.remove();
+          this.quickActionElement = null;
+        }
+        return;
+      }
+
+      if (this.quickActionElement && this.quickActionElement.parentElement == event.target) {
+        this.quickActionElement.remove();
+        this.quickActionElement = null;
+        return;
+      }
+
+      if (value && this.canQuery(field) && event.target.classList.contains("quick-action-trigger")) {
+        if (this.quickActionElement) {
+          this.quickActionElement.remove();
+          this.quickActionElement = null;
+        }
+        this.filterRouteInclude = this.buildFilterRoute(field, value, FILTER_INCLUDE);
+        this.filterRouteExclude = this.buildFilterRoute(field, value, FILTER_EXCLUDE);
+        this.filterRouteExact = this.buildFilterRoute(field, value, FILTER_EXACT);
+
+        var route = this;
+        setTimeout(function() {
+          var quickActionTemplate = document.getElementById("hunt-quick-action");
+          route.quickActionElement = quickActionTemplate.cloneNode(true);
+          route.quickActionElement.style.display = "block";
+          event.target.appendChild(route.quickActionElement);
+        }, 0);
+
+
       }
     },
     filterVisibleFields(eventModule, eventDataset, fields) {

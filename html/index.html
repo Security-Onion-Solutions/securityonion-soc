@@ -385,18 +385,7 @@
                     {{ item.count.toLocaleString() }}
                   </td>
                   <td v-for="field in groupByHeaders.slice(1)">
-                    <div class="d-inline-block semi-transparent">
-                      <v-btn v-if="canQuery(field.value)" icon x-small :to="buildFilterRoute(field.value, item[field.value], FILTER_INCLUDE)">
-                        <v-icon :alt="i18n.filterInclude" :title="i18n.filterIncludeHelp">fa-search-plus</v-icon>
-                      </v-btn>
-                      <v-btn v-if="canQuery(field.value)" icon x-small :to="buildFilterRoute(field.value, item[field.value], FILTER_EXCLUDE)">
-                        <v-icon :alt="i18n.filterExclude" :title="i18n.filterExcludeHelp">fa-search-minus</v-icon>
-                      </v-btn>
-                      <v-btn v-if="canQuery(field.value)" icon x-small :to="buildFilterRoute(field.value, item[field.value], FILTER_EXACT)">
-                        <v-icon :alt="i18n.filterExact" :title="i18n.filterExactHelp">fa-search</v-icon>
-                      </v-btn>
-                    </div>
-                    <div class="d-inline-block" v-text="item[field.value]"></div>
+                    <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction(event, field.value, item[field.value])"></div>
                   </td>
                 </tr>
               </template>
@@ -440,19 +429,7 @@
                     </a>
                   </td>
                   <td v-for="field in eventHeaders">
-                    <div class="d-inline-block semi-transparent">
-                      <v-btn v-if="item[field.value] != null && canQuery(field.value)" icon x-small :to="buildFilterRoute(field.value, item[field.value], FILTER_INCLUDE)">
-                        <v-icon :alt="i18n.filterInclude" :title="i18n.filterIncludeHelp">fa-search-plus</v-icon>
-                      </v-btn>
-                      <v-btn v-if="item[field.value] != null && canQuery(field.value)" icon x-small :to="buildFilterRoute(field.value, item[field.value], FILTER_EXCLUDE)">
-                        <v-icon :alt="i18n.filterExclude" :title="i18n.filterExcludeHelp">fa-search-minus</v-icon>
-                      </v-btn>
-                      <v-btn v-if="item[field.value] != null && canQuery(field.value)" icon x-small :to="buildFilterRoute(field.value, item[field.value], FILTER_EXACT)">
-                        <v-icon :alt="i18n.filterExact" :title="i18n.filterExactHelp">fa-search</v-icon>
-                      </v-btn>
-                      
-                    </div>
-                    <div class="d-inline-block" v-text="item[field.value]"></div>
+                    <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction(event, field.value, item[field.value])"></div>
                   </td>
                 </tr>
               </template>
@@ -470,18 +447,7 @@
                           <div class="d-inline-block expansion" v-text="item.key"></div>
                         </td>
                         <td class="expansion">
-                          <div class="d-inline-block semi-transparent">
-                            <v-btn :disabled="!canQuery(item.key)" icon x-small :to="buildFilterRoute(item.key, item.value, FILTER_INCLUDE)">
-                              <v-icon :alt="i18n.filterInclude" :title="i18n.filterIncludeHelp">fa-search-plus</v-icon>
-                            </v-btn>
-                            <v-btn :disabled="!canQuery(item.key)" icon x-small :to="buildFilterRoute(item.key, item.value, FILTER_EXCLUDE)">
-                              <v-icon :alt="i18n.filterExclude" :title="i18n.filterExcludeHelp">fa-search-minus</v-icon>
-                            </v-btn>
-                            <v-btn :disabled="!canQuery(item.key)" icon x-small :to="buildFilterRoute(item.key, item.value, FILTER_EXACT)">
-                              <v-icon :alt="i18n.filterExact" :title="i18n.filterExactHelp">fa-search</v-icon>
-                            </v-btn>
-                          </div>
-                          <div class="d-inline-block expansion hardwrap" v-text="item.value"></div>
+                          <div class="quick-action-trigger d-inline-block expansion hardwrap" v-text="item.value" @click="toggleQuickAction(event, item.key, item.value)"></div>
                         </td>
                       </tr>
                     </template>
@@ -489,6 +455,17 @@
                 </td>
               </template>
             </v-data-table>
+            <div id="hunt-quick-action" class="quick-action">
+              <v-btn icon x-small :to="filterRouteInclude">
+                <v-icon :alt="i18n.filterInclude" :title="i18n.filterIncludeHelp">fa-search-plus</v-icon>
+              </v-btn>
+              <v-btn icon x-small :to="filterRouteExclude">
+                <v-icon :alt="i18n.filterExclude" :title="i18n.filterExcludeHelp">fa-search-minus</v-icon>
+              </v-btn>
+              <v-btn icon x-small :to="filterRouteExact">
+                <v-icon :alt="i18n.filterExact" :title="i18n.filterExactHelp">fa-search</v-icon>
+              </v-btn>
+            </div>            
           </v-col>
         </v-row>
         <v-row v-if="loaded">

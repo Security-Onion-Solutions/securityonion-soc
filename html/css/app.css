@@ -116,6 +116,11 @@
   opacity: 0.5;
 }
 
+.quick-action {
+  display: none;
+  position: absolute;
+}
+
 .expansion {
   padding-left: 0px;
   vertical-align: top;
