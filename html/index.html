@@ -386,13 +386,13 @@
                   </td>
                   <td v-for="field in groupByHeaders.slice(1)">
                     <div class="d-inline-block semi-transparent">
-                      <v-btn v-if="canQuery(field.value)" icon x-small @click="filterQuery(field.value, item[field.value], FILTER_INCLUDE)">
+                      <v-btn v-if="canQuery(field.value)" icon x-small :to="buildFilterRoute(field.value, item[field.value], FILTER_INCLUDE)">
                         <v-icon :alt="i18n.filterInclude" :title="i18n.filterIncludeHelp">fa-search-plus</v-icon>
                       </v-btn>
-                      <v-btn v-if="canQuery(field.value)" icon x-small @click="filterQuery(field.value, item[field.value], FILTER_EXCLUDE)">
+                      <v-btn v-if="canQuery(field.value)" icon x-small :to="buildFilterRoute(field.value, item[field.value], FILTER_EXCLUDE)">
                         <v-icon :alt="i18n.filterExclude" :title="i18n.filterExcludeHelp">fa-search-minus</v-icon>
                       </v-btn>
-                      <v-btn v-if="canQuery(field.value)" icon x-small @click="filterQuery(field.value, item[field.value], FILTER_EXACT)">
+                      <v-btn v-if="canQuery(field.value)" icon x-small :to="buildFilterRoute(field.value, item[field.value], FILTER_EXACT)">
                         <v-icon :alt="i18n.filterExact" :title="i18n.filterExactHelp">fa-search</v-icon>
                       </v-btn>
                     </div>
@@ -441,15 +441,16 @@
                   </td>
                   <td v-for="field in eventHeaders">
                     <div class="d-inline-block semi-transparent">
-                      <v-btn v-if="item[field.value] != null && canQuery(field.value)" icon x-small @click="filterQuery(field.value, item[field.value], FILTER_INCLUDE)">
+                      <v-btn v-if="item[field.value] != null && canQuery(field.value)" icon x-small :to="buildFilterRoute(field.value, item[field.value], FILTER_INCLUDE)">
                         <v-icon :alt="i18n.filterInclude" :title="i18n.filterIncludeHelp">fa-search-plus</v-icon>
                       </v-btn>
-                      <v-btn v-if="item[field.value] != null && canQuery(field.value)" icon x-small @click="filterQuery(field.value, item[field.value], FILTER_EXCLUDE)">
+                      <v-btn v-if="item[field.value] != null && canQuery(field.value)" icon x-small :to="buildFilterRoute(field.value, item[field.value], FILTER_EXCLUDE)">
                         <v-icon :alt="i18n.filterExclude" :title="i18n.filterExcludeHelp">fa-search-minus</v-icon>
                       </v-btn>
-                      <v-btn v-if="item[field.value] != null && canQuery(field.value)" icon x-small @click="filterQuery(field.value, item[field.value], FILTER_EXACT)">
+                      <v-btn v-if="item[field.value] != null && canQuery(field.value)" icon x-small :to="buildFilterRoute(field.value, item[field.value], FILTER_EXACT)">
                         <v-icon :alt="i18n.filterExact" :title="i18n.filterExactHelp">fa-search</v-icon>
                       </v-btn>
+                      
                     </div>
                     <div class="d-inline-block" v-text="item[field.value]"></div>
                   </td>
@@ -462,7 +463,7 @@
                       <tr>
                         <td class="expansion">
                           <div class="d-inline-block semi-transparent">
-                            <v-btn :disabled="!canQuery(item.key)" icon x-small @click="groupQuery(item.key)">
+                            <v-btn :disabled="!canQuery(item.key)" icon x-small :to="buildGroupByRoute(item.key)">
                               <v-icon :alt="i18n.groupInclude" :title="i18n.groupIncludeHelp">fa-layer-group</v-icon>
                             </v-btn>
                           </div>
@@ -470,13 +471,13 @@
                         </td>
                         <td class="expansion">
                           <div class="d-inline-block semi-transparent">
-                            <v-btn :disabled="!canQuery(item.key)" icon x-small @click="filterQuery(item.key, item.value, FILTER_INCLUDE)">
+                            <v-btn :disabled="!canQuery(item.key)" icon x-small :to="buildFilterRoute(item.key, item.value, FILTER_INCLUDE)">
                               <v-icon :alt="i18n.filterInclude" :title="i18n.filterIncludeHelp">fa-search-plus</v-icon>
                             </v-btn>
-                            <v-btn :disabled="!canQuery(item.key)" icon x-small @click="filterQuery(item.key, item.value, FILTER_EXCLUDE)">
+                            <v-btn :disabled="!canQuery(item.key)" icon x-small :to="buildFilterRoute(item.key, item.value, FILTER_EXCLUDE)">
                               <v-icon :alt="i18n.filterExclude" :title="i18n.filterExcludeHelp">fa-search-minus</v-icon>
                             </v-btn>
-                            <v-btn :disabled="!canQuery(item.key)" icon x-small @click="filterQuery(item.key, item.value, FILTER_EXACT)">
+                            <v-btn :disabled="!canQuery(item.key)" icon x-small :to="buildFilterRoute(item.key, item.value, FILTER_EXACT)">
                               <v-icon :alt="i18n.filterExact" :title="i18n.filterExactHelp">fa-search</v-icon>
                             </v-btn>
                           </div>

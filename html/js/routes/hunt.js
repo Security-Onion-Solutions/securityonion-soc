@@ -170,7 +170,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       if (this.relativeTimeEnabled) {
         this.dateRange = this.getStartDate().format(this.i18n.timePickerFormat) + " - " + this.getEndDate().format(this.i18n.timePickerFormat);
       }
-      this.$router.push({ name: 'hunt', query: { q: this.query, t: this.dateRange, z: this.zone, el: this.eventLimit, gl: this.groupByLimit }}, onSuccess, onFail);
+      this.$router.push(this.buildCurrentRoute(), onSuccess, onFail);
       this.$root.setSubtitle(this.query);
     },
     huntQuery(query) {
@@ -181,7 +181,6 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       return "/joblookup?id=" + encodeURIComponent(eventId);
     },
     async loadData() {
-      this.$root.startLoading();
       if (this.$route.query.q) {
         this.query = this.$route.query.q;
       }
@@ -197,6 +196,20 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       if (this.$route.query.gl) {
         this.groupByLimit = parseInt(this.$route.query.gl);
       }
+
+      // Check for special params that force a re-route
+      var reRoute = false;
+      if (this.$route.query.filterValue) {
+        this.filterQuery(this.$route.query.filterField, this.$route.query.filterValue, this.$route.query.filterMode);
+        reRoute = true;
+      }
+      if (this.$route.query.groupByField) {
+        this.groupQuery(this.$route.query.groupByField);
+        reRoute = true;
+      }
+      if (reRoute) return;
+
+      this.$root.startLoading();
       try {
         const response = await this.$root.papi.get('events/', { params: { 
           query: this.query, 
@@ -229,6 +242,21 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       }
       this.$root.stopLoading();
     },
+    buildCurrentRoute() {
+      return { name: 'hunt', query: { q: this.query, t: this.dateRange, z: this.zone, el: this.eventLimit, gl: this.groupByLimit }};
+    },
+    buildFilterRoute(filterField, filterValue, filterMode) {
+      route = this.buildCurrentRoute()
+      route.query.filterField = filterField;
+      route.query.filterValue = filterValue;
+      route.query.filterMode = filterMode;
+      return route;
+    },
+    buildGroupByRoute(field) {
+      route = this.buildCurrentRoute()
+      route.query.groupByField = field;
+      return route;
+    },    
     async filterQuery(field, value, filterMode, notify = true) {
       try {
         const valueType = typeof value;
