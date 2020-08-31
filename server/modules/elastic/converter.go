@@ -141,7 +141,9 @@ func parseAggregation(name string, aggObj interface{}, keys []interface{}, resul
 					key = bucket["key"]
 				}
 				if key != nil {
-					tmpKeys := append(keys, key)
+					tmpKeys := make([]interface{}, len(keys), len(keys) + 1)
+					copy(tmpKeys, keys)
+					tmpKeys = append(tmpKeys, key)
 					metric.Keys = tmpKeys
 					metrics = append(metrics, metric)
 					for innerName, innerAgg := range bucket {
