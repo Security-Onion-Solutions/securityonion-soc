@@ -138,6 +138,11 @@ func (steno *StenoQuery) ProcessJob(job *model.Job, reader io.ReadCloser) (io.Re
 	return reader, err
 }
 
+func (steno *StenoQuery) CleanupJob(job *model.Job) {
+    pcapOutputFilepath := fmt.Sprintf("%s/%d.%s", steno.pcapOutputPath, job.Id, job.FileExtension)
+    os.Remove(pcapOutputFilepath)	
+}
+
 func (steno *StenoQuery) CreateQuery(job *model.Job) string {
 	beginTime := job.Filter.BeginTime.Format(time.RFC3339)
 	endTime := job.Filter.EndTime.Format(time.RFC3339)

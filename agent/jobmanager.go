@@ -64,6 +64,7 @@ func (mgr *JobManager) Start() {
       } else {
         job.Fail(err)
       }
+      mgr.CleanupJob(job)
       err = mgr.UpdateJob(job)
       if err != nil {
         log.WithError(err).WithField("jobId", job.Id).Error("Failed to update job")
@@ -101,6 +102,12 @@ func (mgr *JobManager) ProcessJob(job *model.Job) (io.ReadCloser, error) {
     }
   }
   return reader, err
+}
+
+func (mgr *JobManager) CleanupJob(job *model.Job) {
+  for _, processor := range mgr.jobProcessors {
+    processor.CleanupJob(job) 
+  }
 }
 
 func (mgr *JobManager) updateDataEpoch() {

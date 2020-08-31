@@ -17,5 +17,6 @@ import (
 
 type JobProcessor interface {
   ProcessJob(*model.Job, io.ReadCloser) (io.ReadCloser, error)
+  CleanupJob(*model.Job)
   GetDataEpoch() time.Time
 }
