@@ -794,8 +794,10 @@
                   <td v-text="props.item.number"></td>
                   <td>{{ props.item.timestamp | formatTimestamp }}</td>
                   <td><v-chip :color="props.item.type | colorType">{{ props.item.type }}</v-chip></td>
-                  <td>{{ props.item.srcIp }}:{{ props.item.srcPort }}</td>
-                  <td>{{ props.item.dstIp }}:{{ props.item.dstPort }}</td>
+                  <td>{{ props.item.srcIp }}</td>
+                  <td>{{ props.item.srcPort }}</td>
+                  <td>{{ props.item.dstIp }}</td>
+                  <td>{{ props.item.dstPort }}</td>
                   <td><v-chip v-for="flag in props.item.flags" :color="flag | colorFlag" :key="flag">{{ flag }}</v-chip></td>
                   <td>{{ props.item.length }}</td>
                 </tr>
