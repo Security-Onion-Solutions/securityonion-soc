@@ -37,7 +37,6 @@ func (userHandler *UserHandler) HandleNow(writer http.ResponseWriter, request *h
 
   switch request.Method {
     case http.MethodGet: return userHandler.get(writer, request)
-    case http.MethodPut: return userHandler.put(writer, request)
   }
   return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }

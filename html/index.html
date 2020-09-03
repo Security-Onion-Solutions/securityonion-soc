@@ -596,7 +596,7 @@
                     <router-link :to="{ name: 'user', params: {id: props.item.id}}" :style="{ cursor: 'pointer'}">
                       <v-icon class="mr-2 d-none" v-title="i18n.edit">fa-edit</v-icon>
                     </router-link>
-                    <v-icon class="mr-2" v-title="i18n.delete" @click.stop="showDeleteConfirm(props.item)">fa-times-circle</v-icon>
+                    <v-icon class="mr-2 d-none" v-title="i18n.delete" @click.stop="showDeleteConfirm(props.item)">fa-times-circle</v-icon>
                   </td>
                 </tr>
               </template>
