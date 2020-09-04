@@ -9,7 +9,7 @@ WORKDIR /go/src/github.com/ory
 RUN git clone https://github.com/ory/kratos.git
 
 WORKDIR /go/src/github.com/ory/kratos
-RUN git checkout v0.3.0-alpha.1
+RUN git checkout ada04ff04e278a92bd7663c6059004cb7e4d17b7
 RUN go mod download
 
 RUN GO111MODULE=on go install github.com/gobuffalo/packr/v2/packr2
@@ -37,6 +37,7 @@ RUN echo "kratos -c /kratos-conf/kratos.yaml serve >> /kratos-log/kratos.log 2>&
 RUN chmod a+x /start-kratos.sh
 
 COPY --from=builder /go/src/github.com/ory/kratos/kratos /usr/bin/kratos
+COPY --from=builder /go/src/github.com/ory/kratos/.schema /.schema
 USER kratos
 
 

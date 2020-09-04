@@ -115,6 +115,8 @@ const i18n = {
       loading: 'Loading, please wait...',
       loadMore: 'Load More',
       login: 'Login',
+      loginDisabled: 'Locked',
+      loginEnabled: 'Unlocked',
       loginExpired: 'The login session has expired. Refresh, or wait for the page to refresh automatically, and then try again.',
       loginInvalid: 'The provided credentials are invalid. Please try again.',
       loginTitle: 'Login to Security Onion',

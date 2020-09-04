@@ -6,29 +6,31 @@ import (
 )
 
 type KratosTraits struct {
-	Email											string									`json:"email"`
-	FirstName									string									`json:"firstName"`
-	LastName									string									`json:"lastName"`
-	Role											string									`json:"role"`
+	Email			string	`json:"email"`
+	FirstName		string	`json:"firstName"`
+	LastName 		string	`json:"lastName"`
+	Role			string	`json:"role"`
+	Status			string	`json:"status"`
 }
 
-func NewTraits(email string, firstName string, lastName string, role string) *KratosTraits {
+func NewTraits(email string, firstName string, lastName string, role string, status string) *KratosTraits {
 	traits := &KratosTraits {
 		Email: email,
 		FirstName: firstName,
 		LastName: lastName,
 		Role: role,
+		Status: status,
 	}
 	return traits
 }
 
 type KratosAddress struct {
-	Id	                			string 									`json:"id"`
-	Value	                		string 									`json:"value"`
-	ExpirationTime            time.Time 							`json:"expires_at"`
-	VerifiedTime              time.Time 							`json:"verified_at"`
-  Verified  								bool										`json:"verified"`
-  VerifiedVia								string									`json:"via"`
+	Id 				string 		`json:"id"`
+	Value 			string 		`json:"value"`
+	ExpirationTime 	time.Time 	`json:"expires_at"`
+	VerifiedTime 	time.Time 	`json:"verified_at"`
+	Verified  		bool		`json:"verified"`
+	VerifiedVia		string		`json:"via"`
 }
 
 func NewAddress(email string) *KratosAddress {
@@ -45,41 +47,43 @@ func NewAddresses(email string) []*KratosAddress {
 }
 
 type KratosUser struct {
-  Id												string									`json:"id"`
-	SchemaId	                string 									`json:"traits_schema_id"`
-	SchemaUrl	                string 									`json:"traits_schema_url"`
-	Traits  									*KratosTraits	 					`json:"traits"`
-	Addresses									[]*KratosAddress				`json:"addresses"`
+	Id			string				`json:"id"`
+	SchemaId	string				`json:"schema_id"`
+	SchemaUrl	string				`json:"schema_url"`
+	Traits		*KratosTraits		`json:"traits"`
+	Addresses	[]*KratosAddress	`json:"verifiable_addresses"`
 }
 
-func NewKratosUser(email string, firstName string, lastName string, role string) *KratosUser {
+func NewKratosUser(email string, firstName string, lastName string, role string, status string) *KratosUser {
 	kratosUser := &KratosUser{
-		Traits: NewTraits(email, firstName, lastName, role),
+		Traits: NewTraits(email, firstName, lastName, role, status),
 		Addresses: NewAddresses(email),
 	}
 	return kratosUser
 }
 
 func (kratosUser* KratosUser) copyToUser(user *model.User) {
-  user.Id = kratosUser.Id
-  user.Email = kratosUser.Traits.Email
-  user.FirstName = kratosUser.Traits.FirstName
-  user.LastName = kratosUser.Traits.LastName
-  user.Role = kratosUser.Traits.Role
+	user.Id = kratosUser.Id
+	user.Email = kratosUser.Traits.Email
+	user.FirstName = kratosUser.Traits.FirstName
+	user.LastName = kratosUser.Traits.LastName
+	user.Role = kratosUser.Traits.Role
+	user.Status = kratosUser.Traits.Status
 }
 
 func (kratosUser* KratosUser) copyFromUser(user *model.User) {
 	if kratosUser.Traits == nil {
 		kratosUser.Traits = &KratosTraits{}
 	}
-  kratosUser.Traits.Email = user.Email
-  kratosUser.Traits.FirstName = user.FirstName
-  kratosUser.Traits.LastName = user.LastName
+	kratosUser.Traits.Email = user.Email
+	kratosUser.Traits.FirstName = user.FirstName
+	kratosUser.Traits.LastName = user.LastName
 	kratosUser.Traits.Role = user.Role
+	kratosUser.Traits.Status = user.Status
 	if len(kratosUser.Addresses) == 0 {
 		kratosUser.Addresses = make([]*KratosAddress, 1)
 		kratosUser.Addresses[0] = &KratosAddress{}
 	}
-  kratosUser.Addresses[0].Value = user.Email
-  kratosUser.Addresses[0].Verified = true
+	kratosUser.Addresses[0].Value = user.Email
+	kratosUser.Addresses[0].Verified = true
 }

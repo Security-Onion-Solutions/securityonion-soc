@@ -593,6 +593,10 @@
                   <td v-text="props.item.firstName"></td>
                   <td v-text="props.item.lastName"></td>
                   <td>
+                    <v-icon v-if="props.item.status != 'locked'" v-title="i18n.loginEnabled">fa-check</v-icon>
+                    <v-icon v-if="props.item.status == 'locked'" v-title="i18n.loginDisabled">fa-lock</v-icon>
+                  </td>
+                  <td>
                     <router-link :to="{ name: 'user', params: {id: props.item.id}}" :style="{ cursor: 'pointer'}">
                       <v-icon class="mr-2 d-none" v-title="i18n.edit">fa-edit</v-icon>
                     </router-link>
