@@ -91,13 +91,13 @@ func TestConvertToElasticRequestEmptyCriteria(tester *testing.T) {
 
 func TestConvertToElasticRequestGroupByCriteria(tester *testing.T) {
 	criteria := model.NewEventSearchCriteria()
-	criteria.Populate("abc AND def | groupby ghi jkl", "2020-01-02T12:13:14Z - 2020-01-02T13:13:14Z", time.RFC3339, "America/New_York", "10", "25")
+	criteria.Populate(`abc AND def AND q:"\\file\path" | groupby ghi jkl`, "2020-01-02T12:13:14Z - 2020-01-02T13:13:14Z", time.RFC3339, "America/New_York", "10", "25")
 	actualJson, err := convertToElasticRequest(NewTestStore(), criteria)
   if err != nil {
     tester.Errorf("unexpected conversion error: %s", err)
 	}
 
-	expectedJson := `{"aggs":{"bottom":{"terms":{"field":"ghi","order":{"_count":"asc"},"size":10}},"groupby|ghi":{"aggs":{"groupby|ghi|jkl":{"terms":{"field":"jkl","order":{"_count":"desc"},"size":10}}},"terms":{"field":"ghi","order":{"_count":"desc"},"size":10}},"timeline":{"date_histogram":{"field":"@timestamp","interval":"30m","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"abc AND def"}},{"range":{"@timestamp":{"format":"epoch_millis","gte":1577967194000,"lte":1577970794000}}}],"must_not":[],"should":[]}},"size":25}`
+	expectedJson := `{"aggs":{"bottom":{"terms":{"field":"ghi","order":{"_count":"asc"},"size":10}},"groupby|ghi":{"aggs":{"groupby|ghi|jkl":{"terms":{"field":"jkl","order":{"_count":"desc"},"size":10}}},"terms":{"field":"ghi","order":{"_count":"desc"},"size":10}},"timeline":{"date_histogram":{"field":"@timestamp","interval":"30m","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"abc AND def AND q: \"\\\\\\\\file\\\\path\""}},{"range":{"@timestamp":{"format":"epoch_millis","gte":1577967194000,"lte":1577970794000}}}],"must_not":[],"should":[]}},"size":25}`
 	if actualJson != expectedJson {
 		tester.Errorf("Mismatched ES request conversion; actual='%s' vs expected='%s'", actualJson, expectedJson)
 	}
