@@ -118,15 +118,7 @@
 .quick-action {
   display: none;
   position: absolute;
-  white-space: normal;
-}
 
-.quick-action>a {
-  margin-bottom: 2px;
-}
-
-.custom-quick-action-button {
-  margin-right: 4px;
 }
 
 .expansion {

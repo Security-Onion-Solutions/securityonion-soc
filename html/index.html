@@ -447,21 +447,27 @@
                 </td>
               </template>
             </v-data-table>
-            <div id="hunt-quick-action" class="quick-action">
-              <v-btn outlined small :to="filterRouteInclude" :title="i18n.filterIncludeHelp">
-                <v-icon :alt="i18n.filterInclude">fa-search-plus</v-icon>
-              </v-btn>
-              <v-btn outlined small :to="filterRouteExclude" :title="i18n.filterExcludeHelp">
-                <v-icon :alt="i18n.filterExclude">fa-search-minus</v-icon>
-              </v-btn>
-              <v-btn outlined small :to="filterRouteExact" :title="i18n.filterExactHelp">
-                <v-icon :alt="i18n.filterExact">fa-search</v-icon>
-              </v-btn>
-              <v-btn class="custom-quick-action-button" v-for="action in actions" outlined small v-if="action.enabled" :href="action.linkFormatted" :title="$root.localizeMessage(action.description)">
-                <v-icon :class="{ 'v-icon--left': action.name }">{{ action.icon }}</v-icon>
-                {{ $root.localizeMessage(action.name) }}
-              </v-btn>
-            </div>            
+            <v-card id="hunt-quick-action" class="quick-action" color="secondary">
+              <v-card-actions>
+                <v-list-item dense>
+                  <v-row align="center" justify="middle">
+                    <v-btn depressed tile small color="secondary" :to="filterRouteInclude" :title="i18n.filterIncludeHelp">
+                      <v-icon :alt="i18n.filterInclude">fa-search-plus</v-icon>
+                    </v-btn>
+                    <v-btn depressed tile small color="secondary" :to="filterRouteExclude" :title="i18n.filterExcludeHelp">
+                      <v-icon :alt="i18n.filterExclude">fa-search-minus</v-icon>
+                    </v-btn>
+                    <v-btn depressed tile small color="secondary" :to="filterRouteExact" :title="i18n.filterExactHelp">
+                      <v-icon :alt="i18n.filterExact">fa-search</v-icon>
+                    </v-btn>
+                    <v-btn class="custom-quick-action-button" v-for="action in actions" depressed tile small color="secondary" v-if="action.enabled" :href="action.linkFormatted" :title="$root.localizeMessage(action.description)">
+                      <v-icon v-if="action.icon" :class="{ 'v-icon--left': action.name }">{{ action.icon }}</v-icon>
+                      {{ $root.localizeMessage(action.name) }}
+                    </v-btn>
+                  </v-row>
+                </v-list-item>
+              </v-card-actions>
+            </v-card>            
           </v-col>
         </v-row>
         <v-row v-if="loaded">
