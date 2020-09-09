@@ -82,6 +82,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     filterRouteExclude: "",
     filterRouteExact: "",
     quickActionElement: null,
+    actions: [],
   }},
   created() {
     this.$root.initializeCharts();
@@ -129,6 +130,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       if (this.queries != null && this.queries.length > 0) {
         this.query = this.queries[0].query;
       }
+      this.actions = params["actions"];
       this.zone = moment.tz.guess();
 
       this.loadLocalSettings();
@@ -262,7 +264,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       route = this.buildCurrentRoute()
       route.query.groupByField = field;
       return route;
-    },    
+    },
     async filterQuery(field, value, filterMode, notify = true) {
       try {
         const valueType = typeof value;
@@ -299,8 +301,8 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
         this.$root.showError(error);
       }
     },
-    toggleQuickAction(event, field, value) {
-      if (!event) {
+    toggleQuickAction(domEvent, event, field, value) {
+      if (!domEvent) {
         if (this.quickActionElement) {
           this.quickActionElement.remove();
           this.quickActionElement = null;
@@ -308,13 +310,13 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
         return;
       }
 
-      if (this.quickActionElement && this.quickActionElement.parentElement == event.target) {
+      if (this.quickActionElement && this.quickActionElement.parentElement == domEvent.target) {
         this.quickActionElement.remove();
         this.quickActionElement = null;
         return;
       }
 
-      if (value && this.canQuery(field) && event.target.classList.contains("quick-action-trigger")) {
+      if (value && this.canQuery(field) && domEvent.target.classList.contains("quick-action-trigger")) {
         if (this.quickActionElement) {
           this.quickActionElement.remove();
           this.quickActionElement = null;
@@ -322,13 +324,32 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
         this.filterRouteInclude = this.buildFilterRoute(field, value, FILTER_INCLUDE);
         this.filterRouteExclude = this.buildFilterRoute(field, value, FILTER_EXCLUDE);
         this.filterRouteExact = this.buildFilterRoute(field, value, FILTER_EXACT);
+        this.actions.forEach(function(action, index) {
+          var link = action.link;
+          link = link.replace("{eventId}", event["soc_id"]);
+          link = link.replace("{field}", field);
+          link = link.replace("{value}", value);
+
+          if (action.fields) {
+            action.enabled = false;
+            for (var x = 0; x < action.fields.length; x++) {
+              if (action.fields[x] == field) {
+                action.enabled = true;
+                break;
+              }
+            }
+          } else {
+            action.enabled = true;
+          }
+          action.linkFormatted = link;
+        });
 
         var route = this;
         setTimeout(function() {
           var quickActionTemplate = document.getElementById("hunt-quick-action");
           route.quickActionElement = quickActionTemplate.cloneNode(true);
           route.quickActionElement.style.display = "block";
-          event.target.appendChild(route.quickActionElement);
+          domEvent.target.appendChild(route.quickActionElement);
         }, 0);
 
 

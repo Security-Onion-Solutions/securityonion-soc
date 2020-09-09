@@ -106,10 +106,9 @@
 /* Sensoroni-specific element styles */
 .hardwrap {
   word-wrap: break-word;
-  white-space: normal;
+  white-space: pre-wrap;
   word-break: break-all;
   overflow-x: hidden;
-  padding-right: 50px;
 }
 
 .semi-transparent {
@@ -119,6 +118,15 @@
 .quick-action {
   display: none;
   position: absolute;
+  white-space: normal;
+}
+
+.quick-action>a {
+  margin-bottom: 2px;
+}
+
+.custom-quick-action-button {
+  margin-right: 4px;
 }
 
 .expansion {

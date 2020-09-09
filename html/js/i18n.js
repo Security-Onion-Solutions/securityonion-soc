@@ -11,6 +11,12 @@ const i18n = {
   translations: {
     "en-US": {
       actions: 'Actions',
+      actionAlert: 'Alert',
+      actionAlertHelp: 'Create an alert for this event',
+      actionPcap: 'PCAP',
+      actionPcapHelp: 'Show PCAP for this event',
+      actionVirtusTotal: 'IP',
+      actionVirtusTotalHelp: 'Show details about this IP (if applicable to this field)',
       addJob: 'Add Job',
       addUser: 'Add User',
       admin: 'Administration',
@@ -76,9 +82,9 @@ const i18n = {
 
       filterExact: 'Only',
       filterExactHelp: 'Filters for only this value',
-      filterExclude: 'Include',
+      filterExclude: 'Exclude',
       filterExcludeHelp: 'Excludes this value from the search',
-      filterInclude: 'Exclude',
+      filterInclude: 'Include',
       filterIncludeHelp: 'Adds this value as a required match in the search',
       filterResults: 'Filter Results',
       firstName: 'First Name',
@@ -138,8 +144,6 @@ const i18n = {
       passwordChange: 'New password',
       passwordRequired: 'A password must be specified.',
       pcap: 'PCAP',
-      pcapOpenInNewTab: 'Open PCAP in new tab',
-      pcapOpenInSameTab: 'Leave hunting results and go directly to PCAP',
       pending: 'Pending',
       product: 'Security Onion',
       settings: 'Settings',

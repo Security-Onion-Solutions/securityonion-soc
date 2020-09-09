@@ -46,7 +46,7 @@
           </v-list-item>
           <v-list-item @click="" to="/jobs">
             <v-list-item-action>
-              <v-icon>fa-tasks</v-icon>
+              <v-icon>fa-stream</v-icon>
             </v-list-item-action>
             <v-list-item-content>
               <v-list-item-title v-text="i18n.jobs"></v-list-item-title>
@@ -385,7 +385,7 @@
                     {{ item.count.toLocaleString() }}
                   </td>
                   <td v-for="field in groupByHeaders.slice(1)">
-                    <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction(event, field.value, item[field.value])"></div>
+                    <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction(event, item, field.value, item[field.value])"></div>
                   </td>
                 </tr>
               </template>
@@ -419,17 +419,9 @@
                       <v-icon v-if="isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-down</v-icon>
                       <v-icon v-if="!isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-right</v-icon>
                     </v-btn>
-                    &nbsp;
-                    <a :title="i18n.pcapOpenInSameTab" :alt="i18n.pcapOpenInSameTab" @click.stop="lookupPcap(item.soc_id)">
-                      {{ i18n.pcap }}
-                    </a>
-                    &nbsp;
-                    <a :title="i18n.pcapOpenInNewTab" :alt="i18n.pcapOpenInNewTab" @click.stop="lookupPcap(item.soc_id, true)">
-                      <v-icon>fa-external-link-alt</v-icon>
-                    </a>
                   </td>
                   <td v-for="field in eventHeaders">
-                    <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction(event, field.value, item[field.value])"></div>
+                    <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction(event, item, field.value, item[field.value])"></div>
                   </td>
                 </tr>
               </template>
@@ -447,7 +439,7 @@
                           <div class="d-inline-block expansion" v-text="item.key"></div>
                         </td>
                         <td class="expansion">
-                          <div class="quick-action-trigger d-inline-block expansion hardwrap" v-text="item.value" @click="toggleQuickAction(event, item.key, item.value)"></div>
+                          <div class="quick-action-trigger d-inline-block expansion hardwrap" v-text="item.value" @click="toggleQuickAction(event, expanded[0], item.key, item.value)"></div>
                         </td>
                       </tr>
                     </template>
@@ -456,14 +448,18 @@
               </template>
             </v-data-table>
             <div id="hunt-quick-action" class="quick-action">
-              <v-btn icon x-small :to="filterRouteInclude">
-                <v-icon :alt="i18n.filterInclude" :title="i18n.filterIncludeHelp">fa-search-plus</v-icon>
+              <v-btn outlined small :to="filterRouteInclude" :title="i18n.filterIncludeHelp">
+                <v-icon :alt="i18n.filterInclude">fa-search-plus</v-icon>
               </v-btn>
-              <v-btn icon x-small :to="filterRouteExclude">
-                <v-icon :alt="i18n.filterExclude" :title="i18n.filterExcludeHelp">fa-search-minus</v-icon>
+              <v-btn outlined small :to="filterRouteExclude" :title="i18n.filterExcludeHelp">
+                <v-icon :alt="i18n.filterExclude">fa-search-minus</v-icon>
               </v-btn>
-              <v-btn icon x-small :to="filterRouteExact">
-                <v-icon :alt="i18n.filterExact" :title="i18n.filterExactHelp">fa-search</v-icon>
+              <v-btn outlined small :to="filterRouteExact" :title="i18n.filterExactHelp">
+                <v-icon :alt="i18n.filterExact">fa-search</v-icon>
+              </v-btn>
+              <v-btn class="custom-quick-action-button" v-for="action in actions" outlined small v-if="action.enabled" :href="action.linkFormatted" :title="$root.localizeMessage(action.description)">
+                <v-icon :class="{ 'v-icon--left': action.name }">{{ action.icon }}</v-icon>
+                {{ $root.localizeMessage(action.name) }}
               </v-btn>
             </div>            
           </v-col>
@@ -809,7 +805,7 @@
               <template v-slot:expanded-item="props">
                 <tr v-if="isOptionEnabled('packets') || props.item.payloadOffset > 0">
                   <td :colspan="getPacketColumnSpan()" :class="getPacketClass(props.item)">
-                    <pre>{{ props.item | formatPacketView }}</pre>
+                    <pre class="hardwrap">{{ props.item | formatPacketView }}</pre>
                   </td>
                 </tr>
               </template>

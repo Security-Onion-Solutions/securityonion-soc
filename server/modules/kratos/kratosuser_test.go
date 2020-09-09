@@ -59,7 +59,7 @@ func TestCopyToUser(tester *testing.T) {
   if kratosUser.Traits.Role != user.Role {
     tester.Errorf("Role failed to convert")
 	} 
-  if kratosUser.Traits.Enabled != user.Enabled {
+  if kratosUser.Traits.Status != user.Status {
     tester.Errorf("Role failed to convert")
   } 
   if kratosUser.Addresses[0].Value != user.Email {

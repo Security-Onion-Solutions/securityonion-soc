@@ -15,7 +15,7 @@ const DEFAULT_DATE_RANGE_MINUTES = 1440
 const DEFAULT_MOST_RECENTLY_USED_LIMIT = 5
 
 type ClientParameters struct {
-	HuntingParams					HuntingParameters			`json:"hunt"`
+	HuntingParams			HuntingParameters			`json:"hunt"`
 }
 
 func (config *ClientParameters) Verify() error {
@@ -25,18 +25,27 @@ func (config *ClientParameters) Verify() error {
 }
 
 type HuntingQuery struct {
-	Name				string		`json:"name"`
+	Name		string		`json:"name"`
 	Description	string		`json:"description"`
-	Query				string		`json:"query"`
+	Query		string		`json:"query"`
+}
+
+type HuntingAction struct {
+	Name		string		`json:"name"`
+	Description	string		`json:"description"`
+	Icon		string		`json:"icon"`
+	Link		string		`json:"link"`
+	Fields		[]string	`json:"fields"`
 }
 
 type HuntingParameters struct {
-	GroupFetchLimit       int  									`json:"groupFetchLimit"`
-	EventFetchLimit       int       						`json:"eventFetchLimit"`
-	DateRangeMinutes			int										`json:"dateRangeMinutes"`
-	MostRecentlyUsedLimit	int										`json:"mostRecentlyUsedLimit"`
-	EventFields						map[string][]string		`json:"eventFields"`
-	Queries								[]HuntingQuery				`json:"queries"`
+	GroupFetchLimit      	int  					`json:"groupFetchLimit"`
+	EventFetchLimit      	int       				`json:"eventFetchLimit"`
+	DateRangeMinutes		int						`json:"dateRangeMinutes"`
+	MostRecentlyUsedLimit	int						`json:"mostRecentlyUsedLimit"`
+	EventFields				map[string][]string		`json:"eventFields"`
+	Queries					[]HuntingQuery			`json:"queries"`
+	Actions					[]HuntingAction			`json:"actions"`
 }
 
 func (params *HuntingParameters) Verify() error {
