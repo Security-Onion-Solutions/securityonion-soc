@@ -57,7 +57,7 @@ func makeQuery(store *ElasticEventstore, criteria *model.EventSearchCriteria) ma
 	}
 
 	queryDetails := make(map[string]interface{})
-	queryDetails["query"] = searchString
+	queryDetails["query"] = strings.ReplaceAll(searchString, "\\", "\\\\")
 	queryDetails["analyze_wildcard"] = true
 	queryDetails["default_field"] = "*"
 
