@@ -418,25 +418,36 @@
                 </tr>
               </template>
               <template v-slot:expanded-item="{ headers, item }">
-                <td :colspan="headers.length" class="py-2">
-                  <v-data-table dense disable-pagination hide-default-header hide-default-footer must-sort :headers="expandedHeaders" :items="getExpandedData()">
-                    <template v-slot:item="{ item }">
-                      <tr>
-                        <td class="expansion">
-                          <div class="d-inline-block semi-transparent">
-                            <v-btn :disabled="!canQuery(item.key)" icon x-small :to="buildGroupByRoute(item.key)">
-                              <v-icon :alt="i18n.groupInclude" :title="i18n.groupIncludeHelp">fa-layer-group</v-icon>
-                            </v-btn>
+                <tr>
+                  <td :colspan="headers.length" class="px-0">
+                    <v-data-table dense disable-pagination hide-default-header hide-default-footer must-sort :headers="expandedHeaders" :items="getExpandedData()">
+                      <template v-slot:top="{ items }">
+                        <div class="event-actions py-2">
+                          <div v-for="action in actions" class="expanded-action">
+                            <a v-if="isEventAction(action)" :href="formatActionLink(action, item)">
+                              {{ $root.localizeMessage(action.description) }}
+                            </a>
                           </div>
-                          <div class="d-inline-block expansion" v-text="item.key"></div>
-                        </td>
-                        <td class="expansion">
-                          <div class="quick-action-trigger d-inline-block expansion hardwrap" v-text="item.value" @click="toggleQuickAction(event, expanded[0], item.key, item.value)"></div>
-                        </td>
-                      </tr>
-                    </template>
-                  </v-data-table>
-                </td>
+                        </div>
+                      </template>
+                      <template v-slot:item="{ item }">
+                        <tr class="pt-3">
+                          <td class="expansion">
+                            <div class="d-inline-block semi-transparent">
+                              <v-btn :disabled="!canQuery(item.key)" icon x-small :to="buildGroupByRoute(item.key)">
+                                <v-icon :alt="i18n.groupInclude" :title="i18n.groupIncludeHelp">fa-layer-group</v-icon>
+                              </v-btn>
+                            </div>
+                            <div class="d-inline-block expansion" v-text="item.key"></div>
+                          </td>
+                          <td class="expansion">
+                            <div class="quick-action-trigger d-inline-block expansion hardwrap" v-text="item.value" @click="toggleQuickAction(event, expanded[0], item.key, item.value)"></div>
+                          </td>
+                        </tr>
+                      </template>
+                    </v-data-table>
+                  </td>
+                </tr>
               </template>
             </v-data-table>
             <v-card id="hunt-quick-action" class="quick-action" color="secondary">

@@ -324,12 +324,8 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
         this.filterRouteInclude = this.buildFilterRoute(field, value, FILTER_INCLUDE);
         this.filterRouteExclude = this.buildFilterRoute(field, value, FILTER_EXCLUDE);
         this.filterRouteExact = this.buildFilterRoute(field, value, FILTER_EXACT);
+        var route = this;
         this.actions.forEach(function(action, index) {
-          var link = action.link;
-          link = link.replace("{eventId}", event["soc_id"]);
-          link = link.replace("{field}", field);
-          link = link.replace("{value}", value);
-
           if (action.fields) {
             action.enabled = false;
             for (var x = 0; x < action.fields.length; x++) {
@@ -341,7 +337,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
           } else {
             action.enabled = true;
           }
-          action.linkFormatted = link;
+          action.linkFormatted = route.formatActionLink(action, event, field, value);
         });
 
         var route = this;
@@ -354,6 +350,16 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
 
 
       }
+    },
+    formatActionLink(action, event, field, value) {
+      var link = action.link;
+      link = link.replace("{eventId}", event["soc_id"]);
+      link = link.replace("{field}", field);
+      link = link.replace("{value}", value);
+      return link;
+    },
+    isEventAction(action) {
+      return action && action.link && !action.link.includes("{field}") && !action.link.includes("{value}");
     },
     filterVisibleFields(eventModule, eventDataset, fields) {
       if (this.eventFields) {

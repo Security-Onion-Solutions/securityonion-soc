@@ -22,6 +22,7 @@ const i18n = {
       addJob: 'Add Job',
       addUser: 'Add User',
       admin: 'Administration',
+      alerts: 'Alerts',
       attempt: 'Attempt',
       autohunt: 'Auto-Hunt',
       autohuntHint: 'Automatically Hunt after changing filters, groupings, and date-ranges',
