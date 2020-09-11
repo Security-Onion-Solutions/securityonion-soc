@@ -36,6 +36,7 @@ type HuntingAction struct {
 	Icon		string		`json:"icon"`
 	Link		string		`json:"link"`
 	Fields		[]string	`json:"fields"`
+	Target		string		`json:"target"`
 }
 
 type HuntingParameters struct {

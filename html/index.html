@@ -463,7 +463,7 @@
                     <v-btn depressed tile small color="secondary" :to="filterRouteExact" :title="i18n.filterExactHelp">
                       <v-icon :alt="i18n.filterExact">fa-search</v-icon>
                     </v-btn>
-                    <v-btn class="custom-quick-action-button" v-for="action in actions" depressed tile small color="secondary" v-if="action.enabled" :href="action.linkFormatted" :title="$root.localizeMessage(action.description)">
+                    <v-btn class="custom-quick-action-button" v-for="action in actions" depressed tile small color="secondary" v-if="action.enabled" :href="action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="action.target">
                       <v-icon v-if="action.icon" :class="{ 'v-icon--left': action.name }">{{ action.icon }}</v-icon>
                       {{ $root.localizeMessage(action.name) }}
                     </v-btn>

@@ -147,11 +147,11 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
         this.loadData();
       }
     },
-    notifyInputsChanged() {
+    notifyInputsChanged(replaceHistory = false) {
       this.toggleQuickAction();
       if (!this.loading()) {
         if (this.autohunt) {
-          this.hunt();
+          this.hunt(replaceHistory);
         } else {
           this.$root.drawAttention('#hunt');
         }
@@ -168,7 +168,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
         }
       }
     },
-    hunt() {
+    hunt(replaceHistory = false) {
       var route = this;
       var onSuccess = function() {};
       var onFail = function() { 
@@ -178,7 +178,11 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       if (this.relativeTimeEnabled) {
         this.dateRange = this.getStartDate().format(this.i18n.timePickerFormat) + " - " + this.getEndDate().format(this.i18n.timePickerFormat);
       }
-      this.$router.push(this.buildCurrentRoute(), onSuccess, onFail);
+      if (replaceHistory === true) {
+        this.$router.replace(this.buildCurrentRoute(), onSuccess, onFail);
+      } else {
+        this.$router.push(this.buildCurrentRoute(), onSuccess, onFail);
+      }
       this.$root.setSubtitle(this.query);
     },
     huntQuery(query) {
@@ -281,7 +285,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
         }});
         this.query = response.data;
         if (notify) {
-          this.notifyInputsChanged();
+          this.notifyInputsChanged(true);
         }
       } catch (error) {
         this.$root.showError(error);
@@ -295,7 +299,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
         }});
         this.query = response.data;
         if (notify) {
-          this.notifyInputsChanged();
+          this.notifyInputsChanged(true);
         }
       } catch (error) {
         this.$root.showError(error);
