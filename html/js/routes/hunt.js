@@ -134,16 +134,19 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       this.zone = moment.tz.guess();
 
       this.loadLocalSettings();
-      this.setupDateRangePicker();
+
+      if (this.$route.query.t) {
+        // This page was either refreshed, or opened from an existing hunt hyperlink, 
+        // so switch to absolute time since the URL has the absolute time defined.
+        this.relativeTimeEnabled = false;
+        this.dateRange = this.$route.query.t;
+      }
+
+      setTimeout(this.setupDateRangePicker, 10);
       this.setupCharts();
       this.$root.stopLoading();
 
       if (this.$route.query.q || (this.autohunt && this.query)) {
-        if (this.$route.query.q) {
-          // This page was either refreshed, or opened from an existing hunt hyperlink, 
-          // so switch to absolute time since the URL has the absolute time defined.
-          this.relativeTimeEnabled = false;
-        }
         this.loadData();
       }
     },
@@ -176,6 +179,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
         route.loadData(); 
       };
       if (this.relativeTimeEnabled) {
+        this.dateRange = '';
         this.dateRange = this.getStartDate().format(this.i18n.timePickerFormat) + " - " + this.getEndDate().format(this.i18n.timePickerFormat);
       }
       if (replaceHistory === true) {
@@ -549,9 +553,21 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       this.notifyInputsChanged();
     },
     getEndDate() {
+      if (this.dateRange != '') {
+        var pieces = this.dateRange.split(" - ");
+        if (pieces.length == 2) {
+          return moment(pieces[1], this.i18n.timePickerFormat);
+        }
+      } 
       return moment();
     },
     getStartDate() {
+      if (this.dateRange != '') {
+        var pieces = this.dateRange.split(" - ");
+        if (pieces.length == 2) {
+          return moment(pieces[0], this.i18n.timePickerFormat);
+        }
+      } 
       var unit = "hour";
       switch (this.relativeTimeUnit) {
         case RELATIVE_TIME_SECONDS: unit = "seconds"; break;
@@ -577,7 +593,9 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
         }
       });
       var route = this;
-      route.dateRange = $('#huntdaterange')[0].value;
+      if (route.dateRange == '') {
+        route.dateRange = $('#huntdaterange')[0].value;
+      }
       $('#huntdaterange').on('hide.daterangepicker', function(ev, picker) { 
         route.hideDateRangePicker();
       });
