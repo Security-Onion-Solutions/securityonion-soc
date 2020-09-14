@@ -134,6 +134,9 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       this.zone = moment.tz.guess();
 
       this.loadLocalSettings();
+      if (this.mruQueries.length > 0) {
+        this.query = this.mruQueries[0];
+      }
 
       if (this.$route.query.t) {
         // This page was either refreshed, or opened from an existing hunt hyperlink, 
@@ -162,13 +165,15 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     },
     addMRUQuery(query) {
       if (query && query.length > 1) {
-        if (this.mruQueries.indexOf(query) == -1) {
-          this.mruQueries.unshift(query);
-          if (this.mruQueries.length > this.mruQueryLimit) {
-            this.mruQueries.pop();
-          }
-          this.saveLocalSettings();
+        var existingIndex = this.mruQueries.indexOf(query);
+        if (existingIndex >= 0) {
+          this.mruQueries.splice(existingIndex, 1);
         }
+        this.mruQueries.unshift(query);
+        while (this.mruQueries.length > this.mruQueryLimit) {
+          this.mruQueries.pop();
+        }
+        this.saveLocalSettings();
       }
     },
     hunt(replaceHistory = false) {
