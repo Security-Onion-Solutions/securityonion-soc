@@ -123,7 +123,7 @@ func (segment *SearchSegment) AddFilter(field string, value string, scalar bool,
 	alreadyFiltered := false
 	if len(field) > 0 {
 		for _, term := range segment.terms {
-			if term.String() == field {
+			if term.String() == field + ":" {
 				alreadyFiltered = true
 			}
 		}

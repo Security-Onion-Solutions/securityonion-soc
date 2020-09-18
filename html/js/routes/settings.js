@@ -7,7 +7,7 @@
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-routes.push({ path: '*', name: 'settings', component: {
+routes.push({ path: '/settings', name: 'settings', component: {
   template: '#page-settings',
   data() { return {
     i18n: this.$root.i18n,
@@ -25,7 +25,7 @@ routes.push({ path: '*', name: 'settings', component: {
     },
     authSettingsUrl: null,
   }},
-  created() {
+  mounted() {
     if (location.search.indexOf("request=") == -1) {
       this.reloadSettings();
     } else {

@@ -6,30 +6,36 @@
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-const  RELATIVE_TIME_SECONDS = 10;
-const  RELATIVE_TIME_MINUTES = 20;
-const  RELATIVE_TIME_HOURS   = 30;
-const  RELATIVE_TIME_DAYS    = 40;
-const  RELATIVE_TIME_WEEKS   = 50;
-const  RELATIVE_TIME_MONTHS  = 60;
-const  FILTER_INCLUDE = 'INCLUDE';
-const  FILTER_EXCLUDE = 'EXCLUDE';
-const  FILTER_EXACT = 'EXACT';
+const RELATIVE_TIME_SECONDS = 10;
+const RELATIVE_TIME_MINUTES = 20;
+const RELATIVE_TIME_HOURS   = 30;
+const RELATIVE_TIME_DAYS    = 40;
+const RELATIVE_TIME_WEEKS   = 50;
+const RELATIVE_TIME_MONTHS  = 60;
+const FILTER_INCLUDE = 'INCLUDE';
+const FILTER_EXCLUDE = 'EXCLUDE';
+const FILTER_EXACT = 'EXACT';
 
-routes.push({ path: '/hunt', name: 'hunt', component: {
+const huntComponent = {
   template: '#page-hunt',
   data() { return {
     i18n: this.$root.i18n,
+    params: null,
+    category: '',
+    advanced: false,
     query: '',
     queries: [],
+    queryPrefix: "",
+    querySuffix: "",
+    queryName: '',
+    queryFilters: [],
+    queryGroupBys: [],
     eventFields: {},
     dateRange: '',
     relativeTimeEnabled: true,
     relativeTimeValue: 24,
     relativeTimeUnit: RELATIVE_TIME_HOURS,
     relativeTimeUnits: [],
-    dateRangeInitialized: false,
-    dateRangeMinutes: 1440,
     loaded: false,
     expanded: [],
     chartHeight: 200,
@@ -39,6 +45,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     timelineChartData: {},
 
     metricsEnabled: false,
+    eventsEnabled: true,
     topChartOptions: {},
     topChartData: {},
     bottomChartOptions: {},
@@ -81,6 +88,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     filterRouteInclude: "",
     filterRouteExclude: "",
     filterRouteExact: "",
+    groupByRoute: "",
     quickActionElement: null,
     actions: [],
   }},
@@ -94,13 +102,15 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       { text: this.i18n.weeks, value: RELATIVE_TIME_WEEKS },
       { text: this.i18n.months, value: RELATIVE_TIME_MONTHS }
     ];
+    Vue.filter('colorSeverity', this.colorSeverity);
   },
   beforeDestroy() {
     this.$root.setSubtitle("");
   },
   mounted() {
     this.$root.startLoading();
-    this.$root.loadParameters("hunt", this.initHunt);
+    this.category = this.$route.path.replace("/", "");
+    this.$root.loadParameters(this.category, this.initHunt);
   },
   watch: {
     '$route': 'loadData',
@@ -117,16 +127,32 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
     'autohunt': 'saveLocalSettings',
   },
   methods: {
+    isAdvanced() {
+      return this.advanced;
+    },
+    shouldAutohunt() {
+      return this.autohunt || !this.isAdvanced();
+    },
+    isCategory(testCategory) {
+      return testCategory == this.category;
+    },
     loading() {
       return this.$root.loading;
     },
     initHunt(params) {
+      this.params = params;
+      this.groupByItemsPerPage = params["groupItemsPerPage"];
       this.groupByLimit = params["groupFetchLimit"];
+      this.itemsPerPage = params["eventItemsPerPage"];
       this.eventLimit = params["eventFetchLimit"];
-      this.dateRangeMinutes = params["dateRangeMinutes"];
+      this.relativeTimeValue = params["relativeTimeValue"];
+      this.relativeTimeUnit = params["relativeTimeUnit"];
       this.mruQueryLimit = params["mostRecentlyUsedLimit"];
+      this.queryPrefix = params["queryPrefix"];
+      this.querySuffix = params["querySuffix"];
       this.queries = params["queries"];
       this.eventFields = params["eventFields"];
+      this.advanced = params["advanced"];
       if (this.queries != null && this.queries.length > 0) {
         this.query = this.queries[0].query;
       }
@@ -134,11 +160,11 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       this.zone = moment.tz.guess();
 
       this.loadLocalSettings();
-      if (this.mruQueries.length > 0) {
+      if (this.mruQueries.length > 0 && this.isAdvanced()) {
         this.query = this.mruQueries[0];
       }
 
-      if (this.$route.query.t) {
+      if (this.$route.query.t && this.isAdvanced()) {
         // This page was either refreshed, or opened from an existing hunt hyperlink, 
         // so switch to absolute time since the URL has the absolute time defined.
         this.relativeTimeEnabled = false;
@@ -149,22 +175,25 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       this.setupCharts();
       this.$root.stopLoading();
 
-      if (this.$route.query.q || (this.autohunt && this.query)) {
+      if (this.$route.query.q || (this.shouldAutohunt() && this.query)) {
         this.loadData();
       }
     },
     notifyInputsChanged(replaceHistory = false) {
+      var hunted = false;
       this.toggleQuickAction();
       if (!this.loading()) {
-        if (this.autohunt) {
+        if (this.shouldAutohunt()) {
           this.hunt(replaceHistory);
+          hunted = true;
         } else {
           this.$root.drawAttention('#hunt');
         }
       }
+      return hunted;
     },
     addMRUQuery(query) {
-      if (query && query.length > 1) {
+      if (query && query.length > 1 && this.isAdvanced()) {
         var existingIndex = this.mruQueries.indexOf(query);
         if (existingIndex >= 0) {
           this.mruQueries.splice(existingIndex, 1);
@@ -202,6 +231,8 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       return "/joblookup?id=" + encodeURIComponent(eventId);
     },
     async loadData() {
+      this.category = this.$route.path.replace("/", "");
+
       if (this.$route.query.q) {
         this.query = this.$route.query.q;
       }
@@ -232,14 +263,16 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
 
       this.$root.startLoading();
       try {
+        this.obtainQueryDetails();
         const response = await this.$root.papi.get('events/', { params: { 
-          query: this.query, 
+          query: this.queryPrefix + " " + this.query + " " + this.querySuffix,
           range: this.dateRange, 
           format: this.i18n.timePickerSample, 
           zone: this.zone, 
           metricLimit: this.groupByLimit, 
           eventLimit: this.eventLimit 
         }});
+
         this.eventPage = 1;
         this.groupByPage = 1;
         this.totalEvents = response.data.totalEvents;
@@ -263,8 +296,79 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       }
       this.$root.stopLoading();
     },
+    obtainQueryDetails() {
+      this.queryName = "";
+      this.queryFilters = [];
+      this.queryGroupBys = [];
+      var route = this;
+      if (this.query) {
+        var segments = this.query.split("|");
+        if (segments.length > 0) {
+          var search = segments[0].trim();
+          var matchingQueryName = this.i18n.custom;
+          for (var i = 0; i < this.queries.length; i++) {
+            if (this.query == this.queries[i].query) {
+              matchingQueryName = this.queries[i].name;
+            }
+          }
+          this.queryName = matchingQueryName;
+          search.split(" AND ").forEach(function(item, index) {
+            item = item.trim();
+            if (item.length > 0 && item != "*") {
+              route.queryFilters.push(item);
+            }
+          });
+        }
+        if (segments.length > 1) {
+          for (var segmentIdx = 1; segmentIdx < segments.length; segmentIdx++) {
+            var segment = segments[segmentIdx].trim().replace(/,/g, ' ');
+            if (segment.indexOf("groupby") == 0) {
+              segment.split(" ").forEach(function(item, index) {
+                if (index > 0 && item.trim().length > 0) {
+                  route.queryGroupBys.push(item);
+                }
+              });
+              break;
+            }
+          }
+        }
+      }
+    },
+    removeFilter(filter) {
+      var newQuery = this.query.replace(" AND " + filter, "");
+      if (newQuery == this.query) {
+        newQuery = this.query.replace(filter, "");
+      }
+      if (newQuery.trim().indexOf("|") == 0) {
+        newQuery = "* " + newQuery.trim()
+      }
+      this.query = newQuery;
+      if (!this.notifyInputsChanged()) {
+        this.obtainQueryDetails();
+      }
+    },
+    removeGroupBy(groupBy) {
+      var segments = this.query.split("|");
+      var newQuery = segments[0];
+      for (var i = 1; i < segments.length; i++) {
+        if (segments[i].trim().indexOf("groupby") == 0) {
+          segments[i].replace(/,/g, ' ');
+          segments[i] = segments[i].replace(" " + groupBy, "");
+          if (segments[i].trim() == "groupby") {
+            segments[i] = "";
+          }
+        }
+        if (segments[i].length > 0) {
+          newQuery = newQuery + " | " + segments[i];
+        }
+      }
+      this.query = newQuery;
+      if (!this.notifyInputsChanged()) {
+        this.obtainQueryDetails();
+      }        
+    },
     buildCurrentRoute() {
-      return { name: 'hunt', query: { q: this.query, t: this.dateRange, z: this.zone, el: this.eventLimit, gl: this.groupByLimit }};
+      return { path: this.category, query: { q: this.query, t: this.dateRange, z: this.zone, el: this.eventLimit, gl: this.groupByLimit }};
     },
     buildFilterRoute(filterField, filterValue, filterMode) {
       route = this.buildCurrentRoute()
@@ -337,6 +441,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
         this.filterRouteInclude = this.buildFilterRoute(field, value, FILTER_INCLUDE);
         this.filterRouteExclude = this.buildFilterRoute(field, value, FILTER_EXCLUDE);
         this.filterRouteExact = this.buildFilterRoute(field, value, FILTER_EXACT);
+        this.groupByRoute = this.buildGroupByRoute(field);
         var route = this;
         this.actions.forEach(function(action, index) {
           if (action.fields) {
@@ -347,8 +452,10 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
                 break;
               }
             }
-          } else {
+          } else if (action.link.indexOf("{eventId}") == -1 || event['soc_id']) {
             action.enabled = true;
+          } else {
+            action.enabled = false;
           }
           action.linkFormatted = route.formatActionLink(action, event, field, value);
         });
@@ -606,6 +713,7 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       });
     },
     showAbsoluteTime() {
+      if (!this.isAdvanced()) return;
       this.relativeTimeEnabled = false;
       setTimeout(this.setupDateRangePicker, 10);
     },
@@ -713,33 +821,57 @@ routes.push({ path: '/hunt', name: 'hunt', component: {
       }
       this.saveLocalSettings();
     },
+    colorSeverity(value) {
+      if (value == "low") return "yellow";
+      if (value == "medium") return "amber darken-1";
+      if (value == "high") return "red darken-1";
+      if (value == "critical") return "red darken-4";
+      return "";      
+    },
+    dismiss(event, item) {
+      event.target.disabled = true;
+    },
+    saveSetting(name, value, defaultValue = null) {
+      var item = 'settings.' + this.category + '.' + name;
+      if (defaultValue == null || value != defaultValue) {
+        localStorage[item] = value;
+      } else {
+        localStorage.removeItem(item);
+      }
+    },
     saveLocalSettings() {
-      localStorage['settings.hunt.groupBySortBy'] = this.groupBySortBy;
-      localStorage['settings.hunt.groupBySortDesc'] = this.groupBySortDesc;
-      localStorage['settings.hunt.groupByItemsPerPage'] = this.groupByItemsPerPage;
-      localStorage['settings.hunt.groupByLimit'] = this.groupByLimit;
-      localStorage['settings.hunt.sortBy'] = this.sortBy;
-      localStorage['settings.hunt.sortDesc'] = this.sortDesc;
-      localStorage['settings.hunt.itemsPerPage'] = this.itemsPerPage;
-      localStorage['settings.hunt.eventLimit'] = this.eventLimit;
-      localStorage['settings.hunt.mruQueries'] = JSON.stringify(this.mruQueries);
-      localStorage['settings.hunt.relativeTimeValue'] = this.relativeTimeValue;
-      localStorage['settings.hunt.relativeTimeUnit'] = this.relativeTimeUnit;
-      localStorage['settings.hunt.autohunt'] = this.autohunt;
+      this.saveSetting('groupBySortBy', this.groupBySortBy, 'timestamp');
+      this.saveSetting('groupBySortDesc', this.groupBySortDesc, true);
+      this.saveSetting('groupByItemsPerPage', this.groupByItemsPerPage, this.params['groupItemsPerPage']);
+      this.saveSetting('groupByLimit', this.groupByLimit, this.params['groupFetchLimit']);
+      this.saveSetting('sortBy', this.sortBy, 'timestamp');
+      this.saveSetting('sortDesc', this.sortDesc, true);
+      this.saveSetting('itemsPerPage', this.itemsPerPage, this.params['eventItemsPerPage']);
+      this.saveSetting('eventLimit', this.eventLimit, this.params['eventFetchLimit']);
+      this.saveSetting('mruQueries', JSON.stringify(this.mruQueries), '[]');
+      this.saveSetting('relativeTimeValue', this.relativeTimeValue, this.params['relativeTimeValue']);
+      this.saveSetting('relativeTimeUnit', this.relativeTimeUnit, this.params['relativeTimeUnit']);
+      this.saveSetting('autohunt', this.autohunt, true);
     },
     loadLocalSettings() {
-      if (localStorage['settings.hunt.groupBySortBy']) this.groupBySortBy = localStorage['settings.hunt.groupBySortBy'];
-      if (localStorage['settings.hunt.groupBySortDesc']) this.groupBySortDesc = localStorage['settings.hunt.groupBySortDesc'] == "true";
-      if (localStorage['settings.hunt.groupByItemsPerPage']) this.groupByItemsPerPage = parseInt(localStorage['settings.hunt.groupByItemsPerPage']);
-      if (localStorage['settings.hunt.groupByLimit']) this.groupByLimit = parseInt(localStorage['settings.hunt.groupByLimit']);
-      if (localStorage['settings.hunt.sortBy']) this.sortBy = localStorage['settings.hunt.sortBy'];
-      if (localStorage['settings.hunt.sortDesc']) this.sortDesc = localStorage['settings.hunt.sortDesc'] == "true";
-      if (localStorage['settings.hunt.itemsPerPage']) this.itemsPerPage = parseInt(localStorage['settings.hunt.itemsPerPage']);
-      if (localStorage['settings.hunt.eventLimit']) this.eventLimit = parseInt(localStorage['settings.hunt.eventLimit']);
-      if (localStorage['settings.hunt.mruQueries']) this.mruQueries = JSON.parse(localStorage['settings.hunt.mruQueries']);
-      if (localStorage['settings.hunt.relativeTimeValue']) this.relativeTimeValue = parseInt(localStorage['settings.hunt.relativeTimeValue']);
-      if (localStorage['settings.hunt.relativeTimeUnit']) this.relativeTimeUnit = parseInt(localStorage['settings.hunt.relativeTimeUnit']);
-      if (localStorage['settings.hunt.autohunt']) this.autohunt = localStorage['settings.hunt.autohunt'] == 'true';
+      var prefix = 'settings.' + this.category;
+      if (localStorage[prefix + '.groupBySortBy']) this.groupBySortBy = localStorage[prefix + '.groupBySortBy'];
+      if (localStorage[prefix + '.groupBySortDesc']) this.groupBySortDesc = localStorage[prefix + '.groupBySortDesc'] == "true";
+      if (localStorage[prefix + '.groupByItemsPerPage']) this.groupByItemsPerPage = parseInt(localStorage[prefix + '.groupByItemsPerPage']);
+      if (localStorage[prefix + '.groupByLimit']) this.groupByLimit = parseInt(localStorage[prefix + '.groupByLimit']);
+      if (localStorage[prefix + '.sortBy']) this.sortBy = localStorage[prefix + '.sortBy'];
+      if (localStorage[prefix + '.sortDesc']) this.sortDesc = localStorage[prefix + '.sortDesc'] == "true";
+      if (localStorage[prefix + '.itemsPerPage']) this.itemsPerPage = parseInt(localStorage[prefix + '.itemsPerPage']);
+      if (localStorage[prefix + '.eventLimit']) this.eventLimit = parseInt(localStorage[prefix + '.eventLimit']);
+      if (localStorage[prefix + '.mruQueries']) this.mruQueries = JSON.parse(localStorage[prefix + '.mruQueries']);
+      if (localStorage[prefix + '.relativeTimeValue']) this.relativeTimeValue = parseInt(localStorage[prefix + '.relativeTimeValue']);
+      if (localStorage[prefix + '.relativeTimeUnit']) this.relativeTimeUnit = parseInt(localStorage[prefix + '.relativeTimeUnit']);
+      if (localStorage[prefix + '.autohunt']) this.autohunt = localStorage[prefix + '.autohunt'] == 'true';
     },
   }
-}});
+};
+
+routes.push({ path: '/hunt', name: 'hunt', component: huntComponent});
+
+const alertsComponent = Object.assign({}, huntComponent);
+routes.push({ path: '/alerts', name: 'alerts', component: alertsComponent});

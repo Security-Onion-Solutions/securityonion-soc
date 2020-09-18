@@ -36,6 +36,14 @@
               <v-list-item-title v-text="i18n.home"></v-list-item-title>
             </v-list-item-content>
           </v-list-item>
+          <v-list-item @click="" to="/alerts">
+            <v-list-item-action>
+              <v-icon>fa-bell</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>
+              <v-list-item-title v-text="i18n.alerts"></v-list-item-title>
+            </v-list-item-content>
+          </v-list-item>
           <v-list-item @click="" to="/hunt">
             <v-list-item-action>
               <v-icon>fa-crosshairs</v-icon>
@@ -146,9 +154,9 @@
           <v-icon>fa-bars</v-icon>
         </v-app-bar-nav-icon>
         <v-toolbar-title>
-          <router-link id="title" to="/">
+          <a href="/" id="title">
             <img class="pt-1" :title="i18n.product" :alt="i18n.product" height="45" src="images/so-logo.svg"></v-img>
-          </router-link>
+          </a>
         </v-toolbar-title>
         <v-spacer></v-spacer>
         <v-menu bottom left offset-y="true">
@@ -256,18 +264,17 @@
       <v-container fluid>
         <v-row>
           <v-col cols="9">
-            <h2 v-text="i18n.hunt"></h2>
+            <h2 v-text="i18n[category]"></h2>
           </v-col>
           <v-col cols="3" align="end">
             <h4 v-if="loaded">{{ i18n.eventTotal }} {{ totalEvents.toLocaleString() }}</h4>
             <p>
-            <h5>{{ i18n.timezone }} {{ zone }}</h5>
+            <h5 v-if="isAdvanced()">{{ i18n.timezone }} {{ zone }}</h5>
           </v-col>
         </v-row>
         <v-row align="start">
           <v-col cols="12" md="7">
-            <v-textarea clearable auto-grow :disabled="loading()" @change="notifyInputsChanged" class="mx-2" v-model="query" :hint="i18n.queryHelp" rows="1" persistent-hint="true" 
-              autofocus="true" prepend-icon="fa-search" @keydown.enter.prevent="hunt" id="hunt-query-input">
+            <v-textarea v-if="isAdvanced()" clearable auto-grow :disabled="loading()" @change="notifyInputsChanged" class="mx-2" v-model="query" :hint="i18n.queryHelp" rows="1" persistent-hint autofocus prepend-icon="fa-search" @keydown.enter.prevent="hunt" id="hunt-query-input">
               <template v-slot:prepend-inner>
                 <v-menu dense bottom three-line offset-y="true">
                   <template v-slot:activator="{ on: menu }">
@@ -304,10 +311,34 @@
                 </v-menu>
               </template>
             </v-textarea>
+            <v-textarea v-if="!isAdvanced()" no-resize readonly @change="notifyInputsChanged" class="mx-2" v-model="queryName" rows="1" 
+              prepend-icon="fa-search" @keydown.enter.prevent="hunt" id="hunt-query-input">
+              <template v-slot:prepend-inner>
+                <v-menu dense bottom three-line offset-y="true">
+                  <template v-slot:activator="{ on: menu }">
+                    <v-tooltip bottom>
+                      <template v-slot:activator="{ on: tooltip }">
+                        <v-btn icon small v-on="{ ...tooltip, ...menu }" id="hunt-query-dropdown-button">
+                          <v-icon>fa-angle-down</v-icon>
+                        </v-btn>
+                      </template>
+                      <span>{{ i18n.queriesHelp }}</span>
+                    </v-tooltip>
+                  </template>
+                  <v-list dense class="overflow-y-auto" style="max-height: 600px" id="hunt-query-dropdown-list">
+                    <v-list-item v-for="query in queries">
+                      <v-list-item-content @click="huntQuery(query.query)" :style="{ cursor: 'pointer'}">
+                        <v-list-item-title v-text="query.name"></v-list-item-title>
+                      </v-list-item-content>
+                    </v-list-item>
+                  </v-list>
+                </v-menu>
+              </template>
+            </v-textarea>            
           </v-col>
           <v-col cols="12" md="5" class="d-flex flex-nowrap align-center">
             <v-text-field :disabled="loading()" v-if="relativeTimeEnabled" id="huntrelativetimevalue" @change="notifyInputsChanged" class="mx-2" 
-                v-model="relativeTimeValue" :hint="i18n.relativeTimeHelp" persistent-hint="true" type="number">
+                v-model="relativeTimeValue" :hint="isAdvanced() ? i18n.relativeTimeHelp : ''" :persistent-hint="isAdvanced()" type="number">
               <template v-slot:prepend>
                 <b-btn v-if="relativeTimeEnabled" icon x-small @click="showAbsoluteTime" id="show-absolute-time">
                   <v-icon>fa-history</v-icon>
@@ -321,7 +352,7 @@
                   v-model="relativeTimeUnit" :items="relativeTimeUnits"></v-select>
               </template>
             </v-text-field>
-            <v-text-field :disabled="loading()" v-if="!relativeTimeEnabled" id="huntdaterange" @change="notifyInputsChanged" class="mx-2" 
+            <v-text-field :disabled="loading()" v-if="!relativeTimeEnabled && isAdvanced()" id="huntdaterange" @change="notifyInputsChanged" class="mx-2" 
               v-model="dateRange" :hint="i18n.timePickerHelp" persistent-hint="true" 
               prepend-inner-icon="fa-angle-down" @click:prepend-inner="showDateRangePicker">
               <template v-slot:prepend>
@@ -330,18 +361,28 @@
                 </b-btn>
               </template>
             </v-text-field>
-            <v-btn id="hunt" :disabled="loading()" color="primary" @click.stop="hunt">
+            <v-btn id="hunt" :disabled="loading()" color="primary" @click.stop="hunt" v-if="isAdvanced()">
               <span class="d-sm-none d-lg-inline">{{ i18n.hunt }}&nbsp;</span>
               <v-icon>fa-crosshairs</v-icon>
             </v-btn>
           </v-col>
         </v-row>
-        <v-row v-if="loaded && !metricsEnabled">
+        <v-row v-if="loaded && (queryFilters.length > 0 || queryGroupBys.length > 0)">
+          <v-col cols="12">
+            <span v-for="filter in queryFilters">
+              <v-chip class="filter mx-1 my-1" color="primary" close @click:close="removeFilter(filter)">{{ filter }}</v-chip>
+            </span>
+            <span v-for="groupBy in queryGroupBys">
+              <v-chip class="groupBy mx-1 my-1" color="accent" close @click:close="removeGroupBy(groupBy)">{{ i18n.groupedBy }} {{ groupBy }}</v-chip>
+            </span>
+          </v-col>
+        </v-row>
+        <v-row v-if="loaded && isAdvanced() && !metricsEnabled">
           <v-col cols="12">
             <line-chart :height="chartHeight" :chartdata="timelineChartData" :options="timelineChartOptions"/>
           </v-col>
         </v-row>
-        <v-row v-if="metricsEnabled">
+        <v-row v-if="metricsEnabled && isAdvanced()">
           <v-col cols="12" md="4">
             <bar-chart id="topChart" :height="chartHeight" :chartdata="topChartData" :options="topChartOptions"/>
           </v-col>
@@ -356,7 +397,7 @@
           <v-col cols="12">
             <v-data-table :search="groupByFilter" dense :sort-by.sync="groupBySortBy" :sort-desc.sync="groupBySortDesc" :footer-props="groupByFooters" 
               :items-per-page.sync="groupByItemsPerPage" must-sort :headers="groupByHeaders" :items="groupByData" :page.sync="groupByPage">
-              <template v-slot:top>
+              <template v-slot:top v-if="isAdvanced()">
                 <v-container fluid>
                   <v-row>
                     <v-col cols="4">
@@ -377,7 +418,11 @@
                     {{ item.count.toLocaleString() }}
                   </td>
                   <td v-for="field in groupByHeaders.slice(1)">
+                    <v-btn v-if="field.value == 'event.severity_label' && isCategory('alerts')" class="mx-2" icon x-small @click="dismiss(event, item)" :title="i18n.alertDismiss" :color="item[field.value] | colorSeverity">
+                      <v-icon>fa-bell-slash</v-icon>
+                    </v-btn>
                     <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction(event, item, field.value, item[field.value])"></div>
+
                   </td>
                 </tr>
               </template>
@@ -385,11 +430,11 @@
             </v-data-table>
           </v-col>
         </v-row>
-        <v-row v-if="loaded">
+        <v-row v-if="loaded && eventsEnabled && (isAdvanced() || !metricsEnabled)">
           <v-col cols="12">
             <v-data-table :search="eventFilter" :sort-by.sync="sortBy" item-key="soc_id" :expanded.sync="expanded" :sort-desc.sync="sortDesc" :footer-props="footerProps" 
               :items-per-page.sync="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" show-expand :page.sync="eventPage">
-              <template v-slot:top>
+              <template v-slot:top v-if="isAdvanced()">
                 <v-container fluid>
                   <v-row>
                     <v-col cols="4">
@@ -413,6 +458,9 @@
                     </v-btn>
                   </td>
                   <td v-for="field in eventHeaders">
+                    <v-btn v-if="field.value == 'event.severity_label' && isCategory('alerts')" class="mx-2" icon x-small @click="dismiss(event, item)" :title="i18n.alertDismiss" :color="item[field.value] | colorSeverity">
+                      <v-icon>fa-bell-slash</v-icon>
+                    </v-btn>
                     <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction(event, item, field.value, item[field.value])"></div>
                   </td>
                 </tr>
@@ -450,30 +498,9 @@
                 </tr>
               </template>
             </v-data-table>
-            <v-card id="hunt-quick-action" class="quick-action" color="secondary">
-              <v-card-actions>
-                <v-list-item dense>
-                  <v-row align="center" justify="middle">
-                    <v-btn depressed tile small color="secondary" :to="filterRouteInclude" :title="i18n.filterIncludeHelp">
-                      <v-icon :alt="i18n.filterInclude">fa-search-plus</v-icon>
-                    </v-btn>
-                    <v-btn depressed tile small color="secondary" :to="filterRouteExclude" :title="i18n.filterExcludeHelp">
-                      <v-icon :alt="i18n.filterExclude">fa-search-minus</v-icon>
-                    </v-btn>
-                    <v-btn depressed tile small color="secondary" :to="filterRouteExact" :title="i18n.filterExactHelp">
-                      <v-icon :alt="i18n.filterExact">fa-search</v-icon>
-                    </v-btn>
-                    <v-btn class="custom-quick-action-button" v-for="action in actions" depressed tile small color="secondary" v-if="action.enabled" :href="action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="action.target">
-                      <v-icon v-if="action.icon" :class="{ 'v-icon--left': action.name }">{{ action.icon }}</v-icon>
-                      {{ $root.localizeMessage(action.name) }}
-                    </v-btn>
-                  </v-row>
-                </v-list-item>
-              </v-card-actions>
-            </v-card>            
           </v-col>
         </v-row>
-        <v-row v-if="loaded">
+        <v-row v-if="loaded && isAdvanced()">
           <v-col cols="6">
             <v-subheader inset>{{ i18n.eventFetchTook }} {{ fetchTimeSecs }} {{ i18n.seconds }}. {{ i18n.eventRoundTripTook }} {{ roundTripTimeSecs }} {{ i18n.seconds }}.</v-subheader>
           </v-col>
@@ -482,6 +509,30 @@
             <v-switch id="auto-hunt" :disabled="loading()" v-model="autohunt" dense :label="i18n.autohunt" persistent-hint="true" :hint="i18n.autohuntHint"></v-switch>
           </v-col>
         </v-row>
+        <v-card id="hunt-quick-action" class="quick-action" color="secondary" elevation="2">
+          <v-card-actions>
+            <v-list-item dense>
+              <v-row align="center" justify="middle">
+                <v-btn depressed tile small color="secondary" :to="filterRouteInclude" :title="i18n.filterIncludeHelp">
+                  <v-icon :alt="i18n.filterInclude">fa-search-plus</v-icon>
+                </v-btn>
+                <v-btn depressed tile small color="secondary" :to="filterRouteExclude" :title="i18n.filterExcludeHelp">
+                  <v-icon :alt="i18n.filterExclude">fa-search-minus</v-icon>
+                </v-btn>
+                <v-btn depressed tile small color="secondary" :to="filterRouteExact" :title="i18n.filterExactHelp" v-if="isAdvanced()">
+                  <v-icon :alt="i18n.filterExact">fa-search</v-icon>
+                </v-btn>
+                <v-btn depressed tile small color="secondary" :to="groupByRoute" :title="i18n.groupIncludeHelp">
+                  <v-icon :alt="i18n.groupInclude">fa-layer-group</v-icon>
+                </v-btn>
+                <v-btn class="custom-quick-action-button" v-for="action in actions" depressed tile small color="secondary" v-if="action.enabled" :href="action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="action.target">
+                  <v-icon v-if="action.icon" :class="{ 'v-icon--left': action.name }">{{ action.icon }}</v-icon>
+                  {{ $root.localizeMessage(action.name) }}
+                </v-btn>
+              </v-row>
+            </v-list-item>
+          </v-card-actions>
+        </v-card>            
       </v-container>
     </script>
 
