@@ -296,6 +296,72 @@ const huntComponent = {
       }
       this.$root.stopLoading();
     },
+    async filterQuery(field, value, filterMode, notify = true) {
+      try {
+        const valueType = typeof value;
+        var scalar = false;
+        if (valueType == "boolean" || valueType == "number" || valueType == "bigint") {
+          scalar = true;
+        }
+        const response = await this.$root.papi.get('query/filtered', { params: { 
+          query: this.query,
+          field: filterMode == FILTER_EXACT ? "" : field,
+          value: value,
+          scalar: scalar,
+          mode: filterMode,
+        }});
+        this.query = response.data;
+        if (notify) {
+          this.notifyInputsChanged(true);
+        }
+      } catch (error) {
+        this.$root.showError(error);
+      }
+    },
+    async groupQuery(field, notify = true) {
+      try {
+        const response = await this.$root.papi.get('query/grouped', { params: { 
+          query: this.query,
+          field: field,
+        }});
+        this.query = response.data;
+        if (notify) {
+          this.notifyInputsChanged(true);
+        }
+      } catch (error) {
+        this.$root.showError(error);
+      }
+    },
+    async lookupPcap(id, newTab) {
+      this.$root.startLoading();
+      try {
+        const response = await this.$root.papi.post('job/', null, { params: { eventId: id }});
+        if (response.data.id) {
+          if (newTab) {
+            window.open('/#/job/' + response.data.id, '_blank');
+          } else {
+            this.$root.$router.push({ name: 'job', params: { jobId: response.data.id }});
+          }
+        } else {
+          this.$root.showError(i18n.eventLookupFailed);
+        }
+      } catch (error) {
+        this.$root.showError(error);
+      }
+      this.$root.stopLoading();
+    },    
+    async ack(event, item, escalate = false) {
+      try {
+        const response = await this.$root.papi.post('alerts/', { params: { 
+          item: item,
+          escalate: escalate
+        }});
+        event.target.style.visibility = "hidden";
+      } catch (error) {
+        this.$root.showError(error);
+      }      
+    },
+
     obtainQueryDetails() {
       this.queryName = "";
       this.queryFilters = [];
@@ -381,42 +447,6 @@ const huntComponent = {
       route = this.buildCurrentRoute()
       route.query.groupByField = field;
       return route;
-    },
-    async filterQuery(field, value, filterMode, notify = true) {
-      try {
-        const valueType = typeof value;
-        var scalar = false;
-        if (valueType == "boolean" || valueType == "number" || valueType == "bigint") {
-          scalar = true;
-        }
-        const response = await this.$root.papi.get('query/filtered', { params: { 
-          query: this.query,
-          field: filterMode == FILTER_EXACT ? "" : field,
-          value: value,
-          scalar: scalar,
-          mode: filterMode,
-        }});
-        this.query = response.data;
-        if (notify) {
-          this.notifyInputsChanged(true);
-        }
-      } catch (error) {
-        this.$root.showError(error);
-      }
-    },
-    async groupQuery(field, notify = true) {
-      try {
-        const response = await this.$root.papi.get('query/grouped', { params: { 
-          query: this.query,
-          field: field,
-        }});
-        this.query = response.data;
-        if (notify) {
-          this.notifyInputsChanged(true);
-        }
-      } catch (error) {
-        this.$root.showError(error);
-      }
     },
     toggleQuickAction(domEvent, event, field, value) {
       if (!domEvent) {
@@ -637,24 +667,6 @@ const huntComponent = {
       }
       return desiredKey;
     },
-    async lookupPcap(id, newTab) {
-      this.$root.startLoading();
-      try {
-        const response = await this.$root.papi.post('job/', null, { params: { eventId: id }});
-        if (response.data.id) {
-          if (newTab) {
-            window.open('/#/job/' + response.data.id, '_blank');
-          } else {
-            this.$root.$router.push({ name: 'job', params: { jobId: response.data.id }});
-          }
-        } else {
-          this.$root.showError(i18n.eventLookupFailed);
-        }
-      } catch (error) {
-        this.$root.showError(error);
-      }
-      this.$root.stopLoading();
-    },
     showDateRangePicker() {
       if (this.relativeTimeEnabled) return;
       $('#huntdaterange').click();
@@ -827,9 +839,6 @@ const huntComponent = {
       if (value == "high") return "red darken-1";
       if (value == "critical") return "red darken-4";
       return "";      
-    },
-    dismiss(event, item) {
-      event.target.disabled = true;
     },
     saveSetting(name, value, defaultValue = null) {
       var item = 'settings.' + this.category + '.' + name;

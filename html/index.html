@@ -418,7 +418,7 @@
                     {{ item.count.toLocaleString() }}
                   </td>
                   <td v-for="field in groupByHeaders.slice(1)">
-                    <v-btn v-if="field.value == 'event.severity_label' && isCategory('alerts')" class="mx-2" icon x-small @click="dismiss(event, item)" :title="i18n.alertDismiss" :color="item[field.value] | colorSeverity">
+                    <v-btn v-if="field.value == 'event.severity_label' && isCategory('alerts')" class="mx-2" icon x-small @click="ack(event, item)" :title="i18n.alertDismiss" :color="item[field.value] | colorSeverity">
                       <v-icon>fa-bell-slash</v-icon>
                     </v-btn>
                     <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction(event, item, field.value, item[field.value])"></div>
@@ -519,7 +519,7 @@
                 <v-btn depressed tile small color="secondary" :to="filterRouteExclude" :title="i18n.filterExcludeHelp">
                   <v-icon :alt="i18n.filterExclude">fa-search-minus</v-icon>
                 </v-btn>
-                <v-btn depressed tile small color="secondary" :to="filterRouteExact" :title="i18n.filterExactHelp" v-if="isAdvanced()">
+                <v-btn depressed tile small color="secondary" :to="filterRouteExact" :title="i18n.filterExactHelp">
                   <v-icon :alt="i18n.filterExact">fa-search</v-icon>
                 </v-btn>
                 <v-btn depressed tile small color="secondary" :to="groupByRoute" :title="i18n.groupIncludeHelp">
