@@ -109,4 +109,6 @@ func TestFilter(tester *testing.T) {
 	validateFilter(tester, "a", "b", "c", false, FILTER_EXCLUDE, "a AND NOT b:\"c\"")
 	validateFilter(tester, "", "b", "c", false, FILTER_INCLUDE, "b:\"c\"")
 	validateFilter(tester, "", "b", "1", true, FILTER_INCLUDE, "b:1")
+	validateFilter(tester, "(a:1 OR c:2) | groupby z", "b", "1", true, FILTER_EXACT, "b:1 | groupby z")
+	validateFilter(tester, "(a:1 OR c:2) | groupby z", "b", "1", true, FILTER_DRILLDOWN, "(a:1 OR c:2) AND b:1")
 }

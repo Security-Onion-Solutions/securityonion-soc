@@ -16,6 +16,11 @@ import (
   "github.com/apex/log"
 )
 
+type EventAckCriteria struct {
+  Event           map[string]interface{} `json:"event"`
+  Escalate        bool              `json:"escalate"`
+}
+
 type EventSearchCriteria struct {
   RawQuery        string    	`json:"query"`
   DateRange       string      `json:"dateRange"`

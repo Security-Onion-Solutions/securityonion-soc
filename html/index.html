@@ -334,6 +334,11 @@
                   </v-list>
                 </v-menu>
               </template>
+              <template v-slot:append-outer>
+                <v-btn small icon id="switch-to-hunt-button" :title="i18n.huntHelp" @click="switchToHunt()">
+                  <v-icon>fa-crosshairs</v-icon>
+                </v-btn>
+              </template>
             </v-textarea>            
           </v-col>
           <v-col cols="12" md="5" class="d-flex flex-nowrap align-center">
@@ -458,7 +463,7 @@
                     </v-btn>
                   </td>
                   <td v-for="field in eventHeaders">
-                    <v-btn v-if="field.value == 'event.severity_label' && isCategory('alerts')" class="mx-2" icon x-small @click="dismiss(event, item)" :title="i18n.alertDismiss" :color="item[field.value] | colorSeverity">
+                    <v-btn v-if="field.value == 'event.severity_label' && isCategory('alerts')" class="mx-2" icon x-small @click="ack(event, item)" :title="i18n.alertDismiss" :color="item[field.value] | colorSeverity">
                       <v-icon>fa-bell-slash</v-icon>
                     </v-btn>
                     <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction(event, item, field.value, item[field.value])"></div>
@@ -519,8 +524,11 @@
                 <v-btn depressed tile small color="secondary" :to="filterRouteExclude" :title="i18n.filterExcludeHelp">
                   <v-icon :alt="i18n.filterExclude">fa-search-minus</v-icon>
                 </v-btn>
-                <v-btn depressed tile small color="secondary" :to="filterRouteExact" :title="i18n.filterExactHelp">
+                <v-btn depressed tile small color="secondary" :to="filterRouteExact" :title="i18n.filterExactHelp" v-if="isAdvanced()">
                   <v-icon :alt="i18n.filterExact">fa-search</v-icon>
+                </v-btn>
+                <v-btn depressed tile small color="secondary" :to="filterRouteDrilldown" :title="i18n.filterDrilldownHelp" v-if="!isAdvanced() && metricsEnabled">
+                  <v-icon :alt="i18n.filterDrilldown">fa-angle-double-down</v-icon>
                 </v-btn>
                 <v-btn depressed tile small color="secondary" :to="groupByRoute" :title="i18n.groupIncludeHelp">
                   <v-icon :alt="i18n.groupInclude">fa-layer-group</v-icon>

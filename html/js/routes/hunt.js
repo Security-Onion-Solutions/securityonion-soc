@@ -15,6 +15,7 @@ const RELATIVE_TIME_MONTHS  = 60;
 const FILTER_INCLUDE = 'INCLUDE';
 const FILTER_EXCLUDE = 'EXCLUDE';
 const FILTER_EXACT = 'EXACT';
+const FILTER_DRILLDOWN = 'DRILLDOWN';
 
 const huntComponent = {
   template: '#page-hunt',
@@ -88,6 +89,7 @@ const huntComponent = {
     filterRouteInclude: "",
     filterRouteExclude: "",
     filterRouteExact: "",
+    filterRouteDrilldown: "",
     groupByRoute: "",
     quickActionElement: null,
     actions: [],
@@ -352,10 +354,10 @@ const huntComponent = {
     },    
     async ack(event, item, escalate = false) {
       try {
-        const response = await this.$root.papi.post('alerts/', { params: { 
-          item: item,
+        const response = await this.$root.papi.post('events/ack', { 
+          event: item,
           escalate: escalate
-        }});
+        });
         event.target.style.visibility = "hidden";
       } catch (error) {
         this.$root.showError(error);
@@ -471,6 +473,7 @@ const huntComponent = {
         this.filterRouteInclude = this.buildFilterRoute(field, value, FILTER_INCLUDE);
         this.filterRouteExclude = this.buildFilterRoute(field, value, FILTER_EXCLUDE);
         this.filterRouteExact = this.buildFilterRoute(field, value, FILTER_EXACT);
+        this.filterRouteDrilldown = this.buildFilterRoute(field, value, FILTER_DRILLDOWN);
         this.groupByRoute = this.buildGroupByRoute(field);
         var route = this;
         this.actions.forEach(function(action, index) {
@@ -503,9 +506,9 @@ const huntComponent = {
     },
     formatActionLink(action, event, field, value) {
       var link = action.link;
-      link = link.replace("{eventId}", event["soc_id"]);
-      link = link.replace("{field}", field);
-      link = link.replace("{value}", value);
+      link = link.replace("{eventId}", encodeURI(event["soc_id"]));
+      link = link.replace("{field}", encodeURI(field));
+      link = link.replace("{value}", encodeURI(value));
       return link;
     },
     isEventAction(action) {
@@ -839,6 +842,10 @@ const huntComponent = {
       if (value == "high") return "red darken-1";
       if (value == "critical") return "red darken-4";
       return "";      
+    },
+    switchToHunt() {
+      this.category = "hunt";
+      this.hunt();
     },
     saveSetting(name, value, defaultValue = null) {
       var item = 'settings.' + this.category + '.' + name;

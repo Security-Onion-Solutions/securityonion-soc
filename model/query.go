@@ -8,6 +8,7 @@ import (
 const FILTER_INCLUDE = "INCLUDE"
 const FILTER_EXCLUDE = "EXCLUDE"
 const FILTER_EXACT = "EXACT"
+const FILTER_DRILLDOWN = "DRILLDOWN"
 
 type QueryTerm struct {
 	Raw     string
@@ -235,6 +236,16 @@ func (query *Query) NamedSegment(name string) QuerySegment {
 	return nil
 }
 
+func (query *Query) RemoveSegment(name string) QuerySegment {
+	for idx, segment := range query.Segments {
+		if segment.Kind() == name {
+			query.Segments = append(query.Segments[:idx], query.Segments[idx+1:]...)
+			return segment
+		}
+	}
+	return nil
+}
+
 func (query *Query) Parse(str string) error {
 	currentSegmentTerms := make([]*QueryTerm, 0, 0)
 	currentSegmentKind := SegmentKind_Search
@@ -390,6 +401,10 @@ func (query *Query) Filter(field string, value string, scalar bool, mode string)
 
 	include := mode != FILTER_EXCLUDE
 	err = searchSegment.AddFilter(field, value, scalar, include)
+
+	if mode == FILTER_DRILLDOWN {
+		query.RemoveSegment(SegmentKind_GroupBy)
+	}
 
 	return query.String(), err
 }
