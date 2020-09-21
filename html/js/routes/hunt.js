@@ -358,7 +358,7 @@ const huntComponent = {
           event: item,
           escalate: escalate
         });
-        event.target.style.visibility = "hidden";
+        event.target.parentElement.parentElement.style.visibility = "hidden";
       } catch (error) {
         this.$root.showError(error);
       }      
