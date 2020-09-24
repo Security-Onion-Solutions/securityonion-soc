@@ -215,6 +215,14 @@
         <v-alert dismissible type="error" icon="fa-exclamation-triangle" v-model="error" transition="scale-transition" v-text="errorMessage"></v-alert>
         <v-alert dismissible type="warning" icon="fa-exclamation" v-model="warning" transition="scale-transition" v-text="warningMessage"></v-alert>
         <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" v-text="infoMessage"></v-alert>
+        <v-snackbar id="tip" top centered rounded close :timeout="tipTimeout" v-model="tip" color="info">
+          <template v-slot:action="{ attrs }">
+            <v-btn icon small v-bind="attrs" @click="tip = false">
+              <v-icon>fa-times</v-icon>
+            </v-btn>
+          </template>
+          {{ tipMessage }}
+        </v-snackbar>
         <router-view></router-view>
       </v-main>
       <v-footer app>
@@ -353,7 +361,7 @@
                 </div>
               </template>
               <template v-slot:append-outer>
-                <v-select class="my-n1 py-0" :disabled="loading()" v-if="relativeTimeEnabled" id="huntrelativetimeunit" @change="notifyInputsChanged"
+                <v-select id="huntrelativetimeunit" class="my-n1 py-0" :disabled="loading()" v-if="relativeTimeEnabled" id="huntrelativetimeunit" @change="notifyInputsChanged"
                   v-model="relativeTimeUnit" :items="relativeTimeUnits"></v-select>
               </template>
             </v-text-field>
@@ -420,14 +428,15 @@
               <template v-slot:item="{ item }">
                 <tr>
                   <td>
-                    {{ item.count.toLocaleString() }}
-                  </td>
-                  <td v-for="field in groupByHeaders.slice(1)">
-                    <v-btn v-if="field.value == 'event.severity_label' && isCategory('alerts')" class="mx-2" icon x-small @click="ack(event, item)" :title="i18n.alertDismiss" :color="item[field.value] | colorSeverity">
+                    <v-btn id="alertButton" v-if="isCategory('alerts') && item['event.severity_label']" class="mx-2" icon x-small @click="ack(event, item)" :title="i18n.alertDismiss" :color="item['event.severity_label'] | colorSeverity">
                       <v-icon>fa-bell-slash</v-icon>
                     </v-btn>
+                  </td>
+                  <td>
+                    {{ item.count.toLocaleString() }}
+                  </td>
+                  <td v-for="field in groupByHeaders.slice(2)">
                     <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction(event, item, field.value, item[field.value])"></div>
-
                   </td>
                 </tr>
               </template>
@@ -461,11 +470,11 @@
                       <v-icon v-if="isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-down</v-icon>
                       <v-icon v-if="!isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-right</v-icon>
                     </v-btn>
-                  </td>
-                  <td v-for="field in eventHeaders">
-                    <v-btn v-if="field.value == 'event.severity_label' && isCategory('alerts')" class="mx-2" icon x-small @click="ack(event, item)" :title="i18n.alertDismiss" :color="item[field.value] | colorSeverity">
+                    <v-btn id="alertButton" v-if="isCategory('alerts') && item['event.severity_label']" class="mx-2" icon x-small @click="ack(event, item)" :title="i18n.alertDismiss" :color="item['event.severity_label'] | colorSeverity">
                       <v-icon>fa-bell-slash</v-icon>
                     </v-btn>
+                  </td>
+                  <td v-for="field in eventHeaders">
                     <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction(event, item, field.value, item[field.value])"></div>
                   </td>
                 </tr>
@@ -518,19 +527,19 @@
           <v-card-actions>
             <v-list-item dense>
               <v-row align="center" justify="middle">
-                <v-btn depressed tile small color="secondary" :to="filterRouteInclude" :title="i18n.filterIncludeHelp">
+                <v-btn id="actionFilerInclude" depressed tile small color="secondary" :to="filterRouteInclude" :title="i18n.filterIncludeHelp">
                   <v-icon :alt="i18n.filterInclude">fa-search-plus</v-icon>
                 </v-btn>
-                <v-btn depressed tile small color="secondary" :to="filterRouteExclude" :title="i18n.filterExcludeHelp">
+                <v-btn id="actionFilterExclude" depressed tile small color="secondary" :to="filterRouteExclude" :title="i18n.filterExcludeHelp">
                   <v-icon :alt="i18n.filterExclude">fa-search-minus</v-icon>
                 </v-btn>
-                <v-btn depressed tile small color="secondary" :to="filterRouteExact" :title="i18n.filterExactHelp" v-if="isAdvanced()">
+                <v-btn id="actionFilterExact" depressed tile small color="secondary" :to="filterRouteExact" :title="i18n.filterExactHelp" v-if="isAdvanced()">
                   <v-icon :alt="i18n.filterExact">fa-search</v-icon>
                 </v-btn>
-                <v-btn depressed tile small color="secondary" :to="filterRouteDrilldown" :title="i18n.filterDrilldownHelp" v-if="!isAdvanced() && metricsEnabled">
+                <v-btn id="actionDrilldown" depressed tile small color="secondary" :to="filterRouteDrilldown" :title="i18n.filterDrilldownHelp" v-if="!isAdvanced() && metricsEnabled">
                   <v-icon :alt="i18n.filterDrilldown">fa-angle-double-down</v-icon>
                 </v-btn>
-                <v-btn depressed tile small color="secondary" :to="groupByRoute" :title="i18n.groupIncludeHelp">
+                <v-btn id="actionGroupBy" depressed tile small color="secondary" :to="groupByRoute" :title="i18n.groupIncludeHelp">
                   <v-icon :alt="i18n.groupInclude">fa-layer-group</v-icon>
                 </v-btn>
                 <v-btn class="custom-quick-action-button" v-for="action in actions" depressed tile small color="secondary" v-if="action.enabled" :href="action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="action.target">

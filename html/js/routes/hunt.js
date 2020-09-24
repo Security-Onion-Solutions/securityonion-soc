@@ -26,8 +26,7 @@ const huntComponent = {
     advanced: false,
     query: '',
     queries: [],
-    queryPrefix: "",
-    querySuffix: "",
+    queryBaseFilter: "",
     queryName: '',
     queryFilters: [],
     queryGroupBys: [],
@@ -150,8 +149,7 @@ const huntComponent = {
       this.relativeTimeValue = params["relativeTimeValue"];
       this.relativeTimeUnit = params["relativeTimeUnit"];
       this.mruQueryLimit = params["mostRecentlyUsedLimit"];
-      this.queryPrefix = params["queryPrefix"];
-      this.querySuffix = params["querySuffix"];
+      this.queryBaseFilter = params["queryBaseFilter"];
       this.queries = params["queries"];
       this.eventFields = params["eventFields"];
       this.advanced = params["advanced"];
@@ -223,11 +221,17 @@ const huntComponent = {
       } else {
         this.$router.push(this.buildCurrentRoute(), onSuccess, onFail);
       }
-      this.$root.setSubtitle(this.query);
     },
     huntQuery(query) {
       this.query = query;
       this.hunt();
+    },
+    getQuery() {
+      var q = "";
+      if (this.queryBaseFilter.length > 0) {
+        q = this.queryBaseFilter + " AND ";
+      }
+      return q + this.query;
     },
     generatePcapLink(eventId) {
       return "/joblookup?id=" + encodeURIComponent(eventId);
@@ -267,7 +271,7 @@ const huntComponent = {
       try {
         this.obtainQueryDetails();
         const response = await this.$root.papi.get('events/', { params: { 
-          query: this.queryPrefix + " " + this.query + " " + this.querySuffix,
+          query: this.getQuery(),
           range: this.dateRange, 
           format: this.i18n.timePickerSample, 
           zone: this.zone, 
@@ -278,7 +282,7 @@ const huntComponent = {
         this.eventPage = 1;
         this.groupByPage = 1;
         this.totalEvents = response.data.totalEvents;
-        this.fetchTimeSecs = response.data.fetchElapsedMs / 1000;
+        this.fetchTimeSecs = response.data.elapsedMs / 1000;
         this.roundTripTimeSecs = Math.abs(moment(response.data.completeTime) - moment(response.data.createTime)) / 1000;
         this.populateChart(this.timelineChartData, response.data.metrics["timeline"]);
         this.populateEventTable(response.data.events);
@@ -293,6 +297,9 @@ const huntComponent = {
         this.loaded = true;
         this.expanded = [];
         this.addMRUQuery(this.query);
+
+        var subtitle = this.isAdvanced() ? this.query : this.queryName;
+        this.$root.setSubtitle(this.i18n[this.category] + " - " + subtitle);       
       } catch (error) {
         this.$root.showError(error);
       }
@@ -345,7 +352,7 @@ const huntComponent = {
             this.$root.$router.push({ name: 'job', params: { jobId: response.data.id }});
           }
         } else {
-          this.$root.showError(i18n.eventLookupFailed);
+          this.$root.showError(this.i18n.eventLookupFailed);
         }
       } catch (error) {
         this.$root.showError(error);
@@ -354,11 +361,22 @@ const huntComponent = {
     },    
     async ack(event, item, escalate = false) {
       try {
-        const response = await this.$root.papi.post('events/ack', { 
-          event: item,
+        if (item["soc_id"]) {
+          // Strip away everything else for optimization
+          item = { "soc_id": item["soc_id"] };
+        } 
+        const response = await this.$root.papi.post('events/ack', {
+          searchFilter: this.getQuery(),
+          eventFilter: item,
+          dateRange: this.dateRange, 
+          dateRangeFormat: this.i18n.timePickerSample, 
+          timezone: this.zone, 
           escalate: escalate
         });
         event.target.parentElement.parentElement.style.visibility = "hidden";
+        if (item["count"]) {
+          this.$root.showTip(this.i18n.bulkOperationNotice);
+        }
       } catch (error) {
         this.$root.showError(error);
       }      
@@ -427,10 +445,10 @@ const huntComponent = {
           }
         }
         if (segments[i].length > 0) {
-          newQuery = newQuery + " | " + segments[i];
+          newQuery = newQuery.trim() + " | " + segments[i];
         }
       }
-      this.query = newQuery;
+      this.query = newQuery.trim();
       if (!this.notifyInputsChanged()) {
         this.obtainQueryDetails();
       }        
@@ -569,6 +587,7 @@ const huntComponent = {
         this.groupByFields = [...fields];
         this.groupByData = this.constructGroupByRows(fields, metrics[key])
         fields.unshift("count");
+        fields.unshift(""); // Leave empty header column for optional action buttons/icons
         this.groupByHeaders = this.constructHeaders(fields);
       }
     },

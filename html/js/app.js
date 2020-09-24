@@ -44,9 +44,12 @@ $(document).ready(function() {
       error: false,
       warning: false,
       info: false,
+      tip: false,
       errorMessage: "",
       warningMessage: "",
       infoMessage: "",
+      tipMessage: "",
+      tipTimeout: 6000,
       toolbar: null,
       wsUrl: (location.protocol == 'https:' ?  'wss://' : 'ws://') + location.host + location.pathname + 'ws',
       apiUrl: location.origin + location.pathname + 'api/',
@@ -210,6 +213,10 @@ $(document).ready(function() {
       showInfo(msg) {
         this.info = true;
         this.infoMessage = msg;
+      },
+      showTip(msg) {
+        this.tip = true;
+        this.tipMessage = msg;
       },
       startLoading() {
         this.loading = true;

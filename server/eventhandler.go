@@ -13,7 +13,6 @@ import (
   "errors"
   "encoding/json"
   "net/http"
-  "github.com/apex/log"
   "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/web"
 )
@@ -73,19 +72,14 @@ func (eventHandler *EventHandler) get(writer http.ResponseWriter, request *http.
 func (eventHandler *EventHandler) ack(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   statusCode := http.StatusBadRequest
 
-  var ackCriteria model.EventAckCriteria
+  ackCriteria := model.NewEventAckCriteria()
   err := json.NewDecoder(request.Body).Decode(&ackCriteria)
   if err == nil {
-    if ackCriteria.Event != nil {
-      log.WithFields(log.Fields {
-        "event": ackCriteria.Event,
-        "escalate": ackCriteria.Escalate,
-      }).Info("Acknowledging event")
-      if err == nil {
-        statusCode = http.StatusOK
-      } else {
-        statusCode = http.StatusInternalServerError
-      }
+    err = eventHandler.server.Eventstore.Acknowledge(ackCriteria)
+    if err == nil {
+      statusCode = http.StatusOK
+    } else {
+      statusCode = http.StatusInternalServerError
     }
   }
   return statusCode, nil, err

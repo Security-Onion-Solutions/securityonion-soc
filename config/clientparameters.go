@@ -50,8 +50,7 @@ type HuntingParameters struct {
 	RelativeTimeUnit		int						`json:"relativeTimeUnit"`
 	MostRecentlyUsedLimit	int						`json:"mostRecentlyUsedLimit"`
 	EventFields				map[string][]string		`json:"eventFields"`
-	QueryPrefix				string					`json:"queryPrefix"`
-	QuerySuffix				string					`json:"querySuffix"`
+	QueryBaseFilter			string					`json:"queryBaseFilter"`
 	Queries					[]HuntingQuery			`json:"queries"`
 	Actions					[]HuntingAction			`json:"actions"`
 	Advanced				bool					`json:"advanced"`

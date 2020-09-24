@@ -32,6 +32,7 @@ const i18n = {
       beginTime: 'Filter Begin',
       beginTimeHelp: 'The beginning date and time to include in this job filter (YYYY-MM-DD HH:mm:ss.SSS Z)',
       blog: 'Blog',
+      bulkOperationNotice: 'The requested operation may take a while and will continue in the background.',
       cancel: 'Cancel',
       chartTitleBottom: 'Fewest Occurrences',
       chartTitleTimeline: 'Timeline',
