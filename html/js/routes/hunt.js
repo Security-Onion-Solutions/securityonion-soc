@@ -360,6 +360,7 @@ const huntComponent = {
       this.$root.stopLoading();
     },    
     async ack(event, item, escalate = false) {
+      var btn = event.currentTarget;
       try {
         if (item["soc_id"]) {
           // Strip away everything else for optimization
@@ -373,7 +374,7 @@ const huntComponent = {
           timezone: this.zone, 
           escalate: escalate
         });
-        event.target.parentElement.parentElement.style.visibility = "hidden";
+        $(btn).hide();
         if (item["count"]) {
           this.$root.showTip(this.i18n.bulkOperationNotice);
         }
