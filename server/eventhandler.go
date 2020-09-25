@@ -79,7 +79,7 @@ func (eventHandler *EventHandler) ack(writer http.ResponseWriter, request *http.
     if err == nil {
       statusCode = http.StatusOK
     } else {
-      statusCode = http.StatusInternalServerError
+      statusCode = http.StatusBadRequest
     }
   }
   return statusCode, nil, err

@@ -569,11 +569,12 @@ func (store *ElasticEventstore) Acknowledge(ackCriteria *model.EventAckCriteria)
       "searchFilter": ackCriteria.SearchFilter,
       "eventFilter": ackCriteria.EventFilter,
       "escalate": ackCriteria.Escalate,
-    }).Debug("Acknowledging event")
+      "acknowledge": ackCriteria.Acknowledge,
+    }).Info("Acknowledging event")
 
     updateCriteria := model.NewEventUpdateCriteria()
-    updateCriteria.AddUpdateScript("ctx._source.event.acknowledged=true")
-    if ackCriteria.Escalate {
+    updateCriteria.AddUpdateScript("ctx._source.event.acknowledged=" + strconv.FormatBool(ackCriteria.Acknowledge))
+    if ackCriteria.Escalate && ackCriteria.Acknowledge {
       updateCriteria.AddUpdateScript("ctx._source.event.escalated=true")
     }
     updateCriteria.Populate(ackCriteria.SearchFilter, 
@@ -591,6 +592,7 @@ func (store *ElasticEventstore) Acknowledge(ackCriteria *model.EventAckCriteria)
     } else {
       searchSegment = segment.(*model.SearchSegment)
     }
+
     updateCriteria.Asynchronous = false
     for key, value := range ackCriteria.EventFilter {
       if (strings.ToLower(key) != "count") {

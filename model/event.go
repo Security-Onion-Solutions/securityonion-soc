@@ -160,6 +160,7 @@ type EventAckCriteria struct {
   DateRangeFormat string                  `json:"dateRangeFormat"`
   Timezone        string                  `json:"timezone"`
   Escalate        bool                    `json:"escalate"`
+  Acknowledge     bool                    `json:"acknowledge"`
 }
 
 func NewEventAckCriteria() *EventAckCriteria {

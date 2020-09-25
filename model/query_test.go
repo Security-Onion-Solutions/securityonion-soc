@@ -135,3 +135,26 @@ func TestIsScalar(tester *testing.T) {
     tester.Errorf("Expected 'str' to not be scalar")
   }
 }
+
+func TestRemoveTermsWith(tester *testing.T) {
+  segment := NewSearchSegmentEmpty()
+  if segment.RemoveTermsWith("hello") != 0 {
+    tester.Errorf("Expected no terms removed on empty segment")
+  }
+  segment.AddFilter("hello", "a", false, false)
+  if segment.RemoveTermsWith("hello") != 1 {
+    tester.Errorf("Expected one terms removed on single term segment")
+  }
+  if segment.RemoveTermsWith("hello") != 0 {
+    tester.Errorf("Expected no terms removed on already removed term")
+  }
+  segment.AddFilter("there", "b", false, false)
+  if segment.RemoveTermsWith("hello") != 0 {
+    tester.Errorf("Expected no terms removed on unmatched term")
+  }
+  segment.AddFilter("and", "c", false, false)
+  segment.AddFilter("goodbye", "d", false, false)
+  if segment.RemoveTermsWith("e") != 2 {
+    tester.Errorf("Expected two terms removed")
+  }
+}

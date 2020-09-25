@@ -41,6 +41,8 @@ const huntComponent = {
     chartHeight: 200,
     zone: '',
 
+    filterToggles: [],
+
     timelineChartOptions: {},
     timelineChartData: {},
 
@@ -151,6 +153,7 @@ const huntComponent = {
       this.mruQueryLimit = params["mostRecentlyUsedLimit"];
       this.queryBaseFilter = params["queryBaseFilter"];
       this.queries = params["queries"];
+      this.filterToggles = params["queryToggleFilters"];
       this.eventFields = params["eventFields"];
       this.advanced = params["advanced"];
       if (this.queries != null && this.queries.length > 0) {
@@ -230,6 +233,14 @@ const huntComponent = {
       var q = "";
       if (this.queryBaseFilter.length > 0) {
         q = this.queryBaseFilter + " AND ";
+      }
+      for (var i = 0; i < this.filterToggles.length; i++) {
+        filter = this.filterToggles[i];
+        if (filter.enabled) {
+          q = q + filter.filter + " AND ";
+        } else if (filter.exclusive) {
+          q = q + " NOT " + filter.filter + " AND ";
+        }
       }
       return q + this.query;
     },
@@ -359,30 +370,46 @@ const huntComponent = {
       }
       this.$root.stopLoading();
     },    
-    async ack(event, item, escalate = false) {
-      var btn = event.currentTarget;
+    async ack(event, item, idx, acknowledge, escalate = false) {
       try {
+        var docEvent = item;
         if (item["soc_id"]) {
           // Strip away everything else for optimization
-          item = { "soc_id": item["soc_id"] };
+          docEvent = { "soc_id": item["soc_id"] };
         } 
         const response = await this.$root.papi.post('events/ack', {
           searchFilter: this.getQuery(),
-          eventFilter: item,
+          eventFilter: docEvent,
           dateRange: this.dateRange, 
           dateRangeFormat: this.i18n.timePickerSample, 
           timezone: this.zone, 
-          escalate: escalate
+          escalate: escalate,
+          acknowledge: acknowledge,
         });
-        $(btn).hide();
+        if (item["count"] && item["count"] > 1) {
+          this.$root.showTip(acknowledge ? this.i18n.ackMultipleTip : this.i18n.ackUndoMultipleTip);
+        } else {
+          this.$root.showTip(acknowledge ? this.i18n.ackSingleTip : this.i18n.ackUndoSingleTip);
+        }
+
         if (item["count"]) {
-          this.$root.showTip(this.i18n.bulkOperationNotice);
+          Vue.delete(this.groupByData, idx);
+        } else {
+          Vue.delete(this.eventData, idx);
         }
       } catch (error) {
         this.$root.showError(error);
       }      
     },
-
+    isFilterToggleEnabled(name) {
+      for (var i = 0; i < this.filterToggles.length; i++) {
+        var filter = this.filterToggles[i];
+        if (filter.name == name) {
+          return filter.enabled;
+        }
+      }
+      return false;
+    },
     obtainQueryDetails() {
       this.queryName = "";
       this.queryFilters = [];
@@ -857,11 +884,11 @@ const huntComponent = {
       this.saveLocalSettings();
     },
     colorSeverity(value) {
-      if (value == "low") return "yellow";
-      if (value == "medium") return "amber darken-1";
-      if (value == "high") return "red darken-1";
-      if (value == "critical") return "red darken-4";
-      return "";      
+      if (value == "low_false") return "yellow";
+      if (value == "medium_false") return "amber darken-1";
+      if (value == "high_false") return "red darken-1";
+      if (value == "critical_false") return "red darken-4";
+      return "secondary";      
     },
     switchToHunt() {
       this.category = "hunt";

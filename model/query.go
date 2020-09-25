@@ -98,6 +98,23 @@ func (segment *BaseSegment) Clear() {
   segment.terms = make([]*QueryTerm, 0, 0)
 }
 
+func (segment *BaseSegment) RemoveTermsWith(raw string) int {
+  removed := 0
+  foundTerm := true
+  for foundTerm {
+    foundTerm = false
+    for idx, term := range segment.terms {
+      if strings.Contains(term.Raw, raw) {
+        segment.terms = append(segment.terms[:idx], segment.terms[idx+1:]...)
+        foundTerm = true
+        removed++
+        break
+      }
+    }
+  }
+  return removed
+}
+
 type SearchSegment struct {
   *BaseSegment
 }

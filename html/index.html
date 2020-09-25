@@ -271,8 +271,16 @@
     <script type="text/x-template" id="page-hunt">
       <v-container fluid>
         <v-row>
-          <v-col cols="9">
+          <v-col cols="3">
             <h2 v-text="i18n[category]"></h2>
+          </v-col>
+          <v-col cols="6">
+            <v-switch v-for="toggle in filterToggles" 
+              :id="'filterToggle-' + toggle.name" 
+              :disabled="loading()" 
+              v-model="toggle['enabled']" 
+              dense hide-details class="my-0"
+              :label="$root.localizeMessage(toggle.name)" @click="notifyInputsChanged()"></v-switch>
           </v-col>
           <v-col cols="3" align="end">
             <h4 v-if="loaded">{{ i18n.eventTotal }} {{ totalEvents.toLocaleString() }}</h4>
@@ -425,12 +433,17 @@
                   </v-row>
                 </v-container>        
               </template>
-              <template v-slot:item="{ item }">
+              <template v-slot:item="{ item, index }">
                 <tr>
                   <td>
-                    <v-btn id="alertButton" v-if="isCategory('alerts') && item['event.severity_label']" class="mx-2" icon x-small @click="ack(event, item)" :title="i18n.alertDismiss" :color="item['event.severity_label'] | colorSeverity">
-                      <v-icon>fa-bell-slash</v-icon>
+                    <v-btn id="alertButton" v-if="isCategory('alerts') && item['event.severity_label']" class="mx-2" icon x-small 
+                      @click="ack(event, item, index, !isFilterToggleEnabled('acknowledged'))" 
+                      :title="isFilterToggleEnabled('acknowledged') ? i18n.alertDismiss : i18n.alertUndoDismiss" 
+                      :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
+                      <v-icon v-if="!isFilterToggleEnabled('acknowledged') && item['event.acknowledged'] != true">fa-bell</v-icon>
+                      <v-icon v-if="isFilterToggleEnabled('acknowledged') || item['event.acknowledged'] == true">fa-bell-slash</v-icon>
                     </v-btn>
+                    <v-icon v-if="isCategory('alerts') && (isFilterToggleEnabled('escalated') || item['event.escalated'] == true)" :title="i18n.escalated" color="accent">fa-exclamation</v-icon>
                   </td>
                   <td>
                     {{ item.count.toLocaleString() }}
@@ -463,16 +476,21 @@
                   </v-row>
                 </v-container>
               </template>        
-              <template v-slot:item="{ item }">
+              <template v-slot:item="{ item, index }">
                 <tr>
                   <td>
-                    <v-btn icon small @click="expand(item)">
+                    <v-btn id="expandEvent" icon small @click="expand(item)">
                       <v-icon v-if="isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-down</v-icon>
                       <v-icon v-if="!isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-right</v-icon>
                     </v-btn>
-                    <v-btn id="alertButton" v-if="isCategory('alerts') && item['event.severity_label']" class="mx-2" icon x-small @click="ack(event, item)" :title="i18n.alertDismiss" :color="item['event.severity_label'] | colorSeverity">
-                      <v-icon>fa-bell-slash</v-icon>
+                    <v-btn id="alertButton" v-if="isCategory('alerts') && item['event.severity_label']" class="mx-2" icon x-small 
+                      @click="ack(event, item, index, !isFilterToggleEnabled('acknowledged'))" 
+                      :title="isFilterToggleEnabled('acknowledged') ? i18n.alertDismiss : i18n.alertUndoDismiss" 
+                      :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
+                      <v-icon v-if="!isFilterToggleEnabled('acknowledged') && item['event.acknowledged'] != true">fa-bell</v-icon>
+                      <v-icon v-if="isFilterToggleEnabled('acknowledged') || item['event.acknowledged'] == true">fa-bell-slash</v-icon>
                     </v-btn>
+                    <v-icon v-if="isCategory('alerts') && (isFilterToggleEnabled('escalated') || item['event.escalated'] == true)" :title="i18n.escalated" color="accent">fa-exclamation</v-icon>
                   </td>
                   <td v-for="field in eventHeaders">
                     <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction(event, item, field.value, item[field.value])"></div>
