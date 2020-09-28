@@ -275,6 +275,7 @@
             <h2 v-text="i18n[category]"></h2>
           </v-col>
           <v-col cols="6">
+            <v-switch v-if="isAdvanced()" id="auto-hunt" :disabled="loading()" v-model="autohunt" dense hide-details class="my-0" :label="i18n.autohunt"></v-switch>
             <v-switch v-for="toggle in filterToggles" 
               :id="'filterToggle-' + toggle.name" 
               :disabled="loading()" 
@@ -382,7 +383,7 @@
                 </b-btn>
               </template>
             </v-text-field>
-            <v-btn id="hunt" :disabled="loading()" color="primary" @click.stop="hunt" v-if="isAdvanced()">
+            <v-btn id="hunt" :disabled="loading()" :color="huntPending ? 'light-green accent-4' : 'primary'" @click.stop="hunt" v-if="isAdvanced()">
               <span class="d-sm-none d-lg-inline">{{ i18n.hunt }}&nbsp;</span>
               <v-icon>fa-crosshairs</v-icon>
             </v-btn>
@@ -537,9 +538,6 @@
             <v-subheader inset>{{ i18n.eventFetchTook }} {{ fetchTimeSecs }} {{ i18n.seconds }}. {{ i18n.eventRoundTripTook }} {{ roundTripTimeSecs }} {{ i18n.seconds }}.</v-subheader>
           </v-col>
           <v-spacer></v-spacer>
-          <v-col>
-            <v-switch id="auto-hunt" :disabled="loading()" v-model="autohunt" dense :label="i18n.autohunt" persistent-hint="true" :hint="i18n.autohuntHint"></v-switch>
-          </v-col>
         </v-row>
         <v-card id="hunt-quick-action" class="quick-action" color="secondary" elevation="2">
           <v-card-actions>

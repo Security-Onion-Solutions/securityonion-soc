@@ -40,6 +40,7 @@ const huntComponent = {
     expanded: [],
     chartHeight: 200,
     zone: '',
+    huntPending: false,
 
     filterToggles: [],
 
@@ -191,6 +192,7 @@ const huntComponent = {
           hunted = true;
         } else {
           this.$root.drawAttention('#hunt');
+          this.huntPending = true;
         }
       }
       return hunted;
@@ -209,6 +211,7 @@ const huntComponent = {
       }
     },
     hunt(replaceHistory = false) {
+      this.huntPending = false;
       var route = this;
       var onSuccess = function() {};
       var onFail = function() { 
