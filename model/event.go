@@ -19,7 +19,7 @@ import (
 type EventResults struct {
   CreateTime      time.Time   `json:"createTime"`
   CompleteTime    time.Time   `json:"completeTime"`
-  ElapsedMs       int         `json:"updateElapsedMs"`
+  ElapsedMs       int         `json:"elapsedMs"`
 }
 
 func (results *EventResults) initEventResults() {
