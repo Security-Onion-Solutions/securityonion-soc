@@ -147,17 +147,16 @@ func (segment *SearchSegment) String() string {
 }
 
 func (segment *SearchSegment) AddFilter(field string, value string, scalar bool, inclusive bool) error {
+  // This flag can be adjust to true once the query parser is more robust and better able to determine
+  // when an inclusive filter already exists in a query, so that two inclusive filters are not allowed
+  // to exist in a query together. For example, the following filters will prevent any matches: 
+  // Ex: foo:1 AND foo:2
   alreadyFiltered := false
+
   if len(field) > 4 && field[:4] == "soc_" {
     field = field[3:]
   }
-  if len(field) > 0 {
-    for _, term := range segment.terms {
-      if term.String() == field + ":" {
-        alreadyFiltered = true
-      }
-    }
-  }
+
   var err error
   if !alreadyFiltered {
     if len(segment.terms) > 0 {

@@ -454,7 +454,10 @@ const huntComponent = {
     removeFilter(filter) {
       var newQuery = this.query.replace(" AND " + filter, "");
       if (newQuery == this.query) {
-        newQuery = this.query.replace(filter, "");
+        newQuery = this.query.replace(filter + " AND ", "");
+        if (newQuery == this.query) {
+          newQuery = this.query.replace(filter, "");
+        }
       }
       if (newQuery.trim().indexOf("|") == 0) {
         newQuery = "* " + newQuery.trim()

@@ -112,6 +112,9 @@ func TestFilter(tester *testing.T) {
   validateFilter(tester, "(a:1 OR c:2) | groupby z", "b", "1", true, FILTER_EXACT, "b:1 | groupby z")
   validateFilter(tester, "(a:1 OR c:2) | groupby z", "b", "1", true, FILTER_DRILLDOWN, "(a:1 OR c:2) AND b:1")
   validateFilter(tester, "a", "soc_b", "1", true, FILTER_INCLUDE, "a AND _b:1")
+  validateFilter(tester, "a:1", "a", "2", true, FILTER_INCLUDE, "a:1 AND a:2")
+  validateFilter(tester, "a: 1", "a", "2", true, FILTER_INCLUDE, "a: 1 AND a:2")
+  validateFilter(tester, "NOT a:1", "a", "2", true, FILTER_EXCLUDE, "NOT a:1 AND NOT a:2")
 }
 
 func TestIsScalar(tester *testing.T) {
