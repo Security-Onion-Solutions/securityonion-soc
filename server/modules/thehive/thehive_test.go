@@ -7,24 +7,18 @@
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-package modules
+package thehive
 
 import (
   "testing"
   "github.com/security-onion-solutions/securityonion-soc/module"
 )
 
-func TestBuildModuleMap(tester *testing.T) {
-  mm := BuildModuleMap(nil)
-  findModule(tester, mm, "filedatastore")
-  findModule(tester, mm, "kratos")
-  findModule(tester, mm, "elastic")
-  findModule(tester, mm, "statickeyauth")
-  findModule(tester, mm, "thehive")
-}
-
-func findModule(tester *testing.T, mm map[string]module.Module, module string) {
-  if _, ok := mm[module]; !ok {
-    tester.Errorf("missing module %s", module)
+func TestTheHiveInit(tester *testing.T) {
+  thehive := NewTheHive(nil)
+  cfg := make(module.ModuleConfig)
+  err := thehive.Init(cfg)
+  if err != nil {
+    tester.Errorf("unexpected Init error: %s", err)
   }
 }

@@ -159,7 +159,7 @@
           </a>
         </v-toolbar-title>
         <v-spacer></v-spacer>
-        <v-menu bottom left offset-y="true">
+        <v-menu bottom left offset-y>
           <template v-slot:activator="{ on }">
             <v-btn icon v-on="on">
               <v-icon>fa-user</v-icon>
@@ -211,7 +211,9 @@
         </v-menu>
       </v-app-bar>
       <v-main>
-        <v-progress-linear v-if="loading" height="10" :active="loading" indeterminate></v-progress-linear>
+        <v-overlay :value="loading">
+          <v-progress-circular indeterminate color="primary" width="2" size="64"></v-progress-circular>
+        </v-overlay>
         <v-alert dismissible type="error" icon="fa-exclamation-triangle" v-model="error" transition="scale-transition" v-text="errorMessage"></v-alert>
         <v-alert dismissible type="warning" icon="fa-exclamation" v-model="warning" transition="scale-transition" v-text="warningMessage"></v-alert>
         <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" v-text="infoMessage"></v-alert>
@@ -276,7 +278,7 @@
           </v-col>
           <v-col cols="6">
             <v-switch v-if="isAdvanced()" id="auto-hunt" :disabled="loading()" v-model="autohunt" dense hide-details class="my-0" :label="i18n.autohunt"></v-switch>
-            <v-switch v-for="toggle in filterToggles" 
+            <v-switch v-for="toggle in filterToggles" :key="toggle.name"
               :id="'filterToggle-' + toggle.name" 
               :disabled="loading()" 
               v-model="toggle['enabled']" 
@@ -293,7 +295,7 @@
           <v-col cols="12" md="7">
             <v-textarea v-if="isAdvanced()" clearable auto-grow :disabled="loading()" @change="notifyInputsChanged" class="mx-2" v-model="query" :hint="i18n.queryHelp" rows="1" persistent-hint autofocus prepend-icon="fa-search" @keydown.enter.prevent="hunt" id="hunt-query-input">
               <template v-slot:prepend-inner>
-                <v-menu dense bottom three-line offset-y="true">
+                <v-menu dense bottom three-line offset-y>
                   <template v-slot:activator="{ on: menu }">
                     <v-tooltip bottom>
                       <template v-slot:activator="{ on: tooltip }">
@@ -305,7 +307,7 @@
                     </v-tooltip>
                   </template>
                   <v-list dense class="overflow-y-auto" style="max-height: 600px" id="hunt-query-dropdown-list">
-                    <v-list-item v-for="query in mruQueries">
+                    <v-list-item v-for="query in mruQueries" :key="query">
                       <v-list-item-content @click="huntQuery(query)" :style="{ cursor: 'pointer'}">
                         <v-list-item-title v-text="query"></v-list-item-title>
                         <v-list-item-subtitle>
@@ -315,7 +317,7 @@
                       </v-list-item-content>
                     </v-list-item>
                     <v-divider></v-divider>
-                    <v-list-item v-for="query in queries">
+                    <v-list-item v-for="query in queries" :key="query.query">
                       <v-list-item-content @click="huntQuery(query.query)" :style="{ cursor: 'pointer'}">
                         <v-list-item-title v-text="query.query"></v-list-item-title>
                         <v-list-item-subtitle>
@@ -331,7 +333,7 @@
             <v-textarea v-if="!isAdvanced()" no-resize readonly @change="notifyInputsChanged" class="mx-2" v-model="queryName" rows="1" 
               prepend-icon="fa-search" @keydown.enter.prevent="hunt" id="hunt-query-input">
               <template v-slot:prepend-inner>
-                <v-menu dense bottom three-line offset-y="true">
+                <v-menu dense bottom three-line offset-y>
                   <template v-slot:activator="{ on: menu }">
                     <v-tooltip bottom>
                       <template v-slot:activator="{ on: tooltip }">
@@ -343,7 +345,7 @@
                     </v-tooltip>
                   </template>
                   <v-list dense class="overflow-y-auto" style="max-height: 600px" id="hunt-query-dropdown-list">
-                    <v-list-item v-for="query in queries">
+                    <v-list-item v-for="query in queries" :key="query.query">
                       <v-list-item-content @click="huntQuery(query.query)" :style="{ cursor: 'pointer'}">
                         <v-list-item-title v-text="query.name"></v-list-item-title>
                       </v-list-item-content>
@@ -362,15 +364,15 @@
             <v-text-field :disabled="loading()" v-if="relativeTimeEnabled" id="huntrelativetimevalue" @change="notifyInputsChanged" class="mx-2" 
                 v-model="relativeTimeValue" :hint="isAdvanced() ? i18n.relativeTimeHelp : ''" :persistent-hint="isAdvanced()" type="number">
               <template v-slot:prepend>
-                <b-btn v-if="relativeTimeEnabled" icon x-small @click="showAbsoluteTime" id="show-absolute-time">
+                <v-btn v-if="relativeTimeEnabled" icon x-small @click="showAbsoluteTime" id="show-absolute-time">
                   <v-icon>fa-history</v-icon>
-                </b-btn>
+                </v-btn>
                 <div v-if="relativeTimeEnabled" class="pt-1 px-4">
                   {{ i18n.last }}
                 </div>
               </template>
               <template v-slot:append-outer>
-                <v-select id="huntrelativetimeunit" class="my-n1 py-0" :disabled="loading()" v-if="relativeTimeEnabled" id="huntrelativetimeunit" @change="notifyInputsChanged"
+                <v-select id="huntrelativetimeunit" class="my-n1 py-0" :disabled="loading()" v-if="relativeTimeEnabled" @change="notifyInputsChanged"
                   v-model="relativeTimeUnit" :items="relativeTimeUnits"></v-select>
               </template>
             </v-text-field>
@@ -378,9 +380,9 @@
               v-model="dateRange" :hint="i18n.timePickerHelp" persistent-hint="true" 
               prepend-inner-icon="fa-angle-down" @click:prepend-inner="showDateRangePicker">
               <template v-slot:prepend>
-                <b-btn v-if="!relativeTimeEnabled" icon x-small @click="showRelativeTime" id="show-relative-time">
+                <v-btn v-if="!relativeTimeEnabled" icon x-small @click="showRelativeTime" id="show-relative-time">
                   <v-icon>fa-calendar-alt</v-icon>
-                </b-btn>
+                </v-btn>
               </template>
             </v-text-field>
             <v-btn id="hunt" :disabled="loading()" :color="huntPending ? 'light-green accent-4' : 'primary'" @click.stop="hunt" v-if="isAdvanced()">
@@ -391,10 +393,10 @@
         </v-row>
         <v-row v-if="loaded && (queryFilters.length > 0 || queryGroupBys.length > 0)">
           <v-col cols="12">
-            <span v-for="filter in queryFilters">
+            <span v-for="filter in queryFilters" :key="filter">
               <v-chip class="filter mx-1 my-1" color="primary" close @click:close="removeFilter(filter)">{{ filter }}</v-chip>
             </span>
-            <span v-for="groupBy in queryGroupBys">
+            <span v-for="groupBy in queryGroupBys" :key="groupBy">
               <v-chip class="groupBy mx-1 my-1" color="accent" close @click:close="removeGroupBy(groupBy)">{{ i18n.groupedBy }} {{ groupBy }}</v-chip>
             </span>
           </v-col>
@@ -426,7 +428,7 @@
                       <h3>{{ i18n.groups }}</h3>
                     </v-col>
                     <v-col cols="2">
-                      <v-select :disabled="loading()" @change="notifyInputsChanged" v-model="groupByLimit" :items="groupByLimitOptions" :label="i18n.fetchLimit"></v-text-field>
+                      <v-select :disabled="loading()" @change="notifyInputsChanged" v-model="groupByLimit" :items="groupByLimitOptions" :label="i18n.fetchLimit"></v-select>
                     </v-col>
                     <v-col cols="6">
                       <v-text-field v-model="groupByFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
@@ -438,19 +440,25 @@
                 <tr>
                   <td>
                     <v-btn id="alertButton" v-if="isCategory('alerts') && item['event.severity_label']" class="mx-2" icon x-small 
-                      @click="ack(event, item, index, !isFilterToggleEnabled('acknowledged'))" 
+                      @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))" 
                       :title="isFilterToggleEnabled('acknowledged') ? i18n.alertUndoDismiss : i18n.alertDismiss" 
                       :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
                       <v-icon v-if="!isFilterToggleEnabled('acknowledged') && item['event.acknowledged'] != true">fa-bell</v-icon>
                       <v-icon v-if="isFilterToggleEnabled('acknowledged') || item['event.acknowledged'] == true">fa-bell-slash</v-icon>
                     </v-btn>
-                    <v-icon v-if="isCategory('alerts') && (isFilterToggleEnabled('escalated') || item['event.escalated'] == true)" :title="i18n.escalated" color="accent">fa-exclamation</v-icon>
+                    <v-btn id="escalateButton" v-if="isCategory('alerts') && item['event.severity_label']" class="mx-2" icon x-small 
+                      @click="ack($event, item, index, true, true)" 
+                      :title="isFilterToggleEnabled('escalated') ? i18n.alertEscalated : i18n.escalate" 
+                      color="primary">
+                      <v-icon v-if="!isFilterToggleEnabled('escalated') && item['event.escalated'] != true">fa-exclamation</v-icon>
+                      <v-icon v-if="isFilterToggleEnabled('escalated') || item['event.escalated'] == true">fa-exclamation-circle</v-icon>
+                    </v-btn>                    
                   </td>
                   <td>
                     {{ item.count.toLocaleString() }}
                   </td>
-                  <td v-for="field in groupByHeaders.slice(2)">
-                    <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction(event, item, field.value, item[field.value])"></div>
+                  <td v-for="field in groupByHeaders.slice(2)" :key="field.value">
+                    <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction($event, item, field.value, item[field.value])"></div>
                   </td>
                 </tr>
               </template>
@@ -469,7 +477,7 @@
                       <h3>{{ i18n.events }}</h3>
                     </v-col>
                     <v-col cols="2">
-                      <v-select :disabled="loading()" @change="notifyInputsChanged" v-model="eventLimit" :items="eventLimitOptions" :label="i18n.fetchLimit"></v-text-field>
+                      <v-select :disabled="loading()" @change="notifyInputsChanged" v-model="eventLimit" :items="eventLimitOptions" :label="i18n.fetchLimit"></v-select>
                     </v-col>
                     <v-col cols="6">
                       <v-text-field v-model="eventFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
@@ -485,16 +493,22 @@
                       <v-icon v-if="!isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-right</v-icon>
                     </v-btn>
                     <v-btn id="alertButton" v-if="isCategory('alerts') && item['event.severity_label']" class="mx-2" icon x-small 
-                      @click="ack(event, item, index, !isFilterToggleEnabled('acknowledged'))" 
+                      @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))" 
                       :title="isFilterToggleEnabled('acknowledged') ? i18n.alertUndoDismiss : i18n.alertDismiss" 
                       :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
                       <v-icon v-if="!isFilterToggleEnabled('acknowledged') && item['event.acknowledged'] != true">fa-bell</v-icon>
                       <v-icon v-if="isFilterToggleEnabled('acknowledged') || item['event.acknowledged'] == true">fa-bell-slash</v-icon>
                     </v-btn>
-                    <v-icon v-if="isCategory('alerts') && (isFilterToggleEnabled('escalated') || item['event.escalated'] == true)" :title="i18n.escalated" color="accent">fa-exclamation</v-icon>
+                    <v-btn id="escalateButton" v-if="isCategory('alerts') && item['event.severity_label']" class="mx-2" icon x-small 
+                      @click="ack($event, item, index, true, true)" 
+                      :title="isFilterToggleEnabled('escalated') ? i18n.alertEscalated : i18n.escalate" 
+                      color="primary">
+                      <v-icon v-if="!isFilterToggleEnabled('escalated') && item['event.escalated'] != true">fa-exclamation</v-icon>
+                      <v-icon v-if="isFilterToggleEnabled('escalated') || item['event.escalated'] == true">fa-exclamation-circle</v-icon>
+                    </v-btn>
                   </td>
-                  <td v-for="field in eventHeaders">
-                    <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction(event, item, field.value, item[field.value])"></div>
+                  <td v-for="field in eventHeaders" :key="field.value">
+                    <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction($event, item, field.value, item[field.value])"></div>
                   </td>
                 </tr>
               </template>
@@ -504,7 +518,7 @@
                     <v-data-table dense disable-pagination hide-default-header hide-default-footer must-sort :headers="expandedHeaders" :items="getExpandedData()">
                       <template v-slot:top="{ items }">
                         <div class="event-actions py-2">
-                          <div v-for="action in actions" class="expanded-action">
+                          <div v-for="action in actions" class="expanded-action" :key="action.link">
                             <a v-if="isEventAction(action)" :href="formatActionLink(action, item)">
                               {{ $root.localizeMessage(action.description) }}
                             </a>
@@ -522,7 +536,7 @@
                             <div class="d-inline-block expansion" v-text="item.key"></div>
                           </td>
                           <td class="expansion">
-                            <div class="quick-action-trigger d-inline-block expansion hardwrap" v-text="item.value" @click="toggleQuickAction(event, expanded[0], item.key, item.value)"></div>
+                            <div class="quick-action-trigger d-inline-block expansion hardwrap" v-text="item.value" @click="toggleQuickAction($event, expanded[0], item.key, item.value)"></div>
                           </td>
                         </tr>
                       </template>
@@ -542,7 +556,7 @@
         <v-card id="hunt-quick-action" class="quick-action" color="secondary" elevation="2">
           <v-card-actions>
             <v-list-item dense>
-              <v-row align="center" justify="middle">
+              <v-row align="center" justify="center">
                 <v-btn id="actionFilerInclude" depressed tile small color="secondary" :to="filterRouteInclude" :title="i18n.filterIncludeHelp">
                   <v-icon :alt="i18n.filterInclude">fa-search-plus</v-icon>
                 </v-btn>
@@ -555,7 +569,7 @@
                 <v-btn id="actionGroupBy" depressed tile small color="secondary" :to="groupByRoute" :title="i18n.groupIncludeHelp">
                   <v-icon :alt="i18n.groupInclude">fa-layer-group</v-icon>
                 </v-btn>
-                <v-btn class="custom-quick-action-button" v-for="action in actions" depressed tile small color="secondary" v-if="action.enabled" :href="action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="action.target">
+                <v-btn class="custom-quick-action-button" v-for="action in actions" depressed tile small color="secondary" v-if="action.enabled" :key="action.link" :href="action.linkFormatted" @click="" :title="$root.localizeMessage(action.description)" :target="action.target">
                   <v-icon v-if="action.icon" :class="{ 'v-icon--left': action.name }">{{ action.icon }}</v-icon>
                   {{ $root.localizeMessage(action.name) }}
                 </v-btn>

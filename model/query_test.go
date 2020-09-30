@@ -146,7 +146,7 @@ func TestRemoveTermsWith(tester *testing.T) {
   }
   segment.AddFilter("hello", "a", false, false)
   if segment.RemoveTermsWith("hello") != 1 {
-    tester.Errorf("Expected one terms removed on single term segment")
+    tester.Errorf("Expected one term removed on single term segment")
   }
   if segment.RemoveTermsWith("hello") != 0 {
     tester.Errorf("Expected no terms removed on already removed term")

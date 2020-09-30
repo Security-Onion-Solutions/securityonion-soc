@@ -374,12 +374,30 @@ const huntComponent = {
       this.$root.stopLoading();
     },    
     async ack(event, item, idx, acknowledge, escalate = false) {
+      this.$root.startLoading();
       try {
         var docEvent = item;
         if (item["soc_id"]) {
           // Strip away everything else for optimization
           docEvent = { "soc_id": item["soc_id"] };
         } 
+        if (escalate) {
+          var title = item['rule.name'];
+          var description = item['message'];
+          var severity = item['event.severity'];
+
+          if (!title) {
+            this.$root.showError(this.i18n.invalidEscalation);
+          }
+          if (!description) description = JSON.stringify(item);
+          if (!severity) severity = 0;
+
+          const response = await this.$root.papi.post('case', {
+            title: title,
+            description: description,
+            severity: severity,
+          });
+        }
         const response = await this.$root.papi.post('events/ack', {
           searchFilter: this.getQuery(),
           eventFilter: docEvent,
@@ -390,9 +408,9 @@ const huntComponent = {
           acknowledge: acknowledge,
         });
         if (item["count"] && item["count"] > 1) {
-          this.$root.showTip(acknowledge ? this.i18n.ackMultipleTip : this.i18n.ackUndoMultipleTip);
+          this.$root.showTip(escalate ? this.i18n.escalatedMultipleTip : (acknowledge ? this.i18n.ackMultipleTip : this.i18n.ackUndoMultipleTip));
         } else {
-          this.$root.showTip(acknowledge ? this.i18n.ackSingleTip : this.i18n.ackUndoSingleTip);
+          this.$root.showTip(escalate ? this.i18n.escalatedSingleTip : (acknowledge ? this.i18n.ackSingleTip : this.i18n.ackUndoSingleTip));
         }
 
         if (item["count"]) {
@@ -403,6 +421,7 @@ const huntComponent = {
       } catch (error) {
         this.$root.showError(error);
       }      
+      this.$root.stopLoading();
     },
     isFilterToggleEnabled(name) {
       for (var i = 0; i < this.filterToggles.length; i++) {
