@@ -63,7 +63,7 @@ const i18n = {
       description: 'Description',
       downloads: 'Downloads',
       downloadsFirewallTip: 'When installing packages such as osquery or beats onto remote systems be sure to run <code>so-allow</code> on the Security Onion Manager node to allow network access through the firewall.',
-      downloadsInfo: 'These packages and configs are osquery files, customized for this specific Fleet install and will only be generated if Fleet has been installed. Due to macOS packaging constraints, the macOS PKG has not been customized for this Fleet install - osquery/Launcher will need to be configured post-deployment. These files are not signed. Signed, non-customized osquery packages can be obtained directly from <a href="https://osquery.io/downloads">osquery.io</a>. For further Fleet & osquery information, please refer to our <a href="https://docs.securityonion.net/en/2.1/osquery.html">documentation</a>.',
+      downloadsInfo: 'These packages and configs are osquery files, customized for this specific Fleet install and will only be generated if Fleet has been installed. Due to macOS packaging constraints, the macOS PKG has not been customized for this Fleet install - osquery/Launcher will need to be configured post-deployment. These files are not signed. Signed, non-customized osquery packages can be obtained directly from <a href="https://osquery.io/downloads">osquery.io</a>. For further Fleet & osquery information, please refer to our <a href="https://docs.securityonion.net/en/2.3/osquery.html">documentation</a>.',
       downloadsLoggers: 'Logging Utilities',
       downloadsOsqueryPackages: 'Packages and Configs (osquery)',
       downloadPackets: 'Download the packets as a PCAP file',
