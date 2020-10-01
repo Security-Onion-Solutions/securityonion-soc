@@ -83,7 +83,7 @@ func TestConvertToElasticRequestEmptyCriteria(tester *testing.T) {
     tester.Errorf("unexpected conversion error: %s", err)
   }
 
-  expectedJson := `{"aggs":{"timeline":{"date_histogram":{"field":"@timestamp","interval":"30m","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":""}},{"range":{"@timestamp":{"format":"epoch_millis","gte":-62135596800000,"lte":-62135596800000}}}],"must_not":[],"should":[]}},"size":25}`
+  expectedJson := `{"aggs":{"timeline":{"date_histogram":{"field":"@timestamp","interval":"30m","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"*"}},{"range":{"@timestamp":{"format":"epoch_millis","gte":-62135596800000,"lte":-62135596800000}}}],"must_not":[],"should":[]}},"size":25}`
   if actualJson != expectedJson {
     tester.Errorf("Mismatched ES request conversion; actual='%s' vs expected='%s'", actualJson, expectedJson)
   }
@@ -228,3 +228,40 @@ func TestConvertFromElasticUpdateResultsSuccess(tester *testing.T) {
   }
 }
 
+func validateFormatSearch(tester *testing.T, original string, expected string) {
+  output := formatSearch(original)
+  if output != expected {
+    tester.Errorf("Expected mapped query '%s' but got '%s'", expected, output)
+  }
+}
+
+func TestFormatSearch(tester *testing.T) {
+  validateFormatSearch(tester, "", "*")
+  validateFormatSearch(tester, " ", "*")
+  validateFormatSearch(tester, "\\foo\\bar", "\\\\foo\\\\bar")
+}
+
+
+func validateMappedQuery(tester *testing.T, original string, expected string) {
+  store := NewTestStore()
+  store.fieldDefs["foo"] = &FieldDefinition { aggregatable: false, }
+  store.fieldDefs["foo.keyword"] = &FieldDefinition { aggregatable: true, }
+  query := model.NewQuery()
+  query.Parse(original)
+  search := query.NamedSegment(model.SegmentKind_Search)
+  mapSearch(store, search.(*model.SearchSegment))
+  output := search.String()
+  if output != expected {
+    tester.Errorf("Expected mapped query '%s' but got '%s'", expected, output)
+  }
+}
+
+func TestMapSearch(tester *testing.T) {
+  validateMappedQuery(tester, "foo: \"bar\"", "foo.keyword: \"bar\"")
+  validateMappedQuery(tester, "foo: \"bar\" AND barfoo: \"blue\"", "foo.keyword: \"bar\" AND barfoo: \"blue\"")
+  validateMappedQuery(tester, "foo: 123", "foo.keyword: 123")
+  validateMappedQuery(tester, "(foo: \"123\")", "(foo: \"123\")")
+  validateMappedQuery(tester, "foo2: \"bar\"", "foo2: \"bar\"")
+  validateMappedQuery(tester, "barfoo: \"bar\"", "barfoo: \"bar\"")
+  validateMappedQuery(tester, "barfoo: \"foo: bar\"", "barfoo: \"foo: bar\"")
+}

@@ -48,16 +48,39 @@ func makeTimeline(interval string) map[string]interface{} {
   return timeline
 }
 
+func formatSearch(input string) string {
+  input = strings.ReplaceAll(input, "\\", "\\\\")
+  input = strings.Trim(input, " ")
+  if len(input) == 0 {
+    input = "*"
+  }
+  return input
+}
+
+func mapSearch(store *ElasticEventstore, searchSegment *model.SearchSegment) *model.SearchSegment {
+  const delim = ":"
+  for _, term := range(searchSegment.Terms()) {
+    if strings.HasSuffix(term.Raw, delim) && !term.Grouped && !term.Quoted {
+      field := strings.Trim(term.Raw, delim)
+      newField := store.mapElasticField(field)
+      if newField != field {
+        term.Raw = newField + delim
+      }      
+    }
+  }
+  return searchSegment
+}
+
 func makeQuery(store *ElasticEventstore, parsedQuery *model.Query, beginTime time.Time, endTime time.Time) map[string]interface{} {
   searchString := ""
   segment := parsedQuery.NamedSegment(model.SegmentKind_Search)
   if segment != nil {
     searchSegment := segment.(*model.SearchSegment)
-    searchString = searchSegment.String()
+    searchString = mapSearch(store, searchSegment).String()
   }
 
   queryDetails := make(map[string]interface{})
-  queryDetails["query"] = strings.ReplaceAll(searchString, "\\", "\\\\")
+  queryDetails["query"] = formatSearch(searchString)
   queryDetails["analyze_wildcard"] = true
   queryDetails["default_field"] = "*"
 

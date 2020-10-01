@@ -70,6 +70,10 @@ type BaseSegment struct {
   terms []*QueryTerm
 }
 
+func (segment *BaseSegment) Terms() []*QueryTerm {
+  return segment.terms
+}
+
 const SegmentKind_Search = "search"
 const SegmentKind_GroupBy = "groupby"
 
