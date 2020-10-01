@@ -390,10 +390,15 @@ const huntComponent = {
           var description = item['message'];
           if (!description) description = JSON.stringify(item);
 
-          switch (item['event.severity_label']) {
-          case 'low': severity = 1; break;
-          case 'medium': severity = 2; break;
-          default: severity = 3;
+          var severity = item['event.severity'];
+          if (!severity || isNaN(severity)) {
+            switch (item['event.severity_label']) {
+            case 'low': severity = 1; break;
+            case 'medium': severity = 2; break;
+            case 'high': severity = 3; break;
+            case 'critical': severity = 4; break;
+            default: severity = 3;
+            }
           }
 
           const response = await this.$root.papi.post('case', {
