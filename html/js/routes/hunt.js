@@ -383,14 +383,18 @@ const huntComponent = {
         } 
         if (escalate) {
           var title = item['rule.name'];
-          var description = item['message'];
-          var severity = item['event.severity'];
-
           if (!title) {
             this.$root.showError(this.i18n.invalidEscalation);
           }
+
+          var description = item['message'];
           if (!description) description = JSON.stringify(item);
-          if (!severity) severity = 0;
+
+          switch (item['event.severity_label']) {
+          case 'low': severity = 1; break;
+          case 'medium': severity = 2; break;
+          default: severity = 3;
+          }
 
           const response = await this.$root.papi.post('case', {
             title: title,
