@@ -432,14 +432,38 @@ const huntComponent = {
       }      
       this.$root.stopLoading();
     },
-    isFilterToggleEnabled(name) {
+    getFilterToggle(name) {
       for (var i = 0; i < this.filterToggles.length; i++) {
         var filter = this.filterToggles[i];
         if (filter.name == name) {
-          return filter.enabled;
+          return filter;
         }
       }
+      return null;
+    },
+    isFilterToggleEnabled(name) {
+      var toggle = this.getFilterToggle(name);
+      if (toggle) {
+        return toggle.enabled;
+      }
       return false;
+    },
+    filterToggled(event, filterToggle) {
+      if (filterToggle.enabled && filterToggle.enablesToggles) {
+        filterToggle.enablesToggles.forEach((name) => {
+          var toggle = this.getFilterToggle(name)
+          if (toggle) {
+            toggle.enabled = true;
+          }
+        });
+      } else if (!filterToggle.enabled && filterToggle.disablesToggles) {
+        filterToggle.disablesToggles.forEach((name) => {
+          var toggle = this.getFilterToggle(name)
+          if (toggle) {
+            toggle.enabled = false;
+          }
+        });        
+      }
     },
     obtainQueryDetails() {
       this.queryName = "";

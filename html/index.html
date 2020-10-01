@@ -283,6 +283,7 @@
               :disabled="loading()" 
               v-model="toggle['enabled']" 
               dense hide-details class="my-0"
+              @click="filterToggled($event, toggle)"
               :label="$root.localizeMessage(toggle.name)" @click="notifyInputsChanged()"></v-switch>
           </v-col>
           <v-col cols="3" align="end">

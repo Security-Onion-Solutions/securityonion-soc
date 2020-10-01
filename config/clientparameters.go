@@ -42,10 +42,12 @@ type HuntingAction struct {
 }
 
 type ToggleFilter struct {
-  Name        string    `json:"name"`
-  Filter      string    `json:"filter"`
-  Enabled     bool      `json:"enabled"`
-  Exclusive   bool      `json:"exclusive"`
+  Name            string    `json:"name"`
+  Filter          string    `json:"filter"`
+  Enabled         bool      `json:"enabled"`
+  Exclusive       bool      `json:"exclusive"`
+  EnablesToggles  []string  `json:"enablesToggles"`
+  DisablesToggles []string  `json:"disablesToggles"`
 }
 
 type HuntingParameters struct {
