@@ -443,15 +443,13 @@
                       @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))" 
                       :title="isFilterToggleEnabled('acknowledged') ? i18n.alertUndoDismiss : i18n.alertDismiss" 
                       :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
-                      <v-icon v-if="!isFilterToggleEnabled('acknowledged') && item['event.acknowledged'] != true">fa-bell</v-icon>
-                      <v-icon v-if="isFilterToggleEnabled('acknowledged') || item['event.acknowledged'] == true">fa-bell-slash</v-icon>
+                      <v-icon>fa-bell</v-icon>
                     </v-btn>
                     <v-btn id="escalateButton" v-if="isCategory('alerts') && item['event.severity_label']" class="mx-2" icon x-small 
                       @click="ack($event, item, index, true, true)" 
-                      :title="isFilterToggleEnabled('escalated') ? i18n.alertEscalated : i18n.escalate" 
-                      color="primary">
-                      <v-icon v-if="!isFilterToggleEnabled('escalated') && item['event.escalated'] != true">fa-exclamation</v-icon>
-                      <v-icon v-if="isFilterToggleEnabled('escalated') || item['event.escalated'] == true">fa-exclamation-circle</v-icon>
+                      :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate" 
+                      :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
+                      <v-icon>fa-exclamation-triangle</v-icon>
                     </v-btn>                    
                   </td>
                   <td>
@@ -496,15 +494,13 @@
                       @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))" 
                       :title="isFilterToggleEnabled('acknowledged') ? i18n.alertUndoDismiss : i18n.alertDismiss" 
                       :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
-                      <v-icon v-if="!isFilterToggleEnabled('acknowledged') && item['event.acknowledged'] != true">fa-bell</v-icon>
-                      <v-icon v-if="isFilterToggleEnabled('acknowledged') || item['event.acknowledged'] == true">fa-bell-slash</v-icon>
+                      <v-icon>fa-bell</v-icon>
                     </v-btn>
                     <v-btn id="escalateButton" v-if="isCategory('alerts') && item['event.severity_label']" class="mx-2" icon x-small 
                       @click="ack($event, item, index, true, true)" 
-                      :title="isFilterToggleEnabled('escalated') ? i18n.alertEscalated : i18n.escalate" 
-                      color="primary">
-                      <v-icon v-if="!isFilterToggleEnabled('escalated') && item['event.escalated'] != true">fa-exclamation</v-icon>
-                      <v-icon v-if="isFilterToggleEnabled('escalated') || item['event.escalated'] == true">fa-exclamation-circle</v-icon>
+                      :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate" 
+                      :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
+                      <v-icon>fa-exclamation-triangle</v-icon>
                     </v-btn>
                   </td>
                   <td v-for="field in eventHeaders" :key="field.value">
