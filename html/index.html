@@ -211,7 +211,7 @@
         </v-menu>
       </v-app-bar>
       <v-main>
-        <v-overlay :value="loading">
+        <v-overlay id="loading" :value="loading">
           <v-progress-circular indeterminate color="primary" width="2" size="64"></v-progress-circular>
         </v-overlay>
         <v-alert dismissible type="error" icon="fa-exclamation-triangle" v-model="error" transition="scale-transition" v-text="errorMessage"></v-alert>
