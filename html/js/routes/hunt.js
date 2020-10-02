@@ -380,11 +380,24 @@ const huntComponent = {
         if (item["soc_id"]) {
           // Strip away everything else for optimization
           docEvent = { "soc_id": item["soc_id"] };
-        } 
+        }
+        var isAlert = ('rule.name' in item);
         if (escalate) {
           var title = item['rule.name'];
           if (!title) {
-            this.$root.showError(this.i18n.invalidEscalation);
+            title = this.i18n.eventCaseTitle;
+            if (item['event.module'] || item['event.dataset']) {
+              title = title + ": ";
+              if (item['event.module']) {
+                title = title + item['event.module'];
+                if (item['event.dataset']) {
+                  title = title + " - ";
+                }
+              }
+              if (item['event.dataset']) {
+                title = title + item['event.dataset'];
+              }
+            }
           }
 
           var description = item['message'];
@@ -407,25 +420,31 @@ const huntComponent = {
             severity: severity,
           });
         }
-        const response = await this.$root.papi.post('events/ack', {
-          searchFilter: this.getQuery(),
-          eventFilter: docEvent,
-          dateRange: this.dateRange, 
-          dateRangeFormat: this.i18n.timePickerSample, 
-          timezone: this.zone, 
-          escalate: escalate,
-          acknowledge: acknowledge,
-        });
-        if (item["count"] && item["count"] > 1) {
-          this.$root.showTip(escalate ? this.i18n.escalatedMultipleTip : (acknowledge ? this.i18n.ackMultipleTip : this.i18n.ackUndoMultipleTip));
-        } else {
-          this.$root.showTip(escalate ? this.i18n.escalatedSingleTip : (acknowledge ? this.i18n.ackSingleTip : this.i18n.ackUndoSingleTip));
+        if (isAlert) {
+          const response = await this.$root.papi.post('events/ack', {
+            searchFilter: this.getQuery(),
+            eventFilter: docEvent,
+            dateRange: this.dateRange, 
+            dateRangeFormat: this.i18n.timePickerSample, 
+            timezone: this.zone, 
+            escalate: escalate,
+            acknowledge: acknowledge,
+          });
         }
+        if (this.isCategory('alerts')) {
+          if (item["count"] && item["count"] > 1) {
+            this.$root.showTip(escalate ? this.i18n.escalatedMultipleTip : (acknowledge ? this.i18n.ackMultipleTip : this.i18n.ackUndoMultipleTip));
+          } else {
+            this.$root.showTip(escalate ? this.i18n.escalatedSingleTip : (acknowledge ? this.i18n.ackSingleTip : this.i18n.ackUndoSingleTip));
+          }
 
-        if (item["count"]) {
-          Vue.delete(this.groupByData, idx);
-        } else {
-          Vue.delete(this.eventData, idx);
+          if (item["count"]) {
+            Vue.delete(this.groupByData, idx);
+          } else {
+            Vue.delete(this.eventData, idx);
+          }
+        } else if (escalate) {
+          this.$root.showTip(this.i18n.escalatedEventTip);
         }
       } catch (error) {
         this.$root.showError(error);

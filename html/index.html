@@ -446,7 +446,7 @@
                       :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
                       <v-icon>fa-bell</v-icon>
                     </v-btn>
-                    <v-btn id="escalateButton" v-if="isCategory('alerts') && item['event.severity_label']" class="mx-2" icon x-small 
+                    <v-btn id="escalateButton" class="mx-2" icon x-small 
                       @click="ack($event, item, index, true, true)" 
                       :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate" 
                       :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
@@ -497,7 +497,7 @@
                       :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
                       <v-icon>fa-bell</v-icon>
                     </v-btn>
-                    <v-btn id="escalateButton" v-if="isCategory('alerts') && item['event.severity_label']" class="mx-2" icon x-small 
+                    <v-btn id="escalateButton" class="mx-2" icon x-small 
                       @click="ack($event, item, index, true, true)" 
                       :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate" 
                       :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
