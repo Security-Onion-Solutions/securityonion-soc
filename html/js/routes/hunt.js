@@ -533,6 +533,9 @@ const huntComponent = {
       if (newQuery.trim().indexOf("|") == 0) {
         newQuery = "* " + newQuery.trim()
       }
+      if (newQuery.trim().length == 0) {
+        newQuery = "*";
+      }
       this.query = newQuery;
       if (!this.notifyInputsChanged()) {
         this.obtainQueryDetails();

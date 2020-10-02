@@ -294,6 +294,9 @@ $(document).ready(function() {
         location.href = this.authUrl + "login";
       },
       apiSuccessCallback(response) {
+        if (response.headers['content-type'] != "application/json") {
+          this.showLogin();
+        }
         return response;
       },
       apiFailureCallback(error) {
