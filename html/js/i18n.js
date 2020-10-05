@@ -217,6 +217,8 @@ const i18n = {
       version: 'Version',
       view: 'View',
       weeks: 'weeks',
+
+      CASE_MODULE_NOT_ENABLED: 'A case module has not been configured for this installation. Unable to proceed with request.',
     },
   },
 
