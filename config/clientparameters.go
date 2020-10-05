@@ -64,6 +64,8 @@ type HuntingParameters struct {
   Queries                 []HuntingQuery      `json:"queries"`
   Actions                 []HuntingAction     `json:"actions"`
   Advanced                bool                `json:"advanced"`
+  DismissEnabled          bool                `json:"dismissEnabled"`
+  EscalateEnabled         bool                `json:"escalateEnabled"`
 }
 
 func (params *HuntingParameters) Verify() error {

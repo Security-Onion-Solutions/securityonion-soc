@@ -440,13 +440,13 @@
               <template v-slot:item="{ item, index }">
                 <tr>
                   <td>
-                    <v-btn id="alertButton" v-if="isCategory('alerts') && item['event.severity_label']" class="mx-2" icon x-small 
+                    <v-btn id="alertButton" v-if="dismissEnabled && item['event.severity_label']" class="mx-2" icon x-small 
                       @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))" 
                       :title="isFilterToggleEnabled('acknowledged') ? i18n.alertUndoDismiss : i18n.alertDismiss" 
                       :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
                       <v-icon>fa-bell</v-icon>
                     </v-btn>
-                    <v-btn id="escalateButton" class="mx-2" icon x-small 
+                    <v-btn id="escalateButton" v-if="escalateEnabled" class="mx-2" icon x-small 
                       @click="ack($event, item, index, true, true)" 
                       :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate" 
                       :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
@@ -491,13 +491,13 @@
                       <v-icon v-if="isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-down</v-icon>
                       <v-icon v-if="!isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-right</v-icon>
                     </v-btn>
-                    <v-btn id="alertButton" v-if="isCategory('alerts') && item['event.severity_label']" class="mx-2" icon x-small 
+                    <v-btn id="alertButton" v-if="dismissEnabled && item['event.severity_label']" class="mx-2" icon x-small 
                       @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))" 
                       :title="isFilterToggleEnabled('acknowledged') ? i18n.alertUndoDismiss : i18n.alertDismiss" 
                       :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
                       <v-icon>fa-bell</v-icon>
                     </v-btn>
-                    <v-btn id="escalateButton" class="mx-2" icon x-small 
+                    <v-btn id="escalateButton" v-if="escalateEnabled" class="mx-2" icon x-small 
                       @click="ack($event, item, index, true, true)" 
                       :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate" 
                       :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">

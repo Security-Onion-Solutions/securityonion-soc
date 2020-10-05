@@ -41,6 +41,8 @@ const huntComponent = {
     chartHeight: 200,
     zone: '',
     huntPending: false,
+    dismissEnabled: false,
+    escalateEnabled: false,
 
     filterToggles: [],
 
@@ -157,6 +159,8 @@ const huntComponent = {
       this.filterToggles = params["queryToggleFilters"];
       this.eventFields = params["eventFields"];
       this.advanced = params["advanced"];
+      this.dismissEnabled = params["dismissEnabled"];
+      this.escalateEnabled = params["escalateEnabled"];
       if (this.queries != null && this.queries.length > 0) {
         this.query = this.queries[0].query;
       }
