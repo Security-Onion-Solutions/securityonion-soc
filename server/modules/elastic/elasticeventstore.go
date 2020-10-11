@@ -40,8 +40,10 @@ type FieldDefinition struct {
 }
 
 type ElasticEventstore struct {
-  esConfig		      elasticsearch.Config
+  hostUrls          []string
   esClient		      *elasticsearch.Client
+  esRemoteClients   []*elasticsearch.Client
+  esAllClients      []*elasticsearch.Client
   timeShiftMs	      int
   defaultDurationMs int
   esSearchOffsetMs  int
@@ -55,10 +57,15 @@ type ElasticEventstore struct {
 }
 
 func NewElasticEventstore() *ElasticEventstore {
-  return &ElasticEventstore{}
+  return &ElasticEventstore{
+    hostUrls: make([]string, 0),
+    esRemoteClients: make([]*elasticsearch.Client, 0),
+    esAllClients: make([]*elasticsearch.Client, 0),
+  }
 }
 
-func (store *ElasticEventstore) Init(hostUrl string, 
+func (store *ElasticEventstore) Init(hostUrl string,
+                                      remoteHosts []string, 
                                       user string, 
                                       pass string, 
                                       verifyCert bool, 
@@ -69,7 +76,6 @@ func (store *ElasticEventstore) Init(hostUrl string,
                                       cacheMs int, 
                                       index string, 
                                       asyncThreshold int) error {
-  hosts := make([]string, 1)
   store.timeShiftMs = timeShiftMs
   store.defaultDurationMs = defaultDurationMs
   store.esSearchOffsetMs = esSearchOffsetMs
@@ -77,8 +83,32 @@ func (store *ElasticEventstore) Init(hostUrl string,
   store.asyncThreshold = asyncThreshold
   store.timeoutMs = time.Duration(timeoutMs) * time.Millisecond
   store.cacheMs = time.Duration(cacheMs) * time.Millisecond
-  hosts[0] = hostUrl
-  store.esConfig = elasticsearch.Config {
+
+  var err error
+  store.esClient, err = store.makeEsClient(hostUrl, user, pass, verifyCert)
+  if err == nil {
+    store.hostUrls = append(store.hostUrls, hostUrl)
+    store.esAllClients = append(store.esAllClients, store.esClient)
+    for _, remoteHostUrl := range(remoteHosts) {
+      client, err := store.makeEsClient(remoteHostUrl, user, pass, verifyCert)
+      if err == nil {
+        store.hostUrls = append(store.hostUrls, remoteHostUrl)
+        store.esRemoteClients = append(store.esRemoteClients, client)
+        store.esAllClients = append(store.esAllClients, client)
+      } else {
+        break
+      }
+    }
+  }
+  return err
+}
+
+func (store *ElasticEventstore) makeEsClient(host string, user string, pass string, verifyCert bool) (*elasticsearch.Client, error) {
+  var esClient *elasticsearch.Client
+
+  hosts := make([]string, 1)
+  hosts[0] = host
+  esConfig := elasticsearch.Config {
     Addresses: hosts,
     Username: user,
     Password: pass,
@@ -92,26 +122,26 @@ func (store *ElasticEventstore) Init(hostUrl string,
     },
   }
   maskedPassword := "*****"
-  if len(store.esConfig.Password) == 0 {
+  if len(esConfig.Password) == 0 {
     maskedPassword = ""
   }
 
-  esClient, err := elasticsearch.NewClient(store.esConfig)
+  esClient, err := elasticsearch.NewClient(esConfig)
   fields := log.Fields {
     "InsecureSkipVerify": !verifyCert,
-    "HostUrl": hosts[0],
-    "Username": store.esConfig.Username,
+    "HostUrl": host,
+    "Username": esConfig.Username,
     "Password": maskedPassword,
-    "Index": index,
-    "TimeoutMs": timeoutMs,
+    "Index": store.index,
+    "TimeoutMs": store.timeoutMs,
   }
   if err == nil {
-    store.esClient = esClient
     log.WithFields(fields).Info("Initialized Elasticsearch Client")
   } else {
     log.WithFields(fields).Error("Failed to initialize Elasticsearch Client")
+    esClient = nil
   }
-  return err
+  return esClient, err
 }
 
 func (store *ElasticEventstore) mapElasticField(field string) string {
@@ -160,15 +190,27 @@ func (store *ElasticEventstore) Update(criteria *model.EventUpdateCriteria) (*mo
   store.refreshCache()
 
   results := model.NewEventUpdateResults()
+  results.Criteria = criteria
   query, err := convertToElasticUpdateRequest(store, criteria)
   if err == nil {
     var response string
-    response, err = store.updateDocuments(query, strings.Split(store.index, ","), !criteria.Asynchronous)
-    if err == nil {
-      if !criteria.Asynchronous {
-        err = convertFromElasticUpdateResults(store, response, results)
+
+    for idx, client := range(store.esAllClients) {
+      log.WithField("clientHost", store.hostUrls[idx]).Debug("Sending request to client")
+      response, err = store.updateDocuments(client, query, strings.Split(store.index, ","), !criteria.Asynchronous)
+      if err == nil {
+        if !criteria.Asynchronous {
+          currentResults := model.NewEventUpdateResults()
+          err = convertFromElasticUpdateResults(store, response, currentResults)
+          if err == nil {
+            mergeElasticUpdateResults(results, currentResults)
+          } else {
+            break
+          }
+        }
+      } else {
+        break
       }
-      results.Criteria = criteria
     }
   }
 
@@ -242,16 +284,16 @@ func (store *ElasticEventstore) indexDocument(document string, index string) (st
   return json, err
 }
 
-func (store *ElasticEventstore) updateDocuments(query string, indexes []string, waitForCompletion bool) (string, error) {
+func (store *ElasticEventstore) updateDocuments(client *elasticsearch.Client, query string, indexes []string, waitForCompletion bool) (string, error) {
   log.WithField("query", query).Debug("Updating documents in Elasticsearch")
   var json string
-  res, err := store.esClient.UpdateByQuery(
+  res, err := client.UpdateByQuery(
     indexes,
-    store.esClient.UpdateByQuery.WithContext(context.Background()),
-    store.esClient.UpdateByQuery.WithPretty(),
-    store.esClient.UpdateByQuery.WithBody(strings.NewReader(query)),
-    store.esClient.UpdateByQuery.WithRefresh(true),
-    store.esClient.UpdateByQuery.WithWaitForCompletion(waitForCompletion),
+    client.UpdateByQuery.WithContext(context.Background()),
+    client.UpdateByQuery.WithPretty(),
+    client.UpdateByQuery.WithBody(strings.NewReader(query)),
+    client.UpdateByQuery.WithRefresh(true),
+    client.UpdateByQuery.WithWaitForCompletion(waitForCompletion),
   )
   if err == nil {
     defer res.Body.Close()

@@ -75,3 +75,25 @@ func GetBoolDefault(options map[string]interface{}, key string, dflt bool) bool 
   }
   return value
 }
+
+func GetStringArray(options map[string]interface{}, key string) ([]string, error) {
+  var err error
+  var value []string
+  if gen, ok := options[key]; ok {
+    value = make([]string, 0)
+    for _, iface := range(gen.([]interface{})) {
+      value = append(value, iface.(string))
+    }
+  } else {
+    err = errors.New("Required option is missing: " + key + " ([]string)")
+  }
+  return value, err
+} 
+
+func GetStringArrayDefault(options map[string]interface{}, key string, dflt []string) []string {
+  value, err := GetStringArray(options, key)
+  if err != nil {
+    value = dflt
+  }
+  return value
+} 

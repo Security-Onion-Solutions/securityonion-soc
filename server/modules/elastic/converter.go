@@ -282,3 +282,9 @@ func convertFromElasticUpdateResults(store *ElasticEventstore, esJson string, re
 
   return err
 }
+
+func mergeElasticUpdateResults(results *model.EventUpdateResults, newResults *model.EventUpdateResults) {
+  results.ElapsedMs += newResults.ElapsedMs
+  results.UpdatedCount += newResults.UpdatedCount
+  results.UnchangedCount += newResults.UnchangedCount
+}

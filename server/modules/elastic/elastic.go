@@ -42,6 +42,7 @@ func (elastic *Elastic) PrerequisiteModules() []string {
 func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
   elastic.config = cfg
   host := module.GetStringDefault(cfg, "hostUrl", "elasticsearch")
+  remoteHosts := module.GetStringArrayDefault(cfg, "remoteHostUrls", make([]string, 0, 0))
   verifyCert := module.GetBoolDefault(cfg, "verifyCert", true)
   username := module.GetStringDefault(cfg, "username", "")
   password := module.GetStringDefault(cfg, "password", "")
@@ -52,7 +53,7 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
   cacheMs := module.GetIntDefault(cfg, "cacheMs", DEFAULT_CACHE_MS)
   index := module.GetStringDefault(cfg, "index", DEFAULT_INDEX)
   asyncThreshold := module.GetIntDefault(cfg, "asyncThreshold", DEFAULT_ASYNC_THRESHOLD)
-  err := elastic.store.Init(host, username, password, verifyCert, timeShiftMs, defaultDurationMs, esSearchOffsetMs, timeoutMs, cacheMs, index, asyncThreshold)
+  err := elastic.store.Init(host, remoteHosts, username, password, verifyCert, timeShiftMs, defaultDurationMs, esSearchOffsetMs, timeoutMs, cacheMs, index, asyncThreshold)
   if err == nil && elastic.server != nil {
     elastic.server.Eventstore = elastic.store
   }

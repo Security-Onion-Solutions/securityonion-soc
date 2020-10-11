@@ -228,6 +228,29 @@ func TestConvertFromElasticUpdateResultsSuccess(tester *testing.T) {
   }
 }
 
+func TestMergeElasticUpdateResults(tester *testing.T) {
+  results1 := model.NewEventUpdateResults()
+  results1.ElapsedMs = 100
+  results1.UpdatedCount = 200
+  results1.UnchangedCount = 400
+  results2 := model.NewEventUpdateResults()
+  results2.ElapsedMs = 12
+  results2.UpdatedCount = 2
+  results2.UnchangedCount = 4
+  mergeElasticUpdateResults(results1, results2)
+  if results1.ElapsedMs != 112 {
+    tester.Errorf("Unexpected ElapsedMs: %d", results1.ElapsedMs)
+  }
+
+  if results1.UpdatedCount != 202 {
+    tester.Errorf("Unexpected updated count: %d", results1.UpdatedCount)
+  }
+
+  if results1.UnchangedCount != 404 {
+    tester.Errorf("Unexpected updated count: %d", results1.UnchangedCount)
+  }
+}
+
 func validateFormatSearch(tester *testing.T, original string, expected string) {
   output := formatSearch(original)
   if output != expected {
