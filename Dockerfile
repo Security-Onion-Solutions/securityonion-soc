@@ -35,11 +35,12 @@ RUN chmod u+x scripts/*
 RUN chown 939:939 scripts/*
 RUN find . -name \*.html -exec sed -i -e "s/VERSION_PLACEHOLDER/$VERSION/g" {} \;
 
-RUN wget https://docs.securityonion.net/_/downloads/en/2.3/htmlzip/ -O /tmp/docs.zip && \
+RUN [[ $VERSION == '0.0.0' ]] || \
+    (wget https://docs.securityonion.net/_/downloads/en/$(echo $VERSION | cut -d'.' -f 1,2)/htmlzip/ -O /tmp/docs.zip && \
     unzip -o /tmp/docs.zip -d html/docs && \
     rm -f /tmp/docs.zip && \
     mv -f html/docs/securityonion-*/* html/docs && \
-    rm -fr html/docs/securityonion-*
+    rm -fr html/docs/securityonion-*)
 
 USER socore
 EXPOSE 9822/tcp
