@@ -434,6 +434,9 @@ const huntComponent = {
             escalate: escalate,
             acknowledge: acknowledge,
           });
+          if (response.data && response.data.errors && response.data.errors.length > 0) {
+            this.$root.showWarning(this.i18n.ackPartialSuccess);
+          }
         }
         if (this.isCategory('alerts')) {
           if (item["count"] && item["count"] > 1) {

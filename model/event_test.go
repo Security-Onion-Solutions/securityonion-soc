@@ -80,6 +80,9 @@ func TestNewEventSearchResult(tester *testing.T) {
   if !event.CompleteTime.After(event.CreateTime) {
     tester.Errorf("expected CompleteTime to be newer than CreateTime")
   }
+  if len(event.Errors) != 0 {
+    tester.Errorf("expected no errors")
+  }
 }
 
 
@@ -89,5 +92,8 @@ func TestNewEventUpdateResult(tester *testing.T) {
   event.Complete()
   if !event.CompleteTime.After(event.CreateTime) {
     tester.Errorf("expected CompleteTime to be newer than CreateTime")
+  }
+  if len(event.Errors) != 0 {
+    tester.Errorf("expected no errors")
   }
 }

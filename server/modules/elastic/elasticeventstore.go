@@ -205,13 +205,21 @@ func (store *ElasticEventstore) Update(criteria *model.EventUpdateCriteria) (*mo
           if err == nil {
             mergeElasticUpdateResults(results, currentResults)
           } else {
-            break
+            log.WithError(err).WithField("clientHost", store.hostUrls[idx]).Error("Encountered error while updating elasticsearch")
+            results.Errors = append(results.Errors, err.Error())
           }
         }
       } else {
-        break
+        log.WithError(err).WithField("clientHost", store.hostUrls[idx]).Error("Encountered error while updating elasticsearch")
+        results.Errors = append(results.Errors, err.Error())        
       }
     }
+  }
+
+  if len(results.Errors) < len(store.esAllClients) {
+    // Do not fail this request completely since some hosts succeeded.
+    // The results.Errors property contains the list of errors.
+    err = nil
   }
 
   results.Complete()
@@ -605,7 +613,8 @@ func (store *ElasticEventstore) PopulateJobFromEventId(esId string, job *model.J
   return nil
 }
 
-func (store *ElasticEventstore) Acknowledge(ackCriteria *model.EventAckCriteria) error {
+func (store *ElasticEventstore) Acknowledge(ackCriteria *model.EventAckCriteria) (*model.EventUpdateResults, error) {
+  var results *model.EventUpdateResults
   var err error
   if len(ackCriteria.EventFilter) > 0 {
     log.WithFields(log.Fields {
@@ -654,7 +663,6 @@ func (store *ElasticEventstore) Acknowledge(ackCriteria *model.EventAckCriteria)
     updateCriteria.ParsedQuery = model.NewQuery()
     updateCriteria.ParsedQuery.AddSegment(searchSegment)
 
-    var results *model.EventUpdateResults
     results, err = store.Update(updateCriteria)
     if err == nil && !updateCriteria.Asynchronous {
       if results.UpdatedCount == 0 {
@@ -668,6 +676,6 @@ func (store *ElasticEventstore) Acknowledge(ackCriteria *model.EventAckCriteria)
   } else {
     err = errors.New("EventFilter must be specified to ack an event")
   }
-  return err
+  return results, err
 }
 

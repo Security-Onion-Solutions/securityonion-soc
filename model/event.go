@@ -20,10 +20,12 @@ type EventResults struct {
   CreateTime      time.Time   `json:"createTime"`
   CompleteTime    time.Time   `json:"completeTime"`
   ElapsedMs       int         `json:"elapsedMs"`
+  Errors          []string    `json:"errors"`
 }
 
 func (results *EventResults) initEventResults() {
   results.CreateTime = time.Now()
+  results.Errors = make([]string, 0)
 }
 
 func (results *EventResults) Complete() {

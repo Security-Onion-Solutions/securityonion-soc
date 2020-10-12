@@ -70,17 +70,18 @@ func (eventHandler *EventHandler) get(writer http.ResponseWriter, request *http.
 }
 
 func (eventHandler *EventHandler) ack(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+  var results *model.EventUpdateResults
   statusCode := http.StatusBadRequest
 
   ackCriteria := model.NewEventAckCriteria()
   err := json.NewDecoder(request.Body).Decode(&ackCriteria)
   if err == nil {
-    err = eventHandler.server.Eventstore.Acknowledge(ackCriteria)
+    results, err = eventHandler.server.Eventstore.Acknowledge(ackCriteria)
     if err == nil {
       statusCode = http.StatusOK
     } else {
       statusCode = http.StatusBadRequest
     }
   }
-  return statusCode, nil, err
+  return statusCode, results, err
 }
