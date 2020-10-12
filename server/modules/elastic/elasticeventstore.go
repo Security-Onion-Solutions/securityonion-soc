@@ -208,6 +208,8 @@ func (store *ElasticEventstore) Update(criteria *model.EventUpdateCriteria) (*mo
             break
           }
         }
+      } else {
+        break
       }
     }
   }
@@ -289,6 +291,7 @@ func (store *ElasticEventstore) updateDocuments(client *elasticsearch.Client, qu
     indexes,
     client.UpdateByQuery.WithContext(context.Background()),
     client.UpdateByQuery.WithPretty(),
+    client.UpdateByQuery.WithConflicts("proceed"),
     client.UpdateByQuery.WithBody(strings.NewReader(query)),
     client.UpdateByQuery.WithRefresh(true),
     client.UpdateByQuery.WithWaitForCompletion(waitForCompletion),
