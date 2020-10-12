@@ -30,7 +30,7 @@ import (
   "github.com/tidwall/gjson"
 )
 
-const MAX_ERROR_LENGTH = 512
+const MAX_ERROR_LENGTH = 4096
 
 type FieldDefinition struct {
   name          string
@@ -208,8 +208,6 @@ func (store *ElasticEventstore) Update(criteria *model.EventUpdateCriteria) (*mo
             break
           }
         }
-      } else {
-        break
       }
     }
   }
