@@ -18,13 +18,14 @@ import (
 const DEFAULT_MAX_PACKET_COUNT = 5000
 
 type ServerConfig struct {
-  BindAddress               			string    												`json:"bindAddress"`
+  AirgapEnabled                   bool                              `json:"airgapEnabled"`
+  BindAddress                     string                            `json:"bindAddress"`
   BaseUrl                         string                            `json:"baseUrl"`
-  HtmlDir													string														`json:"htmlDir"`
-  MaxPacketCount									int																`json:"maxPacketCount"`
-  Modules													module.ModuleConfigMap						`json:"modules"`
-  ModuleFailuresIgnored						bool															`json:"moduleFailuresIgnored"`
-  ClientParams  									ClientParameters 								  `json:"client"`
+  HtmlDir                         string                            `json:"htmlDir"`
+  MaxPacketCount                  int                               `json:"maxPacketCount"`
+  Modules                         module.ModuleConfigMap            `json:"modules"`
+  ModuleFailuresIgnored           bool                              `json:"moduleFailuresIgnored"`
+  ClientParams                    ClientParameters                  `json:"client"`
 }
 
 func (config *ServerConfig) Verify() error {

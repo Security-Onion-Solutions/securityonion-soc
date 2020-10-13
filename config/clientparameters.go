@@ -18,6 +18,7 @@ const DEFAULT_MOST_RECENTLY_USED_LIMIT = 5
 type ClientParameters struct {
   HuntingParams     HuntingParameters     `json:"hunt"`
   AlertingParams    HuntingParameters     `json:"alerts"`
+  DocsUrl           string                `json:"docsUrl"`
 }
 
 func (config *ClientParameters) Verify() error {

@@ -132,6 +132,6 @@ func TestDisableCrossClusterIndexing(tester *testing.T) {
     tester.Errorf("Expected disabled cross cluster index but got: %s", newIndexes[0])
   }
   if newIndexes[1] != "my-*" {
-    tester.Errorf("Expected unomdified index but got: %s", newIndexes[1])
+    tester.Errorf("Expected unmodified index but got: %s", newIndexes[1])
   }
 }
