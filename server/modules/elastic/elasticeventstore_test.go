@@ -118,3 +118,20 @@ func TestReadErrorFromJson(tester *testing.T) {
     tester.Errorf("Expected %s but got %s", expected, actual)
   }
 }
+
+func TestDisableCrossClusterIndexing(tester *testing.T) {
+  store := &ElasticEventstore{}
+  indexes := make([]string, 2, 2)
+  indexes[0] = "*:so-*"
+  indexes[1] = "my-*"
+  newIndexes := store.disableCrossClusterIndexing(indexes)
+  if len(newIndexes) != len(indexes) {
+    tester.Errorf("Expected same array lengths")
+  }
+  if newIndexes[0] != "so-*" {
+    tester.Errorf("Expected disabled cross cluster index but got: %s", newIndexes[0])
+  }
+  if newIndexes[1] != "my-*" {
+    tester.Errorf("Expected unomdified index but got: %s", newIndexes[1])
+  }
+}

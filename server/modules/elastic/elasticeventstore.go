@@ -186,6 +186,16 @@ func (store *ElasticEventstore) Search(criteria *model.EventSearchCriteria) (*mo
   return results, err
 }
 
+func (store *ElasticEventstore) disableCrossClusterIndexing(indexes []string) []string {
+  for idx, index := range(indexes) {
+    pieces := strings.SplitN(index, ":", 2)
+    if len(pieces) == 2 {
+      indexes[idx] = pieces[1]
+    }
+  }
+  return indexes
+}
+
 func (store *ElasticEventstore) Update(criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
   store.refreshCache()
 
@@ -197,7 +207,7 @@ func (store *ElasticEventstore) Update(criteria *model.EventUpdateCriteria) (*mo
 
     for idx, client := range(store.esAllClients) {
       log.WithField("clientHost", store.hostUrls[idx]).Debug("Sending request to client")
-      response, err = store.updateDocuments(client, query, strings.Split(store.index, ","), !criteria.Asynchronous)
+      response, err = store.updateDocuments(client, query, store.disableCrossClusterIndexing(strings.Split(store.index, ",")), !criteria.Asynchronous)
       if err == nil {
         if !criteria.Asynchronous {
           currentResults := model.NewEventUpdateResults()
