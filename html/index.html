@@ -262,9 +262,12 @@
           </v-col>
           <v-col class="mx-auto text-center">
             <div v-html="i18n.sponsorsIntro"></div>
-            <a target="sos" href="https://securityonionsolutions.com/">
+            <a target="sos" href="https://securityonionsolutions.com/" class="text-decoration-none">
               <img v-if="!$vuetify.theme.dark" height="200" src="images/sos-logo.svg">
               <img v-if="$vuetify.theme.dark" height="200" src="images/sos-logo-white.svg">
+              <div class="text-h5">
+                Security Onion Solutions
+              </div>
             </a>
           </v-col>
         </v-row>
