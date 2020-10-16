@@ -117,6 +117,11 @@ func (importer *Importer) ProcessJob(job *model.Job, reader io.ReadCloser) (io.R
   return reader, err
 }
 
+func (importer *Importer) CleanupJob(job *model.Job) {
+    pcapOutputFilepath := fmt.Sprintf("%s/%d.%s", importer.pcapOutputPath, job.Id, job.FileExtension)
+    os.Remove(pcapOutputFilepath)
+}
+
 func (importer *Importer) GetDataEpoch() time.Time {
   // Epoch not used for imported data, return current time
   return time.Now()

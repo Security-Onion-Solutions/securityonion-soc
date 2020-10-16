@@ -33,7 +33,10 @@ func TestVerifyHuntingParams(tester *testing.T) {
   if params.EventFetchLimit != DEFAULT_EVENT_FETCH_LIMIT {
     tester.Errorf("expected EventFetchLimit %d but got %d", DEFAULT_EVENT_FETCH_LIMIT, params.EventFetchLimit)
   }
-  if params.DateRangeMinutes != DEFAULT_DATE_RANGE_MINUTES {
-    tester.Errorf("expected DateRangeMinutes %d but got %d", DEFAULT_DATE_RANGE_MINUTES, params.DateRangeMinutes)
+  if params.RelativeTimeValue != DEFAULT_RELATIVE_TIME_VALUE {
+    tester.Errorf("expected RelativeTimeValue %d but got %d", DEFAULT_RELATIVE_TIME_VALUE, params.RelativeTimeValue)
+  }
+  if params.RelativeTimeUnit != DEFAULT_RELATIVE_TIME_UNIT {
+    tester.Errorf("expected RelativeTimeUnit %d but got %d", DEFAULT_RELATIVE_TIME_UNIT, params.RelativeTimeUnit)
   }
 }

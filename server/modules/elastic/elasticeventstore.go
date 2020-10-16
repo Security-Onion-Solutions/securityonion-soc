@@ -25,9 +25,12 @@ import (
   "time"
   "github.com/apex/log"
   "github.com/elastic/go-elasticsearch/v7"
+  "github.com/elastic/go-elasticsearch/v7/esapi"
   "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/tidwall/gjson"
 )
+
+const MAX_ERROR_LENGTH = 4096
 
 type FieldDefinition struct {
   name          string
@@ -37,8 +40,10 @@ type FieldDefinition struct {
 }
 
 type ElasticEventstore struct {
-  esConfig		      elasticsearch.Config
+  hostUrls          []string
   esClient		      *elasticsearch.Client
+  esRemoteClients   []*elasticsearch.Client
+  esAllClients      []*elasticsearch.Client
   timeShiftMs	      int
   defaultDurationMs int
   esSearchOffsetMs  int
@@ -48,22 +53,62 @@ type ElasticEventstore struct {
   cacheTime         time.Time
   cacheLock         sync.Mutex
   fieldDefs         map[string]*FieldDefinition
+  asyncThreshold int
 }
 
 func NewElasticEventstore() *ElasticEventstore {
-  return &ElasticEventstore{}
+  return &ElasticEventstore{
+    hostUrls: make([]string, 0),
+    esRemoteClients: make([]*elasticsearch.Client, 0),
+    esAllClients: make([]*elasticsearch.Client, 0),
+  }
 }
 
-func (store *ElasticEventstore) Init(hostUrl string, user string, pass string, verifyCert bool, timeShiftMs int, defaultDurationMs int, esSearchOffsetMs int, timeoutMs int, cacheMs int, index string) error {
-  hosts := make([]string, 1)
+func (store *ElasticEventstore) Init(hostUrl string,
+                                      remoteHosts []string, 
+                                      user string, 
+                                      pass string, 
+                                      verifyCert bool, 
+                                      timeShiftMs int, 
+                                      defaultDurationMs int, 
+                                      esSearchOffsetMs int, 
+                                      timeoutMs int, 
+                                      cacheMs int, 
+                                      index string, 
+                                      asyncThreshold int) error {
   store.timeShiftMs = timeShiftMs
   store.defaultDurationMs = defaultDurationMs
   store.esSearchOffsetMs = esSearchOffsetMs
   store.index = index
+  store.asyncThreshold = asyncThreshold
   store.timeoutMs = time.Duration(timeoutMs) * time.Millisecond
   store.cacheMs = time.Duration(cacheMs) * time.Millisecond
-  hosts[0] = hostUrl
-  store.esConfig = elasticsearch.Config {
+
+  var err error
+  store.esClient, err = store.makeEsClient(hostUrl, user, pass, verifyCert)
+  if err == nil {
+    store.hostUrls = append(store.hostUrls, hostUrl)
+    store.esAllClients = append(store.esAllClients, store.esClient)
+    for _, remoteHostUrl := range(remoteHosts) {
+      client, err := store.makeEsClient(remoteHostUrl, user, pass, verifyCert)
+      if err == nil {
+        store.hostUrls = append(store.hostUrls, remoteHostUrl)
+        store.esRemoteClients = append(store.esRemoteClients, client)
+        store.esAllClients = append(store.esAllClients, client)
+      } else {
+        break
+      }
+    }
+  }
+  return err
+}
+
+func (store *ElasticEventstore) makeEsClient(host string, user string, pass string, verifyCert bool) (*elasticsearch.Client, error) {
+  var esClient *elasticsearch.Client
+
+  hosts := make([]string, 1)
+  hosts[0] = host
+  esConfig := elasticsearch.Config {
     Addresses: hosts,
     Username: user,
     Password: pass,
@@ -77,26 +122,26 @@ func (store *ElasticEventstore) Init(hostUrl string, user string, pass string, v
     },
   }
   maskedPassword := "*****"
-  if len(store.esConfig.Password) == 0 {
+  if len(esConfig.Password) == 0 {
     maskedPassword = ""
   }
 
-  esClient, err := elasticsearch.NewClient(store.esConfig)
+  esClient, err := elasticsearch.NewClient(esConfig)
   fields := log.Fields {
     "InsecureSkipVerify": !verifyCert,
-    "HostUrl": hosts[0],
-    "Username": store.esConfig.Username,
+    "HostUrl": host,
+    "Username": esConfig.Username,
     "Password": maskedPassword,
-    "Index": index,
-    "TimeoutMs": timeoutMs,
+    "Index": store.index,
+    "TimeoutMs": store.timeoutMs,
   }
   if err == nil {
-    store.esClient = esClient
     log.WithFields(fields).Info("Initialized Elasticsearch Client")
   } else {
     log.WithFields(fields).Error("Failed to initialize Elasticsearch Client")
+    esClient = nil
   }
-  return err
+  return esClient, err
 }
 
 func (store *ElasticEventstore) mapElasticField(field string) string {
@@ -141,8 +186,86 @@ func (store *ElasticEventstore) Search(criteria *model.EventSearchCriteria) (*mo
   return results, err
 }
 
+func (store *ElasticEventstore) disableCrossClusterIndexing(indexes []string) []string {
+  for idx, index := range(indexes) {
+    pieces := strings.SplitN(index, ":", 2)
+    if len(pieces) == 2 {
+      indexes[idx] = pieces[1]
+    }
+  }
+  return indexes
+}
+
+func (store *ElasticEventstore) Update(criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+  store.refreshCache()
+
+  results := model.NewEventUpdateResults()
+  results.Criteria = criteria
+  query, err := convertToElasticUpdateRequest(store, criteria)
+  if err == nil {
+    var response string
+
+    for idx, client := range(store.esAllClients) {
+      log.WithField("clientHost", store.hostUrls[idx]).Debug("Sending request to client")
+      response, err = store.updateDocuments(client, query, store.disableCrossClusterIndexing(strings.Split(store.index, ",")), !criteria.Asynchronous)
+      if err == nil {
+        if !criteria.Asynchronous {
+          currentResults := model.NewEventUpdateResults()
+          err = convertFromElasticUpdateResults(store, response, currentResults)
+          if err == nil {
+            mergeElasticUpdateResults(results, currentResults)
+          } else {
+            log.WithError(err).WithField("clientHost", store.hostUrls[idx]).Error("Encountered error while updating elasticsearch")
+            results.Errors = append(results.Errors, err.Error())
+          }
+        }
+      } else {
+        log.WithError(err).WithField("clientHost", store.hostUrls[idx]).Error("Encountered error while updating elasticsearch")
+        results.Errors = append(results.Errors, err.Error())        
+      }
+    }
+  }
+
+  if len(results.Errors) < len(store.esAllClients) {
+    // Do not fail this request completely since some hosts succeeded.
+    // The results.Errors property contains the list of errors.
+    err = nil
+  }
+
+  results.Complete()
+  return results, err
+}
+
 func (store *ElasticEventstore) luceneSearch(query string) (string, error) {
   return store.indexSearch(query, strings.Split(store.index, ","))
+}
+
+func (store *ElasticEventstore) transformIndex(index string) string {
+  today := time.Now().Format("2006.01.02")
+  index = strings.ReplaceAll(index, "{today}", today)
+  return index
+}
+
+func (store *ElasticEventstore) readErrorFromJson(json string) error {
+  errorType := gjson.Get(json, "error.type").String()
+  errorReason := gjson.Get(json, "error.reason").String()
+  errorDetails := json
+  if len(json) > MAX_ERROR_LENGTH {
+    errorDetails = json[0:MAX_ERROR_LENGTH]
+  }
+  err := errors.New(errorType + ": " + errorReason + " -> " + errorDetails)
+  return err
+}
+
+func (store *ElasticEventstore) readJsonFromResponse(res *esapi.Response) (string, error) {
+  var err error
+  var b bytes.Buffer
+  b.ReadFrom(res.Body)
+  json := b.String()
+  if res.IsError() {
+    err = store.readErrorFromJson(json)
+  }
+  return json, err
 }
 
 func (store *ElasticEventstore) indexSearch(query string, indexes []string) (string, error) {
@@ -157,22 +280,45 @@ func (store *ElasticEventstore) indexSearch(query string, indexes []string) (str
   )
   if err == nil {
     defer res.Body.Close()
-
-    var b bytes.Buffer
-    b.ReadFrom(res.Body)
-    json = b.String()
-
-    if res.IsError() {
-      errorType := gjson.Get(json, "error.type").String()
-      errorReason := gjson.Get(json, "error.reason").String()
-      errorDetails := json
-      if len(json) > 255 {
-        errorDetails = json[0:512]
-      }
-      err = errors.New(errorType + ": " + errorReason + " -> " + errorDetails)
-    }
+    json, err = store.readJsonFromResponse(res)
   }
-  log.WithFields(log.Fields{"response": json}).Debug("Search Finished")
+  log.WithFields(log.Fields{"response": json}).Debug("Search finished")
+  return json, err
+}
+
+func (store *ElasticEventstore) indexDocument(document string, index string) (string, error) {
+  log.WithField("document", document).Debug("Adding document to Elasticsearch")
+
+  res, err := store.esClient.Index(store.transformIndex(index), strings.NewReader(document), store.esClient.Index.WithRefresh("true"))
+
+  if err != nil {
+    log.WithError(err).Error("Unable to index acknowledgement into Elasticsearch")
+    return "", err
+  }
+  defer res.Body.Close()
+  json, err := store.readJsonFromResponse(res)
+
+  log.WithFields(log.Fields{"response": json}).Debug("Index new document finished")
+  return json, err
+}
+
+func (store *ElasticEventstore) updateDocuments(client *elasticsearch.Client, query string, indexes []string, waitForCompletion bool) (string, error) {
+  log.WithField("query", query).Debug("Updating documents in Elasticsearch")
+  var json string
+  res, err := client.UpdateByQuery(
+    indexes,
+    client.UpdateByQuery.WithContext(context.Background()),
+    client.UpdateByQuery.WithPretty(),
+    client.UpdateByQuery.WithConflicts("proceed"),
+    client.UpdateByQuery.WithBody(strings.NewReader(query)),
+    client.UpdateByQuery.WithRefresh(true),
+    client.UpdateByQuery.WithWaitForCompletion(waitForCompletion),
+  )
+  if err == nil {
+    defer res.Body.Close()
+    json, err = store.readJsonFromResponse(res)
+  }
+  log.WithFields(log.Fields{"response": json}).Debug("Update finished")
   return json, err
 }
 
@@ -475,5 +621,71 @@ func (store *ElasticEventstore) PopulateJobFromEventId(esId string, job *model.J
   job.Filter = filter
 
   return nil
+}
+
+func (store *ElasticEventstore) Acknowledge(ackCriteria *model.EventAckCriteria) (*model.EventUpdateResults, error) {
+  var results *model.EventUpdateResults
+  var err error
+  if len(ackCriteria.EventFilter) > 0 {
+    log.WithFields(log.Fields {
+      "searchFilter": ackCriteria.SearchFilter,
+      "eventFilter": ackCriteria.EventFilter,
+      "escalate": ackCriteria.Escalate,
+      "acknowledge": ackCriteria.Acknowledge,
+    }).Info("Acknowledging event")
+
+    updateCriteria := model.NewEventUpdateCriteria()
+    updateCriteria.AddUpdateScript("ctx._source.event.acknowledged=" + strconv.FormatBool(ackCriteria.Acknowledge))
+    if ackCriteria.Escalate && ackCriteria.Acknowledge {
+      updateCriteria.AddUpdateScript("ctx._source.event.escalated=true")
+    }
+    updateCriteria.Populate(ackCriteria.SearchFilter, 
+                            ackCriteria.DateRange, 
+                            ackCriteria.DateRangeFormat, 
+                            ackCriteria.Timezone, 
+                            "0",
+                            "0")
+
+    // Add the event filters to the search query
+    var searchSegment *model.SearchSegment
+    segment := updateCriteria.ParsedQuery.NamedSegment("search")
+    if segment == nil {
+      searchSegment = model.NewSearchSegmentEmpty()
+    } else {
+      searchSegment = segment.(*model.SearchSegment)
+    }
+
+    updateCriteria.Asynchronous = false
+    for key, value := range ackCriteria.EventFilter {
+      if (strings.ToLower(key) != "count") {
+        valueStr := fmt.Sprintf("%v", value)
+        searchSegment.AddFilter(store.mapElasticField(key), valueStr, model.IsScalar(value), true)
+      } else if int(value.(float64)) > store.asyncThreshold {
+        log.WithFields(log.Fields {
+          key: value,
+          "threshold": store.asyncThreshold,
+        }).Info("Acknowledging events asynchronously due to large quantity");
+        updateCriteria.Asynchronous = true
+      }
+    }
+
+    // Baseline the query to be based only on the search component
+    updateCriteria.ParsedQuery = model.NewQuery()
+    updateCriteria.ParsedQuery.AddSegment(searchSegment)
+
+    results, err = store.Update(updateCriteria)
+    if err == nil && !updateCriteria.Asynchronous {
+      if results.UpdatedCount == 0 {
+        if results.UnchangedCount == 0 {
+          err = errors.New("No eligible events available to acknowledge")
+        } else {
+          err = errors.New("All events have already been acknowledged")
+        }
+      }
+    }
+  } else {
+    err = errors.New("EventFilter must be specified to ack an event")
+  }
+  return results, err
 }
 

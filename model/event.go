@@ -16,6 +16,39 @@ import (
   "github.com/apex/log"
 )
 
+type EventResults struct {
+  CreateTime      time.Time   `json:"createTime"`
+  CompleteTime    time.Time   `json:"completeTime"`
+  ElapsedMs       int         `json:"elapsedMs"`
+  Errors          []string    `json:"errors"`
+}
+
+func (results *EventResults) initEventResults() {
+  results.CreateTime = time.Now()
+  results.Errors = make([]string, 0)
+}
+
+func (results *EventResults) Complete() {
+  results.CompleteTime = time.Now()
+}
+
+type EventSearchResults struct {
+  EventResults
+  Criteria          *EventSearchCriteria        `json:"criteria"`
+  TotalEvents       int                         `json:"totalEvents"`
+  Events            []*EventRecord              `json:"events"`
+  Metrics           map[string]([]*EventMetric) `json:"metrics"`
+}
+
+func NewEventSearchResults() *EventSearchResults {
+  results := &EventSearchResults{
+    Events: make([]*EventRecord, 0, 0),
+    Metrics: make(map[string]([]*EventMetric)),
+  }
+  results.initEventResults()
+  return results
+}
+
 type EventSearchCriteria struct {
   RawQuery        string    	`json:"query"`
   DateRange       string      `json:"dateRange"`
@@ -27,13 +60,17 @@ type EventSearchCriteria struct {
   ParsedQuery     *Query
 }
 
+func (criteria *EventSearchCriteria) initSearchCriteria() {
+  criteria.CreateTime = time.Now()
+  criteria.ParsedQuery = NewQuery()
+  criteria.EventLimit = 25
+  criteria.MetricLimit = 10
+}
+
 func NewEventSearchCriteria() *EventSearchCriteria {
-  return &EventSearchCriteria{
-    CreateTime: time.Now(),
-    ParsedQuery: NewQuery(),
-    EventLimit: 25,
-    MetricLimit: 10,
-  }
+  criteria := &EventSearchCriteria{}
+  criteria.initSearchCriteria()
+  return criteria
 }
 
 func (criteria *EventSearchCriteria) Populate(query string, dateRange string, dateRangeFormat string, timezone string, metricLimit string, eventLimit string) error {
@@ -88,24 +125,47 @@ type EventRecord struct {
   Payload       map[string]interface{}  `json:"payload"`
 }
 
-type EventSearchResults struct {
-  Criteria		      *EventSearchCriteria	      `json:"criteria"`
-  TotalEvents       int                         `json:"totalEvents"`
-  Events            []*EventRecord              `json:"events"`
-  Metrics           map[string]([]*EventMetric) `json:"metrics"`
-  CreateTime	      time.Time			              `json:"createTime"`
-  CompleteTime	    time.Time			              `json:"completeTime"`
-  FetchElapsedMs    int                         `json:"fetchElapsedMs"`
+type EventUpdateCriteria struct {
+  EventSearchCriteria
+  UpdateScripts   []string    `json:"updateScripts"`
+  Asynchronous    bool        `json:"async"`
 }
 
-func NewEventSearchResults() *EventSearchResults {
-  return &EventSearchResults{
-    CreateTime: time.Now(),
-    Events: make([]*EventRecord, 0, 0),
-    Metrics: make(map[string]([]*EventMetric)),
+func NewEventUpdateCriteria() *EventUpdateCriteria {
+  criteria := &EventUpdateCriteria{}
+  criteria.initSearchCriteria()
+  return criteria
+}
+
+func (criteria *EventUpdateCriteria) AddUpdateScript(script string) {
+  criteria.UpdateScripts = append(criteria.UpdateScripts, script)
+}
+
+type EventUpdateResults struct {
+  EventResults
+  Criteria        *EventUpdateCriteria        `json:"criteria"`
+  UpdatedCount    int                         `json:"updatedCount"`
+  UnchangedCount  int                         `json:"unchangedCount"`
+}
+
+func NewEventUpdateResults() *EventUpdateResults {
+  results := &EventUpdateResults {
   }
+  results.initEventResults()
+  return results
 }
 
-func (results *EventSearchResults) Complete() {
-  results.CompleteTime = time.Now()
+type EventAckCriteria struct {
+  SearchFilter    string                  `json:"searchFilter"`
+  EventFilter     map[string]interface{}  `json:"eventFilter"`
+  DateRange       string                  `json:"dateRange"`
+  DateRangeFormat string                  `json:"dateRangeFormat"`
+  Timezone        string                  `json:"timezone"`
+  Escalate        bool                    `json:"escalate"`
+  Acknowledge     bool                    `json:"acknowledge"`
+}
+
+func NewEventAckCriteria() *EventAckCriteria {
+  return &EventAckCriteria{
+  }
 }

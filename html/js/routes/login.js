@@ -40,7 +40,7 @@ routes.push({ path: '*', name: 'login', component: {
       try {
         const response = await this.$root.authApi.get('requests/login' + location.search);
         this.form.csrfToken = response.data.methods.password.config.fields.find(item => item.name == 'csrf_token').value;
-        if (response.data.methods.password.config.errors) {
+        if (response.data.methods.password.config.messages) {
           this.$root.showWarning(this.i18n.loginInvalid);
         }
       } catch (error) {

@@ -7,7 +7,7 @@
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-routes.push({ path: '*', name: 'settings', component: {
+routes.push({ path: '/settings', name: 'settings', component: {
   template: '#page-settings',
   data() { return {
     i18n: this.$root.i18n,
@@ -25,7 +25,7 @@ routes.push({ path: '*', name: 'settings', component: {
     },
     authSettingsUrl: null,
   }},
-  created() {
+  mounted() {
     if (location.search.indexOf("request=") == -1) {
       this.reloadSettings();
     } else {
@@ -46,15 +46,15 @@ routes.push({ path: '*', name: 'settings', component: {
         this.form.csrfToken = response.data.methods.password.config.fields.find(item => item.name == 'csrf_token').value;
         var errors = [];
         response.data.methods.password.config.fields.forEach(function(value, index, array) {
-          if (value.errors) {
-            value.errors.forEach(function(err, idx, errArray) {
-              errors.push(err.message);
+          if (value.messages) {
+            value.messages.forEach(function(err, idx, errArray) {
+              errors.push(err.text);
             });
           }
         });
         if (errors.length > 0) {
           this.$root.showWarning(this.i18n.settingsInvalid + errors.join("\n"));
-        } else if (response.data.update_successful == true) {
+        } else if (response.data.state == "success") {
           this.$root.showInfo(this.i18n.settingsSaved);
         }
       } catch (error) {

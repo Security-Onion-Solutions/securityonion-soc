@@ -23,7 +23,9 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       { text: this.$root.i18n.timestamp, value: 'timestamp' },
       { text: this.$root.i18n.type, value: 'type' },
       { text: this.$root.i18n.srcIp, value: 'srcIp' },
+      { text: this.$root.i18n.srcPort, value: 'srcPort' },
       { text: this.$root.i18n.dstIp, value: 'dstIp' },
+      { text: this.$root.i18n.dstPort, value: 'dstPort' },
       { text: this.$root.i18n.flags, value: 'flags' },
       { text: this.$root.i18n.length, value: 'length' },
     ],
@@ -147,7 +149,7 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       this.loadLocalSettings();
 
       try {
-        const response = await this.$root.papi.get('job', { params: {
+        const response = await this.$root.papi.get('job/', { params: {
             jobId: this.$route.params.jobId
         }});
         this.job = response.data;

@@ -11,32 +11,62 @@ package config
 
 const DEFAULT_GROUP_FETCH_LIMIT = 10
 const DEFAULT_EVENT_FETCH_LIMIT = 100
-const DEFAULT_DATE_RANGE_MINUTES = 1440
+const DEFAULT_RELATIVE_TIME_VALUE = 24
+const DEFAULT_RELATIVE_TIME_UNIT = 30
 const DEFAULT_MOST_RECENTLY_USED_LIMIT = 5
 
 type ClientParameters struct {
-	HuntingParams					HuntingParameters			`json:"hunt"`
+  HuntingParams     HuntingParameters     `json:"hunt"`
+  AlertingParams    HuntingParameters     `json:"alerts"`
+  DocsUrl           string                `json:"docsUrl"`
 }
 
 func (config *ClientParameters) Verify() error {
-	var err error
-	err = config.HuntingParams.Verify()
-	return err
+  var err error
+  err = config.HuntingParams.Verify()
+  return err
 }
 
 type HuntingQuery struct {
-	Name				string		`json:"name"`
-	Description	string		`json:"description"`
-	Query				string		`json:"query"`
+  Name        string    `json:"name"`
+  Description string    `json:"description"`
+  Query       string    `json:"query"`
+}
+
+type HuntingAction struct {
+  Name        string    `json:"name"`
+  Description string    `json:"description"`
+  Icon        string    `json:"icon"`
+  Link        string    `json:"link"`
+  Fields      []string  `json:"fields"`
+  Target      string    `json:"target"`
+}
+
+type ToggleFilter struct {
+  Name            string    `json:"name"`
+  Filter          string    `json:"filter"`
+  Enabled         bool      `json:"enabled"`
+  Exclusive       bool      `json:"exclusive"`
+  EnablesToggles  []string  `json:"enablesToggles"`
+  DisablesToggles []string  `json:"disablesToggles"`
 }
 
 type HuntingParameters struct {
-	GroupFetchLimit       int  									`json:"groupFetchLimit"`
-	EventFetchLimit       int       						`json:"eventFetchLimit"`
-	DateRangeMinutes			int										`json:"dateRangeMinutes"`
-	MostRecentlyUsedLimit	int										`json:"mostRecentlyUsedLimit"`
-	EventFields						map[string][]string		`json:"eventFields"`
-	Queries								[]HuntingQuery				`json:"queries"`
+  GroupItemsPerPage       int                 `json:"groupItemsPerPage"`
+  GroupFetchLimit         int                 `json:"groupFetchLimit"`
+  EventItemsPerPage       int                 `json:"eventItemsPerPage"`
+  EventFetchLimit         int                 `json:"eventFetchLimit"`
+  RelativeTimeValue       int                 `json:"relativeTimeValue"`
+  RelativeTimeUnit        int                 `json:"relativeTimeUnit"`
+  MostRecentlyUsedLimit   int                 `json:"mostRecentlyUsedLimit"`
+  EventFields             map[string][]string `json:"eventFields"`
+  QueryBaseFilter         string              `json:"queryBaseFilter"`
+  QueryToggleFilters      []ToggleFilter      `json:"queryToggleFilters"`
+  Queries                 []HuntingQuery      `json:"queries"`
+  Actions                 []HuntingAction     `json:"actions"`
+  Advanced                bool                `json:"advanced"`
+  DismissEnabled          bool                `json:"dismissEnabled"`
+  EscalateEnabled         bool                `json:"escalateEnabled"`
 }
 
 func (params *HuntingParameters) Verify() error {
@@ -46,13 +76,16 @@ func (params *HuntingParameters) Verify() error {
   }
   if params.EventFetchLimit <= 0 {
     params.EventFetchLimit = DEFAULT_EVENT_FETCH_LIMIT
-	}
-  if params.DateRangeMinutes <= 0 {
-    params.DateRangeMinutes = DEFAULT_DATE_RANGE_MINUTES
   }
-  if params.MostRecentlyUsedLimit <= 0 {
+  if params.RelativeTimeValue <= 0 {
+    params.RelativeTimeValue = DEFAULT_RELATIVE_TIME_VALUE
+  }
+  if params.RelativeTimeUnit <= 0 {
+    params.RelativeTimeUnit = DEFAULT_RELATIVE_TIME_UNIT
+  }
+  if params.MostRecentlyUsedLimit < 10 {
     params.MostRecentlyUsedLimit = DEFAULT_MOST_RECENTLY_USED_LIMIT
   }
-	return err
+  return err
 }
 

@@ -44,9 +44,12 @@ $(document).ready(function() {
       error: false,
       warning: false,
       info: false,
+      tip: false,
       errorMessage: "",
       warningMessage: "",
       infoMessage: "",
+      tipMessage: "",
+      tipTimeout: 6000,
       toolbar: null,
       wsUrl: (location.protocol == 'https:' ?  'wss://' : 'ws://') + location.host + location.pathname + 'ws',
       apiUrl: location.origin + location.pathname + 'api/',
@@ -211,6 +214,10 @@ $(document).ready(function() {
         this.info = true;
         this.infoMessage = msg;
       },
+      showTip(msg) {
+        this.tip = true;
+        this.tipMessage = msg;
+      },
       startLoading() {
         this.loading = true;
         this.error = false;
@@ -287,6 +294,9 @@ $(document).ready(function() {
         location.href = this.authUrl + "login";
       },
       apiSuccessCallback(response) {
+        if (response.headers['content-type'] == "text/html") {
+          this.showLogin();
+        }
         return response;
       },
       apiFailureCallback(error) {

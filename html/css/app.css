@@ -56,6 +56,10 @@
   font-size: 15px !important;
 }
 
+.v-chip .v-avatar {
+  margin-right: 6px;
+}
+
 /* animations */
 .waggle {
   animation-name: waggle;
@@ -102,14 +106,20 @@
 /* Sensoroni-specific element styles */
 .hardwrap {
   word-wrap: break-word;
-  white-space: normal;
+  white-space: pre-wrap;
   word-break: break-all;
   overflow-x: hidden;
-  padding-right: 50px;
 }
 
 .semi-transparent {
   opacity: 0.5;
+}
+
+.quick-action {
+  display: none;
+  position: absolute;
+  z-index: 10;
+
 }
 
 .expansion {
@@ -131,11 +141,6 @@ a#title, a#title:visited, a#title:active, a#title:hover {
 .dst {
   border-left: 3px solid var(--v-error-base);
   font-weight: bold;
-}
-
-.details {
-  white-space: nowrap;
-  overflow-y: scroll;
 }
 
 .filter.label {

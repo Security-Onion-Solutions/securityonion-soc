@@ -11,6 +11,7 @@ package server
 
 import (
   "errors"
+  "encoding/json"
   "net/http"
   "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/web"
@@ -33,6 +34,11 @@ func (eventHandler *EventHandler) HandleNow(writer http.ResponseWriter, request 
   if eventHandler.server.Eventstore != nil {
     switch request.Method {
       case http.MethodGet: return eventHandler.get(writer, request)
+      case http.MethodPost: 
+        obj := eventHandler.GetPathParameter(request.URL.Path, 2)
+        if obj == "ack" {
+          return eventHandler.ack(writer, request)
+        }
     }
   }
   return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
@@ -58,6 +64,23 @@ func (eventHandler *EventHandler) get(writer http.ResponseWriter, request *http.
       } else {
         statusCode = http.StatusInternalServerError
       }
+    }
+  }
+  return statusCode, results, err
+}
+
+func (eventHandler *EventHandler) ack(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+  var results *model.EventUpdateResults
+  statusCode := http.StatusBadRequest
+
+  ackCriteria := model.NewEventAckCriteria()
+  err := json.NewDecoder(request.Body).Decode(&ackCriteria)
+  if err == nil {
+    results, err = eventHandler.server.Eventstore.Acknowledge(ackCriteria)
+    if err == nil {
+      statusCode = http.StatusOK
+    } else {
+      statusCode = http.StatusBadRequest
     }
   }
   return statusCode, results, err

@@ -10,7 +10,6 @@
 package elastic
 
 import (
-  "net/http"
   "testing"
   "time"
   "github.com/security-onion-solutions/securityonion-soc/module"
@@ -23,17 +22,14 @@ func TestElasticInit(tester *testing.T) {
   if err != nil {
     tester.Errorf("unexpected Init error: %s", err)
   }
-  if len(elastic.store.esConfig.Addresses) != 1 || elastic.store.esConfig.Addresses[0] != "elasticsearch" {
-    tester.Errorf("expected host %s but got %s", "elasticsearch", elastic.store.esConfig.Addresses)
+  if len(elastic.store.hostUrls) != 1 || elastic.store.hostUrls[0] != "elasticsearch" {
+    tester.Errorf("expected host %s but got %s", "elasticsearch", elastic.store.hostUrls[0])
   }
-  if elastic.store.esConfig.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify != false {
-    tester.Errorf("expected verifyCert %t but got %t", false, elastic.store.esConfig.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify)
+  if len(elastic.store.esRemoteClients) != 0 {
+    tester.Errorf("expected no remote hosts but got %v", elastic.store.esRemoteClients)
   }
-  if elastic.store.esConfig.Username != "" {
-    tester.Errorf("expected username %s but got %s", "", elastic.store.esConfig.Username)
-  }
-  if elastic.store.esConfig.Password != "" {
-    tester.Errorf("expected password %s but got %s", "", elastic.store.esConfig.Password)
+  if len(elastic.store.esAllClients) != 1 {
+    tester.Errorf("expected no remote hosts but got %v", elastic.store.esAllClients)
   }
   if elastic.store.timeShiftMs != DEFAULT_TIME_SHIFT_MS {
     tester.Errorf("expected timeShiftMs %d but got %d", DEFAULT_TIME_SHIFT_MS, elastic.store.timeShiftMs)
@@ -51,6 +47,6 @@ func TestElasticInit(tester *testing.T) {
     tester.Errorf("expected cacheMs %d but got %d", DEFAULT_CACHE_MS, elastic.store.cacheMs)
   }
   if elastic.store.index != DEFAULT_INDEX {
-    tester.Errorf("expected index %s but got %s", DEFAULT_INDEX, elastic.store.esConfig.Addresses)
+    tester.Errorf("expected index %s but got %s", DEFAULT_INDEX, elastic.store.index)
   }
 }

@@ -99,3 +99,45 @@ func TestGetBoolDefault(tester *testing.T) {
     tester.Errorf("expected GetBoolDefault to return %t but got %t", false, actual)
   }
 }
+
+func TestGetStringArray(tester *testing.T) {
+  options := make(map[string]interface{})
+  _, err := GetStringArray(options, "MyKey")
+  if err == nil {
+    tester.Errorf("expected GetStringArray error")
+  }
+  array := make([]interface{}, 2, 2)
+  array[0] = "MyValue1"
+  array[1] = "MyValue2"
+  options["MyKey"] = array
+  actual, err := GetStringArray(options, "MyKey") 
+  if err != nil {
+    tester.Errorf("unexpected GetString error")
+  }
+  if actual[0] != "MyValue1" {
+    tester.Errorf("expected GetString to return %s but got %s", "MyValue1", actual[0])
+  }
+  if actual[1] != "MyValue2" {
+    tester.Errorf("expected GetString to return %s but got %s", "MyValue2", actual[1])
+  }
+}
+
+func TestGetStringArrayDefault(tester *testing.T) {
+  options := make(map[string]interface{})
+  actual := GetStringArrayDefault(options, "MyKey", make([]string, 0, 0))
+  if len(actual) != 0 {
+    tester.Errorf("expected empty default string array but got %v", actual)
+  }
+
+  array := make([]interface{}, 2, 2)
+  array[0] = "MyValue1"
+  array[1] = "MyValue2"
+  options["MyKey"] = array
+  actual = GetStringArrayDefault(options, "MyKey", make([]string, 0, 0)) 
+  if actual[0] != "MyValue1" {
+    tester.Errorf("expected GetString to return %s but got %s", "MyValue1", actual[0])
+  }
+  if actual[1] != "MyValue2" {
+    tester.Errorf("expected GetString to return %s but got %s", "MyValue2", actual[1])
+  }
+}

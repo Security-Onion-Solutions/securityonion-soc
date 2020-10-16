@@ -15,6 +15,7 @@ import (
   "encoding/json"
   "errors"
   "io"
+  "io/ioutil"
   "net/http"
   "strconv"
   "strings"
@@ -55,6 +56,11 @@ func (client *Client) SendObject(method string, path string, obj interface{}, re
     if err == nil {
       defer resp.Body.Close()
       if resp.StatusCode < 200 || resp.StatusCode > 299 {
+        bytes, _ := ioutil.ReadAll(resp.Body)
+        body := string(bytes)
+        log.WithFields(log.Fields {
+          "body": body,
+        }).Debug("Response")
         err = errors.New("Request did not complete successfully (" + strconv.Itoa(resp.StatusCode) + "): " + resp.Status)
       } else if returnedObj != nil && resp.Body != nil {
         err = json.NewDecoder(resp.Body).Decode(returnedObj)

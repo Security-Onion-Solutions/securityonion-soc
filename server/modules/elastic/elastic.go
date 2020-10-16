@@ -20,6 +20,7 @@ const DEFAULT_ES_SEARCH_OFFSET_MS = 1800000
 const DEFAULT_TIMEOUT_MS = 120000
 const DEFAULT_CACHE_MS = 86400000
 const DEFAULT_INDEX = "*:so-*"
+const DEFAULT_ASYNC_THRESHOLD = 10
 
 type Elastic struct {
   config			module.ModuleConfig
@@ -41,6 +42,7 @@ func (elastic *Elastic) PrerequisiteModules() []string {
 func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
   elastic.config = cfg
   host := module.GetStringDefault(cfg, "hostUrl", "elasticsearch")
+  remoteHosts := module.GetStringArrayDefault(cfg, "remoteHostUrls", make([]string, 0, 0))
   verifyCert := module.GetBoolDefault(cfg, "verifyCert", true)
   username := module.GetStringDefault(cfg, "username", "")
   password := module.GetStringDefault(cfg, "password", "")
@@ -50,7 +52,8 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
   timeoutMs := module.GetIntDefault(cfg, "timeoutMs", DEFAULT_TIMEOUT_MS)
   cacheMs := module.GetIntDefault(cfg, "cacheMs", DEFAULT_CACHE_MS)
   index := module.GetStringDefault(cfg, "index", DEFAULT_INDEX)
-  err := elastic.store.Init(host, username, password, verifyCert, timeShiftMs, defaultDurationMs, esSearchOffsetMs, timeoutMs, cacheMs, index)
+  asyncThreshold := module.GetIntDefault(cfg, "asyncThreshold", DEFAULT_ASYNC_THRESHOLD)
+  err := elastic.store.Init(host, remoteHosts, username, password, verifyCert, timeShiftMs, defaultDurationMs, esSearchOffsetMs, timeoutMs, cacheMs, index, asyncThreshold)
   if err == nil && elastic.server != nil {
     elastic.server.Eventstore = elastic.store
   }

@@ -1,6 +1,7 @@
 <!doctype html>
 <!--
-  Copyright 2020 Security Onion Solutions. All rights reserved.
+  Copyright 2019 Jason Ertel (jertel). All rights reserved.
+  Copyright 2020 Security Onion Solutions, LLC. All rights reserved.
 
   This program is distributed under the terms of version 2 of the
   GNU General Public License.  See LICENSE for further details.
@@ -19,8 +20,8 @@
     <link rel="mask-icon" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
     <link rel="alternate icon" class="so-favicon" type="image/png" href="images/favicon/onion.png?v=VERSION_PLACEHOLDER">
     <link rel="icon" class="so-favicon" type="image/svg+xml" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
-    <link rel="stylesheet" href="css/external/vuetify-v2.2.18.min.css">
-    <link rel="stylesheet" href="css/external/all-5.13.0.min.css">
+    <link rel="stylesheet" href="css/external/vuetify-v2.3.10.min.css">
+    <link rel="stylesheet" href="css/external/all-5.14.0.min.css">
     <link rel="stylesheet" href="css/app.css?v=VERSION_PLACEHOLDER">
     <title>Security Onion</title>
   </head>
@@ -31,13 +32,13 @@
           <img class="pt-1" :title="i18n.product" :alt="i18n.product" height="45" src="images/so-logo.svg"></v-img>
         </router-link>
       </v-app-bar>
-      <v-content>
+      <v-main>
         <v-progress-linear v-if="loading" :active="loading" indeterminate></v-progress-linear>
         <v-alert dismissible type="error" icon="fa-exclamation-triangle" v-model="error" transition="scale-transition" v-text="errorMessage"></v-alert>
         <v-alert dismissible type="warning" icon="fa-exclamation" v-model="warning" transition="scale-transition" v-text="warningMessage"></v-alert>
         <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition">{{ infoMessage }}</v-alert>
         <router-view></router-view>
-      </v-content>
+      </v-main>
       <v-footer app inset>
         <v-spacer></v-spacer>
         <span class="center overline text-no-wrap">
@@ -68,12 +69,12 @@
       </v-card>
     </script>
 
-    <script src="js/external/jquery-3.4.1.min.js"></script>
+    <script src="js/external/jquery-3.5.1.min.js"></script>
     <script src="js/external/vue-2.6.11.min.js"></script>
-    <script src="js/external/vue-router-3.1.6.min.js"></script>
-    <script src="js/external/vuetify-v2.2.18.min.js"></script>
-    <script src="js/external/axios-0.19.2.min.js"></script>
-    <script src="js/external/moment-2.24.0.min.js"></script>
+    <script src="js/external/vue-router-3.4.3.min.js"></script>
+    <script src="js/external/vuetify-v2.3.10.min.js"></script>
+    <script src="js/external/axios-0.20.0.min.js"></script>
+    <script src="js/external/moment-2.27.0.min.js"></script>
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>

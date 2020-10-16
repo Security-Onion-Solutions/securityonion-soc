@@ -10,46 +10,48 @@
 package server
 
 import (
-  "errors"
+	"errors"
 	"net/http"
 	"regexp"
-  "github.com/security-onion-solutions/securityonion-soc/model"
-  "github.com/security-onion-solutions/securityonion-soc/web"
+
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type QueryHandler struct {
-  web.BaseHandler
-  server 		*Server
+	web.BaseHandler
+	server *Server
 }
 
 func NewQueryHandler(srv *Server) *QueryHandler {
-  handler := &QueryHandler {}
-  handler.Host = srv.Host
-  handler.server = srv
-  handler.Impl = handler
-  return handler
+	handler := &QueryHandler{}
+	handler.Host = srv.Host
+	handler.server = srv
+	handler.Impl = handler
+	return handler
 }
 
 func (queryHandler *QueryHandler) HandleNow(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
 	switch request.Method {
-		case http.MethodGet: return queryHandler.get(writer, request)
+	case http.MethodGet:
+		return queryHandler.get(writer, request)
 	}
-  return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
+	return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
 
 func (queryHandler *QueryHandler) get(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-  operation := queryHandler.GetPathParameter(request.URL.Path, 2)
-  safe, _ := regexp.MatchString(`^[a-z]+$`, operation)
-  if !safe {
-    return http.StatusBadRequest, nil, errors.New("Invalid query operation")
+	operation := queryHandler.GetPathParameter(request.URL.Path, 2)
+	safe, _ := regexp.MatchString(`^[a-z]+$`, operation)
+	if !safe {
+		return http.StatusBadRequest, nil, errors.New("Invalid query operation")
 	}
 
 	err := request.ParseForm()
-  if err != nil {
+	if err != nil {
 		return http.StatusBadRequest, nil, errors.New("Invalid query operation inputs")
 	}
-	
-  queryStr := request.Form.Get("query") 
+
+	queryStr := request.Form.Get("query")
 	query := model.NewQuery()
 	err = query.Parse(queryStr)
 	if err != nil {
@@ -58,17 +60,17 @@ func (queryHandler *QueryHandler) get(writer http.ResponseWriter, request *http.
 
 	var alteredQuery string
 	switch operation {
-	case "filtered": 
-		field := request.Form.Get("field") 
+	case "filtered":
+		field := request.Form.Get("field")
 		scalar := request.Form.Get("scalar") == "true"
-		include := request.Form.Get("include") == "true"
+		mode := request.Form.Get("mode")
 		value := request.Form.Get("value")
 		if len(value) > 0 {
-			alteredQuery, err = query.Filter(field, value, scalar, include)
+			alteredQuery, err = query.Filter(field, value, scalar, mode)
 		} else {
 			values := request.Form["value[]"]
 			for _, value := range values {
-				alteredQuery, err = query.Filter(field, value, scalar, include)
+				alteredQuery, err = query.Filter(field, value, scalar, mode)
 				queryStr = query.String()
 				query = model.NewQuery()
 				err = query.Parse(queryStr)
@@ -77,14 +79,14 @@ func (queryHandler *QueryHandler) get(writer http.ResponseWriter, request *http.
 				}
 			}
 		}
-	case "grouped": 
-		field := request.Form.Get("field") 
+	case "grouped":
+		field := request.Form.Get("field")
 		alteredQuery, err = query.Group(field)
 	default:
 		return http.StatusBadRequest, nil, errors.New("Unsupported query operation")
 	}
 
-  if err != nil {
+	if err != nil {
 		return http.StatusBadRequest, nil, err
 	}
 

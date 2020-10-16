@@ -16,6 +16,7 @@ import (
   "github.com/security-onion-solutions/securityonion-soc/server/modules/kratos"
   "github.com/security-onion-solutions/securityonion-soc/server/modules/elastic"
   "github.com/security-onion-solutions/securityonion-soc/server/modules/statickeyauth"
+  "github.com/security-onion-solutions/securityonion-soc/server/modules/thehive"
 )
 
 func BuildModuleMap(srv *server.Server) map[string]module.Module {
@@ -24,5 +25,6 @@ func BuildModuleMap(srv *server.Server) map[string]module.Module {
   moduleMap["kratos"] = kratos.NewKratos(srv)
   moduleMap["elastic"] = elastic.NewElastic(srv)
   moduleMap["statickeyauth"] = statickeyauth.NewStaticKeyAuth(srv)
+  moduleMap["thehive"] = thehive.NewTheHive(srv)
   return moduleMap
 }
