@@ -608,7 +608,7 @@
           <v-col>
             <h3 v-text="i18n.downloadsLoggers" id="download-loggers"></h3>
             <ul>
-              <li><a href="https://artifacts.elastic.co/downloads/beats/winlogbeat/winlogbeat-oss-7.9.2-windows-x86_64.msi" download="winlogbeat-oss-7.9.2-windows-x86_64.msi">Winlogbeat</a> (External Link)</li>
+              <li><a :href="'/downloads/winlogbeat-oss-' + $root.elasticVersion + '-windows-x86_64.msi'" :download="'winlogbeat-oss-' +  $root.elasticVersion + '-windows-x86_64.msi'">Winlogbeat</a></li>
             </ul>
             <p></p>
             <h3 v-text="i18n.downloadsOsqueryPackages" id="osquery-packages"></h3>

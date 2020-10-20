@@ -56,6 +56,7 @@ $(document).ready(function() {
       authUrl: '/auth/self-service/browser/flows/',
       settingsUrl: null,
       version: '0.0.0',
+      elasticVersion: '0.0.0',
       papi: null,
       connectionTimeout: 300000,
       socket: null,
@@ -102,6 +103,7 @@ $(document).ready(function() {
             this.version = response.data.version;
             this.license = response.data.license;
             this.parameters = response.data.parameters;
+            this.elasticVersion = response.data.elasticVersion;
 
             if (this.parameterCallback != null) {
               this.parameterCallback(this.parameters[this.parameterSection]);

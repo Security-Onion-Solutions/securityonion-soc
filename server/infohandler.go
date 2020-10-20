@@ -12,6 +12,7 @@ package server
 import (
   "errors"
   "net/http"
+  "os"
   "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/web"
 )
@@ -41,6 +42,7 @@ func (infoHandler *InfoHandler) get(writer http.ResponseWriter, request *http.Re
     Version: infoHandler.Host.Version,
     License: "GPL v2",
     Parameters: &infoHandler.server.Config.ClientParams,
+    ElasticVersion: os.Getenv("ELASTIC_VERSION"),
   }
   return http.StatusOK, info, nil
 }

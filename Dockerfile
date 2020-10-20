@@ -15,9 +15,12 @@ WORKDIR /build
 RUN ./build.sh "$VERSION"
 
 FROM alpine:latest
+
 ARG UID=939
 ARG GID=939
 ARG VERSION=0.0.0
+ARG ELASTIC_VERSION=0.0.0
+
 RUN apk update && apk add tzdata ca-certificates curl tcpdump && update-ca-certificates
 RUN addgroup --gid "$GID" socore
 RUN adduser -D -u "$UID" -G socore -g '' socore
@@ -41,6 +44,12 @@ RUN [[ $VERSION == '0.0.0' ]] || \
     rm -f /tmp/docs.zip && \
     mv -f html/docs/securityonion-*/* html/docs && \
     rm -fr html/docs/securityonion-*)
+
+RUN [[ $ELASTIC_VERSION == '0.0.0' ]] || \
+    (mkdir -p html/downloads && \
+     wget https://artifacts.elastic.co/downloads/beats/winlogbeat/winlogbeat-oss-$(echo $ELASTIC_VERSION)-windows-x86_64.msi -P html/downloads/)
+
+ENV ELASTIC_VERSION=$ELASTIC_VERSION
 
 USER socore
 EXPOSE 9822/tcp
