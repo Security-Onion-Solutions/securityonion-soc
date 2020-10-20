@@ -561,6 +561,9 @@
                 <v-btn id="actionFilterExclude" depressed tile small color="secondary" :to="filterRouteExclude" :title="i18n.filterExcludeHelp">
                   <v-icon :alt="i18n.filterExclude">fa-search-minus</v-icon>
                 </v-btn>
+                <v-btn id="actionFilterExact" depressed tile small color="secondary" :to="filterRouteExact" :title="i18n.filterExactHelp">
+                  <v-icon :alt="i18n.filterExact">fa-search</v-icon>
+                </v-btn>
                 <v-btn id="actionDrilldown" depressed tile small color="secondary" :to="filterRouteDrilldown" :title="i18n.filterDrilldownHelp" v-if="!isAdvanced() && metricsEnabled">
                   <v-icon :alt="i18n.filterDrilldown">fa-angle-double-down</v-icon>
                 </v-btn>
