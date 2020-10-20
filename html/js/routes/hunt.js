@@ -835,7 +835,7 @@ const huntComponent = {
         case RELATIVE_TIME_MINUTES: unit = "minutes"; break;
         case RELATIVE_TIME_HOURS: unit = "hours"; break;
         case RELATIVE_TIME_DAYS: unit = "days"; break;
-        case RELATIVE_TIME_WEEEKS: unit = "weeks"; break;
+        case RELATIVE_TIME_WEEKS: unit = "weeks"; break;
         case RELATIVE_TIME_MONTHS: unit = "months"; break;
       }
       return moment().subtract(this.relativeTimeValue, unit);
