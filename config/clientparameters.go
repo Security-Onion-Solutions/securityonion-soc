@@ -19,6 +19,7 @@ type ClientParameters struct {
   HuntingParams     HuntingParameters     `json:"hunt"`
   AlertingParams    HuntingParameters     `json:"alerts"`
   DocsUrl           string                `json:"docsUrl"`
+  CheatsheetUrl     string                `json:"cheatsheetUrl"`
 }
 
 func (config *ClientParameters) Verify() error {

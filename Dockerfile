@@ -43,7 +43,8 @@ RUN [[ $VERSION == '0.0.0' ]] || \
     unzip -o /tmp/docs.zip -d html/docs && \
     rm -f /tmp/docs.zip && \
     mv -f html/docs/securityonion-*/* html/docs && \
-    rm -fr html/docs/securityonion-*)
+    rm -fr html/docs/securityonion-* && \
+    wget https://github.com/Security-Onion-Solutions/securityonion-docs/raw/$(echo $VERSION | cut -d'.' -f 1,2)/images/cheat-sheet/Security-Onion-Cheat-Sheet.pdf -O /html/docs/cheatsheet.pdf)
 
 RUN [[ $ELASTIC_VERSION == '0.0.0' ]] || \
     (mkdir -p html/downloads && \

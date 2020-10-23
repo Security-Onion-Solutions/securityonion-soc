@@ -43,6 +43,7 @@ const i18n = {
       chartTitleBottom: 'Fewest Occurrences',
       chartTitleTimeline: 'Timeline',
       chartTitleTop: 'Most Occurrences',
+      cheatsheet: 'Cheat Sheet',
       collapse: 'Collapse',
       collapseHelp: 'Collapse all packet data',
       completed: 'Completed',
