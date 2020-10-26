@@ -169,7 +169,7 @@
           <v-list id="top-menu">
             <v-list-item @click.stop="toggleTheme">
               <v-list-item-action>
-                <v-icon>fa-adjust</v-icon>
+                <v-icon class="mx-auto">fa-adjust</v-icon>
               </v-list-item-action>
               <v-list-item-content>
                 <v-list-item-title v-text="i18n.darkMode"></v-list-item-title>
@@ -177,7 +177,7 @@
             </v-list-item>
             <v-list-item target="so-help" :href="parameters.docsUrl">
               <v-list-item-action>
-                <v-icon>fa-question</v-icon>
+                <v-icon class="mx-auto">fa-question</v-icon>
               </v-list-item-action>
               <v-list-item-content>
                 <v-list-item-title v-text="i18n.help"></v-list-item-title>
@@ -185,7 +185,7 @@
             </v-list-item>
             <v-list-item target="so-cheatsheet" :href="parameters.cheatsheetUrl">
               <v-list-item-action>
-                <v-icon>fa-scroll</v-icon>
+                <v-icon class="mx-auto">fa-scroll</v-icon>
               </v-list-item-action>
               <v-list-item-content>
                 <v-list-item-title v-text="i18n.cheatsheet"></v-list-item-title>
@@ -193,7 +193,7 @@
             </v-list-item>
             <v-list-item target="so-blog" href="https://blog.securityonion.net/">
               <v-list-item-action>
-                <v-icon>fa-info</v-icon>
+                <v-icon class="mx-auto">fa-info</v-icon>
               </v-list-item-action>
               <v-list-item-content>
                 <v-list-item-title v-text="i18n.blog"></v-list-item-title>
@@ -202,7 +202,7 @@
             <v-divider></v-divider>
             <v-list-item :href="settingsUrl">
               <v-list-item-action>
-                <v-icon>fa-user-edit</v-icon>
+                <v-icon class="mx-auto">fa-user-edit</v-icon>
               </v-list-item-action>
               <v-list-item-content>
                 <v-list-item-title v-text="i18n.settings"></v-list-item-title>
@@ -210,7 +210,7 @@
             </v-list-item>
             <v-list-item :href="authUrl + 'logout'">
               <v-list-item-action>
-                <v-icon>fa-sign-out-alt</v-icon>
+                <v-icon class="mx-auto">fa-sign-out-alt</v-icon>
               </v-list-item-action>
               <v-list-item-content>
                 <v-list-item-title v-text="i18n.logout"></v-list-item-title>
