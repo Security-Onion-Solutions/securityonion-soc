@@ -61,7 +61,7 @@ const huntComponent = {
     groupByFilter: '',
     groupByData: [],
     groupByHeaders: [],
-    groupBySortBy: 'timestamp',
+    groupBySortBy: 'count',
     groupBySortDesc: true,
     groupByItemsPerPage: 10,
     groupByFooters: { 'items-per-page-options': [10,25,50,100,200,500] },
@@ -73,7 +73,7 @@ const huntComponent = {
     eventFilter: '',  
     eventHeaders: [],
     eventPage: 1,
-    sortBy: 'timestamp',
+    sortBy: 'soc_timestamp',
     sortDesc: true,
     itemsPerPage: 10,
     footerProps: { 'items-per-page-options': [10,25,50,100,200,500,1000] },
@@ -711,13 +711,16 @@ const huntComponent = {
       var fields = [];
       var eventModule;
       var eventDataset;
+      var route = this;
       if (events != null && events.length > 0) {
         events.forEach(function(event, index) {
           var record = event.payload;
           record.soc_id = event.id;
           record.soc_score = event.score;
           record.soc_type = event.type;
-          record.soc_timestamp = event.timestamp;
+          var utcTime = moment.utc(event.timestamp);
+          var localTime = utcTime.tz(route.zone);
+          record.soc_timestamp = localTime.format(route.i18n.timestampFormat);
           record.soc_source = event.source;
           records.push(record);
 
