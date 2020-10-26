@@ -184,7 +184,7 @@ const huntComponent = {
       this.$root.stopLoading();
 
       if (this.$route.query.q || (this.shouldAutohunt() && this.query)) {
-        this.loadData();
+        this.hunt(true);
       }
     },
     notifyInputsChanged(replaceHistory = false) {
