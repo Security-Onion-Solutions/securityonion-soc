@@ -449,9 +449,9 @@
               <template v-slot:item="{ item, index }">
                 <tr>
                   <td>
-                    <v-btn id="alertButton" v-if="dismissEnabled && item['event.severity_label']" class="mx-2" icon x-small 
+                    <v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" class="mx-2" icon x-small 
                       @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))" 
-                      :title="isFilterToggleEnabled('acknowledged') ? i18n.alertUndoDismiss : i18n.alertDismiss" 
+                      :title="isFilterToggleEnabled('acknowledged') ? i18n.alertUndoAcknowledge : i18n.alertAcknowledge" 
                       :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
                       <v-icon>fa-bell</v-icon>
                     </v-btn>
@@ -500,9 +500,9 @@
                       <v-icon v-if="isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-down</v-icon>
                       <v-icon v-if="!isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-right</v-icon>
                     </v-btn>
-                    <v-btn id="alertButton" v-if="dismissEnabled && item['event.severity_label']" class="mx-2" icon x-small 
+                    <v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" class="mx-2" icon x-small 
                       @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))" 
-                      :title="isFilterToggleEnabled('acknowledged') ? i18n.alertUndoDismiss : i18n.alertDismiss" 
+                      :title="isFilterToggleEnabled('acknowledged') ? i18n.alertUndoAcknowledge : i18n.alertAcknowledge" 
                       :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
                       <v-icon>fa-bell</v-icon>
                     </v-btn>
@@ -559,33 +559,58 @@
           </v-col>
           <v-spacer></v-spacer>
         </v-row>
-        <v-card id="hunt-quick-action" class="quick-action" color="secondary" elevation="2">
-          <v-card-actions>
-            <v-list-item dense>
-              <v-row align="center" justify="center">
-                <v-btn id="actionFilerInclude" depressed tile small color="secondary" :to="filterRouteInclude" :title="i18n.filterIncludeHelp">
-                  <v-icon :alt="i18n.filterInclude">fa-search-plus</v-icon>
-                </v-btn>
-                <v-btn id="actionFilterExclude" depressed tile small color="secondary" :to="filterRouteExclude" :title="i18n.filterExcludeHelp">
-                  <v-icon :alt="i18n.filterExclude">fa-search-minus</v-icon>
-                </v-btn>
-                <v-btn id="actionFilterExact" depressed tile small color="secondary" :to="filterRouteExact" :title="i18n.filterExactHelp">
-                  <v-icon :alt="i18n.filterExact">fa-search</v-icon>
-                </v-btn>
-                <v-btn id="actionDrilldown" depressed tile small color="secondary" :to="filterRouteDrilldown" :title="i18n.filterDrilldownHelp" v-if="!isAdvanced() && metricsEnabled">
-                  <v-icon :alt="i18n.filterDrilldown">fa-angle-double-down</v-icon>
-                </v-btn>
-                <v-btn id="actionGroupBy" depressed tile small color="secondary" :to="groupByRoute" :title="i18n.groupIncludeHelp">
-                  <v-icon :alt="i18n.groupInclude">fa-layer-group</v-icon>
-                </v-btn>
-                <v-btn class="custom-quick-action-button" v-for="action in actions" depressed tile small color="secondary" v-if="action.enabled" :key="action.link" :href="action.linkFormatted" @click="" :title="$root.localizeMessage(action.description)" :target="action.target">
-                  <v-icon v-if="action.icon" :class="{ 'v-icon--left': action.name }">{{ action.icon }}</v-icon>
-                  {{ $root.localizeMessage(action.name) }}
-                </v-btn>
-              </v-row>
+        <v-menu v-model="quickActionVisible" :position-x="quickActionX" :position-y="quickActionY" absolute>
+          <v-list id="hunt-quick-action" color="secondary">
+            <v-list-item id="actionFilerInclude" dense :to="filterRouteInclude" :title="i18n.filterIncludeHelp">
+              <v-list-item-icon>
+                <v-icon :alt="i18n.filterInclude" color="white">fa-search-plus</v-icon>
+              </v-list-item-icon>
+              <v-list-item-title class="white--text">
+                {{ i18n.filterInclude }}
+              </v-list-item-title>
             </v-list-item>
-          </v-card-actions>
-        </v-card>            
+            <v-list-item id="actionFilterExclude" dense :to="filterRouteExclude" :title="i18n.filterExcludeHelp">
+              <v-list-item-icon>
+                <v-icon :alt="i18n.filterExclude" color="white">fa-search-minus</v-icon>
+              </v-list-item-icon>
+              <v-list-item-title class="white--text">
+                {{ i18n.filterExclude }}
+              </v-list-item-title>
+            </v-list-item>
+            <v-list-item id="actionFilterExact" dense :to="filterRouteExact" :title="i18n.filterExactHelp">
+              <v-list-item-icon>
+                <v-icon :alt="i18n.filterExact" color="white">fa-search</v-icon>
+              </v-list-item-icon>
+              <v-list-item-title class="white--text">
+                {{ i18n.filterExact }}
+              </v-list-item-title>
+            </v-list-item>
+            <v-list-item id="actionDrilldown" dense :to="filterRouteDrilldown" :title="i18n.filterDrilldownHelp" v-if="!isAdvanced() && metricsEnabled">
+              <v-list-item-icon>
+                <v-icon :alt="i18n.filterDrilldown" color="white">fa-angle-double-down</v-icon>
+              </v-list-item-icon>
+              <v-list-item-title class="white--text">
+                {{ i18n.filterDrilldown }}
+              </v-list-item-title>
+            </v-list-item>
+            <v-list-item id="actionGroupBy" dense :to="groupByRoute" :title="i18n.groupIncludeHelp">
+              <v-list-item-icon>
+                <v-icon :alt="i18n.groupInclude" color="white">fa-layer-group</v-icon>
+              </v-list-item-icon>
+              <v-list-item-title class="white--text">
+                {{ i18n.groupInclude }}
+              </v-list-item-title>
+            </v-list-item>
+            <v-list-item dense v-for="action in actions" class="custom-quick-action-button" v-if="action.enabled" :key="action.link" :href="action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="action.target">
+              <v-list-item-icon>
+                <v-icon :alt="action.name" color="white">{{ action.icon }}</v-icon>
+              </v-list-item-icon>
+              <v-list-item-title class="white--text">
+                {{ $root.localizeMessage(action.name) }}
+              </v-list-item-title>
+            </v-list-item>
+          </v-list>
+        </v-menu>
       </v-container>
     </script>
 

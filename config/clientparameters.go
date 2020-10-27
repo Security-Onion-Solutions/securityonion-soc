@@ -66,7 +66,7 @@ type HuntingParameters struct {
   Queries                 []HuntingQuery      `json:"queries"`
   Actions                 []HuntingAction     `json:"actions"`
   Advanced                bool                `json:"advanced"`
-  DismissEnabled          bool                `json:"dismissEnabled"`
+  AckEnabled              bool                `json:"ackEnabled"`
   EscalateEnabled         bool                `json:"escalateEnabled"`
 }
 

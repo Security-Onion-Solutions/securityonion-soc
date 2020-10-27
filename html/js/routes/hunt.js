@@ -41,7 +41,7 @@ const huntComponent = {
     chartHeight: 200,
     zone: '',
     huntPending: false,
-    dismissEnabled: false,
+    ackEnabled: false,
     escalateEnabled: false,
 
     filterToggles: [],
@@ -95,7 +95,9 @@ const huntComponent = {
     filterRouteExact: "",
     filterRouteDrilldown: "",
     groupByRoute: "",
-    quickActionElement: null,
+    quickActionVisible: false,
+    quickActionX: 0,
+    quickActionY: 0,
     actions: [],
   }},
   created() {
@@ -159,7 +161,7 @@ const huntComponent = {
       this.filterToggles = params["queryToggleFilters"];
       this.eventFields = params["eventFields"];
       this.advanced = params["advanced"];
-      this.dismissEnabled = params["dismissEnabled"];
+      this.ackEnabled = params["ackEnabled"];
       this.escalateEnabled = params["escalateEnabled"];
       if (this.queries != null && this.queries.length > 0) {
         this.query = this.queries[0].query;
@@ -584,25 +586,14 @@ const huntComponent = {
       return route;
     },
     toggleQuickAction(domEvent, event, field, value) {
-      if (!domEvent) {
-        if (this.quickActionElement) {
-          this.quickActionElement.remove();
-          this.quickActionElement = null;
-        }
+      if (!domEvent || this.quickActionVisible) {
+        this.quickActionVisible = false;
         return;
       }
 
-      if (this.quickActionElement && this.quickActionElement.parentElement == domEvent.target) {
-        this.quickActionElement.remove();
-        this.quickActionElement = null;
-        return;
-      }
+      domEvent.preventDefault();
 
       if (value && this.canQuery(field) && domEvent.target.classList.contains("quick-action-trigger")) {
-        if (this.quickActionElement) {
-          this.quickActionElement.remove();
-          this.quickActionElement = null;
-        }
         this.filterRouteInclude = this.buildFilterRoute(field, value, FILTER_INCLUDE);
         this.filterRouteExclude = this.buildFilterRoute(field, value, FILTER_EXCLUDE);
         this.filterRouteExact = this.buildFilterRoute(field, value, FILTER_EXACT);
@@ -626,15 +617,11 @@ const huntComponent = {
           action.linkFormatted = route.formatActionLink(action, event, field, value);
         });
 
-        var route = this;
-        setTimeout(function() {
-          var quickActionTemplate = document.getElementById("hunt-quick-action");
-          route.quickActionElement = quickActionTemplate.cloneNode(true);
-          route.quickActionElement.style.display = "block";
-          domEvent.target.appendChild(route.quickActionElement);
-        }, 0);
-
-
+        this.quickActionX = domEvent.clientX;
+        this.quickActionY = domEvent.clientY;
+        this.$nextTick(() => { 
+          this.quickActionVisible = true; 
+        });
       }
     },
     formatActionLink(action, event, field, value) {
