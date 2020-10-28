@@ -372,7 +372,7 @@
           </v-col>
           <v-col cols="12" md="5" class="d-flex flex-nowrap align-center">
             <v-text-field :disabled="loading()" v-if="relativeTimeEnabled" id="huntrelativetimevalue" @change="notifyInputsChanged" class="mx-2" 
-                v-model="relativeTimeValue" :hint="isAdvanced() ? i18n.relativeTimeHelp : ''" :persistent-hint="isAdvanced()" type="number">
+                v-model="relativeTimeValue" :hint="i18n.relativeTimeHelp" persistent-hint="true" type="number">
               <template v-slot:prepend>
                 <v-btn v-if="relativeTimeEnabled" icon x-small @click="showAbsoluteTime" id="show-absolute-time">
                   <v-icon>fa-history</v-icon>
@@ -386,7 +386,7 @@
                   v-model="relativeTimeUnit" :items="relativeTimeUnits"></v-select>
               </template>
             </v-text-field>
-            <v-text-field :disabled="loading()" v-if="!relativeTimeEnabled && isAdvanced()" id="huntdaterange" @change="notifyInputsChanged" class="mx-2" 
+            <v-text-field :disabled="loading()" v-if="!relativeTimeEnabled" id="huntdaterange" @change="notifyInputsChanged" class="mx-2" 
               v-model="dateRange" :hint="i18n.timePickerHelp" persistent-hint="true" 
               prepend-inner-icon="fa-angle-down" @click:prepend-inner="showDateRangePicker">
               <template v-slot:prepend>

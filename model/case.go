@@ -23,6 +23,7 @@ type Case struct {
   Priority        int         `json:"priority"`
   Severity        int         `json:"severity"`
   Status          string      `json:"status"`
+  Template        string      `json:"template"`
 }
 
 func NewCase() *Case {

@@ -174,7 +174,7 @@ const huntComponent = {
         this.query = this.mruQueries[0];
       }
 
-      if (this.$route.query.t && this.isAdvanced()) {
+      if (this.$route.query.t) {
         // This page was either refreshed, or opened from an existing hunt hyperlink, 
         // so switch to absolute time since the URL has the absolute time defined.
         this.relativeTimeEnabled = false;
@@ -420,10 +420,13 @@ const huntComponent = {
             }
           }
 
+          var template = 'rule.case_template' in item ? item['rule.case_template'] : '';
+
           const response = await this.$root.papi.post('case', {
             title: title,
             description: description,
             severity: severity,
+            template: template,
           });
         }
         if (isAlert) {
@@ -852,7 +855,6 @@ const huntComponent = {
       });
     },
     showAbsoluteTime() {
-      if (!this.isAdvanced()) return;
       this.relativeTimeEnabled = false;
       setTimeout(this.setupDateRangePicker, 10);
     },

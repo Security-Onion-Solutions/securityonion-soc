@@ -32,6 +32,7 @@ type TheHiveCase struct {
   Tags            []string    `json:"tags"`
   Tlp             int         `json:"tlp"`
   Flag            bool        `json:"flag"`
+  Template        string      `json:"caseTemplate"`
 }
 
 func NewTheHiveCase() *TheHiveCase {

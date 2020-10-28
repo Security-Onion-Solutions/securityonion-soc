@@ -66,6 +66,7 @@ func TestConvertToTheHiveCase(tester *testing.T) {
   socCase.Description = "my description.\nline 2.\n"
   socCase.Severity = 3
   socCase.Id = "my id"
+  socCase.Template = "someTemplate"
 
   thehiveCase, err := convertToTheHiveCase(socCase)
   if err != nil {
@@ -86,5 +87,9 @@ func TestConvertToTheHiveCase(tester *testing.T) {
 
   if len(thehiveCase.Tags) != 1 {
     tester.Errorf("expected one tag, but got: %v", thehiveCase.Tags)
+  }
+
+  if socCase.Template != thehiveCase.Template {
+    tester.Errorf("expected template: %s, but got: %s", thehiveCase.Template, socCase.Template)
   }
 }
