@@ -594,9 +594,7 @@ const huntComponent = {
         return;
       }
 
-      domEvent.preventDefault();
-
-      if (value && this.canQuery(field) && domEvent.target.classList.contains("quick-action-trigger")) {
+      if (value && this.canQuery(field)) {
         this.filterRouteInclude = this.buildFilterRoute(field, value, FILTER_INCLUDE);
         this.filterRouteExclude = this.buildFilterRoute(field, value, FILTER_EXCLUDE);
         this.filterRouteExact = this.buildFilterRoute(field, value, FILTER_EXACT);
@@ -926,12 +924,8 @@ const huntComponent = {
         var clickedValue = activeElement[0]._model.label;
         if (clickedValue && clickedValue.length > 0) {
           if (this.canQuery(clickedValue)) {
-            this.query = "*";
-            for (var index = 1; index < this.groupByFields.length; index++) {
-              var field = this.groupByFields[index];
-              await this.groupQuery(field, false);
-            }
-            this.filterQuery(this.groupByFields[0], clickedValue, FILTER_EXACT, true);
+            var chartGroupByField = this.groupByFields[0];
+            this.toggleQuickAction(e, {}, chartGroupByField, clickedValue);
           }
         }
         return true;
