@@ -121,6 +121,14 @@
   overflow-x: hidden;
 }
 
+th.sortable {
+  white-space: nowrap;
+}
+
+th.sortable>i {
+  margin-left: 5px;
+}
+
 a#title, a#title:visited, a#title:active, a#title:hover {
   text-decoration: none;
   color: inherit;
