@@ -185,6 +185,8 @@ const huntComponent = {
       this.setupCharts();
       this.$root.stopLoading();
 
+      if (!this.parseUrlParameters()) return;
+      
       if (this.$route.query.q || (this.shouldAutohunt() && this.query)) {
         this.hunt(true);
       }
@@ -256,7 +258,7 @@ const huntComponent = {
     generatePcapLink(eventId) {
       return "/joblookup?id=" + encodeURIComponent(eventId);
     },
-    async loadData() {
+    parseUrlParameters() {
       this.category = this.$route.path.replace("/", "");
 
       if (this.$route.query.q) {
@@ -285,7 +287,11 @@ const huntComponent = {
         this.groupQuery(this.$route.query.groupByField);
         reRoute = true;
       }
-      if (reRoute) return;
+      if (reRoute) return false;
+      return true;      
+    },
+    async loadData() {
+      if (!this.parseUrlParameters()) return;
 
       this.$root.startLoading();
       try {
@@ -627,10 +633,10 @@ const huntComponent = {
     },
     formatActionLink(action, event, field, value) {
       var link = action.link;
-      link = link.replace("{eventId}", encodeURI(event["soc_id"]));
-      link = link.replace("{field}", encodeURI(field));
-      link = link.replace("{value}", encodeURI(value));
-      return link;
+      link = link.replace("{eventId}", event["soc_id"]);
+      link = link.replace("{field}", field);
+      link = link.replace("{value}", value);
+      return encodeURI(link);
     },
     isEventAction(action) {
       return action && action.link && !action.link.includes("{field}") && !action.link.includes("{value}");
