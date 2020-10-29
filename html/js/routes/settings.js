@@ -13,6 +13,7 @@ routes.push({ path: '/settings', name: 'settings', component: {
     i18n: this.$root.i18n,
     showSettingsForm: false,
     showPassword: false,
+    usingDefaults: false,
     form: {
       valid: false,
       email: null,
@@ -33,12 +34,17 @@ routes.push({ path: '/settings', name: 'settings', component: {
       this.authSettingsUrl = this.$root.authUrl + 'settings/strategies/password' + location.search;
       this.loadData()
     }
+    this.usingDefaults = localStorage.length == 0;
   },
   watch: {
   },
   methods: {
     reloadSettings() {
       location.pathname = this.$root.settingsUrl;
+    },
+    resetDefaults() {
+      localStorage.clear();
+      this.usingDefaults = true;
     },
     async loadData() {
       try {

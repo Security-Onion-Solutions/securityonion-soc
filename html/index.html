@@ -1010,19 +1010,19 @@
             </v-row>
             <v-row>
               <v-col>
-                <div v-text="i18n.settingsInstructions"></div>
+                <h3 class="mb-4" v-text="i18n.updateSettings"></h3>
+                <div v-text="i18n.resetDefaultsHint"></div>
+                <v-btn color="primary" :disabled="usingDefaults" v-text="i18n.resetDefaults" @click="resetDefaults"></v-btn>
               </v-col>
             </v-row>
             <v-row>
               <v-col>
+                <h3 class="mb-4"  v-text="i18n.updateProfile"></h3>
+                <div v-text="i18n.settingsInstructions"></div>
                 <v-text-field name="password" v-model="form.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required]"></v-text-field>
                 <v-text-field :placeholder="i18n.passwordConfirm" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.matches]"></v-text-field>
                 <v-text-field name="csrf_token" v-model="form.csrfToken" class="d-none"></v-text-field>
-              </v-col>
-            </v-row>
-            <v-row>
-              <v-col>
-                <v-btn type="submit" :disabled="!form.valid" text color="primary" v-text="i18n.save"></v-btn>
+                <v-btn type="submit" color="primary" :disabled="!form.valid" v-text="i18n.save"></v-btn>
               </v-col>
             </v-row>
           </v-container>
