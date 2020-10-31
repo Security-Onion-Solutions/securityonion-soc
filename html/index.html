@@ -1012,7 +1012,7 @@
               <v-col>
                 <h3 class="mb-4" v-text="i18n.updateSettings"></h3>
                 <div v-text="i18n.resetDefaultsHint"></div>
-                <v-btn color="primary" :disabled="usingDefaults" v-text="i18n.resetDefaults" @click="resetDefaults"></v-btn>
+                <v-btn id="settingsResetDefaults" color="primary" :disabled="usingDefaults" v-text="i18n.resetDefaults" @click="resetDefaults"></v-btn>
               </v-col>
             </v-row>
             <v-row>
