@@ -2,19 +2,22 @@ FROM golang:alpine AS builder
 
 RUN addgroup -S ory; \
     adduser -S ory -G ory -D -H -s /bin/nologin
-RUN apk -U --no-cache add build-base git gcc
+RUN apk -U --no-cache add build-base git gcc bash
 
 RUN mkdir -p /go/src/github.com/ory
 WORKDIR /go/src/github.com/ory
 RUN git clone https://github.com/ory/kratos.git
 
 WORKDIR /go/src/github.com/ory/kratos
-RUN git checkout ada04ff04e278a92bd7663c6059004cb7e4d17b7
-RUN go mod download
 
-RUN GO111MODULE=on go install github.com/gobuffalo/packr/v2/packr2
-RUN packr2
-RUN CGO_ENABLED=1 go build -tags sqlite -a
+RUN git checkout v0.5.3-alpha.1
+
+ENV GO111MODULE on
+ENV CGO_ENABLED 1
+
+RUN go mod download
+RUN make pack
+RUN go build -tags sqlite -a
 
 FROM alpine:latest
 

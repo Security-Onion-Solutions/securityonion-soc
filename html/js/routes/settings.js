@@ -27,11 +27,11 @@ routes.push({ path: '/settings', name: 'settings', component: {
     authSettingsUrl: null,
   }},
   mounted() {
-    if (location.search.indexOf("request=") == -1) {
+    if (!this.$root.getAuthFlowId()) {
       this.reloadSettings();
     } else {
       this.showSettingsForm = true;
-      this.authSettingsUrl = this.$root.authUrl + 'settings/strategies/password' + location.search;
+      this.authSettingsUrl = this.$root.authUrl + 'settings/methods/password' + location.search;
       this.loadData()
     }
     this.usingDefaults = localStorage.length == 0;
@@ -48,7 +48,7 @@ routes.push({ path: '/settings', name: 'settings', component: {
     },
     async loadData() {
       try {
-        const response = await this.$root.authApi.get('requests/settings' + location.search);
+        const response = await this.$root.authApi.get('settings/flows?id=' + this.$root.getAuthFlowId());
         this.form.csrfToken = response.data.methods.password.config.fields.find(item => item.name == 'csrf_token').value;
         var errors = [];
         response.data.methods.password.config.fields.forEach(function(value, index, array) {

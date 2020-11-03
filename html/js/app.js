@@ -53,7 +53,7 @@ $(document).ready(function() {
       toolbar: null,
       wsUrl: (location.protocol == 'https:' ?  'wss://' : 'ws://') + location.host + location.pathname + 'ws',
       apiUrl: location.origin + location.pathname + 'api/',
-      authUrl: '/auth/self-service/browser/flows/',
+      authUrl: '/auth/self-service/',
       settingsUrl: null,
       version: '0.0.0',
       elasticVersion: '0.0.0',
@@ -88,12 +88,9 @@ $(document).ready(function() {
         return false;
       },
       redirectRoute() {
-        if (location.search.indexOf("?r=%2F") == 0) {
-          var stopIdx = location.search.indexOf("&");
-          if (stopIdx == -1) {
-            stopIdx = undefined;
-          }
-          location.hash = '#/' + location.search.substring(6, stopIdx);
+        const redirectPage = this.getRedirectPage();
+        if (redirectPage) {
+          location.hash = '#' + redirectPage;
         }
       },
       async loadServerSettings() {
@@ -114,6 +111,17 @@ $(document).ready(function() {
             this.showError(error);
           }
         }
+      },
+      getAuthFlowId() {
+        return this.getSearchParam('flow');
+      },
+      getRedirectPage() {
+        return this.getSearchParam('r');
+      },
+      getSearchParam(param) {
+        const searchParams = new URLSearchParams(window.location.search);
+        const value = searchParams.get(param);
+        return value;
       },
       loadParameters(section, callback) {
         if (this.parametersLoaded) {
@@ -293,7 +301,7 @@ $(document).ready(function() {
         }
       },
       showLogin() {
-        location.href = this.authUrl + "login";
+        location.href = this.authUrl + "login/browser";
       },
       apiSuccessCallback(response) {
         if (response.headers['content-type'] == "text/html") {
@@ -320,7 +328,7 @@ $(document).ready(function() {
           timeout: this.connectionTimeout,
           withCredentials: true,
         });
-        this.settingsUrl = this.authUrl + 'settings';
+        this.settingsUrl = this.authUrl + 'settings/browser';
       },
       setCookie(name, value, ageSecs) {
         let maxAge = "";
