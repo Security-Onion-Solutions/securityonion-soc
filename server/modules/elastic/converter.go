@@ -88,9 +88,9 @@ func makeQuery(store *ElasticEventstore, parsedQuery *model.Query, beginTime tim
   query["query_string"] = queryDetails
 
   timestampDetails := make(map[string]interface{})
-  timestampDetails["gte"] = beginTime.Unix() * 1000
-  timestampDetails["lte"] = endTime.Unix() * 1000
-  timestampDetails["format"] = "epoch_millis"
+  timestampDetails["gte"] = beginTime.Format(time.RFC3339)
+  timestampDetails["lte"] = endTime.Format(time.RFC3339)
+  timestampDetails["format"] = "strict_date_optional_time"
 
   timerangeDetails := make(map[string]interface{})
   timerangeDetails["@timestamp"] = timestampDetails
