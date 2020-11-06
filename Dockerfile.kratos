@@ -1,4 +1,4 @@
-FROM golang:alpine AS builder
+FROM ghcr.io/security-onion-solutions/golang:alpine AS builder
 
 RUN addgroup -S ory; \
     adduser -S ory -G ory -D -H -s /bin/nologin
@@ -19,7 +19,7 @@ RUN go mod download
 RUN make pack
 RUN go build -tags sqlite -a
 
-FROM alpine:latest
+FROM ghcr.io/security-onion-solutions/alpine:latest
 
 ENV DSN=sqlite:///kratos-data/db.sqlite?_fk=true
 ENV SQA_OPT_OUT=true

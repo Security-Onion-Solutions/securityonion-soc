@@ -7,14 +7,14 @@
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-FROM golang:alpine as builder
+FROM ghcr.io/security-onion-solutions/golang:alpine as builder
 ARG VERSION=0.0.0
 RUN apk update && apk add libpcap-dev bash git musl-dev gcc
 COPY . /build
 WORKDIR /build
 RUN ./build.sh "$VERSION"
 
-FROM alpine:latest
+FROM ghcr.io/security-onion-solutions/alpine:latest
 
 ARG UID=939
 ARG GID=939
