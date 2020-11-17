@@ -385,6 +385,14 @@ const huntComponent = {
       }
       this.$root.stopLoading();
     },    
+    removeDataItemFromView(data, item) {
+      for (var j = 0; j < data.length; j++) {
+        if (data[j] == item) {
+          Vue.delete(data, j);
+          break;
+        }
+      }
+    },
     async ack(event, item, idx, acknowledge, escalate = false) {
       this.$root.startLoading();
       try {
@@ -455,12 +463,7 @@ const huntComponent = {
           } else {
             this.$root.showTip(escalate ? this.i18n.escalatedSingleTip : (acknowledge ? this.i18n.ackSingleTip : this.i18n.ackUndoSingleTip));
           }
-
-          if (item["count"]) {
-            Vue.delete(this.groupByData, idx);
-          } else {
-            Vue.delete(this.eventData, idx);
-          }
+          this.removeDataItemFromView(item["count"] ? this.groupByData : this.eventData, item);
         } else if (escalate) {
           this.$root.showTip(this.i18n.escalatedEventTip);
         }
