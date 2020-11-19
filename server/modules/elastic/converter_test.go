@@ -83,7 +83,7 @@ func TestConvertToElasticRequestEmptyCriteria(tester *testing.T) {
     tester.Errorf("unexpected conversion error: %s", err)
   }
 
-  expectedJson := `{"aggs":{"timeline":{"date_histogram":{"field":"@timestamp","interval":"30m","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"*"}},{"range":{"@timestamp":{"format":"epoch_millis","gte":-62135596800000,"lte":-62135596800000}}}],"must_not":[],"should":[]}},"size":25}`
+  expectedJson := `{"aggs":{"timeline":{"date_histogram":{"field":"@timestamp","interval":"30m","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"*"}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"0001-01-01T00:00:00Z","lte":"0001-01-01T00:00:00Z"}}}],"must_not":[],"should":[]}},"size":25}`
   if actualJson != expectedJson {
     tester.Errorf("Mismatched ES request conversion; actual='%s' vs expected='%s'", actualJson, expectedJson)
   }
@@ -97,7 +97,7 @@ func TestConvertToElasticRequestGroupByCriteria(tester *testing.T) {
     tester.Errorf("unexpected conversion error: %s", err)
   }
 
-  expectedJson := `{"aggs":{"bottom":{"terms":{"field":"ghi","order":{"_count":"asc"},"size":10}},"groupby|ghi":{"aggs":{"groupby|ghi|jkl":{"terms":{"field":"jkl","order":{"_count":"desc"},"size":10}}},"terms":{"field":"ghi","order":{"_count":"desc"},"size":10}},"timeline":{"date_histogram":{"field":"@timestamp","interval":"30m","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"abc AND def AND q: \"\\\\\\\\file\\\\path\""}},{"range":{"@timestamp":{"format":"epoch_millis","gte":1577967194000,"lte":1577970794000}}}],"must_not":[],"should":[]}},"size":25}`
+  expectedJson := `{"aggs":{"bottom":{"terms":{"field":"ghi","order":{"_count":"asc"},"size":10}},"groupby|ghi":{"aggs":{"groupby|ghi|jkl":{"terms":{"field":"jkl","order":{"_count":"desc"},"size":10}}},"terms":{"field":"ghi","order":{"_count":"desc"},"size":10}},"timeline":{"date_histogram":{"field":"@timestamp","interval":"30m","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"abc AND def AND q: \"\\\\\\\\file\\\\path\""}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"2020-01-02T12:13:14Z","lte":"2020-01-02T13:13:14Z"}}}],"must_not":[],"should":[]}},"size":25}`
   if actualJson != expectedJson {
     tester.Errorf("Mismatched ES request conversion; actual='%s' vs expected='%s'", actualJson, expectedJson)
   }
@@ -183,7 +183,7 @@ func TestConvertToElasticUpdateRequest(tester *testing.T) {
     tester.Errorf("unexpected conversion error: %s", err)
   }
 
-  expectedJson := `{"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"event.dataset:alerts"}},{"range":{"@timestamp":{"format":"epoch_millis","gte":1600956672000,"lte":1600964055000}}}],"must_not":[],"should":[]}},"script":{"inline":"ctx._source.event.acknowledged=true; ctx._source.event.escalated=true","lang":"painless"}}`
+  expectedJson := `{"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"event.dataset:alerts"}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"2020-09-24T10:11:12-04:00","lte":"2020-09-24T12:14:15-04:00"}}}],"must_not":[],"should":[]}},"script":{"inline":"ctx._source.event.acknowledged=true; ctx._source.event.escalated=true","lang":"painless"}}`
   if actualJson != expectedJson {
     tester.Errorf("Mismatched ES request conversion; actual='%s' vs expected='%s'", actualJson, expectedJson)
   }

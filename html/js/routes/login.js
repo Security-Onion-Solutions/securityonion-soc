@@ -25,11 +25,11 @@ routes.push({ path: '*', name: 'login', component: {
     authLoginUrl: null,
   }},
   created() {
-    if (location.search.indexOf("request=") == -1) {
+    if (!this.$root.getAuthFlowId()) {
       this.$root.showLogin();
     } else {
       this.showLoginForm = true;
-      this.authLoginUrl = this.$root.authUrl + 'login/strategies/password' + location.search;
+      this.authLoginUrl = this.$root.authUrl + 'login/methods/password' + location.search;
       this.loadData()
     }
   },
@@ -38,7 +38,7 @@ routes.push({ path: '*', name: 'login', component: {
   methods: {
     async loadData() {
       try {
-        const response = await this.$root.authApi.get('requests/login' + location.search);
+        const response = await this.$root.authApi.get('login/flows?id=' + this.$root.getAuthFlowId());
         this.form.csrfToken = response.data.methods.password.config.fields.find(item => item.name == 'csrf_token').value;
         if (response.data.methods.password.config.messages) {
           this.$root.showWarning(this.i18n.loginInvalid);

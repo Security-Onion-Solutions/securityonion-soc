@@ -19,6 +19,7 @@ type ClientParameters struct {
   HuntingParams     HuntingParameters     `json:"hunt"`
   AlertingParams    HuntingParameters     `json:"alerts"`
   DocsUrl           string                `json:"docsUrl"`
+  CheatsheetUrl     string                `json:"cheatsheetUrl"`
 }
 
 func (config *ClientParameters) Verify() error {
@@ -65,7 +66,7 @@ type HuntingParameters struct {
   Queries                 []HuntingQuery      `json:"queries"`
   Actions                 []HuntingAction     `json:"actions"`
   Advanced                bool                `json:"advanced"`
-  DismissEnabled          bool                `json:"dismissEnabled"`
+  AckEnabled              bool                `json:"ackEnabled"`
   EscalateEnabled         bool                `json:"escalateEnabled"`
 }
 

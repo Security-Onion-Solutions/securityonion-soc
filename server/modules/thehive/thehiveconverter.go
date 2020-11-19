@@ -18,6 +18,7 @@ func convertToTheHiveCase(inputCase *model.Case) (*TheHiveCase, error) {
 	outputCase.Description = inputCase.Description
 	outputCase.Tags = append(outputCase.Tags, "SecurityOnion")
 	outputCase.Tlp = CASE_TLP_AMBER
+	outputCase.Template = inputCase.Template
 	return outputCase, nil
 }
 

@@ -14,7 +14,8 @@ import (
 )
 
 type Info struct {
-  Version		  	string		                `json:"version"`
-  License			  string	            	    `json:"license"`	
-  Parameters    *config.ClientParameters  `json:"parameters"`
+  Version        string                   `json:"version"`
+  License        string                   `json:"license"`
+  Parameters     *config.ClientParameters `json:"parameters"`
+  ElasticVersion string                   `json:"elasticVersion"`
 }

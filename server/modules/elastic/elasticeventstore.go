@@ -269,7 +269,7 @@ func (store *ElasticEventstore) readJsonFromResponse(res *esapi.Response) (strin
 }
 
 func (store *ElasticEventstore) indexSearch(query string, indexes []string) (string, error) {
-  log.WithField("query", query).Debug("Searching Elasticsearch")
+  log.WithField("query", query).Info("Searching Elasticsearch")
   var json string
   res, err := store.esClient.Search(
     store.esClient.Search.WithContext(context.Background()),

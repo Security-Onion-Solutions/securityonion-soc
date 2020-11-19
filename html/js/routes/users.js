@@ -99,7 +99,7 @@ routes.push({ path: '/users', name: 'users', component: {
         } else if (!password) {
           this.$root.showError(this.i18n.passwordRequired);
         } else {
-          const response = await this.$root.authApi.post('self-service/browser/flows/registration/strategies/password?request=' + requestId, {
+          const response = await this.$root.authApi.post('self-service/registration/methods/password?flow=' + requestId, {
             "traits.email": email,
             password: password,
             "traits.firstName": firstName,

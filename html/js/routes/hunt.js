@@ -41,7 +41,7 @@ const huntComponent = {
     chartHeight: 200,
     zone: '',
     huntPending: false,
-    dismissEnabled: false,
+    ackEnabled: false,
     escalateEnabled: false,
 
     filterToggles: [],
@@ -61,7 +61,7 @@ const huntComponent = {
     groupByFilter: '',
     groupByData: [],
     groupByHeaders: [],
-    groupBySortBy: 'timestamp',
+    groupBySortBy: 'count',
     groupBySortDesc: true,
     groupByItemsPerPage: 10,
     groupByFooters: { 'items-per-page-options': [10,25,50,100,200,500] },
@@ -73,7 +73,7 @@ const huntComponent = {
     eventFilter: '',  
     eventHeaders: [],
     eventPage: 1,
-    sortBy: 'timestamp',
+    sortBy: 'soc_timestamp',
     sortDesc: true,
     itemsPerPage: 10,
     footerProps: { 'items-per-page-options': [10,25,50,100,200,500,1000] },
@@ -95,7 +95,9 @@ const huntComponent = {
     filterRouteExact: "",
     filterRouteDrilldown: "",
     groupByRoute: "",
-    quickActionElement: null,
+    quickActionVisible: false,
+    quickActionX: 0,
+    quickActionY: 0,
     actions: [],
   }},
   created() {
@@ -159,7 +161,7 @@ const huntComponent = {
       this.filterToggles = params["queryToggleFilters"];
       this.eventFields = params["eventFields"];
       this.advanced = params["advanced"];
-      this.dismissEnabled = params["dismissEnabled"];
+      this.ackEnabled = params["ackEnabled"];
       this.escalateEnabled = params["escalateEnabled"];
       if (this.queries != null && this.queries.length > 0) {
         this.query = this.queries[0].query;
@@ -172,7 +174,7 @@ const huntComponent = {
         this.query = this.mruQueries[0];
       }
 
-      if (this.$route.query.t && this.isAdvanced()) {
+      if (this.$route.query.t) {
         // This page was either refreshed, or opened from an existing hunt hyperlink, 
         // so switch to absolute time since the URL has the absolute time defined.
         this.relativeTimeEnabled = false;
@@ -183,8 +185,10 @@ const huntComponent = {
       this.setupCharts();
       this.$root.stopLoading();
 
+      if (!this.parseUrlParameters()) return;
+      
       if (this.$route.query.q || (this.shouldAutohunt() && this.query)) {
-        this.loadData();
+        this.hunt(true);
       }
     },
     notifyInputsChanged(replaceHistory = false) {
@@ -254,7 +258,7 @@ const huntComponent = {
     generatePcapLink(eventId) {
       return "/joblookup?id=" + encodeURIComponent(eventId);
     },
-    async loadData() {
+    parseUrlParameters() {
       this.category = this.$route.path.replace("/", "");
 
       if (this.$route.query.q) {
@@ -283,7 +287,11 @@ const huntComponent = {
         this.groupQuery(this.$route.query.groupByField);
         reRoute = true;
       }
-      if (reRoute) return;
+      if (reRoute) return false;
+      return true;      
+    },
+    async loadData() {
+      if (!this.parseUrlParameters()) return;
 
       this.$root.startLoading();
       try {
@@ -377,6 +385,14 @@ const huntComponent = {
       }
       this.$root.stopLoading();
     },    
+    removeDataItemFromView(data, item) {
+      for (var j = 0; j < data.length; j++) {
+        if (data[j] == item) {
+          Vue.delete(data, j);
+          break;
+        }
+      }
+    },
     async ack(event, item, idx, acknowledge, escalate = false) {
       this.$root.startLoading();
       try {
@@ -418,10 +434,13 @@ const huntComponent = {
             }
           }
 
+          var template = 'rule.case_template' in item ? item['rule.case_template'] : '';
+
           const response = await this.$root.papi.post('case', {
             title: title,
             description: description,
             severity: severity,
+            template: template,
           });
         }
         if (isAlert) {
@@ -444,12 +463,7 @@ const huntComponent = {
           } else {
             this.$root.showTip(escalate ? this.i18n.escalatedSingleTip : (acknowledge ? this.i18n.ackSingleTip : this.i18n.ackUndoSingleTip));
           }
-
-          if (item["count"]) {
-            Vue.delete(this.groupByData, idx);
-          } else {
-            Vue.delete(this.eventData, idx);
-          }
+          this.removeDataItemFromView(item["count"] ? this.groupByData : this.eventData, item);
         } else if (escalate) {
           this.$root.showTip(this.i18n.escalatedEventTip);
         }
@@ -584,25 +598,12 @@ const huntComponent = {
       return route;
     },
     toggleQuickAction(domEvent, event, field, value) {
-      if (!domEvent) {
-        if (this.quickActionElement) {
-          this.quickActionElement.remove();
-          this.quickActionElement = null;
-        }
+      if (!domEvent || this.quickActionVisible) {
+        this.quickActionVisible = false;
         return;
       }
 
-      if (this.quickActionElement && this.quickActionElement.parentElement == domEvent.target) {
-        this.quickActionElement.remove();
-        this.quickActionElement = null;
-        return;
-      }
-
-      if (value && this.canQuery(field) && domEvent.target.classList.contains("quick-action-trigger")) {
-        if (this.quickActionElement) {
-          this.quickActionElement.remove();
-          this.quickActionElement = null;
-        }
+      if (value && this.canQuery(field)) {
         this.filterRouteInclude = this.buildFilterRoute(field, value, FILTER_INCLUDE);
         this.filterRouteExclude = this.buildFilterRoute(field, value, FILTER_EXCLUDE);
         this.filterRouteExact = this.buildFilterRoute(field, value, FILTER_EXACT);
@@ -626,23 +627,19 @@ const huntComponent = {
           action.linkFormatted = route.formatActionLink(action, event, field, value);
         });
 
-        var route = this;
-        setTimeout(function() {
-          var quickActionTemplate = document.getElementById("hunt-quick-action");
-          route.quickActionElement = quickActionTemplate.cloneNode(true);
-          route.quickActionElement.style.display = "block";
-          domEvent.target.appendChild(route.quickActionElement);
-        }, 0);
-
-
+        this.quickActionX = domEvent.clientX;
+        this.quickActionY = domEvent.clientY;
+        this.$nextTick(() => { 
+          this.quickActionVisible = true; 
+        });
       }
     },
     formatActionLink(action, event, field, value) {
       var link = action.link;
-      link = link.replace("{eventId}", encodeURI(event["soc_id"]));
-      link = link.replace("{field}", encodeURI(field));
-      link = link.replace("{value}", encodeURI(value));
-      return link;
+      link = link.replace("{eventId}", event["soc_id"]);
+      link = link.replace("{field}", field);
+      link = link.replace("{value}", value);
+      return encodeURI(link);
     },
     isEventAction(action) {
       return action && action.link && !action.link.includes("{field}") && !action.link.includes("{value}");
@@ -711,13 +708,16 @@ const huntComponent = {
       var fields = [];
       var eventModule;
       var eventDataset;
+      var route = this;
       if (events != null && events.length > 0) {
         events.forEach(function(event, index) {
           var record = event.payload;
           record.soc_id = event.id;
           record.soc_score = event.score;
           record.soc_type = event.type;
-          record.soc_timestamp = event.timestamp;
+          var utcTime = moment.utc(event.timestamp);
+          var localTime = utcTime.tz(route.zone);
+          record.soc_timestamp = localTime.format(route.i18n.timestampFormat);
           record.soc_source = event.source;
           records.push(record);
 
@@ -835,7 +835,7 @@ const huntComponent = {
         case RELATIVE_TIME_MINUTES: unit = "minutes"; break;
         case RELATIVE_TIME_HOURS: unit = "hours"; break;
         case RELATIVE_TIME_DAYS: unit = "days"; break;
-        case RELATIVE_TIME_WEEEKS: unit = "weeks"; break;
+        case RELATIVE_TIME_WEEKS: unit = "weeks"; break;
         case RELATIVE_TIME_MONTHS: unit = "months"; break;
       }
       return moment().subtract(this.relativeTimeValue, unit);
@@ -862,7 +862,6 @@ const huntComponent = {
       });
     },
     showAbsoluteTime() {
-      if (!this.isAdvanced()) return;
       this.relativeTimeEnabled = false;
       setTimeout(this.setupDateRangePicker, 10);
     },
@@ -934,12 +933,8 @@ const huntComponent = {
         var clickedValue = activeElement[0]._model.label;
         if (clickedValue && clickedValue.length > 0) {
           if (this.canQuery(clickedValue)) {
-            this.query = "*";
-            for (var index = 1; index < this.groupByFields.length; index++) {
-              var field = this.groupByFields[index];
-              await this.groupQuery(field, false);
-            }
-            this.filterQuery(this.groupByFields[0], clickedValue, FILTER_EXACT, true);
+            var chartGroupByField = this.groupByFields[0];
+            this.toggleQuickAction(e, {}, chartGroupByField, clickedValue);
           }
         }
         return true;

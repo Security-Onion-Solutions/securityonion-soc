@@ -169,7 +169,7 @@
           <v-list id="top-menu">
             <v-list-item @click.stop="toggleTheme">
               <v-list-item-action>
-                <v-icon>fa-adjust</v-icon>
+                <v-icon class="mx-auto">fa-adjust</v-icon>
               </v-list-item-action>
               <v-list-item-content>
                 <v-list-item-title v-text="i18n.darkMode"></v-list-item-title>
@@ -177,15 +177,23 @@
             </v-list-item>
             <v-list-item target="so-help" :href="parameters.docsUrl">
               <v-list-item-action>
-                <v-icon>fa-question</v-icon>
+                <v-icon class="mx-auto">fa-question</v-icon>
               </v-list-item-action>
               <v-list-item-content>
                 <v-list-item-title v-text="i18n.help"></v-list-item-title>
               </v-list-item-content>
             </v-list-item>
+            <v-list-item target="so-cheatsheet" :href="parameters.cheatsheetUrl">
+              <v-list-item-action>
+                <v-icon class="mx-auto">fa-scroll</v-icon>
+              </v-list-item-action>
+              <v-list-item-content>
+                <v-list-item-title v-text="i18n.cheatsheet"></v-list-item-title>
+              </v-list-item-content>
+            </v-list-item>
             <v-list-item target="so-blog" href="https://blog.securityonion.net/">
               <v-list-item-action>
-                <v-icon>fa-info</v-icon>
+                <v-icon class="mx-auto">fa-info</v-icon>
               </v-list-item-action>
               <v-list-item-content>
                 <v-list-item-title v-text="i18n.blog"></v-list-item-title>
@@ -194,15 +202,15 @@
             <v-divider></v-divider>
             <v-list-item :href="settingsUrl">
               <v-list-item-action>
-                <v-icon>fa-user-edit</v-icon>
+                <v-icon class="mx-auto">fa-user-edit</v-icon>
               </v-list-item-action>
               <v-list-item-content>
                 <v-list-item-title v-text="i18n.settings"></v-list-item-title>
               </v-list-item-content>
             </v-list-item>
-            <v-list-item :href="authUrl + 'logout'">
+            <v-list-item :href="authUrl + 'browser/flows/logout'">
               <v-list-item-action>
-                <v-icon>fa-sign-out-alt</v-icon>
+                <v-icon class="mx-auto">fa-sign-out-alt</v-icon>
               </v-list-item-action>
               <v-list-item-content>
                 <v-list-item-title v-text="i18n.logout"></v-list-item-title>
@@ -290,7 +298,7 @@
           <v-col cols="3" align="end">
             <h4 v-if="loaded">{{ i18n.eventTotal }} {{ totalEvents.toLocaleString() }}</h4>
             <p>
-            <h5 v-if="isAdvanced()">{{ i18n.timezone }} {{ zone }}</h5>
+            <h5>{{ i18n.timezone }} {{ zone }}</h5>
           </v-col>
         </v-row>
         <v-row align="start">
@@ -364,7 +372,7 @@
           </v-col>
           <v-col cols="12" md="5" class="d-flex flex-nowrap align-center">
             <v-text-field :disabled="loading()" v-if="relativeTimeEnabled" id="huntrelativetimevalue" @change="notifyInputsChanged" class="mx-2" 
-                v-model="relativeTimeValue" :hint="isAdvanced() ? i18n.relativeTimeHelp : ''" :persistent-hint="isAdvanced()" type="number">
+                v-model="relativeTimeValue" :hint="i18n.relativeTimeHelp" persistent-hint="true" type="number">
               <template v-slot:prepend>
                 <v-btn v-if="relativeTimeEnabled" icon x-small @click="showAbsoluteTime" id="show-absolute-time">
                   <v-icon>fa-history</v-icon>
@@ -378,7 +386,7 @@
                   v-model="relativeTimeUnit" :items="relativeTimeUnits"></v-select>
               </template>
             </v-text-field>
-            <v-text-field :disabled="loading()" v-if="!relativeTimeEnabled && isAdvanced()" id="huntdaterange" @change="notifyInputsChanged" class="mx-2" 
+            <v-text-field :disabled="loading()" v-if="!relativeTimeEnabled" id="huntdaterange" @change="notifyInputsChanged" class="mx-2" 
               v-model="dateRange" :hint="i18n.timePickerHelp" persistent-hint="true" 
               prepend-inner-icon="fa-angle-down" @click:prepend-inner="showDateRangePicker">
               <template v-slot:prepend>
@@ -441,9 +449,9 @@
               <template v-slot:item="{ item, index }">
                 <tr>
                   <td>
-                    <v-btn id="alertButton" v-if="dismissEnabled && item['event.severity_label']" class="mx-2" icon x-small 
+                    <v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" class="mx-2" icon x-small 
                       @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))" 
-                      :title="isFilterToggleEnabled('acknowledged') ? i18n.alertUndoDismiss : i18n.alertDismiss" 
+                      :title="isFilterToggleEnabled('acknowledged') ? i18n.alertUndoAcknowledge : i18n.alertAcknowledge" 
                       :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
                       <v-icon>fa-bell</v-icon>
                     </v-btn>
@@ -492,9 +500,9 @@
                       <v-icon v-if="isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-down</v-icon>
                       <v-icon v-if="!isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-right</v-icon>
                     </v-btn>
-                    <v-btn id="alertButton" v-if="dismissEnabled && item['event.severity_label']" class="mx-2" icon x-small 
+                    <v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" class="mx-2" icon x-small 
                       @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))" 
-                      :title="isFilterToggleEnabled('acknowledged') ? i18n.alertUndoDismiss : i18n.alertDismiss" 
+                      :title="isFilterToggleEnabled('acknowledged') ? i18n.alertUndoAcknowledge : i18n.alertAcknowledge" 
                       :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
                       <v-icon>fa-bell</v-icon>
                     </v-btn>
@@ -551,30 +559,58 @@
           </v-col>
           <v-spacer></v-spacer>
         </v-row>
-        <v-card id="hunt-quick-action" class="quick-action" color="secondary" elevation="2">
-          <v-card-actions>
-            <v-list-item dense>
-              <v-row align="center" justify="center">
-                <v-btn id="actionFilerInclude" depressed tile small color="secondary" :to="filterRouteInclude" :title="i18n.filterIncludeHelp">
-                  <v-icon :alt="i18n.filterInclude">fa-search-plus</v-icon>
-                </v-btn>
-                <v-btn id="actionFilterExclude" depressed tile small color="secondary" :to="filterRouteExclude" :title="i18n.filterExcludeHelp">
-                  <v-icon :alt="i18n.filterExclude">fa-search-minus</v-icon>
-                </v-btn>
-                <v-btn id="actionDrilldown" depressed tile small color="secondary" :to="filterRouteDrilldown" :title="i18n.filterDrilldownHelp" v-if="!isAdvanced() && metricsEnabled">
-                  <v-icon :alt="i18n.filterDrilldown">fa-angle-double-down</v-icon>
-                </v-btn>
-                <v-btn id="actionGroupBy" depressed tile small color="secondary" :to="groupByRoute" :title="i18n.groupIncludeHelp">
-                  <v-icon :alt="i18n.groupInclude">fa-layer-group</v-icon>
-                </v-btn>
-                <v-btn class="custom-quick-action-button" v-for="action in actions" depressed tile small color="secondary" v-if="action.enabled" :key="action.link" :href="action.linkFormatted" @click="" :title="$root.localizeMessage(action.description)" :target="action.target">
-                  <v-icon v-if="action.icon" :class="{ 'v-icon--left': action.name }">{{ action.icon }}</v-icon>
-                  {{ $root.localizeMessage(action.name) }}
-                </v-btn>
-              </v-row>
+        <v-menu v-model="quickActionVisible" :position-x="quickActionX" :position-y="quickActionY" absolute>
+          <v-list id="hunt-quick-action" color="secondary">
+            <v-list-item id="actionFilerInclude" dense :to="filterRouteInclude" :title="i18n.filterIncludeHelp">
+              <v-list-item-icon>
+                <v-icon :alt="i18n.filterInclude" color="white">fa-search-plus</v-icon>
+              </v-list-item-icon>
+              <v-list-item-title class="white--text">
+                {{ i18n.filterInclude }}
+              </v-list-item-title>
             </v-list-item>
-          </v-card-actions>
-        </v-card>            
+            <v-list-item id="actionFilterExclude" dense :to="filterRouteExclude" :title="i18n.filterExcludeHelp">
+              <v-list-item-icon>
+                <v-icon :alt="i18n.filterExclude" color="white">fa-search-minus</v-icon>
+              </v-list-item-icon>
+              <v-list-item-title class="white--text">
+                {{ i18n.filterExclude }}
+              </v-list-item-title>
+            </v-list-item>
+            <v-list-item id="actionFilterExact" dense :to="filterRouteExact" :title="i18n.filterExactHelp">
+              <v-list-item-icon>
+                <v-icon :alt="i18n.filterExact" color="white">fa-search</v-icon>
+              </v-list-item-icon>
+              <v-list-item-title class="white--text">
+                {{ i18n.filterExact }}
+              </v-list-item-title>
+            </v-list-item>
+            <v-list-item id="actionDrilldown" dense :to="filterRouteDrilldown" :title="i18n.filterDrilldownHelp" v-if="!isAdvanced() && metricsEnabled">
+              <v-list-item-icon>
+                <v-icon :alt="i18n.filterDrilldown" color="white">fa-angle-double-down</v-icon>
+              </v-list-item-icon>
+              <v-list-item-title class="white--text">
+                {{ i18n.filterDrilldown }}
+              </v-list-item-title>
+            </v-list-item>
+            <v-list-item id="actionGroupBy" dense :to="groupByRoute" :title="i18n.groupIncludeHelp">
+              <v-list-item-icon>
+                <v-icon :alt="i18n.groupInclude" color="white">fa-layer-group</v-icon>
+              </v-list-item-icon>
+              <v-list-item-title class="white--text">
+                {{ i18n.groupInclude }}
+              </v-list-item-title>
+            </v-list-item>
+            <v-list-item dense v-for="action in actions" class="custom-quick-action-button" v-if="action.enabled" :key="action.link" :href="action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="action.target">
+              <v-list-item-icon>
+                <v-icon :alt="action.name" color="white">{{ action.icon }}</v-icon>
+              </v-list-item-icon>
+              <v-list-item-title class="white--text">
+                {{ $root.localizeMessage(action.name) }}
+              </v-list-item-title>
+            </v-list-item>
+          </v-list>
+        </v-menu>
       </v-container>
     </script>
 
@@ -605,7 +641,7 @@
           <v-col>
             <h3 v-text="i18n.downloadsLoggers" id="download-loggers"></h3>
             <ul>
-              <li><a href="https://artifacts.elastic.co/downloads/beats/winlogbeat/winlogbeat-oss-7.9.2-windows-x86_64.msi" download="winlogbeat-oss-7.9.2-windows-x86_64.msi">Winlogbeat</a> (External Link)</li>
+              <li><a :href="'/downloads/winlogbeat-oss-' + $root.elasticVersion + '-windows-x86_64.msi'" :download="'winlogbeat-oss-' +  $root.elasticVersion + '-windows-x86_64.msi'">Winlogbeat</a></li>
             </ul>
             <p></p>
             <h3 v-text="i18n.downloadsOsqueryPackages" id="osquery-packages"></h3>
@@ -974,19 +1010,19 @@
             </v-row>
             <v-row>
               <v-col>
-                <div v-text="i18n.settingsInstructions"></div>
+                <h3 class="mb-4" v-text="i18n.updateSettings"></h3>
+                <div v-text="i18n.resetDefaultsHint"></div>
+                <v-btn id="settingsResetDefaults" color="primary" :disabled="usingDefaults" v-text="i18n.resetDefaults" @click="resetDefaults"></v-btn>
               </v-col>
             </v-row>
             <v-row>
               <v-col>
+                <h3 class="mb-4"  v-text="i18n.updateProfile"></h3>
+                <div v-text="i18n.settingsInstructions"></div>
                 <v-text-field name="password" v-model="form.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required]"></v-text-field>
                 <v-text-field :placeholder="i18n.passwordConfirm" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.matches]"></v-text-field>
                 <v-text-field name="csrf_token" v-model="form.csrfToken" class="d-none"></v-text-field>
-              </v-col>
-            </v-row>
-            <v-row>
-              <v-col>
-                <v-btn type="submit" :disabled="!form.valid" text color="primary" v-text="i18n.save"></v-btn>
+                <v-btn type="submit" color="primary" :disabled="!form.valid" v-text="i18n.save"></v-btn>
               </v-col>
             </v-row>
           </v-container>

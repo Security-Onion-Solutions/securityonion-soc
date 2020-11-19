@@ -7,17 +7,20 @@
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-FROM golang:alpine as builder
+FROM ghcr.io/security-onion-solutions/golang:alpine as builder
 ARG VERSION=0.0.0
 RUN apk update && apk add libpcap-dev bash git musl-dev gcc
 COPY . /build
 WORKDIR /build
 RUN ./build.sh "$VERSION"
 
-FROM alpine:latest
+FROM ghcr.io/security-onion-solutions/alpine:latest
+
 ARG UID=939
 ARG GID=939
 ARG VERSION=0.0.0
+ARG ELASTIC_VERSION=0.0.0
+
 RUN apk update && apk add tzdata ca-certificates curl tcpdump && update-ca-certificates
 RUN addgroup --gid "$GID" socore
 RUN adduser -D -u "$UID" -G socore -g '' socore
@@ -40,7 +43,14 @@ RUN [[ $VERSION == '0.0.0' ]] || \
     unzip -o /tmp/docs.zip -d html/docs && \
     rm -f /tmp/docs.zip && \
     mv -f html/docs/securityonion-*/* html/docs && \
-    rm -fr html/docs/securityonion-*)
+    rm -fr html/docs/securityonion-* && \
+    wget https://github.com/Security-Onion-Solutions/securityonion-docs/raw/$(echo $VERSION | cut -d'.' -f 1,2)/images/cheat-sheet/Security-Onion-Cheat-Sheet.pdf -O html/docs/cheatsheet.pdf)
+
+RUN [[ $ELASTIC_VERSION == '0.0.0' ]] || \
+    (mkdir -p html/downloads && \
+     wget https://artifacts.elastic.co/downloads/beats/winlogbeat/winlogbeat-oss-$(echo $ELASTIC_VERSION)-windows-x86_64.msi -P html/downloads/)
+
+ENV ELASTIC_VERSION=$ELASTIC_VERSION
 
 USER socore
 EXPOSE 9822/tcp

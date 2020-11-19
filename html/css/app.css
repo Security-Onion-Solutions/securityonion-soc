@@ -115,17 +115,18 @@
   opacity: 0.5;
 }
 
-.quick-action {
-  display: none;
-  position: absolute;
-  z-index: 10;
-
-}
-
 .expansion {
   padding-left: 0px;
   vertical-align: top;
   overflow-x: hidden;
+}
+
+th.sortable {
+  white-space: nowrap;
+}
+
+th.sortable>i {
+  margin-left: 5px;
 }
 
 a#title, a#title:visited, a#title:active, a#title:hover {
