@@ -7,13 +7,14 @@
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-routes.push({ path: '/sensors', name: 'sensors', component: {
-  template: '#page-sensors',
+routes.push({ path: '/grid', name: 'grid', component: {
+  template: '#page-grid',
   data() { return {
     i18n: this.$root.i18n,
-    sensors: [],
+    nodes: [],
     headers: [
       { text: this.$root.i18n.id, value: 'id' },
+      { text: this.$root.i18n.role, value: 'role' },
       { text: this.$root.i18n.description, value: 'description' },
       { text: this.$root.i18n.version, value: 'version' },
       { text: this.$root.i18n.dateOnline, value: 'onlineTime' },
@@ -30,7 +31,7 @@ routes.push({ path: '/sensors', name: 'sensors', component: {
     this.loadData() 
   },
   destroyed() {
-    this.$root.unsubscribe("sensor", this.updateSensor);
+    this.$root.unsubscribe("node", this.updateNode);
   },
   watch: {
     '$route': 'loadData',
@@ -42,31 +43,31 @@ routes.push({ path: '/sensors', name: 'sensors', component: {
     async loadData() {
       this.$root.startLoading();
       try {
-        const response = await this.$root.papi.get('sensors');
-        this.sensors = response.data;
+        const response = await this.$root.papi.get('grid');
+        this.nodes = response.data;
         this.loadLocalSettings();
       } catch (error) {
         this.$root.showError(error);
       }
       this.$root.stopLoading();
-      this.$root.subscribe("sensor", this.updateSensor);
+      this.$root.subscribe("node", this.updateNode);
     },
     saveLocalSettings() {
-      localStorage['settings.sensors.sortBy'] = this.sortBy;
-      localStorage['settings.sensors.sortDesc'] = this.sortDesc;
-      localStorage['settings.sensors.itemsPerPage'] = this.itemsPerPage;
+      localStorage['settings.grid.sortBy'] = this.sortBy;
+      localStorage['settings.grid.sortDesc'] = this.sortDesc;
+      localStorage['settings.grid.itemsPerPage'] = this.itemsPerPage;
     },
     loadLocalSettings() {
-      if (localStorage['settings.sensors.sortBy']) {
-        this.sortBy = localStorage['settings.sensors.sortBy'];
-        this.sortDesc = localStorage['settings.sensors.sortDesc'] == "true";
-        this.itemsPerPage = parseInt(localStorage['settings.sensors.itemsPerPage']);
+      if (localStorage['settings.grid.sortBy']) {
+        this.sortBy = localStorage['settings.grid.sortBy'];
+        this.sortDesc = localStorage['settings.grid.sortDesc'] == "true";
+        this.itemsPerPage = parseInt(localStorage['settings.grid.itemsPerPage']);
       }
     },
-    updateSensor(sensor) {
-      for (var i = 0; i < this.sensors.length; i++) {
-        if (this.sensors[i].id == sensor.id) {
-          this.$set(this.sensors, i, sensor);
+    updateNode(node) {
+      for (var i = 0; i < this.nodes.length; i++) {
+        if (this.nodes[i].id == node.id) {
+          this.$set(this.nodes, i, node);
           break;
         }
       }

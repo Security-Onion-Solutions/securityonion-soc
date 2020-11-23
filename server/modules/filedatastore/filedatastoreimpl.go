@@ -31,9 +31,9 @@ const DEFAULT_RETRY_FAILURE_INTERVAL_MS = 600000
 type FileDatastoreImpl struct {
   jobDir									string
   retryFailureIntervalMs	int
-  jobsBySensorId 					map[string][]*model.Job
+  jobsByNodeId 					map[string][]*model.Job
   jobsById 								map[int]*model.Job
-  sensorsById							map[string]*model.Sensor
+  nodesById							map[string]*model.Node
   ready    								bool
   nextJobId								int
   lock										sync.RWMutex
@@ -41,9 +41,9 @@ type FileDatastoreImpl struct {
 
 func NewFileDatastoreImpl() *FileDatastoreImpl {
   return &FileDatastoreImpl {
-    jobsBySensorId: make(map[string][]*model.Job),
+    jobsByNodeId: make(map[string][]*model.Job),
     jobsById: make(map[int]*model.Job),
-    sensorsById: make(map[string]*model.Sensor),
+    nodesById: make(map[string]*model.Node),
     lock: sync.RWMutex{},
   }
 }
@@ -59,61 +59,61 @@ func (datastore *FileDatastoreImpl) Init(cfg module.ModuleConfig) error {
   return datastore.loadJobs()
 }
 
-func (datastore *FileDatastoreImpl) CreateSensor(id string) *model.Sensor {
-  sensor := model.NewSensor(id)
-  return sensor
+func (datastore *FileDatastoreImpl) CreateNode(id string, role string, description string) *model.Node {
+  node := model.NewNode(id, role, description)
+  return node
 }
 
-func (datastore *FileDatastoreImpl) GetSensors() []*model.Sensor {
+func (datastore *FileDatastoreImpl) GetNodes() []*model.Node {
   datastore.lock.RLock()
   defer datastore.lock.RUnlock()
-  allSensors := make([]*model.Sensor, 0)
-  for _, sensor := range datastore.sensorsById {
-    allSensors = append(allSensors, sensor)
+  allNodes := make([]*model.Node, 0)
+  for _, node := range datastore.nodesById {
+    allNodes = append(allNodes, node)
   }
-  return allSensors
+  return allNodes
 }
 
-func (datastore *FileDatastoreImpl) AddSensor(sensor *model.Sensor) error {
-  return datastore.UpdateSensor(sensor)
+func (datastore *FileDatastoreImpl) AddNode(node *model.Node) error {
+  return datastore.UpdateNode(node)
 }
 
-func (datastore *FileDatastoreImpl) addSensor(sensor *model.Sensor) *model.Sensor {
-  datastore.sensorsById[sensor.Id] = sensor
+func (datastore *FileDatastoreImpl) addNode(node *model.Node) *model.Node {
+  datastore.nodesById[node.Id] = node
   log.WithFields(log.Fields {
-    "id": sensor.Id,
-    "description": sensor.Description,
-  }).Debug("Added sensor")
-  return sensor
+    "id": node.Id,
+    "description": node.Description,
+  }).Debug("Added node")
+  return node
 }
 
-func (datastore *FileDatastoreImpl) UpdateSensor(newSensor *model.Sensor) error {
-  if len(newSensor.Id) > 0 {
+func (datastore *FileDatastoreImpl) UpdateNode(newNode *model.Node) error {
+  if len(newNode.Id) > 0 {
     datastore.lock.Lock()
     defer datastore.lock.Unlock()
-    sensor := datastore.sensorsById[newSensor.Id]
-    if sensor == nil {
-      sensor = datastore.addSensor(newSensor)
+    node := datastore.nodesById[newNode.Id]
+    if node == nil {
+      node = datastore.addNode(newNode)
     }
     // Preserve the original online time
-    newSensor.OnlineTime = sensor.OnlineTime
+    newNode.OnlineTime = node.OnlineTime
     // Update time is now
-    newSensor.UpdateTime = time.Now()
+    newNode.UpdateTime = time.Now()
     // Calculate uptime
-    newSensor.UptimeSeconds = int(newSensor.UpdateTime.Sub(newSensor.OnlineTime).Seconds())
-    datastore.sensorsById[newSensor.Id] = newSensor
+    newNode.UptimeSeconds = int(newNode.UpdateTime.Sub(newNode.OnlineTime).Seconds())
+    datastore.nodesById[newNode.Id] = newNode
   } else {
-    log.WithField("description", newSensor.Description).Info("Not adding sensor with missing id")
+    log.WithField("description", newNode.Description).Info("Not adding node with missing id")
   }
   return nil
 } 
 
-func (datastore *FileDatastoreImpl) GetNextJob(sensorId string) *model.Job {
+func (datastore *FileDatastoreImpl) GetNextJob(nodeId string) *model.Job {
   datastore.lock.RLock()
   defer datastore.lock.RUnlock()
   var nextJob *model.Job
   now := time.Now()
-  jobs := datastore.jobsBySensorId[sensorId]
+  jobs := datastore.jobsByNodeId[nodeId]
   for _, job := range jobs {
     retryTime := job.FailTime.Add(time.Millisecond * time.Duration(datastore.retryFailureIntervalMs))
     if job.Status != model.JobStatusCompleted && 
@@ -187,7 +187,7 @@ func (datastore *FileDatastoreImpl) DeleteJob(job *model.Job) error {
   if err == nil {
     job.Status = model.JobStatusDeleted
     filename := fmt.Sprintf("%d.json", job.Id)
-    folder := filepath.Join(datastore.jobDir, sanitize.Name(job.SensorId))
+    folder := filepath.Join(datastore.jobDir, sanitize.Name(job.NodeId))
     err = os.Remove(filepath.Join(folder, filename))
     if err == nil {
       filename = fmt.Sprintf("%d.bin", job.Id)
@@ -211,18 +211,18 @@ func (datastore *FileDatastoreImpl) deleteJob(job *model.Job) error {
   if existingJob == nil {
     err = errors.New("Job does not exist")
   } else {
-    jobs := datastore.jobsBySensorId[job.SensorId]
+    jobs := datastore.jobsByNodeId[job.NodeId]
     newJobs := make([]*model.Job, 0)
     for _, currentJob := range jobs {
       if currentJob.Id != job.Id {
         newJobs = append(newJobs, currentJob)
       }
     }
-    datastore.jobsBySensorId[job.SensorId] = newJobs
+    datastore.jobsByNodeId[job.NodeId] = newJobs
     delete(datastore.jobsById, job.Id)
     log.WithFields(log.Fields {
       "id": job.Id,
-      "sensor": job.SensorId,
+      "node": job.NodeId,
     }).Debug("Deleted job from list")
   }
   return err
@@ -234,16 +234,16 @@ func (datastore *FileDatastoreImpl) addJob(job *model.Job) error {
   if existingJob != nil {
     err = errors.New("Job already exists")
   } else {
-    jobs := datastore.jobsBySensorId[job.SensorId]
+    jobs := datastore.jobsByNodeId[job.NodeId]
     if jobs == nil {
       jobs = make([]*model.Job, 0)
     }
-    datastore.jobsBySensorId[job.SensorId] = append(jobs, job)
+    datastore.jobsByNodeId[job.NodeId] = append(jobs, job)
     datastore.jobsById[job.Id] = job
     datastore.incrementJobId(job.Id)
     log.WithFields(log.Fields {
       "id": job.Id,
-      "sensor": job.SensorId,
+      "node": job.NodeId,
     }).Debug("Added job")
   }
   return err
@@ -257,7 +257,7 @@ func (datastore *FileDatastoreImpl) incrementJobId(id int) {
 
 func (datastore *FileDatastoreImpl) saveJob(job *model.Job) error {
   filename := fmt.Sprintf("%d.json", job.Id)
-  folder := filepath.Join(datastore.jobDir, sanitize.Name(job.SensorId))
+  folder := filepath.Join(datastore.jobDir, sanitize.Name(job.NodeId))
   log.WithFields(log.Fields {
     "id": job.Id,
     "folder": folder,
@@ -343,7 +343,7 @@ func (datastore *FileDatastoreImpl) GetPacketStream(jobId int, unwrap bool) (io.
   job := datastore.GetJob(jobId)
   if job != nil {
     if job.Status == model.JobStatusCompleted {
-      filename = fmt.Sprintf("sensoroni_%s_%d.%s", sanitize.Name(job.SensorId), job.Id, job.FileExtension);
+      filename = fmt.Sprintf("nodeoni_%s_%d.%s", sanitize.Name(job.NodeId), job.Id, job.FileExtension);
       file, err := os.Open(datastore.getModifiedStreamFilename(job, unwrap))
       if err != nil {
         log.WithError(err).WithField("jobId", job.Id).Error("Failed to open packet stream")
@@ -368,7 +368,7 @@ func (datastore *FileDatastoreImpl) GetPacketStream(jobId int, unwrap bool) (io.
 
 func (datastore *FileDatastoreImpl) getStreamFilename(job *model.Job) string {
   filename := fmt.Sprintf("%d.bin", job.Id)
-  folder := filepath.Join(datastore.jobDir, sanitize.Name(job.SensorId))
+  folder := filepath.Join(datastore.jobDir, sanitize.Name(job.NodeId))
   return filepath.Join(folder, filename)
 }
 

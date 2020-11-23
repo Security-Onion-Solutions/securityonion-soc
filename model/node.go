@@ -13,19 +13,22 @@ import (
   "time"
 )
 
-type Sensor struct {
+type Node struct {
   Id											string		`json:"id"`
   OnlineTime              time.Time `json:"onlineTime"`
   UpdateTime            	time.Time `json:"updateTime"`
   EpochTime								time.Time	`json:"epochTime"`
   UptimeSeconds						int				`json:"uptimeSeconds"`
   Description             string    `json:"description"`
+  Role                    string    `json:"role"`
   Version									string		`json:"version"`
 }
 
-func NewSensor(id string) *Sensor {
-  return &Sensor{
+func NewNode(id string, role string, description string) *Node {
+  return &Node{
     Id: id,
+    Role: role,
+    Description: description,
     OnlineTime: time.Now(),
     UpdateTime: time.Now(),
   }

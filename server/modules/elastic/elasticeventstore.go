@@ -617,7 +617,7 @@ func (store *ElasticEventstore) PopulateJobFromEventId(esId string, job *model.J
 
   filter.BeginTime = timestamp.Add(time.Duration(-duration - int64(store.timeShiftMs)) * time.Millisecond)
   filter.EndTime = timestamp.Add(time.Duration(duration + int64(store.timeShiftMs)) * time.Millisecond)
-  job.SensorId = outputSensorId
+  job.NodeId = outputSensorId
   job.Filter = filter
 
   return nil

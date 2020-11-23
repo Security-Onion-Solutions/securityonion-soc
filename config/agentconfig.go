@@ -18,7 +18,9 @@ import (
 const DEFAULT_POLL_INTERVAL_MS = 1000
 
 type AgentConfig struct {
-  SensorId												string														`json:"sensorId"`
+  NodeId  												string														`json:"nodeId"`
+  Role                            string                            `json:"role"`
+  Description                     string                            `json:"description"`
   ServerUrl			               		string    												`json:"serverUrl"`
   VerifyCert			               	bool	    												`json:"verifyCert"`
   PollIntervalMs									int																`json:"pollIntervalMs"`
@@ -31,8 +33,8 @@ func (config *AgentConfig) Verify() error {
   if err == nil && config.PollIntervalMs <= 0 {
     config.PollIntervalMs = DEFAULT_POLL_INTERVAL_MS
   }
-  if err == nil && config.SensorId == "" {
-    config.SensorId, err = os.Hostname()
+  if err == nil && config.NodeId == "" {
+    config.NodeId, err = os.Hostname()
   }
   if err == nil && config.ServerUrl == "" {
     err = errors.New("Agent.ServerUrl configuration value is required")

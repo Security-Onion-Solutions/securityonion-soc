@@ -27,7 +27,7 @@ type Job struct {
   Failure										string									`json:"failure"`
   FailCount									int											`json:"failCount"`
   Owner                     string    							`json:"owner"`
-  SensorId	                string    							`json:"sensorId"`
+  NodeId	                  string    							`json:"nodeId"`
   FileExtension							string									`json:"fileExtension"`
   Filter										*Filter									`json:"filter"`
 }

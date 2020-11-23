@@ -21,7 +21,7 @@ import (
 
 type JobManager struct {
   agent 				*Agent
-  sensor				*model.Sensor
+  node				*model.Node
   running				bool
   jobProcessors	[]JobProcessor
   lock					sync.RWMutex
@@ -30,9 +30,9 @@ type JobManager struct {
 func NewJobManager(agent *Agent) *JobManager {
   mgr := &JobManager{
     agent: agent,
-    sensor: model.NewSensor(agent.Config.SensorId),
+    node: model.NewNode(agent.Config.NodeId, agent.Config.Role, agent.Config.Description),
   }
-  mgr.sensor.Version = agent.Version
+  mgr.node.Version = agent.Version
   return mgr
 }
 
@@ -80,7 +80,7 @@ func (mgr *JobManager) Stop() {
 
 func (mgr *JobManager) PollPendingJobs() (*model.Job, error) {
   job := model.NewJob()
-  available, err := mgr.agent.Client.SendAuthorizedObject("POST", "/api/sensor", mgr.sensor, job)
+  available, err := mgr.agent.Client.SendAuthorizedObject("POST", "/api/node", mgr.node, job)
   if !available {
     job = nil
   }
@@ -114,8 +114,8 @@ func (mgr *JobManager) updateDataEpoch() {
   epochHasBeenSet := false
   for _, processor := range mgr.jobProcessors {
     processorEpoch := processor.GetDataEpoch()
-    if !epochHasBeenSet || mgr.sensor.EpochTime.After(processorEpoch) {
-      mgr.sensor.EpochTime = processorEpoch
+    if !epochHasBeenSet || mgr.node.EpochTime.After(processorEpoch) {
+      mgr.node.EpochTime = processorEpoch
       epochHasBeenSet = true
     }
   }

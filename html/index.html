@@ -61,12 +61,12 @@
               <v-list-item-title v-text="i18n.jobs"></v-list-item-title>
             </v-list-item-content>
           </v-list-item>
-          <v-list-item @click="" to="/sensors">
+          <v-list-item @click="" to="/grid">
             <v-list-item-action>
-              <v-icon>fa-ethernet</v-icon>
+              <v-icon>fa-network-wired</v-icon>
             </v-list-item-action>
             <v-list-item-content>
-              <v-list-item-title v-text="i18n.sensors"></v-list-item-title>
+              <v-list-item-title v-text="i18n.grid"></v-list-item-title>
             </v-list-item-content>
           </v-list-item>
           <v-list-item @click="" to="/downloads">
@@ -794,7 +794,7 @@
                   </td>
                   <td>{{ props.item.createTime | formatDateTime }}</td>
                   <td>{{ props.item | formatJobUpdateTime | formatDateTime }}</td>
-                  <td v-text="props.item.sensorId"></td>
+                  <td v-text="props.item.nodeId"></td>
                   <td><v-chip :color="props.item | colorJobStatus">{{ props.item | formatJobStatus }}</v-chip></td>
                   <td>
                     <router-link :to="{ name: 'job', params: {jobId: props.item.id}}" :style="{ cursor: 'pointer'}">
@@ -812,7 +812,7 @@
                   <v-container grid-list-sm class="pa-4">
                     <v-row>
                       <v-col xs12>
-                        <v-text-field v-model="form.sensorId" :placeholder="i18n.sensorId" :hint="i18n.sensorIdHelp"></v-text-field>
+                        <v-text-field v-model="form.nodeId" :placeholder="i18n.sensorId" :hint="i18n.sensorIdHelp"></v-text-field>
                         <v-text-field v-model="form.srcIp" :placeholder="i18n.srcIp" :hint="i18n.srcIpHelp"></v-text-field>
                         <v-text-field v-model="form.srcPort" :placeholder="i18n.srcPort" :hint="i18n.srcPortHelp"></v-text-field>
                         <v-text-field v-model="form.dstIp" :placeholder="i18n.dstIp" :hint="i18n.dstIpHelp"></v-text-field>
@@ -858,7 +858,7 @@
                     <v-avatar>
                       <v-icon>fa-ethernet</v-icon>
                     </v-avatar>
-                    <span id="jobDetailsSensorId">{{ job.sensorId }}</span>
+                    <span id="jobDetailsSensorId">{{ job.nodeId }}</span>
                   </v-chip>
                   <v-chip disabled v-if="job.filter">
                     <v-avatar>
@@ -972,20 +972,21 @@
       </v-container>
     </script>
 
-    <script type="text/x-template" id="page-sensors">
+    <script type="text/x-template" id="page-grid">
       <v-container fluid>
         <v-row>
           <v-col>
-            <h2 v-text="i18n.sensors"></h2>
+            <h2 v-text="i18n.grid"></h2>
           </v-col>
         </v-row>
         <v-row>
           <v-col>
             <v-data-table :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps" 
-              :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="sensors">
+              :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="nodes">
               <template v-slot:item="props">
                 <tr>
                   <td v-text="props.item.id"></td>
+                  <td v-text="props.item.role"></td>
                   <td v-text="props.item.description"></td>
                   <td v-text="props.item.version"></td>
                   <td>{{ props.item.onlineTime | formatDateTime }}</td>
@@ -1049,7 +1050,7 @@
     <script src="js/routes/jobs.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/job.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/settings.js?v=VERSION_PLACEHOLDER"></script>
-    <script src="js/routes/sensors.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/grid.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/terms.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/user.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/users.js?v=VERSION_PLACEHOLDER"></script>

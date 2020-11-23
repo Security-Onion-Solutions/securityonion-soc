@@ -16,35 +16,35 @@ import (
   "github.com/security-onion-solutions/securityonion-soc/web"
 )
 
-type SensorHandler struct {
+type NodeHandler struct {
   web.BaseHandler
   server 		*Server
 }
 
-func NewSensorHandler(srv *Server) *SensorHandler {
-  handler := &SensorHandler {}
+func NewNodeHandler(srv *Server) *NodeHandler {
+  handler := &NodeHandler {}
   handler.Host = srv.Host
   handler.server = srv
   handler.Impl = handler
   return handler
 }
 
-func (sensorHandler *SensorHandler) HandleNow(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (nodeHandler *NodeHandler) HandleNow(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   switch request.Method {
-    case http.MethodPost: return sensorHandler.post(writer, request)
+    case http.MethodPost: return nodeHandler.post(writer, request)
   }
   return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
 
-func (sensorHandler *SensorHandler) post(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (nodeHandler *NodeHandler) post(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   var job *model.Job
-  sensor := model.NewSensor("")
-  err := sensorHandler.ReadJson(request, sensor)
+  node := model.NewNode("", "", "")
+  err := nodeHandler.ReadJson(request, node)
   if err == nil {
-    err = sensorHandler.server.Datastore.UpdateSensor(sensor)
+    err = nodeHandler.server.Datastore.UpdateNode(node)
     if err == nil {
-      sensorHandler.Host.Broadcast("sensor", sensor)
-      job = sensorHandler.server.Datastore.GetNextJob(sensor.Id)
+      nodeHandler.Host.Broadcast("node", node)
+      job = nodeHandler.server.Datastore.GetNextJob(node.Id)
     }
   }
   return http.StatusOK, job, err
