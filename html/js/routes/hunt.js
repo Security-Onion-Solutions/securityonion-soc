@@ -36,6 +36,9 @@ const huntComponent = {
     relativeTimeValue: 24,
     relativeTimeUnit: RELATIVE_TIME_HOURS,
     relativeTimeUnits: [],
+    autoRefreshInterval: 0,
+    autoRefreshIntervals: [],
+    autoRefreshTimer: null,
     loaded: false,
     expanded: [],
     chartHeight: 200,
@@ -110,10 +113,29 @@ const huntComponent = {
       { text: this.i18n.weeks, value: RELATIVE_TIME_WEEKS },
       { text: this.i18n.months, value: RELATIVE_TIME_MONTHS }
     ];
+    this.autoRefreshIntervals = [
+      { text: this.i18n.interval0s, value: 0 },
+      { text: this.i18n.interval5s, value: 5 },
+      { text: this.i18n.interval10s, value: 10 },
+      { text: this.i18n.interval15s, value: 15 },
+      { text: this.i18n.interval30s, value: 30 },
+      { text: this.i18n.interval1m, value: 60 },
+      { text: this.i18n.interval2m, value: 120 },
+      { text: this.i18n.interval5m, value: 300 },
+      { text: this.i18n.interval10m, value: 600 },
+      { text: this.i18n.interval15m, value: 900 },
+      { text: this.i18n.interval30m, value: 1800 },
+      { text: this.i18n.interval1h, value: 3600 },
+      { text: this.i18n.interval2h, value: 7200 },
+      { text: this.i18n.interval5h, value: 18000 },
+      { text: this.i18n.interval10h, value: 36000 },
+      { text: this.i18n.interval24h, value: 86400 },
+    ];
     Vue.filter('colorSeverity', this.colorSeverity);
   },
   beforeDestroy() {
     this.$root.setSubtitle("");
+    this.stopRefreshTimer();
   },
   mounted() {
     this.$root.startLoading();
@@ -133,6 +155,7 @@ const huntComponent = {
     'relativeTimeValue': 'saveLocalSettings',
     'relativeTimeUnit': 'saveLocalSettings',
     'autohunt': 'saveLocalSettings',
+    'autoRefreshInterval': 'resetRefreshTimer',
   },
   methods: {
     isAdvanced() {
@@ -234,6 +257,19 @@ const huntComponent = {
         this.$router.replace(this.buildCurrentRoute(), onSuccess, onFail);
       } else {
         this.$router.push(this.buildCurrentRoute(), onSuccess, onFail);
+      }
+      this.resetRefreshTimer();
+    },
+    stopRefreshTimer() {
+      if (this.autoRefreshTimer) {
+        clearTimeout(this.autoRefreshTimer);
+      }
+    },
+    resetRefreshTimer() {
+      var route = this;
+      this.stopRefreshTimer();
+      if (this.autoRefreshInterval > 0) {
+        this.autoRefreshTimer = setTimeout(function() { route.hunt(true); }, this.autoRefreshInterval * 1000);
       }
     },
     huntQuery(query) {
