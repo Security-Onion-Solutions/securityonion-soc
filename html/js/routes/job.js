@@ -44,7 +44,9 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     this.loadData();
   },
   destroyed() {
-    this.$root.unsubscribe("job", this.updateJob);
+    if (this.job && this.job.id) {
+      this.$root.unsubscribe("job-" + this.job.id, this.updateJob);
+    }
   },
   watch: {
     '$route': 'loadData',
@@ -162,7 +164,9 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
         }
       }
       this.$root.stopLoading();
-      this.$root.subscribe("job", this.updateJob);
+      if (this.job && this.job.id) {
+        this.$root.subscribe("job-" + this.job.id, this.updateJob);
+      }
     },
     saveLocalSettings() {
       if (!this.packetsLoading) {
