@@ -109,7 +109,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
           this.$root.showError(this.i18n.sensorIdRequired);
         } else {
           const response = await this.$root.papi.post('job/', {
-            sensorId: sensorId,
+            nodeId: sensorId,
             filter: {
               srcIp: srcIp,
               srcPort: parseInt(srcPort),
