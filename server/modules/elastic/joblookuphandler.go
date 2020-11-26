@@ -47,7 +47,7 @@ func (handler *JobLookupHandler) get(writer http.ResponseWriter, request *http.R
   if err == nil {
     err = handler.server.Datastore.AddJob(job)
     if err == nil {
-      handler.Host.Broadcast("job-" + strconv.Itoa(job.Id), job)
+      handler.Host.Broadcast("job", job)
       statusCode = http.StatusOK
       redirectUrl := handler.server.Config.BaseUrl + "#/job/" + strconv.Itoa(job.Id)
       http.Redirect(writer, request, redirectUrl, http.StatusFound)
