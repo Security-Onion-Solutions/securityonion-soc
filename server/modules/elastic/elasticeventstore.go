@@ -334,7 +334,7 @@ func (store *ElasticEventstore) refreshCache() {
 }
 
 func (store *ElasticEventstore) refreshCacheFromIndexPatterns() error {
-  query := fmt.Sprintf(`{"query" : { "bool": { "must": { "match" : { "type" : "index-pattern" }}}}}`)
+  query := fmt.Sprintf(`{"query" : { "bool": { "must": [ { "match": { "index-pattern.title" : "` + store.index + `" }}, { "match" : { "type" : "index-pattern" }} ] }}}`)
   json, err := store.indexSearch(query, []string{".kibana*"})
   if err != nil {
     log.WithError(err).Error("Failed to refresh cache from index patterns")
