@@ -655,10 +655,8 @@ const huntComponent = {
                 break;
               }
             }
-          } else if (action.link.indexOf("{eventId}") == -1 || event['soc_id']) {
-            action.enabled = true;
           } else {
-            action.enabled = false;
+            action.enabled = true;
           }
           action.linkFormatted = route.formatActionLink(action, event, field, value);
         });
@@ -672,6 +670,9 @@ const huntComponent = {
     },
     formatActionLink(action, event, field, value) {
       var link = action.link;
+      if (!event["soc_id"]) {
+        event = this.findFirstEventInGroup(event);
+      }
       link = link.replace("{eventId}", event["soc_id"]);
       link = link.replace("{field}", field);
       link = link.replace("{value}", value);
@@ -700,6 +701,23 @@ const huntComponent = {
         }
       }
       return fields;
+    },
+    findFirstEventInGroup(group) {
+      if (group && this.eventData) {
+        for (var eventIdx = 0; eventIdx < this.eventData.length; eventIdx++) {
+          var event = this.eventData[eventIdx];
+          var matches = true;
+          Object.keys(group).forEach(function(key) {
+            if (key != "count") {
+              matches &= (event[key] == group[key]);
+            }
+          });
+          if (matches) {
+            return event;
+          }
+        }
+        return null
+      }
     },
     constructHeaders(fields) {
       var headers = [];
