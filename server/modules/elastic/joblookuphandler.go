@@ -11,6 +11,7 @@ package elastic
 
 import (
   "errors"
+  "fmt"
   "net/http"
   "strconv"
   "github.com/security-onion-solutions/securityonion-soc/server"
@@ -41,9 +42,17 @@ func (handler *JobLookupHandler) HandleNow(writer http.ResponseWriter, request *
 
 func (handler *JobLookupHandler) get(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   statusCode := http.StatusBadRequest
-  esId := request.URL.Query().Get("esid")
+  esId := request.URL.Query().Get("esid") // Elastic doc ID
+  var query string
+  if len(esId) > 0 {
+    query = fmt.Sprintf(`{"query" : { "bool": { "must": { "match" : { "_id" : "%s" }}}}}`, esId)
+  } else {
+    ncId := request.URL.Query().Get("ncid") // Network community ID
+    query = fmt.Sprintf(`{"query" : { "bool": { "must": { "match" : { "network.community_id" : "%s" }}}}}`, ncId)
+  }
+
   job := handler.server.Datastore.CreateJob()
-  err := handler.store.PopulateJobFromEventId(esId, job)
+  err := handler.store.PopulateJobFromDocQuery(query, job)
   if err == nil {
     err = handler.server.Datastore.AddJob(job)
     if err == nil {

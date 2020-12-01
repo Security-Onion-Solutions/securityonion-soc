@@ -411,7 +411,7 @@ func (store *ElasticEventstore) parseFirst(json string, name string) string {
 }
 
 /**
- * Fetch record via provided Elasticsearch document ID.
+ * Fetch record via provided Elasticsearch document query.
  * If the record has a tunnel_parent, search for a UID=tunnel_parent[0]
  *   - If found, discard original record and replace with the new record
  * If the record has source IP/port and destination IP/port, use it as the filter.
@@ -422,23 +422,22 @@ func (store *ElasticEventstore) parseFirst(json string, name string) string {
  * Review the results from the Zeek search and find the record with the timestamp nearest
    to the original ES ID record and use the IP/port details as the filter.
  */
-func (store *ElasticEventstore) PopulateJobFromEventId(esId string, job *model.Job) error {
+func (store *ElasticEventstore) PopulateJobFromDocQuery(query string, job *model.Job) error {
   var outputSensorId string
   filter := model.NewFilter()
-  query := fmt.Sprintf(`{"query" : { "bool": { "must": { "match" : { "_id" : "%s" }}}}}`, esId)
   json, err := store.luceneSearch(query)
   log.WithFields(log.Fields{
     "query": query,
     "response": json,
     }).Debug("Elasticsearch primary search finished")
   if err != nil {
-    log.WithField("esId", esId).WithError(err).Error("Unable to lookup initial document record")
+    log.WithField("query", query).WithError(err).Error("Unable to lookup initial document record")
     return err
   }
 
   hits := gjson.Get(json, "hits.total.value").Int()
   if hits == 0 {
-    log.WithField("esId", esId).Error("Pivoted document record was not found")
+    log.WithField("query", query).Error("Pivoted document record was not found")
     return errors.New("Unable to locate document record")
   }
 
@@ -457,12 +456,12 @@ func (store *ElasticEventstore) PopulateJobFromEventId(esId string, job *model.J
       "response": json,
       }).Debug("Elasticsearch tunnel search finished")
     if err != nil {
-      log.WithField("esId", esId).WithError(err).Error("Unable to lookup tunnel record")
+      log.WithField("query", query).WithError(err).Error("Unable to lookup tunnel record")
       return err
     }
     hits := gjson.Get(json, "hits.total.value").Int()
     if hits == 0 {
-      log.WithField("esId", esId).Error("Tunnel record was not found")
+      log.WithField("query", query).Error("Tunnel record was not found")
       return errors.New("Unable to locate encapsulating tunnel record")
     }
   }
@@ -472,7 +471,7 @@ func (store *ElasticEventstore) PopulateJobFromEventId(esId string, job *model.J
   timestamp, err = time.Parse(time.RFC3339, timestampStr)
   if err != nil {
     log.WithFields(log.Fields {
-      "esId": esId,
+      "query": query,
       "timestamp": timestamp,
     }).WithError(err).Error("Unable to parse document timestamp")
     return err
@@ -513,7 +512,7 @@ func (store *ElasticEventstore) PopulateJobFromEventId(esId string, job *model.J
 
         if err != nil {
           log.WithFields(log.Fields {
-            "esId": esId,
+            "query": query,
             "zeekFileQuery": zeekFileQuery,
           }).WithError(err).Error("Unable to lookup Zeek File record")
           return err
@@ -522,7 +521,7 @@ func (store *ElasticEventstore) PopulateJobFromEventId(esId string, job *model.J
         hits = gjson.Get(json, "hits.total.value").Int()
         if hits == 0 {
           log.WithFields(log.Fields {
-            "esId": esId,
+            "query": query,
             "zeekFileQuery": zeekFileQuery,
           }).Error("Zeek File record was not found")
           return errors.New("Unable to locate Zeek File record")
@@ -533,7 +532,7 @@ func (store *ElasticEventstore) PopulateJobFromEventId(esId string, job *model.J
 
       if len(uid) == 0 {
         log.WithFields(log.Fields {
-          "esId": esId,
+          "query": query,
           "zeekFileQuery": zeekFileQuery,
         }).Warn("Zeek File record is missing a UID")
         return errors.New("No valid Zeek connection ID found")
@@ -551,7 +550,7 @@ func (store *ElasticEventstore) PopulateJobFromEventId(esId string, job *model.J
 
     if err != nil {
       log.WithFields(log.Fields {
-        "esId": esId,
+        "query": query,
         "uid": uid,
       }).WithError(err).Error("Unable to lookup Zeek record")
       return err
@@ -560,7 +559,7 @@ func (store *ElasticEventstore) PopulateJobFromEventId(esId string, job *model.J
     hits = gjson.Get(json, "hits.total.value").Int()
     if hits == 0 {
       log.WithFields(log.Fields {
-        "esId": esId,
+        "query": query,
         "uid": uid,
       }).Error("Zeek record was not found")
       return errors.New("Unable to locate Zeek record")
@@ -609,7 +608,7 @@ func (store *ElasticEventstore) PopulateJobFromEventId(esId string, job *model.J
 
   if len(filter.SrcIp) == 0 || len(filter.DstIp) == 0 || filter.SrcPort == 0 || filter.DstPort == 0 {
     log.WithFields(log.Fields {
-      "esId": esId,
+      "query": query,
       "uid": uid,
     }).Warn("Unable to lookup PCAP due to missing TCP/UDP parameters")
     return errors.New("No TCP/UDP record was found for retrieving PCAP")

@@ -291,9 +291,6 @@ const huntComponent = {
       }
       return q + this.query;
     },
-    generatePcapLink(eventId) {
-      return "/joblookup?id=" + encodeURIComponent(eventId);
-    },
     parseUrlParameters() {
       this.category = this.$route.path.replace("/", "");
 
@@ -402,33 +399,7 @@ const huntComponent = {
       } catch (error) {
         this.$root.showError(error);
       }
-    },
-    async lookupPcap(id, newTab) {
-      this.$root.startLoading();
-      try {
-        const response = await this.$root.papi.post('job/', null, { params: { eventId: id }});
-        if (response.data.id) {
-          if (newTab) {
-            window.open('/#/job/' + response.data.id, '_blank');
-          } else {
-            this.$root.$router.push({ name: 'job', params: { jobId: response.data.id }});
-          }
-        } else {
-          this.$root.showError(this.i18n.eventLookupFailed);
-        }
-      } catch (error) {
-        this.$root.showError(error);
-      }
-      this.$root.stopLoading();
-    },    
-    removeDataItemFromView(data, item) {
-      for (var j = 0; j < data.length; j++) {
-        if (data[j] == item) {
-          Vue.delete(data, j);
-          break;
-        }
-      }
-    },
+    },  
     async ack(event, item, idx, acknowledge, escalate = false) {
       this.$root.startLoading();
       try {
@@ -508,6 +479,14 @@ const huntComponent = {
       }      
       this.$root.stopLoading();
     },
+    removeDataItemFromView(data, item) {
+      for (var j = 0; j < data.length; j++) {
+        if (data[j] == item) {
+          Vue.delete(data, j);
+          break;
+        }
+      }
+    },    
     getFilterToggle(name) {
       for (var i = 0; i < this.filterToggles.length; i++) {
         var filter = this.filterToggles[i];
@@ -655,12 +634,15 @@ const huntComponent = {
                 break;
               }
             }
-          } else if (action.link.indexOf("{eventId}") == -1 || event['soc_id']) {
+          }
+
+          var link = route.findEligibleActionLinkForEvent(action, event);
+          if (link) {
             action.enabled = true;
+            action.linkFormatted = route.formatActionLink(link, event, field, value);
           } else {
             action.enabled = false;
           }
-          action.linkFormatted = route.formatActionLink(action, event, field, value);
         });
 
         this.quickActionX = domEvent.clientX;
@@ -670,15 +652,53 @@ const huntComponent = {
         });
       }
     },
-    formatActionLink(action, event, field, value) {
-      var link = action.link;
+    findEligibleActionLinkForEvent(action, event) {
+      if (action && action.links) {
+        for (var idx = 0; idx < action.links.length; idx++) {
+          const link = action.links[idx];
+
+          if (this.isActionLinkEligibleForEvent(link, event)) {
+            return link;
+          }
+        }
+      }
+      return null;
+    },
+    isActionLinkEligibleForEvent(link, event) {
+      var eligible = true;
+      eligible &= (link.indexOf("{eventId}") == -1 || event['soc_id']);
+      const fields = this.getDynamicActionFieldNames(link);
+      if (fields && fields.length > 0) {
+        fields.forEach(function(field) {
+          value = event[field];
+          eligible &= value != undefined && value != null;
+        });
+      }
+      return eligible;
+    },
+    getDynamicActionFieldNames(url) {
+      const fields = [];
+      const matches = url.matchAll(/\{:([a-zA-Z0-9_.]+?)\}/g);
+      for (const match of matches) {
+        if (match.length > 1) {
+          fields.push(match[1]);
+        }
+      }
+      return fields;
+    },
+    formatActionLink(link, event, field, value) {
       link = link.replace("{eventId}", event["soc_id"]);
       link = link.replace("{field}", field);
       link = link.replace("{value}", value);
+      
+      const fields = this.getDynamicActionFieldNames(link);
+      if (fields && fields.length > 0) {
+        fields.forEach(function(field) {
+          value = event[field];
+          link = link.replace("{:" + field + "}", value);
+        });
+      }
       return encodeURI(link);
-    },
-    isEventAction(action) {
-      return action && action.link && !action.link.includes("{field}") && !action.link.includes("{value}");
     },
     filterVisibleFields(eventModule, eventDataset, fields) {
       if (this.eventFields) {

@@ -528,15 +528,6 @@
                 <tr>
                   <td :colspan="headers.length" class="px-0">
                     <v-data-table dense disable-pagination hide-default-header hide-default-footer must-sort :headers="expandedHeaders" :items="getExpandedData()">
-                      <template v-slot:top="{ items }">
-                        <div class="event-actions py-2">
-                          <div v-for="action in actions" class="expanded-action" :key="action.link">
-                            <a v-if="isEventAction(action)" :href="formatActionLink(action, item)">
-                              {{ $root.localizeMessage(action.description) }}
-                            </a>
-                          </div>
-                        </div>
-                      </template>
                       <template v-slot:item="{ item }">
                         <tr class="pt-3">
                           <td class="expansion">
