@@ -19,6 +19,8 @@ const i18n = {
       actions: 'Actions',
       actionAlert: 'Alert',
       actionAlertHelp: 'Create an alert for this event',
+      actionCorrelate: 'Correlate',
+      actionCorrelateHelp: 'Show related events',
       actionGoogle: 'Google',
       actionGoogleHelp: 'Perform a Google search on this field',
       actionHunt: 'Hunt',
