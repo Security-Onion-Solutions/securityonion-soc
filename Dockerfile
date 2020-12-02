@@ -20,6 +20,7 @@ ARG UID=939
 ARG GID=939
 ARG VERSION=0.0.0
 ARG ELASTIC_VERSION=0.0.0
+ARG WAZUH_VERSION=0.0.0
 
 RUN apk update && apk add tzdata ca-certificates curl tcpdump && update-ca-certificates
 RUN addgroup --gid "$GID" socore
@@ -50,7 +51,13 @@ RUN [[ $ELASTIC_VERSION == '0.0.0' ]] || \
     (mkdir -p html/downloads && \
      wget https://artifacts.elastic.co/downloads/beats/winlogbeat/winlogbeat-oss-$(echo $ELASTIC_VERSION)-windows-x86_64.msi -P html/downloads/)
 
+RUN [[ $WAZUH_VERSION == '0.0.0' ]] || \
+    (mkdir -p html/downloads && \
+     wget https://packages.wazuh.com/3.x/osx/wazuh-agent-$(echo $WAZUH_VERSION).pkg -P html/downloads/ && \
+     wget https://packages.wazuh.com/3.x/windows/wazuh-agent-$(echo $WAZUH_VERSION).msi -P html/downloads/)
+
 ENV ELASTIC_VERSION=$ELASTIC_VERSION
+ENV WAZUH_VERSION=$WAZUH_VERSION
 
 USER socore
 EXPOSE 9822/tcp

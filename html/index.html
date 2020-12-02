@@ -636,12 +636,16 @@
         <v-alert type="info" v-html="i18n.downloadsFirewallTip"></v-alert>
         <v-row>
           <v-col>
-            <h3 v-text="i18n.downloadsLoggers" id="download-loggers"></h3>
+            <h3 class="mt-2" id="download-elastic">{{ i18n.downloadsElastic }} ({{ $root.elasticVersion }})</h3>
             <ul>
               <li><a :href="'/downloads/winlogbeat-oss-' + $root.elasticVersion + '-windows-x86_64.msi'" :download="'winlogbeat-oss-' +  $root.elasticVersion + '-windows-x86_64.msi'">Winlogbeat</a></li>
             </ul>
-            <p></p>
-            <h3 v-text="i18n.downloadsOsqueryPackages" id="osquery-packages"></h3>
+            <h3 class="mt-2" id="download-wazuh">{{ i18n.downloadsWazuh }} ({{ $root.wazuhVersion }})</h3>
+            <ul>
+              <li><a :href="'/downloads/wazuh-agent-' + $root.wazuhVersion + '.msi'" :download="'wazuh-agent-' +  $root.wazuhVersion + '.msi'">MSI (Windows)</a></li>
+              <li><a :href="'/downloads/wazuh-agent-' + $root.wazuhVersion + '.pkg'" :download="'wazuh-agent-' +  $root.wazuhVersion + '.pkg'">PKG (MacOS)</a></li>
+            </ul>
+            <h3 class="mt-2" v-text="i18n.downloadsOsquery" id="download-osquery"></h3>
             <ul>
               <li><a href="/packages/launcher.msi" download="msi-launcher.msi">MSI (Windows)</a></li>
               <li><a href="/packages/launcher.deb" download="deb-launcher.deb">DEB (Debian)</a></li>

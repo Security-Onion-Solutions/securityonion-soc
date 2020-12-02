@@ -101,6 +101,7 @@ $(document).ready(function() {
             this.license = response.data.license;
             this.parameters = response.data.parameters;
             this.elasticVersion = response.data.elasticVersion;
+            this.wazuhVersion = response.data.wazuhVersion;
 
             if (this.parameterCallback != null) {
               this.parameterCallback(this.parameters[this.parameterSection]);

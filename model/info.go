@@ -18,4 +18,5 @@ type Info struct {
   License        string                   `json:"license"`
   Parameters     *config.ClientParameters `json:"parameters"`
   ElasticVersion string                   `json:"elasticVersion"`
+  WazuhVersion   string                   `json:"wazuhVersion"`
 }
