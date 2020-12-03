@@ -29,6 +29,7 @@ const i18n = {
       actionPcapHelp: 'Show PCAP for this event',
       actionVirusTotal: 'VirusTotal',
       actionVirusTotalHelp: 'Analyze this field at virustotal.com',
+      address: 'Address',
       addJob: 'Add Job',
       addUser: 'Add User',
       admin: 'Administration',

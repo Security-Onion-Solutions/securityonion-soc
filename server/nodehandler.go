@@ -38,7 +38,7 @@ func (nodeHandler *NodeHandler) HandleNow(writer http.ResponseWriter, request *h
 
 func (nodeHandler *NodeHandler) post(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   var job *model.Job
-  node := model.NewNode("", "", "")
+  node := model.NewNode("")
   err := nodeHandler.ReadJson(request, node)
   if err == nil {
     err = nodeHandler.server.Datastore.UpdateNode(node)

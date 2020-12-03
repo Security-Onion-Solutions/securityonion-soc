@@ -20,18 +20,21 @@ import (
 )
 
 type JobManager struct {
-  agent 				*Agent
-  node				*model.Node
-  running				bool
-  jobProcessors	[]JobProcessor
-  lock					sync.RWMutex
+  agent         *Agent
+  node          *model.Node
+  running       bool
+  jobProcessors []JobProcessor
+  lock          sync.RWMutex
 }
 
 func NewJobManager(agent *Agent) *JobManager {
   mgr := &JobManager{
     agent: agent,
-    node: model.NewNode(agent.Config.NodeId, agent.Config.Role, agent.Config.Description),
+    node: model.NewNode(agent.Config.NodeId),
   }
+  mgr.node.Role = agent.Config.Role
+  mgr.node.Description = agent.Config.Description
+  mgr.node.Address = agent.Config.Address
   mgr.node.Version = agent.Version
   return mgr
 }

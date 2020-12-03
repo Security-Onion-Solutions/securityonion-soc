@@ -40,7 +40,10 @@ func TestNodes(tester *testing.T) {
   ds := NewFileDatastoreImpl()
   cfg := make(module.ModuleConfig)
   ds.Init(cfg)
-  node := ds.CreateNode("foo", "rolo", "desc")
+  node := ds.CreateNode("foo")
+  node.Role = "rolo"
+  node.Description = "desc"
+  node.Address = "addr"
   ds.addNode(node)
   nodes := ds.GetNodes()
   if len(nodes) != 1 {
@@ -55,8 +58,11 @@ func TestNodes(tester *testing.T) {
   if nodes[0].Description != "desc" {
     tester.Errorf("expected node.Description %s but got %s", "desc", nodes[0].Description)
   }
+  if nodes[0].Address != "addr" {
+    tester.Errorf("expected node.Address %s but got %s", "addr", nodes[0].Address)
+  }
   
-  node = ds.CreateNode("bar", "rolo", "desc")
+  node = ds.CreateNode("bar")
   ds.addNode(node)
   nodes = ds.GetNodes()
   if len(nodes) != 2 {
@@ -72,7 +78,7 @@ func TestJobs(tester *testing.T) {
   ds := NewFileDatastoreImpl()
   cfg := make(module.ModuleConfig)
   ds.Init(cfg)
-  node := ds.CreateNode("foo", "rolo", "desc")
+  node := ds.CreateNode("foo")
   ds.addNode(node)
 
   // Test adding a job

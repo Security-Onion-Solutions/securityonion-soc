@@ -14,21 +14,20 @@ import (
 )
 
 type Node struct {
-  Id											string		`json:"id"`
+  Id                      string    `json:"id"`
   OnlineTime              time.Time `json:"onlineTime"`
-  UpdateTime            	time.Time `json:"updateTime"`
-  EpochTime								time.Time	`json:"epochTime"`
-  UptimeSeconds						int				`json:"uptimeSeconds"`
+  UpdateTime              time.Time `json:"updateTime"`
+  EpochTime               time.Time `json:"epochTime"`
+  UptimeSeconds           int       `json:"uptimeSeconds"`
   Description             string    `json:"description"`
+  Address                 string    `json:"address"`
   Role                    string    `json:"role"`
-  Version									string		`json:"version"`
+  Version                 string    `json:"version"`
 }
 
-func NewNode(id string, role string, description string) *Node {
+func NewNode(id string) *Node {
   return &Node{
     Id: id,
-    Role: role,
-    Description: description,
     OnlineTime: time.Now(),
     UpdateTime: time.Now(),
   }

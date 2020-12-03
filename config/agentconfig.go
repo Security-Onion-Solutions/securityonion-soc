@@ -18,14 +18,15 @@ import (
 const DEFAULT_POLL_INTERVAL_MS = 1000
 
 type AgentConfig struct {
-  NodeId  												string														`json:"nodeId"`
+  NodeId                          string                            `json:"nodeId"`
   Role                            string                            `json:"role"`
   Description                     string                            `json:"description"`
-  ServerUrl			               		string    												`json:"serverUrl"`
-  VerifyCert			               	bool	    												`json:"verifyCert"`
-  PollIntervalMs									int																`json:"pollIntervalMs"`
-  Modules													module.ModuleConfigMap						`json:"modules"`
-  ModuleFailuresIgnored						bool															`json:"moduleFailuresIgnored"`
+  Address                         string                            `json:"address"`
+  ServerUrl                       string                            `json:"serverUrl"`
+  VerifyCert                      bool                              `json:"verifyCert"`
+  PollIntervalMs                  int                               `json:"pollIntervalMs"`
+  Modules                         module.ModuleConfigMap            `json:"modules"`
+  ModuleFailuresIgnored           bool                              `json:"moduleFailuresIgnored"`
 }
 
 func (config *AgentConfig) Verify() error {

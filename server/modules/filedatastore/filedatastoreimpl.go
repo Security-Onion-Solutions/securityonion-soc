@@ -59,8 +59,8 @@ func (datastore *FileDatastoreImpl) Init(cfg module.ModuleConfig) error {
   return datastore.loadJobs()
 }
 
-func (datastore *FileDatastoreImpl) CreateNode(id string, role string, description string) *model.Node {
-  node := model.NewNode(id, role, description)
+func (datastore *FileDatastoreImpl) CreateNode(id string) *model.Node {
+  node := model.NewNode(id)
   return node
 }
 

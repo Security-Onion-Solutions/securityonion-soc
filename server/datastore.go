@@ -15,7 +15,7 @@ import (
 )
 
 type Datastore interface {
-  CreateNode(id string, role string, description string) *model.Node
+  CreateNode(id string) *model.Node
   GetNodes() []*model.Node
   AddNode(node *model.Node) error
   UpdateNode(newNode *model.Node) error

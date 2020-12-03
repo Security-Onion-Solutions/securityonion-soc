@@ -15,6 +15,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
     headers: [
       { text: this.$root.i18n.id, value: 'id' },
       { text: this.$root.i18n.role, value: 'role' },
+      { text: this.$root.i18n.address, value: 'address' },
       { text: this.$root.i18n.description, value: 'description' },
       { text: this.$root.i18n.version, value: 'version' },
       { text: this.$root.i18n.dateOnline, value: 'onlineTime' },
