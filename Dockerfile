@@ -54,6 +54,8 @@ RUN [[ $ELASTIC_VERSION == '0.0.0' ]] || \
 RUN [[ $WAZUH_VERSION == '0.0.0' ]] || \
     (mkdir -p html/downloads && \
      wget https://packages.wazuh.com/3.x/osx/wazuh-agent-$(echo $WAZUH_VERSION).pkg -P html/downloads/ && \
+     wget https://packages.wazuh.com/3.x/yum/wazuh-agent-$(echo $WAZUH_VERSION).x86_64.rpm -P html/downloads/ && \
+     wget https://packages.wazuh.com/3.x/apt/pool/main/w/wazuh-agent/wazuh-agent_$(echo $WAZUH_VERSION)_amd64.deb -P html/downloads/ && \
      wget https://packages.wazuh.com/3.x/windows/wazuh-agent-$(echo $WAZUH_VERSION).msi -P html/downloads/)
 
 ENV ELASTIC_VERSION=$ELASTIC_VERSION
