@@ -16,10 +16,11 @@ const DEFAULT_RELATIVE_TIME_UNIT = 30
 const DEFAULT_MOST_RECENTLY_USED_LIMIT = 5
 
 type ClientParameters struct {
-  HuntingParams     HuntingParameters     `json:"hunt"`
-  AlertingParams    HuntingParameters     `json:"alerts"`
-  DocsUrl           string                `json:"docsUrl"`
-  CheatsheetUrl     string                `json:"cheatsheetUrl"`
+  HuntingParams       HuntingParameters     `json:"hunt"`
+  AlertingParams      HuntingParameters     `json:"alerts"`
+  DocsUrl             string                `json:"docsUrl"`
+  CheatsheetUrl       string                `json:"cheatsheetUrl"`
+  GridParams          GridParameters        `json:"grid"`
 }
 
 func (config *ClientParameters) Verify() error {
@@ -70,6 +71,9 @@ type HuntingParameters struct {
   Advanced                bool                `json:"advanced"`
   AckEnabled              bool                `json:"ackEnabled"`
   EscalateEnabled         bool                `json:"escalateEnabled"`
+}
+
+type GridParameters struct {
 }
 
 func (params *HuntingParameters) Verify() error {

@@ -53,7 +53,7 @@ func (webSocketHandler *WebSocketHandler) HandleNow(writer http.ResponseWriter, 
     log.WithFields(log.Fields{
       "sourceIp": request.RemoteAddr,
       "path": request.URL.Path,
-      "msg": message,
+      "msg": string(message),
       "type": messageType,
     }).Info("WebSocket message received")
   }

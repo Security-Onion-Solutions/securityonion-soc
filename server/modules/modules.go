@@ -15,6 +15,7 @@ import (
   "github.com/security-onion-solutions/securityonion-soc/server/modules/filedatastore"
   "github.com/security-onion-solutions/securityonion-soc/server/modules/kratos"
   "github.com/security-onion-solutions/securityonion-soc/server/modules/elastic"
+  "github.com/security-onion-solutions/securityonion-soc/server/modules/sostatus"
   "github.com/security-onion-solutions/securityonion-soc/server/modules/statickeyauth"
   "github.com/security-onion-solutions/securityonion-soc/server/modules/thehive"
 )
@@ -24,6 +25,7 @@ func BuildModuleMap(srv *server.Server) map[string]module.Module {
   moduleMap["filedatastore"] = filedatastore.NewFileDatastore(srv)
   moduleMap["kratos"] = kratos.NewKratos(srv)
   moduleMap["elastic"] = elastic.NewElastic(srv)
+  moduleMap["sostatus"] = sostatus.NewSoStatus(srv)
   moduleMap["statickeyauth"] = statickeyauth.NewStaticKeyAuth(srv)
   moduleMap["thehive"] = thehive.NewTheHive(srv)
   return moduleMap

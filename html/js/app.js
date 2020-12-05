@@ -57,8 +57,9 @@ $(document).ready(function() {
       settingsUrl: null,
       version: '0.0.0',
       elasticVersion: '0.0.0',
+      wazuhVersion: '0.0.0',
       papi: null,
-      connectionTimeout: 300000,
+      connectionTimeout: 15000,
       socket: null,
       subscriptions: [],
       parameters: {},
@@ -67,6 +68,7 @@ $(document).ready(function() {
       parameterSection: null,
       chartsInitialized: false,
       subtitle: '',
+      currentStatus: '',
     },
     watch: {
       '$vuetify.theme.dark': 'saveLocalSettings',
@@ -145,21 +147,27 @@ $(document).ready(function() {
               pngFavicon = document.querySelector('.so-favicon[type="image/png"]');
     
         if (pngFavicon && svgFavicon) {
-          const svgExt = '.svg',
-                darkTagExt = '-dark.svg';
-          const darkTagIndex = svgFavicon.href.indexOf(darkTagExt),
-                svgIndex = svgFavicon.href.indexOf(svgExt),
-                baseText = svgFavicon.href.substring(0, darkTagIndex !== -1 ? darkTagIndex : svgIndex),
-                queryParam = svgFavicon.href.substring(darkTagIndex !== -1 ? ( darkTagIndex + darkTagExt.length ) : ( svgIndex + svgExt.length));
+          const ext = ".svg";
+          const tagIndex = svgFavicon.href.indexOf("-"),
+                extIndex = svgFavicon.href.indexOf(ext),
+                baseText = svgFavicon.href.substring(0, tagIndex !== -1 ? tagIndex : extIndex),
+                queryParam = svgFavicon.href.substring(extIndex + ext.length);
           
-          pngFavicon.href = `${baseText}${colorSchemeString}.png${queryParam}`;
-          svgFavicon.href = `${baseText}${colorSchemeString}.svg${queryParam}`;
+          const attention = this.isAttentionNeeded() ? '-attention' : '' 
+          pngFavicon.href = `${baseText}${colorSchemeString}${attention}.png${queryParam}`;
+          svgFavicon.href = `${baseText}${colorSchemeString}${attention}.svg${queryParam}`;
         }
       },
       setSubtitle(subtitle) {
-        var title = "Security Onion";
-        if (subtitle && subtitle.length > 0) {
-          title += " - " + subtitle;
+        this.subtitle = subtitle;
+        this.updateTitle();
+      },
+      updateTitle() {
+        var title = "";
+        title += this.isAttentionNeeded() ? "! " : "";
+        title += "Security Onion";
+        if (this.subtitle && this.subtitle.length > 0) {
+          title += " - " + this.subtitle;
         }
         document.title = title;
       },
@@ -281,7 +289,7 @@ $(document).ready(function() {
         }
       },
       openWebsocket() {
-        if (this.socket == null || this.socket.readyState == WebSocket.CLOSED) {
+        if (this.isDisconnected()) {
           const vm = this;
           this.log("WebSocket connecting to " + this.wsUrl);
           this.socket = new WebSocket(this.wsUrl);
@@ -291,6 +299,7 @@ $(document).ready(function() {
           this.socket.onclose = function(evt) {
             vm.log("WebSocket closed, will attempt to reconnect");
             vm.socket = null;
+            vm.updateStatus();
           };
           this.socket.onmessage = function(evt) {
             var msg = JSON.parse(evt.data);
@@ -299,7 +308,24 @@ $(document).ready(function() {
           this.socket.onerror = function(evt) {
             vm.log("WebSocket failure: " + evt.data);
           };
+        } else {
+          try {
+            this.socket.send('{ "Kind": "Ping" }');
+          } catch (e) {
+            this.log("Failed to ping manager");
+            try {
+              this.socket.close();
+            } catch (ce) {
+            }
+            this.socket = null;
+          }
         }
+      },
+      isDisconnected() {
+        return this.socket == null || this.socket.readyState == WebSocket.CLOSED
+      },
+      isReconnecting() {
+        return this.socket && this.socket.readyState == WebSocket.CONNECTING;
       },
       showLogin() {
         location.href = this.authUrl + "login/browser";
@@ -395,6 +421,22 @@ $(document).ready(function() {
         var BB = ((B.toString(16).length==1)?"0"+B.toString(16):B.toString(16));
         
         return "#"+RR+GG+BB;
+      },
+      updateStatus(status) {
+        if (status) {
+          this.currentStatus = status;
+        }
+        this.setFavicon();
+        this.updateTitle();
+      },
+      isGridUnhealthy() {
+        return this.currentStatus && this.currentStatus.grid.unhealthyNodeCount > 0
+      },
+      isNewAlert() {
+        return this.currentStatus && this.currentStatus.alerts.newCount  > 0
+      },
+      isAttentionNeeded() {
+        return this.isNewAlert() || this.isGridUnhealthy() || this.isDisconnected() || this.isReconnecting();
       }
     },
     created() {
@@ -414,6 +456,7 @@ $(document).ready(function() {
     mounted() {
       this.setFavicon();
       window.matchMedia('(prefers-color-scheme: dark)').addListener(() => this.setFavicon());
+      this.subscribe("status", this.updateStatus);
     },
   });
 });

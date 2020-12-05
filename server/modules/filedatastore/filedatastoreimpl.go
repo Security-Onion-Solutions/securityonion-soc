@@ -29,14 +29,14 @@ import (
 const DEFAULT_RETRY_FAILURE_INTERVAL_MS = 600000
 
 type FileDatastoreImpl struct {
-  jobDir									string
-  retryFailureIntervalMs	int
-  jobsByNodeId 					map[string][]*model.Job
-  jobsById 								map[int]*model.Job
-  nodesById							map[string]*model.Node
-  ready    								bool
-  nextJobId								int
-  lock										sync.RWMutex
+  jobDir                  string
+  retryFailureIntervalMs  int
+  jobsByNodeId            map[string][]*model.Job
+  jobsById                map[int]*model.Job
+  nodesById               map[string]*model.Node
+  ready                   bool
+  nextJobId               int
+  lock                    sync.RWMutex
 }
 
 func NewFileDatastoreImpl() *FileDatastoreImpl {

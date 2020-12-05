@@ -44,6 +44,9 @@
             <v-list-item-content>
               <v-list-item-title v-text="i18n.alerts"></v-list-item-title>
             </v-list-item-content>
+            <v-list-item-icon v-if="isNewAlert()">
+              <v-icon color="warning">fa-exclamation</v-icon>
+            </v-list-item-icon>
           </v-list-item>
           <v-list-item @click="" to="/hunt">
             <v-list-item-action>
@@ -65,9 +68,12 @@
             <v-list-item-action>
               <v-icon>fa-network-wired</v-icon>
             </v-list-item-action>
-            <v-list-item-content>
+            <v-list-item-content> 
               <v-list-item-title v-text="i18n.grid"></v-list-item-title>
             </v-list-item-content>
+            <v-list-item-icon v-if="isGridUnhealthy()">
+              <v-icon color="warning">fa-exclamation</v-icon>
+            </v-list-item-icon>
           </v-list-item>
           <v-list-item @click="" to="/downloads">
             <v-list-item-action>
@@ -159,6 +165,12 @@
             <img class="pt-1" :title="i18n.product" :alt="i18n.product" height="45" src="images/so-logo.svg"></v-img>
           </a>
         </v-toolbar-title>
+        <v-spacer></v-spacer>
+        <div v-if="isDisconnected() || isReconnecting()">
+          <v-icon class="mr-2" color="warning">fa-satellite-dish</v-icon>
+          <span v-if="isReconnecting()" v-text="i18n.reconnecting"></span>
+          <span v-if="!isReconnecting()" v-text="i18n.disconnected"></span>
+        </div>
         <v-spacer></v-spacer>
         <v-menu bottom left offset-y>
           <template v-slot:activator="{ on }">
@@ -984,12 +996,23 @@
         </v-row>
         <v-row>
           <v-col>
-            <v-data-table :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps" 
+            <v-data-table :search="gridFilter" :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps" 
               :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="nodes">
+              <template v-slot:top>
+                <v-container fluid>
+                  <v-row>
+                    <v-col cols="6">
+                    </v-col>
+                    <v-col cols="6">
+                      <v-text-field v-model="gridFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
+                    </v-col>
+                  </v-row>
+                </v-container>        
+              </template>
               <template v-slot:item="props">
                 <tr>
                   <td v-text="props.item.id"></td>
-                  <td v-text="props.item.role"></td>
+                  <td v-text="$root.localizeMessage(props.item.role)"></td>
                   <td v-text="props.item.address"></td>
                   <td v-text="props.item.description"></td>
                   <td v-text="props.item.version"></td>
@@ -997,6 +1020,7 @@
                   <td>{{ props.item.updateTime | formatDateTime }}</td>
                   <td>{{ props.item.epochTime | formatDateTime }}</td>
                   <td>{{ props.item.uptimeSeconds | formatDuration }}</td>
+                  <td><v-chip class="nodeStatus" :color="props.item.status | colorNodeStatus">{{ $root.localizeMessage(props.item.status) }}</v-chip></td>
                 </tr>
               </template>
             </v-data-table>

@@ -38,7 +38,7 @@ func GetInt(options map[string]interface{}, key string) (int, error) {
   var err error
   var value int
   if gen, ok := options[key]; ok {
-    value = gen.(int)
+    value = int(gen.(float64))
   } else {
     err = errors.New("Required option is missing: " + key + " (int)")
   }
@@ -48,7 +48,7 @@ func GetInt(options map[string]interface{}, key string) (int, error) {
 func GetIntDefault(options map[string]interface{}, key string, dflt int) int {
   var value int
   if gen, ok := options[key]; ok {
-    value = gen.(int)
+    value = int(gen.(float64))
   } else {
     value = dflt
   }

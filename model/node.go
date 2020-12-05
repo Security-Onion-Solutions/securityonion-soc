@@ -13,6 +13,11 @@ import (
   "time"
 )
 
+const NodeStatusUnknown = "unknown"
+const NodeStatusOffline = "offline"
+const NodeStatusOk = "ok"
+const NodeStatusError = "error"
+
 type Node struct {
   Id                      string    `json:"id"`
   OnlineTime              time.Time `json:"onlineTime"`
@@ -22,12 +27,14 @@ type Node struct {
   Description             string    `json:"description"`
   Address                 string    `json:"address"`
   Role                    string    `json:"role"`
+  Status                  string    `json:"status"`
   Version                 string    `json:"version"`
 }
 
 func NewNode(id string) *Node {
   return &Node{
     Id: id,
+    Status: NodeStatusUnknown,
     OnlineTime: time.Now(),
     UpdateTime: time.Now(),
   }

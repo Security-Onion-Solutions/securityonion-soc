@@ -167,3 +167,11 @@ td {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+.nodeStatus {
+  min-width: 10ch;
+}
+
+.nodeStatus .v-chip__content {
+  margin: auto;
+}

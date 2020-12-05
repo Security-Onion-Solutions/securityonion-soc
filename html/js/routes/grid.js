@@ -6,12 +6,17 @@
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+const NodeStatusUnknown = "unknown";
+const NodeStatusOffline = "offline";
+const NodeStatusError = "error";
+const NodeStatusOk = "ok";
 
 routes.push({ path: '/grid', name: 'grid', component: {
   template: '#page-grid',
   data() { return {
     i18n: this.$root.i18n,
     nodes: [],
+    gridFilter: '',
     headers: [
       { text: this.$root.i18n.id, value: 'id' },
       { text: this.$root.i18n.role, value: 'role' },
@@ -22,6 +27,8 @@ routes.push({ path: '/grid', name: 'grid', component: {
       { text: this.$root.i18n.dateUpdated, value: 'updateTime' },
       { text: this.$root.i18n.dateDataEpoch, value: 'epochTime' },
       { text: this.$root.i18n.uptime, value: 'uptimeSeconds' },
+      { text: this.$root.i18n.status, value: 'status' },
+      { text: '', value: 'keywords', align: ' d-none' },
     ],
     sortBy: 'id',
     sortDesc: false,
@@ -29,10 +36,15 @@ routes.push({ path: '/grid', name: 'grid', component: {
     footerProps: { 'items-per-page-options': [10,50,250,1000] },
   }},
   created() { 
-    this.loadData() 
+    Vue.filter('colorNodeStatus', this.colorNodeStatus);    
   },
+  beforeDestroy() {
+  },  
   destroyed() {
     this.$root.unsubscribe("node", this.updateNode);
+  },
+  mounted() {
+    this.$root.loadParameters("grid", this.initGrid);
   },
   watch: {
     '$route': 'loadData',
@@ -41,11 +53,14 @@ routes.push({ path: '/grid', name: 'grid', component: {
     'itemsPerPage': 'saveLocalSettings',
   },
   methods: {
+    initGrid(params) {
+      this.loadData();
+    },
     async loadData() {
       this.$root.startLoading();
       try {
         const response = await this.$root.papi.get('grid');
-        this.nodes = response.data;
+        this.nodes = this.formatNode(response.data);
         this.loadLocalSettings();
       } catch (error) {
         this.$root.showError(error);
@@ -68,10 +83,23 @@ routes.push({ path: '/grid', name: 'grid', component: {
     updateNode(node) {
       for (var i = 0; i < this.nodes.length; i++) {
         if (this.nodes[i].id == node.id) {
-          this.$set(this.nodes, i, node);
+          this.$set(this.nodes, i, this.formatNode(node));
           break;
         }
       }
+    },
+    formatNode(node) {
+      node['keywords'] = this.$root.localizeMessage(node["role"] + '-keywords');
+      return node;
+    },
+    colorNodeStatus(status) {
+      var color = "gray";
+      switch (status) {
+        case NodeStatusOffline: color = "warning"; break;
+        case NodeStatusError: color = "error"; break;
+        case NodeStatusOk: color = "success"; break;
+      }
+      return color;
     }
   }
 }});
