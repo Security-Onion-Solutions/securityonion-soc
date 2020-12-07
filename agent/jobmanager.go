@@ -83,7 +83,7 @@ func (mgr *JobManager) Stop() {
 
 func (mgr *JobManager) PollPendingJobs() (*model.Job, error) {
   job := model.NewJob()
-  mgr.node.Status = model.NodeStatusOk
+  mgr.node.Status = model.NodeStatusOnline
   available, err := mgr.agent.Client.SendAuthorizedObject("POST", "/api/node", mgr.node, job)
   if !available {
     job = nil

@@ -8,6 +8,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 const NodeStatusUnknown = "unknown";
 const NodeStatusOffline = "offline";
+const NodeStatusOnline = "online";
 const NodeStatusError = "error";
 const NodeStatusOk = "ok";
 
@@ -96,6 +97,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
       var color = "gray";
       switch (status) {
         case NodeStatusOffline: color = "warning"; break;
+        case NodeStatusOnline: color = "info"; break;
         case NodeStatusError: color = "error"; break;
         case NodeStatusOk: color = "success"; break;
       }

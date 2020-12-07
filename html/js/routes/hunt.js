@@ -101,6 +101,9 @@ const huntComponent = {
     quickActionVisible: false,
     quickActionX: 0,
     quickActionY: 0,
+    quickActionEvent: null,
+    quickActionField: "",
+    quickActionValue: "",
     actions: [],
   }},
   created() {
@@ -644,7 +647,9 @@ const huntComponent = {
             action.enabled = false;
           }
         });
-
+        this.quickActionEvent = event;
+        this.quickActionField = field;
+        this.quickActionValue = value;
         this.quickActionX = domEvent.clientX;
         this.quickActionY = domEvent.clientY;
         this.$nextTick(() => { 
@@ -652,6 +657,23 @@ const huntComponent = {
         });
       }
     },
+    copyToClipboard(data, style) {
+      const buffer = document.getElementById('clipboardBuffer');
+      // Convert entire item into text
+      if (style == 'json') {
+        data = JSON.stringify(data);
+      } else if (style == 'kvp') {
+        var text = "";
+        for (const prop in data) {
+          text += prop + ": " + data[prop] + "\n";
+        }
+        data = text;
+      }
+      buffer.value = data;
+      buffer.select();
+      buffer.setSelectionRange(0, 99999);
+      document.execCommand("copy");
+    },    
     findEligibleActionLinkForEvent(action, event) {
       if (action && action.links) {
         for (var idx = 0; idx < action.links.length; idx++) {

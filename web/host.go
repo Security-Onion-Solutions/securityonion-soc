@@ -36,7 +36,7 @@ type Host struct {
   running			bool
   Version			string
   connections []*websocket.Conn
-  lock				sync.RWMutex
+  lock				sync.Mutex
 }
 
 func NewHost(address string, htmlDir string, version string) *Host {
@@ -99,14 +99,17 @@ func (host *Host) RemoveConnection(conn *websocket.Conn) {
 }
 
 func (host *Host) Broadcast(kind string, obj interface{}) {
-  host.lock.RLock()
-  defer host.lock.RUnlock()
+  host.lock.Lock()
+  defer host.lock.Unlock()
   msg := &WebSocketMessage{
     Kind: kind,
     Object: obj,
   }
   for _, connection := range host.connections {
+    log.WithFields(log.Fields {
+      "kind": kind,
+      "host": connection.RemoteAddr().String(),
+    }).Debug("Broadcasting message to WebSocket connection")
     connection.WriteJSON(msg)
-    log.WithField("kind", kind).Debug("Broadcasted message to WebSocket connection")
   }
 }

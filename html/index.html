@@ -247,6 +247,7 @@
           {{ tipMessage }}
         </v-snackbar>
         <router-view></router-view>
+        <textarea id="clipboardBuffer"></textarea>
       </v-main>
       <v-footer app>
         <span id="version" class="overline text-no-wrap">
@@ -610,14 +611,52 @@
                 {{ i18n.groupInclude }}
               </v-list-item-title>
             </v-list-item>
-            <v-list-item dense v-for="action in actions" class="custom-quick-action-button" v-if="action.enabled" :key="action.link" :href="action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="action.target">
-              <v-list-item-icon>
-                <v-icon :alt="action.name" color="white">{{ action.icon }}</v-icon>
-              </v-list-item-icon>
-              <v-list-item-title class="white--text">
-                {{ $root.localizeMessage(action.name) }}
-              </v-list-item-title>
-            </v-list-item>
+            <v-list-group dense @click.stop prepend-icon="fa-clipboard">
+              <template v-slot:activator>
+                <v-list-item-title class="white--text">
+                  {{ i18n.share }}
+                </v-list-item-title>
+              </template>
+              <v-list-item id="actionCopyEventAsJson" dense @click="copyToClipboard(quickActionValue)">
+                <v-list-item-icon>
+                  <v-icon color="white">fa-copy</v-icon>
+                </v-list-item-icon>
+                <v-list-item-title class="white--text">
+                  {{ i18n.copyFieldToClipboard }}
+                </v-list-item-title>
+              </v-list-item>
+              <v-list-item id="actionCopyEventAsJson" dense @click="copyToClipboard(quickActionEvent, 'json')">
+                <v-list-item-icon>
+                  <v-icon color="white">fa-copy</v-icon>
+                </v-list-item-icon>
+                <v-list-item-title class="white--text">
+                  {{ i18n.copyEventToClipboardAsJson }}
+                </v-list-item-title>
+              </v-list-item>
+              <v-list-item id="actionCopyEventAsKvp" dense @click="copyToClipboard(quickActionEvent, 'kvp')">
+                <v-list-item-icon>
+                  <v-icon color="white">fa-copy</v-icon>
+                </v-list-item-icon>
+                <v-list-item-title class="white--text">
+                  {{ i18n.copyEventToClipboardAsKvp }}
+                </v-list-item-title>
+              </v-list-item>
+            </v-list-group>
+            <v-list-group dense @click.stop prepend-icon="fa-external-link-alt">
+              <template v-slot:activator>
+                <v-list-item-title class="white--text">
+                  {{ i18n.quickActions }}
+                </v-list-item-title>
+              </template>
+              <v-list-item dense v-for="action in actions" class="custom-quick-action-button" v-if="action.enabled" :key="action.link" :href="action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="action.target">
+                <v-list-item-icon>
+                  <v-icon :alt="action.name" color="white">{{ action.icon }}</v-icon>
+                </v-list-item-icon>
+                <v-list-item-title class="white--text">
+                  {{ $root.localizeMessage(action.name) }}
+                </v-list-item-title>
+              </v-list-item>
+            </v-list-group>
           </v-list>
         </v-menu>
       </v-container>

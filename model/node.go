@@ -15,6 +15,7 @@ import (
 
 const NodeStatusUnknown = "unknown"
 const NodeStatusOffline = "offline"
+const NodeStatusOnline = "online"
 const NodeStatusOk = "ok"
 const NodeStatusError = "error"
 

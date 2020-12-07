@@ -44,7 +44,7 @@
   margin-right: 10px !important;
 }
 
-.v-list-group__header__append-icon {
+.v-navigation-drawer .v-list-group__header__append-icon {
   display: none;
 }
 
@@ -174,4 +174,10 @@ td {
 
 .nodeStatus .v-chip__content {
   margin: auto;
+}
+
+#clipboardBuffer {
+  width: 1px;
+  height: 1px;
+  opacity: 0%;
 }
