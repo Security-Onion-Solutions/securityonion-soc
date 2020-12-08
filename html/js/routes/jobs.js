@@ -31,6 +31,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
     form: {
       valid: false,
       sensorId: null,
+      importId: null,
       srcIp: null,
       srcPort: null,
       dstIp: null,
@@ -93,10 +94,10 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       }
     },
     submitAddJob(event) {
-      this.addJob(this.form.sensorId, this.form.srcIp, this.form.srcPort, this.form.dstIp, this.form.dstPort, this.form.beginTime, this.form.endTime);
+      this.addJob(this.form.sensorId, this.form.importId, this.form.srcIp, this.form.srcPort, this.form.dstIp, this.form.dstPort, this.form.beginTime, this.form.endTime);
       this.dialog = false;
     },
-    async addJob(sensorId, srcIp, srcPort, dstIp, dstPort, beginTime, endTime) {
+    async addJob(sensorId, importId, srcIp, srcPort, dstIp, dstPort, beginTime, endTime) {
       try {
         if (!sensorId) {
           this.$root.showError(this.i18n.sensorIdRequired);
@@ -104,6 +105,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
           const response = await this.$root.papi.post('job/', {
             nodeId: sensorId,
             filter: {
+              importId: importId,
               srcIp: srcIp,
               srcPort: parseInt(srcPort),
               dstIp: dstIp,

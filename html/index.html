@@ -867,6 +867,7 @@
                     <v-row>
                       <v-col xs12>
                         <v-text-field v-model="form.sensorId" :placeholder="i18n.sensorId" :hint="i18n.sensorIdHelp"></v-text-field>
+                        <v-text-field v-model="form.importId" :placeholder="i18n.importId" :hint="i18n.importIdHelp"></v-text-field>
                         <v-text-field v-model="form.srcIp" :placeholder="i18n.srcIp" :hint="i18n.srcIpHelp"></v-text-field>
                         <v-text-field v-model="form.srcPort" :placeholder="i18n.srcPort" :hint="i18n.srcPortHelp"></v-text-field>
                         <v-text-field v-model="form.dstIp" :placeholder="i18n.dstIp" :hint="i18n.dstIpHelp"></v-text-field>
@@ -931,6 +932,7 @@
                   <v-container fluid grid-list-sm class="pa-4">
                     <v-row>
                       <v-col>
+                        <div><span class="filter label">{{ i18n.importId }}:</span> <span v-if="job.filter" class="filter value">{{ job.filter.importId }}</span></div>
                         <div><span class="filter label">{{ i18n.dateQueued }}:</span> <span v-if="job.filter" class="filter value">{{ job.createTime | formatDateTime}}</span></div>
                         <div><span class="filter label">{{ i18n.dateCompleted }}:</span> <span v-if="job.filter" class="filter value">{{ job.completeTime | formatDateTime}}</span></div>
                         <div><span class="filter label">{{ i18n.beginTime }}:</span> <span v-if="job.filter" class="filter value">{{ job.filter.beginTime | formatTimestamp }}</span></div>

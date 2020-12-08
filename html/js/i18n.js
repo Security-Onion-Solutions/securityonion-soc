@@ -137,6 +137,8 @@ const i18n = {
       hunt: 'Hunt',
       huntHelp: 'Start a new hunt based on the current filters',
       id: 'ID',
+      importId: 'Import ID',
+      importIdHelp: 'UUID value that is output from so-import-pcap. Only needed for imported PCAPs.',
       index: "Index",
       interval0s: "Never",
       interval5s: "5 seconds",
