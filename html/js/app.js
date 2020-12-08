@@ -68,7 +68,7 @@ $(document).ready(function() {
       parameterSection: null,
       chartsInitialized: false,
       subtitle: '',
-      currentStatus: '',
+      currentStatus: null,
     },
     watch: {
       '$vuetify.theme.dark': 'saveLocalSettings',

@@ -95,13 +95,6 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
     submitAddJob(event) {
       this.addJob(this.form.sensorId, this.form.srcIp, this.form.srcPort, this.form.dstIp, this.form.dstPort, this.form.beginTime, this.form.endTime);
       this.dialog = false;
-      this.form.sensorId = null;
-      this.form.srcIp = null;
-      this.form.srcPort = null;
-      this.form.dstIp = null;
-      this.form.dstPort = null;
-      this.form.beginTime = null;
-      this.form.endTime = null;
     },
     async addJob(sensorId, srcIp, srcPort, dstIp, dstPort, beginTime, endTime) {
       try {
