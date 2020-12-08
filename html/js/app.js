@@ -311,6 +311,7 @@ $(document).ready(function() {
         } else {
           try {
             this.socket.send('{ "Kind": "Ping" }');
+            this.updateStatus();
           } catch (e) {
             this.log("Failed to ping manager");
             try {
