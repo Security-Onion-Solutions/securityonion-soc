@@ -208,7 +208,8 @@ $(document).ready(function() {
           return moment.duration(duration,"s").humanize();
         }
       },
-      localizeMessage(msg) {
+      localizeMessage(origMsg) {
+        var msg = origMsg;
         if (msg.response && msg.response.data) {
           msg = msg.response.data;
           if (msg.error && msg.error.reason) {
@@ -217,6 +218,9 @@ $(document).ready(function() {
         }
         var localized = this.i18n[msg];
         if (!localized) {
+          if (origMsg.message) {
+            msg = origMsg.message;
+          }
           if (msg.length > 200) {
             msg = msg.substring(0, 200) + "...";
           }

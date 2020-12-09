@@ -282,6 +282,16 @@ const i18n = {
       weeks: 'weeks',
 
       CASE_MODULE_NOT_ENABLED: 'A case module has not been configured for this installation. Unable to proceed with request.',
+      QUERY_INVALID__GROUP_EMPTY: 'The search query has an empty group.',
+      QUERY_INVALID__GROUP_INCOMPLETE: 'The search query is missing an ending parenthesis.',
+      QUERY_INVALID__GROUP_NOT_STARTED: 'The search query has an extra parenthesis.',
+      QUERY_INVALID__GROUPBY_TERMS_MISSING: 'The search query is has a malformed groupby segment.',
+      QUERY_INVALID__QUOTE_INCOMPLETE: 'The search query is missing an ending double quote.',
+      QUERY_INVALID__SEARCH_MISSING: 'The search query is missing the search criteria.',
+      QUERY_INVALID__SEARCH_TERMS_MISSING: 'The search query is missing search terms.',
+      QUERY_INVALID__SEGMENT_EMPTY: 'The search query has an incomplete segment (pipe) function.',
+      QUERY_INVALID__SEGMENT_UNSUPPORTED: 'The search query contains an unsupported segment (pipe) function.',
+      QUERY_INVALID__TERM_MISSING: 'The search query is incomplete.',
     },
   },
 
