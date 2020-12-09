@@ -79,6 +79,14 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
         this.sortBy = localStorage['settings.jobs.sortBy'];
         this.sortDesc = localStorage['settings.jobs.sortDesc'] == "true";
         this.itemsPerPage = parseInt(localStorage['settings.jobs.itemsPerPage']);
+        this.form.sensorId = localStorage['settings.jobs.addJobForm.sensorId'];
+        this.form.importId = localStorage['settings.jobs.addJobForm.importId'];
+        this.form.srcIp = localStorage['settings.jobs.addJobForm.srcIp'];
+        this.form.srcPort = localStorage['settings.jobs.addJobForm.srcPort'];
+        this.form.dstIp = localStorage['settings.jobs.addJobForm.dstIp'];
+        this.form.dstPort = localStorage['settings.jobs.addJobForm.dstPort'];
+        this.form.beginTime = localStorage['settings.jobs.addJobForm.beginTime'];
+        this.form.endTime = localStorage['settings.jobs.addJobForm.endTime'];        
       }
     },
     updateJob(job) {
@@ -96,12 +104,43 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
     submitAddJob(event) {
       this.addJob(this.form.sensorId, this.form.importId, this.form.srcIp, this.form.srcPort, this.form.dstIp, this.form.dstPort, this.form.beginTime, this.form.endTime);
       this.dialog = false;
+      this.saveAddJobForm();
+    },
+    saveAddJobForm() {
+      localStorage['settings.jobs.addJobForm.sensorId'] = this.form.sensorId;
+      localStorage['settings.jobs.addJobForm.importId'] = this.form.importId;
+      localStorage['settings.jobs.addJobForm.srcIp'] = this.form.srcIp;
+      localStorage['settings.jobs.addJobForm.srcPort'] = this.form.srcPort;
+      localStorage['settings.jobs.addJobForm.dstIp'] = this.form.dstIp;
+      localStorage['settings.jobs.addJobForm.dstPort'] = this.form.dstPort;
+      localStorage['settings.jobs.addJobForm.beginTime'] = this.form.beginTime;
+      localStorage['settings.jobs.addJobForm.endTime'] = this.form.endTime;
+    },    
+    clearAddJobForm() {
+      this.form.sensorId = null;
+      this.form.importId = null;
+      this.form.srcIp = null;
+      this.form.srcPort = null;
+      this.form.dstIp = null;
+      this.form.dstPort = null;
+      this.form.beginTime = null;
+      this.form.endTime = null;
+      localStorage.removeItem('settings.jobs.addJobForm.sensorId');
+      localStorage.removeItem('settings.jobs.addJobForm.importId');
+      localStorage.removeItem('settings.jobs.addJobForm.srcIp');
+      localStorage.removeItem('settings.jobs.addJobForm.srcPort');
+      localStorage.removeItem('settings.jobs.addJobForm.dstIp');
+      localStorage.removeItem('settings.jobs.addJobForm.dstPort');
+      localStorage.removeItem('settings.jobs.addJobForm.beginTime');
+      localStorage.removeItem('settings.jobs.addJobForm.endTime');
     },
     async addJob(sensorId, importId, srcIp, srcPort, dstIp, dstPort, beginTime, endTime) {
       try {
         if (!sensorId) {
           this.$root.showError(this.i18n.sensorIdRequired);
         } else {
+          const beginDate = moment(beginTime);
+          const endDate = moment(endTime);
           const response = await this.$root.papi.post('job/', {
             nodeId: sensorId,
             filter: {
@@ -110,8 +149,8 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
               srcPort: parseInt(srcPort),
               dstIp: dstIp,
               dstPort: parseInt(dstPort),
-              beginTime: new Date(beginTime),
-              endTime: new Date(endTime)
+              beginTime: beginDate,
+              endTime: endDate
             }
           });
           this.jobs.push(response.data);

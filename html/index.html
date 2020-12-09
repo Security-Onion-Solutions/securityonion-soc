@@ -851,7 +851,7 @@
                   <td v-text="props.item.nodeId"></td>
                   <td><v-chip :color="props.item | colorJobStatus">{{ props.item | formatJobStatus }}</v-chip></td>
                   <td>
-                    <router-link :to="{ name: 'job', params: {jobId: props.item.id}}" :style="{ cursor: 'pointer'}">
+                    <router-link :to="{ name: 'job', params: {jobId: props.item.id}}" style="text-decoration: none; cursor: 'pointer'">
                       <v-icon class="mr-2" :title="i18n.view">fa-binoculars</v-icon>
                     </router-link>
                     <v-icon class="mr-2" :title="i18n.delete" @click.stop="deleteJob(props.item)">fa-times-circle</v-icon>
@@ -866,20 +866,21 @@
                   <v-container grid-list-sm class="pa-4">
                     <v-row>
                       <v-col xs12>
-                        <v-text-field v-model="form.sensorId" :placeholder="i18n.sensorId" :hint="i18n.sensorIdHelp"></v-text-field>
-                        <v-text-field v-model="form.importId" :placeholder="i18n.importId" :hint="i18n.importIdHelp"></v-text-field>
-                        <v-text-field v-model="form.srcIp" :placeholder="i18n.srcIp" :hint="i18n.srcIpHelp"></v-text-field>
-                        <v-text-field v-model="form.srcPort" :placeholder="i18n.srcPort" :hint="i18n.srcPortHelp"></v-text-field>
-                        <v-text-field v-model="form.dstIp" :placeholder="i18n.dstIp" :hint="i18n.dstIpHelp"></v-text-field>
-                        <v-text-field v-model="form.dstPort" :placeholder="i18n.dstPort" :hint="i18n.dstPortHelp"></v-text-field>
-                        <v-text-field v-model="form.beginTime" :placeholder="i18n.beginTime" :hint="i18n.beginTimeHelp"></v-text-field>
-                        <v-text-field v-model="form.endTime" :placeholder="i18n.endTime" :hint="i18n.endTimeHelp"></v-text-field>
+                        <v-text-field v-model="form.sensorId" :placeholder="i18n.sensorId" persistent-hint :hint="i18n.sensorIdHelp"></v-text-field>
+                        <v-text-field v-model="form.importId" :placeholder="i18n.importId" persistent-hint :hint="i18n.importIdHelp"></v-text-field>
+                        <v-text-field v-model="form.srcIp" :placeholder="i18n.srcIp" persistent-hint :hint="i18n.srcIpHelp"></v-text-field>
+                        <v-text-field v-model="form.srcPort" :placeholder="i18n.srcPort" persistent-hint :hint="i18n.srcPortHelp"></v-text-field>
+                        <v-text-field v-model="form.dstIp" :placeholder="i18n.dstIp" persistent-hint :hint="i18n.dstIpHelp"></v-text-field>
+                        <v-text-field v-model="form.dstPort" :placeholder="i18n.dstPort" persistent-hint :hint="i18n.dstPortHelp"></v-text-field>
+                        <v-text-field v-model="form.beginTime" :placeholder="i18n.beginTime" persistent-hint :hint="i18n.beginTimeHelp"></v-text-field>
+                        <v-text-field v-model="form.endTime" :placeholder="i18n.endTime" persistent-hint :hint="i18n.endTimeHelp"></v-text-field>
                       </v-col>
                     </v-row>
                   </v-container>
                   <v-card-actions>
                     <v-spacer></v-spacer>
-                    <v-btn text @click="dialog = false">Cancel</v-btn>
+                    <v-btn text @click="clearAddJobForm()" v-text="i18n.clear"></v-btn>
+                    <v-btn text @click="dialog = false" v-text="i18n.cancel"></v-btn>
                     <v-btn :disabled="!form.valid" text color="primary" @click="submitAddJob" v-text="i18n.addJob"></v-btn>
                   </v-card-actions>
                 </v-form>
@@ -903,25 +904,25 @@
             <v-expansion-panels>
               <v-expansion-panel>
                 <v-expansion-panel-header>
-                  <v-chip disabled>
+                  <v-chip>
                     <v-avatar>
                       <v-icon>fa-hashtag</v-icon>
                     </v-avatar>
                     <span id="jobDetailsId">{{ job.id }}</span>
                   </v-chip>
-                  <v-chip disabled>
+                  <v-chip>
                     <v-avatar>
                       <v-icon>fa-ethernet</v-icon>
                     </v-avatar>
                     <span id="jobDetailsSensorId">{{ job.nodeId }}</span>
                   </v-chip>
-                  <v-chip disabled v-if="job.filter">
+                  <v-chip v-if="job.filter">
                     <v-avatar>
                       <v-icon>fa-file-export</v-icon>
                     </v-avatar>
                     <span id="jobDetailsSrc">{{ job.filter.srcIp }}:{{ job.filter.srcPort }}</span>
                   </v-chip>
-                  <v-chip disabled v-if="job.filter">
+                  <v-chip v-if="job.filter">
                     <v-avatar>
                       <v-icon>fa-file-import</v-icon>
                     </v-avatar>
@@ -932,11 +933,50 @@
                   <v-container fluid grid-list-sm class="pa-4">
                     <v-row>
                       <v-col>
-                        <div><span class="filter label">{{ i18n.importId }}:</span> <span v-if="job.filter" class="filter value">{{ job.filter.importId }}</span></div>
-                        <div><span class="filter label">{{ i18n.dateQueued }}:</span> <span v-if="job.filter" class="filter value">{{ job.createTime | formatDateTime}}</span></div>
-                        <div><span class="filter label">{{ i18n.dateCompleted }}:</span> <span v-if="job.filter" class="filter value">{{ job.completeTime | formatDateTime}}</span></div>
-                        <div><span class="filter label">{{ i18n.beginTime }}:</span> <span v-if="job.filter" class="filter value">{{ job.filter.beginTime | formatTimestamp }}</span></div>
-                        <div><span class="filter label">{{ i18n.endTime }}:</span> <span v-if="job.filter" class="filter value">{{ job.filter.endTime | formatTimestamp }}</span></div>
+                        <div>
+                          <span class="filter label">{{ i18n.job }}:</span> 
+                          <span v-if="job.filter" class="filter value">{{ job.id }}</span>
+                        </div>
+                        <div>
+                          <span class="filter label">{{ i18n.sensorId }}:</span> 
+                          <span v-if="job.filter" class="filter value">{{ job.nodeId }}</span>
+                        </div>
+                        <div>
+                          <span class="filter label">{{ i18n.importId }}:</span> 
+                          <span v-if="job.filter" class="filter value">{{ job.filter.importId }}</span>
+                        </div>
+                        <div>
+                          <span class="filter label">{{ i18n.srcIp }}:</span> 
+                          <span v-if="job.filter" class="filter value">{{ job.filter.srcIp }}</span>
+                        </div>
+                        <div>
+                          <span class="filter label">{{ i18n.srcPort }}:</span> 
+                          <span v-if="job.filter" class="filter value">{{ job.filter.srcPort }}</span>
+                        </div>
+                        <div>
+                          <span class="filter label">{{ i18n.dstIp }}:</span> 
+                          <span v-if="job.filter" class="filter value">{{ job.filter.dstIp }}</span>
+                        </div>
+                        <div>
+                          <span class="filter label">{{ i18n.dstPort }}:</span> 
+                          <span v-if="job.filter" class="filter value">{{ job.filter.dstPort }}</span>
+                        </div>
+                        <div>
+                          <span class="filter label">{{ i18n.dateQueued }}:</span>
+                          <span v-if="job.filter" class="filter value">{{ job.createTime | formatDateTime}}</span>
+                        </div>
+                        <div>
+                          <span class="filter label">{{ i18n.dateCompleted }}:</span>
+                          <span v-if="job.filter" class="filter value">{{ job.completeTime | formatDateTime}}</span>
+                        </div>
+                        <div>
+                          <span class="filter label">{{ i18n.beginTime }}:</span>
+                          <span v-if="job.filter" class="filter value">{{ job.filter.beginTime | formatTimestamp }}</span>
+                        </div>
+                        <div>
+                          <span class="filter label">{{ i18n.endTime }}:</span>
+                          <span v-if="job.filter" class="filter value">{{ job.filter.endTime | formatTimestamp }}</span>
+                        </div>
                       </v-col>
                     </v-row>
                   </v-container>
