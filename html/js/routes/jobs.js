@@ -79,15 +79,15 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
         this.sortBy = localStorage['settings.jobs.sortBy'];
         this.sortDesc = localStorage['settings.jobs.sortDesc'] == "true";
         this.itemsPerPage = parseInt(localStorage['settings.jobs.itemsPerPage']);
-        this.form.sensorId = localStorage['settings.jobs.addJobForm.sensorId'];
-        this.form.importId = localStorage['settings.jobs.addJobForm.importId'];
-        this.form.srcIp = localStorage['settings.jobs.addJobForm.srcIp'];
-        this.form.srcPort = localStorage['settings.jobs.addJobForm.srcPort'];
-        this.form.dstIp = localStorage['settings.jobs.addJobForm.dstIp'];
-        this.form.dstPort = localStorage['settings.jobs.addJobForm.dstPort'];
-        this.form.beginTime = localStorage['settings.jobs.addJobForm.beginTime'];
-        this.form.endTime = localStorage['settings.jobs.addJobForm.endTime'];        
       }
+      this.form.sensorId = localStorage['settings.jobs.addJobForm.sensorId'];
+      this.form.importId = localStorage['settings.jobs.addJobForm.importId'];
+      this.form.srcIp = localStorage['settings.jobs.addJobForm.srcIp'];
+      this.form.srcPort = localStorage['settings.jobs.addJobForm.srcPort'];
+      this.form.dstIp = localStorage['settings.jobs.addJobForm.dstIp'];
+      this.form.dstPort = localStorage['settings.jobs.addJobForm.dstPort'];
+      this.form.beginTime = localStorage['settings.jobs.addJobForm.beginTime'];
+      this.form.endTime = localStorage['settings.jobs.addJobForm.endTime'];
     },
     updateJob(job) {
       for (var i = 0; i < this.jobs.length; i++) {
@@ -107,14 +107,14 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       this.saveAddJobForm();
     },
     saveAddJobForm() {
-      localStorage['settings.jobs.addJobForm.sensorId'] = this.form.sensorId;
-      localStorage['settings.jobs.addJobForm.importId'] = this.form.importId;
-      localStorage['settings.jobs.addJobForm.srcIp'] = this.form.srcIp;
-      localStorage['settings.jobs.addJobForm.srcPort'] = this.form.srcPort;
-      localStorage['settings.jobs.addJobForm.dstIp'] = this.form.dstIp;
-      localStorage['settings.jobs.addJobForm.dstPort'] = this.form.dstPort;
-      localStorage['settings.jobs.addJobForm.beginTime'] = this.form.beginTime;
-      localStorage['settings.jobs.addJobForm.endTime'] = this.form.endTime;
+      if (this.form.sensorId) localStorage['settings.jobs.addJobForm.sensorId'] = this.form.sensorId;
+      if (this.form.importId) localStorage['settings.jobs.addJobForm.importId'] = this.form.importId;
+      if (this.form.srcIp) localStorage['settings.jobs.addJobForm.srcIp'] = this.form.srcIp;
+      if (this.form.srcPort) localStorage['settings.jobs.addJobForm.srcPort'] = this.form.srcPort;
+      if (this.form.dstIp) localStorage['settings.jobs.addJobForm.dstIp'] = this.form.dstIp;
+      if (this.form.dstPort) localStorage['settings.jobs.addJobForm.dstPort'] = this.form.dstPort;
+      if (this.form.beginTime) localStorage['settings.jobs.addJobForm.beginTime'] = this.form.beginTime;
+      if (this.form.endTime) localStorage['settings.jobs.addJobForm.endTime'] = this.form.endTime;
     },    
     clearAddJobForm() {
       this.form.sensorId = null;
