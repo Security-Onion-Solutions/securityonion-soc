@@ -69,6 +69,8 @@ $(document).ready(function() {
       chartsInitialized: false,
       subtitle: '',
       currentStatus: null,
+      connected: false,
+      reconnecting: false,
     },
     watch: {
       '$vuetify.theme.dark': 'saveLocalSettings',
@@ -110,6 +112,7 @@ $(document).ready(function() {
               this.parameterCallback = null;
             }
             this.parametersLoaded = true;
+            this.subscribe("status", this.updateStatus);
           } catch (error) {
             this.showError(error);
           }
@@ -284,21 +287,30 @@ $(document).ready(function() {
       },
       ensureConnected() {
         if (this.socket == null) {
+          this.connected = false;
+          this.reconnecting = false;
           this.openWebsocket();
           window.setInterval(this.openWebsocket, this.connectionTimeout);    
         }
       },
       openWebsocket() {
-        if (this.isDisconnected()) {
+        if (!this.socket || this.socket.readyState == WebSocket.CLOSED ) {
           const vm = this;
+          this.connected = false;
+          this.reconnecting = true;
           this.log("WebSocket connecting to " + this.wsUrl);
           this.socket = new WebSocket(this.wsUrl);
           this.socket.onopen = function(evt) {
             vm.log("WebSocket connected");
+            vm.connected = true;
+            vm.reconnecting = false;
+            vm.updateStatus();
           };
           this.socket.onclose = function(evt) {
             vm.log("WebSocket closed, will attempt to reconnect");
             vm.socket = null;
+            vm.connected = false;
+            vm.reconnecting = false;
             vm.updateStatus();
           };
           this.socket.onmessage = function(evt) {
@@ -309,6 +321,8 @@ $(document).ready(function() {
             vm.log("WebSocket failure: " + evt.data);
           };
         } else {
+          this.connected = true;
+          this.reconnecting = false;
           try {
             this.socket.send('{ "Kind": "Ping" }');
             this.updateStatus();
@@ -321,12 +335,6 @@ $(document).ready(function() {
             this.socket = null;
           }
         }
-      },
-      isDisconnected() {
-        return this.socket == null || this.socket.readyState == WebSocket.CLOSED
-      },
-      isReconnecting() {
-        return this.socket && this.socket.readyState == WebSocket.CONNECTING;
       },
       showLogin() {
         location.href = this.authUrl + "login/browser";
@@ -437,7 +445,7 @@ $(document).ready(function() {
         return this.currentStatus && this.currentStatus.alerts.newCount  > 0
       },
       isAttentionNeeded() {
-        return this.isNewAlert() || this.isGridUnhealthy() || this.isDisconnected() || this.isReconnecting();
+        return this.isNewAlert() || this.isGridUnhealthy() || !this.connected || this.reconnecting;
       }
     },
     created() {
@@ -457,7 +465,6 @@ $(document).ready(function() {
     mounted() {
       this.setFavicon();
       window.matchMedia('(prefers-color-scheme: dark)').addListener(() => this.setFavicon());
-      this.subscribe("status", this.updateStatus);
     },
   });
 });

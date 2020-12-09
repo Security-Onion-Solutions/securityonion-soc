@@ -10,7 +10,7 @@ RUN git clone https://github.com/ory/kratos.git
 
 WORKDIR /go/src/github.com/ory/kratos
 
-RUN git checkout v0.5.3-alpha.1
+RUN git checkout v0.5.5-alpha.1
 
 ENV GO111MODULE on
 ENV CGO_ENABLED 1
