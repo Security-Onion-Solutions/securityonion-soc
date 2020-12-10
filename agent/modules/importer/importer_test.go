@@ -12,6 +12,7 @@ package importer
 import (
   "testing"
   "time"
+  "github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 func TestInitImporter(tester *testing.T) {
@@ -43,4 +44,34 @@ func TestDataLag(tester *testing.T) {
   if epoch.After(time.Now()) {
     tester.Errorf("expected epoch date to be before or equal to current date")
   }
+}
+
+func validateQuery(tester *testing.T, actual string, expected string) {
+  if actual != expected {
+    tester.Errorf("expected '%s' but got '%s'", expected, actual)
+  }
+}
+
+func TestBuildQuery(tester *testing.T) {
+  importer := NewImporter(nil)
+  job := model.NewJob()
+
+  query := importer.buildQuery(job)
+  validateQuery(tester, query, "")
+
+  job.Filter.SrcIp = "1.2.3.4"
+  query = importer.buildQuery(job)
+  validateQuery(tester, query, " host 1.2.3.4")
+
+  job.Filter.DstIp = "4.3.2.1"
+  query = importer.buildQuery(job)
+  validateQuery(tester, query, " host 1.2.3.4 and host 4.3.2.1")
+
+  job.Filter.DstPort = 53
+  query = importer.buildQuery(job)
+  validateQuery(tester, query, " host 1.2.3.4 and host 4.3.2.1 and port 53")
+
+  job.Filter.SrcPort = 33
+  query = importer.buildQuery(job)
+  validateQuery(tester, query, " host 1.2.3.4 and host 4.3.2.1 and port 33 and port 53")
 }
