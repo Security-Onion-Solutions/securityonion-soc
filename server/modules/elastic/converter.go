@@ -28,6 +28,7 @@ func makeAggregation(store *ElasticEventstore, name string, keys []string, count
   aggFields["field"] = store.mapElasticField(keys[0])
   aggFields["size"] = count
   aggFields["order"] = orderFields
+  aggFields["missing"] = "__missing__"
   agg["terms"] = aggFields
   if len(keys) > 1 {
     inner := make(map[string]interface{})
