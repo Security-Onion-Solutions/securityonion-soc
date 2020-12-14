@@ -265,7 +265,7 @@ const i18n = {
       timePickerFormat: 'YYYY/MM/DD hh:mm:ss A',
       timePickerSample: '2006/01/02 3:04:05 PM',
       timestamp: 'Timestamp',
-      timestampFormat: 'YYYY-MM-DD hh:mm:ss.SSS A Z',
+      timestampFormat: 'YYYY-MM-DD HH:mm:ss.SSS Z',
       timezone: 'Time Zone:',
       type: 'Type',
       unknown: 'Unknown',
