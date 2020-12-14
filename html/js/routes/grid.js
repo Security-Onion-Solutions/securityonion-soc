@@ -59,9 +59,13 @@ routes.push({ path: '/grid', name: 'grid', component: {
     },
     async loadData() {
       this.$root.startLoading();
+      var route = this;
       try {
         const response = await this.$root.papi.get('grid');
-        this.nodes = this.formatNode(response.data);
+        this.nodes = response.data;
+        this.nodes.forEach(function(node) {
+          route.updateNode(node);
+        });
         this.loadLocalSettings();
       } catch (error) {
         this.$root.showError(error);
@@ -82,11 +86,16 @@ routes.push({ path: '/grid', name: 'grid', component: {
       }
     },
     updateNode(node) {
+      var found = false;
       for (var i = 0; i < this.nodes.length; i++) {
         if (this.nodes[i].id == node.id) {
           this.$set(this.nodes, i, this.formatNode(node));
+          found = true;
           break;
         }
+      }
+      if (!found) {
+        this.nodes.push(this.formatNode(node));
       }
     },
     formatNode(node) {
