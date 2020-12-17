@@ -611,8 +611,11 @@
                 {{ i18n.groupInclude }}
               </v-list-item-title>
             </v-list-item>
-            <v-list-group dense @click.stop prepend-icon="fa-clipboard">
+            <v-list-group dense @click.stop>
               <template v-slot:activator>
+                <v-list-item-icon>
+                  <v-icon color="white">fa-clipboard</v-icon>
+                </v-list-item-icon>
                 <v-list-item-title class="white--text">
                   {{ i18n.share }}
                 </v-list-item-title>
@@ -642,8 +645,11 @@
                 </v-list-item-title>
               </v-list-item>
             </v-list-group>
-            <v-list-group dense @click.stop prepend-icon="fa-external-link-alt">
+            <v-list-group dense @click.stop color="white">
               <template v-slot:activator>
+                <v-list-item-icon>
+                  <v-icon color="white">fa-external-link-alt</v-icon>
+                </v-list-item-icon>
                 <v-list-item-title class="white--text">
                   {{ i18n.quickActions }}
                 </v-list-item-title>

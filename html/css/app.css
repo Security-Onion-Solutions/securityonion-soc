@@ -104,6 +104,10 @@
   background-color: rgba(230, 230, 230, 0.25);
  }
 
+.v-list-item__icon.v-list-group__header__append-icon .theme--light{
+  color: white !important;
+}
+
 /* Sensoroni-specific element styles */
 .hardwrap {
   word-wrap: break-word;
