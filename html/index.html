@@ -166,7 +166,7 @@
           </a>
         </v-toolbar-title>
         <v-spacer></v-spacer>
-        <div v-if="!connected || reconnecting">
+        <div id="connection-indicator" v-if="!connected || reconnecting">
           <v-icon class="mr-2" color="warning">fa-satellite-dish</v-icon>
           <span v-if="reconnecting" v-text="i18n.reconnecting"></span>
           <span v-if="!reconnecting" v-text="i18n.disconnected"></span>

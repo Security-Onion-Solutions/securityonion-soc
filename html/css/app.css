@@ -185,3 +185,7 @@ td {
   height: 1px;
   opacity: 0%;
 }
+
+#connection-indicator {
+  color: white;
+}
