@@ -59,7 +59,8 @@ $(document).ready(function() {
       elasticVersion: '0.0.0',
       wazuhVersion: '0.0.0',
       papi: null,
-      connectionTimeout: 15000,
+      connectionTimeout: 120000,
+      wsConnectionTimeout: 15000,
       socket: null,
       subscriptions: [],
       parameters: {},
@@ -294,7 +295,7 @@ $(document).ready(function() {
           this.connected = false;
           this.reconnecting = false;
           this.openWebsocket();
-          window.setInterval(this.openWebsocket, this.connectionTimeout);    
+          window.setInterval(this.openWebsocket, this.wsConnectionTimeout);    
         }
       },
       openWebsocket() {
