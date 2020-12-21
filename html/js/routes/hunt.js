@@ -36,6 +36,9 @@ const huntComponent = {
     relativeTimeValue: 24,
     relativeTimeUnit: RELATIVE_TIME_HOURS,
     relativeTimeUnits: [],
+    autoRefreshInterval: 0,
+    autoRefreshIntervals: [],
+    autoRefreshTimer: null,
     loaded: false,
     expanded: [],
     chartHeight: 200,
@@ -98,6 +101,9 @@ const huntComponent = {
     quickActionVisible: false,
     quickActionX: 0,
     quickActionY: 0,
+    quickActionEvent: null,
+    quickActionField: "",
+    quickActionValue: "",
     actions: [],
   }},
   created() {
@@ -110,10 +116,29 @@ const huntComponent = {
       { text: this.i18n.weeks, value: RELATIVE_TIME_WEEKS },
       { text: this.i18n.months, value: RELATIVE_TIME_MONTHS }
     ];
+    this.autoRefreshIntervals = [
+      { text: this.i18n.interval0s, value: 0 },
+      { text: this.i18n.interval5s, value: 5 },
+      { text: this.i18n.interval10s, value: 10 },
+      { text: this.i18n.interval15s, value: 15 },
+      { text: this.i18n.interval30s, value: 30 },
+      { text: this.i18n.interval1m, value: 60 },
+      { text: this.i18n.interval2m, value: 120 },
+      { text: this.i18n.interval5m, value: 300 },
+      { text: this.i18n.interval10m, value: 600 },
+      { text: this.i18n.interval15m, value: 900 },
+      { text: this.i18n.interval30m, value: 1800 },
+      { text: this.i18n.interval1h, value: 3600 },
+      { text: this.i18n.interval2h, value: 7200 },
+      { text: this.i18n.interval5h, value: 18000 },
+      { text: this.i18n.interval10h, value: 36000 },
+      { text: this.i18n.interval24h, value: 86400 },
+    ];
     Vue.filter('colorSeverity', this.colorSeverity);
   },
   beforeDestroy() {
     this.$root.setSubtitle("");
+    this.stopRefreshTimer();
   },
   mounted() {
     this.$root.startLoading();
@@ -133,6 +158,7 @@ const huntComponent = {
     'relativeTimeValue': 'saveLocalSettings',
     'relativeTimeUnit': 'saveLocalSettings',
     'autohunt': 'saveLocalSettings',
+    'autoRefreshInterval': 'resetRefreshTimer',
   },
   methods: {
     isAdvanced() {
@@ -235,6 +261,19 @@ const huntComponent = {
       } else {
         this.$router.push(this.buildCurrentRoute(), onSuccess, onFail);
       }
+      this.resetRefreshTimer();
+    },
+    stopRefreshTimer() {
+      if (this.autoRefreshTimer) {
+        clearTimeout(this.autoRefreshTimer);
+      }
+    },
+    resetRefreshTimer() {
+      var route = this;
+      this.stopRefreshTimer();
+      if (this.autoRefreshInterval > 0) {
+        this.autoRefreshTimer = setTimeout(function() { route.hunt(true); }, this.autoRefreshInterval * 1000);
+      }
     },
     huntQuery(query) {
       this.query = query;
@@ -254,9 +293,6 @@ const huntComponent = {
         }
       }
       return q + this.query;
-    },
-    generatePcapLink(eventId) {
-      return "/joblookup?id=" + encodeURIComponent(eventId);
     },
     parseUrlParameters() {
       this.category = this.$route.path.replace("/", "");
@@ -366,33 +402,7 @@ const huntComponent = {
       } catch (error) {
         this.$root.showError(error);
       }
-    },
-    async lookupPcap(id, newTab) {
-      this.$root.startLoading();
-      try {
-        const response = await this.$root.papi.post('job/', null, { params: { eventId: id }});
-        if (response.data.id) {
-          if (newTab) {
-            window.open('/#/job/' + response.data.id, '_blank');
-          } else {
-            this.$root.$router.push({ name: 'job', params: { jobId: response.data.id }});
-          }
-        } else {
-          this.$root.showError(this.i18n.eventLookupFailed);
-        }
-      } catch (error) {
-        this.$root.showError(error);
-      }
-      this.$root.stopLoading();
-    },    
-    removeDataItemFromView(data, item) {
-      for (var j = 0; j < data.length; j++) {
-        if (data[j] == item) {
-          Vue.delete(data, j);
-          break;
-        }
-      }
-    },
+    },  
     async ack(event, item, idx, acknowledge, escalate = false) {
       this.$root.startLoading();
       try {
@@ -472,6 +482,14 @@ const huntComponent = {
       }      
       this.$root.stopLoading();
     },
+    removeDataItemFromView(data, item) {
+      for (var j = 0; j < data.length; j++) {
+        if (data[j] == item) {
+          Vue.delete(data, j);
+          break;
+        }
+      }
+    },    
     getFilterToggle(name) {
       for (var i = 0; i < this.filterToggles.length; i++) {
         var filter = this.filterToggles[i];
@@ -619,14 +637,19 @@ const huntComponent = {
                 break;
               }
             }
-          } else if (action.link.indexOf("{eventId}") == -1 || event['soc_id']) {
+          }
+
+          var link = route.findEligibleActionLinkForEvent(action, event);
+          if (link) {
             action.enabled = true;
+            action.linkFormatted = route.formatActionLink(link, event, field, value);
           } else {
             action.enabled = false;
           }
-          action.linkFormatted = route.formatActionLink(action, event, field, value);
         });
-
+        this.quickActionEvent = event;
+        this.quickActionField = field;
+        this.quickActionValue = value;
         this.quickActionX = domEvent.clientX;
         this.quickActionY = domEvent.clientY;
         this.$nextTick(() => { 
@@ -634,15 +657,70 @@ const huntComponent = {
         });
       }
     },
-    formatActionLink(action, event, field, value) {
-      var link = action.link;
+    copyToClipboard(data, style) {
+      const buffer = document.getElementById('clipboardBuffer');
+      // Convert entire item into text
+      if (style == 'json') {
+        data = JSON.stringify(data);
+      } else if (style == 'kvp') {
+        var text = "";
+        for (const prop in data) {
+          text += prop + ": " + data[prop] + "\n";
+        }
+        data = text;
+      }
+      buffer.value = data;
+      buffer.select();
+      buffer.setSelectionRange(0, 99999);
+      document.execCommand("copy");
+    },    
+    findEligibleActionLinkForEvent(action, event) {
+      if (action && action.links) {
+        for (var idx = 0; idx < action.links.length; idx++) {
+          const link = action.links[idx];
+
+          if (this.isActionLinkEligibleForEvent(link, event)) {
+            return link;
+          }
+        }
+      }
+      return null;
+    },
+    isActionLinkEligibleForEvent(link, event) {
+      var eligible = true;
+      eligible &= (link.indexOf("{eventId}") == -1 || event['soc_id']);
+      const fields = this.getDynamicActionFieldNames(link);
+      if (fields && fields.length > 0) {
+        fields.forEach(function(field) {
+          value = event[field];
+          eligible &= value != undefined && value != null;
+        });
+      }
+      return eligible;
+    },
+    getDynamicActionFieldNames(url) {
+      const fields = [];
+      const matches = url.matchAll(/\{:([a-zA-Z0-9_.]+?)\}/g);
+      for (const match of matches) {
+        if (match.length > 1) {
+          fields.push(match[1]);
+        }
+      }
+      return fields;
+    },
+    formatActionLink(link, event, field, value) {
       link = link.replace("{eventId}", event["soc_id"]);
       link = link.replace("{field}", field);
       link = link.replace("{value}", value);
+      
+      const fields = this.getDynamicActionFieldNames(link);
+      if (fields && fields.length > 0) {
+        fields.forEach(function(field) {
+          value = event[field];
+          link = link.replace("{:" + field + "}", value);
+        });
+      }
       return encodeURI(link);
-    },
-    isEventAction(action) {
-      return action && action.link && !action.link.includes("{field}") && !action.link.includes("{value}");
     },
     filterVisibleFields(eventModule, eventDataset, fields) {
       if (this.eventFields) {

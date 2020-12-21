@@ -15,11 +15,11 @@ import (
 )
 
 type Datastore interface {
-  CreateSensor(id string) *model.Sensor
-  GetSensors() []*model.Sensor
-  AddSensor(sensor *model.Sensor) error
-  UpdateSensor(newSensor *model.Sensor) error
-  GetNextJob(sensorId string) *model.Job
+  CreateNode(id string) *model.Node
+  GetNodes() []*model.Node
+  AddNode(node *model.Node) error
+  UpdateNode(newNode *model.Node) error
+  GetNextJob(nodeId string) *model.Job
   CreateJob() *model.Job
   GetJob(jobId int) *model.Job
   GetJobs() []*model.Job

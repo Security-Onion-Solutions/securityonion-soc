@@ -15,26 +15,26 @@ import (
   "github.com/security-onion-solutions/securityonion-soc/web"
 )
 
-type SensorsHandler struct {
+type GridHandler struct {
   web.BaseHandler
   server 		*Server
 }
 
-func NewSensorsHandler(srv *Server) *SensorsHandler {
-  handler := &SensorsHandler {}
+func NewGridHandler(srv *Server) *GridHandler {
+  handler := &GridHandler {}
   handler.Host = srv.Host
   handler.server = srv
   handler.Impl = handler
   return handler
 }
 
-func (sensorsHandler *SensorsHandler) HandleNow(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (gridHandler *GridHandler) HandleNow(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   switch request.Method {
-    case http.MethodGet: return sensorsHandler.get(writer, request)
+    case http.MethodGet: return gridHandler.get(writer, request)
   }
   return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
 
-func (sensorsHandler *SensorsHandler) get(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-  return http.StatusOK, sensorsHandler.server.Datastore.GetSensors(), nil
+func (gridHandler *GridHandler) get(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+  return http.StatusOK, gridHandler.server.Datastore.GetNodes(), nil
 }

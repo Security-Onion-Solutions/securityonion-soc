@@ -186,6 +186,8 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       }
     },
     updateJob(job) {
+      if (!job || job.id != this.job.id) return;
+
       if (this.job.status != job.status) {
         this.loadPackets(this.isOptionEnabled('unwrap'));
       }

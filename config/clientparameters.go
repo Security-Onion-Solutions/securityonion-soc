@@ -16,15 +16,17 @@ const DEFAULT_RELATIVE_TIME_UNIT = 30
 const DEFAULT_MOST_RECENTLY_USED_LIMIT = 5
 
 type ClientParameters struct {
-  HuntingParams     HuntingParameters     `json:"hunt"`
-  AlertingParams    HuntingParameters     `json:"alerts"`
-  DocsUrl           string                `json:"docsUrl"`
-  CheatsheetUrl     string                `json:"cheatsheetUrl"`
+  HuntingParams       HuntingParameters     `json:"hunt"`
+  AlertingParams      HuntingParameters     `json:"alerts"`
+  DocsUrl             string                `json:"docsUrl"`
+  CheatsheetUrl       string                `json:"cheatsheetUrl"`
+  GridParams          GridParameters        `json:"grid"`
 }
 
 func (config *ClientParameters) Verify() error {
   var err error
   err = config.HuntingParams.Verify()
+  err = config.AlertingParams.Verify()
   return err
 }
 
@@ -39,6 +41,7 @@ type HuntingAction struct {
   Description string    `json:"description"`
   Icon        string    `json:"icon"`
   Link        string    `json:"link"`
+  Links       []string  `json:"links"`
   Fields      []string  `json:"fields"`
   Target      string    `json:"target"`
 }
@@ -62,12 +65,15 @@ type HuntingParameters struct {
   MostRecentlyUsedLimit   int                 `json:"mostRecentlyUsedLimit"`
   EventFields             map[string][]string `json:"eventFields"`
   QueryBaseFilter         string              `json:"queryBaseFilter"`
-  QueryToggleFilters      []ToggleFilter      `json:"queryToggleFilters"`
-  Queries                 []HuntingQuery      `json:"queries"`
-  Actions                 []HuntingAction     `json:"actions"`
+  QueryToggleFilters      []*ToggleFilter     `json:"queryToggleFilters"`
+  Queries                 []*HuntingQuery     `json:"queries"`
+  Actions                 []*HuntingAction    `json:"actions"`
   Advanced                bool                `json:"advanced"`
   AckEnabled              bool                `json:"ackEnabled"`
   EscalateEnabled         bool                `json:"escalateEnabled"`
+}
+
+type GridParameters struct {
 }
 
 func (params *HuntingParameters) Verify() error {
@@ -87,6 +93,15 @@ func (params *HuntingParameters) Verify() error {
   if params.MostRecentlyUsedLimit < 10 {
     params.MostRecentlyUsedLimit = DEFAULT_MOST_RECENTLY_USED_LIMIT
   }
+  params.combineDeprecatedLinkIntoLinks()
   return err
 }
 
+func (params *HuntingParameters) combineDeprecatedLinkIntoLinks() {
+  for _, action := range params.Actions {
+    if len(action.Link) > 0 {
+      action.Links = append(action.Links, action.Link)
+      action.Link = ""
+    }
+  }  
+}

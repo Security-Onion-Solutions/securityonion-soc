@@ -4,5 +4,6 @@ sensoroni.log
 sensoroni
 kratos
 jobs/
+nsm/
 .vscode/
 .DS_Store

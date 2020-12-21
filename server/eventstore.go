@@ -14,7 +14,6 @@ import (
 )
 
 type Eventstore interface {
-	PopulateJobFromEventId(id string, job *model.Job) error
 	Search(criteria *model.EventSearchCriteria) (*model.EventSearchResults, error)
 	Update(criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error)
 	Acknowledge(criteria *model.EventAckCriteria) (*model.EventUpdateResults, error)

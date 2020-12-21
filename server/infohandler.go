@@ -43,6 +43,7 @@ func (infoHandler *InfoHandler) get(writer http.ResponseWriter, request *http.Re
     License: "GPL v2",
     Parameters: &infoHandler.server.Config.ClientParams,
     ElasticVersion: os.Getenv("ELASTIC_VERSION"),
+    WazuhVersion: os.Getenv("WAZUH_VERSION"),
   }
   return http.StatusOK, info, nil
 }

@@ -48,7 +48,7 @@ func TestGetInt(tester *testing.T) {
   if err == nil {
     tester.Errorf("expected GetInt error")
   }
-  options["MyKey"] = 123
+  options["MyKey"] = float64(123)
   actual, err := GetInt(options, "MyKey") 
   if err != nil {
     tester.Errorf("unexpected GetInt error")
@@ -64,7 +64,7 @@ func TestGetIntDefault(tester *testing.T) {
   if actual != 123 {
     tester.Errorf("expected GetIntDefault to return %d but got %d", 123, actual)
   }
-  options["MyKey"] = 1234
+  options["MyKey"] = float64(1234)
   actual = GetIntDefault(options, "MyKey", 123) 
   if actual != 1234 {
     tester.Errorf("expected GetIntDefault to return %d but got %d", 1234, actual)

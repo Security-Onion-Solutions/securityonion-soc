@@ -40,3 +40,49 @@ func TestVerifyHuntingParams(tester *testing.T) {
     tester.Errorf("expected RelativeTimeUnit %d but got %d", DEFAULT_RELATIVE_TIME_UNIT, params.RelativeTimeUnit)
   }
 }
+
+func TestCombineEmptyDeprecatedLinkIntoEmptyLinks(tester *testing.T) {
+  action := &HuntingAction{}
+  params := &HuntingParameters{}
+  params.Actions = append(params.Actions, action)
+  params.combineDeprecatedLinkIntoLinks()
+  if len(action.Links) != 0 {
+    tester.Errorf("expected empty links list but got %d", len(action.Links))
+  }
+}
+
+func TestCombineDeprecatedLinkIntoEmptyLinks(tester *testing.T) {
+  action := &HuntingAction{}
+  params := &HuntingParameters{}
+  params.Actions = append(params.Actions, action)
+  params.combineDeprecatedLinkIntoLinks()
+  if len(action.Links) != 0 {
+    tester.Errorf("expected empty links list but got %d", len(action.Links))
+  }
+
+  action.Link = "test"
+  params.combineDeprecatedLinkIntoLinks()
+  if len(action.Links) != 1 {
+    tester.Errorf("expected single item in links list but got %d", len(action.Links))
+  }
+  if len(action.Link) != 0 {
+    tester.Errorf("expected empty link but got %d", len(action.Link))
+  }
+}
+
+func TestCombineDeprecatedLinkIntoNonEmptyLinks(tester *testing.T) {
+  action := &HuntingAction{}
+  params := &HuntingParameters{}
+  params.Actions = append(params.Actions, action)
+  params.combineDeprecatedLinkIntoLinks()
+
+  action.Link = "test"
+  action.Links = append(action.Links, "new-item")
+  params.combineDeprecatedLinkIntoLinks()
+  if len(action.Links) != 2 {
+    tester.Errorf("expected 2 items in links list but got %d", len(action.Links))
+  }
+  if len(action.Link) != 0 {
+    tester.Errorf("expected empty link but got %d", len(action.Link))
+  }
+}

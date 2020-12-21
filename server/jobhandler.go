@@ -56,14 +56,7 @@ func (jobHandler *JobHandler) get(writer http.ResponseWriter, request *http.Requ
 func (jobHandler *JobHandler) post(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   statusCode := http.StatusBadRequest
   job := jobHandler.server.Datastore.CreateJob()
-  var err error
-  id := request.URL.Query().Get("eventId")
-  if len(id) > 0 {
-    err = jobHandler.server.Eventstore.PopulateJobFromEventId(id, job)
-  } else {
-    err = jobHandler.ReadJson(request, job)
-  }
-
+  err := jobHandler.ReadJson(request, job)
   if err == nil {
     err = jobHandler.server.Datastore.AddJob(job)
     if err == nil {

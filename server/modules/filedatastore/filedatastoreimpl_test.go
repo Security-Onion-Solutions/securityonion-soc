@@ -23,7 +23,7 @@ func TestFileDatastoreInit(tester *testing.T) {
     tester.Errorf("expected Init error")
   }
 
-  jobDir := "/tmp/sensoroni.jobs"
+  jobDir := "/tmp/nodeoni.jobs"
   cfg["jobDir"] = jobDir
   defer os.Remove(jobDir)
   os.Mkdir(jobDir, 0777)
@@ -36,25 +36,37 @@ func TestFileDatastoreInit(tester *testing.T) {
   }
 }
 
-func TestSensors(tester *testing.T) {
+func TestNodes(tester *testing.T) {
   ds := NewFileDatastoreImpl()
   cfg := make(module.ModuleConfig)
   ds.Init(cfg)
-  sensor := ds.CreateSensor("foo")
-  ds.addSensor(sensor)
-  sensors := ds.GetSensors()
-  if len(sensors) != 1 {
-    tester.Errorf("expected %d sensors but got %d", 1, len(sensors))
+  node := ds.CreateNode("foo")
+  node.Role = "rolo"
+  node.Description = "desc"
+  node.Address = "addr"
+  ds.addNode(node)
+  nodes := ds.GetNodes()
+  if len(nodes) != 1 {
+    tester.Errorf("expected %d nodes but got %d", 1, len(nodes))
   }
-  if sensors[0].Id != "foo" {
-    tester.Errorf("expected sensor.Id %s but got %s", "foo", sensors[0].Id)
+  if nodes[0].Id != "foo" {
+    tester.Errorf("expected node.Id %s but got %s", "foo", nodes[0].Id)
+  }
+  if nodes[0].Role != "rolo" {
+    tester.Errorf("expected node.Role %s but got %s", "rolo", nodes[0].Role)
+  }
+  if nodes[0].Description != "desc" {
+    tester.Errorf("expected node.Description %s but got %s", "desc", nodes[0].Description)
+  }
+  if nodes[0].Address != "addr" {
+    tester.Errorf("expected node.Address %s but got %s", "addr", nodes[0].Address)
   }
   
-  sensor = ds.CreateSensor("bar")
-  ds.addSensor(sensor)
-  sensors = ds.GetSensors()
-  if len(sensors) != 2 {
-    tester.Errorf("expected %d sensors but got %d", 2, len(sensors))
+  node = ds.CreateNode("bar")
+  ds.addNode(node)
+  nodes = ds.GetNodes()
+  if len(nodes) != 2 {
+    tester.Errorf("expected %d nodes but got %d", 2, len(nodes))
   }
   job := ds.GetNextJob("foo")
   if job != nil {
@@ -66,8 +78,8 @@ func TestJobs(tester *testing.T) {
   ds := NewFileDatastoreImpl()
   cfg := make(module.ModuleConfig)
   ds.Init(cfg)
-  sensor := ds.CreateSensor("foo")
-  ds.addSensor(sensor)
+  node := ds.CreateNode("foo")
+  ds.addNode(node)
 
   // Test adding a job
   job := ds.CreateJob()
