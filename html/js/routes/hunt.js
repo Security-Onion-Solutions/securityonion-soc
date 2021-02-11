@@ -709,18 +709,18 @@ const huntComponent = {
       return fields;
     },
     formatActionLink(link, event, field, value) {
-      link = link.replace("{eventId}", event["soc_id"]);
-      link = link.replace("{field}", field);
-      link = link.replace("{value}", value);
+      link = link.replace("{eventId}", encodeURIComponent(event["soc_id"]));
+      link = link.replace("{field}", encodeURIComponent(field));
+      link = link.replace("{value}", encodeURIComponent(value));
       
       const fields = this.getDynamicActionFieldNames(link);
       if (fields && fields.length > 0) {
         fields.forEach(function(field) {
           value = event[field];
-          link = link.replace("{:" + field + "}", value);
+          link = link.replace("{:" + field + "}", encodeURIComponent(value));
         });
       }
-      return encodeURI(link);
+      return link;
     },
     filterVisibleFields(eventModule, eventDataset, fields) {
       if (this.eventFields) {
