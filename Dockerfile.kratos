@@ -42,6 +42,8 @@ RUN addgroup --gid "$GID" -S kratos; \
     adduser -u "$UID" -S kratos -G kratos -D -H -s /bin/nologin
 RUN apk add -U --no-cache ca-certificates
 
+RUN [ ! -e /etc/nsswitch.conf ] && echo 'hosts: files dns' > /etc/nsswitch.conf
+
 RUN echo "#!/bin/sh" > /start-kratos.sh
 RUN echo "kratos -c /kratos-conf/kratos.yaml migrate sql -e --yes >> /kratos-log/kratos-migrate.log 2>&1" >> /start-kratos.sh
 RUN echo "chown kratos:kratos /kratos-data/db.sqlite" >> /start-kratos.sh
