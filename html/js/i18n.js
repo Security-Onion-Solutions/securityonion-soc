@@ -250,6 +250,8 @@ const i18n = {
       'so-managersearch-keywords': 'Elastic, Elasticsearch, Ingest, Manager, Master, Search, Soc, Web',
       'so-manager': 'Manager',
       'so-manager-keywords': 'Manager, Master, Soc',
+      'so-node': 'Search',
+      'so-node-keywords': 'Elastic, Elasticsearch, Ingest, Search',
       'so-search': 'Search',
       'so-search-keywords': 'Elastic, Elasticsearch, Ingest, Search',
       'so-sensor': 'Forward',
