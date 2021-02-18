@@ -153,10 +153,11 @@ $(document).ready(function() {
     
         if (pngFavicon && svgFavicon) {
           const ext = ".svg";
-          const tagIndex = svgFavicon.href.indexOf("-"),
-                extIndex = svgFavicon.href.indexOf(ext),
-                baseText = svgFavicon.href.substring(0, tagIndex !== -1 ? tagIndex : extIndex),
-                queryParam = svgFavicon.href.substring(extIndex + ext.length);
+          const tagIndex = svgFavicon.href.indexOf("-");
+          const extIndex = svgFavicon.href.indexOf(ext);
+          if (tagIndex > extIndex) tagIndex = -1;
+          const baseText = svgFavicon.href.substring(0, tagIndex !== -1 ? tagIndex : extIndex);
+          const queryParam = svgFavicon.href.substring(extIndex + ext.length);
           
           const attention = this.isAttentionNeeded() ? '-attention' : '' 
           pngFavicon.href = `${baseText}${colorSchemeString}${attention}.png${queryParam}`;
