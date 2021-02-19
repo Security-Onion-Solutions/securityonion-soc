@@ -153,7 +153,7 @@ $(document).ready(function() {
     
         if (pngFavicon && svgFavicon) {
           const ext = ".svg";
-          const tagIndex = svgFavicon.href.indexOf("-");
+          var tagIndex = svgFavicon.href.indexOf("-");
           const extIndex = svgFavicon.href.indexOf(ext);
           if (tagIndex > extIndex) tagIndex = -1;
           const baseText = svgFavicon.href.substring(0, tagIndex !== -1 ? tagIndex : extIndex);
