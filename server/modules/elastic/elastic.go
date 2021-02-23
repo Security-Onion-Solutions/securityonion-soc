@@ -22,6 +22,7 @@ const DEFAULT_TIMEOUT_MS = 120000
 const DEFAULT_CACHE_MS = 86400000
 const DEFAULT_INDEX = "*:so-*"
 const DEFAULT_ASYNC_THRESHOLD = 10
+const DEFAULT_INTERVALS = 25
 
 type Elastic struct {
   config			module.ModuleConfig
@@ -54,7 +55,8 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
   cacheMs := module.GetIntDefault(cfg, "cacheMs", DEFAULT_CACHE_MS)
   index := module.GetStringDefault(cfg, "index", DEFAULT_INDEX)
   asyncThreshold := module.GetIntDefault(cfg, "asyncThreshold", DEFAULT_ASYNC_THRESHOLD)
-  err := elastic.store.Init(host, remoteHosts, username, password, verifyCert, timeShiftMs, defaultDurationMs, esSearchOffsetMs, timeoutMs, cacheMs, index, asyncThreshold)
+  intervals := module.GetIntDefault(cfg, "intervals", DEFAULT_INTERVALS)
+  err := elastic.store.Init(host, remoteHosts, username, password, verifyCert, timeShiftMs, defaultDurationMs, esSearchOffsetMs, timeoutMs, cacheMs, index, asyncThreshold, intervals)
   if err == nil && elastic.server != nil {
     elastic.server.Eventstore = elastic.store
   }

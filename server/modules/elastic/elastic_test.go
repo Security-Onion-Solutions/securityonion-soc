@@ -50,4 +50,7 @@ func TestElasticInit(tester *testing.T) {
   if elastic.store.index != DEFAULT_INDEX {
     tester.Errorf("expected index %s but got %s", DEFAULT_INDEX, elastic.store.index)
   }
+  if elastic.store.intervals != DEFAULT_INTERVALS {
+    tester.Errorf("expected interval %d but got %d", DEFAULT_INTERVALS, elastic.store.intervals)
+  }
 }
