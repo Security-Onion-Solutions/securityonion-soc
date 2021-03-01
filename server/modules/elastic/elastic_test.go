@@ -1,4 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
+// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -48,5 +49,8 @@ func TestElasticInit(tester *testing.T) {
   }
   if elastic.store.index != DEFAULT_INDEX {
     tester.Errorf("expected index %s but got %s", DEFAULT_INDEX, elastic.store.index)
+  }
+  if elastic.store.intervals != DEFAULT_INTERVALS {
+    tester.Errorf("expected interval %d but got %d", DEFAULT_INTERVALS, elastic.store.intervals)
   }
 }

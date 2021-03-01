@@ -1,4 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
+// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -59,7 +60,8 @@ $(document).ready(function() {
       elasticVersion: '0.0.0',
       wazuhVersion: '0.0.0',
       papi: null,
-      connectionTimeout: 15000,
+      connectionTimeout: 120000,
+      wsConnectionTimeout: 15000,
       socket: null,
       subscriptions: [],
       parameters: {},
@@ -151,10 +153,11 @@ $(document).ready(function() {
     
         if (pngFavicon && svgFavicon) {
           const ext = ".svg";
-          const tagIndex = svgFavicon.href.indexOf("-"),
-                extIndex = svgFavicon.href.indexOf(ext),
-                baseText = svgFavicon.href.substring(0, tagIndex !== -1 ? tagIndex : extIndex),
-                queryParam = svgFavicon.href.substring(extIndex + ext.length);
+          var tagIndex = svgFavicon.href.indexOf("-");
+          const extIndex = svgFavicon.href.indexOf(ext);
+          if (tagIndex > extIndex) tagIndex = -1;
+          const baseText = svgFavicon.href.substring(0, tagIndex !== -1 ? tagIndex : extIndex);
+          const queryParam = svgFavicon.href.substring(extIndex + ext.length);
           
           const attention = this.isAttentionNeeded() ? '-attention' : '' 
           pngFavicon.href = `${baseText}${colorSchemeString}${attention}.png${queryParam}`;
@@ -294,7 +297,7 @@ $(document).ready(function() {
           this.connected = false;
           this.reconnecting = false;
           this.openWebsocket();
-          window.setInterval(this.openWebsocket, this.connectionTimeout);    
+          window.setInterval(this.openWebsocket, this.wsConnectionTimeout);    
         }
       },
       openWebsocket() {

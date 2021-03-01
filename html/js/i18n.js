@@ -1,4 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
+// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -183,6 +184,8 @@ const i18n = {
       loginExpired: 'The login session has expired. Refresh, or wait for the page to refresh automatically, and then try again.',
       loginInvalid: 'The provided credentials are invalid. Please try again.',
       loginTitle: 'Login to Security Onion',
+      loginHeader: '',
+      loginFooter: '',
       logout: 'Logout',
       minutes: 'minutes',
       months: 'months',
@@ -247,6 +250,8 @@ const i18n = {
       'so-managersearch-keywords': 'Elastic, Elasticsearch, Ingest, Manager, Master, Search, Soc, Web',
       'so-manager': 'Manager',
       'so-manager-keywords': 'Manager, Master, Soc',
+      'so-node': 'Search',
+      'so-node-keywords': 'Elastic, Elasticsearch, Ingest, Search',
       'so-search': 'Search',
       'so-search-keywords': 'Elastic, Elasticsearch, Ingest, Search',
       'so-sensor': 'Forward',

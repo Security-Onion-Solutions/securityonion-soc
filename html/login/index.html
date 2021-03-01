@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   Copyright 2019 Jason Ertel (jertel). All rights reserved.
-  Copyright 2020 Security Onion Solutions, LLC. All rights reserved.
+  Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
 
   This program is distributed under the terms of version 2 of the
   GNU General Public License.  See LICENSE for further details.
@@ -55,9 +55,19 @@
           <v-container grid-list-sm class="pa-4">
             <v-row>
               <v-col xs12>
+                <div id="loginHeader" class="subtitle-1" v-text="i18n.loginHeader"></div>
+              </v-col>
+            </v-row>
+            <v-row>
+              <v-col xs12>
                 <v-text-field name="identifier" v-model="form.email" :placeholder="i18n.email" :hint="i18n.emailHelp" autofocus="true" :rules="[rules.required]"></v-text-field>
                 <v-text-field name="password" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'mdi-eye' : 'mdi-eye-off'" :rules="[rules.required]"></v-text-field>
                 <v-text-field name="csrf_token" v-model="form.csrfToken" class="d-none"></v-text-field>
+              </v-col>
+            </v-row>
+            <v-row>
+              <v-col xs12>
+                <div id="loginFooter" class="subtitle-2" v-text="i18n.loginFooter"></div>
               </v-col>
             </v-row>
           </v-container>
@@ -73,11 +83,12 @@
     <script src="js/external/vue-2.6.11.min.js"></script>
     <script src="js/external/vue-router-3.4.9.min.js"></script>
     <script src="js/external/vuetify-v2.3.19.min.js"></script>
-    <script src="js/external/axios-0.21.0.min.js"></script>
+    <script src="js/external/axios-0.21.1.min.js"></script>
     <script src="js/external/moment-2.29.1.min.js"></script>
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/login.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/custom.js?v=VERSION_PLACEHOLDER"></script>
   </body>
 </html>

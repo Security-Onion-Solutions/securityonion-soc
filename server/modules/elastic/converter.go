@@ -1,4 +1,4 @@
-// Copyright 2020 Security Onion Solutions. All rights reserved.
+// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -42,7 +42,7 @@ func makeTimeline(interval string) map[string]interface{} {
   timeline := make(map[string]interface{})
   timelineFields := make(map[string]interface{})
   timelineFields["field"] = "@timestamp"
-  timelineFields["interval"] = interval
+  timelineFields["fixed_interval"] = interval
   timelineFields["min_doc_count"] = 1
   timeline["date_histogram"] = timelineFields
   return timeline
@@ -114,6 +114,62 @@ func makeQuery(store *ElasticEventstore, parsedQuery *model.Query, beginTime tim
   return clause
 }
 
+func calcTimelineInterval(intervals int, beginTime time.Time, endTime time.Time) string {
+  difference := endTime.Sub(beginTime)
+  intervalSeconds := difference.Seconds() / float64(intervals)
+  
+  // Find a common interval nearest the calculated interval
+  if intervalSeconds <= 3 {
+    return "1s"
+  }
+  if intervalSeconds <= 7 {
+    return "5s"
+  }
+  if intervalSeconds <= 13 {
+    return "10s"
+  }
+  if intervalSeconds <= 23 {
+    return "15s"
+  }
+  if intervalSeconds <= 45 {
+    return "30s"
+  }
+  if intervalSeconds <= 180 {
+    return "1m"
+  }
+  if intervalSeconds <= 420 {
+    return "5m"
+  }
+  if intervalSeconds <= 780 {
+    return "10m"
+  }
+  if intervalSeconds <= 1380 {
+    return "15m"
+  }
+  if intervalSeconds <= 2700 {
+    return "30m"
+  }
+  if intervalSeconds <= 5400 {
+    return "1h"
+  }
+  if intervalSeconds <= 25200 {
+    return "5h"
+  }
+  if intervalSeconds <= 54000 {
+    return "10h"
+  }
+  if intervalSeconds <= 259200 {
+    return "1d"
+  }
+  if intervalSeconds <= 604800 {
+    return "5d"
+  }
+  if intervalSeconds <= 1296000 {
+    return "10d"
+  }
+  return "30d"
+}
+
 func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSearchCriteria) (string, error) {
   var err error
   var esJson string
@@ -124,7 +180,7 @@ func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSear
 
   aggregations := make(map[string]interface{})
   esMap["aggs"] = aggregations
-  aggregations["timeline"] = makeTimeline("30m")
+  aggregations["timeline"] = makeTimeline(calcTimelineInterval(store.intervals, criteria.BeginTime, criteria.EndTime))
 
   segment := criteria.ParsedQuery.NamedSegment(model.SegmentKind_GroupBy)
   if segment != nil {

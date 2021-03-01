@@ -1,4 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
+// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -19,6 +20,7 @@ import (
 func NewTestStore() *ElasticEventstore {
   return &ElasticEventstore{
     fieldDefs: make(map[string]*FieldDefinition),
+    intervals: DEFAULT_INTERVALS,
   }
 }
 
@@ -68,11 +70,35 @@ func TestMakeTimeline(tester *testing.T) {
   if terms["field"] != "@timestamp" {
     tester.Errorf("Expected %s, Actual %s", "@timestamp", terms["field"])
   }
-  if terms["interval"] != "30m" {
-    tester.Errorf("Expected %s, Actual %s", "30m", terms["interval"])
+  if terms["fixed_interval"] != "30m" {
+    tester.Errorf("Expected %s, Actual %s", "30m", terms["fixed_interval"])
   }
   if terms["min_doc_count"] != 1 {
     tester.Errorf("Expected %d, Actual %d", 1, terms["min_doc_count"])
+  }
+}
+
+func TestCalcTimelineInterval(tester *testing.T) {
+  start, _ := time.Parse(time.RFC3339, "2021-01-02T05:00:00Z")
+  end, _   := time.Parse(time.RFC3339, "2021-01-02T13:00:00Z")
+  interval := calcTimelineInterval(25, start, end)
+  if interval != "15m" {
+    tester.Errorf("Expected 15m interval but got %s", interval)
+  }
+
+  // Boundaries
+  start, _ = time.Parse(time.RFC3339, "2021-01-02T13:00:00Z")
+  end, _   = time.Parse(time.RFC3339, "2021-01-02T13:00:01Z")
+  interval = calcTimelineInterval(25, start, end)
+  if interval != "1s" {
+    tester.Errorf("Expected 1s interval but got %s", interval)
+  }
+
+  start, _ = time.Parse(time.RFC3339, "1990-01-02T05:00:00Z")
+  end, _   = time.Parse(time.RFC3339, "2021-01-02T13:00:00Z")
+  interval = calcTimelineInterval(25, start, end)
+  if interval != "30d" {
+    tester.Errorf("Expected 30d interval but got %s", interval)
   }
 }
 
@@ -83,7 +109,7 @@ func TestConvertToElasticRequestEmptyCriteria(tester *testing.T) {
     tester.Errorf("unexpected conversion error: %s", err)
   }
 
-  expectedJson := `{"aggs":{"timeline":{"date_histogram":{"field":"@timestamp","interval":"30m","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"*"}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"0001-01-01T00:00:00Z","lte":"0001-01-01T00:00:00Z"}}}],"must_not":[],"should":[]}},"size":25}`
+  expectedJson := `{"aggs":{"timeline":{"date_histogram":{"field":"@timestamp","fixed_interval":"1s","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"*"}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"0001-01-01T00:00:00Z","lte":"0001-01-01T00:00:00Z"}}}],"must_not":[],"should":[]}},"size":25}`
   if actualJson != expectedJson {
     tester.Errorf("Mismatched ES request conversion; actual='%s' vs expected='%s'", actualJson, expectedJson)
   }
@@ -97,7 +123,7 @@ func TestConvertToElasticRequestGroupByCriteria(tester *testing.T) {
     tester.Errorf("unexpected conversion error: %s", err)
   }
 
-  expectedJson := `{"aggs":{"bottom":{"terms":{"field":"ghi","order":{"_count":"asc"},"size":10}},"groupby|ghi":{"aggs":{"groupby|ghi|jkl":{"terms":{"field":"jkl","order":{"_count":"desc"},"size":10}}},"terms":{"field":"ghi","order":{"_count":"desc"},"size":10}},"timeline":{"date_histogram":{"field":"@timestamp","interval":"30m","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"abc AND def AND q: \"\\\\\\\\file\\\\path\""}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"2020-01-02T12:13:14Z","lte":"2020-01-02T13:13:14Z"}}}],"must_not":[],"should":[]}},"size":25}`
+  expectedJson := `{"aggs":{"bottom":{"terms":{"field":"ghi","order":{"_count":"asc"},"size":10}},"groupby|ghi":{"aggs":{"groupby|ghi|jkl":{"terms":{"field":"jkl","order":{"_count":"desc"},"size":10}}},"terms":{"field":"ghi","order":{"_count":"desc"},"size":10}},"timeline":{"date_histogram":{"field":"@timestamp","fixed_interval":"1m","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"abc AND def AND q: \"\\\\\\\\file\\\\path\""}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"2020-01-02T12:13:14Z","lte":"2020-01-02T13:13:14Z"}}}],"must_not":[],"should":[]}},"size":25}`
   if actualJson != expectedJson {
     tester.Errorf("Mismatched ES request conversion; actual='%s' vs expected='%s'", actualJson, expectedJson)
   }

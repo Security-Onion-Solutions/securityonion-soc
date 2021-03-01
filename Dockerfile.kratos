@@ -1,3 +1,13 @@
+# Copyright 2019 Jason Ertel (jertel). All rights reserved.
+# Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+#
+# This program is distributed under the terms of version 2 of the
+# GNU General Public License.  See LICENSE for further details.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
 FROM ghcr.io/security-onion-solutions/golang:alpine AS builder
 
 RUN addgroup -S ory; \
@@ -31,6 +41,8 @@ ARG GID=928
 RUN addgroup --gid "$GID" -S kratos; \
     adduser -u "$UID" -S kratos -G kratos -D -H -s /bin/nologin
 RUN apk add -U --no-cache ca-certificates
+
+RUN [ ! -e /etc/nsswitch.conf ] && echo 'hosts: files dns' > /etc/nsswitch.conf
 
 RUN echo "#!/bin/sh" > /start-kratos.sh
 RUN echo "kratos -c /kratos-conf/kratos.yaml migrate sql -e --yes >> /kratos-log/kratos-migrate.log 2>&1" >> /start-kratos.sh

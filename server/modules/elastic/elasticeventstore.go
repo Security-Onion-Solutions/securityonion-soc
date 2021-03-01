@@ -1,4 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
+// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -53,6 +54,7 @@ type ElasticEventstore struct {
   cacheTime         time.Time
   cacheLock         sync.Mutex
   fieldDefs         map[string]*FieldDefinition
+  intervals         int
   asyncThreshold int
 }
 
@@ -75,7 +77,8 @@ func (store *ElasticEventstore) Init(hostUrl string,
                                       timeoutMs int, 
                                       cacheMs int, 
                                       index string, 
-                                      asyncThreshold int) error {
+                                      asyncThreshold int,
+                                      intervals int) error {
   store.timeShiftMs = timeShiftMs
   store.defaultDurationMs = defaultDurationMs
   store.esSearchOffsetMs = esSearchOffsetMs
@@ -83,6 +86,7 @@ func (store *ElasticEventstore) Init(hostUrl string,
   store.asyncThreshold = asyncThreshold
   store.timeoutMs = time.Duration(timeoutMs) * time.Millisecond
   store.cacheMs = time.Duration(cacheMs) * time.Millisecond
+  store.intervals = intervals
 
   var err error
   store.esClient, err = store.makeEsClient(hostUrl, user, pass, verifyCert)
