@@ -642,7 +642,11 @@ const huntComponent = {
           var link = route.findEligibleActionLinkForEvent(action, event);
           if (link) {
             action.enabled = true;
-            action.linkFormatted = route.formatActionLink(link, event, field, value);
+            action.linkFormatted = route.formatActionContent(link, event, field, value, true);
+            action.bodyFormatted = route.formatActionContent(action.body, event, field, value, action.encodeBody);
+            action.backgroundSuccessLinkFormatted = route.formatActionContent(action.backgroundSuccessLink, event, field, value, true);
+            action.backgroundFailureLinkFormatted = route.formatActionContent(action.backgroundFailureLink, event, field, value, true);
+            
           } else {
             action.enabled = false;
           }
@@ -700,7 +704,7 @@ const huntComponent = {
     },
     getDynamicActionFieldNames(url) {
       const fields = [];
-      const matches = url.matchAll(/\{:([a-zA-Z0-9_.]+?)\}/g);
+      const matches = url.matchAll(/\{:([a-zA-Z0-9_.]+?)(\|.*?)?\}/g);
       for (const match of matches) {
         if (match.length > 1) {
           fields.push(match[1]);
@@ -708,19 +712,76 @@ const huntComponent = {
       }
       return fields;
     },
-    formatActionLink(link, event, field, value) {
-      link = link.replace("{eventId}", encodeURIComponent(event["soc_id"]));
-      link = link.replace("{field}", encodeURIComponent(field));
-      link = link.replace("{value}", encodeURIComponent(value));
-      
-      const fields = this.getDynamicActionFieldNames(link);
+    performAction(event, action) {
+      if (action && !action.background) return false;
+      const options = action.options ? action.options : { mode: 'no-cors' };
+      options.method = action.method;
+      if (action.method != 'GET') {
+        options.body = action.bodyFormatted;
+      }
+      const route = this;
+      fetch(action.linkFormatted, options)
+      .then(data => {
+        var link = action.backgroundSuccessLinkFormatted;
+        if (link) {
+          if (data.status != null) {
+            link = route.replaceActionVar(link, "responseCode", data.status, true)
+          }
+          if (data.statusText != null) {
+            link = route.replaceActionVar(link, "responseStatus", data.statusText, true)
+          }
+          window.open(link, action.target);
+        } else {
+          route.$root.showTip(route.i18n.actionSuccess + route.$root.localizeMessage(action.name));
+        }
+      })
+      .catch((error) => {
+        console.error('Unable to perform background action: ' + error);
+        var link = action.backgroundFailureLinkFormatted;
+        if (link) {
+          link = route.replaceActionVar(link, "error", error.message, true)
+          window.open(link, action.target);
+        } else {
+          route.$root.showTip(route.i18n.actionFailure + route.$root.localizeMessage(action.name));
+        }
+      });
+    },
+    base64encode(content) {
+      try {
+        content = btoa(content);
+      } catch (e) {
+        Console.error("Failed to base64 encode content: " + e);
+      }
+      return content;
+    },
+    replaceActionVar(content, field, value, uriEncode) {
+      var encode = function(input) { 
+        if (uriEncode) {
+          return encodeURIComponent(input);
+        }
+        return input; 
+      };
+
+      content = content.replace("{" + field + "}", encode(value));
+      content = content.replace("{" + field + "|base64}", encode(this.base64encode(value)));
+      return content;
+    },
+    formatActionContent(content, event, field, value, uriEncode = true) {
+      if (!content) return null;
+
+      content = this.replaceActionVar(content, "eventId", event["soc_id"], uriEncode)
+      content = this.replaceActionVar(content, "field", field, uriEncode)
+      content = this.replaceActionVar(content, "value", value, uriEncode)
+
+      const fields = this.getDynamicActionFieldNames(content);
+      const route = this;
       if (fields && fields.length > 0) {
         fields.forEach(function(field) {
           value = event[field];
-          link = link.replace("{:" + field + "}", encodeURIComponent(value));
+          content = route.replaceActionVar(content, ":" + field, value, uriEncode)
         });
       }
-      return link;
+      return content;
     },
     filterVisibleFields(eventModule, eventDataset, fields) {
       if (this.eventFields) {

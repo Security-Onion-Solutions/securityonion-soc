@@ -38,13 +38,19 @@ type HuntingQuery struct {
 }
 
 type HuntingAction struct {
-  Name        string    `json:"name"`
-  Description string    `json:"description"`
-  Icon        string    `json:"icon"`
-  Link        string    `json:"link"`
-  Links       []string  `json:"links"`
-  Fields      []string  `json:"fields"`
-  Target      string    `json:"target"`
+  Name                    string                 `json:"name"`
+  Description             string                 `json:"description"`
+  Icon                    string                 `json:"icon"`
+  Link                    string                 `json:"link"`
+  Links                   []string               `json:"links"`
+  Fields                  []string               `json:"fields"`
+  Target                  string                 `json:"target"`
+  Background              bool                   `json:"background"`
+  BackgroundSuccessLink   string                 `json:"backgroundSuccessLink"`
+  BackgroundFailureLink   string                 `json:"backgroundFailureLink"`
+  Method                  string                 `json:"method"`
+  Body                    string                 `json:"body"`
+  Options                 map[string]interface{} `json:"options"`
 }
 
 type ToggleFilter struct {
