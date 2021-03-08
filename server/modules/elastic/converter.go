@@ -49,7 +49,6 @@ func makeTimeline(interval string) map[string]interface{} {
 }
 
 func formatSearch(input string) string {
-  input = strings.ReplaceAll(input, "\\", "\\\\")
   input = strings.Trim(input, " ")
   if len(input) == 0 {
     input = "*"
