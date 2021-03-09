@@ -117,7 +117,7 @@ func TestConvertToElasticRequestEmptyCriteria(tester *testing.T) {
 
 func TestConvertToElasticRequestGroupByCriteria(tester *testing.T) {
   criteria := model.NewEventSearchCriteria()
-  criteria.Populate(`abc AND def AND q:"\\file\path" | groupby ghi jkl`, "2020-01-02T12:13:14Z - 2020-01-02T13:13:14Z", time.RFC3339, "America/New_York", "10", "25")
+  criteria.Populate(`abc AND def AND q:"\\\\file\\path" | groupby ghi jkl`, "2020-01-02T12:13:14Z - 2020-01-02T13:13:14Z", time.RFC3339, "America/New_York", "10", "25")
   actualJson, err := convertToElasticRequest(NewTestStore(), criteria)
   if err != nil {
     tester.Errorf("unexpected conversion error: %s", err)
@@ -287,7 +287,7 @@ func validateFormatSearch(tester *testing.T, original string, expected string) {
 func TestFormatSearch(tester *testing.T) {
   validateFormatSearch(tester, "", "*")
   validateFormatSearch(tester, " ", "*")
-  validateFormatSearch(tester, "\\foo\\bar", "\\\\foo\\\\bar")
+  validateFormatSearch(tester, "\\foo\\bar", "\\foo\\bar")
 }
 
 

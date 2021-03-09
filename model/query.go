@@ -159,6 +159,12 @@ func (segment *SearchSegment) String() string {
   return segment.TermsAsString()
 }
 
+func (segment *SearchSegment) escape(value string) string {
+  value = strings.ReplaceAll(value, "\\", "\\\\")
+  value = strings.ReplaceAll(value, "\"", "\\\"")
+  return value
+}
+
 func (segment *SearchSegment) AddFilter(field string, value string, scalar bool, inclusive bool) error {
   // This flag can be adjust to true once the query parser is more robust and better able to determine
   // when an inclusive filter already exists in a query, so that two inclusive filters are not allowed
@@ -189,7 +195,7 @@ func (segment *SearchSegment) AddFilter(field string, value string, scalar bool,
     if !scalar {
       strBuilder.WriteRune('"')
     }
-    strBuilder.WriteString(value)
+    strBuilder.WriteString(segment.escape(value))
     if !scalar {
       strBuilder.WriteRune('"')
     }
@@ -295,13 +301,14 @@ func (query *Query) Parse(str string) error {
   currentSegmentTerms := make([]*QueryTerm, 0, 0)
   currentSegmentKind := SegmentKind_Search
   var currentTermBuilder strings.Builder
+  escaping := false
   quoting := false
   grouping := 0
   quotingChar := ' '
   for _, ch := range str {
     if !quoting {
       if grouping == 0 {
-        if ch == '"' || ch == '\'' {
+        if !escaping && ch == '"' || ch == '\'' {
           if currentTermBuilder.Len() > 0 {
             term, err := NewQueryTerm(currentTermBuilder.String())
             if err != nil {
@@ -312,7 +319,7 @@ func (query *Query) Parse(str string) error {
           }
           quoting = true
           quotingChar = ch
-        } else if ch == '|' {
+        } else if !escaping && ch == '|' {
           if currentTermBuilder.Len() > 0 {
             term, err := NewQueryTerm(currentTermBuilder.String())
             if err != nil {
@@ -335,7 +342,7 @@ func (query *Query) Parse(str string) error {
           query.AddSegment(segment)
           currentSegmentKind = ""
           currentSegmentTerms = make([]*QueryTerm, 0, 0)
-        } else if ch == ' ' || ch == ',' || ch == '\n' || ch == '\t' {
+        } else if !escaping && (ch == ' ' || ch == ',' || ch == '\n' || ch == '\t') {
           if currentTermBuilder.Len() > 0 {
             term, err := NewQueryTerm(currentTermBuilder.String())
             if err != nil {
@@ -344,14 +351,14 @@ func (query *Query) Parse(str string) error {
             currentSegmentTerms = append(currentSegmentTerms, term)
             currentTermBuilder.Reset()
           }
-        } else if ch == '(' {
+        } else if !escaping && ch == '(' {
           grouping++
-        } else if ch == ')' {
+        } else if !escaping && ch == ')' {
           return errors.New("QUERY_INVALID__GROUP_NOT_STARTED")
         } else {
           currentTermBuilder.WriteRune(ch)
         }
-      } else if ch == ')' && grouping == 1 {
+      } else if !escaping && ch == ')' && grouping == 1 {
         if currentTermBuilder.Len() == 0 {
           return errors.New("QUERY_INVALID__GROUP_EMPTY")
         }
@@ -371,7 +378,7 @@ func (query *Query) Parse(str string) error {
         }
         currentTermBuilder.WriteRune(ch)
       }
-    } else if ch == quotingChar {
+    } else if !escaping && ch == quotingChar {
       term, err := NewQueryTerm(currentTermBuilder.String())
       if err != nil {
         return err
@@ -383,6 +390,11 @@ func (query *Query) Parse(str string) error {
       quoting = false
     } else {
       currentTermBuilder.WriteRune(ch)
+    }
+    if !escaping && ch == '\\' {
+      escaping = true
+    } else {
+      escaping = false
     }
   }
   if quoting {
@@ -416,6 +428,7 @@ func (query *Query) Parse(str string) error {
   if len(query.Segments) == 0 {
     return errors.New("QUERY_INVALID__SEARCH_MISSING")
   }
+
   return nil
 }
 
