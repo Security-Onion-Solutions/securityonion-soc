@@ -18,6 +18,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
     jobs: [],
     headers: [
       { text: this.$root.i18n.id, value: 'id' },
+      { text: this.$root.i18n.owner, value: 'owner' },
       { text: this.$root.i18n.dateQueued, value: 'createTime' },
       { text: this.$root.i18n.dateUpdated, value: 'updateTime' },
       { text: this.$root.i18n.sensorId, value: 'sensorId' },
@@ -62,12 +63,18 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       try {
         const response = await this.$root.papi.get('jobs');
         this.jobs = response.data;
+        this.loadUserDetails();
         this.loadLocalSettings();
       } catch (error) {
         this.$root.showError(error);
       }
       this.$root.stopLoading();
       this.$root.subscribe("job", this.updateJob);
+    },
+    loadUserDetails() {
+      for (var i = 0; i < this.jobs.length; i++) {
+        this.$root.populateJobDetails(this.jobs[i]);
+      }
     },
     saveLocalSettings() {
       localStorage['settings.jobs.sortBy'] = this.sortBy;
@@ -153,7 +160,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
               endTime: endDate
             }
           });
-          this.jobs.push(response.data);
+          this.jobs.push(this.$root.populateJobDetails(response.data));
         }
       } catch (error) {
          this.$root.showError(error);

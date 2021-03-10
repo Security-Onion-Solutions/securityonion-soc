@@ -64,6 +64,7 @@ func (handler *BaseHandler) Handle(responseWriter http.ResponseWriter, request *
       "contentLength": contentLength,
       "method": request.Method,
       "elapsedMs": elapsed,
+      "userId": handler.GetUserId(request),
     }).Error("Failed request")
   
     if statusCode < http.StatusBadRequest {
@@ -81,8 +82,13 @@ func (handler *BaseHandler) Handle(responseWriter http.ResponseWriter, request *
       "contentLength": contentLength,
       "method": request.Method,
       "elapsedMs": elapsed,
+      "userId": handler.GetUserId(request),
     }).Info("Handled request")
   }
+}
+
+func (handler *BaseHandler) GetUserId(request *http.Request) string {
+  return request.Header.Get("x-user-id")
 }
 
 func (handler *BaseHandler) WriteJson(responseWriter http.ResponseWriter, request *http.Request, statusCode int, obj interface{}) (int, error) {

@@ -852,6 +852,7 @@
                       {{ props.item.id }}
                     </router-link>
                   </td>
+                  <td>{{ props.item.owner }}</td>
                   <td>{{ props.item.createTime | formatDateTime }}</td>
                   <td>{{ props.item | formatJobUpdateTime | formatDateTime }}</td>
                   <td v-text="props.item.nodeId"></td>
@@ -942,6 +943,10 @@
                         <div>
                           <span class="filter label">{{ i18n.job }}:</span> 
                           <span v-if="job.filter" class="filter value">{{ job.id }}</span>
+                        </div>
+                        <div>
+                          <span class="filter label">{{ i18n.owner }}:</span> 
+                          <span v-if="job.filter" class="filter value">{{ job.owner }}</span>
                         </div>
                         <div>
                           <span class="filter label">{{ i18n.sensorId }}:</span> 

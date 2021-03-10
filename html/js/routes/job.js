@@ -153,6 +153,7 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
             jobId: this.$route.params.jobId
         }});
         this.job = response.data;
+        this.$root.populateJobDetails(this.job);
         this.loadPackets(this.isOptionEnabled('unwrap'));
       } catch (error) {
         if (error.response != undefined && error.response.status == 404) {

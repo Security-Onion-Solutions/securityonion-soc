@@ -59,6 +59,7 @@ func (jobHandler *JobHandler) post(writer http.ResponseWriter, request *http.Req
   job := jobHandler.server.Datastore.CreateJob()
   err := jobHandler.ReadJson(request, job)
   if err == nil {
+    job.UserId = jobHandler.GetUserId(request)
     err = jobHandler.server.Datastore.AddJob(job)
     if err == nil {
       jobHandler.Host.Broadcast("job", job)

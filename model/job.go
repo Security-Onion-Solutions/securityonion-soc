@@ -31,6 +31,7 @@ type Job struct {
   NodeId	                  string    							`json:"nodeId"`
   FileExtension							string									`json:"fileExtension"`
   Filter										*Filter									`json:"filter"`
+  UserId                    string                  `json:"userId"`
 }
 
 func NewJob() *Job {

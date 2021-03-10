@@ -55,13 +55,8 @@ routes.push({ path: '/users', name: 'users', component: {
   methods: {
     async loadData() {
       this.$root.startLoading();
-      try {
-        const response = await this.$root.papi.get('users');
-        this.users = response.data;
-        this.loadLocalSettings();
-      } catch (error) {
-        this.$root.showError(error);
-      }
+      this.users = this.$root.getUsers();
+      this.loadLocalSettings();
       this.$root.stopLoading();
     },
     saveLocalSettings() {

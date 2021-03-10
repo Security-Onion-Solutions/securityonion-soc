@@ -73,6 +73,9 @@ $(document).ready(function() {
       currentStatus: null,
       connected: false,
       reconnecting: false,
+      users: [],
+      usersLoadedDate: null,
+      usersRefreshIntervalMs: 300000
     },
     watch: {
       '$vuetify.theme.dark': 'saveLocalSettings',
@@ -437,6 +440,37 @@ $(document).ready(function() {
         var BB = ((B.toString(16).length==1)?"0"+B.toString(16):B.toString(16));
         
         return "#"+RR+GG+BB;
+      },
+      async getUsers() {
+        try {
+          const response = await this.papi.get('users');
+          this.users = response.data;
+        } catch (error) {
+          this.showError(error);
+        }
+        return this.users;
+      },
+      async getUserById(id) {
+        const nowTime = new Date().time;
+        if (this.users.length == 0 || (nowTime - this.usersLoadedTime > this.usersRefreshIntervalMs)) {
+          await this.getUsers();
+          this.usersLoadedTime = nowTime;
+        }
+        for (var idx = 0; idx < this.users.length; idx++) {
+          const user = this.users[idx];
+          if (user.id == id) {
+            return user;
+          }
+        }
+        return null;
+      },
+      async populateJobDetails(job) {
+        if (job.userId && job.userId.length > 0) {
+          const user = await this.$root.getUserById(job.userId);
+          if (user) {
+            job.owner = user.email;
+          }
+        }
       },
       updateStatus(status) {
         if (status) {
