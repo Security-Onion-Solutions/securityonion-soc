@@ -22,6 +22,10 @@ type ClientParameters struct {
   DocsUrl             string                `json:"docsUrl"`
   CheatsheetUrl       string                `json:"cheatsheetUrl"`
   GridParams          GridParameters        `json:"grid"`
+  WebSocketTimeoutMs  int                   `json:"webSocketTimeoutMs"`
+  TipTimeoutMs        int                   `json:"tipTimeoutMs"`
+  ApiTimeoutMs        int                   `json:"apiTimeoutMs"`
+  CacheExpirationMs   int                   `json:"cacheExpirationMs"`
 }
 
 func (config *ClientParameters) Verify() error {
