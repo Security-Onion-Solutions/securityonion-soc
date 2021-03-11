@@ -55,7 +55,7 @@ routes.push({ path: '/users', name: 'users', component: {
   methods: {
     async loadData() {
       this.$root.startLoading();
-      this.users = this.$root.getUsers();
+      this.users = await this.$root.getUsers();
       this.loadLocalSettings();
       this.$root.stopLoading();
     },

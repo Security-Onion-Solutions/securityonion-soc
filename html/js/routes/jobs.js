@@ -160,7 +160,8 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
               endTime: endDate
             }
           });
-          this.jobs.push(this.$root.populateJobDetails(response.data));
+          this.$root.populateJobDetails(response.data);
+          this.jobs.push(response.data);
         }
       } catch (error) {
          this.$root.showError(error);
