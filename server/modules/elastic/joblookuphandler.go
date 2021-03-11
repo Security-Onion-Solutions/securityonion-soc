@@ -55,6 +55,7 @@ func (handler *JobLookupHandler) get(writer http.ResponseWriter, request *http.R
   job := handler.server.Datastore.CreateJob()
   err := handler.store.PopulateJobFromDocQuery(query, job)
   if err == nil {
+    job.UserId = handler.GetUserId(request)
     err = handler.server.Datastore.AddJob(job)
     if err == nil {
       handler.Host.Broadcast("job", job)
