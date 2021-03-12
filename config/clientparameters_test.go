@@ -20,6 +20,18 @@ func TestVerifyClientParameters(tester *testing.T) {
   if err != nil {
     tester.Errorf("expected no error")
   }
+  if params.WebSocketTimeoutMs != 0 {
+    tester.Errorf("expected 0 but got %d", params.WebSocketTimeoutMs)
+  }
+  if params.TipTimeoutMs != 0 {
+    tester.Errorf("expected 0 but got %d", params.TipTimeoutMs)
+  }
+  if params.ApiTimeoutMs != 0 {
+    tester.Errorf("expected 0 but got %d", params.ApiTimeoutMs)
+  }
+  if params.CacheExpirationMs != 0 {
+    tester.Errorf("expected 0 but got %d", params.CacheExpirationMs)
+  }
 }
 
 func TestVerifyHuntingParams(tester *testing.T) {

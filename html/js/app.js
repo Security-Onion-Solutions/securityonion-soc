@@ -117,6 +117,18 @@ $(document).ready(function() {
               this.parameterCallback = null;
             }
             this.parametersLoaded = true;
+            if (this.parameters.webSocketTimeoutMs > 0) {
+              this.wsConnectionTimeout = this.parameters.webSocketTimeoutMs;
+            }
+            if (this.parameters.apiTimeoutMs > 0) {
+              this.connectionTimeout = this.parameters.apiTimeoutMs;
+            }
+            if (this.parameters.cacheExpirationMs > 0) {
+              this.usersRefreshIntervalMs = this.parameters.cacheExpirationMs;
+            }
+            if (this.parameters.tipTimeoutMs > 0) {
+              this.tipTimeout = this.parameters.tipTimeoutMs;
+            }
             this.subscribe("status", this.updateStatus);
           } catch (error) {
             this.showError(error);

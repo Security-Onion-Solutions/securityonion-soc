@@ -102,6 +102,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
           if (job.status == JobStatusDeleted) {
             this.jobs.splice(i, 1);
           } else {
+            this.$root.populateJobDetails(job);
             this.$set(this.jobs, i, job);
           }
           break;
