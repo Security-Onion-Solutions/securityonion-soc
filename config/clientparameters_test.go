@@ -49,6 +49,9 @@ func TestVerifyHuntingParams(tester *testing.T) {
   if params.RelativeTimeValue != DEFAULT_RELATIVE_TIME_VALUE {
     tester.Errorf("expected RelativeTimeValue %d but got %d", DEFAULT_RELATIVE_TIME_VALUE, params.RelativeTimeValue)
   }
+  if params.RelativeTimeUnit != DEFAULT_RELATIVE_TIME_UNIT {
+    tester.Errorf("expected RelativeTimeUnit %d but got %d", DEFAULT_RELATIVE_TIME_UNIT, params.RelativeTimeUnit)
+  }
 }
 
 func TestCombineEmptyDeprecatedLinkIntoEmptyLinks(tester *testing.T) {
