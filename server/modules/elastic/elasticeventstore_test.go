@@ -20,76 +20,90 @@ import (
 func TestFieldMapping(tester *testing.T) {
   store := &ElasticEventstore{}
 
-  json, err := ioutil.ReadFile("indexpattern_response.json")
+  json, err := ioutil.ReadFile("fieldcaps_response.json")
   if err != nil {
     tester.Errorf("Unexpected error while loading test resource: %v", err)
   }
   store.cacheFieldsFromJson(string(json))
 
-  // Exists as keyword
-  actual := store.mapElasticField("ack")
-  if actual != "ack.keyword" {
-    tester.Errorf("expected mapped field %s but got %s", "ack.keyword", actual)
+  // Exists as keyword and not already aggregatable
+  actual := store.mapElasticField("smb.service")
+  if actual != "smb.service.keyword" {
+    tester.Errorf("expected mapped field %s but got %s", "smb.service.keyword", actual)
+  }
+
+  // Exists as keyword but already aggregatable
+  actual = store.mapElasticField("agent.ip")
+  if actual != "agent.ip" {
+    tester.Errorf("expected mapped field %s but got %s", "agent.ip", actual)
   }
 
   // Does not exist as valid keyword
-  actual = store.mapElasticField("foo")
-  if actual != "foo" {
-    tester.Errorf("expected unmapped field %s but got %s", "foo", actual)
+  actual = store.mapElasticField("event.acknowledged")
+  if actual != "event.acknowledged" {
+    tester.Errorf("expected unmapped field %s but got %s", "event.acknowledged", actual)
   }
 
-  actual = store.unmapElasticField("ack.keyword")
-  if actual != "ack" {
-    tester.Errorf("expected unmapped field %s but got %s", "ack", actual)
+  // Both non-keyword and keyword variants are aggregatable
+  actual = store.unmapElasticField("agent.ip.keyword")
+  if actual != "agent.ip.keyword" {
+    tester.Errorf("expected unmapped field %s but got %s", "agent.ip.keyword", actual)
   }
 
-  actual = store.unmapElasticField("foo.keyword")
-  if actual != "foo.keyword" {
-    tester.Errorf("expected unmapped field %s but got %s", "foo.keyword", actual)
+  // Only keyword variant is aggregatable
+  actual = store.unmapElasticField("smb.service.keyword")
+  if actual != "smb.service" {
+    tester.Errorf("expected unmapped field %s but got %s", "smb.service", actual)
+  }
+
+  // Neither are aggregatable
+  actual = store.unmapElasticField("event.acknowledged")
+  if actual != "event.acknowledged" {
+    tester.Errorf("expected unmapped field %s but got %s", "event.acknowledged", actual)
   }
 }
 
 func TestFieldMappingCache(tester *testing.T) {
   store := &ElasticEventstore{}
 
-  json, err := ioutil.ReadFile("indexpattern_response.json")
+  json, err := ioutil.ReadFile("fieldcaps_response.json")
   if err != nil {
     tester.Errorf("Unexpected error while loading test resource: %v", err)
   }
   store.cacheFieldsFromJson(string(json))
 
-  ack := store.fieldDefs["ack"]
-  if ack == nil {
+  field := store.fieldDefs["smb.service"]
+  if field == nil {
     tester.Errorf("expected field definition")
   }
-  if ack.name != "ack" {
-    tester.Errorf("expected name %s but got %s", "ack", ack.name)
+  if field.name != "smb.service" {
+    tester.Errorf("expected name %s but got %s", "ack", field.name)
   }
-  if ack.fieldType != "string" {
-    tester.Errorf("expected fieldType %s but got %s", "string", ack.fieldType)
+  if field.fieldType != "text" {
+    tester.Errorf("expected fieldType %s but got %s", "text", field.fieldType)
   }
-  if ack.aggregatable != false {
-    tester.Errorf("expected aggregatable %t but got %t", false, ack.aggregatable)
+  if field.aggregatable != false {
+    tester.Errorf("expected aggregatable %t but got %t", false, field.aggregatable)
   }
-  if ack.searchable != true {
-    tester.Errorf("expected searchable %t but got %t", true, ack.searchable)
+  if field.searchable != true {
+    tester.Errorf("expected searchable %t but got %t", true, field.searchable)
   }
 
-  ackKeyword := store.fieldDefs["ack.keyword"]
-  if ackKeyword == nil {
+  fieldKeyword := store.fieldDefs["smb.service.keyword"]
+  if fieldKeyword == nil {
     tester.Errorf("expected field definition")
   }
-  if ackKeyword.name != "ack.keyword" {
-    tester.Errorf("expected name %s but got %s", "ackKeyword", ackKeyword.name)
+  if fieldKeyword.name != "smb.service.keyword" {
+    tester.Errorf("expected name %s but got %s", "smb.service.keyword", fieldKeyword.name)
   }
-  if ackKeyword.fieldType != "string" {
-    tester.Errorf("expected fieldType %s but got %s", "string", ackKeyword.fieldType)
+  if fieldKeyword.fieldType != "keyword" {
+    tester.Errorf("expected fieldType %s but got %s", "keyword", fieldKeyword.fieldType)
   }
-  if ackKeyword.aggregatable != true {
-    tester.Errorf("expected aggregatable %t but got %t", true, ackKeyword.aggregatable)
+  if fieldKeyword.aggregatable != true {
+    tester.Errorf("expected aggregatable %t but got %t", true, fieldKeyword.aggregatable)
   }
-  if ackKeyword.searchable != true {
-    tester.Errorf("expected searchable %t but got %t", true, ackKeyword.searchable)
+  if fieldKeyword.searchable != true {
+    tester.Errorf("expected searchable %t but got %t", true, fieldKeyword.searchable)
   }
 }
 
