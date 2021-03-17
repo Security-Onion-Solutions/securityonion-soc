@@ -69,6 +69,7 @@ $(document).ready(function() {
       parameterCallback: null,
       parameterSection: null,
       chartsInitialized: false,
+      tools: [],
       subtitle: '',
       currentStatus: null,
       connected: false,
@@ -128,6 +129,16 @@ $(document).ready(function() {
             }
             if (this.parameters.tipTimeoutMs > 0) {
               this.tipTimeout = this.parameters.tipTimeoutMs;
+            }
+            if (this.parameters.tools && this.parameters.tools.length > 0) {
+              this.tools = this.parameters.tools;
+              if (this.parameters.inactiveTools) {
+                const inactive = this.parameters.inactiveTools;
+                for (var i = 0; i < this.tools.length; i++) {
+                  const tool = this.tools[i];
+                  tool.enabled = !inactive.includes(tool.name);
+                }
+              }
             }
             this.subscribe("status", this.updateStatus);
           } catch (error) {

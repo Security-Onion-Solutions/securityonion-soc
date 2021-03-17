@@ -98,60 +98,12 @@
         <v-divider></v-divider>
         <v-list subheader dense id="external-tools-list">
           <v-subheader>Tools</v-subheader>
-          <v-list-item target="so-kibana" href="/kibana/">
+          <v-list-item v-for="tool in tools" v-if="tool.enabled" :key="tool.name" :target="tool.target" :href="tool.link" :title="$root.localizeMessage(tool.description)">
             <v-list-item-action>
-              <v-icon>fa-external-link-alt</v-icon>
+              <v-icon>{{ tool.icon }}</v-icon>
             </v-list-item-action>
             <v-list-item-content>
-              <v-list-item-title v-text="i18n.launch_kibana"></v-list-item-title>
-            </v-list-item-content>
-          </v-list-item>
-          <v-list-item target="so-grafana" href="/grafana/d/so_overview">
-            <v-list-item-action>
-              <v-icon>fa-external-link-alt</v-icon>
-            </v-list-item-action>
-            <v-list-item-content>
-              <v-list-item-title v-text="i18n.launch_grafana"></v-list-item-title>
-            </v-list-item-content>
-          </v-list-item>
-          <v-list-item target="so-cyberchef" href="/cyberchef/">
-            <v-list-item-action>
-              <v-icon>fa-external-link-alt</v-icon>
-            </v-list-item-action>
-            <v-list-item-content>
-              <v-list-item-title v-text="i18n.launch_cyberchef"></v-list-item-title>
-            </v-list-item-content>
-          </v-list-item>
-          <v-list-item target="so-playbook" href="/playbook/projects/detection-playbooks/issues/">
-            <v-list-item-action>
-              <v-icon>fa-external-link-alt</v-icon>
-            </v-list-item-action>
-            <v-list-item-content>
-              <v-list-item-title v-text="i18n.launch_playbook"></v-list-item-title>
-            </v-list-item-content>
-          </v-list-item>
-          <v-list-item target="so-fleet" href="/fleet/">
-            <v-list-item-action>
-              <v-icon>fa-external-link-alt</v-icon>
-            </v-list-item-action>
-            <v-list-item-content>
-              <v-list-item-title v-text="i18n.launch_fleet"></v-list-item-title>
-            </v-list-item-content>
-          </v-list-item>
-          <v-list-item target="so-thehive" href="/thehive/">
-            <v-list-item-action>
-              <v-icon>fa-external-link-alt</v-icon>
-            </v-list-item-action>
-            <v-list-item-content>
-              <v-list-item-title v-text="i18n.launch_thehive"></v-list-item-title>
-            </v-list-item-content>
-          </v-list-item>
-          <v-list-item target="so-navigator" href="/navigator/">
-            <v-list-item-action>
-              <v-icon>fa-external-link-alt</v-icon>
-            </v-list-item-action>
-            <v-list-item-content>
-              <v-list-item-title v-text="i18n.launch_navigator"></v-list-item-title>
+              <v-list-item-title v-text="$root.localizeMessage(tool.name)"></v-list-item-title>
             </v-list-item-content>
           </v-list-item>
         </v-list>
