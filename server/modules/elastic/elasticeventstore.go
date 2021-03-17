@@ -330,47 +330,59 @@ func (store *ElasticEventstore) refreshCache() {
   store.cacheLock.Lock()
   defer store.cacheLock.Unlock()
   if store.cacheTime.IsZero() || time.Now().Sub(store.cacheTime) > store.cacheMs {
-    err := store.refreshCacheFromIndexPatterns()
+    err := store.refreshCacheFromFieldCaps()
     if err == nil {
       store.cacheTime = time.Now()
     }
   }
 }
 
-func (store *ElasticEventstore) refreshCacheFromIndexPatterns() error {
-  query := fmt.Sprintf(`{"query" : { "bool": { "must": [ { "match": { "index-pattern.title" : "` + store.index + `" }}, { "match" : { "type" : "index-pattern" }} ] }}}`)
-  json, err := store.indexSearch(query, []string{".kibana*"})
-  if err != nil {
-    log.WithError(err).Error("Failed to refresh cache from index patterns")
-  } else {
+func (store *ElasticEventstore) refreshCacheFromFieldCaps() error {
+  log.Info("Fetching Field Capabilities from Elasticsearch")
+  indexes := strings.Split(store.index, ",")
+  var json string
+  res, err := store.esClient.FieldCaps(
+    store.esClient.FieldCaps.WithContext(context.Background()),
+    store.esClient.FieldCaps.WithIndex(indexes...),
+    store.esClient.FieldCaps.WithFields("*"),
+    store.esClient.FieldCaps.WithPretty(),
+  )
+  if err == nil {
+    defer res.Body.Close()
+    json, err = store.readJsonFromResponse(res)
+    log.WithFields(log.Fields{"response": json}).Debug("Fetch finished")
     store.cacheFieldsFromJson(json)
+  } else {
+    log.WithError(err).Error("Failed to refresh cache from index patterns")
   }
   return err
 }
 
 func (store *ElasticEventstore) cacheFieldsFromJson(json string) {
   store.fieldDefs = make(map[string]*FieldDefinition)
-  gjson.Get(json, "hits.hits.#._source.index-pattern.fields").ForEach(store.cacheFields)
+  gjson.Get(json, "fields").ForEach(store.cacheFields)
 }
 
-func (store *ElasticEventstore) cacheFields(name gjson.Result, fields gjson.Result) bool {
-  fieldList := make([]map[string]interface{}, 0, 0)
-  json.NewDecoder(strings.NewReader(fields.String())).Decode(&fieldList)
-  for _, field := range fieldList {
-    name := field["name"].(string)
+func (store *ElasticEventstore) cacheFields(name gjson.Result, details gjson.Result) bool {
+  fieldName := name.String()
+  detailsMap := make(map[string]map[string]interface{})
+  json.NewDecoder(strings.NewReader(details.String())).Decode(&detailsMap)
+  for _, field := range detailsMap {
     fieldType := field["type"].(string)
 
     fieldDef := &FieldDefinition {
-      name: name, 
+      name: fieldName, 
       fieldType: fieldType, 
       aggregatable: field["aggregatable"].(bool), 
       searchable: field["searchable"].(bool),
     }
-    store.fieldDefs[name] = fieldDef
+    store.fieldDefs[fieldName] = fieldDef
 
     log.WithFields(log.Fields {
       "name": name,
       "type": fieldType,
+      "aggregatable": fieldDef.aggregatable,
+      "searchable": fieldDef.searchable,
     }).Debug("Added field definition")
   }
   return true
