@@ -26,6 +26,8 @@ type ClientParameters struct {
   TipTimeoutMs        int                   `json:"tipTimeoutMs"`
   ApiTimeoutMs        int                   `json:"apiTimeoutMs"`
   CacheExpirationMs   int                   `json:"cacheExpirationMs"`
+  InactiveTools       []string              `json:"inactiveTools"`
+  Tools               []ClientTool          `json:"tools"`
 }
 
 func (config *ClientParameters) Verify() error {
@@ -33,6 +35,14 @@ func (config *ClientParameters) Verify() error {
   err = config.HuntingParams.Verify()
   err = config.AlertingParams.Verify()
   return err
+}
+
+type ClientTool struct {
+  Name        string    `json:"name"`
+  Description string    `json:"description"`
+  Target      string    `json:"target"`
+  Icon        string    `json:"icon"`
+  Link        string    `json:"link"`
 }
 
 type HuntingQuery struct {
