@@ -22,6 +22,12 @@ type ClientParameters struct {
   DocsUrl             string                `json:"docsUrl"`
   CheatsheetUrl       string                `json:"cheatsheetUrl"`
   GridParams          GridParameters        `json:"grid"`
+  WebSocketTimeoutMs  int                   `json:"webSocketTimeoutMs"`
+  TipTimeoutMs        int                   `json:"tipTimeoutMs"`
+  ApiTimeoutMs        int                   `json:"apiTimeoutMs"`
+  CacheExpirationMs   int                   `json:"cacheExpirationMs"`
+  InactiveTools       []string              `json:"inactiveTools"`
+  Tools               []ClientTool          `json:"tools"`
 }
 
 func (config *ClientParameters) Verify() error {
@@ -31,6 +37,14 @@ func (config *ClientParameters) Verify() error {
   return err
 }
 
+type ClientTool struct {
+  Name        string    `json:"name"`
+  Description string    `json:"description"`
+  Target      string    `json:"target"`
+  Icon        string    `json:"icon"`
+  Link        string    `json:"link"`
+}
+
 type HuntingQuery struct {
   Name        string    `json:"name"`
   Description string    `json:"description"`
@@ -38,13 +52,19 @@ type HuntingQuery struct {
 }
 
 type HuntingAction struct {
-  Name        string    `json:"name"`
-  Description string    `json:"description"`
-  Icon        string    `json:"icon"`
-  Link        string    `json:"link"`
-  Links       []string  `json:"links"`
-  Fields      []string  `json:"fields"`
-  Target      string    `json:"target"`
+  Name                    string                 `json:"name"`
+  Description             string                 `json:"description"`
+  Icon                    string                 `json:"icon"`
+  Link                    string                 `json:"link"`
+  Links                   []string               `json:"links"`
+  Fields                  []string               `json:"fields"`
+  Target                  string                 `json:"target"`
+  Background              bool                   `json:"background"`
+  BackgroundSuccessLink   string                 `json:"backgroundSuccessLink"`
+  BackgroundFailureLink   string                 `json:"backgroundFailureLink"`
+  Method                  string                 `json:"method"`
+  Body                    string                 `json:"body"`
+  Options                 map[string]interface{} `json:"options"`
 }
 
 type ToggleFilter struct {

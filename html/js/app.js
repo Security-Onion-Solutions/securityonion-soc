@@ -69,10 +69,14 @@ $(document).ready(function() {
       parameterCallback: null,
       parameterSection: null,
       chartsInitialized: false,
+      tools: [],
       subtitle: '',
       currentStatus: null,
       connected: false,
       reconnecting: false,
+      users: [],
+      usersLoadedDate: null,
+      usersRefreshIntervalMs: 300000
     },
     watch: {
       '$vuetify.theme.dark': 'saveLocalSettings',
@@ -114,6 +118,28 @@ $(document).ready(function() {
               this.parameterCallback = null;
             }
             this.parametersLoaded = true;
+            if (this.parameters.webSocketTimeoutMs > 0) {
+              this.wsConnectionTimeout = this.parameters.webSocketTimeoutMs;
+            }
+            if (this.parameters.apiTimeoutMs > 0) {
+              this.connectionTimeout = this.parameters.apiTimeoutMs;
+            }
+            if (this.parameters.cacheExpirationMs > 0) {
+              this.usersRefreshIntervalMs = this.parameters.cacheExpirationMs;
+            }
+            if (this.parameters.tipTimeoutMs > 0) {
+              this.tipTimeout = this.parameters.tipTimeoutMs;
+            }
+            if (this.parameters.tools && this.parameters.tools.length > 0) {
+              this.tools = this.parameters.tools;
+              if (this.parameters.inactiveTools) {
+                const inactive = this.parameters.inactiveTools;
+                for (var i = 0; i < this.tools.length; i++) {
+                  const tool = this.tools[i];
+                  tool.enabled = !inactive.includes(tool.name);
+                }
+              }
+            }
             this.subscribe("status", this.updateStatus);
           } catch (error) {
             this.showError(error);
@@ -437,6 +463,37 @@ $(document).ready(function() {
         var BB = ((B.toString(16).length==1)?"0"+B.toString(16):B.toString(16));
         
         return "#"+RR+GG+BB;
+      },
+      async getUsers() {
+        try {
+          const response = await this.papi.get('users');
+          this.users = response.data;
+        } catch (error) {
+          this.showError(error);
+        }
+        return this.users;
+      },
+      async getUserById(id) {
+        const nowTime = new Date().time;
+        if (this.users.length == 0 || (nowTime - this.usersLoadedTime > this.usersRefreshIntervalMs)) {
+          await this.getUsers();
+          this.usersLoadedTime = nowTime;
+        }
+        for (var idx = 0; idx < this.users.length; idx++) {
+          const user = this.users[idx];
+          if (user.id == id) {
+            return user;
+          }
+        }
+        return null;
+      },
+      async populateJobDetails(job) {
+        if (job.userId && job.userId.length > 0) {
+          const user = await this.$root.getUserById(job.userId);
+          if (user) {
+            job.owner = user.email;
+          }
+        }
       },
       updateStatus(status) {
         if (status) {

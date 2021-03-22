@@ -1,0 +1,8824 @@
+{
+  "indices" : [
+    "standalone:so-ids-2021.03.17",
+    "standalone:so-osquery-2021.03.17",
+    "standalone:so-ossec-2021.03.17",
+    "standalone:so-strelka-2021.03.17",
+    "standalone:so-zeek-2021.03.17"
+  ],
+  "fields" : {
+    "data.extra_data.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smtp.to.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "weird.peer.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dns.parent_domain.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "connection.local.originator" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dhcp.assigned_ip.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.mitre.id" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smtp.helo" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "host.domain" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "log.id.fuids.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.compile_timestamp.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "source.geo.region_name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.rx_bytes.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "client.address.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "weird.name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.file_info.fixed.flags.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.ruleset.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "destination.geo.continent_name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "log.id.resp_fuids" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.nice.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "log.id.resp_fuids.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.args.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "version" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "file.extracted.filename" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "request.time" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.times_modified.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.version.linker" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "destination.geo.region_iso_code" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smtp.recipient_to" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "http.useragent.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.subsystem.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.file_info.fixed.operating_systems.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dns.subdomain.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pdf.elapsed" : {
+      "float" : {
+        "type" : "float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.analyzer.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "user.id.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "log.id.uids.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.pci_dss" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "hash.md5" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "irc" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "software.version.minor" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "connection.local" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "software.type.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.header.version.subsystem" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "ntlm.server.dns" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "file.action" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.action.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "software.version.unparsed.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.symbols.table.library.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "log.id.fuid" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.metadata.signature_severity.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dns.truncated" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "weird" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "smtp.transaction_depth" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "result.counter" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.os.minor.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dhcp.requested_address" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.level" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.header.machine.type" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dns.query.class_name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "smtp.message_id" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.symbols.imported.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "log.previous_log" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.tx_bytes" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.xml.tags.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.dep" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "request.id.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "event.code.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "user.id.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "kerberos.ticket.valid.until.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.ipv4.metric.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "user.escalated.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.extracted.cutoff" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "smtp.subject.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dce_rpc.operation" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.ruleset" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "event.action.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "smb.file_system.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.metadata.tag" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "_routing" : {
+      "_routing" : {
+        "type" : "_routing",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.entropy.elapsed" : {
+      "float" : {
+        "type" : "float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "_doc_count" : {
+      "integer" : {
+        "type" : "integer",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "scan.header.header.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.metadata.created_at.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.table.export" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "connection.history.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.live_query.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "client.ip" : {
+      "ip" : {
+        "type" : "ip",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "log.file" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.symbols.table.symbols.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.header.timestamp" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ntlm.server.tree" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.resources.language.sub.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "destination_geo.latitude" : {
+      "half_float" : {
+        "type" : "half_float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "host.hostname.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.machine.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ftp.data_channel_passive" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "http" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "file.aslr" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.mimetype.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.subsystem.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "smb.path.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.hash1.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.yara.matches" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ftp.password" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.file_info.fixed" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "group.id" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "destination_geo.longitude" : {
+      "half_float" : {
+        "type" : "half_float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "smtp.mail_date.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.category.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.os.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.ppid.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "observer.name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.rgroup" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.ipv4" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "file.permissions.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "event.severity_label.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "source.geo.country_iso_code.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.tgid.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "http.version.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "destination.geo.timezone.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pdf" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "event.timestamp.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "notice.action" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "winlog" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "dns.id" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "host.mac.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "message" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.resources.language" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.state" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "http.status_code" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.seh" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.yara.matches.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.tx_bytes.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "log.id.id.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "manager.name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.category" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.os.architecture.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "agent.hostname.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.resources.name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.xml.tags.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smtp.tls" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "event.category" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "request.attributes.filename.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.author.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "event.dataset.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.tree.parent.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "snmp" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.resources.language.primary" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smtp.to" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smtp.subject" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.metadata.updated_at" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.live_query" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.state.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "kerberos.request_type.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.hardware_serial.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.header" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "process.vm_size.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.total" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "user.id" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.mitre.id.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "kerberos.ticket.valid" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "scan.entropy.entropy" : {
+      "float" : {
+        "type" : "float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.header.size" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "result.name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "event.timestamp" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.nlwp" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "http.response.body" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "intel" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "result.unixTime" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.priority.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.elapsed" : {
+      "float" : {
+        "type" : "float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "geoip.latitude" : {
+      "half_float" : {
+        "type" : "half_float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.header.size.data" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.sections.characteristics.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.header.size.data.uninitialized" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "_source" : {
+      "_source" : {
+        "type" : "_source",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "irc.command.type.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "hash" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "ftp.user" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.tx_errors.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "network.community_id.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "http.status_message.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.hardware.cpu_cores" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.mitre.tactic.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "software.name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.metadata.updated_at.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "kerberos" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "http.referrer.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.command_line.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.columns.uid_signed.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "smtp.useragent.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "version.minor3" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "http.virtual_host" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.sections" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "agent.ephemeral_id.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "result.columns.directory.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smtp.first_received" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ecs.version.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ntlm.server.dns.name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "destination.geo.ip.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "ftp.command.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "weird.name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.ruser" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.columns.directory" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "hash.sha256" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "log.full.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.fgroup.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dce_rpc" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "process.start_time.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "source.geo.country_name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.os.hostname" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "tunnel.type.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.sgroup" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.file_info.fixed.type" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "process.size.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "event.category.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dns.query.name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.nlwp.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.ruser.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "log.id.id.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.os.major.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "kerberos.ticket.valid.until.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "log.id.fuid.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.extracted.filename.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.magic.image" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "http.status_message" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "irc.command" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "source.port.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.netinfo.iface.rx_errors" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.tsc.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.file_info.fixed.operating_systems" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "kerberos.error_message" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.tsc.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.ipv4.address.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ftp.data_channel_destination.ip" : {
+      "ip" : {
+        "type" : "ip",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "smtp.helo.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.symbols.table.type" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "_seq_no" : {
+      "_seq_no" : {
+        "type" : "_seq_no",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.netinfo.iface.rx_packets.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "destination.geo.location.lat" : {
+      "float" : {
+        "type" : "float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.sections.entropy" : {
+      "float" : {
+        "type" : "float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.netinfo.iface.ipv4.netmask.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "_id" : {
+      "_id" : {
+        "type" : "_id",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "log.previous_output.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.xml.namespaces" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.rx_bytes.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "log.previous_log.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "weird.name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.hardware.ram_free" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.action" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "error.eventdata_parsing" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.severity" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "http.virtual_host.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.version" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "log.id.fuids.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "@version" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.cmd.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "log.file.path.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "http.request" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "connection.state_description.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.sections.characteristics" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.suser" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "geoip" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "server.packets" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.symbols" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "result.columns.gid_signed" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "network.transport.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.machine" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.ipv4.dhcp.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.gid" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.pwd.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.sections.name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pdf.total.objects" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "http.status_message.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ntlm" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "log.location.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "notice.note.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smb.path.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dce_rpc.named_pipe" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.tree.parent.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.egroup.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "ingest.timestamp" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.total.sections" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.tree" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "result.endpoint_ip2.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.endpoint_ip1.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.file_info.fixed.operating_systems.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.gdpr.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "result.hostIdentifier.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dns.query" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.version.operating_system" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.session" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.mtime" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.action" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.cmd.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "hash.md5.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "destination.geo.location.lon" : {
+      "float" : {
+        "type" : "float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.subsystem" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smtp.is_webmail" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.gpg13.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.stime" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "_version" : {
+      "_version" : {
+        "type" : "_version",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "file.scanners.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.section_names.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "event.severity" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.file.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.resident" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "software.type" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "agent.id.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "destination.geo.timezone.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "agent.hostname" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "http.referrer.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.netinfo.iface.tx_errors" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.ipv4.address" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dns.recursion" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "source.port" : {
+      "integer" : {
+        "type" : "integer",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "server.reply_message.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.start_time.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "log.location.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.imphash" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "destination.geo.country_name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "result.live_query.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.xml.total" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "observer.name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.processor.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "request.client.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.suser.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smtp.last_reply.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "network.protocol.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.ipv4.netmask.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.action.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "connection.history.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "software.version.major" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.os.version.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.euser.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.metadata.affected_product.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "software.name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dns.parent_domain_length" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.machine.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.start_time" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "kerberos.error_message.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "result.hostIdentifier" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.tx_dropped.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.tree.root.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.xml.version" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "_field_names" : {
+      "_field_names" : {
+        "type" : "_field_names",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "software.version.unparsed.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.firedtimes" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "source.geo.timezone.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.mime_type.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.times_modified" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.gid.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dhcp.assigned_ip.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dns.top_level_domain.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "result.columns.shell.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.date.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "source" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "ftp.argument.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.orig_mime_types.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "http.virtual_host.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.hardware.ram_total.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.os.sysname" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ecs.version.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.times_accessed.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.stime.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dns.query.type" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.uid" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "destination.geo.timezone" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.sgroup.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.pwd.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.hardware.ram_usage.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.analyzer.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smtp.mail_from.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.columns.uuid.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "event.dataset.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "log.id.tunnel_parents.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.description" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "log.offset" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.scanners" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smtp.to.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "notice.message.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "result.columns.uuid" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "message.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.mime_type" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.pgrp.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "source.ip.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.header.magic.dos" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.type.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "log.previous_log.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.netinfo.iface.ipv4.netmask" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.tx_errors.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "weird.peer.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.subsystem.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.pci_dss.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "client.packets" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "server.ip_bytes" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.egroup" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.size.stack" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "dns.query.name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.url.elapsed" : {
+      "float" : {
+        "type" : "float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "log.file.path.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.sections.address.virtual" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "notice.message.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.symbols.imported.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "log.id.fuid.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.srcuser.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pdf.total" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "dns.query.length" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dns.highest_registered_domain.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.tree.node.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dce_rpc.named_pipe.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "notice.peer_description.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.is_orig" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "kerberos.request_type" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "snmp.set" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "source.geo.continent_name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "request.id" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.srcuser.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.os.sysname.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.netinfo.iface.name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smb.share_type.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.os.hostname.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smtp.useragent" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "user.escalated.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.netinfo.iface.mtu.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "hash.ssdeep.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.tree.node.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "http.uri" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "destination.geo.region_iso_code.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "irc.command.info.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "destination.geo.region_name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.codename.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.hardware.cpu_name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.os.minor" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.bytes.overflow" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "ntlm.server.tree.name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.orig_mime_types" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.groups.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.utime.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.metadata.tag.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.code_integrity" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "http.version" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.resident.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "agent.ip" : {
+      "ip" : {
+        "type" : "ip",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.sections.characteristics.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.xml.namespaces.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.netinfo.iface.ipv4.broadcast.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.columns.description" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "log.id.uids.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "connection.bytes.missed" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.nlwp.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "event.code" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "log.id.id" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "agent.id" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "hash.ssdeep" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.utime" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smb.service.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "host.hostname.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "destination.port" : {
+      "integer" : {
+        "type" : "integer",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "log" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.mac" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.mimetype" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.tx_bytes.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "http.request.body" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.address" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "dns.subdomain" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "log.id.uid.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "http.request.body.length" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "result.calendarTime.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.title.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "destination.geo.country_iso_code.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "source.geo.country_iso_code.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.resources.type.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.metadata.former_category.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dns.top_level_domain" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "kerberos.ticket" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "process.nice" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.os.release.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.size.image" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.metadata.deployment.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smtp.path" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.hardware.cpu_mhz" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.metadata.affected_product.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "destination.geo.country_iso_code" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.ipv4.address.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.header.size.heap.reserve" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.description.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dhcp.message_types.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "hash.sha256.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "event.code.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "observer.name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.resp_mime_types" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "_feature" : {
+      "_feature" : {
+        "type" : "_feature",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.rx_packets.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "server.ip" : {
+      "ip" : {
+        "type" : "ip",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.netinfo.iface.mtu.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.compile_timestamp" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.hash1.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "kerberos.service" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "destination.geo" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.rx_errors.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.symbols.table.type.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.hostname" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.os.release_version.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "ntlm.success" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.imphash.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "group" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "result.calendarTime" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.metadata.created_at" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "notice.peer_description" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.euser" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "snmp.set.requests" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "result.hostIdentifier.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.magic.image.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "network.data.decoded.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "source_geo.longitude" : {
+      "half_float" : {
+        "type" : "half_float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "result.hardware_serial.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.codename.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "kerberos.request_type.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "log.previous_output.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "software.type.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.symbols.table.type.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.mitre.technique.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "host.domain.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "event.module.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.times_accessed.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.file_info.string.value.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.tx_packets" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "notice.action.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ftp.argument.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "request" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "source.geo.region_iso_code.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "_index" : {
+      "_index" : {
+        "type" : "_index",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "source.geo.city_name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "hash.md5.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "source.geo.location" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.address.code" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.netinfo.iface.ipv4.gateway.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.header.size.headers" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "irc.command.type" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "request.attributes" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.symbols.table" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "ntlm.server.tree.name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.columns" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "rule.metadata.created_at.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "geoip.location" : {
+      "geo_point" : {
+        "type" : "geo_point",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "_data_stream_timestamp" : {
+      "_data_stream_timestamp" : {
+        "type" : "_data_stream_timestamp",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "network.bytes" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.rule.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.resources.language.sub.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.hardware.cpu_name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ntlm.server" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "data.title" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "dns.answers.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.orig_mime_types.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.magic" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "destination.geo.country_name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "destination.geo.country_iso_code.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.uuid" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "irc.command.type.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.ipv4.dhcp.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.total.resources" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.yara.matches.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.xml" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "source.geo.country_name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "user" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.total.libraries" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.rgroup.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "host.hostname" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.hardware.ram_usage" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "server.address" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "request.source.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.entropy" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "data.os.version" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dns.authoritative" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.metadata.attack_target" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.section_names" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.analyzer" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ingest.timestamp.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.mitre.technique" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.symbols.table.symbols.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "server.address.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.priority.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dns.highest_registered_domain.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dns.query.rejected" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "tags" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "connection.state_description.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.share" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smtp.first_received.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.accessed.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.action.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "irc.command.info" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.size" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.srcuser" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.xml.version.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.metadata.signature_severity" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smtp.first_received.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "server.reply_code" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.netinfo.iface.type.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "snmp.version.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.hipaa" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "log.id.uids" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "tags.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "ntlm.server.nb.name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dns.response.code_name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "snmp.get.responses" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "smtp.last_reply.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.xml.tags" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smtp.message_id.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dns.response.code_name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "result.columns.description.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "result.epoch" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "kerberos.service.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dns.top_level_domain.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "server.port" : {
+      "integer" : {
+        "type" : "integer",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "destination.geo.city_name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dns.response.code_name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.state.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "smtp.mail_date" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smtp.mail_from" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.size.stack.reserve" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "ntlm.server.dns.name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dns.recursion.desired" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.file_info.fixed.type.primary.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.file_info.string.value" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "event.action.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.times_accessed" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.pwd" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dns.query.type_name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.netinfo.iface.rx_errors.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ftp.user.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.file_info.var.character_set.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "host.domain.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.characteristics.image.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.permissions.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "destination.geo.continent_name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.netinfo.iface.name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "http.referrer" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dns.ttls" : {
+      "float" : {
+        "type" : "float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.mitre.technique.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.size.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.action.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.vm_size.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ftp.data_channel_source" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "data.uid.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "destination.geo.continent_name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "log.id.uid" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.columns.uid_signed.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.hipaa.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.depth" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.yara" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "http.method.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.file_info.string.name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.scanners.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.os.release.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.file_info.var.language.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.metadata" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.tx_packets.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "notice.note.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.reference.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.bytes.missing" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "geoip.longitude" : {
+      "half_float" : {
+        "type" : "half_float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "log.id.orig_fuids.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.gid" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "request.attributes.filename" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.hardware.cpu_mhz.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.url" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "data.os" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "http.trans_depth" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.hardware.cpu_name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.args.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "notice.peer_description.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.pgrp.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.file_info.string.name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "client.ip.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.mime_type.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.resources.name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.mtime.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.mimetype.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.file_info.var.character_set" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "log.id.tunnel_parents.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.sgroup.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.permissions" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.uid.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.tx_packets.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.file_info.var.language" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smtp.from.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.resources.type" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "event.module" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.egroup.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.file_info.var.character_set.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.accessed" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "source_geo.ip" : {
+      "ip" : {
+        "type" : "ip",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.total.symbols" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "client" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "weird.notice" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.symbols.libraries.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dns.response.code" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "notice" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "smb.service" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.table" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "file.ctime.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.ipv4.dhcp" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "source_geo" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "process.args" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.extracted.filename.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "smb.file_system.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "hash.sha1.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.tty.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.debug_data" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.rule.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.pci_dss.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.os.name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ftp.data_channel_source.ip.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.tree.root" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.type.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "connection.history" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smb.share_type" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.symbols.imported" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "notice.suppress_for" : {
+      "float" : {
+        "type" : "float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "tunnel" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "smtp.mail_from.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dns.query.class" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "smtp.from.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dns.query.type_name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "http.uri.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.os.major" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "intel.indicator" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.tty.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "event.severity_label.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.times_created" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.symbols.table.library.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.ipv4.metric.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.author" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "request.attributes.filename.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.hipaa.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.ruser.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.netinfo.iface.mtu" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "source.ip" : {
+      "ip" : {
+        "type" : "ip",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.os.architecture.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "agent.name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "network.community_id" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "intel.indicator.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "connection.state" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.metadata.former_category" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.endpoint_ip2" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "http.useragent.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "result.endpoint_ip1" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.resources.name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.machine.type.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "tunnel.type.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dns" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "data.extra_data" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.author.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.source" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.mac.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ftp.password.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "request.client.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.xml.total.tags" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "smb.file_system" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "request.id.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.times_created.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.cmd" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.title.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.header.subsystem" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.os.hostname.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "agent.type.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.times_changed.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "kerberos.client.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "server" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "process.tty.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.priority" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dns.query.class_name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ntlm.server.nb.name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.hash1" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.reference.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smb.service.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "agent.ip.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.nist_800_53.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.hardware.cpu_cores.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "smb" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "rule.ruleset.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "event.category.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dns.subdomain_length" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "log.full.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.tgid.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.os.release" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "software.version.minor2" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.euser.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "destination_geo" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.ipv4.metric" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dce_rpc.named_pipe.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.sections.address.physical" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.header.size.stack.commit" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "event.acknowledged" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.command_line.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "result.hardware_serial" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.type" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ntlm.server.tree.name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "destination.geo.ip" : {
+      "ip" : {
+        "type" : "ip",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.hardware.cpu_cores.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.file_info.string.value.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "ftp" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "manager.name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.netinfo.iface.tx_dropped.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "_type" : {
+      "_type" : {
+        "type" : "_type",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "ntlm.server.dns.name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "destination.ip" : {
+      "ip" : {
+        "type" : "ip",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pdf.total.extracted" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "event.duration" : {
+      "float" : {
+        "type" : "float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "kerberos.ticket.renewable" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.netinfo.iface.rx_packets" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "@timestamp" : {
+      "date" : {
+        "type" : "date",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.header.address.data" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "source.geo.location.lat" : {
+      "float" : {
+        "type" : "float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dce_rpc.operation.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.header.header.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "agent.ephemeral_id" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smb.share_type.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "source.geo.ip.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dhcp.lease_time" : {
+      "float" : {
+        "type" : "float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.description.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "event.module.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.yara.elapsed" : {
+      "float" : {
+        "type" : "float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.os.platform.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "ftp.password.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.groups.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.table.cert" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.pid" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dns.answers.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.share.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.columns.shell" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "destination.geo.region_name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "host" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "agent.version.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.type.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.metadata.signature_severity.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "host.name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "destination_geo.ip" : {
+      "ip" : {
+        "type" : "ip",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.pid.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.file_info.var" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "winlog.version" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dce_rpc.endpoint.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.resp_mime_types.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "connection.state.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "snmp.community" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.times_changed.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.resident.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.os.sysname.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.home.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "smtp.last_reply" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.metadata.tag.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.shell.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.gid.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ftp.data_channel_source.ip" : {
+      "ip" : {
+        "type" : "ip",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "smtp.helo.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "snmp.community.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "log.id.resp_fuids.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.columns.uid_signed" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "destination.geo.location" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "dns.query.name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "notice.note" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "server.reply_message" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "network.protocol" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "source_geo.location" : {
+      "geo_point" : {
+        "type" : "geo_point",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dns.parent_domain.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dce_rpc.operation.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "http.method" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "hash.sha256.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.resp_mime_types.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dhcp.message_types" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.mac.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.ctime" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.ipv4.broadcast" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.flavors.yara.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.mail" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "log.id.fuids" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "host.name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "weird.additional_info" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "network.protocol.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "network.transport.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.command_line" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.file_info.fixed.flags" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.xml.total.extracted" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.tty" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.times_created.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.tx_dropped" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "user.name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.hardware.ram_total.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.metadata.former_category.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.header.machine" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "agent.version.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.symbols.libraries.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dns.query.type_name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "log.previous_output" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "host.name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.nist_800_53" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.rgroup.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.characteristics.image.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.tree.parent" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.shell" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "kerberos.client.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "host.mac" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "log.id.uid.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "client.address" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "log.id.orig_fuids" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "observer" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.file_info.fixed.type.primary.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.columns.uuid.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dns.query.class_name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "server.port.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.file_info.string.name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.hostname.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "network.data.decoded" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "source.geo.city_name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.extra_data.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "hash.sha1" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dhcp.message_types.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.os.major.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "destination.geo.region_iso_code.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.tree.root.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.metadata.attack_target.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.machine.type.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "destination.geo.city_name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "connection.local.responder" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "destination.ip.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "client.port" : {
+      "integer" : {
+        "type" : "integer",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.rule" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "tunnel.type" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ftp.data_channel_destination.port" : {
+      "integer" : {
+        "type" : "integer",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "http.version.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.bytes" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "destination.geo.country_name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "weird.additional_info.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "smtp.message_id.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.header.characteristics.image" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.hardware.ram_total" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.metadata.deployment.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "result.columns.gid_signed.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.alignment.file" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "request.source" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.sections.size" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.file_info.string" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "software.version" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "agent.type" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.gpg13.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.session.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "manager.name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.flavors.yara.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "source.geo.country_name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.calendarTime.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "log.location" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "hash.elapsed" : {
+      "float" : {
+        "type" : "float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dns.reserved" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.metadata.deployment" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smtp" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "manager" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "agent.name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.times_changed" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.state.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "network.community_id.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "destination.geo.city_name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "kerberos.ticket.cipher.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "ftp.data_channel_destination" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "rule.gdpr.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "log.file.path" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.times_modified.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.metadata.affected_product" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.header.header" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.imphash.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.file_info.fixed.flags.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.machine.id" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "agent" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "kerberos.ticket.cipher.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "http.method.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "http.response.body.length" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.nist_800_53.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.pgrp" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.processor" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "user.name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "kerberos.ticket.forwardable" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.resources.type.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "_ignored" : {
+      "_ignored" : {
+        "type" : "_ignored",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.shell.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "log.id" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "source.geo.timezone.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "smtp.path.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.os.name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.alignment.section" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "result.name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.resources" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "smtp.subject.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "request.client" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "network.data.decoded.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.os" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "log.id.tunnel_parents" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.tsc" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "http.uri.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "result.numerics" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.xml.elapsed" : {
+      "float" : {
+        "type" : "float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.processor.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ntlm.server.nb" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "file.timed_out" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "irc.command.value.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "source.geo.timezone" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "event.severity_label" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "agent.version" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.groups" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "irc.command.info.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.sections.name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "notice.action.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dhcp.requested_address.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.nice.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.rx_dropped" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ntlm.server.nb.name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "destination" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "rule" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.rx_dropped.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.flavors.yara" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.local_orig" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "result.action.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.fgroup.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dce_rpc.endpoint" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ftp.data_channel_destination.ip.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "source.geo.city_name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "agent.id.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.file" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "snmp.get.requests" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.header.elapsed" : {
+      "float" : {
+        "type" : "float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "smtp.useragent.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "process.utime.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.netinfo.iface" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "connection.bytes" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "process.stime.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.header.address.entry_point" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.compile_timestamp.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "group.id.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "destination.geo.region_name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "software.version.additional_info.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.tgid" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.magic.dos.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "client.bytes" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "result.endpoint_ip1.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.bytes.seen" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "source.geo.continent_name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smtp.recipient_to.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "log.id.orig_fuids.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.mitre.id.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.xml.namespaces.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.xml.version.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.hardware.ram_free.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.resources.language.primary.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "software" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "result.columns.description.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "server.ip.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.reference" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.os.architecture" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.codename" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "irc.command.value" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.os.minor.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "ingest" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "data.hardware.serial.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.ipv4.gateway.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ingest.timestamp.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "snmp.get.bulk_requests" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "ftp.data_channel_destination.port.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.share.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dhcp.requested_address.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "agent.name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "connection.state.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "connection" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "process.suser.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.header.magic.dos.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "kerberos.service.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "user.escalated" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.hardware.ram_free.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.os.platform.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "source.geo.location.lon" : {
+      "float" : {
+        "type" : "float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.tty" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.type" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.ppid" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.ipv4.gateway" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dns.answers" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.tty.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.subsystem.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.columns.shell.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.exiftool" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "source.geo.region_name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "smb.path" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.alignment" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "file.is_exe" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.table.import" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.header.checksum" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.session.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "destination_geo.location" : {
+      "geo_point" : {
+        "type" : "geo_point",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.metadata.attack_target.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "request.source.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "result.columns.gid_signed.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "software.version.additional_info" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.home" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.fgroup" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.state.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "process.ppid.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "dns.highest_registered_domain" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.file_info.fixed.type.primary" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.address.image" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.hardware.serial" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.hostname.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "hash.ssdeep.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "user.name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.vm_size" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "software.version.unparsed" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dhcp.assigned_ip" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dns.parent_domain" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "geoip.ip" : {
+      "ip" : {
+        "type" : "ip",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.ctime.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "source.geo" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.resources.id" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "kerberos.success" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "source.geo.ip" : {
+      "ip" : {
+        "type" : "ip",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "event" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "server.address.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "agent.type.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "smtp.recipient_to.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.source.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.mitre" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "file.bytes.total" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.mitre.tactic" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "client.address.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "snmp.version.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "source_geo.latitude" : {
+      "half_float" : {
+        "type" : "half_float",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "smtp.path.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.symbols.table.library" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.date.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "event.action" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.hardware.ram_usage.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "software.name" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "network.data" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "scan.header" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "rule.metadata.updated_at.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "kerberos.client" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ftp.command.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.resources.language.primary.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "smtp.from" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "weird.peer" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.extracted" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.size.code" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.category.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "smtp.mail_date.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.file_info.var.language.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.size.heap" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.sections.address" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "connection.state_description" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "irc.command.value.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "agent.hostname.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.accessed.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "agent.ephemeral_id.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ecs" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "data.os.release_version" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "server.reply_message.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "http.response" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "file.mtime.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.hardware" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "snmp.version" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "source.geo.region_iso_code" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.size.heap.commit" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.section_names.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.symbols.libraries" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "group.id.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.is_64bit" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "source.geo.region_iso_code.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.os.platform" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.action.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.hardware.cpu_mhz.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.netinfo.iface.rx_dropped.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dns.subdomain.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.rx_bytes" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "ecs.version" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "log.full" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.os.release_version.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.characteristics" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "ftp.user.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.sections.name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.symbols.table.symbols" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "http.useragent" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.version.image" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.flavors" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.header.size.data.initialized" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "notice.message" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dce_rpc.endpoint.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "server.bytes" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "rule.rev" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "client.port.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.home.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.gdpr" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.os.version.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dns.recursion.available" : {
+      "boolean" : {
+        "type" : "boolean",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "result.endpoint_ip2.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.os.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "kerberos.ticket.valid.until" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "weird.additional_info.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dns.response" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "error" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "ftp.command" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "kerberos.ticket.cipher" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.tree.node" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.state" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "network" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "rule.mitre.tactic.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.netinfo.iface.ipv4.broadcast.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "source.geo.country_iso_code" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "process.pid.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "ftp.argument" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "scan.pe.resources.language.sub" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "dhcp" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "rule.gpg13" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "source.geo.region_name.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "host.mac.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "software.version.additional_info.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "snmp.community.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "destination.port.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "event.timestamp.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "result.columns.directory.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "file.size" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "hash.sha1.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "winlog.event_id" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "kerberos.error_message.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "file.source.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "network.transport" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "client.ip_bytes" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.header.magic.image.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "rule.score" : {
+      "long" : {
+        "type" : "long",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "snmp.get" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "rule.date" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "data.hardware.serial.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "scan.pe.file_info" : {
+      "object" : {
+        "type" : "object",
+        "searchable" : false,
+        "aggregatable" : false
+      }
+    },
+    "data.file.security" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    },
+    "source.geo.continent_name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "data.os.name.keyword" : {
+      "keyword" : {
+        "type" : "keyword",
+        "searchable" : true,
+        "aggregatable" : true
+      }
+    },
+    "event.dataset" : {
+      "text" : {
+        "type" : "text",
+        "searchable" : true,
+        "aggregatable" : false
+      }
+    }
+  }
+}

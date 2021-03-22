@@ -98,60 +98,12 @@
         <v-divider></v-divider>
         <v-list subheader dense id="external-tools-list">
           <v-subheader>Tools</v-subheader>
-          <v-list-item target="so-kibana" href="/kibana/">
+          <v-list-item v-for="tool in tools" v-if="tool.enabled" :key="tool.name" :target="tool.target" :href="tool.link" :title="$root.localizeMessage(tool.description)">
             <v-list-item-action>
-              <v-icon>fa-external-link-alt</v-icon>
+              <v-icon>{{ tool.icon }}</v-icon>
             </v-list-item-action>
             <v-list-item-content>
-              <v-list-item-title v-text="i18n.launch_kibana"></v-list-item-title>
-            </v-list-item-content>
-          </v-list-item>
-          <v-list-item target="so-grafana" href="/grafana/d/so_overview">
-            <v-list-item-action>
-              <v-icon>fa-external-link-alt</v-icon>
-            </v-list-item-action>
-            <v-list-item-content>
-              <v-list-item-title v-text="i18n.launch_grafana"></v-list-item-title>
-            </v-list-item-content>
-          </v-list-item>
-          <v-list-item target="so-cyberchef" href="/cyberchef/">
-            <v-list-item-action>
-              <v-icon>fa-external-link-alt</v-icon>
-            </v-list-item-action>
-            <v-list-item-content>
-              <v-list-item-title v-text="i18n.launch_cyberchef"></v-list-item-title>
-            </v-list-item-content>
-          </v-list-item>
-          <v-list-item target="so-playbook" href="/playbook/projects/detection-playbooks/issues/">
-            <v-list-item-action>
-              <v-icon>fa-external-link-alt</v-icon>
-            </v-list-item-action>
-            <v-list-item-content>
-              <v-list-item-title v-text="i18n.launch_playbook"></v-list-item-title>
-            </v-list-item-content>
-          </v-list-item>
-          <v-list-item target="so-fleet" href="/fleet/">
-            <v-list-item-action>
-              <v-icon>fa-external-link-alt</v-icon>
-            </v-list-item-action>
-            <v-list-item-content>
-              <v-list-item-title v-text="i18n.launch_fleet"></v-list-item-title>
-            </v-list-item-content>
-          </v-list-item>
-          <v-list-item target="so-thehive" href="/thehive/">
-            <v-list-item-action>
-              <v-icon>fa-external-link-alt</v-icon>
-            </v-list-item-action>
-            <v-list-item-content>
-              <v-list-item-title v-text="i18n.launch_thehive"></v-list-item-title>
-            </v-list-item-content>
-          </v-list-item>
-          <v-list-item target="so-navigator" href="/navigator/">
-            <v-list-item-action>
-              <v-icon>fa-external-link-alt</v-icon>
-            </v-list-item-action>
-            <v-list-item-content>
-              <v-list-item-title v-text="i18n.launch_navigator"></v-list-item-title>
+              <v-list-item-title v-text="$root.localizeMessage(tool.name)"></v-list-item-title>
             </v-list-item-content>
           </v-list-item>
         </v-list>
@@ -654,7 +606,7 @@
                   {{ i18n.quickActions }}
                 </v-list-item-title>
               </template>
-              <v-list-item dense v-for="action in actions" class="custom-quick-action-button" v-if="action.enabled" :key="action.link" :href="action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="action.target">
+              <v-list-item dense v-for="action in actions" class="custom-quick-action-button" v-if="action.enabled" :key="action.link" :href="action.background ? '' : action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="action.target" @click="performAction($event, action)">
                 <v-list-item-icon>
                   <v-icon :alt="action.name" color="white">{{ action.icon }}</v-icon>
                 </v-list-item-icon>
@@ -852,6 +804,7 @@
                       {{ props.item.id }}
                     </router-link>
                   </td>
+                  <td>{{ props.item.owner }}</td>
                   <td>{{ props.item.createTime | formatDateTime }}</td>
                   <td>{{ props.item | formatJobUpdateTime | formatDateTime }}</td>
                   <td v-text="props.item.nodeId"></td>
@@ -942,6 +895,10 @@
                         <div>
                           <span class="filter label">{{ i18n.job }}:</span> 
                           <span v-if="job.filter" class="filter value">{{ job.id }}</span>
+                        </div>
+                        <div>
+                          <span class="filter label">{{ i18n.owner }}:</span> 
+                          <span v-if="job.filter" class="filter value">{{ job.owner }}</span>
                         </div>
                         <div>
                           <span class="filter label">{{ i18n.sensorId }}:</span> 
