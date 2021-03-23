@@ -293,6 +293,7 @@ const i18n = {
       version: 'Version',
       view: 'View',
       weeks: 'weeks',
+      whatsnew: 'What\'s New',
 
       CASE_MODULE_NOT_ENABLED: 'A case module has not been configured for this installation. Unable to proceed with request.',
       QUERY_INVALID__GROUP_EMPTY: 'The search query has an empty group.',

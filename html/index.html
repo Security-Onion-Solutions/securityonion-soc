@@ -139,6 +139,14 @@
                 <v-list-item-title v-text="i18n.darkMode"></v-list-item-title>
               </v-list-item-content>
             </v-list-item>
+            <v-list-item target="so-help" :href="parameters.docsUrl + 'release-notes.html'">
+              <v-list-item-action>
+                <v-icon class="mx-auto">fa-gift</v-icon>
+              </v-list-item-action>
+              <v-list-item-content>
+                <v-list-item-title v-text="i18n.whatsnew"></v-list-item-title>
+              </v-list-item-content>
+            </v-list-item>
             <v-list-item target="so-help" :href="parameters.docsUrl">
               <v-list-item-action>
                 <v-icon class="mx-auto">fa-question</v-icon>
@@ -228,10 +236,7 @@
         </v-row>
         <v-row>
           <v-col class="mx-auto px-12" id="change-details">
-            <div  class="title" v-html="changeDetails.title"></div>
-            <ul>
-              <li v-for="change in changeDetails.changes" :key="change.summary" v-html="change.summary"></li>
-            </ul>
+            <div v-html="motd"></div>
           </v-col>
           <v-col class="mx-auto text-center">
             <div v-html="i18n.sponsorsIntro" class="mb-6"></div>
@@ -1113,6 +1118,7 @@
     <script src="js/external/chart-2.9.4.min.js"></script>
     <script src="js/external/vue-chartjs-2.7.1.min.js"></script>
     <script src="js/external/daterangepicker-3.1.0.min.js"></script>
+    <script src="js/external/marked-2.0.1.min.js"></script>
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>
