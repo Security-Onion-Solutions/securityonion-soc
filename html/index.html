@@ -19,8 +19,8 @@
     <link rel="mask-icon" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
     <link rel="alternate icon" class="so-favicon" type="image/png" href="images/favicon/onion.png?v=VERSION_PLACEHOLDER">
     <link rel="icon" class="so-favicon" type="image/svg+xml" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
-    <link rel="stylesheet" href="css/external/vuetify-v2.3.19.min.css">
-    <link rel="stylesheet" href="css/external/all-5.14.0.min.css">
+    <link rel="stylesheet" href="css/external/vuetify-v2.4.7.min.css">
+    <link rel="stylesheet" href="css/external/all-5.15.2.min.css">
     <link rel="stylesheet" href="css/external/daterangepicker-3.1.0.css">
     <link rel="stylesheet" href="css/app.css?v=VERSION_PLACEHOLDER">
     <title>Security Onion</title>
@@ -139,6 +139,14 @@
                 <v-list-item-title v-text="i18n.darkMode"></v-list-item-title>
               </v-list-item-content>
             </v-list-item>
+            <v-list-item target="so-help" :href="parameters.docsUrl + 'release-notes.html'">
+              <v-list-item-action>
+                <v-icon class="mx-auto">fa-gift</v-icon>
+              </v-list-item-action>
+              <v-list-item-content>
+                <v-list-item-title v-text="i18n.whatsnew"></v-list-item-title>
+              </v-list-item-content>
+            </v-list-item>
             <v-list-item target="so-help" :href="parameters.docsUrl">
               <v-list-item-action>
                 <v-icon class="mx-auto">fa-question</v-icon>
@@ -228,10 +236,7 @@
         </v-row>
         <v-row>
           <v-col class="mx-auto px-12" id="change-details">
-            <div  class="title" v-html="changeDetails.title"></div>
-            <ul>
-              <li v-for="change in changeDetails.changes" :key="change.summary" v-html="change.summary"></li>
-            </ul>
+            <div v-html="motd"></div>
           </v-col>
           <v-col class="mx-auto text-center">
             <div v-html="i18n.sponsorsIntro" class="mb-6"></div>
@@ -1103,16 +1108,17 @@
       </v-card>
     </script>
 
-    <script src="js/external/jquery-3.5.1.min.js"></script>
+    <script src="js/external/jquery-3.6.0.min.js"></script>
     <script src="js/external/vue-2.6.11.min.js"></script>
-    <script src="js/external/vue-router-3.4.9.min.js"></script>
-    <script src="js/external/vuetify-v2.3.19.min.js"></script>
+    <script src="js/external/vue-router-3.5.1.min.js"></script>
+    <script src="js/external/vuetify-v2.4.7.min.js"></script>
     <script src="js/external/axios-0.21.1.min.js"></script>
     <script src="js/external/moment-2.29.1.min.js"></script>
-    <script src="js/external/moment-timezone-data-0.5.32.min.js"></script>
+    <script src="js/external/moment-timezone-data-0.5.33.min.js"></script>
     <script src="js/external/chart-2.9.4.min.js"></script>
     <script src="js/external/vue-chartjs-2.7.1.min.js"></script>
     <script src="js/external/daterangepicker-3.1.0.min.js"></script>
+    <script src="js/external/marked-2.0.1.min.js"></script>
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>
