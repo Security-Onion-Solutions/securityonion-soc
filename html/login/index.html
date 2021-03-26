@@ -54,8 +54,8 @@
         <v-form v-model="form.valid" method="post" :action="authLoginUrl">
           <v-container grid-list-sm class="pa-4">
             <v-row>
-              <v-col xs12>
-                <div id="loginHeader" class="subtitle-1" v-text="i18n.loginHeader"></div>
+              <v-col class="mx-auto px-12">
+                <div id="banner" v-html="banner"></div>
               </v-col>
             </v-row>
             <v-row>
@@ -63,11 +63,6 @@
                 <v-text-field name="identifier" v-model="form.email" :placeholder="i18n.email" :hint="i18n.emailHelp" autofocus="true" :rules="[rules.required]"></v-text-field>
                 <v-text-field name="password" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'mdi-eye' : 'mdi-eye-off'" :rules="[rules.required]"></v-text-field>
                 <v-text-field name="csrf_token" v-model="form.csrfToken" class="d-none"></v-text-field>
-              </v-col>
-            </v-row>
-            <v-row>
-              <v-col xs12>
-                <div id="loginFooter" class="subtitle-2" v-text="i18n.loginFooter"></div>
               </v-col>
             </v-row>
           </v-container>
@@ -85,6 +80,7 @@
     <script src="js/external/vuetify-v2.4.7.min.js"></script>
     <script src="js/external/axios-0.21.1.min.js"></script>
     <script src="js/external/moment-2.29.1.min.js"></script>
+    <script src="js/external/marked-2.0.1.min.js"></script>
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>

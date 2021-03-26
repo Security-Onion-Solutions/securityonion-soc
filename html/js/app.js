@@ -372,24 +372,34 @@ $(document).ready(function() {
       showLogin() {
         location.href = this.authUrl + "login/browser";
       },
-      apiSuccessCallback(response) {
-        if (response.headers['content-type'] == "text/html") {
+      checkForUnauthorized(response) {
+        const redirectCookie = this.getCookie('AUTH_REDIRECT');
+        if ((response.headers['content-type'] == "text/html") ||
+            (response.status == 401) ||
+            (redirectCookie != null && redirectCookie.length > 0)) {
+          this.deleteCookie('AUTH_REDIRECT');
           this.showLogin();
+          return null
         }
         return response;
       },
+      apiSuccessCallback(response) {
+        return this.checkForUnauthorized(response);
+      },
       apiFailureCallback(error) {
-        if (error.response && error.response.status === 401) {
-          this.showLogin();
-        }
+        this.checkForUnauthorized(error.response);
         throw error;
       },
-      setupApi() {
-        this.papi = axios.create({
-          baseURL: this.apiUrl,
-          timeout: this.connectionTimeout,
+      createApi(baseUrl) {
+        const ax = axios.create({
+          baseURL: baseUrl,
+          timeout: this.connectionTimeout
         });
-        this.papi.interceptors.response.use(this.apiSuccessCallback, this.apiFailureCallback);
+        ax.interceptors.response.use(this.apiSuccessCallback, this.apiFailureCallback);
+        return ax;
+      },
+      setupApi() {
+        this.papi = this.createApi(this.apiUrl);
       },
       setupAuth() {
         this.authApi = axios.create({

@@ -22,7 +22,7 @@ routes.push({ path: '/', name: 'home', component: {
   methods: {
     async loadChanges() {
       try {
-        let response = await axios.create().get('motd.md?v=' + Date.now());
+        const response = await this.$root.createApi().get('motd.md?v=' + Date.now());
         if (response.data) {
           this.motd = marked(response.data);
         }

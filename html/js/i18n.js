@@ -192,8 +192,6 @@ const i18n = {
       loginExpired: 'The login session has expired. Refresh, or wait for the page to refresh automatically, and then try again.',
       loginInvalid: 'The provided credentials are invalid. Please try again.',
       loginTitle: 'Login to Security Onion',
-      loginHeader: '',
-      loginFooter: '',
       logout: 'Logout',
       minutes: 'minutes',
       months: 'months',
