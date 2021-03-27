@@ -76,7 +76,8 @@ $(document).ready(function() {
       reconnecting: false,
       users: [],
       usersLoadedDate: null,
-      usersRefreshIntervalMs: 300000
+      cacheRefreshIntervalMs: 300000,
+      loadServerSettingsTime: 0,
     },
     watch: {
       '$vuetify.theme.dark': 'saveLocalSettings',
@@ -104,45 +105,50 @@ $(document).ready(function() {
         }
       },
       async loadServerSettings() {
+        // This version element ensures we're passed the login screen.
         if (document.getElementById("version")) {
-          try {
-            const response = await this.papi.get('info');
-            this.version = response.data.version;
-            this.license = response.data.license;
-            this.parameters = response.data.parameters;
-            this.elasticVersion = response.data.elasticVersion;
-            this.wazuhVersion = response.data.wazuhVersion;
+          const now = Date.now()
+          if (now - this.loadServerSettingsTime > this.cacheRefreshIntervalMs) {
+            this.loadServerSettingsTime = now;
+            try {
+              const response = await this.papi.get('info');
+              this.version = response.data.version;
+              this.license = response.data.license;
+              this.parameters = response.data.parameters;
+              this.elasticVersion = response.data.elasticVersion;
+              this.wazuhVersion = response.data.wazuhVersion;
 
-            if (this.parameterCallback != null) {
-              this.parameterCallback(this.parameters[this.parameterSection]);
-              this.parameterCallback = null;
-            }
-            this.parametersLoaded = true;
-            if (this.parameters.webSocketTimeoutMs > 0) {
-              this.wsConnectionTimeout = this.parameters.webSocketTimeoutMs;
-            }
-            if (this.parameters.apiTimeoutMs > 0) {
-              this.connectionTimeout = this.parameters.apiTimeoutMs;
-            }
-            if (this.parameters.cacheExpirationMs > 0) {
-              this.usersRefreshIntervalMs = this.parameters.cacheExpirationMs;
-            }
-            if (this.parameters.tipTimeoutMs > 0) {
-              this.tipTimeout = this.parameters.tipTimeoutMs;
-            }
-            if (this.parameters.tools && this.parameters.tools.length > 0) {
-              this.tools = this.parameters.tools;
-              if (this.parameters.inactiveTools) {
-                const inactive = this.parameters.inactiveTools;
-                for (var i = 0; i < this.tools.length; i++) {
-                  const tool = this.tools[i];
-                  tool.enabled = !inactive.includes(tool.name);
+              if (this.parameterCallback != null) {
+                this.parameterCallback(this.parameters[this.parameterSection]);
+                this.parameterCallback = null;
+              }
+              this.parametersLoaded = true;
+              if (this.parameters.webSocketTimeoutMs > 0) {
+                this.wsConnectionTimeout = this.parameters.webSocketTimeoutMs;
+              }
+              if (this.parameters.apiTimeoutMs > 0) {
+                this.connectionTimeout = this.parameters.apiTimeoutMs;
+              }
+              if (this.parameters.cacheExpirationMs > 0) {
+                this.cacheRefreshIntervalMs = this.parameters.cacheExpirationMs;
+              }
+              if (this.parameters.tipTimeoutMs > 0) {
+                this.tipTimeout = this.parameters.tipTimeoutMs;
+              }
+              if (this.parameters.tools && this.parameters.tools.length > 0) {
+                this.tools = this.parameters.tools;
+                if (this.parameters.inactiveTools) {
+                  const inactive = this.parameters.inactiveTools;
+                  for (var i = 0; i < this.tools.length; i++) {
+                    const tool = this.tools[i];
+                    tool.enabled = !inactive.includes(tool.name);
+                  }
                 }
               }
+              this.subscribe("status", this.updateStatus);
+            } catch (error) {
+              this.showError(error);
             }
-            this.subscribe("status", this.updateStatus);
-          } catch (error) {
-            this.showError(error);
           }
         }
       },
@@ -372,24 +378,34 @@ $(document).ready(function() {
       showLogin() {
         location.href = this.authUrl + "login/browser";
       },
-      apiSuccessCallback(response) {
-        if (response.headers['content-type'] == "text/html") {
+      checkForUnauthorized(response) {
+        const redirectCookie = this.getCookie('AUTH_REDIRECT');
+        if ((response.headers['content-type'] == "text/html") ||
+            (response.status == 401) ||
+            (redirectCookie != null && redirectCookie.length > 0)) {
+          this.deleteCookie('AUTH_REDIRECT');
           this.showLogin();
+          return null
         }
         return response;
       },
+      apiSuccessCallback(response) {
+        return this.checkForUnauthorized(response);
+      },
       apiFailureCallback(error) {
-        if (error.response && error.response.status === 401) {
-          this.showLogin();
-        }
+        this.checkForUnauthorized(error.response);
         throw error;
       },
-      setupApi() {
-        this.papi = axios.create({
-          baseURL: this.apiUrl,
-          timeout: this.connectionTimeout,
+      createApi(baseUrl) {
+        const ax = axios.create({
+          baseURL: baseUrl,
+          timeout: this.connectionTimeout
         });
-        this.papi.interceptors.response.use(this.apiSuccessCallback, this.apiFailureCallback);
+        ax.interceptors.response.use(this.apiSuccessCallback, this.apiFailureCallback);
+        return ax;
+      },
+      setupApi() {
+        this.papi = this.createApi(this.apiUrl);
       },
       setupAuth() {
         this.authApi = axios.create({
@@ -475,7 +491,7 @@ $(document).ready(function() {
       },
       async getUserById(id) {
         const nowTime = new Date().time;
-        if (this.users.length == 0 || (nowTime - this.usersLoadedTime > this.usersRefreshIntervalMs)) {
+        if (this.users.length == 0 || (nowTime - this.usersLoadedTime > this.cacheRefreshIntervalMs)) {
           await this.getUsers();
           this.usersLoadedTime = nowTime;
         }
@@ -501,6 +517,7 @@ $(document).ready(function() {
         }
         this.setFavicon();
         this.updateTitle();
+        this.loadServerSettings();
       },
       isGridUnhealthy() {
         return this.currentStatus && this.currentStatus.grid.unhealthyNodeCount > 0
