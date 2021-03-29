@@ -380,7 +380,7 @@ $(document).ready(function() {
       },
       checkForUnauthorized(response) {
         const redirectCookie = this.getCookie('AUTH_REDIRECT');
-        if ((response.headers['content-type'] == "text/html") ||
+        if ((response.headers && response.headers['content-type'] == "text/html") ||
             (response.status == 401) ||
             (redirectCookie != null && redirectCookie.length > 0)) {
           this.deleteCookie('AUTH_REDIRECT');

@@ -17,6 +17,7 @@ import (
 )
 
 const DEFAULT_MAX_PACKET_COUNT = 5000
+const DEFAULT_IDLE_CONNECTION_TIMEOUT_MS = 300000
 
 type ServerConfig struct {
   AirgapEnabled                   bool                              `json:"airgapEnabled"`
@@ -27,6 +28,7 @@ type ServerConfig struct {
   Modules                         module.ModuleConfigMap            `json:"modules"`
   ModuleFailuresIgnored           bool                              `json:"moduleFailuresIgnored"`
   ClientParams                    ClientParameters                  `json:"client"`
+  IdleConnectionTimeoutMs         int                               `json:"idleConnectionTimeoutMs"`
 }
 
 func (config *ServerConfig) Verify() error {
@@ -45,6 +47,9 @@ func (config *ServerConfig) Verify() error {
   }
   if err == nil {
     err = config.ClientParams.Verify()
+  }
+  if (config.IdleConnectionTimeoutMs <= 0) {
+    config.IdleConnectionTimeoutMs = DEFAULT_IDLE_CONNECTION_TIMEOUT_MS
   }
   return err
 }

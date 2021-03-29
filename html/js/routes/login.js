@@ -49,7 +49,11 @@ routes.push({ path: '*', name: 'login', component: {
           this.$root.showWarning(this.i18n.loginInvalid);
         }
       } catch (error) {
-        this.$root.showError(error);
+        if (error.response.status == 410) {
+          document.location = "/login";
+        } else {
+          this.$root.showError(error);
+        }
       }
     },
   }

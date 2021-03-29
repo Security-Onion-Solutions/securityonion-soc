@@ -20,6 +20,9 @@ func TestVerifyServer(tester *testing.T) {
   if cfg.MaxPacketCount != DEFAULT_MAX_PACKET_COUNT {
     tester.Errorf("expected MaxPacketCount %d but got %d", DEFAULT_MAX_PACKET_COUNT, cfg.MaxPacketCount)
   }
+  if cfg.IdleConnectionTimeoutMs != DEFAULT_IDLE_CONNECTION_TIMEOUT_MS {
+    tester.Errorf("expected IdleConnectionTimeoutMs %d but got %d", DEFAULT_IDLE_CONNECTION_TIMEOUT_MS, cfg.IdleConnectionTimeoutMs)
+  }
   if err == nil {
     tester.Errorf("expected bind address error")
   }
