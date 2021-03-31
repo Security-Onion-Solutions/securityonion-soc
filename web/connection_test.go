@@ -16,7 +16,7 @@ import (
 )
 
 func TestIsAuthorized(tester *testing.T) {
-	conn := NewConnection(nil)
+	conn := NewConnection(nil, "")
 	result := conn.IsAuthorized("test")
 	if !result {
 		tester.Errorf("expected connection to be authorized for message %s", "test")
@@ -24,7 +24,7 @@ func TestIsAuthorized(tester *testing.T) {
 }
 
 func TestUpdatePingTime(tester *testing.T) {
-  conn := NewConnection(nil)
+  conn := NewConnection(nil, "")
 	oldPingTime := conn.lastPingTime
 	time.Sleep(3 * time.Millisecond)
 	conn.UpdatePingTime()

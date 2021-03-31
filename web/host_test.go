@@ -20,9 +20,13 @@ func TestAddRemoveConnection(tester *testing.T) {
   host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test")
 	conn := &websocket.Conn{}
 	tester.Run("testing add connection", func(t *testing.T) {
-	  host.AddConnection(conn);
+	  socConn := host.AddConnection(conn, "1.2.3.4");
 		if len(host.connections) != 1 {
 			tester.Errorf("expected %d but got %d", 1, len(host.connections))
+		}
+
+		if socConn.ip != "1.2.3.4" {
+			tester.Errorf("expected %s but got %s", "1.2.3.4", socConn.ip)
 		}
 
 		if host.idleConnectionTimeoutMs != 123 {
@@ -39,7 +43,7 @@ func TestAddRemoveConnection(tester *testing.T) {
 
 func TestManageConnections(tester *testing.T) {
   host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test")
-	conn := host.AddConnection(nil)
+	conn := host.AddConnection(nil, "")
 
 	conn.lastPingTime = time.Time{}
 

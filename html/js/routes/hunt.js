@@ -1,4 +1,4 @@
-// Copyright 2020 Security Onion Solutions. All rights reserved.
+// Copyright 2020,2021 Security Onion Solutions. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -748,15 +748,15 @@ const huntComponent = {
     },
     base64encode(content) {
       try {
-        content = btoa(content);
+        content = Buffer.from(content, 'binary').toString('base64');
       } catch (e) {
         Console.error("Failed to base64 encode content: " + e);
       }
       return content;
     },
     escape(content) {
-      content = content.replaceAll("\\", "\\\\");
-      content = content.replaceAll("\"", "\\\"");
+      content = content.replace(/\\/g, "\\\\");
+      content = content.replace(/\"/g, "\\\"");
       return content
     },
     replaceActionVar(content, field, value, uriEncode) {
@@ -1166,3 +1166,5 @@ routes.push({ path: '/hunt', name: 'hunt', component: huntComponent});
 
 const alertsComponent = Object.assign({}, huntComponent);
 routes.push({ path: '/alerts', name: 'alerts', component: alertsComponent});
+
+module.exports = huntComponent;

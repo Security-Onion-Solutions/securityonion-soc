@@ -32,19 +32,22 @@ func NewWebSocketHandler(host *Host) *WebSocketHandler {
 func (webSocketHandler *WebSocketHandler) HandleNow(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   upgrader := websocket.Upgrader{}
   connection, err := upgrader.Upgrade(writer, request, nil)
+  ip := webSocketHandler.Host.GetSourceIp(request)
   if err != nil {
     log.WithError(err).WithFields(log.Fields{
-      "sourceIp": request.RemoteAddr,
+      "remoteAddr": request.RemoteAddr,
+      "sourceIp": ip,
       "path": request.URL.Path,
     }).Warn("Failed to upgrade websocket")
     return http.StatusBadRequest, nil, errors.New("Unable to upgrade request to websocket")
   }
 
   log.WithFields(log.Fields{
-    "sourceIp": request.RemoteAddr,
+    "remoteAddr": request.RemoteAddr,
+    "sourceIp": ip,
     "path": request.URL.Path,
   }).Info("WebSocket connected")
-  conn := webSocketHandler.Host.AddConnection(connection)
+  conn := webSocketHandler.Host.AddConnection(connection, ip)
 
   defer connection.Close()
   for {
@@ -53,7 +56,8 @@ func (webSocketHandler *WebSocketHandler) HandleNow(writer http.ResponseWriter, 
       break
     }
     log.WithFields(log.Fields{
-      "sourceIp": request.RemoteAddr,
+      "remoteAddr": request.RemoteAddr,
+      "sourceIp": ip,
       "path": request.URL.Path,
       "msg": string(messageBytes),
       "type": messageType,
@@ -64,7 +68,8 @@ func (webSocketHandler *WebSocketHandler) HandleNow(writer http.ResponseWriter, 
     webSocketHandler.handleMessage(msg, conn)
   }
   log.WithFields(log.Fields{
-    "sourceIp": request.RemoteAddr,
+    "remoteAddr": request.RemoteAddr,
+    "sourceIp": ip,
     "path": request.URL.Path,
   }).Info("WebSocket disconnected")
   webSocketHandler.Host.RemoveConnection(connection)
