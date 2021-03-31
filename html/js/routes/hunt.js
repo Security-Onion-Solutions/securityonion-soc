@@ -754,6 +754,11 @@ const huntComponent = {
       }
       return content;
     },
+    escape(content) {
+      content = content.replaceAll("\\", "\\\\");
+      content = content.replaceAll("\"", "\\\"");
+      return content
+    },
     replaceActionVar(content, field, value, uriEncode) {
       var encode = function(input) { 
         if (uriEncode) {
@@ -764,6 +769,8 @@ const huntComponent = {
 
       content = content.replace("{" + field + "}", encode(value));
       content = content.replace("{" + field + "|base64}", encode(this.base64encode(value)));
+      content = content.replace("{" + field + "|escape}", encode(this.escape(value)));
+      content = content.replace("{" + field + "|escape|base64}", encode(this.base64encode(this.escape(value))));
       return content;
     },
     formatActionContent(content, event, field, value, uriEncode = true) {

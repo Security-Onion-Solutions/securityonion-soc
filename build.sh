@@ -12,5 +12,8 @@
 version=${1:-dev}
 now=`date -u +%Y-%m-%dT%H:%M:%S`
 
+set -e
+
 go get ./...
+go test ./...
 go build -a -ldflags "-X main.BuildVersion=$version -X main.BuildTime=$now -extldflags '-static'" -tags netgo -installsuffix netgo cmd/sensoroni.go
