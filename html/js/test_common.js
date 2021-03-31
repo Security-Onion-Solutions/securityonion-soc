@@ -10,5 +10,7 @@
 
 // Place common test setup fixtures here for re-use across SOC JS tests.
 
-global.Console = { error: function(s) {} };
+global.btoa = function(content) {
+	return Buffer.from(content, 'binary').toString('base64');
+};
 global.routes = [];

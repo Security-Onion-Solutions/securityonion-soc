@@ -748,9 +748,9 @@ const huntComponent = {
     },
     base64encode(content) {
       try {
-        content = Buffer.from(content, 'binary').toString('base64');
+        content = btoa(content);
       } catch (e) {
-        Console.error("Failed to base64 encode content: " + e);
+        console.error("Failed to base64 encode content: " + e);
       }
       return content;
     },
@@ -760,6 +760,8 @@ const huntComponent = {
       return content
     },
     replaceActionVar(content, field, value, uriEncode) {
+      if (value === undefined || value == null) return content;
+
       var encode = function(input) { 
         if (uriEncode) {
           return encodeURIComponent(input);
@@ -1167,4 +1169,4 @@ routes.push({ path: '/hunt', name: 'hunt', component: huntComponent});
 const alertsComponent = Object.assign({}, huntComponent);
 routes.push({ path: '/alerts', name: 'alerts', component: alertsComponent});
 
-module.exports = huntComponent;
+if (typeof module != 'undefined') module.exports = huntComponent;
