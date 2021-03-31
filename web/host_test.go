@@ -11,6 +11,7 @@
 package web
 
 import (
+	"net/http"
   "testing"
   "time"
 	"github.com/gorilla/websocket"
@@ -58,4 +59,17 @@ func TestManageConnections(tester *testing.T) {
 	if len(host.connections) != 0 {
 		tester.Errorf("Expected no connections after manage cycle")
 	}
+}
+
+func TestGetSourceIp(tester *testing.T) {
+  host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test")
+  request, _ := http.NewRequest("GET", "", nil)
+
+  expected := "1.1.1.1"
+  request.Header.Set("X-real-IP", expected)
+
+  actual := host.GetSourceIp(request)
+  if actual != expected {
+    tester.Errorf("expected %s but got %s", expected, actual)
+  }
 }

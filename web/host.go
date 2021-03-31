@@ -54,8 +54,9 @@ func NewHost(address string, htmlDir string, timeoutMs int, version string) *Hos
 
 func (host *Host) GetSourceIp(request *http.Request) string {
   ip := request.RemoteAddr
-  if val, ok := request.Header["X-Real-IP"]; ok {
-    ip = val[0]
+  val := request.Header.Get("x-real-ip")
+  if len(val) > 0 {
+    ip = val
   }
   return ip
 }
