@@ -10,9 +10,10 @@
 
 FROM ghcr.io/security-onion-solutions/golang:alpine as builder
 ARG VERSION=0.0.0
-RUN apk update && apk add libpcap-dev bash git musl-dev gcc
+RUN apk update && apk add libpcap-dev bash git musl-dev gcc npm
 COPY . /build
 WORKDIR /build
+RUN npm install jest --global
 RUN ./build.sh "$VERSION"
 
 FROM ghcr.io/security-onion-solutions/alpine:latest
@@ -36,6 +37,7 @@ COPY --from=builder /build/COPYING .
 COPY --from=builder /build/LICENSE .
 COPY --from=builder /build/README.md .
 COPY --from=builder /build/sensoroni.json .
+RUN find html/js -name "*test*.js" -delete
 RUN chmod u+x scripts/*
 RUN chown 939:939 scripts/*
 RUN find . -name \*.html -exec sed -i -e "s/VERSION_PLACEHOLDER/$VERSION/g" {} \;

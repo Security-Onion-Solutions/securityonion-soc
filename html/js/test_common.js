@@ -1,4 +1,5 @@
-// Copyright 2020,2021 Security Onion Solutions. All rights reserved.
+// Copyright 2019 Jason Ertel (jertel). All rights reserved.
+// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -7,15 +8,9 @@
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-routes.push({ path: '/downloads', name: 'downloads', component: {
-  template: '#page-downloads',
-  data() { return {
-    i18n: this.$root.i18n,
-  }},
-  created() {
-  },
-  watch: {
-  },
-  methods: {
-  }
-}});
+// Place common test setup fixtures here for re-use across SOC JS tests.
+
+global.btoa = function(content) {
+	return Buffer.from(content, 'binary').toString('base64');
+};
+global.routes = [];

@@ -52,6 +52,15 @@ func NewHost(address string, htmlDir string, timeoutMs int, version string) *Hos
   }
 }
 
+func (host *Host) GetSourceIp(request *http.Request) string {
+  ip := request.RemoteAddr
+  val := request.Header.Get("x-real-ip")
+  if len(val) > 0 {
+    ip = val
+  }
+  return ip
+}
+
 func (host *Host) Register(route string, handler HostHandler) {
   http.HandleFunc(route, handler.Handle)
 }
@@ -84,11 +93,11 @@ func (host *Host) IsRunning() bool {
   return host.running
 }
 
-func (host *Host) AddConnection(wsConn *websocket.Conn) *Connection {
+func (host *Host) AddConnection(wsConn *websocket.Conn, ip string) *Connection {
   host.lock.Lock();
   defer host.lock.Unlock()
 
-  conn := NewConnection(wsConn)
+  conn := NewConnection(wsConn, ip)
   host.connections = append(host.connections, conn);
   log.WithField("Connections", len(host.connections)).Debug("Added WebSocket connection")
   return conn
@@ -117,13 +126,15 @@ func (host *Host) Broadcast(kind string, obj interface{}) {
     if (connection.IsAuthorized(kind)) {
       log.WithFields(log.Fields {
         "kind": kind,
-        "host": connection.websocket.RemoteAddr().String(),
+        "remoteAddr": connection.websocket.RemoteAddr().String(),
+        "sourceIp": connection.ip,
       }).Debug("Broadcasting message to WebSocket connection")
       connection.websocket.WriteJSON(msg)
     } else {
       log.WithFields(log.Fields {
         "kind": kind,
-        "host": connection.websocket.RemoteAddr().String(),
+        "remoteAddr": connection.websocket.RemoteAddr().String(),
+        "sourceIp": connection.ip,
       }).Debug("Skipping broadcast due to insufficient authorization")
     }
   }

@@ -12,6 +12,7 @@ package thehive
 
 import (
   "strconv"
+  "strings"
   "testing"
   "time"
   "github.com/security-onion-solutions/securityonion-soc/model"
@@ -48,16 +49,19 @@ func TestConvertFromTheHiveCase(tester *testing.T) {
     tester.Errorf("expected id: %d, but got: %s", thehiveCase.Id, socCase.Id)
   }
 
-  if socCase.CreateTime.Format(time.RFC3339) != "2020-09-30T10:40:02-04:00" {
-    tester.Errorf("unexpected create time: %s", socCase.CreateTime.Format(time.RFC3339))
+  tm := socCase.CreateTime.Format(time.RFC3339)
+  if !strings.Contains(tm, ":40:02") {
+    tester.Errorf("unexpected create time: %s", tm)
   }
 
-  if socCase.StartTime.Format(time.RFC3339) != "2020-09-30T10:40:01-04:00" {
-    tester.Errorf("unexpected start time: %s", socCase.StartTime.Format(time.RFC3339))
+  tm = socCase.StartTime.Format(time.RFC3339)
+  if !strings.Contains(tm, ":40:01") {
+    tester.Errorf("unexpected start time: %s", tm)
   }
 
-  if socCase.CompleteTime.Format(time.RFC3339) != "2020-09-30T10:40:03-04:00" {
-    tester.Errorf("unexpected complete time: %s", socCase.CompleteTime.Format(time.RFC3339))
+  tm = socCase.CompleteTime.Format(time.RFC3339)
+  if !strings.Contains(tm, ":40:03") {
+    tester.Errorf("unexpected complete time: %s", tm)
   }
 }
 

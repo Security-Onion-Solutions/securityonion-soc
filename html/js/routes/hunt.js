@@ -1,4 +1,4 @@
-// Copyright 2020 Security Onion Solutions. All rights reserved.
+// Copyright 2020,2021 Security Onion Solutions. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -750,11 +750,18 @@ const huntComponent = {
       try {
         content = btoa(content);
       } catch (e) {
-        Console.error("Failed to base64 encode content: " + e);
+        console.error("Failed to base64 encode content: " + e);
       }
       return content;
     },
+    escape(content) {
+      content = content.replace(/\\/g, "\\\\");
+      content = content.replace(/\"/g, "\\\"");
+      return content
+    },
     replaceActionVar(content, field, value, uriEncode) {
+      if (value === undefined || value == null) return content;
+
       var encode = function(input) { 
         if (uriEncode) {
           return encodeURIComponent(input);
@@ -764,6 +771,8 @@ const huntComponent = {
 
       content = content.replace("{" + field + "}", encode(value));
       content = content.replace("{" + field + "|base64}", encode(this.base64encode(value)));
+      content = content.replace("{" + field + "|escape}", encode(this.escape(value)));
+      content = content.replace("{" + field + "|escape|base64}", encode(this.base64encode(this.escape(value))));
       return content;
     },
     formatActionContent(content, event, field, value, uriEncode = true) {
@@ -1159,3 +1168,5 @@ routes.push({ path: '/hunt', name: 'hunt', component: huntComponent});
 
 const alertsComponent = Object.assign({}, huntComponent);
 routes.push({ path: '/alerts', name: 'alerts', component: alertsComponent});
+
+if (typeof module != 'undefined') module.exports = huntComponent;
