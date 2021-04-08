@@ -76,7 +76,8 @@ func (datastore *FileDatastoreImpl) GetNodes() []*model.Node {
 }
 
 func (datastore *FileDatastoreImpl) AddNode(node *model.Node) error {
-  return datastore.UpdateNode(node)
+  _, err := datastore.UpdateNode(node)
+  return err
 }
 
 func (datastore *FileDatastoreImpl) addNode(node *model.Node) *model.Node {
@@ -88,25 +89,39 @@ func (datastore *FileDatastoreImpl) addNode(node *model.Node) *model.Node {
   return node
 }
 
-func (datastore *FileDatastoreImpl) UpdateNode(newNode *model.Node) error {
+func (datastore *FileDatastoreImpl) UpdateNode(newNode *model.Node) (*model.Node, error) {
+  var node *model.Node
+
   if len(newNode.Id) > 0 {
     datastore.lock.Lock()
     defer datastore.lock.Unlock()
-    node := datastore.nodesById[newNode.Id]
+    node = datastore.nodesById[newNode.Id]
     if node == nil {
       node = datastore.addNode(newNode)
     }
-    // Preserve the original online time
-    newNode.OnlineTime = node.OnlineTime
+
+    // Only copy the following values from the incoming node. Preserve everything else.
+    node.EpochTime     = newNode.EpochTime
+    node.Role          = newNode.Role
+    node.Description   = newNode.Description
+    node.Address       = newNode.Address
+    node.Version       = newNode.Version
+
+    // Ensure model parameters are updated
+    node.SetModel(newNode.Model)
+    
+    // Mark ConnectionStatus as Ok since this node just checked in
+    node.ConnectionStatus = model.NodeStatusOk
+
     // Update time is now
-    newNode.UpdateTime = time.Now()
+    node.UpdateTime = time.Now()
+
     // Calculate uptime
-    newNode.UptimeSeconds = int(newNode.UpdateTime.Sub(newNode.OnlineTime).Seconds())
-    datastore.nodesById[newNode.Id] = newNode
+    node.UptimeSeconds = int(node.UpdateTime.Sub(node.OnlineTime).Seconds())
   } else {
     log.WithField("description", newNode.Description).Info("Not adding node with missing id")
   }
-  return nil
+  return node, nil
 } 
 
 func (datastore *FileDatastoreImpl) GetNextJob(nodeId string) *model.Job {

@@ -20,6 +20,7 @@ type Status struct {
 type GridStatus struct {
   TotalNodeCount      int     `json:"totalNodeCount"`
   UnhealthyNodeCount  int     `json:"unhealthyNodeCount"`
+  Eps                 int     `json:"eps"`
 }
 
 type AlertsStatus struct {

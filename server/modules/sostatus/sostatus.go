@@ -58,6 +58,7 @@ func (status *SoStatus) Start() error {
 func (status *SoStatus) refresher() {
 	status.refreshTicker = time.NewTicker(time.Duration(status.refreshIntervalMs) * time.Millisecond)
 	status.running = true
+
 	for {
 		select {
 		case <- status.refreshTicker.C:
@@ -80,29 +81,49 @@ func (status *SoStatus) IsRunning() bool {
 }
 
 func (status *SoStatus) Refresh() {
-	log.Debug("Refreshing SO Status")
+	log.Debug("Updating grid status")
 	status.refreshGrid()
 	status.server.Host.Broadcast("status", status.currentStatus)
 }
 
 func (status *SoStatus) refreshGrid() {
 	unhealthyNodes := 0
+
 	nodes := status.server.Datastore.GetNodes()
 	for _, node := range nodes {
+
 		staleMs := int(time.Now().Sub(node.UpdateTime) / time.Millisecond)
 		if staleMs > status.offlineThresholdMs {
-			unhealthyNodes++
-			if node.Status != model.NodeStatusOffline {
+			if node.ConnectionStatus != model.NodeStatusFault {
 				log.WithFields(log.Fields {
 					"nodeId": node.Id,
 					"staleMs": staleMs,
 					"offlineThresholdMs": status.offlineThresholdMs,
 				}).Warn("Node has gone offline")
-				node.Status = model.NodeStatusOffline
-	      status.server.Host.Broadcast("node", node)
+				node.ConnectionStatus = model.NodeStatusFault
 			}
 		}
+
+		updated := status.server.Metrics.UpdateNodeMetrics(node)
+
+	  log.WithFields(log.Fields { 
+	    "Id": node.Id, 
+	    "processStatus": node.ProcessStatus, 
+	    "raidStatus": node.RaidStatus, 
+	    "connectionStatus": node.ConnectionStatus, 
+	    "overallStatus": node.Status,
+	    "updated": updated,
+	  }).Debug("Node Status")
+
+	  if updated {
+	    status.server.Host.Broadcast("node", node)
+	  }
+
+	  if node.Status != model.NodeStatusOk {
+			unhealthyNodes++
+	  }
 	}
 	status.currentStatus.Grid.TotalNodeCount = len(nodes)
 	status.currentStatus.Grid.UnhealthyNodeCount = unhealthyNodes
+	status.currentStatus.Grid.Eps = status.server.Metrics.GetGridEps()
 }

@@ -1168,5 +1168,3 @@ routes.push({ path: '/hunt', name: 'hunt', component: huntComponent});
 
 const alertsComponent = Object.assign({}, huntComponent);
 routes.push({ path: '/alerts', name: 'alerts', component: alertsComponent});
-
-if (typeof module != 'undefined') module.exports = huntComponent;

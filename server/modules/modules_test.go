@@ -17,9 +17,11 @@ import (
 
 func TestBuildModuleMap(tester *testing.T) {
   mm := BuildModuleMap(nil)
+  findModule(tester, mm, "elastic")
   findModule(tester, mm, "filedatastore")
   findModule(tester, mm, "kratos")
-  findModule(tester, mm, "elastic")
+  findModule(tester, mm, "influxdb")
+  findModule(tester, mm, "sostatus")
   findModule(tester, mm, "statickeyauth")
   findModule(tester, mm, "thehive")
 }

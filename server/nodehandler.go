@@ -42,8 +42,9 @@ func (nodeHandler *NodeHandler) post(writer http.ResponseWriter, request *http.R
   node := model.NewNode("")
   err := nodeHandler.ReadJson(request, node)
   if err == nil {
-    err = nodeHandler.server.Datastore.UpdateNode(node)
+    node, err = nodeHandler.server.Datastore.UpdateNode(node)
     if err == nil {
+      nodeHandler.server.Metrics.UpdateNodeMetrics(node)
       nodeHandler.Host.Broadcast("node", node)
       job = nodeHandler.server.Datastore.GetNextJob(node.Id)
     }

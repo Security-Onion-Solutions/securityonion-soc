@@ -23,6 +23,7 @@ type Server struct {
   Userstore   Userstore
   Eventstore  Eventstore
   Casestore   Casestore
+  Metrics     Metrics
   stoppedChan chan bool
 }
 

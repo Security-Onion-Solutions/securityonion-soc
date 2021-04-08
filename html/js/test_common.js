@@ -14,3 +14,23 @@ global.btoa = function(content) {
 	return Buffer.from(content, 'binary').toString('base64');
 };
 global.routes = [];
+
+global.initComponentData = function(comp) {
+	return comp.data();
+}
+
+global.getComponent = function(name) {
+	var comp = null;
+	for (var i = 0; i < global.routes.length; i++) {
+		if (global.routes[i].name == name) {
+			comp = global.routes[i].component;
+			break;
+		}
+	}
+	comp.$root = { i18n: {} };
+
+	const data = global.initComponentData(comp);
+	Object.assign(comp, data, comp.methods);
+
+	return comp;
+}
