@@ -11,6 +11,7 @@
 const i18n = {
   translations: {
     "en-US": {
+      __missing__: '*Missing',
       acknowledged: 'Acknowledged',
       ackMultipleTip: 'Acknowledging groups of alerts may take a while and will continue in the background.',
       ackPartialSuccess: 'The acknowledge request encountered an unexpected problem. Some events may not have been acknowledged.',
@@ -323,3 +324,5 @@ const i18n = {
     return trans;
   },
 }
+
+if (global) global.i18n = i18n;

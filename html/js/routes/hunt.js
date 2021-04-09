@@ -813,6 +813,12 @@ const huntComponent = {
       }
       return fields;
     },
+    localizeValue(value) {
+      if (value.startsWith("__")) {
+        value = this.$root.localizeMessage(value);
+      }
+      return value;
+    },
     constructHeaders(fields) {
       var headers = [];
       var i18n = this.i18n;
@@ -827,13 +833,14 @@ const huntComponent = {
       return headers;
     },
     constructGroupByRows(fields, data) {
-      var records = [];
+      const records = [];
+      const route = this;
       data.forEach(function(row, index) {
         var record = {
           count: row.value,
         };
         fields.forEach(function(field, index) {
-          record[field] = row.keys[index];
+          record[field] = route.localizeValue(row.keys[index]);
         });
         records.push(record);
       });
@@ -892,8 +899,9 @@ const huntComponent = {
       chart.labels = [];
       chart.datasets[0].data = [];
       if (!data) return;
+      const route = this;
       data.forEach(function(item, index) {
-        chart.labels.push(item.keys[0]);
+        chart.labels.push(route.localizeValue(item.keys[0]));
         chart.datasets[0].data.push(item.value);
       });
       if (chart.obj) {

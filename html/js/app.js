@@ -9,6 +9,8 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 const routes = [];
 
+if (global) global.routes = routes;
+
 $(document).ready(function() {
   new Vue({
     el: '#app',
@@ -89,7 +91,15 @@ $(document).ready(function() {
       redirectIfAuthCompleted() {
         if (!location.pathname.startsWith("/login")) {
           destUri = this.getCookie("AUTH_REDIRECT");
-          if (destUri && destUri != "/") {
+          if (destUri && destUri != "/" && 
+              !destUri.includes(".?v=") && 
+              !destUri.endsWith(".ico") && 
+              !destUri.endsWith(".js") && 
+              !destUri.endsWith(".css") &&
+              !destUri.endsWith(".png") &&
+              !destUri.endsWith(".svg") &&
+              !destUri.endsWith(".jpg") &&
+              !destUri.endsWith(".gif")) {
             this.log("Redirecting to auth destination: " + destUri);
             this.deleteCookie("AUTH_REDIRECT");
             location.pathname = destUri;
@@ -248,6 +258,9 @@ $(document).ready(function() {
         if (duration != null) {
           return moment.duration(duration,"s").humanize();
         }
+      },
+      formatCount(count) {
+        return Number(count).toLocaleString();
       },
       localizeMessage(origMsg) {
         var msg = origMsg;
@@ -547,6 +560,7 @@ $(document).ready(function() {
       this.loadLocalSettings();
       Vue.filter('formatDateTime', this.formatDateTime);
       Vue.filter('formatDuration', this.formatDuration);
+      Vue.filter('formatCount', this.formatCount);
       Vue.filter('formatTimestamp', this.formatTimestamp);
       $('#app')[0].style.display = "block";
       this.log("Initialization complete");

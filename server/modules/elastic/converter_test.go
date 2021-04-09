@@ -25,14 +25,20 @@ func NewTestStore() *ElasticEventstore {
 }
 
 func TestMakeAggregation(tester *testing.T) {
-  keys := []string{"one","two","three"}
-  agg := makeAggregation(NewTestStore(), "groupby|one", keys, 10, false)
+  keys := []string{"one*","two","three*"}
+  agg, name := makeAggregation(NewTestStore(), "groupby", keys, 10, false)
+  if name != "groupby|one" {
+    tester.Errorf("Expected aggregation name %s but got %s", "groupby|one", name)
+  }
   if agg["terms"] == nil {
     tester.Errorf("aggregation missing terms")
   }
   terms := agg["terms"].(map[string]interface{})
   if terms["field"] != "one" {
     tester.Errorf("Expected %s, Actual %s", "one", terms["field"])
+  }
+  if terms["missing"] != "__missing__" {
+    tester.Errorf("Expected %s, Actual %s", "__missing__", terms["missing"])
   }
   if terms["size"] != 10 {
     tester.Errorf("Expected %d, Actual %d", 10, terms["size"])
@@ -55,11 +61,26 @@ func TestMakeAggregation(tester *testing.T) {
   if secondAgg["aggs"] == nil {
     tester.Errorf("aggregation missing second level aggregations")
   }
+  terms = secondAgg["terms"].(map[string]interface{})
+  if terms["missing"] != nil {
+    tester.Errorf("Unexpected missing term, Actual %v", terms["missing"])
+  }
+
   thirdAggs := secondAgg["aggs"].(map[string]interface{})
   if thirdAggs["groupby|one|two|three"] == nil {
     tester.Errorf("Nested aggregation missing 'groupby|one|two|three' key")
   }
+  thirdAgg := thirdAggs["groupby|one|two|three"].(map[string]interface{})
+  if thirdAgg["aggs"] != nil {
+    tester.Errorf("third aggregation should not have another level aggregation")
+  }
+  terms = thirdAgg["terms"].(map[string]interface{})
+  if terms["missing"] != "__missing__" {
+    tester.Errorf("Expected third agg %s, Actual %s", "__missing__", terms["missing"])
+  }
+
 }
+
 
 func TestMakeTimeline(tester *testing.T) {
   timeline := makeTimeline("30m")
@@ -117,13 +138,13 @@ func TestConvertToElasticRequestEmptyCriteria(tester *testing.T) {
 
 func TestConvertToElasticRequestGroupByCriteria(tester *testing.T) {
   criteria := model.NewEventSearchCriteria()
-  criteria.Populate(`abc AND def AND q:"\\\\file\\path" | groupby ghi jkl`, "2020-01-02T12:13:14Z - 2020-01-02T13:13:14Z", time.RFC3339, "America/New_York", "10", "25")
+  criteria.Populate(`abc AND def AND q:"\\\\file\\path" | groupby ghi jkl*`, "2020-01-02T12:13:14Z - 2020-01-02T13:13:14Z", time.RFC3339, "America/New_York", "10", "25")
   actualJson, err := convertToElasticRequest(NewTestStore(), criteria)
   if err != nil {
     tester.Errorf("unexpected conversion error: %s", err)
   }
 
-  expectedJson := `{"aggs":{"bottom":{"terms":{"field":"ghi","order":{"_count":"asc"},"size":10}},"groupby|ghi":{"aggs":{"groupby|ghi|jkl":{"terms":{"field":"jkl","order":{"_count":"desc"},"size":10}}},"terms":{"field":"ghi","order":{"_count":"desc"},"size":10}},"timeline":{"date_histogram":{"field":"@timestamp","fixed_interval":"1m","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"abc AND def AND q: \"\\\\\\\\file\\\\path\""}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"2020-01-02T12:13:14Z","lte":"2020-01-02T13:13:14Z"}}}],"must_not":[],"should":[]}},"size":25}`
+  expectedJson := `{"aggs":{"bottom":{"terms":{"field":"ghi","order":{"_count":"asc"},"size":10}},"groupby|ghi":{"aggs":{"groupby|ghi|jkl":{"terms":{"field":"jkl","missing":"__missing__","order":{"_count":"desc"},"size":10}}},"terms":{"field":"ghi","order":{"_count":"desc"},"size":10}},"timeline":{"date_histogram":{"field":"@timestamp","fixed_interval":"1m","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"abc AND def AND q: \"\\\\\\\\file\\\\path\""}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"2020-01-02T12:13:14Z","lte":"2020-01-02T13:13:14Z"}}}],"must_not":[],"should":[]}},"size":25}`
   if actualJson != expectedJson {
     tester.Errorf("Mismatched ES request conversion; actual='%s' vs expected='%s'", actualJson, expectedJson)
   }

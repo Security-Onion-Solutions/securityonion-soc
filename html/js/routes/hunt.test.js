@@ -36,3 +36,8 @@ test('replaceActionVar', () => {
   expect(comp.replaceActionVar('test {foo} here', 'foo', null, true)).toBe('test {foo} here');
   expect(comp.replaceActionVar('test {foo} here', 'foo', undefined, true)).toBe('test {foo} here');
 });
+
+test('localizeValue', () => {
+  expect(comp.localizeValue('foo')).toBe('foo');
+  expect(comp.localizeValue('__missing__')).toBe('*Missing');
+});
