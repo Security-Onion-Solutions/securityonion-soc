@@ -325,4 +325,4 @@ const i18n = {
   },
 }
 
-if (global) global.i18n = i18n;
+if (typeof global !== 'undefined') global.i18n = i18n;

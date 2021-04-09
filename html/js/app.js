@@ -9,7 +9,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 const routes = [];
 
-if (global) global.routes = routes;
+if (typeof global !== 'undefined') global.routes = routes;
 
 $(document).ready(function() {
   new Vue({
