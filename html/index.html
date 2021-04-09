@@ -810,8 +810,8 @@
                     </router-link>
                   </td>
                   <td>{{ props.item.owner }}</td>
-                  <td>{{ props.item.createTime | formatDateTime }}</td>
-                  <td>{{ props.item | formatJobUpdateTime | formatDateTime }}</td>
+                  <td>{{ props.item.createTime | formatTimestamp }}</td>
+                  <td>{{ props.item | formatJobUpdateTime | formatTimestamp }}</td>
                   <td v-text="props.item.nodeId"></td>
                   <td><v-chip :color="props.item | colorJobStatus">{{ props.item | formatJobStatus }}</v-chip></td>
                   <td>
@@ -1039,13 +1039,17 @@
     <script type="text/x-template" id="page-grid">
       <v-container fluid>
         <v-row>
-          <v-col>
+          <v-col cols="9">
             <h2 v-text="i18n.grid"></h2>
+          </v-col>
+          <v-col cols="3" align="end">
+            <h4>{{ i18n.gridEps }} {{ gridEps | formatCount }}</h4>
           </v-col>
         </v-row>
         <v-row>
           <v-col>
-            <v-data-table :search="gridFilter" :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps" 
+            <v-data-table :search="gridFilter" :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" 
+              :expanded.sync="expanded" :footer-props="footerProps" show-expand
               :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="nodes">
               <template v-slot:top>
                 <v-container fluid>
@@ -1060,16 +1064,58 @@
               </template>
               <template v-slot:item="props">
                 <tr>
+                  <td>
+                    <v-btn id="expandNode" icon small @click="expand(props.item)">
+                      <v-icon v-if="isExpanded(props.item)" :alt="i18n.nodeExpand" :title="i18n.nodeExpandHelp">fa-angle-down</v-icon>
+                      <v-icon v-if="!isExpanded(props.item)" :alt="i18n.nodeExpand" :title="i18n.nodeExpandHelp">fa-angle-right</v-icon>
+                    </v-btn>
+                  </td>
                   <td v-text="props.item.id"></td>
                   <td v-text="$root.localizeMessage(props.item.role)"></td>
                   <td v-text="props.item.address"></td>
                   <td v-text="props.item.description"></td>
                   <td v-text="props.item.version"></td>
-                  <td>{{ props.item.onlineTime | formatDateTime }}</td>
-                  <td>{{ props.item.updateTime | formatDateTime }}</td>
-                  <td>{{ props.item.epochTime | formatDateTime }}</td>
+                  <td v-text="props.item.model"></td>
+                  <td v-text="props.item.eps"></td>
+                  <td>{{ props.item.updateTime | formatTimestamp }}</td>
+                  <td>{{ props.item.epochTime | formatTimestamp }}</td>
                   <td>{{ props.item.uptimeSeconds | formatDuration }}</td>
-                  <td><v-chip class="nodeStatus" :color="props.item.status | colorNodeStatus">{{ $root.localizeMessage(props.item.status) }}</v-chip></td>
+                  <td><v-chip class="nodeStatus" @click="expand(props.item)" :color="props.item.status | colorNodeStatus">{{ $root.localizeMessage(props.item.status) }}</v-chip></td>
+                </tr>
+              </template>
+              <template v-slot:expanded-item="{ item }">
+                <tr>
+                  <td :colspan="headers.length" class="px-0">
+                    <v-container fluid grid-list-sm class="pa-4">
+                      <v-row>
+                        <v-col>
+                          <img class="rounded-lg elevation-5" v-if="item.imageFront" :src="'images/appliances/' + item.imageFront">
+                          <span v-if="!item.imageFront">{{ i18n.nodeImageUnavailable }}</span>
+                        </v-col>
+                        <v-col>
+                          <img class="rounded-lg elevation-5" v-if="item.imageBack" :src="'images/appliances/' + item.imageBack">
+                        </v-col>
+                        <v-col>
+                          <div>
+                            <span class="filter label">{{ i18n.dateOnline }}:</span>
+                            <span class="filter value">{{ item.onlineTime | formatDateTime }}</span>
+                          </div>
+                          <div>
+                            <span class="filter label">{{ i18n.nodeStatusProcess }}:</span>
+                            <span class="filter value">{{ $root.localizeMessage(item.processStatus) }}</span>
+                          </div>
+                          <div>
+                            <span class="filter label">{{ i18n.nodeStatusConnection }}:</span>
+                            <span class="filter value">{{ $root.localizeMessage(item.connectionStatus) }}</span>
+                          </div>
+                          <div>
+                            <span class="filter label">{{ i18n.nodeStatusRaid }}:</span>
+                            <span class="filter value">{{ $root.localizeMessage(item.raidStatus) }}</span>
+                          </div>
+                        </v-col>
+                      </v-row>
+                    </v-container>
+                  </td>
                 </tr>
               </template>
             </v-data-table>

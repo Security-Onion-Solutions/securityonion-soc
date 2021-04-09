@@ -9,6 +9,8 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 const routes = [];
 
+if (typeof global !== 'undefined') global.routes = routes;
+
 $(document).ready(function() {
   new Vue({
     el: '#app',
@@ -89,7 +91,15 @@ $(document).ready(function() {
       redirectIfAuthCompleted() {
         if (!location.pathname.startsWith("/login")) {
           destUri = this.getCookie("AUTH_REDIRECT");
-          if (destUri && destUri != "/") {
+          if (destUri && destUri != "/" && 
+              !destUri.includes(".?v=") && 
+              !destUri.endsWith(".ico") && 
+              !destUri.endsWith(".js") && 
+              !destUri.endsWith(".css") &&
+              !destUri.endsWith(".png") &&
+              !destUri.endsWith(".svg") &&
+              !destUri.endsWith(".jpg") &&
+              !destUri.endsWith(".gif")) {
             this.log("Redirecting to auth destination: " + destUri);
             this.deleteCookie("AUTH_REDIRECT");
             location.pathname = destUri;
@@ -104,7 +114,7 @@ $(document).ready(function() {
           location.hash = '#' + redirectPage;
         }
       },
-      async loadServerSettings() {
+      async loadServerSettings(background) {
         // This version element ensures we're passed the login screen.
         if (document.getElementById("version")) {
           const now = Date.now()
@@ -147,7 +157,13 @@ $(document).ready(function() {
               }
               this.subscribe("status", this.updateStatus);
             } catch (error) {
-              this.showError(error);
+              if (!background) {
+                // Only show the error on initial startup, otherwise the error
+                // will appear without the user having initiated it and will
+                // lead to confusion. There's already a connectivity indicator
+                // on the nav bar for the purpose of showing connection state.
+                this.showError(error);
+              }
             }
           }
         }
@@ -239,9 +255,12 @@ $(document).ready(function() {
         return formatted;
       },
       formatDuration(duration) {
-        if (duration) {
+        if (duration != null) {
           return moment.duration(duration,"s").humanize();
         }
+      },
+      formatCount(count) {
+        return Number(count).toLocaleString();
       },
       localizeMessage(origMsg) {
         var msg = origMsg;
@@ -379,13 +398,15 @@ $(document).ready(function() {
         location.href = this.authUrl + "login/browser";
       },
       checkForUnauthorized(response) {
-        const redirectCookie = this.getCookie('AUTH_REDIRECT');
-        if ((response.headers && response.headers['content-type'] == "text/html") ||
-            (response.status == 401) ||
-            (redirectCookie != null && redirectCookie.length > 0)) {
-          this.deleteCookie('AUTH_REDIRECT');
-          this.showLogin();
-          return null
+          if (response) {
+          const redirectCookie = this.getCookie('AUTH_REDIRECT');
+          if ((response.headers && response.headers['content-type'] == "text/html") ||
+              (response.status == 401) ||
+              (redirectCookie != null && redirectCookie.length > 0)) {
+            this.deleteCookie('AUTH_REDIRECT');
+            this.showLogin();
+            return null
+          }
         }
         return response;
       },
@@ -517,7 +538,7 @@ $(document).ready(function() {
         }
         this.setFavicon();
         this.updateTitle();
-        this.loadServerSettings();
+        this.loadServerSettings(true);
       },
       isGridUnhealthy() {
         return this.currentStatus && this.currentStatus.grid.unhealthyNodeCount > 0
@@ -535,10 +556,11 @@ $(document).ready(function() {
       if (this.redirectRoute()) return;
       this.setupApi();
       this.setupAuth();
-      this.loadServerSettings();
+      this.loadServerSettings(false);
       this.loadLocalSettings();
       Vue.filter('formatDateTime', this.formatDateTime);
       Vue.filter('formatDuration', this.formatDuration);
+      Vue.filter('formatCount', this.formatCount);
       Vue.filter('formatTimestamp', this.formatTimestamp);
       $('#app')[0].style.display = "block";
       this.log("Initialization complete");

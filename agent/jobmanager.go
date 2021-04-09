@@ -33,10 +33,15 @@ func NewJobManager(agent *Agent) *JobManager {
     agent: agent,
     node: model.NewNode(agent.Config.NodeId),
   }
+
+  // Any field/value added to this list must be manually copied to the 
+  // existing node object in filedatastoreimpl.go::UpdateNode()
   mgr.node.Role = agent.Config.Role
   mgr.node.Description = agent.Config.Description
   mgr.node.Address = agent.Config.Address
   mgr.node.Version = agent.Version
+  mgr.node.Model = agent.Config.Model
+
   return mgr
 }
 
@@ -84,7 +89,6 @@ func (mgr *JobManager) Stop() {
 
 func (mgr *JobManager) PollPendingJobs() (*model.Job, error) {
   job := model.NewJob()
-  mgr.node.Status = model.NodeStatusOnline
   available, err := mgr.agent.Client.SendAuthorizedObject("POST", "/api/node", mgr.node, job)
   if !available {
     job = nil

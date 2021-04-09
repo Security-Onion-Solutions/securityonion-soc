@@ -23,6 +23,9 @@ func TestVerifyAgent(tester *testing.T) {
   if cfg.NodeId == "" {
     tester.Errorf("expected non-empty NodeId")
   }
+  if cfg.Model != "" {
+    tester.Errorf("expected blank model by default")
+  }
   if cfg.VerifyCert == true {
     tester.Errorf("expected VerifyCert to be false")
   }

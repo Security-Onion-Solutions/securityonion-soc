@@ -23,6 +23,7 @@ type AgentConfig struct {
   Role                            string                            `json:"role"`
   Description                     string                            `json:"description"`
   Address                         string                            `json:"address"`
+  Model                           string                            `json:"model"`
   ServerUrl                       string                            `json:"serverUrl"`
   VerifyCert                      bool                              `json:"verifyCert"`
   PollIntervalMs                  int                               `json:"pollIntervalMs"`
