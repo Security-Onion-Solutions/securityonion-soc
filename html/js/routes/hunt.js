@@ -486,6 +486,14 @@ const huntComponent = {
       for (var j = 0; j < data.length; j++) {
         if (data[j] == item) {
           Vue.delete(data, j);
+          if (item["count"]) {
+            this.totalEvents -= item["count"];
+          } else {
+            this.totalEvents--;
+          }
+          if (this.totalEvents < 0) {
+            this.totalEvents = 0;
+          }
           break;
         }
       }

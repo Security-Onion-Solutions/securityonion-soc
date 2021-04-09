@@ -34,6 +34,9 @@ global.Vue = function(obj) {
 	app = this;
 	Object.assign(app, obj.data, obj.methods);
 };
+global.Vue.delete = function(data, i) {
+	data.splice(i, 1);
+};
 global.Vuetify = function(obj) {};
 global.VueRouter = function(obj) {};
 

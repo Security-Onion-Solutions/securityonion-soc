@@ -41,3 +41,30 @@ test('localizeValue', () => {
   expect(comp.localizeValue('foo')).toBe('foo');
   expect(comp.localizeValue('__missing__')).toBe('*Missing');
 });
+
+test('removeDataFromView', () => {
+  const a = {};
+  const b = {};
+  const c = { count: 10 };
+  data = [a, b, c];
+  comp.totalEvents = 11;
+
+  comp.removeDataItemFromView(data, a);
+  expect(comp.totalEvents).toBe(10);
+  expect(data.length).toBe(2);
+
+  comp.removeDataItemFromView(data, c);
+  expect(comp.totalEvents).toBe(0);
+  expect(data.length).toBe(1);
+
+  // Removing non-existent item should be no-op
+  comp.removeDataItemFromView(data, a);
+  expect(comp.totalEvents).toBe(0);
+  expect(data.length).toBe(1);
+
+  // Ensure totalEvents never drops below 0 (shouldn't, but double check)
+  comp.removeDataItemFromView(data, b);
+  expect(comp.totalEvents).toBe(0);
+  expect(data.length).toBe(0);
+
+});
