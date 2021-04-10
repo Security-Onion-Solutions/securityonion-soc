@@ -58,13 +58,15 @@ func (metrics *InfluxDBMetrics) Init(hostUrl string,
   options.SetTLSConfig(&tls.Config{
     InsecureSkipVerify: !verifyCert,
   })
-  metrics.client = influxdb2.NewClientWithOptions(hostUrl, token, options)
+  if hostUrl != "" {
+    metrics.client = influxdb2.NewClientWithOptions(hostUrl, token, options)
+    metrics.queryApi = metrics.client.QueryAPI(org)
+  }
   metrics.bucket = bucket
   metrics.org = org
   metrics.cacheExpirationMs = cacheExpirationMs
   metrics.maxMetricAgeSeconds = maxMetricAgeSeconds
 
-  metrics.queryApi = metrics.client.QueryAPI(org)
   return nil
 }
 
@@ -105,7 +107,7 @@ func (metrics *InfluxDBMetrics) fetchLatestValuesByHost(measurement string, fiel
       log.WithError(err).Error("Unable to determine latest value")
     }
   } else {
-    log.Warn("Fetch failed due to disconnected InfluxDB client")
+    log.Info("Skipping InfluxDB fetch due to disconnected InfluxDB client")
   }
   return values
 }

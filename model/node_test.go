@@ -43,12 +43,14 @@ func TestSetModel(tester *testing.T) {
 }
 
 func testStatus(tester *testing.T, 
+                role string,
                 nodeStatus string,
                 connectionStatus string,
                 raidStatus string,
                 processStatus string,
                 expectedStatus string) {
   node := NewNode("")
+  node.Role = role
   node.Status = nodeStatus
   node.ConnectionStatus = connectionStatus
   node.RaidStatus = raidStatus
@@ -65,91 +67,115 @@ func testStatus(tester *testing.T,
 
 func TestUpdateNodeStatusAllUnknown(tester *testing.T) {
   // If all component statuses are unknown then the node's overall status is fault, regardless of current status.
-  testStatus(tester, NodeStatusUnknown, NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusOk,      NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusFault,   NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusUnknown, NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusOk,      NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusFault,   NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault)
 }
 
 func TestUpdateNodeStatusOneNotUnknown(tester *testing.T) {
   // If only one status is not unknown then must be in fault state.
-  testStatus(tester, NodeStatusUnknown, NodeStatusOk,       NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusUnknown, NodeStatusFault,    NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusUnknown, NodeStatusUnknown,  NodeStatusOk,       NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusUnknown, NodeStatusUnknown,  NodeStatusFault,    NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusUnknown, NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusOk,       NodeStatusFault)
-  testStatus(tester, NodeStatusUnknown, NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault,    NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusUnknown, NodeStatusOk,       NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusUnknown, NodeStatusFault,    NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusUnknown, NodeStatusUnknown,  NodeStatusOk,       NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusUnknown, NodeStatusUnknown,  NodeStatusFault,    NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusUnknown, NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusOk,       NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusUnknown, NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault,    NodeStatusFault)
 
-  testStatus(tester, NodeStatusOk,      NodeStatusOk,       NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusOk,      NodeStatusFault,    NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusOk,      NodeStatusUnknown,  NodeStatusOk,       NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusOk,      NodeStatusUnknown,  NodeStatusFault,    NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusOk,      NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusOk,       NodeStatusFault)
-  testStatus(tester, NodeStatusOk,      NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault,    NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusOk,      NodeStatusOk,       NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusOk,      NodeStatusFault,    NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusOk,      NodeStatusUnknown,  NodeStatusOk,       NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusOk,      NodeStatusUnknown,  NodeStatusFault,    NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusOk,      NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusOk,       NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusOk,      NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault,    NodeStatusFault)
 
-  testStatus(tester, NodeStatusFault,   NodeStatusOk,       NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusFault,   NodeStatusFault,    NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusFault,   NodeStatusUnknown,  NodeStatusOk,       NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusFault,   NodeStatusUnknown,  NodeStatusFault,    NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusFault,   NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusOk,       NodeStatusFault)
-  testStatus(tester, NodeStatusFault,   NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault,    NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusFault,   NodeStatusOk,       NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusFault,   NodeStatusFault,    NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusFault,   NodeStatusUnknown,  NodeStatusOk,       NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusFault,   NodeStatusUnknown,  NodeStatusFault,    NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusFault,   NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusOk,       NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusFault,   NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault,    NodeStatusFault)
+}
+
+func TestUpdateImportNodeStatusOneNotUnknown(tester *testing.T) {
+  // If only one status is not unknown then must be in fault state.
+  testStatus(tester, "so-import", NodeStatusUnknown, NodeStatusOk,       NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusOk)
+  testStatus(tester, "so-import", NodeStatusUnknown, NodeStatusFault,    NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-import", NodeStatusUnknown, NodeStatusUnknown,  NodeStatusOk,       NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-import", NodeStatusUnknown, NodeStatusUnknown,  NodeStatusFault,    NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-import", NodeStatusUnknown, NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusOk,       NodeStatusFault)
+  testStatus(tester, "so-import", NodeStatusUnknown, NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault,    NodeStatusFault)
+
+  testStatus(tester, "so-import", NodeStatusOk,      NodeStatusOk,       NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusOk)
+  testStatus(tester, "so-import", NodeStatusOk,      NodeStatusFault,    NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-import", NodeStatusOk,      NodeStatusUnknown,  NodeStatusOk,       NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-import", NodeStatusOk,      NodeStatusUnknown,  NodeStatusFault,    NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-import", NodeStatusOk,      NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusOk,       NodeStatusFault)
+  testStatus(tester, "so-import", NodeStatusOk,      NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault,    NodeStatusFault)
+
+  testStatus(tester, "so-import", NodeStatusFault,   NodeStatusOk,       NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusOk)
+  testStatus(tester, "so-import", NodeStatusFault,   NodeStatusFault,    NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-import", NodeStatusFault,   NodeStatusUnknown,  NodeStatusOk,       NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-import", NodeStatusFault,   NodeStatusUnknown,  NodeStatusFault,    NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-import", NodeStatusFault,   NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusOk,       NodeStatusFault)
+  testStatus(tester, "so-import", NodeStatusFault,   NodeStatusUnknown,  NodeStatusUnknown,  NodeStatusFault,    NodeStatusFault)
 }
 
 func TestUpdateNodeStatusMultipleNotUnknownOkFirst(tester *testing.T) {
   // If an earlier component status is Ok then the subsequent status becomes the overall status, regardless of current status.
-  testStatus(tester, NodeStatusUnknown, NodeStatusOk,       NodeStatusOk,      NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusUnknown, NodeStatusOk,       NodeStatusFault,   NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusUnknown, NodeStatusOk,       NodeStatusOk,      NodeStatusOk,       NodeStatusOk)
-  testStatus(tester, NodeStatusUnknown, NodeStatusOk,       NodeStatusOk,      NodeStatusFault,    NodeStatusFault)
-  testStatus(tester, NodeStatusUnknown, NodeStatusOk,       NodeStatusUnknown, NodeStatusOk,       NodeStatusOk)
-  testStatus(tester, NodeStatusUnknown, NodeStatusOk,       NodeStatusUnknown, NodeStatusFault,    NodeStatusFault)
-  testStatus(tester, NodeStatusUnknown, NodeStatusUnknown,  NodeStatusOk,      NodeStatusOk,       NodeStatusFault)
-  testStatus(tester, NodeStatusUnknown, NodeStatusUnknown,  NodeStatusOk,      NodeStatusFault,    NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusUnknown, NodeStatusOk,       NodeStatusOk,      NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusUnknown, NodeStatusOk,       NodeStatusFault,   NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusUnknown, NodeStatusOk,       NodeStatusOk,      NodeStatusOk,       NodeStatusOk)
+  testStatus(tester, "so-standalone", NodeStatusUnknown, NodeStatusOk,       NodeStatusOk,      NodeStatusFault,    NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusUnknown, NodeStatusOk,       NodeStatusUnknown, NodeStatusOk,       NodeStatusOk)
+  testStatus(tester, "so-standalone", NodeStatusUnknown, NodeStatusOk,       NodeStatusUnknown, NodeStatusFault,    NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusUnknown, NodeStatusUnknown,  NodeStatusOk,      NodeStatusOk,       NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusUnknown, NodeStatusUnknown,  NodeStatusOk,      NodeStatusFault,    NodeStatusFault)
 
-  testStatus(tester, NodeStatusOk,      NodeStatusOk,       NodeStatusOk,      NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusOk,      NodeStatusOk,       NodeStatusFault,   NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusOk,      NodeStatusOk,       NodeStatusOk,      NodeStatusOk,       NodeStatusOk)
-  testStatus(tester, NodeStatusOk,      NodeStatusOk,       NodeStatusOk,      NodeStatusFault,    NodeStatusFault)
-  testStatus(tester, NodeStatusOk,      NodeStatusOk,       NodeStatusUnknown, NodeStatusOk,       NodeStatusOk)
-  testStatus(tester, NodeStatusOk,      NodeStatusOk,       NodeStatusUnknown, NodeStatusFault,    NodeStatusFault)
-  testStatus(tester, NodeStatusOk,      NodeStatusUnknown,  NodeStatusOk,      NodeStatusOk,       NodeStatusFault)
-  testStatus(tester, NodeStatusOk,      NodeStatusUnknown,  NodeStatusOk,      NodeStatusFault,    NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusOk,      NodeStatusOk,       NodeStatusOk,      NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusOk,      NodeStatusOk,       NodeStatusFault,   NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusOk,      NodeStatusOk,       NodeStatusOk,      NodeStatusOk,       NodeStatusOk)
+  testStatus(tester, "so-standalone", NodeStatusOk,      NodeStatusOk,       NodeStatusOk,      NodeStatusFault,    NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusOk,      NodeStatusOk,       NodeStatusUnknown, NodeStatusOk,       NodeStatusOk)
+  testStatus(tester, "so-standalone", NodeStatusOk,      NodeStatusOk,       NodeStatusUnknown, NodeStatusFault,    NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusOk,      NodeStatusUnknown,  NodeStatusOk,      NodeStatusOk,       NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusOk,      NodeStatusUnknown,  NodeStatusOk,      NodeStatusFault,    NodeStatusFault)
 
-  testStatus(tester, NodeStatusFault,   NodeStatusOk,       NodeStatusOk,      NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusFault,   NodeStatusOk,       NodeStatusFault,   NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusFault,   NodeStatusOk,       NodeStatusOk,      NodeStatusOk,       NodeStatusOk)
-  testStatus(tester, NodeStatusFault,   NodeStatusOk,       NodeStatusOk,      NodeStatusFault,    NodeStatusFault)
-  testStatus(tester, NodeStatusFault,   NodeStatusOk,       NodeStatusUnknown, NodeStatusOk,       NodeStatusOk)
-  testStatus(tester, NodeStatusFault,   NodeStatusOk,       NodeStatusUnknown, NodeStatusFault,    NodeStatusFault)
-  testStatus(tester, NodeStatusFault,   NodeStatusUnknown,  NodeStatusOk,      NodeStatusOk,       NodeStatusFault)
-  testStatus(tester, NodeStatusFault,   NodeStatusUnknown,  NodeStatusOk,      NodeStatusFault,    NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusFault,   NodeStatusOk,       NodeStatusOk,      NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusFault,   NodeStatusOk,       NodeStatusFault,   NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusFault,   NodeStatusOk,       NodeStatusOk,      NodeStatusOk,       NodeStatusOk)
+  testStatus(tester, "so-standalone", NodeStatusFault,   NodeStatusOk,       NodeStatusOk,      NodeStatusFault,    NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusFault,   NodeStatusOk,       NodeStatusUnknown, NodeStatusOk,       NodeStatusOk)
+  testStatus(tester, "so-standalone", NodeStatusFault,   NodeStatusOk,       NodeStatusUnknown, NodeStatusFault,    NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusFault,   NodeStatusUnknown,  NodeStatusOk,      NodeStatusOk,       NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusFault,   NodeStatusUnknown,  NodeStatusOk,      NodeStatusFault,    NodeStatusFault)
 }
 
 func TestUpdateNodeStatusMultipleNotUnknownFaultFirst(tester *testing.T) {
   // If an earlier component status is Fault then the subsequent status remains Fault, regardless of current status.
-  testStatus(tester, NodeStatusUnknown, NodeStatusFault,    NodeStatusOk,      NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusUnknown, NodeStatusFault,    NodeStatusFault,   NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusUnknown, NodeStatusFault,    NodeStatusOk,      NodeStatusOk,       NodeStatusFault)
-  testStatus(tester, NodeStatusUnknown, NodeStatusFault,    NodeStatusOk,      NodeStatusFault,    NodeStatusFault)
-  testStatus(tester, NodeStatusUnknown, NodeStatusFault,    NodeStatusUnknown, NodeStatusOk,       NodeStatusFault)
-  testStatus(tester, NodeStatusUnknown, NodeStatusFault,    NodeStatusUnknown, NodeStatusFault,    NodeStatusFault)
-  testStatus(tester, NodeStatusUnknown, NodeStatusUnknown,  NodeStatusFault,   NodeStatusOk,       NodeStatusFault)
-  testStatus(tester, NodeStatusUnknown, NodeStatusUnknown,  NodeStatusFault,   NodeStatusFault,    NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusUnknown, NodeStatusFault,    NodeStatusOk,      NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusUnknown, NodeStatusFault,    NodeStatusFault,   NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusUnknown, NodeStatusFault,    NodeStatusOk,      NodeStatusOk,       NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusUnknown, NodeStatusFault,    NodeStatusOk,      NodeStatusFault,    NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusUnknown, NodeStatusFault,    NodeStatusUnknown, NodeStatusOk,       NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusUnknown, NodeStatusFault,    NodeStatusUnknown, NodeStatusFault,    NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusUnknown, NodeStatusUnknown,  NodeStatusFault,   NodeStatusOk,       NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusUnknown, NodeStatusUnknown,  NodeStatusFault,   NodeStatusFault,    NodeStatusFault)
   
-  testStatus(tester, NodeStatusOk,      NodeStatusFault,    NodeStatusOk,      NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusOk,      NodeStatusFault,    NodeStatusFault,   NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusOk,      NodeStatusFault,    NodeStatusOk,      NodeStatusOk,       NodeStatusFault)
-  testStatus(tester, NodeStatusOk,      NodeStatusFault,    NodeStatusOk,      NodeStatusFault,    NodeStatusFault)
-  testStatus(tester, NodeStatusOk,      NodeStatusFault,    NodeStatusUnknown, NodeStatusOk,       NodeStatusFault)
-  testStatus(tester, NodeStatusOk,      NodeStatusFault,    NodeStatusUnknown, NodeStatusFault,    NodeStatusFault)
-  testStatus(tester, NodeStatusOk,      NodeStatusUnknown,  NodeStatusFault,   NodeStatusOk,       NodeStatusFault)
-  testStatus(tester, NodeStatusOk,      NodeStatusUnknown,  NodeStatusFault,   NodeStatusFault,    NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusOk,      NodeStatusFault,    NodeStatusOk,      NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusOk,      NodeStatusFault,    NodeStatusFault,   NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusOk,      NodeStatusFault,    NodeStatusOk,      NodeStatusOk,       NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusOk,      NodeStatusFault,    NodeStatusOk,      NodeStatusFault,    NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusOk,      NodeStatusFault,    NodeStatusUnknown, NodeStatusOk,       NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusOk,      NodeStatusFault,    NodeStatusUnknown, NodeStatusFault,    NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusOk,      NodeStatusUnknown,  NodeStatusFault,   NodeStatusOk,       NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusOk,      NodeStatusUnknown,  NodeStatusFault,   NodeStatusFault,    NodeStatusFault)
   
-  testStatus(tester, NodeStatusFault,   NodeStatusFault,    NodeStatusOk,      NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusFault,   NodeStatusFault,    NodeStatusFault,   NodeStatusUnknown,  NodeStatusFault)
-  testStatus(tester, NodeStatusFault,   NodeStatusFault,    NodeStatusOk,      NodeStatusOk,       NodeStatusFault)
-  testStatus(tester, NodeStatusFault,   NodeStatusFault,    NodeStatusOk,      NodeStatusFault,    NodeStatusFault)
-  testStatus(tester, NodeStatusFault,   NodeStatusFault,    NodeStatusUnknown, NodeStatusOk,       NodeStatusFault)
-  testStatus(tester, NodeStatusFault,   NodeStatusFault,    NodeStatusUnknown, NodeStatusFault,    NodeStatusFault)
-  testStatus(tester, NodeStatusFault,   NodeStatusUnknown,  NodeStatusFault,   NodeStatusOk,       NodeStatusFault)
-  testStatus(tester, NodeStatusFault,   NodeStatusUnknown,  NodeStatusFault,   NodeStatusFault,    NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusFault,   NodeStatusFault,    NodeStatusOk,      NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusFault,   NodeStatusFault,    NodeStatusFault,   NodeStatusUnknown,  NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusFault,   NodeStatusFault,    NodeStatusOk,      NodeStatusOk,       NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusFault,   NodeStatusFault,    NodeStatusOk,      NodeStatusFault,    NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusFault,   NodeStatusFault,    NodeStatusUnknown, NodeStatusOk,       NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusFault,   NodeStatusFault,    NodeStatusUnknown, NodeStatusFault,    NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusFault,   NodeStatusUnknown,  NodeStatusFault,   NodeStatusOk,       NodeStatusFault)
+  testStatus(tester, "so-standalone", NodeStatusFault,   NodeStatusUnknown,  NodeStatusFault,   NodeStatusFault,    NodeStatusFault)
 }

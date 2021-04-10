@@ -84,8 +84,8 @@ func (node *Node) UpdateOverallStatus() bool {
   newStatus = node.updateStatusComponent(newStatus, node.ProcessStatus)
 
   // Special case: If either process or connection status is unknown then show node in error state.
-  if node.ProcessStatus == NodeStatusUnknown ||
-     node.ConnectionStatus == NodeStatusUnknown {
+  if (node.Role != "so-import" && node.ProcessStatus == NodeStatusUnknown) || 
+      node.ConnectionStatus == NodeStatusUnknown {
     newStatus = NodeStatusFault
   }
 

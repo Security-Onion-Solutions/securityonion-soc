@@ -17,6 +17,7 @@ import (
 func TestInfluxDBInit(tester *testing.T) {
   influxdb := NewInfluxDB(nil)
   cfg := make(module.ModuleConfig)
+  cfg["hostUrl"] = "http://some.where"
   cfg["org"] = "testorg"
   cfg["bucket"] = "testbucket"
   cfg["cacheExpirationMs"] = float64(12345)
@@ -38,9 +39,34 @@ func TestInfluxDBInit(tester *testing.T) {
   }
 }
 
+func TestInfluxDBInitNoUrl(tester *testing.T) {
+  influxdb := NewInfluxDB(nil)
+  cfg := make(module.ModuleConfig)
+  cfg["org"] = "testorg"
+  cfg["bucket"] = "testbucket"
+  cfg["cacheExpirationMs"] = float64(12345)
+  err := influxdb.Init(cfg)
+  if err != nil {
+    tester.Errorf("unexpected Init error: %s", err)
+  }
+  if influxdb.metrics.org != "testorg" {
+    tester.Errorf("Expected testorg")
+  }
+  if influxdb.metrics.bucket != "testbucket" {
+    tester.Errorf("Expected testbucket")
+  }
+  if influxdb.metrics.cacheExpirationMs != 12345 {
+    tester.Errorf("Expected cacheExpirationMs to be overriden")
+  }
+  if influxdb.metrics.queryApi != nil {
+    tester.Errorf("Expected unconstructed queryApi")
+  }
+}
+
 func TestInfluxDBInitDefaults(tester *testing.T) {
   influxdb := NewInfluxDB(nil)
   cfg := make(module.ModuleConfig)
+  cfg["hostUrl"] = "http://some.where"
   err := influxdb.Init(cfg)
   if err != nil {
     tester.Errorf("unexpected Init error: %s", err)
@@ -62,6 +88,7 @@ func TestInfluxDBInitDefaults(tester *testing.T) {
 func TestInfluxDBStop(tester *testing.T) {
   influxdb := NewInfluxDB(nil)
   cfg := make(module.ModuleConfig)
+  cfg["hostUrl"] = "http://some.where"
   influxdb.Init(cfg)
   if !influxdb.IsRunning() {
   	tester.Errorf("Expected IsRunning = true")
