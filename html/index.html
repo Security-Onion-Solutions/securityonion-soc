@@ -1076,7 +1076,7 @@
                   <td v-text="props.item.description"></td>
                   <td v-text="props.item.version"></td>
                   <td v-text="props.item.model"></td>
-                  <td v-text="props.item.eps"></td>
+                  <td>{{ props.item.productionEps | formatCount }}</td>
                   <td>{{ props.item.updateTime | formatTimestamp }}</td>
                   <td>{{ props.item.epochTime | formatTimestamp }}</td>
                   <td>{{ props.item.uptimeSeconds | formatDuration }}</td>
@@ -1097,19 +1097,31 @@
                         </v-col>
                         <v-col>
                           <div>
-                            <span class="filter label">{{ i18n.dateOnline }}:</span>
+                            <span class="filter label">{{ i18n.dateOnline }}</span>
                             <span class="filter value">{{ item.onlineTime | formatDateTime }}</span>
                           </div>
                           <div>
-                            <span class="filter label">{{ i18n.nodeStatusProcess }}:</span>
+                            <span class="filter label">{{ i18n.epsProduction }}</span>
+                            <span class="filter value">{{ item.productionEps | formatCount }}</span>
+                          </div>
+                          <div>
+                            <span class="filter label">{{ i18n.epsConsumption }}</span>
+                            <span class="filter value">{{ item.consumptionEps | formatCount }}</span>
+                          </div>
+                          <div>
+                            <span class="filter label">{{ i18n.failedEvents }}:</span>
+                            <span class="filter value">{{ item.failedEvents | formatCount }}</span>
+                          </div>
+                          <div>
+                            <span class="filter label">{{ i18n.nodeStatusProcess }}</span>
                             <span class="filter value">{{ $root.localizeMessage(item.processStatus) }}</span>
                           </div>
                           <div>
-                            <span class="filter label">{{ i18n.nodeStatusConnection }}:</span>
+                            <span class="filter label">{{ i18n.nodeStatusConnection }}</span>
                             <span class="filter value">{{ $root.localizeMessage(item.connectionStatus) }}</span>
                           </div>
                           <div>
-                            <span class="filter label">{{ i18n.nodeStatusRaid }}:</span>
+                            <span class="filter label">{{ i18n.nodeStatusRaid }}</span>
                             <span class="filter value">{{ $root.localizeMessage(item.raidStatus) }}</span>
                           </div>
                         </v-col>

@@ -75,23 +75,59 @@ func TestGetProcessStatus(tester *testing.T) {
 	}
 }
 
-func TestGetEps(tester *testing.T) {
+func TestGetProductionEps(tester *testing.T) {
 	metrics := NewInfluxDBMetrics()
 	metrics.lastEpsUpdateTime = time.Now()
-	metrics.eps["foo"] = 0
-	metrics.eps["bar"] = 1
-	metrics.eps["zoo"] = 2
+	metrics.productionEps["foo"] = 0
+	metrics.productionEps["bar"] = 1
+	metrics.productionEps["zoo"] = 2
 
-	if metrics.getEps("foo") != 0 {
-		tester.Errorf("Expected 0 but got %d", metrics.getEps("foo"))
+	if metrics.getProductionEps("foo") != 0 {
+		tester.Errorf("Expected 0 but got %d", metrics.getProductionEps("foo"))
 	}
-	if metrics.getEps("bar") != 1 {
-		tester.Errorf("Expected 1 but got %d", metrics.getEps("bar"))
+	if metrics.getProductionEps("bar") != 1 {
+		tester.Errorf("Expected 1 but got %d", metrics.getProductionEps("bar"))
 	}
-	if metrics.getEps("zoo") != 2 {
-		tester.Errorf("Expected 2 but got %d", metrics.getEps("zoo"))
+	if metrics.getProductionEps("zoo") != 2 {
+		tester.Errorf("Expected 2 but got %d", metrics.getProductionEps("zoo"))
+	}
+}
+
+func TestGetConsumptionEps(tester *testing.T) {
+	metrics := NewInfluxDBMetrics()
+	metrics.lastEpsUpdateTime = time.Now()
+	metrics.consumptionEps["foo"] = 0
+	metrics.consumptionEps["bar"] = 1
+	metrics.consumptionEps["zoo"] = 2
+
+	if metrics.getConsumptionEps("foo") != 0 {
+		tester.Errorf("Expected 0 but got %d", metrics.getConsumptionEps("foo"))
+	}
+	if metrics.getConsumptionEps("bar") != 1 {
+		tester.Errorf("Expected 1 but got %d", metrics.getConsumptionEps("bar"))
+	}
+	if metrics.getConsumptionEps("zoo") != 2 {
+		tester.Errorf("Expected 2 but got %d", metrics.getConsumptionEps("zoo"))
 	}
 	if metrics.GetGridEps() != 3 {
 		tester.Errorf("Expected 3 but got %d", metrics.GetGridEps())
+	}
+}
+
+func TestGetFailedEvents(tester *testing.T) {
+	metrics := NewInfluxDBMetrics()
+	metrics.lastEpsUpdateTime = time.Now()
+	metrics.failedEvents["foo"] = 0
+	metrics.failedEvents["bar"] = 1
+	metrics.failedEvents["zoo"] = 2
+
+	if metrics.getFailedEvents("foo") != 0 {
+		tester.Errorf("Expected 0 but got %d", metrics.getFailedEvents("foo"))
+	}
+	if metrics.getFailedEvents("bar") != 1 {
+		tester.Errorf("Expected 1 but got %d", metrics.getFailedEvents("bar"))
+	}
+	if metrics.getFailedEvents("zoo") != 2 {
+		tester.Errorf("Expected 2 but got %d", metrics.getFailedEvents("zoo"))
 	}
 }

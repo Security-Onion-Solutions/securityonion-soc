@@ -36,14 +36,18 @@ type InfluxDBMetrics struct {
   lastEpsUpdateTime     time.Time
   raidStatus            map[string]int
   processStatus         map[string]int
-  eps                   map[string]int
+  consumptionEps        map[string]int
+  productionEps         map[string]int
+  failedEvents          map[string]int
 }
 
 func NewInfluxDBMetrics() *InfluxDBMetrics {
   return &InfluxDBMetrics{
     raidStatus: make(map[string]int),
     processStatus: make(map[string]int),
-    eps: make(map[string]int),
+    consumptionEps: make(map[string]int),
+    productionEps: make(map[string]int),
+    failedEvents: make(map[string]int),
   }
 }
 
@@ -168,7 +172,14 @@ func (metrics *InfluxDBMetrics) updateEps() {
   now := time.Now()
   if now.Sub(metrics.lastEpsUpdateTime).Milliseconds() > int64(metrics.cacheExpirationMs) {
     values := metrics.fetchLatestValuesByHost("esteps", "eps")
-    metrics.eps = metrics.convertValuesToInt(values)
+    metrics.consumptionEps = metrics.convertValuesToInt(values)
+
+    values = metrics.fetchLatestValuesByHost("fbstats", "eps")
+    metrics.productionEps = metrics.convertValuesToInt(values)
+
+    values = metrics.fetchLatestValuesByHost("fbstats", "failed")
+    metrics.failedEvents = metrics.convertValuesToInt(values)
+
     metrics.lastEpsUpdateTime = now
   }
 }
@@ -203,18 +214,29 @@ func (metrics *InfluxDBMetrics) getProcessStatus(host string) string {
   return status
 }
 
-func (metrics *InfluxDBMetrics) getEps(host string) int {
+func (metrics *InfluxDBMetrics) getProductionEps(host string) int {
   metrics.updateEps()
 
-  return metrics.eps[host]
+  return metrics.productionEps[host]
 }
 
+func (metrics *InfluxDBMetrics) getConsumptionEps(host string) int {
+  metrics.updateEps()
+
+  return metrics.consumptionEps[host]
+}
+
+func (metrics *InfluxDBMetrics) getFailedEvents(host string) int {
+  metrics.updateEps()
+
+  return metrics.failedEvents[host]
+}
 
 func (metrics *InfluxDBMetrics) GetGridEps() int {
   metrics.updateEps()
 
   eps := 0
-  for _, hostEps := range metrics.eps {
+  for _, hostEps := range metrics.consumptionEps {
     eps = eps + hostEps
   }
 
@@ -224,6 +246,8 @@ func (metrics *InfluxDBMetrics) GetGridEps() int {
 func (metrics *InfluxDBMetrics) UpdateNodeMetrics(node *model.Node) bool {
   node.RaidStatus = metrics.getRaidStatus(node.Id)
   node.ProcessStatus = metrics.getProcessStatus(node.Id)
-  node.Eps = metrics.getEps(node.Id)
+  node.ProductionEps = metrics.getProductionEps(node.Id)
+  node.ConsumptionEps = metrics.getConsumptionEps(node.Id)
+  node.FailedEvents = metrics.getFailedEvents(node.Id)
   return node.UpdateOverallStatus()
 }

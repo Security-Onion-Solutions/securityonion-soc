@@ -35,7 +35,9 @@ type Node struct {
   ConnectionStatus        string    `json:"connectionStatus"`
   RaidStatus              string    `json:"raidStatus"`
   ProcessStatus           string    `json:"processStatus"`
-  Eps                     int       `json:"eps"`
+  ProductionEps           int       `json:"productionEps"`
+  ConsumptionEps          int       `json:"consumptionEps"`
+  FailedEvents            int       `json:"failedEvents"`
 }
 
 func NewNode(id string) *Node {
