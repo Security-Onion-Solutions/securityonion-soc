@@ -21,7 +21,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       { text: this.$root.i18n.id, value: 'id' },
       { text: this.$root.i18n.owner, value: 'owner' },
       { text: this.$root.i18n.dateQueued, value: 'createTime' },
-      { text: this.$root.i18n.dateUpdated, value: 'updateTime' },
+      { text: this.$root.i18n.dateCompleted, value: 'completeTime' },
       { text: this.$root.i18n.sensorId, value: 'sensorId' },
       { text: this.$root.i18n.status, value: 'status' },
       { text: this.$root.i18n.actions },
@@ -45,7 +45,6 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
   }},
   created() {
     Vue.filter('formatJobStatus', this.formatJobStatus);
-    Vue.filter('formatJobUpdateTime', this.formatJobUpdateTime);
     Vue.filter('colorJobStatus', this.colorJobStatus);
     this.loadData();
   },
@@ -177,15 +176,6 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       } catch (error) {
          this.$root.showError(error);
       }
-    },
-    formatJobUpdateTime(job) {
-      var time = "";
-      if (job.status == JobStatusCompleted) {
-        time = job.completeTime;
-      } else if (job.status == JobStatusIncomplete) {
-        time = job.failTime;
-      }
-      return time;
     },
     formatJobStatus(job) {
       var status = this.i18n.pending;

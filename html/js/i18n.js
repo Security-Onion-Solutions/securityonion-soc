@@ -64,6 +64,7 @@ const i18n = {
       darkMode: 'Dark Mode',
       dateDataEpoch: 'Data Epoch',
       dateCompleted: 'Date Completed',
+      dateFailed: 'Date Failed',
       dateOnline: 'Online Since:',
       dateQueued: 'Date Queued',
       dateTimeFormat: 'lll',

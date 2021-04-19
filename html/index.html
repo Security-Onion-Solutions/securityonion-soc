@@ -811,7 +811,7 @@
                   </td>
                   <td>{{ props.item.owner }}</td>
                   <td>{{ props.item.createTime | formatTimestamp }}</td>
-                  <td>{{ props.item | formatJobUpdateTime | formatTimestamp }}</td>
+                  <td>{{ props.item.completeTime | formatTimestamp }}</td>
                   <td v-text="props.item.nodeId"></td>
                   <td><v-chip :color="props.item | colorJobStatus">{{ props.item | formatJobStatus }}</v-chip></td>
                   <td>
@@ -936,6 +936,10 @@
                         <div>
                           <span class="filter label">{{ i18n.dateCompleted }}:</span>
                           <span v-if="job.filter" class="filter value">{{ job.completeTime | formatDateTime}}</span>
+                        </div>
+                        <div>
+                          <span class="filter label">{{ i18n.dateFailed }}:</span>
+                          <span v-if="job.filter" class="filter value">{{ job.failTime | formatDateTime}}</span>
                         </div>
                         <div>
                           <span class="filter label">{{ i18n.beginTime }}:</span>
