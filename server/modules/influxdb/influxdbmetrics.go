@@ -171,7 +171,7 @@ func (metrics *InfluxDBMetrics) updateEps() {
   defer metrics.cacheLock.Unlock()
   now := time.Now()
   if now.Sub(metrics.lastEpsUpdateTime).Milliseconds() > int64(metrics.cacheExpirationMs) {
-    values := metrics.fetchLatestValuesByHost("esteps", "eps")
+    values := metrics.fetchLatestValuesByHost("consumptioneps", "eps")
     metrics.consumptionEps = metrics.convertValuesToInt(values)
 
     values = metrics.fetchLatestValuesByHost("fbstats", "eps")
