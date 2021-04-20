@@ -62,7 +62,7 @@ const i18n = {
       copyFieldToClipboard: 'Copy this field only',
       custom: 'Custom',
       darkMode: 'Dark Mode',
-      dateDataEpoch: 'Data Epoch',
+      dateDataEpoch: 'Earliest PCAP',
       dateCompleted: 'Date Completed',
       dateFailed: 'Date Failed',
       dateOnline: 'Online Since:',
