@@ -16,6 +16,7 @@ test('escape', () => {
   expect(comp.escape('')).toBe('');
   expect(comp.escape('hello')).toBe('hello');
   expect(comp.escape('hello "bob" the builder\\bricklayer')).toBe('hello \\\"bob\\\" the builder\\\\bricklayer');
+  expect(comp.escape(1234)).toBe(1234);
 });
 
 test('base64encode', () => {

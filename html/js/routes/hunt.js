@@ -763,8 +763,14 @@ const huntComponent = {
       return content;
     },
     escape(content) {
-      content = content.replace(/\\/g, "\\\\");
-      content = content.replace(/\"/g, "\\\"");
+      if (content.replace) {
+        try {
+          content = content.replace(/\\/g, "\\\\");
+          content = content.replace(/\"/g, "\\\"");
+        } catch (e) {
+          console.error("Failed to escape content: " + e);
+        }
+      }
       return content
     },
     replaceActionVar(content, field, value, uriEncode) {
