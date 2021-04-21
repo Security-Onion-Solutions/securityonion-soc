@@ -406,7 +406,7 @@
         <v-row v-if="metricsEnabled">
           <v-col cols="12">
             <v-data-table :search="groupByFilter" dense :sort-by.sync="groupBySortBy" :sort-desc.sync="groupBySortDesc" :footer-props="groupByFooters" 
-              :items-per-page.sync="groupByItemsPerPage" must-sort :headers="groupByHeaders" :items="groupByData" :page.sync="groupByPage">
+              :items-per-page.sync="groupByItemsPerPage" must-sort :headers="groupByHeaders" :items="groupByData" :page.sync="groupByPage" :custom-sort="sortEvents">
               <template v-slot:top v-if="isAdvanced()">
                 <v-container fluid>
                   <v-row>
@@ -453,7 +453,7 @@
         <v-row v-if="loaded && eventsEnabled && (isAdvanced() || !metricsEnabled)">
           <v-col cols="12">
             <v-data-table :search="eventFilter" :sort-by.sync="sortBy" item-key="soc_id" :expanded.sync="expanded" :sort-desc.sync="sortDesc" :footer-props="footerProps" 
-              :items-per-page.sync="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" show-expand :page.sync="eventPage">
+              :items-per-page.sync="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" show-expand :page.sync="eventPage" :custom-sort="sortEvents">
               <template v-slot:top v-if="isAdvanced()">
                 <v-container fluid>
                   <v-row>

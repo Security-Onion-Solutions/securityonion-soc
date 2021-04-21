@@ -1142,6 +1142,41 @@ const huntComponent = {
       if (value == "critical_false") return "red darken-4";
       return "secondary";      
     },
+    lookupAlertSeverityScore(sev) {
+      if (sev.toLowerCase) {
+        sev = sev.toLowerCase();
+        switch (sev) {
+          case 'critical': sev = 400; break;
+          case 'high': sev = 300; break;
+          case 'medium': sev = 200; break;
+          case 'low': sev = 100; break;
+        }
+      }
+      return sev
+    },
+    defaultSort(a, b, isDesc) {
+      if (!isDesc) {
+        return a < b ? -1 : 1;
+      }
+      return b < a ? -1 : 1;
+    },
+    sortEvents(items, index, isDesc) {
+      const route = this;
+      if (index && index.length > 0) {
+        index = index[0];
+      }
+      if (isDesc && isDesc.length > 0) {
+        isDesc = isDesc[0];
+      }
+      items.sort((a, b) => {
+        if (index === "event.severity_label") {
+          return route.defaultSort(route.lookupAlertSeverityScore(a[index]), route.lookupAlertSeverityScore(b[index]), isDesc);
+        } else {
+          return route.defaultSort(a[index], b[index], isDesc);
+        }
+      });
+      return items
+    },
     switchToHunt() {
       this.category = "hunt";
       this.hunt();
