@@ -828,7 +828,7 @@ const huntComponent = {
       return fields;
     },
     localizeValue(value) {
-      if (value.startsWith("__")) {
+      if (value.startsWith && value.startsWith("__")) {
         value = this.$root.localizeMessage(value);
       }
       return value;

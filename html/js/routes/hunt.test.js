@@ -41,6 +41,7 @@ test('replaceActionVar', () => {
 test('localizeValue', () => {
   expect(comp.localizeValue('foo')).toBe('foo');
   expect(comp.localizeValue('__missing__')).toBe('*Missing');
+  expect(comp.localizeValue(123)).toBe(123);
 });
 
 test('removeDataFromView', () => {
