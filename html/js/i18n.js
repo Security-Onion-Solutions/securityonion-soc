@@ -282,7 +282,7 @@ const i18n = {
       timezone: 'Time Zone:',
       toolCyberchef: 'CyberChef',
       toolCyberchefHelp: 'Data decoding and transformation tools',
-      toolFleet: 'Fleet DM',
+      toolFleet: 'FleetDM',
       toolFleetHelp: 'Osquery Fleet Management',
       toolGrafana: 'Grafana',
       toolGrafanaHelp: 'Visualize Security Onion metrics',
