@@ -11,25 +11,41 @@
 package json
 
 import (
-  "os"
-  "testing"
+	"os"
+	"testing"
 )
 
 func TestJson(tester *testing.T) {
-  testFile := "/tmp/sensoroni_test.json"
-  defer os.Remove(testFile)
-  obj := make(map[string]string)
-  obj["MyKey"] = "MyValue"
-  err := WriteJsonFile(testFile, obj)
-  if err != nil {
-    tester.Errorf("unexpected write error")
-  }
-  obj = make(map[string]string)
-  err = LoadJsonFile(testFile, &obj)
-  if err != nil {
-    tester.Errorf("unexpected load error")
-  }
-  if obj["MyKey"] != "MyValue" {
-    tester.Errorf("expected value %s but got %s", "MyValue", obj["MyKey"])
-  }
+	testFile := "/tmp/sensoroni_test.json"
+	defer func(name string) {
+		err := os.Remove(name)
+		if err != nil {
+			tester.Errorf("unexpected error attempting to remove the file.")
+		}
+	}(testFile)
+	obj := make(map[string]string)
+	obj["MyKey"] = "MyValue"
+	err := WriteJsonFile(testFile, obj)
+	if err != nil {
+		tester.Errorf("unexpected write error")
+	}
+	err = LoadJsonFile(testFile, &obj)
+	if err != nil {
+		tester.Errorf("unexpected load error")
+	}
+	if obj["MyKey"] != "MyValue" {
+		tester.Errorf("expected value %s but got %s", "MyValue", obj["MyKey"])
+	}
+	err = LoadJson([]byte("{\"test: \"test\"}"), &obj)
+	if err == nil {
+		tester.Errorf("Expected a load error")
+	}
+	err = LoadJson([]byte("{\"test\": false}"), &obj)
+	if err == nil {
+		tester.Errorf("Expected load error")
+	}
+	errr := WriteJsonFile("test"+testFile, obj)
+	if errr == nil {
+		tester.Errorf("Expected write error")
+	}
 }
