@@ -11,8 +11,8 @@
 package web
 
 import (
-  "testing"
-  "time"
+	"testing"
+	"time"
 )
 
 func TestHandlePingMessage(tester *testing.T) {
@@ -20,7 +20,7 @@ func TestHandlePingMessage(tester *testing.T) {
 	conn := NewConnection(nil, "")
 	oldPingTime := conn.lastPingTime
 	time.Sleep(3 * time.Millisecond)
-	msg := &WebSocketMessage{ Kind: "Ping" }
+	msg := &WebSocketMessage{Kind: "Ping"}
 	webSocketHandler.handleMessage(msg, conn)
 	newPingTime := conn.lastPingTime
 

@@ -10,22 +10,22 @@
 package sostatus
 
 import (
-  "testing"
+	"testing"
 )
 
 func TestSoStatusInit(tester *testing.T) {
-  status := NewSoStatus(nil)
-  cfg := make(map[string]interface{})
-  cfg["refreshIntervalMs"] = float64(1000)
-  cfg["offlineThresholdMs"] = float64(2000)
-  err := status.Init(cfg)
-  if err != nil {
-    tester.Errorf("unexpected Init error")
-  }
-  if status.refreshIntervalMs != 1000 {
-  	tester.Errorf("Unexpected refresh interval value %d", status.refreshIntervalMs)
-  }
-  if status.offlineThresholdMs != 2000 {
-  	tester.Errorf("Unexpected threshold value %d", status.offlineThresholdMs)
-  }
+	status := NewSoStatus(nil)
+	cfg := make(map[string]interface{})
+	cfg["refreshIntervalMs"] = float64(1000)
+	cfg["offlineThresholdMs"] = float64(2000)
+	err := status.Init(cfg)
+	if err != nil {
+		tester.Errorf("unexpected Init error")
+	}
+	if status.refreshIntervalMs != 1000 {
+		tester.Errorf("Unexpected refresh interval value %d", status.refreshIntervalMs)
+	}
+	if status.offlineThresholdMs != 2000 {
+		tester.Errorf("Unexpected threshold value %d", status.offlineThresholdMs)
+	}
 }

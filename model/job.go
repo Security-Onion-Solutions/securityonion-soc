@@ -11,7 +11,7 @@
 package model
 
 import (
-  "time"
+	"time"
 )
 
 const JobStatusPending = 0
@@ -20,39 +20,39 @@ const JobStatusIncomplete = 2
 const JobStatusDeleted = 3
 
 type Job struct {
-  Id                        int                     `json:"id"`
-  CreateTime                time.Time               `json:"createTime"`
-  Status                    int                     `json:"status"`
-  CompleteTime              time.Time               `json:"completeTime"`
-  FailTime                  time.Time               `json:"failTime"`
-  Failure                   string                  `json:"failure"`
-  FailCount                 int                     `json:"failCount"`
-  Owner                     string                  `json:"owner"`
-  NodeId                    string                  `json:"nodeId"`
-  FileExtension             string                  `json:"fileExtension"`
-  Filter                    *Filter                 `json:"filter"`
-  UserId                    string                  `json:"userId"`
+	Id            int       `json:"id"`
+	CreateTime    time.Time `json:"createTime"`
+	Status        int       `json:"status"`
+	CompleteTime  time.Time `json:"completeTime"`
+	FailTime      time.Time `json:"failTime"`
+	Failure       string    `json:"failure"`
+	FailCount     int       `json:"failCount"`
+	Owner         string    `json:"owner"`
+	NodeId        string    `json:"nodeId"`
+	FileExtension string    `json:"fileExtension"`
+	Filter        *Filter   `json:"filter"`
+	UserId        string    `json:"userId"`
 }
 
 func NewJob() *Job {
-  return &Job{
-    CreateTime: time.Now(),
-    Status: JobStatusPending,
-    Failure: "",
-    FailCount: 0,
-    FileExtension: "bin",
-    Filter: NewFilter(),
-  }
+	return &Job{
+		CreateTime:    time.Now(),
+		Status:        JobStatusPending,
+		Failure:       "",
+		FailCount:     0,
+		FileExtension: "bin",
+		Filter:        NewFilter(),
+	}
 }
 
 func (job *Job) Complete() {
-  job.Status = JobStatusCompleted
-  job.CompleteTime = time.Now()
+	job.Status = JobStatusCompleted
+	job.CompleteTime = time.Now()
 }
 
 func (job *Job) Fail(err error) {
-  job.Status = JobStatusIncomplete
-  job.Failure = err.Error()
-  job.FailTime = time.Now()
-  job.FailCount++
+	job.Status = JobStatusIncomplete
+	job.Failure = err.Error()
+	job.FailTime = time.Now()
+	job.FailCount++
 }

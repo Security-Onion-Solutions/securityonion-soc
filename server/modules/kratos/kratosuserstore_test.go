@@ -10,13 +10,13 @@
 package kratos
 
 import (
-  "testing"
+	"testing"
 )
 
 func TestUserstoreInit(tester *testing.T) {
-  ai := NewKratosUserstore()
-  err := ai.Init("abc")
-  if err != nil {
-    tester.Errorf("unexpected Init error")
-  } 
+	ai := NewKratosUserstore()
+	err := ai.Init("abc")
+	if err != nil {
+		tester.Errorf("unexpected Init error")
+	}
 }

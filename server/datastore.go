@@ -11,23 +11,23 @@
 package server
 
 import (
-  "io"
-  "github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"io"
 )
 
 type Datastore interface {
-  CreateNode(id string) *model.Node
-  GetNodes() []*model.Node
-  AddNode(node *model.Node) error
-  UpdateNode(newNode *model.Node) (*model.Node, error)
-  GetNextJob(nodeId string) *model.Job
-  CreateJob() *model.Job
-  GetJob(jobId int) *model.Job
-  GetJobs() []*model.Job
-  AddJob(job *model.Job) error
-  UpdateJob(job *model.Job) error
-  DeleteJob(job *model.Job) error
-  GetPackets(jobId int, offset int, count int, unwrap bool) ([]*model.Packet, error)
-  SavePacketStream(jobId int, reader io.ReadCloser) error
-  GetPacketStream(jobId int, unwrap bool) (io.ReadCloser, string, int64, error)
+	CreateNode(id string) *model.Node
+	GetNodes() []*model.Node
+	AddNode(node *model.Node) error
+	UpdateNode(newNode *model.Node) (*model.Node, error)
+	GetNextJob(nodeId string) *model.Job
+	CreateJob() *model.Job
+	GetJob(jobId int) *model.Job
+	GetJobs() []*model.Job
+	AddJob(job *model.Job) error
+	UpdateJob(job *model.Job) error
+	DeleteJob(job *model.Job) error
+	GetPackets(jobId int, offset int, count int, unwrap bool) ([]*model.Packet, error)
+	SavePacketStream(jobId int, reader io.ReadCloser) error
+	GetPacketStream(jobId int, unwrap bool) (io.ReadCloser, string, int64, error)
 }

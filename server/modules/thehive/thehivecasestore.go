@@ -11,45 +11,44 @@
 package thehive
 
 import (
-  "net/http"
-  "github.com/security-onion-solutions/securityonion-soc/model"
-  "github.com/security-onion-solutions/securityonion-soc/web"
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/web"
+	"net/http"
 )
 
 type TheHiveCasestore struct {
-  client            *web.Client
-  apiKey            string
+	client *web.Client
+	apiKey string
 }
 
 func NewTheHiveCasestore() *TheHiveCasestore {
-  return &TheHiveCasestore{}
+	return &TheHiveCasestore{}
 }
 
-func (store *TheHiveCasestore) Init(hostUrl string, 
-                                    key string, 
-                                    verifyCert bool) error {
-  store.client = web.NewClient(hostUrl, verifyCert)
-  store.client.Auth = store
-  store.apiKey = key
-  return nil
+func (store *TheHiveCasestore) Init(hostUrl string,
+	key string,
+	verifyCert bool) error {
+	store.client = web.NewClient(hostUrl, verifyCert)
+	store.client.Auth = store
+	store.apiKey = key
+	return nil
 }
 
 func (store *TheHiveCasestore) Authorize(request *http.Request) error {
-  request.Header.Add("Authorization", "Bearer " + store.apiKey)
-  return nil
+	request.Header.Add("Authorization", "Bearer "+store.apiKey)
+	return nil
 }
 
 func (store *TheHiveCasestore) Create(socCase *model.Case) (*model.Case, error) {
-  var outputCase TheHiveCase
-  inputCase, err := convertToTheHiveCase(socCase)
-  if err != nil {
-    return nil, err
-  }
-  _, err = store.client.SendAuthorizedObject("POST", "/api/case", inputCase, &outputCase)
-  if err != nil {
-    return nil, err
-  }
-  newCase, err := convertFromTheHiveCase(&outputCase)
-  return newCase, err
+	var outputCase TheHiveCase
+	inputCase, err := convertToTheHiveCase(socCase)
+	if err != nil {
+		return nil, err
+	}
+	_, err = store.client.SendAuthorizedObject("POST", "/api/case", inputCase, &outputCase)
+	if err != nil {
+		return nil, err
+	}
+	newCase, err := convertFromTheHiveCase(&outputCase)
+	return newCase, err
 }
-

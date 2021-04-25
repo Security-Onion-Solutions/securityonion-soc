@@ -11,7 +11,7 @@
 package server
 
 import (
-  "github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type Eventstore interface {

@@ -11,13 +11,13 @@
 package model
 
 import (
-  "github.com/security-onion-solutions/securityonion-soc/config"
+	"github.com/security-onion-solutions/securityonion-soc/config"
 )
 
 type Info struct {
-  Version        string                   `json:"version"`
-  License        string                   `json:"license"`
-  Parameters     *config.ClientParameters `json:"parameters"`
-  ElasticVersion string                   `json:"elasticVersion"`
-  WazuhVersion   string                   `json:"wazuhVersion"`
+	Version        string                   `json:"version"`
+	License        string                   `json:"license"`
+	Parameters     *config.ClientParameters `json:"parameters"`
+	ElasticVersion string                   `json:"elasticVersion"`
+	WazuhVersion   string                   `json:"wazuhVersion"`
 }
