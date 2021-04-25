@@ -11,18 +11,18 @@
 package main
 
 import (
-  "os"
-  "testing"
+	"os"
+	"testing"
 )
 
 func TestInitLogging(tester *testing.T) {
-  testFile := "/tmp/sensoroni_test.log"
-  defer os.Remove(testFile)
-  file, err := InitLogging(testFile, "debug")
-  if err != nil {
-    tester.Errorf("expected no errors")
-  }
-  if file == nil {
-    tester.Errorf("expected non-nil log file")
-  }
+	testFile := "/tmp/sensoroni_test.log"
+	defer os.Remove(testFile)
+	file, err := InitLogging(testFile, "debug")
+	if err != nil {
+		tester.Errorf("expected no errors")
+	}
+	if file == nil {
+		tester.Errorf("expected non-nil log file")
+	}
 }

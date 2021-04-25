@@ -10,35 +10,35 @@
 package influxdb
 
 import (
-  "testing"
-  "time"
-  "github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"testing"
+	"time"
 )
 
 func TestConvertValuesToString(tester *testing.T) {
 	metrics := NewInfluxDBMetrics()
-  values := make(map[string]interface{})
-  values["foo"] = "bar"
-  values["bar"] = 1
-  strValues := metrics.convertValuesToString(values)
-  if strValues["foo"] != "bar" {
-  	tester.Errorf("Expected bar string but got %v", strValues["foo"])
-  }
+	values := make(map[string]interface{})
+	values["foo"] = "bar"
+	values["bar"] = 1
+	strValues := metrics.convertValuesToString(values)
+	if strValues["foo"] != "bar" {
+		tester.Errorf("Expected bar string but got %v", strValues["foo"])
+	}
 }
 
 func TestConvertValuesToInt(tester *testing.T) {
-  metrics := NewInfluxDBMetrics()
-  values := make(map[string]interface{})
-  values["foo"] = 1234
-  values["bar"] = 9876.1
-  values["zoo"] = "garbage"
-  intValues := metrics.convertValuesToInt(values)
-  if intValues["foo"] != 1234 {
-  	tester.Errorf("Expected 1234 int but got %v", intValues["foo"])
-  }
-  if intValues["bar"] != 9876 {
-  	tester.Errorf("Expected 9876 int but got %v", intValues["bar"])
-  }
+	metrics := NewInfluxDBMetrics()
+	values := make(map[string]interface{})
+	values["foo"] = 1234
+	values["bar"] = 9876.1
+	values["zoo"] = "garbage"
+	intValues := metrics.convertValuesToInt(values)
+	if intValues["foo"] != 1234 {
+		tester.Errorf("Expected 1234 int but got %v", intValues["foo"])
+	}
+	if intValues["bar"] != 9876 {
+		tester.Errorf("Expected 9876 int but got %v", intValues["bar"])
+	}
 }
 
 func TestGetRaidStatus(tester *testing.T) {

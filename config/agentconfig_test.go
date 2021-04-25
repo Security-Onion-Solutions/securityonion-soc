@@ -11,35 +11,35 @@
 package config
 
 import (
-  "testing"
+	"testing"
 )
 
 func TestVerifyAgent(tester *testing.T) {
-  cfg := &AgentConfig{}
-  err := cfg.Verify()
-  if cfg.PollIntervalMs != DEFAULT_POLL_INTERVAL_MS {
-    tester.Errorf("expected PollIntervalMs %d but got %d", DEFAULT_POLL_INTERVAL_MS, cfg.PollIntervalMs)
-  }
-  if cfg.NodeId == "" {
-    tester.Errorf("expected non-empty NodeId")
-  }
-  if cfg.Model != "" {
-    tester.Errorf("expected blank model by default")
-  }
-  if cfg.VerifyCert == true {
-    tester.Errorf("expected VerifyCert to be false")
-  }
-  if err == nil {
-    tester.Errorf("expected ServerUrl error")
-  }
+	cfg := &AgentConfig{}
+	err := cfg.Verify()
+	if cfg.PollIntervalMs != DEFAULT_POLL_INTERVAL_MS {
+		tester.Errorf("expected PollIntervalMs %d but got %d", DEFAULT_POLL_INTERVAL_MS, cfg.PollIntervalMs)
+	}
+	if cfg.NodeId == "" {
+		tester.Errorf("expected non-empty NodeId")
+	}
+	if cfg.Model != "" {
+		tester.Errorf("expected blank model by default")
+	}
+	if cfg.VerifyCert == true {
+		tester.Errorf("expected VerifyCert to be false")
+	}
+	if err == nil {
+		tester.Errorf("expected ServerUrl error")
+	}
 
-  cfg.PollIntervalMs = 123
-  cfg.ServerUrl = "http://some.where"
-  err = cfg.Verify()
-  if cfg.PollIntervalMs != 123 {
-    tester.Errorf("expected PollIntervalMs %d but got %d", 123, cfg.PollIntervalMs)
-  }
-  if err != nil {
-    tester.Errorf("expected no error")
-  }
+	cfg.PollIntervalMs = 123
+	cfg.ServerUrl = "http://some.where"
+	err = cfg.Verify()
+	if cfg.PollIntervalMs != 123 {
+		tester.Errorf("expected PollIntervalMs %d but got %d", 123, cfg.PollIntervalMs)
+	}
+	if err != nil {
+		tester.Errorf("expected no error")
+	}
 }

@@ -11,8 +11,8 @@
 package web
 
 import (
-  "testing"
-  "time"
+	"testing"
+	"time"
 )
 
 func TestIsAuthorized(tester *testing.T) {
@@ -24,7 +24,7 @@ func TestIsAuthorized(tester *testing.T) {
 }
 
 func TestUpdatePingTime(tester *testing.T) {
-  conn := NewConnection(nil, "")
+	conn := NewConnection(nil, "")
 	oldPingTime := conn.lastPingTime
 	time.Sleep(3 * time.Millisecond)
 	conn.UpdatePingTime()

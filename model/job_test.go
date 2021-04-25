@@ -11,33 +11,33 @@
 package model
 
 import (
-  "errors"
-  "testing"
+	"errors"
+	"testing"
 )
 
 func TestVerifyJob(tester *testing.T) {
-  job := NewJob()
-  if job.Status != JobStatusPending {
-    tester.Errorf("expected Status %d but got %d", JobStatusPending, job.Status)
-  }
+	job := NewJob()
+	if job.Status != JobStatusPending {
+		tester.Errorf("expected Status %d but got %d", JobStatusPending, job.Status)
+	}
 
-  job.Fail(errors.New("one"))
-  if job.Status != JobStatusIncomplete {
-    tester.Errorf("expected Status %d but got %d", JobStatusIncomplete, job.Status)
-  }
-  if job.Failure == "" {
-    tester.Errorf("expected Failure but got none")
-  }
-  if job.FailCount != 1 {
-    tester.Errorf("expected FailCount %d but got %d", 1, job.FailCount)
-  }
-  job.Fail(errors.New("two"))
-  if job.FailCount != 2 {
-    tester.Errorf("expected FailCount %d but got %d", 2, job.FailCount)
-  }
+	job.Fail(errors.New("one"))
+	if job.Status != JobStatusIncomplete {
+		tester.Errorf("expected Status %d but got %d", JobStatusIncomplete, job.Status)
+	}
+	if job.Failure == "" {
+		tester.Errorf("expected Failure but got none")
+	}
+	if job.FailCount != 1 {
+		tester.Errorf("expected FailCount %d but got %d", 1, job.FailCount)
+	}
+	job.Fail(errors.New("two"))
+	if job.FailCount != 2 {
+		tester.Errorf("expected FailCount %d but got %d", 2, job.FailCount)
+	}
 
-  job.Complete()
-  if job.Status != JobStatusCompleted {
-    tester.Errorf("expected Status %d but got %d", JobStatusCompleted, job.Status)
-  }
+	job.Complete()
+	if job.Status != JobStatusCompleted {
+		tester.Errorf("expected Status %d but got %d", JobStatusCompleted, job.Status)
+	}
 }

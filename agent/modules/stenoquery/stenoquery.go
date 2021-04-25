@@ -139,8 +139,8 @@ func (steno *StenoQuery) ProcessJob(job *model.Job, reader io.ReadCloser) (io.Re
 }
 
 func (steno *StenoQuery) CleanupJob(job *model.Job) {
-    pcapOutputFilepath := fmt.Sprintf("%s/%d.%s", steno.pcapOutputPath, job.Id, job.FileExtension)
-    os.Remove(pcapOutputFilepath)	
+	pcapOutputFilepath := fmt.Sprintf("%s/%d.%s", steno.pcapOutputPath, job.Id, job.FileExtension)
+	os.Remove(pcapOutputFilepath)
 }
 
 func (steno *StenoQuery) CreateQuery(job *model.Job) string {

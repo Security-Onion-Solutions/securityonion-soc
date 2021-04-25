@@ -11,43 +11,44 @@
 package server
 
 import (
-  "errors"
-  "net/http"
-  "github.com/security-onion-solutions/securityonion-soc/model"
-  "github.com/security-onion-solutions/securityonion-soc/web"
+	"errors"
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/web"
+	"net/http"
 )
 
 type NodeHandler struct {
-  web.BaseHandler
-  server 		*Server
+	web.BaseHandler
+	server *Server
 }
 
 func NewNodeHandler(srv *Server) *NodeHandler {
-  handler := &NodeHandler {}
-  handler.Host = srv.Host
-  handler.server = srv
-  handler.Impl = handler
-  return handler
+	handler := &NodeHandler{}
+	handler.Host = srv.Host
+	handler.server = srv
+	handler.Impl = handler
+	return handler
 }
 
 func (nodeHandler *NodeHandler) HandleNow(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-  switch request.Method {
-    case http.MethodPost: return nodeHandler.post(writer, request)
-  }
-  return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
+	switch request.Method {
+	case http.MethodPost:
+		return nodeHandler.post(writer, request)
+	}
+	return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
 
 func (nodeHandler *NodeHandler) post(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-  var job *model.Job
-  node := model.NewNode("")
-  err := nodeHandler.ReadJson(request, node)
-  if err == nil {
-    node, err = nodeHandler.server.Datastore.UpdateNode(node)
-    if err == nil {
-      nodeHandler.server.Metrics.UpdateNodeMetrics(node)
-      nodeHandler.Host.Broadcast("node", node)
-      job = nodeHandler.server.Datastore.GetNextJob(node.Id)
-    }
-  }
-  return http.StatusOK, job, err
+	var job *model.Job
+	node := model.NewNode("")
+	err := nodeHandler.ReadJson(request, node)
+	if err == nil {
+		node, err = nodeHandler.server.Datastore.UpdateNode(node)
+		if err == nil {
+			nodeHandler.server.Metrics.UpdateNodeMetrics(node)
+			nodeHandler.Host.Broadcast("node", node)
+			job = nodeHandler.server.Datastore.GetNextJob(node.Id)
+		}
+	}
+	return http.StatusOK, job, err
 }

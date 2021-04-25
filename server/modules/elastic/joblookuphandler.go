@@ -11,62 +11,63 @@
 package elastic
 
 import (
-  "errors"
-  "fmt"
-  "net/http"
-  "strconv"
-  "github.com/security-onion-solutions/securityonion-soc/server"
-  "github.com/security-onion-solutions/securityonion-soc/web"
+	"errors"
+	"fmt"
+	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/web"
+	"net/http"
+	"strconv"
 )
 
 type JobLookupHandler struct {
-  web.BaseHandler
-  server							*server.Server
-  store    						*ElasticEventstore
+	web.BaseHandler
+	server *server.Server
+	store  *ElasticEventstore
 }
 
 func NewJobLookupHandler(srv *server.Server, store *ElasticEventstore) *JobLookupHandler {
-  handler := &JobLookupHandler {}
-  handler.Host = srv.Host
-  handler.server = srv
-  handler.BaseHandler.Impl = handler
-  handler.store = store
-  return handler
+	handler := &JobLookupHandler{}
+	handler.Host = srv.Host
+	handler.server = srv
+	handler.BaseHandler.Impl = handler
+	handler.store = store
+	return handler
 }
 
 func (handler *JobLookupHandler) HandleNow(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-  switch request.Method {
-    case http.MethodGet: return handler.get(writer, request)
-  }
-  return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
+	switch request.Method {
+	case http.MethodGet:
+		return handler.get(writer, request)
+	}
+	return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
 
 func (handler *JobLookupHandler) get(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-  statusCode := http.StatusBadRequest
-  esId := request.URL.Query().Get("esid") // Elastic doc ID
-  var query string
-  if len(esId) > 0 {
-    query = fmt.Sprintf(`{"query" : { "bool": { "must": { "match" : { "_id" : "%s" }}}}}`, esId)
-  } else {
-    ncId := request.URL.Query().Get("ncid") // Network community ID
-    query = fmt.Sprintf(`{"query" : { "bool": { "must": { "match" : { "network.community_id" : "%s" }}}}}`, ncId)
-  }
+	statusCode := http.StatusBadRequest
+	esId := request.URL.Query().Get("esid") // Elastic doc ID
+	var query string
+	if len(esId) > 0 {
+		query = fmt.Sprintf(`{"query" : { "bool": { "must": { "match" : { "_id" : "%s" }}}}}`, esId)
+	} else {
+		ncId := request.URL.Query().Get("ncid") // Network community ID
+		query = fmt.Sprintf(`{"query" : { "bool": { "must": { "match" : { "network.community_id" : "%s" }}}}}`, ncId)
+	}
 
-  job := handler.server.Datastore.CreateJob()
-  err := handler.store.PopulateJobFromDocQuery(query, job)
-  if err == nil {
-    job.UserId = handler.GetUserId(request)
-    err = handler.server.Datastore.AddJob(job)
-    if err == nil {
-      handler.Host.Broadcast("job", job)
-      statusCode = http.StatusOK
-      redirectUrl := handler.server.Config.BaseUrl + "#/job/" + strconv.Itoa(job.Id)
-      http.Redirect(writer, request, redirectUrl, http.StatusFound)
-    }
-  } else {
-    statusCode = http.StatusNotFound
-    http.Error(writer, "Elasticsearch document was not found", http.StatusNotFound)
-    err = nil
-  }
-  return statusCode, nil, err
+	job := handler.server.Datastore.CreateJob()
+	err := handler.store.PopulateJobFromDocQuery(query, job)
+	if err == nil {
+		job.UserId = handler.GetUserId(request)
+		err = handler.server.Datastore.AddJob(job)
+		if err == nil {
+			handler.Host.Broadcast("job", job)
+			statusCode = http.StatusOK
+			redirectUrl := handler.server.Config.BaseUrl + "#/job/" + strconv.Itoa(job.Id)
+			http.Redirect(writer, request, redirectUrl, http.StatusFound)
+		}
+	} else {
+		statusCode = http.StatusNotFound
+		http.Error(writer, "Elasticsearch document was not found", http.StatusNotFound)
+		err = nil
+	}
+	return statusCode, nil, err
 }

@@ -10,17 +10,17 @@
 package modules
 
 import (
-  "github.com/security-onion-solutions/securityonion-soc/agent"
-  "github.com/security-onion-solutions/securityonion-soc/agent/modules/importer"
-  "github.com/security-onion-solutions/securityonion-soc/agent/modules/statickeyauth"
-  "github.com/security-onion-solutions/securityonion-soc/agent/modules/stenoquery"
-  "github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/agent"
+	"github.com/security-onion-solutions/securityonion-soc/agent/modules/importer"
+	"github.com/security-onion-solutions/securityonion-soc/agent/modules/statickeyauth"
+	"github.com/security-onion-solutions/securityonion-soc/agent/modules/stenoquery"
+	"github.com/security-onion-solutions/securityonion-soc/module"
 )
 
 func BuildModuleMap(agt *agent.Agent) map[string]module.Module {
-  moduleMap := make(map[string]module.Module)
-  moduleMap["importer"] = importer.NewImporter(agt)
-  moduleMap["statickeyauth"] = statickeyauth.NewStaticKeyAuth(agt)
-  moduleMap["stenoquery"] = stenoquery.NewStenoQuery(agt)
-  return moduleMap
+	moduleMap := make(map[string]module.Module)
+	moduleMap["importer"] = importer.NewImporter(agt)
+	moduleMap["statickeyauth"] = statickeyauth.NewStaticKeyAuth(agt)
+	moduleMap["stenoquery"] = stenoquery.NewStenoQuery(agt)
+	return moduleMap
 }

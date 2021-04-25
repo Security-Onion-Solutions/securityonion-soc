@@ -11,29 +11,29 @@
 package web
 
 import (
-  "testing"
+	"testing"
 )
 
 func TestFormatUrl(tester *testing.T) {
-  client := NewClient("http://some.where/path", true)
-  var testTable = []struct {
-    url string
-    path string
-    expected string
-  } {
-    { "http://far.out", "path", "http://far.out/path" },
-    { "http://far.out", "/path", "http://far.out/path" },
-    { "http://far.out/", "path", "http://far.out/path" },
-    { "http://far.out/", "/path", "http://far.out/path" },
-    { "http://far.out/", "/path/end", "http://far.out/path/end" },
-  }
+	client := NewClient("http://some.where/path", true)
+	var testTable = []struct {
+		url      string
+		path     string
+		expected string
+	}{
+		{"http://far.out", "path", "http://far.out/path"},
+		{"http://far.out", "/path", "http://far.out/path"},
+		{"http://far.out/", "path", "http://far.out/path"},
+		{"http://far.out/", "/path", "http://far.out/path"},
+		{"http://far.out/", "/path/end", "http://far.out/path/end"},
+	}
 
-  for _, test := range testTable {
-    tester.Run("url=" + test.url + ", path=" + test.path, func(t *testing.T) {
-      actual := client.FormatUrl(test.url, test.path) 
-      if actual != test.expected {
-        t.Errorf("expected %s but got %s", test.expected, actual)
-      }
-    })
-  }
+	for _, test := range testTable {
+		tester.Run("url="+test.url+", path="+test.path, func(t *testing.T) {
+			actual := client.FormatUrl(test.url, test.path)
+			if actual != test.expected {
+				t.Errorf("expected %s but got %s", test.expected, actual)
+			}
+		})
+	}
 }

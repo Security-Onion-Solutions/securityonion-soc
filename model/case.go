@@ -10,23 +10,23 @@
 package model
 
 import (
-  "time"
+	"time"
 )
 
 type Case struct {
-  Id              string      `json:"id"`
-  CreateTime      time.Time   `json:"createTime"`
-  StartTime       time.Time   `json:"startTime"`
-  CompleteTime    time.Time   `json:"completeTime"`
-  Title           string      `json:"title"`
-  Description     string      `json:"description"`
-  Priority        int         `json:"priority"`
-  Severity        int         `json:"severity"`
-  Status          string      `json:"status"`
-  Template        string      `json:"template"`
+	Id           string    `json:"id"`
+	CreateTime   time.Time `json:"createTime"`
+	StartTime    time.Time `json:"startTime"`
+	CompleteTime time.Time `json:"completeTime"`
+	Title        string    `json:"title"`
+	Description  string    `json:"description"`
+	Priority     int       `json:"priority"`
+	Severity     int       `json:"severity"`
+	Status       string    `json:"status"`
+	Template     string    `json:"template"`
 }
 
 func NewCase() *Case {
-  newCase := &Case{}
-  return newCase
+	newCase := &Case{}
+	return newCase
 }

@@ -11,9 +11,9 @@
 package thehive
 
 import (
+	"github.com/security-onion-solutions/securityonion-soc/model"
 	"strconv"
 	"time"
-	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 func convertToTheHiveCase(inputCase *model.Case) (*TheHiveCase, error) {
@@ -39,8 +39,8 @@ func convertFromTheHiveCase(inputCase *TheHiveCase) (*model.Case, error) {
 	outputCase.Description = inputCase.Description
 	outputCase.Id = strconv.Itoa(inputCase.Id)
 	outputCase.Status = inputCase.Status
-	outputCase.CreateTime = time.Unix(inputCase.CreateDate / 1000, 0)
-	outputCase.StartTime = time.Unix(inputCase.StartDate / 1000, 0)
-	outputCase.CompleteTime = time.Unix(inputCase.EndDate / 1000, 0)
+	outputCase.CreateTime = time.Unix(inputCase.CreateDate/1000, 0)
+	outputCase.StartTime = time.Unix(inputCase.StartDate/1000, 0)
+	outputCase.CompleteTime = time.Unix(inputCase.EndDate/1000, 0)
 	return outputCase, nil
 }

@@ -10,56 +10,55 @@
 package statickeyauth
 
 import (
-  "errors"
-  "net/http"
-  "github.com/security-onion-solutions/securityonion-soc/agent"
-  "github.com/security-onion-solutions/securityonion-soc/module"
+	"errors"
+	"github.com/security-onion-solutions/securityonion-soc/agent"
+	"github.com/security-onion-solutions/securityonion-soc/module"
+	"net/http"
 )
 
 type StaticKeyAuth struct {
-  config			module.ModuleConfig
-  apiKey			string
-  agent				*agent.Agent
+	config module.ModuleConfig
+	apiKey string
+	agent  *agent.Agent
 }
 
 func NewStaticKeyAuth(agt *agent.Agent) *StaticKeyAuth {
-  return &StaticKeyAuth {
-    agent: agt,
-  }
+	return &StaticKeyAuth{
+		agent: agt,
+	}
 }
 
 func (skmodule *StaticKeyAuth) PrerequisiteModules() []string {
-  return nil
+	return nil
 }
 
 func (skmodule *StaticKeyAuth) Init(cfg module.ModuleConfig) error {
-  skmodule.config = cfg
-  key, err := module.GetString(cfg, "apiKey")
-  if err == nil {
-    skmodule.apiKey = key
-    if skmodule.agent == nil {
-      err = errors.New("Unable to set client auth due to nil agent")
-    } else {
-      skmodule.agent.Client.Auth = skmodule
-    }
-  }
-  return err
+	skmodule.config = cfg
+	key, err := module.GetString(cfg, "apiKey")
+	if err == nil {
+		skmodule.apiKey = key
+		if skmodule.agent == nil {
+			err = errors.New("Unable to set client auth due to nil agent")
+		} else {
+			skmodule.agent.Client.Auth = skmodule
+		}
+	}
+	return err
 }
 
 func (skmodule *StaticKeyAuth) Start() error {
-  return nil
+	return nil
 }
 
 func (skmodule *StaticKeyAuth) Stop() error {
-  return nil
+	return nil
 }
 
 func (skmodule *StaticKeyAuth) IsRunning() bool {
-  return false
+	return false
 }
 
-
 func (skmodule *StaticKeyAuth) Authorize(request *http.Request) error {
-  request.Header.Add("Authorization", skmodule.apiKey)
-  return nil
+	request.Header.Add("Authorization", skmodule.apiKey)
+	return nil
 }

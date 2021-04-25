@@ -11,26 +11,26 @@
 package model
 
 import (
-  "time"
+	"time"
 )
 
 type User struct {
-  Id												string									`json:"id"`
-  CreateTime                time.Time 							`json:"createTime"`
-  UpdateTime	              time.Time 							`json:"updateTime"`
-  Email											string									`json:"email"`
-  FirstName                 string    							`json:"firstName"`
-  LastName	                string    							`json:"lastName"`
-  Role    	                string    							`json:"role"`
-  Status                    string                  `json:"status"`
+	Id         string    `json:"id"`
+	CreateTime time.Time `json:"createTime"`
+	UpdateTime time.Time `json:"updateTime"`
+	Email      string    `json:"email"`
+	FirstName  string    `json:"firstName"`
+	LastName   string    `json:"lastName"`
+	Role       string    `json:"role"`
+	Status     string    `json:"status"`
 }
 
 func NewUser() *User {
-  return &User{
+	return &User{
 		CreateTime: time.Now(),
-    Email: "",
-    FirstName: "",
-    LastName: "",
-    Status: "",
-  }
+		Email:      "",
+		FirstName:  "",
+		LastName:   "",
+		Status:     "",
+	}
 }

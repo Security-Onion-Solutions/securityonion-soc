@@ -10,47 +10,47 @@
 package thehive
 
 import (
-  "github.com/security-onion-solutions/securityonion-soc/module"
-  "github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 )
 
 type TheHive struct {
-  config			module.ModuleConfig
-  server			*server.Server
-  store			  *TheHiveCasestore
+	config module.ModuleConfig
+	server *server.Server
+	store  *TheHiveCasestore
 }
 
 func NewTheHive(srv *server.Server) *TheHive {
-  return &TheHive {
-    server: srv,
-    store: NewTheHiveCasestore(),
-  }
+	return &TheHive{
+		server: srv,
+		store:  NewTheHiveCasestore(),
+	}
 }
 
 func (thehive *TheHive) PrerequisiteModules() []string {
-  return nil
+	return nil
 }
 
 func (thehive *TheHive) Init(cfg module.ModuleConfig) error {
-  thehive.config = cfg
-  host, _ := module.GetString(cfg, "hostUrl")
-  verifyCert := module.GetBoolDefault(cfg, "verifyCert", true)
-  key, _ := module.GetString(cfg, "key")
-  err := thehive.store.Init(host, key, verifyCert)
-  if err == nil && thehive.server != nil {
-    thehive.server.Casestore = thehive.store
-  }
-  return err
+	thehive.config = cfg
+	host, _ := module.GetString(cfg, "hostUrl")
+	verifyCert := module.GetBoolDefault(cfg, "verifyCert", true)
+	key, _ := module.GetString(cfg, "key")
+	err := thehive.store.Init(host, key, verifyCert)
+	if err == nil && thehive.server != nil {
+		thehive.server.Casestore = thehive.store
+	}
+	return err
 }
 
 func (thehive *TheHive) Start() error {
-  return nil
+	return nil
 }
 
 func (thehive *TheHive) Stop() error {
-  return nil
+	return nil
 }
 
 func (somodule *TheHive) IsRunning() bool {
-  return false
+	return false
 }
