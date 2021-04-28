@@ -17,7 +17,7 @@ import (
   "github.com/security-onion-solutions/securityonion-soc/model"
 )
 
-func makeAggregation(store *ElasticEventstore, name string, keys []string, count int, ascending bool) map[string]interface{} {
+func makeAggregation(store *ElasticEventstore, prefix string, keys []string, count int, ascending bool) (map[string]interface{}, string) {
   agg := make(map[string]interface{})
   orderFields := make(map[string]interface{})
   orderFields["_count"] = "desc"
@@ -25,17 +25,24 @@ func makeAggregation(store *ElasticEventstore, name string, keys []string, count
     orderFields["_count"] = "asc"
   }
   aggFields := make(map[string]interface{})
+  if strings.HasSuffix(keys[0], "*") {
+    keys[0] = strings.TrimSuffix(keys[0], "*")
+    aggFields["missing"] = "__missing__"
+  }
+
   aggFields["field"] = store.mapElasticField(keys[0])
   aggFields["size"] = count
   aggFields["order"] = orderFields
   agg["terms"] = aggFields
+
+  name := prefix + "|" + keys[0]
   if len(keys) > 1 {
     inner := make(map[string]interface{})
-    name = name + "|" + keys[1]
-    inner[name] = makeAggregation(store, name, keys[1:], count, ascending)
+    innerAgg, innerName := makeAggregation(store, name, keys[1:], count, ascending)
+    inner[innerName] = innerAgg
     agg["aggs"] = inner
   }
-  return agg
+  return agg, name
 }
 
 func makeTimeline(interval string) map[string]interface{} {
@@ -186,9 +193,9 @@ func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSear
     groupBySegment := segment.(*model.GroupBySegment)
     fields := groupBySegment.Fields()
     if len(fields) > 0 {
-      name := "groupby|" + fields[0]
-      aggregations[name] = makeAggregation(store, name, fields, criteria.MetricLimit, false)
-      aggregations["bottom"] = makeAggregation(store, "", fields[0:1], criteria.MetricLimit, true)
+      agg, name := makeAggregation(store, "groupby", fields, criteria.MetricLimit, false)
+      aggregations[name] = agg
+      aggregations["bottom"], _ = makeAggregation(store, "", fields[0:1], criteria.MetricLimit, true)
     }
   }
 

@@ -1,4 +1,4 @@
-// Copyright 2020 Security Onion Solutions. All rights reserved.
+// Copyright 2020,2021 Security Onion Solutions. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -23,6 +23,7 @@ routes.push({ path: '*', name: 'login', component: {
       required: value => !!value || this.$root.i18n.required,
     },
     authLoginUrl: null,
+    banner: "",
   }},
   created() {
     if (!this.$root.getAuthFlowId()) {
@@ -38,13 +39,21 @@ routes.push({ path: '*', name: 'login', component: {
   methods: {
     async loadData() {
       try {
-        const response = await this.$root.authApi.get('login/flows?id=' + this.$root.getAuthFlowId());
+        var response = await axios.create().get('/login/banner.md?v=' + Date.now());
+        if (response.data) {
+          this.banner = marked(response.data);
+        }
+        response = await this.$root.authApi.get('login/flows?id=' + this.$root.getAuthFlowId());
         this.form.csrfToken = response.data.methods.password.config.fields.find(item => item.name == 'csrf_token').value;
         if (response.data.methods.password.config.messages) {
           this.$root.showWarning(this.i18n.loginInvalid);
         }
       } catch (error) {
-        this.$root.showError(error);
+        if (error.response.status == 410) {
+          document.location = "/login";
+        } else {
+          this.$root.showError(error);
+        }
       }
     },
   }

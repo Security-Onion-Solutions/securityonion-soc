@@ -1,4 +1,4 @@
-// Copyright 2020 Security Onion Solutions. All rights reserved.
+// Copyright 2020,2021 Security Onion Solutions. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -486,6 +486,14 @@ const huntComponent = {
       for (var j = 0; j < data.length; j++) {
         if (data[j] == item) {
           Vue.delete(data, j);
+          if (item["count"]) {
+            this.totalEvents -= item["count"];
+          } else {
+            this.totalEvents--;
+          }
+          if (this.totalEvents < 0) {
+            this.totalEvents = 0;
+          }
           break;
         }
       }
@@ -750,11 +758,24 @@ const huntComponent = {
       try {
         content = btoa(content);
       } catch (e) {
-        Console.error("Failed to base64 encode content: " + e);
+        console.error("Failed to base64 encode content: " + e);
       }
       return content;
     },
+    escape(content) {
+      if (content.replace) {
+        try {
+          content = content.replace(/\\/g, "\\\\");
+          content = content.replace(/\"/g, "\\\"");
+        } catch (e) {
+          console.error("Failed to escape content: " + e);
+        }
+      }
+      return content
+    },
     replaceActionVar(content, field, value, uriEncode) {
+      if (value === undefined || value == null) return content;
+
       var encode = function(input) { 
         if (uriEncode) {
           return encodeURIComponent(input);
@@ -764,6 +785,8 @@ const huntComponent = {
 
       content = content.replace("{" + field + "}", encode(value));
       content = content.replace("{" + field + "|base64}", encode(this.base64encode(value)));
+      content = content.replace("{" + field + "|escape}", encode(this.escape(value)));
+      content = content.replace("{" + field + "|escape|base64}", encode(this.base64encode(this.escape(value))));
       return content;
     },
     formatActionContent(content, event, field, value, uriEncode = true) {
@@ -804,6 +827,12 @@ const huntComponent = {
       }
       return fields;
     },
+    localizeValue(value) {
+      if (value.startsWith && value.startsWith("__")) {
+        value = this.$root.localizeMessage(value);
+      }
+      return value;
+    },
     constructHeaders(fields) {
       var headers = [];
       var i18n = this.i18n;
@@ -818,13 +847,14 @@ const huntComponent = {
       return headers;
     },
     constructGroupByRows(fields, data) {
-      var records = [];
+      const records = [];
+      const route = this;
       data.forEach(function(row, index) {
         var record = {
           count: row.value,
         };
         fields.forEach(function(field, index) {
-          record[field] = row.keys[index];
+          record[field] = route.localizeValue(row.keys[index]);
         });
         records.push(record);
       });
@@ -883,8 +913,9 @@ const huntComponent = {
       chart.labels = [];
       chart.datasets[0].data = [];
       if (!data) return;
+      const route = this;
       data.forEach(function(item, index) {
-        chart.labels.push(item.keys[0]);
+        chart.labels.push(route.localizeValue(item.keys[0]));
         chart.datasets[0].data.push(item.value);
       });
       if (chart.obj) {
@@ -1110,6 +1141,41 @@ const huntComponent = {
       if (value == "high_false") return "red darken-1";
       if (value == "critical_false") return "red darken-4";
       return "secondary";      
+    },
+    lookupAlertSeverityScore(sev) {
+      if (sev.toLowerCase) {
+        sev = sev.toLowerCase();
+        switch (sev) {
+          case 'critical': sev = 400; break;
+          case 'high': sev = 300; break;
+          case 'medium': sev = 200; break;
+          case 'low': sev = 100; break;
+        }
+      }
+      return sev
+    },
+    defaultSort(a, b, isDesc) {
+      if (!isDesc) {
+        return a < b ? -1 : 1;
+      }
+      return b < a ? -1 : 1;
+    },
+    sortEvents(items, index, isDesc) {
+      const route = this;
+      if (index && index.length > 0) {
+        index = index[0];
+      }
+      if (isDesc && isDesc.length > 0) {
+        isDesc = isDesc[0];
+      }
+      items.sort((a, b) => {
+        if (index === "event.severity_label") {
+          return route.defaultSort(route.lookupAlertSeverityScore(a[index]), route.lookupAlertSeverityScore(b[index]), isDesc);
+        } else {
+          return route.defaultSort(a[index], b[index], isDesc);
+        }
+      });
+      return items
     },
     switchToHunt() {
       this.category = "hunt";

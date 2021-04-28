@@ -20,8 +20,8 @@
     <link rel="mask-icon" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
     <link rel="alternate icon" class="so-favicon" type="image/png" href="images/favicon/onion.png?v=VERSION_PLACEHOLDER">
     <link rel="icon" class="so-favicon" type="image/svg+xml" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
-    <link rel="stylesheet" href="css/external/vuetify-v2.3.19.min.css">
-    <link rel="stylesheet" href="css/external/all-5.14.0.min.css">
+    <link rel="stylesheet" href="css/external/vuetify-v2.4.7.min.css">
+    <link rel="stylesheet" href="css/external/all-5.15.2.min.css">
     <link rel="stylesheet" href="css/app.css?v=VERSION_PLACEHOLDER">
     <title>Security Onion</title>
   </head>
@@ -54,8 +54,8 @@
         <v-form v-model="form.valid" method="post" :action="authLoginUrl">
           <v-container grid-list-sm class="pa-4">
             <v-row>
-              <v-col xs12>
-                <div id="loginHeader" class="subtitle-1" v-text="i18n.loginHeader"></div>
+              <v-col class="mx-auto px-12">
+                <div id="banner" v-html="banner"></div>
               </v-col>
             </v-row>
             <v-row>
@@ -63,11 +63,6 @@
                 <v-text-field name="identifier" v-model="form.email" :placeholder="i18n.email" :hint="i18n.emailHelp" autofocus="true" :rules="[rules.required]"></v-text-field>
                 <v-text-field name="password" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'mdi-eye' : 'mdi-eye-off'" :rules="[rules.required]"></v-text-field>
                 <v-text-field name="csrf_token" v-model="form.csrfToken" class="d-none"></v-text-field>
-              </v-col>
-            </v-row>
-            <v-row>
-              <v-col xs12>
-                <div id="loginFooter" class="subtitle-2" v-text="i18n.loginFooter"></div>
               </v-col>
             </v-row>
           </v-container>
@@ -79,12 +74,13 @@
       </v-card>
     </script>
 
-    <script src="js/external/jquery-3.5.1.min.js"></script>
+    <script src="js/external/jquery-3.6.0.min.js"></script>
     <script src="js/external/vue-2.6.11.min.js"></script>
-    <script src="js/external/vue-router-3.4.9.min.js"></script>
-    <script src="js/external/vuetify-v2.3.19.min.js"></script>
+    <script src="js/external/vue-router-3.5.1.min.js"></script>
+    <script src="js/external/vuetify-v2.4.7.min.js"></script>
     <script src="js/external/axios-0.21.1.min.js"></script>
     <script src="js/external/moment-2.29.1.min.js"></script>
+    <script src="js/external/marked-2.0.1.min.js"></script>
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>

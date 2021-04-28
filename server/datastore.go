@@ -19,7 +19,7 @@ type Datastore interface {
   CreateNode(id string) *model.Node
   GetNodes() []*model.Node
   AddNode(node *model.Node) error
-  UpdateNode(newNode *model.Node) error
+  UpdateNode(newNode *model.Node) (*model.Node, error)
   GetNextJob(nodeId string) *model.Job
   CreateJob() *model.Job
   GetJob(jobId int) *model.Job

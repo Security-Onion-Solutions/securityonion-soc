@@ -23,13 +23,14 @@ type Server struct {
   Userstore   Userstore
   Eventstore  Eventstore
   Casestore   Casestore
+  Metrics     Metrics
   stoppedChan chan bool
 }
 
 func NewServer(cfg *config.ServerConfig, version string) *Server {
   return &Server{
     Config: cfg,
-    Host: web.NewHost(cfg.BindAddress, cfg.HtmlDir, version),
+    Host: web.NewHost(cfg.BindAddress, cfg.HtmlDir, cfg.IdleConnectionTimeoutMs, version),
     stoppedChan: make(chan bool, 1),
   }
 }

@@ -1,4 +1,4 @@
-// Copyright 2020 Security Onion Solutions. All rights reserved.
+// Copyright 2020,2021 Security Onion Solutions. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -12,6 +12,7 @@ routes.push({ path: '/', name: 'home', component: {
   data() { return {
     i18n: this.$root.i18n,
     changeDetails: {},
+    motd: "",
   }},
   created() {
     this.loadChanges();
@@ -21,9 +22,9 @@ routes.push({ path: '/', name: 'home', component: {
   methods: {
     async loadChanges() {
       try {
-        let response = await axios.create().get('changes.json?v=' + Date.now());
+        const response = await this.$root.createApi().get('motd.md?v=' + Date.now());
         if (response.data) {
-          this.changeDetails = response.data;
+          this.motd = marked(response.data);
         }
       } catch (error) {
         this.$root.showError(error);

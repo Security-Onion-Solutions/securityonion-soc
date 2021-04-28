@@ -1,4 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
+// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -6,10 +7,9 @@
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
 const NodeStatusUnknown = "unknown";
-const NodeStatusOffline = "offline";
-const NodeStatusOnline = "online";
-const NodeStatusError = "error";
+const NodeStatusFault = "fault";
 const NodeStatusOk = "ok";
 
 routes.push({ path: '/grid', name: 'grid', component: {
@@ -24,17 +24,20 @@ routes.push({ path: '/grid', name: 'grid', component: {
       { text: this.$root.i18n.address, value: 'address' },
       { text: this.$root.i18n.description, value: 'description' },
       { text: this.$root.i18n.version, value: 'version' },
-      { text: this.$root.i18n.dateOnline, value: 'onlineTime' },
+      { text: this.$root.i18n.model, value: 'model' },
+      { text: this.$root.i18n.eps, value: 'eps' },
       { text: this.$root.i18n.dateUpdated, value: 'updateTime' },
       { text: this.$root.i18n.dateDataEpoch, value: 'epochTime' },
       { text: this.$root.i18n.uptime, value: 'uptimeSeconds' },
       { text: this.$root.i18n.status, value: 'status' },
       { text: '', value: 'keywords', align: ' d-none' },
     ],
+    expanded: [],
     sortBy: 'id',
     sortDesc: false,
     itemsPerPage: 10,
-    footerProps: { 'items-per-page-options': [10,50,250,1000] },
+    footerProps: { 'items-per-page-options': [10,25,50,100,250,1000] },
+    gridEps: 0,
   }},
   created() { 
     Vue.filter('colorNodeStatus', this.colorNodeStatus);    
@@ -43,6 +46,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
   },  
   destroyed() {
     this.$root.unsubscribe("node", this.updateNode);
+    this.$root.unsubscribe("status", this.updateStatus);
   },
   mounted() {
     this.$root.loadParameters("grid", this.initGrid);
@@ -72,6 +76,17 @@ routes.push({ path: '/grid', name: 'grid', component: {
       }
       this.$root.stopLoading();
       this.$root.subscribe("node", this.updateNode);
+      this.$root.subscribe("status", this.updateStatus);
+    },
+    expand(item) {
+      if (this.isExpanded(item)) {
+        this.expanded = [];
+      } else {
+        this.expanded = [item];
+      }
+    },
+    isExpanded(item) {
+      return (this.expanded.length > 0 && this.expanded[0] == item);
     },
     saveLocalSettings() {
       localStorage['settings.grid.sortBy'] = this.sortBy;
@@ -89,7 +104,11 @@ routes.push({ path: '/grid', name: 'grid', component: {
       var found = false;
       for (var i = 0; i < this.nodes.length; i++) {
         if (this.nodes[i].id == node.id) {
+          const exp = this.isExpanded(this.nodes[i]);
           this.$set(this.nodes, i, this.formatNode(node));
+          if (exp) {
+            this.expand(this.nodes[i]);
+          }
           found = true;
           break;
         }
@@ -98,6 +117,9 @@ routes.push({ path: '/grid', name: 'grid', component: {
         this.nodes.push(this.formatNode(node));
       }
     },
+    updateStatus(status) {
+      this.gridEps = status.grid.eps;
+    },
     formatNode(node) {
       node['keywords'] = this.$root.localizeMessage(node["role"] + '-keywords');
       return node;
@@ -105,9 +127,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
     colorNodeStatus(status) {
       var color = "gray";
       switch (status) {
-        case NodeStatusOffline: color = "warning"; break;
-        case NodeStatusOnline: color = "info"; break;
-        case NodeStatusError: color = "error"; break;
+        case NodeStatusFault: color = "error"; break;
         case NodeStatusOk: color = "success"; break;
       }
       return color;

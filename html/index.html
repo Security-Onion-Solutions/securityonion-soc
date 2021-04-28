@@ -19,8 +19,8 @@
     <link rel="mask-icon" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
     <link rel="alternate icon" class="so-favicon" type="image/png" href="images/favicon/onion.png?v=VERSION_PLACEHOLDER">
     <link rel="icon" class="so-favicon" type="image/svg+xml" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
-    <link rel="stylesheet" href="css/external/vuetify-v2.3.19.min.css">
-    <link rel="stylesheet" href="css/external/all-5.14.0.min.css">
+    <link rel="stylesheet" href="css/external/vuetify-v2.4.7.min.css">
+    <link rel="stylesheet" href="css/external/all-5.15.2.min.css">
     <link rel="stylesheet" href="css/external/daterangepicker-3.1.0.css">
     <link rel="stylesheet" href="css/app.css?v=VERSION_PLACEHOLDER">
     <title>Security Onion</title>
@@ -139,6 +139,14 @@
                 <v-list-item-title v-text="i18n.darkMode"></v-list-item-title>
               </v-list-item-content>
             </v-list-item>
+            <v-list-item target="so-help" :href="parameters.docsUrl + 'release-notes.html'">
+              <v-list-item-action>
+                <v-icon class="mx-auto">fa-gift</v-icon>
+              </v-list-item-action>
+              <v-list-item-content>
+                <v-list-item-title v-text="i18n.whatsnew"></v-list-item-title>
+              </v-list-item-content>
+            </v-list-item>
             <v-list-item target="so-help" :href="parameters.docsUrl">
               <v-list-item-action>
                 <v-icon class="mx-auto">fa-question</v-icon>
@@ -227,11 +235,8 @@
           </v-col>
         </v-row>
         <v-row>
-          <v-col class="mx-auto px-12" id="change-details">
-            <div  class="title" v-html="changeDetails.title"></div>
-            <ul>
-              <li v-for="change in changeDetails.changes" :key="change.summary" v-html="change.summary"></li>
-            </ul>
+          <v-col class="mx-auto px-12">
+            <div id="motd" v-html="motd"></div>
           </v-col>
           <v-col class="mx-auto text-center">
             <div v-html="i18n.sponsorsIntro" class="mb-6"></div>
@@ -401,7 +406,7 @@
         <v-row v-if="metricsEnabled">
           <v-col cols="12">
             <v-data-table :search="groupByFilter" dense :sort-by.sync="groupBySortBy" :sort-desc.sync="groupBySortDesc" :footer-props="groupByFooters" 
-              :items-per-page.sync="groupByItemsPerPage" must-sort :headers="groupByHeaders" :items="groupByData" :page.sync="groupByPage">
+              :items-per-page.sync="groupByItemsPerPage" must-sort :headers="groupByHeaders" :items="groupByData" :page.sync="groupByPage" :custom-sort="sortEvents">
               <template v-slot:top v-if="isAdvanced()">
                 <v-container fluid>
                   <v-row>
@@ -448,7 +453,7 @@
         <v-row v-if="loaded && eventsEnabled && (isAdvanced() || !metricsEnabled)">
           <v-col cols="12">
             <v-data-table :search="eventFilter" :sort-by.sync="sortBy" item-key="soc_id" :expanded.sync="expanded" :sort-desc.sync="sortDesc" :footer-props="footerProps" 
-              :items-per-page.sync="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" show-expand :page.sync="eventPage">
+              :items-per-page.sync="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" show-expand :page.sync="eventPage" :custom-sort="sortEvents">
               <template v-slot:top v-if="isAdvanced()">
                 <v-container fluid>
                   <v-row>
@@ -572,12 +577,20 @@
                   {{ i18n.share }}
                 </v-list-item-title>
               </template>
-              <v-list-item id="actionCopyEventAsJson" dense @click="copyToClipboard(quickActionValue)">
+              <v-list-item id="actionCopyValue" dense @click="copyToClipboard(quickActionValue)">
                 <v-list-item-icon>
                   <v-icon color="white">fa-copy</v-icon>
                 </v-list-item-icon>
                 <v-list-item-title class="white--text">
                   {{ i18n.copyFieldToClipboard }}
+                </v-list-item-title>
+              </v-list-item>
+              <v-list-item id="actionCopyFieldValue" dense @click="copyToClipboard(quickActionField + ': ' + quickActionValue)">
+                <v-list-item-icon>
+                  <v-icon color="white">fa-copy</v-icon>
+                </v-list-item-icon>
+                <v-list-item-title class="white--text">
+                  {{ i18n.copyFieldValueToClipboard }}
                 </v-list-item-title>
               </v-list-item>
               <v-list-item id="actionCopyEventAsJson" dense @click="copyToClipboard(quickActionEvent, 'json')">
@@ -805,8 +818,8 @@
                     </router-link>
                   </td>
                   <td>{{ props.item.owner }}</td>
-                  <td>{{ props.item.createTime | formatDateTime }}</td>
-                  <td>{{ props.item | formatJobUpdateTime | formatDateTime }}</td>
+                  <td>{{ props.item.createTime | formatTimestamp }}</td>
+                  <td>{{ props.item.completeTime | formatTimestamp }}</td>
                   <td v-text="props.item.nodeId"></td>
                   <td><v-chip :color="props.item | colorJobStatus">{{ props.item | formatJobStatus }}</v-chip></td>
                   <td>
@@ -933,6 +946,10 @@
                           <span v-if="job.filter" class="filter value">{{ job.completeTime | formatDateTime}}</span>
                         </div>
                         <div>
+                          <span class="filter label">{{ i18n.dateFailed }}:</span>
+                          <span v-if="job.filter" class="filter value">{{ job.failTime | formatDateTime}}</span>
+                        </div>
+                        <div>
                           <span class="filter label">{{ i18n.beginTime }}:</span>
                           <span v-if="job.filter" class="filter value">{{ job.filter.beginTime | formatTimestamp }}</span>
                         </div>
@@ -1034,13 +1051,17 @@
     <script type="text/x-template" id="page-grid">
       <v-container fluid>
         <v-row>
-          <v-col>
+          <v-col cols="9">
             <h2 v-text="i18n.grid"></h2>
+          </v-col>
+          <v-col cols="3" align="end">
+            <h4>{{ i18n.gridEps }} {{ gridEps | formatCount }}</h4>
           </v-col>
         </v-row>
         <v-row>
           <v-col>
-            <v-data-table :search="gridFilter" :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps" 
+            <v-data-table :search="gridFilter" :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" 
+              :expanded.sync="expanded" :footer-props="footerProps" show-expand
               :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="nodes">
               <template v-slot:top>
                 <v-container fluid>
@@ -1055,16 +1076,66 @@
               </template>
               <template v-slot:item="props">
                 <tr>
+                  <td>
+                    <v-btn id="expandNode" icon small @click="expand(props.item)">
+                      <v-icon v-if="isExpanded(props.item)" :alt="i18n.nodeExpand" :title="i18n.nodeExpandHelp">fa-angle-down</v-icon>
+                      <v-icon v-if="!isExpanded(props.item)" :alt="i18n.nodeExpand" :title="i18n.nodeExpandHelp">fa-angle-right</v-icon>
+                    </v-btn>
+                  </td>
                   <td v-text="props.item.id"></td>
                   <td v-text="$root.localizeMessage(props.item.role)"></td>
                   <td v-text="props.item.address"></td>
                   <td v-text="props.item.description"></td>
                   <td v-text="props.item.version"></td>
-                  <td>{{ props.item.onlineTime | formatDateTime }}</td>
-                  <td>{{ props.item.updateTime | formatDateTime }}</td>
-                  <td>{{ props.item.epochTime | formatDateTime }}</td>
+                  <td v-text="props.item.model"></td>
+                  <td>{{ props.item.productionEps | formatCount }}</td>
+                  <td>{{ props.item.updateTime | formatTimestamp }}</td>
+                  <td>{{ props.item.epochTime | formatTimestamp }}</td>
                   <td>{{ props.item.uptimeSeconds | formatDuration }}</td>
-                  <td><v-chip class="nodeStatus" :color="props.item.status | colorNodeStatus">{{ $root.localizeMessage(props.item.status) }}</v-chip></td>
+                  <td><v-chip class="nodeStatus" @click="expand(props.item)" :color="props.item.status | colorNodeStatus">{{ $root.localizeMessage(props.item.status) }}</v-chip></td>
+                </tr>
+              </template>
+              <template v-slot:expanded-item="{ item }">
+                <tr>
+                  <td :colspan="headers.length" class="px-0">
+                    <v-container fluid grid-list-sm class="pa-4">
+                      <v-row>
+                        <v-col>
+                          <img class="rounded-lg elevation-5" v-if="item.imageFront" :src="'images/appliances/' + item.imageFront">
+                          <span v-if="!item.imageFront">{{ i18n.nodeImageUnavailable }}</span>
+                        </v-col>
+                        <v-col>
+                          <img class="rounded-lg elevation-5" v-if="item.imageBack" :src="'images/appliances/' + item.imageBack">
+                        </v-col>
+                        <v-col>
+                          <div>
+                            <span class="filter label">{{ i18n.dateOnline }}</span>
+                            <span class="filter value">{{ item.onlineTime | formatDateTime }}</span>
+                          </div>
+                          <div>
+                            <span class="filter label">{{ i18n.epsProduction }}</span>
+                            <span class="filter value">{{ item.productionEps | formatCount }}</span>
+                          </div>
+                          <div>
+                            <span class="filter label">{{ i18n.epsConsumption }}</span>
+                            <span class="filter value">{{ item.consumptionEps | formatCount }}</span>
+                          </div>
+                          <div>
+                            <span class="filter label">{{ i18n.nodeStatusProcess }}</span>
+                            <span class="filter value">{{ $root.localizeMessage(item.processStatus) }}</span>
+                          </div>
+                          <div>
+                            <span class="filter label">{{ i18n.nodeStatusConnection }}</span>
+                            <span class="filter value">{{ $root.localizeMessage(item.connectionStatus) }}</span>
+                          </div>
+                          <div>
+                            <span class="filter label">{{ i18n.nodeStatusRaid }}</span>
+                            <span class="filter value">{{ $root.localizeMessage(item.raidStatus) }}</span>
+                          </div>
+                        </v-col>
+                      </v-row>
+                    </v-container>
+                  </td>
                 </tr>
               </template>
             </v-data-table>
@@ -1103,16 +1174,17 @@
       </v-card>
     </script>
 
-    <script src="js/external/jquery-3.5.1.min.js"></script>
+    <script src="js/external/jquery-3.6.0.min.js"></script>
     <script src="js/external/vue-2.6.11.min.js"></script>
-    <script src="js/external/vue-router-3.4.9.min.js"></script>
-    <script src="js/external/vuetify-v2.3.19.min.js"></script>
+    <script src="js/external/vue-router-3.5.1.min.js"></script>
+    <script src="js/external/vuetify-v2.4.7.min.js"></script>
     <script src="js/external/axios-0.21.1.min.js"></script>
     <script src="js/external/moment-2.29.1.min.js"></script>
-    <script src="js/external/moment-timezone-data-0.5.32.min.js"></script>
+    <script src="js/external/moment-timezone-data-0.5.33.min.js"></script>
     <script src="js/external/chart-2.9.4.min.js"></script>
     <script src="js/external/vue-chartjs-2.7.1.min.js"></script>
     <script src="js/external/daterangepicker-3.1.0.min.js"></script>
+    <script src="js/external/marked-2.0.1.min.js"></script>
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>

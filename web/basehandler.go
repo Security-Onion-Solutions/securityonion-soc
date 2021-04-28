@@ -56,7 +56,8 @@ func (handler *BaseHandler) Handle(responseWriter http.ResponseWriter, request *
 
   if err != nil {
     log.WithError(err).WithFields(log.Fields{
-      "sourceIp": request.RemoteAddr,
+      "remoteAddr": request.RemoteAddr,
+      "sourceIp": handler.Host.GetSourceIp(request),
       "path": request.URL.Path,
       "query": request.URL.Query(),
       "impl": reflect.TypeOf(handler.Impl),
@@ -74,7 +75,8 @@ func (handler *BaseHandler) Handle(responseWriter http.ResponseWriter, request *
     responseWriter.Write([]byte(err.Error()))
   } else {
     log.WithFields(log.Fields{
-      "sourceIp": request.RemoteAddr,
+      "remoteAddr": request.RemoteAddr,
+      "sourceIp": handler.Host.GetSourceIp(request),
       "path": request.URL.Path,
       "query": request.URL.Query(),
       "impl": reflect.TypeOf(handler.Impl),
