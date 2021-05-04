@@ -122,40 +122,42 @@ $(document).ready(function() {
             this.loadServerSettingsTime = now;
             try {
               const response = await this.papi.get('info');
-              this.version = response.data.version;
-              this.license = response.data.license;
-              this.parameters = response.data.parameters;
-              this.elasticVersion = response.data.elasticVersion;
-              this.wazuhVersion = response.data.wazuhVersion;
+              if (response) {
+                this.version = response.data.version;
+                this.license = response.data.license;
+                this.parameters = response.data.parameters;
+                this.elasticVersion = response.data.elasticVersion;
+                this.wazuhVersion = response.data.wazuhVersion;
 
-              if (this.parameterCallback != null) {
-                this.parameterCallback(this.parameters[this.parameterSection]);
-                this.parameterCallback = null;
-              }
-              this.parametersLoaded = true;
-              if (this.parameters.webSocketTimeoutMs > 0) {
-                this.wsConnectionTimeout = this.parameters.webSocketTimeoutMs;
-              }
-              if (this.parameters.apiTimeoutMs > 0) {
-                this.connectionTimeout = this.parameters.apiTimeoutMs;
-              }
-              if (this.parameters.cacheExpirationMs > 0) {
-                this.cacheRefreshIntervalMs = this.parameters.cacheExpirationMs;
-              }
-              if (this.parameters.tipTimeoutMs > 0) {
-                this.tipTimeout = this.parameters.tipTimeoutMs;
-              }
-              if (this.parameters.tools && this.parameters.tools.length > 0) {
-                this.tools = this.parameters.tools;
-                if (this.parameters.inactiveTools) {
-                  const inactive = this.parameters.inactiveTools;
-                  for (var i = 0; i < this.tools.length; i++) {
-                    const tool = this.tools[i];
-                    tool.enabled = !inactive.includes(tool.name);
+                if (this.parameterCallback != null) {
+                  this.parameterCallback(this.parameters[this.parameterSection]);
+                  this.parameterCallback = null;
+                }
+                this.parametersLoaded = true;
+                if (this.parameters.webSocketTimeoutMs > 0) {
+                  this.wsConnectionTimeout = this.parameters.webSocketTimeoutMs;
+                }
+                if (this.parameters.apiTimeoutMs > 0) {
+                  this.connectionTimeout = this.parameters.apiTimeoutMs;
+                }
+                if (this.parameters.cacheExpirationMs > 0) {
+                  this.cacheRefreshIntervalMs = this.parameters.cacheExpirationMs;
+                }
+                if (this.parameters.tipTimeoutMs > 0) {
+                  this.tipTimeout = this.parameters.tipTimeoutMs;
+                }
+                if (this.parameters.tools && this.parameters.tools.length > 0) {
+                  this.tools = this.parameters.tools;
+                  if (this.parameters.inactiveTools) {
+                    const inactive = this.parameters.inactiveTools;
+                    for (var i = 0; i < this.tools.length; i++) {
+                      const tool = this.tools[i];
+                      tool.enabled = !inactive.includes(tool.name);
+                    }
                   }
                 }
+                this.subscribe("status", this.updateStatus);
               }
-              this.subscribe("status", this.updateStatus);
             } catch (error) {
               if (!background) {
                 // Only show the error on initial startup, otherwise the error
