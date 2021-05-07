@@ -23,6 +23,8 @@ const i18n = {
       actionAlertHelp: 'Create an alert for this event',
       actionCorrelate: 'Correlate',
       actionCorrelateHelp: 'Show related events',
+      actionCyberChef: 'CyberChef',
+      actionCyberChefHelp: 'Analyze this field using CyberChef',
       actionFailure: 'Action failed (check browser console for more error details): ',
       actionGoogle: 'Google',
       actionGoogleHelp: 'Perform a Google search on this field',
