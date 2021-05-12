@@ -11,6 +11,7 @@
 package server
 
 import (
+  "context"
   "errors"
   "net/http"
   "regexp"
@@ -32,17 +33,17 @@ func NewJobHandler(srv *Server) *JobHandler {
   return handler
 }
 
-func (jobHandler *JobHandler) HandleNow(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (jobHandler *JobHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   switch request.Method {
-    case http.MethodGet: return jobHandler.get(writer, request)
-    case http.MethodPost: return jobHandler.post(writer, request)
-    case http.MethodPut: return jobHandler.put(writer, request)
-    case http.MethodDelete: return jobHandler.delete(writer, request)
+    case http.MethodGet: return jobHandler.get(ctx, writer, request)
+    case http.MethodPost: return jobHandler.post(ctx, writer, request)
+    case http.MethodPut: return jobHandler.put(ctx, writer, request)
+    case http.MethodDelete: return jobHandler.delete(ctx, writer, request)
   }
   return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
 
-func (jobHandler *JobHandler) get(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (jobHandler *JobHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   statusCode := http.StatusBadRequest
   jobId, err := strconv.ParseInt(request.URL.Query().Get("jobId"), 10, 32)
   job := jobHandler.server.Datastore.GetJob(int(jobId))
@@ -54,22 +55,26 @@ func (jobHandler *JobHandler) get(writer http.ResponseWriter, request *http.Requ
   return statusCode, job, err
 }
 
-func (jobHandler *JobHandler) post(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (jobHandler *JobHandler) post(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   statusCode := http.StatusBadRequest
   job := jobHandler.server.Datastore.CreateJob()
   err := jobHandler.ReadJson(request, job)
   if err == nil {
-    job.UserId = jobHandler.GetUserId(request)
-    err = jobHandler.server.Datastore.AddJob(job)
-    if err == nil {
-      jobHandler.Host.Broadcast("job", job)
-      statusCode = http.StatusCreated
+    if user, ok := ctx.Value(web.ContextKeyRequestor).(*model.User); ok {
+      job.UserId = user.Id
+      err = jobHandler.server.Datastore.AddJob(job)
+      if err == nil {
+        jobHandler.Host.Broadcast("job", job)
+        statusCode = http.StatusCreated
+      }
+    } else {
+      err = errors.New("User not found in context")
     }
   }
   return statusCode, job, err
 }
 
-func (jobHandler *JobHandler) put(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (jobHandler *JobHandler) put(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   statusCode := http.StatusBadRequest
   job := model.NewJob()
   err := jobHandler.ReadJson(request, job)
@@ -87,7 +92,7 @@ func (jobHandler *JobHandler) put(writer http.ResponseWriter, request *http.Requ
   return statusCode, job, err
 }
 
-func (jobHandler *JobHandler) delete(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (jobHandler *JobHandler) delete(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   id := jobHandler.GetPathParameter(request.URL.Path, 2)
   safe, _ := regexp.MatchString(`^[0-9-]+$`, id)
   if !safe {

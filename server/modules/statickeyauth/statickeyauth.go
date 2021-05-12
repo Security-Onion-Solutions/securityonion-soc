@@ -41,7 +41,7 @@ func (skmodule *StaticKeyAuth) Init(cfg module.ModuleConfig) error {
 		if err == nil {
 			err = skmodule.impl.Init(key, anonymousCidr)
 			if err == nil {
-				skmodule.server.Host.Auth = skmodule.impl
+				err = skmodule.server.Host.AddPreprocessor(skmodule.impl)
 			}
 		}
 	}

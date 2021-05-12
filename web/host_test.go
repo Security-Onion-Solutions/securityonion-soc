@@ -11,6 +11,7 @@
 package web
 
 import (
+	"context"
 	"net/http"
   "testing"
   "time"
@@ -72,4 +73,74 @@ func TestGetSourceIp(tester *testing.T) {
   if actual != expected {
     tester.Errorf("expected %s but got %s", expected, actual)
   }
+}
+
+type DummyPreprocessor struct {
+	priority int
+	statusCode int
+	err error
+}
+
+func (dummy *DummyPreprocessor) PreprocessPriority() int {
+	return dummy.priority
+}
+
+func (dummy *DummyPreprocessor) Preprocess(ctx context.Context, request *http.Request) (context.Context, int, error) {
+	return ctx, dummy.statusCode, dummy.err
+}
+
+func TestPreprocessorSetup(tester *testing.T) {
+	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test")
+	if len(host.Preprocessors()) != 1 {
+		tester.Errorf("expected one preprocessors on new host")
+	}
+
+	newPreprocessor := &DummyPreprocessor{ priority: 123, }
+
+	host.AddPreprocessor(newPreprocessor)
+	if len(host.Preprocessors()) != 2 {
+		tester.Errorf("expected two preprocessors on host")
+	}
+
+	if host.Preprocessors()[1] != newPreprocessor {
+		tester.Errorf("expected new preprocessors to be processed last")
+	}
+
+	newPreprocessor2 := &DummyPreprocessor{ priority: 12, }
+
+	host.AddPreprocessor(newPreprocessor2)
+	if len(host.Preprocessors()) != 3 {
+		tester.Errorf("expected three preprocessors on host")
+	}
+
+	if host.Preprocessors()[1] != newPreprocessor2 {
+		tester.Errorf("expected new preprocessors to be processed second")
+	}
+
+	// Should collide
+	newPreprocessor3 := &DummyPreprocessor{ priority: 12, }
+	err := host.AddPreprocessor(newPreprocessor3)
+	if err == nil {
+		tester.Errorf("Expected error from colliding preprocessors")
+	}
+	if len(host.Preprocessors()) != 3 {
+		tester.Errorf("expected three preprocessors on host after collision")
+	}
+}
+
+func TestPreprocessExecute(tester *testing.T) {
+	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test")
+	newPreprocessor := &DummyPreprocessor{ priority: 123, statusCode: 321}
+	host.AddPreprocessor(newPreprocessor)
+	request, _ := http.NewRequest("GET", "", nil)
+	ctx, statusCode, err := host.Preprocess(context.Background(), request)
+	if err != nil {
+		tester.Errorf("Unexpected error during testing preprocessing")
+	}
+	if statusCode != 321 {
+		tester.Errorf("Expected status code 321 but got %d", statusCode)
+	}
+	if ctx.Value(ContextKeyRequestId) == nil {
+		tester.Error("Context mismatch after preprocessing")
+	}
 }

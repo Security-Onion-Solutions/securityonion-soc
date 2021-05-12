@@ -11,11 +11,12 @@
 package server
 
 import (
+	"context"
   "github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type Eventstore interface {
-	Search(criteria *model.EventSearchCriteria) (*model.EventSearchResults, error)
-	Update(criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error)
-	Acknowledge(criteria *model.EventAckCriteria) (*model.EventUpdateResults, error)
+	Search(context context.Context, criteria *model.EventSearchCriteria) (*model.EventSearchResults, error)
+	Update(context context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error)
+	Acknowledge(context context.Context, criteria *model.EventAckCriteria) (*model.EventUpdateResults, error)
 }

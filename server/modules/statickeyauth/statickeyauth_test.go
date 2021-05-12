@@ -35,6 +35,9 @@ func TestAuthInit(tester *testing.T) {
 }
 
 func authInit(tester *testing.T, auth *StaticKeyAuth, cfg module.ModuleConfig, failure bool, expectedCidr string) {
+	if len(auth.server.Host.Preprocessors()) != 1 {
+		tester.Errorf("expected one preprocessors to exist prior to init")
+	}
 	err := auth.Init(cfg)
 	if failure {
 		if err == nil {
@@ -46,8 +49,8 @@ func authInit(tester *testing.T, auth *StaticKeyAuth, cfg module.ModuleConfig, f
 		if auth.impl.anonymousNetwork.String() != expectedCidr {
 			tester.Errorf("expected anonymousNetwork %s but got %s", expectedCidr, auth.impl.anonymousNetwork.String())
 		}
-		if auth.server.Host.Auth == nil {
-			tester.Errorf("expected non-nil Host.Auth")
+		if len(auth.server.Host.Preprocessors()) != 2 {
+			tester.Errorf("expected two preprocessors to now exist")
 		}
 	}
 }

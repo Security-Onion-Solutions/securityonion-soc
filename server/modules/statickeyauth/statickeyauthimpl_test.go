@@ -11,7 +11,10 @@
 package statickeyauth
 
 import (
+	"context"
+	"net/http"
 	"testing"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 func TestValidateAuthorization(tester *testing.T) {
@@ -65,4 +68,37 @@ func TestAuthImplInit(tester *testing.T) {
 	if ai.anonymousNetwork.String() != "1.2.0.0/16" {
 		tester.Errorf("expected anonymousNetwork %s but got %s", "1.2.3.4/16", ai.anonymousNetwork.String())
 	}
+}
+
+func TestPreprocessPriority(tester *testing.T) {
+  handler := NewStaticKeyAuthImpl()
+  if handler.PreprocessPriority() != 100 {
+    tester.Error("expected 100 priority")
+  }
+}
+
+func TestPreprocess(tester *testing.T) {
+	ai := NewStaticKeyAuthImpl()
+	err := ai.Init("abc", "1")
+	ai.apiKey = "123"
+	request, _ := http.NewRequest("GET", "", nil)
+	request.Header.Set("authorization", ai.apiKey)
+  ctx, statusCode, err := ai.Preprocess(context.Background(), request)
+  if err != nil {
+  	tester.Errorf("Unexpected error: %v", err)
+  }
+  if statusCode != 0 {
+  	tester.Errorf("expected 0 statusCode but got %d", statusCode)
+  }
+  if ctx == nil {
+  	tester.Errorf("Unexpected nil context return")
+  }
+  requestor := ctx.Value(web.ContextKeyRequestor)
+  if requestor == nil {
+  	tester.Errorf("Expected non-nil requestor")
+  }
+  actualId := requestor.(string)
+  if actualId != "SONODE" {
+  	tester.Errorf("Expected SONODE but got %s", actualId)
+  }
 }

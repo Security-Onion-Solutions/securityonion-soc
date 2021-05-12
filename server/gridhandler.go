@@ -11,6 +11,7 @@
 package server
 
 import (
+  "context"
   "errors"
   "net/http"
   "github.com/security-onion-solutions/securityonion-soc/web"
@@ -29,13 +30,13 @@ func NewGridHandler(srv *Server) *GridHandler {
   return handler
 }
 
-func (gridHandler *GridHandler) HandleNow(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (gridHandler *GridHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   switch request.Method {
-    case http.MethodGet: return gridHandler.get(writer, request)
+    case http.MethodGet: return gridHandler.get(ctx, writer, request)
   }
   return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
 
-func (gridHandler *GridHandler) get(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (gridHandler *GridHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   return http.StatusOK, gridHandler.server.Datastore.GetNodes(), nil
 }

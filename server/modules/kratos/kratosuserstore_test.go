@@ -15,7 +15,7 @@ import (
 
 func TestUserstoreInit(tester *testing.T) {
   ai := NewKratosUserstore()
-  err := ai.Init("abc")
+  err := ai.Init("abc", 1)
   if err != nil {
     tester.Errorf("unexpected Init error")
   } 

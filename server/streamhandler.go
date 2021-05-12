@@ -11,6 +11,7 @@
 package server
 
 import (
+  "context"
   "errors"
   "io"
   "net/http"
@@ -34,15 +35,15 @@ func NewStreamHandler(srv *Server) *StreamHandler {
   return handler
 }
 
-func (streamHandler *StreamHandler) HandleNow(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (streamHandler *StreamHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   switch request.Method {
-    case http.MethodGet: return streamHandler.get(writer, request)
-    case http.MethodPost: return streamHandler.post(writer, request)
+    case http.MethodGet: return streamHandler.get(ctx, writer, request)
+    case http.MethodPost: return streamHandler.post(ctx, writer, request)
   }
   return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
 
-func (streamHandler *StreamHandler) get(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (streamHandler *StreamHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   statusCode := http.StatusBadRequest
   jobId, err := strconv.ParseInt(request.URL.Query().Get("jobId"), 10, 32)
   if err != nil {
@@ -85,7 +86,7 @@ func (streamHandler *StreamHandler) get(writer http.ResponseWriter, request *htt
   return statusCode, nil, err
 }
 
-func (streamHandler *StreamHandler) post(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (streamHandler *StreamHandler) post(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   statusCode := http.StatusBadRequest
   jobId, err := strconv.ParseInt(request.URL.Query().Get("jobId"), 10, 32)
   err = streamHandler.server.Datastore.SavePacketStream(int(jobId), request.Body)

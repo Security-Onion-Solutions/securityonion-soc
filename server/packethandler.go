@@ -11,6 +11,7 @@
 package server
 
 import (
+  "context"
   "errors"
   "net/http"
   "strconv"
@@ -30,14 +31,14 @@ func NewPacketHandler(srv *Server) *PacketHandler {
   return handler
 }
 
-func (packetHandler *PacketHandler) HandleNow(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (packetHandler *PacketHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   switch request.Method {
-    case http.MethodGet: return packetHandler.get(writer, request)
+    case http.MethodGet: return packetHandler.get(ctx, writer, request)
   }
   return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
 
-func (packetHandler *PacketHandler) get(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (packetHandler *PacketHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   statusCode := http.StatusBadRequest
   jobId, err := strconv.ParseInt(request.URL.Query().Get("jobId"), 10, 32)
   if err != nil {

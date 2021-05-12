@@ -11,6 +11,7 @@
 package server
 
 import (
+  "context"
   "errors"
   "net/http"
   "os"
@@ -31,14 +32,14 @@ func NewInfoHandler(srv *Server) *InfoHandler {
   return handler
 }
 
-func (infoHandler *InfoHandler) HandleNow(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (infoHandler *InfoHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   switch request.Method {
-    case http.MethodGet: return infoHandler.get(writer, request)
+    case http.MethodGet: return infoHandler.get(ctx, writer, request)
   }
   return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
 
-func (infoHandler *InfoHandler) get(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (infoHandler *InfoHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   info := &model.Info{
     Version: infoHandler.Host.Version,
     License: "GPL v2",

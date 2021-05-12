@@ -10,6 +10,7 @@
 package server
 
 import (
+  "context"
   "errors"
   "encoding/json"
   "net/http"
@@ -30,20 +31,20 @@ func NewCaseHandler(srv *Server) *CaseHandler {
   return handler
 }
 
-func (caseHandler *CaseHandler) HandleNow(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (caseHandler *CaseHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   if caseHandler.server.Casestore == nil {
     return http.StatusMethodNotAllowed, nil, errors.New("CASE_MODULE_NOT_ENABLED")
   }
 
   if caseHandler.server.Casestore != nil {
     switch request.Method {
-      case http.MethodPost: return caseHandler.create(writer, request)
+      case http.MethodPost: return caseHandler.create(ctx, writer, request)
     }
   }
   return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
 
-func (caseHandler *CaseHandler) create(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (caseHandler *CaseHandler) create(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   statusCode := http.StatusBadRequest
   var outputCase *model.Case
 

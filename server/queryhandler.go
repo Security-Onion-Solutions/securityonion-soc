@@ -10,6 +10,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"regexp"
@@ -31,15 +32,15 @@ func NewQueryHandler(srv *Server) *QueryHandler {
 	return handler
 }
 
-func (queryHandler *QueryHandler) HandleNow(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (queryHandler *QueryHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
 	switch request.Method {
 	case http.MethodGet:
-		return queryHandler.get(writer, request)
+		return queryHandler.get(ctx, writer, request)
 	}
 	return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
 
-func (queryHandler *QueryHandler) get(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (queryHandler *QueryHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
 	operation := queryHandler.GetPathParameter(request.URL.Path, 2)
 	safe, _ := regexp.MatchString(`^[a-z]+$`, operation)
 	if !safe {
