@@ -360,19 +360,21 @@ func (datastore *FileDatastoreImpl) GetPacketStream(jobId int, unwrap bool) (io.
   if job != nil {
     if job.Status == model.JobStatusCompleted {
       filename = fmt.Sprintf("sensoroni_%s_%d.%s", sanitize.Name(job.GetNodeId()), job.Id, sanitize.Name(job.FileExtension));
-      file, err := os.Open(datastore.getModifiedStreamFilename(job, unwrap))
+      var file *os.File
+      file, err = os.Open(datastore.getModifiedStreamFilename(job, unwrap))
       if err != nil {
         log.WithError(err).WithField("jobId", job.Id).Error("Failed to open packet stream")
-      }
-      reader = file
-      info, err := file.Stat()
-      length = info.Size()
-      log.WithFields(log.Fields {
-        "size": length,
-        "name": info.Name(),
-      }).Info("Streaming file")
-      if err != nil {
-        log.WithError(err).WithField("jobId", job.Id).Error("Failed to open file stats")
+      } else {
+        reader = file
+        info, err := file.Stat()
+        length = info.Size()
+        log.WithFields(log.Fields {
+          "size": length,
+          "name": info.Name(),
+        }).Info("Streaming file")
+        if err != nil {
+          log.WithError(err).WithField("jobId", job.Id).Error("Failed to open file stats")
+        }
       }
     }
   } else {
