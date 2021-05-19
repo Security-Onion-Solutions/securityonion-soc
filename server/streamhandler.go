@@ -59,7 +59,10 @@ func (streamHandler *StreamHandler) get(writer http.ResponseWriter, request *htt
     if !safe {
       return http.StatusBadRequest, nil, errors.New("Invalid extension")
     }
-    filename = strings.TrimSuffix(filename, ".bin") + "." + extension
+    extension = "." + extension
+    if !strings.HasSuffix(filename, extension) {
+      filename = strings.TrimSuffix(filename, ".bin") + extension
+    }
   }
 
   if err == nil {
