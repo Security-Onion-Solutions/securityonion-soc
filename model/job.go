@@ -11,6 +11,7 @@
 package model
 
 import (
+  "strings"
   "time"
 )
 
@@ -43,6 +44,17 @@ func NewJob() *Job {
     FileExtension: "bin",
     Filter: NewFilter(),
   }
+}
+
+func (job *Job) SetNodeId(nodeId string) {
+  job.NodeId = strings.ToLower(nodeId)
+}
+
+func (job *Job) GetNodeId() string {
+  // Lower case on the Getter as well since the property could have been 
+  // manipulated directly. Consider json.Unmarshall().
+  job.NodeId = strings.ToLower(job.NodeId)
+  return job.NodeId
 }
 
 func (job *Job) Complete() {

@@ -129,7 +129,7 @@ func (datastore *FileDatastoreImpl) GetNextJob(nodeId string) *model.Job {
   defer datastore.lock.RUnlock()
   var nextJob *model.Job
   now := time.Now()
-  jobs := datastore.jobsByNodeId[nodeId]
+  jobs := datastore.jobsByNodeId[strings.ToLower(nodeId)]
   for _, job := range jobs {
     retryTime := job.FailTime.Add(time.Millisecond * time.Duration(datastore.retryFailureIntervalMs))
     if job.Status != model.JobStatusCompleted && 
@@ -203,7 +203,7 @@ func (datastore *FileDatastoreImpl) DeleteJob(job *model.Job) error {
   if err == nil {
     job.Status = model.JobStatusDeleted
     filename := fmt.Sprintf("%d.json", job.Id)
-    folder := filepath.Join(datastore.jobDir, sanitize.Name(job.NodeId))
+    folder := filepath.Join(datastore.jobDir, sanitize.Name(job.GetNodeId()))
     err = os.Remove(filepath.Join(folder, filename))
     if err == nil {
       filename = fmt.Sprintf("%d.bin", job.Id)
@@ -227,18 +227,18 @@ func (datastore *FileDatastoreImpl) deleteJob(job *model.Job) error {
   if existingJob == nil {
     err = errors.New("Job does not exist")
   } else {
-    jobs := datastore.jobsByNodeId[job.NodeId]
+    jobs := datastore.jobsByNodeId[job.GetNodeId()]
     newJobs := make([]*model.Job, 0)
     for _, currentJob := range jobs {
       if currentJob.Id != job.Id {
         newJobs = append(newJobs, currentJob)
       }
     }
-    datastore.jobsByNodeId[job.NodeId] = newJobs
+    datastore.jobsByNodeId[job.GetNodeId()] = newJobs
     delete(datastore.jobsById, job.Id)
     log.WithFields(log.Fields {
       "id": job.Id,
-      "node": job.NodeId,
+      "node": job.GetNodeId(),
     }).Debug("Deleted job from list")
   }
   return err
@@ -250,16 +250,16 @@ func (datastore *FileDatastoreImpl) addJob(job *model.Job) error {
   if existingJob != nil {
     err = errors.New("Job already exists")
   } else {
-    jobs := datastore.jobsByNodeId[job.NodeId]
+    jobs := datastore.jobsByNodeId[job.GetNodeId()]
     if jobs == nil {
       jobs = make([]*model.Job, 0)
     }
-    datastore.jobsByNodeId[job.NodeId] = append(jobs, job)
+    datastore.jobsByNodeId[job.GetNodeId()] = append(jobs, job)
     datastore.jobsById[job.Id] = job
     datastore.incrementJobId(job.Id)
     log.WithFields(log.Fields {
       "id": job.Id,
-      "node": job.NodeId,
+      "node": job.GetNodeId(),
     }).Debug("Added job")
   }
   return err
@@ -273,7 +273,7 @@ func (datastore *FileDatastoreImpl) incrementJobId(id int) {
 
 func (datastore *FileDatastoreImpl) saveJob(job *model.Job) error {
   filename := fmt.Sprintf("%d.json", job.Id)
-  folder := filepath.Join(datastore.jobDir, sanitize.Name(job.NodeId))
+  folder := filepath.Join(datastore.jobDir, sanitize.Name(job.GetNodeId()))
   log.WithFields(log.Fields {
     "id": job.Id,
     "folder": folder,
@@ -359,20 +359,22 @@ func (datastore *FileDatastoreImpl) GetPacketStream(jobId int, unwrap bool) (io.
   job := datastore.GetJob(jobId)
   if job != nil {
     if job.Status == model.JobStatusCompleted {
-      filename = fmt.Sprintf("nodeoni_%s_%d.%s", sanitize.Name(job.NodeId), job.Id, job.FileExtension);
-      file, err := os.Open(datastore.getModifiedStreamFilename(job, unwrap))
+      filename = fmt.Sprintf("sensoroni_%s_%d.%s", sanitize.Name(job.GetNodeId()), job.Id, sanitize.Name(job.FileExtension));
+      var file *os.File
+      file, err = os.Open(datastore.getModifiedStreamFilename(job, unwrap))
       if err != nil {
         log.WithError(err).WithField("jobId", job.Id).Error("Failed to open packet stream")
-      }
-      reader = file
-      info, err := file.Stat()
-      length = info.Size()
-      log.WithFields(log.Fields {
-        "size": length,
-        "name": info.Name(),
-      }).Info("Streaming file")
-      if err != nil {
-        log.WithError(err).WithField("jobId", job.Id).Error("Failed to open file stats")
+      } else {
+        reader = file
+        info, err := file.Stat()
+        length = info.Size()
+        log.WithFields(log.Fields {
+          "size": length,
+          "name": info.Name(),
+        }).Info("Streaming file")
+        if err != nil {
+          log.WithError(err).WithField("jobId", job.Id).Error("Failed to open file stats")
+        }
       }
     }
   } else {
@@ -384,7 +386,7 @@ func (datastore *FileDatastoreImpl) GetPacketStream(jobId int, unwrap bool) (io.
 
 func (datastore *FileDatastoreImpl) getStreamFilename(job *model.Job) string {
   filename := fmt.Sprintf("%d.bin", job.Id)
-  folder := filepath.Join(datastore.jobDir, sanitize.Name(job.NodeId))
+  folder := filepath.Join(datastore.jobDir, sanitize.Name(job.GetNodeId()))
   return filepath.Join(folder, filename)
 }
 

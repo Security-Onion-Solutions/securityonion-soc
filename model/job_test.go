@@ -41,3 +41,42 @@ func TestVerifyJob(tester *testing.T) {
     tester.Errorf("expected Status %d but got %d", JobStatusCompleted, job.Status)
   }
 }
+
+func TestSetNodeId(tester *testing.T) {
+  job := NewJob()
+  if job.NodeId != "" {
+    tester.Errorf("expected new jobs to have an empty node ID")
+  }
+
+  job.NodeId = "test"
+  if job.NodeId != "test" {
+    tester.Errorf("expected unmodified Node ID but got %s", job.NodeId)
+  }
+
+  job.SetNodeId("testing")
+  if job.NodeId != "testing" {
+    tester.Errorf("expected unmodified Node ID but got %s", job.NodeId)
+  }
+  if job.GetNodeId() != "testing" {
+    tester.Errorf("expected unmodified Node ID via getter but got %s", job.GetNodeId())
+  }
+
+  job.SetNodeId("TestingThis")
+  if job.NodeId != "testingthis" {
+    tester.Errorf("expected lowercased Node ID but got %s", job.NodeId)
+  }
+  if job.GetNodeId() != "testingthis" {
+    tester.Errorf("expected lowercased Node ID via getter but got %s", job.GetNodeId())
+  }
+
+  job.NodeId = "TestingThis2"
+  if job.NodeId != "TestingThis2" {
+    tester.Errorf("expected unmodified Node ID but got %s", job.NodeId)
+  }
+  if job.GetNodeId() != "testingthis2" {
+    tester.Errorf("expected lowercased Node ID via getter but got %s", job.GetNodeId())
+  }
+  if job.NodeId != "testingthis2" {
+    tester.Errorf("expected lowercased Node ID after getter but got %s", job.NodeId)
+  }
+}
