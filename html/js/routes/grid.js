@@ -38,6 +38,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
     itemsPerPage: 10,
     footerProps: { 'items-per-page-options': [10,25,50,100,250,1000] },
     gridEps: 0,
+    metricsEnabled: false,
   }},
   created() { 
     Vue.filter('colorNodeStatus', this.colorNodeStatus);    
@@ -70,6 +71,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
         this.nodes.forEach(function(node) {
           route.updateNode(node);
         });
+        this.updateMetricsEnabled();
         this.loadLocalSettings();
       } catch (error) {
         this.$root.showError(error);
@@ -77,6 +79,21 @@ routes.push({ path: '/grid', name: 'grid', component: {
       this.$root.stopLoading();
       this.$root.subscribe("node", this.updateNode);
       this.$root.subscribe("status", this.updateStatus);
+    },
+    updateMetricsEnabled() {
+      this.metricsEnabled = !this.nodes.every(function(node) { return !node.metricsEnabled; });
+
+      const route = this;
+      const epsColumn = this.headers.find(function(item) { 
+        return item.text == route.i18n.eps 
+      });
+      if (epsColumn) {
+        if (!this.metricsEnabled) {
+          epsColumn.align = ' d-none';
+        } else {
+          epsColumn.align = '';
+        }
+      }
     },
     expand(item) {
       if (this.isExpanded(item)) {
@@ -101,6 +118,10 @@ routes.push({ path: '/grid', name: 'grid', component: {
       }
     },
     updateNode(node) {
+      this.updateNodeDetails(node);
+      this.updateMetricsEnabled()
+    },
+    updateNodeDetails(node) {
       var found = false;
       for (var i = 0; i < this.nodes.length; i++) {
         if (this.nodes[i].id == node.id) {

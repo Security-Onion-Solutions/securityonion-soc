@@ -24,7 +24,7 @@ func TestFileDatastoreInit(tester *testing.T) {
     tester.Errorf("expected Init error")
   }
 
-  jobDir := "/tmp/nodeoni.jobs"
+  jobDir := "/tmp/sensoroni.jobs"
   cfg["jobDir"] = jobDir
   defer os.Remove(jobDir)
   os.Mkdir(jobDir, 0777)

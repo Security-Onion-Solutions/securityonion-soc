@@ -111,7 +111,7 @@ func (metrics *InfluxDBMetrics) fetchLatestValuesByHost(measurement string, fiel
       log.WithError(err).Error("Unable to determine latest value")
     }
   } else {
-    log.Info("Skipping InfluxDB fetch due to disconnected InfluxDB client")
+    log.Debug("Skipping InfluxDB fetch due to disconnected InfluxDB client")
   }
   return values
 }
@@ -249,5 +249,7 @@ func (metrics *InfluxDBMetrics) UpdateNodeMetrics(node *model.Node) bool {
   node.ProductionEps = metrics.getProductionEps(node.Id)
   node.ConsumptionEps = metrics.getConsumptionEps(node.Id)
   node.FailedEvents = metrics.getFailedEvents(node.Id)
-  return node.UpdateOverallStatus()
+
+  enhancedStatusEnabled := (metrics.client != nil)
+  return node.UpdateOverallStatus(enhancedStatusEnabled)
 }

@@ -193,6 +193,7 @@ const i18n = {
       months: 'months',
       mruQuery: 'Recently Used',
       mruQueryHelp: 'This query is a user-defined query and is only available on this browser.',
+      na: 'N/A',
       noData: 'No information is currently available.',
       nodeExpandHelp: 'Show node details',
       nodeExpand: 'Expand',

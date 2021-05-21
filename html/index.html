@@ -1055,7 +1055,7 @@
             <h2 v-text="i18n.grid"></h2>
           </v-col>
           <v-col cols="3" align="end">
-            <h4>{{ i18n.gridEps }} {{ gridEps | formatCount }}</h4>
+            <h4 v-if="metricsEnabled">{{ i18n.gridEps }} {{ gridEps | formatCount }}</h4>
           </v-col>
         </v-row>
         <v-row>
@@ -1088,7 +1088,10 @@
                   <td v-text="props.item.description"></td>
                   <td v-text="props.item.version"></td>
                   <td v-text="props.item.model"></td>
-                  <td>{{ props.item.productionEps | formatCount }}</td>
+                  <td v-if="metricsEnabled">
+                    <span v-if="props.item.metricsEnabled">{{ props.item.productionEps | formatCount }}</span>
+                    <span v-if="!props.item.metricsEnabled">{{ i18n.na }}</span>
+                  </td>
                   <td>{{ props.item.updateTime | formatTimestamp }}</td>
                   <td>{{ props.item.epochTime | formatTimestamp }}</td>
                   <td>{{ props.item.uptimeSeconds | formatDuration }}</td>
@@ -1112,15 +1115,15 @@
                             <span class="filter label">{{ i18n.dateOnline }}</span>
                             <span class="filter value">{{ item.onlineTime | formatDateTime }}</span>
                           </div>
-                          <div>
+                          <div v-if="item.metricsEnabled">
                             <span class="filter label">{{ i18n.epsProduction }}</span>
                             <span class="filter value">{{ item.productionEps | formatCount }}</span>
                           </div>
-                          <div>
+                          <div v-if="item.metricsEnabled">
                             <span class="filter label">{{ i18n.epsConsumption }}</span>
                             <span class="filter value">{{ item.consumptionEps | formatCount }}</span>
                           </div>
-                          <div>
+                          <div v-if="item.metricsEnabled">
                             <span class="filter label">{{ i18n.nodeStatusProcess }}</span>
                             <span class="filter value">{{ $root.localizeMessage(item.processStatus) }}</span>
                           </div>
@@ -1128,7 +1131,7 @@
                             <span class="filter label">{{ i18n.nodeStatusConnection }}</span>
                             <span class="filter value">{{ $root.localizeMessage(item.connectionStatus) }}</span>
                           </div>
-                          <div>
+                          <div v-if="item.metricsEnabled">
                             <span class="filter label">{{ i18n.nodeStatusRaid }}</span>
                             <span class="filter value">{{ $root.localizeMessage(item.raidStatus) }}</span>
                           </div>

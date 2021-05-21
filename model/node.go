@@ -38,6 +38,7 @@ type Node struct {
   ProductionEps           int       `json:"productionEps"`
   ConsumptionEps          int       `json:"consumptionEps"`
   FailedEvents            int       `json:"failedEvents"`
+  MetricsEnabled          bool      `json:"metricsEnabled"`
 }
 
 func NewNode(id string) *Node {
@@ -79,19 +80,22 @@ func (node *Node) updateStatusComponent(currentState string, newState string) st
   return currentState
 }
 
-func (node *Node) UpdateOverallStatus() bool {
+func (node *Node) UpdateOverallStatus(enhancedStatusEnabled bool) bool {
   newStatus := NodeStatusUnknown
   newStatus = node.updateStatusComponent(newStatus, node.ConnectionStatus)
-  newStatus = node.updateStatusComponent(newStatus, node.RaidStatus)
-  newStatus = node.updateStatusComponent(newStatus, node.ProcessStatus)
+  if enhancedStatusEnabled {
+    newStatus = node.updateStatusComponent(newStatus, node.RaidStatus)
+    newStatus = node.updateStatusComponent(newStatus, node.ProcessStatus)
+  }
 
   // Special case: If either process or connection status is unknown then show node in error state.
-  if (node.Role != "so-import" && node.ProcessStatus == NodeStatusUnknown) || 
+  if (enhancedStatusEnabled && node.ProcessStatus == NodeStatusUnknown) || 
       node.ConnectionStatus == NodeStatusUnknown {
     newStatus = NodeStatusFault
   }
 
   oldStatus := node.Status
   node.Status = newStatus
+  node.MetricsEnabled = enhancedStatusEnabled
   return oldStatus != node.Status
 }

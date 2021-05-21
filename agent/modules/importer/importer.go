@@ -18,6 +18,7 @@ import (
   "os/exec"
   "time"
   "github.com/apex/log"
+  "github.com/kennygrant/sanitize"
   "github.com/security-onion-solutions/securityonion-soc/agent"
   "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/module"
@@ -117,7 +118,7 @@ func (importer *Importer) ProcessJob(job *model.Job, reader io.ReadCloser) (io.R
 }
 
 func (importer *Importer) CleanupJob(job *model.Job) {
-    pcapOutputFilepath := fmt.Sprintf("%s/%d.%s", importer.pcapOutputPath, job.Id, job.FileExtension)
+    pcapOutputFilepath := fmt.Sprintf("%s/%d.%s", importer.pcapOutputPath, job.Id, sanitize.Name(job.FileExtension))
     os.Remove(pcapOutputFilepath)
 }
 

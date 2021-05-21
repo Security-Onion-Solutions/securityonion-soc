@@ -632,7 +632,7 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(query string, job *model
 
   filter.BeginTime = timestamp.Add(time.Duration(-duration - int64(store.timeShiftMs)) * time.Millisecond)
   filter.EndTime = timestamp.Add(time.Duration(duration + int64(store.timeShiftMs)) * time.Millisecond)
-  job.NodeId = outputSensorId
+  job.SetNodeId(outputSensorId)
   job.Filter = filter
 
   return nil
