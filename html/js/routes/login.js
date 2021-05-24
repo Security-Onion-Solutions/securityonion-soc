@@ -18,6 +18,7 @@ routes.push({ path: '*', name: 'login', component: {
       email: null,
       password: null,
       csrfToken: null,
+      method: null,
     },
     rules: {
       required: value => !!value || this.$root.i18n.required,
@@ -30,7 +31,7 @@ routes.push({ path: '*', name: 'login', component: {
       this.$root.showLogin();
     } else {
       this.showLoginForm = true;
-      this.authLoginUrl = this.$root.authUrl + 'login/methods/password' + location.search;
+      this.authLoginUrl = this.$root.authUrl + 'login' + location.search;
       this.loadData()
     }
   },
@@ -44,9 +45,13 @@ routes.push({ path: '*', name: 'login', component: {
           this.banner = marked(response.data);
         }
         response = await this.$root.authApi.get('login/flows?id=' + this.$root.getAuthFlowId());
-        this.form.csrfToken = response.data.methods.password.config.fields.find(item => item.name == 'csrf_token').value;
-        if (response.data.methods.password.config.messages) {
-          this.$root.showWarning(this.i18n.loginInvalid);
+        this.form.csrfToken = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'csrf_token').attributes.value;
+        this.form.method = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'method').attributes.value;
+        if (response.data.ui.messages) {
+          const error = response.data.ui.messages.find(item => item.type == "error");
+          if (error && error.text) {
+            this.$root.showWarning(this.i18n.loginInvalid);
+          }
         }
       } catch (error) {
         if (error.response.status == 410) {

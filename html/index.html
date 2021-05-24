@@ -778,6 +778,7 @@
                         <v-text-field v-model="form.firstName" :placeholder="i18n.firstName"></v-text-field>
                         <v-text-field v-model="form.lastName" :placeholder="i18n.lastName"></v-text-field>
                         <v-text-field name="csrf_token" v-model="form.csrfToken" class="d-none"></v-text-field>
+                        <v-text-field name="method" v-model="form.method" class="d-none"></v-text-field>
                       </v-col>
                     </v-row>
                   </v-container>
@@ -1169,6 +1170,7 @@
                 <v-text-field name="password" v-model="form.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required]"></v-text-field>
                 <v-text-field :placeholder="i18n.passwordConfirm" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.matches]"></v-text-field>
                 <v-text-field name="csrf_token" v-model="form.csrfToken" class="d-none"></v-text-field>
+                <v-text-field name="method" v-model="form.method" class="d-none"></v-text-field>
                 <v-btn type="submit" color="primary" :disabled="!form.valid" v-text="i18n.save"></v-btn>
               </v-col>
             </v-row>

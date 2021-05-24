@@ -38,9 +38,6 @@ func TestCopyFromUser(tester *testing.T) {
   if kratosUser.Traits.Status != user.Status {
     tester.Errorf("Status failed to convert")
   } 
-  if kratosUser.Traits.SearchUsername != user.SearchUsername {
-    tester.Errorf("SearchUsername failed to convert")
-  } 
   if kratosUser.Addresses[0].Value != user.Email {
     tester.Errorf("Address failed to convert")
   } 
@@ -48,7 +45,6 @@ func TestCopyFromUser(tester *testing.T) {
 
 func TestCopyToUser(tester *testing.T) {
 	kratosUser := NewKratosUser("myEmail", "myFirst", "myLast", "myRole", "locked")
-  kratosUser.Traits.SearchUsername = "mysearchuser"
 	user := model.NewUser()
 	kratosUser.copyToUser(user)
   if kratosUser.Traits.Email != user.Email {
@@ -65,9 +61,6 @@ func TestCopyToUser(tester *testing.T) {
 	} 
   if kratosUser.Traits.Status != user.Status {
     tester.Errorf("Status failed to convert")
-  } 
-  if kratosUser.Traits.SearchUsername != user.SearchUsername {
-    tester.Errorf("SearchUsername failed to convert")
   } 
   if kratosUser.Addresses[0].Value != user.Email {
     tester.Errorf("Address failed to convert")
