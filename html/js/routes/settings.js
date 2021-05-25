@@ -16,11 +16,9 @@ routes.push({ path: '/settings', name: 'settings', component: {
     usingDefaults: false,
     form: {
       valid: false,
-      email: null,
       password: null,
       csrfToken: null,
       method: null,
-      email: null,
     },
     rules: {
       required: value => !!value || this.$root.i18n.required,
