@@ -647,13 +647,13 @@ const huntComponent = {
             }
           }
 
-          var link = route.findEligibleActionLinkForEvent(action, event);
+          var link = route.$root.findEligibleActionLinkForEvent(action, event);
           if (link) {
             action.enabled = true;
-            action.linkFormatted = route.formatActionContent(link, event, field, value, true);
-            action.bodyFormatted = route.formatActionContent(action.body, event, field, value, action.encodeBody);
-            action.backgroundSuccessLinkFormatted = route.formatActionContent(action.backgroundSuccessLink, event, field, value, true);
-            action.backgroundFailureLinkFormatted = route.formatActionContent(action.backgroundFailureLink, event, field, value, true);
+            action.linkFormatted = route.$root.formatActionContent(link, event, field, value, true);
+            action.bodyFormatted = route.$root.formatActionContent(action.body, event, field, value, action.encodeBody);
+            action.backgroundSuccessLinkFormatted = route.$root.formatActionContent(action.backgroundSuccessLink, event, field, value, true);
+            action.backgroundFailureLinkFormatted = route.$root.formatActionContent(action.backgroundFailureLink, event, field, value, true);
             
           } else {
             action.enabled = false;
@@ -668,143 +668,6 @@ const huntComponent = {
           this.quickActionVisible = true; 
         });
       }
-    },
-    copyToClipboard(data, style) {
-      const buffer = document.getElementById('clipboardBuffer');
-      // Convert entire item into text
-      if (style == 'json') {
-        data = JSON.stringify(data);
-      } else if (style == 'kvp') {
-        var text = "";
-        for (const prop in data) {
-          text += prop + ": " + data[prop] + "\n";
-        }
-        data = text;
-      }
-      buffer.value = data;
-      buffer.select();
-      buffer.setSelectionRange(0, 99999);
-      document.execCommand("copy");
-    },    
-    findEligibleActionLinkForEvent(action, event) {
-      if (action && action.links) {
-        for (var idx = 0; idx < action.links.length; idx++) {
-          const link = action.links[idx];
-
-          if (this.isActionLinkEligibleForEvent(link, event)) {
-            return link;
-          }
-        }
-      }
-      return null;
-    },
-    isActionLinkEligibleForEvent(link, event) {
-      var eligible = true;
-      eligible &= (link.indexOf("{eventId}") == -1 || event['soc_id']);
-      const fields = this.getDynamicActionFieldNames(link);
-      if (fields && fields.length > 0) {
-        fields.forEach(function(field) {
-          value = event[field];
-          eligible &= value != undefined && value != null;
-        });
-      }
-      return eligible;
-    },
-    getDynamicActionFieldNames(url) {
-      const fields = [];
-      const matches = url.matchAll(/\{:([a-zA-Z0-9_.]+?)(\|.*?)?\}/g);
-      for (const match of matches) {
-        if (match.length > 1) {
-          fields.push(match[1]);
-        }
-      }
-      return fields;
-    },
-    performAction(event, action) {
-      if (action && !action.background) return false;
-      const options = action.options ? action.options : { mode: 'no-cors' };
-      options.method = action.method;
-      if (action.method != 'GET') {
-        options.body = action.bodyFormatted;
-      }
-      const route = this;
-      fetch(action.linkFormatted, options)
-      .then(data => {
-        var link = action.backgroundSuccessLinkFormatted;
-        if (link) {
-          if (data.status != null) {
-            link = route.replaceActionVar(link, "responseCode", data.status, true)
-          }
-          if (data.statusText != null) {
-            link = route.replaceActionVar(link, "responseStatus", data.statusText, true)
-          }
-          window.open(link, action.target);
-        } else {
-          route.$root.showTip(route.i18n.actionSuccess + route.$root.localizeMessage(action.name));
-        }
-      })
-      .catch((error) => {
-        console.error('Unable to perform background action: ' + error);
-        var link = action.backgroundFailureLinkFormatted;
-        if (link) {
-          link = route.replaceActionVar(link, "error", error.message, true)
-          window.open(link, action.target);
-        } else {
-          route.$root.showTip(route.i18n.actionFailure + route.$root.localizeMessage(action.name));
-        }
-      });
-    },
-    base64encode(content) {
-      try {
-        content = btoa(content);
-      } catch (e) {
-        console.error("Failed to base64 encode content: " + e);
-      }
-      return content;
-    },
-    escape(content) {
-      if (content.replace) {
-        try {
-          content = content.replace(/\\/g, "\\\\");
-          content = content.replace(/\"/g, "\\\"");
-        } catch (e) {
-          console.error("Failed to escape content: " + e);
-        }
-      }
-      return content
-    },
-    replaceActionVar(content, field, value, uriEncode) {
-      if (value === undefined || value == null) return content;
-
-      var encode = function(input) { 
-        if (uriEncode) {
-          return encodeURIComponent(input);
-        }
-        return input; 
-      };
-
-      content = content.replace("{" + field + "}", encode(value));
-      content = content.replace("{" + field + "|base64}", encode(this.base64encode(value)));
-      content = content.replace("{" + field + "|escape}", encode(this.escape(value)));
-      content = content.replace("{" + field + "|escape|base64}", encode(this.base64encode(this.escape(value))));
-      return content;
-    },
-    formatActionContent(content, event, field, value, uriEncode = true) {
-      if (!content) return null;
-
-      content = this.replaceActionVar(content, "eventId", event["soc_id"], uriEncode)
-      content = this.replaceActionVar(content, "field", field, uriEncode)
-      content = this.replaceActionVar(content, "value", value, uriEncode)
-
-      const fields = this.getDynamicActionFieldNames(content);
-      const route = this;
-      if (fields && fields.length > 0) {
-        fields.forEach(function(field) {
-          value = event[field];
-          content = route.replaceActionVar(content, ":" + field, value, uriEncode)
-        });
-      }
-      return content;
     },
     filterVisibleFields(eventModule, eventDataset, fields) {
       if (this.eventFields) {

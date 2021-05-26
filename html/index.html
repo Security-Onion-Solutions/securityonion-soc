@@ -577,7 +577,7 @@
                   {{ i18n.share }}
                 </v-list-item-title>
               </template>
-              <v-list-item id="actionCopyValue" dense @click="copyToClipboard(quickActionValue)">
+              <v-list-item id="actionCopyValue" dense @click="$root.copyToClipboard(quickActionValue)">
                 <v-list-item-icon>
                   <v-icon color="white">fa-copy</v-icon>
                 </v-list-item-icon>
@@ -585,7 +585,7 @@
                   {{ i18n.copyFieldToClipboard }}
                 </v-list-item-title>
               </v-list-item>
-              <v-list-item id="actionCopyFieldValue" dense @click="copyToClipboard(quickActionField + ': ' + quickActionValue)">
+              <v-list-item id="actionCopyFieldValue" dense @click="$root.copyToClipboard(quickActionField + ': ' + quickActionValue)">
                 <v-list-item-icon>
                   <v-icon color="white">fa-copy</v-icon>
                 </v-list-item-icon>
@@ -593,7 +593,7 @@
                   {{ i18n.copyFieldValueToClipboard }}
                 </v-list-item-title>
               </v-list-item>
-              <v-list-item id="actionCopyEventAsJson" dense @click="copyToClipboard(quickActionEvent, 'json')">
+              <v-list-item id="actionCopyEventAsJson" dense @click="$root.copyToClipboard(quickActionEvent, 'json')">
                 <v-list-item-icon>
                   <v-icon color="white">fa-copy</v-icon>
                 </v-list-item-icon>
@@ -601,7 +601,7 @@
                   {{ i18n.copyEventToClipboardAsJson }}
                 </v-list-item-title>
               </v-list-item>
-              <v-list-item id="actionCopyEventAsKvp" dense @click="copyToClipboard(quickActionEvent, 'kvp')">
+              <v-list-item id="actionCopyEventAsKvp" dense @click="$root.copyToClipboard(quickActionEvent, 'kvp')">
                 <v-list-item-icon>
                   <v-icon color="white">fa-copy</v-icon>
                 </v-list-item-icon>
@@ -619,7 +619,7 @@
                   {{ i18n.quickActions }}
                 </v-list-item-title>
               </template>
-              <v-list-item dense v-for="action in actions" class="custom-quick-action-button" v-if="action.enabled" :key="action.link" :href="action.background ? '' : action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="action.target" @click="performAction($event, action)">
+              <v-list-item dense v-for="action in actions" class="custom-quick-action-button" v-if="action.enabled" :key="action.link" :href="action.background ? '' : action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="action.target" @click="$root.performAction($event, action)">
                 <v-list-item-icon>
                   <v-icon :alt="action.name" color="white">{{ action.icon }}</v-icon>
                 </v-list-item-icon>
@@ -865,7 +865,7 @@
 
 
     <script type="text/x-template" id="page-job">
-      <v-container fluid>
+      <v-container fluid @click="jobClickHandler()">
         <v-row>
           <v-col>
             <h2>{{ i18n.viewJob }}</h2>
@@ -1045,6 +1045,36 @@
             </v-alert>
           </v-col>
         </v-row>
+        <v-menu v-model="quickActionVisible" :position-x="quickActionX" :position-y="quickActionY" absolute>
+          <v-list id="hunt-quick-action" color="secondary">                                                                                
+              <v-list-item id="actionCopyValue" dense @click="$root.copyToClipboard(quickActionValue)">
+                <v-list-item-icon>                   
+                  <v-icon color="white">fa-copy</v-icon>
+                </v-list-item-icon>                                                                                 
+                <v-list-item-title class="white--text">                                                             
+                  {{ i18n.copyToClipboard }}                                  
+                </v-list-item-title>                                                                                         
+              </v-list-item>                                                                                                                        
+          </v-list>                                                     
+          <v-list id="hunt-quick-action" color="secondary">                                        
+              <template v-slot:activator>                                                                        
+                <v-list-item-icon>                                                                                 
+                  <v-icon color="white">fa-external-link-alt</v-icon>                                              
+                </v-list-item-icon>                                                                                                    
+                <v-list-item-title class="white--text">                                                                                
+                  {{ i18n.quickActions }}                                           
+                </v-list-item-title>                                                                                      
+              </template>                                                                                                 
+              <v-list-item dense v-for="action in actions" class="custom-quick-action-button" v-if="action.enabled" :key="action.link" :href="action.background ? '' : action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="action.target" @click="$root.performAction($event, action)">
+                <v-list-item-icon>
+                  <v-icon :alt="action.name" color="white">{{ action.icon }}</v-icon>
+                </v-list-item-icon>                                                     
+                <v-list-item-title class="white--text">                                      
+                  {{ $root.localizeMessage(action.name) }}                                     
+                </v-list-item-title>                                                           
+              </v-list-item>                                                    
+          </v-list>                                                                           
+        </v-menu>
       </v-container>
     </script>
 
