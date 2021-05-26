@@ -35,6 +35,13 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     itemsPerPage: 10,
     footerProps: { 'items-per-page-options': [10,50,250,1000] },
     count: 500,
+    quickActionVisible: false,
+    quickActionX: 0,
+    quickActionY: 0,
+    quickActionEvent: null,
+    quickActionField: "",
+    quickActionValue: "",
+    actions: [],
   }},
   created() {
     Vue.filter('formatPacketView', this.formatPacketView);
@@ -43,6 +50,7 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
   },
   mounted() {
     this.loadData();
+    this.$root.loadParameters('job', this.initActions);
   },
   destroyed() {
     this.$root.unsubscribe("job", this.updateJob);
@@ -57,6 +65,57 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     'itemsPerPage': 'saveLocalSettings',
   },
   methods: {
+    initActions(params) {                                                     
+      this.params = params;
+      this.actions = params["actions"];                           
+    },
+    jobClickHandler() {
+      if (window.getSelection().toString() != '') {
+        this.toggleQuickAction(event, {}, 'userSelection', window.getSelection().toString());
+        window.getSelection().empty();
+      }
+    },
+    toggleQuickAction(domEvent, event, field, value) {
+      if (!domEvent || this.quickActionVisible) {        
+        this.quickActionVisible = false;                
+        return;                                        
+      }
+                                                            
+      if (value) {      
+        var route = this;
+        this.actions.forEach(function(action, index) {
+          if (action.fields) {
+            action.enabled = false;
+            for (var x = 0; x < action.fields.length; x++) {
+              if (action.fields[x] == field) {
+                action.enabled = true;
+                break;                          
+              } 
+            } 
+          }                                             
+                                                              
+          var link = route.$root.findEligibleActionLinkForEvent(action, event);
+          if (link) {                                 
+            action.enabled = true;                        
+            action.linkFormatted = route.$root.formatActionContent(link, event, field, value, true);
+            action.bodyFormatted = route.$root.formatActionContent(action.body, event, field, value, action.encodeBody);
+            action.backgroundSuccessLinkFormatted = route.$root.formatActionContent(action.backgroundSuccessLink, event, field, value, true);
+            action.backgroundFailureLinkFormatted = route.$root.formatActionContent(action.backgroundFailureLink, event, field, value, true);
+      
+          } else {   
+            action.enabled = false;
+          }          
+        });                                                     
+        this.quickActionEvent = event;
+        this.quickActionField = field;
+        this.quickActionValue = value;
+        this.quickActionX = domEvent.clientX;
+        this.quickActionY = domEvent.clientY;
+        this.$nextTick(() => {    
+          this.quickActionVisible = true;
+        });     
+      }                 
+    },
     getPacketColumnSpan() {
         return this.isOptionEnabled('packets') ? this.headers.length : 1;
     },

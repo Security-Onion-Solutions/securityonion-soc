@@ -63,6 +63,7 @@ const i18n = {
       copyEventToClipboardAsKvp: 'Copy full event as field:value pairs',
       copyFieldToClipboard: 'Copy this value only',
       copyFieldValueToClipboard: 'Copy as field:value',
+      copyToClipboard: 'Copy to clipboard',
       custom: 'Custom',
       darkMode: 'Dark Mode',
       dateDataEpoch: 'Earliest PCAP',
