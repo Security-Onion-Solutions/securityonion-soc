@@ -43,6 +43,10 @@ global.VueRouter = function(obj) {};
 ////////////////////////////////////
 // Test Helper Functions
 ////////////////////////////////////
+global.getApp = function() {
+	return app;
+}
+
 global.initComponentData = function(comp) {
 	return comp.data();
 }
