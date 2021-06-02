@@ -62,7 +62,7 @@ $(document).ready(function() {
       elasticVersion: '0.0.0',
       wazuhVersion: '0.0.0',
       papi: null,
-      connectionTimeout: 120000,
+      connectionTimeout: 300000,
       wsConnectionTimeout: 15000,
       socket: null,
       subscriptions: [],
