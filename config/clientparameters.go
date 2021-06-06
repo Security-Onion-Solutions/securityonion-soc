@@ -19,6 +19,7 @@ const DEFAULT_MOST_RECENTLY_USED_LIMIT = 5
 type ClientParameters struct {
   HuntingParams       HuntingParameters     `json:"hunt"`
   AlertingParams      HuntingParameters     `json:"alerts"`
+  JobParams           HuntingParameters     `json:"job"`
   DocsUrl             string                `json:"docsUrl"`
   CheatsheetUrl       string                `json:"cheatsheetUrl"`
   GridParams          GridParameters        `json:"grid"`
@@ -34,6 +35,7 @@ func (config *ClientParameters) Verify() error {
   var err error
   err = config.HuntingParams.Verify()
   err = config.AlertingParams.Verify()
+  err = config.JobParams.Verify()
   return err
 }
 
