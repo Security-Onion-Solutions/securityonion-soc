@@ -222,6 +222,7 @@ const i18n = {
       pcap: 'PCAP',
       pending: 'Pending',
       product: 'Security Onion',
+      quickDrilldown: 'Quick Drilldown',
       queriesHelp: 'Choose from several pre-defined queries',
       queryHelp: 'Specify a hunting query in Onion Query Language (OQL)',
       quickActions: 'Actions',
