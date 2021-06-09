@@ -445,7 +445,7 @@
                            <div class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()" v-bind="attrs" @click="countDrilldown(item)"></div>
 			 </span>
 		       </template>
-		       <span>Click to drill down into these events</span>
+		       <span>{{ i18n.quickDrilldown }}</span>
 	             </v-tooltip>
                      <div v-else class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()"></div>
                   </td>

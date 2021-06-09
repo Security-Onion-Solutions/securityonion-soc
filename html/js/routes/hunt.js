@@ -624,8 +624,8 @@ const huntComponent = {
       return route;
     },
     countDrilldown(event) {
-      if ( this.category == 'alerts' && Object.keys(event).length == 4 && Object.keys(event)[0] == "count" && Object.keys(event)[1] == "rule.name" && Object.keys(event)[2] == "event.module" && Object.keys(event)[3] == "event.severity_label" ) {
-        this.filterRouteDrilldown = this.buildFilterRoute('rule.name', event['rule.name'], FILTER_DRILLDOWN);
+      if ( (Object.keys(event).length == 2 && Object.keys(event)[0] == "count") || (Object.keys(event).length == 4 && Object.keys(event)[0] == "count" && Object.keys(event)[1] == "rule.name" && Object.keys(event)[2] == "event.module" && Object.keys(event)[3] == "event.severity_label") ) {
+        this.filterRouteDrilldown = this.buildFilterRoute(Object.keys(event)[1], event[Object.keys(event)[1]], FILTER_DRILLDOWN);
         this.$router.push(this.filterRouteDrilldown);
       }
     },
