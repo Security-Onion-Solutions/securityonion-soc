@@ -20,4 +20,5 @@ type Info struct {
   Parameters     *config.ClientParameters `json:"parameters"`
   ElasticVersion string                   `json:"elasticVersion"`
   WazuhVersion   string                   `json:"wazuhVersion"`
+  UserId         string                   `json:"userId"`
 }

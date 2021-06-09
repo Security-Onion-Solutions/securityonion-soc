@@ -131,6 +131,12 @@
             </v-btn>
           </template>
           <v-list id="top-menu">
+            <v-list-item>
+              <v-list-item-content>
+                <v-list-item-title v-text="username"></v-list-item-title>
+              </v-list-item-content>
+            </v-list-item>
+            <v-divider></v-divider>
             <v-list-item @click.stop="toggleTheme">
               <v-list-item-action>
                 <v-icon class="mx-auto">fa-adjust</v-icon>
