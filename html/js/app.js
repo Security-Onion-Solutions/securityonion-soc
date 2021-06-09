@@ -228,19 +228,21 @@ $(document).ready(function() {
       redirectIfAuthCompleted() {
         if (!location.pathname.startsWith("/login")) {
           destUri = this.getCookie("AUTH_REDIRECT");
-          if (destUri && destUri != "/" && 
-              !destUri.includes(".?v=") && 
-              !destUri.endsWith(".ico") && 
-              !destUri.endsWith(".js") && 
-              !destUri.endsWith(".css") &&
-              !destUri.endsWith(".png") &&
-              !destUri.endsWith(".svg") &&
-              !destUri.endsWith(".jpg") &&
-              !destUri.endsWith(".gif")) {
-            this.log("Redirecting to auth destination: " + destUri);
+          if (destUri) {
             this.deleteCookie("AUTH_REDIRECT");
-            location.pathname = destUri;
-            return true;
+            if (destUri != "/" && 
+                !destUri.includes(".?v=") && 
+                !destUri.endsWith(".ico") && 
+                !destUri.endsWith(".js") && 
+                !destUri.endsWith(".css") &&
+                !destUri.endsWith(".png") &&
+                !destUri.endsWith(".svg") &&
+                !destUri.endsWith(".jpg") &&
+                !destUri.endsWith(".gif")) {
+              this.log("Redirecting to auth destination: " + destUri);
+              location.pathname = destUri;
+              return true;
+            }
           }
         }
         return false;
