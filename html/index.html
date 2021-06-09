@@ -445,7 +445,15 @@
                     </v-btn>                    
                   </td>
                   <td>
-                    {{ item.count.toLocaleString() }}
+		     <v-tooltip bottom v-if="loaded && eventsEnabled && metricsEnabled && ( (groupByHeaders.length==3 && groupByHeaders[1]['value']=='count' ) || (groupByHeaders.length==5 && groupByHeaders[1]['value']=='count' && groupByHeaders[2]['value']=='rule.name' && groupByHeaders[3]['value']=='event.module' && groupByHeaders[4]['value']=='event.severity_label') ) ">
+		       <template v-slot:activator="{ on, attrs }">
+	                 <span v-bind="attrs" v-on="on">
+                           <div class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()" v-bind="attrs" @click="countDrilldown(item)"></div>
+			 </span>
+		       </template>
+		       <span>{{ i18n.quickDrilldown }}</span>
+	             </v-tooltip>
+                     <div v-else class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()"></div>
                   </td>
                   <td v-for="field in groupByHeaders.slice(2)" :key="field.value">
                     <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction($event, item, field.value, item[field.value])"></div>
