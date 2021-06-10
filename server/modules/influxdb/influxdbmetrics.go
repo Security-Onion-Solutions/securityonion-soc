@@ -194,6 +194,11 @@ func (metrics *InfluxDBMetrics) getRaidStatus(host string) string {
     case 0: status = model.NodeStatusOk
     case 1: status = model.NodeStatusFault
     }
+  } else {
+    log.WithFields(log.Fields {
+      "host": host,
+      "raidStatus": metrics.raidStatus,
+    }).Warn("Host not found in raid status metrics")
   }
 
   return status
@@ -209,6 +214,11 @@ func (metrics *InfluxDBMetrics) getProcessStatus(host string) string {
     case 0: status = model.NodeStatusOk
     case 1: status = model.NodeStatusFault
     }
+  } else {
+    log.WithFields(log.Fields {
+      "host": host,
+      "processStatus": metrics.processStatus,
+    }).Warn("Host not found in process status metrics")
   }
 
   return status
