@@ -13,7 +13,6 @@ package elastic
 import (
   "context"
   "errors"
-  "fmt"
   "net/http"
   "strconv"
   "github.com/security-onion-solutions/securityonion-soc/model"
@@ -45,17 +44,18 @@ func (handler *JobLookupHandler) HandleNow(ctx context.Context, writer http.Resp
 
 func (handler *JobLookupHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   statusCode := http.StatusBadRequest
-  esId := request.URL.Query().Get("esid") // Elastic doc ID
-  var query string
-  if len(esId) > 0 {
-    query = fmt.Sprintf(`{"query" : { "bool": { "must": { "match" : { "_id" : "%s" }}}}}`, esId)
-  } else {
-    ncId := request.URL.Query().Get("ncid") // Network community ID
-    query = fmt.Sprintf(`{"query" : { "bool": { "must": { "match" : { "network.community_id" : "%s" }}}}}`, ncId)
+
+  timestampStr := request.URL.Query().Get("time") // Elastic doc timestamp
+  
+  idField := "_id"
+  idValue := request.URL.Query().Get("esid") // Elastic doc ID
+  if len(idValue) == 0 {
+    idValue = request.URL.Query().Get("ncid") // Network community ID
+    idField = "network.community_id"
   }
 
   job := handler.server.Datastore.CreateJob()
-  err := handler.store.PopulateJobFromDocQuery(ctx, query, job)
+  err := handler.store.PopulateJobFromDocQuery(ctx, idField, idValue, timestampStr, job)
   if err == nil {
     if user, ok := ctx.Value(web.ContextKeyRequestor).(*model.User); ok {
       job.UserId = user.Id

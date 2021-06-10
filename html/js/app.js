@@ -216,7 +216,7 @@ $(document).ready(function() {
       },
       getDynamicActionFieldNames(url) {
         const fields = [];
-        const matches = url.matchAll(/\{:([a-zA-Z0-9_.]+?)(\|.*?)?\}/g);
+        const matches = url.matchAll(/\{:([@a-zA-Z0-9_.]+?)(\|.*?)?\}/g);
         for (const match of matches) {
           if (match.length > 1) {
             fields.push(match[1]);
