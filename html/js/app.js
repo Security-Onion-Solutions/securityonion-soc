@@ -269,6 +269,7 @@ $(document).ready(function() {
                 this.parameters = response.data.parameters;
                 this.elasticVersion = response.data.elasticVersion;
                 this.wazuhVersion = response.data.wazuhVersion;
+                this.timezones = response.data.timezones;
 
                 this.user = await this.getUserById(response.data.userId);
                 if (this.user) {

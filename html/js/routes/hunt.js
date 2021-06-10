@@ -1058,6 +1058,9 @@ const huntComponent = {
         localStorage.removeItem(item);
       }
     },
+    saveTimezone() {
+      localStorage['timezone'] = this.zone;
+    },
     saveLocalSettings() {
       this.saveSetting('groupBySortBy', this.groupBySortBy, 'timestamp');
       this.saveSetting('groupBySortDesc', this.groupBySortDesc, true);
@@ -1073,6 +1076,10 @@ const huntComponent = {
       this.saveSetting('autohunt', this.autohunt, true);
     },
     loadLocalSettings() {
+      // Global settings
+      if (localStorage['timezone']) this.zone = localStorage['timezone'];
+
+      // Module settings
       var prefix = 'settings.' + this.category;
       if (localStorage[prefix + '.groupBySortBy']) this.groupBySortBy = localStorage[prefix + '.groupBySortBy'];
       if (localStorage[prefix + '.groupBySortDesc']) this.groupBySortDesc = localStorage[prefix + '.groupBySortDesc'] == "true";

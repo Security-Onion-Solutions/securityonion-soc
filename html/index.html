@@ -261,23 +261,31 @@
           <v-col cols="3">
             <h2 v-text="i18n[category]"></h2>
           </v-col>
-          <v-col cols="4">
-            <v-switch v-if="isAdvanced()" id="auto-hunt" :disabled="loading()" v-model="autohunt" dense hide-details class="my-0" :label="i18n.autohunt"></v-switch>
-            <v-switch v-for="toggle in filterToggles" :key="toggle.name"
-              :id="'filterToggle-' + toggle.name" 
-              :disabled="loading()" 
-              v-model="toggle['enabled']" 
-              dense hide-details class="my-0"
-              @click="filterToggled($event, toggle)"
-              :label="$root.localizeMessage(toggle.name)" @click="notifyInputsChanged()"></v-switch>
+          <v-col cols="5">
+            <v-expansion-panels>
+              <v-expansion-panel>
+                <v-expansion-panel-header>{{i18n.options}}</v-expansion-panel-header>
+                <v-expansion-panel-content>
+                  <v-switch v-if="isAdvanced()" id="auto-hunt" :disabled="loading()" v-model="autohunt" dense hide-details class="my-0" :label="i18n.autohunt"></v-switch>
+                  <v-switch v-for="toggle in filterToggles" :key="toggle.name"
+                    :id="'filterToggle-' + toggle.name" 
+                    :disabled="loading()" 
+                    v-model="toggle['enabled']" 
+                    dense hide-details class="my-0"
+                    @click="filterToggled($event, toggle)"
+                    :label="$root.localizeMessage(toggle.name)" @click="notifyInputsChanged()"></v-switch>
+                  <v-select id="autoRefresh" class="ml-" :disabled="loading()" v-model="autoRefreshInterval" :items="autoRefreshIntervals" :hint="i18n.autoRefresh" persistent-hint prepend-icon="fa-hourglass-half"></v-select>
+                  <v-select :disabled="loading()" @change="saveTimezone" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint prepend-icon="fa-user-clock"></v-select>
+                </v-expansion-panel-content>
+              </v-expansion-panel>
+            </v-expansion-panels>
           </v-col>
-          <v-col cols="2">
-            <v-select id="autoRefresh" class="ml-" :disabled="loading()" v-model="autoRefreshInterval" :items="autoRefreshIntervals" :hint="i18n.autoRefresh" persistent-hint prepend-icon="fa-hourglass-half"></v-select>
-          </v-col>
-          <v-col cols="3" align="end">
+          <v-spacer></v-spacer>
+          <v-col cols="2" align="end">
             <h4 v-if="loaded">{{ i18n.eventTotal }} {{ totalEvents.toLocaleString() }}</h4>
             <p>
-            <h5>{{ i18n.timezone }} {{ zone }}</h5>
+            <h5>
+            </h5>
           </v-col>
         </v-row>
         <v-row align="start">

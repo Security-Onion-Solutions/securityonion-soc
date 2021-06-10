@@ -21,4 +21,5 @@ type Info struct {
   ElasticVersion string                   `json:"elasticVersion"`
   WazuhVersion   string                   `json:"wazuhVersion"`
   UserId         string                   `json:"userId"`
+  Timezones      []string                 `json:"timezones"`
 }
