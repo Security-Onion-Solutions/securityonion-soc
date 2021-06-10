@@ -37,6 +37,6 @@ func TestVerifyServer(tester *testing.T) {
     tester.Errorf("expected no error")
   }
   if cfg.TimezoneScript != "/opt/sensoroni/scripts/timezones.sh" {
-    tester.Errorf("Unexpected default timezone script: %d", cfg.TimezoneScript)
+    tester.Errorf("Unexpected default timezone script: %s", cfg.TimezoneScript)
   }
 }
