@@ -264,7 +264,7 @@
           <v-col cols="5">
             <v-expansion-panels>
               <v-expansion-panel>
-                <v-expansion-panel-header>{{i18n.options}}</v-expansion-panel-header>
+                <v-expansion-panel-header id="huntOptionsHeader">{{i18n.options}}</v-expansion-panel-header>
                 <v-expansion-panel-content>
                   <v-switch v-if="isAdvanced()" id="auto-hunt" :disabled="loading()" v-model="autohunt" dense hide-details class="my-0" :label="i18n.autohunt"></v-switch>
                   <v-switch v-for="toggle in filterToggles" :key="toggle.name"
