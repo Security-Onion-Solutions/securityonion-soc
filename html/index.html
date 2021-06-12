@@ -492,10 +492,17 @@
               <template v-slot:item="{ item, index }">
                 <tr>
                   <td>
-                    <v-btn id="expandEvent" icon small @click="expand(item)">
-                      <v-icon v-if="isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-down</v-icon>
-                      <v-icon v-if="!isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-right</v-icon>
-                    </v-btn>
+                    <v-tooltip bottom>
+                      <template v-slot:activator="{ on, attrs }">
+                        <span v-bind="attrs" v-on="on">
+                          <v-btn id="expandEvent" icon small @click="expand(item)">
+                            <v-icon v-if="isExpanded(item)" :alt="i18n.eventExpand">fa-angle-down</v-icon>
+                            <v-icon v-if="!isExpanded(item)" :alt="i18n.eventExpand">fa-angle-right</v-icon>
+                          </v-btn>
+                        </span>
+                      </template>
+                      <span>{{ i18n.eventExpandHelp }}</span>
+                    </v-tooltip>
                     <v-tooltip bottom v-if="ackEnabled && item['event.severity_label']">
                       <template v-slot:activator="{ on, attrs }">
                         <span v-bind="attrs" v-on="on">
