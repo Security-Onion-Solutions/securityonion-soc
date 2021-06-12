@@ -426,39 +426,39 @@
                 <tr>
                   <td>
                     <v-tooltip bottom v-if="ackEnabled && item['event.severity_label']">	
-		      <template v-slot:activator="{ on, attrs }">
-	                <span v-bind="attrs" v-on="on">
+                      <template v-slot:activator="{ on, attrs }">
+                        <span v-bind="attrs" v-on="on">
                           <v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" class="mx-2" icon x-small 
                             @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))" 
                             :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
                             <v-icon>fa-bell</v-icon>
                           </v-btn>
                         </span>
-		      </template>
-		      <span>{{ isFilterToggleEnabled('acknowledged') ? i18n.alertUndoAcknowledge : i18n.alertAcknowledge }}</span>
-	            </v-tooltip>
+                      </template>
+                      <span>{{ isFilterToggleEnabled('acknowledged') ? i18n.alertUndoAcknowledge : i18n.alertAcknowledge }}</span>
+                    </v-tooltip>
                     <v-tooltip bottom v-if="escalateEnabled">	
-		      <template v-slot:activator="{ on, attrs }">
-	                <span v-bind="attrs" v-on="on">
+                      <template v-slot:activator="{ on, attrs }">
+                        <span v-bind="attrs" v-on="on">
                           <v-btn id="escalateButton" v-if="escalateEnabled" class="mx-2" icon x-small 
                             @click="ack($event, item, index, true, true)" 
                             :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
                             <v-icon>fa-exclamation-triangle</v-icon>
                           </v-btn>                    
                         </span>
-		      </template>
-		      <span>{{ isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate }}</span>
-	            </v-tooltip>
+                      </template>
+                      <span>{{ isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate }}</span>
+                    </v-tooltip>
                   </td>
                   <td>
-		     <v-tooltip bottom v-if="loaded && eventsEnabled && metricsEnabled && ( (groupByHeaders.length==3 && groupByHeaders[1]['value']=='count' ) || (groupByHeaders.length==5 && groupByHeaders[1]['value']=='count' && groupByHeaders[2]['value']=='rule.name' && groupByHeaders[3]['value']=='event.module' && groupByHeaders[4]['value']=='event.severity_label') ) ">
-		       <template v-slot:activator="{ on, attrs }">
-	                 <span v-bind="attrs" v-on="on">
-                           <div class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()" v-bind="attrs" @click="countDrilldown(item)"></div>
-			 </span>
-		       </template>
-		       <span>{{ i18n.quickDrilldown }}</span>
-	             </v-tooltip>
+                    <v-tooltip bottom v-if="loaded && eventsEnabled && metricsEnabled && ( (groupByHeaders.length==3 && groupByHeaders[1]['value']=='count' ) || (groupByHeaders.length==5 && groupByHeaders[1]['value']=='count' && groupByHeaders[2]['value']=='rule.name' && groupByHeaders[3]['value']=='event.module' && groupByHeaders[4]['value']=='event.severity_label') ) ">
+                      <template v-slot:activator="{ on, attrs }">
+                        <span v-bind="attrs" v-on="on">
+                          <div class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()" v-bind="attrs" @click="countDrilldown(item)"></div>
+                        </span>
+                      </template>
+                      <span>{{ i18n.quickDrilldown }}</span>
+                    </v-tooltip>
                      <div v-else class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()"></div>
                   </td>
                   <td v-for="field in groupByHeaders.slice(2)" :key="field.value">
