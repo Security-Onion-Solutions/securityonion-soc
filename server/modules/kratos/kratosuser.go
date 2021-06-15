@@ -19,7 +19,6 @@ type KratosTraits struct {
 	LastName 				string	`json:"lastName"`
 	Role						string	`json:"role"`
 	Status					string	`json:"status"`
-	SearchUsername	string	`json:"searchUsername"`
 }
 
 func NewTraits(email string, firstName string, lastName string, role string, status string) *KratosTraits {
@@ -78,7 +77,6 @@ func (kratosUser* KratosUser) copyToUser(user *model.User) {
 	user.LastName = kratosUser.Traits.LastName
 	user.Role = kratosUser.Traits.Role
 	user.Status = kratosUser.Traits.Status
-	user.SearchUsername = kratosUser.Traits.SearchUsername
 }
 
 func (kratosUser* KratosUser) copyFromUser(user *model.User) {
@@ -90,7 +88,6 @@ func (kratosUser* KratosUser) copyFromUser(user *model.User) {
 	kratosUser.Traits.LastName = user.LastName
 	kratosUser.Traits.Role = user.Role
 	kratosUser.Traits.Status = user.Status
-	kratosUser.Traits.SearchUsername = user.SearchUsername
 	if len(kratosUser.Addresses) == 0 {
 		kratosUser.Addresses = make([]*KratosAddress, 1)
 		kratosUser.Addresses[0] = &KratosAddress{}

@@ -131,6 +131,12 @@
             </v-btn>
           </template>
           <v-list id="top-menu">
+            <v-list-item>
+              <v-list-item-content>
+                <v-list-item-title v-text="username"></v-list-item-title>
+              </v-list-item-content>
+            </v-list-item>
+            <v-divider></v-divider>
             <v-list-item @click.stop="toggleTheme">
               <v-list-item-action>
                 <v-icon class="mx-auto">fa-adjust</v-icon>
@@ -255,23 +261,31 @@
           <v-col cols="3">
             <h2 v-text="i18n[category]"></h2>
           </v-col>
-          <v-col cols="4">
-            <v-switch v-if="isAdvanced()" id="auto-hunt" :disabled="loading()" v-model="autohunt" dense hide-details class="my-0" :label="i18n.autohunt"></v-switch>
-            <v-switch v-for="toggle in filterToggles" :key="toggle.name"
-              :id="'filterToggle-' + toggle.name" 
-              :disabled="loading()" 
-              v-model="toggle['enabled']" 
-              dense hide-details class="my-0"
-              @click="filterToggled($event, toggle)"
-              :label="$root.localizeMessage(toggle.name)" @click="notifyInputsChanged()"></v-switch>
+          <v-col cols="5">
+            <v-expansion-panels>
+              <v-expansion-panel>
+                <v-expansion-panel-header id="huntOptionsHeader">{{i18n.options}}</v-expansion-panel-header>
+                <v-expansion-panel-content>
+                  <v-switch v-if="isAdvanced()" id="auto-hunt" :disabled="loading()" v-model="autohunt" dense hide-details class="my-0" :label="i18n.autohunt"></v-switch>
+                  <v-switch v-for="toggle in filterToggles" :key="toggle.name"
+                    :id="'filterToggle-' + toggle.name" 
+                    :disabled="loading()" 
+                    v-model="toggle['enabled']" 
+                    dense hide-details class="my-0"
+                    @click="filterToggled($event, toggle)"
+                    :label="$root.localizeMessage(toggle.name)" @click="notifyInputsChanged()"></v-switch>
+                  <v-select id="autoRefresh" class="ml-" :disabled="loading()" v-model="autoRefreshInterval" :items="autoRefreshIntervals" :hint="i18n.autoRefresh" persistent-hint prepend-icon="fa-hourglass-half"></v-select>
+                  <v-select :disabled="loading()" @change="saveTimezone" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint prepend-icon="fa-user-clock"></v-select>
+                </v-expansion-panel-content>
+              </v-expansion-panel>
+            </v-expansion-panels>
           </v-col>
-          <v-col cols="2">
-            <v-select id="autoRefresh" class="ml-" :disabled="loading()" v-model="autoRefreshInterval" :items="autoRefreshIntervals" :hint="i18n.autoRefresh" persistent-hint prepend-icon="fa-hourglass-half"></v-select>
-          </v-col>
-          <v-col cols="3" align="end">
+          <v-spacer></v-spacer>
+          <v-col cols="2" align="end">
             <h4 v-if="loaded">{{ i18n.eventTotal }} {{ totalEvents.toLocaleString() }}</h4>
             <p>
-            <h5>{{ i18n.timezone }} {{ zone }}</h5>
+            <h5>
+            </h5>
           </v-col>
         </v-row>
         <v-row align="start">
@@ -817,6 +831,7 @@
                         <v-text-field v-model="form.firstName" :placeholder="i18n.firstName"></v-text-field>
                         <v-text-field v-model="form.lastName" :placeholder="i18n.lastName"></v-text-field>
                         <v-text-field name="csrf_token" v-model="form.csrfToken" class="d-none"></v-text-field>
+                        <v-text-field name="method" v-model="form.method" class="d-none"></v-text-field>
                       </v-col>
                     </v-row>
                   </v-container>
@@ -1238,6 +1253,7 @@
                 <v-text-field name="password" v-model="form.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required]"></v-text-field>
                 <v-text-field :placeholder="i18n.passwordConfirm" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.matches]"></v-text-field>
                 <v-text-field name="csrf_token" v-model="form.csrfToken" class="d-none"></v-text-field>
+                <v-text-field name="method" v-model="form.method" class="d-none"></v-text-field>
                 <v-btn type="submit" color="primary" :disabled="!form.valid" v-text="i18n.save"></v-btn>
               </v-col>
             </v-row>

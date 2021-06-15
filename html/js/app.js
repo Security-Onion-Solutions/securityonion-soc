@@ -80,6 +80,8 @@ $(document).ready(function() {
       usersLoadedDate: null,
       cacheRefreshIntervalMs: 300000,
       loadServerSettingsTime: 0,
+      user: null,
+      username: '',
     },
     watch: {
       '$vuetify.theme.dark': 'saveLocalSettings',
@@ -214,7 +216,7 @@ $(document).ready(function() {
       },
       getDynamicActionFieldNames(url) {
         const fields = [];
-        const matches = url.matchAll(/\{:([a-zA-Z0-9_.]+?)(\|.*?)?\}/g);
+        const matches = url.matchAll(/\{:([@a-zA-Z0-9_.]+?)(\|.*?)?\}/g);
         for (const match of matches) {
           if (match.length > 1) {
             fields.push(match[1]);
@@ -267,6 +269,12 @@ $(document).ready(function() {
                 this.parameters = response.data.parameters;
                 this.elasticVersion = response.data.elasticVersion;
                 this.wazuhVersion = response.data.wazuhVersion;
+                this.timezones = response.data.timezones;
+
+                this.user = await this.getUserById(response.data.userId);
+                if (this.user) {
+                  this.username = this.user.email;
+                }
 
                 if (this.parameterCallback != null) {
                   this.parameterCallback(this.parameters[this.parameterSection]);

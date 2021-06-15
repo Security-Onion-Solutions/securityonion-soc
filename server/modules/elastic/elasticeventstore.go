@@ -435,6 +435,22 @@ func (store *ElasticEventstore) parseFirst(json string, name string) string {
   return result
 }
 
+func (store *ElasticEventstore) buildRangeFilter(timestampStr string) (string, time.Time) {
+  if len(timestampStr) > 0 {
+    timestamp, err := time.Parse(time.RFC3339, timestampStr)
+    if err != nil {
+      log.WithFields(log.Fields {
+        "timestampStr": timestampStr,
+      }).WithError(err).Error("Unable to parse document timestamp")
+    }
+    startTime := timestamp.Add(time.Duration(-store.esSearchOffsetMs) * time.Millisecond).Unix() * 1000
+    endTime := timestamp.Add(time.Duration(store.esSearchOffsetMs) * time.Millisecond).Unix() * 1000
+    filter := fmt.Sprintf(`,{"range":{"@timestamp":{"gte":"%d","lte":"%d","format":"epoch_millis"}}}`, startTime, endTime)
+    return filter, timestamp
+  }
+  return "", time.Time{}
+}
+
 /**
  * Fetch record via provided Elasticsearch document query.
  * If the record has a tunnel_parent, search for a UID=tunnel_parent[0]
@@ -447,7 +463,20 @@ func (store *ElasticEventstore) parseFirst(json string, name string) string {
  * Review the results from the Zeek search and find the record with the timestamp nearest
    to the original ES ID record and use the IP/port details as the filter.
  */
-func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, query string, job *model.Job) error {
+func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idField string, idValue string, timestampStr string, job *model.Job) error {
+  rangeFilter, timestamp := store.buildRangeFilter(timestampStr)
+
+  query := fmt.Sprintf(`
+    {
+      "query" : { 
+        "bool": { 
+          "must": [
+            { "match" : { "%s" : "%s" }}%s
+          ]
+        }
+      }
+    }`, idField, idValue, rangeFilter)
+
   var outputSensorId string
   filter := model.NewFilter()
   json, err := store.luceneSearch(ctx, query)
@@ -467,6 +496,12 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, que
     return errors.New("Unable to locate document record")
   }
 
+  // Try to grab the timestamp from this new record, if the time wasn't provided to this function
+  if len(rangeFilter) == 0 {
+    timestampStr = gjson.Get(json, "hits.hits.0._source.\\@timestamp").String()
+    rangeFilter, timestamp = store.buildRangeFilter(timestampStr)
+  }
+
   // Check if user has pivoted to a PCAP that is encapsulated in a tunnel. The best we 
   // can do in this situation is respond with the tunnel PCAP data, which could be excessive.
   tunnelParent := gjson.Get(json, "hits.hits.0._source.log.id.tunnel_parents").String()
@@ -475,7 +510,17 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, que
     if tunnelParent[0] == '[' {
       tunnelParent = gjson.Get(json, "hits.hits.0._source.log.id.tunnel_parents.0").String()
     }
-    query := fmt.Sprintf(`{"query" : { "bool": { "must": { "match" : { "log.id.uid" : "%s" }}}}}`, tunnelParent)
+    query := fmt.Sprintf(`
+      {
+        "query" : { 
+          "bool": { 
+            "must": [
+              { "match" : { "log.id.uid" : "%s" }}%s
+            ]
+          }
+        }
+      }`, tunnelParent, rangeFilter)
+
     json, err = store.luceneSearch(ctx, query)
     log.WithFields(log.Fields{
       "query": query,
@@ -492,17 +537,6 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, que
     }
   }
 
-  timestampStr := gjson.Get(json, "hits.hits.0._source.\\@timestamp").String()
-  var timestamp time.Time
-  timestamp, err = time.Parse(time.RFC3339, timestampStr)
-  if err != nil {
-    log.WithFields(log.Fields {
-      "query": query,
-      "timestamp": timestamp,
-    }).WithError(err).Error("Unable to parse document timestamp")
-    return err
-  }
-
   filter.ImportId = gjson.Get(json, "hits.hits.0._source.import.id").String()
   filter.SrcIp = gjson.Get(json, "hits.hits.0._source.source.ip").String()
   filter.SrcPort = int(gjson.Get(json, "hits.hits.0._source.source.port").Int())
@@ -516,9 +550,6 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, que
 
   // If source and destination IP/port details aren't available search ES again for a correlating Zeek record
   if len(filter.SrcIp) == 0 || len(filter.DstIp) == 0 || filter.SrcPort == 0 || filter.DstPort == 0 {
-    startTime := timestamp.Add(time.Duration(-store.esSearchOffsetMs) * time.Millisecond).Unix() * 1000
-    endTime := timestamp.Add(time.Duration(store.esSearchOffsetMs) * time.Millisecond).Unix() * 1000
-
     if len(uid) == 0 || uid[0] != 'C' {
       zeekFileQuery := ""
       if len(x509id) > 0 && x509id[0] == 'F' {
@@ -528,8 +559,8 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, que
       }
 
       if len(zeekFileQuery) > 0 {
-        query = fmt.Sprintf(`{"query":{"bool":{"must":[{"query_string":{"query":"event.module:zeek AND event.dataset:file AND %s","analyze_wildcard":true}},{"range":{"@timestamp":{"gte":"%d","lte":"%d","format":"epoch_millis"}}}]}}}`,
-          zeekFileQuery, startTime, endTime)
+        query = fmt.Sprintf(`{"query":{"bool":{"must":[{"query_string":{"query":"event.module:zeek AND event.dataset:file AND %s","analyze_wildcard":true}}%s]}}}`,
+          zeekFileQuery, rangeFilter)
         json, err = store.luceneSearch(ctx, query)
         log.WithFields(log.Fields{
           "query": query,
@@ -570,8 +601,8 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, que
     }
 
     // Search for the Zeek connection ID
-    query = fmt.Sprintf(`{"query":{"bool":{"must":[{"query_string":{"query":"event.module:zeek AND %s","analyze_wildcard":true}},{"range":{"@timestamp":{"gte":"%d","lte":"%d","format":"epoch_millis"}}}]}}}`,
-      uid, startTime, endTime)
+    query = fmt.Sprintf(`{"query":{"bool":{"must":[{"query_string":{"query":"event.module:zeek AND %s","analyze_wildcard":true}}%s]}}}`,
+      uid, rangeFilter)
     json, err = store.luceneSearch(ctx, query)
     log.WithFields(log.Fields{
       "query": query,

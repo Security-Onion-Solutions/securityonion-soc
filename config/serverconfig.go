@@ -29,6 +29,7 @@ type ServerConfig struct {
   ModuleFailuresIgnored           bool                              `json:"moduleFailuresIgnored"`
   ClientParams                    ClientParameters                  `json:"client"`
   IdleConnectionTimeoutMs         int                               `json:"idleConnectionTimeoutMs"`
+  TimezoneScript                  string                            `json:"timezoneScript"`
 }
 
 func (config *ServerConfig) Verify() error {
@@ -50,6 +51,9 @@ func (config *ServerConfig) Verify() error {
   }
   if (config.IdleConnectionTimeoutMs <= 0) {
     config.IdleConnectionTimeoutMs = DEFAULT_IDLE_CONNECTION_TIMEOUT_MS
+  }
+  if len(config.TimezoneScript) == 0 {
+    config.TimezoneScript = "/opt/sensoroni/scripts/timezones.sh"
   }
   return err
 }

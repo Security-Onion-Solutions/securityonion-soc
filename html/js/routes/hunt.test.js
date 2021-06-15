@@ -117,3 +117,11 @@ test('sortAlertsAscending', () => {
   expect(sorted[1]).toBe(item3);
   expect(sorted[0]).toBe(item4);
 });
+
+test('saveTimezone', () => {
+  comp.zone = "Foo/Bar";
+  comp.saveTimezone();
+  comp.zone = "Test";
+  comp.loadLocalSettings();
+  expect(comp.zone).toBe("Foo/Bar");
+});

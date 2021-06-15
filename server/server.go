@@ -11,6 +11,8 @@
 package server
 
 import (
+  "os/exec"
+  "strings"
   "github.com/apex/log"
   "github.com/security-onion-solutions/securityonion-soc/config"
   "github.com/security-onion-solutions/securityonion-soc/web"
@@ -69,4 +71,20 @@ func (server *Server) Stop() {
 
 func (server *Server) Wait() {
   <- server.stoppedChan
+}
+
+func (server *Server) GetTimezones() []string {
+  var zones []string = make([]string, 0, 0)
+  bytes, err := exec.Command(server.Config.TimezoneScript).Output()
+  if err == nil {
+    output := string(bytes)
+    if strings.Contains(output, "America/New_York") {
+      zones = strings.Split(output, "\n")
+    } else {
+      log.WithError(err).Error("Timezone output is invalid")
+    }
+  } else {
+    log.WithError(err).Error("Unable to lookup timezones from operating system")
+  }
+  return zones
 }

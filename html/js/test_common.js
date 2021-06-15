@@ -14,6 +14,7 @@
 global.document = {};
 global.navigator = {};
 global.location = {};
+global.localStorage = {};
 global.btoa = function(content) {
 	return Buffer.from(content, 'binary').toString('base64');
 };
