@@ -14,13 +14,13 @@ RUN addgroup -S ory; \
     adduser -S ory -G ory -D -H -s /bin/nologin
 RUN apk -U --no-cache add build-base git gcc bash
 
-RUN mkdir -p /go/src/github.com/ory
-WORKDIR /go/src/github.com/ory
-RUN git clone https://github.com/ory/kratos.git
+RUN mkdir -p /go/src/github.com/jertel
+WORKDIR /go/src/github.com/jertel
+RUN git clone https://github.com/jertel/kratos.git
 
-WORKDIR /go/src/github.com/ory/kratos
+WORKDIR /go/src/github.com/jertel/kratos
 
-RUN git checkout v0.6.3-alpha.1
+RUN git checkout v0.6.3-alpha.1-so
 
 ENV GO111MODULE on
 ENV CGO_ENABLED 1
@@ -31,8 +31,6 @@ RUN go build -tags sqlite -a
 FROM ghcr.io/security-onion-solutions/alpine:latest
 
 ENV DSN=sqlite:///kratos-data/db.sqlite?_fk=true
-ENV SQA_OPT_OUT=true
-ENV DISABLE_TELEMETRY=true
 
 ARG UID=928
 ARG GID=928
@@ -47,11 +45,11 @@ RUN echo "#!/bin/sh" > /start-kratos.sh
 RUN echo "kratos -c /kratos-conf/kratos.yaml migrate sql -e --yes >> /kratos-log/kratos-migrate.log 2>&1" >> /start-kratos.sh
 RUN echo "chown kratos:kratos /kratos-data/db.sqlite" >> /start-kratos.sh
 RUN echo "chmod 600 /kratos-data/db.sqlite" >> /start-kratos.sh
-RUN echo "kratos -c /kratos-conf/kratos.yaml serve >> /kratos-log/kratos.log 2>&1" >> /start-kratos.sh
+RUN echo "kratos -c /kratos-conf/kratos.yaml serve --sqa-opt-out=true >> /kratos-log/kratos.log 2>&1" >> /start-kratos.sh
 RUN chmod a+x /start-kratos.sh
 
-COPY --from=builder /go/src/github.com/ory/kratos/kratos /usr/bin/kratos
-COPY --from=builder /go/src/github.com/ory/kratos/.schema /.schema
+COPY --from=builder /go/src/github.com/jertel/kratos/kratos /usr/bin/kratos
+COPY --from=builder /go/src/github.com/jertel/kratos/.schema /.schema
 USER kratos
 
 
