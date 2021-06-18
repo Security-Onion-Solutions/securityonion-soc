@@ -52,10 +52,13 @@ routes.push({ path: '/settings', name: 'settings', component: {
         this.form.csrfToken = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'csrf_token').attributes.value;
         this.form.method = "password";
         var errors = [];
-        if (response.data.ui.messages) {
-          const error = response.data.ui.messages.find(item => item.type == "error");
-          if (error && error.text) {
-            errors.push(error.text);
+        if (response.data.ui.nodes) {
+          const item = response.data.ui.nodes.find(item => item.messages);
+          if (item) {
+            const error = item.messages.find(item => item.type == "error");
+            if (error && error.text) {
+              errors.push(error.text);
+            }
           }
         }
         if (errors.length > 0) {

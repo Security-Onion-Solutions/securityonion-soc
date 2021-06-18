@@ -80,3 +80,25 @@ func TestSetNodeId(tester *testing.T) {
     tester.Errorf("expected lowercased Node ID after getter but got %s", job.NodeId)
   }
 }
+
+func TestGetLegacyNodeId(tester *testing.T) {
+  job := NewJob()
+  if job.GetNodeId() != "" {
+    tester.Errorf("expected new jobs to have an empty node ID")
+  }
+
+  job.NodeId = "Foo"
+  if job.GetNodeId() != "foo" {
+    tester.Errorf("expected foo but got %s", job.GetNodeId())
+  }
+
+  job.LegacySensorId = "Bar"
+  if job.GetNodeId() != "foo" {
+    tester.Errorf("expected foo but got %s", job.GetNodeId())
+  }
+
+  job.NodeId = ""
+  if job.GetNodeId() != "bar" {
+    tester.Errorf("expected bar but got %s", job.GetNodeId())
+  }
+}

@@ -30,6 +30,7 @@ type Job struct {
   FailCount                 int                     `json:"failCount"`
   Owner                     string                  `json:"owner"`
   NodeId                    string                  `json:"nodeId"`
+  LegacySensorId            string                  `json:"sensorId"`
   FileExtension             string                  `json:"fileExtension"`
   Filter                    *Filter                 `json:"filter"`
   UserId                    string                  `json:"userId"`
@@ -54,6 +55,11 @@ func (job *Job) GetNodeId() string {
   // Lower case on the Getter as well since the property could have been 
   // manipulated directly. Consider json.Unmarshall().
   job.NodeId = strings.ToLower(job.NodeId)
+  if len(job.NodeId) == 0 {
+    // See if there's a legacy sensor ID
+    job.LegacySensorId = strings.ToLower(job.LegacySensorId)
+    return job.LegacySensorId
+  }
   return job.NodeId
 }
 
