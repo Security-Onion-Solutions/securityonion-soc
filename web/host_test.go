@@ -43,6 +43,31 @@ func TestAddRemoveConnection(tester *testing.T) {
 	})
 }
 
+func TestMultipleConnections(tester *testing.T) {
+  host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test")
+	conn1 := &websocket.Conn{}
+	conn2 := &websocket.Conn{}
+	tester.Run("testing add multiple connections", func(t *testing.T) {
+	  host.AddConnection(conn1, "1.2.3.4");
+	  host.AddConnection(conn2, "1.2.3.4");
+		if len(host.connections) != 2 {
+			tester.Errorf("expected %d but got %d", 2, len(host.connections))
+		}
+	})
+	tester.Run("testing remove first connection", func(t *testing.T) {
+		host.RemoveConnection(conn1);
+		if len(host.connections) != 1 {
+			t.Errorf("final expected %d but got %d", 1, len(host.connections))
+		}
+	})
+	tester.Run("testing remove second connection", func(t *testing.T) {
+		host.RemoveConnection(conn2);
+		if len(host.connections) != 0 {
+			t.Errorf("final expected %d but got %d", 0, len(host.connections))
+		}
+	})
+}
+
 func TestManageConnections(tester *testing.T) {
   host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test")
 	conn := host.AddConnection(nil, "")

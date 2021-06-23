@@ -114,12 +114,13 @@ func (host *Host) AddConnection(wsConn *websocket.Conn, ip string) *Connection {
 func (host *Host) RemoveConnection(wsConn *websocket.Conn) {
   host.lock.Lock();
   defer host.lock.Unlock()
-  host.connections = make([]*Connection, 0)
+  remaining := make([]*Connection, 0)
   for _, connection := range host.connections {
     if connection.websocket != wsConn {
-      host.connections = append(host.connections, connection)
+      remaining = append(remaining, connection)
     }
   }
+  host.connections = remaining
   log.WithField("Connections", len(host.connections)).Debug("Removed WebSocket connection")
 }
 
