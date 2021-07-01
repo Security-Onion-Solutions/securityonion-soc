@@ -2,7 +2,6 @@ version.json
 config.json
 sensoroni.log
 sensoroni
-kratos
 jobs/
 nsm/
 .vscode/

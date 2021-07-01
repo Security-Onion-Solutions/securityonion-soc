@@ -16,9 +16,9 @@ routes.push({ path: '/settings', name: 'settings', component: {
     usingDefaults: false,
     form: {
       valid: false,
-      email: null,
       password: null,
       csrfToken: null,
+      method: null,
     },
     rules: {
       required: value => !!value || this.$root.i18n.required,
@@ -31,7 +31,7 @@ routes.push({ path: '/settings', name: 'settings', component: {
       this.reloadSettings();
     } else {
       this.showSettingsForm = true;
-      this.authSettingsUrl = this.$root.authUrl + 'settings/methods/password' + location.search;
+      this.authSettingsUrl = this.$root.authUrl + 'settings' + location.search;
       this.loadData()
     }
     this.usingDefaults = localStorage.length == 0;
@@ -49,15 +49,18 @@ routes.push({ path: '/settings', name: 'settings', component: {
     async loadData() {
       try {
         const response = await this.$root.authApi.get('settings/flows?id=' + this.$root.getAuthFlowId());
-        this.form.csrfToken = response.data.methods.password.config.fields.find(item => item.name == 'csrf_token').value;
+        this.form.csrfToken = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'csrf_token').attributes.value;
+        this.form.method = "password";
         var errors = [];
-        response.data.methods.password.config.fields.forEach(function(value, index, array) {
-          if (value.messages) {
-            value.messages.forEach(function(err, idx, errArray) {
-              errors.push(err.text);
-            });
+        if (response.data.ui.nodes) {
+          const item = response.data.ui.nodes.find(item => item.messages);
+          if (item) {
+            const error = item.messages.find(item => item.type == "error");
+            if (error && error.text) {
+              errors.push(error.text);
+            }
           }
-        });
+        }
         if (errors.length > 0) {
           this.$root.showWarning(this.i18n.settingsInvalid + errors.join("\n"));
         } else if (response.data.state == "success") {

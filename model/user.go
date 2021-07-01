@@ -23,6 +23,7 @@ type User struct {
   LastName	                string    							`json:"lastName"`
   Role    	                string    							`json:"role"`
   Status                    string                  `json:"status"`
+  SearchUsername            string                  `json:"searchUsername"`
 }
 
 func NewUser() *User {
@@ -32,5 +33,10 @@ func NewUser() *User {
     FirstName: "",
     LastName: "",
     Status: "",
+    SearchUsername: "",
   }
+}
+
+func (user *User) String() string {
+  return user.Id
 }

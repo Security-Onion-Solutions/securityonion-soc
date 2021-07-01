@@ -11,6 +11,7 @@
 package server
 
 import (
+  "context"
   "errors"
   "net/http"
   "github.com/security-onion-solutions/securityonion-soc/model"
@@ -30,14 +31,14 @@ func NewNodeHandler(srv *Server) *NodeHandler {
   return handler
 }
 
-func (nodeHandler *NodeHandler) HandleNow(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (nodeHandler *NodeHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   switch request.Method {
-    case http.MethodPost: return nodeHandler.post(writer, request)
+    case http.MethodPost: return nodeHandler.post(ctx, writer, request)
   }
   return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
 
-func (nodeHandler *NodeHandler) post(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (nodeHandler *NodeHandler) post(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   var job *model.Job
   node := model.NewNode("")
   err := nodeHandler.ReadJson(request, node)

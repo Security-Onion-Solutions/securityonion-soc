@@ -10,7 +10,6 @@
 package web
 
 import (
-  "net/http"
   "strconv"
   "testing"
 )
@@ -52,18 +51,5 @@ func TestGetPathParameter(tester *testing.T) {
         t.Errorf("expected %s but got %s", test.expected, actual)
       }
     })
-  }
-}
-
-func TestGetUserId(tester *testing.T) {
-  handler := NewTestHandler()
-  request, _ := http.NewRequest("GET", "", nil)
-
-  expectedId := "112233"
-  request.Header.Set("x-user-id", expectedId)
-
-  actualId := handler.GetUserId(request)
-  if actualId != expectedId {
-    tester.Errorf("expected %s but got %s", expectedId, actualId)
   }
 }

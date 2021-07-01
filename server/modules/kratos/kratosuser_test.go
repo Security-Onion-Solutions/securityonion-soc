@@ -21,7 +21,7 @@ func TestCopyFromUser(tester *testing.T) {
 	user.FirstName = "myFirstname"
 	user.LastName = "myLastname"
 	user.Role = "myRole"
-  user.Role = "locked"
+  user.Status = "locked"
   kratosUser.copyFromUser(user)
   if kratosUser.Traits.Email != user.Email {
     tester.Errorf("Email failed to convert")
@@ -35,8 +35,8 @@ func TestCopyFromUser(tester *testing.T) {
   if kratosUser.Traits.Role != user.Role {
     tester.Errorf("Role failed to convert")
 	} 
-  if kratosUser.Traits.Role != user.Role {
-    tester.Errorf("Role failed to convert")
+  if kratosUser.Traits.Status != user.Status {
+    tester.Errorf("Status failed to convert")
   } 
   if kratosUser.Addresses[0].Value != user.Email {
     tester.Errorf("Address failed to convert")
@@ -60,7 +60,7 @@ func TestCopyToUser(tester *testing.T) {
     tester.Errorf("Role failed to convert")
 	} 
   if kratosUser.Traits.Status != user.Status {
-    tester.Errorf("Role failed to convert")
+    tester.Errorf("Status failed to convert")
   } 
   if kratosUser.Addresses[0].Value != user.Email {
     tester.Errorf("Address failed to convert")

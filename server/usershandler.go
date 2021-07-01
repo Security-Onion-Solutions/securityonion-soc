@@ -10,6 +10,7 @@
 package server
 
 import (
+  "context"
   "errors"
   "net/http"
   "regexp"
@@ -29,18 +30,18 @@ func NewUsersHandler(srv *Server) *UsersHandler {
   return handler
 }
 
-func (usersHandler *UsersHandler) HandleNow(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (usersHandler *UsersHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
 	if usersHandler.server.Userstore == nil {
 		return http.StatusMethodNotAllowed, nil, errors.New("Users module not enabled")
 	}
 
   switch request.Method {
-    case http.MethodGet: return usersHandler.get(writer, request)
+    case http.MethodGet: return usersHandler.get(ctx, writer, request)
   }
   return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
 
-func (usersHandler *UsersHandler) get(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (usersHandler *UsersHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   users, err := usersHandler.server.Userstore.GetUsers()
   if err != nil {
     return http.StatusBadRequest, nil, err
@@ -48,7 +49,7 @@ func (usersHandler *UsersHandler) get(writer http.ResponseWriter, request *http.
   return http.StatusOK, users, nil
 }
 
-func (usersHandler *UsersHandler) delete(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (usersHandler *UsersHandler) delete(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   id := usersHandler.GetPathParameter(request.URL.Path, 2)
   safe, _ := regexp.MatchString(`^[A-Za-z0-9-]+$`, id)
   if !safe {

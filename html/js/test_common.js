@@ -14,6 +14,7 @@
 global.document = {};
 global.navigator = {};
 global.location = {};
+global.localStorage = {};
 global.btoa = function(content) {
 	return Buffer.from(content, 'binary').toString('base64');
 };
@@ -43,6 +44,10 @@ global.VueRouter = function(obj) {};
 ////////////////////////////////////
 // Test Helper Functions
 ////////////////////////////////////
+global.getApp = function() {
+	return app;
+}
+
 global.initComponentData = function(comp) {
 	return comp.data();
 }

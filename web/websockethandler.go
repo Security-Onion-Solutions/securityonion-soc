@@ -11,6 +11,7 @@
 package web
 
 import (
+  "context"
 	"errors"
 	"net/http"
   "github.com/apex/log"
@@ -29,7 +30,7 @@ func NewWebSocketHandler(host *Host) *WebSocketHandler {
 	return handler
 }
 
-func (webSocketHandler *WebSocketHandler) HandleNow(writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+func (webSocketHandler *WebSocketHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   upgrader := websocket.Upgrader{}
   connection, err := upgrader.Upgrade(writer, request, nil)
   ip := webSocketHandler.Host.GetSourceIp(request)

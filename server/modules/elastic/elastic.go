@@ -18,7 +18,7 @@ import (
 const DEFAULT_TIME_SHIFT_MS = 120000
 const DEFAULT_DURATION_MS = 1800000
 const DEFAULT_ES_SEARCH_OFFSET_MS = 1800000
-const DEFAULT_TIMEOUT_MS = 120000
+const DEFAULT_TIMEOUT_MS = 300000
 const DEFAULT_CACHE_MS = 86400000
 const DEFAULT_INDEX = "*:so-*"
 const DEFAULT_ASYNC_THRESHOLD = 10
@@ -52,6 +52,9 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
   defaultDurationMs := module.GetIntDefault(cfg, "defaultDurationMs", DEFAULT_DURATION_MS)
   esSearchOffsetMs := module.GetIntDefault(cfg, "esSearchOffsetMs", DEFAULT_ES_SEARCH_OFFSET_MS)
   timeoutMs := module.GetIntDefault(cfg, "timeoutMs", DEFAULT_TIMEOUT_MS)
+  if timeoutMs == 0 {
+    timeoutMs = DEFAULT_TIMEOUT_MS
+  }
   cacheMs := module.GetIntDefault(cfg, "cacheMs", DEFAULT_CACHE_MS)
   index := module.GetStringDefault(cfg, "index", DEFAULT_INDEX)
   asyncThreshold := module.GetIntDefault(cfg, "asyncThreshold", DEFAULT_ASYNC_THRESHOLD)

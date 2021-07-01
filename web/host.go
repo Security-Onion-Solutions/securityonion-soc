@@ -12,7 +12,11 @@ package web
 
 import (
   "context"
+  "errors"
   "net/http"
+  "reflect"
+  "sort"
+  "strconv"
   "sync"
   "time"
   "github.com/apex/log"
@@ -23,15 +27,13 @@ type HostHandler interface {
   Handle(responseWriter http.ResponseWriter, request *http.Request)
 }
 
-type HostHandlerImpl struct {
-}
-
-type HostAuth interface {
-  IsAuthorized(request *http.Request) bool
+type Preprocessor interface {
+  PreprocessPriority() int
+  Preprocess(ctx context.Context, request *http.Request) (context.Context, int, error)
 }
 
 type Host struct {
-  Auth				              HostAuth
+  preprocessors             []Preprocessor
   bindAddress	              string
   htmlDir			              string
   idleConnectionTimeoutMs   int
@@ -43,13 +45,19 @@ type Host struct {
 }
 
 func NewHost(address string, htmlDir string, timeoutMs int, version string) *Host {
-  return &Host {
+  host := &Host {
+    preprocessors: make([]Preprocessor, 0),
     running: false,
     bindAddress: address,
     htmlDir: htmlDir,
     idleConnectionTimeoutMs: timeoutMs,
     Version: version,
   }
+  err := host.AddPreprocessor(NewBasePreprocessor())
+  if err != nil {
+    log.WithError(err).Error("Unable to add base preprocessor")
+  }
+  return host
 }
 
 func (host *Host) GetSourceIp(request *http.Request) string {
@@ -106,12 +114,13 @@ func (host *Host) AddConnection(wsConn *websocket.Conn, ip string) *Connection {
 func (host *Host) RemoveConnection(wsConn *websocket.Conn) {
   host.lock.Lock();
   defer host.lock.Unlock()
-  host.connections = make([]*Connection, 0)
+  remaining := make([]*Connection, 0)
   for _, connection := range host.connections {
     if connection.websocket != wsConn {
-      host.connections = append(host.connections, connection)
+      remaining = append(remaining, connection)
     }
   }
+  host.connections = remaining
   log.WithField("Connections", len(host.connections)).Debug("Removed WebSocket connection")
 }
 
@@ -167,4 +176,69 @@ func (host *Host) manageConnections(sleepDuration time.Duration) {
     host.pruneConnections()
     time.Sleep(sleepDuration)
   }
+}
+
+func (host *Host) AddPreprocessor(preprocessor Preprocessor) error {
+  log.WithFields(log.Fields {
+    "priority": preprocessor.PreprocessPriority(),
+    "type": reflect.TypeOf(preprocessor).String(),
+  }).Info("Adding new preprocessor")
+
+  unsortedMap := make(map[int]Preprocessor)
+  for _, existing := range host.preprocessors {
+    unsortedMap[existing.PreprocessPriority()] = existing
+  }
+
+  if collider, ok := unsortedMap[preprocessor.PreprocessPriority()]; ok {
+    return errors.New("Preprocessor with priority " + strconv.Itoa(collider.PreprocessPriority()) + " already exists; preprocessors cannot share identical priorities")
+  }
+  unsortedMap[preprocessor.PreprocessPriority()] = preprocessor
+
+  sortedList := make([]Preprocessor, 0, len(unsortedMap))
+
+  priorities := make([]int, 0, len(unsortedMap))
+  for priority := range unsortedMap {
+    priorities = append(priorities, priority)
+  }
+
+  sort.Ints(priorities)
+
+  for _, priority := range priorities {
+    preprocessor := unsortedMap[priority]
+    log.WithFields(log.Fields {
+      "priority": preprocessor.PreprocessPriority(),
+      "type": reflect.TypeOf(preprocessor).String(),
+    }).Debug("Prioritized preprocessor")
+    sortedList = append(sortedList, preprocessor)
+  }
+
+  host.preprocessors = sortedList
+  return nil
+}
+
+/**
+ * Returns a copy of the list of preprocessors, in their current priority order,
+ * where the first preprocessor at index 0 is processed first.
+ */
+func (host *Host) Preprocessors() []Preprocessor {
+  procs := make([]Preprocessor, len(host.preprocessors))
+  copy(procs, host.preprocessors)
+  return procs
+}
+
+func (host *Host) Preprocess(ctx context.Context, req *http.Request) (context.Context, int, error) {
+  var statusCode int
+  var err error
+
+  for _, preprocessor := range host.preprocessors {
+    log.WithFields(log.Fields {
+      "priority": preprocessor.PreprocessPriority(),
+      "type": reflect.TypeOf(preprocessor).String(),
+    }).Debug("Preprocessing request")
+    ctx, statusCode, err = preprocessor.Preprocess(ctx, req)
+    if err != nil {
+      break
+    }
+  }
+  return ctx, statusCode, err
 }

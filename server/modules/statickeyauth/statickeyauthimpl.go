@@ -11,11 +11,13 @@
 package statickeyauth
 
 import (
+	"context"
+	"errors"
 	"net"
 	"net/http"
 	"strings"
-
 	"github.com/apex/log"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type StaticKeyAuthImpl struct {
@@ -24,7 +26,8 @@ type StaticKeyAuthImpl struct {
 }
 
 func NewStaticKeyAuthImpl() *StaticKeyAuthImpl {
-	return &StaticKeyAuthImpl{}
+	return &StaticKeyAuthImpl{
+	}
 }
 
 func (auth *StaticKeyAuthImpl) Init(apiKey string, anonymousCidr string) error {
@@ -32,6 +35,23 @@ func (auth *StaticKeyAuthImpl) Init(apiKey string, anonymousCidr string) error {
 	auth.apiKey = apiKey
 	_, auth.anonymousNetwork, err = net.ParseCIDR(anonymousCidr)
 	return err
+}
+
+func (auth *StaticKeyAuthImpl) PreprocessPriority() int {
+	return 100
+}
+
+func (auth *StaticKeyAuthImpl) Preprocess(ctx context.Context, req *http.Request) (context.Context, int, error) {
+	var statusCode int
+	var err error
+
+	if !auth.IsAuthorized(req) {
+		statusCode = http.StatusUnauthorized
+		err = errors.New("Access denied")
+	} else {
+		ctx = context.WithValue(ctx, web.ContextKeyRequestor, "SONODE")
+	}
+	return ctx, statusCode, err
 }
 
 func (auth *StaticKeyAuthImpl) IsAuthorized(request *http.Request) bool {

@@ -13,8 +13,8 @@ package web
 import (
   "bytes"
   "compress/gzip"
+  "context"
   "encoding/json"
-  "errors"
   "net/http"
   "reflect"
   "strings"
@@ -23,7 +23,7 @@ import (
 )
 
 type HandlerImpl interface {
-  HandleNow(responseWriter http.ResponseWriter, request *http.Request) (int, interface{}, error)
+  HandleNow(ctx context.Context, responseWriter http.ResponseWriter, request *http.Request) (int, interface{}, error)
 }
 
 type BaseHandler struct {
@@ -33,22 +33,19 @@ type BaseHandler struct {
 
 func (handler *BaseHandler) Handle(responseWriter http.ResponseWriter, request *http.Request) {
   var statusCode, contentLength int
-  var err error
+ 	var err error
+
   defer request.Body.Close()
   start := time.Now()
-  if handler.Host.Auth == nil {
-    err = errors.New("Agent auth module has not been initialized; ensure a valid auth module has been defined in the configuration")
-  } else {
-    if !handler.Host.Auth.IsAuthorized(request) {
-      statusCode = http.StatusUnauthorized
-      responseWriter.WriteHeader(statusCode)
-    } else {
-      var obj interface{}
-      responseWriter.Header().Set("Version", handler.Host.Version)
-      statusCode, obj, err = handler.Impl.HandleNow(responseWriter, request)
-      if err == nil && obj != nil {
-        contentLength, err = handler.WriteJson(responseWriter, request, statusCode, obj)
-      }
+
+  context, statusCode, err := handler.Host.Preprocess(request.Context(), request)
+  if err == nil {
+    var obj interface{}
+    responseWriter.Header().Set("Version", handler.Host.Version)
+
+    statusCode, obj, err = handler.Impl.HandleNow(context, responseWriter, request.WithContext(context))
+    if err == nil && obj != nil {
+      contentLength, err = handler.WriteJson(responseWriter, request, statusCode, obj)
     }
   }
   stop := time.Now()
@@ -56,41 +53,31 @@ func (handler *BaseHandler) Handle(responseWriter http.ResponseWriter, request *
 
   if err != nil {
     log.WithError(err).WithFields(log.Fields{
-      "remoteAddr": request.RemoteAddr,
-      "sourceIp": handler.Host.GetSourceIp(request),
-      "path": request.URL.Path,
-      "query": request.URL.Query(),
-      "impl": reflect.TypeOf(handler.Impl),
-      "statusCode": statusCode,
-      "contentLength": contentLength,
-      "method": request.Method,
-      "elapsedMs": elapsed,
-      "userId": handler.GetUserId(request),
-    }).Error("Failed request")
+	    "requestId": context.Value(ContextKeyRequestId),
+	    "requestor": context.Value(ContextKeyRequestor),
+    }).Warn("Request did not complete successfully")
   
     if statusCode < http.StatusBadRequest {
       statusCode = http.StatusInternalServerError
     }
     responseWriter.WriteHeader(statusCode)
-    responseWriter.Write([]byte(err.Error()))
-  } else {
-    log.WithFields(log.Fields{
-      "remoteAddr": request.RemoteAddr,
-      "sourceIp": handler.Host.GetSourceIp(request),
-      "path": request.URL.Path,
-      "query": request.URL.Query(),
-      "impl": reflect.TypeOf(handler.Impl),
-      "statusCode": statusCode,
-      "contentLength": contentLength,
-      "method": request.Method,
-      "elapsedMs": elapsed,
-      "userId": handler.GetUserId(request),
-    }).Info("Handled request")
+    bytes := []byte(err.Error())
+    contentLength = len(bytes)
+    responseWriter.Write(bytes)
   }
-}
-
-func (handler *BaseHandler) GetUserId(request *http.Request) string {
-  return request.Header.Get("x-user-id")
+  log.WithFields(log.Fields{
+    "remoteAddr": request.RemoteAddr,
+    "sourceIp": handler.Host.GetSourceIp(request),
+    "path": request.URL.Path,
+    "query": request.URL.Query(),
+    "impl": reflect.TypeOf(handler.Impl),
+    "statusCode": statusCode,
+    "contentLength": contentLength,
+    "method": request.Method,
+    "elapsedMs": elapsed,
+    "requestId": context.Value(ContextKeyRequestId),
+    "requestor": context.Value(ContextKeyRequestor),
+  }).Info("Handled request")
 }
 
 func (handler *BaseHandler) WriteJson(responseWriter http.ResponseWriter, request *http.Request, statusCode int, obj interface{}) (int, error) {
