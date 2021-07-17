@@ -22,7 +22,7 @@ type ClientParameters struct {
   JobParams           HuntingParameters     `json:"job"`
   DocsUrl             string                `json:"docsUrl"`
   CheatsheetUrl       string                `json:"cheatsheetUrl"`
-  ReleasenotesUrl     string                `json:"releaseNotesUrl"`
+  ReleaseNotesUrl     string                `json:"releaseNotesUrl"`
   GridParams          GridParameters        `json:"grid"`
   WebSocketTimeoutMs  int                   `json:"webSocketTimeoutMs"`
   TipTimeoutMs        int                   `json:"tipTimeoutMs"`
