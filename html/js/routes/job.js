@@ -185,8 +185,8 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
         if (packet.payload && packet.payloadOffset > 0) {
           var bytes = atob(packet.payload);
           bytes = bytes.slice(packet.payloadOffset);
-	  transcript += this.formatHexView(bytes);
-	  }
+          transcript += this.formatHexView(bytes);
+          }
         }
       var win = window.open("/cyberchef/#recipe=From_Hexdump()");
       win.onload = function(){ win.app.setInput(transcript); };
