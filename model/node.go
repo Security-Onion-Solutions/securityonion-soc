@@ -67,6 +67,7 @@ func (node *Node) SetModel(model string) {
     node.ImageBack = "sos-2u-back-thumb.jpg"
   case "SO2AMI01":
   case "SO2AZI01":
+  case "SO2GCI01":
   default:
     node.Model = "N/A"
   }

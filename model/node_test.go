@@ -42,6 +42,7 @@ func TestSetModel(tester *testing.T) {
   testModel(tester, "SOSSN7200", "SOSSN7200", "sos-2u-front-thumb.jpg", "sos-2u-back-thumb.jpg");
   testModel(tester, "SO2AMI01", "SO2AMI01", "", "");
   testModel(tester, "SO2AZI01", "SO2AZI01", "", "");
+  testModel(tester, "SO2GCI01", "SO2GCI01", "", "");
 }
 
 func testStatus(tester *testing.T, 
