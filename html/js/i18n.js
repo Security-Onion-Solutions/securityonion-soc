@@ -301,6 +301,7 @@ const i18n = {
       toolPlaybookHelp: 'Detection Playbook',
       toolTheHive: 'TheHive',
       toolTheHiveHelp: 'Case Management',
+      transcriptCyberChefHelp: 'Send the transcript to CyberChef',
       type: 'Type',
       unknown: 'Unknown',
       unwrapHelp: 'Unwrap packets from encapsulation (Ex: VXLAN)',
