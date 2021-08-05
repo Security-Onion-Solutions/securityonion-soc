@@ -180,13 +180,12 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     },
     packetArrayTranscript() {
       return this.packets
-              .filter((packet) => packet.payload && packet.payloadOffset > 0)
-              .map((packet) => {
-                const bytes = atob(packet.payload).slice(packet.payloadOffset);
-                return this.formatHexView(bytes);
-              })
-              .join("");
-
+        .filter(packet => packet.payload && packet.payloadOffset > 0)
+        .map(packet => {
+          const bytes = atob(packet.payload).slice(packet.payloadOffset);
+          return this.formatHexView(bytes);
+        })
+        .join("");
     },
     transcriptCyberChef() {
       const transcript = this.packetArrayTranscript();
