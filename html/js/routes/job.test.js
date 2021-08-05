@@ -1,0 +1,28 @@
+require('../test_common.js')
+require('./job.js')
+
+const comp = getComponent('job') // What component do I want to get?
+
+test('packetArrayTranscript', () => {
+    
+    const packetArr = [
+        { }, // no payload, should be filtered
+        { payload: 'SUdOT1JFLlRISVMuVGVzdC5TdHJpbmcuMTIzLmFzZGZhc2RmLmFzZGZhc2Q=', payloadOffset: 0 }, // payloadOffset == 0, should be filtered
+        { payload: 'SUdOT1JFLlRISVMuVGVzdC5TdHJpbmcuMTIzLmFzZGZhc2RmLmFzZGZhc2Q=', payloadOffset: 12 },
+        { payload: 'SUdOT1JFLlRISVMuVGhpcy5pcy5hLnNlY29uZC50ZXN0LnBhY2tldC4xMjM=', payloadOffset: 12 }
+
+    ]
+    comp.packets = packetArr
+
+    expectedTranscript = `\
+0000  54 65 73 74 2E 53 74 72  69 6E 67 2E 31 32 33 2E   Test.String.123.
+0016  61 73 64 66 61 73 64 66  2E 61 73 64 66 61 73 64   asdfasdf.asdfasd
+0000  54 68 69 73 2E 69 73 2E  61 2E 73 65 63 6F 6E 64   This.is.a.second
+0016  2E 74 65 73 74 2E 70 61  63 6B 65 74 2E 31 32 33   .test.packet.123
+`
+
+    const transcript = comp.packetArrayTranscript()
+
+    expect(transcript).toBe(expectedTranscript)
+});
+
