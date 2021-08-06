@@ -61,7 +61,7 @@
             <v-row>
               <v-col xs12>
                 <v-text-field name="password_identifier" v-model="form.email" :placeholder="i18n.email" :hint="i18n.emailHelp" autofocus="true" :rules="[rules.required]"></v-text-field>
-                <v-text-field name="password" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'mdi-eye' : 'mdi-eye-off'" :rules="[rules.required]"></v-text-field>
+                <v-text-field name="password" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required]"></v-text-field>
                 <v-text-field name="csrf_token" v-model="form.csrfToken" class="d-none"></v-text-field>
                 <v-text-field name="method" v-model="form.method" class="d-none"></v-text-field>
               </v-col>
