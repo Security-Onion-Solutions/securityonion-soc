@@ -200,7 +200,7 @@ const i18n = {
       noData: 'No information is currently available.',
       nodeExpandHelp: 'Show node details',
       nodeExpand: 'Expand',
-      nodeImageUnavailable: 'Appliance images unavailable.',
+      nodeImageUnavailable: 'Appliance images are only displayed for official Security Onion Solutions appliances.',
       nodeStatusConnection: 'Connection Status:',
       nodeStatusProcess: 'Process Status:',
       nodeStatusRaid: 'Raid Status:',
