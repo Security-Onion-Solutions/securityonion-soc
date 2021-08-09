@@ -18,6 +18,9 @@ global.localStorage = {};
 global.btoa = function(content) {
 	return Buffer.from(content, 'binary').toString('base64');
 };
+global.atob = function(content) {
+	return Buffer.from(content, 'base64').toString('binary')
+};
 
 ////////////////////////////////////
 // Mock jQuery
