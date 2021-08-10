@@ -25,3 +25,19 @@ test('packetArrayTranscript', () => {
     expect(transcript).toBe(expectedTranscript);
 });
 
+test('transcriptCyberChef_testing', () => {
+    // Setup
+    const path = '/cyberchef/#recipe=From_Hexdump()';
+    localStorage['settings.flags.testing'] = 'true';
+    const mockedOpen = jest.fn();
+    mockedOpen.mockReturnValue({});
+    const originalOpen = window.open;
+    window.open = mockedOpen;
+
+    // Test
+    comp.transcriptCyberChef();
+    expect(mockedOpen).toBeCalledWith(path, '_self');
+
+    // Cleanup
+    window.open = originalOpen;
+});
