@@ -111,6 +111,7 @@ $(document).ready(function() {
         if (action.method != 'GET') {
           options.body = action.bodyFormatted;
         }
+        action.target = localStorage['settings.flags.testing'] !== 'true' ? action.target : '_self';
         const route = this;
         fetch(action.linkFormatted, options)
         .then(data => {
