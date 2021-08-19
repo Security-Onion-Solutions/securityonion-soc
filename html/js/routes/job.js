@@ -178,6 +178,21 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     downloadUrl() {
       return this.$root.apiUrl + "stream?jobId=" + this.job.id + "&ext=pcap&unwrap=" + this.isOptionEnabled('unwrap');
     },
+    packetArrayTranscript() {
+      return this.packets
+        .filter(packet => packet.payload && packet.payloadOffset > 0)
+        .map(packet => {
+          const bytes = atob(packet.payload).slice(packet.payloadOffset);
+          return this.formatHexView(bytes);
+        })
+        .join("");
+    },
+    transcriptCyberChef() {
+      const transcript = this.packetArrayTranscript();
+
+      const win = window.open("/cyberchef/#recipe=From_Hexdump()");
+      win.onload = () => { win.app.setInput(transcript); };
+    },
     toggleWrap() {
       this.packets = [];
       var unwrap = !this.isOptionEnabled('unwrap'); // option hasn't been flipped yet

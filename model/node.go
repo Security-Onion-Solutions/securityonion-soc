@@ -65,6 +65,9 @@ func (node *Node) SetModel(model string) {
   case "SOS4000", "SOSSN7200":
     node.ImageFront = "sos-2u-front-thumb.jpg"
     node.ImageBack = "sos-2u-back-thumb.jpg"
+  case "SO2AMI01":
+  case "SO2AZI01":
+  case "SO2GCI01":
   default:
     node.Model = "N/A"
   }
