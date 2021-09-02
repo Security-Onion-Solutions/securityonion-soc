@@ -8,16 +8,17 @@
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-package server
+package model
 
 import (
-  "context"
-  "github.com/security-onion-solutions/securityonion-soc/model"
+  "github.com/stretchr/testify/assert"
+  "testing"
 )
 
-type Userstore interface {
-  GetUsers(ctx context.Context) ([]*model.User, error)
-  DeleteUser(id string) error
-  GetUser(ctx context.Context, id string) (*model.User, error)
-  UpdateUser(id string, user *model.User) error
+func TestNewUnauthorized(tester *testing.T) {
+  event := NewUnauthorized("mysubject", "myop", "mytarget")
+  assert.NotZero(tester, event.CreateTime)
+  assert.Equal(tester, event.Subject, "mysubject")
+  assert.Equal(tester, event.Operation, "myop")
+  assert.Equal(tester, event.Target, "mytarget")
 }

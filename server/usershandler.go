@@ -42,7 +42,7 @@ func (usersHandler *UsersHandler) HandleNow(ctx context.Context, writer http.Res
 }
 
 func (usersHandler *UsersHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-  users, err := usersHandler.server.Userstore.GetUsers()
+  users, err := usersHandler.server.Userstore.GetUsers(ctx)
   if err != nil {
     return http.StatusBadRequest, nil, err
   }

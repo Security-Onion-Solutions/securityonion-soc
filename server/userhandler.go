@@ -48,7 +48,7 @@ func (userHandler *UserHandler) get(ctx context.Context, writer http.ResponseWri
   if !safe {
     return http.StatusBadRequest, nil, errors.New("Invalid id")
 	}
-	user, err := userHandler.server.Userstore.GetUser(id)
+	user, err := userHandler.server.Userstore.GetUser(ctx, id)
   if err != nil {
     return http.StatusBadRequest, nil, err
   }

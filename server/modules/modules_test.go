@@ -11,8 +11,8 @@
 package modules
 
 import (
-  "testing"
   "github.com/security-onion-solutions/securityonion-soc/module"
+  "testing"
 )
 
 func TestBuildModuleMap(tester *testing.T) {

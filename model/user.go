@@ -15,24 +15,24 @@ import (
 )
 
 type User struct {
-  Id												string									`json:"id"`
-  CreateTime                time.Time 							`json:"createTime"`
-  UpdateTime	              time.Time 							`json:"updateTime"`
-  Email											string									`json:"email"`
-  FirstName                 string    							`json:"firstName"`
-  LastName	                string    							`json:"lastName"`
-  Role    	                string    							`json:"role"`
-  Status                    string                  `json:"status"`
-  SearchUsername            string                  `json:"searchUsername"`
+  Id             string    `json:"id"`
+  CreateTime     time.Time `json:"createTime"`
+  UpdateTime     time.Time `json:"updateTime"`
+  Email          string    `json:"email"`
+  FirstName      string    `json:"firstName"`
+  LastName       string    `json:"lastName"`
+  Roles          []string  `json:"roles"`
+  Status         string    `json:"status"`
+  SearchUsername string    `json:"searchUsername"`
 }
 
 func NewUser() *User {
   return &User{
-		CreateTime: time.Now(),
-    Email: "",
-    FirstName: "",
-    LastName: "",
-    Status: "",
+    CreateTime:     time.Now(),
+    Email:          "",
+    FirstName:      "",
+    LastName:       "",
+    Status:         "",
     SearchUsername: "",
   }
 }

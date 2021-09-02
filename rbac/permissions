@@ -1,0 +1,16 @@
+# Define low-level permissions and which permission set roles can use them
+# Syntax 			=> permX: roleY roleZ
+# Explanation => roleY and roleZ are granted permission permX
+
+grid/read: 				grid-monitor
+roles/read: 			user-monitor
+roles/write: 			user-admin
+users/read: 			user-monitor
+users/write: 			user-admin
+
+
+# Define low-level permission set inheritence relationships
+# Syntax 			=> roleB: roleA
+# Explanation => roleA inherits all of roleA's permissions
+
+user-monitor: 		user-admin

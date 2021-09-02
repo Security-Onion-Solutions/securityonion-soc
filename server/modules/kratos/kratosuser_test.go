@@ -10,59 +10,52 @@
 package kratos
 
 import (
-	"testing"
-	"github.com/security-onion-solutions/securityonion-soc/model"
+  "github.com/security-onion-solutions/securityonion-soc/model"
+  "testing"
 )
 
 func TestCopyFromUser(tester *testing.T) {
-	kratosUser := &KratosUser{}
-	user := model.NewUser()
-	user.Email = "my@email"
-	user.FirstName = "myFirstname"
-	user.LastName = "myLastname"
-	user.Role = "myRole"
+  kratosUser := &KratosUser{}
+  user := model.NewUser()
+  user.Email = "my@email"
+  user.FirstName = "myFirstname"
+  user.LastName = "myLastname"
   user.Status = "locked"
   kratosUser.copyFromUser(user)
   if kratosUser.Traits.Email != user.Email {
     tester.Errorf("Email failed to convert")
-	} 
+  }
   if kratosUser.Traits.FirstName != user.FirstName {
     tester.Errorf("FirstName failed to convert")
-  } 
+  }
   if kratosUser.Traits.LastName != user.LastName {
     tester.Errorf("LastName failed to convert")
-  } 
-  if kratosUser.Traits.Role != user.Role {
-    tester.Errorf("Role failed to convert")
-	} 
+  }
   if kratosUser.Traits.Status != user.Status {
     tester.Errorf("Status failed to convert")
-  } 
+  }
   if kratosUser.Addresses[0].Value != user.Email {
     tester.Errorf("Address failed to convert")
-  } 
+  }
 }
 
 func TestCopyToUser(tester *testing.T) {
-	kratosUser := NewKratosUser("myEmail", "myFirst", "myLast", "myRole", "locked")
-	user := model.NewUser()
-	kratosUser.copyToUser(user)
+  kratosUser := NewKratosUser("myEmail", "myFirst", "myLast", "locked")
+  user := model.NewUser()
+  kratosUser.copyToUser(user)
   if kratosUser.Traits.Email != user.Email {
     tester.Errorf("Email failed to convert")
-	} 
+  }
   if kratosUser.Traits.FirstName != user.FirstName {
     tester.Errorf("FirstName failed to convert")
-  } 
+  }
   if kratosUser.Traits.LastName != user.LastName {
     tester.Errorf("LastName failed to convert")
-  } 
-  if kratosUser.Traits.Role != user.Role {
-    tester.Errorf("Role failed to convert")
-	} 
+  }
   if kratosUser.Traits.Status != user.Status {
     tester.Errorf("Status failed to convert")
-  } 
+  }
   if kratosUser.Addresses[0].Value != user.Email {
     tester.Errorf("Address failed to convert")
-  } 
+  }
 }

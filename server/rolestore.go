@@ -15,9 +15,7 @@ import (
   "github.com/security-onion-solutions/securityonion-soc/model"
 )
 
-type Userstore interface {
-  GetUsers(ctx context.Context) ([]*model.User, error)
-  DeleteUser(id string) error
-  GetUser(ctx context.Context, id string) (*model.User, error)
-  UpdateUser(id string, user *model.User) error
+type Rolestore interface {
+  GetAssignments(ctx context.Context) (map[string][]string, error)
+  PopulateUserRoles(ctx context.Context, user *model.User) error
 }

@@ -10,13 +10,34 @@
 package kratos
 
 import (
+  "context"
+  "errors"
+  "github.com/security-onion-solutions/securityonion-soc/fake"
+  "github.com/security-onion-solutions/securityonion-soc/model"
   "testing"
 )
 
 func TestUserstoreInit(tester *testing.T) {
-  ai := NewKratosUserstore()
-  err := ai.Init("abc", 1)
+  ai := NewKratosUserstore(nil)
+  err := ai.Init("abc")
   if err != nil {
     tester.Errorf("unexpected Init error")
-  } 
+  }
+}
+
+func TestUnauthorized(tester *testing.T) {
+  userStore := NewKratosUserstore(fake.NewUnauthorizedServer())
+
+  _, err := userStore.GetUsers(context.Background())
+  ensureUnauthorized(tester, err)
+
+  _, err = userStore.GetUser(context.Background(), "some-id")
+  ensureUnauthorized(tester, err)
+}
+
+func ensureUnauthorized(tester *testing.T, err error) {
+  var authErr *model.Unauthorized
+  if err == nil || !errors.As(err, &authErr) {
+    tester.Errorf("Expected unauthorized error but got %v", err)
+  }
 }

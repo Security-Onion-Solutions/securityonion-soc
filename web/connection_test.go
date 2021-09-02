@@ -11,26 +11,22 @@
 package web
 
 import (
-  "testing"
-  "time"
+	"github.com/stretchr/testify/assert"
+	"testing"
+	"time"
 )
 
 func TestIsAuthorized(tester *testing.T) {
 	conn := NewConnection(nil, "")
-	result := conn.IsAuthorized("test")
-	if !result {
-		tester.Errorf("expected connection to be authorized for message %s", "test")
-	}
+	assert.True(tester, conn.IsAuthorized("test"))
 }
 
 func TestUpdatePingTime(tester *testing.T) {
-  conn := NewConnection(nil, "")
+	conn := NewConnection(nil, "")
 	oldPingTime := conn.lastPingTime
 	time.Sleep(3 * time.Millisecond)
 	conn.UpdatePingTime()
 	newPingTime := conn.lastPingTime
 
-	if newPingTime.Sub(oldPingTime).Milliseconds() < 3 {
-		tester.Errorf("expected increase in lastPingTime from %v, but got %v", oldPingTime, newPingTime)
-	}
+	assert.True(tester, newPingTime.Sub(oldPingTime).Milliseconds() >= 3, "expected 3s increase in lastPingTime")
 }

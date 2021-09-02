@@ -15,12 +15,12 @@ import (
   "crypto/tls"
   "encoding/json"
   "errors"
+  "github.com/apex/log"
   "io"
   "io/ioutil"
   "net/http"
   "strconv"
   "strings"
-  "github.com/apex/log"
 )
 
 type ClientAuth interface {
@@ -28,13 +28,16 @@ type ClientAuth interface {
 }
 
 type Client struct {
-  Auth				ClientAuth
-  hostUrl			string
-  impl	    	*http.Client
+  Auth         ClientAuth
+  hostUrl      string
+  impl         *http.Client
+  mock         bool
+  mockResponse *http.Response
+  mockError    error
 }
 
 func NewClient(url string, verifyCert bool) *Client {
-  client := &Client {
+  client := &Client{
     hostUrl: url,
   }
   transport := &http.Transport{
@@ -42,6 +45,22 @@ func NewClient(url string, verifyCert bool) *Client {
   }
   client.impl = &http.Client{Transport: transport}
   return client
+}
+
+func (client *Client) MockStringResponse(body string, statusCode int, mockError error) {
+  mockResp := &http.Response{
+    Body:          ioutil.NopCloser(bytes.NewBufferString(body)),
+    StatusCode:    statusCode,
+    ContentLength: int64(len(body)),
+    Header:        make(http.Header, 0),
+  }
+  client.MockResponse(mockResp, mockError)
+}
+
+func (client *Client) MockResponse(mockResponse *http.Response, mockError error) {
+  client.mock = true
+  client.mockResponse = mockResponse
+  client.mockError = mockError
 }
 
 func (client *Client) SendAuthorizedObject(method string, path string, obj interface{}, returnedObj interface{}) (bool, error) {
@@ -59,7 +78,7 @@ func (client *Client) SendObject(method string, path string, obj interface{}, re
       if resp.StatusCode < 200 || resp.StatusCode > 299 {
         bytes, _ := ioutil.ReadAll(resp.Body)
         body := string(bytes)
-        log.WithFields(log.Fields {
+        log.WithFields(log.Fields{
           "body": body,
         }).Debug("Response")
         err = errors.New("Request did not complete successfully (" + strconv.Itoa(resp.StatusCode) + "): " + resp.Status)
@@ -95,23 +114,28 @@ func (client *Client) SendRequest(method string, path string, contentType string
       if auth {
         err = client.Auth.Authorize(req)
         if err == nil {
-          log.WithFields(log.Fields {
-            "url": formattedUrl,
+          log.WithFields(log.Fields{
+            "url":    formattedUrl,
             "method": method,
           }).Debug("Sending authorized request")
         }
       }
 
       if err == nil {
-        resp, err = client.impl.Do(req)
+        if client.mock {
+          resp = client.mockResponse
+          err = client.mockError
+        } else {
+          resp, err = client.impl.Do(req)
+        }
         if err != nil {
           log.WithError(err).Warn("Failed to submit request")
         } else {
-          log.WithFields(log.Fields {
-            "url": formattedUrl,
-            "method": method,
-            "statusCode": resp.StatusCode,
-            "status": resp.Status,
+          log.WithFields(log.Fields{
+            "url":           formattedUrl,
+            "method":        method,
+            "statusCode":    resp.StatusCode,
+            "status":        resp.Status,
             "contentLength": resp.ContentLength,
           }).Info("HTTP request finished")
         }
