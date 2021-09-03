@@ -189,18 +189,20 @@ func (metrics *InfluxDBMetrics) getRaidStatus(host string) string {
 
   metrics.updateRaidStatus()
 
-  if hostStatus, exists := metrics.raidStatus[host]; exists {
-    switch hostStatus {
-    case 0:
-      status = model.NodeStatusOk
-    case 1:
-      status = model.NodeStatusFault
+  if len(metrics.raidStatus) > 0 {
+    if hostStatus, exists := metrics.raidStatus[host]; exists {
+      switch hostStatus {
+      case 0:
+        status = model.NodeStatusOk
+      case 1:
+        status = model.NodeStatusFault
+      }
+    } else {
+      log.WithFields(log.Fields{
+        "host":       host,
+        "raidStatus": metrics.raidStatus,
+      }).Warn("Host not found in raid status metrics")
     }
-  } else {
-    log.WithFields(log.Fields{
-      "host":       host,
-      "raidStatus": metrics.raidStatus,
-    }).Info("Host not found in raid status metrics")
   }
 
   return status
