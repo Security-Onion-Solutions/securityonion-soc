@@ -11,31 +11,27 @@
 package module
 
 import (
-  "testing"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMeetsPrerequisites(tester *testing.T) {
-  mgr := NewModuleManager()
-  mcm := make(ModuleConfigMap)
+	mgr := NewModuleManager()
+	mcm := make(ModuleConfigMap)
 
-  prereqs := make([]string, 0)
-  prereqs = append(prereqs, "foo")
-  prereqs = append(prereqs, "bar")
+	prereqs := make([]string, 0)
+	prereqs = append(prereqs, "foo")
+	prereqs = append(prereqs, "bar")
 
-  actual := mgr.meetsPrerequisites(prereqs, mcm)
-  if actual != false {
-    tester.Errorf("expected meetsPrerequisites %t but got %t", false, actual)
-  }
+	actual := mgr.meetsPrerequisites(prereqs, mcm)
+	assert.False(tester, actual)
 
-  mcm["foo"] = make(ModuleConfig)
-  actual = mgr.meetsPrerequisites(prereqs, mcm)
-  if actual != false {
-    tester.Errorf("expected meetsPrerequisites %t but got %t", false, actual)
-  }
+	mcm["foo"] = make(ModuleConfig)
+	actual = mgr.meetsPrerequisites(prereqs, mcm)
+	assert.False(tester, actual)
 
-  mcm["bar"] = make(ModuleConfig)
-  actual = mgr.meetsPrerequisites(prereqs, mcm)
-  if actual != true {
-    tester.Errorf("expected meetsPrerequisites %t but got %t", true, actual)
-  }
+	mcm["bar"] = make(ModuleConfig)
+	actual = mgr.meetsPrerequisites(prereqs, mcm)
+	assert.True(tester, actual)
 }

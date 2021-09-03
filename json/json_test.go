@@ -11,25 +11,22 @@
 package json
 
 import (
-  "os"
-  "testing"
+	"os"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestJson(tester *testing.T) {
-  testFile := "/tmp/sensoroni_test.json"
-  defer os.Remove(testFile)
-  obj := make(map[string]string)
-  obj["MyKey"] = "MyValue"
-  err := WriteJsonFile(testFile, obj)
-  if err != nil {
-    tester.Errorf("unexpected write error")
-  }
-  obj = make(map[string]string)
-  err = LoadJsonFile(testFile, &obj)
-  if err != nil {
-    tester.Errorf("unexpected load error")
-  }
-  if obj["MyKey"] != "MyValue" {
-    tester.Errorf("expected value %s but got %s", "MyValue", obj["MyKey"])
-  }
+	testFile := "/tmp/sensoroni_test.json"
+	defer os.Remove(testFile)
+	obj := make(map[string]string)
+	obj["MyKey"] = "MyValue"
+	err := WriteJsonFile(testFile, obj)
+	assert.Nil(tester, err)
+	obj = make(map[string]string)
+	err = LoadJsonFile(testFile, &obj)
+	if assert.Nil(tester, err) {
+		assert.Equal(tester, "MyValue", obj["MyKey"])
+	}
 }

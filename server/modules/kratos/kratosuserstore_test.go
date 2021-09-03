@@ -10,34 +10,31 @@
 package kratos
 
 import (
-  "context"
-  "errors"
-  "github.com/security-onion-solutions/securityonion-soc/fake"
-  "github.com/security-onion-solutions/securityonion-soc/model"
-  "testing"
+	"context"
+	"testing"
+
+	"github.com/security-onion-solutions/securityonion-soc/fake"
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestUserstoreInit(tester *testing.T) {
-  ai := NewKratosUserstore(nil)
-  err := ai.Init("abc")
-  if err != nil {
-    tester.Errorf("unexpected Init error")
-  }
+	ai := NewKratosUserstore(nil)
+	err := ai.Init("abc")
+	assert.Nil(tester, err)
 }
 
 func TestUnauthorized(tester *testing.T) {
-  userStore := NewKratosUserstore(fake.NewUnauthorizedServer())
+	userStore := NewKratosUserstore(fake.NewUnauthorizedServer())
 
-  _, err := userStore.GetUsers(context.Background())
-  ensureUnauthorized(tester, err)
+	_, err := userStore.GetUsers(context.Background())
+	ensureUnauthorized(tester, err)
 
-  _, err = userStore.GetUser(context.Background(), "some-id")
-  ensureUnauthorized(tester, err)
+	_, err = userStore.GetUser(context.Background(), "some-id")
+	ensureUnauthorized(tester, err)
 }
 
 func ensureUnauthorized(tester *testing.T, err error) {
-  var authErr *model.Unauthorized
-  if err == nil || !errors.As(err, &authErr) {
-    tester.Errorf("Expected unauthorized error but got %v", err)
-  }
+	var authErr *model.Unauthorized
+	assert.ErrorAs(tester, err, &authErr)
 }

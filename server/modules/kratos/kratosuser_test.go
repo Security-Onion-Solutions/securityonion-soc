@@ -10,52 +10,34 @@
 package kratos
 
 import (
-  "github.com/security-onion-solutions/securityonion-soc/model"
-  "testing"
+	"testing"
+
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCopyFromUser(tester *testing.T) {
-  kratosUser := &KratosUser{}
-  user := model.NewUser()
-  user.Email = "my@email"
-  user.FirstName = "myFirstname"
-  user.LastName = "myLastname"
-  user.Status = "locked"
-  kratosUser.copyFromUser(user)
-  if kratosUser.Traits.Email != user.Email {
-    tester.Errorf("Email failed to convert")
-  }
-  if kratosUser.Traits.FirstName != user.FirstName {
-    tester.Errorf("FirstName failed to convert")
-  }
-  if kratosUser.Traits.LastName != user.LastName {
-    tester.Errorf("LastName failed to convert")
-  }
-  if kratosUser.Traits.Status != user.Status {
-    tester.Errorf("Status failed to convert")
-  }
-  if kratosUser.Addresses[0].Value != user.Email {
-    tester.Errorf("Address failed to convert")
-  }
+	kratosUser := &KratosUser{}
+	user := model.NewUser()
+	user.Email = "my@email"
+	user.FirstName = "myFirstname"
+	user.LastName = "myLastname"
+	user.Status = "locked"
+	kratosUser.copyFromUser(user)
+	assert.Equal(tester, user.Email, kratosUser.Traits.Email)
+	assert.Equal(tester, user.FirstName, kratosUser.Traits.FirstName)
+	assert.Equal(tester, user.LastName, kratosUser.Traits.LastName)
+	assert.Equal(tester, user.Status, kratosUser.Traits.Status)
+	assert.Equal(tester, user.Email, kratosUser.Addresses[0].Value)
 }
 
 func TestCopyToUser(tester *testing.T) {
-  kratosUser := NewKratosUser("myEmail", "myFirst", "myLast", "locked")
-  user := model.NewUser()
-  kratosUser.copyToUser(user)
-  if kratosUser.Traits.Email != user.Email {
-    tester.Errorf("Email failed to convert")
-  }
-  if kratosUser.Traits.FirstName != user.FirstName {
-    tester.Errorf("FirstName failed to convert")
-  }
-  if kratosUser.Traits.LastName != user.LastName {
-    tester.Errorf("LastName failed to convert")
-  }
-  if kratosUser.Traits.Status != user.Status {
-    tester.Errorf("Status failed to convert")
-  }
-  if kratosUser.Addresses[0].Value != user.Email {
-    tester.Errorf("Address failed to convert")
-  }
+	kratosUser := NewKratosUser("myEmail", "myFirst", "myLast", "locked")
+	user := model.NewUser()
+	kratosUser.copyToUser(user)
+	assert.Equal(tester, kratosUser.Traits.Email, user.Email)
+	assert.Equal(tester, kratosUser.Traits.FirstName, user.FirstName)
+	assert.Equal(tester, kratosUser.Traits.LastName, user.LastName)
+	assert.Equal(tester, kratosUser.Traits.Status, user.Status)
+	assert.Equal(tester, kratosUser.Addresses[0].Value, user.Email)
 }

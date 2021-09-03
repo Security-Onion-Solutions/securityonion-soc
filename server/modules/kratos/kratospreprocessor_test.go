@@ -10,28 +10,28 @@
 package kratos
 
 import (
-  "context"
-  "github.com/security-onion-solutions/securityonion-soc/fake"
-  "github.com/security-onion-solutions/securityonion-soc/model"
-  "github.com/security-onion-solutions/securityonion-soc/web"
-  "net/http"
-  "testing"
+	"context"
+	"net/http"
+	"testing"
+
+	"github.com/security-onion-solutions/securityonion-soc/fake"
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/web"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPreprocessPriority(tester *testing.T) {
-  handler := NewKratosPreprocessor(nil)
-  if handler.PreprocessPriority() != 110 {
-    tester.Error("expected 110 priority")
-  }
+	handler := NewKratosPreprocessor(nil)
+	assert.Equal(tester, 110, handler.PreprocessPriority())
 }
 func TestPreprocess(tester *testing.T) {
-  expectedId := "112233"
+	expectedId := "112233"
 
-  user := model.NewUser()
-  user.Id = expectedId
-  userstore := NewKratosUserstore(fake.NewAuthorizedServer(make(map[string][]string)))
-  userstore.Init("some/url")
-  kratosUsersResponseJson := `
+	user := model.NewUser()
+	user.Id = expectedId
+	userstore := NewKratosUserstore(fake.NewAuthorizedServer(make(map[string][]string)))
+	userstore.Init("some/url")
+	kratosUsersResponseJson := `
     [
       {
         "credentials": {},
@@ -46,38 +46,27 @@ func TestPreprocess(tester *testing.T) {
         "verifiable_addresses": []
       }
     ]`
-  userstore.client.MockStringResponse(kratosUsersResponseJson, 200, nil)
+	userstore.client.MockStringResponse(kratosUsersResponseJson, 200, nil)
 
-  handler := NewKratosPreprocessor(userstore)
-  request, _ := http.NewRequest("GET", "", nil)
+	handler := NewKratosPreprocessor(userstore)
+	request, _ := http.NewRequest("GET", "", nil)
 
-  request.Header.Set("x-user-id", expectedId)
+	request.Header.Set("x-user-id", expectedId)
 
-  ctx, statusCode, err := handler.Preprocess(context.Background(), request)
-  if err != nil {
-    tester.Errorf("Unexpected error: %v", err)
-  }
-  if statusCode != 0 {
-    tester.Errorf("expected 0 statusCode but got %d", statusCode)
-  }
-  if ctx == nil {
-    tester.Errorf("Unexpected nil context return")
-  }
+	ctx, statusCode, err := handler.Preprocess(context.Background(), request)
+	if assert.Nil(tester, err) {
+		assert.Zero(tester, statusCode)
+		assert.NotNil(tester, ctx)
+	}
 
-  requestor := ctx.Value(web.ContextKeyRequestor)
-  if requestor == nil {
-    tester.Errorf("Expected non-nil requestor")
-  }
-  actualId := requestor.(*model.User).Id
-  if actualId != expectedId {
-    tester.Errorf("expected %s but got %s", expectedId, actualId)
-  }
+	requestor := ctx.Value(web.ContextKeyRequestor)
+	assert.NotNil(tester, requestor)
 
-  requestorId := ctx.Value(web.ContextKeyRequestorId)
-  if requestorId == nil {
-    tester.Errorf("Expected non-nil requestor ID")
-  }
-  if requestorId != expectedId {
-    tester.Errorf("expected %s but got %s", expectedId, requestorId)
-  }
+	actualId := requestor.(*model.User).Id
+	assert.Equal(tester, expectedId, actualId)
+
+	requestorId := ctx.Value(web.ContextKeyRequestorId)
+	if assert.NotNil(tester, requestorId) {
+		assert.Equal(tester, expectedId, requestorId)
+	}
 }
