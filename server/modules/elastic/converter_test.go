@@ -14,7 +14,9 @@ import (
   "io/ioutil"
   "testing"
   "time"
+
   "github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/stretchr/testify/assert"
 )
 
 func NewTestStore() *ElasticEventstore {
@@ -275,7 +277,7 @@ func TestConvertFromElasticUpdateResultsSuccess(tester *testing.T) {
   }
 }
 
-func TestMergeElasticUpdateResults(tester *testing.T) {
+func TestAddEventUpdateResults(tester *testing.T) {
   results1 := model.NewEventUpdateResults()
   results1.ElapsedMs = 100
   results1.UpdatedCount = 200
@@ -284,18 +286,11 @@ func TestMergeElasticUpdateResults(tester *testing.T) {
   results2.ElapsedMs = 12
   results2.UpdatedCount = 2
   results2.UnchangedCount = 4
-  mergeElasticUpdateResults(results1, results2)
-  if results1.ElapsedMs != 112 {
-    tester.Errorf("Unexpected ElapsedMs: %d", results1.ElapsedMs)
-  }
 
-  if results1.UpdatedCount != 202 {
-    tester.Errorf("Unexpected updated count: %d", results1.UpdatedCount)
-  }
-
-  if results1.UnchangedCount != 404 {
-    tester.Errorf("Unexpected updated count: %d", results1.UnchangedCount)
-  }
+	results1.AddEventUpdateResults(results2)
+	assert.Equal(tester, 112, results1.ElapsedMs)
+	assert.Equal(tester, 202, results1.UpdatedCount)
+	assert.Equal(tester, 404, results1.UnchangedCount)
 }
 
 func validateFormatSearch(tester *testing.T, original string, expected string) {
