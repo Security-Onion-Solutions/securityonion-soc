@@ -804,6 +804,7 @@
                   <td v-text="props.item.email"></td>
                   <td v-text="props.item.firstName"></td>
                   <td v-text="props.item.lastName"></td>
+                  <td v-text="$root.formatStringArray(props.item.roles)"></td>
                   <td>
                     <v-icon v-if="props.item.status != 'locked'" :title="i18n.loginEnabled">fa-check</v-icon>
                     <v-icon v-if="props.item.status == 'locked'" :title="i18n.loginDisabled">fa-lock</v-icon>

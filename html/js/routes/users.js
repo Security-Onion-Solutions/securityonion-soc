@@ -16,6 +16,7 @@ routes.push({ path: '/users', name: 'users', component: {
       { text: this.$root.i18n.email, value: 'email' },
       { text: this.$root.i18n.firstName, value: 'firstName' },
       { text: this.$root.i18n.lastName, value: 'lastName' },
+      { text: this.$root.i18n.role, value: 'role' },
       { text: this.$root.i18n.status, value: 'status' },
       { text: this.$root.i18n.actions },
     ],

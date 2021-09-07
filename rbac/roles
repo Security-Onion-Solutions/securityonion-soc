@@ -1,0 +1,7 @@
+# Define which business level roles can access which permission set roles.
+# Syntax 			=> roleX: roleY roleZ
+# Explanation => roleY and roleZ are granted permissions of roleX
+
+grid-monitor: 		superuser analyst
+user-monitor: 		analyst
+user-admin:				superuser

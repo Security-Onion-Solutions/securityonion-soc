@@ -11,94 +11,58 @@
 package model
 
 import (
-  "errors"
-  "testing"
+	"errors"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestVerifyJob(tester *testing.T) {
-  job := NewJob()
-  if job.Status != JobStatusPending {
-    tester.Errorf("expected Status %d but got %d", JobStatusPending, job.Status)
-  }
+	job := NewJob()
+	assert.Equal(tester, JobStatusPending, job.Status)
 
-  job.Fail(errors.New("one"))
-  if job.Status != JobStatusIncomplete {
-    tester.Errorf("expected Status %d but got %d", JobStatusIncomplete, job.Status)
-  }
-  if job.Failure == "" {
-    tester.Errorf("expected Failure but got none")
-  }
-  if job.FailCount != 1 {
-    tester.Errorf("expected FailCount %d but got %d", 1, job.FailCount)
-  }
-  job.Fail(errors.New("two"))
-  if job.FailCount != 2 {
-    tester.Errorf("expected FailCount %d but got %d", 2, job.FailCount)
-  }
+	job.Fail(errors.New("one"))
+	assert.Equal(tester, JobStatusIncomplete, job.Status)
+	assert.NotEmpty(tester, job.Failure)
+	assert.Equal(tester, 1, job.FailCount)
 
-  job.Complete()
-  if job.Status != JobStatusCompleted {
-    tester.Errorf("expected Status %d but got %d", JobStatusCompleted, job.Status)
-  }
+	job.Fail(errors.New("two"))
+	assert.Equal(tester, 2, job.FailCount)
+
+	job.Complete()
+	assert.Equal(tester, JobStatusCompleted, job.Status)
 }
 
 func TestSetNodeId(tester *testing.T) {
-  job := NewJob()
-  if job.NodeId != "" {
-    tester.Errorf("expected new jobs to have an empty node ID")
-  }
+	job := NewJob()
+	assert.Empty(tester, job.NodeId)
 
-  job.NodeId = "test"
-  if job.NodeId != "test" {
-    tester.Errorf("expected unmodified Node ID but got %s", job.NodeId)
-  }
+	job.SetNodeId("testing")
+	assert.Equal(tester, "testing", job.NodeId)
+	assert.Equal(tester, "testing", job.GetNodeId())
 
-  job.SetNodeId("testing")
-  if job.NodeId != "testing" {
-    tester.Errorf("expected unmodified Node ID but got %s", job.NodeId)
-  }
-  if job.GetNodeId() != "testing" {
-    tester.Errorf("expected unmodified Node ID via getter but got %s", job.GetNodeId())
-  }
+	job.SetNodeId("TestingThis")
+	assert.Equal(tester, "testingthis", job.NodeId)
+	assert.Equal(tester, "testingthis", job.GetNodeId())
 
-  job.SetNodeId("TestingThis")
-  if job.NodeId != "testingthis" {
-    tester.Errorf("expected lowercased Node ID but got %s", job.NodeId)
-  }
-  if job.GetNodeId() != "testingthis" {
-    tester.Errorf("expected lowercased Node ID via getter but got %s", job.GetNodeId())
-  }
-
-  job.NodeId = "TestingThis2"
-  if job.NodeId != "TestingThis2" {
-    tester.Errorf("expected unmodified Node ID but got %s", job.NodeId)
-  }
-  if job.GetNodeId() != "testingthis2" {
-    tester.Errorf("expected lowercased Node ID via getter but got %s", job.GetNodeId())
-  }
-  if job.NodeId != "testingthis2" {
-    tester.Errorf("expected lowercased Node ID after getter but got %s", job.NodeId)
-  }
+	// Check that NodeId is modified by getter
+	job.NodeId = "TestingThis2"
+	assert.Equal(tester, "TestingThis2", job.NodeId)
+	assert.Equal(tester, "testingthis2", job.GetNodeId())
+	assert.Equal(tester, "testingthis2", job.NodeId)
 }
 
 func TestGetLegacyNodeId(tester *testing.T) {
-  job := NewJob()
-  if job.GetNodeId() != "" {
-    tester.Errorf("expected new jobs to have an empty node ID")
-  }
+	job := NewJob()
+	assert.Empty(tester, job.GetNodeId())
 
-  job.NodeId = "Foo"
-  if job.GetNodeId() != "foo" {
-    tester.Errorf("expected foo but got %s", job.GetNodeId())
-  }
+	job.NodeId = "Foo"
+	assert.Equal(tester, "foo", job.GetNodeId())
 
-  job.LegacySensorId = "Bar"
-  if job.GetNodeId() != "foo" {
-    tester.Errorf("expected foo but got %s", job.GetNodeId())
-  }
+	job.LegacySensorId = "Bar"
+	assert.Equal(tester, "foo", job.GetNodeId())
 
-  job.NodeId = ""
-  if job.GetNodeId() != "bar" {
-    tester.Errorf("expected bar but got %s", job.GetNodeId())
-  }
+	// Check that GetNodeId() returns formatted LegacySensorId if NodeId is blank
+	job.NodeId = ""
+	assert.Equal(tester, "bar", job.GetNodeId())
 }

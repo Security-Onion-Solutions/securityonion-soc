@@ -11,21 +11,17 @@
 package agent
 
 import (
-  "testing"
-  "github.com/security-onion-solutions/securityonion-soc/config"
+	"testing"
+
+	"github.com/security-onion-solutions/securityonion-soc/config"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewAgent(tester *testing.T) {
-  cfg := &config.AgentConfig{}
-  cfg.ServerUrl = "http://some.where"
-  agent := NewAgent(cfg, "")
-  if agent.Client == nil {
-    tester.Errorf("expected non-nil agent.Client")
-  }
-  if agent.JobMgr == nil {
-    tester.Errorf("expected non-nil agent.JobMgr")
-  }
-  if agent.stoppedChan == nil {
-    tester.Errorf("expected non-nil agent.stoppedChan")
-  }
+	cfg := &config.AgentConfig{}
+	cfg.ServerUrl = "http://some.where"
+	agent := NewAgent(cfg, "")
+	assert.NotNil(tester, agent.Client)
+	assert.NotNil(tester, agent.JobMgr)
+	assert.NotNil(tester, agent.stoppedChan)
 }

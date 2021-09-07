@@ -10,5 +10,6 @@ require (
 	github.com/gorilla/websocket v1.4.2
 	github.com/influxdata/influxdb-client-go/v2 v2.2.3 // indirect
 	github.com/kennygrant/sanitize v1.2.4
+	github.com/stretchr/testify v1.7.0 // indirect
 	github.com/tidwall/gjson v1.6.8
 )

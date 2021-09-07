@@ -11,8 +11,10 @@
 package web
 
 import (
-  "testing"
-  "time"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestHandlePingMessage(tester *testing.T) {
@@ -20,11 +22,8 @@ func TestHandlePingMessage(tester *testing.T) {
 	conn := NewConnection(nil, "")
 	oldPingTime := conn.lastPingTime
 	time.Sleep(3 * time.Millisecond)
-	msg := &WebSocketMessage{ Kind: "Ping" }
+	msg := &WebSocketMessage{Kind: "Ping"}
 	webSocketHandler.handleMessage(msg, conn)
 	newPingTime := conn.lastPingTime
-
-	if newPingTime.Sub(oldPingTime).Milliseconds() < 3 {
-		tester.Errorf("expected increase in lastPingTime from %v, but got %v", oldPingTime, newPingTime)
-	}
+	assert.GreaterOrEqual(tester, newPingTime.Sub(oldPingTime).Milliseconds(), int64(3))
 }

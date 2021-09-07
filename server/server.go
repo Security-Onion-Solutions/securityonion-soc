@@ -11,28 +11,35 @@
 package server
 
 import (
-  "os/exec"
-  "strings"
+  "context"
   "github.com/apex/log"
   "github.com/security-onion-solutions/securityonion-soc/config"
   "github.com/security-onion-solutions/securityonion-soc/web"
+  "os/exec"
+  "strings"
 )
 
+type Authorizer interface {
+  CheckContextOperationAuthorized(ctx context.Context, operation string, target string) error
+}
+
 type Server struct {
-  Config 			*config.ServerConfig
-  Host				*web.Host
-  Datastore 	Datastore
+  Config      *config.ServerConfig
+  Host        *web.Host
+  Datastore   Datastore
   Userstore   Userstore
+  Rolestore   Rolestore
   Eventstore  Eventstore
   Casestore   Casestore
   Metrics     Metrics
   stoppedChan chan bool
+  Authorizer  Authorizer
 }
 
 func NewServer(cfg *config.ServerConfig, version string) *Server {
   return &Server{
-    Config: cfg,
-    Host: web.NewHost(cfg.BindAddress, cfg.HtmlDir, cfg.IdleConnectionTimeoutMs, version),
+    Config:      cfg,
+    Host:        web.NewHost(cfg.BindAddress, cfg.HtmlDir, cfg.IdleConnectionTimeoutMs, version),
     stoppedChan: make(chan bool, 1),
   }
 }
@@ -70,7 +77,7 @@ func (server *Server) Stop() {
 }
 
 func (server *Server) Wait() {
-  <- server.stoppedChan
+  <-server.stoppedChan
 }
 
 func (server *Server) GetTimezones() []string {

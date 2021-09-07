@@ -412,6 +412,12 @@ $(document).ready(function() {
       formatCount(count) {
         return Number(count).toLocaleString();
       },
+      formatStringArray(strArray) {
+        if (strArray != null && strArray.length > 0) {
+          return strArray.join(", ");
+        }
+        return "";
+      },
       localizeMessage(origMsg) {
         var msg = origMsg;
         if (msg.response && msg.response.data) {
