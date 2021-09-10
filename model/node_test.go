@@ -35,9 +35,9 @@ func TestSetModel(tester *testing.T) {
 	testModel(tester, "SOS10K", "SOS10K", "sos-1u-front-thumb.jpg", "sos-1u-sfp-back-thumb.jpg")
 	testModel(tester, "SOS4000", "SOS4000", "sos-2u-front-thumb.jpg", "sos-2u-back-thumb.jpg")
 	testModel(tester, "SOSSN7200", "SOSSN7200", "sos-2u-front-thumb.jpg", "sos-2u-back-thumb.jpg")
-	testModel(tester, "SO2AMI01", "SO2AMI01", "", "")
-	testModel(tester, "SO2AZI01", "SO2AZI01", "", "")
-	testModel(tester, "SO2GCI01", "SO2GCI01", "", "")
+	testModel(tester, "SO2AMI01", "SO2AMI01", "so-cloud-aws.jpg", "")
+	testModel(tester, "SO2AZI01", "SO2AZI01", "so-cloud-azure.jpg", "")
+	testModel(tester, "SO2GCI01", "SO2GCI01", "so-cloud-gcp.jpg", "")
 }
 
 func testStatus(tester *testing.T,
