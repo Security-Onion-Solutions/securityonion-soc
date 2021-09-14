@@ -13,11 +13,12 @@ package statickeyauth
 import (
 	"context"
 	"errors"
+	"github.com/apex/log"
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 	"net"
 	"net/http"
 	"strings"
-	"github.com/apex/log"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type StaticKeyAuthImpl struct {
@@ -26,8 +27,7 @@ type StaticKeyAuthImpl struct {
 }
 
 func NewStaticKeyAuthImpl() *StaticKeyAuthImpl {
-	return &StaticKeyAuthImpl{
-	}
+	return &StaticKeyAuthImpl{}
 }
 
 func (auth *StaticKeyAuthImpl) Init(apiKey string, anonymousCidr string) error {
@@ -49,7 +49,11 @@ func (auth *StaticKeyAuthImpl) Preprocess(ctx context.Context, req *http.Request
 		statusCode = http.StatusUnauthorized
 		err = errors.New("Access denied")
 	} else {
-		ctx = context.WithValue(ctx, web.ContextKeyRequestor, "SONODE")
+		// Currently all static auth clients are sensors
+		sensorUser := model.NewUser()
+		sensorUser.Id = "sensor"
+		sensorUser.Email = "sensor"
+		ctx = context.WithValue(ctx, web.ContextKeyRequestor, sensorUser)
 	}
 	return ctx, statusCode, err
 }

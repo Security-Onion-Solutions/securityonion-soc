@@ -11,15 +11,28 @@
 package filedatastore
 
 import (
+	"context"
 	"os"
 	"testing"
 
+	"github.com/security-onion-solutions/securityonion-soc/fake"
+	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
 )
 
+const MY_USER_ID = "123"
+const ANOTHER_USER_ID = "124"
+
+func newContext() context.Context {
+	user := model.NewUser()
+	user.Id = MY_USER_ID
+	return context.WithValue(context.Background(), web.ContextKeyRequestor, user)
+}
+
 func TestFileDatastoreInit(tester *testing.T) {
-	ds := NewFileDatastoreImpl()
+	ds := NewFileDatastoreImpl(fake.NewUnauthorizedServer())
 	cfg := make(module.ModuleConfig)
 	err := ds.Init(cfg)
 	assert.Error(tester, err)
@@ -35,7 +48,7 @@ func TestFileDatastoreInit(tester *testing.T) {
 }
 
 func TestNodes(tester *testing.T) {
-	ds := NewFileDatastoreImpl()
+	ds := NewFileDatastoreImpl(fake.NewUnauthorizedServer())
 	cfg := make(module.ModuleConfig)
 	ds.Init(cfg)
 	node := ds.CreateNode("foo")
@@ -55,22 +68,22 @@ func TestNodes(tester *testing.T) {
 	ds.addNode(node)
 	nodes = ds.GetNodes()
 	assert.Len(tester, nodes, 2)
-	job := ds.GetNextJob("foo")
+	job := ds.GetNextJob(newContext(), "foo")
 	assert.Nil(tester, job)
 }
 
 func TestJobs(tester *testing.T) {
-	ds := NewFileDatastoreImpl()
+	ds := NewFileDatastoreImpl(fake.NewAuthorizedServer(nil))
 	cfg := make(module.ModuleConfig)
 	ds.Init(cfg)
 	node := ds.CreateNode("foo")
 	ds.addNode(node)
 
 	// Test adding a job
-	job := ds.CreateJob()
+	job := ds.CreateJob(newContext())
 	assert.Equal(tester, 1001, job.Id)
 	ds.addJob(job)
-	job = ds.CreateJob()
+	job = ds.CreateJob(newContext())
 	assert.Equal(tester, 1002, job.Id)
 	ds.addJob(job)
 
@@ -78,30 +91,95 @@ func TestJobs(tester *testing.T) {
 	job = ds.getJobById(1001)
 	assert.Equal(tester, 1001, job.Id)
 
-	job = ds.GetJob(1002)
+	job = ds.GetJob(newContext(), 1002)
 	assert.Equal(tester, 1002, job.Id)
 
-	job = ds.GetJob(1003)
+	job = ds.GetJob(newContext(), 1003)
 	assert.Nil(tester, job)
 
 	// Test fetching all jobs
-	jobs := ds.GetJobs()
+	jobs := ds.GetJobs(newContext())
 	assert.Len(tester, jobs, 2)
 
 	// Test deleting jobs
 	ds.deleteJob(jobs[0])
-	jobs = ds.GetJobs()
+	jobs = ds.GetJobs(newContext())
 	assert.Len(tester, jobs, 1)
 	ds.deleteJob(jobs[0])
-	jobs = ds.GetJobs()
+	jobs = ds.GetJobs(newContext())
 	assert.Len(tester, jobs, 0)
 }
 
+func TestJobReadAuthorization(tester *testing.T) {
+	ds := NewFileDatastoreImpl(fake.NewUnauthorizedServer())
+	cfg := make(module.ModuleConfig)
+	ds.Init(cfg)
+	node := ds.CreateNode("foo")
+	ds.addNode(node)
+
+	myJobId := 10001
+	anothersJobId := 10002
+
+	// Test adding a job
+	job := ds.CreateJob(newContext())
+	job.UserId = ANOTHER_USER_ID
+	job.Id = anothersJobId
+	ds.addJob(job)
+
+	job = ds.CreateJob(newContext())
+	job.UserId = MY_USER_ID // This user's job
+	job.Id = myJobId
+	ds.addJob(job)
+
+	job = ds.GetJob(newContext(), myJobId)
+	assert.Equal(tester, myJobId, job.Id)
+
+	job = ds.GetJob(newContext(), anothersJobId)
+	assert.Nil(tester, job)
+
+	// Test fetching all jobs
+	jobs := ds.GetJobs(newContext())
+	assert.Len(tester, jobs, 1) // Only has my job
+}
+
+func TestJobDeleteAuthorization(tester *testing.T) {
+	ds := NewFileDatastoreImpl(fake.NewUnauthorizedServer())
+	cfg := make(module.ModuleConfig)
+	ds.Init(cfg)
+	node := ds.CreateNode("foo")
+	ds.addNode(node)
+
+	myJobId := 10001
+	anothersJobId := 10002
+
+	// Test adding a job
+	anotherJob := ds.CreateJob(newContext())
+	anotherJob.UserId = ANOTHER_USER_ID
+	anotherJob.Id = anothersJobId
+	ds.addJob(anotherJob)
+
+	myJob := ds.CreateJob(newContext())
+	myJob.UserId = MY_USER_ID // This user's job
+	myJob.Id = myJobId
+	ds.addJob(myJob)
+
+	assert.NotNil(tester, ds.jobsById[myJobId])
+	assert.NotNil(tester, ds.jobsById[anothersJobId])
+
+	// Should not delete another user's job
+	ds.DeleteJob(newContext(), anotherJob)
+	assert.NotNil(tester, ds.jobsById[anothersJobId])
+
+	// Should delete my own job
+	ds.DeleteJob(newContext(), myJob)
+	assert.Nil(tester, ds.jobsById[myJobId])
+}
+
 func TestGetStreamFilename(tester *testing.T) {
-	ds := NewFileDatastoreImpl()
+	ds := NewFileDatastoreImpl(fake.NewUnauthorizedServer())
 	cfg := make(module.ModuleConfig)
 	cfg["jobDir"] = "/tmp/jobs"
 	ds.Init(cfg)
-	filename := ds.getStreamFilename(ds.CreateJob())
+	filename := ds.getStreamFilename(ds.CreateJob(newContext()))
 	assert.Equal(tester, "/tmp/jobs/1001.bin", filename)
 }

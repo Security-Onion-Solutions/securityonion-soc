@@ -125,23 +125,22 @@ func (impl *StaticRbacAuthorizer) CheckContextOperationAuthorized(ctx context.Co
   permission := target + "/" + operation
 
   if user, ok := ctx.Value(web.ContextKeyRequestor).(*model.User); ok {
-    log.WithFields(log.Fields{
-      "userId":     user.Id,
-      "username":   user.Email,
-      "requestId":  ctx.Value(web.ContextKeyRequestId),
-      "permission": permission,
-      "roleMap":    impl.roleMap,
-    }).Info("Evaluating authorization for requestor")
-
     impl.mutex.Lock()
     defer impl.mutex.Unlock()
 
     if user.Email == permission {
       err = errors.New("Unable to check authorization of a subject name that matches the permission name itself")
-    }
-    if !impl.isAuthorized(user.Email, permission) {
+    } else if !impl.isAuthorized(user.Email, permission) {
       err = model.NewUnauthorized(user.Email, operation, target)
     }
+    log.WithFields(log.Fields{
+      "userId":       user.Id,
+      "username":     user.Email,
+      "requestId":    ctx.Value(web.ContextKeyRequestId),
+      "permission":   permission,
+      "primaryRoles": impl.roleMap[user.Email],
+      "authorized":   err == nil,
+    }).Info("Evaluating authorization for requestor")
   } else {
     log.Debug("Authorization user not found in context")
     err = model.NewUnauthorized("", operation, target)
@@ -196,7 +195,7 @@ func (impl *StaticRbacAuthorizer) scanFiles() {
 
   hash := md5.Sum([]byte(hashText))
   if hash != impl.previousHash {
-    log.Info("Role files have changed; updating roles")
+    log.WithField("roleMap", newRoleMap).Info("Role files have changed; updating roles")
     impl.UpdateRoleMap(newRoleMap)
     impl.previousHash = hash
   }

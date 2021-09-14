@@ -13,21 +13,21 @@ package elastic
 import (
   "context"
   "errors"
-  "net/http"
-  "strconv"
   "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/server"
   "github.com/security-onion-solutions/securityonion-soc/web"
+  "net/http"
+  "strconv"
 )
 
 type JobLookupHandler struct {
   web.BaseHandler
-  server							*server.Server
-  store    						*ElasticEventstore
+  server *server.Server
+  store  *ElasticEventstore
 }
 
 func NewJobLookupHandler(srv *server.Server, store *ElasticEventstore) *JobLookupHandler {
-  handler := &JobLookupHandler {}
+  handler := &JobLookupHandler{}
   handler.Host = srv.Host
   handler.server = srv
   handler.BaseHandler.Impl = handler
@@ -37,7 +37,8 @@ func NewJobLookupHandler(srv *server.Server, store *ElasticEventstore) *JobLooku
 
 func (handler *JobLookupHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   switch request.Method {
-    case http.MethodGet: return handler.get(ctx, writer, request)
+  case http.MethodGet:
+    return handler.get(ctx, writer, request)
   }
   return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
@@ -46,7 +47,7 @@ func (handler *JobLookupHandler) get(ctx context.Context, writer http.ResponseWr
   statusCode := http.StatusBadRequest
 
   timestampStr := request.URL.Query().Get("time") // Elastic doc timestamp
-  
+
   idField := "_id"
   idValue := request.URL.Query().Get("esid") // Elastic doc ID
   if len(idValue) == 0 {
@@ -54,12 +55,12 @@ func (handler *JobLookupHandler) get(ctx context.Context, writer http.ResponseWr
     idField = "network.community_id"
   }
 
-  job := handler.server.Datastore.CreateJob()
+  job := handler.server.Datastore.CreateJob(ctx)
   err := handler.store.PopulateJobFromDocQuery(ctx, idField, idValue, timestampStr, job)
   if err == nil {
     if user, ok := ctx.Value(web.ContextKeyRequestor).(*model.User); ok {
       job.UserId = user.Id
-      err = handler.server.Datastore.AddJob(job)
+      err = handler.server.Datastore.AddJob(ctx, job)
       if err == nil {
         handler.Host.Broadcast("job", job)
         statusCode = http.StatusOK

@@ -11,8 +11,9 @@
 package server
 
 import (
-  "io"
+  "context"
   "github.com/security-onion-solutions/securityonion-soc/model"
+  "io"
 )
 
 type Datastore interface {
@@ -20,14 +21,14 @@ type Datastore interface {
   GetNodes() []*model.Node
   AddNode(node *model.Node) error
   UpdateNode(newNode *model.Node) (*model.Node, error)
-  GetNextJob(nodeId string) *model.Job
-  CreateJob() *model.Job
-  GetJob(jobId int) *model.Job
-  GetJobs() []*model.Job
-  AddJob(job *model.Job) error
-  UpdateJob(job *model.Job) error
-  DeleteJob(job *model.Job) error
-  GetPackets(jobId int, offset int, count int, unwrap bool) ([]*model.Packet, error)
-  SavePacketStream(jobId int, reader io.ReadCloser) error
-  GetPacketStream(jobId int, unwrap bool) (io.ReadCloser, string, int64, error)
+  GetNextJob(ctx context.Context, nodeId string) *model.Job
+  CreateJob(ctx context.Context) *model.Job
+  GetJob(ctx context.Context, jobId int) *model.Job
+  GetJobs(ctx context.Context) []*model.Job
+  AddJob(ctx context.Context, job *model.Job) error
+  UpdateJob(ctx context.Context, job *model.Job) error
+  DeleteJob(ctx context.Context, job *model.Job) error
+  GetPackets(ctx context.Context, jobId int, offset int, count int, unwrap bool) ([]*model.Packet, error)
+  SavePacketStream(ctx context.Context, jobId int, reader io.ReadCloser) error
+  GetPacketStream(ctx context.Context, jobId int, unwrap bool) (io.ReadCloser, string, int64, error)
 }
