@@ -224,20 +224,26 @@ func (datastore *FileDatastoreImpl) AddJob(ctx context.Context, job *model.Job) 
 func (datastore *FileDatastoreImpl) UpdateJob(ctx context.Context, job *model.Job) error {
   var err error
   if err = datastore.server.Authorizer.CheckContextOperationAuthorized(ctx, "process", "jobs"); err == nil {
-    if job.CanProcess() {
-      datastore.lock.Lock()
-      defer datastore.lock.Unlock()
-      err = datastore.deleteJob(job)
-      if err == nil {
+    existingJob := datastore.getJobById(job.Id)
+    if existingJob != nil {
+      job.UserId = existingJob.UserId // Prevent users from altering the creating user
+      job.NodeId = existingJob.NodeId // Do not allow moving a job between nodes due to data file path
+      if job.CanProcess() {
+        datastore.lock.Lock()
+        defer datastore.lock.Unlock()
+        datastore.deleteJob(existingJob)
         err = datastore.addJob(job)
         if err == nil {
           err = datastore.saveJob(job)
         }
+      } else {
+        err = errors.New("Job is ineligible for processing")
       }
     } else {
-      err = errors.New("Job is ineligible for processing")
+      err = errors.New("Job not found")
     }
   }
+
   return err
 }
 
@@ -245,11 +251,14 @@ func (datastore *FileDatastoreImpl) getJobById(jobId int) *model.Job {
   return datastore.jobsById[jobId]
 }
 
-func (datastore *FileDatastoreImpl) DeleteJob(ctx context.Context, job *model.Job) error {
+func (datastore *FileDatastoreImpl) DeleteJob(ctx context.Context, jobId int) (*model.Job, error) {
   var err error
-  if datastore.jobIsAllowed(ctx, job, "delete") {
-    err = datastore.deleteJob(job)
-    if err == nil {
+  job := datastore.getJobById(jobId)
+  if job != nil {
+    if datastore.jobIsAllowed(ctx, job, "delete") {
+      datastore.lock.Lock()
+      defer datastore.lock.Unlock()
+      datastore.deleteJob(job)
       job.Status = model.JobStatusDeleted
       filename := fmt.Sprintf("%d.json", job.Id)
       folder := filepath.Join(datastore.jobDir, sanitize.Name(job.GetNodeId()))
@@ -266,32 +275,29 @@ func (datastore *FileDatastoreImpl) DeleteJob(ctx context.Context, job *model.Jo
           "filename": filename,
         }).Info("Permanently deleted job and job files")
       }
+    } else {
+      err = errors.New("Permission denied attempting to delete job")
     }
+  } else {
+    err = errors.New("Job not found")
   }
-  return err
+  return job, err
 }
 
-func (datastore *FileDatastoreImpl) deleteJob(job *model.Job) error {
-  var err error
-  existingJob := datastore.getJobById(job.Id)
-  if existingJob == nil {
-    err = errors.New("Job does not exist")
-  } else {
-    jobs := datastore.jobsByNodeId[job.GetNodeId()]
-    newJobs := make([]*model.Job, 0)
-    for _, currentJob := range jobs {
-      if currentJob.Id != job.Id {
-        newJobs = append(newJobs, currentJob)
-      }
+func (datastore *FileDatastoreImpl) deleteJob(job *model.Job) {
+  jobs := datastore.jobsByNodeId[job.GetNodeId()]
+  newJobs := make([]*model.Job, 0)
+  for _, currentJob := range jobs {
+    if currentJob.Id != job.Id {
+      newJobs = append(newJobs, currentJob)
     }
-    datastore.jobsByNodeId[job.GetNodeId()] = newJobs
-    delete(datastore.jobsById, job.Id)
-    log.WithFields(log.Fields{
-      "id":   job.Id,
-      "node": job.GetNodeId(),
-    }).Debug("Deleted job from list")
   }
-  return err
+  datastore.jobsByNodeId[job.GetNodeId()] = newJobs
+  delete(datastore.jobsById, job.Id)
+  log.WithFields(log.Fields{
+    "id":   job.Id,
+    "node": job.GetNodeId(),
+  }).Debug("Deleted job from list")
 }
 
 func (datastore *FileDatastoreImpl) addJob(job *model.Job) error {
@@ -384,7 +390,7 @@ func (datastore *FileDatastoreImpl) GetPackets(ctx context.Context, jobId int, o
 func (datastore *FileDatastoreImpl) SavePacketStream(ctx context.Context, jobId int, reader io.ReadCloser) error {
   var err error
   if err = datastore.server.Authorizer.CheckContextOperationAuthorized(ctx, "process", "jobs"); err == nil {
-    job := datastore.GetJob(ctx, jobId)
+    job := datastore.getJobById(jobId)
     if job != nil {
       if job.CanProcess() {
         var count int64

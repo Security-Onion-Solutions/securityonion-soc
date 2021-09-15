@@ -83,17 +83,10 @@ func (jobHandler *JobHandler) put(ctx context.Context, writer http.ResponseWrite
   job := model.NewJob()
   err := jobHandler.ReadJson(request, job)
   if err == nil {
-    existingJob := jobHandler.server.Datastore.GetJob(ctx, job.Id)
-    if existingJob != nil {
-      job.UserId = existingJob.UserId // Prevent users from altering the creating user
-
-      err = jobHandler.server.Datastore.UpdateJob(ctx, job)
-      if err == nil {
-        jobHandler.Host.Broadcast("job", job)
-        statusCode = http.StatusOK
-      } else {
-        statusCode = http.StatusNotFound
-      }
+    err = jobHandler.server.Datastore.UpdateJob(ctx, job)
+    if err == nil {
+      jobHandler.Host.Broadcast("job", job)
+      statusCode = http.StatusOK
     } else {
       statusCode = http.StatusNotFound
     }
@@ -113,15 +106,11 @@ func (jobHandler *JobHandler) delete(ctx context.Context, writer http.ResponseWr
 
   jobId, err := strconv.Atoi(id)
   if err == nil {
-    job := jobHandler.server.Datastore.GetJob(ctx, int(jobId))
-    if job != nil {
-      err = jobHandler.server.Datastore.DeleteJob(ctx, job)
-      if err == nil {
-        jobHandler.Host.Broadcast("job", job)
-        statusCode = http.StatusOK
-      }
-    } else {
-      statusCode = http.StatusNotFound
+    var job *model.Job
+    job, err = jobHandler.server.Datastore.DeleteJob(ctx, int(jobId))
+    if err == nil {
+      jobHandler.Host.Broadcast("job", job)
+      statusCode = http.StatusOK
     }
   }
 

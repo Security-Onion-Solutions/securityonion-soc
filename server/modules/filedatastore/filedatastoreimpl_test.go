@@ -118,12 +118,12 @@ func TestJobReadAuthorization(tester *testing.T) {
 	ds.addNode(node)
 
 	myJobId := 10001
-	anothersJobId := 10002
+	anotherJobId := 10002
 
 	// Test adding a job
 	job := ds.CreateJob(newContext())
 	job.UserId = ANOTHER_USER_ID
-	job.Id = anothersJobId
+	job.Id = anotherJobId
 	ds.addJob(job)
 
 	job = ds.CreateJob(newContext())
@@ -134,7 +134,7 @@ func TestJobReadAuthorization(tester *testing.T) {
 	job = ds.GetJob(newContext(), myJobId)
 	assert.Equal(tester, myJobId, job.Id)
 
-	job = ds.GetJob(newContext(), anothersJobId)
+	job = ds.GetJob(newContext(), anotherJobId)
 	assert.Nil(tester, job)
 
 	// Test fetching all jobs
@@ -150,12 +150,12 @@ func TestJobDeleteAuthorization(tester *testing.T) {
 	ds.addNode(node)
 
 	myJobId := 10001
-	anothersJobId := 10002
+	anotherJobId := 10002
 
 	// Test adding a job
 	anotherJob := ds.CreateJob(newContext())
 	anotherJob.UserId = ANOTHER_USER_ID
-	anotherJob.Id = anothersJobId
+	anotherJob.Id = anotherJobId
 	ds.addJob(anotherJob)
 
 	myJob := ds.CreateJob(newContext())
@@ -164,14 +164,14 @@ func TestJobDeleteAuthorization(tester *testing.T) {
 	ds.addJob(myJob)
 
 	assert.NotNil(tester, ds.jobsById[myJobId])
-	assert.NotNil(tester, ds.jobsById[anothersJobId])
+	assert.NotNil(tester, ds.jobsById[anotherJobId])
 
 	// Should not delete another user's job
-	ds.DeleteJob(newContext(), anotherJob)
-	assert.NotNil(tester, ds.jobsById[anothersJobId])
+	ds.DeleteJob(newContext(), anotherJobId)
+	assert.NotNil(tester, ds.jobsById[anotherJobId])
 
 	// Should delete my own job
-	ds.DeleteJob(newContext(), myJob)
+	ds.DeleteJob(newContext(), myJobId)
 	assert.Nil(tester, ds.jobsById[myJobId])
 }
 
