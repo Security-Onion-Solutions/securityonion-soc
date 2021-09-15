@@ -228,7 +228,7 @@ func (datastore *FileDatastoreImpl) UpdateJob(ctx context.Context, job *model.Jo
     if existingJob != nil {
       job.UserId = existingJob.UserId // Prevent users from altering the creating user
       job.NodeId = existingJob.NodeId // Do not allow moving a job between nodes due to data file path
-      if job.CanProcess() {
+      if existingJob.CanProcess() {
         datastore.lock.Lock()
         defer datastore.lock.Unlock()
         datastore.deleteJob(existingJob)

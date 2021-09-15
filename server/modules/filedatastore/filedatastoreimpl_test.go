@@ -183,3 +183,39 @@ func TestGetStreamFilename(tester *testing.T) {
 	filename := ds.getStreamFilename(ds.CreateJob(newContext()))
 	assert.Equal(tester, "/tmp/jobs/1001.bin", filename)
 }
+
+func TestUpdateInelegible(tester *testing.T) {
+	ds := NewFileDatastoreImpl(fake.NewUnauthorizedServer())
+	cfg := make(module.ModuleConfig)
+	ds.Init(cfg)
+
+	job := ds.CreateJob(newContext())
+	job.UserId = MY_USER_ID // This user's job
+	job.Id = 1212
+	ds.addJob(job)
+
+	err := ds.UpdateJob(newContext(), job)
+	assert.Error(tester, err, "Job is inelegible for processing")
+}
+
+func TestUpdatePreserveData(tester *testing.T) {
+	ds := NewFileDatastoreImpl(fake.NewAuthorizedServer(nil))
+	cfg := make(module.ModuleConfig)
+	ds.Init(cfg)
+
+	job := ds.CreateJob(newContext())
+	job.UserId = MY_USER_ID // This user's job
+	job.NodeId = "some node"
+	job.Id = 1212
+	job.Status = model.JobStatusPending
+	ds.addJob(job)
+
+	newJob := ds.CreateJob(newContext())
+	newJob.Id = job.Id
+	newJob.UserId = ANOTHER_USER_ID
+	newJob.NodeId = "some other node"
+	err := ds.UpdateJob(newContext(), newJob)
+	assert.NoError(tester, err)
+	assert.Equal(tester, job.UserId, newJob.UserId)
+	assert.Equal(tester, job.NodeId, newJob.NodeId)
+}
