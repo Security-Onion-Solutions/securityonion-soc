@@ -17,7 +17,7 @@ import (
 
 type Userstore interface {
   GetUsers(ctx context.Context) ([]*model.User, error)
-  DeleteUser(id string) error
+  DeleteUser(ctx context.Context, id string) error
   GetUser(ctx context.Context, id string) (*model.User, error)
-  UpdateUser(id string, user *model.User) error
+  UpdateUser(ctx context.Context, id string, user *model.User) error
 }

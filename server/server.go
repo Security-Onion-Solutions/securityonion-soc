@@ -14,6 +14,7 @@ import (
   "context"
   "github.com/apex/log"
   "github.com/security-onion-solutions/securityonion-soc/config"
+  "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/web"
   "os/exec"
   "strings"
@@ -34,14 +35,25 @@ type Server struct {
   Metrics     Metrics
   stoppedChan chan bool
   Authorizer  Authorizer
+  Context     context.Context
 }
 
 func NewServer(cfg *config.ServerConfig, version string) *Server {
-  return &Server{
+  server := &Server{
     Config:      cfg,
     Host:        web.NewHost(cfg.BindAddress, cfg.HtmlDir, cfg.IdleConnectionTimeoutMs, version),
     stoppedChan: make(chan bool, 1),
   }
+  server.initContext()
+  return server
+}
+
+func (server *Server) initContext() {
+  // Server will retain the role of an agent until there's a need for higher privileges
+  agent := model.NewUser()
+  agent.Id = "agent"
+  agent.Email = agent.Id
+  server.Context = context.WithValue(context.Background(), web.ContextKeyRequestor, agent)
 }
 
 func (server *Server) Start() {

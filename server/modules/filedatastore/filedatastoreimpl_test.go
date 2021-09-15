@@ -18,12 +18,14 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/fake"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
 )
 
 const MY_USER_ID = "123"
 const ANOTHER_USER_ID = "124"
+const JOB_DIR = "/tmp/sensoroni.jobs"
 
 func newContext() context.Context {
 	user := model.NewUser()
@@ -31,32 +33,43 @@ func newContext() context.Context {
 	return context.WithValue(context.Background(), web.ContextKeyRequestor, user)
 }
 
-func TestFileDatastoreInit(tester *testing.T) {
-	ds := NewFileDatastoreImpl(fake.NewUnauthorizedServer())
-	cfg := make(module.ModuleConfig)
-	err := ds.Init(cfg)
-	assert.Error(tester, err)
-
-	jobDir := "/tmp/sensoroni.jobs"
-	cfg["jobDir"] = jobDir
-	defer os.Remove(jobDir)
-	os.Mkdir(jobDir, 0777)
-	err = ds.Init(cfg)
-	if assert.Nil(tester, err) {
-		assert.Equal(tester, DEFAULT_RETRY_FAILURE_INTERVAL_MS, ds.retryFailureIntervalMs)
-	}
+func cleanup() {
+	os.RemoveAll(JOB_DIR)
 }
 
-func TestNodes(tester *testing.T) {
-	ds := NewFileDatastoreImpl(fake.NewUnauthorizedServer())
+func createDatastore(authorized bool) (*FileDatastoreImpl, error) {
+	cleanup()
+
+	var srv *server.Server
+	if authorized {
+		srv = fake.NewAuthorizedServer(nil)
+	} else {
+		srv = fake.NewUnauthorizedServer()
+	}
+	ds := NewFileDatastoreImpl(srv)
 	cfg := make(module.ModuleConfig)
-	ds.Init(cfg)
-	node := ds.CreateNode("foo")
+	cfg["jobDir"] = JOB_DIR
+	os.MkdirAll(JOB_DIR, 0777)
+	err := ds.Init(cfg)
+	node := ds.CreateNode(newContext(), "foo")
 	node.Role = "rolo"
 	node.Description = "desc"
 	node.Address = "addr"
 	ds.addNode(node)
-	nodes := ds.GetNodes()
+	return ds, err
+}
+
+func TestFileDatastoreInit(tester *testing.T) {
+	defer cleanup()
+	ds, err := createDatastore(true)
+	assert.NoError(tester, err)
+	assert.Equal(tester, DEFAULT_RETRY_FAILURE_INTERVAL_MS, ds.retryFailureIntervalMs)
+}
+
+func TestNodes(tester *testing.T) {
+	defer cleanup()
+	ds, _ := createDatastore(true)
+	nodes := ds.GetNodes(newContext())
 	if assert.Len(tester, nodes, 1) {
 		assert.Equal(tester, "foo", nodes[0].Id)
 		assert.Equal(tester, "rolo", nodes[0].Role)
@@ -64,20 +77,17 @@ func TestNodes(tester *testing.T) {
 		assert.Equal(tester, "addr", nodes[0].Address)
 	}
 
-	node = ds.CreateNode("bar")
+	node := ds.CreateNode(newContext(), "bar")
 	ds.addNode(node)
-	nodes = ds.GetNodes()
+	nodes = ds.GetNodes(newContext())
 	assert.Len(tester, nodes, 2)
 	job := ds.GetNextJob(newContext(), "foo")
 	assert.Nil(tester, job)
 }
 
 func TestJobs(tester *testing.T) {
-	ds := NewFileDatastoreImpl(fake.NewAuthorizedServer(nil))
-	cfg := make(module.ModuleConfig)
-	ds.Init(cfg)
-	node := ds.CreateNode("foo")
-	ds.addNode(node)
+	defer cleanup()
+	ds, _ := createDatastore(true)
 
 	// Test adding a job
 	job := ds.CreateJob(newContext())
@@ -110,12 +120,65 @@ func TestJobs(tester *testing.T) {
 	assert.Len(tester, jobs, 0)
 }
 
+func TestJobAddUnauthorized(tester *testing.T) {
+	defer cleanup()
+	ds, _ := createDatastore(false)
+
+	// Test adding a job
+	job := ds.CreateJob(newContext())
+	assert.Equal(tester, 1001, job.Id)
+	err := ds.AddJob(newContext(), job)
+	assert.Error(tester, err)
+	assert.Len(tester, ds.jobsById, 0)
+}
+
+func TestJobAdd(tester *testing.T) {
+	defer cleanup()
+	ds, _ := createDatastore(true)
+	assert.Len(tester, ds.jobsById, 0)
+
+	// Test adding a job
+	job := ds.CreateJob(newContext())
+	assert.Equal(tester, 1001, job.Id)
+	err := ds.AddJob(newContext(), job)
+	assert.NoError(tester, err)
+	assert.Len(tester, ds.jobsById, 1)
+
+	newJob := ds.GetJob(newContext(), job.Id)
+	assert.Equal(tester, MY_USER_ID, newJob.UserId)
+}
+
+func TestJobAddPivotUnauthorized(tester *testing.T) {
+	defer cleanup()
+	ds, _ := createDatastore(false)
+
+	// Test adding an arbitrary job
+	job := ds.CreateJob(newContext())
+	assert.Equal(tester, 1001, job.Id)
+	err := ds.AddPivotJob(newContext(), job)
+	assert.Error(tester, err)
+	assert.Len(tester, ds.jobsById, 0)
+}
+
+func TestJobAddPivot(tester *testing.T) {
+	defer cleanup()
+	ds, _ := createDatastore(true)
+	assert.Len(tester, ds.jobsById, 0)
+
+	// Test adding a pivot job (requires different permission)
+	job := ds.CreateJob(newContext())
+	assert.Equal(tester, 1001, job.Id)
+	err := ds.AddPivotJob(newContext(), job)
+	assert.NoError(tester, err)
+	assert.Len(tester, ds.jobsById, 1)
+
+	newJob := ds.GetJob(newContext(), job.Id)
+	assert.Equal(tester, MY_USER_ID, newJob.UserId)
+}
+
 func TestJobReadAuthorization(tester *testing.T) {
-	ds := NewFileDatastoreImpl(fake.NewUnauthorizedServer())
-	cfg := make(module.ModuleConfig)
-	ds.Init(cfg)
-	node := ds.CreateNode("foo")
-	ds.addNode(node)
+	defer cleanup()
+	ds, _ := createDatastore(false)
 
 	myJobId := 10001
 	anotherJobId := 10002
@@ -143,11 +206,8 @@ func TestJobReadAuthorization(tester *testing.T) {
 }
 
 func TestJobDeleteAuthorization(tester *testing.T) {
-	ds := NewFileDatastoreImpl(fake.NewUnauthorizedServer())
-	cfg := make(module.ModuleConfig)
-	ds.Init(cfg)
-	node := ds.CreateNode("foo")
-	ds.addNode(node)
+	defer cleanup()
+	ds, _ := createDatastore(false)
 
 	myJobId := 10001
 	anotherJobId := 10002
@@ -176,21 +236,18 @@ func TestJobDeleteAuthorization(tester *testing.T) {
 }
 
 func TestGetStreamFilename(tester *testing.T) {
-	ds := NewFileDatastoreImpl(fake.NewUnauthorizedServer())
-	cfg := make(module.ModuleConfig)
-	cfg["jobDir"] = "/tmp/jobs"
-	ds.Init(cfg)
+	defer cleanup()
+	ds, _ := createDatastore(false)
 	filename := ds.getStreamFilename(ds.CreateJob(newContext()))
-	assert.Equal(tester, "/tmp/jobs/1001.bin", filename)
+	assert.Equal(tester, "/tmp/sensoroni.jobs/1001.bin", filename)
 }
 
 func TestUpdateInelegible(tester *testing.T) {
-	ds := NewFileDatastoreImpl(fake.NewUnauthorizedServer())
-	cfg := make(module.ModuleConfig)
-	ds.Init(cfg)
+	defer cleanup()
+	ds, _ := createDatastore(false)
 
 	job := ds.CreateJob(newContext())
-	job.UserId = MY_USER_ID // This user's job
+	job.UserId = MY_USER_ID
 	job.Id = 1212
 	ds.addJob(job)
 
@@ -199,12 +256,11 @@ func TestUpdateInelegible(tester *testing.T) {
 }
 
 func TestUpdatePreserveData(tester *testing.T) {
-	ds := NewFileDatastoreImpl(fake.NewAuthorizedServer(nil))
-	cfg := make(module.ModuleConfig)
-	ds.Init(cfg)
+	defer cleanup()
+	ds, _ := createDatastore(true)
 
 	job := ds.CreateJob(newContext())
-	job.UserId = MY_USER_ID // This user's job
+	job.UserId = MY_USER_ID
 	job.NodeId = "some node"
 	job.Id = 1212
 	job.Status = model.JobStatusPending

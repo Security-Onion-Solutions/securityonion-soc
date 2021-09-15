@@ -14,8 +14,7 @@ import (
 	"context"
 	"errors"
 	"github.com/apex/log"
-	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/web"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 	"net"
 	"net/http"
 	"strings"
@@ -24,10 +23,13 @@ import (
 type StaticKeyAuthImpl struct {
 	apiKey           string
 	anonymousNetwork *net.IPNet
+	server           *server.Server
 }
 
-func NewStaticKeyAuthImpl() *StaticKeyAuthImpl {
-	return &StaticKeyAuthImpl{}
+func NewStaticKeyAuthImpl(srv *server.Server) *StaticKeyAuthImpl {
+	return &StaticKeyAuthImpl{
+		server: srv,
+	}
 }
 
 func (auth *StaticKeyAuthImpl) Init(apiKey string, anonymousCidr string) error {
@@ -49,11 +51,9 @@ func (auth *StaticKeyAuthImpl) Preprocess(ctx context.Context, req *http.Request
 		statusCode = http.StatusUnauthorized
 		err = errors.New("Access denied")
 	} else {
-		// Currently all static auth clients are sensors
-		sensorUser := model.NewUser()
-		sensorUser.Id = "sensor"
-		sensorUser.Email = "sensor"
-		ctx = context.WithValue(ctx, web.ContextKeyRequestor, sensorUser)
+		// Remote agents will assume the role of this server until the implementation
+		// is enhanced to support unique agent keys and roles.
+		ctx = auth.server.Context
 	}
 	return ctx, statusCode, err
 }

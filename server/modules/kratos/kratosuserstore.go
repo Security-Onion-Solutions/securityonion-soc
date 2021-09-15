@@ -84,11 +84,14 @@ func (kratos *KratosUserstore) GetUsers(ctx context.Context) ([]*model.User, err
   return users, nil
 }
 
-func (kratos *KratosUserstore) DeleteUser(id string) error {
-  log.WithField("id", id).Debug("Deleting user")
-  _, err := kratos.client.SendObject("DELETE", "/identities/"+id, "", nil, false)
-  if err != nil {
-    log.WithError(err).Error("Failed to delete user from Kratos")
+func (kratos *KratosUserstore) DeleteUser(ctx context.Context, id string) error {
+  var err error
+  if err = kratos.server.Authorizer.CheckContextOperationAuthorized(ctx, "delete", "users"); err != nil {
+    log.WithField("id", id).Debug("Deleting user")
+    _, err := kratos.client.SendObject("DELETE", "/identities/"+id, "", nil, false)
+    if err != nil {
+      log.WithError(err).Error("Failed to delete user from Kratos")
+    }
   }
   return err
 }
@@ -109,15 +112,18 @@ func (kratos *KratosUserstore) GetUser(ctx context.Context, id string) (*model.U
   return user, err
 }
 
-func (kratos *KratosUserstore) UpdateUser(id string, user *model.User) error {
-  kratosUser, err := kratos.fetchUser(id)
-  if err != nil {
-    log.WithError(err).Error("Original user not found")
-  } else {
-    kratosUser.copyFromUser(user)
-    _, err = kratos.client.SendObject("PUT", "/identities/"+id, kratosUser, nil, false)
+func (kratos *KratosUserstore) UpdateUser(ctx context.Context, id string, user *model.User) error {
+  var err error
+  if err = kratos.server.Authorizer.CheckContextOperationAuthorized(ctx, "write", "users"); err != nil {
+    kratosUser, err := kratos.fetchUser(id)
     if err != nil {
-      log.WithError(err).Error("Failed to update user in Kratos")
+      log.WithError(err).Error("Original user not found")
+    } else {
+      kratosUser.copyFromUser(user)
+      _, err = kratos.client.SendObject("PUT", "/identities/"+id, kratosUser, nil, false)
+      if err != nil {
+        log.WithError(err).Error("Failed to update user in Kratos")
+      }
     }
   }
   return err

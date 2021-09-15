@@ -2,10 +2,14 @@
 # Syntax      => roleX: roleY roleZ
 # Explanation => roleY and roleZ are granted permissions of roleX
 
-grid-admin:       superuser
-grid-monitor:     analyst auditor
+case-admin:       analyst limited-analyst superuser
+event-admin:      analyst limited-analyst superuser
+event-monitor:    auditor limited-auditor
+node-admin:       agent superuser
+node-monitor:     analyst limited-analyst auditor
 user-admin:       superuser
 user-monitor:     analyst auditor
-job-admin:        superuser analyst
+job-admin:        analyst superuser
+job-user:         limited-analyst
 job-monitor:      auditor
-job-processor:    sensor
+job-processor:    agent

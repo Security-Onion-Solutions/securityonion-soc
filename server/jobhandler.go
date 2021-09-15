@@ -64,15 +64,10 @@ func (jobHandler *JobHandler) post(ctx context.Context, writer http.ResponseWrit
   job := jobHandler.server.Datastore.CreateJob(ctx)
   err := jobHandler.ReadJson(request, job)
   if err == nil {
-    if user, ok := ctx.Value(web.ContextKeyRequestor).(*model.User); ok {
-      job.UserId = user.Id
-      err = jobHandler.server.Datastore.AddJob(ctx, job)
-      if err == nil {
-        jobHandler.Host.Broadcast("job", job)
-        statusCode = http.StatusCreated
-      }
-    } else {
-      err = errors.New("User not found in context")
+    err = jobHandler.server.Datastore.AddJob(ctx, job)
+    if err == nil {
+      jobHandler.Host.Broadcast("job", job)
+      statusCode = http.StatusCreated
     }
   }
   return statusCode, job, err

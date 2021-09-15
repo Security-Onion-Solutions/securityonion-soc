@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/security-onion-solutions/securityonion-soc/fake"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
@@ -30,7 +31,7 @@ func TestValidateAuthorization(tester *testing.T) {
 }
 
 func validateAuthorization(tester *testing.T, key string, ip string, expected bool) {
-	ai := NewStaticKeyAuthImpl()
+	ai := NewStaticKeyAuthImpl(fake.NewAuthorizedServer(nil))
 	ai.Init("abc", "172.17.0.0/24")
 	actual := ai.validateAuthorization(key, ip)
 	assert.Equal(tester, expected, actual)
@@ -45,14 +46,14 @@ func TestValidateApiKey(tester *testing.T) {
 }
 
 func validateKey(tester *testing.T, key string, expected bool) {
-	ai := NewStaticKeyAuthImpl()
+	ai := NewStaticKeyAuthImpl(fake.NewAuthorizedServer(nil))
 	ai.apiKey = "abc"
 	actual := ai.validateApiKey(key)
 	assert.Equal(tester, expected, actual)
 }
 
 func TestAuthImplInit(tester *testing.T) {
-	ai := NewStaticKeyAuthImpl()
+	ai := NewStaticKeyAuthImpl(fake.NewAuthorizedServer(nil))
 	err := ai.Init("abc", "1")
 	assert.Error(tester, err)
 	err = ai.Init("abc", "1.2.3.4/16")
@@ -63,12 +64,12 @@ func TestAuthImplInit(tester *testing.T) {
 }
 
 func TestPreprocessPriority(tester *testing.T) {
-	handler := NewStaticKeyAuthImpl()
+	handler := NewStaticKeyAuthImpl(fake.NewAuthorizedServer(nil))
 	assert.Equal(tester, 100, handler.PreprocessPriority())
 }
 
 func TestPreprocess(tester *testing.T) {
-	ai := NewStaticKeyAuthImpl()
+	ai := NewStaticKeyAuthImpl(fake.NewAuthorizedServer(nil))
 	err := ai.Init("abc", "1")
 	assert.Error(tester, err)
 	ai.apiKey = "123"
@@ -82,8 +83,8 @@ func TestPreprocess(tester *testing.T) {
 			if assert.NotNil(tester, requestor) {
 				sensorUser := requestor.(*model.User)
 				assert.NotNil(tester, sensorUser)
-				assert.Equal(tester, "sensor", sensorUser.Id)
-				assert.Equal(tester, "sensor", sensorUser.Email)
+				assert.Equal(tester, "agent", sensorUser.Id)
+				assert.Equal(tester, "agent", sensorUser.Email)
 			}
 		}
 	}

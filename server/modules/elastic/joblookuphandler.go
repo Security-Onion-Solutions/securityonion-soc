@@ -13,7 +13,6 @@ package elastic
 import (
   "context"
   "errors"
-  "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/server"
   "github.com/security-onion-solutions/securityonion-soc/web"
   "net/http"
@@ -58,17 +57,12 @@ func (handler *JobLookupHandler) get(ctx context.Context, writer http.ResponseWr
   job := handler.server.Datastore.CreateJob(ctx)
   err := handler.store.PopulateJobFromDocQuery(ctx, idField, idValue, timestampStr, job)
   if err == nil {
-    if user, ok := ctx.Value(web.ContextKeyRequestor).(*model.User); ok {
-      job.UserId = user.Id
-      err = handler.server.Datastore.AddJob(ctx, job)
-      if err == nil {
-        handler.Host.Broadcast("job", job)
-        statusCode = http.StatusOK
-        redirectUrl := handler.server.Config.BaseUrl + "#/job/" + strconv.Itoa(job.Id)
-        http.Redirect(writer, request, redirectUrl, http.StatusFound)
-      }
-    } else {
-      err = errors.New("User not found in context")
+    err = handler.server.Datastore.AddPivotJob(ctx, job)
+    if err == nil {
+      handler.Host.Broadcast("job", job)
+      statusCode = http.StatusOK
+      redirectUrl := handler.server.Config.BaseUrl + "#/job/" + strconv.Itoa(job.Id)
+      http.Redirect(writer, request, redirectUrl, http.StatusFound)
     }
   } else {
     statusCode = http.StatusNotFound

@@ -26,6 +26,7 @@ import (
 	"github.com/elastic/go-elasticsearch/v7"
 	"github.com/elastic/go-elasticsearch/v7/esapi"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/tidwall/gjson"
 )
@@ -40,6 +41,7 @@ type FieldDefinition struct {
 }
 
 type ElasticEventstore struct {
+	server            *server.Server
 	hostUrls          []string
 	esClient          *elasticsearch.Client
 	esRemoteClients   []*elasticsearch.Client
@@ -57,8 +59,9 @@ type ElasticEventstore struct {
 	asyncThreshold    int
 }
 
-func NewElasticEventstore() *ElasticEventstore {
+func NewElasticEventstore(srv *server.Server) *ElasticEventstore {
 	return &ElasticEventstore{
+		server:          srv,
 		hostUrls:        make([]string, 0),
 		esRemoteClients: make([]*elasticsearch.Client, 0),
 		esAllClients:    make([]*elasticsearch.Client, 0),
@@ -165,19 +168,22 @@ func (store *ElasticEventstore) unmapElasticField(field string) string {
 }
 
 func (store *ElasticEventstore) Search(ctx context.Context, criteria *model.EventSearchCriteria) (*model.EventSearchResults, error) {
-	store.refreshCache(ctx)
-
+	var err error
 	results := model.NewEventSearchResults()
-	query, err := convertToElasticRequest(store, criteria)
-	if err == nil {
-		var response string
-		response, err = store.luceneSearch(ctx, query)
+	if err := store.server.Authorizer.CheckContextOperationAuthorized(ctx, "read", "events"); err == nil {
+		store.refreshCache(ctx)
+
+		var query string
+		query, err = convertToElasticRequest(store, criteria)
 		if err == nil {
-			err = convertFromElasticResults(store, response, results)
-			results.Criteria = criteria
+			var response string
+			response, err = store.luceneSearch(ctx, query)
+			if err == nil {
+				err = convertFromElasticResults(store, response, results)
+				results.Criteria = criteria
+			}
 		}
 	}
-
 	results.Complete()
 	return results, err
 }
@@ -193,39 +199,43 @@ func (store *ElasticEventstore) disableCrossClusterIndexing(indexes []string) []
 }
 
 func (store *ElasticEventstore) Update(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
-	store.refreshCache(ctx)
-
+	var err error
 	results := model.NewEventUpdateResults()
-	results.Criteria = criteria
-	query, err := convertToElasticUpdateRequest(store, criteria)
-	if err == nil {
-		var response string
+	if err = store.server.Authorizer.CheckContextOperationAuthorized(ctx, "write", "events"); err == nil {
+		store.refreshCache(ctx)
 
-		for idx, client := range store.esAllClients {
-			log.WithField("clientHost", store.hostUrls[idx]).Debug("Sending request to client")
-			response, err = store.updateDocuments(ctx, client, query, store.disableCrossClusterIndexing(strings.Split(store.index, ",")), !criteria.Asynchronous)
-			if err == nil {
-				if !criteria.Asynchronous {
-					currentResults := model.NewEventUpdateResults()
-					err = convertFromElasticUpdateResults(store, response, currentResults)
-					if err == nil {
-						results.AddEventUpdateResults(currentResults)
-					} else {
-						log.WithError(err).WithField("clientHost", store.hostUrls[idx]).Error("Encountered error while updating elasticsearch")
-						results.Errors = append(results.Errors, err.Error())
+		results.Criteria = criteria
+		var query string
+		query, err = convertToElasticUpdateRequest(store, criteria)
+		if err == nil {
+			var response string
+
+			for idx, client := range store.esAllClients {
+				log.WithField("clientHost", store.hostUrls[idx]).Debug("Sending request to client")
+				response, err = store.updateDocuments(ctx, client, query, store.disableCrossClusterIndexing(strings.Split(store.index, ",")), !criteria.Asynchronous)
+				if err == nil {
+					if !criteria.Asynchronous {
+						currentResults := model.NewEventUpdateResults()
+						err = convertFromElasticUpdateResults(store, response, currentResults)
+						if err == nil {
+							results.AddEventUpdateResults(currentResults)
+						} else {
+							log.WithError(err).WithField("clientHost", store.hostUrls[idx]).Error("Encountered error while updating elasticsearch")
+							results.Errors = append(results.Errors, err.Error())
+						}
 					}
+				} else {
+					log.WithError(err).WithField("clientHost", store.hostUrls[idx]).Error("Encountered error while updating elasticsearch")
+					results.Errors = append(results.Errors, err.Error())
 				}
-			} else {
-				log.WithError(err).WithField("clientHost", store.hostUrls[idx]).Error("Encountered error while updating elasticsearch")
-				results.Errors = append(results.Errors, err.Error())
 			}
 		}
-	}
 
-	if len(results.Errors) < len(store.esAllClients) {
-		// Do not fail this request completely since some hosts succeeded.
-		// The results.Errors property contains the list of errors.
-		err = nil
+		if len(results.Errors) < len(store.esAllClients) {
+			// Do not fail this request completely since some hosts succeeded.
+			// The results.Errors property contains the list of errors.
+			err = nil
+		}
 	}
 
 	results.Complete()
@@ -693,61 +703,63 @@ func (store *ElasticEventstore) Acknowledge(ctx context.Context, ackCriteria *mo
 	var results *model.EventUpdateResults
 	var err error
 	if len(ackCriteria.EventFilter) > 0 {
-		log.WithFields(log.Fields{
-			"searchFilter": ackCriteria.SearchFilter,
-			"eventFilter":  ackCriteria.EventFilter,
-			"escalate":     ackCriteria.Escalate,
-			"acknowledge":  ackCriteria.Acknowledge,
-			"requestId":    ctx.Value(web.ContextKeyRequestId),
-		}).Info("Acknowledging event")
+		if err = store.server.Authorizer.CheckContextOperationAuthorized(ctx, "ack", "events"); err == nil {
+			log.WithFields(log.Fields{
+				"searchFilter": ackCriteria.SearchFilter,
+				"eventFilter":  ackCriteria.EventFilter,
+				"escalate":     ackCriteria.Escalate,
+				"acknowledge":  ackCriteria.Acknowledge,
+				"requestId":    ctx.Value(web.ContextKeyRequestId),
+			}).Info("Acknowledging event")
 
-		updateCriteria := model.NewEventUpdateCriteria()
-		updateCriteria.AddUpdateScript("ctx._source.event.acknowledged=" + strconv.FormatBool(ackCriteria.Acknowledge))
-		if ackCriteria.Escalate && ackCriteria.Acknowledge {
-			updateCriteria.AddUpdateScript("ctx._source.event.escalated=true")
-		}
-		updateCriteria.Populate(ackCriteria.SearchFilter,
-			ackCriteria.DateRange,
-			ackCriteria.DateRangeFormat,
-			ackCriteria.Timezone,
-			"0",
-			"0")
-
-		// Add the event filters to the search query
-		var searchSegment *model.SearchSegment
-		segment := updateCriteria.ParsedQuery.NamedSegment("search")
-		if segment == nil {
-			searchSegment = model.NewSearchSegmentEmpty()
-		} else {
-			searchSegment = segment.(*model.SearchSegment)
-		}
-
-		updateCriteria.Asynchronous = false
-		for key, value := range ackCriteria.EventFilter {
-			if strings.ToLower(key) != "count" {
-				valueStr := fmt.Sprintf("%v", value)
-				searchSegment.AddFilter(store.mapElasticField(key), valueStr, model.IsScalar(value), true)
-			} else if int(value.(float64)) > store.asyncThreshold {
-				log.WithFields(log.Fields{
-					key:         value,
-					"threshold": store.asyncThreshold,
-					"requestId": ctx.Value(web.ContextKeyRequestId),
-				}).Info("Acknowledging events asynchronously due to large quantity")
-				updateCriteria.Asynchronous = true
+			updateCriteria := model.NewEventUpdateCriteria()
+			updateCriteria.AddUpdateScript("ctx._source.event.acknowledged=" + strconv.FormatBool(ackCriteria.Acknowledge))
+			if ackCriteria.Escalate && ackCriteria.Acknowledge {
+				updateCriteria.AddUpdateScript("ctx._source.event.escalated=true")
 			}
-		}
+			updateCriteria.Populate(ackCriteria.SearchFilter,
+				ackCriteria.DateRange,
+				ackCriteria.DateRangeFormat,
+				ackCriteria.Timezone,
+				"0",
+				"0")
 
-		// Baseline the query to be based only on the search component
-		updateCriteria.ParsedQuery = model.NewQuery()
-		updateCriteria.ParsedQuery.AddSegment(searchSegment)
+			// Add the event filters to the search query
+			var searchSegment *model.SearchSegment
+			segment := updateCriteria.ParsedQuery.NamedSegment("search")
+			if segment == nil {
+				searchSegment = model.NewSearchSegmentEmpty()
+			} else {
+				searchSegment = segment.(*model.SearchSegment)
+			}
 
-		results, err = store.Update(ctx, updateCriteria)
-		if err == nil && !updateCriteria.Asynchronous {
-			if results.UpdatedCount == 0 {
-				if results.UnchangedCount == 0 {
-					err = errors.New("No eligible events available to acknowledge")
-				} else {
-					err = errors.New("All events have already been acknowledged")
+			updateCriteria.Asynchronous = false
+			for key, value := range ackCriteria.EventFilter {
+				if strings.ToLower(key) != "count" {
+					valueStr := fmt.Sprintf("%v", value)
+					searchSegment.AddFilter(store.mapElasticField(key), valueStr, model.IsScalar(value), true)
+				} else if int(value.(float64)) > store.asyncThreshold {
+					log.WithFields(log.Fields{
+						key:         value,
+						"threshold": store.asyncThreshold,
+						"requestId": ctx.Value(web.ContextKeyRequestId),
+					}).Info("Acknowledging events asynchronously due to large quantity")
+					updateCriteria.Asynchronous = true
+				}
+			}
+
+			// Baseline the query to be based only on the search component
+			updateCriteria.ParsedQuery = model.NewQuery()
+			updateCriteria.ParsedQuery.AddSegment(searchSegment)
+
+			results, err = store.Update(ctx, updateCriteria)
+			if err == nil && !updateCriteria.Asynchronous {
+				if results.UpdatedCount == 0 {
+					if results.UnchangedCount == 0 {
+						err = errors.New("No eligible events available to acknowledge")
+					} else {
+						err = errors.New("All events have already been acknowledged")
+					}
 				}
 			}
 		}

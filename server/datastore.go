@@ -17,15 +17,16 @@ import (
 )
 
 type Datastore interface {
-  CreateNode(id string) *model.Node
-  GetNodes() []*model.Node
-  AddNode(node *model.Node) error
-  UpdateNode(newNode *model.Node) (*model.Node, error)
+  CreateNode(ctx context.Context, id string) *model.Node
+  GetNodes(ctx context.Context) []*model.Node
+  AddNode(ctx context.Context, node *model.Node) error
+  UpdateNode(ctx context.Context, newNode *model.Node) (*model.Node, error)
   GetNextJob(ctx context.Context, nodeId string) *model.Job
   CreateJob(ctx context.Context) *model.Job
   GetJob(ctx context.Context, jobId int) *model.Job
   GetJobs(ctx context.Context) []*model.Job
   AddJob(ctx context.Context, job *model.Job) error
+  AddPivotJob(ctx context.Context, job *model.Job) error
   UpdateJob(ctx context.Context, job *model.Job) error
   DeleteJob(ctx context.Context, jobId int) (*model.Job, error)
   GetPackets(ctx context.Context, jobId int, offset int, count int, unwrap bool) ([]*model.Packet, error)

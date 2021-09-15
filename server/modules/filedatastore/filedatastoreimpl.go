@@ -65,23 +65,26 @@ func (datastore *FileDatastoreImpl) Init(cfg module.ModuleConfig) error {
   return datastore.loadJobs()
 }
 
-func (datastore *FileDatastoreImpl) CreateNode(id string) *model.Node {
-  node := model.NewNode(id)
+func (datastore *FileDatastoreImpl) CreateNode(ctx context.Context, id string) *model.Node {
+  var node *model.Node
+  node = model.NewNode(id)
   return node
 }
 
-func (datastore *FileDatastoreImpl) GetNodes() []*model.Node {
-  datastore.lock.RLock()
-  defer datastore.lock.RUnlock()
+func (datastore *FileDatastoreImpl) GetNodes(ctx context.Context) []*model.Node {
   allNodes := make([]*model.Node, 0)
-  for _, node := range datastore.nodesById {
-    allNodes = append(allNodes, node)
+  if err := datastore.server.Authorizer.CheckContextOperationAuthorized(ctx, "read", "nodes"); err == nil {
+    datastore.lock.RLock()
+    defer datastore.lock.RUnlock()
+    for _, node := range datastore.nodesById {
+      allNodes = append(allNodes, node)
+    }
   }
   return allNodes
 }
 
-func (datastore *FileDatastoreImpl) AddNode(node *model.Node) error {
-  _, err := datastore.UpdateNode(node)
+func (datastore *FileDatastoreImpl) AddNode(ctx context.Context, node *model.Node) error {
+  _, err := datastore.UpdateNode(ctx, node)
   return err
 }
 
@@ -94,35 +97,37 @@ func (datastore *FileDatastoreImpl) addNode(node *model.Node) *model.Node {
   return node
 }
 
-func (datastore *FileDatastoreImpl) UpdateNode(newNode *model.Node) (*model.Node, error) {
+func (datastore *FileDatastoreImpl) UpdateNode(ctx context.Context, newNode *model.Node) (*model.Node, error) {
   var node *model.Node
 
   if len(newNode.Id) > 0 {
-    datastore.lock.Lock()
-    defer datastore.lock.Unlock()
-    node = datastore.nodesById[newNode.Id]
-    if node == nil {
-      node = datastore.addNode(newNode)
+    if err := datastore.server.Authorizer.CheckContextOperationAuthorized(ctx, "write", "nodes"); err == nil {
+      datastore.lock.Lock()
+      defer datastore.lock.Unlock()
+      node = datastore.nodesById[newNode.Id]
+      if node == nil {
+        node = datastore.addNode(newNode)
+      }
+
+      // Only copy the following values from the incoming node. Preserve everything else.
+      node.EpochTime = newNode.EpochTime
+      node.Role = newNode.Role
+      node.Description = newNode.Description
+      node.Address = newNode.Address
+      node.Version = newNode.Version
+
+      // Ensure model parameters are updated
+      node.SetModel(newNode.Model)
+
+      // Mark ConnectionStatus as Ok since this node just checked in
+      node.ConnectionStatus = model.NodeStatusOk
+
+      // Update time is now
+      node.UpdateTime = time.Now()
+
+      // Calculate uptime
+      node.UptimeSeconds = int(node.UpdateTime.Sub(node.OnlineTime).Seconds())
     }
-
-    // Only copy the following values from the incoming node. Preserve everything else.
-    node.EpochTime = newNode.EpochTime
-    node.Role = newNode.Role
-    node.Description = newNode.Description
-    node.Address = newNode.Address
-    node.Version = newNode.Version
-
-    // Ensure model parameters are updated
-    node.SetModel(newNode.Model)
-
-    // Mark ConnectionStatus as Ok since this node just checked in
-    node.ConnectionStatus = model.NodeStatusOk
-
-    // Update time is now
-    node.UpdateTime = time.Now()
-
-    // Calculate uptime
-    node.UptimeSeconds = int(node.UpdateTime.Sub(node.OnlineTime).Seconds())
   } else {
     log.WithField("description", newNode.Description).Info("Not adding node with missing id")
   }
@@ -211,12 +216,35 @@ func (datastore *FileDatastoreImpl) GetJobs(ctx context.Context) []*model.Job {
 func (datastore *FileDatastoreImpl) AddJob(ctx context.Context, job *model.Job) error {
   var err error
   if err = datastore.server.Authorizer.CheckContextOperationAuthorized(ctx, "write", "jobs"); err == nil {
-    datastore.lock.Lock()
-    defer datastore.lock.Unlock()
-    err = datastore.addJob(job)
     if err == nil {
-      err = datastore.saveJob(job)
+      err = datastore.addAndSaveJob(ctx, job)
     }
+  }
+  return err
+}
+
+func (datastore *FileDatastoreImpl) AddPivotJob(ctx context.Context, job *model.Job) error {
+  var err error
+  if err = datastore.server.Authorizer.CheckContextOperationAuthorized(ctx, "pivot", "jobs"); err == nil {
+    if err == nil {
+      err = datastore.addAndSaveJob(ctx, job)
+    }
+  }
+  return err
+}
+
+func (datastore *FileDatastoreImpl) addAndSaveJob(ctx context.Context, job *model.Job) error {
+  var err error
+  if user, ok := ctx.Value(web.ContextKeyRequestor).(*model.User); ok {
+    job.UserId = user.Id
+  } else {
+    err = errors.New("User not found in context")
+  }
+  datastore.lock.Lock()
+  defer datastore.lock.Unlock()
+  err = datastore.addJob(job)
+  if err == nil {
+    err = datastore.saveJob(job)
   }
   return err
 }
