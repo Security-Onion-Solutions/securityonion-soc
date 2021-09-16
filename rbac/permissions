@@ -2,7 +2,7 @@
 # Syntax      => permX: roleY roleZ
 # Explanation => roleY and roleZ are granted permission permX
 
-cases/write:      case-admin  
+cases/write:      case-admin
 events/read:      event-monitor
 events/write:     event-admin
 events/ack:       event-admin
