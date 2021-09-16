@@ -129,7 +129,10 @@ func (datastore *FileDatastoreImpl) UpdateNode(ctx context.Context, newNode *mod
       node.UptimeSeconds = int(node.UpdateTime.Sub(node.OnlineTime).Seconds())
     }
   } else {
-    log.WithField("description", newNode.Description).Info("Not adding node with missing id")
+    log.WithFields(log.Fields{
+      "description": newNode.Description,
+      "requestId":   ctx.Value(web.ContextKeyRequestId),
+    }).Info("Not adding node with missing id")
   }
   return node, nil
 }

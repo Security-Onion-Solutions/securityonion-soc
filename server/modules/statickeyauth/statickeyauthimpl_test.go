@@ -33,7 +33,7 @@ func TestValidateAuthorization(tester *testing.T) {
 func validateAuthorization(tester *testing.T, key string, ip string, expected bool) {
 	ai := NewStaticKeyAuthImpl(fake.NewAuthorizedServer(nil))
 	ai.Init("abc", "172.17.0.0/24")
-	actual := ai.validateAuthorization(key, ip)
+	actual := ai.validateAuthorization(context.Background(), key, ip)
 	assert.Equal(tester, expected, actual)
 }
 

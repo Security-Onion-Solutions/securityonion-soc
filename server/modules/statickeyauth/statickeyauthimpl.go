@@ -49,7 +49,7 @@ func (auth *StaticKeyAuthImpl) Preprocess(ctx context.Context, req *http.Request
 	var statusCode int
 	var err error
 
-	if !auth.IsAuthorized(req) {
+	if !auth.IsAuthorized(ctx, req) {
 		statusCode = http.StatusUnauthorized
 		err = errors.New("Access denied")
 	} else {
@@ -66,18 +66,19 @@ func (auth *StaticKeyAuthImpl) Preprocess(ctx context.Context, req *http.Request
 	return ctx, statusCode, err
 }
 
-func (auth *StaticKeyAuthImpl) IsAuthorized(request *http.Request) bool {
+func (auth *StaticKeyAuthImpl) IsAuthorized(ctx context.Context, request *http.Request) bool {
 	apiKey := request.Header.Get("Authorization")
 	remoteIp := request.RemoteAddr
-	return auth.validateAuthorization(apiKey, remoteIp)
+	return auth.validateAuthorization(ctx, apiKey, remoteIp)
 }
 
-func (auth *StaticKeyAuthImpl) validateAuthorization(key string, ipStr string) bool {
+func (auth *StaticKeyAuthImpl) validateAuthorization(ctx context.Context, key string, ipStr string) bool {
 	// If API key has been provided, it must match
 	if len(key) > 0 {
 		isApiKeyAccepted := auth.validateApiKey(key)
 		log.WithFields(log.Fields{
 			"isApiKeyAccepted": isApiKeyAccepted,
+			"requestId":        ctx.Value(web.ContextKeyRequestId),
 		}).Debug("Authorization check via API key")
 		return isApiKeyAccepted
 	}
@@ -93,6 +94,7 @@ func (auth *StaticKeyAuthImpl) validateAuthorization(key string, ipStr string) b
 		"anonymousNetwork": auth.anonymousNetwork,
 		"remoteIp":         remoteIp,
 		"isAnonymousIp":    isAnonymousIp,
+		"requestId":        ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Authorization check via remote IP")
 	return isAnonymousIp
 }

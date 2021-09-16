@@ -69,8 +69,9 @@ func (impl *StaticRbacAuthorizer) GetAssignments(ctx context.Context) (map[strin
       roles := impl.roleMap[user.Email]
       roleMap[user.Email] = roles
       log.WithFields(log.Fields{
-        "email": user.Email,
-        "roles": roles,
+        "email":     user.Email,
+        "roles":     roles,
+        "requestId": ctx.Value(web.ContextKeyRequestId),
       }).Debug("User does not have access to read all roles; limiting role map to self")
     }
   }
@@ -140,7 +141,7 @@ func (impl *StaticRbacAuthorizer) CheckContextOperationAuthorized(ctx context.Co
       "permission":   permission,
       "primaryRoles": impl.roleMap[user.Email],
       "authorized":   err == nil,
-    }).Info("Evaluating authorization for requestor")
+    }).Debug("Evaluating authorization for requestor")
   } else {
     log.Debug("Authorization user not found in context")
     err = model.NewUnauthorized("", operation, target)
