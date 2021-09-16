@@ -66,6 +66,10 @@ func (impl *StaticRbacAuthorizer) StopScanningFiles() {
   impl.timer.Stop()
 }
 
+func (impl *StaticRbacAuthorizer) identifyUser(user *model.User) string {
+  return user.Email
+}
+
 func (impl *StaticRbacAuthorizer) GetAssignments(ctx context.Context) (map[string][]string, error) {
   userMap := make(map[string][]string)
 
@@ -76,12 +80,13 @@ func (impl *StaticRbacAuthorizer) GetAssignments(ctx context.Context) (map[strin
       impl.mutex.Lock()
       defer impl.mutex.Unlock()
 
-      roles := impl.userMap[user.Email]
+      userIdentifier := impl.identifyUser(user)
+      roles := impl.userMap[userIdentifier]
       newRoles := make([]string, len(roles))
       copy(newRoles, roles)
-      userMap[user.Email] = newRoles
+      userMap[userIdentifier] = newRoles
       log.WithFields(log.Fields{
-        "email":     user.Email,
+        "user":      userIdentifier,
         "roles":     roles,
         "requestId": ctx.Value(web.ContextKeyRequestId),
       }).Debug("User does not have access to read all roles; limiting role map to self")
@@ -104,14 +109,15 @@ func (impl *StaticRbacAuthorizer) PopulateUserRoles(ctx context.Context, user *m
   // Use the returned roles instead of the struct roles so that they are filtered for access permissions
   userMap, _ := impl.GetAssignments(ctx)
 
-  if roles, ok := userMap[user.Email]; ok {
+  userIdentifier := impl.identifyUser(user)
+  if roles, ok := userMap[userIdentifier]; ok {
     user.Roles = roles
     log.WithFields(log.Fields{
-      "email": user.Email,
+      "user":  userIdentifier,
       "roles": user.Roles,
     }).Debug("Populated roles for user")
   } else {
-    log.WithField("email", user.Email).Debug("No roles found")
+    log.WithField("user", userIdentifier).Debug("No roles found")
   }
   return nil
 }
@@ -134,14 +140,14 @@ func (impl *StaticRbacAuthorizer) AddRoleToUser(user *model.User, role string) {
   impl.mutex.Lock()
   defer impl.mutex.Unlock()
 
-  impl.adjustMap(impl.userMap, user.Email, role, "+")
+  impl.adjustMap(impl.userMap, impl.identifyUser(user), role, "+")
 }
 
 func (impl *StaticRbacAuthorizer) RemoveRoleFromUser(user *model.User, role string) {
   impl.mutex.Lock()
   defer impl.mutex.Unlock()
 
-  impl.adjustMap(impl.userMap, user.Email, role, "-")
+  impl.adjustMap(impl.userMap, impl.identifyUser(user), role, "-")
 }
 
 func (impl *StaticRbacAuthorizer) adjustMap(mp map[string][]string, subject string, permission string, operation string) {
@@ -180,8 +186,9 @@ func (impl *StaticRbacAuthorizer) CheckContextOperationAuthorized(ctx context.Co
     defer impl.mutex.Unlock()
 
     authorized := false
+    userIdentifier := impl.identifyUser(user)
     var primaryRoles []string
-    if primaryRoles, ok = impl.userMap[user.Email]; ok {
+    if primaryRoles, ok = impl.userMap[userIdentifier]; ok {
       for _, role := range primaryRoles {
         if impl.isAuthorized(role, permission) {
           authorized = true
@@ -191,8 +198,7 @@ func (impl *StaticRbacAuthorizer) CheckContextOperationAuthorized(ctx context.Co
     }
 
     log.WithFields(log.Fields{
-      "userId":       user.Id,
-      "username":     user.Email,
+      "user":         userIdentifier,
       "requestId":    ctx.Value(web.ContextKeyRequestId),
       "permission":   permission,
       "primaryRoles": primaryRoles,
@@ -200,7 +206,7 @@ func (impl *StaticRbacAuthorizer) CheckContextOperationAuthorized(ctx context.Co
     }).Debug("Evaluated authorization for requestor")
 
     if !authorized {
-      err = model.NewUnauthorized(user.Email, operation, target)
+      err = model.NewUnauthorized(userIdentifier, operation, target)
     }
   } else {
     log.Debug("Authorization user not found in context")
