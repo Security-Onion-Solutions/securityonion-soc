@@ -16,6 +16,7 @@ import (
   "errors"
   "github.com/apex/log"
   "github.com/security-onion-solutions/securityonion-soc/model"
+  "github.com/security-onion-solutions/securityonion-soc/server"
   "github.com/security-onion-solutions/securityonion-soc/web"
   "os"
   "sort"
@@ -25,21 +26,28 @@ import (
 )
 
 type StaticRbacAuthorizer struct {
-  roleFiles      []string
-  scanIntervalMs int
-  roleMap        map[string][]string
-  mutex          sync.Mutex
-  running        bool
-  previousHash   [16]byte
-  timer          *time.Timer
+  server           *server.Server
+  roleFiles        []string
+  userFiles        []string
+  scanIntervalMs   int
+  roleMap          map[string][]string
+  userMap          map[string][]string
+  mutex            sync.Mutex
+  running          bool
+  previousRoleHash [16]byte
+  previousUserHash [16]byte
+  timer            *time.Timer
 }
 
-func NewStaticRbacAuthorizer() *StaticRbacAuthorizer {
-  return &StaticRbacAuthorizer{}
+func NewStaticRbacAuthorizer(srv *server.Server) *StaticRbacAuthorizer {
+  return &StaticRbacAuthorizer{
+    server: srv,
+  }
 }
 
-func (impl *StaticRbacAuthorizer) Init(files []string, scanIntervalMs int) error {
-  impl.roleFiles = files
+func (impl *StaticRbacAuthorizer) Init(userFiles []string, roleFiles []string, scanIntervalMs int) error {
+  impl.roleFiles = roleFiles
+  impl.userFiles = userFiles
 
   if scanIntervalMs == 0 {
     return errors.New("scanIntervalMs must be a positive integer")
@@ -59,32 +67,44 @@ func (impl *StaticRbacAuthorizer) StopScanningFiles() {
 }
 
 func (impl *StaticRbacAuthorizer) GetAssignments(ctx context.Context) (map[string][]string, error) {
-  roleMap := impl.roleMap
+  userMap := make(map[string][]string)
 
   if err := impl.CheckContextOperationAuthorized(ctx, "read", "roles"); err != nil {
     // User is not allowed to access the entire role map, so only show their top-level roles
-    roleMap = make(map[string][]string)
 
     if user, ok := ctx.Value(web.ContextKeyRequestor).(*model.User); ok {
-      roles := impl.roleMap[user.Email]
-      roleMap[user.Email] = roles
+      impl.mutex.Lock()
+      defer impl.mutex.Unlock()
+
+      roles := impl.userMap[user.Email]
+      newRoles := make([]string, len(roles))
+      copy(newRoles, roles)
+      userMap[user.Email] = newRoles
       log.WithFields(log.Fields{
         "email":     user.Email,
         "roles":     roles,
         "requestId": ctx.Value(web.ContextKeyRequestId),
       }).Debug("User does not have access to read all roles; limiting role map to self")
     }
+  } else {
+    impl.mutex.Lock()
+    defer impl.mutex.Unlock()
+
+    for user, roles := range impl.userMap {
+      newRoles := make([]string, len(roles))
+      copy(newRoles, roles)
+      userMap[user] = newRoles
+    }
   }
 
-  return roleMap, nil
+  return userMap, nil
 }
 
 func (impl *StaticRbacAuthorizer) PopulateUserRoles(ctx context.Context, user *model.User) error {
   // Use the returned roles instead of the struct roles so that they are filtered for access permissions
-  roleMap, _ := impl.GetAssignments(ctx)
+  userMap, _ := impl.GetAssignments(ctx)
 
-  if roles, ok := roleMap[user.Email]; ok {
-    sort.Strings(roles)
+  if roles, ok := userMap[user.Email]; ok {
     user.Roles = roles
     log.WithFields(log.Fields{
       "email": user.Email,
@@ -103,14 +123,44 @@ func (impl *StaticRbacAuthorizer) UpdateRoleMap(newRoleMap map[string][]string) 
   impl.roleMap = newRoleMap
 }
 
-func (impl *StaticRbacAuthorizer) AdjustPermissionInRole(roleMap map[string][]string, role string, permission string, operation string) {
-  perms := roleMap[role]
+func (impl *StaticRbacAuthorizer) UpdateUserMap(newUserMap map[string][]string) {
+  impl.mutex.Lock()
+  defer impl.mutex.Unlock()
+
+  impl.userMap = newUserMap
+}
+
+func (impl *StaticRbacAuthorizer) AddRoleToUser(user *model.User, role string) {
+  impl.mutex.Lock()
+  defer impl.mutex.Unlock()
+
+  impl.adjustMap(impl.userMap, user.Email, role, "+")
+}
+
+func (impl *StaticRbacAuthorizer) RemoveRoleFromUser(user *model.User, role string) {
+  impl.mutex.Lock()
+  defer impl.mutex.Unlock()
+
+  impl.adjustMap(impl.userMap, user.Email, role, "-")
+}
+
+func (impl *StaticRbacAuthorizer) adjustMap(mp map[string][]string, subject string, permission string, operation string) {
+  perms := mp[subject]
   if perms == nil {
     perms = make([]string, 0, 0)
   }
-  if operation == "+" {
+  existsAtIdx := -1
+  for idx, value := range perms {
+    if value == permission {
+      existsAtIdx = idx
+      break
+    }
+  }
+
+  if existsAtIdx == -1 && operation == "+" {
     perms = append(perms, permission)
-  } else if operation == "-" {
+    sort.Strings(perms)
+  } else if existsAtIdx != -1 && operation == "-" {
     for idx, value := range perms {
       if value == permission {
         perms = append(perms[:idx], perms[idx+1:]...)
@@ -118,7 +168,7 @@ func (impl *StaticRbacAuthorizer) AdjustPermissionInRole(roleMap map[string][]st
       }
     }
   }
-  roleMap[role] = perms
+  mp[subject] = perms
 }
 
 func (impl *StaticRbacAuthorizer) CheckContextOperationAuthorized(ctx context.Context, operation string, target string) error {
@@ -129,19 +179,29 @@ func (impl *StaticRbacAuthorizer) CheckContextOperationAuthorized(ctx context.Co
     impl.mutex.Lock()
     defer impl.mutex.Unlock()
 
-    if user.Email == permission {
-      err = errors.New("Unable to check authorization of a subject name that matches the permission name itself")
-    } else if !impl.isAuthorized(user.Email, permission) {
-      err = model.NewUnauthorized(user.Email, operation, target)
+    authorized := false
+    var primaryRoles []string
+    if primaryRoles, ok = impl.userMap[user.Email]; ok {
+      for _, role := range primaryRoles {
+        if impl.isAuthorized(role, permission) {
+          authorized = true
+          break
+        }
+      }
     }
+
     log.WithFields(log.Fields{
       "userId":       user.Id,
       "username":     user.Email,
       "requestId":    ctx.Value(web.ContextKeyRequestId),
       "permission":   permission,
-      "primaryRoles": impl.roleMap[user.Email],
-      "authorized":   err == nil,
-    }).Debug("Evaluating authorization for requestor")
+      "primaryRoles": primaryRoles,
+      "authorized":   authorized,
+    }).Debug("Evaluated authorization for requestor")
+
+    if !authorized {
+      err = model.NewUnauthorized(user.Email, operation, target)
+    }
   } else {
     log.Debug("Authorization user not found in context")
     err = model.NewUnauthorized("", operation, target)
@@ -168,20 +228,43 @@ func (impl *StaticRbacAuthorizer) isAuthorized(subject string, requestedPermissi
 func (impl *StaticRbacAuthorizer) scanLoop() {
   log.WithField("scanIntervalMs", impl.scanIntervalMs).Info("Starting periodic role file scanner")
   for impl.running {
-    impl.scanFiles()
+    impl.scanNow()
+    impl.timer = time.NewTimer(time.Millisecond * time.Duration(impl.scanIntervalMs))
+
     <-impl.timer.C
   }
   log.Info("Stopped scanning role files")
 }
 
-func (impl *StaticRbacAuthorizer) scanFiles() {
+func (impl *StaticRbacAuthorizer) scanNow() {
   log.Debug("Scanning role files for updates")
-  newRoleMap := make(map[string][]string)
+  newMap, hash := impl.scanFiles(impl.roleFiles)
+  if hash != impl.previousRoleHash {
+    log.WithField("roleMap", newMap).Info("Role files have changed; updating roles")
+    impl.UpdateRoleMap(newMap)
+    impl.previousRoleHash = hash
+  }
+
+  log.Debug("Scanning user files for updates")
+  newMap, hash = impl.scanFiles(impl.userFiles)
+  if hash != impl.previousUserHash {
+    log.WithField("userMap", newMap).Info("User files have changed; updating users")
+    impl.UpdateUserMap(newMap)
+
+    // Ensure agent user/role exists
+    impl.AddRoleToUser(impl.server.Agent, "agent")
+
+    impl.previousUserHash = hash
+  }
+}
+
+func (impl *StaticRbacAuthorizer) scanFiles(files []string) (map[string][]string, [16]byte) {
+  newMap := make(map[string][]string)
   hashText := ""
-  for lineNum, path := range impl.roleFiles {
+  for lineNum, path := range files {
     file, err := os.Open(path)
     if err != nil {
-      log.WithError(err).WithField("path", path).Error("Unable to open role file")
+      log.WithError(err).WithField("path", path).Error("Unable to open file")
     } else {
       defer file.Close()
 
@@ -189,22 +272,16 @@ func (impl *StaticRbacAuthorizer) scanFiles() {
       for scanner.Scan() {
         line := scanner.Text()
         hashText = hashText + line
-        impl.parseLine(newRoleMap, line, path, lineNum)
+        impl.parseLine(newMap, line, path, lineNum)
       }
     }
   }
 
   hash := md5.Sum([]byte(hashText))
-  if hash != impl.previousHash {
-    log.WithField("roleMap", newRoleMap).Info("Role files have changed; updating roles")
-    impl.UpdateRoleMap(newRoleMap)
-    impl.previousHash = hash
-  }
-
-  impl.timer = time.NewTimer(time.Millisecond * time.Duration(impl.scanIntervalMs))
+  return newMap, hash
 }
 
-func (impl *StaticRbacAuthorizer) parseLine(roleMap map[string][]string, line string, path string, lineNum int) {
+func (impl *StaticRbacAuthorizer) parseLine(mp map[string][]string, line string, path string, lineNum int) {
   line = strings.ReplaceAll(line, ",", " ") // Allow comma delimiting
   line = strings.ReplaceAll(line, ";", " ") // Allow semi-colon delimiting
   line = strings.TrimSpace(line)
@@ -215,7 +292,7 @@ func (impl *StaticRbacAuthorizer) parseLine(roleMap map[string][]string, line st
       log.WithFields(log.Fields{
         "lineNumber": lineNum + 1,
         "filepath":   path,
-      }).Warn("Invalid role mapping found while parsing role file")
+      }).Warn("Invalid mapping found while parsing file")
     } else {
       permission := strings.TrimSpace(pieces[0])
       roles := strings.Split(pieces[1], " ")
@@ -227,7 +304,7 @@ func (impl *StaticRbacAuthorizer) parseLine(roleMap map[string][]string, line st
       for _, role := range roles {
         role = strings.TrimSpace(role)
         if len(role) > 0 {
-          impl.AdjustPermissionInRole(roleMap, role, permission, operation)
+          impl.adjustMap(mp, role, permission, operation)
         }
       }
     }

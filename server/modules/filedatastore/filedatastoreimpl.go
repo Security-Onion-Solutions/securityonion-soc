@@ -99,9 +99,9 @@ func (datastore *FileDatastoreImpl) addNode(node *model.Node) *model.Node {
 
 func (datastore *FileDatastoreImpl) UpdateNode(ctx context.Context, newNode *model.Node) (*model.Node, error) {
   var node *model.Node
-
+  var err error
   if len(newNode.Id) > 0 {
-    if err := datastore.server.Authorizer.CheckContextOperationAuthorized(ctx, "write", "nodes"); err == nil {
+    if err = datastore.server.Authorizer.CheckContextOperationAuthorized(ctx, "write", "nodes"); err == nil {
       datastore.lock.Lock()
       defer datastore.lock.Unlock()
       node = datastore.nodesById[newNode.Id]
@@ -134,7 +134,7 @@ func (datastore *FileDatastoreImpl) UpdateNode(ctx context.Context, newNode *mod
       "requestId":   ctx.Value(web.ContextKeyRequestId),
     }).Info("Not adding node with missing id")
   }
-  return node, nil
+  return node, err
 }
 
 func (datastore *FileDatastoreImpl) GetNextJob(ctx context.Context, nodeId string) *model.Job {

@@ -11,6 +11,7 @@ package staticrbac
 
 import (
   "context"
+  "github.com/security-onion-solutions/securityonion-soc/fake"
   "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/web"
   "github.com/stretchr/testify/assert"
@@ -23,21 +24,23 @@ func prepareTest(tester *testing.T, email string) (*StaticRbacAuthorizer, contex
   user.Email = email
   ctx = context.WithValue(ctx, web.ContextKeyRequestor, user)
 
-  auth := NewStaticRbacAuthorizer()
+  auth := NewStaticRbacAuthorizer(fake.NewAuthorizedServer(nil))
+  userFiles := []string{"rbac_users.test"}
   roleFiles := []string{"rbac_permissions.test", "rbac_roles.test"}
-  auth.Init(roleFiles, DEFAULT_SCAN_INTERVAL_MS)
+  auth.Init(userFiles, roleFiles, DEFAULT_SCAN_INTERVAL_MS)
 
   assert.Equal(tester, DEFAULT_SCAN_INTERVAL_MS, auth.scanIntervalMs)
   assert.Equal(tester, roleFiles, auth.roleFiles)
+  assert.Equal(tester, userFiles, auth.userFiles)
 
-  auth.scanFiles()
+  auth.scanNow()
 
   return auth, ctx, user
 }
 
 func TestCheckContextOperationAuthorized_EmptyContext(tester *testing.T) {
   ctx := context.Background()
-  auth := NewStaticRbacAuthorizer()
+  auth := NewStaticRbacAuthorizer(fake.NewAuthorizedServer(nil))
   err := auth.CheckContextOperationAuthorized(ctx, "myop", "mytarget")
   assert.Error(tester, err, "Expected error due to missing context data")
 }
@@ -48,7 +51,7 @@ func TestCheckContextOperationAuthorized_Collision(tester *testing.T) {
   user.Email = "mytarget/myop"
   ctx = context.WithValue(ctx, web.ContextKeyRequestor, user)
 
-  auth := NewStaticRbacAuthorizer()
+  auth := NewStaticRbacAuthorizer(fake.NewAuthorizedServer(nil))
   err := auth.CheckContextOperationAuthorized(ctx, "myop", "mytarget")
   assert.Error(tester, err)
 }
@@ -57,7 +60,7 @@ func TestCheckContextOperationAuthorized_Fail(tester *testing.T) {
   ctx := context.Background()
   ctx = context.WithValue(ctx, web.ContextKeyRequestor, model.NewUser())
 
-  auth := NewStaticRbacAuthorizer()
+  auth := NewStaticRbacAuthorizer(fake.NewAuthorizedServer(nil))
   err := auth.CheckContextOperationAuthorized(ctx, "myop", "mytarget")
   var unauthErr *model.Unauthorized
   assert.ErrorAs(tester, err, &unauthErr)
@@ -86,7 +89,7 @@ func TestCheckContextOperationAuthorized_Success(tester *testing.T) {
 }
 
 func TestIsAuthorized(tester *testing.T) {
-  auth := NewStaticRbacAuthorizer()
+  auth := NewStaticRbacAuthorizer(fake.NewAuthorizedServer(nil))
 
   roleMap := make(map[string][]string)
   roleMap["clerk"] = []string{"register/operates", "tables/maintains"}
@@ -141,4 +144,46 @@ func TestPopulateUserRoles(tester *testing.T) {
 
   var expectedRoles = [...]string{"user"}
   assert.ElementsMatch(tester, expectedRoles, user.Roles)
+}
+
+func TestAddRemoveRole(tester *testing.T) {
+  auth, ctx, user := prepareTest(tester, "some@one.invalid")
+
+  // Fresh, shouldn't have fruity
+  roles, err := auth.GetAssignments(ctx)
+  assert.NoError(tester, err)
+  assert.Len(tester, roles[user.Email], 1)
+  assert.NotContains(tester, roles[user.Email], "fruity")
+
+  auth.AddRoleToUser(user, "fruity")
+
+  // Now should have fruity
+  roles, err = auth.GetAssignments(ctx)
+  assert.NoError(tester, err)
+  assert.Len(tester, roles[user.Email], 2)
+  assert.Contains(tester, roles[user.Email], "fruity")
+
+  auth.AddRoleToUser(user, "fruity")
+
+  // Make sure it's not duplicated
+  roles, err = auth.GetAssignments(ctx)
+  assert.NoError(tester, err)
+  assert.Len(tester, roles[user.Email], 2)
+  assert.Contains(tester, roles[user.Email], "fruity")
+
+  auth.RemoveRoleFromUser(user, "fruity")
+
+  // Should no longer have fruity
+  roles, err = auth.GetAssignments(ctx)
+  assert.NoError(tester, err)
+  assert.Len(tester, roles[user.Email], 1)
+  assert.NotContains(tester, roles[user.Email], "fruity")
+
+  auth.RemoveRoleFromUser(user, "fruity")
+
+  // Should not remove an item that doesn't exist
+  roles, err = auth.GetAssignments(ctx)
+  assert.NoError(tester, err)
+  assert.Len(tester, roles[user.Email], 1)
+  assert.NotContains(tester, roles[user.Email], "fruity")
 }

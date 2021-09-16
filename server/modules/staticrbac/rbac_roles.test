@@ -4,6 +4,3 @@ thirdrole:user
 fourthrole:analyst
 analyst: superuser
 user-monitor:user
-
-analyst: some@where.invalid
-user: some@one.invalid

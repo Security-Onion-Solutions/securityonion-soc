@@ -35,6 +35,7 @@ type Server struct {
   Metrics     Metrics
   stoppedChan chan bool
   Authorizer  Authorizer
+  Agent       *model.User
   Context     context.Context
 }
 
@@ -50,10 +51,10 @@ func NewServer(cfg *config.ServerConfig, version string) *Server {
 
 func (server *Server) initContext() {
   // Server will retain the role of an agent until there's a need for higher privileges
-  agent := model.NewUser()
-  agent.Id = "agent"
-  agent.Email = agent.Id
-  server.Context = context.WithValue(context.Background(), web.ContextKeyRequestor, agent)
+  server.Agent = model.NewUser()
+  server.Agent.Id = "agent"
+  server.Agent.Email = server.Agent.Id
+  server.Context = context.WithValue(context.Background(), web.ContextKeyRequestor, server.Agent)
 }
 
 func (server *Server) Start() {

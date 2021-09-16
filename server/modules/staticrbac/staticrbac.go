@@ -25,7 +25,7 @@ type StaticRbac struct {
 func NewStaticRbac(srv *server.Server) *StaticRbac {
   return &StaticRbac{
     server: srv,
-    impl:   NewStaticRbacAuthorizer(),
+    impl:   NewStaticRbacAuthorizer(srv),
   }
 }
 
@@ -34,15 +34,20 @@ func (auth *StaticRbac) PrerequisiteModules() []string {
 }
 
 func (auth *StaticRbac) Init(cfg module.ModuleConfig) error {
+  var err error
   auth.config = cfg
-
-  paths, err := module.GetStringArray(cfg, "roleFiles")
+  var rolePaths []string
+  rolePaths, err = module.GetStringArray(cfg, "roleFiles")
   if err == nil {
-    scanIntervalMs := module.GetIntDefault(cfg, "scanIntervalMs", DEFAULT_SCAN_INTERVAL_MS)
-    err = auth.impl.Init(paths, scanIntervalMs)
+    var userPaths []string
+    userPaths, err = module.GetStringArray(cfg, "userFiles")
     if err == nil {
-      auth.server.Rolestore = auth.impl
-      auth.server.Authorizer = auth.impl
+      scanIntervalMs := module.GetIntDefault(cfg, "scanIntervalMs", DEFAULT_SCAN_INTERVAL_MS)
+      err = auth.impl.Init(userPaths, rolePaths, scanIntervalMs)
+      if err == nil {
+        auth.server.Rolestore = auth.impl
+        auth.server.Authorizer = auth.impl
+      }
     }
   }
   return err
