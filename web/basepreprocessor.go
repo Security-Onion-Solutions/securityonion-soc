@@ -12,7 +12,6 @@ package web
 
 import (
 	"context"
-	"github.com/apex/log"
 	"github.com/google/uuid"
 	"net/http"
 )
