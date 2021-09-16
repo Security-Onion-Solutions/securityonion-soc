@@ -37,8 +37,5 @@ func (Processor *BasePreprocessor) PreprocessPriority() int {
 func (processor *BasePreprocessor) Preprocess(ctx context.Context, req *http.Request) (context.Context, int, error) {
 	uuid := uuid.New().String()
 	ctx = context.WithValue(ctx, ContextKeyRequestId, uuid)
-
-	log.WithField("requestId", ctx.Value("ContextKeyRequestId")).Info("CHECK")
-
 	return ctx, 0, nil
 }
