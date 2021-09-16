@@ -14,7 +14,9 @@ import (
 	"context"
 	"errors"
 	"github.com/apex/log"
+	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 	"net"
 	"net/http"
 	"strings"
@@ -53,7 +55,13 @@ func (auth *StaticKeyAuthImpl) Preprocess(ctx context.Context, req *http.Request
 	} else {
 		// Remote agents will assume the role of this server until the implementation
 		// is enhanced to support unique agent keys and roles.
-		ctx = auth.server.Context
+		if agent, ok := auth.server.Context.Value(web.ContextKeyRequestor).(*model.User); ok {
+			ctx = context.WithValue(ctx, web.ContextKeyRequestor, agent)
+			ctx = context.WithValue(ctx, web.ContextKeyRequestorId, agent.Id)
+		} else {
+			// Server wasn't initialized correctly, or something has corrupted the static server context.
+			err = errors.New("Agent not found in server context")
+		}
 	}
 	return ctx, statusCode, err
 }
