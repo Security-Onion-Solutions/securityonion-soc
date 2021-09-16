@@ -6,7 +6,7 @@ case-admin:       analyst limited-analyst superuser
 event-admin:      analyst limited-analyst superuser
 event-monitor:    auditor limited-auditor
 node-admin:       agent
-node-monitor:     analyst limited-analyst auditor limited-auditor
+node-monitor:     analyst limited-analyst auditor limited-auditor superuser
 user-admin:       superuser
 user-monitor:     analyst auditor
 job-admin:        analyst superuser
