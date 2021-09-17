@@ -18,10 +18,11 @@ import (
   "testing"
 )
 
-func prepareTest(tester *testing.T, email string) (*StaticRbacAuthorizer, context.Context, *model.User) {
+func prepareTest(tester *testing.T, email string, id string) (*StaticRbacAuthorizer, context.Context, *model.User) {
   ctx := context.Background()
   user := model.NewUser()
   user.Email = email
+  user.Id = id
   ctx = context.WithValue(ctx, web.ContextKeyRequestor, user)
 
   auth := NewStaticRbacAuthorizer(fake.NewAuthorizedServer(nil))
@@ -49,6 +50,7 @@ func TestCheckContextOperationAuthorized_Collision(tester *testing.T) {
   ctx := context.Background()
   user := model.NewUser()
   user.Email = "mytarget/myop"
+  user.Id = "a1-id"
   ctx = context.WithValue(ctx, web.ContextKeyRequestor, user)
 
   auth := NewStaticRbacAuthorizer(fake.NewAuthorizedServer(nil))
@@ -67,7 +69,7 @@ func TestCheckContextOperationAuthorized_Fail(tester *testing.T) {
 }
 
 func TestCheckContextOperationAuthorized_FailRemoved(tester *testing.T) {
-  auth, ctx, _ := prepareTest(tester, "some@one.invalid")
+  auth, ctx, _ := prepareTest(tester, "some@one.invalid", "a1-id")
 
   err := auth.CheckContextOperationAuthorized(ctx, "bar", "foo")
   assert.NoError(tester, err)
@@ -78,7 +80,7 @@ func TestCheckContextOperationAuthorized_FailRemoved(tester *testing.T) {
 }
 
 func TestCheckContextOperationAuthorized_Success(tester *testing.T) {
-  auth, ctx, _ := prepareTest(tester, "some@where.invalid")
+  auth, ctx, _ := prepareTest(tester, "some@where.invalid", "a0-id")
 
   err := auth.CheckContextOperationAuthorized(ctx, "action", "another")
   assert.NoError(tester, err)
@@ -126,18 +128,18 @@ func TestIsAuthorized(tester *testing.T) {
 }
 
 func TestGetAssignments_Self(tester *testing.T) {
-  auth, ctx, user := prepareTest(tester, "some@one.invalid")
+  auth, ctx, user := prepareTest(tester, "some@one.invalid", "a1-id")
 
   roleMap, err := auth.GetAssignments(ctx)
   assert.NoError(tester, err)
-  assert.Contains(tester, roleMap, user.Email)
+  assert.Contains(tester, roleMap, auth.identifyUser(user))
 
   var expectedRoles = [...]string{"user"}
-  assert.ElementsMatch(tester, expectedRoles, roleMap[user.Email])
+  assert.ElementsMatch(tester, expectedRoles, roleMap[auth.identifyUser(user)])
 }
 
 func TestPopulateUserRoles(tester *testing.T) {
-  auth, ctx, user := prepareTest(tester, "some@one.invalid")
+  auth, ctx, user := prepareTest(tester, "some@one.invalid", "a1-id")
 
   err := auth.PopulateUserRoles(ctx, user)
   assert.NoError(tester, err)
@@ -147,43 +149,43 @@ func TestPopulateUserRoles(tester *testing.T) {
 }
 
 func TestAddRemoveRole(tester *testing.T) {
-  auth, ctx, user := prepareTest(tester, "some@one.invalid")
+  auth, ctx, user := prepareTest(tester, "some@one.invalid", "a1-id")
 
   // Fresh, shouldn't have fruity
   roles, err := auth.GetAssignments(ctx)
   assert.NoError(tester, err)
-  assert.Len(tester, roles[user.Email], 1)
-  assert.NotContains(tester, roles[user.Email], "fruity")
+  assert.Len(tester, roles[auth.identifyUser(user)], 1)
+  assert.NotContains(tester, roles[auth.identifyUser(user)], "fruity")
 
   auth.AddRoleToUser(user, "fruity")
 
   // Now should have fruity
   roles, err = auth.GetAssignments(ctx)
   assert.NoError(tester, err)
-  assert.Len(tester, roles[user.Email], 2)
-  assert.Contains(tester, roles[user.Email], "fruity")
+  assert.Len(tester, roles[auth.identifyUser(user)], 2)
+  assert.Contains(tester, roles[auth.identifyUser(user)], "fruity")
 
   auth.AddRoleToUser(user, "fruity")
 
   // Make sure it's not duplicated
   roles, err = auth.GetAssignments(ctx)
   assert.NoError(tester, err)
-  assert.Len(tester, roles[user.Email], 2)
-  assert.Contains(tester, roles[user.Email], "fruity")
+  assert.Len(tester, roles[auth.identifyUser(user)], 2)
+  assert.Contains(tester, roles[auth.identifyUser(user)], "fruity")
 
   auth.RemoveRoleFromUser(user, "fruity")
 
   // Should no longer have fruity
   roles, err = auth.GetAssignments(ctx)
   assert.NoError(tester, err)
-  assert.Len(tester, roles[user.Email], 1)
-  assert.NotContains(tester, roles[user.Email], "fruity")
+  assert.Len(tester, roles[auth.identifyUser(user)], 1)
+  assert.NotContains(tester, roles[auth.identifyUser(user)], "fruity")
 
   auth.RemoveRoleFromUser(user, "fruity")
 
   // Should not remove an item that doesn't exist
   roles, err = auth.GetAssignments(ctx)
   assert.NoError(tester, err)
-  assert.Len(tester, roles[user.Email], 1)
-  assert.NotContains(tester, roles[user.Email], "fruity")
+  assert.Len(tester, roles[auth.identifyUser(user)], 1)
+  assert.NotContains(tester, roles[auth.identifyUser(user)], "fruity")
 }

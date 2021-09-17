@@ -67,7 +67,7 @@ func (impl *StaticRbacAuthorizer) StopScanningFiles() {
 }
 
 func (impl *StaticRbacAuthorizer) identifyUser(user *model.User) string {
-  return user.Email
+  return user.Id
 }
 
 func (impl *StaticRbacAuthorizer) GetAssignments(ctx context.Context) (map[string][]string, error) {
