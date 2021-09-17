@@ -11,17 +11,15 @@
 package server
 
 import (
-  "testing"
-  "github.com/security-onion-solutions/securityonion-soc/config"
+	"testing"
+
+	"github.com/security-onion-solutions/securityonion-soc/config"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewServer(tester *testing.T) {
-  cfg := &config.ServerConfig{}
-  srv := NewServer(cfg, "")
-  if srv.Host == nil {
-    tester.Errorf("expected non-nil Host")
-  }
-  if srv.stoppedChan == nil {
-    tester.Errorf("expected non-nil stoppedChan")
-  }
+	cfg := &config.ServerConfig{}
+	srv := NewServer(cfg, "")
+	assert.NotNil(tester, srv.Host)
+	assert.NotNil(tester, srv.stoppedChan)
 }
