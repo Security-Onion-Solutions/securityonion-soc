@@ -16,6 +16,7 @@ import (
   "github.com/influxdata/influxdb-client-go/v2"
   "github.com/influxdata/influxdb-client-go/v2/api"
   "github.com/security-onion-solutions/securityonion-soc/model"
+  "github.com/security-onion-solutions/securityonion-soc/server"
   "strconv"
   "sync"
   "time"
@@ -23,6 +24,7 @@ import (
 
 type InfluxDBMetrics struct {
   client   influxdb2.Client
+  server   *server.Server
   token    string
   org      string
   bucket   string
@@ -41,8 +43,9 @@ type InfluxDBMetrics struct {
   failedEvents          map[string]int
 }
 
-func NewInfluxDBMetrics() *InfluxDBMetrics {
+func NewInfluxDBMetrics(srv *server.Server) *InfluxDBMetrics {
   return &InfluxDBMetrics{
+    server:         srv,
     raidStatus:     make(map[string]int),
     processStatus:  make(map[string]int),
     consumptionEps: make(map[string]int),
@@ -248,24 +251,29 @@ func (metrics *InfluxDBMetrics) getFailedEvents(host string) int {
   return metrics.failedEvents[host]
 }
 
-func (metrics *InfluxDBMetrics) GetGridEps() int {
-  metrics.updateEps()
-
+func (metrics *InfluxDBMetrics) GetGridEps(ctx context.Context) int {
   eps := 0
-  for _, hostEps := range metrics.consumptionEps {
-    eps = eps + hostEps
+  if err := metrics.server.Authorizer.CheckContextOperationAuthorized(ctx, "read", "nodes"); err == nil {
+    metrics.updateEps()
+    for _, hostEps := range metrics.consumptionEps {
+      eps = eps + hostEps
+    }
   }
 
   return eps
 }
 
-func (metrics *InfluxDBMetrics) UpdateNodeMetrics(node *model.Node) bool {
-  node.RaidStatus = metrics.getRaidStatus(node.Id)
-  node.ProcessStatus = metrics.getProcessStatus(node.Id)
-  node.ProductionEps = metrics.getProductionEps(node.Id)
-  node.ConsumptionEps = metrics.getConsumptionEps(node.Id)
-  node.FailedEvents = metrics.getFailedEvents(node.Id)
+func (metrics *InfluxDBMetrics) UpdateNodeMetrics(ctx context.Context, node *model.Node) bool {
+  var status bool
+  if err := metrics.server.Authorizer.CheckContextOperationAuthorized(ctx, "write", "nodes"); err == nil {
+    node.RaidStatus = metrics.getRaidStatus(node.Id)
+    node.ProcessStatus = metrics.getProcessStatus(node.Id)
+    node.ProductionEps = metrics.getProductionEps(node.Id)
+    node.ConsumptionEps = metrics.getConsumptionEps(node.Id)
+    node.FailedEvents = metrics.getFailedEvents(node.Id)
 
-  enhancedStatusEnabled := (metrics.client != nil)
-  return node.UpdateOverallStatus(enhancedStatusEnabled)
+    enhancedStatusEnabled := (metrics.client != nil)
+    status = node.UpdateOverallStatus(enhancedStatusEnabled)
+  }
+  return status
 }

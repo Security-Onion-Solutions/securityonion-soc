@@ -13,22 +13,22 @@ package server
 import (
   "context"
   "errors"
+  "github.com/apex/log"
+  "github.com/security-onion-solutions/securityonion-soc/web"
   "io"
   "net/http"
   "regexp"
   "strconv"
   "strings"
-  "github.com/apex/log"
-  "github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type StreamHandler struct {
   web.BaseHandler
-  server 		*Server
+  server *Server
 }
 
 func NewStreamHandler(srv *Server) *StreamHandler {
-  handler := &StreamHandler {}
+  handler := &StreamHandler{}
   handler.Host = srv.Host
   handler.server = srv
   handler.Impl = handler
@@ -37,8 +37,10 @@ func NewStreamHandler(srv *Server) *StreamHandler {
 
 func (streamHandler *StreamHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   switch request.Method {
-    case http.MethodGet: return streamHandler.get(ctx, writer, request)
-    case http.MethodPost: return streamHandler.post(ctx, writer, request)
+  case http.MethodGet:
+    return streamHandler.get(ctx, writer, request)
+  case http.MethodPost:
+    return streamHandler.post(ctx, writer, request)
   }
   return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
@@ -53,7 +55,7 @@ func (streamHandler *StreamHandler) get(ctx context.Context, writer http.Respons
   if err != nil {
     return statusCode, nil, err
   }
-  reader, filename, length, err := streamHandler.server.Datastore.GetPacketStream(int(jobId), unwrap)
+  reader, filename, length, err := streamHandler.server.Datastore.GetPacketStream(ctx, int(jobId), unwrap)
   extension := request.URL.Query().Get("ext")
   if len(extension) > 0 {
     safe, _ := regexp.MatchString(`^[a-zA-Z0-9-_]+$`, extension)
@@ -71,15 +73,15 @@ func (streamHandler *StreamHandler) get(ctx context.Context, writer http.Respons
     statusCode = http.StatusOK
     writer.Header().Set("Content-Type", "vnd.tcpdump.pcap")
     writer.Header().Set("Content-Length", strconv.FormatInt(length, 10))
-    writer.Header().Set("Content-Disposition", "inline; filename=\"" + filename + "\"");
-    writer.Header().Set("Content-Transfer-Encoding", "binary");
+    writer.Header().Set("Content-Disposition", "inline; filename=\""+filename+"\"")
+    writer.Header().Set("Content-Transfer-Encoding", "binary")
     written, err := io.Copy(writer, reader)
     if err != nil {
-      log.WithError(err).WithFields(log.Fields {
+      log.WithError(err).WithFields(log.Fields{
         "name": filename,
       }).Error("Failed to copy stream")
     }
-    log.WithFields(log.Fields {
+    log.WithFields(log.Fields{
       "name": filename,
       "size": written,
     }).Info("Copied stream to response")
@@ -92,7 +94,7 @@ func (streamHandler *StreamHandler) get(ctx context.Context, writer http.Respons
 func (streamHandler *StreamHandler) post(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   statusCode := http.StatusBadRequest
   jobId, err := strconv.ParseInt(request.URL.Query().Get("jobId"), 10, 32)
-  err = streamHandler.server.Datastore.SavePacketStream(int(jobId), request.Body)
+  err = streamHandler.server.Datastore.SavePacketStream(ctx, int(jobId), request.Body)
   if err == nil {
     statusCode = http.StatusOK
   }

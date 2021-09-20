@@ -12,19 +12,19 @@ package server
 import (
   "context"
   "errors"
+  "github.com/security-onion-solutions/securityonion-soc/model"
+  "github.com/security-onion-solutions/securityonion-soc/web"
   "net/http"
-	"regexp"
-	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/web"
+  "regexp"
 )
 
 type UserHandler struct {
   web.BaseHandler
-  server 		*Server
+  server *Server
 }
 
 func NewUserHandler(srv *Server) *UserHandler {
-  handler := &UserHandler {}
+  handler := &UserHandler{}
   handler.Host = srv.Host
   handler.server = srv
   handler.Impl = handler
@@ -32,12 +32,13 @@ func NewUserHandler(srv *Server) *UserHandler {
 }
 
 func (userHandler *UserHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	if userHandler.server.Userstore == nil {
-		return http.StatusMethodNotAllowed, nil, errors.New("Users module not enabled")
-	}
+  if userHandler.server.Userstore == nil {
+    return http.StatusMethodNotAllowed, nil, errors.New("Users module not enabled")
+  }
 
   switch request.Method {
-    case http.MethodGet: return userHandler.get(ctx, writer, request)
+  case http.MethodGet:
+    return userHandler.get(ctx, writer, request)
   }
   return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
@@ -47,8 +48,8 @@ func (userHandler *UserHandler) get(ctx context.Context, writer http.ResponseWri
   safe, _ := regexp.MatchString(`^[A-Za-z0-9-]+$`, id)
   if !safe {
     return http.StatusBadRequest, nil, errors.New("Invalid id")
-	}
-	user, err := userHandler.server.Userstore.GetUser(ctx, id)
+  }
+  user, err := userHandler.server.Userstore.GetUser(ctx, id)
   if err != nil {
     return http.StatusBadRequest, nil, err
   }
@@ -60,15 +61,15 @@ func (userHandler *UserHandler) put(ctx context.Context, writer http.ResponseWri
   safe, _ := regexp.MatchString(`^[A-Za-z0-9-]+$`, id)
   if !safe {
     return http.StatusBadRequest, nil, errors.New("Invalid id")
-	}
+  }
   user := model.NewUser()
-	err := userHandler.ReadJson(request, user)
-	if err != nil {
-		return http.StatusBadRequest, nil, errors.New("Invalid user object")
-	}
-	err = userHandler.server.Userstore.UpdateUser(id, user)
-	if err != nil {
-		return http.StatusBadRequest, nil, err
-	}	
+  err := userHandler.ReadJson(request, user)
+  if err != nil {
+    return http.StatusBadRequest, nil, errors.New("Invalid user object")
+  }
+  err = userHandler.server.Userstore.UpdateUser(ctx, id, user)
+  if err != nil {
+    return http.StatusBadRequest, nil, err
+  }
   return http.StatusOK, nil, nil
 }

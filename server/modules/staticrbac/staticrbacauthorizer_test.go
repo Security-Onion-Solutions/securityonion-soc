@@ -11,33 +11,37 @@ package staticrbac
 
 import (
   "context"
+  "github.com/security-onion-solutions/securityonion-soc/fake"
   "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/web"
   "github.com/stretchr/testify/assert"
   "testing"
 )
 
-func prepareTest(tester *testing.T, email string) (*StaticRbacAuthorizer, context.Context, *model.User) {
+func prepareTest(tester *testing.T, email string, id string) (*StaticRbacAuthorizer, context.Context, *model.User) {
   ctx := context.Background()
   user := model.NewUser()
   user.Email = email
+  user.Id = id
   ctx = context.WithValue(ctx, web.ContextKeyRequestor, user)
 
-  auth := NewStaticRbacAuthorizer()
+  auth := NewStaticRbacAuthorizer(fake.NewAuthorizedServer(nil))
+  userFiles := []string{"rbac_users.test"}
   roleFiles := []string{"rbac_permissions.test", "rbac_roles.test"}
-  auth.Init(roleFiles, DEFAULT_SCAN_INTERVAL_MS)
+  auth.Init(userFiles, roleFiles, DEFAULT_SCAN_INTERVAL_MS)
 
   assert.Equal(tester, DEFAULT_SCAN_INTERVAL_MS, auth.scanIntervalMs)
   assert.Equal(tester, roleFiles, auth.roleFiles)
+  assert.Equal(tester, userFiles, auth.userFiles)
 
-  auth.scanFiles()
+  auth.scanNow()
 
   return auth, ctx, user
 }
 
 func TestCheckContextOperationAuthorized_EmptyContext(tester *testing.T) {
   ctx := context.Background()
-  auth := NewStaticRbacAuthorizer()
+  auth := NewStaticRbacAuthorizer(fake.NewAuthorizedServer(nil))
   err := auth.CheckContextOperationAuthorized(ctx, "myop", "mytarget")
   assert.Error(tester, err, "Expected error due to missing context data")
 }
@@ -46,9 +50,10 @@ func TestCheckContextOperationAuthorized_Collision(tester *testing.T) {
   ctx := context.Background()
   user := model.NewUser()
   user.Email = "mytarget/myop"
+  user.Id = "a1-id"
   ctx = context.WithValue(ctx, web.ContextKeyRequestor, user)
 
-  auth := NewStaticRbacAuthorizer()
+  auth := NewStaticRbacAuthorizer(fake.NewAuthorizedServer(nil))
   err := auth.CheckContextOperationAuthorized(ctx, "myop", "mytarget")
   assert.Error(tester, err)
 }
@@ -57,14 +62,14 @@ func TestCheckContextOperationAuthorized_Fail(tester *testing.T) {
   ctx := context.Background()
   ctx = context.WithValue(ctx, web.ContextKeyRequestor, model.NewUser())
 
-  auth := NewStaticRbacAuthorizer()
+  auth := NewStaticRbacAuthorizer(fake.NewAuthorizedServer(nil))
   err := auth.CheckContextOperationAuthorized(ctx, "myop", "mytarget")
   var unauthErr *model.Unauthorized
   assert.ErrorAs(tester, err, &unauthErr)
 }
 
 func TestCheckContextOperationAuthorized_FailRemoved(tester *testing.T) {
-  auth, ctx, _ := prepareTest(tester, "some@one.invalid")
+  auth, ctx, _ := prepareTest(tester, "some@one.invalid", "a1-id")
 
   err := auth.CheckContextOperationAuthorized(ctx, "bar", "foo")
   assert.NoError(tester, err)
@@ -75,7 +80,7 @@ func TestCheckContextOperationAuthorized_FailRemoved(tester *testing.T) {
 }
 
 func TestCheckContextOperationAuthorized_Success(tester *testing.T) {
-  auth, ctx, _ := prepareTest(tester, "some@where.invalid")
+  auth, ctx, _ := prepareTest(tester, "some@where.invalid", "a0-id")
 
   err := auth.CheckContextOperationAuthorized(ctx, "action", "another")
   assert.NoError(tester, err)
@@ -86,7 +91,7 @@ func TestCheckContextOperationAuthorized_Success(tester *testing.T) {
 }
 
 func TestIsAuthorized(tester *testing.T) {
-  auth := NewStaticRbacAuthorizer()
+  auth := NewStaticRbacAuthorizer(fake.NewAuthorizedServer(nil))
 
   roleMap := make(map[string][]string)
   roleMap["clerk"] = []string{"register/operates", "tables/maintains"}
@@ -123,22 +128,64 @@ func TestIsAuthorized(tester *testing.T) {
 }
 
 func TestGetAssignments_Self(tester *testing.T) {
-  auth, ctx, user := prepareTest(tester, "some@one.invalid")
+  auth, ctx, user := prepareTest(tester, "some@one.invalid", "a1-id")
 
   roleMap, err := auth.GetAssignments(ctx)
   assert.NoError(tester, err)
-  assert.Contains(tester, roleMap, user.Email)
+  assert.Contains(tester, roleMap, auth.identifyUser(user))
 
   var expectedRoles = [...]string{"user"}
-  assert.ElementsMatch(tester, expectedRoles, roleMap[user.Email])
+  assert.ElementsMatch(tester, expectedRoles, roleMap[auth.identifyUser(user)])
 }
 
 func TestPopulateUserRoles(tester *testing.T) {
-  auth, ctx, user := prepareTest(tester, "some@one.invalid")
+  auth, ctx, user := prepareTest(tester, "some@one.invalid", "a1-id")
 
   err := auth.PopulateUserRoles(ctx, user)
   assert.NoError(tester, err)
 
   var expectedRoles = [...]string{"user"}
   assert.ElementsMatch(tester, expectedRoles, user.Roles)
+}
+
+func TestAddRemoveRole(tester *testing.T) {
+  auth, ctx, user := prepareTest(tester, "some@one.invalid", "a1-id")
+
+  // Fresh, shouldn't have fruity
+  roles, err := auth.GetAssignments(ctx)
+  assert.NoError(tester, err)
+  assert.Len(tester, roles[auth.identifyUser(user)], 1)
+  assert.NotContains(tester, roles[auth.identifyUser(user)], "fruity")
+
+  auth.AddRoleToUser(user, "fruity")
+
+  // Now should have fruity
+  roles, err = auth.GetAssignments(ctx)
+  assert.NoError(tester, err)
+  assert.Len(tester, roles[auth.identifyUser(user)], 2)
+  assert.Contains(tester, roles[auth.identifyUser(user)], "fruity")
+
+  auth.AddRoleToUser(user, "fruity")
+
+  // Make sure it's not duplicated
+  roles, err = auth.GetAssignments(ctx)
+  assert.NoError(tester, err)
+  assert.Len(tester, roles[auth.identifyUser(user)], 2)
+  assert.Contains(tester, roles[auth.identifyUser(user)], "fruity")
+
+  auth.RemoveRoleFromUser(user, "fruity")
+
+  // Should no longer have fruity
+  roles, err = auth.GetAssignments(ctx)
+  assert.NoError(tester, err)
+  assert.Len(tester, roles[auth.identifyUser(user)], 1)
+  assert.NotContains(tester, roles[auth.identifyUser(user)], "fruity")
+
+  auth.RemoveRoleFromUser(user, "fruity")
+
+  // Should not remove an item that doesn't exist
+  roles, err = auth.GetAssignments(ctx)
+  assert.NoError(tester, err)
+  assert.Len(tester, roles[auth.identifyUser(user)], 1)
+  assert.NotContains(tester, roles[auth.identifyUser(user)], "fruity")
 }

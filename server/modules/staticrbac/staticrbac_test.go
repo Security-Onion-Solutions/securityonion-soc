@@ -28,6 +28,10 @@ func TestInit(tester *testing.T) {
   array := make([]interface{}, 1, 1)
   array[0] = "MyValue1"
   cfg["roleFiles"] = array
+
+  array = make([]interface{}, 1, 1)
+  array[0] = "MyValue2"
+  cfg["userFiles"] = array
   err = auth.Init(cfg)
   assert.NoError(tester, err)
   assert.NotNil(tester, auth.server.Authorizer)

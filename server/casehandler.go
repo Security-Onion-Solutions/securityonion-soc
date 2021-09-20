@@ -11,20 +11,20 @@ package server
 
 import (
   "context"
-  "errors"
   "encoding/json"
-  "net/http"
+  "errors"
   "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/web"
+  "net/http"
 )
 
 type CaseHandler struct {
   web.BaseHandler
-  server 		*Server
+  server *Server
 }
 
 func NewCaseHandler(srv *Server) *CaseHandler {
-  handler := &CaseHandler {}
+  handler := &CaseHandler{}
   handler.Host = srv.Host
   handler.server = srv
   handler.Impl = handler
@@ -38,7 +38,8 @@ func (caseHandler *CaseHandler) HandleNow(ctx context.Context, writer http.Respo
 
   if caseHandler.server.Casestore != nil {
     switch request.Method {
-      case http.MethodPost: return caseHandler.create(ctx, writer, request)
+    case http.MethodPost:
+      return caseHandler.create(ctx, writer, request)
     }
   }
   return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
@@ -51,7 +52,7 @@ func (caseHandler *CaseHandler) create(ctx context.Context, writer http.Response
   inputCase := model.NewCase()
   err := json.NewDecoder(request.Body).Decode(&inputCase)
   if err == nil {
-    outputCase, err = caseHandler.server.Casestore.Create(inputCase)
+    outputCase, err = caseHandler.server.Casestore.Create(ctx, inputCase)
     if err == nil {
       statusCode = http.StatusOK
     } else {

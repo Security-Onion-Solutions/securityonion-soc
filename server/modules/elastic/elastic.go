@@ -25,15 +25,15 @@ const DEFAULT_ASYNC_THRESHOLD = 10
 const DEFAULT_INTERVALS = 25
 
 type Elastic struct {
-  config			module.ModuleConfig
-  server			*server.Server
-  store			  *ElasticEventstore
+  config module.ModuleConfig
+  server *server.Server
+  store  *ElasticEventstore
 }
 
 func NewElastic(srv *server.Server) *Elastic {
-  return &Elastic {
+  return &Elastic{
     server: srv,
-    store: NewElasticEventstore(),
+    store:  NewElasticEventstore(srv),
   }
 }
 

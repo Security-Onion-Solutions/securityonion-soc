@@ -21,29 +21,29 @@ const JobStatusIncomplete = 2
 const JobStatusDeleted = 3
 
 type Job struct {
-  Id                        int                     `json:"id"`
-  CreateTime                time.Time               `json:"createTime"`
-  Status                    int                     `json:"status"`
-  CompleteTime              time.Time               `json:"completeTime"`
-  FailTime                  time.Time               `json:"failTime"`
-  Failure                   string                  `json:"failure"`
-  FailCount                 int                     `json:"failCount"`
-  Owner                     string                  `json:"owner"`
-  NodeId                    string                  `json:"nodeId"`
-  LegacySensorId            string                  `json:"sensorId"`
-  FileExtension             string                  `json:"fileExtension"`
-  Filter                    *Filter                 `json:"filter"`
-  UserId                    string                  `json:"userId"`
+  Id             int       `json:"id"`
+  CreateTime     time.Time `json:"createTime"`
+  Status         int       `json:"status"`
+  CompleteTime   time.Time `json:"completeTime"`
+  FailTime       time.Time `json:"failTime"`
+  Failure        string    `json:"failure"`
+  FailCount      int       `json:"failCount"`
+  Owner          string    `json:"owner"`
+  NodeId         string    `json:"nodeId"`
+  LegacySensorId string    `json:"sensorId"`
+  FileExtension  string    `json:"fileExtension"`
+  Filter         *Filter   `json:"filter"`
+  UserId         string    `json:"userId"`
 }
 
 func NewJob() *Job {
   return &Job{
-    CreateTime: time.Now(),
-    Status: JobStatusPending,
-    Failure: "",
-    FailCount: 0,
+    CreateTime:    time.Now(),
+    Status:        JobStatusPending,
+    Failure:       "",
+    FailCount:     0,
     FileExtension: "bin",
-    Filter: NewFilter(),
+    Filter:        NewFilter(),
   }
 }
 
@@ -52,7 +52,7 @@ func (job *Job) SetNodeId(nodeId string) {
 }
 
 func (job *Job) GetNodeId() string {
-  // Lower case on the Getter as well since the property could have been 
+  // Lower case on the Getter as well since the property could have been
   // manipulated directly. Consider json.Unmarshall().
   job.NodeId = strings.ToLower(job.NodeId)
   if len(job.NodeId) == 0 {
@@ -61,6 +61,10 @@ func (job *Job) GetNodeId() string {
     return job.LegacySensorId
   }
   return job.NodeId
+}
+
+func (job *Job) CanProcess() bool {
+  return job.Status != JobStatusCompleted && job.Status != JobStatusDeleted
 }
 
 func (job *Job) Complete() {

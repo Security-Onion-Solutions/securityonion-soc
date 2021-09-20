@@ -12,9 +12,8 @@ package model
 
 import (
 	"errors"
-	"testing"
-
 	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
 func TestVerifyJob(tester *testing.T) {
@@ -65,4 +64,18 @@ func TestGetLegacyNodeId(tester *testing.T) {
 	// Check that GetNodeId() returns formatted LegacySensorId if NodeId is blank
 	job.NodeId = ""
 	assert.Equal(tester, "bar", job.GetNodeId())
+}
+
+func TestCanProcess(tester *testing.T) {
+	job := NewJob()
+	assert.True(tester, job.CanProcess())
+	job.Fail(errors.New("Something"))
+	assert.True(tester, job.CanProcess())
+
+	job.Complete()
+	assert.False(tester, job.CanProcess())
+
+	job = NewJob()
+	job.Status = JobStatusDeleted
+	assert.False(tester, job.CanProcess())
 }
