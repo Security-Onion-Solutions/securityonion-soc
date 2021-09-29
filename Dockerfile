@@ -59,8 +59,7 @@ RUN [[ $ELASTIC_VERSION == '0.0.0' ]] || \
      wget https://artifacts.elastic.co/downloads/beats/auditbeat/auditbeat-oss-$(echo $ELASTIC_VERSION)-x86_64.rpm -P html/downloads/ && \
      wget https://artifacts.elastic.co/downloads/beats/metricbeat/metricbeat-oss-$(echo $ELASTIC_VERSION)-amd64.deb -P html/downloads/ && \
      wget https://artifacts.elastic.co/downloads/beats/filebeat/filebeat-oss-$(echo $ELASTIC_VERSION)-amd64.deb -P html/downloads/ && \
-     wget https://artifacts.elastic.co/downloads/beats/auditbeat/auditbeat-oss-$(echo $ELASTIC_VERSION)-amd64.deb -P html/downloads/ && \
-    )
+     wget https://artifacts.elastic.co/downloads/beats/auditbeat/auditbeat-oss-$(echo $ELASTIC_VERSION)-amd64.deb -P html/downloads/)
 
 RUN [[ $WAZUH_VERSION == '0.0.0' ]] || \
     (mkdir -p html/downloads && \

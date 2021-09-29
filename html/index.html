@@ -714,6 +714,15 @@
             <h3 class="mt-2" id="download-elastic">{{ i18n.downloadsElastic }} ({{ $root.elasticVersion }})</h3>
             <ul>
               <li><a :href="'/downloads/winlogbeat-oss-' + $root.elasticVersion + '-windows-x86_64.msi'" :download="'winlogbeat-oss-' +  $root.elasticVersion + '-windows-x86_64.msi'">Winlogbeat</a></li>
+
+              <li><a :href="'/downloads/filebeat-oss-' + $root.elasticVersion + '-amd64.deb'" :download="'filebeat-oss-' +  $root.elasticVersion + '-amd64.deb'">Filebeat DEB</a> (Linux [amd64]: Debian, Ubuntu)</li>
+              <li><a :href="'/downloads/filebeat-oss-' + $root.elasticVersion + '-x86_64.rpm'" :download="'filebeat-oss-' +  $root.elasticVersion + '-x86_64.rpm'">Filebeat RPM</a> (Linux [x86_64]: Amazon, CentOS, Fedora, Oracle, SUSE)</li>
+
+              <li><a :href="'/downloads/metricbeat-oss-' + $root.elasticVersion + '-amd64.deb'" :download="'metricbeat-oss-' +  $root.elasticVersion + '-amd64.deb'">Metricbeat DEB</a> (Linux [amd64]: Debian, Ubuntu)</li>
+              <li><a :href="'/downloads/metricbeat-oss-' + $root.elasticVersion + '-x86_64.rpm'" :download="'metricbeat-oss-' +  $root.elasticVersion + '-x86_64.rpm'">Metricbeat RPM</a> (Linux [x86_64]: Amazon, CentOS, Fedora, Oracle, SUSE)</li>
+
+              <li><a :href="'/downloads/auditbeat-oss-' + $root.elasticVersion + '-amd64.deb'" :download="'auditbeat-oss-' +  $root.elasticVersion + '-amd64.deb'">Auditbeat DEB</a> (Linux [amd64]: Debian, Ubuntu)</li>
+              <li><a :href="'/downloads/auditbeat-oss-' + $root.elasticVersion + '-x86_64.rpm'" :download="'auditbeat-oss-' +  $root.elasticVersion + '-x86_64.rpm'">Auditbeat RPM</a> (Linux [x86_64]: Amazon, CentOS, Fedora, Oracle, SUSE)</li>
             </ul>
             <h3 class="mt-2" id="download-wazuh">{{ i18n.downloadsWazuh }} ({{ $root.wazuhVersion }})</h3>
             <ul>
