@@ -1,0 +1,5 @@
+some/action:somerole:+
+another/action:anotherrole thirdrole,fourthrole; fifthrole
+another/action:thirdrole:-
+foo/bar:thirdrole
+roles/read:user-monitor

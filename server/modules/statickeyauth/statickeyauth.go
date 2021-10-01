@@ -24,7 +24,7 @@ type StaticKeyAuth struct {
 func NewStaticKeyAuth(srv *server.Server) *StaticKeyAuth {
 	return &StaticKeyAuth{
 		server: srv,
-		impl:   NewStaticKeyAuthImpl(),
+		impl:   NewStaticKeyAuthImpl(srv),
 	}
 }
 

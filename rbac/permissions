@@ -1,0 +1,31 @@
+# Define low-level permissions and which permission set roles can use them
+# Syntax      => permX: roleY roleZ
+# Explanation => roleY and roleZ are granted permission permX
+
+cases/write:      case-admin
+events/read:      event-monitor
+events/write:     event-admin
+events/ack:       event-admin
+jobs/read:        job-monitor
+jobs/pivot:       job-user
+jobs/write:       job-admin
+jobs/delete:      job-admin
+jobs/process:     job-processor
+nodes/read:       node-monitor
+nodes/write:      node-admin
+roles/read:       user-monitor
+roles/write:      user-admin
+users/read:       user-monitor
+users/write:      user-admin
+users/delete:     user-admin
+
+
+# Define low-level permission set inheritence relationships
+# Syntax      => roleB: roleA
+# Explanation => roleA inherits all of roleA's permissions
+
+event-monitor:    event-admin
+job-monitor:      job-admin
+job-user:         job-admin
+node-monitor:     node-admin
+user-monitor:     user-admin

@@ -111,6 +111,7 @@ $(document).ready(function() {
         if (action.method != 'GET') {
           options.body = action.bodyFormatted;
         }
+        action.target = localStorage['settings.flags.testing'] !== 'true' ? action.target : '_self';
         const route = this;
         fetch(action.linkFormatted, options)
         .then(data => {
@@ -410,6 +411,12 @@ $(document).ready(function() {
       },
       formatCount(count) {
         return Number(count).toLocaleString();
+      },
+      formatStringArray(strArray) {
+        if (strArray != null && strArray.length > 0) {
+          return strArray.join(", ");
+        }
+        return "";
       },
       localizeMessage(origMsg) {
         var msg = origMsg;

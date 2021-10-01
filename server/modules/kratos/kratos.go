@@ -14,18 +14,16 @@ import (
   "github.com/security-onion-solutions/securityonion-soc/server"
 )
 
-const DEFAULT_CACHE_MS = 60000
-
 type Kratos struct {
-  config			module.ModuleConfig
-  server			*server.Server
-  impl				*KratosUserstore
+  config module.ModuleConfig
+  server *server.Server
+  impl   *KratosUserstore
 }
 
 func NewKratos(srv *server.Server) *Kratos {
-  return &Kratos {
+  return &Kratos{
     server: srv,
-    impl: NewKratosUserstore(),
+    impl:   NewKratosUserstore(srv),
   }
 }
 
@@ -35,10 +33,9 @@ func (kratos *Kratos) PrerequisiteModules() []string {
 
 func (kratos *Kratos) Init(cfg module.ModuleConfig) error {
   kratos.config = cfg
-  cacheMs := module.GetIntDefault(cfg, "cacheMs", DEFAULT_CACHE_MS)
   url, err := module.GetString(cfg, "hostUrl")
   if err == nil {
-    err := kratos.impl.Init(url, cacheMs)
+    err = kratos.impl.Init(url)
     if err == nil {
       kratos.server.Userstore = kratos.impl
       err = kratos.server.Host.AddPreprocessor(NewKratosPreprocessor(kratos.impl))

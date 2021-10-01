@@ -16,15 +16,15 @@ import (
 )
 
 type FileDatastore struct {
-  config			module.ModuleConfig
-  server			*server.Server
-  impl				*FileDatastoreImpl
+  config module.ModuleConfig
+  server *server.Server
+  impl   *FileDatastoreImpl
 }
 
 func NewFileDatastore(srv *server.Server) *FileDatastore {
-  return &FileDatastore {
+  return &FileDatastore{
     server: srv,
-    impl: NewFileDatastoreImpl(),
+    impl:   NewFileDatastoreImpl(srv),
   }
 }
 

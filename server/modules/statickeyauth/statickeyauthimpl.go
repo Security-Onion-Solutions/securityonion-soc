@@ -13,20 +13,23 @@ package statickeyauth
 import (
 	"context"
 	"errors"
+	"github.com/apex/log"
+	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 	"net"
 	"net/http"
 	"strings"
-	"github.com/apex/log"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type StaticKeyAuthImpl struct {
 	apiKey           string
 	anonymousNetwork *net.IPNet
+	server           *server.Server
 }
 
-func NewStaticKeyAuthImpl() *StaticKeyAuthImpl {
+func NewStaticKeyAuthImpl(srv *server.Server) *StaticKeyAuthImpl {
 	return &StaticKeyAuthImpl{
+		server: srv,
 	}
 }
 
@@ -45,27 +48,31 @@ func (auth *StaticKeyAuthImpl) Preprocess(ctx context.Context, req *http.Request
 	var statusCode int
 	var err error
 
-	if !auth.IsAuthorized(req) {
+	if !auth.IsAuthorized(ctx, req) {
 		statusCode = http.StatusUnauthorized
 		err = errors.New("Access denied")
 	} else {
-		ctx = context.WithValue(ctx, web.ContextKeyRequestor, "SONODE")
+		// Remote agents will assume the role of this server until the implementation
+		// is enhanced to support unique agent keys and roles.
+		ctx = context.WithValue(ctx, web.ContextKeyRequestor, auth.server.Agent)
+		ctx = context.WithValue(ctx, web.ContextKeyRequestorId, auth.server.Agent.Id)
 	}
 	return ctx, statusCode, err
 }
 
-func (auth *StaticKeyAuthImpl) IsAuthorized(request *http.Request) bool {
+func (auth *StaticKeyAuthImpl) IsAuthorized(ctx context.Context, request *http.Request) bool {
 	apiKey := request.Header.Get("Authorization")
 	remoteIp := request.RemoteAddr
-	return auth.validateAuthorization(apiKey, remoteIp)
+	return auth.validateAuthorization(ctx, apiKey, remoteIp)
 }
 
-func (auth *StaticKeyAuthImpl) validateAuthorization(key string, ipStr string) bool {
+func (auth *StaticKeyAuthImpl) validateAuthorization(ctx context.Context, key string, ipStr string) bool {
 	// If API key has been provided, it must match
 	if len(key) > 0 {
 		isApiKeyAccepted := auth.validateApiKey(key)
 		log.WithFields(log.Fields{
 			"isApiKeyAccepted": isApiKeyAccepted,
+			"requestId":        ctx.Value(web.ContextKeyRequestId),
 		}).Debug("Authorization check via API key")
 		return isApiKeyAccepted
 	}
@@ -81,6 +88,7 @@ func (auth *StaticKeyAuthImpl) validateAuthorization(key string, ipStr string) b
 		"anonymousNetwork": auth.anonymousNetwork,
 		"remoteIp":         remoteIp,
 		"isAnonymousIp":    isAnonymousIp,
+		"requestId":        ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Authorization check via remote IP")
 	return isAnonymousIp
 }

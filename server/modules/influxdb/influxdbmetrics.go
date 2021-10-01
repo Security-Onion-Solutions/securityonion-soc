@@ -12,21 +12,23 @@ package influxdb
 import (
   "context"
   "crypto/tls"
-  "strconv"
-  "sync"
-  "time"
   "github.com/apex/log"
   "github.com/influxdata/influxdb-client-go/v2"
   "github.com/influxdata/influxdb-client-go/v2/api"
   "github.com/security-onion-solutions/securityonion-soc/model"
+  "github.com/security-onion-solutions/securityonion-soc/server"
+  "strconv"
+  "sync"
+  "time"
 )
 
 type InfluxDBMetrics struct {
-  client                influxdb2.Client
-  token                 string
-  org                   string
-  bucket                string
-  queryApi              api.QueryAPI
+  client   influxdb2.Client
+  server   *server.Server
+  token    string
+  org      string
+  bucket   string
+  queryApi api.QueryAPI
 
   cacheLock             sync.Mutex
   cacheExpirationMs     int
@@ -41,23 +43,24 @@ type InfluxDBMetrics struct {
   failedEvents          map[string]int
 }
 
-func NewInfluxDBMetrics() *InfluxDBMetrics {
+func NewInfluxDBMetrics(srv *server.Server) *InfluxDBMetrics {
   return &InfluxDBMetrics{
-    raidStatus: make(map[string]int),
-    processStatus: make(map[string]int),
+    server:         srv,
+    raidStatus:     make(map[string]int),
+    processStatus:  make(map[string]int),
     consumptionEps: make(map[string]int),
-    productionEps: make(map[string]int),
-    failedEvents: make(map[string]int),
+    productionEps:  make(map[string]int),
+    failedEvents:   make(map[string]int),
   }
 }
 
-func (metrics *InfluxDBMetrics) Init(hostUrl string, 
-                                     token string, 
-                                     org string,
-                                     bucket string,
-                                     verifyCert bool,
-                                     cacheExpirationMs int,
-                                     maxMetricAgeSeconds int) error {
+func (metrics *InfluxDBMetrics) Init(hostUrl string,
+  token string,
+  org string,
+  bucket string,
+  verifyCert bool,
+  cacheExpirationMs int,
+  maxMetricAgeSeconds int) error {
   options := influxdb2.DefaultOptions()
   options.SetTLSConfig(&tls.Config{
     InsecureSkipVerify: !verifyCert,
@@ -86,13 +89,13 @@ func (metrics *InfluxDBMetrics) fetchLatestValuesByHost(measurement string, fiel
   if metrics.client != nil {
     log.WithFields(log.Fields{
       "measurement": measurement,
-      "field": field,
+      "field":       field,
     }).Debug("Fetching latest values by host")
-    result, err := metrics.queryApi.Query(context.Background(), 
-        `from(bucket:"` + metrics.bucket + `")
-        |> range(start: -` + strconv.Itoa(metrics.maxMetricAgeSeconds) + `s)
-        |> filter(fn: (r) => r._measurement == "` + measurement + `" 
-                             and r._field == "` + field + `") 
+    result, err := metrics.queryApi.Query(context.Background(),
+      `from(bucket:"`+metrics.bucket+`")
+        |> range(start: -`+strconv.Itoa(metrics.maxMetricAgeSeconds)+`s)
+        |> filter(fn: (r) => r._measurement == "`+measurement+`" 
+                             and r._field == "`+field+`") 
         |> group(columns: ["host"]) |> last()`)
     if err == nil {
       for result.Next() {
@@ -122,7 +125,7 @@ func (metrics *InfluxDBMetrics) convertValuesToString(values map[string]interfac
     if str, ok := v.(string); ok {
       results[k] = str
     } else {
-      log.WithFields(log.Fields { "key": k, "value": v,}).Warn("Unexpected value type; expected string")
+      log.WithFields(log.Fields{"key": k, "value": v}).Warn("Unexpected value type; expected string")
     }
   }
   return results
@@ -138,7 +141,7 @@ func (metrics *InfluxDBMetrics) convertValuesToInt(values map[string]interface{}
     } else if num, ok := v.(int); ok {
       results[k] = num
     } else {
-      log.WithFields(log.Fields { "key": k, "value": v,}).Warn("Unexpected value type; expected float64, int64, or int")
+      log.WithFields(log.Fields{"key": k, "value": v}).Warn("Unexpected value type; expected float64, int64, or int")
     }
   }
   return results
@@ -189,16 +192,20 @@ func (metrics *InfluxDBMetrics) getRaidStatus(host string) string {
 
   metrics.updateRaidStatus()
 
-  if hostStatus, exists := metrics.raidStatus[host]; exists {
-    switch hostStatus {
-    case 0: status = model.NodeStatusOk
-    case 1: status = model.NodeStatusFault
+  if len(metrics.raidStatus) > 0 {
+    if hostStatus, exists := metrics.raidStatus[host]; exists {
+      switch hostStatus {
+      case 0:
+        status = model.NodeStatusOk
+      case 1:
+        status = model.NodeStatusFault
+      }
+    } else {
+      log.WithFields(log.Fields{
+        "host":       host,
+        "raidStatus": metrics.raidStatus,
+      }).Warn("Host not found in raid status metrics")
     }
-  } else {
-    log.WithFields(log.Fields {
-      "host": host,
-      "raidStatus": metrics.raidStatus,
-    }).Warn("Host not found in raid status metrics")
   }
 
   return status
@@ -211,12 +218,14 @@ func (metrics *InfluxDBMetrics) getProcessStatus(host string) string {
 
   if hostStatus, exists := metrics.processStatus[host]; exists {
     switch hostStatus {
-    case 0: status = model.NodeStatusOk
-    case 1: status = model.NodeStatusFault
+    case 0:
+      status = model.NodeStatusOk
+    case 1:
+      status = model.NodeStatusFault
     }
   } else {
-    log.WithFields(log.Fields {
-      "host": host,
+    log.WithFields(log.Fields{
+      "host":          host,
       "processStatus": metrics.processStatus,
     }).Warn("Host not found in process status metrics")
   }
@@ -242,24 +251,29 @@ func (metrics *InfluxDBMetrics) getFailedEvents(host string) int {
   return metrics.failedEvents[host]
 }
 
-func (metrics *InfluxDBMetrics) GetGridEps() int {
-  metrics.updateEps()
-
+func (metrics *InfluxDBMetrics) GetGridEps(ctx context.Context) int {
   eps := 0
-  for _, hostEps := range metrics.consumptionEps {
-    eps = eps + hostEps
+  if err := metrics.server.Authorizer.CheckContextOperationAuthorized(ctx, "read", "nodes"); err == nil {
+    metrics.updateEps()
+    for _, hostEps := range metrics.consumptionEps {
+      eps = eps + hostEps
+    }
   }
 
   return eps
 }
 
-func (metrics *InfluxDBMetrics) UpdateNodeMetrics(node *model.Node) bool {
-  node.RaidStatus = metrics.getRaidStatus(node.Id)
-  node.ProcessStatus = metrics.getProcessStatus(node.Id)
-  node.ProductionEps = metrics.getProductionEps(node.Id)
-  node.ConsumptionEps = metrics.getConsumptionEps(node.Id)
-  node.FailedEvents = metrics.getFailedEvents(node.Id)
+func (metrics *InfluxDBMetrics) UpdateNodeMetrics(ctx context.Context, node *model.Node) bool {
+  var status bool
+  if err := metrics.server.Authorizer.CheckContextOperationAuthorized(ctx, "write", "nodes"); err == nil {
+    node.RaidStatus = metrics.getRaidStatus(node.Id)
+    node.ProcessStatus = metrics.getProcessStatus(node.Id)
+    node.ProductionEps = metrics.getProductionEps(node.Id)
+    node.ConsumptionEps = metrics.getConsumptionEps(node.Id)
+    node.FailedEvents = metrics.getFailedEvents(node.Id)
 
-  enhancedStatusEnabled := (metrics.client != nil)
-  return node.UpdateOverallStatus(enhancedStatusEnabled)
+    enhancedStatusEnabled := (metrics.client != nil)
+    status = node.UpdateOverallStatus(enhancedStatusEnabled)
+  }
+  return status
 }

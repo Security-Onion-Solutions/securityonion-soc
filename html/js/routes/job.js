@@ -189,8 +189,10 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     },
     transcriptCyberChef() {
       const transcript = this.packetArrayTranscript();
+      let openArgs = ['/cyberchef/#recipe=From_Hexdump()'];
+      if (localStorage['settings.flags.testing'] === 'true') { openArgs.push('_self'); };
 
-      const win = window.open("/cyberchef/#recipe=From_Hexdump()");
+      const win = window.open(...openArgs);
       win.onload = () => { win.app.setInput(transcript); };
     },
     toggleWrap() {

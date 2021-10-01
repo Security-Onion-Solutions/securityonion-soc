@@ -15,11 +15,13 @@ import (
   "compress/gzip"
   "context"
   "encoding/json"
+  "errors"
   "net/http"
   "reflect"
   "strings"
   "time"
   "github.com/apex/log"
+  "github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type HandlerImpl interface {
@@ -57,7 +59,10 @@ func (handler *BaseHandler) Handle(responseWriter http.ResponseWriter, request *
 	    "requestor": context.Value(ContextKeyRequestor),
     }).Warn("Request did not complete successfully")
   
-    if statusCode < http.StatusBadRequest {
+    var unauthorizedError *model.Unauthorized
+    if errors.As(err, &unauthorizedError) {
+      statusCode = http.StatusUnauthorized
+    } else if statusCode < http.StatusBadRequest {
       statusCode = http.StatusInternalServerError
     }
     responseWriter.WriteHeader(statusCode)

@@ -36,7 +36,8 @@ func (proc *KratosPreprocessor) Preprocess(ctx context.Context, request *http.Re
 
   userId := request.Header.Get("x-user-id")
   if userId != "" {
-  	user, err := proc.userstore.GetUser(userId)
+  	ctx = context.WithValue(ctx, web.ContextKeyRequestorId, userId)
+  	user, err := proc.userstore.GetUser(ctx, userId)
   	if err == nil {
   		ctx = context.WithValue(ctx, web.ContextKeyRequestor, user)
   	}

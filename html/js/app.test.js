@@ -37,3 +37,15 @@ test('replaceActionVar', () => {
   expect(app.replaceActionVar('test {foo} here', 'foo', null, true)).toBe('test {foo} here');
   expect(app.replaceActionVar('test {foo} here', 'foo', undefined, true)).toBe('test {foo} here');
 });
+
+test('base64encode', () => {
+  expect(app.base64encode('')).toBe('');
+  expect(app.base64encode('hello')).toBe('aGVsbG8=');
+});
+
+test('formatStringArray', () => {
+  expect(app.formatStringArray(['hi','there','foo'])).toBe('hi, there, foo');
+  expect(app.formatStringArray(['hi','there'])).toBe('hi, there');
+  expect(app.formatStringArray(['hi'])).toBe('hi');
+  expect(app.formatStringArray([])).toBe('');
+});

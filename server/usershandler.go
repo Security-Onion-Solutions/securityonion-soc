@@ -12,18 +12,18 @@ package server
 import (
   "context"
   "errors"
+  "github.com/security-onion-solutions/securityonion-soc/web"
   "net/http"
   "regexp"
-  "github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type UsersHandler struct {
   web.BaseHandler
-  server 		*Server
+  server *Server
 }
 
 func NewUsersHandler(srv *Server) *UsersHandler {
-  handler := &UsersHandler {}
+  handler := &UsersHandler{}
   handler.Host = srv.Host
   handler.server = srv
   handler.Impl = handler
@@ -31,18 +31,19 @@ func NewUsersHandler(srv *Server) *UsersHandler {
 }
 
 func (usersHandler *UsersHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	if usersHandler.server.Userstore == nil {
-		return http.StatusMethodNotAllowed, nil, errors.New("Users module not enabled")
-	}
+  if usersHandler.server.Userstore == nil {
+    return http.StatusMethodNotAllowed, nil, errors.New("Users module not enabled")
+  }
 
   switch request.Method {
-    case http.MethodGet: return usersHandler.get(ctx, writer, request)
+  case http.MethodGet:
+    return usersHandler.get(ctx, writer, request)
   }
   return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
 
 func (usersHandler *UsersHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-  users, err := usersHandler.server.Userstore.GetUsers()
+  users, err := usersHandler.server.Userstore.GetUsers(ctx)
   if err != nil {
     return http.StatusBadRequest, nil, err
   }
@@ -55,7 +56,7 @@ func (usersHandler *UsersHandler) delete(ctx context.Context, writer http.Respon
   if !safe {
     return http.StatusBadRequest, nil, errors.New("Invalid id")
   }
-  err := usersHandler.server.Userstore.DeleteUser(id)
+  err := usersHandler.server.Userstore.DeleteUser(ctx, id)
   if err != nil {
     return http.StatusBadRequest, nil, err
   }

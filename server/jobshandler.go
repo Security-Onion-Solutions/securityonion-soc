@@ -13,17 +13,17 @@ package server
 import (
   "context"
   "errors"
-  "net/http"
   "github.com/security-onion-solutions/securityonion-soc/web"
+  "net/http"
 )
 
 type JobsHandler struct {
   web.BaseHandler
-  server 		*Server
+  server *Server
 }
 
 func NewJobsHandler(srv *Server) *JobsHandler {
-  handler := &JobsHandler {}
+  handler := &JobsHandler{}
   handler.Host = srv.Host
   handler.server = srv
   handler.Impl = handler
@@ -32,11 +32,12 @@ func NewJobsHandler(srv *Server) *JobsHandler {
 
 func (jobsHandler *JobsHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   switch request.Method {
-    case http.MethodGet: return jobsHandler.get(ctx, writer, request)
+  case http.MethodGet:
+    return jobsHandler.get(ctx, writer, request)
   }
   return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
 
 func (jobsHandler *JobsHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-  return http.StatusOK, jobsHandler.server.Datastore.GetJobs(), nil
+  return http.StatusOK, jobsHandler.server.Datastore.GetJobs(ctx), nil
 }

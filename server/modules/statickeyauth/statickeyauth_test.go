@@ -16,6 +16,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestAuthInit(tester *testing.T) {
@@ -35,22 +36,14 @@ func TestAuthInit(tester *testing.T) {
 }
 
 func authInit(tester *testing.T, auth *StaticKeyAuth, cfg module.ModuleConfig, failure bool, expectedCidr string) {
-	if len(auth.server.Host.Preprocessors()) != 1 {
-		tester.Errorf("expected one preprocessors to exist prior to init")
-	}
+	assert.Len(tester, auth.server.Host.Preprocessors(), 1)
 	err := auth.Init(cfg)
 	if failure {
-		if err == nil {
-			tester.Errorf("expected Init error")
-		}
-	} else if err != nil {
-		tester.Errorf("Unexpacted error: %v", err)
+		assert.Error(tester, err, "Expected Init error")
 	} else {
-		if auth.impl.anonymousNetwork.String() != expectedCidr {
-			tester.Errorf("expected anonymousNetwork %s but got %s", expectedCidr, auth.impl.anonymousNetwork.String())
-		}
-		if len(auth.server.Host.Preprocessors()) != 2 {
-			tester.Errorf("expected two preprocessors to now exist")
+		if assert.Nil(tester, err) {
+			assert.Equal(tester, expectedCidr, auth.impl.anonymousNetwork.String())
+			assert.Len(tester, auth.server.Host.Preprocessors(), 2)
 		}
 	}
 }

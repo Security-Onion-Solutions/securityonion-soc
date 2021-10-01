@@ -10,23 +10,19 @@
 package statickeyauth
 
 import (
-  "testing"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestInitStaticKeyAuth(tester *testing.T) {
-  cfg := make(map[string]interface{})
-  auth := NewStaticKeyAuth(nil)
-  err := auth.Init(cfg)
-  if err == nil {
-    tester.Error("expected missing apiKey error")
-  }
+	cfg := make(map[string]interface{})
+	auth := NewStaticKeyAuth(nil)
+	err := auth.Init(cfg)
+	assert.Error(tester, err)
 
-  cfg["apiKey"] = "123"
-  err = auth.Init(cfg)
-  if auth.apiKey != "123" {
-    tester.Errorf("expected apiKey %s but got %s", cfg["apiKey"], auth.apiKey)
-  }
-  if err == nil {
-    tester.Error("expected missing apiKey error")
-  }
+	cfg["apiKey"] = "123"
+	err = auth.Init(cfg)
+	assert.Error(tester, err)
+	assert.Equal(tester, "123", auth.apiKey)
 }

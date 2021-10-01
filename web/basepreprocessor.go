@@ -12,20 +12,21 @@ package web
 
 import (
 	"context"
-	"net/http"
 	"github.com/google/uuid"
+	"net/http"
 )
 
 type ContextKey string
+
 const ContextKeyRequestId = ContextKey("ContextKeyRequestId")
+const ContextKeyRequestorId = ContextKey("ContextKeyRequestorId")
 const ContextKeyRequestor = ContextKey("ContextKeyRequestor")
 
 type BasePreprocessor struct {
 }
 
 func NewBasePreprocessor() *BasePreprocessor {
-	return &BasePreprocessor {
-	}
+	return &BasePreprocessor{}
 }
 
 func (Processor *BasePreprocessor) PreprocessPriority() int {

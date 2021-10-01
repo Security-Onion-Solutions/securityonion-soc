@@ -10,9 +10,10 @@
 package server
 
 import (
+	"context"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type Casestore interface {
-	Create(newCase *model.Case) (*model.Case, error)
+	Create(ctx context.Context, newCase *model.Case) (*model.Case, error)
 }

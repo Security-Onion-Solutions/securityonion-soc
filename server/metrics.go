@@ -11,10 +11,11 @@
 package server
 
 import (
+	"context"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type Metrics interface {
-	GetGridEps() int
-	UpdateNodeMetrics(node *model.Node) bool
+	GetGridEps(ctx context.Context) int
+	UpdateNodeMetrics(ctx context.Context, node *model.Node) bool
 }

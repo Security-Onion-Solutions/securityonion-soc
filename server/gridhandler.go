@@ -13,17 +13,17 @@ package server
 import (
   "context"
   "errors"
-  "net/http"
   "github.com/security-onion-solutions/securityonion-soc/web"
+  "net/http"
 )
 
 type GridHandler struct {
   web.BaseHandler
-  server 		*Server
+  server *Server
 }
 
 func NewGridHandler(srv *Server) *GridHandler {
-  handler := &GridHandler {}
+  handler := &GridHandler{}
   handler.Host = srv.Host
   handler.server = srv
   handler.Impl = handler
@@ -32,11 +32,12 @@ func NewGridHandler(srv *Server) *GridHandler {
 
 func (gridHandler *GridHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   switch request.Method {
-    case http.MethodGet: return gridHandler.get(ctx, writer, request)
+  case http.MethodGet:
+    return gridHandler.get(ctx, writer, request)
   }
   return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
 
 func (gridHandler *GridHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-  return http.StatusOK, gridHandler.server.Datastore.GetNodes(), nil
+  return http.StatusOK, gridHandler.server.Datastore.GetNodes(ctx), nil
 }

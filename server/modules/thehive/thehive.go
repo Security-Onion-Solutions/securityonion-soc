@@ -15,15 +15,15 @@ import (
 )
 
 type TheHive struct {
-  config			module.ModuleConfig
-  server			*server.Server
-  store			  *TheHiveCasestore
+  config module.ModuleConfig
+  server *server.Server
+  store  *TheHiveCasestore
 }
 
 func NewTheHive(srv *server.Server) *TheHive {
-  return &TheHive {
+  return &TheHive{
     server: srv,
-    store: NewTheHiveCasestore(),
+    store:  NewTheHiveCasestore(srv),
   }
 }
 

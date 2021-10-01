@@ -11,15 +11,15 @@
 package thehive
 
 import (
-  "testing"
-  "github.com/security-onion-solutions/securityonion-soc/module"
+	"testing"
+
+	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestTheHiveInit(tester *testing.T) {
-  thehive := NewTheHive(nil)
-  cfg := make(module.ModuleConfig)
-  err := thehive.Init(cfg)
-  if err != nil {
-    tester.Errorf("unexpected Init error: %s", err)
-  }
+	thehive := NewTheHive(nil)
+	cfg := make(module.ModuleConfig)
+	err := thehive.Init(cfg)
+	assert.Nil(tester, err)
 }

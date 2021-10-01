@@ -10,124 +10,98 @@
 package influxdb
 
 import (
-  "testing"
-  "time"
-  "github.com/security-onion-solutions/securityonion-soc/model"
+	"context"
+	"testing"
+	"time"
+
+	"github.com/security-onion-solutions/securityonion-soc/fake"
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/stretchr/testify/assert"
 )
 
+func newContext() context.Context {
+	return context.Background()
+}
+
 func TestConvertValuesToString(tester *testing.T) {
-	metrics := NewInfluxDBMetrics()
-  values := make(map[string]interface{})
-  values["foo"] = "bar"
-  values["bar"] = 1
-  strValues := metrics.convertValuesToString(values)
-  if strValues["foo"] != "bar" {
-  	tester.Errorf("Expected bar string but got %v", strValues["foo"])
-  }
+	metrics := NewInfluxDBMetrics(fake.NewAuthorizedServer(nil))
+	values := make(map[string]interface{})
+	values["foo"] = "bar"
+	values["bar"] = 1
+	strValues := metrics.convertValuesToString(values)
+	assert.Equal(tester, values["foo"], strValues["foo"])
 }
 
 func TestConvertValuesToInt(tester *testing.T) {
-  metrics := NewInfluxDBMetrics()
-  values := make(map[string]interface{})
-  values["foo"] = 1234
-  values["bar"] = 9876.1
-  values["zoo"] = "garbage"
-  intValues := metrics.convertValuesToInt(values)
-  if intValues["foo"] != 1234 {
-  	tester.Errorf("Expected 1234 int but got %v", intValues["foo"])
-  }
-  if intValues["bar"] != 9876 {
-  	tester.Errorf("Expected 9876 int but got %v", intValues["bar"])
-  }
+	metrics := NewInfluxDBMetrics(fake.NewAuthorizedServer(nil))
+	values := make(map[string]interface{})
+	values["foo"] = 1234
+	values["bar"] = 9876.1
+	values["zoo"] = "garbage"
+	intValues := metrics.convertValuesToInt(values)
+	assert.Equal(tester, values["foo"], intValues["foo"])
+	expectedBarVal := int(values["bar"].(float64))
+	assert.Equal(tester, expectedBarVal, intValues["bar"], "float64 should be cast to int")
 }
 
 func TestGetRaidStatus(tester *testing.T) {
-	metrics := NewInfluxDBMetrics()
+	metrics := NewInfluxDBMetrics(fake.NewAuthorizedServer(nil))
 	metrics.lastRaidUpdateTime = time.Now()
 	metrics.raidStatus["foo"] = 0
 	metrics.raidStatus["bar"] = 1
 
-	if metrics.getRaidStatus("foo") != model.NodeStatusOk {
-		tester.Errorf("Expected ok status but got %s", metrics.getRaidStatus("foo"))
-	}
-	if metrics.getRaidStatus("bar") != model.NodeStatusFault {
-		tester.Errorf("Expected fault status but got %s", metrics.getRaidStatus("foo"))
-	}
-	if metrics.getRaidStatus("no") != model.NodeStatusUnknown {
-		tester.Errorf("Expected unknown status but got %s", metrics.getRaidStatus("foo"))
-	}
+	assert.Equal(tester, model.NodeStatusOk, metrics.getRaidStatus("foo"))
+	assert.Equal(tester, model.NodeStatusFault, metrics.getRaidStatus("bar"))
+	assert.Equal(tester, model.NodeStatusUnknown, metrics.getRaidStatus("missing"))
 }
 
 func TestGetProcessStatus(tester *testing.T) {
-	metrics := NewInfluxDBMetrics()
+	metrics := NewInfluxDBMetrics(fake.NewAuthorizedServer(nil))
 	metrics.lastProcessUpdateTime = time.Now()
 	metrics.processStatus["foo"] = 0
 	metrics.processStatus["bar"] = 1
 
-	if metrics.getProcessStatus("foo") != model.NodeStatusOk {
-		tester.Errorf("Expected ok status but got %s", metrics.getProcessStatus("foo"))
-	}
-	if metrics.getProcessStatus("bar") != model.NodeStatusFault {
-		tester.Errorf("Expected fault status but got %s", metrics.getProcessStatus("foo"))
-	}
-	if metrics.getProcessStatus("no") != model.NodeStatusUnknown {
-		tester.Errorf("Expected unknown status but got %s", metrics.getProcessStatus("foo"))
-	}
+	assert.Equal(tester, model.NodeStatusOk, metrics.getProcessStatus("foo"))
+	assert.Equal(tester, model.NodeStatusFault, metrics.getProcessStatus("bar"))
+	assert.Equal(tester, model.NodeStatusUnknown, metrics.getProcessStatus("missing"))
 }
 
 func TestGetProductionEps(tester *testing.T) {
-	metrics := NewInfluxDBMetrics()
+	metrics := NewInfluxDBMetrics(fake.NewAuthorizedServer(nil))
 	metrics.lastEpsUpdateTime = time.Now()
 	metrics.productionEps["foo"] = 0
 	metrics.productionEps["bar"] = 1
 	metrics.productionEps["zoo"] = 2
 
-	if metrics.getProductionEps("foo") != 0 {
-		tester.Errorf("Expected 0 but got %d", metrics.getProductionEps("foo"))
-	}
-	if metrics.getProductionEps("bar") != 1 {
-		tester.Errorf("Expected 1 but got %d", metrics.getProductionEps("bar"))
-	}
-	if metrics.getProductionEps("zoo") != 2 {
-		tester.Errorf("Expected 2 but got %d", metrics.getProductionEps("zoo"))
-	}
+	assert.Equal(tester, 0, metrics.getProductionEps("foo"))
+	assert.Equal(tester, 1, metrics.getProductionEps("bar"))
+	assert.Equal(tester, 2, metrics.getProductionEps("zoo"))
+	assert.Equal(tester, 0, metrics.getProductionEps("missing"))
 }
 
 func TestGetConsumptionEps(tester *testing.T) {
-	metrics := NewInfluxDBMetrics()
+	metrics := NewInfluxDBMetrics(fake.NewAuthorizedServer(nil))
 	metrics.lastEpsUpdateTime = time.Now()
 	metrics.consumptionEps["foo"] = 0
 	metrics.consumptionEps["bar"] = 1
 	metrics.consumptionEps["zoo"] = 2
 
-	if metrics.getConsumptionEps("foo") != 0 {
-		tester.Errorf("Expected 0 but got %d", metrics.getConsumptionEps("foo"))
-	}
-	if metrics.getConsumptionEps("bar") != 1 {
-		tester.Errorf("Expected 1 but got %d", metrics.getConsumptionEps("bar"))
-	}
-	if metrics.getConsumptionEps("zoo") != 2 {
-		tester.Errorf("Expected 2 but got %d", metrics.getConsumptionEps("zoo"))
-	}
-	if metrics.GetGridEps() != 3 {
-		tester.Errorf("Expected 3 but got %d", metrics.GetGridEps())
-	}
+	assert.Equal(tester, 0, metrics.getConsumptionEps("foo"))
+	assert.Equal(tester, 1, metrics.getConsumptionEps("bar"))
+	assert.Equal(tester, 2, metrics.getConsumptionEps("zoo"))
+	assert.Equal(tester, 0, metrics.getConsumptionEps("missing"))
+	assert.Equal(tester, 3, metrics.GetGridEps(newContext()))
 }
 
 func TestGetFailedEvents(tester *testing.T) {
-	metrics := NewInfluxDBMetrics()
+	metrics := NewInfluxDBMetrics(fake.NewAuthorizedServer(nil))
 	metrics.lastEpsUpdateTime = time.Now()
 	metrics.failedEvents["foo"] = 0
 	metrics.failedEvents["bar"] = 1
 	metrics.failedEvents["zoo"] = 2
 
-	if metrics.getFailedEvents("foo") != 0 {
-		tester.Errorf("Expected 0 but got %d", metrics.getFailedEvents("foo"))
-	}
-	if metrics.getFailedEvents("bar") != 1 {
-		tester.Errorf("Expected 1 but got %d", metrics.getFailedEvents("bar"))
-	}
-	if metrics.getFailedEvents("zoo") != 2 {
-		tester.Errorf("Expected 2 but got %d", metrics.getFailedEvents("zoo"))
-	}
+	assert.Equal(tester, 0, metrics.getFailedEvents("foo"))
+	assert.Equal(tester, 1, metrics.getFailedEvents("bar"))
+	assert.Equal(tester, 2, metrics.getFailedEvents("zoo"))
+	assert.Equal(tester, 0, metrics.getFailedEvents("missing"))
 }

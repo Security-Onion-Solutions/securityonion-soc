@@ -13,20 +13,20 @@ package server
 import (
   "context"
   "errors"
+  "github.com/security-onion-solutions/securityonion-soc/model"
+  "github.com/security-onion-solutions/securityonion-soc/web"
   "net/http"
   "regexp"
   "strconv"
-  "github.com/security-onion-solutions/securityonion-soc/model"
-  "github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type JobHandler struct {
   web.BaseHandler
-  server 		*Server
+  server *Server
 }
 
 func NewJobHandler(srv *Server) *JobHandler {
-  handler := &JobHandler {}
+  handler := &JobHandler{}
   handler.Host = srv.Host
   handler.server = srv
   handler.Impl = handler
@@ -35,10 +35,14 @@ func NewJobHandler(srv *Server) *JobHandler {
 
 func (jobHandler *JobHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   switch request.Method {
-    case http.MethodGet: return jobHandler.get(ctx, writer, request)
-    case http.MethodPost: return jobHandler.post(ctx, writer, request)
-    case http.MethodPut: return jobHandler.put(ctx, writer, request)
-    case http.MethodDelete: return jobHandler.delete(ctx, writer, request)
+  case http.MethodGet:
+    return jobHandler.get(ctx, writer, request)
+  case http.MethodPost:
+    return jobHandler.post(ctx, writer, request)
+  case http.MethodPut:
+    return jobHandler.put(ctx, writer, request)
+  case http.MethodDelete:
+    return jobHandler.delete(ctx, writer, request)
   }
   return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
@@ -46,7 +50,7 @@ func (jobHandler *JobHandler) HandleNow(ctx context.Context, writer http.Respons
 func (jobHandler *JobHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   statusCode := http.StatusBadRequest
   jobId, err := strconv.ParseInt(request.URL.Query().Get("jobId"), 10, 32)
-  job := jobHandler.server.Datastore.GetJob(int(jobId))
+  job := jobHandler.server.Datastore.GetJob(ctx, int(jobId))
   if job != nil {
     statusCode = http.StatusOK
   } else {
@@ -57,18 +61,13 @@ func (jobHandler *JobHandler) get(ctx context.Context, writer http.ResponseWrite
 
 func (jobHandler *JobHandler) post(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   statusCode := http.StatusBadRequest
-  job := jobHandler.server.Datastore.CreateJob()
+  job := jobHandler.server.Datastore.CreateJob(ctx)
   err := jobHandler.ReadJson(request, job)
   if err == nil {
-    if user, ok := ctx.Value(web.ContextKeyRequestor).(*model.User); ok {
-      job.UserId = user.Id
-      err = jobHandler.server.Datastore.AddJob(job)
-      if err == nil {
-        jobHandler.Host.Broadcast("job", job)
-        statusCode = http.StatusCreated
-      }
-    } else {
-      err = errors.New("User not found in context")
+    err = jobHandler.server.Datastore.AddJob(ctx, job)
+    if err == nil {
+      jobHandler.Host.Broadcast("job", job)
+      statusCode = http.StatusCreated
     }
   }
   return statusCode, job, err
@@ -79,7 +78,7 @@ func (jobHandler *JobHandler) put(ctx context.Context, writer http.ResponseWrite
   job := model.NewJob()
   err := jobHandler.ReadJson(request, job)
   if err == nil {
-    err = jobHandler.server.Datastore.UpdateJob(job)
+    err = jobHandler.server.Datastore.UpdateJob(ctx, job)
     if err == nil {
       jobHandler.Host.Broadcast("job", job)
       statusCode = http.StatusOK
@@ -97,20 +96,16 @@ func (jobHandler *JobHandler) delete(ctx context.Context, writer http.ResponseWr
   safe, _ := regexp.MatchString(`^[0-9-]+$`, id)
   if !safe {
     return http.StatusBadRequest, nil, errors.New("Invalid id")
-	}
+  }
   statusCode := http.StatusBadRequest
 
   jobId, err := strconv.Atoi(id)
   if err == nil {
-    job := jobHandler.server.Datastore.GetJob(int(jobId))
-    if job != nil {
-      err = jobHandler.server.Datastore.DeleteJob(job)
-      if err == nil {
-        jobHandler.Host.Broadcast("job", job)
-        statusCode = http.StatusOK
-      }
-    } else {
-      statusCode = http.StatusNotFound
+    var job *model.Job
+    job, err = jobHandler.server.Datastore.DeleteJob(ctx, int(jobId))
+    if err == nil {
+      jobHandler.Host.Broadcast("job", job)
+      statusCode = http.StatusOK
     }
   }
 

@@ -10,75 +10,107 @@
 package kratos
 
 import (
-  "sync"
-  "time"
+  "context"
   "github.com/apex/log"
   "github.com/security-onion-solutions/securityonion-soc/model"
+  "github.com/security-onion-solutions/securityonion-soc/server"
   "github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type KratosUserstore struct {
-  client            *web.Client
-  cacheMs           time.Duration
-  cacheLock         sync.Mutex
-  users             []*model.User
-  usersLastUpdated  time.Time
+  server *server.Server
+  client *web.Client
 }
 
-func NewKratosUserstore() *KratosUserstore {
-  return &KratosUserstore {
+func NewKratosUserstore(server *server.Server) *KratosUserstore {
+  return &KratosUserstore{
+    server: server,
   }
 }
 
-func (kratos* KratosUserstore) Init(url string, cacheMs int) error {
+func (kratos *KratosUserstore) Init(url string) error {
   kratos.client = web.NewClient(url, true)
-  kratos.cacheMs = time.Duration(cacheMs) * time.Millisecond
   return nil
 }
 
-func (kratos* KratosUserstore) fetchUser(id string) (*KratosUser, error) {
+func (kratos *KratosUserstore) fetchUser(id string) (*KratosUser, error) {
   kratosUser := &KratosUser{}
-  _, err := kratos.client.SendObject("GET", "/identities/" + id, "", &kratosUser, false)
+  _, err := kratos.client.SendObject("GET", "/identities/"+id, "", &kratosUser, false)
   return kratosUser, err
 }
 
-func (kratos *KratosUserstore) GetUsers() ([]*model.User, error) {
-  kratos.cacheLock.Lock()
-  defer kratos.cacheLock.Unlock()
+func (kratos *KratosUserstore) GetUsers(ctx context.Context) ([]*model.User, error) {
+  kratosUsers := make([]*KratosUser, 0, 0)
 
-  if time.Now().Sub(kratos.usersLastUpdated) > kratos.cacheMs {
-    kratosUsers := make([]*KratosUser, 0, 0)
-    _, err := kratos.client.SendObject("GET", "/identities", "", &kratosUsers, false)
-    if err != nil {
-      log.WithError(err).Error("Failed to fetch users from Kratos")
+  if err := kratos.server.Authorizer.CheckContextOperationAuthorized(ctx, "read", "users"); err != nil {
+    // User is only allowed to get their own user. Even though the user is already on
+    // the context we have to fetch it again to ensure it's fully updated with the
+    // latest user attributes.
+
+    if requestorId, ok := ctx.Value(web.ContextKeyRequestorId).(string); ok {
+      log.WithFields(log.Fields{
+        "requestorId": requestorId,
+        "requestId":   ctx.Value(web.ContextKeyRequestId),
+      }).Debug("Fetching own user for requestor ID")
+
+      var kratosUser KratosUser
+      _, err = kratos.client.SendObject("GET", "/identities/"+requestorId, "", &kratosUser, false)
+      if err != nil {
+        log.WithError(err).WithFields(log.Fields{
+          "userId":    requestorId,
+          "requestId": ctx.Value(web.ContextKeyRequestId),
+        }).Error("Failed to fetch user from Kratos")
+        return nil, err
+      }
+      kratosUsers = append(kratosUsers, &kratosUser)
+    } else {
+      // Missing context data, unlikely to occur
       return nil, err
     }
-    users := make([]*model.User, 0, 0)
-    for _, kratosUser := range kratosUsers {
-      user := model.NewUser()
-      kratosUser.copyToUser(user)
-      users = append(users, user)
+  } else {
+    // User is allowed to view all users, go get them
+    _, err := kratos.client.SendObject("GET", "/identities", "", &kratosUsers, false)
+    if err != nil {
+      log.WithError(err).WithFields(log.Fields{
+        "requestId": ctx.Value(web.ContextKeyRequestId),
+      }).Error("Failed to fetch users from Kratos")
+      return nil, err
     }
-    kratos.users = users
-    kratos.usersLastUpdated = time.Now()
   }
-  return kratos.users, nil
+
+  // Convert the kratos users to SOC users
+  users := make([]*model.User, 0, 0)
+  for _, kratosUser := range kratosUsers {
+    user := model.NewUser()
+    kratosUser.copyToUser(user)
+    kratos.server.Rolestore.PopulateUserRoles(ctx, user)
+    users = append(users, user)
+  }
+  return users, nil
 }
 
-func (kratos *KratosUserstore) DeleteUser(id string) error {
-  log.WithField("id", id).Debug("Deleting user")
-  _, err := kratos.client.SendObject("DELETE", "/identities/" + id, "", nil, false)
-  if err != nil {
-    log.WithError(err).Error("Failed to delete user from Kratos")
+func (kratos *KratosUserstore) DeleteUser(ctx context.Context, id string) error {
+  var err error
+  if err = kratos.server.Authorizer.CheckContextOperationAuthorized(ctx, "delete", "users"); err != nil {
+    log.WithFields(log.Fields{
+      "id":        id,
+      "requestId": ctx.Value(web.ContextKeyRequestId),
+    }).Debug("Deleting user")
+    _, err := kratos.client.SendObject("DELETE", "/identities/"+id, "", nil, false)
+    if err != nil {
+      log.WithError(err).WithFields(log.Fields{
+        "requestId": ctx.Value(web.ContextKeyRequestId),
+      }).Error("Failed to delete user from Kratos")
+    }
   }
   return err
 }
 
-func (kratos *KratosUserstore) GetUser(id string) (*model.User, error) {
+func (kratos *KratosUserstore) GetUser(ctx context.Context, id string) (*model.User, error) {
   var err error
   var user *model.User
 
-  users, err := kratos.GetUsers()
+  users, err := kratos.GetUsers(ctx)
   if err == nil {
     for _, testUser := range users {
       if testUser.Id == id {
@@ -90,16 +122,23 @@ func (kratos *KratosUserstore) GetUser(id string) (*model.User, error) {
   return user, err
 }
 
-func (kratos *KratosUserstore) UpdateUser(id string, user *model.User) error {
-  kratosUser, err := kratos.fetchUser(id)
-  if err != nil {
-    log.WithError(err).Error("Original user not found")
-  } else {
-    kratosUser.copyFromUser(user)
-    _, err = kratos.client.SendObject("PUT", "/identities/" + id, kratosUser, nil, false)
+func (kratos *KratosUserstore) UpdateUser(ctx context.Context, id string, user *model.User) error {
+  var err error
+  if err = kratos.server.Authorizer.CheckContextOperationAuthorized(ctx, "write", "users"); err != nil {
+    kratosUser, err := kratos.fetchUser(id)
     if err != nil {
-      log.WithError(err).Error("Failed to update user in Kratos")
-    } 
+      log.WithError(err).WithFields(log.Fields{
+        "requestId": ctx.Value(web.ContextKeyRequestId),
+      }).Error("Original user not found")
+    } else {
+      kratosUser.copyFromUser(user)
+      _, err = kratos.client.SendObject("PUT", "/identities/"+id, kratosUser, nil, false)
+      if err != nil {
+        log.WithError(err).WithFields(log.Fields{
+          "requestId": ctx.Value(web.ContextKeyRequestId),
+        }).Error("Failed to update user in Kratos")
+      }
+    }
   }
   return err
 }

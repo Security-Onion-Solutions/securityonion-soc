@@ -13,18 +13,18 @@ package server
 import (
   "context"
   "errors"
+  "github.com/security-onion-solutions/securityonion-soc/web"
   "net/http"
   "strconv"
-  "github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type PacketHandler struct {
   web.BaseHandler
-  server 		*Server
+  server *Server
 }
 
 func NewPacketHandler(srv *Server) *PacketHandler {
-  handler := &PacketHandler {}
+  handler := &PacketHandler{}
   handler.Host = srv.Host
   handler.server = srv
   handler.Impl = handler
@@ -33,7 +33,8 @@ func NewPacketHandler(srv *Server) *PacketHandler {
 
 func (packetHandler *PacketHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   switch request.Method {
-    case http.MethodGet: return packetHandler.get(ctx, writer, request)
+  case http.MethodGet:
+    return packetHandler.get(ctx, writer, request)
   }
   return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
@@ -60,7 +61,7 @@ func (packetHandler *PacketHandler) get(ctx context.Context, writer http.Respons
       count = tmpCount
     }
   }
-  packets, err := packetHandler.server.Datastore.GetPackets(int(jobId), int(offset), count, unwrap)
+  packets, err := packetHandler.server.Datastore.GetPackets(ctx, int(jobId), int(offset), count, unwrap)
   if err == nil {
     statusCode = http.StatusOK
   } else {
