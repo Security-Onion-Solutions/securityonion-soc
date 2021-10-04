@@ -191,6 +191,7 @@ const i18n = {
       loginInvalid: 'The provided credentials are invalid. Please try again.',
       loginTitle: 'Login to Security Onion',
       logout: 'Logout',
+      logoutFailure: 'Unable to initiate logout. Ensure server is accessible.',
       minutes: 'minutes',
       model: 'Model',
       months: 'months',

@@ -186,7 +186,7 @@
                 <v-list-item-title v-text="i18n.settings"></v-list-item-title>
               </v-list-item-content>
             </v-list-item>
-            <v-list-item :href="authUrl + 'browser/flows/logout'">
+            <v-list-item @click.stop="logout">
               <v-list-item-action>
                 <v-icon class="mx-auto">fa-sign-out-alt</v-icon>
               </v-list-item-action>
