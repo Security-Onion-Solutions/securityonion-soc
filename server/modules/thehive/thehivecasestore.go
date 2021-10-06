@@ -48,7 +48,7 @@ func (store *TheHiveCasestore) Create(ctx context.Context, socCase *model.Case) 
   var newCase *model.Case
   var err error
 
-  if err = store.server.Authorizer.CheckContextOperationAuthorized(ctx, "write", "cases"); err == nil {
+  if err = store.server.CheckAuthorized(ctx, "write", "cases"); err == nil {
     var outputCase TheHiveCase
     var inputCase *TheHiveCase
     inputCase, err = convertToTheHiveCase(socCase)

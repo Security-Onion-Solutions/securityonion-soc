@@ -12,6 +12,7 @@ package server
 
 import (
   "context"
+  "errors"
   "github.com/apex/log"
   "github.com/security-onion-solutions/securityonion-soc/config"
   "github.com/security-onion-solutions/securityonion-soc/model"
@@ -91,6 +92,17 @@ func (server *Server) Stop() {
 
 func (server *Server) Wait() {
   <-server.stoppedChan
+}
+
+func (server *Server) CheckAuthorized(ctx context.Context, operation string, target string) error {
+  var err error
+  if server.Authorizer == nil {
+    log.Warn("No authorizer module has been configured; assuming no authorization")
+    err = errors.New("Missing Authorizer module")
+  } else {
+    err = server.Authorizer.CheckContextOperationAuthorized(ctx, "write", "cases"); err == nil {
+  }
+  return err
 }
 
 func (server *Server) GetTimezones() []string {
