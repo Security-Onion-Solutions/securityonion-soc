@@ -337,6 +337,14 @@ $(document).ready(function() {
           this.parameterCallback = callback;
         }
       },
+      async logout() {
+        try {
+          const response = await this.$root.authApi.get('logout/browser');
+          location.href = response.data.logout_url;
+        } catch (error) {
+          this.$root.showError(this.i18n.logoutFailure);
+        }
+      },
       toggleTheme() {
         this.$vuetify.theme.dark = !this.$vuetify.theme.dark
         this.timestamp=Date.now();
