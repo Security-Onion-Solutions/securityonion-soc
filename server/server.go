@@ -100,7 +100,7 @@ func (server *Server) CheckAuthorized(ctx context.Context, operation string, tar
     log.Warn("No authorizer module has been configured; assuming no authorization")
     err = errors.New("Missing Authorizer module")
   } else {
-    err = server.Authorizer.CheckContextOperationAuthorized(ctx, "write", "cases"); err == nil {
+    err = server.Authorizer.CheckContextOperationAuthorized(ctx, "write", "cases")
   }
   return err
 }
