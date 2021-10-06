@@ -17,15 +17,13 @@ type KratosTraits struct {
 	Email     string `json:"email"`
 	FirstName string `json:"firstName"`
 	LastName  string `json:"lastName"`
-	Status    string `json:"status"`
 }
 
-func NewTraits(email string, firstName string, lastName string, status string) *KratosTraits {
+func NewTraits(email string, firstName string, lastName string) *KratosTraits {
 	traits := &KratosTraits{
 		Email:     email,
 		FirstName: firstName,
 		LastName:  lastName,
-		Status:    status,
 	}
 	return traits
 }
@@ -56,14 +54,16 @@ type KratosUser struct {
 	Id        string           `json:"id"`
 	SchemaId  string           `json:"schema_id"`
 	SchemaUrl string           `json:"schema_url"`
+	State     string           `json:"state"`
 	Traits    *KratosTraits    `json:"traits"`
 	Addresses []*KratosAddress `json:"verifiable_addresses"`
 }
 
-func NewKratosUser(email string, firstName string, lastName string, status string) *KratosUser {
+func NewKratosUser(email string, firstName string, lastName string, state string) *KratosUser {
 	kratosUser := &KratosUser{
-		Traits:    NewTraits(email, firstName, lastName, status),
+		Traits:    NewTraits(email, firstName, lastName),
 		Addresses: NewAddresses(email),
+		State:     state,
 	}
 	return kratosUser
 }
@@ -73,7 +73,11 @@ func (kratosUser *KratosUser) copyToUser(user *model.User) {
 	user.Email = kratosUser.Traits.Email
 	user.FirstName = kratosUser.Traits.FirstName
 	user.LastName = kratosUser.Traits.LastName
-	user.Status = kratosUser.Traits.Status
+	if kratosUser.State == "inactive" {
+		user.Status = "locked"
+	} else {
+		user.Status = ""
+	}
 }
 
 func (kratosUser *KratosUser) copyFromUser(user *model.User) {
@@ -83,7 +87,11 @@ func (kratosUser *KratosUser) copyFromUser(user *model.User) {
 	kratosUser.Traits.Email = user.Email
 	kratosUser.Traits.FirstName = user.FirstName
 	kratosUser.Traits.LastName = user.LastName
-	kratosUser.Traits.Status = user.Status
+	if user.Status == "locked" {
+		kratosUser.State = "inactive"
+	} else {
+		kratosUser.State = "active"
+	}
 	if len(kratosUser.Addresses) == 0 {
 		kratosUser.Addresses = make([]*KratosAddress, 1)
 		kratosUser.Addresses[0] = &KratosAddress{}

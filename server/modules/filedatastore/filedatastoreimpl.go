@@ -229,9 +229,7 @@ func (datastore *FileDatastoreImpl) AddJob(ctx context.Context, job *model.Job) 
 func (datastore *FileDatastoreImpl) AddPivotJob(ctx context.Context, job *model.Job) error {
   var err error
   if err = datastore.server.Authorizer.CheckContextOperationAuthorized(ctx, "pivot", "jobs"); err == nil {
-    if err == nil {
-      err = datastore.addAndSaveJob(ctx, job)
-    }
+    err = datastore.addAndSaveJob(ctx, job)
   }
   return err
 }
