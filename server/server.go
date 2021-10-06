@@ -97,8 +97,12 @@ func (server *Server) Wait() {
 func (server *Server) CheckAuthorized(ctx context.Context, operation string, target string) error {
   var err error
   if server.Authorizer == nil {
-    log.Warn("No authorizer module has been configured; assuming no authorization")
-    err = errors.New("Missing Authorizer module")
+    if server.Config.DeveloperEnabled {
+      log.Info("Using developer mode; all authorization requests will succeed")
+    } else {
+      log.Warn("No authorizer module has been configured; assuming no authorization")
+      err = errors.New("Missing Authorizer module")
+    }
   } else {
     err = server.Authorizer.CheckContextOperationAuthorized(ctx, "write", "cases")
   }

@@ -42,7 +42,7 @@ func (kratos *KratosUserstore) fetchUser(id string) (*KratosUser, error) {
 func (kratos *KratosUserstore) GetUsers(ctx context.Context) ([]*model.User, error) {
   kratosUsers := make([]*KratosUser, 0, 0)
 
-  if err := kratos.server.Authorizer.CheckContextOperationAuthorized(ctx, "read", "users"); err != nil {
+  if err := kratos.server.CheckAuthorized(ctx, "read", "users"); err != nil {
     // User is only allowed to get their own user. Even though the user is already on
     // the context we have to fetch it again to ensure it's fully updated with the
     // latest user attributes.
@@ -91,7 +91,7 @@ func (kratos *KratosUserstore) GetUsers(ctx context.Context) ([]*model.User, err
 
 func (kratos *KratosUserstore) DeleteUser(ctx context.Context, id string) error {
   var err error
-  if err = kratos.server.Authorizer.CheckContextOperationAuthorized(ctx, "delete", "users"); err != nil {
+  if err = kratos.server.CheckAuthorized(ctx, "delete", "users"); err != nil {
     log.WithFields(log.Fields{
       "id":        id,
       "requestId": ctx.Value(web.ContextKeyRequestId),
@@ -124,7 +124,7 @@ func (kratos *KratosUserstore) GetUser(ctx context.Context, id string) (*model.U
 
 func (kratos *KratosUserstore) UpdateUser(ctx context.Context, id string, user *model.User) error {
   var err error
-  if err = kratos.server.Authorizer.CheckContextOperationAuthorized(ctx, "write", "users"); err != nil {
+  if err = kratos.server.CheckAuthorized(ctx, "write", "users"); err != nil {
     kratosUser, err := kratos.fetchUser(id)
     if err != nil {
       log.WithError(err).WithFields(log.Fields{

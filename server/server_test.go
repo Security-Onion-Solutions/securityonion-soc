@@ -23,3 +23,20 @@ func TestNewServer(tester *testing.T) {
 	assert.NotNil(tester, srv.Host)
 	assert.NotNil(tester, srv.stoppedChan)
 }
+
+func TestDeveloperAuthorization(tester *testing.T) {
+	cfg := &config.ServerConfig{}
+	srv := NewServer(cfg, "")
+	cfg.DeveloperEnabled = true
+
+	authErr := srv.CheckAuthorized(nil, "read", "users")
+	assert.NoError(tester, authErr)
+}
+
+func TestMissingAuthorization(tester *testing.T) {
+	cfg := &config.ServerConfig{}
+	srv := NewServer(cfg, "")
+
+	authErr := srv.CheckAuthorized(nil, "read", "users")
+	assert.Error(tester, authErr, "Missing Authorizer module")
+}
