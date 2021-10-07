@@ -11,10 +11,9 @@
 package server
 
 import (
-	"testing"
-
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
 func TestNewServer(tester *testing.T) {
@@ -38,5 +37,14 @@ func TestMissingAuthorization(tester *testing.T) {
 	srv := NewServer(cfg, "")
 
 	authErr := srv.CheckAuthorized(nil, "read", "users")
-	assert.Error(tester, authErr, "Missing Authorizer module")
+	assert.Error(tester, authErr)
+	assert.Equal(tester, "Missing Authorizer module", authErr.Error())
+}
+
+func TestFailedAuthorization(tester *testing.T) {
+	srv := NewFakeUnauthorizedServer()
+
+	authErr := srv.CheckAuthorized(nil, "read", "users")
+	assert.Error(tester, authErr)
+	assert.Contains(tester, authErr.Error(), "not authorized to perform operation 'read' on target 'users'")
 }

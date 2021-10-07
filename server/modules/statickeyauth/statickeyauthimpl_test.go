@@ -12,13 +12,12 @@ package statickeyauth
 
 import (
 	"context"
-	"net/http"
-	"testing"
-
-	"github.com/security-onion-solutions/securityonion-soc/fake"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
+	"net/http"
+	"testing"
 )
 
 func TestValidateAuthorization(tester *testing.T) {
@@ -31,7 +30,7 @@ func TestValidateAuthorization(tester *testing.T) {
 }
 
 func validateAuthorization(tester *testing.T, key string, ip string, expected bool) {
-	ai := NewStaticKeyAuthImpl(fake.NewAuthorizedServer(nil))
+	ai := NewStaticKeyAuthImpl(server.NewFakeAuthorizedServer(nil))
 	ai.Init("abc", "172.17.0.0/24")
 	actual := ai.validateAuthorization(context.Background(), key, ip)
 	assert.Equal(tester, expected, actual)
@@ -46,14 +45,14 @@ func TestValidateApiKey(tester *testing.T) {
 }
 
 func validateKey(tester *testing.T, key string, expected bool) {
-	ai := NewStaticKeyAuthImpl(fake.NewAuthorizedServer(nil))
+	ai := NewStaticKeyAuthImpl(server.NewFakeAuthorizedServer(nil))
 	ai.apiKey = "abc"
 	actual := ai.validateApiKey(key)
 	assert.Equal(tester, expected, actual)
 }
 
 func TestAuthImplInit(tester *testing.T) {
-	ai := NewStaticKeyAuthImpl(fake.NewAuthorizedServer(nil))
+	ai := NewStaticKeyAuthImpl(server.NewFakeAuthorizedServer(nil))
 	err := ai.Init("abc", "1")
 	assert.Error(tester, err)
 	err = ai.Init("abc", "1.2.3.4/16")
@@ -64,12 +63,12 @@ func TestAuthImplInit(tester *testing.T) {
 }
 
 func TestPreprocessPriority(tester *testing.T) {
-	handler := NewStaticKeyAuthImpl(fake.NewAuthorizedServer(nil))
+	handler := NewStaticKeyAuthImpl(server.NewFakeAuthorizedServer(nil))
 	assert.Equal(tester, 100, handler.PreprocessPriority())
 }
 
 func TestPreprocess(tester *testing.T) {
-	ai := NewStaticKeyAuthImpl(fake.NewAuthorizedServer(nil))
+	ai := NewStaticKeyAuthImpl(server.NewFakeAuthorizedServer(nil))
 	err := ai.Init("abc", "1")
 	assert.Error(tester, err)
 	ai.apiKey = "123"

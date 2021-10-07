@@ -104,7 +104,7 @@ func (server *Server) CheckAuthorized(ctx context.Context, operation string, tar
       err = errors.New("Missing Authorizer module")
     }
   } else {
-    err = server.Authorizer.CheckContextOperationAuthorized(ctx, "write", "cases")
+    err = server.Authorizer.CheckContextOperationAuthorized(ctx, operation, target)
   }
   return err
 }

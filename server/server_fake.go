@@ -8,13 +8,12 @@
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-package fake
+package server
 
 import (
   "context"
   "github.com/security-onion-solutions/securityonion-soc/config"
   "github.com/security-onion-solutions/securityonion-soc/model"
-  "github.com/security-onion-solutions/securityonion-soc/server"
 )
 
 type FakeAuthorizer struct {
@@ -41,9 +40,9 @@ func (impl *FakeRolestore) PopulateUserRoles(ctx context.Context, user *model.Us
   return nil
 }
 
-func NewFakeServer(authorized bool, roleMap map[string][]string) *server.Server {
+func NewFakeServer(authorized bool, roleMap map[string][]string) *Server {
   cfg := &config.ServerConfig{}
-  srv := server.NewServer(cfg, "")
+  srv := NewServer(cfg, "")
   srv.Authorizer = &FakeAuthorizer{
     authorized: authorized,
   }
@@ -53,10 +52,10 @@ func NewFakeServer(authorized bool, roleMap map[string][]string) *server.Server 
   return srv
 }
 
-func NewAuthorizedServer(roleMap map[string][]string) *server.Server {
+func NewFakeAuthorizedServer(roleMap map[string][]string) *Server {
   return NewFakeServer(true, roleMap)
 }
 
-func NewUnauthorizedServer() *server.Server {
+func NewFakeUnauthorizedServer() *Server {
   return NewFakeServer(false, make(map[string][]string))
 }

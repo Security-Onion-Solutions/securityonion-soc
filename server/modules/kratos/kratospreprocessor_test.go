@@ -14,8 +14,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/security-onion-solutions/securityonion-soc/fake"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
 )
@@ -29,7 +29,7 @@ func TestPreprocess(tester *testing.T) {
 
 	user := model.NewUser()
 	user.Id = expectedId
-	userstore := NewKratosUserstore(fake.NewAuthorizedServer(make(map[string][]string)))
+	userstore := NewKratosUserstore(server.NewFakeAuthorizedServer(make(map[string][]string)))
 	userstore.Init("some/url")
 	kratosUsersResponseJson := `
     [

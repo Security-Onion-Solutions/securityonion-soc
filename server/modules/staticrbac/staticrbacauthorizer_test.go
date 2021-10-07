@@ -11,8 +11,8 @@ package staticrbac
 
 import (
   "context"
-  "github.com/security-onion-solutions/securityonion-soc/fake"
   "github.com/security-onion-solutions/securityonion-soc/model"
+  "github.com/security-onion-solutions/securityonion-soc/server"
   "github.com/security-onion-solutions/securityonion-soc/web"
   "github.com/stretchr/testify/assert"
   "testing"
@@ -25,7 +25,7 @@ func prepareTest(tester *testing.T, email string, id string) (*StaticRbacAuthori
   user.Id = id
   ctx = context.WithValue(ctx, web.ContextKeyRequestor, user)
 
-  auth := NewStaticRbacAuthorizer(fake.NewAuthorizedServer(nil))
+  auth := NewStaticRbacAuthorizer(server.NewFakeAuthorizedServer(nil))
   userFiles := []string{"rbac_users.test"}
   roleFiles := []string{"rbac_permissions.test", "rbac_roles.test"}
   auth.Init(userFiles, roleFiles, DEFAULT_SCAN_INTERVAL_MS)
@@ -41,7 +41,7 @@ func prepareTest(tester *testing.T, email string, id string) (*StaticRbacAuthori
 
 func TestCheckContextOperationAuthorized_EmptyContext(tester *testing.T) {
   ctx := context.Background()
-  auth := NewStaticRbacAuthorizer(fake.NewAuthorizedServer(nil))
+  auth := NewStaticRbacAuthorizer(server.NewFakeAuthorizedServer(nil))
   err := auth.CheckContextOperationAuthorized(ctx, "myop", "mytarget")
   assert.Error(tester, err, "Expected error due to missing context data")
 }
@@ -53,7 +53,7 @@ func TestCheckContextOperationAuthorized_Collision(tester *testing.T) {
   user.Id = "a1-id"
   ctx = context.WithValue(ctx, web.ContextKeyRequestor, user)
 
-  auth := NewStaticRbacAuthorizer(fake.NewAuthorizedServer(nil))
+  auth := NewStaticRbacAuthorizer(server.NewFakeAuthorizedServer(nil))
   err := auth.CheckContextOperationAuthorized(ctx, "myop", "mytarget")
   assert.Error(tester, err)
 }
@@ -62,7 +62,7 @@ func TestCheckContextOperationAuthorized_Fail(tester *testing.T) {
   ctx := context.Background()
   ctx = context.WithValue(ctx, web.ContextKeyRequestor, model.NewUser())
 
-  auth := NewStaticRbacAuthorizer(fake.NewAuthorizedServer(nil))
+  auth := NewStaticRbacAuthorizer(server.NewFakeAuthorizedServer(nil))
   err := auth.CheckContextOperationAuthorized(ctx, "myop", "mytarget")
   var unauthErr *model.Unauthorized
   assert.ErrorAs(tester, err, &unauthErr)
@@ -91,7 +91,7 @@ func TestCheckContextOperationAuthorized_Success(tester *testing.T) {
 }
 
 func TestIsAuthorized(tester *testing.T) {
-  auth := NewStaticRbacAuthorizer(fake.NewAuthorizedServer(nil))
+  auth := NewStaticRbacAuthorizer(server.NewFakeAuthorizedServer(nil))
 
   roleMap := make(map[string][]string)
   roleMap["clerk"] = []string{"register/operates", "tables/maintains"}
