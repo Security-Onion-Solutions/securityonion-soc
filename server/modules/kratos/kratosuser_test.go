@@ -54,7 +54,7 @@ func TestCopyToUser(tester *testing.T) {
 }
 
 func TestCopyToUserActive(tester *testing.T) {
-	kratosUser := NewKratosUser("myEmail", "myFirst", "myLast", "myNote" "active")
+	kratosUser := NewKratosUser("myEmail", "myFirst", "myLast", "myNote", "active")
 	user := model.NewUser()
 	kratosUser.copyToUser(user)
 	assert.Equal(tester, "", user.Status)
