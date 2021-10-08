@@ -764,6 +764,7 @@
                         <v-text-field v-model="form.email" :placeholder="i18n.email" autofocus="true" :rules="[rules.required]"></v-text-field>
                         <v-text-field v-model="form.firstName" :placeholder="i18n.firstName"></v-text-field>
                         <v-text-field v-model="form.lastName" :placeholder="i18n.lastName"></v-text-field>
+                        <v-text-field v-model="form.note" :placeholder="i18n.note"></v-text-field>
                       </v-col>
                     </v-row>
                   </v-container>
@@ -813,6 +814,7 @@
                   <td v-text="props.item.email"></td>
                   <td v-text="props.item.firstName"></td>
                   <td v-text="props.item.lastName"></td>
+                  <td v-text="props.item.note"></td>
                   <td v-text="$root.formatStringArray(props.item.roles)"></td>
                   <td>
                     <v-icon v-if="props.item.status != 'locked'" :title="i18n.loginEnabled">fa-check</v-icon>
@@ -840,6 +842,7 @@
                           :rules="[rules.required]"></v-text-field>
                         <v-text-field v-model="form.firstName" :placeholder="i18n.firstName"></v-text-field>
                         <v-text-field v-model="form.lastName" :placeholder="i18n.lastName"></v-text-field>
+                        <v-text-field v-model="form.note" :placeholder="i18n.note"></v-text-field>
                         <v-text-field name="csrf_token" v-model="form.csrfToken" class="d-none"></v-text-field>
                         <v-text-field name="method" v-model="form.method" class="d-none"></v-text-field>
                       </v-col>
@@ -1245,34 +1248,75 @@
     </script>
 
     <script type="text/x-template" id="page-settings">
-        <v-form v-model="form.valid" method="post" :action="authSettingsUrl">
-          <v-container v-if="showSettingsForm" fluid>
-            <v-row>
-              <v-col>
-                <h2 v-text="i18n.settingsTitle"></h2>
-              </v-col>
-            </v-row>
-            <v-row>
-              <v-col>
-                <h3 class="mb-4" v-text="i18n.updateSettings"></h3>
-                <div v-text="i18n.resetDefaultsHint"></div>
-                <v-btn id="settingsResetDefaults" color="primary" :disabled="usingDefaults" v-text="i18n.resetDefaults" @click="resetDefaults"></v-btn>
-              </v-col>
-            </v-row>
-            <v-row>
-              <v-col>
-                <h3 class="mb-4"  v-text="i18n.updateProfile"></h3>
-                <div v-text="i18n.settingsInstructions"></div>
-                <v-text-field name="password" v-model="form.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required]"></v-text-field>
-                <v-text-field :placeholder="i18n.passwordConfirm" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.matches]"></v-text-field>
-                <v-text-field name="csrf_token" v-model="form.csrfToken" class="d-none"></v-text-field>
-                <v-text-field name="method" v-model="form.method" class="d-none"></v-text-field>
-                <v-btn type="submit" color="primary" :disabled="!form.valid" v-text="i18n.save"></v-btn>
-              </v-col>
-            </v-row>
-          </v-container>
-        </v-form>
-      </v-card>
+      <v-container v-if="showSettingsForm" fluid>
+        <v-row>
+          <v-col>
+            <h2 v-text="i18n.settingsTitle"></h2>
+          </v-col>
+        </v-row>
+        <v-row>
+          <v-col>
+            <v-tabs>
+
+              <v-tab>
+                <v-icon left>fa-cogs</v-icon>
+                {{ i18n.settings }}
+              </v-tab>
+              <v-tab>
+                <v-icon left>fa-id-card</v-icon>
+                {{ i18n.profile }}
+              </v-tab>
+              <v-tab>
+                <v-icon left>fa-key</v-icon>
+                {{ i18n.security }}
+              </v-tab>
+
+              <v-tab-item>
+                <v-card>
+                  <v-card-text>
+                    <div v-text="i18n.resetDefaultsHint"></div>
+                    <p/>
+                    <v-btn id="settingsResetDefaults" color="primary" :disabled="usingDefaults" v-text="i18n.resetDefaults" @click="resetDefaults"></v-btn>
+                  </v-card-text>
+                </v-card>
+              </v-tab-item>
+
+              <v-tab-item>
+                <v-card>
+                  <v-card-text>
+                    <v-form v-model="profileForm.valid" method="post" :action="authSettingsUrl">
+                      <div v-text="i18n.profileInstructions"></div>
+                      <v-text-field name="traits.email" v-model="profileForm.email" :placeholder="i18n.email" :rules="[rules.required, rules.minemaillen]"></v-text-field>
+                      <v-text-field name="traits.firstName" v-model="profileForm.firstName" :placeholder="i18n.firstName" type="text":rules="[rules.maxlen]"></v-text-field>
+                      <v-text-field name="traits.lastName" v-model="profileForm.lastName" :placeholder="i18n.lastName" type="text" type="text":rules="[rules.maxlen]"></v-text-field>
+                      <v-text-field name="traits.note" v-model="profileForm.note" :placeholder="i18n.note" type="text" type="text":rules="[rules.maxlen]"></v-text-field>
+                      <v-text-field name="csrf_token" v-model="profileForm.csrfToken" class="d-none"></v-text-field>
+                      <v-text-field name="method" value="profile" class="d-none"></v-text-field>
+                      <v-btn type="submit" color="primary" :disabled="!profileForm.valid" v-text="i18n.save"></v-btn>
+                    </v-form>
+                  </v-card-text>
+                </v-card>
+              </v-tab-item>
+
+              <v-tab-item>
+                <v-card>
+                  <v-card-text>
+                    <v-form v-model="passwordForm.valid" method="post" :action="authSettingsUrl">
+                      <div v-text="i18n.passwordInstructions"></div>
+                      <v-text-field name="password" v-model="passwordForm.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.maxpasslen]"></v-text-field>
+                      <v-text-field :placeholder="i18n.passwordConfirm" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.maxpasslen, rules.matches]"></v-text-field>
+                      <v-text-field name="csrf_token" v-model="passwordForm.csrfToken" class="d-none"></v-text-field>
+                      <v-text-field name="method" value="password" class="d-none"></v-text-field>
+                      <v-btn type="submit" color="primary" :disabled="!passwordForm.valid" v-text="i18n.save"></v-btn>
+                    </v-form>
+                  </v-card-text>
+                </v-card>
+              </v-tab-item>
+
+            <v-tabs>
+          </v-col>
+        </v-row>
+      </v-container>
     </script>
 
     <script src="js/external/jquery-3.6.0.min.js"></script>

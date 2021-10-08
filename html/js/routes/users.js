@@ -16,6 +16,7 @@ routes.push({ path: '/users', name: 'users', component: {
       { text: this.$root.i18n.email, value: 'email' },
       { text: this.$root.i18n.firstName, value: 'firstName' },
       { text: this.$root.i18n.lastName, value: 'lastName' },
+      { text: this.$root.i18n.note, value: 'note' },
       { text: this.$root.i18n.role, value: 'role' },
       { text: this.$root.i18n.status, value: 'status' },
       { text: this.$root.i18n.actions },
@@ -33,6 +34,7 @@ routes.push({ path: '/users', name: 'users', component: {
       password: null,
       firstName: null,
       lastName: null,
+      note: null,
       csrfToken: null,
     },
     showPassword: false,
@@ -81,14 +83,15 @@ routes.push({ path: '/users', name: 'users', component: {
       }
     },
     submitAddUser(event) {
-      this.addUser(this.form.email, this.form.password, this.form.firstName, this.form.lastName, this.form.csrfToken);
+      this.addUser(this.form.email, this.form.password, this.form.firstName, this.form.lastName, this.form.note, this.form.csrfToken);
       this.dialog = false;
       this.form.email = null;
       this.form.password = null;
       this.form.firstName = null;
       this.form.lastName = null;
+      this.form.note = null;
     },
-    async addUser(email, password, firstName, lastName, csrfToken) {
+    async addUser(email, password, firstName, lastName, note, csrfToken) {
       try {
         if (!email) {
           this.$root.showError(this.i18n.emailRequired);
@@ -100,6 +103,7 @@ routes.push({ path: '/users', name: 'users', component: {
             password: password,
             "traits.firstName": firstName,
             "traits.lastName": lastName,
+            "traits.note": note,
             csrf_token: csrfToken,
           });
           this.users.push(response.data);

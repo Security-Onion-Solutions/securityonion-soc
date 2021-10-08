@@ -667,7 +667,7 @@ $(document).ready(function() {
       },
       async getUsers() {
         try {
-          const response = await this.papi.get('users');
+          const response = await this.papi.get('users/');
           this.users = response.data;
         } catch (error) {
           this.showError(error);

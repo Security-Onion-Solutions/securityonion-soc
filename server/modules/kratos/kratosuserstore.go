@@ -83,7 +83,9 @@ func (kratos *KratosUserstore) GetUsers(ctx context.Context) ([]*model.User, err
   for _, kratosUser := range kratosUsers {
     user := model.NewUser()
     kratosUser.copyToUser(user)
-    kratos.server.Rolestore.PopulateUserRoles(ctx, user)
+    if kratos.server.Rolestore != nil {
+      kratos.server.Rolestore.PopulateUserRoles(ctx, user)
+    }
     users = append(users, user)
   }
   return users, nil

@@ -17,13 +17,15 @@ type KratosTraits struct {
 	Email     string `json:"email"`
 	FirstName string `json:"firstName"`
 	LastName  string `json:"lastName"`
+	Note      string `json:"note"`
 }
 
-func NewTraits(email string, firstName string, lastName string) *KratosTraits {
+func NewTraits(email string, firstName string, lastName string, note string) *KratosTraits {
 	traits := &KratosTraits{
 		Email:     email,
 		FirstName: firstName,
 		LastName:  lastName,
+		Note:      note,
 	}
 	return traits
 }
@@ -59,9 +61,9 @@ type KratosUser struct {
 	Addresses []*KratosAddress `json:"verifiable_addresses"`
 }
 
-func NewKratosUser(email string, firstName string, lastName string, state string) *KratosUser {
+func NewKratosUser(email string, firstName string, lastName string, note string, state string) *KratosUser {
 	kratosUser := &KratosUser{
-		Traits:    NewTraits(email, firstName, lastName),
+		Traits:    NewTraits(email, firstName, lastName, note),
 		Addresses: NewAddresses(email),
 		State:     state,
 	}
@@ -73,6 +75,7 @@ func (kratosUser *KratosUser) copyToUser(user *model.User) {
 	user.Email = kratosUser.Traits.Email
 	user.FirstName = kratosUser.Traits.FirstName
 	user.LastName = kratosUser.Traits.LastName
+	user.Note = kratosUser.Traits.Note
 	if kratosUser.State == "inactive" {
 		user.Status = "locked"
 	} else {
@@ -87,6 +90,7 @@ func (kratosUser *KratosUser) copyFromUser(user *model.User) {
 	kratosUser.Traits.Email = user.Email
 	kratosUser.Traits.FirstName = user.FirstName
 	kratosUser.Traits.LastName = user.LastName
+	kratosUser.Traits.Note = user.Note
 	if user.Status == "locked" {
 		kratosUser.State = "inactive"
 	} else {

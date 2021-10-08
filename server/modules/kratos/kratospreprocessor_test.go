@@ -41,7 +41,8 @@ func TestPreprocess(tester *testing.T) {
         "traits": {
           "email": "",
           "firstname": "",
-          "lastname": ""
+          "lastname": "",
+          "note": ""
         },
         "verifiable_addresses": []
       }
