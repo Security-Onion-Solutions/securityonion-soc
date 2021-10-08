@@ -221,7 +221,7 @@ const i18n = {
       passwordHelp: 'Passwords must meet strength requirements',
       passwordMustMatch: 'Passwords must match',
       passwordChange: 'New password',
-      passwordInstructions: 'You may be prompted to login again when updating your profile. If so, login with the old password to verify your identity. This is a security measure to protect your account.',
+      passwordInstructions: 'You may be prompted to login again when updating your security settings. If so, login with the old password to verify your identity. This is a security measure to protect your account.',
       passwordRequired: 'A password must be specified.',
       profileInstructions: 'You may be prompted to login again when updating your profile. This is a security measure to protect your account.',
       pcap: 'PCAP',
