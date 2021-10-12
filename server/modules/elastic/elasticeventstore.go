@@ -170,7 +170,7 @@ func (store *ElasticEventstore) unmapElasticField(field string) string {
 func (store *ElasticEventstore) Search(ctx context.Context, criteria *model.EventSearchCriteria) (*model.EventSearchResults, error) {
 	var err error
 	results := model.NewEventSearchResults()
-	if err := store.server.Authorizer.CheckContextOperationAuthorized(ctx, "read", "events"); err == nil {
+	if err := store.server.CheckAuthorized(ctx, "read", "events"); err == nil {
 		store.refreshCache(ctx)
 
 		var query string
@@ -201,7 +201,7 @@ func (store *ElasticEventstore) disableCrossClusterIndexing(indexes []string) []
 func (store *ElasticEventstore) Update(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
 	var err error
 	results := model.NewEventUpdateResults()
-	if err = store.server.Authorizer.CheckContextOperationAuthorized(ctx, "write", "events"); err == nil {
+	if err = store.server.CheckAuthorized(ctx, "write", "events"); err == nil {
 		store.refreshCache(ctx)
 
 		results.Criteria = criteria
@@ -703,7 +703,7 @@ func (store *ElasticEventstore) Acknowledge(ctx context.Context, ackCriteria *mo
 	var results *model.EventUpdateResults
 	var err error
 	if len(ackCriteria.EventFilter) > 0 {
-		if err = store.server.Authorizer.CheckContextOperationAuthorized(ctx, "ack", "events"); err == nil {
+		if err = store.server.CheckAuthorized(ctx, "ack", "events"); err == nil {
 			log.WithFields(log.Fields{
 				"searchFilter": ackCriteria.SearchFilter,
 				"eventFilter":  ackCriteria.EventFilter,

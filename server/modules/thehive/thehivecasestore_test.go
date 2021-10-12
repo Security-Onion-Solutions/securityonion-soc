@@ -12,14 +12,14 @@ package thehive
 
 import (
   "context"
-  "github.com/security-onion-solutions/securityonion-soc/fake"
   "github.com/security-onion-solutions/securityonion-soc/model"
+  "github.com/security-onion-solutions/securityonion-soc/server"
   "github.com/stretchr/testify/assert"
   "testing"
 )
 
 func TestCreateUnauthorized(tester *testing.T) {
-  casestore := NewTheHiveCasestore(fake.NewUnauthorizedServer())
+  casestore := NewTheHiveCasestore(server.NewFakeUnauthorizedServer())
   casestore.Init("some/url", "somekey", true)
   socCase := model.NewCase()
   newCase, err := casestore.Create(context.Background(), socCase)
@@ -28,7 +28,7 @@ func TestCreateUnauthorized(tester *testing.T) {
 }
 
 func TestCreate(tester *testing.T) {
-  casestore := NewTheHiveCasestore(fake.NewAuthorizedServer(nil))
+  casestore := NewTheHiveCasestore(server.NewFakeAuthorizedServer(nil))
   casestore.Init("some/url", "somekey", true)
   caseResponse := `
     {

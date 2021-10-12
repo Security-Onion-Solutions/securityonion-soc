@@ -16,6 +16,7 @@ routes.push({ path: '/user/:id', name: 'user', component: {
       email: null,
       firstName: null,
       lastName: null,
+      note: null,
     },
     rules: {
       required: value => !!value || this.$root.i18n.required,
@@ -36,6 +37,7 @@ routes.push({ path: '/user/:id', name: 'user', component: {
           this.form.email = response.data.email;
           this.form.firstName = response.data.firstName;
           this.form.lastName = response.data.lastName;
+          this.form.note = response.data.note;
         } else {
           this.$root.showError(response.statusText);
         }
@@ -53,6 +55,7 @@ routes.push({ path: '/user/:id', name: 'user', component: {
             email: this.form.email,
             firstName: this.form.firstName,
             lastName: this.form.lastName,
+            note: this.form.note,
           });
           if (response.status == 200) {
             this.$root.showInfo(this.i18n.updateSuccessful);

@@ -253,7 +253,7 @@ func (metrics *InfluxDBMetrics) getFailedEvents(host string) int {
 
 func (metrics *InfluxDBMetrics) GetGridEps(ctx context.Context) int {
   eps := 0
-  if err := metrics.server.Authorizer.CheckContextOperationAuthorized(ctx, "read", "nodes"); err == nil {
+  if err := metrics.server.CheckAuthorized(ctx, "read", "nodes"); err == nil {
     metrics.updateEps()
     for _, hostEps := range metrics.consumptionEps {
       eps = eps + hostEps
@@ -265,7 +265,7 @@ func (metrics *InfluxDBMetrics) GetGridEps(ctx context.Context) int {
 
 func (metrics *InfluxDBMetrics) UpdateNodeMetrics(ctx context.Context, node *model.Node) bool {
   var status bool
-  if err := metrics.server.Authorizer.CheckContextOperationAuthorized(ctx, "write", "nodes"); err == nil {
+  if err := metrics.server.CheckAuthorized(ctx, "write", "nodes"); err == nil {
     node.RaidStatus = metrics.getRaidStatus(node.Id)
     node.ProcessStatus = metrics.getProcessStatus(node.Id)
     node.ProductionEps = metrics.getProductionEps(node.Id)

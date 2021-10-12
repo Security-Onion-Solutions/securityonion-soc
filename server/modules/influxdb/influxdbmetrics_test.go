@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/security-onion-solutions/securityonion-soc/fake"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -24,7 +24,7 @@ func newContext() context.Context {
 }
 
 func TestConvertValuesToString(tester *testing.T) {
-	metrics := NewInfluxDBMetrics(fake.NewAuthorizedServer(nil))
+	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
 	values := make(map[string]interface{})
 	values["foo"] = "bar"
 	values["bar"] = 1
@@ -33,7 +33,7 @@ func TestConvertValuesToString(tester *testing.T) {
 }
 
 func TestConvertValuesToInt(tester *testing.T) {
-	metrics := NewInfluxDBMetrics(fake.NewAuthorizedServer(nil))
+	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
 	values := make(map[string]interface{})
 	values["foo"] = 1234
 	values["bar"] = 9876.1
@@ -45,7 +45,7 @@ func TestConvertValuesToInt(tester *testing.T) {
 }
 
 func TestGetRaidStatus(tester *testing.T) {
-	metrics := NewInfluxDBMetrics(fake.NewAuthorizedServer(nil))
+	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
 	metrics.lastRaidUpdateTime = time.Now()
 	metrics.raidStatus["foo"] = 0
 	metrics.raidStatus["bar"] = 1
@@ -56,7 +56,7 @@ func TestGetRaidStatus(tester *testing.T) {
 }
 
 func TestGetProcessStatus(tester *testing.T) {
-	metrics := NewInfluxDBMetrics(fake.NewAuthorizedServer(nil))
+	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
 	metrics.lastProcessUpdateTime = time.Now()
 	metrics.processStatus["foo"] = 0
 	metrics.processStatus["bar"] = 1
@@ -67,7 +67,7 @@ func TestGetProcessStatus(tester *testing.T) {
 }
 
 func TestGetProductionEps(tester *testing.T) {
-	metrics := NewInfluxDBMetrics(fake.NewAuthorizedServer(nil))
+	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
 	metrics.lastEpsUpdateTime = time.Now()
 	metrics.productionEps["foo"] = 0
 	metrics.productionEps["bar"] = 1
@@ -80,7 +80,7 @@ func TestGetProductionEps(tester *testing.T) {
 }
 
 func TestGetConsumptionEps(tester *testing.T) {
-	metrics := NewInfluxDBMetrics(fake.NewAuthorizedServer(nil))
+	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
 	metrics.lastEpsUpdateTime = time.Now()
 	metrics.consumptionEps["foo"] = 0
 	metrics.consumptionEps["bar"] = 1
@@ -94,7 +94,7 @@ func TestGetConsumptionEps(tester *testing.T) {
 }
 
 func TestGetFailedEvents(tester *testing.T) {
-	metrics := NewInfluxDBMetrics(fake.NewAuthorizedServer(nil))
+	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
 	metrics.lastEpsUpdateTime = time.Now()
 	metrics.failedEvents["foo"] = 0
 	metrics.failedEvents["bar"] = 1
