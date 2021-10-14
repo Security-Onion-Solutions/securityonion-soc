@@ -15,6 +15,7 @@ import (
   "github.com/security-onion-solutions/securityonion-soc/server"
   "github.com/security-onion-solutions/securityonion-soc/server/modules/elastic"
   "github.com/security-onion-solutions/securityonion-soc/server/modules/filedatastore"
+  "github.com/security-onion-solutions/securityonion-soc/server/modules/generichttp"
   "github.com/security-onion-solutions/securityonion-soc/server/modules/influxdb"
   "github.com/security-onion-solutions/securityonion-soc/server/modules/kratos"
   "github.com/security-onion-solutions/securityonion-soc/server/modules/sostatus"
@@ -26,6 +27,7 @@ import (
 func BuildModuleMap(srv *server.Server) map[string]module.Module {
   moduleMap := make(map[string]module.Module)
   moduleMap["filedatastore"] = filedatastore.NewFileDatastore(srv)
+  moduleMap["httpcase"] = generichttp.NewHttpCase(srv)
   moduleMap["influxdb"] = influxdb.NewInfluxDB(srv)
   moduleMap["kratos"] = kratos.NewKratos(srv)
   moduleMap["elastic"] = elastic.NewElastic(srv)
