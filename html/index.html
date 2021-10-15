@@ -1286,7 +1286,7 @@
                   <v-card-text>
                     <v-form v-model="profileForm.valid" method="post" :action="authSettingsUrl">
                       <div v-text="i18n.profileInstructions"></div>
-                      <v-text-field name="traits.email" v-model="profileForm.email" :placeholder="i18n.email" :rules="[rules.required, rules.minemaillen]"></v-text-field>
+                      <v-text-field name="traits.email" v-model="profileForm.email" :placeholder="i18n.email" :rules="[rules.required, rules.minemaillen]" class="d-none"></v-text-field>
                       <v-text-field name="traits.firstName" v-model="profileForm.firstName" :placeholder="i18n.firstName" type="text":rules="[rules.maxlen]"></v-text-field>
                       <v-text-field name="traits.lastName" v-model="profileForm.lastName" :placeholder="i18n.lastName" type="text" type="text":rules="[rules.maxlen]"></v-text-field>
                       <v-text-field name="traits.note" v-model="profileForm.note" :placeholder="i18n.note" type="text" type="text":rules="[rules.maxlen]"></v-text-field>

@@ -223,7 +223,7 @@ const i18n = {
       passwordChange: 'New password',
       passwordInstructions: 'You may be prompted to login again when updating your security settings. If so, login with the old password to verify your identity. This is a security measure to protect your account.',
       passwordRequired: 'A password must be specified.',
-      profileInstructions: 'You may be prompted to login again when updating your profile. This is a security measure to protect your account. Note that a change to your email address does not automatically propogate to TheHive or FleetDM.',
+      profileInstructions: 'You may be prompted to login again when updating your profile. This is a security measure to protect your account.',
       pcap: 'PCAP',
       pending: 'Pending',
       product: 'Security Onion',
