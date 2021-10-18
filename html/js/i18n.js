@@ -139,6 +139,7 @@ const i18n = {
       filterResults: 'Filter Results',
       firstName: 'First Name',
       flags: 'Flags',
+      graphs: 'Graphs',
       grid: 'Grid',
       gridEps: 'Grid EPS:',
       groupedBy: 'Group:',

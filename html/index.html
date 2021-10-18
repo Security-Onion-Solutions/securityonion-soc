@@ -401,178 +401,221 @@
             </span>
           </v-col>
         </v-row>
-        <v-row v-if="loaded && isAdvanced() && !metricsEnabled">
-          <v-col cols="12">
-            <line-chart :height="chartHeight" :chartdata="timelineChartData" :options="timelineChartOptions"/>
-          </v-col>
-        </v-row>
-        <v-row v-if="metricsEnabled && isAdvanced()">
-          <v-col cols="12" md="4">
-            <bar-chart id="topChart" :height="chartHeight" :chartdata="topChartData" :options="topChartOptions"/>
-          </v-col>
-          <v-col cols="12" md="4">
-            <line-chart id="timelineChart" :height="chartHeight" :chartdata="timelineChartData" :options="timelineChartOptions"/>
-          </v-col>
-          <v-col cols="12" md="4">
-            <bar-chart id="bottomChart":height="chartHeight" :chartdata="bottomChartData" :options="bottomChartOptions"/>
-          </v-col>
-        </v-row>
-        <v-row v-if="metricsEnabled">
-          <v-col cols="12">
-            <v-data-table :search="groupByFilter" dense :sort-by.sync="groupBySortBy" :sort-desc.sync="groupBySortDesc" :footer-props="groupByFooters" 
-              :items-per-page.sync="groupByItemsPerPage" must-sort :headers="groupByHeaders" :items="groupByData" :page.sync="groupByPage" :custom-sort="sortEvents">
-              <template v-slot:top v-if="isAdvanced()">
-                <v-container fluid>
-                  <v-row>
-                    <v-col cols="4">
-                      <h3>{{ i18n.groups }}</h3>
-                    </v-col>
-                    <v-col cols="2">
-                      <v-select :disabled="loading()" @change="notifyInputsChanged" v-model="groupByLimit" :items="groupByLimitOptions" :label="i18n.fetchLimit"></v-select>
-                    </v-col>
-                    <v-col cols="6">
-                      <v-text-field v-model="groupByFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
-                    </v-col>
-                  </v-row>
-                </v-container>        
-              </template>
-              <template v-slot:item="{ item, index }">
-                <tr>
-                  <td>
-                    <v-tooltip bottom v-if="ackEnabled && item['event.severity_label']">	
-                      <template v-slot:activator="{ on, attrs }">
-                        <span v-bind="attrs" v-on="on">
-                          <v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" class="mx-2" icon x-small 
-                            @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))" 
-                            :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
-                            <v-icon>fa-bell</v-icon>
-                          </v-btn>
-                        </span>
-                      </template>
-                      <span>{{ isFilterToggleEnabled('acknowledged') ? i18n.alertUndoAcknowledge : i18n.alertAcknowledge }}</span>
-                    </v-tooltip>
-                    <v-tooltip bottom v-if="escalateEnabled">	
-                      <template v-slot:activator="{ on, attrs }">
-                        <span v-bind="attrs" v-on="on">
-                          <v-btn id="escalateButton" v-if="escalateEnabled" class="mx-2" icon x-small 
-                            @click="ack($event, item, index, true, true)" 
-                            :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
-                            <v-icon>fa-exclamation-triangle</v-icon>
-                          </v-btn>                    
-                        </span>
-                      </template>
-                      <span>{{ isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate }}</span>
-                    </v-tooltip>
-                  </td>
-                  <td>
-                    <v-tooltip bottom v-if="loaded && eventsEnabled && metricsEnabled && ( (groupByHeaders.length==3 && groupByHeaders[1]['value']=='count' ) || (groupByHeaders.length==5 && groupByHeaders[1]['value']=='count' && groupByHeaders[2]['value']=='rule.name' && groupByHeaders[3]['value']=='event.module' && groupByHeaders[4]['value']=='event.severity_label') ) ">
-                      <template v-slot:activator="{ on, attrs }">
-                        <span v-bind="attrs" v-on="on">
-                          <div class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()" v-bind="attrs" @click="countDrilldown(item)"></div>
-                        </span>
-                      </template>
-                      <span>{{ i18n.quickDrilldown }}</span>
-                    </v-tooltip>
-                     <div v-else class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()"></div>
-                  </td>
-                  <td v-for="field in groupByHeaders.slice(2)" :key="field.value">
-                    <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction($event, item, field.value, item[field.value])"></div>
-                  </td>
-                </tr>
-              </template>
-
-            </v-data-table>
-          </v-col>
-        </v-row>
-        <v-row v-if="loaded && eventsEnabled && (isAdvanced() || !metricsEnabled)">
-          <v-col cols="12">
-            <v-data-table :search="eventFilter" :sort-by.sync="sortBy" item-key="soc_id" :expanded.sync="expanded" :sort-desc.sync="sortDesc" :footer-props="footerProps" 
-              :items-per-page.sync="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" show-expand :page.sync="eventPage" :custom-sort="sortEvents">
-              <template v-slot:top v-if="isAdvanced()">
-                <v-container fluid>
-                  <v-row>
-                    <v-col cols="4">
-                      <h3>{{ i18n.events }}</h3>
-                    </v-col>
-                    <v-col cols="2">
-                      <v-select :disabled="loading()" @change="notifyInputsChanged" v-model="eventLimit" :items="eventLimitOptions" :label="i18n.fetchLimit"></v-select>
-                    </v-col>
-                    <v-col cols="6">
-                      <v-text-field v-model="eventFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
-                    </v-col>
-                  </v-row>
-                </v-container>
-              </template>        
-              <template v-slot:item="{ item, index }">
-                <tr>
-                  <td>
-                    <v-tooltip bottom>
-                      <template v-slot:activator="{ on, attrs }">
-                        <span v-bind="attrs" v-on="on">
-                          <v-btn id="expandEvent" icon small @click="expand(item)">
-                            <v-icon v-if="isExpanded(item)" :alt="i18n.eventExpand">fa-angle-down</v-icon>
-                            <v-icon v-if="!isExpanded(item)" :alt="i18n.eventExpand">fa-angle-right</v-icon>
-                          </v-btn>
-                        </span>
-                      </template>
-                      <span>{{ i18n.eventExpandHelp }}</span>
-                    </v-tooltip>
-                    <v-tooltip bottom v-if="ackEnabled && item['event.severity_label']">
-                      <template v-slot:activator="{ on, attrs }">
-                        <span v-bind="attrs" v-on="on">
-                          <v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" class="mx-2" icon x-small 
-                            @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))" 
-                            :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
-                            <v-icon>fa-bell</v-icon>
-                          </v-btn>
-                        </span>
-                      </template>
-                      <span>{{ isFilterToggleEnabled('acknowledged') ? i18n.alertUndoAcknowledge : i18n.alertAcknowledge }}</span>
-                    </v-tooltip>
-                    <v-tooltip bottom v-if="escalateEnabled">
-                      <template v-slot:activator="{ on, attrs }">
-                        <span v-bind="attrs" v-on="on">
-                          <v-btn id="escalateButton" v-if="escalateEnabled" class="mx-2" icon x-small 
-                            @click="ack($event, item, index, true, true)" 
-                            :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
-                            <v-icon>fa-exclamation-triangle</v-icon>
-                          </v-btn>
-                        </span>
-                      </template>
-                      <span>{{ isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate }}</span>
-                    </v-tooltip>
-                  </td>
-                  <td v-for="field in eventHeaders" :key="field.value">
-                    <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction($event, item, field.value, item[field.value])"></div>
-                  </td>
-                </tr>
-              </template>
-              <template v-slot:expanded-item="{ headers, item }">
-                <tr>
-                  <td :colspan="headers.length" class="px-0">
-                    <v-data-table dense disable-pagination hide-default-header hide-default-footer must-sort :headers="expandedHeaders" :items="getExpandedData()">
-                      <template v-slot:item="{ item }">
-                        <tr class="pt-3">
-                          <td class="expansion">
-                            <div class="d-inline-block semi-transparent">
-                              <v-btn :disabled="!canQuery(item.key)" icon x-small :to="buildGroupByRoute(item.key)">
-                                <v-icon :alt="i18n.groupInclude" :title="i18n.groupIncludeHelp">fa-layer-group</v-icon>
+        <v-col v-if="loaded && isAdvanced()">
+          <v-toolbar dense flat>
+            <v-toolbar-title>{{ i18n.graphs }}</v-toolbar-title>
+            <v-spacer />
+            <v-btn
+              text
+              @click="toggleShowSection('hunt-graphs')"
+            >
+              <v-icon v-if="!isExpandedSection('hunt-graphs')">fa-angle-down</v-icon>
+              <v-icon v-if="isExpandedSection('hunt-graphs')">fa-angle-up</v-icon>
+            </v-btn>
+          </v-toolbar>
+          <v-expand-transition>
+            <div v-if="isExpandedSection('hunt-graphs')">
+              <v-row v-if="!metricsEnabled">
+                <v-col cols="12">
+                  <line-chart :height="chartHeight" :chartdata="timelineChartData" :options="timelineChartOptions"/>
+                </v-col>
+              </v-row>
+              <v-row v-if="metricsEnabled">
+                <v-col cols="12" md="4">
+                  <bar-chart id="topChart" :height="chartHeight" :chartdata="topChartData" :options="topChartOptions"/>
+                </v-col>
+                <v-col cols="12" md="4">
+                  <line-chart id="timelineChart" :height="chartHeight" :chartdata="timelineChartData" :options="timelineChartOptions"/>
+                </v-col>
+                <v-col cols="12" md="4">
+                  <bar-chart id="bottomChart":height="chartHeight" :chartdata="bottomChartData" :options="bottomChartOptions"/>
+                </v-col>
+              </v-row>
+            </div>
+          </v-expand-transition>
+        </v-col>
+        <v-col v-if="metricsEnabled">
+          <v-toolbar v-if="isAdvanced()" dense flat>
+            <v-toolbar-title >{{ i18n.groups }}</v-toolbar-title>
+            <v-spacer />
+            <v-btn
+              text
+              @click="toggleShowSection('hunt-groups')"
+            >
+              <v-icon v-if="!isExpandedSection('hunt-groups')">fa-angle-down</v-icon>
+              <v-icon v-if="isExpandedSection('hunt-groups')">fa-angle-up</v-icon>
+            </v-btn>
+          </v-toolbar>
+          <v-expand-transition>
+            <v-row v-if="isExpandedSection('hunt-groups')">
+              <v-col cols="12">
+                <v-data-table :search="groupByFilter" dense :sort-by.sync="groupBySortBy" :sort-desc.sync="groupBySortDesc" :footer-props="groupByFooters" 
+                  :items-per-page.sync="groupByItemsPerPage" must-sort :headers="groupByHeaders" :items="groupByData" :page.sync="groupByPage" :custom-sort="sortEvents">
+                  <template v-slot:top v-if="isAdvanced()">
+                    <v-container fluid>
+                      <v-row>
+                        <v-col cols="4"></v-col>
+                        <v-col cols="2">
+                          <v-select :disabled="loading()" @change="notifyInputsChanged" v-model="groupByLimit" :items="groupByLimitOptions" :label="i18n.fetchLimit"></v-select>
+                        </v-col>
+                        <v-col cols="6">
+                          <v-text-field v-model="groupByFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
+                        </v-col>
+                      </v-row>
+                    </v-container>        
+                  </template>
+                  <template v-slot:item="{ item, index }">
+                    <tr>
+                      <td>
+                        <v-tooltip bottom v-if="ackEnabled && item['event.severity_label']">	
+                          <template v-slot:activator="{ on, attrs }">
+                            <span v-bind="attrs" v-on="on">
+                              <v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" class="mx-2" icon x-small 
+                                @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))" 
+                                :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
+                                <v-icon>fa-bell</v-icon>
                               </v-btn>
-                            </div>
-                            <div class="d-inline-block expansion" v-text="item.key"></div>
-                          </td>
-                          <td class="expansion">
-                            <div class="quick-action-trigger d-inline-block expansion hardwrap" v-text="item.value" @click="toggleQuickAction($event, expanded[0], item.key, item.value)"></div>
-                          </td>
-                        </tr>
-                      </template>
-                    </v-data-table>
-                  </td>
-                </tr>
-              </template>
-            </v-data-table>
-          </v-col>
-        </v-row>
+                            </span>
+                          </template>
+                          <span>{{ isFilterToggleEnabled('acknowledged') ? i18n.alertUndoAcknowledge : i18n.alertAcknowledge }}</span>
+                        </v-tooltip>
+                        <v-tooltip bottom v-if="escalateEnabled">	
+                          <template v-slot:activator="{ on, attrs }">
+                            <span v-bind="attrs" v-on="on">
+                              <v-btn id="escalateButton" v-if="escalateEnabled" class="mx-2" icon x-small 
+                                @click="ack($event, item, index, true, true)" 
+                                :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
+                                <v-icon>fa-exclamation-triangle</v-icon>
+                              </v-btn>                    
+                            </span>
+                          </template>
+                          <span>{{ isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate }}</span>
+                        </v-tooltip>
+                      </td>
+                      <td>
+                        <v-tooltip bottom v-if="loaded && eventsEnabled && metricsEnabled && ( (groupByHeaders.length==3 && groupByHeaders[1]['value']=='count' ) || (groupByHeaders.length==5 && groupByHeaders[1]['value']=='count' && groupByHeaders[2]['value']=='rule.name' && groupByHeaders[3]['value']=='event.module' && groupByHeaders[4]['value']=='event.severity_label') ) ">
+                          <template v-slot:activator="{ on, attrs }">
+                            <span v-bind="attrs" v-on="on">
+                              <div class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()" v-bind="attrs" @click="countDrilldown(item)"></div>
+                            </span>
+                          </template>
+                          <span>{{ i18n.quickDrilldown }}</span>
+                        </v-tooltip>
+                         <div v-else class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()"></div>
+                      </td>
+                      <td v-for="field in groupByHeaders.slice(2)" :key="field.value">
+                        <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction($event, item, field.value, item[field.value])"></div>
+                      </td>
+                    </tr>
+                  </template>
+    
+                </v-data-table>
+              </v-col>
+            </v-row>
+          </v-expand-transition>
+        </v-col>
+        <v-col v-if="loaded && eventsEnabled && (isAdvanced() || !metricsEnabled)">
+          <v-toolbar dense flat>
+            <v-toolbar-title>{{ i18n.events }}</v-toolbar-title>
+            <v-spacer />
+            <v-btn
+              text
+              @click="toggleShowSection('hunt-events')"
+            >
+              <v-icon v-if="!isExpandedSection('hunt-events')">fa-angle-down</v-icon>
+              <v-icon v-if="isExpandedSection('hunt-events')">fa-angle-up</v-icon>
+            </v-btn>
+          </v-toolbar>
+          <v-expand-transition>
+            <v-row v-if="isExpandedSection('hunt-events')">
+              <v-col cols="12">
+                <v-data-table :search="eventFilter" :sort-by.sync="sortBy" item-key="soc_id" :expanded.sync="expanded" :sort-desc.sync="sortDesc" :footer-props="footerProps" 
+                  :items-per-page.sync="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" show-expand :page.sync="eventPage" :custom-sort="sortEvents">
+                  <template v-slot:top v-if="isAdvanced()">
+                    <v-container fluid>
+                      <v-row>
+                        <v-col cols="4"></v-col>
+                        <v-col cols="2">
+                          <v-select :disabled="loading()" @change="notifyInputsChanged" v-model="eventLimit" :items="eventLimitOptions" :label="i18n.fetchLimit"></v-select>
+                        </v-col>
+                        <v-col cols="6">
+                          <v-text-field v-model="eventFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
+                        </v-col>
+                      </v-row>
+                    </v-container>
+                  </template>        
+                  <template v-slot:item="{ item, index }">
+                    <tr>
+                      <td>
+                        <v-tooltip bottom>
+                          <template v-slot:activator="{ on, attrs }">
+                            <span v-bind="attrs" v-on="on">
+                              <v-btn id="expandEvent" icon small @click="expand(item)">
+                                <v-icon v-if="isExpanded(item)" :alt="i18n.eventExpand">fa-angle-down</v-icon>
+                                <v-icon v-if="!isExpanded(item)" :alt="i18n.eventExpand">fa-angle-right</v-icon>
+                              </v-btn>
+                            </span>
+                          </template>
+                          <span>{{ i18n.eventExpandHelp }}</span>
+                        </v-tooltip>
+                        <v-tooltip bottom v-if="ackEnabled && item['event.severity_label']">
+                          <template v-slot:activator="{ on, attrs }">
+                            <span v-bind="attrs" v-on="on">
+                              <v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" class="mx-2" icon x-small 
+                                @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))" 
+                                :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
+                                <v-icon>fa-bell</v-icon>
+                              </v-btn>
+                            </span>
+                          </template>
+                          <span>{{ isFilterToggleEnabled('acknowledged') ? i18n.alertUndoAcknowledge : i18n.alertAcknowledge }}</span>
+                        </v-tooltip>
+                        <v-tooltip bottom v-if="escalateEnabled">
+                          <template v-slot:activator="{ on, attrs }">
+                            <span v-bind="attrs" v-on="on">
+                              <v-btn id="escalateButton" v-if="escalateEnabled" class="mx-2" icon x-small 
+                                @click="ack($event, item, index, true, true)" 
+                                :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
+                                <v-icon>fa-exclamation-triangle</v-icon>
+                              </v-btn>
+                            </span>
+                          </template>
+                          <span>{{ isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate }}</span>
+                        </v-tooltip>
+                      </td>
+                      <td v-for="field in eventHeaders" :key="field.value">
+                        <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction($event, item, field.value, item[field.value])"></div>
+                      </td>
+                    </tr>
+                  </template>
+                  <template v-slot:expanded-item="{ headers, item }">
+                    <tr>
+                      <td :colspan="headers.length" class="px-0">
+                        <v-data-table dense disable-pagination hide-default-header hide-default-footer must-sort :headers="expandedHeaders" :items="getExpandedData()">
+                          <template v-slot:item="{ item }">
+                            <tr class="pt-3">
+                              <td class="expansion">
+                                <div class="d-inline-block semi-transparent">
+                                  <v-btn :disabled="!canQuery(item.key)" icon x-small :to="buildGroupByRoute(item.key)">
+                                    <v-icon :alt="i18n.groupInclude" :title="i18n.groupIncludeHelp">fa-layer-group</v-icon>
+                                  </v-btn>
+                                </div>
+                                <div class="d-inline-block expansion" v-text="item.key"></div>
+                              </td>
+                              <td class="expansion">
+                                <div class="quick-action-trigger d-inline-block expansion hardwrap" v-text="item.value" @click="toggleQuickAction($event, expanded[0], item.key, item.value)"></div>
+                              </td>
+                            </tr>
+                          </template>
+                        </v-data-table>
+                      </td>
+                    </tr>
+                  </template>
+                </v-data-table>
+              </v-col>
+            </v-row>
+          </v-expand-transition>
+        </v-col>
         <v-row v-if="loaded && isAdvanced()">
           <v-col cols="6">
             <v-subheader inset>{{ i18n.eventFetchTook }} {{ fetchTimeSecs }} {{ i18n.seconds }}. {{ i18n.eventRoundTripTook }} {{ roundTripTimeSecs }} {{ i18n.seconds }}.</v-subheader>
