@@ -411,7 +411,7 @@ const huntComponent = {
           // Strip away everything else for optimization
           docEvent = { "soc_id": item["soc_id"] };
         }
-        var isAlert = ('rule.name' in item);
+        var isAlert = ('rule.name' in item || 'event.severity_label' in item);
         if (escalate) {
           var title = item['rule.name'];
           if (!title) {
