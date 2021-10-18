@@ -46,6 +46,7 @@ const huntComponent = {
     huntPending: false,
     ackEnabled: false,
     escalateEnabled: false,
+    collapsedSections: [],
 
     filterToggles: [],
 
@@ -411,7 +412,7 @@ const huntComponent = {
           // Strip away everything else for optimization
           docEvent = { "soc_id": item["soc_id"] };
         }
-        var isAlert = ('rule.name' in item);
+        var isAlert = ('rule.name' in item || 'event.severity_label' in item);
         if (escalate) {
           var title = item['rule.name'];
           if (!title) {
@@ -1094,6 +1095,16 @@ const huntComponent = {
       if (localStorage[prefix + '.relativeTimeUnit']) this.relativeTimeUnit = parseInt(localStorage[prefix + '.relativeTimeUnit']);
       if (localStorage[prefix + '.autohunt']) this.autohunt = localStorage[prefix + '.autohunt'] == 'true';
     },
+    toggleShowSection(item) {
+      if (this.isExpandedSection(item)) {
+        this.collapsedSections.push(item);
+      } else {
+        this.collapsedSections.splice(this.collapsedSections.indexOf(item), 1);
+      }
+    },
+    isExpandedSection(item) {
+      return (this.collapsedSections.indexOf(item) == -1);
+    }
   }
 };
 
