@@ -401,7 +401,7 @@
             </span>
           </v-col>
         </v-row>
-        <v-col v-if="loaded && isAdvanced()">
+        <v-col  id="graphs" v-if="loaded && isAdvanced()">
           <v-toolbar dense flat>
             <v-toolbar-title>{{ i18n.graphs }}</v-toolbar-title>
             <v-spacer />
@@ -434,9 +434,9 @@
             </div>
           </v-expand-transition>
         </v-col>
-        <v-col v-if="metricsEnabled">
+        <v-col id="group-metrics" v-if="metricsEnabled">
           <v-toolbar v-if="isAdvanced()" dense flat>
-            <v-toolbar-title >{{ i18n.groups }}</v-toolbar-title>
+            <v-toolbar-title>{{ i18n.groups }}</v-toolbar-title>
             <v-spacer />
             <v-btn
               text
@@ -514,7 +514,7 @@
             </v-row>
           </v-expand-transition>
         </v-col>
-        <v-col v-if="loaded && eventsEnabled && (isAdvanced() || !metricsEnabled)">
+        <v-col id="events" v-if="loaded && eventsEnabled && (isAdvanced() || !metricsEnabled)">
           <v-toolbar dense flat>
             <v-toolbar-title>{{ i18n.events }}</v-toolbar-title>
             <v-spacer />
