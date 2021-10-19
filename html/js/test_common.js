@@ -62,3 +62,8 @@ global.getComponent = function(name) {
 ////////////////////////////////////
 require('./i18n.js');
 require('./app.js');
+
+////////////////////////////////////
+// Import external dependencies
+////////////////////////////////////
+global.moment = require('./external/moment-2.29.1.min.js');
