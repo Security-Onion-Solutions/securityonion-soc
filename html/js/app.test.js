@@ -49,3 +49,21 @@ test('formatStringArray', () => {
   expect(app.formatStringArray(['hi'])).toBe('hi');
   expect(app.formatStringArray([])).toBe('');
 });
+
+test('generateDatePickerPreselects', () => {
+  
+  global.moment = require('./external/moment-2.29.1.min.js');
+  const preselects = app.generateDatePickerPreselects();
+  expect(preselects[app.i18n.datePreselectToday].length).toBe(2);
+  expect(preselects[app.i18n.datePreselectYesterday].length).toBe(2);
+  expect(preselects[app.i18n.datePreselectThisMonth].length).toBe(2);
+  expect(preselects[app.i18n.datePreselectLastMonth].length).toBe(2);
+  expect(preselects[app.i18n.datePreselectPrevious3d].length).toBe(2);
+  expect(preselects[app.i18n.datePreselectPrevious4d].length).toBe(2);
+  expect(preselects[app.i18n.datePreselectPrevious7d].length).toBe(2);
+  expect(preselects[app.i18n.datePreselectPrevious30d].length).toBe(2);
+  expect(preselects[app.i18n.datePreselect3dToNow].length).toBe(2);
+  expect(preselects[app.i18n.datePreselect4dToNow].length).toBe(2);
+  expect(preselects[app.i18n.datePreselect7dToNow].length).toBe(2);
+  expect(preselects[app.i18n.datePreselect30dToNow].length).toBe(2);
+});

@@ -882,9 +882,10 @@ const huntComponent = {
     },
     setupDateRangePicker() {
       if (this.relativeTimeEnabled) return;
-      
+
       range = document.getElementById('huntdaterange');
       $('#huntdaterange').daterangepicker({
+        ranges: this.$root.generateDatePickerPreselects(),
         timePicker: true,
         timePickerSeconds: true,
         endDate: this.getEndDate(),

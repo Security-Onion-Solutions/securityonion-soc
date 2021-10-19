@@ -426,6 +426,22 @@ $(document).ready(function() {
         }
         return "";
       },
+      generateDatePickerPreselects() {
+        var preselects = {};
+        preselects[this.i18n.datePreselectToday] = [moment().startOf('day'), moment().endOf('day')];
+        preselects[this.i18n.datePreselectYesterday] = [moment().subtract(1, 'days').startOf('day'), moment().subtract(1, 'days').endOf('day')];
+        preselects[this.i18n.datePreselectThisMonth] = [moment().startOf('month'), moment().endOf('month')];
+        preselects[this.i18n.datePreselectLastMonth] = [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')];
+        preselects[this.i18n.datePreselectPrevious3d] = [moment().subtract(3, 'days').startOf('day'), moment().subtract(1, 'days').endOf('day')];
+        preselects[this.i18n.datePreselectPrevious4d] = [moment().subtract(4, 'days').startOf('day'), moment().subtract(1, 'days').endOf('day')];
+        preselects[this.i18n.datePreselectPrevious7d] = [moment().subtract(7, 'days').startOf('day'), moment().subtract(1, 'days').endOf('day')];
+        preselects[this.i18n.datePreselectPrevious30d] = [moment().subtract(30, 'days').startOf('day'), moment().subtract(1, 'days').endOf('day')];
+        preselects[this.i18n.datePreselect3dToNow] = [moment().subtract(3, 'days'), moment()];
+        preselects[this.i18n.datePreselect4dToNow] = [moment().subtract(4, 'days'), moment()];
+        preselects[this.i18n.datePreselect7dToNow] = [moment().subtract(7, 'days'), moment()];
+        preselects[this.i18n.datePreselect30dToNow] = [moment().subtract(30, 'days'), moment()];
+        return preselects;
+      },
       localizeMessage(origMsg) {
         var msg = origMsg;
         if (msg.response && msg.response.data) {
