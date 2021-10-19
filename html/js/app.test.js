@@ -51,8 +51,6 @@ test('formatStringArray', () => {
 });
 
 test('generateDatePickerPreselects', () => {
-  
-  global.moment = require('./external/moment-2.29.1.min.js');
   const preselects = app.generateDatePickerPreselects();
   expect(preselects[app.i18n.datePreselectToday].length).toBe(2);
   expect(preselects[app.i18n.datePreselectYesterday].length).toBe(2);
