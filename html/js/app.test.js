@@ -54,6 +54,8 @@ test('generateDatePickerPreselects', () => {
   const preselects = app.generateDatePickerPreselects();
   expect(preselects[app.i18n.datePreselectToday].length).toBe(2);
   expect(preselects[app.i18n.datePreselectYesterday].length).toBe(2);
+  expect(preselects[app.i18n.datePreselectThisWeek].length).toBe(2);
+  expect(preselects[app.i18n.datePreselectLastWeek].length).toBe(2);
   expect(preselects[app.i18n.datePreselectThisMonth].length).toBe(2);
   expect(preselects[app.i18n.datePreselectLastMonth].length).toBe(2);
   expect(preselects[app.i18n.datePreselectPrevious3d].length).toBe(2);

@@ -73,6 +73,8 @@ const i18n = {
       dateQueued: 'Date Queued',
       datePreselectToday: 'Today',
       datePreselectYesterday: 'Yesterday',
+      datePreselectThisWeek: 'This Week',
+      datePreselectLastWeek: 'Last Week',
       datePreselectThisMonth: 'This Month',
       datePreselectLastMonth: 'Last Month',
       datePreselectPrevious3d: 'Previous 3 Days',

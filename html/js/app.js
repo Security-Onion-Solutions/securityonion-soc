@@ -430,6 +430,8 @@ $(document).ready(function() {
         var preselects = {};
         preselects[this.i18n.datePreselectToday] = [moment().startOf('day'), moment().endOf('day')];
         preselects[this.i18n.datePreselectYesterday] = [moment().subtract(1, 'days').startOf('day'), moment().subtract(1, 'days').endOf('day')];
+        preselects[this.i18n.datePreselectThisWeek] = [moment().startOf('week'), moment().endOf('week')];
+        preselects[this.i18n.datePreselectLastWeek] = [moment().subtract(1, 'week').startOf('week'), moment().subtract(1, 'week').endOf('week')];
         preselects[this.i18n.datePreselectThisMonth] = [moment().startOf('month'), moment().endOf('month')];
         preselects[this.i18n.datePreselectLastMonth] = [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')];
         preselects[this.i18n.datePreselectPrevious3d] = [moment().subtract(3, 'days').startOf('day'), moment().subtract(1, 'days').endOf('day')];
