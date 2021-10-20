@@ -396,7 +396,15 @@ func (store *ElasticEventstore) cacheFields(name gjson.Result, details gjson.Res
 			aggregatable: field["aggregatable"].(bool),
 			searchable:   field["searchable"].(bool),
 		}
-		store.fieldDefs[fieldName] = fieldDef
+
+		// If there are multiple types for this field prefer the non-aggregatable since
+		// we cannot reliably aggregate across all indices. In most, or maybe all cases,
+		// there will be a .keyword subfield across both indices which will be used
+		// for aggregation purposes until all ingested data is fully ECS data type
+		// compliant.
+		if store.fieldDefs[fieldName] == nil || !fieldDef.aggregatable {
+			store.fieldDefs[fieldName] = fieldDef
+		}
 
 		log.WithFields(log.Fields{
 			"name":         name,

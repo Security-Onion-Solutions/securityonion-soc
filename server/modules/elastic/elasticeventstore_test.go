@@ -51,6 +51,34 @@ func TestFieldMapping(tester *testing.T) {
 	assert.Equal(tester, "event.acknowledged", actual)
 }
 
+func TestFieldMappingCollisions(tester *testing.T) {
+	store := &ElasticEventstore{}
+
+	json, err := ioutil.ReadFile("fieldcaps_response.json")
+	assert.Nil(tester, err)
+	store.cacheFieldsFromJson(string(json))
+
+	var testTable = []struct {
+		given    string
+		expected string
+	}{
+		{"event.module", "event.module.keyword"},
+		{"event.category", "event.category.keyword"},
+		{"event.dataset", "event.dataset.keyword"},
+		{"event.kind", "event.kind.keyword"},
+		{"event.outcome", "event.outcome.keyword"},
+		{"event.type", "event.type.keyword"},
+		{"event.timezone", "event.timezone.keyword"},
+	}
+
+	for _, test := range testTable {
+		tester.Run("given="+test.given, func(t *testing.T) {
+			actual := store.mapElasticField(test.given)
+			assert.Equal(tester, test.expected, actual)
+		})
+	}
+}
+
 func TestFieldMappingCache(tester *testing.T) {
 	store := &ElasticEventstore{}
 
