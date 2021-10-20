@@ -515,7 +515,7 @@
           </v-expand-transition>
         </v-col>
         <v-col id="events" v-if="loaded && eventsEnabled && (isAdvanced() || !metricsEnabled)">
-          <v-toolbar dense flat>
+          <v-toolbar v-if="isAdvanced()" dense flat>
             <v-toolbar-title>{{ i18n.events }}</v-toolbar-title>
             <v-spacer />
             <v-btn
