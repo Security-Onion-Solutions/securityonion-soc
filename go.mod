@@ -11,5 +11,5 @@ require (
 	github.com/influxdata/influxdb-client-go/v2 v2.5.1
 	github.com/kennygrant/sanitize v1.2.4
 	github.com/stretchr/testify v1.7.0
-	github.com/tidwall/gjson v1.9.1
+	github.com/tidwall/gjson v1.9.3
 )
