@@ -24,6 +24,9 @@ ARG VERSION=0.0.0
 ARG ELASTIC_VERSION=0.0.0
 ARG WAZUH_VERSION=0.0.0
 
+RUN mkdir testZ
+RUN mkdir -p testZ/testY
+
 RUN apk update && apk add tzdata ca-certificates curl tcpdump && update-ca-certificates
 RUN addgroup --gid "$GID" socore
 RUN adduser -D -u "$UID" -G socore -g '' socore
@@ -42,6 +45,9 @@ RUN find html/js -name "*test*.js" -delete
 RUN chmod u+x scripts/*
 RUN chown 939:939 scripts/*
 RUN find . -name \*.html -exec sed -i -e "s/VERSION_PLACEHOLDER/$VERSION/g" {} \;
+
+RUN mkdir testA
+RUN mkdir -p testA/testB
 
 RUN [[ $VERSION == '0.0.0' ]] || \
     (wget https://docs.securityonion.net/_/downloads/en/$(echo $VERSION | cut -d'.' -f 1,2)/htmlzip/ -O /tmp/docs.zip && \
