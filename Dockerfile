@@ -47,8 +47,7 @@ RUN [[ $VERSION == '0.0.0' ]] || \
     (wget https://docs.securityonion.net/_/downloads/en/$(echo $VERSION | cut -d'.' -f 1,2)/htmlzip/ -O /tmp/docs.zip && \
     unzip -o /tmp/docs.zip -d html/docs && \
     rm -f /tmp/docs.zip && \
-    mv -f html/docs/securityonion-*/* html/docs && \
-    rm -fr html/docs/securityonion-*)
+    mv -f html/docs/securityonion-*/* html/docs)
 
 RUN [[ $ELASTIC_VERSION == '0.0.0' ]] || \
     (mkdir -p html/downloads && \
