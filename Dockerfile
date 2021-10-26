@@ -51,15 +51,15 @@ RUN [[ $VERSION == '0.0.0' ]] || \
     rm -fr html/docs/securityonion-* && \
     wget https://github.com/Security-Onion-Solutions/securityonion-docs/raw/$(echo $VERSION | cut -d'.' -f 1,2)/images/cheat-sheet/Security-Onion-Cheat-Sheet.pdf -O html/docs/cheatsheet.pdf)
 
-RUN [[ $ELASTIC_VERSION == '0.0.0' ]] || \
-    (mkdir -p html/downloads && \
-     wget https://artifacts.elastic.co/downloads/beats/winlogbeat/winlogbeat-oss-$(echo $ELASTIC_VERSION)-windows-x86_64.msi -P html/downloads/ && \
-     wget https://artifacts.elastic.co/downloads/beats/metricbeat/metricbeat-oss-$(echo $ELASTIC_VERSION)-x86_64.rpm -P html/downloads/ && \
-     wget https://artifacts.elastic.co/downloads/beats/filebeat/filebeat-oss-$(echo $ELASTIC_VERSION)-x86_64.rpm -P html/downloads/ && \
-     wget https://artifacts.elastic.co/downloads/beats/auditbeat/auditbeat-oss-$(echo $ELASTIC_VERSION)-x86_64.rpm -P html/downloads/ && \
-     wget https://artifacts.elastic.co/downloads/beats/metricbeat/metricbeat-oss-$(echo $ELASTIC_VERSION)-amd64.deb -P html/downloads/ && \
-     wget https://artifacts.elastic.co/downloads/beats/filebeat/filebeat-oss-$(echo $ELASTIC_VERSION)-amd64.deb -P html/downloads/ && \
-     wget https://artifacts.elastic.co/downloads/beats/auditbeat/auditbeat-oss-$(echo $ELASTIC_VERSION)-amd64.deb -P html/downloads/)
+
+RUN    mkdir -p html/downloads
+RUN      wget https://artifacts.elastic.co/downloads/beats/winlogbeat/winlogbeat-oss-$(echo $ELASTIC_VERSION)-windows-x86_64.msi -P html/downloads/
+RUN      wget https://artifacts.elastic.co/downloads/beats/metricbeat/metricbeat-oss-$(echo $ELASTIC_VERSION)-x86_64.rpm -P html/downloads/
+RUN      wget https://artifacts.elastic.co/downloads/beats/filebeat/filebeat-oss-$(echo $ELASTIC_VERSION)-x86_64.rpm -P html/downloads/
+RUN      wget https://artifacts.elastic.co/downloads/beats/auditbeat/auditbeat-oss-$(echo $ELASTIC_VERSION)-x86_64.rpm -P html/downloads/
+RUN      wget https://artifacts.elastic.co/downloads/beats/metricbeat/metricbeat-oss-$(echo $ELASTIC_VERSION)-amd64.deb -P html/downloads/
+RUN      wget https://artifacts.elastic.co/downloads/beats/filebeat/filebeat-oss-$(echo $ELASTIC_VERSION)-amd64.deb -P html/downloads/
+RUN      wget https://artifacts.elastic.co/downloads/beats/auditbeat/auditbeat-oss-$(echo $ELASTIC_VERSION)-amd64.deb -P html/downloads/
 
 RUN [[ $WAZUH_VERSION == '0.0.0' ]] || \
     (mkdir -p html/downloads && \
