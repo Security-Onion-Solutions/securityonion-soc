@@ -7,7 +7,7 @@
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-package thehive
+package elasticcases
 
 import (
   "errors"
@@ -15,46 +15,47 @@ import (
   "github.com/security-onion-solutions/securityonion-soc/server"
 )
 
-type TheHive struct {
+type ElasticCases struct {
   config module.ModuleConfig
   server *server.Server
-  store  *TheHiveCasestore
+  store  *ElasticCasestore
 }
 
-func NewTheHive(srv *server.Server) *TheHive {
-  return &TheHive{
+func NewElasticCases(srv *server.Server) *ElasticCases {
+  return &ElasticCases{
     server: srv,
-    store:  NewTheHiveCasestore(srv),
+    store:  NewElasticCasestore(srv),
   }
 }
 
-func (thehive *TheHive) PrerequisiteModules() []string {
+func (somodule *ElasticCases) PrerequisiteModules() []string {
   return nil
 }
 
-func (thehive *TheHive) Init(cfg module.ModuleConfig) error {
-  thehive.config = cfg
-  host, _ := module.GetString(cfg, "hostUrl")
+func (somodule *ElasticCases) Init(cfg module.ModuleConfig) error {
+  somodule.config = cfg
+  host := module.GetStringDefault(cfg, "hostUrl", "kibana")
   verifyCert := module.GetBoolDefault(cfg, "verifyCert", true)
-  key, _ := module.GetString(cfg, "key")
-  err := thehive.store.Init(host, key, verifyCert)
-  if err == nil && thehive.server != nil {
-    if thehive.server.Casestore != nil {
+  username := module.GetStringDefault(cfg, "username", "")
+  password := module.GetStringDefault(cfg, "password", "")
+  err := somodule.store.Init(host, username, password, verifyCert)
+  if err == nil && somodule.server != nil {
+    if somodule.server.Casestore != nil {
       err = errors.New("Multiple case modules cannot be enabled concurrently")
     }
-    thehive.server.Casestore = thehive.store
+    somodule.server.Casestore = somodule.store
   }
   return err
 }
 
-func (thehive *TheHive) Start() error {
+func (somodule *ElasticCases) Start() error {
   return nil
 }
 
-func (thehive *TheHive) Stop() error {
+func (somodule *ElasticCases) Stop() error {
   return nil
 }
 
-func (somodule *TheHive) IsRunning() bool {
+func (somodule *ElasticCases) IsRunning() bool {
   return false
 }

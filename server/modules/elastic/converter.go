@@ -292,7 +292,12 @@ func convertFromElasticResults(store *ElasticEventstore, esJson string, results 
 		event.Type = esRecord["_type"].(string)
 		event.Score = esRecord["_score"].(float64)
 		event.Payload = flatten(store, esRecord["_source"].(map[string]interface{}))
-		ts, _ := time.Parse(time.RFC3339, event.Payload["@timestamp"].(string))
+		var ts time.Time
+		if event.Payload["@timestamp"] != nil {
+			ts, _ = time.Parse(time.RFC3339, event.Payload["@timestamp"].(string))
+		} else if event.Payload["timestamp"] != nil {
+			ts, _ = time.Parse(time.RFC3339, event.Payload["timestamp"].(string))
+		}
 		event.Timestamp = ts.Format("2006-01-02T15:04:05.000Z")
 		results.Events = append(results.Events, event)
 	}

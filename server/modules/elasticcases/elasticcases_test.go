@@ -8,7 +8,7 @@
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-package thehive
+package elasticcases
 
 import (
 	"testing"
@@ -18,13 +18,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestTheHiveInit(tester *testing.T) {
-	thehive := NewTheHive(server.NewFakeUnauthorizedServer())
+func TestElasticCasesInit(tester *testing.T) {
+	somodule := NewElasticCases(server.NewFakeUnauthorizedServer())
 	cfg := make(module.ModuleConfig)
-	err := thehive.Init(cfg)
+	err := somodule.Init(cfg)
 	assert.Nil(tester, err)
 
 	// Fail if casestore already initialized
-	err = thehive.Init(cfg)
+	err = somodule.Init(cfg)
 	assert.Error(tester, err)
 }
