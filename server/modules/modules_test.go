@@ -20,6 +20,7 @@ import (
 func TestBuildModuleMap(tester *testing.T) {
 	mm := BuildModuleMap(nil)
 	findModule(tester, mm, "elastic")
+	findModule(tester, mm, "elasticcases")
 	findModule(tester, mm, "filedatastore")
 	findModule(tester, mm, "httpcase")
 	findModule(tester, mm, "kratos")

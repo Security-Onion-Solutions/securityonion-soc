@@ -10,6 +10,7 @@
 package generichttp
 
 import (
+  "errors"
   "github.com/security-onion-solutions/securityonion-soc/module"
   "github.com/security-onion-solutions/securityonion-soc/server"
 )
@@ -39,6 +40,9 @@ func (somodule *HttpCase) Init(cfg module.ModuleConfig) error {
   createParams := NewGenericHttpParams(cfg, "create")
   err := somodule.store.Init(host, verifyCert, headers, createParams)
   if err == nil && somodule.server != nil {
+    if somodule.server.Casestore != nil {
+      err = errors.New("Multiple case modules cannot be enabled concurrently")
+    }
     somodule.server.Casestore = somodule.store
   }
   return err
