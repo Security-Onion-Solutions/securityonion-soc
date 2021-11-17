@@ -467,30 +467,16 @@
                   <template v-slot:item="{ item, index }">
                     <tr>
                       <td>
-                        <v-tooltip bottom v-if="ackEnabled && item['event.severity_label']">	
-                          <template v-slot:activator="{ on, attrs }">
-                            <span v-bind="attrs" v-on="on">
-                              <v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" class="mx-2" icon x-small 
-                                @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))" 
-                                :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
-                                <v-icon>fa-bell</v-icon>
-                              </v-btn>
-                            </span>
-                          </template>
-                          <span>{{ isFilterToggleEnabled('acknowledged') ? i18n.alertUndoAcknowledge : i18n.alertAcknowledge }}</span>
-                        </v-tooltip>
-                        <v-tooltip bottom v-if="escalateEnabled">	
-                          <template v-slot:activator="{ on, attrs }">
-                            <span v-bind="attrs" v-on="on">
-                              <v-btn id="escalateButton" v-if="escalateEnabled" class="mx-2" icon x-small 
-                                @click="ack($event, item, index, true, true)" 
-                                :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
-                                <v-icon>fa-exclamation-triangle</v-icon>
-                              </v-btn>                    
-                            </span>
-                          </template>
-                          <span>{{ isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate }}</span>
-                        </v-tooltip>
+                        <v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" class="mx-2" icon x-small
+                          @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))"
+                          :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
+                          <v-icon :title="isFilterToggleEnabled('acknowledged') ? i18n.alertUndoAcknowledge : i18n.alertAcknowledge">fa-bell</v-icon>
+                        </v-btn>
+                        <v-btn id="escalateButton" v-if="escalateEnabled" class="mx-2" icon x-small
+                          @click="ack($event, item, index, true, true)"
+                          :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
+                          <v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate">fa-exclamation-triangle</v-icon>
+                        </v-btn>
                       </td>
                       <td>
                         <v-tooltip bottom v-if="loaded && eventsEnabled && metricsEnabled && ( (groupByHeaders.length==3 && groupByHeaders[1]['value']=='count' ) || (groupByHeaders.length==5 && groupByHeaders[1]['value']=='count' && groupByHeaders[2]['value']=='rule.name' && groupByHeaders[3]['value']=='event.module' && groupByHeaders[4]['value']=='event.severity_label') ) ">
@@ -551,30 +537,16 @@
                           <v-icon v-if="isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-down</v-icon>
                           <v-icon v-if="!isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-right</v-icon>
                         </v-btn>
-                        <v-tooltip bottom v-if="ackEnabled && item['event.severity_label']">
-                          <template v-slot:activator="{ on, attrs }">
-                            <span v-bind="attrs" v-on="on">
-                              <v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" class="mx-2" icon x-small 
-                                @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))" 
-                                :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
-                                <v-icon>fa-bell</v-icon>
-                              </v-btn>
-                            </span>
-                          </template>
-                          <span>{{ isFilterToggleEnabled('acknowledged') ? i18n.alertUndoAcknowledge : i18n.alertAcknowledge }}</span>
-                        </v-tooltip>
-                        <v-tooltip bottom v-if="escalateEnabled">
-                          <template v-slot:activator="{ on, attrs }">
-                            <span v-bind="attrs" v-on="on">
-                              <v-btn id="escalateButton" v-if="escalateEnabled" class="mx-2" icon x-small 
-                                @click="ack($event, item, index, true, true)" 
-                                :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
-                                <v-icon>fa-exclamation-triangle</v-icon>
-                              </v-btn>
-                            </span>
-                          </template>
-                          <span>{{ isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate }}</span>
-                        </v-tooltip>
+                        <v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" class="mx-2" icon x-small
+                          @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))"
+                          :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
+                          <v-icon :title="isFilterToggleEnabled('acknowledged') ? i18n.alertUndoAcknowledge : i18n.alertAcknowledge">fa-bell</v-icon>
+                        </v-btn>
+                        <v-btn id="escalateButton" v-if="escalateEnabled" class="mx-2" icon x-small
+                          @click="ack($event, item, index, true, true)"
+                          :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
+                          <v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate">fa-exclamation-triangle</v-icon>
+                        </v-btn>
                       </td>
                       <td v-for="field in eventHeaders" :key="field.value">
                         <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction($event, item, field.value, item[field.value])"></div>
