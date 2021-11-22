@@ -170,7 +170,7 @@ func (store *ElasticEventstore) unmapElasticField(field string) string {
 func (store *ElasticEventstore) Search(ctx context.Context, criteria *model.EventSearchCriteria) (*model.EventSearchResults, error) {
 	var err error
 	results := model.NewEventSearchResults()
-	if err := store.server.Authorizer.CheckContextOperationAuthorized(ctx, "read", "events"); err == nil {
+	if err := store.server.CheckAuthorized(ctx, "read", "events"); err == nil {
 		store.refreshCache(ctx)
 
 		var query string
@@ -201,7 +201,7 @@ func (store *ElasticEventstore) disableCrossClusterIndexing(indexes []string) []
 func (store *ElasticEventstore) Update(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
 	var err error
 	results := model.NewEventUpdateResults()
-	if err = store.server.Authorizer.CheckContextOperationAuthorized(ctx, "write", "events"); err == nil {
+	if err = store.server.CheckAuthorized(ctx, "write", "events"); err == nil {
 		store.refreshCache(ctx)
 
 		results.Criteria = criteria
@@ -396,7 +396,15 @@ func (store *ElasticEventstore) cacheFields(name gjson.Result, details gjson.Res
 			aggregatable: field["aggregatable"].(bool),
 			searchable:   field["searchable"].(bool),
 		}
-		store.fieldDefs[fieldName] = fieldDef
+
+		// If there are multiple types for this field prefer the non-aggregatable since
+		// we cannot reliably aggregate across all indices. In most, or maybe all cases,
+		// there will be a .keyword subfield across both indices which will be used
+		// for aggregation purposes until all ingested data is fully ECS data type
+		// compliant.
+		if store.fieldDefs[fieldName] == nil || !fieldDef.aggregatable {
+			store.fieldDefs[fieldName] = fieldDef
+		}
 
 		log.WithFields(log.Fields{
 			"name":         name,
@@ -703,7 +711,7 @@ func (store *ElasticEventstore) Acknowledge(ctx context.Context, ackCriteria *mo
 	var results *model.EventUpdateResults
 	var err error
 	if len(ackCriteria.EventFilter) > 0 {
-		if err = store.server.Authorizer.CheckContextOperationAuthorized(ctx, "ack", "events"); err == nil {
+		if err = store.server.CheckAuthorized(ctx, "ack", "events"); err == nil {
 			log.WithFields(log.Fields{
 				"searchFilter": ackCriteria.SearchFilter,
 				"eventFilter":  ackCriteria.EventFilter,

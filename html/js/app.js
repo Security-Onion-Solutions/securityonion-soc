@@ -337,6 +337,14 @@ $(document).ready(function() {
           this.parameterCallback = callback;
         }
       },
+      async logout() {
+        try {
+          const response = await this.$root.authApi.get('logout/browser');
+          location.href = response.data.logout_url;
+        } catch (error) {
+          this.$root.showError(this.i18n.logoutFailure);
+        }
+      },
       toggleTheme() {
         this.$vuetify.theme.dark = !this.$vuetify.theme.dark
         this.timestamp=Date.now();
@@ -417,6 +425,24 @@ $(document).ready(function() {
           return strArray.join(", ");
         }
         return "";
+      },
+      generateDatePickerPreselects() {
+        var preselects = {};
+        preselects[this.i18n.datePreselectToday] = [moment().startOf('day'), moment().endOf('day')];
+        preselects[this.i18n.datePreselectYesterday] = [moment().subtract(1, 'days').startOf('day'), moment().subtract(1, 'days').endOf('day')];
+        preselects[this.i18n.datePreselectThisWeek] = [moment().startOf('week'), moment().endOf('week')];
+        preselects[this.i18n.datePreselectLastWeek] = [moment().subtract(1, 'week').startOf('week'), moment().subtract(1, 'week').endOf('week')];
+        preselects[this.i18n.datePreselectThisMonth] = [moment().startOf('month'), moment().endOf('month')];
+        preselects[this.i18n.datePreselectLastMonth] = [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')];
+        preselects[this.i18n.datePreselectPrevious3d] = [moment().subtract(3, 'days').startOf('day'), moment().subtract(1, 'days').endOf('day')];
+        preselects[this.i18n.datePreselectPrevious4d] = [moment().subtract(4, 'days').startOf('day'), moment().subtract(1, 'days').endOf('day')];
+        preselects[this.i18n.datePreselectPrevious7d] = [moment().subtract(7, 'days').startOf('day'), moment().subtract(1, 'days').endOf('day')];
+        preselects[this.i18n.datePreselectPrevious30d] = [moment().subtract(30, 'days').startOf('day'), moment().subtract(1, 'days').endOf('day')];
+        preselects[this.i18n.datePreselect3dToNow] = [moment().subtract(3, 'days'), moment()];
+        preselects[this.i18n.datePreselect4dToNow] = [moment().subtract(4, 'days'), moment()];
+        preselects[this.i18n.datePreselect7dToNow] = [moment().subtract(7, 'days'), moment()];
+        preselects[this.i18n.datePreselect30dToNow] = [moment().subtract(30, 'days'), moment()];
+        return preselects;
       },
       localizeMessage(origMsg) {
         var msg = origMsg;
@@ -659,7 +685,7 @@ $(document).ready(function() {
       },
       async getUsers() {
         try {
-          const response = await this.papi.get('users');
+          const response = await this.papi.get('users/');
           this.users = response.data;
         } catch (error) {
           this.showError(error);

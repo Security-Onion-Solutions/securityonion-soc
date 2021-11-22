@@ -15,7 +15,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/security-onion-solutions/securityonion-soc/fake"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -42,9 +41,9 @@ func createDatastore(authorized bool) (*FileDatastoreImpl, error) {
 
 	var srv *server.Server
 	if authorized {
-		srv = fake.NewAuthorizedServer(nil)
+		srv = server.NewFakeAuthorizedServer(nil)
 	} else {
-		srv = fake.NewUnauthorizedServer()
+		srv = server.NewFakeUnauthorizedServer()
 	}
 	ds := NewFileDatastoreImpl(srv)
 	cfg := make(module.ModuleConfig)

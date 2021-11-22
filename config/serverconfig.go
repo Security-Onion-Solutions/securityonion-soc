@@ -20,16 +20,17 @@ const DEFAULT_MAX_PACKET_COUNT = 5000
 const DEFAULT_IDLE_CONNECTION_TIMEOUT_MS = 300000
 
 type ServerConfig struct {
-  AirgapEnabled                   bool                              `json:"airgapEnabled"`
-  BindAddress                     string                            `json:"bindAddress"`
-  BaseUrl                         string                            `json:"baseUrl"`
-  HtmlDir                         string                            `json:"htmlDir"`
-  MaxPacketCount                  int                               `json:"maxPacketCount"`
-  Modules                         module.ModuleConfigMap            `json:"modules"`
-  ModuleFailuresIgnored           bool                              `json:"moduleFailuresIgnored"`
-  ClientParams                    ClientParameters                  `json:"client"`
-  IdleConnectionTimeoutMs         int                               `json:"idleConnectionTimeoutMs"`
-  TimezoneScript                  string                            `json:"timezoneScript"`
+  AirgapEnabled           bool                   `json:"airgapEnabled"`
+  BindAddress             string                 `json:"bindAddress"`
+  BaseUrl                 string                 `json:"baseUrl"`
+  DeveloperEnabled        bool                   `json:"developerEnabled"`
+  HtmlDir                 string                 `json:"htmlDir"`
+  MaxPacketCount          int                    `json:"maxPacketCount"`
+  Modules                 module.ModuleConfigMap `json:"modules"`
+  ModuleFailuresIgnored   bool                   `json:"moduleFailuresIgnored"`
+  ClientParams            ClientParameters       `json:"client"`
+  IdleConnectionTimeoutMs int                    `json:"idleConnectionTimeoutMs"`
+  TimezoneScript          string                 `json:"timezoneScript"`
 }
 
 func (config *ServerConfig) Verify() error {
@@ -40,7 +41,7 @@ func (config *ServerConfig) Verify() error {
   if config.BindAddress == "" {
     err = errors.New("Server.BindAddress configuration value is required")
   }
-  if strings.TrimSpace(config.BaseUrl) == ""{
+  if strings.TrimSpace(config.BaseUrl) == "" {
     config.BaseUrl = "/"
   }
   if config.BaseUrl[len(config.BaseUrl)-1] != '/' {
@@ -49,7 +50,7 @@ func (config *ServerConfig) Verify() error {
   if err == nil {
     err = config.ClientParams.Verify()
   }
-  if (config.IdleConnectionTimeoutMs <= 0) {
+  if config.IdleConnectionTimeoutMs <= 0 {
     config.IdleConnectionTimeoutMs = DEFAULT_IDLE_CONNECTION_TIMEOUT_MS
   }
   if len(config.TimezoneScript) == 0 {

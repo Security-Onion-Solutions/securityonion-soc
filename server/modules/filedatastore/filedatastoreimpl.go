@@ -73,7 +73,7 @@ func (datastore *FileDatastoreImpl) CreateNode(ctx context.Context, id string) *
 
 func (datastore *FileDatastoreImpl) GetNodes(ctx context.Context) []*model.Node {
   allNodes := make([]*model.Node, 0)
-  if err := datastore.server.Authorizer.CheckContextOperationAuthorized(ctx, "read", "nodes"); err == nil {
+  if err := datastore.server.CheckAuthorized(ctx, "read", "nodes"); err == nil {
     datastore.lock.RLock()
     defer datastore.lock.RUnlock()
     for _, node := range datastore.nodesById {
@@ -101,7 +101,7 @@ func (datastore *FileDatastoreImpl) UpdateNode(ctx context.Context, newNode *mod
   var node *model.Node
   var err error
   if len(newNode.Id) > 0 {
-    if err = datastore.server.Authorizer.CheckContextOperationAuthorized(ctx, "write", "nodes"); err == nil {
+    if err = datastore.server.CheckAuthorized(ctx, "write", "nodes"); err == nil {
       datastore.lock.Lock()
       defer datastore.lock.Unlock()
       node = datastore.nodesById[newNode.Id]
@@ -142,7 +142,7 @@ func (datastore *FileDatastoreImpl) GetNextJob(ctx context.Context, nodeId strin
   defer datastore.lock.RUnlock()
   var nextJob *model.Job
 
-  if err := datastore.server.Authorizer.CheckContextOperationAuthorized(ctx, "process", "jobs"); err == nil {
+  if err := datastore.server.CheckAuthorized(ctx, "process", "jobs"); err == nil {
     now := time.Now()
     jobs := datastore.jobsByNodeId[strings.ToLower(nodeId)]
     for _, job := range jobs {
@@ -175,7 +175,7 @@ func (datastore *FileDatastoreImpl) jobIsAllowed(ctx context.Context, job *model
   allowed := false
 
   if job != nil {
-    if err := datastore.server.Authorizer.CheckContextOperationAuthorized(ctx, op, "jobs"); err == nil {
+    if err := datastore.server.CheckAuthorized(ctx, op, "jobs"); err == nil {
       // User can operate on all jobs
       allowed = true
     } else {
@@ -218,7 +218,7 @@ func (datastore *FileDatastoreImpl) GetJobs(ctx context.Context) []*model.Job {
 
 func (datastore *FileDatastoreImpl) AddJob(ctx context.Context, job *model.Job) error {
   var err error
-  if err = datastore.server.Authorizer.CheckContextOperationAuthorized(ctx, "write", "jobs"); err == nil {
+  if err = datastore.server.CheckAuthorized(ctx, "write", "jobs"); err == nil {
     if err == nil {
       err = datastore.addAndSaveJob(ctx, job)
     }
@@ -228,10 +228,8 @@ func (datastore *FileDatastoreImpl) AddJob(ctx context.Context, job *model.Job) 
 
 func (datastore *FileDatastoreImpl) AddPivotJob(ctx context.Context, job *model.Job) error {
   var err error
-  if err = datastore.server.Authorizer.CheckContextOperationAuthorized(ctx, "pivot", "jobs"); err == nil {
-    if err == nil {
-      err = datastore.addAndSaveJob(ctx, job)
-    }
+  if err = datastore.server.CheckAuthorized(ctx, "pivot", "jobs"); err == nil {
+    err = datastore.addAndSaveJob(ctx, job)
   }
   return err
 }
@@ -254,7 +252,7 @@ func (datastore *FileDatastoreImpl) addAndSaveJob(ctx context.Context, job *mode
 
 func (datastore *FileDatastoreImpl) UpdateJob(ctx context.Context, job *model.Job) error {
   var err error
-  if err = datastore.server.Authorizer.CheckContextOperationAuthorized(ctx, "process", "jobs"); err == nil {
+  if err = datastore.server.CheckAuthorized(ctx, "process", "jobs"); err == nil {
     existingJob := datastore.getJobById(job.Id)
     if existingJob != nil {
       job.UserId = existingJob.UserId // Prevent users from altering the creating user
@@ -420,7 +418,7 @@ func (datastore *FileDatastoreImpl) GetPackets(ctx context.Context, jobId int, o
 
 func (datastore *FileDatastoreImpl) SavePacketStream(ctx context.Context, jobId int, reader io.ReadCloser) error {
   var err error
-  if err = datastore.server.Authorizer.CheckContextOperationAuthorized(ctx, "process", "jobs"); err == nil {
+  if err = datastore.server.CheckAuthorized(ctx, "process", "jobs"); err == nil {
     job := datastore.getJobById(jobId)
     if job != nil {
       if job.CanProcess() {

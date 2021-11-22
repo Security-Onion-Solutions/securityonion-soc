@@ -114,6 +114,7 @@ func TestConvertFromElasticResultsSuccess(tester *testing.T) {
 		assert.Equal(tester, 23689430, results.TotalEvents)
 		assert.Len(tester, results.Events, 25)
 		assert.Equal(tester, "2020-04-24T03:00:55.300Z", results.Events[0].Timestamp)
+		assert.Equal(tester, "2020-04-24T03:00:55.038Z", results.Events[1].Timestamp) // Check for alternate timestamp field
 		assert.Equal(tester, "so16:logstash-bro-2020.04.24", results.Events[0].Source)
 		assert.NotNil(tester, results.Metrics["groupby|source_ip"])
 		assert.NotNil(tester, results.Metrics["groupby|source_ip|destination_ip"])

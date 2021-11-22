@@ -33,6 +33,9 @@ func NewUserHandler(srv *Server) *UserHandler {
 
 func (userHandler *UserHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   if userHandler.server.Userstore == nil {
+    if userHandler.server.Config.DeveloperEnabled {
+      return http.StatusOK, nil, nil
+    }
     return http.StatusMethodNotAllowed, nil, errors.New("Users module not enabled")
   }
 

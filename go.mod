@@ -4,12 +4,12 @@ go 1.16
 
 require (
 	github.com/apex/log v1.9.0
-	github.com/elastic/go-elasticsearch/v7 v7.11.0
+	github.com/elastic/go-elasticsearch/v7 v7.15.0
 	github.com/google/gopacket v1.1.19
-	github.com/google/uuid v1.1.1 // indirect
+	github.com/google/uuid v1.3.0
 	github.com/gorilla/websocket v1.4.2
-	github.com/influxdata/influxdb-client-go/v2 v2.2.3 // indirect
+	github.com/influxdata/influxdb-client-go/v2 v2.5.1
 	github.com/kennygrant/sanitize v1.2.4
-	github.com/stretchr/testify v1.7.0 // indirect
-	github.com/tidwall/gjson v1.6.8
+	github.com/stretchr/testify v1.7.0
+	github.com/tidwall/gjson v1.9.3
 )

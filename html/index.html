@@ -186,7 +186,7 @@
                 <v-list-item-title v-text="i18n.settings"></v-list-item-title>
               </v-list-item-content>
             </v-list-item>
-            <v-list-item :href="authUrl + 'browser/flows/logout'">
+            <v-list-item @click.stop="logout">
               <v-list-item-action>
                 <v-icon class="mx-auto">fa-sign-out-alt</v-icon>
               </v-list-item-action>
@@ -401,178 +401,186 @@
             </span>
           </v-col>
         </v-row>
-        <v-row v-if="loaded && isAdvanced() && !metricsEnabled">
-          <v-col cols="12">
-            <line-chart :height="chartHeight" :chartdata="timelineChartData" :options="timelineChartOptions"/>
-          </v-col>
-        </v-row>
-        <v-row v-if="metricsEnabled && isAdvanced()">
-          <v-col cols="12" md="4">
-            <bar-chart id="topChart" :height="chartHeight" :chartdata="topChartData" :options="topChartOptions"/>
-          </v-col>
-          <v-col cols="12" md="4">
-            <line-chart id="timelineChart" :height="chartHeight" :chartdata="timelineChartData" :options="timelineChartOptions"/>
-          </v-col>
-          <v-col cols="12" md="4">
-            <bar-chart id="bottomChart":height="chartHeight" :chartdata="bottomChartData" :options="bottomChartOptions"/>
-          </v-col>
-        </v-row>
-        <v-row v-if="metricsEnabled">
-          <v-col cols="12">
-            <v-data-table :search="groupByFilter" dense :sort-by.sync="groupBySortBy" :sort-desc.sync="groupBySortDesc" :footer-props="groupByFooters" 
-              :items-per-page.sync="groupByItemsPerPage" must-sort :headers="groupByHeaders" :items="groupByData" :page.sync="groupByPage" :custom-sort="sortEvents">
-              <template v-slot:top v-if="isAdvanced()">
-                <v-container fluid>
-                  <v-row>
-                    <v-col cols="4">
-                      <h3>{{ i18n.groups }}</h3>
-                    </v-col>
-                    <v-col cols="2">
-                      <v-select :disabled="loading()" @change="notifyInputsChanged" v-model="groupByLimit" :items="groupByLimitOptions" :label="i18n.fetchLimit"></v-select>
-                    </v-col>
-                    <v-col cols="6">
-                      <v-text-field v-model="groupByFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
-                    </v-col>
-                  </v-row>
-                </v-container>        
-              </template>
-              <template v-slot:item="{ item, index }">
-                <tr>
-                  <td>
-                    <v-tooltip bottom v-if="ackEnabled && item['event.severity_label']">	
-                      <template v-slot:activator="{ on, attrs }">
-                        <span v-bind="attrs" v-on="on">
-                          <v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" class="mx-2" icon x-small 
-                            @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))" 
-                            :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
-                            <v-icon>fa-bell</v-icon>
-                          </v-btn>
-                        </span>
-                      </template>
-                      <span>{{ isFilterToggleEnabled('acknowledged') ? i18n.alertUndoAcknowledge : i18n.alertAcknowledge }}</span>
-                    </v-tooltip>
-                    <v-tooltip bottom v-if="escalateEnabled">	
-                      <template v-slot:activator="{ on, attrs }">
-                        <span v-bind="attrs" v-on="on">
-                          <v-btn id="escalateButton" v-if="escalateEnabled" class="mx-2" icon x-small 
-                            @click="ack($event, item, index, true, true)" 
-                            :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
-                            <v-icon>fa-exclamation-triangle</v-icon>
-                          </v-btn>                    
-                        </span>
-                      </template>
-                      <span>{{ isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate }}</span>
-                    </v-tooltip>
-                  </td>
-                  <td>
-                    <v-tooltip bottom v-if="loaded && eventsEnabled && metricsEnabled && ( (groupByHeaders.length==3 && groupByHeaders[1]['value']=='count' ) || (groupByHeaders.length==5 && groupByHeaders[1]['value']=='count' && groupByHeaders[2]['value']=='rule.name' && groupByHeaders[3]['value']=='event.module' && groupByHeaders[4]['value']=='event.severity_label') ) ">
-                      <template v-slot:activator="{ on, attrs }">
-                        <span v-bind="attrs" v-on="on">
-                          <div class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()" v-bind="attrs" @click="countDrilldown(item)"></div>
-                        </span>
-                      </template>
-                      <span>{{ i18n.quickDrilldown }}</span>
-                    </v-tooltip>
-                     <div v-else class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()"></div>
-                  </td>
-                  <td v-for="field in groupByHeaders.slice(2)" :key="field.value">
-                    <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction($event, item, field.value, item[field.value])"></div>
-                  </td>
-                </tr>
-              </template>
-
-            </v-data-table>
-          </v-col>
-        </v-row>
-        <v-row v-if="loaded && eventsEnabled && (isAdvanced() || !metricsEnabled)">
-          <v-col cols="12">
-            <v-data-table :search="eventFilter" :sort-by.sync="sortBy" item-key="soc_id" :expanded.sync="expanded" :sort-desc.sync="sortDesc" :footer-props="footerProps" 
-              :items-per-page.sync="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" show-expand :page.sync="eventPage" :custom-sort="sortEvents">
-              <template v-slot:top v-if="isAdvanced()">
-                <v-container fluid>
-                  <v-row>
-                    <v-col cols="4">
-                      <h3>{{ i18n.events }}</h3>
-                    </v-col>
-                    <v-col cols="2">
-                      <v-select :disabled="loading()" @change="notifyInputsChanged" v-model="eventLimit" :items="eventLimitOptions" :label="i18n.fetchLimit"></v-select>
-                    </v-col>
-                    <v-col cols="6">
-                      <v-text-field v-model="eventFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
-                    </v-col>
-                  </v-row>
-                </v-container>
-              </template>        
-              <template v-slot:item="{ item, index }">
-                <tr>
-                  <td>
-                    <v-tooltip bottom>
-                      <template v-slot:activator="{ on, attrs }">
-                        <span v-bind="attrs" v-on="on">
-                          <v-btn id="expandEvent" icon small @click="expand(item)">
-                            <v-icon v-if="isExpanded(item)" :alt="i18n.eventExpand">fa-angle-down</v-icon>
-                            <v-icon v-if="!isExpanded(item)" :alt="i18n.eventExpand">fa-angle-right</v-icon>
-                          </v-btn>
-                        </span>
-                      </template>
-                      <span>{{ i18n.eventExpandHelp }}</span>
-                    </v-tooltip>
-                    <v-tooltip bottom v-if="ackEnabled && item['event.severity_label']">
-                      <template v-slot:activator="{ on, attrs }">
-                        <span v-bind="attrs" v-on="on">
-                          <v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" class="mx-2" icon x-small 
-                            @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))" 
-                            :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
-                            <v-icon>fa-bell</v-icon>
-                          </v-btn>
-                        </span>
-                      </template>
-                      <span>{{ isFilterToggleEnabled('acknowledged') ? i18n.alertUndoAcknowledge : i18n.alertAcknowledge }}</span>
-                    </v-tooltip>
-                    <v-tooltip bottom v-if="escalateEnabled">
-                      <template v-slot:activator="{ on, attrs }">
-                        <span v-bind="attrs" v-on="on">
-                          <v-btn id="escalateButton" v-if="escalateEnabled" class="mx-2" icon x-small 
-                            @click="ack($event, item, index, true, true)" 
-                            :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
-                            <v-icon>fa-exclamation-triangle</v-icon>
-                          </v-btn>
-                        </span>
-                      </template>
-                      <span>{{ isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate }}</span>
-                    </v-tooltip>
-                  </td>
-                  <td v-for="field in eventHeaders" :key="field.value">
-                    <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction($event, item, field.value, item[field.value])"></div>
-                  </td>
-                </tr>
-              </template>
-              <template v-slot:expanded-item="{ headers, item }">
-                <tr>
-                  <td :colspan="headers.length" class="px-0">
-                    <v-data-table dense disable-pagination hide-default-header hide-default-footer must-sort :headers="expandedHeaders" :items="getExpandedData()">
-                      <template v-slot:item="{ item }">
-                        <tr class="pt-3">
-                          <td class="expansion">
-                            <div class="d-inline-block semi-transparent">
-                              <v-btn :disabled="!canQuery(item.key)" icon x-small :to="buildGroupByRoute(item.key)">
-                                <v-icon :alt="i18n.groupInclude" :title="i18n.groupIncludeHelp">fa-layer-group</v-icon>
-                              </v-btn>
-                            </div>
-                            <div class="d-inline-block expansion" v-text="item.key"></div>
-                          </td>
-                          <td class="expansion">
-                            <div class="quick-action-trigger d-inline-block expansion hardwrap" v-text="item.value" @click="toggleQuickAction($event, expanded[0], item.key, item.value)"></div>
-                          </td>
-                        </tr>
-                      </template>
-                    </v-data-table>
-                  </td>
-                </tr>
-              </template>
-            </v-data-table>
-          </v-col>
-        </v-row>
+        <v-col  id="graphs" v-if="loaded && isAdvanced()">
+          <v-toolbar dense flat>
+            <v-toolbar-title>{{ i18n.graphs }}</v-toolbar-title>
+            <v-spacer />
+            <v-btn
+              text
+              @click="toggleShowSection('hunt-graphs')"
+            >
+              <v-icon v-if="!isExpandedSection('hunt-graphs')">fa-angle-down</v-icon>
+              <v-icon v-if="isExpandedSection('hunt-graphs')">fa-angle-up</v-icon>
+            </v-btn>
+          </v-toolbar>
+          <v-expand-transition>
+            <div v-if="isExpandedSection('hunt-graphs')">
+              <v-row v-if="!metricsEnabled">
+                <v-col cols="12">
+                  <line-chart :height="chartHeight" :chartdata="timelineChartData" :options="timelineChartOptions"/>
+                </v-col>
+              </v-row>
+              <v-row v-if="metricsEnabled">
+                <v-col cols="12" md="4">
+                  <bar-chart id="topChart" :height="chartHeight" :chartdata="topChartData" :options="topChartOptions"/>
+                </v-col>
+                <v-col cols="12" md="4">
+                  <line-chart id="timelineChart" :height="chartHeight" :chartdata="timelineChartData" :options="timelineChartOptions"/>
+                </v-col>
+                <v-col cols="12" md="4">
+                  <bar-chart id="bottomChart":height="chartHeight" :chartdata="bottomChartData" :options="bottomChartOptions"/>
+                </v-col>
+              </v-row>
+            </div>
+          </v-expand-transition>
+        </v-col>
+        <v-col id="group-metrics" v-if="metricsEnabled">
+          <v-toolbar v-if="isAdvanced()" dense flat>
+            <v-toolbar-title>{{ i18n.groups }}</v-toolbar-title>
+            <v-spacer />
+            <v-btn
+              text
+              @click="toggleShowSection('hunt-groups')"
+            >
+              <v-icon v-if="!isExpandedSection('hunt-groups')">fa-angle-down</v-icon>
+              <v-icon v-if="isExpandedSection('hunt-groups')">fa-angle-up</v-icon>
+            </v-btn>
+          </v-toolbar>
+          <v-expand-transition>
+            <v-row v-if="isExpandedSection('hunt-groups')">
+              <v-col cols="12">
+                <v-data-table :search="groupByFilter" dense :sort-by.sync="groupBySortBy" :sort-desc.sync="groupBySortDesc" :footer-props="groupByFooters" 
+                  :items-per-page.sync="groupByItemsPerPage" must-sort :headers="groupByHeaders" :items="groupByData" :page.sync="groupByPage" :custom-sort="sortEvents">
+                  <template v-slot:top v-if="isAdvanced()">
+                    <v-container fluid>
+                      <v-row>
+                        <v-col cols="4"></v-col>
+                        <v-col cols="2">
+                          <v-select :disabled="loading()" @change="notifyInputsChanged" v-model="groupByLimit" :items="groupByLimitOptions" :label="i18n.fetchLimit"></v-select>
+                        </v-col>
+                        <v-col cols="6">
+                          <v-text-field v-model="groupByFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
+                        </v-col>
+                      </v-row>
+                    </v-container>        
+                  </template>
+                  <template v-slot:item="{ item, index }">
+                    <tr>
+                      <td>
+                        <v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" class="mx-2" icon x-small
+                          @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))"
+                          :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
+                          <v-icon :title="isFilterToggleEnabled('acknowledged') ? i18n.alertUndoAcknowledge : i18n.alertAcknowledge">fa-bell</v-icon>
+                        </v-btn>
+                        <v-btn id="escalateButton" v-if="escalateEnabled" class="mx-2" icon x-small
+                          @click="ack($event, item, index, true, true)"
+                          :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
+                          <v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate">fa-exclamation-triangle</v-icon>
+                        </v-btn>
+                      </td>
+                      <td>
+                        <v-tooltip bottom v-if="loaded && eventsEnabled && metricsEnabled && ( (groupByHeaders.length==3 && groupByHeaders[1]['value']=='count' ) || (groupByHeaders.length==5 && groupByHeaders[1]['value']=='count' && groupByHeaders[2]['value']=='rule.name' && groupByHeaders[3]['value']=='event.module' && groupByHeaders[4]['value']=='event.severity_label') ) ">
+                          <template v-slot:activator="{ on, attrs }">
+                            <span v-bind="attrs" v-on="on">
+                              <div class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()" v-bind="attrs" @click="countDrilldown(item)"></div>
+                            </span>
+                          </template>
+                          <span>{{ i18n.quickDrilldown }}</span>
+                        </v-tooltip>
+                         <div v-else class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()"></div>
+                      </td>
+                      <td v-for="field in groupByHeaders.slice(2)" :key="field.value">
+                        <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction($event, item, field.value, item[field.value])"></div>
+                      </td>
+                    </tr>
+                  </template>
+    
+                </v-data-table>
+              </v-col>
+            </v-row>
+          </v-expand-transition>
+        </v-col>
+        <v-col id="events" v-if="loaded && eventsEnabled && (isAdvanced() || !metricsEnabled)">
+          <v-toolbar v-if="isAdvanced()" dense flat>
+            <v-toolbar-title>{{ i18n.events }}</v-toolbar-title>
+            <v-spacer />
+            <v-btn
+              text
+              @click="toggleShowSection('hunt-events')"
+            >
+              <v-icon v-if="!isExpandedSection('hunt-events')">fa-angle-down</v-icon>
+              <v-icon v-if="isExpandedSection('hunt-events')">fa-angle-up</v-icon>
+            </v-btn>
+          </v-toolbar>
+          <v-expand-transition>
+            <v-row v-if="isExpandedSection('hunt-events')">
+              <v-col cols="12">
+                <v-data-table :search="eventFilter" :sort-by.sync="sortBy" item-key="soc_id" :expanded.sync="expanded" :sort-desc.sync="sortDesc" :footer-props="footerProps" 
+                  :items-per-page.sync="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" show-expand :page.sync="eventPage" :custom-sort="sortEvents">
+                  <template v-slot:top v-if="isAdvanced()">
+                    <v-container fluid>
+                      <v-row>
+                        <v-col cols="4"></v-col>
+                        <v-col cols="2">
+                          <v-select :disabled="loading()" @change="notifyInputsChanged" v-model="eventLimit" :items="eventLimitOptions" :label="i18n.fetchLimit"></v-select>
+                        </v-col>
+                        <v-col cols="6">
+                          <v-text-field v-model="eventFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
+                        </v-col>
+                      </v-row>
+                    </v-container>
+                  </template>        
+                  <template v-slot:item="{ item, index }">
+                    <tr>
+                      <td>
+                        <v-btn id="expandEvent" icon small @click="expand(item)">
+                          <v-icon v-if="isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-down</v-icon>
+                          <v-icon v-if="!isExpanded(item)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp">fa-angle-right</v-icon>
+                        </v-btn>
+                        <v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" class="mx-2" icon x-small
+                          @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))"
+                          :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
+                          <v-icon :title="isFilterToggleEnabled('acknowledged') ? i18n.alertUndoAcknowledge : i18n.alertAcknowledge">fa-bell</v-icon>
+                        </v-btn>
+                        <v-btn id="escalateButton" v-if="escalateEnabled" class="mx-2" icon x-small
+                          @click="ack($event, item, index, true, true)"
+                          :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
+                          <v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate">fa-exclamation-triangle</v-icon>
+                        </v-btn>
+                      </td>
+                      <td v-for="field in eventHeaders" :key="field.value">
+                        <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction($event, item, field.value, item[field.value])"></div>
+                      </td>
+                    </tr>
+                  </template>
+                  <template v-slot:expanded-item="{ headers, item }">
+                    <tr>
+                      <td :colspan="headers.length" class="px-0">
+                        <v-data-table dense disable-pagination hide-default-header hide-default-footer must-sort :headers="expandedHeaders" :items="getExpandedData()">
+                          <template v-slot:item="{ item }">
+                            <tr class="pt-3">
+                              <td class="expansion">
+                                <div class="d-inline-block semi-transparent">
+                                  <v-btn :disabled="!canQuery(item.key)" icon x-small :to="buildGroupByRoute(item.key)">
+                                    <v-icon :alt="i18n.groupInclude" :title="i18n.groupIncludeHelp">fa-layer-group</v-icon>
+                                  </v-btn>
+                                </div>
+                                <div class="d-inline-block expansion" v-text="item.key"></div>
+                              </td>
+                              <td class="expansion">
+                                <div class="quick-action-trigger d-inline-block expansion hardwrap" v-text="item.value" @click="toggleQuickAction($event, expanded[0], item.key, item.value)"></div>
+                              </td>
+                            </tr>
+                          </template>
+                        </v-data-table>
+                      </td>
+                    </tr>
+                  </template>
+                </v-data-table>
+              </v-col>
+            </v-row>
+          </v-expand-transition>
+        </v-col>
         <v-row v-if="loaded && isAdvanced()">
           <v-col cols="6">
             <v-subheader inset>{{ i18n.eventFetchTook }} {{ fetchTimeSecs }} {{ i18n.seconds }}. {{ i18n.eventRoundTripTook }} {{ roundTripTimeSecs }} {{ i18n.seconds }}.</v-subheader>
@@ -713,20 +721,29 @@
           <v-col>
             <h3 class="mt-2" id="download-elastic">{{ i18n.downloadsElastic }} ({{ $root.elasticVersion }})</h3>
             <ul>
-              <li><a :href="'/downloads/winlogbeat-oss-' + $root.elasticVersion + '-windows-x86_64.msi'" :download="'winlogbeat-oss-' +  $root.elasticVersion + '-windows-x86_64.msi'">Winlogbeat</a></li>
+              <li><a :href="'/downloads/winlogbeat-oss-' + $root.elasticVersion + '-windows-x86_64.msi'" :download="'winlogbeat-oss-' +  $root.elasticVersion + '-windows-x86_64.msi'">Winlogbeat</a> (Windows)</li>
+
+              <li><a :href="'/downloads/filebeat-oss-' + $root.elasticVersion + '-amd64.deb'" :download="'filebeat-oss-' +  $root.elasticVersion + '-amd64.deb'">Filebeat DEB</a> (Linux [amd64]: Debian, Ubuntu)</li>
+              <li><a :href="'/downloads/filebeat-oss-' + $root.elasticVersion + '-x86_64.rpm'" :download="'filebeat-oss-' +  $root.elasticVersion + '-x86_64.rpm'">Filebeat RPM</a> (Linux [x86_64]: Amazon, CentOS, Rocky, Fedora, Oracle, SUSE)</li>
+
+              <li><a :href="'/downloads/metricbeat-oss-' + $root.elasticVersion + '-amd64.deb'" :download="'metricbeat-oss-' +  $root.elasticVersion + '-amd64.deb'">Metricbeat DEB</a> (Linux [amd64]: Debian, Ubuntu)</li>
+              <li><a :href="'/downloads/metricbeat-oss-' + $root.elasticVersion + '-x86_64.rpm'" :download="'metricbeat-oss-' +  $root.elasticVersion + '-x86_64.rpm'">Metricbeat RPM</a> (Linux [x86_64]: Amazon, CentOS, Rocky, Fedora, Oracle, SUSE)</li>
+
+              <li><a :href="'/downloads/auditbeat-oss-' + $root.elasticVersion + '-amd64.deb'" :download="'auditbeat-oss-' +  $root.elasticVersion + '-amd64.deb'">Auditbeat DEB</a> (Linux [amd64]: Debian, Ubuntu)</li>
+              <li><a :href="'/downloads/auditbeat-oss-' + $root.elasticVersion + '-x86_64.rpm'" :download="'auditbeat-oss-' +  $root.elasticVersion + '-x86_64.rpm'">Auditbeat RPM</a> (Linux [x86_64]: Amazon, CentOS, Rocky, Fedora, Oracle, SUSE)</li>
             </ul>
             <h3 class="mt-2" id="download-wazuh">{{ i18n.downloadsWazuh }} ({{ $root.wazuhVersion }})</h3>
             <ul>
               <li><a :href="'/downloads/wazuh-agent-' + $root.wazuhVersion + '.msi'" :download="'wazuh-agent-' +  $root.wazuhVersion + '.msi'">MSI</a> (Windows)</li>
               <li><a :href="'/downloads/wazuh-agent_' + $root.wazuhVersion + '_amd64.deb'" :download="'wazuh-agent_' +  $root.wazuhVersion + '_amd64.deb'">DEB</a> (Linux [amd64]: Debian, Ubuntu)</li>
-              <li><a :href="'/downloads/wazuh-agent-' + $root.wazuhVersion + '.x86_64.rpm'" :download="'wazuh-agent-' +  $root.wazuhVersion + '.x86_64.rpm'">RPM</a> (Linux [x86_64]: Amazon, CentOS, Fedora, Oracle, SUSE)</li>
+              <li><a :href="'/downloads/wazuh-agent-' + $root.wazuhVersion + '.x86_64.rpm'" :download="'wazuh-agent-' +  $root.wazuhVersion + '.x86_64.rpm'">RPM</a> (Linux [x86_64]: Amazon, CentOS, Rocky, Fedora, Oracle, SUSE)</li>
               <li><a :href="'/downloads/wazuh-agent-' + $root.wazuhVersion + '.pkg'" :download="'wazuh-agent-' +  $root.wazuhVersion + '.pkg'">PKG</a> (MacOS)</li>
             </ul>
             <h3 class="mt-2" v-text="i18n.downloadsOsquery" id="download-osquery"></h3>
             <ul>
               <li><a href="/packages/launcher.msi" download="msi-launcher.msi">MSI</a> (Windows)</li>
               <li><a href="/packages/launcher.deb" download="deb-launcher.deb">DEB</a> (Linux [amd64]: Debian, Ubuntu)</li>
-              <li><a href="/packages/launcher.rpm" download="rpm-launcher.rpm">RPM</a> (Linux [x86_64]: Amazon, CentOS, Fedora, Oracle, SUSE)</li>
+              <li><a href="/packages/launcher.rpm" download="rpm-launcher.rpm">RPM</a> (Linux [x86_64]: Amazon, CentOS, Rocky, Fedora, Oracle, SUSE)</li>
               <li><a href="/packages/launcher.pkg" download="pkg-launcher.pkg">PKG</a> (MacOS)</li>
               <li><a href="/packages/launcher.flags" download="launcher.flags.txt">RPM & DEB Config Flag File</a></li>
               <li><a href="/packages/launcher-msi.flags" download="launcher-msi.flags.txt">MSI Config Flag File</a></li>
@@ -755,6 +772,7 @@
                         <v-text-field v-model="form.email" :placeholder="i18n.email" autofocus="true" :rules="[rules.required]"></v-text-field>
                         <v-text-field v-model="form.firstName" :placeholder="i18n.firstName"></v-text-field>
                         <v-text-field v-model="form.lastName" :placeholder="i18n.lastName"></v-text-field>
+                        <v-text-field v-model="form.note" :placeholder="i18n.note"></v-text-field>
                       </v-col>
                     </v-row>
                   </v-container>
@@ -804,6 +822,7 @@
                   <td v-text="props.item.email"></td>
                   <td v-text="props.item.firstName"></td>
                   <td v-text="props.item.lastName"></td>
+                  <td v-text="props.item.note"></td>
                   <td v-text="$root.formatStringArray(props.item.roles)"></td>
                   <td>
                     <v-icon v-if="props.item.status != 'locked'" :title="i18n.loginEnabled">fa-check</v-icon>
@@ -831,6 +850,7 @@
                           :rules="[rules.required]"></v-text-field>
                         <v-text-field v-model="form.firstName" :placeholder="i18n.firstName"></v-text-field>
                         <v-text-field v-model="form.lastName" :placeholder="i18n.lastName"></v-text-field>
+                        <v-text-field v-model="form.note" :placeholder="i18n.note"></v-text-field>
                         <v-text-field name="csrf_token" v-model="form.csrfToken" class="d-none"></v-text-field>
                         <v-text-field name="method" v-model="form.method" class="d-none"></v-text-field>
                       </v-col>
@@ -1236,34 +1256,75 @@
     </script>
 
     <script type="text/x-template" id="page-settings">
-        <v-form v-model="form.valid" method="post" :action="authSettingsUrl">
-          <v-container v-if="showSettingsForm" fluid>
-            <v-row>
-              <v-col>
-                <h2 v-text="i18n.settingsTitle"></h2>
-              </v-col>
-            </v-row>
-            <v-row>
-              <v-col>
-                <h3 class="mb-4" v-text="i18n.updateSettings"></h3>
-                <div v-text="i18n.resetDefaultsHint"></div>
-                <v-btn id="settingsResetDefaults" color="primary" :disabled="usingDefaults" v-text="i18n.resetDefaults" @click="resetDefaults"></v-btn>
-              </v-col>
-            </v-row>
-            <v-row>
-              <v-col>
-                <h3 class="mb-4"  v-text="i18n.updateProfile"></h3>
-                <div v-text="i18n.settingsInstructions"></div>
-                <v-text-field name="password" v-model="form.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required]"></v-text-field>
-                <v-text-field :placeholder="i18n.passwordConfirm" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.matches]"></v-text-field>
-                <v-text-field name="csrf_token" v-model="form.csrfToken" class="d-none"></v-text-field>
-                <v-text-field name="method" v-model="form.method" class="d-none"></v-text-field>
-                <v-btn type="submit" color="primary" :disabled="!form.valid" v-text="i18n.save"></v-btn>
-              </v-col>
-            </v-row>
-          </v-container>
-        </v-form>
-      </v-card>
+      <v-container v-if="showSettingsForm" fluid>
+        <v-row>
+          <v-col>
+            <h2 v-text="i18n.settingsTitle"></h2>
+          </v-col>
+        </v-row>
+        <v-row>
+          <v-col>
+            <v-tabs>
+
+              <v-tab id="userSettings_generalTab">
+                <v-icon left>fa-cogs</v-icon>
+                {{ i18n.settings }}
+              </v-tab>
+              <v-tab id="userSettings_profileTab">
+                <v-icon left>fa-id-card</v-icon>
+                {{ i18n.profile }}
+              </v-tab>
+              <v-tab id="userSettings_securityTab">
+                <v-icon left>fa-key</v-icon>
+                {{ i18n.security }}
+              </v-tab>
+
+              <v-tab-item>
+                <v-card>
+                  <v-card-text>
+                    <div v-text="i18n.resetDefaultsHint"></div>
+                    <p/>
+                    <v-btn id="settingsResetDefaults" color="primary" :disabled="usingDefaults" v-text="i18n.resetDefaults" @click="resetDefaults"></v-btn>
+                  </v-card-text>
+                </v-card>
+              </v-tab-item>
+
+              <v-tab-item>
+                <v-card>
+                  <v-card-text>
+                    <v-form v-model="profileForm.valid" method="post" :action="authSettingsUrl">
+                      <div v-text="i18n.profileInstructions"></div>
+                      <v-text-field name="traits.email" v-model="profileForm.email" :placeholder="i18n.email" :rules="[rules.required, rules.minemaillen]" class="d-none"></v-text-field>
+                      <v-text-field name="traits.firstName" v-model="profileForm.firstName" :placeholder="i18n.firstName" type="text":rules="[rules.maxlen]"></v-text-field>
+                      <v-text-field name="traits.lastName" v-model="profileForm.lastName" :placeholder="i18n.lastName" type="text" type="text":rules="[rules.maxlen]"></v-text-field>
+                      <v-text-field name="traits.note" v-model="profileForm.note" :placeholder="i18n.note" type="text" type="text":rules="[rules.maxlen]"></v-text-field>
+                      <v-text-field name="csrf_token" v-model="profileForm.csrfToken" class="d-none"></v-text-field>
+                      <v-text-field name="method" value="profile" class="d-none"></v-text-field>
+                      <v-btn type="submit" color="primary" :disabled="!profileForm.valid" v-text="i18n.save"></v-btn>
+                    </v-form>
+                  </v-card-text>
+                </v-card>
+              </v-tab-item>
+
+              <v-tab-item>
+                <v-card>
+                  <v-card-text>
+                    <v-form v-model="passwordForm.valid" method="post" :action="authSettingsUrl">
+                      <div v-text="i18n.passwordInstructions"></div>
+                      <v-text-field name="password" v-model="passwordForm.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.maxpasslen]"></v-text-field>
+                      <v-text-field :placeholder="i18n.passwordConfirm" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.maxpasslen, rules.matches]"></v-text-field>
+                      <v-text-field name="csrf_token" v-model="passwordForm.csrfToken" class="d-none"></v-text-field>
+                      <v-text-field name="method" value="password" class="d-none"></v-text-field>
+                      <v-btn type="submit" color="primary" :disabled="!passwordForm.valid" v-text="i18n.save"></v-btn>
+                    </v-form>
+                  </v-card-text>
+                </v-card>
+              </v-tab-item>
+
+            <v-tabs>
+          </v-col>
+        </v-row>
+      </v-container>
     </script>
 
     <script src="js/external/jquery-3.6.0.min.js"></script>

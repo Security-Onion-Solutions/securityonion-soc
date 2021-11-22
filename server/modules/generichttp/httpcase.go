@@ -7,7 +7,7 @@
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-package thehive
+package generichttp
 
 import (
   "errors"
@@ -15,46 +15,47 @@ import (
   "github.com/security-onion-solutions/securityonion-soc/server"
 )
 
-type TheHive struct {
+type HttpCase struct {
   config module.ModuleConfig
   server *server.Server
-  store  *TheHiveCasestore
+  store  *HttpCasestore
 }
 
-func NewTheHive(srv *server.Server) *TheHive {
-  return &TheHive{
+func NewHttpCase(srv *server.Server) *HttpCase {
+  return &HttpCase{
     server: srv,
-    store:  NewTheHiveCasestore(srv),
+    store:  NewHttpCasestore(srv),
   }
 }
 
-func (thehive *TheHive) PrerequisiteModules() []string {
+func (somodule *HttpCase) PrerequisiteModules() []string {
   return nil
 }
 
-func (thehive *TheHive) Init(cfg module.ModuleConfig) error {
-  thehive.config = cfg
+func (somodule *HttpCase) Init(cfg module.ModuleConfig) error {
+  somodule.config = cfg
   host, _ := module.GetString(cfg, "hostUrl")
   verifyCert := module.GetBoolDefault(cfg, "verifyCert", true)
-  key, _ := module.GetString(cfg, "key")
-  err := thehive.store.Init(host, key, verifyCert)
-  if err == nil && thehive.server != nil {
-    if thehive.server.Casestore != nil {
+  headers := module.GetStringArrayDefault(cfg, "headers", nil)
+  createParams := NewGenericHttpParams(cfg, "create")
+  err := somodule.store.Init(host, verifyCert, headers, createParams)
+  if err == nil && somodule.server != nil {
+    if somodule.server.Casestore != nil {
       err = errors.New("Multiple case modules cannot be enabled concurrently")
     }
-    thehive.server.Casestore = thehive.store
+    somodule.server.Casestore = somodule.store
   }
   return err
 }
 
-func (thehive *TheHive) Start() error {
+func (somodule *HttpCase) Start() error {
   return nil
 }
 
-func (thehive *TheHive) Stop() error {
+func (somodule *HttpCase) Stop() error {
   return nil
 }
 
-func (somodule *TheHive) IsRunning() bool {
+func (somodule *HttpCase) IsRunning() bool {
   return false
 }

@@ -11,11 +11,10 @@ package kratos
 
 import (
 	"context"
-	"testing"
-
-	"github.com/security-onion-solutions/securityonion-soc/fake"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
 func TestUserstoreInit(tester *testing.T) {
@@ -25,7 +24,7 @@ func TestUserstoreInit(tester *testing.T) {
 }
 
 func TestUnauthorized(tester *testing.T) {
-	userStore := NewKratosUserstore(fake.NewUnauthorizedServer())
+	userStore := NewKratosUserstore(server.NewFakeUnauthorizedServer())
 
 	_, err := userStore.GetUsers(context.Background())
 	ensureUnauthorized(tester, err)

@@ -8,7 +8,7 @@
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-package thehive
+package elasticcases
 
 import (
   "context"
@@ -19,8 +19,8 @@ import (
 )
 
 func TestCreateUnauthorized(tester *testing.T) {
-  casestore := NewTheHiveCasestore(server.NewFakeUnauthorizedServer())
-  casestore.Init("some/url", "somekey", true)
+  casestore := NewElasticCasestore(server.NewFakeUnauthorizedServer())
+  casestore.Init("some/url", "someusername", "somepassword", true)
   socCase := model.NewCase()
   newCase, err := casestore.Create(context.Background(), socCase)
   assert.Error(tester, err)
@@ -28,11 +28,11 @@ func TestCreateUnauthorized(tester *testing.T) {
 }
 
 func TestCreate(tester *testing.T) {
-  casestore := NewTheHiveCasestore(server.NewFakeAuthorizedServer(nil))
-  casestore.Init("some/url", "somekey", true)
+  casestore := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+  casestore.Init("some/url", "someusername", "somepassword", true)
   caseResponse := `
     {
-      "caseId": 123,
+      "id": "a123",
       "title": "my title"
     }`
   casestore.client.MockStringResponse(caseResponse, 200, nil)
@@ -41,5 +41,5 @@ func TestCreate(tester *testing.T) {
   assert.NoError(tester, err)
 
   assert.Equal(tester, "my title", newCase.Title)
-  assert.Equal(tester, "123", newCase.Id)
+  assert.Equal(tester, "a123", newCase.Id)
 }

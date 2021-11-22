@@ -22,6 +22,7 @@ func TestVerifyServer(tester *testing.T) {
 	if assert.Error(tester, err) {
 		assert.Equal(tester, DEFAULT_MAX_PACKET_COUNT, cfg.MaxPacketCount)
 		assert.Equal(tester, DEFAULT_IDLE_CONNECTION_TIMEOUT_MS, cfg.IdleConnectionTimeoutMs)
+		assert.False(tester, cfg.DeveloperEnabled)
 	}
 
 	cfg.BindAddress = "http://some.where"
@@ -30,5 +31,6 @@ func TestVerifyServer(tester *testing.T) {
 	if assert.Nil(tester, err) {
 		assert.Equal(tester, 123, cfg.MaxPacketCount)
 		assert.Equal(tester, "/opt/sensoroni/scripts/timezones.sh", cfg.TimezoneScript)
+		assert.False(tester, cfg.DeveloperEnabled)
 	}
 }

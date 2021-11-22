@@ -10,13 +10,13 @@
 package sostatus
 
 import (
-	"github.com/security-onion-solutions/securityonion-soc/fake"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
 func TestSoStatusInit(tester *testing.T) {
-	status := NewSoStatus(fake.NewUnauthorizedServer())
+	status := NewSoStatus(server.NewFakeUnauthorizedServer())
 	cfg := make(map[string]interface{})
 	cfg["refreshIntervalMs"] = float64(1000)
 	cfg["offlineThresholdMs"] = float64(2000)
