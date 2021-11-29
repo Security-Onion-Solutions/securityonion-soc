@@ -19,8 +19,6 @@ import (
 )
 
 func TestConvertFromElasticCase(tester *testing.T) {
-	var emptyTime time.Time
-
 	elasticCase := NewElasticCase()
 	elasticCase.Title = "my title"
 	elasticCase.Description = "my description.\nline 2.\n"
@@ -35,9 +33,9 @@ func TestConvertFromElasticCase(tester *testing.T) {
 	assert.Equal(tester, elasticCase.Title, socCase.Title)
 	assert.Equal(tester, elasticCase.Description, socCase.Description)
 	assert.Equal(tester, elasticCase.Id, socCase.Id)
-	assert.Equal(tester, tm, socCase.CreateTime)
-	assert.Equal(tester, emptyTime, socCase.StartTime)
-	assert.Equal(tester, emptyTime, socCase.CompleteTime)
+	assert.Equal(tester, &tm, socCase.CreateTime)
+	assert.Nil(tester, socCase.StartTime)
+	assert.Nil(tester, socCase.CompleteTime)
 }
 
 func TestConvertToElasticCase(tester *testing.T) {

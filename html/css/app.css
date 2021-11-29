@@ -164,6 +164,20 @@ a#title, a#title:visited, a#title:active, a#title:hover {
   white-space: nowrap;
 }
 
+.case.label {
+  display: inline-block;
+  padding-right: 10px;
+  width: 15%;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.case.value {
+  text-align: left;
+  font-weight: bold;
+  white-space: wrap;
+}
+
 td {
   white-space: nowrap;
 }

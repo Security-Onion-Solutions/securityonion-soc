@@ -86,10 +86,11 @@ func TestCalcTimelineInterval(tester *testing.T) {
 
 func TestConvertToElasticRequestEmptyCriteria(tester *testing.T) {
 	criteria := model.NewEventSearchCriteria()
+	criteria.MetricLimit = 0
 	actualJson, err := convertToElasticRequest(NewTestStore(), criteria)
 	assert.Nil(tester, err)
 
-	expectedJson := `{"aggs":{"timeline":{"date_histogram":{"field":"@timestamp","fixed_interval":"1s","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"*"}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"0001-01-01T00:00:00Z","lte":"0001-01-01T00:00:00Z"}}}],"must_not":[],"should":[]}},"size":25}`
+	expectedJson := `{"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"*"}}],"must_not":[],"should":[]}},"size":25}`
 	assert.Equal(tester, expectedJson, actualJson)
 }
 
@@ -100,6 +101,26 @@ func TestConvertToElasticRequestGroupByCriteria(tester *testing.T) {
 	assert.Nil(tester, err)
 
 	expectedJson := `{"aggs":{"bottom":{"terms":{"field":"ghi","order":{"_count":"asc"},"size":10}},"groupby|ghi":{"aggs":{"groupby|ghi|jkl":{"terms":{"field":"jkl","missing":"__missing__","order":{"_count":"desc"},"size":10}}},"terms":{"field":"ghi","order":{"_count":"desc"},"size":10}},"timeline":{"date_histogram":{"field":"@timestamp","fixed_interval":"1m","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"abc AND def AND q: \"\\\\\\\\file\\\\path\""}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"2020-01-02T12:13:14Z","lte":"2020-01-02T13:13:14Z"}}}],"must_not":[],"should":[]}},"size":25}`
+	assert.Equal(tester, expectedJson, actualJson)
+}
+
+func TestConvertToElasticRequestSortByCriteria(tester *testing.T) {
+	criteria := model.NewEventSearchCriteria()
+	criteria.Populate(`abc AND def AND q:"\\\\file\\path" | sortby ghi jkl^`, "2020-01-02T12:13:14Z - 2020-01-02T13:13:14Z", time.RFC3339, "America/New_York", "10", "25")
+	actualJson, err := convertToElasticRequest(NewTestStore(), criteria)
+	assert.Nil(tester, err)
+
+	expectedJson := `{"aggs":{"timeline":{"date_histogram":{"field":"@timestamp","fixed_interval":"1m","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"abc AND def AND q: \"\\\\\\\\file\\\\path\""}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"2020-01-02T12:13:14Z","lte":"2020-01-02T13:13:14Z"}}}],"must_not":[],"should":[]}},"size":25,"sort":[{"ghi":"desc"},{"jkl":"asc"}]}`
+	assert.Equal(tester, expectedJson, actualJson)
+}
+
+func TestConvertToElasticRequestGroupBySortByCriteria(tester *testing.T) {
+	criteria := model.NewEventSearchCriteria()
+	criteria.Populate(`abc AND def AND q:"\\\\file\\path" | groupby ghi jkl* | sortby ghi jkl^`, "2020-01-02T12:13:14Z - 2020-01-02T13:13:14Z", time.RFC3339, "America/New_York", "10", "25")
+	actualJson, err := convertToElasticRequest(NewTestStore(), criteria)
+	assert.Nil(tester, err)
+
+	expectedJson := `{"aggs":{"bottom":{"terms":{"field":"ghi","order":{"_count":"asc"},"size":10}},"groupby|ghi":{"aggs":{"groupby|ghi|jkl":{"terms":{"field":"jkl","missing":"__missing__","order":{"_count":"desc"},"size":10}}},"terms":{"field":"ghi","order":{"_count":"desc"},"size":10}},"timeline":{"date_histogram":{"field":"@timestamp","fixed_interval":"1m","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"abc AND def AND q: \"\\\\\\\\file\\\\path\""}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"2020-01-02T12:13:14Z","lte":"2020-01-02T13:13:14Z"}}}],"must_not":[],"should":[]}},"size":25,"sort":[{"ghi":"desc"},{"jkl":"asc"}]}`
 	assert.Equal(tester, expectedJson, actualJson)
 }
 
@@ -227,4 +248,145 @@ func TestMapSearch(tester *testing.T) {
 	validateMappedQuery(tester, "foo2: \"bar\"", "foo2: \"bar\"")
 	validateMappedQuery(tester, "barfoo: \"bar\"", "barfoo: \"bar\"")
 	validateMappedQuery(tester, "barfoo: \"foo: bar\"", "barfoo: \"foo: bar\"")
+}
+
+func TestConvertObjectToDocumentMap(tester *testing.T) {
+	caseObj := model.NewCase()
+	actual := convertObjectToDocumentMap("test", caseObj)
+	assert.NotNil(tester, actual)
+	assert.Equal(tester, caseObj, actual["test"])
+	assert.NotNil(tester, actual["@timestamp"])
+}
+
+func TestConvertToElasticIndexRequest(tester *testing.T) {
+	store := NewTestStore()
+	event := make(map[string]interface{})
+	event["foo"] = "bar"
+	expected := `{"foo":"bar"}`
+
+	actual, err := convertToElasticIndexRequest(store, event)
+	assert.NoError(tester, err)
+	assert.Equal(tester, expected, actual)
+}
+
+func TestConvertFromElasticIndexResults(tester *testing.T) {
+	store := NewTestStore()
+	results := model.NewEventIndexResults()
+	json := `{"_version":1, "_id":"123abc", "result": "successful"}`
+
+	err := convertFromElasticIndexResults(store, json, results)
+	assert.NoError(tester, err)
+}
+
+func TestConvertElasticEventToCaseNil(tester *testing.T) {
+	caseObj, err := convertElasticEventToCase(nil)
+	assert.NoError(tester, err)
+	assert.Nil(tester, caseObj)
+}
+
+func TestConvertElasticEventToCase(tester *testing.T) {
+	myTime := time.Now()
+	myCreateTime := myTime.Add(time.Hour * -1)
+	myCompleteTime := myTime.Add(time.Hour * -2)
+	myStartTime := myTime.Add(time.Hour * -3)
+
+	event := &model.EventRecord{}
+	event.Payload = make(map[string]interface{})
+	event.Payload["kind"] = "case"
+	event.Payload["operation"] = "update"
+	event.Payload["case.title"] = "myTitle"
+	event.Payload["case.description"] = "myDesc"
+	event.Payload["case.priority"] = float64(123)
+	event.Payload["case.severity"] = float64(456)
+	event.Payload["case.status"] = "myStatus"
+	event.Payload["case.template"] = "myTemplate"
+	event.Payload["case.userId"] = "myUserId"
+	event.Payload["case.assigneeId"] = "myAssigneeId"
+	event.Payload["case.tlp"] = "myTlp"
+	event.Payload["case.pap"] = "myPap"
+	event.Payload["case.category"] = "myCategory"
+	tags := make([]interface{}, 2, 2)
+	tags[0] = "tag1"
+	tags[1] = "tag2"
+	event.Payload["case.tags"] = tags
+	event.Time = myTime
+	event.Payload["case.createTime"] = myCreateTime
+	event.Payload["case.completeTime"] = myCompleteTime
+	event.Payload["case.startTime"] = myStartTime
+	caseObj, err := convertElasticEventToCase(event)
+	assert.NoError(tester, err)
+	assert.Equal(tester, "case", caseObj.Kind)
+	assert.Equal(tester, "update", caseObj.Operation)
+	assert.Equal(tester, "myTitle", caseObj.Title)
+	assert.Equal(tester, "myDesc", caseObj.Description)
+	assert.Equal(tester, 123, caseObj.Priority)
+	assert.Equal(tester, 456, caseObj.Severity)
+	assert.Equal(tester, "myStatus", caseObj.Status)
+	assert.Equal(tester, "myTemplate", caseObj.Template)
+	assert.Equal(tester, "myUserId", caseObj.UserId)
+	assert.Equal(tester, "myAssigneeId", caseObj.AssigneeId)
+	assert.Equal(tester, "myPap", caseObj.Pap)
+	assert.Equal(tester, "myTlp", caseObj.Tlp)
+	assert.Equal(tester, "myCategory", caseObj.Category)
+	assert.Equal(tester, tags[0], "tag1")
+	assert.Equal(tester, tags[1], "tag2")
+	assert.Equal(tester, &myTime, caseObj.UpdateTime)
+	assert.Equal(tester, &myCreateTime, caseObj.CreateTime)
+	assert.Equal(tester, &myCompleteTime, caseObj.CompleteTime)
+	assert.Equal(tester, &myStartTime, caseObj.StartTime)
+}
+
+func TestParseTime(tester *testing.T) {
+	m := make(map[string]interface{})
+
+	format := "2006-01-02 03:04pm"
+	t, _ := time.Parse(format, "2021-12-20 12:43pm")
+	m["obj"] = t
+	m["ptr"] = &t
+	m["str"] = "2021-12-20T12:43:00Z"
+	m["bad"] = 12
+
+	expected := "2021-12-20 12:43pm"
+
+	actual := parseTime(m, "obj").Format(format)
+	assert.Equal(tester, expected, actual)
+
+	actual = parseTime(m, "ptr").Format(format)
+	assert.Equal(tester, expected, actual)
+
+	actual = parseTime(m, "str").Format(format)
+	assert.Equal(tester, expected, actual)
+
+	actualObj := parseTime(m, "bad")
+	assert.True(tester, actualObj.IsZero())
+}
+
+func TestConvertElasticEventToCommentNil(tester *testing.T) {
+	obj, err := convertElasticEventToComment(nil)
+	assert.NoError(tester, err)
+	assert.Nil(tester, obj)
+}
+
+func TestConvertElasticEventToComment(tester *testing.T) {
+	myTime := time.Now()
+	myCreateTime := myTime.Add(time.Hour * -1)
+
+	event := &model.EventRecord{}
+	event.Payload = make(map[string]interface{})
+	event.Payload["kind"] = "comment"
+	event.Payload["operation"] = "create"
+	event.Payload["comment.description"] = "myDesc"
+	event.Payload["comment.userId"] = "myUserId"
+	event.Payload["comment.caseId"] = "myCaseId"
+	event.Time = myTime
+	event.Payload["comment.createTime"] = myCreateTime
+	obj, err := convertElasticEventToComment(event)
+	assert.NoError(tester, err)
+	assert.Equal(tester, "comment", obj.Kind)
+	assert.Equal(tester, "create", obj.Operation)
+	assert.Equal(tester, "myDesc", obj.Description)
+	assert.Equal(tester, "myUserId", obj.UserId)
+	assert.Equal(tester, "myCaseId", obj.CaseId)
+	assert.Equal(tester, &myTime, obj.UpdateTime)
+	assert.Equal(tester, &myCreateTime, obj.CreateTime)
 }

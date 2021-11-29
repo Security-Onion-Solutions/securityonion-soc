@@ -71,3 +71,35 @@ func (store *HttpCasestore) Create(ctx context.Context, socCase *model.Case) (*m
   }
   return nil, err
 }
+
+func (store *HttpCasestore) Update(ctx context.Context, socCase *model.Case) (*model.Case, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) GetCase(ctx context.Context, caseId string) (*model.Case, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) GetCaseHistory(ctx context.Context, caseId string) ([]interface{}, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) CreateComment(ctx context.Context, comment *model.Comment) (*model.Comment, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) GetComment(ctx context.Context, commentId string) (*model.Comment, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) GetComments(ctx context.Context, commentId string) ([]*model.Comment, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) UpdateComment(ctx context.Context, comment *model.Comment) (*model.Comment, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) DeleteComment(ctx context.Context, id string) error {
+  return errors.New("Unsupported operation by this module")
+}

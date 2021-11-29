@@ -12,6 +12,7 @@ package elasticcases
 import (
   "context"
   "encoding/base64"
+  "errors"
   "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/server"
   "github.com/security-onion-solutions/securityonion-soc/web"
@@ -64,4 +65,36 @@ func (store *ElasticCasestore) Create(ctx context.Context, socCase *model.Case) 
     newCase, err = convertFromElasticCase(&outputCase)
   }
   return newCase, err
+}
+
+func (store *ElasticCasestore) Update(ctx context.Context, socCase *model.Case) (*model.Case, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) GetCase(ctx context.Context, caseId string) (*model.Case, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) GetCaseHistory(ctx context.Context, caseId string) ([]interface{}, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) CreateComment(ctx context.Context, comment *model.Comment) (*model.Comment, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) GetComment(ctx context.Context, commentId string) (*model.Comment, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) GetComments(ctx context.Context, commentId string) ([]*model.Comment, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) UpdateComment(ctx context.Context, comment *model.Comment) (*model.Comment, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) DeleteComment(ctx context.Context, id string) error {
+  return errors.New("Unsupported operation by this module")
 }

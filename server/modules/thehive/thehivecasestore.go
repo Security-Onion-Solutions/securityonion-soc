@@ -12,6 +12,7 @@ package thehive
 
 import (
   "context"
+  "errors"
   "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/server"
   "github.com/security-onion-solutions/securityonion-soc/web"
@@ -62,4 +63,36 @@ func (store *TheHiveCasestore) Create(ctx context.Context, socCase *model.Case) 
     newCase, err = convertFromTheHiveCase(&outputCase)
   }
   return newCase, err
+}
+
+func (store *TheHiveCasestore) Update(ctx context.Context, socCase *model.Case) (*model.Case, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *TheHiveCasestore) GetCase(ctx context.Context, caseId string) (*model.Case, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *TheHiveCasestore) GetCaseHistory(ctx context.Context, caseId string) ([]interface{}, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *TheHiveCasestore) CreateComment(ctx context.Context, comment *model.Comment) (*model.Comment, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *TheHiveCasestore) GetComment(ctx context.Context, commentId string) (*model.Comment, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *TheHiveCasestore) GetComments(ctx context.Context, commentId string) ([]*model.Comment, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *TheHiveCasestore) UpdateComment(ctx context.Context, comment *model.Comment) (*model.Comment, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *TheHiveCasestore) DeleteComment(ctx context.Context, id string) error {
+  return errors.New("Unsupported operation by this module")
 }

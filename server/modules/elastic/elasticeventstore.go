@@ -242,6 +242,51 @@ func (store *ElasticEventstore) Update(ctx context.Context, criteria *model.Even
 	return results, err
 }
 
+func (store *ElasticEventstore) Index(ctx context.Context, index string, document map[string]interface{}, id string) (*model.EventIndexResults, error) {
+	var err error
+	results := model.NewEventIndexResults()
+	if err = store.server.CheckAuthorized(ctx, "write", "events"); err == nil {
+		store.refreshCache(ctx)
+
+		var request string
+		request, err = convertToElasticIndexRequest(store, document)
+		if err == nil {
+			var response string
+
+			log.Debug("Sending index request to primary Elasticsearch client")
+			response, err = store.indexDocument(ctx, index, request, id)
+			if err == nil {
+				err = convertFromElasticIndexResults(store, response, results)
+				if err != nil {
+					log.WithError(err).Error("Encountered error while converting document index results")
+				}
+			} else {
+				log.WithError(err).Error("Encountered error while indexing document into elasticsearch")
+			}
+		}
+	}
+	return results, err
+}
+
+func (store *ElasticEventstore) Delete(ctx context.Context, index string, id string) error {
+	var err error
+	results := model.NewEventIndexResults()
+	if err = store.server.CheckAuthorized(ctx, "write", "events"); err == nil {
+		var response string
+		log.Debug("Sending delete request to primary Elasticsearch client")
+		response, err = store.deleteDocument(ctx, index, id)
+		if err == nil {
+			err = convertFromElasticIndexResults(store, response, results)
+			if err != nil {
+				log.WithError(err).Error("Encountered error while converting document index results")
+			}
+		} else {
+			log.WithError(err).Error("Encountered error while deleting document from elasticsearch")
+		}
+	}
+	return err
+}
+
 func (store *ElasticEventstore) luceneSearch(ctx context.Context, query string) (string, error) {
 	return store.indexSearch(ctx, query, strings.Split(store.index, ","))
 }
@@ -298,16 +343,21 @@ func (store *ElasticEventstore) indexSearch(ctx context.Context, query string, i
 	return json, err
 }
 
-func (store *ElasticEventstore) indexDocument(ctx context.Context, document string, index string) (string, error) {
+func (store *ElasticEventstore) indexDocument(ctx context.Context, index string, document string, id string) (string, error) {
 	log.WithFields(log.Fields{
+		"index":     index,
+		"id":        id,
 		"document":  document,
 		"requestId": ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Adding document to Elasticsearch")
 
-	res, err := store.esClient.Index(store.transformIndex(index), strings.NewReader(document), store.esClient.Index.WithRefresh("true"))
+	res, err := store.esClient.Index(store.transformIndex(index),
+		strings.NewReader(document),
+		store.esClient.Index.WithRefresh("true"),
+		store.esClient.Index.WithDocumentID(id))
 
 	if err != nil {
-		log.WithError(err).Error("Unable to index acknowledgement into Elasticsearch")
+		log.WithError(err).Error("Unable to index document into Elasticsearch")
 		return "", err
 	}
 	defer res.Body.Close()
@@ -317,6 +367,35 @@ func (store *ElasticEventstore) indexDocument(ctx context.Context, document stri
 		"response":  json,
 		"requestId": ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Index new document finished")
+	return json, err
+}
+
+func (store *ElasticEventstore) deleteDocument(ctx context.Context, index string, id string) (string, error) {
+	log.WithFields(log.Fields{
+		"index":     index,
+		"id":        id,
+		"requestId": ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Deleting document from Elasticsearch")
+
+	res, err := store.esClient.Delete(store.transformIndex(index), id)
+
+	if err != nil {
+		log.WithFields(log.Fields{
+			"index":     index,
+			"id":        id,
+			"requestId": ctx.Value(web.ContextKeyRequestId),
+		}).WithError(err).Error("Unable to delete document from Elasticsearch")
+		return "", err
+	}
+	defer res.Body.Close()
+	json, err := store.readJsonFromResponse(res)
+
+	log.WithFields(log.Fields{
+		"index":     index,
+		"id":        id,
+		"response":  json,
+		"requestId": ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Delete document finished")
 	return json, err
 }
 

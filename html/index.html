@@ -56,6 +56,14 @@
               <v-list-item-title v-text="i18n.hunt"></v-list-item-title>
             </v-list-item-content>
           </v-list-item>
+          <v-list-item @click="" to="/cases">
+            <v-list-item-action>
+              <v-icon>fa-briefcase</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>
+              <v-list-item-title v-text="i18n.cases"></v-list-item-title>
+            </v-list-item-content>
+          </v-list-item>
           <v-list-item @click="" to="/jobs">
             <v-list-item-action>
               <v-icon>fa-stream</v-icon>
@@ -391,13 +399,16 @@
             </v-btn>
           </v-col>
         </v-row>
-        <v-row v-if="loaded && (queryFilters.length > 0 || queryGroupBys.length > 0)">
+        <v-row v-if="loaded && (queryFilters.length > 0 || queryGroupBys.length > 0 || querySortBys.length > 0)">
           <v-col cols="12">
             <span v-for="filter in queryFilters" :key="filter">
               <v-chip class="filter mx-1 my-1" color="primary" close @click:close="removeFilter(filter)">{{ filter }}</v-chip>
             </span>
             <span v-for="groupBy in queryGroupBys" :key="groupBy">
               <v-chip class="groupBy mx-1 my-1" color="accent" close @click:close="removeGroupBy(groupBy)">{{ i18n.groupedBy }} {{ groupBy }}</v-chip>
+            </span>
+            <span v-for="sortBy in querySortBys" :key="sortBy">
+              <v-chip class="sortBy mx-1 my-1" color="secondary" close @click:close="removeSortBy(sortBy)">{{ i18n.sortedBy }} {{ sortBy }}</v-chip>
             </span>
           </v-col>
         </v-row>
@@ -547,6 +558,9 @@
                           :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
                           <v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate">fa-exclamation-triangle</v-icon>
                         </v-btn>
+                        <router-link :to="{ name: 'case', params: {id: item.soc_id}}" style="text-decoration: none; cursor: 'pointer'" v-if="viewEnabled">
+                          <v-icon class="mr-2" :title="i18n.view">fa-binoculars</v-icon>
+                        </router-link>
                       </td>
                       <td v-for="field in eventHeaders" :key="field.value">
                         <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction($event, item, field.value, item[field.value])"></div>
@@ -839,7 +853,7 @@
             </v-data-table>
             <v-dialog v-model="dialog" width="800px">
               <v-card>
-                <v-card-title class="lighten-4 py-4 title" v-text="i18n.addUser"></v-card-title>
+                <v-card-title class="lighten-4 py-4 title">{{ i18n.add }} {{ i18n.user }}</v-card-title>
                 <v-form v-model="form.valid">
                   <v-container grid-list-sm class="pa-4">
                     <v-row>
@@ -859,7 +873,7 @@
                   <v-card-actions>
                     <v-spacer></v-spacer>
                     <v-btn text @click="dialog = false">Cancel</v-btn>
-                    <v-btn :disabled="!form.valid" text color="primary" @click="submitAddUser" v-text="i18n.addUser"></v-btn>
+                    <v-btn :disabled="!form.valid" text color="primary" @click="submitAddUser" v-text="i18n.add"></v-btn>
                   </v-card-actions>
                 </v-form>
               </v-card>
@@ -908,7 +922,7 @@
             </v-data-table>
             <v-dialog v-model="dialog" width="800px">
               <v-card id="pcap-job-dialog">
-                <v-card-title class="lighten-4 py-4 title" v-text="i18n.addJob"></v-card-title>
+                <v-card-title class="lighten-4 py-4 title">{{ i18n.add }} {{ i18n.job }}</v-card-title>
                 <v-form v-model="form.valid">
                   <v-container grid-list-sm class="pa-4">
                     <v-row>
@@ -928,7 +942,7 @@
                     <v-spacer></v-spacer>
                     <v-btn text @click="clearAddJobForm()" v-text="i18n.clear"></v-btn>
                     <v-btn text @click="dialog = false" v-text="i18n.cancel"></v-btn>
-                    <v-btn :disabled="!form.valid" text color="primary" @click="submitAddJob" v-text="i18n.addJob"></v-btn>
+                    <v-btn :disabled="!form.valid" text color="primary" @click="submitAddJob" v-text="i18n.add"></v-btn>
                   </v-card-actions>
                 </v-form>
               </v-card>
@@ -1156,6 +1170,191 @@
       </v-container>
     </script>
 
+    <script type="text/x-template" id="page-case">
+      <v-container fluid>
+        <v-row>
+          <v-col>
+            <h2>{{ i18n.viewCase }}</h2>
+          </v-col>
+        </v-row>
+        <v-row>
+          <v-col>
+            <v-form v-model="form.valid">
+              <div>
+                <span class="case label">{{ i18n.caseId }}:</span>
+                <span class="case value">{{ caseObj.id }}</span>
+              </div>
+              <div>
+                <span class="case label">{{ i18n.dateCreated }}:</span>
+                <span class="case value">{{ caseObj.createTime | formatDateTime}}</span>
+              </div>
+              <div>
+                <span class="case label">{{ i18n.dateModified }}:</span>
+                <span class="case value">{{ caseObj.updateTime | formatDateTime}}</span>
+              </div>
+              <div>
+                <span class="case label">{{ i18n.dateClosed }}:</span>
+                <span class="case value">{{ caseObj.completeTime | formatDateTime}}</span>
+              </div>
+              <div>
+                <span class="case label">{{ i18n.author }}:</span>
+                <span class="case value">{{ caseObj.owner }}</span>
+              </div>
+              <div>
+                <span class="case label">{{ i18n.caseAssignee }}:</span>
+                <span class="case value">{{ caseObj.assignee }}</span>
+              </div>
+              <div>
+                <v-text-field v-model="form.title" :placeholder="i18n.caseTitle" persistent-hint :hint="i18n.caseTitleHelp" :rules="[rules.required]"></v-text-field>
+              </div>
+              <div>
+                <v-text-field v-model="form.description" :placeholder="i18n.caseDescription" persistent-hint :hint="i18n.caseDescriptionHelp"></v-text-field>
+              </div>
+              <div>
+                <v-text-field v-model="form.status" :placeholder="i18n.caseStatus" persistent-hint :hint="i18n.caseStatusHelp" :rules="[rules.required]"></v-text-field>
+              </div>
+              <div>
+                <v-text-field v-model="form.severity" :placeholder="i18n.caseSeverity" persistent-hint :hint="i18n.caseSeverityHelp" :rules="[rules.required]"></v-text-field>
+              </div>
+              <div>
+                <v-text-field v-model="form.priority" :placeholder="i18n.casePriority" persistent-hint :hint="i18n.casePriorityHelp" :rules="[rules.required]"></v-text-field>
+              </div>
+              <div>
+                <v-text-field v-model="form.tags" :placeholder="i18n.caseTags" persistent-hint :hint="i18n.caseTagsHelp"></v-text-field>
+              </div>              
+              <div>
+                <v-text-field v-model="form.tlp" :placeholder="i18n.caseTlp" persistent-hint :hint="i18n.caseTlpHelp"></v-text-field>
+              </div>
+              <div>
+                <v-text-field v-model="form.pap" :placeholder="i18n.casePap" persistent-hint :hint="i18n.casePapHelp"></v-text-field>
+              </div>
+              <div>
+                <v-text-field v-model="form.category" :placeholder="i18n.caseCategory" persistent-hint :hint="i18n.caseCategoryHelp"></v-text-field>
+              </div>
+              <div>
+                <v-text-field v-model="form.assigneeId" :placeholder="i18n.caseAssignee" persistent-hint :hint="i18n.caseAssigneeHelp"></v-text-field>
+              </div>
+              <div class="my-4">
+                <v-btn :disabled="!form.valid" text color="primary" @click="modifyCase" v-text="i18n.update"></v-btn>
+              <div>
+            </form>
+          </v-col>
+        </v-row>
+        <v-row>
+            <v-tabs>
+
+              <v-tab id="case_commentsTab">
+                <v-icon left>fa-comments</v-icon>
+                {{ i18n.comments }}
+              </v-tab>
+              <v-tab id="case_historyTab">
+                <v-icon left>fa-history</v-icon>
+                {{ i18n.history }}
+              </v-tab>
+
+              <v-tab-item>
+                <v-card v-for="comment in associations.comments" elevation="2" class="my-2">
+                  <div>
+                    <span class="case label">{{ i18n.dateCreated }}:</span>
+                    <span class="case value">{{ comment.createTime | formatDateTime }}</span>
+                  </div>
+                  <div>
+                    <span class="case label">{{ i18n.dateModified }}:</span>
+                    <span class="case value">{{ comment.updateTime | formatDateTime }}</span>
+                  </div>
+                  <div>
+                    <span class="case label">{{ i18n.author }}:</span>
+                    <span class="case value">{{ comment.owner }}</span>
+                  </div>
+                  <div>
+                    <span class="case label">authorId:</span>
+                    <span class="case value">{{ comment.userId }}</span>
+                  </div>
+                  <div>
+                    <span class="case label">{{ i18n.commentDescription }}:</span>
+                    <span class="case value">{{ comment.description }}</span>
+                  </div>
+                  <div class="my-4">
+                    <v-btn text colror="secondary" @click="editComment(comment)" icon><v-icon>fa-edit</v-icon></v-btn>
+                    <v-btn text colror="secondary" @click="deleteAssociation('comments', comment)" icon><v-icon>fa-trash</v-icon></v-btn>
+                  <div>                      
+                </v-card>
+                <div class="mx-12 my-12">
+                  <v-form v-model="associatedForms['comments'].valid">
+                    <v-text-field v-model="associatedForms['comments'].description" :placeholder="i18n.commentDescription" persistent-hint :hint="i18n.commentDescriptionHelp" :rules="[rules.required]"></v-text-field>
+                    <v-text-field v-model="associatedForms['comments'].id" class="d-none"></v-text-field>
+                    <div class="my-4">
+                      <v-btn v-if="associatedForms['comments'].id == ''" :disabled="!associatedForms['comments'].valid" text color="primary" @click="addAssociation('comments')" v-text="i18n.add"></v-btn>
+                      <v-btn v-if="associatedForms['comments'].id != ''" :disabled="!associatedForms['comments'].valid" text color="primary" @click="modifyAssociation('comments')" v-text="i18n.update"></v-btn>
+                      <v-btn text color="secondary" @click="cancelComment()" v-text="i18n.cancel"></v-btn>
+                    <div>                      
+                  </form>
+                </div>
+              </v-tab-item>
+
+              <v-tab-item>
+                <v-card v-for="event in associations.history" elevation="2" class="my-2">
+                  <div>
+                    <span class="case label">{{ i18n.event }}:</span>
+                    <span class="case value">{{ event.kind }} - {{ event.operation }}</span>
+                  </div>
+                  <div>
+                    <span class="case label">{{ i18n.dateCreated }}:</span>
+                    <span class="case value">{{ event.createTime | formatDateTime }}</span>
+                  </div>
+                  <div>
+                    <span class="case label">{{ i18n.dateModified }}:</span>
+                    <span class="case value">{{ event.updateTime | formatDateTime }}</span>
+                  </div>
+                  <div>
+                    <span class="case label">{{ i18n.dateClosed }}:</span>
+                    <span class="case value">{{ event.completeTime | formatDateTime }}</span>
+                  </div>
+                  <div>
+                    <span class="case label">{{ i18n.author }}:</span>
+                    <span class="case value">{{ event.owner }}</span>
+                  </div>
+                  <div>
+                    <span class="case label">authorId:</span>
+                    <span class="case value">{{ event.userId }}</span>
+                  </div>
+                  <div v-if="event.kind == 'case'">
+                    <div>
+                      <span class="case label">{{ i18n.caseTitle}}:</span>
+                      <span class="case value">{{ event.title }}</span>
+                    </div>
+                    <div>
+                      <span class="case label">{{ i18n.caseDescription }}:</span>
+                      <span class="case value">{{ event.description }}</span>
+                    </div>
+                    <div>
+                      <span class="case label">{{ i18n.caseStatus }}:</span>
+                      <span class="case value">{{ event.status }}</span>
+                    </div>
+                    <div>
+                      <span class="case label">{{ i18n.caseSeverity }}:</span>
+                      <span class="case value">{{ event.severity }}</span>
+                    </div>
+                    <div>
+                      <span class="case label">{{ i18n.casePriority }}:</span>
+                      <span class="case value">{{ event.priority }}</span>
+                    </div>
+                  </div>
+                  <div v-if="event.kind == 'comment'">
+                    <div>
+                      <span class="case label">{{ i18n.commentDescription }}:</span>
+                      <span class="case value">{{ event.description }}</span>
+                    </div>
+                  </div>
+                </v-card>
+              </v-tab-item>
+
+            <v-tabs>
+        </v-row>
+      </v-container>
+    </script>
+
+
     <script type="text/x-template" id="page-grid">
       <v-container fluid>
         <v-row>
@@ -1341,6 +1540,7 @@
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/case.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/downloads.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/home.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/hunt.js?v=VERSION_PLACEHOLDER"></script>

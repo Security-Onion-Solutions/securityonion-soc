@@ -16,4 +16,13 @@ import (
 
 type Casestore interface {
 	Create(ctx context.Context, newCase *model.Case) (*model.Case, error)
+	Update(ctx context.Context, socCase *model.Case) (*model.Case, error)
+	GetCase(ctx context.Context, caseId string) (*model.Case, error)
+	GetCaseHistory(ctx context.Context, caseId string) ([]interface{}, error)
+
+	CreateComment(ctx context.Context, newComment *model.Comment) (*model.Comment, error)
+	GetComment(ctx context.Context, commentId string) (*model.Comment, error)
+	GetComments(ctx context.Context, caseId string) ([]*model.Comment, error)
+	UpdateComment(ctx context.Context, comment *model.Comment) (*model.Comment, error)
+	DeleteComment(ctx context.Context, id string) error
 }

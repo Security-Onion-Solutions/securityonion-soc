@@ -467,6 +467,9 @@ $(document).ready(function() {
       showError(msg) {
         this.error = true;
         this.errorMessage = this.localizeMessage(msg);
+        if (this.debug) {
+          console.log(msg.stack);
+        }
       },
       showWarning(msg) {
         this.warning = true;
@@ -706,11 +709,11 @@ $(document).ready(function() {
         }
         return null;
       },
-      async populateJobDetails(job) {
-        if (job.userId && job.userId.length > 0) {
-          const user = await this.$root.getUserById(job.userId);
+      async populateUserDetails(obj, idField, outputField) {
+        if (obj[idField] && obj[idField].length > 0) {
+          const user = await this.$root.getUserById(obj[idField]);
           if (user) {
-            job.owner = user.email;
+            obj[outputField] = user.email;
           }
         }
       },

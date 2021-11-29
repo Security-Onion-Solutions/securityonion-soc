@@ -64,7 +64,7 @@ func (server *Server) Start() {
   } else {
     log.Info("Starting server")
 
-    server.Host.Register("/api/case", NewCaseHandler(server))
+    server.Host.Register("/api/case/", NewCaseHandler(server))
     server.Host.Register("/api/events/", NewEventHandler(server))
     server.Host.Register("/api/info", NewInfoHandler(server))
     server.Host.Register("/api/job/", NewJobHandler(server))

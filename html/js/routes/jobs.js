@@ -73,7 +73,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
     },
     loadUserDetails() {
       for (var i = 0; i < this.jobs.length; i++) {
-        this.$root.populateJobDetails(this.jobs[i]);
+        this.$root.populateUserDetails(this.jobs[i], "userId", "owner");
       }
     },
     saveLocalSettings() {
@@ -102,7 +102,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
           if (job.status == JobStatusDeleted) {
             this.jobs.splice(i, 1);
           } else {
-            this.$root.populateJobDetails(job);
+            this.$root.populateUserDetails(job, "userId", "owner");
             this.$set(this.jobs, i, job);
           }
           break;
@@ -161,7 +161,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
               endTime: endDate
             }
           });
-          this.$root.populateJobDetails(response.data);
+          this.$root.populateUserDetails(response.data, "userId", "owner");
           this.jobs.push(response.data);
         }
       } catch (error) {

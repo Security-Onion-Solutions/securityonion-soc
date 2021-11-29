@@ -67,3 +67,25 @@ test('generateDatePickerPreselects', () => {
   expect(preselects[app.i18n.datePreselect7dToNow].length).toBe(2);
   expect(preselects[app.i18n.datePreselect30dToNow].length).toBe(2);
 });
+
+test('populateUserDetailsEmpty', async () => {
+  const obj = {};
+  await app.populateUserDetails(obj, "userId", "owner")
+  expect(obj.owner).toBe(undefined);
+});
+
+test('populateUserDetailsNonEmptyNoUser', async () => {
+  const obj = {userId:'123'}
+  app.users = [{id:'111',email:'hi@there.net'}];
+  app.usersLoadedTime = new Date().time;
+  await app.populateUserDetails(obj, "userId", "owner")
+  expect(obj.owner).toBe(undefined);
+});
+
+test('populateUserDetails', async () => {
+  const obj = {userId:'123'};
+  app.users = [{id:'123',email:'hi@there.net'}];
+  app.usersLoadedTime = new Date().time;
+  await app.populateUserDetails(obj, "userId", "owner")
+  expect(obj.owner).toBe('hi@there.net');
+});

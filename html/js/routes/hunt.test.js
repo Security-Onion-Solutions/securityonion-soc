@@ -125,3 +125,53 @@ test('saveTimezone', () => {
   comp.loadLocalSettings();
   expect(comp.zone).toBe("Foo/Bar");
 });
+
+test('removeFilter', () => {
+  comp.query = "abc def | groupby foo bar*"; 
+  comp.removeFilter('def')
+  expect(comp.query).toBe("abc  | groupby foo bar*");
+
+  comp.removeFilter('abc')
+  expect(comp.query).toBe("* | groupby foo bar*");
+
+  // no-op
+  comp.removeFilter('*')
+  expect(comp.query).toBe("* | groupby foo bar*");
+});
+
+test('removeGroupBy', () => {
+  comp.query = "abc | groupby foo bar*"; 
+  comp.removeGroupBy('foo')
+  expect(comp.query).toBe("abc | groupby bar*");
+
+  comp.removeGroupBy('bar*')
+  expect(comp.query).toBe("abc");
+
+  // no-op
+  comp.removeGroupBy('bar*')
+  expect(comp.query).toBe("abc");
+});
+
+test('removeSortBy', () => {
+  comp.query = "abc | sortby foo bar^"; 
+  comp.removeSortBy('foo')
+  expect(comp.query).toBe("abc | sortby bar^");
+
+  comp.removeSortBy('bar^')
+  expect(comp.query).toBe("abc");
+
+  // no-op
+  comp.removeSortBy('bar^')
+  expect(comp.query).toBe("abc");
+
+  comp.query = "abc | sortby foo bar^ | groupby xyz"; 
+  comp.removeSortBy('foo')
+  expect(comp.query).toBe("abc | sortby bar^ | groupby xyz");
+
+  comp.removeSortBy('bar^')
+  expect(comp.query).toBe("abc | groupby xyz");
+
+  // no-op
+  comp.removeSortBy('bar^')
+  expect(comp.query).toBe("abc | groupby xyz");
+});

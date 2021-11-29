@@ -83,6 +83,9 @@ func (queryHandler *QueryHandler) get(ctx context.Context, writer http.ResponseW
 	case "grouped":
 		field := request.Form.Get("field")
 		alteredQuery, err = query.Group(field)
+	case "sorted":
+		field := request.Form.Get("field")
+		alteredQuery, err = query.Sort(field)
 	default:
 		return http.StatusBadRequest, nil, errors.New("Unsupported query operation")
 	}

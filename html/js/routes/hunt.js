@@ -30,6 +30,7 @@ const huntComponent = {
     queryName: '',
     queryFilters: [],
     queryGroupBys: [],
+    querySortBys: [],
     eventFields: {},
     dateRange: '',
     relativeTimeEnabled: true,
@@ -46,6 +47,7 @@ const huntComponent = {
     huntPending: false,
     ackEnabled: false,
     escalateEnabled: false,
+    viewEnabled: false,
     collapsedSections: [],
 
     filterToggles: [],
@@ -190,6 +192,7 @@ const huntComponent = {
       this.advanced = params["advanced"];
       this.ackEnabled = params["ackEnabled"];
       this.escalateEnabled = params["escalateEnabled"];
+      this.viewEnabled = params["viewEnabled"];
       if (this.queries != null && this.queries.length > 0) {
         this.query = this.queries[0].query;
       }
@@ -447,7 +450,7 @@ const huntComponent = {
 
           var template = 'rule.case_template' in item ? item['rule.case_template'] : '';
 
-          const response = await this.$root.papi.post('case', {
+          const response = await this.$root.papi.post('case/', {
             title: title,
             description: description,
             severity: severity,
@@ -536,6 +539,7 @@ const huntComponent = {
       this.queryName = "";
       this.queryFilters = [];
       this.queryGroupBys = [];
+      this.querySortBys = [];
       var route = this;
       if (this.query) {
         var segments = this.query.split("|");
@@ -564,7 +568,13 @@ const huntComponent = {
                   route.queryGroupBys.push(item);
                 }
               });
-              break;
+            }
+            if (segment.indexOf("sortby") == 0) {
+              segment.split(" ").forEach(function(item, index) {
+                if (index > 0 && item.trim().length > 0) {
+                  route.querySortBys.push(item);
+                }
+              });
             }
           }
         }
@@ -601,7 +611,27 @@ const huntComponent = {
           }
         }
         if (segments[i].length > 0) {
-          newQuery = newQuery.trim() + " | " + segments[i];
+          newQuery = newQuery.trim() + " | " + segments[i].trim();
+        }
+      }
+      this.query = newQuery.trim();
+      if (!this.notifyInputsChanged()) {
+        this.obtainQueryDetails();
+      }        
+    },
+    removeSortBy(sortBy) {
+      var segments = this.query.split("|");
+      var newQuery = segments[0];
+      for (var i = 1; i < segments.length; i++) {
+        if (segments[i].trim().indexOf("sortby") == 0) {
+          segments[i].replace(/,/g, ' ');
+          segments[i] = segments[i].replace(" " + sortBy, "");
+          if (segments[i].trim() == "sortby") {
+            segments[i] = "";
+          }
+        }
+        if (segments[i].length > 0) {
+          newQuery = newQuery.trim() + " | " + segments[i].trim();
         }
       }
       this.query = newQuery.trim();
@@ -1113,3 +1143,6 @@ routes.push({ path: '/hunt', name: 'hunt', component: huntComponent});
 
 const alertsComponent = Object.assign({}, huntComponent);
 routes.push({ path: '/alerts', name: 'alerts', component: alertsComponent});
+
+const casesComponent = Object.assign({}, huntComponent);
+routes.push({ path: '/cases', name: 'cases', component: casesComponent});

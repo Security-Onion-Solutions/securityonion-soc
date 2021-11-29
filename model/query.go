@@ -85,6 +85,7 @@ func (segment *BaseSegment) Terms() []*QueryTerm {
 
 const SegmentKind_Search = "search"
 const SegmentKind_GroupBy = "groupby"
+const SegmentKind_SortBy = "sortby"
 
 func NewSegment(kind string, terms []*QueryTerm) (QuerySegment, error) {
   switch kind {
@@ -92,6 +93,8 @@ func NewSegment(kind string, terms []*QueryTerm) (QuerySegment, error) {
     return NewSearchSegment(terms)
   case SegmentKind_GroupBy:
     return NewGroupBySegment(terms)
+  case SegmentKind_SortBy:
+    return NewSortBySegment(terms)
   }
   return nil, errors.New("QUERY_INVALID__SEGMENT_UNSUPPORTED")
 }
@@ -168,7 +171,7 @@ func (segment *SearchSegment) escape(value string) string {
 func (segment *SearchSegment) AddFilter(field string, value string, scalar bool, inclusive bool) error {
   // This flag can be adjust to true once the query parser is more robust and better able to determine
   // when an inclusive filter already exists in a query, so that two inclusive filters are not allowed
-  // to exist in a query together. For example, the following filters will prevent any matches: 
+  // to exist in a query together. For example, the following filters will prevent any matches:
   // Ex: foo:1 AND foo:2
   alreadyFiltered := false
 
@@ -257,6 +260,63 @@ func (segment *GroupBySegment) AddGrouping(group string) error {
   var err error
   if !alreadyGrouped {
     term, err := NewQueryTerm(group)
+    if err == nil {
+      segment.terms = append(segment.terms, term)
+    }
+  }
+  return err
+}
+
+type SortBySegment struct {
+  *BaseSegment
+}
+
+func NewSortBySegmentEmpty() *SortBySegment {
+  return &SortBySegment{
+    &BaseSegment{
+      terms: make([]*QueryTerm, 0, 0),
+    },
+  }
+}
+
+func NewSortBySegment(terms []*QueryTerm) (*SortBySegment, error) {
+  if terms == nil || len(terms) == 0 {
+    return nil, errors.New("QUERY_INVALID__SORTBY_TERMS_MISSING")
+  }
+
+  segment := NewSortBySegmentEmpty()
+  segment.terms = terms
+
+  return segment, nil
+}
+
+func (segment *SortBySegment) Kind() string {
+  return SegmentKind_SortBy
+}
+
+func (segment *SortBySegment) String() string {
+  return segment.Kind() + " " + segment.TermsAsString()
+}
+
+func (segment *SortBySegment) Fields() []string {
+  fields := make([]string, 0, 0)
+  for _, field := range segment.terms {
+    fields = append(fields, field.String())
+  }
+  return fields
+}
+
+func (segment *SortBySegment) AddSortField(sortField string) error {
+  fields := segment.Fields()
+  alreadySorted := false
+  for _, field := range fields {
+    if field == sortField {
+      alreadySorted = true
+    }
+  }
+  var err error
+  if !alreadySorted {
+    term, err := NewQueryTerm(sortField)
     if err == nil {
       segment.terms = append(segment.terms, term)
     }
@@ -477,6 +537,20 @@ func (query *Query) Group(field string) (string, error) {
   }
   groupBySegment := segment.(*GroupBySegment)
   err = groupBySegment.AddGrouping(field)
+
+  return query.String(), err
+}
+
+func (query *Query) Sort(field string) (string, error) {
+  var err error
+
+  segment := query.NamedSegment(SegmentKind_SortBy)
+  if segment == nil {
+    segment = NewSortBySegmentEmpty()
+    query.AddSegment(segment)
+  }
+  sortBySegment := segment.(*SortBySegment)
+  err = sortBySegment.AddSortField(field)
 
   return query.String(), err
 }
