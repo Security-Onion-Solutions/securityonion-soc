@@ -2,6 +2,7 @@
 # Syntax      => roleX: roleY roleZ
 # Explanation => roleY and roleZ are granted permissions of roleX
 
+case-monitor:     auditor limited-auditor
 case-admin:       analyst limited-analyst superuser
 event-admin:      analyst limited-analyst superuser
 event-monitor:    auditor limited-auditor
