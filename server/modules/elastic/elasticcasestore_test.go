@@ -40,6 +40,266 @@ func TestPrepareForSave(tester *testing.T) {
 	assert.Nil(tester, obj.UpdateTime)
 }
 
+func TestValidateIdInvalid(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+
+	var err error
+	err = store.validateId("", "test")
+	assert.Error(tester, err)
+
+	err = store.validateId("1", "test")
+	assert.Error(tester, err)
+
+	err = store.validateId("a", "test")
+	assert.Error(tester, err)
+
+	err = store.validateId("this is invalid since it has spaces", "test")
+	assert.Error(tester, err)
+
+	err = store.validateId("'quotes'", "test")
+	assert.Error(tester, err)
+
+	err = store.validateId("\"dblquotes\"", "test")
+	assert.Error(tester, err)
+
+	err = store.validateId("123456789012345678901234567890123456789012345678901", "test")
+	assert.Error(tester, err)
+}
+
+func TestValidateIdValid(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+
+	var err error
+	err = store.validateId("12345", "test")
+	assert.NoError(tester, err)
+
+	err = store.validateId("123456", "test")
+	assert.NoError(tester, err)
+
+	err = store.validateId("1-2-A-b", "test")
+	assert.NoError(tester, err)
+
+	err = store.validateId("1-2-a-b_2klj", "test")
+	assert.NoError(tester, err)
+
+	err = store.validateId("12345678901234567890123456789012345678901234567890", "test")
+	assert.NoError(tester, err)
+}
+
+func TestValidateStringInvalid(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+
+	var err error
+	err = store.validateString("1234567", 6, "test")
+	assert.Error(tester, err)
+
+	err = store.validateString("12345678", 6, "test")
+	assert.Error(tester, err)
+}
+
+func TestValidateStringValid(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+
+	var err error
+	err = store.validateString("12345", 6, "test")
+	assert.NoError(tester, err)
+
+	err = store.validateString("123456", 6, "test")
+	assert.NoError(tester, err)
+
+	err = store.validateString("", 6, "test")
+	assert.NoError(tester, err)
+}
+
+func TestValidateCaseInvalid(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+
+	var err error
+	socCase := model.NewCase()
+
+	socCase.Id = "this is an invalid id"
+	err = store.validateCase(socCase)
+	assert.EqualError(tester, err, "invalid ID for caseId")
+	socCase.Id = ""
+
+	socCase.UserId = "this is an invalid id"
+	err = store.validateCase(socCase)
+	assert.EqualError(tester, err, "invalid ID for userId")
+	socCase.UserId = ""
+
+	socCase.AssigneeId = "this is an invalid id"
+	err = store.validateCase(socCase)
+	assert.EqualError(tester, err, "invalid ID for assigneeId")
+	socCase.AssigneeId = ""
+
+	for x := 1; x < 5; x++ {
+		socCase.Title += "this is my unreasonably long title\n"
+	}
+	err = store.validateCase(socCase)
+	assert.EqualError(tester, err, "title is too long (140/100)")
+	socCase.Title = "myTitle"
+
+	for x := 1; x < 30000; x++ {
+		socCase.Description += "this is my unreasonably long description\n"
+	}
+	err = store.validateCase(socCase)
+	assert.EqualError(tester, err, "description is too long (1229959/1000000)")
+	socCase.Description = "myDescription"
+
+	socCase.Priority = -12
+	err = store.validateCase(socCase)
+	assert.EqualError(tester, err, "Invalid priority")
+	socCase.Priority = 12
+
+	socCase.Severity = -12
+	err = store.validateCase(socCase)
+	assert.EqualError(tester, err, "Invalid severity")
+	socCase.Severity = 12
+
+	for x := 1; x < 5; x++ {
+		socCase.Tlp += "this is my unreasonably long tlp\n"
+	}
+	err = store.validateCase(socCase)
+	assert.EqualError(tester, err, "tlp is too long (132/100)")
+	socCase.Tlp = "myTlp"
+
+	for x := 1; x < 5; x++ {
+		socCase.Pap += "this is my unreasonably long pap\n"
+	}
+	err = store.validateCase(socCase)
+	assert.EqualError(tester, err, "pap is too long (132/100)")
+	socCase.Pap = "myPap"
+
+	for x := 1; x < 5; x++ {
+		socCase.Category += "this is my unreasonably long category\n"
+	}
+	err = store.validateCase(socCase)
+	assert.EqualError(tester, err, "category is too long (152/100)")
+	socCase.Category = "myCategory"
+
+	for x := 1; x < 5; x++ {
+		socCase.Template += "this is my unreasonably long template\n"
+	}
+	err = store.validateCase(socCase)
+	assert.EqualError(tester, err, "template is too long (152/100)")
+	socCase.Template = "myTemplate"
+
+	for x := 1; x < 5; x++ {
+		socCase.Status += "this is my unreasonably long status\n"
+	}
+	err = store.validateCase(socCase)
+	assert.EqualError(tester, err, "status is too long (144/100)")
+	socCase.Status = "myStatus"
+
+	socCase.Kind = "myKind"
+	err = store.validateCase(socCase)
+	assert.EqualError(tester, err, "Field 'Kind' must not be specified")
+	socCase.Kind = ""
+
+	socCase.Operation = "myOperation"
+	err = store.validateCase(socCase)
+	assert.EqualError(tester, err, "Field 'Operation' must not be specified")
+	socCase.Operation = ""
+
+	tag := ""
+	for x := 1; x < 5; x++ {
+		tag += "this is my unreasonably long tag\n"
+	}
+	socCase.Tags = append(socCase.Tags, tag)
+	err = store.validateCase(socCase)
+	assert.EqualError(tester, err, "tag[0] is too long (132/100)")
+	socCase.Tags = nil
+
+	for x := 1; x < 500; x++ {
+		socCase.Tags = append(socCase.Tags, "myTag")
+	}
+	err = store.validateCase(socCase)
+	assert.EqualError(tester, err, "Field 'Tags' contains excessive elements (499/50)")
+	socCase.Tags = nil
+}
+
+func TestValidateCaseValid(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+
+	var err error
+	socCase := model.NewCase() // empty cases are valid cases
+	err = store.validateCase(socCase)
+	assert.NoError(tester, err)
+
+	socCase.Id = "123456"
+	socCase.Title = "this is my reasonable long title - nothing excessive, just a normal title"
+	for x := 1; x < 500; x++ {
+		socCase.Description += "this is my reasonably long description\n"
+	}
+	socCase.Priority = 123
+	socCase.Severity = 1
+	socCase.Tags = append(socCase.Tags, "tag1")
+	socCase.Tags = append(socCase.Tags, "tag2")
+	socCase.Tlp = "amber"
+	socCase.Pap = "check"
+	socCase.Category = "confirmed"
+	socCase.Status = "in progress"
+	socCase.Template = "tbd"
+	socCase.UserId = "myUserId"
+	socCase.AssigneeId = "myAssigneeId"
+	err = store.validateCase(socCase)
+	assert.NoError(tester, err)
+}
+
+func TestValidateCommentInvalid(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+
+	var err error
+	comment := model.NewComment()
+
+	comment.Id = "this is an invalid id"
+	err = store.validateComment(comment)
+	assert.EqualError(tester, err, "invalid ID for commentId")
+	comment.Id = ""
+
+	comment.CaseId = "this is an invalid id"
+	err = store.validateComment(comment)
+	assert.EqualError(tester, err, "invalid ID for caseId")
+	comment.CaseId = ""
+
+	comment.UserId = "this is an invalid id"
+	err = store.validateComment(comment)
+	assert.EqualError(tester, err, "invalid ID for userId")
+	comment.UserId = ""
+
+	for x := 1; x < 30000; x++ {
+		comment.Description += "this is my unreasonably long description\n"
+	}
+	err = store.validateComment(comment)
+	assert.EqualError(tester, err, "description is too long (1229959/1000000)")
+	comment.Description = "myDescription"
+}
+
+func TestValidateCommentValid(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+
+	var err error
+	comment := model.NewComment() // empty comments are valid comments
+	err = store.validateComment(comment)
+	assert.NoError(tester, err)
+
+	comment.Id = "123456"
+	comment.UserId = "myUserId"
+	for x := 1; x < 500; x++ {
+		comment.Description += "this is my reasonably long description\n"
+	}
+	err = store.validateComment(comment)
+	assert.NoError(tester, err)
+}
+
 func TestSaveCreate(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
 	store.Init("myIndex", "myAuditIndex", 45)
@@ -153,7 +413,7 @@ func TestCreateError(tester *testing.T) {
 	myCase.Id = "123"
 	newCase, err := store.Create(ctx, myCase)
 	assert.Error(tester, err)
-	assert.Equal(tester, "Unexpected ID found in new case", err.Error())
+	assert.Equal(tester, "invalid ID for caseId", err.Error())
 	assert.NotNil(tester, newCase)
 }
 
@@ -212,7 +472,7 @@ func TestCreateCommentUnexpectedId(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 	comment := model.NewComment()
-	comment.Id = "123"
+	comment.Id = "123444"
 	_, err := store.CreateComment(ctx, comment)
 	assert.Error(tester, err)
 	assert.Equal(tester, "Unexpected ID found in new comment", err.Error())
