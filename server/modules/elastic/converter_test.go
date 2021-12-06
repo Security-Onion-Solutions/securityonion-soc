@@ -284,6 +284,17 @@ func TestConvertElasticEventToCaseNil(tester *testing.T) {
 	assert.Nil(tester, caseObj)
 }
 
+func TestConvertElasticEventToCaseWithoutTags(tester *testing.T) {
+	event := &model.EventRecord{}
+	event.Payload = make(map[string]interface{})
+	event.Payload["kind"] = "case"
+	event.Payload["operation"] = "create"
+	event.Payload["case.tags"] = nil
+
+	_, err := convertElasticEventToCase(event)
+	assert.NoError(tester, err)
+}
+
 func TestConvertElasticEventToCase(tester *testing.T) {
 	myTime := time.Now()
 	myCreateTime := myTime.Add(time.Hour * -1)

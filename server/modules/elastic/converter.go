@@ -413,7 +413,7 @@ func convertElasticEventToCase(event *model.EventRecord) (*model.Case, error) {
 			if value, ok := event.Payload["case.pap"]; ok {
 				obj.Pap = value.(string)
 			}
-			if value, ok := event.Payload["case.tags"]; ok {
+			if value, ok := event.Payload["case.tags"]; ok && value != nil {
 				obj.Tags = convertToStringArray(value.([]interface{}))
 			}
 			obj.CreateTime = parseTime(event.Payload, "case.createTime")
