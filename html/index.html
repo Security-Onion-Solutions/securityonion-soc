@@ -1172,15 +1172,48 @@
 
     <script type="text/x-template" id="page-case">
       <v-container fluid>
-        <v-row>
+        <v-form v-model="mainForms.info.valid">
+          <v-row class="mb-1">
+            <v-col>
+              <v-input hide-details="auto">
+                <v-text-field hide-details="auto" class="case title" v-model="mainForms.info.title"/>
+              </v-input>
+            </v-col>
+          </v-row>
+          <div class="align-center d-inline-flex mr-4">
+            <div class="mr-2">{{i18n.caseAssignee}}: </div>
+            <v-select dense outlined hide-details :items="userList" v-model="mainForms.info.assigneeId" item-text="email" item-value="id"></v-select>
+          </div>
+          <div class="align-center d-inline-flex">
+            <div class="mr-2">{{i18n.status}}: </div>
+            <v-select dense outlined hide-details :items="statusList" v-model="mainForms.info.status" item-text="text" item-value="value"></v-select>
+          </div>
+          <!-- <v-row dense class="ml-1 my-4">
+            <v-col class="col-12 col-md-7">
+              <v-row align="center">
+                <v-col class="d-flex flex-column justify-center align-end col-3 col-sm-2 col-md-3">
+                  <div class="text-center">{{i18n.caseAssignee}}: </div>
+                </v-col>
+                <v-col class="col-9 col-sm-7 col-md-9">
+                  <v-select dense outlined hide-details :items="userList" v-model="mainForms.info.assigneeId" item-text="email" item-value="id"></v-select>
+                </v-col>
+              </v-row>
+            </v-col>
+            <v-col class="col-12 col-md-4">
+              <v-row align="center">
+                <v-col class="d-flex flex-column align-end col-3 col-sm-2 col-md-3">
+                  <div class="text-center">{{i18n.status}}: </div>
+                </v-col>
+                <v-col class="col-7 col-sm-4 col-md-7">
+                  <v-select dense outlined hide-details :items="statusList" v-model="mainForms.info.status" item-text="text" item-value="value"></v-select>
+                </v-col>
+              </v-row>
+            </v-col>
+          </v-row> -->
+        </v-form>
+        <v-row class="mt-2">
           <v-col>
-            <h2>{{ i18n.viewCase }}</h2>
-          </v-col>
-        </v-row>
-        <v-row>
-          <v-col>
-            <v-form v-model="form.valid">
-              <div>
+            <v-form v-model="mainForms.details.valid">
                 <span class="case label">{{ i18n.caseId }}:</span>
                 <span class="case value">{{ caseObj.id }}</span>
               </div>
@@ -1205,37 +1238,34 @@
                 <span class="case value">{{ caseObj.assignee }}</span>
               </div>
               <div>
-                <v-text-field v-model="form.title" :placeholder="i18n.caseTitle" persistent-hint :hint="i18n.caseTitleHelp" :rules="[rules.required]"></v-text-field>
+                <v-text-field v-model="mainForms.details.description" :placeholder="i18n.caseDescription" persistent-hint :hint="i18n.caseDescriptionHelp"></v-text-field>
               </div>
               <div>
-                <v-text-field v-model="form.description" :placeholder="i18n.caseDescription" persistent-hint :hint="i18n.caseDescriptionHelp"></v-text-field>
+                <v-text-field v-model="mainForms.info.status" :placeholder="i18n.caseStatus" persistent-hint :hint="i18n.caseStatusHelp" :rules="[rules.required]"></v-text-field>
               </div>
               <div>
-                <v-text-field v-model="form.status" :placeholder="i18n.caseStatus" persistent-hint :hint="i18n.caseStatusHelp" :rules="[rules.required]"></v-text-field>
+                <v-text-field v-model="mainForms.details.severity" :placeholder="i18n.caseSeverity" persistent-hint :hint="i18n.caseSeverityHelp" :rules="[rules.required]"></v-text-field>
               </div>
               <div>
-                <v-text-field v-model="form.severity" :placeholder="i18n.caseSeverity" persistent-hint :hint="i18n.caseSeverityHelp" :rules="[rules.required]"></v-text-field>
+                <v-text-field v-model="mainForms.details.priority" :placeholder="i18n.casePriority" persistent-hint :hint="i18n.casePriorityHelp" :rules="[rules.required]"></v-text-field>
               </div>
               <div>
-                <v-text-field v-model="form.priority" :placeholder="i18n.casePriority" persistent-hint :hint="i18n.casePriorityHelp" :rules="[rules.required]"></v-text-field>
-              </div>
-              <div>
-                <v-text-field v-model="form.tags" :placeholder="i18n.caseTags" persistent-hint :hint="i18n.caseTagsHelp"></v-text-field>
+                <v-text-field v-model="mainForms.details.tags" :placeholder="i18n.caseTags" persistent-hint :hint="i18n.caseTagsHelp"></v-text-field>
               </div>              
               <div>
-                <v-text-field v-model="form.tlp" :placeholder="i18n.caseTlp" persistent-hint :hint="i18n.caseTlpHelp"></v-text-field>
+                <v-text-field v-model="mainForms.details.tlp" :placeholder="i18n.caseTlp" persistent-hint :hint="i18n.caseTlpHelp"></v-text-field>
               </div>
               <div>
-                <v-text-field v-model="form.pap" :placeholder="i18n.casePap" persistent-hint :hint="i18n.casePapHelp"></v-text-field>
+                <v-text-field v-model="mainForms.details.pap" :placeholder="i18n.casePap" persistent-hint :hint="i18n.casePapHelp"></v-text-field>
               </div>
               <div>
-                <v-text-field v-model="form.category" :placeholder="i18n.caseCategory" persistent-hint :hint="i18n.caseCategoryHelp"></v-text-field>
+                <v-text-field v-model="mainForms.details.category" :placeholder="i18n.caseCategory" persistent-hint :hint="i18n.caseCategoryHelp"></v-text-field>
               </div>
               <div>
-                <v-text-field v-model="form.assigneeId" :placeholder="i18n.caseAssignee" persistent-hint :hint="i18n.caseAssigneeHelp"></v-text-field>
+                <v-text-field v-model="mainForms.info.assigneeId" :placeholder="i18n.caseAssignee" persistent-hint :hint="i18n.caseAssigneeHelp"></v-text-field>
               </div>
               <div class="my-4">
-                <v-btn :disabled="!form.valid" text color="primary" @click="modifyCase" v-text="i18n.update"></v-btn>
+                <v-btn :disabled="!mainForms.details.valid" text color="primary" @click="modifyCase" v-text="i18n.update"></v-btn>
               <div>
             </form>
           </v-col>

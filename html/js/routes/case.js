@@ -34,19 +34,25 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     itemsPerPage: 10,
     footerProps: { 'items-per-page-options': [10,50,250,1000] },
     count: 500,
-    form: {
-      valid: false,
-      id: null,
-      title: null,
-      description: null,
-      status: null,
-      severity: null,
-      priority: null,
-      assigneeId: null,
-      tags: null,
-      tlp: null,
-      pap: null,
-      category: null
+    userList: [],
+    mainForms: {
+      info: {
+        valid: false,
+        title: null,
+        assigneeId: null,
+        status: null
+      },
+      details: {
+        valid: false,
+        id: null,
+        description: null,
+        severity: null,
+        priority: null,
+        tags: null,
+        tlp: null,
+        pap: null,
+        category: null
+      }
     },
     associatedForms: {
       comments: {
@@ -73,6 +79,34 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       required: value => (!!value) || this.$root.i18n.required,
     },
   }},
+  computed: {
+    severityList() {
+      return [
+        { text: 'High', value: 0 },
+        { text: 'Medium', value: 1 },
+        { text: 'Low', value: 2 },
+        { text: 'Extra Low', value: 3}
+      ]
+    },
+    severityString() {
+      return typeof(this.mainForms.details.severity) == Number
+        ? this.severityList.find(el => el.value == this.mainForms.details.severity).text
+        : this.mainForms.details.severity
+    }, 
+    statusList() {
+      const statuses = [
+        'new',
+        'in progress',
+        'closed'
+      ]
+      return statuses.map((value) => {
+        return {
+          text: value.split(' ').map(word => word.charAt(0).toLocaleUpperCase() + word.substring(1)).join(' '),
+          value: value
+        }
+      })
+    }
+  },
   created() {
   },
   mounted() {
@@ -137,6 +171,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         const response = await this.$root.papi.get('case/', { params: {
             id: this.$route.params.id
         }});
+        this.userList = await this.$root.getUsers();
         this.updateCaseDetails(response.data);
         this.loadAssociations();
       } catch (error) {
@@ -150,35 +185,40 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       this.$root.subscribe("case", this.updateCase);
     },
     updateCaseDetails(caseObj) {
-      this.form.id = caseObj.id;
-      this.form.title = caseObj.title;
-      this.form.description = caseObj.description;
-      this.form.severity = caseObj.severity;
-      this.form.priority = caseObj.priority;
-      this.form.status = caseObj.status;
-      this.form.tags = caseObj.tags ? caseObj.tags.join(", ") : "";
-      this.form.tlp = caseObj.tlp;
-      this.form.pap = caseObj.pap;
-      this.form.category = caseObj.category;
-      this.form.assigneeId = caseObj.assigneeId;
+      this.mainForms.details.id = caseObj.id;
+      this.mainForms.info.title = caseObj.title;
+      this.mainForms.details.description = caseObj.description;
+      this.mainForms.details.severity = caseObj.severity;
+      this.mainForms.details.priority = caseObj.priority;
+      this.mainForms.info.status = caseObj.status;
+      this.mainForms.details.tags = caseObj.tags ? caseObj.tags.join(", ") : "";
+      this.mainForms.details.tlp = caseObj.tlp;
+      this.mainForms.details.pap = caseObj.pap;
+      this.mainForms.details.category = caseObj.category;
+      this.mainForms.info.assigneeId = caseObj.assigneeId;
       this.$root.populateUserDetails(caseObj, "userId", "owner");
       this.$root.populateUserDetails(caseObj, "assigneeId", "assignee");
       this.caseObj = caseObj;
-    },    
+    },
     async modifyCase() {
       this.$root.startLoading();
       try {
         // Convert priority and severity to ints
-        this.form.severity = parseInt(this.form.severity, 10);
-        this.form.priority = parseInt(this.form.priority, 10);
-        const formattedTags = this.form.tags;
-        if (this.form.tags) {
-          this.form.tags = this.form.tags.split(",").map(tag => {
+        this.mainForms.details.severity = parseInt(this.mainForms.details.severity, 10);
+        this.mainForms.details.severity = this.severityString;
+        this.mainForms.details.priority = parseInt(this.mainForms.details.priority, 10);
+        const formattedTags = this.mainForms.details.tags;
+        if (this.mainForms.details.tags) {
+          this.mainForms.details.tags = this.mainForms.details.tags.split(",").map(tag => {
             return tag.trim();
           });
-        }
-        const json = JSON.stringify(this.form);
-        this.form.tags = formattedTags;
+        } else { this.mainForms.details.tags = []; }
+        const caseInfo = {
+          ...this.mainForms.info,
+          ...this.mainForms.details
+        };
+        const json = JSON.stringify(caseInfo);
+        this.mainForms.details.tags = formattedTags;
         const response = await this.$root.papi.put('case/', json);
         this.updateCaseDetails(response.data);
       } catch (error) {

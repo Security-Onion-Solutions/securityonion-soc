@@ -178,6 +178,11 @@ a#title, a#title:visited, a#title:active, a#title:hover {
   white-space: wrap;
 }
 
+.case.title.v-text-field input {
+  font-size: 1.2em;
+  margin-bottom: 0.15em;
+}
+
 td {
   white-space: nowrap;
 }
