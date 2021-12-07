@@ -1207,32 +1207,55 @@
               <v-btn v-else @click="toggleEdit('case-title')">Edit</v-btn>
             </v-col>
           </v-row>
-          <div class="align-center d-inline-flex mr-4">
-            <div class="mr-2">{{i18n.caseAssignee}}: </div>
-            <v-select
-              dense
-              outlined
-              hide-details
-              v-model="mainForms.info.assigneeId"
-              :items="userList"
-              item-text="email"
-              item-value="id"
-              v-on:change="modifyCase()"
-            />
-          </div>
-          <div class="align-center d-inline-flex">
-            <div class="mr-2">{{i18n.status}}: </div>
-            <v-select
-              dense
-              outlined
-              hide-details
-              v-model="mainForms.info.status"
-              :items="statusList"
-              item-text="text"
-              item-value="value"
-              v-on:change="modifyCase()"
-            />
-          </div>
+          <v-row>
+            
+            <v-col class="d-flex flex-column justify-center">
+              <v-card
+                class="mx-auto"
+                max-width="600"
+                outlined
+              >
+                <h3 class="mx-3 my-2">Info</h3>
+                <v-divider/>
+                <div class="mx-6 my-8">
+                  <div class="align-center d-inline-flex mb-2">
+                    <div class="mr-2">{{i18n.caseAssignee}}: </div>
+                    <v-select
+                      dense
+                      outlined
+                      hide-details
+                      v-model="mainForms.info.assigneeId"
+                      :items="userList"
+                      item-text="email"
+                      item-value="id"
+                      v-on:change="modifyCase()"
+                      class="flex-shrink-1 flex-grow-0"
+                    />
+                  </div>
+                  <div class="align-center d-inline-flex">
+                    <div class="mr-2">{{i18n.status}}: </div>
+                    <v-select
+                      dense
+                      outlined
+                      hide-details
+                      v-model="mainForms.info.status"
+                      :items="statusList"
+                      item-text="text"
+                      item-value="value"
+                      v-on:change="modifyCase()"
+                      class="flex-shrink-1 flex-grow-0"
+                    />
+                  </div>
+                </div>
+                <v-divider/>
+                <h3 class="mx-3 my-2">Details</h3>
+                <v-divider/>
+                <div class="mx-6 my-8">
+                  test
+                </div>
+              </v-card>
+            </v-col>
+          </v-row>
           <!-- <v-row dense class="ml-1 my-4">
             <v-col class="col-12 col-md-7">
               <v-row align="center">
