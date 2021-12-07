@@ -75,6 +75,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         valid: false
       }
     },
+    editFields: [],
     rules: {
       required: value => (!!value) || this.$root.i18n.required,
     },
@@ -300,6 +301,17 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       // this.updateCaseDetails(caseObj)
       // this.loadAssociations();
     },
+    isEdit(id) {
+      return this.editFields.find(item => item == id) != null
+    },
+    async toggleEdit(id) {
+      if (this.editFields.find(item => item == id) == null) {
+        this.editFields.push(id)
+      } else {
+        this.editFields = this.editFields.filter(item => item != id)
+        await this.modifyCase()
+      }
+    }
   }
 }});
 

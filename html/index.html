@@ -1173,20 +1173,41 @@
     <script type="text/x-template" id="page-case">
       <v-container fluid>
         <v-form v-model="mainForms.info.valid">
-          <v-row class="mb-1">
-            <v-col>
-              <v-input hide-details="auto">
-                <v-text-field hide-details="auto" class="case title" v-model="mainForms.info.title"/>
-              </v-input>
+          <v-row class="mb-1" align="center">
+            <v-col id="case-title">
+              <v-text-field v-if="isEdit('case-title')" hide-details="auto" outlined class="case title" v-model="mainForms.info.title"/>
+              <h2 v-else class="py-1">{{ mainForms.info.title }}</h2>
+            </v-col>
+            <v-col class="flex-shrink-1 flex-grow-0">
+              <v-btn v-if="isEdit('case-title')" @click="toggleEdit('case-title')">Save</v-btn>
+              <v-btn v-else @click="toggleEdit('case-title')">Edit</v-btn>
             </v-col>
           </v-row>
           <div class="align-center d-inline-flex mr-4">
             <div class="mr-2">{{i18n.caseAssignee}}: </div>
-            <v-select dense outlined hide-details :items="userList" v-model="mainForms.info.assigneeId" item-text="email" item-value="id"></v-select>
+            <v-select
+              dense
+              outlined
+              hide-details
+              v-model="mainForms.info.assigneeId"
+              :items="userList"
+              item-text="email"
+              item-value="id"
+              v-on:change="modifyCase()"
+            />
           </div>
           <div class="align-center d-inline-flex">
             <div class="mr-2">{{i18n.status}}: </div>
-            <v-select dense outlined hide-details :items="statusList" v-model="mainForms.info.status" item-text="text" item-value="value"></v-select>
+            <v-select
+              dense
+              outlined
+              hide-details
+              v-model="mainForms.info.status"
+              :items="statusList"
+              item-text="text"
+              item-value="value"
+              v-on:change="modifyCase()"
+            />
           </div>
           <!-- <v-row dense class="ml-1 my-4">
             <v-col class="col-12 col-md-7">
