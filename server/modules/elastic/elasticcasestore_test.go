@@ -663,6 +663,40 @@ func TestCreateRelatedEvent(tester *testing.T) {
 	assert.NotNil(tester, newEvent)
 }
 
+func TestCreateRelatedEventAlreadyExists(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+
+	// Mock the search for case cll
+	casePayload := make(map[string]interface{})
+	casePayload["kind"] = "case"
+	caseEvent := &model.EventRecord{
+		Payload: casePayload,
+		Id:      "123444",
+	}
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, caseEvent)
+
+	// Mock the search for existing related events call
+	eventPayload := make(map[string]interface{})
+	eventPayload["kind"] = "related"
+	eventPayload["related.fields.soc_id"] = "myEventId"
+	elasticEvent := &model.EventRecord{
+		Payload: eventPayload,
+	}
+	getRelatedEventsResults := model.NewEventSearchResults()
+	getRelatedEventsResults.Events = append(getRelatedEventsResults.Events, elasticEvent)
+	fakeEventStore.SearchResults = append(fakeEventStore.SearchResults, getRelatedEventsResults)
+
+	event := model.NewRelatedEvent()
+	event.CaseId = "123444"
+	event.Fields["soc_id"] = "myEventId"
+	_, err := store.CreateRelatedEvent(ctx, event)
+	assert.EqualError(tester, err, "Event ID 'myEventId' has already been attached to this case")
+}
+
 func TestGetRelatedEvent(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
 	store.Init("myIndex", "myAuditIndex", 45)
