@@ -72,6 +72,7 @@ $(document).ready(function() {
       parameterSection: null,
       chartsInitialized: false,
       tools: [],
+      casesEnabled: false,
       subtitle: '',
       currentStatus: null,
       connected: false,
@@ -304,6 +305,8 @@ $(document).ready(function() {
                     }
                   }
                 }
+                this.casesEnabled = this.parameters.casesEnabled;
+
                 this.subscribe("status", this.updateStatus);
               }
             } catch (error) {

@@ -31,6 +31,7 @@ type ClientParameters struct {
 	CacheExpirationMs  int               `json:"cacheExpirationMs"`
 	InactiveTools      []string          `json:"inactiveTools"`
 	Tools              []ClientTool      `json:"tools"`
+	CasesEnabled       bool              `json:"casesEnabled"`
 }
 
 func (config *ClientParameters) Verify() error {

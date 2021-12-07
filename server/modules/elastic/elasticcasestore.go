@@ -364,7 +364,7 @@ func (store *ElasticCasestore) GetCaseHistory(ctx context.Context, caseId string
 
   err = store.validateId(caseId, "caseId")
   if err == nil {
-    query := fmt.Sprintf(`_index:"%s" AND (%s:"%s" OR comment.caseId:"%s" OR related.caseId:"%s")`, store.auditIndex, AUDIT_DOC_ID, caseId, caseId, caseId)
+    query := fmt.Sprintf(`_index:"%s" AND (%s:"%s" OR comment.caseId:"%s" OR related.caseId:"%s") | sortby @timestamp^`, store.auditIndex, AUDIT_DOC_ID, caseId, caseId, caseId)
     history, err = store.getAll(ctx, query, store.maxAssociations)
   }
   return history, err
