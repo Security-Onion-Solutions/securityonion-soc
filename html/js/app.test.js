@@ -89,3 +89,46 @@ test('populateUserDetails', async () => {
   await app.populateUserDetails(obj, "userId", "owner")
   expect(obj.owner).toBe('hi@there.net');
 });
+
+test('loadServerSettings', async () => {
+  const fakeInfo = {
+    version: 'myVersion',
+    license: 'myLicense',
+    parameters: {
+      webSocketTimeoutMs: 456,
+      apiTimeoutMs: 123,
+      cacheExpirationMs: 789,
+      tipTimeoutMs: 222,
+      tools: [{"name": "tool1"},{"name": "tool2"}],
+      inactiveTools: ['tool2'],
+      casesEnabled: true
+    },
+    elasticVersion: 'myElasticVersion',
+    wazuhVersion: 'myWazuhVersion',
+    timezones: ['UTC'],
+    userId: 'myUserId'
+  };
+
+  expect(app.casesEnabled).toBe(false);
+  const getElementByIdMock = global.document.getElementById = jest.fn().mockReturnValueOnce(true);
+  resetPapi();
+  const mock = mockPapi("get", {data: fakeInfo});
+  const showErrorMock = mockShowError();
+  await app.loadServerSettings();
+  expect(mock).toHaveBeenCalledWith('info');
+  expect(showErrorMock).toHaveBeenCalledTimes(0);
+  expect(app.version).toBe('myVersion');
+  expect(app.license).toBe('myLicense');
+  expect(app.elasticVersion).toBe('myElasticVersion');
+  expect(app.wazuhVersion).toBe('myWazuhVersion');
+  expect(app.timezones[0]).toBe('UTC');
+  expect(app.wsConnectionTimeout).toBe(456);
+  expect(app.connectionTimeout).toBe(123);
+  expect(app.cacheRefreshIntervalMs).toBe(789);
+  expect(app.tipTimeout).toBe(222);
+  expect(app.tools[0].name).toBe('tool1');
+  expect(app.tools[0].enabled).toBe(true);
+  expect(app.tools[1].name).toBe('tool2');
+  expect(app.tools[1].enabled).toBe(false);
+  expect(app.casesEnabled).toBe(true);
+});

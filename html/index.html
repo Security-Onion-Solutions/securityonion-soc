@@ -56,7 +56,7 @@
               <v-list-item-title v-text="i18n.hunt"></v-list-item-title>
             </v-list-item-content>
           </v-list-item>
-          <v-list-item @click="" to="/cases">
+          <v-list-item @click="" to="/cases" v-if="casesEnabled">
             <v-list-item-action>
               <v-icon>fa-briefcase</v-icon>
             </v-list-item-action>
