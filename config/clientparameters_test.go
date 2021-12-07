@@ -41,6 +41,8 @@ func verifyInitialHuntingParams(tester *testing.T, params *HuntingParameters) {
 	assert.Equal(tester, DEFAULT_EVENT_FETCH_LIMIT, params.EventFetchLimit)
 	assert.Equal(tester, DEFAULT_RELATIVE_TIME_VALUE, params.RelativeTimeValue)
 	assert.Equal(tester, DEFAULT_RELATIVE_TIME_UNIT, params.RelativeTimeUnit)
+	assert.Equal(tester, false, params.EscalateRelatedEventsEnabled)
+	assert.Equal(tester, false, params.EscalateEnabled)
 }
 
 func TestCombineEmptyDeprecatedLinkIntoEmptyLinks(tester *testing.T) {

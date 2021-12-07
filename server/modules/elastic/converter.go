@@ -11,11 +11,10 @@ package elastic
 
 import (
 	"errors"
-	"strings"
-	"time"
-
 	"github.com/security-onion-solutions/securityonion-soc/json"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"strings"
+	"time"
 )
 
 func makeAggregation(store *ElasticEventstore, prefix string, keys []string, count int, ascending bool) (map[string]interface{}, string) {
@@ -456,6 +455,34 @@ func convertElasticEventToComment(event *model.EventRecord) (*model.Comment, err
 	return obj, err
 }
 
+func convertElasticEventToRelatedEvent(event *model.EventRecord) (*model.RelatedEvent, error) {
+	var err error
+	var obj *model.RelatedEvent
+
+	if event != nil {
+		obj = model.NewRelatedEvent()
+		err = convertElasticEventToAuditable(event, &obj.Auditable)
+		if err == nil {
+			obj.Fields = make(map[string]interface{})
+			for key, value := range event.Payload {
+				if strings.HasPrefix(key, "related.fields.") {
+					key = strings.TrimPrefix(key, "related.fields.")
+					obj.Fields[key] = value
+				}
+			}
+			if value, ok := event.Payload["related.userId"]; ok {
+				obj.UserId = value.(string)
+			}
+			if value, ok := event.Payload["related.caseId"]; ok {
+				obj.CaseId = value.(string)
+			}
+			obj.CreateTime = parseTime(event.Payload, "related.createTime")
+		}
+	}
+
+	return obj, err
+}
+
 func convertElasticEventToObject(event *model.EventRecord) (interface{}, error) {
 	var obj interface{}
 	var err error
@@ -466,6 +493,8 @@ func convertElasticEventToObject(event *model.EventRecord) (interface{}, error) 
 			obj, err = convertElasticEventToCase(event)
 		case "comment":
 			obj, err = convertElasticEventToComment(event)
+		case "related":
+			obj, err = convertElasticEventToRelatedEvent(event)
 		}
 	} else {
 		err = errors.New("Unknown object kind; id=" + event.Id)

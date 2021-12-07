@@ -324,8 +324,9 @@ func TestConvertElasticEventToCase(tester *testing.T) {
 	event.Payload["case.createTime"] = myCreateTime
 	event.Payload["case.completeTime"] = myCompleteTime
 	event.Payload["case.startTime"] = myStartTime
-	caseObj, err := convertElasticEventToCase(event)
+	interf, err := convertElasticEventToObject(event)
 	assert.NoError(tester, err)
+	caseObj := interf.(*model.Case)
 	assert.Equal(tester, "case", caseObj.Kind)
 	assert.Equal(tester, "update", caseObj.Operation)
 	assert.Equal(tester, "myTitle", caseObj.Title)
@@ -391,8 +392,9 @@ func TestConvertElasticEventToComment(tester *testing.T) {
 	event.Payload["comment.caseId"] = "myCaseId"
 	event.Time = myTime
 	event.Payload["comment.createTime"] = myCreateTime
-	obj, err := convertElasticEventToComment(event)
+	interf, err := convertElasticEventToObject(event)
 	assert.NoError(tester, err)
+	obj := interf.(*model.Comment)
 	assert.Equal(tester, "comment", obj.Kind)
 	assert.Equal(tester, "create", obj.Operation)
 	assert.Equal(tester, "myDesc", obj.Description)
@@ -400,4 +402,29 @@ func TestConvertElasticEventToComment(tester *testing.T) {
 	assert.Equal(tester, "myCaseId", obj.CaseId)
 	assert.Equal(tester, &myTime, obj.UpdateTime)
 	assert.Equal(tester, &myCreateTime, obj.CreateTime)
+}
+
+func TestConvertElasticEventToRelatedEvent(tester *testing.T) {
+	myTime := time.Now()
+	myCreateTime := myTime.Add(time.Hour * -1)
+
+	event := &model.EventRecord{}
+	event.Payload = make(map[string]interface{})
+	event.Payload["kind"] = "related"
+	event.Payload["operation"] = "create"
+	event.Payload["related.fields.foo"] = "bar"
+	event.Payload["related.userId"] = "myUserId"
+	event.Payload["related.caseId"] = "myCaseId"
+	event.Time = myTime
+	event.Payload["related.createTime"] = myCreateTime
+	interf, err := convertElasticEventToObject(event)
+	assert.NoError(tester, err)
+	obj := interf.(*model.RelatedEvent)
+	assert.Equal(tester, "related", obj.Kind)
+	assert.Equal(tester, "create", obj.Operation)
+	assert.Equal(tester, "myUserId", obj.UserId)
+	assert.Equal(tester, "myCaseId", obj.CaseId)
+	assert.Equal(tester, &myTime, obj.UpdateTime)
+	assert.Equal(tester, &myCreateTime, obj.CreateTime)
+	assert.Equal(tester, "bar", obj.Fields["foo"])
 }

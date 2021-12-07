@@ -93,6 +93,7 @@ const huntComponent = {
     fetchTimeSecs: 0,
     roundTripTimeSecs: 0,
     mruQueries: [],
+    mruCases: [],
 
     autohunt: true,
 
@@ -107,6 +108,11 @@ const huntComponent = {
     quickActionEvent: null,
     quickActionField: "",
     quickActionValue: "",
+    escalationMenuVisible: false,
+    escalationMenuX: 0,
+    escalationMenuY: 0,
+    escalationItem: null,
+    escalateRelatedEventsEnabled: false,
     actions: [],
   }},
   created() {
@@ -192,6 +198,7 @@ const huntComponent = {
       this.advanced = params["advanced"];
       this.ackEnabled = params["ackEnabled"];
       this.escalateEnabled = params["escalateEnabled"];
+      this.escalateRelatedEventsEnabled = params["escalateRelatedEventsEnabled"];
       this.viewEnabled = params["viewEnabled"];
       if (this.queries != null && this.queries.length > 0) {
         this.query = this.queries[0].query;
@@ -407,7 +414,7 @@ const huntComponent = {
         this.$root.showError(error);
       }
     },  
-    async ack(event, item, idx, acknowledge, escalate = false) {
+    async ack(event, item, idx, acknowledge, escalate = false, caseId = null) {
       this.$root.startLoading();
       try {
         var docEvent = item;
@@ -417,45 +424,59 @@ const huntComponent = {
         }
         var isAlert = ('rule.name' in item || 'event.severity_label' in item);
         if (escalate) {
-          var title = item['rule.name'];
-          if (!title) {
-            title = this.i18n.eventCaseTitle;
-            if (item['event.module'] || item['event.dataset']) {
-              title = title + ": ";
-              if (item['event.module']) {
-                title = title + item['event.module'];
+          if (!caseId || !this.escalateRelatedEventsEnabled) {
+            // Add to new case
+            var title = item['rule.name'];
+            if (!title) {
+              title = this.i18n.eventCaseTitle;
+              if (item['event.module'] || item['event.dataset']) {
+                title = title + ": ";
+                if (item['event.module']) {
+                  title = title + item['event.module'];
+                  if (item['event.dataset']) {
+                    title = title + " - ";
+                  }
+                }
                 if (item['event.dataset']) {
-                  title = title + " - ";
+                  title = title + item['event.dataset'];
                 }
               }
-              if (item['event.dataset']) {
-                title = title + item['event.dataset'];
+            }
+
+            var description = item['message'];
+            if (!description) description = JSON.stringify(item);
+
+            var severity = item['event.severity'];
+            if (!severity || isNaN(severity)) {
+              switch (item['event.severity_label']) {
+              case 'low': severity = 1; break;
+              case 'medium': severity = 2; break;
+              case 'high': severity = 3; break;
+              case 'critical': severity = 4; break;
+              default: severity = 3;
               }
             }
-          }
 
-          var description = item['message'];
-          if (!description) description = JSON.stringify(item);
+            var template = 'rule.case_template' in item ? item['rule.case_template'] : '';
 
-          var severity = item['event.severity'];
-          if (!severity || isNaN(severity)) {
-            switch (item['event.severity_label']) {
-            case 'low': severity = 1; break;
-            case 'medium': severity = 2; break;
-            case 'high': severity = 3; break;
-            case 'critical': severity = 4; break;
-            default: severity = 3;
+            const response = await this.$root.papi.post('case/', {
+              title: title,
+              description: description,
+              severity: severity,
+              template: template,
+            });
+            if (response && response.data) {
+              caseId = response.data.id;
             }
           }
 
-          var template = 'rule.case_template' in item ? item['rule.case_template'] : '';
-
-          const response = await this.$root.papi.post('case/', {
-            title: title,
-            description: description,
-            severity: severity,
-            template: template,
-          });
+          // Attach the event to the case
+          if (caseId && this.escalateRelatedEventsEnabled) {
+            const response = await this.$root.papi.post('case/events', {
+              fields: item,
+              caseId: caseId,
+            });
+          }
         }
         if (isAlert) {
           const response = await this.$root.papi.post('events/ack', {
@@ -660,9 +681,28 @@ const huntComponent = {
         this.$router.push(this.filterRouteDrilldown);
       }
     },
-    toggleQuickAction(domEvent, event, field, value) {
-      if (!domEvent || this.quickActionVisible) {
+    toggleEscalationMenu(domEvent, event) {
+      if (!this.escalateRelatedEventsEnabled) {
+        this.ack(domEvent, event, 0, true, true);
+        return;
+      }
+
+      if (!domEvent || this.quickActionVisible || this.escalationMenuVisible) {
         this.quickActionVisible = false;
+        this.escalationMenuVisible = false;
+        return;
+      }
+      this.escalationMenuX = domEvent.clientX;
+      this.escalationMenuY = domEvent.clientY;
+      this.escalationItem = event;
+      this.$nextTick(() => { 
+        this.escalationMenuVisible = true; 
+      });      
+    },
+    toggleQuickAction(domEvent, event, field, value) {
+      if (!domEvent || this.quickActionVisible || this.escalationMenuVisible) {
+        this.quickActionVisible = false;
+        this.escalationMenuVisible = false;
         return;
       }
 
@@ -1090,6 +1130,9 @@ const huntComponent = {
         localStorage.removeItem(item);
       }
     },
+    formatCaseSummary(socCase) {
+      return socCase.title;
+    },
     saveTimezone() {
       localStorage['timezone'] = this.zone;
     },
@@ -1125,6 +1168,8 @@ const huntComponent = {
       if (localStorage[prefix + '.relativeTimeValue']) this.relativeTimeValue = parseInt(localStorage[prefix + '.relativeTimeValue']);
       if (localStorage[prefix + '.relativeTimeUnit']) this.relativeTimeUnit = parseInt(localStorage[prefix + '.relativeTimeUnit']);
       if (localStorage[prefix + '.autohunt']) this.autohunt = localStorage[prefix + '.autohunt'] == 'true';
+
+      if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
     toggleShowSection(item) {
       if (this.isExpandedSection(item)) {

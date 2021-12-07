@@ -86,22 +86,23 @@ type ToggleFilter struct {
 }
 
 type HuntingParameters struct {
-	GroupItemsPerPage     int                 `json:"groupItemsPerPage"`
-	GroupFetchLimit       int                 `json:"groupFetchLimit"`
-	EventItemsPerPage     int                 `json:"eventItemsPerPage"`
-	EventFetchLimit       int                 `json:"eventFetchLimit"`
-	RelativeTimeValue     int                 `json:"relativeTimeValue"`
-	RelativeTimeUnit      int                 `json:"relativeTimeUnit"`
-	MostRecentlyUsedLimit int                 `json:"mostRecentlyUsedLimit"`
-	EventFields           map[string][]string `json:"eventFields"`
-	QueryBaseFilter       string              `json:"queryBaseFilter"`
-	QueryToggleFilters    []*ToggleFilter     `json:"queryToggleFilters"`
-	Queries               []*HuntingQuery     `json:"queries"`
-	Actions               []*HuntingAction    `json:"actions"`
-	Advanced              bool                `json:"advanced"`
-	AckEnabled            bool                `json:"ackEnabled"`
-	EscalateEnabled       bool                `json:"escalateEnabled"`
-	ViewEnabled           bool                `json:"viewEnabled"`
+	GroupItemsPerPage            int                 `json:"groupItemsPerPage"`
+	GroupFetchLimit              int                 `json:"groupFetchLimit"`
+	EventItemsPerPage            int                 `json:"eventItemsPerPage"`
+	EventFetchLimit              int                 `json:"eventFetchLimit"`
+	RelativeTimeValue            int                 `json:"relativeTimeValue"`
+	RelativeTimeUnit             int                 `json:"relativeTimeUnit"`
+	MostRecentlyUsedLimit        int                 `json:"mostRecentlyUsedLimit"`
+	EventFields                  map[string][]string `json:"eventFields"`
+	QueryBaseFilter              string              `json:"queryBaseFilter"`
+	QueryToggleFilters           []*ToggleFilter     `json:"queryToggleFilters"`
+	Queries                      []*HuntingQuery     `json:"queries"`
+	Actions                      []*HuntingAction    `json:"actions"`
+	Advanced                     bool                `json:"advanced"`
+	AckEnabled                   bool                `json:"ackEnabled"`
+	EscalateEnabled              bool                `json:"escalateEnabled"`
+	EscalateRelatedEventsEnabled bool                `json:"escalateRelatedEventsEnabled"`
+	ViewEnabled                  bool                `json:"viewEnabled"`
 }
 
 type GridParameters struct {

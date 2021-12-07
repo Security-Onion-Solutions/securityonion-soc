@@ -58,6 +58,11 @@ func (caseHandler *CaseHandler) create(ctx context.Context, writer http.Response
   subpath := caseHandler.GetPathParameter(request.URL.Path, 2)
   switch subpath {
   case "events":
+    inputEvent := model.NewRelatedEvent()
+    err = json.NewDecoder(request.Body).Decode(&inputEvent)
+    if err == nil {
+      obj, err = caseHandler.server.Casestore.CreateRelatedEvent(ctx, inputEvent)
+    }
   case "comments":
     inputComment := model.NewComment()
     err = json.NewDecoder(request.Body).Decode(&inputComment)
@@ -120,6 +125,8 @@ func (caseHandler *CaseHandler) delete(ctx context.Context, writer http.Response
   switch subpath {
   case "comments":
     err = caseHandler.server.Casestore.DeleteComment(ctx, id)
+  case "events":
+    err = caseHandler.server.Casestore.DeleteRelatedEvent(ctx, id)
   case "tasks":
   case "artifacts":
   default:
@@ -142,6 +149,7 @@ func (caseHandler *CaseHandler) get(ctx context.Context, writer http.ResponseWri
   subpath := caseHandler.GetPathParameter(request.URL.Path, 2)
   switch subpath {
   case "events":
+    obj, err = caseHandler.server.Casestore.GetRelatedEvents(ctx, id)
   case "comments":
     obj, err = caseHandler.server.Casestore.GetComments(ctx, id)
   case "tasks":

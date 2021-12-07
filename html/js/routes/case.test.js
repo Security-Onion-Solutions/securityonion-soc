@@ -46,8 +46,68 @@ beforeEach(() => {
 });
 
 test('initParams', () => {
-  comp.initActions({"foo":"bar"});
+  comp.mruCases.push({id:"123"});
+  comp.saveLocalSettings()
+  comp.mruCases = [];
+  comp.initCase({"foo":"bar", "mostRecentlyUsedLimit": 23});
   expect(comp.params.foo).toBe("bar");
+  expect(comp.mruCaseLimit).toBe(23);
+  expect(comp.mruCases.length).toBe(1)
+});
+
+test('addMRUCaseObj', () => {
+  const case1 = {id:'1'};
+  const case2 = {id:'2'};
+  const case3 = {id:'3'};
+  const case4 = {id:'4'};
+  const case5 = {id:'5'};
+  const case6 = {id:'6'};
+  expect(comp.mruCases.length).toBe(0);
+  comp.addMRUCaseObj(case1);
+  expect(comp.mruCases.length).toBe(1);
+  comp.addMRUCaseObj(case1);
+  expect(comp.mruCases.length).toBe(1); // still one
+  expect(comp.mruCases[0]).toBe(case1);
+
+  comp.addMRUCaseObj(case2);
+  expect(comp.mruCases.length).toBe(2);
+  expect(comp.mruCases[0]).toBe(case2);
+  expect(comp.mruCases[1]).toBe(case1);
+
+  comp.addMRUCaseObj(case3);
+  expect(comp.mruCases.length).toBe(3);
+  expect(comp.mruCases[0]).toBe(case3);
+  expect(comp.mruCases[1]).toBe(case2);
+  expect(comp.mruCases[2]).toBe(case1);
+
+  comp.addMRUCaseObj(case2);
+  expect(comp.mruCases.length).toBe(3);
+  expect(comp.mruCases[0]).toBe(case2); // back on top
+  expect(comp.mruCases[1]).toBe(case3);
+  expect(comp.mruCases[2]).toBe(case1);
+
+  comp.addMRUCaseObj(case4);
+  expect(comp.mruCases.length).toBe(4);
+  expect(comp.mruCases[0]).toBe(case4);
+  expect(comp.mruCases[1]).toBe(case2);
+  expect(comp.mruCases[2]).toBe(case3);
+  expect(comp.mruCases[3]).toBe(case1);
+
+  comp.addMRUCaseObj(case5);
+  expect(comp.mruCases.length).toBe(5);
+  expect(comp.mruCases[0]).toBe(case5);
+  expect(comp.mruCases[1]).toBe(case4);
+  expect(comp.mruCases[2]).toBe(case2);
+  expect(comp.mruCases[3]).toBe(case3);
+  expect(comp.mruCases[4]).toBe(case1);
+
+  comp.addMRUCaseObj(case6);
+  expect(comp.mruCases.length).toBe(5);
+  expect(comp.mruCases[0]).toBe(case6);
+  expect(comp.mruCases[1]).toBe(case5);
+  expect(comp.mruCases[2]).toBe(case4);
+  expect(comp.mruCases[3]).toBe(case2);
+  expect(comp.mruCases[4]).toBe(case3);
 });
 
 test('loadAssociations', () => {
@@ -171,6 +231,8 @@ test('modifyCase', async () => {
   comp.form.assigneeId = 'myAssigneeId';
   const showErrorMock = mockShowError(true);
 
+  expect(comp.mruCases.length).toBe(0);
+
   await comp.modifyCase();
 
   const body =  "{\"valid\":false,\"id\":\"myCaseId\",\"title\":\"myTitle\",\"description\":\"myDescription\",\"status\":\"open\",\"severity\":31,\"priority\":33,\"assigneeId\":\"myAssigneeId\",\"tags\":[\"tag1\",\"tag2\"],\"tlp\":\"myTlp\",\"pap\":\"myPap\",\"category\":\"myCategory\"}";
@@ -179,6 +241,7 @@ test('modifyCase', async () => {
   expectCaseDetails();
   expect(comp.associations['history'].length).toBe(0);
   expect(comp.$root.loading).toBe(false);
+  expect(comp.mruCases.length).toBe(1);
 });
 
 test('modifyCaseNotFound', async () => {
