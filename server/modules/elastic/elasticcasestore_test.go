@@ -464,7 +464,7 @@ func TestGetCaseHistory(tester *testing.T) {
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myAuditIndex" AND (so_audit_doc_id:"myCaseId" OR comment.caseId:"myCaseId" OR related.caseId:"myCaseId")`
+	query := `_index:"myAuditIndex" AND (so_audit_doc_id:"myCaseId" OR comment.caseId:"myCaseId" OR related.caseId:"myCaseId") | sortby @timestamp^`
 	casePayload := make(map[string]interface{})
 	casePayload["kind"] = "case"
 	caseEvent := &model.EventRecord{
