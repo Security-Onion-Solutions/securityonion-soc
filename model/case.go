@@ -56,3 +56,17 @@ func NewComment() *Comment {
   newComment := &Comment{}
   return newComment
 }
+
+type RelatedEvent struct {
+  Auditable
+  CaseId string                 `json:"caseId"`
+  Fields map[string]interface{} `json:"fields"`
+}
+
+func NewRelatedEvent() *RelatedEvent {
+  newRelatedEvent := &RelatedEvent{}
+  now := time.Now()
+  newRelatedEvent.CreateTime = &now
+  newRelatedEvent.Fields = make(map[string]interface{})
+  return newRelatedEvent
+}

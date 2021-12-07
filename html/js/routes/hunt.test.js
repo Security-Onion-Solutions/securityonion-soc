@@ -175,3 +175,30 @@ test('removeSortBy', () => {
   comp.removeSortBy('bar^')
   expect(comp.query).toBe("abc | groupby xyz");
 });
+
+test('formatCaseSummary', () => {
+  const caseObj = {id:"12", title:"This is a case title"};
+  const summary = comp.formatCaseSummary(caseObj);
+  expect(summary).toBe('This is a case title');
+});
+
+test('toggleEscalationMenu', () => {
+  comp.escalateRelatedEventsEnabled = true;
+  const domEvent = {clientX: 12, clientY: 34};
+  const event = {id:"33",foo:"bar"};
+  comp.$nextTick = function(fn) { fn(); };
+  comp.toggleEscalationMenu(domEvent, event);
+  expect(comp.escalationMenuX).toBe(12);
+  expect(comp.escalationMenuY).toBe(34);
+  expect(comp.escalationItem).toBe(event);
+  expect(comp.escalationMenuVisible).toBe(true);
+});
+
+test('toggleEscalationMenuAlreadyOpen', () => {
+  comp.escalateRelatedEventsEnabled = true;
+  comp.quickActionVisible = true;
+  comp.escalationMenuVisible = true;
+  comp.toggleEscalationMenu();
+  expect(comp.quickActionVisible).toBe(false);
+  expect(comp.escalationMenuVisible).toBe(false);
+});

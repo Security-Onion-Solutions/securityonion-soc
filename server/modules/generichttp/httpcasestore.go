@@ -103,3 +103,19 @@ func (store *HttpCasestore) UpdateComment(ctx context.Context, comment *model.Co
 func (store *HttpCasestore) DeleteComment(ctx context.Context, id string) error {
   return errors.New("Unsupported operation by this module")
 }
+
+func (store *HttpCasestore) CreateRelatedEvent(ctx context.Context, event *model.RelatedEvent) (*model.RelatedEvent, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) GetRelatedEvent(ctx context.Context, id string) (*model.RelatedEvent, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) GetRelatedEvents(ctx context.Context, caseId string) ([]*model.RelatedEvent, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) DeleteRelatedEvent(ctx context.Context, id string) error {
+  return errors.New("Unsupported operation by this module")
+}

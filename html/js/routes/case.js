@@ -76,6 +76,8 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       }
     },
     editFields: [],
+    mruCaseLimit: 5,
+    mruCases: [],
     rules: {
       required: value => (!!value) || this.$root.i18n.required,
     },
@@ -112,7 +114,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
   },
   mounted() {
     this.loadData();
-    this.$root.loadParameters('case', this.initActions);
+    this.$root.loadParameters('cases', this.initCase);
   },
   destroyed() {
     this.$root.unsubscribe("case", this.updateCase);
@@ -121,8 +123,10 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     '$route': 'loadData',
   },
   methods: {
-    initActions(params) {
+    initCase(params) {
       this.params = params;
+      this.mruCaseLimit = params["mostRecentlyUsedLimit"];
+      this.loadLocalSettings();
     },
     async loadAssociations() {
       this.associationsLoading = true;
@@ -165,6 +169,22 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         this.$root.showError(error);
       }
     },
+    addMRUCaseObj(caseObj) {
+      if (caseObj) {
+        for (var idx = 0; idx < this.mruCases.length; idx++) {
+          const cur = this.mruCases[idx];
+          if (cur.id == caseObj.id) {
+            this.mruCases.splice(idx, 1);
+            break;
+          }
+        }
+        this.mruCases.unshift(caseObj);
+        while (this.mruCases.length > this.mruCaseLimit) {
+          this.mruCases.pop();
+        }
+        this.saveLocalSettings();
+      }
+    },
     async loadData() {
       this.$root.startLoading();
 
@@ -199,6 +219,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       this.mainForms.info.assigneeId = caseObj.assigneeId;
       this.$root.populateUserDetails(caseObj, "userId", "owner");
       this.$root.populateUserDetails(caseObj, "assigneeId", "assignee");
+      this.addMRUCaseObj(caseObj);
       this.caseObj = caseObj;
     },
     async modifyCase() {
@@ -221,7 +242,9 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         const json = JSON.stringify(caseInfo);
         this.mainForms.details.tags = formattedTags;
         const response = await this.$root.papi.put('case/', json);
-        this.updateCaseDetails(response.data);
+        if (response.data) {
+          this.updateCaseDetails(response.data);
+        }
       } catch (error) {
         if (error.response != undefined && error.response.status == 404) {
           this.$root.showError(this.i18n.notFound);
@@ -235,8 +258,10 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       this.$root.startLoading();
       try {
         const response = await this.$root.papi.post('case/' + association, JSON.stringify(this.associatedForms[association]));
-        this.$root.populateUserDetails(response.data, "userId", "owner");
-        this.associations[association].push(response.data);
+        if (response.data) {
+          this.$root.populateUserDetails(response.data, "userId", "owner");
+          this.associations[association].push(response.data);
+        }
       } catch (error) {
         this.$root.showError(error);
       }
@@ -254,8 +279,10 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         this.$root.startLoading();
         try {
           const response = await this.$root.papi.put('case/' + association, JSON.stringify(this.associatedForms[association]));
-          this.$root.populateUserDetails(response.data, "userId", "owner");
-          Vue.set(this.associations[association], idx, response.data);
+          if (response.data) {
+            this.$root.populateUserDetails(response.data, "userId", "owner");
+            Vue.set(this.associations[association], idx, response.data);
+          }
         } catch (error) {
           if (error.response != undefined && error.response.status == 404) {
             this.$root.showError(this.i18n.notFound);
@@ -301,17 +328,12 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       // this.updateCaseDetails(caseObj)
       // this.loadAssociations();
     },
-    isEdit(id) {
-      return this.editFields.find(item => item == id) != null
+    saveLocalSettings() {
+      localStorage['settings.case.mruCases'] = JSON.stringify(this.mruCases);
     },
-    async toggleEdit(id) {
-      if (this.editFields.find(item => item == id) == null) {
-        this.editFields.push(id)
-      } else {
-        this.editFields = this.editFields.filter(item => item != id)
-        await this.modifyCase()
-      }
-    }
+    loadLocalSettings() {
+      if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
+    },
   }
 }});
 

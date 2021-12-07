@@ -133,6 +133,30 @@ func (store *ElasticCasestore) validateCase(socCase *model.Case) error {
   return err
 }
 
+func (store *ElasticCasestore) validateRelatedEvent(event *model.RelatedEvent) error {
+  var err error
+
+  if err == nil && event.Id != "" {
+    err = store.validateId(event.Id, "relatedEventId")
+  }
+  if err == nil && event.CaseId != "" {
+    err = store.validateId(event.CaseId, "caseId")
+  }
+  if err == nil && event.UserId != "" {
+    err = store.validateId(event.UserId, "userId")
+  }
+  if err == nil && len(event.Kind) > 0 {
+    err = errors.New("Field 'Kind' must not be specified")
+  }
+  if err == nil && len(event.Operation) > 0 {
+    err = errors.New("Field 'Operation' must not be specified")
+  }
+  if err == nil && len(event.Fields) == 0 {
+    err = errors.New("Related event fields cannot not be empty")
+  }
+  return err
+}
+
 func (store *ElasticCasestore) validateComment(comment *model.Comment) error {
   var err error
 
@@ -222,8 +246,11 @@ func (store *ElasticCasestore) delete(ctx context.Context, obj interface{}, kind
 func (store *ElasticCasestore) get(ctx context.Context, id string, kind string) (interface{}, error) {
   query := fmt.Sprintf(`_index:"%s" AND kind:"%s" AND _id:"%s"`, store.index, kind, id)
   objects, err := store.getAll(ctx, query, 1)
-  if err == nil && len(objects) > 0 {
-    return objects[0], err
+  if err == nil {
+    if len(objects) > 0 {
+      return objects[0], err
+    }
+    err = errors.New("Object not found")
   }
   return nil, err
 }
@@ -337,10 +364,84 @@ func (store *ElasticCasestore) GetCaseHistory(ctx context.Context, caseId string
 
   err = store.validateId(caseId, "caseId")
   if err == nil {
-    query := fmt.Sprintf(`_index:"%s" AND (%s:"%s" OR comment.caseId:"%s")`, store.auditIndex, AUDIT_DOC_ID, caseId, caseId)
+    query := fmt.Sprintf(`_index:"%s" AND (%s:"%s" OR comment.caseId:"%s" OR related.caseId:"%s")`, store.auditIndex, AUDIT_DOC_ID, caseId, caseId, caseId)
     history, err = store.getAll(ctx, query, store.maxAssociations)
   }
   return history, err
+}
+
+func (store *ElasticCasestore) CreateRelatedEvent(ctx context.Context, event *model.RelatedEvent) (*model.RelatedEvent, error) {
+  var err error
+
+  err = store.validateRelatedEvent(event)
+  if err == nil {
+    if event.Id != "" {
+      return nil, errors.New("Unexpected ID found in new related event")
+    } else if event.CaseId == "" {
+      return nil, errors.New("Missing Case ID in new related event")
+    } else {
+      _, err = store.GetCase(ctx, event.CaseId)
+      if err == nil {
+        var results *model.EventIndexResults
+        results, err = store.save(ctx, event, "related", store.prepareForSave(ctx, &event.Auditable))
+        if err == nil {
+          // Read object back to get new modify date, etc
+          event, err = store.GetRelatedEvent(ctx, results.DocumentId)
+        }
+      }
+    }
+  }
+
+  return event, err
+}
+
+func (store *ElasticCasestore) GetRelatedEvent(ctx context.Context, id string) (*model.RelatedEvent, error) {
+  var err error
+  var event *model.RelatedEvent
+
+  err = store.validateId(id, "id")
+  if err == nil {
+    var obj interface{}
+    obj, err = store.get(ctx, id, "related")
+    if err == nil {
+      event = obj.(*model.RelatedEvent)
+    }
+  }
+  return event, err
+}
+
+func (store *ElasticCasestore) GetRelatedEvents(ctx context.Context, caseId string) ([]*model.RelatedEvent, error) {
+  var err error
+  var events []*model.RelatedEvent
+
+  err = store.validateId(caseId, "caseId")
+  if err == nil {
+    events = make([]*model.RelatedEvent, 0)
+    query := fmt.Sprintf(`_index:"%s" AND kind:"related" AND related.caseId:"%s" | sortby related.fields.timestamp^`, store.index, caseId)
+    var objects []interface{}
+    objects, err = store.getAll(ctx, query, store.maxAssociations)
+    if err == nil {
+      for _, obj := range objects {
+        events = append(events, obj.(*model.RelatedEvent))
+      }
+    }
+  }
+  return events, err
+}
+
+func (store *ElasticCasestore) DeleteRelatedEvent(ctx context.Context, id string) error {
+  var err error
+
+  var event *model.RelatedEvent
+  err = store.validateId(id, "id")
+  if err == nil {
+    event, err = store.GetRelatedEvent(ctx, id)
+    if err == nil {
+      err = store.delete(ctx, event, "related", store.prepareForSave(ctx, &event.Auditable))
+    }
+  }
+
+  return err
 }
 
 func (store *ElasticCasestore) CreateComment(ctx context.Context, comment *model.Comment) (*model.Comment, error) {
@@ -353,13 +454,16 @@ func (store *ElasticCasestore) CreateComment(ctx context.Context, comment *model
     } else if comment.CaseId == "" {
       return nil, errors.New("Missing Case ID in new comment")
     } else {
-      now := time.Now()
-      comment.CreateTime = &now
-      var results *model.EventIndexResults
-      results, err = store.save(ctx, comment, "comment", store.prepareForSave(ctx, &comment.Auditable))
+      _, err = store.GetCase(ctx, comment.CaseId)
       if err == nil {
-        // Read object back to get new modify date, etc
-        comment, err = store.GetComment(ctx, results.DocumentId)
+        now := time.Now()
+        comment.CreateTime = &now
+        var results *model.EventIndexResults
+        results, err = store.save(ctx, comment, "comment", store.prepareForSave(ctx, &comment.Auditable))
+        if err == nil {
+          // Read object back to get new modify date, etc
+          comment, err = store.GetComment(ctx, results.DocumentId)
+        }
       }
     }
   }
@@ -388,7 +492,7 @@ func (store *ElasticCasestore) GetComments(ctx context.Context, caseId string) (
   err = store.validateId(caseId, "caseId")
   if err == nil {
     comments = make([]*model.Comment, 0)
-    query := fmt.Sprintf(`_index:"%s" AND kind:"comment" AND comment.caseId:"%s" | sortby comment.createTime^`, store.index, caseId)
+    query := fmt.Sprintf(`_index:"%s" AND kind:"comment" AND comment.caseId:"%s" | sortby @timestamp^`, store.index, caseId)
     var objects []interface{}
     objects, err = store.getAll(ctx, query, store.maxAssociations)
     if err == nil {

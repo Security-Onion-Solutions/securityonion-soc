@@ -377,8 +377,8 @@ func TestGetAll(tester *testing.T) {
 		Payload: commentPayload,
 	}
 
-	fakeEventStore.SearchResults.Events = append(fakeEventStore.SearchResults.Events, caseEvent)
-	fakeEventStore.SearchResults.Events = append(fakeEventStore.SearchResults.Events, commentEvent)
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, caseEvent)
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, commentEvent)
 	results, err := store.getAll(ctx, query, 123)
 	assert.NoError(tester, err)
 	assert.Len(tester, fakeEventStore.InputSearchCriterias, 1)
@@ -398,12 +398,22 @@ func TestGet(tester *testing.T) {
 	caseEvent := &model.EventRecord{
 		Payload: casePayload,
 	}
-	fakeEventStore.SearchResults.Events = append(fakeEventStore.SearchResults.Events, caseEvent)
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, caseEvent)
 	obj, err := store.get(ctx, "myCaseId", "case")
 	assert.NoError(tester, err)
 	assert.Len(tester, fakeEventStore.InputSearchCriterias, 1)
 	assert.Equal(tester, query, fakeEventStore.InputSearchCriterias[0].RawQuery)
 	assert.NotNil(tester, obj)
+}
+
+func TestGetNotFound(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	_, err := store.get(ctx, "myCaseId", "case")
+	assert.EqualError(tester, err, "Object not found")
 }
 
 func TestCreateError(tester *testing.T) {
@@ -440,7 +450,7 @@ func TestGetCase(tester *testing.T) {
 	caseEvent := &model.EventRecord{
 		Payload: casePayload,
 	}
-	fakeEventStore.SearchResults.Events = append(fakeEventStore.SearchResults.Events, caseEvent)
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, caseEvent)
 	obj, err := store.GetCase(ctx, "myCaseId")
 	assert.NoError(tester, err)
 	assert.Len(tester, fakeEventStore.InputSearchCriterias, 1)
@@ -454,13 +464,13 @@ func TestGetCaseHistory(tester *testing.T) {
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myAuditIndex" AND (so_audit_doc_id:"myCaseId" OR comment.caseId:"myCaseId")`
+	query := `_index:"myAuditIndex" AND (so_audit_doc_id:"myCaseId" OR comment.caseId:"myCaseId" OR related.caseId:"myCaseId")`
 	casePayload := make(map[string]interface{})
 	casePayload["kind"] = "case"
 	caseEvent := &model.EventRecord{
 		Payload: casePayload,
 	}
-	fakeEventStore.SearchResults.Events = append(fakeEventStore.SearchResults.Events, caseEvent)
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, caseEvent)
 	results, err := store.GetCaseHistory(ctx, "myCaseId")
 	assert.NoError(tester, err)
 	assert.Len(tester, fakeEventStore.InputSearchCriterias, 1)
@@ -487,6 +497,38 @@ func TestCreateCommentMissingCaseId(tester *testing.T) {
 	assert.Equal(tester, "Missing Case ID in new comment", err.Error())
 }
 
+func TestCreateComment(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+
+	casePayload := make(map[string]interface{})
+	casePayload["kind"] = "case"
+	caseEvent := &model.EventRecord{
+		Payload: casePayload,
+		Id:      "123444",
+	}
+	commentPayload := make(map[string]interface{})
+	commentPayload["kind"] = "comment"
+	commentEvent := &model.EventRecord{
+		Payload: commentPayload,
+	}
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, caseEvent)
+	fakeEventStore.IndexResults[0].Success = true
+	fakeEventStore.IndexResults[0].DocumentId = "myCaseId"
+	commentSearchResults := model.NewEventSearchResults()
+	commentSearchResults.Events = append(commentSearchResults.Events, commentEvent)
+	fakeEventStore.SearchResults = append(fakeEventStore.SearchResults, commentSearchResults)
+	comment := model.NewComment()
+	comment.CaseId = "123444"
+	comment.Description = "Foo Bar"
+	newComment, err := store.CreateComment(ctx, comment)
+	assert.NoError(tester, err)
+	assert.NotNil(tester, newComment)
+}
+
 func TestGetComment(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
 	store.Init("myIndex", "myAuditIndex", 45)
@@ -499,7 +541,7 @@ func TestGetComment(tester *testing.T) {
 	commentEvent := &model.EventRecord{
 		Payload: commentPayload,
 	}
-	fakeEventStore.SearchResults.Events = append(fakeEventStore.SearchResults.Events, commentEvent)
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, commentEvent)
 	obj, err := store.GetComment(ctx, "myCommentId")
 	assert.NoError(tester, err)
 	assert.Len(tester, fakeEventStore.InputSearchCriterias, 1)
@@ -513,13 +555,13 @@ func TestGetComments(tester *testing.T) {
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myIndex" AND kind:"comment" AND comment.caseId:"myCaseId" | sortby comment.createTime^`
+	query := `_index:"myIndex" AND kind:"comment" AND comment.caseId:"myCaseId" | sortby @timestamp^`
 	commentPayload := make(map[string]interface{})
 	commentPayload["kind"] = "comment"
 	commentEvent := &model.EventRecord{
 		Payload: commentPayload,
 	}
-	fakeEventStore.SearchResults.Events = append(fakeEventStore.SearchResults.Events, commentEvent)
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, commentEvent)
 	obj, err := store.GetComments(ctx, "myCaseId")
 	assert.NoError(tester, err)
 	assert.Len(tester, fakeEventStore.InputSearchCriterias, 1)
@@ -549,12 +591,137 @@ func TestDeleteComment(tester *testing.T) {
 		Payload: commentPayload,
 		Id:      "myCommentId",
 	}
-	fakeEventStore.SearchResults.Events = append(fakeEventStore.SearchResults.Events, commentEvent)
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, commentEvent)
 	err := store.DeleteComment(ctx, "myCommentId")
 	assert.NoError(tester, err)
 	assert.Len(tester, fakeEventStore.InputSearchCriterias, 1) // Search to ensure it exists first
 	assert.Equal(tester, query, fakeEventStore.InputSearchCriterias[0].RawQuery)
 	assert.Len(tester, fakeEventStore.InputIds, 2) // Delete and Index (for audit)
 	assert.Equal(tester, "myCommentId", fakeEventStore.InputIds[0])
+	assert.Equal(tester, "", fakeEventStore.InputIds[1])
+}
+
+func TestCreateRelatedEventUnexpectedId(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	event := model.NewRelatedEvent()
+	event.Id = "123444"
+	event.Fields["foo"] = "bar"
+	_, err := store.CreateRelatedEvent(ctx, event)
+	assert.Error(tester, err)
+	assert.Equal(tester, "Unexpected ID found in new related event", err.Error())
+}
+
+func TestCreateRelatedEventMissingCaseId(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	event := model.NewRelatedEvent()
+	event.Fields["foo"] = "bar"
+	_, err := store.CreateRelatedEvent(ctx, event)
+	assert.Error(tester, err)
+	assert.Equal(tester, "Missing Case ID in new related event", err.Error())
+}
+
+func TestCreateRelatedEventMissingFields(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	event := model.NewRelatedEvent()
+	_, err := store.CreateRelatedEvent(ctx, event)
+	assert.Error(tester, err)
+	assert.Equal(tester, "Related event fields cannot not be empty", err.Error())
+}
+
+func TestCreateRelatedEvent(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+
+	casePayload := make(map[string]interface{})
+	casePayload["kind"] = "case"
+	caseEvent := &model.EventRecord{
+		Payload: casePayload,
+		Id:      "123444",
+	}
+	eventPayload := make(map[string]interface{})
+	eventPayload["kind"] = "related"
+	elasticEvent := &model.EventRecord{
+		Payload: eventPayload,
+	}
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, caseEvent)
+	fakeEventStore.IndexResults[0].Success = true
+	fakeEventStore.IndexResults[0].DocumentId = "myCaseId"
+	eventSearchResults := model.NewEventSearchResults()
+	eventSearchResults.Events = append(eventSearchResults.Events, elasticEvent)
+	fakeEventStore.SearchResults = append(fakeEventStore.SearchResults, eventSearchResults)
+	event := model.NewRelatedEvent()
+	event.CaseId = "123444"
+	event.Fields["foo"] = "bar"
+	newEvent, err := store.CreateRelatedEvent(ctx, event)
+	assert.NoError(tester, err)
+	assert.NotNil(tester, newEvent)
+}
+
+func TestGetRelatedEvent(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	query := `_index:"myIndex" AND kind:"related" AND _id:"myEventId"`
+	eventPayload := make(map[string]interface{})
+	eventPayload["kind"] = "related"
+	elasticEvent := &model.EventRecord{
+		Payload: eventPayload,
+	}
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, elasticEvent)
+	obj, err := store.GetRelatedEvent(ctx, "myEventId")
+	assert.NoError(tester, err)
+	assert.Len(tester, fakeEventStore.InputSearchCriterias, 1)
+	assert.Equal(tester, query, fakeEventStore.InputSearchCriterias[0].RawQuery)
+	assert.NotNil(tester, obj)
+}
+
+func TestGetRelatedEvents(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	query := `_index:"myIndex" AND kind:"related" AND related.caseId:"myCaseId" | sortby related.fields.timestamp^`
+	eventPayload := make(map[string]interface{})
+	eventPayload["kind"] = "related"
+	elasticEvent := &model.EventRecord{
+		Payload: eventPayload,
+	}
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, elasticEvent)
+	obj, err := store.GetRelatedEvents(ctx, "myCaseId")
+	assert.NoError(tester, err)
+	assert.Len(tester, fakeEventStore.InputSearchCriterias, 1)
+	assert.Equal(tester, query, fakeEventStore.InputSearchCriterias[0].RawQuery)
+	assert.NotNil(tester, obj)
+}
+
+func TestDeleteRelatedEvent(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	query := `_index:"myIndex" AND kind:"related" AND _id:"myEventId"`
+	elasticPayload := make(map[string]interface{})
+	elasticPayload["kind"] = "related"
+	elasticEvent := &model.EventRecord{
+		Payload: elasticPayload,
+		Id:      "myEventId",
+	}
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, elasticEvent)
+	err := store.DeleteRelatedEvent(ctx, "myEventId")
+	assert.NoError(tester, err)
+	assert.Len(tester, fakeEventStore.InputSearchCriterias, 1) // Search to ensure it exists first
+	assert.Equal(tester, query, fakeEventStore.InputSearchCriterias[0].RawQuery)
+	assert.Len(tester, fakeEventStore.InputIds, 2) // Delete and Index (for audit)
+	assert.Equal(tester, "myEventId", fakeEventStore.InputIds[0])
 	assert.Equal(tester, "", fakeEventStore.InputIds[1])
 }
