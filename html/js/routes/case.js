@@ -71,6 +71,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     },
     mruCaseLimit: 5,
     mruCases: [],
+    presets: {},
     rules: {
       required: value => (!!value) || this.$root.i18n.required,
     },
@@ -79,7 +80,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
   },
   mounted() {
     this.loadData();
-    this.$root.loadParameters('cases', this.initCase);
+    this.$root.loadParameters('case', this.initCase);
   },
   destroyed() {
     this.$root.unsubscribe("case", this.updateCase);
@@ -91,6 +92,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     initCase(params) {
       this.params = params;
       this.mruCaseLimit = params["mostRecentlyUsedLimit"];
+      this.presets = params["presets"];
       this.loadLocalSettings();
     },
     async loadAssociations() {
@@ -133,6 +135,18 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       } catch (error) {
         this.$root.showError(error);
       }
+    },
+    getPresets(kind) {
+      if (this.presets && this.presets[kind]) {
+        return this.presets[kind].labels;
+      }
+      return [];
+    },
+    isPresetCustomEnabled(kind) {
+      if (this.presets && this.presets[kind]) {
+        return this.presets[kind].customEnabled == true;
+      }
+      return false;
     },
     addMRUCaseObj(caseObj) {
       if (caseObj) {

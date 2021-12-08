@@ -20,6 +20,7 @@ type ClientParameters struct {
 	HuntingParams      HuntingParameters `json:"hunt"`
 	AlertingParams     HuntingParameters `json:"alerts"`
 	CasesParams        HuntingParameters `json:"cases"`
+	CaseParams         CaseParameters    `json:"case"`
 	JobParams          HuntingParameters `json:"job"`
 	DocsUrl            string            `json:"docsUrl"`
 	CheatsheetUrl      string            `json:"cheatsheetUrl"`
@@ -106,9 +107,6 @@ type HuntingParameters struct {
 	ViewEnabled                  bool                `json:"viewEnabled"`
 }
 
-type GridParameters struct {
-}
-
 func (params *HuntingParameters) Verify() error {
 	var err error
 	if params.GroupFetchLimit <= 0 {
@@ -137,4 +135,25 @@ func (params *HuntingParameters) combineDeprecatedLinkIntoLinks() {
 			action.Link = ""
 		}
 	}
+}
+
+type PresetParameters struct {
+	Labels        []string `json:"labels"`
+	CustomEnabled bool     `json:"customEnabled"`
+}
+
+type CaseParameters struct {
+	MostRecentlyUsedLimit int                         `json:"mostRecentlyUsedLimit"`
+	Presets               map[string]PresetParameters `json:"presets"`
+}
+
+func (params *CaseParameters) Verify() error {
+	var err error
+	if params.MostRecentlyUsedLimit < 0 {
+		params.MostRecentlyUsedLimit = 0
+	}
+	return err
+}
+
+type GridParameters struct {
 }

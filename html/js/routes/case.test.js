@@ -375,3 +375,40 @@ test('cancelComment', () => {
   expect(comp.associatedForms['comments'].id).toBe("");
   expect(comp.associatedForms['comments'].description).toBe("");
 });
+
+test('presets', () => {
+  expect(comp.isPresetCustomEnabled('foo')).toBe(false); // Presets not loaded
+  expect(comp.getPresets('foo').length).toBe(0);
+
+  comp.presets = {
+    "category": {
+      "labels": [
+        "catLabel2",
+        "catLabel1"
+      ],
+      "customEnabled": true
+    },
+    "tag": {
+      "labels": [
+        "tagLabel1"
+      ]
+    },
+    "severity": {
+      "labels": [
+      ],
+      "customEnabled": false
+    }
+  };
+  expect(comp.isPresetCustomEnabled('foo')).toBe(false); // Doesn't exist
+  expect(comp.getPresets('foo').length).toBe(0);
+
+  expect(comp.isPresetCustomEnabled('category')).toBe(true);
+  expect(comp.getPresets('category')[0]).toBe('catLabel2'); // order is preserved as admin has defined them (do not sort!)
+  expect(comp.getPresets('category')[1]).toBe('catLabel1');
+
+  expect(comp.isPresetCustomEnabled('tag')).toBe(false);  // missing, assume false
+  expect(comp.getPresets('tag')[0]).toBe('tagLabel1');
+
+  expect(comp.isPresetCustomEnabled('severity')).toBe(false);
+  expect(comp.getPresets('severity').length).toBe(0);   // none defined
+});

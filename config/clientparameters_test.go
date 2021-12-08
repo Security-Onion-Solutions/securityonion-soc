@@ -79,3 +79,11 @@ func TestCombineDeprecatedLinkIntoNonEmptyLinks(tester *testing.T) {
 	assert.Len(tester, action.Links, 2)
 	assert.Len(tester, action.Link, 0)
 }
+
+func TestVerifyCaseParams(tester *testing.T) {
+	params := &CaseParameters{}
+	params.MostRecentlyUsedLimit = -1
+	err := params.Verify()
+	assert.Nil(tester, err)
+	assert.Equal(tester, params.MostRecentlyUsedLimit, 0)
+}
