@@ -302,6 +302,7 @@ func (store *ElasticCasestore) Create(ctx context.Context, socCase *model.Case) 
     if socCase.Id != "" {
       err = errors.New("Unexpected ID found in new case")
     } else {
+      socCase = store.applyTemplate(ctx, socCase)
       socCase.Status = model.CASE_STATUS_NEW
       now := time.Now()
       socCase.CreateTime = &now
@@ -382,11 +383,28 @@ func (store *ElasticCasestore) CreateRelatedEvent(ctx context.Context, event *mo
     } else {
       _, err = store.GetCase(ctx, event.CaseId)
       if err == nil {
-        var results *model.EventIndexResults
-        results, err = store.save(ctx, event, "related", store.prepareForSave(ctx, &event.Auditable))
+        var newId string
+        if value, ok := event.Fields["soc_id"]; ok {
+          newId = value.(string)
+          var existingEvents []*model.RelatedEvent
+          existingEvents, err = store.GetRelatedEvents(ctx, event.CaseId)
+          for _, existingEvent := range existingEvents {
+            if value, ok := existingEvent.Fields["soc_id"]; ok {
+              existingId := value.(string)
+              if existingId == newId {
+                err = errors.New(fmt.Sprintf("Event ID '%s' has already been attached to this case", existingId))
+                break
+              }
+            }
+          }
+        }
         if err == nil {
-          // Read object back to get new modify date, etc
-          event, err = store.GetRelatedEvent(ctx, results.DocumentId)
+          var results *model.EventIndexResults
+          results, err = store.save(ctx, event, "related", store.prepareForSave(ctx, &event.Auditable))
+          if err == nil {
+            // Read object back to get new modify date, etc
+            event, err = store.GetRelatedEvent(ctx, results.DocumentId)
+          }
         }
       }
     }
@@ -399,7 +417,7 @@ func (store *ElasticCasestore) GetRelatedEvent(ctx context.Context, id string) (
   var err error
   var event *model.RelatedEvent
 
-  err = store.validateId(id, "id")
+  err = store.validateId(id, "relatedEventId")
   if err == nil {
     var obj interface{}
     obj, err = store.get(ctx, id, "related")
@@ -433,7 +451,7 @@ func (store *ElasticCasestore) DeleteRelatedEvent(ctx context.Context, id string
   var err error
 
   var event *model.RelatedEvent
-  err = store.validateId(id, "id")
+  err = store.validateId(id, "relatedEventId")
   if err == nil {
     event, err = store.GetRelatedEvent(ctx, id)
     if err == nil {
@@ -533,7 +551,7 @@ func (store *ElasticCasestore) DeleteComment(ctx context.Context, id string) err
   var err error
 
   var comment *model.Comment
-  err = store.validateId(id, "id")
+  err = store.validateId(id, "commentId")
   if err == nil {
     comment, err = store.GetComment(ctx, id)
     if err == nil {
