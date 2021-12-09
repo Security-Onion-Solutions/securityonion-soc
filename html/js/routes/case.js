@@ -35,24 +35,20 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     footerProps: { 'items-per-page-options': [10,50,250,1000] },
     count: 500,
     userList: [],
-    mainForms: {
-      info: {
-        valid: false,
-        title: null,
-        assigneeId: null,
-        status: null
-      },
-      details: {
-        valid: false,
-        id: null,
-        description: null,
-        severity: null,
-        priority: null,
-        tags: null,
-        tlp: null,
-        pap: null,
-        category: null
-      }
+    collapsedSections: [],
+    mainForm: {
+      valid: false,
+      title: null,
+      assigneeId: null,
+      status: null,
+      id: null,
+      description: null,
+      severity: null,
+      priority: null,
+      tags: [],
+      tlp: null,
+      pap: null,
+      category: null
     },
     associatedForms: {
       comments: {
@@ -75,28 +71,66 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         valid: false
       }
     },
-    editFields: [],
+    editField: "",
     mruCaseLimit: 5,
     mruCases: [],
     presets: {},
     rules: {
-      required: value => (!!value) || this.$root.i18n.required,
+      required: value => (value != [] && value != "") || this.$root.i18n.required,
+      number: value => (! isNaN(+value) && Number.isInteger(parseFloat(value))) || this.$root.i18n.required,
     },
   }},
   computed: {
     severityList() {
-      return [
-        { text: 'High', value: 0 },
-        { text: 'Medium', value: 1 },
-        { text: 'Low', value: 2 },
-        { text: 'Extra Low', value: 3}
-      ]
+      const sevPresets = this.getPresets('severity');
+      if (sevPresets != []) {
+        let formattedSevList = [];
+        for (let index = 0; index < sevPresets.length; index++) {
+          formattedSevList.push({
+            text: sevPresets[index],
+            value: index+1
+          });
+        }
+        return formattedSevList;
+      } else {
+        return [
+          { text: 'Critical', value: 1 },
+          { text: 'High', value: 2 },
+          { text: 'Medium', value: 3 },
+          { text: 'Low', value: 4}
+        ];
+      }
     },
-    severityString() {
-      return typeof(this.mainForms.details.severity) == Number
-        ? this.severityList.find(el => el.value == this.mainForms.details.severity).text
-        : this.mainForms.details.severity
-    }, 
+    tagList() {
+      const tagPresets = this.getPresets('tags');
+      return tagPresets.concat(this.mainForm.tags);
+    },
+    categoryList() {
+      const catPresets = this.getPresets('category')
+      if (this.mainForm.category !== null) {
+        return catPresets.concat(this.mainForm.category)
+      } else {
+        return catPresets
+      }
+    },
+    tlpList() {
+      const tlpPresets = this.getPresets('tlp')
+      return tlpPresets.map((value) => {
+        return {
+          text: value.split(' ').map(word => word.charAt(0).toLocaleUpperCase() + word.substring(1)).join(' '),
+          value: value
+        }
+      })
+    },
+    papList() {
+      const papPresets = this.getPresets('pap')
+      return papPresets.map((value) => {
+        return {
+          text: value.split(' ').map(word => word.charAt(0).toLocaleUpperCase() + word.substring(1)).join(' '),
+          value: value
+        }
+      })
+    },
     statusList() {
       const statuses = [
         'new',
@@ -207,6 +241,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
             id: this.$route.params.id
         }});
         this.userList = await this.$root.getUsers();
+        console.log(response.data)
         this.updateCaseDetails(response.data);
         this.loadAssociations();
       } catch (error) {
@@ -220,43 +255,40 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       this.$root.subscribe("case", this.updateCase);
     },
     updateCaseDetails(caseObj) {
-      this.mainForms.details.id = caseObj.id;
-      this.mainForms.info.title = caseObj.title;
-      this.mainForms.details.description = caseObj.description;
-      this.mainForms.details.severity = caseObj.severity;
-      this.mainForms.details.priority = caseObj.priority;
-      this.mainForms.info.status = caseObj.status;
-      this.mainForms.details.tags = caseObj.tags ? caseObj.tags.join(", ") : "";
-      this.mainForms.details.tlp = caseObj.tlp;
-      this.mainForms.details.pap = caseObj.pap;
-      this.mainForms.details.category = caseObj.category;
-      this.mainForms.info.assigneeId = caseObj.assigneeId;
+      
+      this.mainForm.id = caseObj.id;
+      this.mainForm.title = caseObj.title;
+      this.mainForm.description = caseObj.description;
+      this.mainForm.severity = caseObj.severity;
+      this.mainForm.priority = caseObj.priority;
+      this.mainForm.status = caseObj.status;
+      this.mainForm.tags = caseObj.tags;
+      this.mainForm.tlp = caseObj.tlp;
+      this.mainForm.pap = caseObj.pap;
+      this.mainForm.category = caseObj.category;
+      this.mainForm.assigneeId = caseObj.assigneeId;
       this.$root.populateUserDetails(caseObj, "userId", "owner");
       this.$root.populateUserDetails(caseObj, "assigneeId", "assignee");
       this.addMRUCaseObj(caseObj);
       this.caseObj = caseObj;
     },
-    async modifyCase() {
+    async modifyCase(keyStr = null) {
       this.$root.startLoading();
       try {
+        let jsonObj = {...this.mainForm };
+        if (keyStr !== null) {
+          jsonObj[keyStr] = this.editField.val;
+        }
         // Convert priority and severity to ints
-        this.mainForms.details.severity = parseInt(this.mainForms.details.severity, 10);
-        this.mainForms.details.severity = this.severityString;
-        this.mainForms.details.priority = parseInt(this.mainForms.details.priority, 10);
-        const formattedTags = this.mainForms.details.tags;
-        if (this.mainForms.details.tags) {
-          this.mainForms.details.tags = this.mainForms.details.tags.split(",").map(tag => {
-            return tag.trim();
-          });
-        } else { this.mainForms.details.tags = []; }
-        const caseInfo = {
-          ...this.mainForms.info,
-          ...this.mainForms.details
-        };
-        const json = JSON.stringify(caseInfo);
-        this.mainForms.details.tags = formattedTags;
+        jsonObj.severity = parseInt(jsonObj.severity, 10);
+        jsonObj.priority = parseInt(jsonObj.priority, 10);
+        // if (jsonObj.tags) {
+        //   jsonObj.tags = jsonObj.tags.split(",").map(tag => tag.trim());
+        // } else { jsonObj.tags = []; }
+        const json = JSON.stringify(jsonObj);
         const response = await this.$root.papi.put('case/', json);
         if (response.data) {
+          this.stopEdit();
           this.updateCaseDetails(response.data);
         }
       } catch (error) {
@@ -343,14 +375,22 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       // this.loadAssociations();
     },
     isEdit(id) {
-      return this.editFields.find(item => item == id) != null
+      return this.editField !== {} && this.editField.id === id;
     },
-    async toggleEdit(id) {
-      if (this.editFields.find(item => item == id) == null) {
-        this.editFields.push(id)
+    startEdit(val, id) {
+      this.editField = {
+        val,
+        id
+      };
+    },
+    stopEdit() {
+      this.editField = {}
+    },
+    async saveEdit(keyStr) {
+      if (this.mainForm[keyStr] === this.editField.val) {
+        this.stopEdit();
       } else {
-        this.editFields = this.editFields.filter(item => item != id)
-        await this.modifyCase()
+        await this.modifyCase(keyStr);
       }
     },
     saveLocalSettings() {
@@ -359,6 +399,16 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     loadLocalSettings() {
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
+    toggleShowSection(item) {
+      if (this.isExpandedSection(item)) {
+        this.collapsedSections.push(item);
+      } else {
+        this.collapsedSections.splice(this.collapsedSections.indexOf(item), 1);
+      }
+    },
+    isExpandedSection(item) {
+      return (this.collapsedSections.indexOf(item) == -1);
+    }
   }
 }});
 
