@@ -254,8 +254,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       this.$root.stopLoading();
       this.$root.subscribe("case", this.updateCase);
     },
-    updateCaseDetails(caseObj) {
-      
+    async updateCaseDetails(caseObj) {
       this.mainForm.id = caseObj.id;
       this.mainForm.title = caseObj.title;
       this.mainForm.description = caseObj.description;
@@ -267,8 +266,8 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       this.mainForm.pap = caseObj.pap;
       this.mainForm.category = caseObj.category;
       this.mainForm.assigneeId = caseObj.assigneeId;
-      this.$root.populateUserDetails(caseObj, "userId", "owner");
-      this.$root.populateUserDetails(caseObj, "assigneeId", "assignee");
+      await this.$root.populateUserDetails(caseObj, "userId", "owner");
+      await this.$root.populateUserDetails(caseObj, "assigneeId", "assignee");
       this.addMRUCaseObj(caseObj);
       this.caseObj = caseObj;
     },
