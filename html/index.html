@@ -1198,16 +1198,6 @@
       <v-container fluid>
         
         <v-form model="mainForm.valid" class="mx-sm-12 mx-lg-6 mt-2 mb-6">
-          <!-- <v-row align="center">
-            <v-col id="case-title">
-              <v-text-field v-if="isEdit('case-title')" hide-details="auto" outlined class="case title" v-model="mainForm.title"/>
-              <h2 v-else class="py-1">{{ mainForm.title }}</h2>
-            </v-col>
-            <v-col class="flex-shrink-1 flex-grow-0">
-              <v-btn v-if="isEdit('case-title')" @click="toggleEdit('case-title')">Save</v-btn>
-              <v-btn v-else @click="toggleEdit('case-title')">Edit</v-btn>
-            </v-col>
-          </v-row> -->
           <div>
             <div class="case-detail-field d-flex align-start pa-2" v-if="!isEdit('case-title')" @click="startEdit(mainForm.title, 'case-title')">
               <h2 class="rounded">{{ mainForm.title }}</div>
@@ -1396,9 +1386,6 @@
                     <v-toolbar dense flat>
                       <v-toolbar-title>Info</v-toolbar-title>
                     </v-toolbar>
-                    <!-- <div class="secondary py-1">
-                      <h3 class="mx-3 my-1">Info</h3>
-                    </div> -->
                     <div class="mx-4 my-8">
                       <v-row no-gutters class="align-start d-inline-flex mb-3 flex-column" style="width: 100%">
                         <v-col cols="12" class="mr-n2 mb-2 font-weight-bold">{{i18n.caseAssignee}}: </v-col>
@@ -1407,7 +1394,7 @@
                             dense
                             eager
                             flat
-                            solo
+                            solo-inverted
                             hide-details
                             v-model="mainForm.assigneeId"
                             :items="userList"
@@ -1425,7 +1412,7 @@
                             dense
                             eager
                             flat
-                            solo
+                            solo-inverted
                             hide-details
                             v-model="mainForm.status"
                             :items="statusList"
@@ -1445,21 +1432,6 @@
                         <v-icon style="font-size: 12px !important;" v-if="isExpandedSection('case-details')">fa-minus</v-icon>
                       </v-btn>
                     </v-toolbar>
-                    <!-- <v-row no-gutters align="center" class="mr-2">
-                      <v-col>
-                        <div class="secondary py-1">
-                          <h3 class="mx-3 my-1">Details</h3>
-                        </div>
-                      </v-col>
-                      <v-col>
-                        <div class="secondary py-2 pr-2 mr-n2 d-flex align-center justify-end">
-                          <v-btn plain icon small @click="toggleShowSection('case-details')">
-                            <v-icon style="font-size: 12px !important;" v-if="!isExpandedSection('case-details')">fa-plus</v-icon>
-                            <v-icon style="font-size: 12px !important;" v-if="isExpandedSection('case-details')">fa-minus</v-icon>
-                          </v-btn>
-                        </div>
-                      </v-col>
-                    </v-row> -->
                     <v-expand-transition>
                       <v-form v-show="isExpandedSection('case-details')" v-model="mainForm.valid" class="mb-n4">
                         <div class="mx-4 my-8 d-flex flex-column">
@@ -1470,7 +1442,7 @@
                                 dense
                                 eager
                                 flat
-                                solo
+                                solo-inverted
                                 hide-details
                                 v-model="mainForm.severity"
                                 :items="severityList"
@@ -1489,7 +1461,7 @@
                               </div>
                               <div class="d-flex flex-column mb-n5" v-if="isEdit('case-priority')">
                                 <div class="mb-2">
-                                  <v-text-field outlined solo hide-details rows="3" dense no-resize v-model="editField.val" :rules="[rules.number]"/>
+                                  <v-text-field solo-inverted flat hide-details rows="3" dense no-resize v-model="editField.val" :rules="[rules.number]"/>
                                 </div>
                                 <div class="d-inline-flex justify-end">
                                   <v-btn :disabled="!mainForm.valid" text small color="primary" class="align-self-end" @click="stopEdit()">
@@ -1509,7 +1481,7 @@
                                 dense
                                 eager
                                 flat
-                                solo
+                                solo-inverted
                                 hide-details
                                 v-model="mainForm.tlp"
                                 :items="tlpList"
@@ -1517,7 +1489,8 @@
                                 item-value="value"
                                 v-on:change="modifyCase()"
                                 class="case-select"
-                              />
+                                />
+                              </v-select>
                             </v-col>
                           </v-row>
                           <v-row no-gutters class="align-start d-inline-flex mb-4 flex-column" style="width: 100%">
@@ -1527,7 +1500,7 @@
                                 dense
                                 eager
                                 flat
-                                solo
+                                solo-inverted
                                 hide-details
                                 v-model="mainForm.pap"
                                 :items="papList"
@@ -1544,9 +1517,8 @@
                               <v-combobox
                                 dense
                                 eager
-                                chips
                                 flat
-                                solo
+                                solo-inverted
                                 hide-details
                                 v-model="mainForm.category"
                                 :items="categoryList"
@@ -1559,7 +1531,6 @@
                             <v-col cols="12" class="mb-2 font-weight-bold">{{i18n.caseTags}}: </v-col>
                             <v-col cols="12" id="case-tags" class="ml-2 pr-2">
                               <v-combobox
-                                dense
                                 eager
                                 multiple
                                 chips
@@ -1570,7 +1541,11 @@
                                 :items="tagList"
                                 v-on:change="modifyCase()"
                                 class="case-select"
-                              />
+                              >
+                                <template #selection="{ item }">
+                                  <v-chip color="primary">{{item}}</v-chip>
+                                </template>
+                              </v-combobox>
                             </v-col>
                           </v-row>
                         </div>
@@ -1579,24 +1554,24 @@
                   </v-card>
                   <div class="ml-2 mt-2">
                     <div>
-                      <span class="case label">{{ i18n.caseId }}:</span>
-                      <span class="case value">{{ caseObj.id }}</span>
+                      <span class="case label details">{{ i18n.caseId }}:</span>
+                      <span class="case value details">{{ caseObj.id }}</span>
                     </div>
                     <div>
-                      <span class="case label">{{ i18n.author }}:</span>
-                      <span class="case value">{{ caseObj.owner }}</span>
+                      <span class="case label details">{{ i18n.author }}:</span>
+                      <span class="case value details">{{ caseObj.owner }}</span>
                     </div>
                     <div>
-                      <span class="case label">{{ i18n.dateCreated }}:</span>
-                      <span class="case value">{{ caseObj.createTime | formatDateTime}}</span>
+                      <span class="case label details">{{ i18n.dateCreated }}:</span>
+                      <span class="case value details">{{ caseObj.createTime | formatDateTime}}</span>
                     </div>
                     <div>
-                      <span class="case label">{{ i18n.dateModified }}:</span>
-                      <span class="case value">{{ caseObj.updateTime | formatDateTime}}</span>
+                      <span class="case label details">{{ i18n.dateModified }}:</span>
+                      <span class="case value details">{{ caseObj.updateTime | formatDateTime}}</span>
                     </div>
                     <div v-if="$root.formatDateTime(caseObj.completeTime) !== ''">
-                      <span class="case label">{{ i18n.dateClosed }}:</span>
-                      <span class="case value">{{ caseObj.completeTime | formatDateTime}}</span>
+                      <span class="case label details">{{ i18n.dateClosed }}:</span>
+                      <span class="case value details">{{ caseObj.completeTime | formatDateTime}}</span>
                     </div>
                   </div>
                 </v-col>
@@ -1604,67 +1579,6 @@
             </v-form>
           </v-col>
         </v-row>
-        <v-row class="mt-2">
-          <v-col>
-            <v-form v-model="mainForm.valid">
-              <div>
-                <span class="case label">{{ i18n.caseId }}:</span>
-                <span class="case value">{{ caseObj.id }}</span>
-              </div>
-              <div>
-                <span class="case label">{{ i18n.dateCreated }}:</span>
-                <span class="case value">{{ caseObj.createTime | formatDateTime}}</span>
-              </div>
-              <div>
-                <span class="case label">{{ i18n.dateModified }}:</span>
-                <span class="case value">{{ caseObj.updateTime | formatDateTime}}</span>
-              </div>
-              <div>
-                <span class="case label">{{ i18n.dateClosed }}:</span>
-                <span class="case value">{{ caseObj.completeTime | formatDateTime}}</span>
-              </div>
-              <div>
-                <span class="case label">{{ i18n.author }}:</span>
-                <span class="case value">{{ caseObj.owner }}</span>
-              </div>
-              <div>
-                <span class="case label">{{ i18n.caseAssignee }}:</span>
-                <span class="case value">{{ caseObj.assignee }}</span>
-              </div>
-              <div>
-                <v-text-field v-model="mainForm.description" :placeholder="i18n.caseDescription" persistent-hint :hint="i18n.caseDescriptionHelp"></v-text-field>
-              </div>
-              <div>
-                <v-text-field v-model="mainForm.status" :placeholder="i18n.caseStatus" persistent-hint :hint="i18n.caseStatusHelp" :rules="[rules.required]"></v-text-field>
-              </div>
-              <div>
-                <v-text-field v-model="mainForm.severity" :placeholder="i18n.caseSeverity" persistent-hint :hint="i18n.caseSeverityHelp" :rules="[rules.required]"></v-text-field>
-              </div>
-              <div>
-                <v-text-field v-model="mainForm.priority" :placeholder="i18n.casePriority" persistent-hint :hint="i18n.casePriorityHelp" :rules="[rules.required]"></v-text-field>
-              </div>
-              <div>
-                <v-text-field v-model="mainForm.tags" :placeholder="i18n.caseTags" persistent-hint :hint="i18n.caseTagsHelp"></v-text-field>
-              </div>              
-              <div>
-                <v-text-field v-model="mainForm.tlp" :placeholder="i18n.caseTlp" persistent-hint :hint="i18n.caseTlpHelp"></v-text-field>
-              </div>
-              <div>
-                <v-text-field v-model="mainForm.pap" :placeholder="i18n.casePap" persistent-hint :hint="i18n.casePapHelp"></v-text-field>
-              </div>
-              <div>
-                <v-text-field v-model="mainForm.category" :placeholder="i18n.caseCategory" persistent-hint :hint="i18n.caseCategoryHelp"></v-text-field>
-              </div>
-              <div>
-                <v-text-field v-model="mainForm.assigneeId" :placeholder="i18n.caseAssignee" persistent-hint :hint="i18n.caseAssigneeHelp"></v-text-field>
-              </div>
-              <div class="my-4">
-                <v-btn :disabled="!mainForm.valid" text color="primary" @click="modifyCase" v-text="i18n.update"></v-btn>
-              <div>
-            </form>
-          </v-col>
-        </v-row>
-        
       </v-container>
     </script>
 
