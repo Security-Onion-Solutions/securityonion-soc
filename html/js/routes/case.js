@@ -304,7 +304,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       try {
         const response = await this.$root.papi.post('case/' + association, JSON.stringify(this.associatedForms[association]));
         if (response.data) {
-          this.$root.populateUserDetails(response.data, "userId", "owner");
+          await this.$root.populateUserDetails(response.data, "userId", "owner");
           this.associations[association].push(response.data);
         }
       } catch (error) {
@@ -325,7 +325,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         try {
           const response = await this.$root.papi.put('case/' + association, JSON.stringify(this.associatedForms[association]));
           if (response.data) {
-            this.$root.populateUserDetails(response.data, "userId", "owner");
+            await this.$root.populateUserDetails(response.data, "userId", "owner");
             Vue.set(this.associations[association], idx, response.data);
           }
         } catch (error) {
