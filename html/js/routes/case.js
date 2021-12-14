@@ -241,7 +241,6 @@ routes.push({ path: '/case/:id', name: 'case', component: {
             id: this.$route.params.id
         }});
         this.userList = await this.$root.getUsers();
-        console.log(response.data)
         this.updateCaseDetails(response.data);
         this.loadAssociations();
       } catch (error) {
