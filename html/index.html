@@ -417,7 +417,10 @@
             <v-toolbar-title>{{ i18n.graphs }}</v-toolbar-title>
             <v-spacer />
             <v-btn
-              text
+              plain
+              icon
+              small
+              class="mr-1"
               @click="toggleShowSection('hunt-graphs')"
             >
               <v-icon v-if="!isExpandedSection('hunt-graphs')">fa-angle-down</v-icon>
@@ -450,7 +453,10 @@
             <v-toolbar-title>{{ i18n.groups }}</v-toolbar-title>
             <v-spacer />
             <v-btn
-              text
+              plain
+              icon
+              small
+              class="mr-1"
               @click="toggleShowSection('hunt-groups')"
             >
               <v-icon v-if="!isExpandedSection('hunt-groups')">fa-angle-down</v-icon>
@@ -516,7 +522,10 @@
             <v-toolbar-title>{{ i18n.events }}</v-toolbar-title>
             <v-spacer />
             <v-btn
-              text
+              plain
+              icon
+              small
+              class="mr-1"
               @click="toggleShowSection('hunt-events')"
             >
               <v-icon v-if="!isExpandedSection('hunt-events')">fa-angle-down</v-icon>
