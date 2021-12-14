@@ -147,8 +147,8 @@ routes.push({ path: '/case/:id', name: 'case', component: {
   },
   created() {
   },
-  mounted() {
-    this.loadData();
+  async mounted() {
+    await this.loadData();
     this.$root.loadParameters('case', this.initCase);
   },
   destroyed() {
