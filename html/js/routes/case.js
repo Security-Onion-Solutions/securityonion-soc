@@ -34,16 +34,21 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     itemsPerPage: 10,
     footerProps: { 'items-per-page-options': [10,50,250,1000] },
     count: 500,
-    form: {
+    userList: [],
+    collapsed: [
+      'case-details'
+    ],
+    collapsible: [],
+    mainForm: {
       valid: false,
-      id: null,
       title: null,
-      description: null,
+      assigneeId: null,
       status: null,
+      id: null,
+      description: null,
       severity: null,
       priority: null,
-      assigneeId: null,
-      tags: null,
+      tags: [],
       tlp: null,
       pap: null,
       category: null
@@ -69,18 +74,85 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         valid: false
       }
     },
+    editField: "",
     mruCaseLimit: 5,
     mruCases: [],
     presets: {},
     rules: {
-      required: value => (!!value) || this.$root.i18n.required,
+      required: value => (value != [] && value != "") || this.$root.i18n.required,
+      number: value => (! isNaN(+value) && Number.isInteger(parseFloat(value))) || this.$root.i18n.required,
+      shortLengthLimit: value => (value.length < 100) || this.$root.i18n.required,
+      longLengthLimit: value => (encodeURI(value).split(/%..|./).length - 1 < 10000000) || this.$root.i18n.required,
     },
   }},
+  computed: {
+    severityList() {
+      const sevPresets = this.getPresets('severity');
+      if (sevPresets != []) {
+        let formattedSevList = [];
+        for (let index = 0; index < sevPresets.length; index++) {
+          formattedSevList.push({
+            text: sevPresets[index],
+            value: index+1
+          });
+        }
+        return formattedSevList;
+      } else {
+        return [
+          { text: 'Critical', value: 1 },
+          { text: 'High', value: 2 },
+          { text: 'Medium', value: 3 },
+          { text: 'Low', value: 4}
+        ];
+      }
+    },
+    tagList() {
+      const tagPresets = this.getPresets('tags');
+      return tagPresets.concat(this.mainForm.tags);
+    },
+    categoryList() {
+      const catPresets = this.getPresets('category')
+      if (this.mainForm.category !== null) {
+        return catPresets.concat(this.mainForm.category)
+      } else {
+        return catPresets
+      }
+    },
+    tlpList() {
+      const tlpPresets = this.getPresets('tlp')
+      return tlpPresets.map((value) => {
+        return {
+          text: value.split(' ').map(word => word.charAt(0).toLocaleUpperCase() + word.substring(1)).join(' '),
+          value: value
+        }
+      })
+    },
+    papList() {
+      const papPresets = this.getPresets('pap')
+      return papPresets.map((value) => {
+        return {
+          text: value.split(' ').map(word => word.charAt(0).toLocaleUpperCase() + word.substring(1)).join(' '),
+          value: value
+        }
+      })
+    },
+    statusList() {
+      const statuses = this.getPresets('status')
+      return statuses.map((value) => {
+        return {
+          text: value.split(' ').map(word => word.charAt(0).toLocaleUpperCase() + word.substring(1)).join(' '),
+          value: value
+        }
+      })
+    },
+  },
   created() {
   },
-  mounted() {
-    this.loadData();
+  async mounted() {
+    await this.loadData();
     this.$root.loadParameters('case', this.initCase);
+    this.updateCollapsible('case-description')
+
   },
   destroyed() {
     this.$root.unsubscribe("case", this.updateCase);
@@ -171,8 +243,9 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         const response = await this.$root.papi.get('case/', { params: {
             id: this.$route.params.id
         }});
-        this.updateCaseDetails(response.data);
-        this.loadAssociations();
+        this.userList = await this.$root.getUsers();
+        await this.updateCaseDetails(response.data);
+        await this.loadAssociations();
       } catch (error) {
         if (error.response != undefined && error.response.status == 404) {
           this.$root.showError(this.i18n.notFound);
@@ -183,41 +256,40 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       this.$root.stopLoading();
       this.$root.subscribe("case", this.updateCase);
     },
-    updateCaseDetails(caseObj) {
-      this.form.id = caseObj.id;
-      this.form.title = caseObj.title;
-      this.form.description = caseObj.description;
-      this.form.severity = caseObj.severity;
-      this.form.priority = caseObj.priority;
-      this.form.status = caseObj.status;
-      this.form.tags = caseObj.tags ? caseObj.tags.join(", ") : "";
-      this.form.tlp = caseObj.tlp;
-      this.form.pap = caseObj.pap;
-      this.form.category = caseObj.category;
-      this.form.assigneeId = caseObj.assigneeId;
-      this.$root.populateUserDetails(caseObj, "userId", "owner");
-      this.$root.populateUserDetails(caseObj, "assigneeId", "assignee");
+    async updateCaseDetails(caseObj) {
+      this.mainForm.id = caseObj.id;
+      this.mainForm.title = caseObj.title;
+      this.mainForm.description = caseObj.description;
+      this.mainForm.severity = caseObj.severity;
+      this.mainForm.priority = caseObj.priority;
+      this.mainForm.status = caseObj.status;
+      this.mainForm.tags = caseObj.tags;
+      this.mainForm.tlp = caseObj.tlp;
+      this.mainForm.pap = caseObj.pap;
+      this.mainForm.category = caseObj.category;
+      this.mainForm.assigneeId = caseObj.assigneeId;
+      await this.$root.populateUserDetails(caseObj, "userId", "owner");
+      await this.$root.populateUserDetails(caseObj, "assigneeId", "assignee");
       this.addMRUCaseObj(caseObj);
       this.caseObj = caseObj;
-    },    
-    async modifyCase() {
+    },
+    async modifyCase(keyStr = null) {
       this.$root.startLoading();
       try {
-        // Convert priority and severity to ints
-        this.form.severity = parseInt(this.form.severity, 10);
-        this.form.priority = parseInt(this.form.priority, 10);
-        const formattedTags = this.form.tags;
-        if (this.form.tags) {
-          this.form.tags = this.form.tags.split(",").map(tag => {
-            return tag.trim();
-          });
-        } else {
-          this.form.tags = [];
+        let jsonObj = {...this.mainForm };
+        if (keyStr !== null) {
+          jsonObj[keyStr] = this.editField.val;
         }
-        const json = JSON.stringify(this.form);
-        this.form.tags = formattedTags;
+        // Convert priority and severity to ints
+        jsonObj.severity = parseInt(jsonObj.severity, 10);
+        jsonObj.priority = parseInt(jsonObj.priority, 10);
+        // if (jsonObj.tags) {
+        //   jsonObj.tags = jsonObj.tags.split(",").map(tag => tag.trim());
+        // } else { jsonObj.tags = []; }
+        const json = JSON.stringify(jsonObj);
         const response = await this.$root.papi.put('case/', json);
         if (response.data) {
+          this.stopEdit();
           this.updateCaseDetails(response.data);
         }
       } catch (error) {
@@ -227,6 +299,10 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           this.$root.showError(error);
         }
       }
+      // Also update description collapsible bool when the description has been changed
+      if (keyStr === 'description') {
+        this.updateCollapsible('case-description');
+      }
       this.$root.stopLoading();
     },
     async addAssociation(association) {
@@ -234,7 +310,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       try {
         const response = await this.$root.papi.post('case/' + association, JSON.stringify(this.associatedForms[association]));
         if (response.data) {
-          this.$root.populateUserDetails(response.data, "userId", "owner");
+          await this.$root.populateUserDetails(response.data, "userId", "owner");
           this.associations[association].push(response.data);
         }
       } catch (error) {
@@ -255,7 +331,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         try {
           const response = await this.$root.papi.put('case/' + association, JSON.stringify(this.associatedForms[association]));
           if (response.data) {
-            this.$root.populateUserDetails(response.data, "userId", "owner");
+            await this.$root.populateUserDetails(response.data, "userId", "owner");
             Vue.set(this.associations[association], idx, response.data);
           }
         } catch (error) {
@@ -303,12 +379,59 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       // this.updateCaseDetails(caseObj)
       // this.loadAssociations();
     },
+    isEdit(id) {
+      return this.editField !== {} && this.editField.id === id;
+    },
+    startEdit(val, id) {
+      this.editField = {
+        val,
+        id
+      };
+    },
+    stopEdit() {
+      this.editField = {}
+    },
+    async saveEdit(keyStr) {
+      if (this.mainForm[keyStr] === this.editField.val) {
+        this.stopEdit();
+      } else {
+        await this.modifyCase(keyStr);
+      }
+    },
     saveLocalSettings() {
       localStorage['settings.case.mruCases'] = JSON.stringify(this.mruCases);
     },
     loadLocalSettings() {
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
+    updateCollapsible(id) {
+      this.$nextTick(() => {
+        let element = document.getElementById(id);
+        let retVal = element.offsetHeight < element.scrollHeight || element.offsetWidth < element.scrollWidth;
+        if (retVal) {
+          if (! this.collapsible.includes(id)) {
+            this.collapsible.push(id);
+          }
+        } else {
+          if (this.collapsible.includes(id)) {
+            this.collapsible.splice(this.collapsible.indexOf(id), 1);
+          }
+        }
+      })
+    },
+    isCollapsible(item) {
+      return (this.collapsible.indexOf(item) !== -1)
+    },
+    toggleCollapse(item) {
+      if (!this.isCollapsed(item)) {
+        this.collapsed.push(item);
+      } else {
+        this.collapsed.splice(this.collapsed.indexOf(item), 1);
+      }
+    },
+    isCollapsed(item) {
+      return (this.collapsed.indexOf(item) !== -1);
+    }
   }
 }});
 

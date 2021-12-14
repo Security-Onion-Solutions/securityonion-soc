@@ -170,12 +170,46 @@ a#title, a#title:visited, a#title:active, a#title:hover {
   width: 15%;
   text-align: right;
   white-space: nowrap;
+  font-weight: bold;
+}
+
+.case.details {
+  font-size: 13px;
 }
 
 .case.value {
   text-align: left;
-  font-weight: bold;
   white-space: wrap;
+}
+
+.case.title.v-text-field input {
+  font-size: 1.2em;
+  margin-bottom: 0.15em;
+}
+
+.case.detail-field {
+  padding-left: .75em;
+  border-radius: .25em;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.case.detail-field:hover {
+  cursor: pointer;
+  color: var(--v-primary-lighten1) !important;
+}
+
+.case.collapse-field {
+  max-height: 7.5em;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.case.collapse-text:hover {
+  cursor: pointer;
+  color: var(--v-primary-lighten2) !important;
 }
 
 td {
