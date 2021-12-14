@@ -158,16 +158,16 @@ test('loadAssociationError', async () => {
 });
 
 expectCaseDetails = () => {
-  expect(comp.form.id).toBe(fakeCase.id);
-  expect(comp.form.title).toBe(fakeCase.title);
-  expect(comp.form.description).toBe(fakeCase.description);
-  expect(comp.form.severity).toBe(fakeCase.severity);
-  expect(comp.form.priority).toBe(fakeCase.priority);
-  expect(comp.form.status).toBe(fakeCase.status);
-  expect(comp.form.tlp).toBe(fakeCase.tlp);
-  expect(comp.form.pap).toBe(fakeCase.pap);
-  expect(comp.form.category).toBe(fakeCase.category);
-  expect(comp.form.tags).toBe(fakeCase.tags.join(", "));
+  expect(comp.mainForm.id).toBe(fakeCase.id);
+  expect(comp.mainForm.title).toBe(fakeCase.title);
+  expect(comp.mainForm.description).toBe(fakeCase.description);
+  expect(comp.mainForm.severity).toBe(fakeCase.severity);
+  expect(comp.mainForm.priority).toBe(fakeCase.priority);
+  expect(comp.mainForm.status).toBe(fakeCase.status);
+  expect(comp.mainForm.tlp).toBe(fakeCase.tlp);
+  expect(comp.mainForm.pap).toBe(fakeCase.pap);
+  expect(comp.mainForm.category).toBe(fakeCase.category);
+  expect(comp.mainForm.tags).toBe(fakeCase.tags);
   expect(comp.caseObj).toBe(fakeCase);
   expect(comp.caseObj.owner).toBe(fakeEmail);
   expect(comp.caseObj.assignee).toBe(fakeAssigneeEmail);
@@ -218,24 +218,24 @@ test('modifyCase', async () => {
   // API call #2 is to get the user list
   const getMock = mockPapi("get", {'data':fakeUsers});
 
-  comp.form.priority = '' + fakePriority;
-  comp.form.severity = '' + fakeSeverity;
-  comp.form.id = 'myCaseId';
-  comp.form.title = 'myTitle';
-  comp.form.description = 'myDescription';
-  comp.form.status = 'open';
-  comp.form.tlp = 'myTlp';
-  comp.form.pap = 'myPap';
-  comp.form.category = 'myCategory';
-  comp.form.tags = 'tag1,tag2';
-  comp.form.assigneeId = 'myAssigneeId';
+  comp.mainForm.priority = '' + fakePriority;
+  comp.mainForm.severity = '' + fakeSeverity;
+  comp.mainForm.id = 'myCaseId';
+  comp.mainForm.title = 'myTitle';
+  comp.mainForm.description = 'myDescription';
+  comp.mainForm.status = 'open';
+  comp.mainForm.tlp = 'myTlp';
+  comp.mainForm.pap = 'myPap';
+  comp.mainForm.category = 'myCategory';
+  comp.mainForm.tags = ['tag1', 'tag2'];
+  comp.mainForm.assigneeId = 'myAssigneeId';
   const showErrorMock = mockShowError(true);
 
   expect(comp.mruCases.length).toBe(0);
 
   await comp.modifyCase();
 
-  const body =  "{\"valid\":false,\"id\":\"myCaseId\",\"title\":\"myTitle\",\"description\":\"myDescription\",\"status\":\"open\",\"severity\":31,\"priority\":33,\"assigneeId\":\"myAssigneeId\",\"tags\":[\"tag1\",\"tag2\"],\"tlp\":\"myTlp\",\"pap\":\"myPap\",\"category\":\"myCategory\"}";
+  const body =  "{\"valid\":false,\"title\":\"myTitle\",\"assigneeId\":\"myAssigneeId\",\"status\":\"open\",\"id\":\"myCaseId\",\"description\":\"myDescription\",\"severity\":31,\"priority\":33,\"tags\":[\"tag1\",\"tag2\"],\"tlp\":\"myTlp\",\"pap\":\"myPap\",\"category\":\"myCategory\"}"
   expect(putMock).toHaveBeenCalledWith('case/', body);
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expectCaseDetails();

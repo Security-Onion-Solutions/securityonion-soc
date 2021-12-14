@@ -290,7 +290,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         const response = await this.$root.papi.put('case/', json);
         if (response.data) {
           this.stopEdit();
-          this.updateCaseDetails(response.data);
+          await this.updateCaseDetails(response.data);
         }
       } catch (error) {
         if (error.response != undefined && error.response.status == 404) {
