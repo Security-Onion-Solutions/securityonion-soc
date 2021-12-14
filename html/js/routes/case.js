@@ -35,7 +35,10 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     footerProps: { 'items-per-page-options': [10,50,250,1000] },
     count: 500,
     userList: [],
-    collapsedSections: [],
+    collapsed: [
+      'case-details'
+    ],
+    collapsible: [],
     mainForm: {
       valid: false,
       title: null,
@@ -78,6 +81,8 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     rules: {
       required: value => (value != [] && value != "") || this.$root.i18n.required,
       number: value => (! isNaN(+value) && Number.isInteger(parseFloat(value))) || this.$root.i18n.required,
+      shortLengthLimit: value => (value.length < 100) || this.$root.i18n.required,
+      longLengthLimit: value => (encodeURI(value).split(/%..|./).length - 1 < 10000000) || this.$root.i18n.required,
     },
   }},
   computed: {
@@ -143,13 +148,15 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           value: value
         }
       })
-    }
+    },
   },
   created() {
   },
   async mounted() {
     await this.loadData();
     this.$root.loadParameters('case', this.initCase);
+    this.updateCollapsible('case-description')
+
   },
   destroyed() {
     this.$root.unsubscribe("case", this.updateCase);
@@ -296,6 +303,10 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           this.$root.showError(error);
         }
       }
+      // Also update description collapsible bool when the description has been changed
+      if (keyStr === 'description') {
+        this.updateCollapsible('case-description');
+      }
       this.$root.stopLoading();
     },
     async addAssociation(association) {
@@ -397,15 +408,33 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     loadLocalSettings() {
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
-    toggleShowSection(item) {
-      if (this.isExpandedSection(item)) {
-        this.collapsedSections.push(item);
+    updateCollapsible(id) {
+      this.$nextTick(() => {
+        let element = document.getElementById(id);
+        let retVal = element.offsetHeight < element.scrollHeight || element.offsetWidth < element.scrollWidth;
+        if (retVal) {
+          if (! this.collapsible.includes(id)) {
+            this.collapsible.push(id);
+          }
+        } else {
+          if (this.collapsible.includes(id)) {
+            this.collapsible.splice(this.collapsible.indexOf(id), 1);
+          }
+        }
+      })
+    },
+    isCollapsible(item) {
+      return (this.collapsible.indexOf(item) !== -1)
+    },
+    toggleCollapse(item) {
+      if (!this.isCollapsed(item)) {
+        this.collapsed.push(item);
       } else {
-        this.collapsedSections.splice(this.collapsedSections.indexOf(item), 1);
+        this.collapsed.splice(this.collapsed.indexOf(item), 1);
       }
     },
-    isExpandedSection(item) {
-      return (this.collapsedSections.indexOf(item) == -1);
+    isCollapsed(item) {
+      return (this.collapsed.indexOf(item) !== -1);
     }
   }
 }});

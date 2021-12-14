@@ -1205,11 +1205,10 @@
 
     <script type="text/x-template" id="page-case">
       <v-container fluid>
-        
-        <v-form model="mainForm.valid" class="mx-sm-12 mx-lg-6 mt-2 mb-6">
+        <v-form model="mainForm.valid" class="mx-sm-12 mx-lg-6 mt-2 mb-6 mb-md-1">
           <div>
-            <div class="case-detail-field d-flex align-start pa-2" v-if="!isEdit('case-title')" @click="startEdit(mainForm.title, 'case-title')">
-              <h2 class="rounded">{{ mainForm.title }}</div>
+            <div class="case detail-field d-flex align-start pa-2" v-if="!isEdit('case-title')" @click="startEdit(mainForm.title, 'case-title')">
+              <h2 class="rounded">{{ mainForm.title }}</h2>
             </div>
             <div class="d-flex flex-column" v-if="isEdit('case-title')">
               <div class="mb-2">
@@ -1225,27 +1224,36 @@
               </div>
             </div>
           </div>
-          <div class="mt-1">
-            <div class="case-detail-field d-flex align-start pa-2" v-if="!isEdit('case-description')" @click="startEdit(mainForm.description, 'case-description')">
-              <div class="rounded">{{ mainForm.description }}</div>
-            </div>
-            <div class="d-flex flex-column" v-if="isEdit('case-description')">
-              <div class="mb-2">
-                <v-textarea outlined hide-details rows="3" dense no-resize v-model="editField.val"/>
-              </div>
-              <div class="d-inline-flex justify-end">
-                <v-btn :disabled="!mainForm.valid" text small color="primary" class="align-self-end" @click="stopEdit()">
-                  Cancel
-                </v-btn>
-                <v-btn :disabled="!mainForm.valid" text small color="primary" class="align-self-end" @click="saveEdit('description')">
-                  Save
-                </v-btn>
-              </div>
-            </div>
-          </div>
         </v-form>
         <v-row class="mx-sm-8 mx-md-12 mx-lg-4 flex-column flex-md-row">
           <v-col cols="12" md="9" class="px-sm-4 mx-4 mx-sm-0 case main" order="2" order-md="1">
+            <div class="d-block d-md-none">
+              <h2>Description</h2>
+            </div>
+            <div class="mb-6 mb-md-3">
+              <div class="case detail-field d-flex align-start pa-2" v-if="!isEdit('case-description')" @click="startEdit(mainForm.description, 'case-description')">
+                <div class="d-block">
+                  <div id="case-description" class="rounded" :class="[ !isCollapsed('case-description') ? 'case collapse-field' : '' ]">{{ mainForm.description }}</div>
+                </div>
+              </div>
+              <div v-if="isCollapsible('case-description') && !isEdit('case-description')" class="pl-2 text-body-2 blue--text case collapse-text" @click="toggleCollapse('case-description')">
+                <div v-if="!isCollapsed('case-description')">See more</div>
+                <div v-if="isCollapsed('case-description')">See less</div>
+              </div>
+              <div class="d-flex flex-column" v-if="isEdit('case-description')">
+                <div class="mb-2">
+                  <v-textarea outlined hide-details rows="5" dense no-resize color="text--black" v-model="editField.val"/>
+                </div>
+                <div class="d-inline-flex justify-end">
+                  <v-btn :disabled="!mainForm.valid" text small color="primary" class="align-self-end" @click="stopEdit()">
+                    Cancel
+                  </v-btn>
+                  <v-btn :disabled="!mainForm.valid" text small color="primary" class="align-self-end" @click="saveEdit('description')">
+                    Save
+                  </v-btn>
+                </div>
+              </div>
+            </div>
             <v-row>
               <v-tabs grow>
                 <v-tab id="case_commentsTab">
@@ -1387,7 +1395,7 @@
           </v-col>
           <v-col cols="12" md="3" order="1" order-md="2">
             <v-form v-model="mainForm.valid">
-              <v-row class="mb-12" no-gutters>
+              <v-row no-gutters>
                 <v-col class="d-flex flex-column justify-center">
                   <v-card
                     class="mx-2 overflow-hidden"
@@ -1403,7 +1411,7 @@
                             dense
                             eager
                             flat
-                            solo-inverted
+                            solo
                             hide-details
                             v-model="mainForm.assigneeId"
                             :items="userList"
@@ -1421,7 +1429,7 @@
                             dense
                             eager
                             flat
-                            solo-inverted
+                            solo
                             hide-details
                             v-model="mainForm.status"
                             :items="statusList"
@@ -1436,13 +1444,13 @@
                     <v-toolbar dense flat>
                       <v-toolbar-title>Details</v-toolbar-title>
                       <v-spacer />
-                      <v-btn plain icon small class="mr-1" @click="toggleShowSection('case-details')">
-                        <v-icon style="font-size: 12px !important;" v-if="!isExpandedSection('case-details')">fa-plus</v-icon>
-                        <v-icon style="font-size: 12px !important;" v-if="isExpandedSection('case-details')">fa-minus</v-icon>
+                      <v-btn plain icon small class="mr-1" @click="toggleCollapse('case-details')">
+                        <v-icon style="font-size: 12px !important;" v-if="isCollapsed('case-details')">fa-angle-down</v-icon>
+                        <v-icon style="font-size: 12px !important;" v-if="!isCollapsed('case-details')">fa-angle-up</v-icon>
                       </v-btn>
                     </v-toolbar>
-                    <v-expand-transition>
-                      <v-form v-show="isExpandedSection('case-details')" v-model="mainForm.valid" class="mb-n4">
+                    <v-expand-transition mode="in-out">
+                      <v-form v-show="!isCollapsed('case-details')" v-model="mainForm.valid" class="mb-n4">
                         <div class="mx-4 my-8 d-flex flex-column">
                           <v-row no-gutters class="align-start d-inline-flex mb-4 flex-column" style="width: 100%">
                             <v-col cols="12" class="mb-2 font-weight-bold">{{i18n.caseSeverity}}: </v-col>
@@ -1451,7 +1459,7 @@
                                 dense
                                 eager
                                 flat
-                                solo-inverted
+                                solo
                                 hide-details
                                 v-model="mainForm.severity"
                                 :items="severityList"
@@ -1465,12 +1473,12 @@
                           <v-row no-gutters class="align-start d-inline-flex flex-column" style="width: 100%">
                             <v-col cols="12" class="mb-2 font-weight-bold">{{i18n.casePriority}}: </v-col>
                             <v-col id="case-priority" cols="12" class="ml-2 pr-2">
-                              <div class="d-flex align-start pa-2 mb-4 case-detail-field" v-if="!isEdit('case-priority')" @click="startEdit(mainForm.priority, 'case-priority')">
+                              <div class="d-flex align-start px-3 py-2 mb-4 case detail-field" v-if="!isEdit('case-priority')" @click="startEdit(mainForm.priority, 'case-priority')">
                                 <div class="mr-2">{{ mainForm.priority }}</div>
                               </div>
                               <div class="d-flex flex-column mb-n5" v-if="isEdit('case-priority')">
                                 <div class="mb-2">
-                                  <v-text-field solo-inverted flat hide-details rows="3" dense no-resize v-model="editField.val" :rules="[rules.number]"/>
+                                  <v-text-field outlined hide-details rows="3" dense no-resize v-model="editField.val" :rules="[rules.number]"/>
                                 </div>
                                 <div class="d-inline-flex justify-end">
                                   <v-btn :disabled="!mainForm.valid" text small color="primary" class="align-self-end" @click="stopEdit()">
@@ -1490,7 +1498,7 @@
                                 dense
                                 eager
                                 flat
-                                solo-inverted
+                                solo
                                 hide-details
                                 v-model="mainForm.tlp"
                                 :items="tlpList"
@@ -1509,7 +1517,7 @@
                                 dense
                                 eager
                                 flat
-                                solo-inverted
+                                solo
                                 hide-details
                                 v-model="mainForm.pap"
                                 :items="papList"
@@ -1527,7 +1535,7 @@
                                 dense
                                 eager
                                 flat
-                                solo-inverted
+                                solo
                                 hide-details
                                 v-model="mainForm.category"
                                 :items="categoryList"

@@ -187,21 +187,30 @@ a#title, a#title:visited, a#title:active, a#title:hover {
   margin-bottom: 0.15em;
 }
 
-.case-detail-field {
-  cursor: pointer;
+.case.detail-field {
+  padding-left: .75em;
   border-radius: .25em;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
-.case-detail-field:hover {
-  background-color: var(--v-drawer_background-base) !important;
+.case.detail-field:hover {
+  cursor: pointer;
+  color: var(--v-primary-lighten1) !important;
 }
 
-.case-detail-field:hover > .v-icon { 
-  /* transition: none !important; */
-  color: var(--v-secondary-lighten1);
+.case.collapse-field {
+  max-height: 7.5em;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
-.v-text-field {}
+.case.collapse-text:hover {
+  cursor: pointer;
+  color: var(--v-primary-lighten2) !important;
+}
 
 td {
   white-space: nowrap;
