@@ -137,11 +137,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       })
     },
     statusList() {
-      const statuses = [
-        'new',
-        'in progress',
-        'closed'
-      ]
+      const statuses = this.getPresets('status')
       return statuses.map((value) => {
         return {
           text: value.split(' ').map(word => word.charAt(0).toLocaleUpperCase() + word.substring(1)).join(' '),
