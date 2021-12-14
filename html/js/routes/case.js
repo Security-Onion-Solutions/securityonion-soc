@@ -244,8 +244,8 @@ routes.push({ path: '/case/:id', name: 'case', component: {
             id: this.$route.params.id
         }});
         this.userList = await this.$root.getUsers();
-        this.updateCaseDetails(response.data);
-        this.loadAssociations();
+        await this.updateCaseDetails(response.data);
+        await this.loadAssociations();
       } catch (error) {
         if (error.response != undefined && error.response.status == 404) {
           this.$root.showError(this.i18n.notFound);
