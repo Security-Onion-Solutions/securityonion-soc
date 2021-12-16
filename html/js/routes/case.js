@@ -92,6 +92,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
   async mounted() {
     await this.loadData();
     this.$root.loadParameters('case', this.initCase);
+    this.updateCollapsible('case-description'); // Update collapsible state for description manually
   },
   destroyed() {
     this.$root.unsubscribe("case", this.updateCase);
@@ -355,18 +356,18 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       this.$nextTick(() => {
         let element = document.getElementById(id);
         let retVal = element.offsetHeight < element.scrollHeight || element.offsetWidth < element.scrollWidth;
-        if (retVal && this.isCollapsed[id] === false) {
+        if (retVal && !this.collapsible[id]) {
           this.collapsible[id] = true
-        } else if (!retVal && this.collapsed[id] === true) {
+        } else if (!retVal && this.collapsible[id]) {
           this.collapsible[id] = false
         }
       })
     },
     isCollapsible(item) {
-      if ((Object.keys(this.collapsible).indexOf(item) !== -1)) {
+      if ((Object.keys(this.collapsible).indexOf(item) === -1)) {
         this.updateCollapsible(item)
       }
-      return (this.collapsible[item] !== false)
+      return (this.collapsible[item] === true)
     },
     toggleCollapse(item) {
       if (!this.isCollapsed(item)) {

@@ -481,7 +481,7 @@ test('updateCollapsible_HeightOverflow', () => {
   document.getElementById = jest.fn(_ => fakeElement);
   comp.updateCollapsible(fakeId);
 
-  expect(comp.collapsible).toStrictEqual(['fakeId']);
+  expect(comp.collapsible).toStrictEqual({'fakeId': true});
 })
 
 test('updateCollapsible_WidthOverflow', () => {
@@ -492,7 +492,7 @@ test('updateCollapsible_WidthOverflow', () => {
   document.getElementById = jest.fn(_ => fakeElement);
   comp.updateCollapsible(fakeId);
 
-  expect(comp.collapsible).toStrictEqual(['fakeId']);
+  expect(comp.collapsible).toStrictEqual({'fakeId': true});
 })
 
 test('updateCollapsible_NoOverflow', () => {
@@ -503,7 +503,7 @@ test('updateCollapsible_NoOverflow', () => {
   document.getElementById = jest.fn(_ => fakeElement);
   comp.updateCollapsible(fakeId);
 
-  expect(comp.collapsible).toStrictEqual([]);
+  expect(comp.collapsible).toStrictEqual({'fakeId': false});
 })
 
 test('updateCollapsible_RemoveId', () => {
@@ -511,12 +511,12 @@ test('updateCollapsible_RemoveId', () => {
     offsetHeight: 10,
     scrollHeight: 10
   };
-  comp.collapsible = [fakeId]
+  comp.collapsible = {fakeId: true}
 
   document.getElementById = jest.fn(_ => fakeElement);
   comp.updateCollapsible(fakeId);
 
-  expect(comp.collapsible).toStrictEqual([]);
+  expect(comp.collapsible).toStrictEqual({'fakeId': false});
 })
 
 test('updateCollapsible_StillCollapsible', () => {
@@ -524,22 +524,22 @@ test('updateCollapsible_StillCollapsible', () => {
     offsetHeight: 10,
     scrollHeight: 11
   };
-  comp.collapsible = [fakeId]
+  comp.collapsible = {fakeId: true}
 
   document.getElementById = jest.fn(_ => fakeElement);
   comp.updateCollapsible(fakeId);
 
-  expect(comp.collapsible).toStrictEqual(['fakeId']);
+  expect(comp.collapsible).toStrictEqual({'fakeId': true});
 })
 
 test('isCollapsible', () => {
-  comp.collapsible = [ fakeId ];
+  comp.collapsible = {fakeId: true};
 
   expect(comp.isCollapsible('fakeId')).toBe(true);
 })
 
 test('isCollapsible_False', () => {
-  comp.collapsible =  [];
+  comp.collapsible =  {fakeId: false};
 
   expect(comp.isCollapsible('fakeId')).toBe(false);
 })
