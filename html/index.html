@@ -1283,8 +1283,8 @@
                       <v-col class="d-flex flex-column align-start pt-2 pb-0 px-0 pa-md-0">
                         <div class="ml-1 ml-md-3 py-3 px-4 secondary rounded rounded-md" style="width: 100%;">
                           <div class="d-flex flex-column align-start">
-                            <div class="case d-flex align-start">
-                              <div class="d-block mb-10">
+                            <div class="case d-flex align-start" v-if="!isEdit(`comment-${index}`)">
+                              <div class="d-block mb-8">
                                 <div :id="`comment-${index}`" class="case comment collapsible" :class="[ !isCollapsed(`comment-${index}`) ? 'collapsed' : 'expanded' ]">{{ comment.description }}</div>
                                 <div v-if="isCollapsible(`comment-${index}`) && !isEdit(`comment-${index}`)" class="pt-1 text-body-2 blue--text case collapse-text" @click="toggleCollapse(`comment-${index}`)">
                                   <div v-if="!isCollapsed(`comment-${index}`)">See more</div>
@@ -1292,9 +1292,19 @@
                                 </div>
                               </div>
                             </div>
-                            <div class="d-flex flex-column" v-if="isEdit(`comment-${index}`)">
+                            <div class="d-flex flex-column" v-if="isEdit(`comment-${index}`)" style="width: 100%;">
                               <div class="mb-2">
-                                <v-textarea outlined hide-details rows="5" dense no-resize color="text--black" v-model="editField.val"/>
+                                <v-form v-model="associatedForms['comments'].valid">
+                                  <v-textarea outlined hide-details rows="5" dense no-resize color="text--black" v-model="editField.val" class="mb-1"/>
+                                  <div class="d-inline-flex justify-end">
+                                    <v-btn :disabled="!associatedForms['comments'].valid" text small color="primary" class="align-self-end" @click="stopEdit()">
+                                      Cancel
+                                    </v-btn>
+                                    <v-btn :disabled="!associatedForms['comments'].valid" text small color="primary" class="align-self-end" @click="modifyAssociation('comments')">
+                                      Save
+                                    </v-btn>
+                                  </div>
+                                </v-form>
                               </div>
                             </div>
                             <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2 text--secondary">
@@ -1315,14 +1325,14 @@
                             edited {{ comment.updateTime | formatDateTime }}
                           </div>
                           <div class="ml-3 d-flex">
-                            <v-btn text small color="primary" @click="editComment(comment)" icon><v-icon style="font-size: 14px !important;">fa-edit</v-icon></v-btn>
+                            <v-btn text small color="primary" @click="editComment(comment, `comment-${index}`)" icon><v-icon style="font-size: 14px !important;">fa-edit</v-icon></v-btn>
                             <v-btn text small color="red" @click="deleteAssociation('comments', comment)" icon><v-icon style="font-size: 14px !important;">fa-trash</v-icon></v-btn>
                           </div>
                         </div>
                       </v-col> 
                     </div>           
                   </div>
-                  <div class="mx-12 my-12">
+                  <div class="mx-12 my-12 d-none">
                     <v-form v-model="associatedForms['comments'].valid">
                       <v-textarea solo flat no-resize v-model="associatedForms['comments'].description" :placeholder="i18n.commentDescription" persistent-hint :hint="i18n.commentDescriptionHelp" :rules="[rules.required]"></v-textarea>
                       <v-textarea solo flat no-resize v-model="associatedForms['comments'].id" class="d-none"></v-textarea>

@@ -274,6 +274,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       if (idx > -1) {
         this.$root.startLoading();
         try {
+          this.associatedForms[association].description = this.editField.val
           const response = await this.$root.papi.put('case/' + association, JSON.stringify(this.associatedForms[association]));
           if (response.data) {
             await this.$root.populateUserDetails(response.data, "userId", "owner");
@@ -286,6 +287,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
             this.$root.showError(error);
           }
         }
+        this.stopEdit();
         this.$root.stopLoading();
       }
     },
@@ -308,9 +310,10 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         this.$root.stopLoading();
       }
     },    
-    editComment(comment) {
+    editComment(comment, htmlId) {
       this.associatedForms['comments'].id = comment.id;
       this.associatedForms['comments'].description = comment.description;
+      this.startEdit(comment.description, htmlId)
     },
     cancelComment() {
       this.associatedForms['comments'].id = "";

@@ -205,6 +205,11 @@ a#title, a#title:visited, a#title:active, a#title:hover {
   transition: max-height 0.8s;
 }
 
+.case.comment-input>.v-input__control>.v-input__slot:before {
+  border: none;
+}
+
+
 .case.collapsible.expanded {
   max-height: max-content;
 
