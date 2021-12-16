@@ -38,7 +38,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     collapsed: [
       'case-details'
     ],
-    collapsible: [],
+    collapsible: {},
     mainForm: {
       valid: false,
       title: null,
@@ -92,7 +92,6 @@ routes.push({ path: '/case/:id', name: 'case', component: {
   async mounted() {
     await this.loadData();
     this.$root.loadParameters('case', this.initCase);
-    this.updateCollapsible('case-description');
   },
   destroyed() {
     this.$root.unsubscribe("case", this.updateCase);
@@ -350,22 +349,24 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
     updateCollapsible(id) {
+      if (! Object.keys(this.collapsible).includes(id)) {
+        this.collapsible[id] = false
+      }
       this.$nextTick(() => {
         let element = document.getElementById(id);
         let retVal = element.offsetHeight < element.scrollHeight || element.offsetWidth < element.scrollWidth;
-        if (retVal) {
-          if (! this.collapsible.includes(id)) {
-            this.collapsible.push(id);
-          }
-        } else {
-          if (this.collapsible.includes(id)) {
-            this.collapsible.splice(this.collapsible.indexOf(id), 1);
-          }
+        if (retVal && this.isCollapsed[id] === false) {
+          this.collapsible[id] = true
+        } else if (!retVal && this.collapsed[id] === true) {
+          this.collapsible[id] = false
         }
       })
     },
     isCollapsible(item) {
-      return (this.collapsible.indexOf(item) !== -1)
+      if ((Object.keys(this.collapsible).indexOf(item) !== -1)) {
+        this.updateCollapsible(item)
+      }
+      return (this.collapsible[item] !== false)
     },
     toggleCollapse(item) {
       if (!this.isCollapsed(item)) {

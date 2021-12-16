@@ -188,7 +188,6 @@ a#title, a#title:visited, a#title:active, a#title:hover {
 }
 
 .case.detail-field {
-  padding-left: .75em;
   border-radius: .25em;
   overflow: hidden;
   white-space: pre-wrap;
@@ -210,6 +209,12 @@ a#title, a#title:visited, a#title:active, a#title:hover {
 .case.collapse-text:hover {
   cursor: pointer;
   color: var(--v-primary-lighten2) !important;
+}
+
+.case.comment {
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 td {

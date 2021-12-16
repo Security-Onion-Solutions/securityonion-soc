@@ -1270,27 +1270,38 @@
                 </v-tab>
   
                 <v-tab-item>
-                  <v-card v-for="comment in associations.comments" elevation="2" class="my-2">
-                    <div>
-                      <span class="case label">{{ i18n.dateCreated }}:</span>
-                      <span class="case value">{{ comment.createTime | formatDateTime }}</span>
-                    </div>
-                    <div>
-                      <span class="case label">{{ i18n.dateModified }}:</span>
-                      <span class="case value">{{ comment.updateTime | formatDateTime }}</span>
-                    </div>
-                    <div>
-                      <span class="case label">{{ i18n.author }}:</span>
-                      <span class="case value">{{ comment.owner }}</span>
-                    </div>
-                    <div>
-                      <span class="case label">authorId:</span>
-                      <span class="case value">{{ comment.userId }}</span>
-                    </div>
-                    <div>
-                      <span class="case label">{{ i18n.commentDescription }}:</span>
-                      <span class="case value">{{ comment.description }}</span>
-                    </div>
+                  <v-card v-for="(comment, index) in associations.comments" elevation="2" class="my-2">
+                    <v-row align="start" class="ma-4" style="width: 100%">
+                      <v-avatar
+                        color="primary"
+                        size="36"
+                      >
+                        <div class="font-weight-bold">
+                          {{ comment.owner.charAt(0) }}
+                        </div>
+                      </v-avatar>
+                      <div class="ml-3 py-3 px-4 rounded secondary rounded-md" style="width: 90%;">
+                        <div class="d-flex flex-column align-start">
+                          <div class="case d-flex align-start">
+                            <div class="d-block mb-10">
+                              <div :id="`comment-${index}`" class="case comment" :class="[ !isCollapsed(`comment-${index}`) ? 'case collapse-field' : '' ]">{{ comment.description }}</div>
+                              <div v-if="isCollapsible(`comment-${index}`) && !isEdit(`comment-${index}`)" class="pt-1 text-body-2 blue--text case collapse-text" @click="toggleCollapse(`comment-${index}`)">
+                                <div v-if="!isCollapsed(`comment-${index}`)">See more</div>
+                                <div v-if="isCollapsed(`comment-${index}`)">See less</div>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="d-flex flex-column" v-if="isEdit('case-description')">
+                            <div class="mb-2">
+                              <v-textarea outlined hide-details rows="5" dense no-resize color="text--black" v-model="editField.val"/>
+                            </div>
+                          </div>
+                          <div class="align-self-end text-body-2 text--secondary">
+                            {{ comment.owner }} &bull; {{ comment.updateTime | formatDateTime }}
+                          </div>
+                        </div>
+                      </div>
+                    </v-row>
                     <div class="my-4">
                       <v-btn text color="secondary" @click="editComment(comment)" icon><v-icon>fa-edit</v-icon></v-btn>
                       <v-btn text color="secondary" @click="deleteAssociation('comments', comment)" icon><v-icon>fa-trash</v-icon></v-btn>
@@ -1298,8 +1309,8 @@
                   </v-card>
                   <div class="mx-12 my-12">
                     <v-form v-model="associatedForms['comments'].valid">
-                      <v-text-field v-model="associatedForms['comments'].description" :placeholder="i18n.commentDescription" persistent-hint :hint="i18n.commentDescriptionHelp" :rules="[rules.required]"></v-text-field>
-                      <v-text-field v-model="associatedForms['comments'].id" class="d-none"></v-text-field>
+                      <v-textarea solo flat no-resize v-model="associatedForms['comments'].description" :placeholder="i18n.commentDescription" persistent-hint :hint="i18n.commentDescriptionHelp" :rules="[rules.required]"></v-textarea>
+                      <v-textarea solo flat no-resize v-model="associatedForms['comments'].id" class="d-none"></v-textarea>
                       <div class="my-4">
                         <v-btn v-if="associatedForms['comments'].id == ''" :disabled="!associatedForms['comments'].valid" text color="primary" @click="addAssociation('comments')" v-text="i18n.add"></v-btn>
                         <v-btn v-if="associatedForms['comments'].id != ''" :disabled="!associatedForms['comments'].valid" text color="primary" @click="modifyAssociation('comments')" v-text="i18n.update"></v-btn>
@@ -1431,6 +1442,19 @@
                             flat
                             solo
                             hide-details
+                            v-if="!isPresetCustomEnabled('status')"
+                            v-model="mainForm.status"
+                            :items="selectList('status')"
+                            v-on:change="modifyCase()"
+                            class="case-select"
+                          />
+                          <v-combobox
+                            dense
+                            eager
+                            flat
+                            solo
+                            hide-details
+                            v-if="isPresetCustomEnabled('status')"
                             v-model="mainForm.status"
                             :items="selectList('status')"
                             v-on:change="modifyCase()"
@@ -1459,6 +1483,19 @@
                                 flat
                                 solo
                                 hide-details
+                                v-if="!isPresetCustomEnabled('severity')"
+                                v-model="mainForm.severity"
+                                :items="selectList('severity')"
+                                v-on:change="modifyCase()"
+                                class="case-select"
+                              />
+                              <v-combobox
+                                dense
+                                eager
+                                flat
+                                solo
+                                hide-details
+                                v-if="isPresetCustomEnabled('severity')"
                                 v-model="mainForm.severity"
                                 :items="selectList('severity')"
                                 v-on:change="modifyCase()"
@@ -1496,10 +1533,23 @@
                                 flat
                                 solo
                                 hide-details
+                                v-if="!isPresetCustomEnabled('tlp')"
                                 v-model="mainForm.tlp"
                                 :items="selectList('tlp')"
                                 v-on:change="modifyCase()"
                                 class="case-select"
+                                />
+                                <v-combobox
+                                  dense
+                                  eager
+                                  flat
+                                  solo
+                                  hide-details
+                                  v-if="isPresetCustomEnabled('tlp')"
+                                  v-model="mainForm.tlp"
+                                  :items="selectList('tlp')"
+                                  v-on:change="modifyCase()"
+                                  class="case-select"
                                 />
                               </v-select>
                             </v-col>
@@ -1513,6 +1563,19 @@
                                 flat
                                 solo
                                 hide-details
+                                v-if="!isPresetCustomEnabled('pap')"
+                                v-model="mainForm.pap"
+                                :items="selectList('pap')"
+                                v-on:change="modifyCase()"
+                                class="case-select"
+                              />
+                              <v-combobox
+                                dense
+                                eager
+                                flat
+                                solo
+                                hide-details
+                                v-if="isPresetCustomEnabled('pap')"
                                 v-model="mainForm.pap"
                                 :items="selectList('pap')"
                                 v-on:change="modifyCase()"
@@ -1523,12 +1586,25 @@
                           <v-row no-gutters class="align-start d-inline-flex mb-4 flex-column" style="width: 100%">
                             <v-col cols="12" class="mb-2 font-weight-bold">{{i18n.caseCategory}}: </v-col>
                             <v-col cols="12" id="case-category" class="ml-2 pr-2">
+                              <v-select
+                                dense
+                                eager
+                                flat
+                                solo
+                                hide-details
+                                v-if="!isPresetCustomEnabled('category')"
+                                v-model="mainForm.category"
+                                :items="selectList('category')"
+                                v-on:change="modifyCase()"
+                                class="case-select"
+                              />
                               <v-combobox
                                 dense
                                 eager
                                 flat
                                 solo
                                 hide-details
+                                v-if="isPresetCustomEnabled('category')"
                                 v-model="mainForm.category"
                                 :items="selectList('category')"
                                 v-on:change="modifyCase()"
@@ -1539,6 +1615,23 @@
                           <v-row no-gutters class="align-start d-inline-flex mb-4 flex-column" style="width: 100%">
                             <v-col cols="12" class="mb-2 font-weight-bold">{{i18n.caseTags}}: </v-col>
                             <v-col cols="12" id="case-tags" class="ml-2 pr-2">
+                              <v-select
+                                dense
+                                eager
+                                multiple
+                                flat
+                                solo
+                                hide-details
+                                v-if="!isPresetCustomEnabled('tags')"
+                                v-model="mainForm.tags"
+                                :items="selectList('tags')"
+                                v-on:change="modifyCase()"
+                                class="case-select"
+                              >
+                                <template #selection="{ item }">
+                                  <v-chip color="primary">{{item}}</v-chip>
+                                </template>
+                              </v-select>
                               <v-combobox
                                 eager
                                 multiple
@@ -1546,6 +1639,7 @@
                                 flat
                                 solo
                                 hide-details
+                                v-if="isPresetCustomEnabled('tags')"
                                 v-model="mainForm.tags"
                                 :items="selectList('tags')"
                                 v-on:change="modifyCase()"
