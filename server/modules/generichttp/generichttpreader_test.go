@@ -24,7 +24,7 @@ func TestConvertCaseToReader(tester *testing.T) {
   socCase.CreateTime = &tm
   socCase.Title = "MyTitle"
   socCase.Description = "My \"Description\" is this."
-  socCase.Severity = 44
+  socCase.Severity = "medium"
 
   source := `ID: {{ .Id }}; Title: {{ .Title }}; Desc: {{ .Description | js }}; Sev: {{ .Severity }}; Time: {{ .CreateTime.Format "15:04" }}`
 
@@ -35,5 +35,5 @@ func TestConvertCaseToReader(tester *testing.T) {
   assert.NoError(tester, err2)
 
   converted := string(bytes)
-  assert.Equal(tester, "ID: 123; Title: MyTitle; Desc: My \\\"Description\\\" is this.; Sev: 44; Time: 00:00", converted)
+  assert.Equal(tester, "ID: 123; Title: MyTitle; Desc: My \\\"Description\\\" is this.; Sev: medium; Time: 00:00", converted)
 }

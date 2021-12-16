@@ -31,7 +31,7 @@ type Case struct {
   Title        string     `json:"title"`
   Description  string     `json:"description"`
   Priority     int        `json:"priority"`
-  Severity     int        `json:"severity"`
+  Severity     string     `json:"severity"`
   Status       string     `json:"status"`
   Template     string     `json:"template"`
   Tlp          string     `json:"tlp"`
@@ -69,4 +69,26 @@ func NewRelatedEvent() *RelatedEvent {
   newRelatedEvent.CreateTime = &now
   newRelatedEvent.Fields = make(map[string]interface{})
   return newRelatedEvent
+}
+
+type Artifact struct {
+  Auditable
+  CaseId       string   `json:"caseId"`
+  GroupType    string   `json:"groupType"`
+  GroupId      string   `json:"groupId"`
+  ArtifactType string   `json:"artifactType"`
+  Value        string   `json:"value"`
+  MimeType     string   `json:"mimeType"`
+  StreamLen    int      `json:"streamLength"`
+  Tlp          string   `json:"tlp"`
+  Tags         []string `json:"tags"`
+  Description  string   `json:"description"`
+  Ioc          bool     `json:"ioc"`
+}
+
+func NewArtifact() *Artifact {
+  newArtifact := &Artifact{}
+  now := time.Now()
+  newArtifact.CreateTime = &now
+  return newArtifact
 }

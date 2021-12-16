@@ -308,7 +308,7 @@ func TestConvertElasticEventToCase(tester *testing.T) {
 	event.Payload["case.title"] = "myTitle"
 	event.Payload["case.description"] = "myDesc"
 	event.Payload["case.priority"] = float64(123)
-	event.Payload["case.severity"] = float64(456)
+	event.Payload["case.severity"] = "medium"
 	event.Payload["case.status"] = "myStatus"
 	event.Payload["case.template"] = "myTemplate"
 	event.Payload["case.userId"] = "myUserId"
@@ -332,7 +332,7 @@ func TestConvertElasticEventToCase(tester *testing.T) {
 	assert.Equal(tester, "myTitle", caseObj.Title)
 	assert.Equal(tester, "myDesc", caseObj.Description)
 	assert.Equal(tester, 123, caseObj.Priority)
-	assert.Equal(tester, 456, caseObj.Severity)
+	assert.Equal(tester, "medium", caseObj.Severity)
 	assert.Equal(tester, "myStatus", caseObj.Status)
 	assert.Equal(tester, "myTemplate", caseObj.Template)
 	assert.Equal(tester, "myUserId", caseObj.UserId)
@@ -346,6 +346,68 @@ func TestConvertElasticEventToCase(tester *testing.T) {
 	assert.Equal(tester, &myCreateTime, caseObj.CreateTime)
 	assert.Equal(tester, &myCompleteTime, caseObj.CompleteTime)
 	assert.Equal(tester, &myStartTime, caseObj.StartTime)
+}
+
+func TestConvertElasticEventToArtifactNil(tester *testing.T) {
+	artifactObj, err := convertElasticEventToArtifact(nil)
+	assert.NoError(tester, err)
+	assert.Nil(tester, artifactObj)
+}
+
+func TestConvertElasticEventToArtifactWithoutTags(tester *testing.T) {
+	event := &model.EventRecord{}
+	event.Payload = make(map[string]interface{})
+	event.Payload["kind"] = "artifact"
+	event.Payload["operation"] = "create"
+	event.Payload["case.tags"] = nil
+
+	_, err := convertElasticEventToCase(event)
+	assert.NoError(tester, err)
+}
+
+func TestConvertElasticEventToArtifact(tester *testing.T) {
+	myTime := time.Now()
+	myCreateTime := myTime.Add(time.Hour * -1)
+
+	event := &model.EventRecord{}
+	event.Payload = make(map[string]interface{})
+	event.Payload["kind"] = "artifact"
+	event.Payload["operation"] = "update"
+	event.Payload["artifact.value"] = "myValue"
+	event.Payload["artifact.description"] = "myDesc"
+	event.Payload["artifact.streamLength"] = float64(123)
+	event.Payload["artifact.groupType"] = "myGroupType"
+	event.Payload["artifact.groupId"] = "myGroupId"
+	event.Payload["artifact.userId"] = "myUserId"
+	event.Payload["artifact.artifactType"] = "myArtifactType"
+	event.Payload["artifact.tlp"] = "myTlp"
+	event.Payload["artifact.mimeType"] = "myMimeType"
+	event.Payload["artifact.ioc"] = true
+	tags := make([]interface{}, 2, 2)
+	tags[0] = "tag1"
+	tags[1] = "tag2"
+	event.Payload["artifact.tags"] = tags
+	event.Time = myTime
+	event.Payload["artifact.createTime"] = myCreateTime
+	interf, err := convertElasticEventToObject(event)
+	assert.NoError(tester, err)
+	artifactObj := interf.(*model.Artifact)
+	assert.Equal(tester, "artifact", artifactObj.Kind)
+	assert.Equal(tester, "update", artifactObj.Operation)
+	assert.Equal(tester, "myValue", artifactObj.Value)
+	assert.Equal(tester, "myDesc", artifactObj.Description)
+	assert.Equal(tester, 123, artifactObj.StreamLen)
+	assert.Equal(tester, "myGroupType", artifactObj.GroupType)
+	assert.Equal(tester, "myGroupId", artifactObj.GroupId)
+	assert.Equal(tester, "myUserId", artifactObj.UserId)
+	assert.Equal(tester, "myArtifactType", artifactObj.ArtifactType)
+	assert.Equal(tester, "myTlp", artifactObj.Tlp)
+	assert.Equal(tester, "myMimeType", artifactObj.MimeType)
+	assert.Equal(tester, true, artifactObj.Ioc)
+	assert.Equal(tester, tags[0], "tag1")
+	assert.Equal(tester, tags[1], "tag2")
+	assert.Equal(tester, &myTime, artifactObj.UpdateTime)
+	assert.Equal(tester, &myCreateTime, artifactObj.CreateTime)
 }
 
 func TestParseTime(tester *testing.T) {

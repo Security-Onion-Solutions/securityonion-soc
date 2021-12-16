@@ -11,7 +11,7 @@ require('../test_common.js');
 require('./case.js');
 
 const fakePriority = 33;
-const fakeSeverity = 31;
+const fakeSeverity = 'medium';
 const fakeEmail = 'my@email.invalid';
 const fakeAssigneeEmail = 'assignee@email.invalid';
 const fakeCase = {
@@ -118,7 +118,7 @@ test('loadAssociations', () => {
   expect(comp.associatedForms["comments"].caseId).toBe('myCaseId')
   expect(comp.loadAssociation).toHaveBeenCalledWith('tasks');
   expect(comp.associatedForms["tasks"].caseId).toBe('myCaseId')
-  expect(comp.loadAssociation).toHaveBeenCalledWith('artifacts');
+  expect(comp.loadAssociation).toHaveBeenCalledWith('artifacts', '/evidence');
   expect(comp.associatedForms["artifacts"].caseId).toBe('myCaseId')
   expect(comp.loadAssociation).toHaveBeenCalledWith('events');
   expect(comp.loadAssociation).toHaveBeenCalledWith('history');
@@ -219,7 +219,7 @@ test('modifyCase', async () => {
   const getMock = mockPapi("get", {'data':fakeUsers});
 
   comp.mainForm.priority = '' + fakePriority;
-  comp.mainForm.severity = '' + fakeSeverity;
+  comp.mainForm.severity = fakeSeverity;
   comp.mainForm.id = 'myCaseId';
   comp.mainForm.title = 'myTitle';
   comp.mainForm.description = 'myDescription';
@@ -235,7 +235,7 @@ test('modifyCase', async () => {
 
   await comp.modifyCase();
 
-  const body =  "{\"valid\":false,\"title\":\"myTitle\",\"assigneeId\":\"myAssigneeId\",\"status\":\"open\",\"id\":\"myCaseId\",\"description\":\"myDescription\",\"severity\":31,\"priority\":33,\"tags\":[\"tag1\",\"tag2\"],\"tlp\":\"myTlp\",\"pap\":\"myPap\",\"category\":\"myCategory\"}"
+  const body =  "{\"valid\":false,\"title\":\"myTitle\",\"assigneeId\":\"myAssigneeId\",\"status\":\"open\",\"id\":\"myCaseId\",\"description\":\"myDescription\",\"severity\":\"medium\",\"priority\":33,\"tags\":[\"tag1\",\"tag2\"],\"tlp\":\"myTlp\",\"pap\":\"myPap\",\"category\":\"myCategory\"}"
   expect(putMock).toHaveBeenCalledWith('case/', body);
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expectCaseDetails();
