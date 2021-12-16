@@ -1233,7 +1233,7 @@
             <div class="mb-6 mb-md-3">
               <div class="case detail-field d-flex align-start pa-2" v-if="!isEdit('case-description')" @click="startEdit(mainForm.description, 'case-description')">
                 <div class="d-block">
-                  <div id="case-description" class="rounded" :class="[ !isCollapsed('case-description') ? 'case collapse-field' : '' ]">{{ mainForm.description }}</div>
+                  <div id="case-description" class="rounded case collapsible" :class="[ !isCollapsed('case-description') ? 'collapsed' : 'expanded' ]">{{ mainForm.description }}</div>
                 </div>
               </div>
               <div v-if="isCollapsible('case-description') && !isEdit('case-description')" class="pl-2 text-body-2 blue--text case collapse-text" @click="toggleCollapse('case-description')">
@@ -1276,7 +1276,7 @@
                         color="primary"
                         size="32"
                       >
-                        <div class="font-weight-bold">
+                        <div class="font-weight-bold white--text">
                           {{ comment.owner.charAt(0) }}
                         </div>
                       </v-avatar>
@@ -1285,7 +1285,7 @@
                           <div class="d-flex flex-column align-start">
                             <div class="case d-flex align-start">
                               <div class="d-block mb-10">
-                                <div :id="`comment-${index}`" class="case comment" :class="[ !isCollapsed(`comment-${index}`) ? 'case collapse-field' : '' ]">{{ comment.description }}</div>
+                                <div :id="`comment-${index}`" class="case comment collapsible" :class="[ !isCollapsed(`comment-${index}`) ? 'collapsed' : 'expanded' ]">{{ comment.description }}</div>
                                 <div v-if="isCollapsible(`comment-${index}`) && !isEdit(`comment-${index}`)" class="pt-1 text-body-2 blue--text case collapse-text" @click="toggleCollapse(`comment-${index}`)">
                                   <div v-if="!isCollapsed(`comment-${index}`)">See more</div>
                                   <div v-if="isCollapsed(`comment-${index}`)">See less</div>

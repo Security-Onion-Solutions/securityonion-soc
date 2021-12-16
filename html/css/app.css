@@ -201,7 +201,16 @@ a#title, a#title:visited, a#title:active, a#title:hover {
   color: var(--v-primary-lighten1) !important;
 }
 
-.case.collapse-field {
+.case.collapsible {
+  transition: max-height 0.8s;
+}
+
+.case.collapsible.expanded {
+  max-height: max-content;
+
+}
+
+.case.collapsible.collapsed {
   max-height: 7.5em;
   overflow: hidden;
   white-space: pre-wrap;

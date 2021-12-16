@@ -29,12 +29,14 @@ $(document).ready(function() {
             nav: '#ffffff',
             drawer_background: '#f4f4f4',
             background: '#ffffff',
+            secondary: '#f5f5f5'
           },
           dark: {
             nav_background: '#12110d',
             nav: '#ffffff',
             drawer_background: '#353535',
             background: '#1e1e1e',
+            secondary: '#424242'
           },
         },
       },
