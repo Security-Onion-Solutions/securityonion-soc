@@ -212,15 +212,19 @@ func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSear
 		sortBySegment := segment.(*model.SortBySegment)
 		fields := sortBySegment.Fields()
 		if len(fields) > 0 {
-			sorting := make([]map[string]string, 0, 0)
+			sorting := make([]map[string]map[string]string, 0, 0)
 			for _, field := range fields {
-				newSort := make(map[string]string)
+				newSort := make(map[string]map[string]string)
 				order := "desc"
 				if strings.HasSuffix(field, "^") {
 					field = strings.TrimSuffix(field, "^")
 					order = "asc"
 				}
-				newSort[field] = order
+				sortParams := make(map[string]string)
+				sortParams["order"] = order
+				sortParams["missing"] = "_last"
+				sortParams["unmapped_type"] = "date"
+				newSort[field] = sortParams
 				sorting = append(sorting, newSort)
 			}
 			esMap["sort"] = sorting

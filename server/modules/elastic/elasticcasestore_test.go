@@ -557,7 +557,7 @@ func TestGetComments(tester *testing.T) {
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myIndex" AND kind:"comment" AND comment.caseId:"myCaseId" | sortby @timestamp^`
+	query := `_index:"myIndex" AND kind:"comment" AND comment.caseId:"myCaseId" | sortby comment.createTime^`
 	commentPayload := make(map[string]interface{})
 	commentPayload["kind"] = "comment"
 	commentEvent := &model.EventRecord{

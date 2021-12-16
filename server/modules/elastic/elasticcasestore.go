@@ -559,7 +559,7 @@ func (store *ElasticCasestore) GetComments(ctx context.Context, caseId string) (
   err = store.validateId(caseId, "caseId")
   if err == nil {
     comments = make([]*model.Comment, 0)
-    query := fmt.Sprintf(`_index:"%s" AND kind:"comment" AND comment.caseId:"%s" | sortby @timestamp^`, store.index, caseId)
+    query := fmt.Sprintf(`_index:"%s" AND kind:"comment" AND comment.caseId:"%s" | sortby comment.createTime^`, store.index, caseId)
     var objects []interface{}
     objects, err = store.getAll(ctx, query, store.maxAssociations)
     if err == nil {
