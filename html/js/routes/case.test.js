@@ -11,7 +11,7 @@ require('../test_common.js');
 require('./case.js');
 
 const fakePriority = 33;
-const fakeSeverity = 31;
+const fakeSeverity = 'High';
 const fakeEmail = 'my@email.invalid';
 const fakeAssigneeEmail = 'assignee@email.invalid';
 const fakeCase = {
@@ -38,7 +38,7 @@ const fakeComment = {
   description: 'myDescription',
 };
 
-var comp;
+let comp;
 
 beforeEach(() => {
   comp = getComponent("case");
@@ -125,7 +125,7 @@ test('loadAssociations', () => {
   expect(comp.associationsLoading).toBe(false);
 });
 
-test('loadAssociation', async () => {
+test('loadSingleAssociation', async () => {
   const params = { params: {
           id: 'myUserId',
           offset: 0,
@@ -150,7 +150,7 @@ test('loadAssociation', async () => {
   expect(comp.$root.loading).toBe(false);
 });
 
-test('loadAssociationError', async () => {
+test('loadSignleAssociationError', async () => {
   const showErrorMock = mockShowError();
   resetPapi().mockPapi("get", null, new Error("something bad"));
   await comp.loadAssociation('comments');
@@ -235,7 +235,7 @@ test('modifyCase', async () => {
 
   await comp.modifyCase();
 
-  const body =  "{\"valid\":false,\"title\":\"myTitle\",\"assigneeId\":\"myAssigneeId\",\"status\":\"open\",\"id\":\"myCaseId\",\"description\":\"myDescription\",\"severity\":31,\"priority\":33,\"tags\":[\"tag1\",\"tag2\"],\"tlp\":\"myTlp\",\"pap\":\"myPap\",\"category\":\"myCategory\"}"
+  const body =  "{\"valid\":false,\"title\":\"myTitle\",\"assigneeId\":\"myAssigneeId\",\"status\":\"open\",\"id\":\"myCaseId\",\"description\":\"myDescription\",\"severity\":\"High\",\"priority\":33,\"tags\":[\"tag1\",\"tag2\"],\"tlp\":\"myTlp\",\"pap\":\"myPap\",\"category\":\"myCategory\"}";
   expect(putMock).toHaveBeenCalledWith('case/', body);
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expectCaseDetails();
@@ -299,7 +299,7 @@ test('modifyAssociation', async () => {
   comp.associations['comments'] = [fakeComment];
   await comp.modifyAssociation('comments');
 
-  const body =  "{\"id\":\"myCommentId\",\"caseId\":\"\",\"description\":\"myDescription2\",\"valid\":false}";
+  const body = "{\"id\":\"myCommentId\",\"caseId\":\"\",\"description\":\"myDescription2\",\"valid\":false}";
   expect(mock).toHaveBeenCalledWith('case/comments', body);
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expect(comp.associations['comments'].length).toBe(1);
