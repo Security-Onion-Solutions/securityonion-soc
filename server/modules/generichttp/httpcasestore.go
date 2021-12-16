@@ -15,6 +15,7 @@ import (
   "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/server"
   "github.com/security-onion-solutions/securityonion-soc/web"
+  "io"
   "net/http"
   "strconv"
   "strings"
@@ -117,5 +118,25 @@ func (store *HttpCasestore) GetRelatedEvents(ctx context.Context, caseId string)
 }
 
 func (store *HttpCasestore) DeleteRelatedEvent(ctx context.Context, id string) error {
+  return errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) CreateArtifact(ctx context.Context, attachment *model.Artifact) (*model.Artifact, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) GetArtifact(ctx context.Context, id string) (*model.Artifact, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) GetArtifactStream(ctx context.Context, id string) (io.ReadCloser, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) GetArtifacts(ctx context.Context, caseId string, groupType string, groupId string) ([]*model.Artifact, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) DeleteArtifact(ctx context.Context, id string) error {
   return errors.New("Unsupported operation by this module")
 }

@@ -125,7 +125,7 @@ test('loadAssociations', () => {
   expect(comp.associatedForms["comments"].caseId).toBe('myCaseId')
   expect(comp.loadAssociation).toHaveBeenCalledWith('tasks');
   expect(comp.associatedForms["tasks"].caseId).toBe('myCaseId')
-  expect(comp.loadAssociation).toHaveBeenCalledWith('artifacts');
+  expect(comp.loadAssociation).toHaveBeenCalledWith('artifacts', '/evidence');
   expect(comp.associatedForms["artifacts"].caseId).toBe('myCaseId')
   expect(comp.loadAssociation).toHaveBeenCalledWith('events');
   expect(comp.loadAssociation).toHaveBeenCalledWith('history');
@@ -226,7 +226,7 @@ test('modifyCase', async () => {
   const getMock = mockPapi("get", {'data':fakeUsers});
 
   comp.mainForm.priority = '' + fakePriority;
-  comp.mainForm.severity = '' + fakeSeverity;
+  comp.mainForm.severity = fakeSeverity;
   comp.mainForm.id = 'myCaseId';
   comp.mainForm.title = 'myTitle';
   comp.mainForm.description = 'myDescription';

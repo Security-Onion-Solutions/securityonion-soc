@@ -125,7 +125,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
 
       this.associations["artifacts"] = [];
       this.associatedForms["artifacts"].caseId = this.caseObj.id;
-      this.loadAssociation('artifacts');
+      this.loadAssociation('artifacts', "/evidence");
 
       this.associations["events"] = [];
       this.loadAssociation('events');
@@ -135,9 +135,9 @@ routes.push({ path: '/case/:id', name: 'case', component: {
 
       this.associationsLoading = false;
     },
-    async loadAssociation(dataType) {
+    async loadAssociation(dataType, extraPath = "") {
       try {
-        const response = await this.$root.papi.get('case/' + dataType, { params: {
+        const response = await this.$root.papi.get('case/' + dataType + extraPath, { params: {
           id: this.$route.params.id,
           offset: this.associations[dataType].length,
           count: this.count,

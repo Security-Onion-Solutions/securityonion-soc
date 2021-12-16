@@ -156,10 +156,12 @@ func TestValidateCaseInvalid(tester *testing.T) {
 	assert.EqualError(tester, err, "Invalid priority")
 	socCase.Priority = 12
 
-	socCase.Severity = -12
+	for x := 1; x < 5; x++ {
+		socCase.Severity += "this is my unreasonably long severity\n"
+	}
 	err = store.validateCase(socCase)
-	assert.EqualError(tester, err, "Invalid severity")
-	socCase.Severity = 12
+	assert.EqualError(tester, err, "severity is too long (152/100)")
+	socCase.Severity = "medium"
 
 	for x := 1; x < 5; x++ {
 		socCase.Tlp += "this is my unreasonably long tlp\n"
@@ -238,7 +240,7 @@ func TestValidateCaseValid(tester *testing.T) {
 		socCase.Description += "this is my reasonably long description\n"
 	}
 	socCase.Priority = 123
-	socCase.Severity = 1
+	socCase.Severity = "medium"
 	socCase.Tags = append(socCase.Tags, "tag1")
 	socCase.Tags = append(socCase.Tags, "tag2")
 	socCase.Tlp = "amber"
@@ -555,7 +557,7 @@ func TestGetComments(tester *testing.T) {
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myIndex" AND kind:"comment" AND comment.caseId:"myCaseId" | sortby @timestamp^`
+	query := `_index:"myIndex" AND kind:"comment" AND comment.caseId:"myCaseId" | sortby comment.createTime^`
 	commentPayload := make(map[string]interface{})
 	commentPayload["kind"] = "comment"
 	commentEvent := &model.EventRecord{
@@ -757,5 +759,199 @@ func TestDeleteRelatedEvent(tester *testing.T) {
 	assert.Equal(tester, query, fakeEventStore.InputSearchCriterias[0].RawQuery)
 	assert.Len(tester, fakeEventStore.InputIds, 2) // Delete and Index (for audit)
 	assert.Equal(tester, "myEventId", fakeEventStore.InputIds[0])
+	assert.Equal(tester, "", fakeEventStore.InputIds[1])
+}
+
+func TestCreateArtifactUnexpectedId(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	artifact := model.NewArtifact()
+	artifact.Id = "123444"
+	artifact.GroupType = "myGroupType"
+	artifact.ArtifactType = "myArtifactType"
+	artifact.Value = "Value"
+	_, err := store.CreateArtifact(ctx, artifact)
+	assert.Error(tester, err)
+	assert.Equal(tester, "Unexpected ID found in new artifact", err.Error())
+}
+
+func TestCreateArtifactMissingCaseId(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	artifact := model.NewArtifact()
+	artifact.GroupType = "myGroupType"
+	artifact.ArtifactType = "myArtifactType"
+	artifact.Value = "Value"
+	_, err := store.CreateArtifact(ctx, artifact)
+	assert.Error(tester, err)
+	assert.Equal(tester, "Missing Case ID in new artifact", err.Error())
+}
+
+func TestCreateArtifactMissingGroupType(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	artifact := model.NewArtifact()
+	_, err := store.CreateArtifact(ctx, artifact)
+	assert.Error(tester, err)
+	assert.Equal(tester, "invalid ID for groupType", err.Error())
+}
+
+func TestCreateArtifactMissingArtifactType(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	artifact := model.NewArtifact()
+	artifact.GroupType = "myGroupType"
+	artifact.CaseId = "12345"
+	_, err := store.CreateArtifact(ctx, artifact)
+	assert.Error(tester, err)
+	assert.Equal(tester, "Missing ArtifactType in new artifact", err.Error())
+}
+
+func TestCreateArtifactMissingValue(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	artifact := model.NewArtifact()
+	artifact.GroupType = "myGroupType"
+	artifact.ArtifactType = "myArtifactType"
+	artifact.CaseId = "12345"
+	_, err := store.CreateArtifact(ctx, artifact)
+	assert.Error(tester, err)
+	assert.Equal(tester, "Missing Value in new artifact", err.Error())
+}
+
+func TestCreateArtifact(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+
+	casePayload := make(map[string]interface{})
+	casePayload["kind"] = "case"
+	caseEvent := &model.EventRecord{
+		Payload: casePayload,
+		Id:      "123444",
+	}
+	eventPayload := make(map[string]interface{})
+	eventPayload["kind"] = "artifact"
+	elasticEvent := &model.EventRecord{
+		Payload: eventPayload,
+	}
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, caseEvent)
+	fakeEventStore.IndexResults[0].Success = true
+	fakeEventStore.IndexResults[0].DocumentId = "myCaseId"
+	eventSearchResults := model.NewEventSearchResults()
+	eventSearchResults.Events = append(eventSearchResults.Events, elasticEvent)
+	fakeEventStore.SearchResults = append(fakeEventStore.SearchResults, eventSearchResults)
+	artifact := model.NewArtifact()
+	artifact.CaseId = "123444"
+	artifact.GroupType = "myGroupType"
+	artifact.ArtifactType = "myArtifactType"
+	artifact.Value = "Value"
+	newEvent, err := store.CreateArtifact(ctx, artifact)
+	assert.NoError(tester, err)
+	assert.NotNil(tester, newEvent)
+}
+
+func TestGetArtifact(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	query := `_index:"myIndex" AND kind:"artifact" AND _id:"myArtifactId"`
+	eventPayload := make(map[string]interface{})
+	eventPayload["kind"] = "artifact"
+	elasticEvent := &model.EventRecord{
+		Payload: eventPayload,
+	}
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, elasticEvent)
+	obj, err := store.GetArtifact(ctx, "myArtifactId")
+	assert.NoError(tester, err)
+	assert.Len(tester, fakeEventStore.InputSearchCriterias, 1)
+	assert.Equal(tester, query, fakeEventStore.InputSearchCriterias[0].RawQuery)
+	assert.NotNil(tester, obj)
+}
+
+func TestGetArtifactsBadGroupType(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	_, err := store.GetArtifacts(ctx, "myCaseId", "myGroupType is invalid", "myGroupId")
+	assert.EqualError(tester, err, "invalid ID for groupType")
+}
+
+func TestGetArtifactsBadGroupId(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	_, err := store.GetArtifacts(ctx, "myCaseId", "myGroupType", "myGroupId is invalid")
+	assert.EqualError(tester, err, "invalid ID for groupId")
+}
+
+func TestGetArtifactsNoGroupId(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	query := `_index:"myIndex" AND kind:"artifact" AND artifact.caseId:"myCaseId" AND artifact.groupType:"myGroupType" | sortby @timestamp^`
+	eventPayload := make(map[string]interface{})
+	eventPayload["kind"] = "artifact"
+	elasticEvent := &model.EventRecord{
+		Payload: eventPayload,
+	}
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, elasticEvent)
+	obj, err := store.GetArtifacts(ctx, "myCaseId", "myGroupType", "")
+	assert.NoError(tester, err)
+	assert.Len(tester, fakeEventStore.InputSearchCriterias, 1)
+	assert.Equal(tester, query, fakeEventStore.InputSearchCriterias[0].RawQuery)
+	assert.NotNil(tester, obj)
+}
+
+func TestGetArtifacts(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	query := `_index:"myIndex" AND kind:"artifact" AND artifact.caseId:"myCaseId" AND artifact.groupType:"myGroupType" AND artifact.groupId:"myGroupId" | sortby @timestamp^`
+	eventPayload := make(map[string]interface{})
+	eventPayload["kind"] = "artifact"
+	elasticEvent := &model.EventRecord{
+		Payload: eventPayload,
+	}
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, elasticEvent)
+	obj, err := store.GetArtifacts(ctx, "myCaseId", "myGroupType", "myGroupId")
+	assert.NoError(tester, err)
+	assert.Len(tester, fakeEventStore.InputSearchCriterias, 1)
+	assert.Equal(tester, query, fakeEventStore.InputSearchCriterias[0].RawQuery)
+	assert.NotNil(tester, obj)
+}
+
+func TestDeleteArtifact(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	query := `_index:"myIndex" AND kind:"artifact" AND _id:"myArtifactId"`
+	elasticPayload := make(map[string]interface{})
+	elasticPayload["kind"] = "artifact"
+	elasticEvent := &model.EventRecord{
+		Payload: elasticPayload,
+		Id:      "myArtifactId",
+	}
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, elasticEvent)
+	err := store.DeleteArtifact(ctx, "myArtifactId")
+	assert.NoError(tester, err)
+	assert.Len(tester, fakeEventStore.InputSearchCriterias, 1) // Search to ensure it exists first
+	assert.Equal(tester, query, fakeEventStore.InputSearchCriterias[0].RawQuery)
+	assert.Len(tester, fakeEventStore.InputIds, 2) // Delete and Index (for audit)
+	assert.Equal(tester, "myArtifactId", fakeEventStore.InputIds[0])
 	assert.Equal(tester, "", fakeEventStore.InputIds[1])
 }

@@ -212,15 +212,19 @@ func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSear
 		sortBySegment := segment.(*model.SortBySegment)
 		fields := sortBySegment.Fields()
 		if len(fields) > 0 {
-			sorting := make([]map[string]string, 0, 0)
+			sorting := make([]map[string]map[string]string, 0, 0)
 			for _, field := range fields {
-				newSort := make(map[string]string)
+				newSort := make(map[string]map[string]string)
 				order := "desc"
 				if strings.HasSuffix(field, "^") {
 					field = strings.TrimSuffix(field, "^")
 					order = "asc"
 				}
-				newSort[field] = order
+				sortParams := make(map[string]string)
+				sortParams["order"] = order
+				sortParams["missing"] = "_last"
+				sortParams["unmapped_type"] = "date"
+				newSort[field] = sortParams
 				sorting = append(sorting, newSort)
 			}
 			esMap["sort"] = sorting
@@ -389,7 +393,7 @@ func convertElasticEventToCase(event *model.EventRecord) (*model.Case, error) {
 				obj.Priority = int(value.(float64))
 			}
 			if value, ok := event.Payload["case.severity"]; ok {
-				obj.Severity = int(value.(float64))
+				obj.Severity = value.(string)
 			}
 			if value, ok := event.Payload["case.status"]; ok {
 				obj.Status = value.(string)
@@ -483,6 +487,57 @@ func convertElasticEventToRelatedEvent(event *model.EventRecord) (*model.Related
 	return obj, err
 }
 
+func convertElasticEventToArtifact(event *model.EventRecord) (*model.Artifact, error) {
+	var err error
+	var obj *model.Artifact
+
+	if event != nil {
+		obj = model.NewArtifact()
+		err = convertElasticEventToAuditable(event, &obj.Auditable)
+		if err == nil {
+			if value, ok := event.Payload["artifact.userId"]; ok {
+				obj.UserId = value.(string)
+			}
+			if value, ok := event.Payload["artifact.caseId"]; ok {
+				obj.CaseId = value.(string)
+			}
+			if value, ok := event.Payload["artifact.groupType"]; ok {
+				obj.GroupType = value.(string)
+			}
+			if value, ok := event.Payload["artifact.groupId"]; ok {
+				obj.GroupId = value.(string)
+			}
+			if value, ok := event.Payload["artifact.description"]; ok {
+				obj.Description = value.(string)
+			}
+			if value, ok := event.Payload["artifact.artifactType"]; ok {
+				obj.ArtifactType = value.(string)
+			}
+			if value, ok := event.Payload["artifact.streamLength"]; ok {
+				obj.StreamLen = int(value.(float64))
+			}
+			if value, ok := event.Payload["artifact.mimeType"]; ok {
+				obj.MimeType = value.(string)
+			}
+			if value, ok := event.Payload["artifact.value"]; ok {
+				obj.Value = value.(string)
+			}
+			if value, ok := event.Payload["artifact.tlp"]; ok {
+				obj.Tlp = value.(string)
+			}
+			if value, ok := event.Payload["artifact.tags"]; ok && value != nil {
+				obj.Tags = convertToStringArray(value.([]interface{}))
+			}
+			if value, ok := event.Payload["artifact.ioc"]; ok {
+				obj.Ioc = value.(bool)
+			}
+			obj.CreateTime = parseTime(event.Payload, "artifact.createTime")
+		}
+	}
+
+	return obj, err
+}
+
 func convertElasticEventToObject(event *model.EventRecord) (interface{}, error) {
 	var obj interface{}
 	var err error
@@ -495,6 +550,8 @@ func convertElasticEventToObject(event *model.EventRecord) (interface{}, error) 
 			obj, err = convertElasticEventToComment(event)
 		case "related":
 			obj, err = convertElasticEventToRelatedEvent(event)
+		case "artifact":
+			obj, err = convertElasticEventToArtifact(event)
 		}
 	} else {
 		err = errors.New("Unknown object kind; id=" + event.Id)

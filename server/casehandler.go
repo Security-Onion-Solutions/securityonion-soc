@@ -13,9 +13,12 @@ import (
   "context"
   "encoding/json"
   "errors"
+  "github.com/apex/log"
   "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/web"
+  "io"
   "net/http"
+  "strconv"
 )
 
 type CaseHandler struct {
@@ -71,6 +74,11 @@ func (caseHandler *CaseHandler) create(ctx context.Context, writer http.Response
     }
   case "tasks":
   case "artifacts":
+    inputArtifact := model.NewArtifact()
+    err = json.NewDecoder(request.Body).Decode(&inputArtifact)
+    if err == nil {
+      obj, err = caseHandler.server.Casestore.CreateArtifact(ctx, inputArtifact)
+    }
   default:
     inputCase := model.NewCase()
     err = json.NewDecoder(request.Body).Decode(&inputCase)
@@ -153,16 +161,50 @@ func (caseHandler *CaseHandler) get(ctx context.Context, writer http.ResponseWri
   case "comments":
     obj, err = caseHandler.server.Casestore.GetComments(ctx, id)
   case "tasks":
+  case "artifactstream":
+    err = caseHandler.copyArtifactStream(ctx, writer, id)
   case "artifacts":
+    groupType := caseHandler.GetPathParameter(request.URL.Path, 3)
+    groupId := caseHandler.GetPathParameter(request.URL.Path, 4)
+    obj, err = caseHandler.server.Casestore.GetArtifacts(ctx, id, groupType, groupId)
   case "history":
     obj, err = caseHandler.server.Casestore.GetCaseHistory(ctx, id)
   default:
     obj, err = caseHandler.server.Casestore.GetCase(ctx, id)
   }
-  if obj != nil {
+  if err == nil {
     statusCode = http.StatusOK
   } else {
     statusCode = http.StatusNotFound
   }
   return statusCode, obj, err
+}
+
+func (caseHandler *CaseHandler) copyArtifactStream(ctx context.Context, writer http.ResponseWriter, artifactId string) error {
+  artifact, err := caseHandler.server.Casestore.GetArtifact(ctx, artifactId)
+  if err == nil {
+    var reader io.ReadCloser
+    reader, err = caseHandler.server.Casestore.GetArtifactStream(ctx, artifactId)
+    if err == nil {
+      defer reader.Close()
+      writer.Header().Set("Content-Type", artifact.MimeType)
+      writer.Header().Set("Content-Length", strconv.FormatInt(int64(artifact.StreamLen), 10))
+      writer.Header().Set("Content-Disposition", "inline; filename=\""+artifact.Value+"\"")
+      writer.Header().Set("Content-Transfer-Encoding", "binary")
+      written, err := io.Copy(writer, reader)
+      if err != nil {
+        log.WithError(err).WithFields(log.Fields{
+          "name":       artifact.Value,
+          "artifactId": artifactId,
+        }).Error("Failed to copy artifact stream")
+      } else {
+        log.WithFields(log.Fields{
+          "name":       artifact.Value,
+          "size":       written,
+          "artifactId": artifactId,
+        }).Info("Copied artifact stream to response")
+      }
+    }
+  }
+  return err
 }

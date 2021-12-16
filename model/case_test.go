@@ -20,3 +20,8 @@ func TestNewRelatedEvent(tester *testing.T) {
 	event := NewRelatedEvent()
 	assert.NotZero(tester, event.CreateTime)
 }
+
+func TestNewArtifact(tester *testing.T) {
+	event := NewArtifact()
+	assert.NotZero(tester, event.CreateTime)
+}

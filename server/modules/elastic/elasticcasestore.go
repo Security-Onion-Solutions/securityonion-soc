@@ -17,6 +17,7 @@ import (
   "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/server"
   "github.com/security-onion-solutions/securityonion-soc/web"
+  "io"
   "regexp"
   "strconv"
   "time"
@@ -97,8 +98,8 @@ func (store *ElasticCasestore) validateCase(socCase *model.Case) error {
   if err == nil && socCase.Priority < 0 {
     err = errors.New("Invalid priority")
   }
-  if err == nil && socCase.Severity < 0 {
-    err = errors.New("Invalid severity")
+  if err == nil {
+    err = store.validateString(socCase.Severity, SHORT_STRING_MAX, "severity")
   }
   if err == nil && len(socCase.Kind) > 0 {
     err = errors.New("Field 'Kind' must not be specified")
@@ -177,6 +178,54 @@ func (store *ElasticCasestore) validateComment(comment *model.Comment) error {
   }
   if err == nil {
     err = store.validateString(comment.Description, LONG_STRING_MAX, "description")
+  }
+  return err
+}
+
+func (store *ElasticCasestore) validateArtifact(artifact *model.Artifact) error {
+  var err error
+
+  if err == nil && artifact.Id != "" {
+    err = store.validateId(artifact.Id, "artifactId")
+  }
+  if err == nil && artifact.UserId != "" {
+    err = store.validateId(artifact.UserId, "userId")
+  }
+  if err == nil && artifact.CaseId != "" {
+    err = store.validateId(artifact.CaseId, "caseId")
+  }
+  if err == nil && artifact.StreamLen != 0 {
+    err = errors.New("Invalid streamLength")
+  }
+  if err == nil && len(artifact.Kind) > 0 {
+    err = errors.New("Field 'Kind' must not be specified")
+  }
+  if err == nil && len(artifact.Operation) > 0 {
+    err = errors.New("Field 'Operation' must not be specified")
+  }
+  if err == nil {
+    err = store.validateString(artifact.Value, LONG_STRING_MAX, "value")
+  }
+  if err == nil {
+    err = store.validateId(artifact.GroupType, "groupType")
+  }
+  if err == nil && len(artifact.GroupId) > 0 {
+    err = store.validateId(artifact.GroupId, "groupId")
+  }
+  if err == nil {
+    err = store.validateString(artifact.ArtifactType, SHORT_STRING_MAX, "artifactType")
+  }
+  if err == nil {
+    err = store.validateString(artifact.Tlp, SHORT_STRING_MAX, "tlp")
+  }
+  if err == nil {
+    err = store.validateString(artifact.MimeType, SHORT_STRING_MAX, "mimeType")
+  }
+  if err == nil {
+    err = store.validateString(artifact.Description, LONG_STRING_MAX, "description")
+  }
+  if err == nil {
+    err = store.validateStringArray(artifact.Tags, SHORT_STRING_MAX, MAX_ARRAY_ELEMENTS, "tags")
   }
   return err
 }
@@ -510,7 +559,7 @@ func (store *ElasticCasestore) GetComments(ctx context.Context, caseId string) (
   err = store.validateId(caseId, "caseId")
   if err == nil {
     comments = make([]*model.Comment, 0)
-    query := fmt.Sprintf(`_index:"%s" AND kind:"comment" AND comment.caseId:"%s" | sortby @timestamp^`, store.index, caseId)
+    query := fmt.Sprintf(`_index:"%s" AND kind:"comment" AND comment.caseId:"%s" | sortby comment.createTime^`, store.index, caseId)
     var objects []interface{}
     objects, err = store.getAll(ctx, query, store.maxAssociations)
     if err == nil {
@@ -551,12 +600,104 @@ func (store *ElasticCasestore) DeleteComment(ctx context.Context, id string) err
   var err error
 
   var comment *model.Comment
-  err = store.validateId(id, "commentId")
+  comment, err = store.GetComment(ctx, id)
   if err == nil {
-    comment, err = store.GetComment(ctx, id)
-    if err == nil {
-      err = store.delete(ctx, comment, "comment", store.prepareForSave(ctx, &comment.Auditable))
+    err = store.delete(ctx, comment, "comment", store.prepareForSave(ctx, &comment.Auditable))
+  }
+
+  return err
+}
+
+func (store *ElasticCasestore) CreateArtifact(ctx context.Context, artifact *model.Artifact) (*model.Artifact, error) {
+  var err error
+
+  err = store.validateArtifact(artifact)
+  if err == nil {
+    if artifact.Id != "" {
+      return nil, errors.New("Unexpected ID found in new artifact")
+    } else if artifact.CaseId == "" {
+      return nil, errors.New("Missing Case ID in new artifact")
+    } else if artifact.GroupType == "" {
+      return nil, errors.New("Missing GroupType in new artifact")
+    } else if artifact.ArtifactType == "" {
+      return nil, errors.New("Missing ArtifactType in new artifact")
+    } else if artifact.Value == "" {
+      return nil, errors.New("Missing Value in new artifact")
+    } else {
+      _, err = store.GetCase(ctx, artifact.CaseId)
+      if err == nil {
+        now := time.Now()
+        artifact.CreateTime = &now
+        var results *model.EventIndexResults
+        results, err = store.save(ctx, artifact, "artifact", store.prepareForSave(ctx, &artifact.Auditable))
+        if err == nil {
+          // Read object back to get new modify date, etc
+          artifact, err = store.GetArtifact(ctx, results.DocumentId)
+        }
+      }
     }
+  }
+  return artifact, err
+}
+
+func (store *ElasticCasestore) GetArtifact(ctx context.Context, id string) (*model.Artifact, error) {
+  var err error
+  var artifact *model.Artifact
+
+  err = store.validateId(id, "artifactId")
+  if err == nil {
+    var obj interface{}
+    obj, err = store.get(ctx, id, "artifact")
+    if err == nil {
+      artifact = obj.(*model.Artifact)
+    }
+  }
+  return artifact, err
+}
+
+func (store *ElasticCasestore) GetArtifactStream(ctx context.Context, id string) (io.ReadCloser, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) GetArtifacts(ctx context.Context, caseId string, groupType string, groupId string) ([]*model.Artifact, error) {
+  var err error
+  var artifacts []*model.Artifact
+
+  err = store.validateId(caseId, "caseId")
+  if err == nil {
+    err = store.validateId(groupType, "groupType") // It's not technically an ID but the possible values confirm to an ID, so let's validate it as an ID.
+    if err == nil {
+      if len(groupId) > 0 {
+        // groupId is optional, since some group won't have multiple groups per case.
+        err = store.validateId(groupId, "groupId")
+      }
+      if err == nil {
+        artifacts = make([]*model.Artifact, 0)
+        var groupIdTerm string
+        if len(groupId) > 0 {
+          groupIdTerm = fmt.Sprintf(`AND artifact.groupId:"%s" `, groupId)
+        }
+        query := fmt.Sprintf(`_index:"%s" AND kind:"artifact" AND artifact.caseId:"%s" AND artifact.groupType:"%s" %s| sortby @timestamp^`, store.index, caseId, groupType, groupIdTerm)
+        var objects []interface{}
+        objects, err = store.getAll(ctx, query, store.maxAssociations)
+        if err == nil {
+          for _, obj := range objects {
+            artifacts = append(artifacts, obj.(*model.Artifact))
+          }
+        }
+      }
+    }
+  }
+  return artifacts, err
+}
+
+func (store *ElasticCasestore) DeleteArtifact(ctx context.Context, id string) error {
+  var err error
+
+  var artifact *model.Artifact
+  artifact, err = store.GetArtifact(ctx, id)
+  if err == nil {
+    err = store.delete(ctx, artifact, "artifact", store.prepareForSave(ctx, &artifact.Auditable))
   }
 
   return err
