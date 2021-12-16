@@ -37,6 +37,13 @@ const fakeComment = {
   id: 'myCommentId',
   description: 'myDescription',
 };
+const fakeFormKeyStr = 'description';
+const fakeEditVal = 'fakeVal';
+const fakeId = 'fakeId';
+const fakeEditFieldObj = {
+  val: fakeEditVal,
+  id: fakeId
+};
 
 let comp;
 
@@ -412,3 +419,216 @@ test('presets', () => {
   expect(comp.isPresetCustomEnabled('severity')).toBe(false);
   expect(comp.getPresets('severity').length).toBe(0);   // none defined
 });
+
+test('isEdit', () => {
+  comp.editField = fakeEditFieldObj;
+  expect(comp.isEdit('fakeId')).toBe(true);
+})
+
+test('isEdit_False', () => {
+  comp.editField = fakeEditFieldObj;
+
+  expect(comp.isEdit('otherFakeId')).toBe(false);
+})
+
+test('startEdit', () => {
+
+  comp.startEdit(fakeEditVal, fakeId);
+
+  const expectedObj = { val: 'fakeVal', id: 'fakeId' };
+  expect(comp.editField).toStrictEqual(expectedObj);
+})
+
+test('stopEdit', () => {
+  comp.editField = fakeEditFieldObj;
+
+  comp.stopEdit();
+
+  expect(comp.editField).toStrictEqual({})
+})
+
+test('saveEdit', async () => {
+  comp.mainForm[fakeFormKeyStr] = 'fakeValOld';
+  comp.editField.val = fakeEditVal;
+
+  comp.stopEdit = jest.fn();
+  comp.modifyCase = jest.fn();
+
+  await comp.saveEdit('description')
+
+  expect(comp.stopEdit).toHaveBeenCalledTimes(0);
+  expect(comp.modifyCase).toHaveBeenCalledTimes(1);
+  expect(comp.modifyCase).toHaveBeenCalledWith('description');
+})
+
+test('saveEdit_NoChanges', async () => {
+  comp.mainForm[fakeFormKeyStr] = fakeEditVal;
+  comp.editField.val = fakeEditVal;
+  comp.stopEdit = jest.fn();
+  comp.modifyCase = jest.fn();
+
+  await comp.saveEdit('description');
+
+  expect(comp.stopEdit).toHaveBeenCalledTimes(1);
+  expect(comp.modifyCase).toHaveBeenCalledTimes(0);
+})
+
+test('updateCollapsible_HeightOverflow', () => {
+  const fakeElement = {
+    offsetHeight: 10,
+    scrollHeight: 11
+  };
+  document.getElementById = jest.fn(_ => fakeElement);
+  comp.updateCollapsible(fakeId);
+
+  expect(comp.collapsible).toStrictEqual(['fakeId']);
+})
+
+test('updateCollapsible_WidthOverflow', () => {
+  const fakeElement = {
+    offsetWidth: 10,
+    scrollWidth: 11
+  };
+  document.getElementById = jest.fn(_ => fakeElement);
+  comp.updateCollapsible(fakeId);
+
+  expect(comp.collapsible).toStrictEqual(['fakeId']);
+})
+
+test('updateCollapsible_NoOverflow', () => {
+  const fakeElement = {
+    offsetHeight: 10,
+    scrollHeight: 10
+  };
+  document.getElementById = jest.fn(_ => fakeElement);
+  comp.updateCollapsible(fakeId);
+
+  expect(comp.collapsible).toStrictEqual([]);
+})
+
+test('updateCollapsible_RemoveId', () => {
+  const fakeElement = {
+    offsetHeight: 10,
+    scrollHeight: 10
+  };
+  comp.collapsible = [fakeId]
+
+  document.getElementById = jest.fn(_ => fakeElement);
+  comp.updateCollapsible(fakeId);
+
+  expect(comp.collapsible).toStrictEqual([]);
+})
+
+test('updateCollapsible_StillCollapsible', () => {
+  const fakeElement = {
+    offsetHeight: 10,
+    scrollHeight: 11
+  };
+  comp.collapsible = [fakeId]
+
+  document.getElementById = jest.fn(_ => fakeElement);
+  comp.updateCollapsible(fakeId);
+
+  expect(comp.collapsible).toStrictEqual(['fakeId']);
+})
+
+test('isCollapsible', () => {
+  comp.collapsible = [ fakeId ];
+
+  expect(comp.isCollapsible('fakeId')).toBe(true);
+})
+
+test('isCollapsible_False', () => {
+  comp.collapsible =  [];
+
+  expect(comp.isCollapsible('fakeId')).toBe(false);
+})
+
+test('isCollapsed', () => {
+  comp.collapsed = [ fakeId ];
+
+  expect(comp.isCollapsed('fakeId')).toBe(true);
+})
+
+test('isCollapsed_False', () => {
+  comp.collapsed =  [];
+
+  expect(comp.isCollapsed('fakeId')).toBe(false);
+})
+
+
+test('toggleCollapse_Add', () => {
+  comp.collapsed = [];
+  
+  comp.toggleCollapse(fakeId);
+
+  expect(comp.collapsed).toStrictEqual(['fakeId']);
+})
+
+test('toggleCollapse_Remove', () => {
+  comp.collapsed = [fakeId];
+  
+  comp.toggleCollapse('fakeId');
+
+  expect(comp.collapsed).toStrictEqual([]);
+})
+
+test('selectList', () => {
+  comp.presets = {
+    'severity': {
+      'labels': [
+        'presetSeverity1',
+        'presetSeverity2'
+      ],
+      'customEnabled': false
+    },
+  }
+  
+  const expectedList = [
+    'presetSeverity1',
+    'presetSeverity2'
+  ]
+
+  expect(comp.selectList('severity')).toStrictEqual(expectedList)
+})
+
+test('selectList_CustomEnabledNoCustomVal', () => {
+  comp.presets = {
+    'severity': {
+      'labels': [
+        'presetSeverity1',
+        'presetSeverity2'
+      ],
+      'customEnabled': true
+    },
+  }
+  
+  const expectedList = [
+    'presetSeverity1',
+    'presetSeverity2',
+  ]
+
+  expect(comp.selectList('severity')).toStrictEqual(expectedList)
+})
+
+test('selectList_CustomEnabledAndCustomVal', () => {
+  comp.presets = {
+    'severity': {
+      'labels': [
+        'presetSeverity1',
+        'presetSeverity2'
+      ],
+      'customEnabled': true
+    },
+  }
+
+  comp.mainForm['severity'] = 'customSeverity1'
+  
+  const expectedList = [
+    'presetSeverity1',
+    'presetSeverity2',
+    'customSeverity1'
+  ]
+
+  expect(comp.selectList('severity')).toStrictEqual(expectedList)
+})

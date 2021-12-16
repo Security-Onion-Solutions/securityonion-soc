@@ -48,7 +48,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       description: null,
       severity: null,
       priority: null,
-      tags: [],
+      tags: null,
       tlp: null,
       pap: null,
       category: null
@@ -74,7 +74,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         valid: false
       }
     },
-    editField: "",
+    editField: {},
     mruCaseLimit: 5,
     mruCases: [],
     presets: {},
@@ -86,73 +86,13 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     },
   }},
   computed: {
-    severityList() {
-      const sevPresets = this.getPresets('severity');
-      if (sevPresets != []) {
-        let formattedSevList = [];
-        for (let index = 0; index < sevPresets.length; index++) {
-          formattedSevList.push({
-            text: sevPresets[index],
-            value: index+1
-          });
-        }
-        return formattedSevList;
-      } else {
-        return [
-          { text: 'Critical', value: 1 },
-          { text: 'High', value: 2 },
-          { text: 'Medium', value: 3 },
-          { text: 'Low', value: 4}
-        ];
-      }
-    },
-    tagList() {
-      const tagPresets = this.getPresets('tags');
-      return tagPresets.concat(this.mainForm.tags);
-    },
-    categoryList() {
-      const catPresets = this.getPresets('category')
-      if (this.mainForm.category !== null) {
-        return catPresets.concat(this.mainForm.category)
-      } else {
-        return catPresets
-      }
-    },
-    tlpList() {
-      const tlpPresets = this.getPresets('tlp')
-      return tlpPresets.map((value) => {
-        return {
-          text: value.split(' ').map(word => word.charAt(0).toLocaleUpperCase() + word.substring(1)).join(' '),
-          value: value
-        }
-      })
-    },
-    papList() {
-      const papPresets = this.getPresets('pap')
-      return papPresets.map((value) => {
-        return {
-          text: value.split(' ').map(word => word.charAt(0).toLocaleUpperCase() + word.substring(1)).join(' '),
-          value: value
-        }
-      })
-    },
-    statusList() {
-      const statuses = this.getPresets('status')
-      return statuses.map((value) => {
-        return {
-          text: value.split(' ').map(word => word.charAt(0).toLocaleUpperCase() + word.substring(1)).join(' '),
-          value: value
-        }
-      })
-    },
   },
   created() {
   },
   async mounted() {
     await this.loadData();
     this.$root.loadParameters('case', this.initCase);
-    this.updateCollapsible('case-description')
-
+    this.updateCollapsible('case-description');
   },
   destroyed() {
     this.$root.unsubscribe("case", this.updateCase);
@@ -161,6 +101,12 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     '$route': 'loadData',
   },
   methods: {
+    selectList(field) {
+      const presets = this.getPresets(field)
+      return this.isPresetCustomEnabled(field) && this.mainForm[field] !== null 
+        ? presets.concat(this.mainForm[field]) 
+        : presets
+    },
     initCase(params) {
       this.params = params;
       this.mruCaseLimit = params["mostRecentlyUsedLimit"];
@@ -280,8 +226,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         if (keyStr !== null) {
           jsonObj[keyStr] = this.editField.val;
         }
-        // Convert priority and severity to ints
-        jsonObj.severity = parseInt(jsonObj.severity, 10);
+        // Convert priority to int
         jsonObj.priority = parseInt(jsonObj.priority, 10);
         // if (jsonObj.tags) {
         //   jsonObj.tags = jsonObj.tags.split(",").map(tag => tag.trim());
@@ -349,7 +294,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       if (idx > -1) {
         this.$root.startLoading();
         try {
-          const response = await this.$root.papi.delete('case/' + association, { params: {
+          await this.$root.papi.delete('case/' + association, { params: {
             id: obj.id
           }});
           this.associations[association].splice(idx, 1);
@@ -380,7 +325,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       // this.loadAssociations();
     },
     isEdit(id) {
-      return this.editField !== {} && this.editField.id === id;
+      return this.editField.id === id;
     },
     startEdit(val, id) {
       this.editField = {

@@ -1432,9 +1432,7 @@
                             solo
                             hide-details
                             v-model="mainForm.status"
-                            :items="statusList"
-                            item-text="text"
-                            item-value="value"
+                            :items="selectList('status')"
                             v-on:change="modifyCase()"
                             class="case-select"
                           />
@@ -1462,9 +1460,7 @@
                                 solo
                                 hide-details
                                 v-model="mainForm.severity"
-                                :items="severityList"
-                                item-text="text"
-                                item-value="value"
+                                :items="selectList('severity')"
                                 v-on:change="modifyCase()"
                                 class="case-select"
                               />
@@ -1501,9 +1497,7 @@
                                 solo
                                 hide-details
                                 v-model="mainForm.tlp"
-                                :items="tlpList"
-                                item-text="text"
-                                item-value="value"
+                                :items="selectList('tlp')"
                                 v-on:change="modifyCase()"
                                 class="case-select"
                                 />
@@ -1520,9 +1514,7 @@
                                 solo
                                 hide-details
                                 v-model="mainForm.pap"
-                                :items="papList"
-                                item-text="text"
-                                item-value="value"
+                                :items="selectList('pap')"
                                 v-on:change="modifyCase()"
                                 class="case-select"
                               />
@@ -1538,7 +1530,7 @@
                                 solo
                                 hide-details
                                 v-model="mainForm.category"
-                                :items="categoryList"
+                                :items="selectList('category')"
                                 v-on:change="modifyCase()"
                                 class="case-select"
                               />
@@ -1555,7 +1547,7 @@
                                 solo
                                 hide-details
                                 v-model="mainForm.tags"
-                                :items="tagList"
+                                :items="selectList('tags')"
                                 v-on:change="modifyCase()"
                                 class="case-select"
                               >

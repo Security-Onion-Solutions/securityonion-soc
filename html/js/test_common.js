@@ -58,12 +58,15 @@ global.getComponent = function(name) {
 
 	comp.$root = app;
 
+	// Run callback function passed to nextTick
+	comp.$nextTick = (fun) => { fun(); }
+
 	// Setup route mock data
 	comp.$route = { params: {}};
 	comp.$router = [];
 
 	const data = global.initComponentData(comp);
-	Object.assign(comp, data, comp.methods);
+	Object.assign(comp, data, comp.methods, comp.computed);
 
 	return comp;
 }
