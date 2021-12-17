@@ -53,25 +53,20 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       pap: null,
       category: null
     },
+    associatedForm: {
+      description: '',
+      valid: false
+    },
     associatedForms: {
       comments: {
-        id: "",
-        caseId: "",
-        description: "",
-        valid: false
+        id: ""
       },
       tasks: {
         id: "",
-        caseId: "",
-        description: "",
-        status: "",
-        valid: false
+        status: ""
       },
       artifacts: {
-        id: "",
-        caseId: "",
-        description: "",
-        valid: false
+        id: ""
       }
     },
     editField: {},
@@ -117,15 +112,12 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       this.associationsLoading = true;
 
       this.associations["comments"] = [];
-      this.associatedForms["comments"].caseId = this.caseObj.id;
       this.loadAssociation('comments');
 
       this.associations["tasks"] = [];
-      this.associatedForms["tasks"].caseId = this.caseObj.id;
       this.loadAssociation('tasks');
 
       this.associations["artifacts"] = [];
-      this.associatedForms["artifacts"].caseId = this.caseObj.id;
       this.loadAssociation('artifacts', "/evidence");
 
       this.associations["events"] = [];
@@ -253,33 +245,38 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     async addAssociation(association) {
       this.$root.startLoading();
       try {
-        const response = await this.$root.papi.post('case/' + association, JSON.stringify(this.associatedForms[association]));
+        const req = {
+          id: '',
+          caseId: this.caseObj.id,
+          description: this.associatedForm.description
+        }
+        const response = await this.$root.papi.post('case/' + association, JSON.stringify(req));
         if (response.data) {
           await this.$root.populateUserDetails(response.data, "userId", "owner");
           this.associations[association].push(response.data);
         }
+        this.associatedForm.description = ''
       } catch (error) {
         this.$root.showError(error);
       }
       this.$root.stopLoading();
     },
-    async modifyAssociation(association) {
-      var idx = -1;
-      for (var i = 0; i < this.associations[association].length; i++) {
-        if (this.associations[association][i].id == this.associatedForms[association].id) {
-          idx = i;
-          break;
-        }
-      }
+    async modifyAssociation(association, obj, htmlId = null) {
+      let idx = this.associations[association].findIndex((x) =>  x.id === obj.id)
       if (idx > -1) {
         this.$root.startLoading();
         try {
-          this.associatedForms[association].description = this.editField.val
-          const response = await this.$root.papi.put('case/' + association, JSON.stringify(this.associatedForms[association]));
+          const req = {
+            id: obj.id,
+            caseId: this.caseObj.id,
+            description: this.editField.val
+          }
+          const response = await this.$root.papi.put('case/' + association, JSON.stringify(req));
           if (response.data) {
             await this.$root.populateUserDetails(response.data, "userId", "owner");
             Vue.set(this.associations[association], idx, response.data);
           }
+          if (htmlId !== null ) this.updateCollapsible(htmlId);
         } catch (error) {
           if (error.response != undefined && error.response.status == 404) {
             this.$root.showError(this.i18n.notFound);
@@ -312,12 +309,10 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     },    
     editComment(comment, htmlId) {
       this.associatedForms['comments'].id = comment.id;
-      this.associatedForms['comments'].description = comment.description;
       this.startEdit(comment.description, htmlId)
     },
     cancelComment() {
       this.associatedForms['comments'].id = "";
-      this.associatedForms['comments'].description = "";
     },
     updateCase(caseObj) {
       // No-op until we can detect if the user has made any changes to the form. We don't
@@ -337,7 +332,9 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       };
     },
     stopEdit() {
+      // Clear all edit values
       this.editField = {}
+      this.associatedForm.description = ''
     },
     async saveEdit(keyStr) {
       if (this.mainForm[keyStr] === this.editField.val) {
@@ -354,16 +351,12 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     },
     updateCollapsible(id) {
       if (! Object.keys(this.collapsible).includes(id)) {
-        this.collapsible[id] = false
+        this.collapsible[id] = false;
       }
       this.$nextTick(() => {
         let element = document.getElementById(id);
         let retVal = element.offsetHeight < element.scrollHeight || element.offsetWidth < element.scrollWidth;
-        if (retVal && !this.collapsible[id]) {
-          this.collapsible[id] = true
-        } else if (!retVal && this.collapsible[id]) {
-          this.collapsible[id] = false
-        }
+        this.collapsible[id] = retVal;
       })
     },
     isCollapsible(item) {

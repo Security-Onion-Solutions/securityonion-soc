@@ -121,12 +121,10 @@ test('loadAssociations', () => {
   comp.caseObj = {id: 'myCaseId'};
   comp.loadAssociation = jest.fn();
   comp.loadAssociations();
+  
   expect(comp.loadAssociation).toHaveBeenCalledWith('comments');
-  expect(comp.associatedForms["comments"].caseId).toBe('myCaseId')
   expect(comp.loadAssociation).toHaveBeenCalledWith('tasks');
-  expect(comp.associatedForms["tasks"].caseId).toBe('myCaseId')
   expect(comp.loadAssociation).toHaveBeenCalledWith('artifacts', '/evidence');
-  expect(comp.associatedForms["artifacts"].caseId).toBe('myCaseId')
   expect(comp.loadAssociation).toHaveBeenCalledWith('events');
   expect(comp.loadAssociation).toHaveBeenCalledWith('history');
   expect(comp.associationsLoading).toBe(false);
@@ -270,14 +268,14 @@ test('modifyCaseError', async () => {
 test('addAssociation', async () => {
   const mock = mockPapi("post", {'data':fakeComment});
 
-  comp.associatedForms['comments'].id = 'myCommentId';
-  comp.associatedForms['comments'].description = 'myDescription';
+  comp.associatedForm.description = 'myDescription';
+  comp.caseObj.id = 'myCaseId';
   const showErrorMock = mockShowError();
   expect(comp.associations['comments'].length).toBe(0);
 
   await comp.addAssociation('comments');
 
-  const body =  "{\"id\":\"myCommentId\",\"caseId\":\"\",\"description\":\"myDescription\",\"valid\":false}";
+  const body =  "{\"id\":\"\",\"caseId\":\"myCaseId\",\"description\":\"myDescription\"}";
   expect(mock).toHaveBeenCalledWith('case/comments', body);
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expect(comp.associations['comments'].length).toBe(1);
@@ -301,16 +299,19 @@ test('modifyAssociation', async () => {
   const mock = mockPapi("put", {'data':fakeComment2});
   const showErrorMock = mockShowError();
 
-  comp.associatedForms['comments'].id = fakeComment.id;
-  comp.associatedForms['comments'].description = 'myDescription2';
+  comp.caseObj.id = 'myCaseId';
+  comp.editField.val = 'myDescription2';
   comp.associations['comments'] = [fakeComment];
-  await comp.modifyAssociation('comments');
+  comp.updateCollapsible = jest.fn();
+  await comp.modifyAssociation('comments', fakeComment, fakeId);
 
-  const body = "{\"id\":\"myCommentId\",\"caseId\":\"\",\"description\":\"myDescription2\",\"valid\":false}";
+  const body = "{\"id\":\"myCommentId\",\"caseId\":\"myCaseId\",\"description\":\"myDescription2\"}";
   expect(mock).toHaveBeenCalledWith('case/comments', body);
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expect(comp.associations['comments'].length).toBe(1);
   expect(comp.associations['comments'][0].description).toBe('myDescription2');
+  expect(comp.updateCollapsible).toHaveBeenCalledTimes(1)
+  expect(comp.updateCollapsible).toHaveBeenCalledWith(fakeId);
   expect(comp.$root.loading).toBe(false);
 });
 
@@ -319,18 +320,18 @@ test('modifyAssociationNotFound', async () => {
   const error = new Error("not found")
   error.response = { status: 404 };
   mockPapi("put", null, error);
-  comp.associatedForms['comments'].id = fakeComment.id;
+  comp.associatedForm.id = fakeComment.id;
   comp.associations['comments'] = [fakeComment];
-  await comp.modifyAssociation('comments');
+  await comp.modifyAssociation('comments', fakeComment, fakeId);
   expect(showErrorMock).toHaveBeenCalledWith(comp.i18n.notFound);
 });
 
 test('modifyAssociationError', async () => {
   const showErrorMock = mockShowError();
   mockPapi("put", null, new Error("something bad"));
-  comp.associatedForms['comments'].id = fakeComment.id;
+  comp.associatedForm.id = fakeComment.id;
   comp.associations['comments'] = [fakeComment];
-  await comp.modifyAssociation('comments');
+  await comp.modifyAssociation('comments', fakeComment, fakeId);
   expect(showErrorMock).toHaveBeenCalledTimes(1);
 });
 
@@ -374,13 +375,13 @@ test('deleteAssociationError', async () => {
 test('editComment', () => {
   comp.editComment(fakeComment);
   expect(comp.associatedForms['comments'].id).toBe(fakeComment.id);
-  expect(comp.associatedForms['comments'].description).toBe(fakeComment.description);
+  expect(comp.editField.val).toBe(fakeComment.description);
 });
 
 test('cancelComment', () => {
   comp.cancelComment(fakeComment);
   expect(comp.associatedForms['comments'].id).toBe("");
-  expect(comp.associatedForms['comments'].description).toBe("");
+  expect(comp.associatedForm.description).toBe("");
 });
 
 test('presets', () => {
