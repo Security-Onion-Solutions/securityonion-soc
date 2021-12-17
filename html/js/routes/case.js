@@ -38,7 +38,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     collapsed: [
       'case-details'
     ],
-    collapsible: [],
+    collapsible: {},
     mainForm: {
       valid: false,
       title: null,
@@ -48,33 +48,28 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       description: null,
       severity: null,
       priority: null,
-      tags: [],
+      tags: null,
       tlp: null,
       pap: null,
       category: null
     },
+    associatedForm: {
+      description: '',
+      valid: false
+    },
     associatedForms: {
       comments: {
-        id: "",
-        caseId: "",
-        description: "",
-        valid: false
+        id: ""
       },
       tasks: {
         id: "",
-        caseId: "",
-        description: "",
-        status: "",
-        valid: false
+        status: ""
       },
       artifacts: {
-        id: "",
-        caseId: "",
-        description: "",
-        valid: false
+        id: ""
       }
     },
-    editField: "",
+    editField: {},
     mruCaseLimit: 5,
     mruCases: [],
     presets: {},
@@ -86,73 +81,13 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     },
   }},
   computed: {
-    severityList() {
-      const sevPresets = this.getPresets('severity');
-      if (sevPresets != []) {
-        let formattedSevList = [];
-        for (let index = 0; index < sevPresets.length; index++) {
-          formattedSevList.push({
-            text: sevPresets[index],
-            value: index+1
-          });
-        }
-        return formattedSevList;
-      } else {
-        return [
-          { text: 'Critical', value: 1 },
-          { text: 'High', value: 2 },
-          { text: 'Medium', value: 3 },
-          { text: 'Low', value: 4}
-        ];
-      }
-    },
-    tagList() {
-      const tagPresets = this.getPresets('tags');
-      return tagPresets.concat(this.mainForm.tags);
-    },
-    categoryList() {
-      const catPresets = this.getPresets('category')
-      if (this.mainForm.category !== null) {
-        return catPresets.concat(this.mainForm.category)
-      } else {
-        return catPresets
-      }
-    },
-    tlpList() {
-      const tlpPresets = this.getPresets('tlp')
-      return tlpPresets.map((value) => {
-        return {
-          text: value.split(' ').map(word => word.charAt(0).toLocaleUpperCase() + word.substring(1)).join(' '),
-          value: value
-        }
-      })
-    },
-    papList() {
-      const papPresets = this.getPresets('pap')
-      return papPresets.map((value) => {
-        return {
-          text: value.split(' ').map(word => word.charAt(0).toLocaleUpperCase() + word.substring(1)).join(' '),
-          value: value
-        }
-      })
-    },
-    statusList() {
-      const statuses = this.getPresets('status')
-      return statuses.map((value) => {
-        return {
-          text: value.split(' ').map(word => word.charAt(0).toLocaleUpperCase() + word.substring(1)).join(' '),
-          value: value
-        }
-      })
-    },
   },
   created() {
   },
   async mounted() {
     await this.loadData();
     this.$root.loadParameters('case', this.initCase);
-    this.updateCollapsible('case-description')
-
+    this.updateCollapsible('case-description'); // Update collapsible state for description manually
   },
   destroyed() {
     this.$root.unsubscribe("case", this.updateCase);
@@ -161,6 +96,12 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     '$route': 'loadData',
   },
   methods: {
+    selectList(field) {
+      const presets = this.getPresets(field)
+      return this.isPresetCustomEnabled(field) && this.mainForm[field] !== null 
+        ? presets.concat(this.mainForm[field]) 
+        : presets
+    },
     initCase(params) {
       this.params = params;
       this.mruCaseLimit = params["mostRecentlyUsedLimit"];
@@ -171,15 +112,12 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       this.associationsLoading = true;
 
       this.associations["comments"] = [];
-      this.associatedForms["comments"].caseId = this.caseObj.id;
       this.loadAssociation('comments');
 
       this.associations["tasks"] = [];
-      this.associatedForms["tasks"].caseId = this.caseObj.id;
       this.loadAssociation('tasks');
 
       this.associations["artifacts"] = [];
-      this.associatedForms["artifacts"].caseId = this.caseObj.id;
       this.loadAssociation('artifacts', "/evidence");
 
       this.associations["events"] = [];
@@ -307,32 +245,38 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     async addAssociation(association) {
       this.$root.startLoading();
       try {
-        const response = await this.$root.papi.post('case/' + association, JSON.stringify(this.associatedForms[association]));
+        const req = {
+          id: '',
+          caseId: this.caseObj.id,
+          description: this.associatedForm.description
+        }
+        const response = await this.$root.papi.post('case/' + association, JSON.stringify(req));
         if (response.data) {
           await this.$root.populateUserDetails(response.data, "userId", "owner");
           this.associations[association].push(response.data);
         }
+        this.associatedForm.description = ''
       } catch (error) {
         this.$root.showError(error);
       }
       this.$root.stopLoading();
     },
-    async modifyAssociation(association) {
-      var idx = -1;
-      for (var i = 0; i < this.associations[association].length; i++) {
-        if (this.associations[association][i].id == this.associatedForms[association].id) {
-          idx = i;
-          break;
-        }
-      }
+    async modifyAssociation(association, obj, htmlId = null) {
+      let idx = this.associations[association].findIndex((x) =>  x.id === obj.id)
       if (idx > -1) {
         this.$root.startLoading();
         try {
-          const response = await this.$root.papi.put('case/' + association, JSON.stringify(this.associatedForms[association]));
+          const req = {
+            id: obj.id,
+            caseId: this.caseObj.id,
+            description: this.editField.val
+          }
+          const response = await this.$root.papi.put('case/' + association, JSON.stringify(req));
           if (response.data) {
             await this.$root.populateUserDetails(response.data, "userId", "owner");
             Vue.set(this.associations[association], idx, response.data);
           }
+          if (htmlId !== null ) this.updateCollapsible(htmlId);
         } catch (error) {
           if (error.response != undefined && error.response.status == 404) {
             this.$root.showError(this.i18n.notFound);
@@ -340,6 +284,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
             this.$root.showError(error);
           }
         }
+        this.stopEdit();
         this.$root.stopLoading();
       }
     },
@@ -348,7 +293,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       if (idx > -1) {
         this.$root.startLoading();
         try {
-          const response = await this.$root.papi.delete('case/' + association, { params: {
+          await this.$root.papi.delete('case/' + association, { params: {
             id: obj.id
           }});
           this.associations[association].splice(idx, 1);
@@ -362,13 +307,12 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         this.$root.stopLoading();
       }
     },    
-    editComment(comment) {
+    editComment(comment, htmlId) {
       this.associatedForms['comments'].id = comment.id;
-      this.associatedForms['comments'].description = comment.description;
+      this.startEdit(comment.description, htmlId)
     },
     cancelComment() {
       this.associatedForms['comments'].id = "";
-      this.associatedForms['comments'].description = "";
     },
     updateCase(caseObj) {
       // No-op until we can detect if the user has made any changes to the form. We don't
@@ -379,7 +323,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       // this.loadAssociations();
     },
     isEdit(id) {
-      return this.editField !== {} && this.editField.id === id;
+      return this.editField.id === id;
     },
     startEdit(val, id) {
       this.editField = {
@@ -388,7 +332,9 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       };
     },
     stopEdit() {
+      // Clear all edit values
       this.editField = {}
+      this.associatedForm.description = ''
     },
     async saveEdit(keyStr) {
       if (this.mainForm[keyStr] === this.editField.val) {
@@ -404,22 +350,20 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
     updateCollapsible(id) {
+      if (! Object.keys(this.collapsible).includes(id)) {
+        this.collapsible[id] = false;
+      }
       this.$nextTick(() => {
         let element = document.getElementById(id);
         let retVal = element.offsetHeight < element.scrollHeight || element.offsetWidth < element.scrollWidth;
-        if (retVal) {
-          if (! this.collapsible.includes(id)) {
-            this.collapsible.push(id);
-          }
-        } else {
-          if (this.collapsible.includes(id)) {
-            this.collapsible.splice(this.collapsible.indexOf(id), 1);
-          }
-        }
+        this.collapsible[id] = retVal;
       })
     },
     isCollapsible(item) {
-      return (this.collapsible.indexOf(item) !== -1)
+      if ((Object.keys(this.collapsible).indexOf(item) === -1)) {
+        this.updateCollapsible(item)
+      }
+      return (this.collapsible[item] === true)
     },
     toggleCollapse(item) {
       if (!this.isCollapsed(item)) {

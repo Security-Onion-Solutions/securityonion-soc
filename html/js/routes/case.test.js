@@ -11,7 +11,7 @@ require('../test_common.js');
 require('./case.js');
 
 const fakePriority = 33;
-const fakeSeverity = 'medium';
+const fakeSeverity = 'High';
 const fakeEmail = 'my@email.invalid';
 const fakeAssigneeEmail = 'assignee@email.invalid';
 const fakeCase = {
@@ -37,8 +37,15 @@ const fakeComment = {
   id: 'myCommentId',
   description: 'myDescription',
 };
+const fakeFormKeyStr = 'description';
+const fakeEditVal = 'fakeVal';
+const fakeId = 'fakeId';
+const fakeEditFieldObj = {
+  val: fakeEditVal,
+  id: fakeId
+};
 
-var comp;
+let comp;
 
 beforeEach(() => {
   comp = getComponent("case");
@@ -114,18 +121,16 @@ test('loadAssociations', () => {
   comp.caseObj = {id: 'myCaseId'};
   comp.loadAssociation = jest.fn();
   comp.loadAssociations();
+  
   expect(comp.loadAssociation).toHaveBeenCalledWith('comments');
-  expect(comp.associatedForms["comments"].caseId).toBe('myCaseId')
   expect(comp.loadAssociation).toHaveBeenCalledWith('tasks');
-  expect(comp.associatedForms["tasks"].caseId).toBe('myCaseId')
   expect(comp.loadAssociation).toHaveBeenCalledWith('artifacts', '/evidence');
-  expect(comp.associatedForms["artifacts"].caseId).toBe('myCaseId')
   expect(comp.loadAssociation).toHaveBeenCalledWith('events');
   expect(comp.loadAssociation).toHaveBeenCalledWith('history');
   expect(comp.associationsLoading).toBe(false);
 });
 
-test('loadAssociation', async () => {
+test('loadSingleAssociation', async () => {
   const params = { params: {
           id: 'myUserId',
           offset: 0,
@@ -150,7 +155,7 @@ test('loadAssociation', async () => {
   expect(comp.$root.loading).toBe(false);
 });
 
-test('loadAssociationError', async () => {
+test('loadSignleAssociationError', async () => {
   const showErrorMock = mockShowError();
   resetPapi().mockPapi("get", null, new Error("something bad"));
   await comp.loadAssociation('comments');
@@ -235,7 +240,7 @@ test('modifyCase', async () => {
 
   await comp.modifyCase();
 
-  const body =  "{\"valid\":false,\"title\":\"myTitle\",\"assigneeId\":\"myAssigneeId\",\"status\":\"open\",\"id\":\"myCaseId\",\"description\":\"myDescription\",\"severity\":\"medium\",\"priority\":33,\"tags\":[\"tag1\",\"tag2\"],\"tlp\":\"myTlp\",\"pap\":\"myPap\",\"category\":\"myCategory\"}"
+  const body =  "{\"valid\":false,\"title\":\"myTitle\",\"assigneeId\":\"myAssigneeId\",\"status\":\"open\",\"id\":\"myCaseId\",\"description\":\"myDescription\",\"severity\":\"High\",\"priority\":33,\"tags\":[\"tag1\",\"tag2\"],\"tlp\":\"myTlp\",\"pap\":\"myPap\",\"category\":\"myCategory\"}";
   expect(putMock).toHaveBeenCalledWith('case/', body);
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expectCaseDetails();
@@ -263,14 +268,14 @@ test('modifyCaseError', async () => {
 test('addAssociation', async () => {
   const mock = mockPapi("post", {'data':fakeComment});
 
-  comp.associatedForms['comments'].id = 'myCommentId';
-  comp.associatedForms['comments'].description = 'myDescription';
+  comp.associatedForm.description = 'myDescription';
+  comp.caseObj.id = 'myCaseId';
   const showErrorMock = mockShowError();
   expect(comp.associations['comments'].length).toBe(0);
 
   await comp.addAssociation('comments');
 
-  const body =  "{\"id\":\"myCommentId\",\"caseId\":\"\",\"description\":\"myDescription\",\"valid\":false}";
+  const body =  "{\"id\":\"\",\"caseId\":\"myCaseId\",\"description\":\"myDescription\"}";
   expect(mock).toHaveBeenCalledWith('case/comments', body);
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expect(comp.associations['comments'].length).toBe(1);
@@ -294,16 +299,19 @@ test('modifyAssociation', async () => {
   const mock = mockPapi("put", {'data':fakeComment2});
   const showErrorMock = mockShowError();
 
-  comp.associatedForms['comments'].id = fakeComment.id;
-  comp.associatedForms['comments'].description = 'myDescription2';
+  comp.caseObj.id = 'myCaseId';
+  comp.editField.val = 'myDescription2';
   comp.associations['comments'] = [fakeComment];
-  await comp.modifyAssociation('comments');
+  comp.updateCollapsible = jest.fn();
+  await comp.modifyAssociation('comments', fakeComment, fakeId);
 
-  const body =  "{\"id\":\"myCommentId\",\"caseId\":\"\",\"description\":\"myDescription2\",\"valid\":false}";
+  const body = "{\"id\":\"myCommentId\",\"caseId\":\"myCaseId\",\"description\":\"myDescription2\"}";
   expect(mock).toHaveBeenCalledWith('case/comments', body);
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expect(comp.associations['comments'].length).toBe(1);
   expect(comp.associations['comments'][0].description).toBe('myDescription2');
+  expect(comp.updateCollapsible).toHaveBeenCalledTimes(1)
+  expect(comp.updateCollapsible).toHaveBeenCalledWith(fakeId);
   expect(comp.$root.loading).toBe(false);
 });
 
@@ -312,18 +320,18 @@ test('modifyAssociationNotFound', async () => {
   const error = new Error("not found")
   error.response = { status: 404 };
   mockPapi("put", null, error);
-  comp.associatedForms['comments'].id = fakeComment.id;
+  comp.associatedForm.id = fakeComment.id;
   comp.associations['comments'] = [fakeComment];
-  await comp.modifyAssociation('comments');
+  await comp.modifyAssociation('comments', fakeComment, fakeId);
   expect(showErrorMock).toHaveBeenCalledWith(comp.i18n.notFound);
 });
 
 test('modifyAssociationError', async () => {
   const showErrorMock = mockShowError();
   mockPapi("put", null, new Error("something bad"));
-  comp.associatedForms['comments'].id = fakeComment.id;
+  comp.associatedForm.id = fakeComment.id;
   comp.associations['comments'] = [fakeComment];
-  await comp.modifyAssociation('comments');
+  await comp.modifyAssociation('comments', fakeComment, fakeId);
   expect(showErrorMock).toHaveBeenCalledTimes(1);
 });
 
@@ -367,13 +375,13 @@ test('deleteAssociationError', async () => {
 test('editComment', () => {
   comp.editComment(fakeComment);
   expect(comp.associatedForms['comments'].id).toBe(fakeComment.id);
-  expect(comp.associatedForms['comments'].description).toBe(fakeComment.description);
+  expect(comp.editField.val).toBe(fakeComment.description);
 });
 
 test('cancelComment', () => {
   comp.cancelComment(fakeComment);
   expect(comp.associatedForms['comments'].id).toBe("");
-  expect(comp.associatedForms['comments'].description).toBe("");
+  expect(comp.associatedForm.description).toBe("");
 });
 
 test('presets', () => {
@@ -412,3 +420,216 @@ test('presets', () => {
   expect(comp.isPresetCustomEnabled('severity')).toBe(false);
   expect(comp.getPresets('severity').length).toBe(0);   // none defined
 });
+
+test('isEdit', () => {
+  comp.editField = fakeEditFieldObj;
+  expect(comp.isEdit('fakeId')).toBe(true);
+})
+
+test('isEdit_False', () => {
+  comp.editField = fakeEditFieldObj;
+
+  expect(comp.isEdit('otherFakeId')).toBe(false);
+})
+
+test('startEdit', () => {
+
+  comp.startEdit(fakeEditVal, fakeId);
+
+  const expectedObj = { val: 'fakeVal', id: 'fakeId' };
+  expect(comp.editField).toStrictEqual(expectedObj);
+})
+
+test('stopEdit', () => {
+  comp.editField = fakeEditFieldObj;
+
+  comp.stopEdit();
+
+  expect(comp.editField).toStrictEqual({})
+})
+
+test('saveEdit', async () => {
+  comp.mainForm[fakeFormKeyStr] = 'fakeValOld';
+  comp.editField.val = fakeEditVal;
+
+  comp.stopEdit = jest.fn();
+  comp.modifyCase = jest.fn();
+
+  await comp.saveEdit('description')
+
+  expect(comp.stopEdit).toHaveBeenCalledTimes(0);
+  expect(comp.modifyCase).toHaveBeenCalledTimes(1);
+  expect(comp.modifyCase).toHaveBeenCalledWith('description');
+})
+
+test('saveEdit_NoChanges', async () => {
+  comp.mainForm[fakeFormKeyStr] = fakeEditVal;
+  comp.editField.val = fakeEditVal;
+  comp.stopEdit = jest.fn();
+  comp.modifyCase = jest.fn();
+
+  await comp.saveEdit('description');
+
+  expect(comp.stopEdit).toHaveBeenCalledTimes(1);
+  expect(comp.modifyCase).toHaveBeenCalledTimes(0);
+})
+
+test('updateCollapsible_HeightOverflow', () => {
+  const fakeElement = {
+    offsetHeight: 10,
+    scrollHeight: 11
+  };
+  document.getElementById = jest.fn(_ => fakeElement);
+  comp.updateCollapsible(fakeId);
+
+  expect(comp.collapsible).toStrictEqual({'fakeId': true});
+})
+
+test('updateCollapsible_WidthOverflow', () => {
+  const fakeElement = {
+    offsetWidth: 10,
+    scrollWidth: 11
+  };
+  document.getElementById = jest.fn(_ => fakeElement);
+  comp.updateCollapsible(fakeId);
+
+  expect(comp.collapsible).toStrictEqual({'fakeId': true});
+})
+
+test('updateCollapsible_NoOverflow', () => {
+  const fakeElement = {
+    offsetHeight: 10,
+    scrollHeight: 10
+  };
+  document.getElementById = jest.fn(_ => fakeElement);
+  comp.updateCollapsible(fakeId);
+
+  expect(comp.collapsible).toStrictEqual({'fakeId': false});
+})
+
+test('updateCollapsible_RemoveId', () => {
+  const fakeElement = {
+    offsetHeight: 10,
+    scrollHeight: 10
+  };
+  comp.collapsible = {fakeId: true}
+
+  document.getElementById = jest.fn(_ => fakeElement);
+  comp.updateCollapsible(fakeId);
+
+  expect(comp.collapsible).toStrictEqual({'fakeId': false});
+})
+
+test('updateCollapsible_StillCollapsible', () => {
+  const fakeElement = {
+    offsetHeight: 10,
+    scrollHeight: 11
+  };
+  comp.collapsible = {fakeId: true}
+
+  document.getElementById = jest.fn(_ => fakeElement);
+  comp.updateCollapsible(fakeId);
+
+  expect(comp.collapsible).toStrictEqual({'fakeId': true});
+})
+
+test('isCollapsible', () => {
+  comp.collapsible = {fakeId: true};
+
+  expect(comp.isCollapsible('fakeId')).toBe(true);
+})
+
+test('isCollapsible_False', () => {
+  comp.collapsible =  {fakeId: false};
+
+  expect(comp.isCollapsible('fakeId')).toBe(false);
+})
+
+test('isCollapsed', () => {
+  comp.collapsed = [ fakeId ];
+
+  expect(comp.isCollapsed('fakeId')).toBe(true);
+})
+
+test('isCollapsed_False', () => {
+  comp.collapsed =  [];
+
+  expect(comp.isCollapsed('fakeId')).toBe(false);
+})
+
+
+test('toggleCollapse_Add', () => {
+  comp.collapsed = [];
+  
+  comp.toggleCollapse(fakeId);
+
+  expect(comp.collapsed).toStrictEqual(['fakeId']);
+})
+
+test('toggleCollapse_Remove', () => {
+  comp.collapsed = [fakeId];
+  
+  comp.toggleCollapse('fakeId');
+
+  expect(comp.collapsed).toStrictEqual([]);
+})
+
+test('selectList', () => {
+  comp.presets = {
+    'severity': {
+      'labels': [
+        'presetSeverity1',
+        'presetSeverity2'
+      ],
+      'customEnabled': false
+    },
+  }
+  
+  const expectedList = [
+    'presetSeverity1',
+    'presetSeverity2'
+  ]
+
+  expect(comp.selectList('severity')).toStrictEqual(expectedList)
+})
+
+test('selectList_CustomEnabledNoCustomVal', () => {
+  comp.presets = {
+    'severity': {
+      'labels': [
+        'presetSeverity1',
+        'presetSeverity2'
+      ],
+      'customEnabled': true
+    },
+  }
+  
+  const expectedList = [
+    'presetSeverity1',
+    'presetSeverity2',
+  ]
+
+  expect(comp.selectList('severity')).toStrictEqual(expectedList)
+})
+
+test('selectList_CustomEnabledAndCustomVal', () => {
+  comp.presets = {
+    'severity': {
+      'labels': [
+        'presetSeverity1',
+        'presetSeverity2'
+      ],
+      'customEnabled': true
+    },
+  }
+
+  comp.mainForm['severity'] = 'customSeverity1'
+  
+  const expectedList = [
+    'presetSeverity1',
+    'presetSeverity2',
+    'customSeverity1'
+  ]
+
+  expect(comp.selectList('severity')).toStrictEqual(expectedList)
+})

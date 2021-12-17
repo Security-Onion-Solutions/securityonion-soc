@@ -1226,14 +1226,14 @@
           </div>
         </v-form>
         <v-row class="mx-sm-8 mx-md-12 mx-lg-4 flex-column flex-md-row">
-          <v-col cols="12" md="9" class="px-sm-4 mx-4 mx-sm-0 case main" order="2" order-md="1">
+          <v-col cols="12" md="9" class="case main" order="2" order-md="1">
             <div class="d-block d-md-none">
               <h2>Description</h2>
             </div>
             <div class="mb-6 mb-md-3">
               <div class="case detail-field d-flex align-start pa-2" v-if="!isEdit('case-description')" @click="startEdit(mainForm.description, 'case-description')">
                 <div class="d-block">
-                  <div id="case-description" class="rounded" :class="[ !isCollapsed('case-description') ? 'case collapse-field' : '' ]">{{ mainForm.description }}</div>
+                  <div id="case-description" class="rounded case collapsible" :class="[ !isCollapsed('case-description') ? 'collapsed' : 'expanded' ]">{{ mainForm.description }}</div>
                 </div>
               </div>
               <div v-if="isCollapsible('case-description') && !isEdit('case-description')" class="pl-2 text-body-2 blue--text case collapse-text" @click="toggleCollapse('case-description')">
@@ -1258,54 +1258,117 @@
               <v-tabs grow>
                 <v-tab id="case_commentsTab">
                   <v-icon left>fa-comments</v-icon>
-                  {{ i18n.comments }}
+                  <div class="d-none d-sm-block">{{ i18n.comments }}</div>
                 </v-tab>
                 <v-tab id="case_eventsTab">
                   <v-icon left>fa-link</v-icon>
-                  {{ i18n.events }}
+                  <div class="d-none d-sm-block">{{ i18n.events }}</div>
                 </v-tab>
                 <v-tab id="case_historyTab">
                   <v-icon left>fa-history</v-icon>
-                  {{ i18n.history }}
+                  <div class="d-none d-sm-block">{{ i18n.history }}</div>
                 </v-tab>
   
                 <v-tab-item>
-                  <v-card v-for="comment in associations.comments" elevation="2" class="my-2">
-                    <div>
-                      <span class="case label">{{ i18n.dateCreated }}:</span>
-                      <span class="case value">{{ comment.createTime | formatDateTime }}</span>
-                    </div>
-                    <div>
-                      <span class="case label">{{ i18n.dateModified }}:</span>
-                      <span class="case value">{{ comment.updateTime | formatDateTime }}</span>
-                    </div>
-                    <div>
-                      <span class="case label">{{ i18n.author }}:</span>
-                      <span class="case value">{{ comment.owner }}</span>
-                    </div>
-                    <div>
-                      <span class="case label">authorId:</span>
-                      <span class="case value">{{ comment.userId }}</span>
-                    </div>
-                    <div>
-                      <span class="case label">{{ i18n.commentDescription }}:</span>
-                      <span class="case value">{{ comment.description }}</span>
-                    </div>
-                    <div class="my-4">
-                      <v-btn text color="secondary" @click="editComment(comment)" icon><v-icon>fa-edit</v-icon></v-btn>
-                      <v-btn text color="secondary" @click="deleteAssociation('comments', comment)" icon><v-icon>fa-trash</v-icon></v-btn>
-                    <div>                      
-                  </v-card>
-                  <div class="mx-12 my-12">
-                    <v-form v-model="associatedForms['comments'].valid">
-                      <v-text-field v-model="associatedForms['comments'].description" :placeholder="i18n.commentDescription" persistent-hint :hint="i18n.commentDescriptionHelp" :rules="[rules.required]"></v-text-field>
-                      <v-text-field v-model="associatedForms['comments'].id" class="d-none"></v-text-field>
-                      <div class="my-4">
-                        <v-btn v-if="associatedForms['comments'].id == ''" :disabled="!associatedForms['comments'].valid" text color="primary" @click="addAssociation('comments')" v-text="i18n.add"></v-btn>
-                        <v-btn v-if="associatedForms['comments'].id != ''" :disabled="!associatedForms['comments'].valid" text color="primary" @click="modifyAssociation('comments')" v-text="i18n.update"></v-btn>
-                        <v-btn text color="secondary" @click="cancelComment()" v-text="i18n.cancel"></v-btn>
-                      <div>                      
-                    </form>
+                  <div v-for="(comment, index) in associations.comments" class="mb-8">
+                    <div class="d-flex flex-column flex-md-row align-start ma-4">
+                      <v-avatar
+                        color="primary"
+                        size="32"
+                      >
+                        <div class="font-weight-bold white--text">
+                          {{ comment.owner.charAt(0) }}
+                        </div>
+                      </v-avatar>
+                      <v-col class="d-flex flex-column align-start pt-2 pb-0 px-0 pa-md-0">
+                        <div class="ml-1 ml-md-3 py-3 px-4 secondary rounded rounded-md" style="width: 100%;">
+                          <div class="d-flex flex-column align-start">
+                            <div class="case d-flex align-start" v-if="!isEdit(`comment-${index}`)">
+                              <div class="d-block mb-8">
+                                <div :id="`comment-${index}`" class="case comment collapsible" :class="[ !isCollapsed(`comment-${index}`) ? 'collapsed' : 'expanded' ]">{{ comment.description }}</div>
+                                <div v-if="isCollapsible(`comment-${index}`) && !isEdit(`comment-${index}`)" class="pt-1 text-body-2 blue--text case collapse-text" @click="toggleCollapse(`comment-${index}`)">
+                                  <div v-if="!isCollapsed(`comment-${index}`)">See more</div>
+                                  <div v-if="isCollapsed(`comment-${index}`)">See less</div>
+                                </div>
+                              </div>
+                            </div>
+                            <div class="d-flex flex-column" v-if="isEdit(`comment-${index}`)" style="width: 100%;">
+                              <div class="mb-2">
+                                <v-form v-model="associatedForm.valid">
+                                  <v-textarea outlined hide-details rows="5" dense no-resize color="text--black" v-model="editField.val" class="mb-1"/>
+                                  <div class="d-inline-flex justify-end">
+                                    <v-btn :disabled="!associatedForm.valid" text small color="primary" class="align-self-end" @click="stopEdit()">
+                                      {{ i18n.cancel }}
+                                    </v-btn>
+                                    <v-btn :disabled="!associatedForm.valid" text small color="primary" class="align-self-end" @click="modifyAssociation('comments', comment, `comment-${index}`)">
+                                      {{ i18n.update }}
+                                    </v-btn>
+                                  </div>
+                                </v-form>
+                              </div>
+                            </div>
+                            <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2 text--secondary">
+                              <div class="mr-1">
+                                {{ comment.owner }}
+                              </div>
+                              <div class="mr-1 d-none d-sm-block">
+                                &bull;
+                              </div>
+                              <div :class="[$root.formatDateTime(comment.createTime) !== $root.formatDateTime(comment.updateTime)] ? 'mr-1' : ''">
+                                {{ comment.createTime | formatDateTime }}
+                              </div>
+                              <div class="ml-1 d-flex">
+                                <v-btn text small color="primary" v-if="!isEdit(`comment-${index}`)" @click="editComment(comment, `comment-${index}`)" icon><v-icon style="font-size: 14px !important;">fa-edit</v-icon></v-btn>
+                                <v-btn text small color="red" @click="deleteAssociation('comments', comment)" icon><v-icon style="font-size: 14px !important;">fa-trash</v-icon></v-btn>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="d-flex align-center align-self-end text-body-2 text--secondary mt-1">
+                          <div v-if="$root.formatDateTime(comment.createTime) !== $root.formatDateTime(comment.updateTime)" class="mr-1">
+                            edited {{ comment.updateTime | formatDateTime }}
+                          </div>
+                        </div>
+                      </v-col> 
+                    </div>           
+                  </div>
+                  <div class="d-flex flex-column flex-md-row align-start ma-4">
+                    <v-avatar
+                        color="primary"
+                        size="32"
+                    >
+                        <div class="font-weight-bold white--text">
+                        {{ $root.username.charAt(0).toLocaleUpperCase() }}
+                        </div>
+                    </v-avatar>
+                    <v-col class="d-flex flex-column align-start pt-2 pb-0 px-0 pa-md-0">
+                        <div class="ml-1 ml-md-3 py-3 px-4 secondary rounded rounded-md" style="width: 100%;">
+                        <div class="d-flex flex-column align-start">
+                            <div class="d-flex flex-column" style="width: 100%;">
+                            <div class="mb-2">
+                                <v-form v-model="associatedForm.valid">
+                                <v-textarea solo flat hide-details rows="5" dense no-resize color="text--black" v-model="associatedForm.description" :rules="[rules.required]" class="mb-1"/>
+                                </v-form>
+                            </div>
+                            </div>
+                            <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2 text--secondary">
+                            <div class="mr-1">
+                                {{ $root.username }}
+                            </div>
+                            </div>
+                        </div>
+                        </div>
+                        <div class="d-flex align-center align-self-end text-body-2 text--secondary mt-2">
+                        <div class="d-inline-flex justify-end">
+                            <v-btn :disabled="!associatedForm.valid" text small color="primary" class="align-self-end" @click="stopEdit()">
+                            {{ i18n.cancel }}
+                            </v-btn>
+                            <v-btn :disabled="!associatedForm.valid" text small color="primary" class="align-self-end" @click="addAssociation('comments')">
+                            {{ i18n.add }}
+                            </v-btn>
+                        </div>
+                        </div>
+                    </v-col> 
                   </div>
                 </v-tab-item>
   
@@ -1410,8 +1473,7 @@
                           <v-select
                             dense
                             eager
-                            flat
-                            solo
+                            outlined
                             hide-details
                             v-model="mainForm.assigneeId"
                             :items="userList"
@@ -1428,13 +1490,22 @@
                           <v-select
                             dense
                             eager
-                            flat
-                            solo
+                            outlined
                             hide-details
+                            v-if="!isPresetCustomEnabled('status')"
                             v-model="mainForm.status"
-                            :items="statusList"
-                            item-text="text"
-                            item-value="value"
+                            :items="selectList('status')"
+                            v-on:change="modifyCase()"
+                            class="case-select"
+                          />
+                          <v-combobox
+                            dense
+                            eager
+                            outlined
+                            hide-details
+                            v-if="isPresetCustomEnabled('status')"
+                            v-model="mainForm.status"
+                            :items="selectList('status')"
                             v-on:change="modifyCase()"
                             class="case-select"
                           />
@@ -1458,13 +1529,22 @@
                               <v-select
                                 dense
                                 eager
-                                flat
-                                solo
+                                outlined
                                 hide-details
+                                v-if="!isPresetCustomEnabled('severity')"
                                 v-model="mainForm.severity"
-                                :items="severityList"
-                                item-text="text"
-                                item-value="value"
+                                :items="selectList('severity')"
+                                v-on:change="modifyCase()"
+                                class="case-select"
+                              />
+                              <v-combobox
+                                dense
+                                eager
+                                outlined
+                                hide-details
+                                v-if="isPresetCustomEnabled('severity')"
+                                v-model="mainForm.severity"
+                                :items="selectList('severity')"
                                 v-on:change="modifyCase()"
                                 class="case-select"
                               />
@@ -1497,15 +1577,24 @@
                               <v-select
                                 dense
                                 eager
-                                flat
-                                solo
+                                outlined
                                 hide-details
+                                v-if="!isPresetCustomEnabled('tlp')"
                                 v-model="mainForm.tlp"
-                                :items="tlpList"
-                                item-text="text"
-                                item-value="value"
+                                :items="selectList('tlp')"
                                 v-on:change="modifyCase()"
                                 class="case-select"
+                                />
+                                <v-combobox
+                                  dense
+                                  eager
+                                  outlined
+                                  hide-details
+                                  v-if="isPresetCustomEnabled('tlp')"
+                                  v-model="mainForm.tlp"
+                                  :items="selectList('tlp')"
+                                  v-on:change="modifyCase()"
+                                  class="case-select"
                                 />
                               </v-select>
                             </v-col>
@@ -1516,13 +1605,22 @@
                               <v-select
                                 dense
                                 eager
-                                flat
-                                solo
+                                outlined
                                 hide-details
+                                v-if="!isPresetCustomEnabled('pap')"
                                 v-model="mainForm.pap"
-                                :items="papList"
-                                item-text="text"
-                                item-value="value"
+                                :items="selectList('pap')"
+                                v-on:change="modifyCase()"
+                                class="case-select"
+                              />
+                              <v-combobox
+                                dense
+                                eager
+                                outlined
+                                hide-details
+                                v-if="isPresetCustomEnabled('pap')"
+                                v-model="mainForm.pap"
+                                :items="selectList('pap')"
                                 v-on:change="modifyCase()"
                                 class="case-select"
                               />
@@ -1531,14 +1629,25 @@
                           <v-row no-gutters class="align-start d-inline-flex mb-4 flex-column" style="width: 100%">
                             <v-col cols="12" class="mb-2 font-weight-bold">{{i18n.caseCategory}}: </v-col>
                             <v-col cols="12" id="case-category" class="ml-2 pr-2">
+                              <v-select
+                                dense
+                                eager
+                                outlined
+                                hide-details
+                                v-if="!isPresetCustomEnabled('category')"
+                                v-model="mainForm.category"
+                                :items="selectList('category')"
+                                v-on:change="modifyCase()"
+                                class="case-select"
+                              />
                               <v-combobox
                                 dense
                                 eager
-                                flat
-                                solo
+                                outlined
                                 hide-details
+                                v-if="isPresetCustomEnabled('category')"
                                 v-model="mainForm.category"
-                                :items="categoryList"
+                                :items="selectList('category')"
                                 v-on:change="modifyCase()"
                                 class="case-select"
                               />
@@ -1547,15 +1656,31 @@
                           <v-row no-gutters class="align-start d-inline-flex mb-4 flex-column" style="width: 100%">
                             <v-col cols="12" class="mb-2 font-weight-bold">{{i18n.caseTags}}: </v-col>
                             <v-col cols="12" id="case-tags" class="ml-2 pr-2">
+                              <v-select
+                                dense
+                                eager
+                                multiple
+                                outlined
+                                hide-details
+                                v-if="!isPresetCustomEnabled('tags')"
+                                v-model="mainForm.tags"
+                                :items="selectList('tags')"
+                                v-on:change="modifyCase()"
+                                class="case-select"
+                              >
+                                <template #selection="{ item }">
+                                  <v-chip color="primary">{{item}}</v-chip>
+                                </template>
+                              </v-select>
                               <v-combobox
                                 eager
                                 multiple
                                 chips
-                                flat
-                                solo
+                                outlined
                                 hide-details
+                                v-if="isPresetCustomEnabled('tags')"
                                 v-model="mainForm.tags"
-                                :items="tagList"
+                                :items="selectList('tags')"
                                 v-on:change="modifyCase()"
                                 class="case-select"
                               >
