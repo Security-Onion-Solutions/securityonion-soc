@@ -53,6 +53,7 @@ const i18n = {
       artifactTypeHelp: 'Select a type for classification purposes (Note: choose "file" type to upload a file)',
       artifactValue: 'Value (hash, filename, etc.)',
       artifactValueHelp: 'Specify the observed value',
+      attachments: 'Attachments',
       attachmentHelp: 'Click to attach a file to upload. (Note: max upload size is {maxUploadSizeBytes} bytes)',
       attempt: 'Attempt',
       author: 'Author',
@@ -200,6 +201,7 @@ const i18n = {
       field_soc_id: 'Event ID',
       field_soc_timestamp: 'Timestamp',
 
+      filename: 'Filename',
       fileTooLarge: 'The chosen file is too large to upload; max file size is {maxUploadSizeBytes} bytes',
       fileEmpty: 'The chosen file appears to have no content; consider using a "filename" artifact instead',
 

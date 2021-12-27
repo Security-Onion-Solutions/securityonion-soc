@@ -18,7 +18,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     associationsLoading: false,
     associations: {
       comments: [],
-      artifacts: [],
+      evidence: [],
       events: [],
       tasks: [],
       history: []
@@ -40,7 +40,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         expanded: [],
         loading: false,
       },
-      artifacts: {
+      evidence: {
         sortBy: 'createTime',
         sortDesc: false,
         search: '',
@@ -108,7 +108,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     expanded: [0, 1],
     associatedForms: {
       comments: {},
-      artifacts: {},
+      evidence: {},
     },
     editForm: {},
     mruCaseLimit: 5,
@@ -148,7 +148,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         this.maxUploadSizeBytes = params.maxUploadSizeBytes;
       }
       this.loadLocalSettings();
-      this.resetForm('artifacts');
+      this.resetForm('evidence');
       this.resetForm('comments');
     },
     getAttachmentHelp() {
@@ -163,6 +163,18 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       }
       return "";
     },
+    mapAssociatedPath(association, concatPath = false) {
+      var path = association;
+      switch (association) {
+        case 'evidence':
+          path = "artifacts";
+          if (concatPath) {
+            path += "/" + association
+          }
+          break;
+      }
+      return path;
+    },
     async loadAssociations() {
       this.associationsLoading = true;
 
@@ -172,8 +184,8 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       this.associations["tasks"] = [];
       this.loadAssociation('tasks');
 
-      this.associations["artifacts"] = [];
-      this.loadAssociation('artifacts', "/evidence");
+      this.associations["evidence"] = [];
+      this.loadAssociation('evidence');
 
       this.associations["events"] = [];
       this.loadAssociation('events');
@@ -183,19 +195,19 @@ routes.push({ path: '/case/:id', name: 'case', component: {
 
       this.associationsLoading = false;
     },
-    async loadAssociation(dataType, extraPath = "") {
+    async loadAssociation(association) {
       try {
         const route = this;
-        const response = await this.$root.papi.get('case/' + dataType + extraPath, { params: {
+        const response = await this.$root.papi.get('case/' + this.mapAssociatedPath(association, true), { params: {
           id: route.$route.params.id,
-          offset: route.associations[dataType].length,
-          count: route.associatedTable[dataType].count,
+          offset: route.associations[association].length,
+          count: route.associatedTable[association].count,
         }});
         if (response && response.data) {
           for (var idx = 0; idx < response.data.length; idx++) {
             const obj = response.data[idx];
             await this.$root.populateUserDetails(obj, "userId", "owner");
-            this.associations[dataType].push(obj);
+            this.associations[association].push(obj);
           }
         }
       } catch (error) {
@@ -343,7 +355,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           headers = { 'Content-Type': 'multipart/form-data; boundary=' + data._boundary }
           config = { 'headers': headers };
         }
-        const response = await this.$root.papi.post('case/' + association, data, config);
+        const response = await this.$root.papi.post('case/' + this.mapAssociatedPath(association), data, config);
         if (response.data) {
           await this.$root.populateUserDetails(response.data, "userId", "owner");
           this.associations[association].push(response.data);
@@ -365,7 +377,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         try {
           const form = this.prepareModifyForm(obj);
           if (form) {
-            const response = await this.$root.papi.put('case/' + association, JSON.stringify(form));
+            const response = await this.$root.papi.put('case/' + this.mapAssociatedPath(association), JSON.stringify(form));
             if (response.data) {
               await this.$root.populateUserDetails(response.data, "userId", "owner");
               Vue.set(this.associations[association], idx, response.data);
@@ -460,7 +472,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     resetForm(ref) {
       const form = { valid: false };
       switch (ref) {
-        case "artifacts": 
+        case "evidence": 
           form.tlp = this.getDefaultPreset('tlp');
           form.artifactType = this.getDefaultPreset('artifactType');
           break;

@@ -129,7 +129,7 @@ test('loadAssociations', () => {
   
   expect(comp.loadAssociation).toHaveBeenCalledWith('comments');
   expect(comp.loadAssociation).toHaveBeenCalledWith('tasks');
-  expect(comp.loadAssociation).toHaveBeenCalledWith('artifacts', '/evidence');
+  expect(comp.loadAssociation).toHaveBeenCalledWith('evidence');
   expect(comp.loadAssociation).toHaveBeenCalledWith('events');
   expect(comp.loadAssociation).toHaveBeenCalledWith('history');
   expect(comp.associationsLoading).toBe(false);
@@ -384,10 +384,10 @@ test('resetFormComments', () => {
   expect(comp.associatedForms['comments'].description).toBe(undefined);
 });
 
-test('resetFormArtifacts', () => {
-  comp.associatedForms['artifacts'].description = "something";
-  comp.resetForm('artifacts');
-  expect(comp.associatedForms['artifacts'].description).toBe(undefined);
+test('resetFormEvidence', () => {
+  comp.associatedForms['evidence'].description = "something";
+  comp.resetForm('evidence');
+  expect(comp.associatedForms['evidence'].description).toBe(undefined);
 });
 
 test('presets', () => {
