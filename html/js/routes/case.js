@@ -508,9 +508,9 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       return okToClear;
     },
     onEditKeyUp(event) {
-      switch (event.which) {
-        case 27: this.stopEdit(); break;
-        case 13: if (!this.editForm.isMultiline) this.stopEdit(true); break;
+      switch (event.key) {
+        case 'Escape': this.stopEdit(); break;
+        case 'Enter': if (!this.editForm.isMultiline) this.stopEdit(true); break;
       }
     },
     resetForm(ref) {
