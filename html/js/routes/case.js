@@ -18,6 +18,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     associationsLoading: false,
     associations: {
       comments: [],
+      attachments: [],
       evidence: [],
       events: [],
       tasks: [],
@@ -33,6 +34,21 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           { text: this.$root.i18n.dateCreated, value: 'createTime' },
           { text: this.$root.i18n.dateModified, value: 'updateTime' },
           { text: this.$root.i18n.commentDescription, value: 'description' },
+        ],
+        itemsPerPage: 10,
+        footerProps: { 'items-per-page-options': [10,50,250,1000] },
+        count: 500,
+        expanded: [],
+        loading: false,
+      },
+      attachments: {
+        sortBy: 'createTime',
+        sortDesc: false,
+        search: '',
+        headers: [
+          { text: this.$root.i18n.dateCreated, value: 'createTime' },
+          { text: this.$root.i18n.dateModified, value: 'updateTime' },
+          { text: this.$root.i18n.filename, value: 'value' },
         ],
         itemsPerPage: 10,
         footerProps: { 'items-per-page-options': [10,50,250,1000] },
@@ -96,6 +112,8 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           { text: this.$root.i18n.time, value: 'updateTime' },
           { text: this.$root.i18n.kind, value: 'kind' },
           { text: this.$root.i18n.operation, value: 'operation' },
+          { text: '', value: 'kindLocalized', align: ' d-none' },
+          { text: '', value: 'operationLocalized', align: ' d-none' },
         ],
         itemsPerPage: 10,
         footerProps: { 'items-per-page-options': [10,50,250,1000] },
@@ -108,6 +126,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     expanded: [0, 1],
     associatedForms: {
       comments: {},
+      attachments: {},
       evidence: {},
     },
     editForm: {},
@@ -148,6 +167,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         this.maxUploadSizeBytes = params.maxUploadSizeBytes;
       }
       this.loadLocalSettings();
+      this.resetForm('attachments');
       this.resetForm('evidence');
       this.resetForm('comments');
     },
@@ -166,6 +186,12 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     mapAssociatedPath(association, concatPath = false) {
       var path = association;
       switch (association) {
+        case 'attachments':
+          path = "artifacts";
+          if (concatPath) {
+            path += "/" + association
+          }
+          break;
         case 'evidence':
           path = "artifacts";
           if (concatPath) {
@@ -175,6 +201,19 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       }
       return path;
     },
+    mapAssociatedKind(obj) {
+      var name = "";
+      if (obj) {
+        switch (obj.kind) {
+          case 'artifact':
+            name = obj.groupType;
+            break;
+          default:
+            name = obj.kind;
+        }
+      }
+      return name;
+    },
     async loadAssociations() {
       this.associationsLoading = true;
 
@@ -183,6 +222,9 @@ routes.push({ path: '/case/:id', name: 'case', component: {
 
       this.associations["tasks"] = [];
       this.loadAssociation('tasks');
+
+      this.associations["attachments"] = [];
+      this.loadAssociation('attachments');
 
       this.associations["evidence"] = [];
       this.loadAssociation('evidence');
@@ -207,6 +249,8 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           for (var idx = 0; idx < response.data.length; idx++) {
             const obj = response.data[idx];
             await this.$root.populateUserDetails(obj, "userId", "owner");
+            obj.kindLocalized = this.$root.localizeMessage(this.mapAssociatedKind(obj));
+            obj.operationLocalized = this.$root.localizeMessage(obj.operation);
             this.associations[association].push(obj);
           }
         }
@@ -402,7 +446,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       if (idx > -1) {
         this.$root.startLoading();
         try {
-          await this.$root.papi.delete('case/' + association, { params: {
+          await this.$root.papi.delete('case/' + this.mapAssociatedPath(association), { params: {
             id: obj.id
           }});
           this.associations[association].splice(idx, 1);
@@ -472,6 +516,9 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     resetForm(ref) {
       const form = { valid: false };
       switch (ref) {
+        case "attachments": 
+          form.tlp = this.getDefaultPreset('tlp');
+          break;
         case "evidence": 
           form.tlp = this.getDefaultPreset('tlp');
           form.artifactType = this.getDefaultPreset('artifactType');

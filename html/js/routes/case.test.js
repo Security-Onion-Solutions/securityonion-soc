@@ -312,7 +312,7 @@ test('modifyAssociation', async () => {
   comp.associations['comments'] = [fakeComment];
   await comp.modifyAssociation('comments', fakeComment);
 
-  const body = "{\"userId\":\"myUserId\",\"id\":\"myCommentId\",\"description\":\"myDescription2\",\"owner\":\"my@email.invalid\"}";
+  const body = "{\"userId\":\"myUserId\",\"id\":\"myCommentId\",\"description\":\"myDescription2\",\"owner\":\"my@email.invalid\",\"kindLocalized\":\"\",\"operationLocalized\":\"\"}";
   expect(mock).toHaveBeenCalledWith('case/comments', body);
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expect(comp.associations['comments'].length).toBe(1);
@@ -583,8 +583,10 @@ test('isEdited', () => {
 });
 
 test('mapAssociatedPath', () => {
-  expect(comp.mapAssociatedPath('comments')).teBe('comments');
-  expect(comp.mapAssociatedPath('comments', true)).teBe('comments');
-  expect(comp.mapAssociatedPath('evidence')).teBe('artifacts');
-  expect(comp.mapAssociatedPath('evidence', true)).teBe('artifacts/evidence');
+  expect(comp.mapAssociatedPath('comments')).toBe('comments');
+  expect(comp.mapAssociatedPath('comments', true)).toBe('comments');
+  expect(comp.mapAssociatedPath('evidence')).toBe('artifacts');
+  expect(comp.mapAssociatedPath('evidence', true)).toBe('artifacts/evidence');
+  expect(comp.mapAssociatedPath('attachments')).toBe('artifacts');
+  expect(comp.mapAssociatedPath('attachments', true)).toBe('artifacts/attachments');
 });

@@ -137,3 +137,8 @@ test('loadServerSettings', async () => {
   expect(app.tools[1].enabled).toBe(false);
   expect(app.casesEnabled).toBe(true);
 });
+
+test('localizeMessage', () => {
+  expect(app.localizeMessage(null)).toBe("");
+  expect(app.localizeMessage('create')).toBe("Create");
+});

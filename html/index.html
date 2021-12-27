@@ -1267,6 +1267,10 @@
                   <v-icon left>fa-comments</v-icon>
                   <div class="d-none d-sm-block">{{ i18n.comments }}</div>
                 </v-tab>
+                <v-tab id="case_attachmentTab">
+                  <v-icon left>fa-paperclip</v-icon>
+                  <div class="d-none d-sm-block">{{ i18n.attachments }}</div>
+                </v-tab>
                 <v-tab id="case_evidenceTab">
                   <v-icon left>fa-eye</v-icon>
                   <div class="d-none d-sm-block">{{ i18n.evidence }}</div>
@@ -1365,6 +1369,169 @@
                       </div>
                     </v-col> 
                   </div>
+                </v-tab-item>
+
+                <v-tab-item>
+                  <v-text-field v-model="associatedTable['attachments'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
+                  <v-data-table ref="attachmentsTable" :sort-by.sync="associatedTable['attachments'].sortBy" :sort-desc.sync="associatedTable['attachments'].sortDesc" :items-per-page.sync="associatedTable['attachments'].itemsPerPage" 
+                    :search="associatedTable['attachments'].search" :footer-props="associatedTable['attachments'].footerProps" must-sort :headers="associatedTable['attachments'].headers"
+                    :items="associations['attachments']" item-key="id" :loading="associatedTable['attachments'].loading" :expanded="associatedTable['attachments'].expanded">
+                    <template v-slot:item="props">
+                      <tr @click="expandRow('attachments', props.item)" class="expandable">
+                        <td>{{ props.item.createTime | formatDateTime }}</td>
+                        <td>{{ props.item.updateTime | formatDateTime }}</td>
+                        <td class="case">
+                          <div class="rounded">{{ props.item.value }}</div>
+                        </td>                  
+                      </tr>
+                    </template>
+                    <template v-slot:expanded-item="props">
+                      <tr>
+                        <td :colspan="3" class="case">
+                          <v-container fluid class="my-2">
+                            <a target="soc-download" :href="`/api/case/artifactstream?id=${props.item.id}`" class="no-underline">
+                              <v-icon>fa-download</v-icon>
+                              {{ props.item.value }}
+                              ({{ props.item.streamLength | formatCount }} 
+                              {{ i18n.bytes }})
+                            </a>
+                          </v-container>
+                          <v-container fluid class="my-2">
+                            <div class="clicktoedit" @click="startEdit(`attachments-${props.index}-description-input`, props.item.description, `attachments-${props.index}-description`, 'description', modifyAssociation, ['attachments', props.item], true)">
+                              <div class="font-weight-bold">{{i18n.artifactDescription}}: </div>
+                              <div id="`attachments-${props.index}-description`" class="case detail-field" v-if="!isEdit(`attachments-${props.index}-description`)" :inner-html.prop="props.item.description | formatMarkdown"></div>
+                            </div>
+                            <div class="d-flex flex-column" v-if="isEdit(`attachments-${props.index}-description`)">
+                              <v-form v-model="editForm.valid">
+                                <div class="mb-2">
+                                  <v-textarea full-width rows="3" multiline :id="`attachments-${props.index}-description-input`" hide-details="auto" outlined v-model="editForm.val" persistent-hint :hint="i18n.artifactDescriptionHelp"/>
+                                </div>
+                                <div class="d-inline-flex justify-end">
+                                  <v-btn text small color="primary" class="align-self-end" @click="stopEdit()">
+                                    {{ i18n.cancel }}
+                                  </v-btn>
+                                  <v-btn :disabled="!editForm.valid" text small color="primary" class="align-self-end" @click="stopEdit(true)">
+                                    {{ i18n.save }}
+                                  </v-btn>
+                                </div>
+                              </v-form>
+                            </div>
+                          </v-container>
+                          <v-container fluid class="my-2">
+                            <div class="clicktoedit" @click="startEdit(`attachments-${props.index}-tlp-input`, props.item.tlp, `attachments-${props.index}-tlp`, 'tlp', modifyAssociation, ['attachments', props.item])">
+                              <div class="font-weight-bold">{{i18n.caseTlp}}: </div>
+                              <div id="`attachments-${props.index}-tlp`" class="case detail-field" v-if="!isEdit(`attachments-${props.index}-tlp`)">{{ withDefault(props.item.tlp, i18n.unknown) }}</div>
+                            </div>
+                            <v-select :id="`attachments-${props.index}-tlp-input`" v-if="isEdit(`attachments-${props.index}-tlp`) && !isPresetCustomEnabled('tlp')"
+                              dense eager outlined hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
+                              v-model="editForm.val"
+                              :items="selectList('tlp', props.item.tlp)"
+                              v-on:change="stopEdit(true)"
+                              />
+                              <v-combobox :id="`attachments-${props.index}-tlp-input`" v-if="isEdit(`attachments-${props.index}-tlp`) && isPresetCustomEnabled('tlp')"
+                                dense eager outlined hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
+                                v-model="editForm.val"
+                                :items="selectList('tlp', props.item.tlp)"
+                                v-on:change="stopEdit(true)"
+                              />
+                            </v-select>
+                          </v-container>
+                          <v-container fluid class="my-2">
+                            <div class="clicktoedit" @click="startEdit(`attachments-${props.index}-tags-input`, props.item.tags, `attachments-${props.index}-tags`, 'tags', modifyAssociation, ['attachments', props.item])">
+                              <div class="font-weight-bold">{{i18n.caseTags}}: </div>
+                              <div id="`attachments-${props.index}-tags`" class="case detail-field" v-if="!isEdit(`attachments-${props.index}-tags`)">
+                                <v-chip class="mx-1" v-for="tag in props.item.tags" color="primary">{{ tag }}</v-chip>
+                              </div>
+                            </div>
+                            <v-select :id="`attachments-${props.index}-tags-input`" v-if="isEdit(`attachments-${props.index}-tags`) && !isPresetCustomEnabled('tags')"
+                              dense eager outlined hide-details="auto" class="case-select" multiple persistent-hint :hint="i18n.caseTagsHelp"
+                              v-model="editForm.val"
+                              :items="selectList('tags', props.item.tags)"
+                              v-on:change="stopEdit(true)">
+                              <template #selection="{ item }">
+                                <v-chip color="primary">{{item}}</v-chip>
+                              </template>
+                            </v-select>
+                            <v-combobox :id="`attachments-${props.index}-tags-input`" v-if="isEdit(`attachments-${props.index}-tags`) && isPresetCustomEnabled('tags')"
+                              dense eager outlined hide-details="auto" class="case-select" multiple persistent-hint :hint="i18n.caseTagsHelp"
+                              v-model="editForm.val"
+                              :items="selectList('tags', props.item.tags)"
+                              v-on:change="stopEdit(true)">
+                              <template #selection="{ item }">
+                                <v-chip color="primary">{{item}}</v-chip>
+                              </template>
+                            </v-combobox>
+                          </v-container>
+
+                          <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
+                            <v-spacer/>
+                            <div class="mr-1">
+                              {{ props.item.owner }}
+                            </div>
+                            <div class="mr-1 d-none d-sm-block">
+                              &bull;
+                            </div>
+                            <div>
+                              {{ props.item.createTime | formatDateTime }}
+                            </div>
+                            <div v-if="isEdited(props.item)" :title="$root.formatDateTime(props.item.updateTime)" class="mx-2">
+                              {{ i18n.edited }}
+                            </div>
+                            <div class="ml-1 d-flex">
+                              <v-btn text small color="red" @click="deleteAssociation('attachments', props.item)" icon><v-icon style="font-size: 14px !important;">fa-trash</v-icon></v-btn>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    </template>
+                    <template v-slot:no-results>
+                      <v-alert :value="true" color="info" icon="fa-info">
+                        {{ i18n.noSearchResults }}
+                      </v-alert>
+                    </template>
+                  </v-data-table>
+                  <div class="text-xs-center pt-2 d-none">
+                      <v-btn v-text="i18n.loadMore" @click="loadAssociation('attachments')"></v-btn>
+                  </div>
+                  <v-row>
+                    <v-col>
+                      <div class="ml-1 ml-md-3 py-3 px-4 contrast-bg rounded rounded-md" style="width: 100%;">
+                      <div class="d-flex flex-column align-start">
+                        <div class="d-flex flex-column" style="width: 100%;">
+                        <div class="mb-2">
+                          <a name="add"><h3>{{ i18n.attachmentAdd }}</h3></a>
+                          <v-form ref="attachments" v-model="associatedForms['attachments'].valid">
+                            <v-file-input show-size v-model="attachment" persistent-hint :hint="getAttachmentHelp()" :rules="[rules.fileSizeLimit, rules.fileNotEmpty]"/>
+                            <v-textarea rows="2" v-model="associatedForms['attachments'].description" :placeholder="i18n.artifactDescription" persistent-hint :hint="i18n.artifactDescriptionHelp"/>
+                            <v-select v-if="!isPresetCustomEnabled('tlp')" v-model="associatedForms['attachments'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
+                            <v-combobox v-if="isPresetCustomEnabled('tlp')" v-model="associatedForms['attachments'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
+                            <v-select v-if="!isPresetCustomEnabled('tags')" v-model="associatedForms['attachments'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
+                              <template #selection="{ item }">
+                                <v-chip color="primary">{{item}}</v-chip>
+                              </template>
+                            </v-select>
+                            <v-combobox v-if="isPresetCustomEnabled('tags')" v-model="associatedForms['attachments'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
+                              <template #selection="{ item }">
+                                <v-chip color="primary">{{item}}</v-chip>
+                              </template>
+                            </v-combobox>                              
+                          </v-form>
+                        </div>
+                        </div>
+                      </div>
+                      </div>
+                      <div class="d-flex align-center align-self-end text-body-2 mt-2">
+                      <div class="d-inline-flex justify-end">
+                        <v-btn text small color="primary" class="align-self-end" @click="resetForm('attachments')">
+                        {{ i18n.cancel }}
+                        </v-btn>
+                        <v-btn :disabled="!associatedForms['attachments'].valid" text small color="primary" class="align-self-end" @click="addAssociation('attachments', {'groupType': 'attachments', 'artifactType':'file'})">
+                        {{ i18n.add }}
+                        </v-btn>
+                      </div>
+                      </div>
+                    </v-col>
+                  </v-row>                  
                 </v-tab-item>
 
                 <v-tab-item>
@@ -1623,12 +1790,13 @@
                         <td>
                           <v-icon v-if="props.item.kind == 'case'">fa-briefcase</v-icon>
                           <v-icon v-if="props.item.kind == 'comment'">fa-comments</v-icon>
+                          <v-icon v-if="props.item.kind == 'artifact' && props.item.groupType == 'attachments'">fa-paperclip</v-icon>
                           <v-icon v-if="props.item.kind == 'artifact' && props.item.groupType == 'evidence'">fa-eye</v-icon>
                           <v-icon v-if="props.item.kind == 'related'">fa-link</v-icon>
-                          <span class="rounded ml-2">{{ props.item.kind }}</span>
+                          <span class="rounded ml-2">{{ props.item.kindLocalized }}</span>
                         </td>
                         <td>
-                          <span class="rounded mr-2">{{ props.item.operation }}</span>
+                          <span class="rounded mr-2">{{ props.item.operationLocalized }}</span>
                           <v-icon v-if="props.item.operation == 'update'">fa-pencil-alt</v-icon>
                         </td>
                       </tr>
@@ -1638,11 +1806,11 @@
                         <td :colspan="4" class="case">
                           <div class="mt-2">
                             <span class="case label">{{ i18n.kind }}:</span>
-                            <span class="case value">{{ props.item.kind }}</span>
+                            <span class="case value">{{ props.item.kindLocalized }}</span>
                           </div>
                           <div>
                             <span class="case label">{{ i18n.operation }}:</span>
-                            <span class="case value">{{ props.item.operation }}</span>
+                            <span class="case value">{{ props.item.operationLocalized }}</span>
                           </div>
                           <div>
                             <span class="case label">{{ i18n.dateCreated }}:</span>
@@ -1688,6 +1856,32 @@
                                   {{ props.item.fields.soc_id }}
                                 </router-link>
                               </span>
+                            </div>
+                          </div>
+                          <div v-if="props.item.kind == 'artifact' && props.item.groupType == 'attachments'">
+                            <div>
+                              <span class="case label">{{ i18n.artifactGroupType }}:</span>
+                              <span class="case value">{{ props.item.groupType }}</span>
+                            </div>
+                            <div>
+                              <span class="case label">{{ i18n.artifactGroupId }}:</span>
+                              <span class="case value">{{ props.item.groupId }}</span>
+                            </div>
+                            <div>
+                              <span class="case label">{{ i18n.filename }}:</span>
+                              <span class="case value">{{ props.item.value }}</span>
+                            </div>
+                            <div>
+                              <span class="case label">{{ i18n.description }}:</span>
+                              <span class="case value">{{ props.item.description }}</span>
+                            </div>
+                            <div>
+                              <span class="case label">{{ i18n.caseTlp }}:</span>
+                              <span class="case value">{{ props.item.tlp }}</span>
+                            </div>
+                            <div>
+                              <span class="case label">{{ i18n.caseTags }}:</span>
+                              <span class="case value">{{ props.item.tags }}</span>
                             </div>
                           </div>
                           <div v-if="props.item.kind == 'artifact' && props.item.groupType == 'evidence'">

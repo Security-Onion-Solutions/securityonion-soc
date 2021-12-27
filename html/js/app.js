@@ -456,6 +456,7 @@ $(document).ready(function() {
         return preselects;
       },
       localizeMessage(origMsg) {
+        if (!origMsg) return "";
         var msg = origMsg;
         if (msg.response && msg.response.data) {
           msg = msg.response.data;
