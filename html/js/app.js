@@ -29,14 +29,12 @@ $(document).ready(function() {
             nav: '#ffffff',
             drawer_background: '#f4f4f4',
             background: '#ffffff',
-            secondary: '#f5f5f5'
           },
           dark: {
             nav_background: '#12110d',
             nav: '#ffffff',
             drawer_background: '#353535',
             background: '#1e1e1e',
-            secondary: '#424242'
           },
         },
       },
@@ -690,6 +688,12 @@ $(document).ready(function() {
         var BB = ((B.toString(16).length==1)?"0"+B.toString(16):B.toString(16));
         
         return "#"+RR+GG+BB;
+      },
+      getAvatar(user) {
+        if (user && user.length > 0) {
+          return user.charAt(0).toLocaleUpperCase();
+        }
+        return this.i18n.na;
       },
       async getUsers() {
         try {

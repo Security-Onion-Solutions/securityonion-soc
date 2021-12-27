@@ -16,7 +16,6 @@ import (
   "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/server"
   "github.com/security-onion-solutions/securityonion-soc/web"
-  "io"
   "net/http"
 )
 
@@ -122,14 +121,26 @@ func (store *TheHiveCasestore) GetArtifact(ctx context.Context, id string) (*mod
   return nil, errors.New("Unsupported operation by this module")
 }
 
-func (store *TheHiveCasestore) GetArtifactStream(ctx context.Context, id string) (io.ReadCloser, error) {
-  return nil, errors.New("Unsupported operation by this module")
-}
-
 func (store *TheHiveCasestore) GetArtifacts(ctx context.Context, caseId string, groupType string, groupId string) ([]*model.Artifact, error) {
   return nil, errors.New("Unsupported operation by this module")
 }
 
 func (store *TheHiveCasestore) DeleteArtifact(ctx context.Context, id string) error {
+  return errors.New("Unsupported operation by this module")
+}
+
+func (store *TheHiveCasestore) UpdateArtifact(ctx context.Context, artifact *model.Artifact) (*model.Artifact, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *TheHiveCasestore) CreateArtifactStream(ctx context.Context, artifactstream *model.ArtifactStream) (string, error) {
+  return "", errors.New("Unsupported operation by this module")
+}
+
+func (store *TheHiveCasestore) GetArtifactStream(ctx context.Context, id string) (*model.ArtifactStream, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *TheHiveCasestore) DeleteArtifactStream(ctx context.Context, id string) error {
   return errors.New("Unsupported operation by this module")
 }

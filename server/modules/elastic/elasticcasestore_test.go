@@ -144,6 +144,13 @@ func TestValidateCaseInvalid(tester *testing.T) {
 	assert.EqualError(tester, err, "title is too long (140/100)")
 	socCase.Title = "myTitle"
 
+	for x := 1; x < 5; x++ {
+		socCase.Status += "this is my unreasonably long status\n"
+	}
+	err = store.validateCase(socCase)
+	assert.EqualError(tester, err, "status is too long (144/100)")
+	socCase.Status = "myStatus"
+
 	for x := 1; x < 30000; x++ {
 		socCase.Description += "this is my unreasonably long description\n"
 	}
@@ -191,13 +198,6 @@ func TestValidateCaseInvalid(tester *testing.T) {
 	assert.EqualError(tester, err, "template is too long (152/100)")
 	socCase.Template = "myTemplate"
 
-	for x := 1; x < 5; x++ {
-		socCase.Status += "this is my unreasonably long status\n"
-	}
-	err = store.validateCase(socCase)
-	assert.EqualError(tester, err, "status is too long (144/100)")
-	socCase.Status = "myStatus"
-
 	socCase.Kind = "myKind"
 	err = store.validateCase(socCase)
 	assert.EqualError(tester, err, "Field 'Kind' must not be specified")
@@ -230,7 +230,10 @@ func TestValidateCaseValid(tester *testing.T) {
 	store.Init("myIndex", "myAuditIndex", 45)
 
 	var err error
-	socCase := model.NewCase() // empty cases are valid cases
+	socCase := model.NewCase()
+	socCase.Title = "myTitle"
+	socCase.Description = "myDescription"
+	socCase.Status = "new"
 	err = store.validateCase(socCase)
 	assert.NoError(tester, err)
 
@@ -251,6 +254,53 @@ func TestValidateCaseValid(tester *testing.T) {
 	socCase.UserId = "myUserId"
 	socCase.AssigneeId = "myAssigneeId"
 	err = store.validateCase(socCase)
+	assert.NoError(tester, err)
+}
+
+func TestValidateRelatedEventInvalid(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+
+	var err error
+	event := model.NewRelatedEvent()
+
+	event.Id = "this is an invalid id"
+	err = store.validateRelatedEvent(event)
+	assert.EqualError(tester, err, "invalid ID for relatedEventId")
+	event.Id = "myEventId"
+
+	event.CaseId = "this is an invalid id"
+	err = store.validateRelatedEvent(event)
+	assert.EqualError(tester, err, "invalid ID for caseId")
+	event.CaseId = "myCaseId"
+
+	event.UserId = "this is an invalid id"
+	err = store.validateRelatedEvent(event)
+	assert.EqualError(tester, err, "invalid ID for userId")
+	event.UserId = "myUserId"
+
+	event.Kind = "myKind"
+	err = store.validateRelatedEvent(event)
+	assert.EqualError(tester, err, "Field 'Kind' must not be specified")
+	event.Kind = ""
+
+	event.Operation = "myOperation"
+	err = store.validateRelatedEvent(event)
+	assert.EqualError(tester, err, "Field 'Operation' must not be specified")
+	event.Operation = ""
+
+	err = store.validateRelatedEvent(event)
+	assert.EqualError(tester, err, "Related event fields cannot not be empty")
+}
+
+func TestValidateRelatedEventValid(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+
+	var err error
+	event := model.NewRelatedEvent()
+	event.Fields["foo"] = "bar"
+	err = store.validateRelatedEvent(event)
 	assert.NoError(tester, err)
 }
 
@@ -276,6 +326,16 @@ func TestValidateCommentInvalid(tester *testing.T) {
 	assert.EqualError(tester, err, "invalid ID for userId")
 	comment.UserId = ""
 
+	comment.Kind = "myKind"
+	err = store.validateComment(comment)
+	assert.EqualError(tester, err, "Field 'Kind' must not be specified")
+	comment.Kind = ""
+
+	comment.Operation = "myOperation"
+	err = store.validateComment(comment)
+	assert.EqualError(tester, err, "Field 'Operation' must not be specified")
+	comment.Operation = ""
+
 	for x := 1; x < 30000; x++ {
 		comment.Description += "this is my unreasonably long description\n"
 	}
@@ -289,7 +349,8 @@ func TestValidateCommentValid(tester *testing.T) {
 	store.Init("myIndex", "myAuditIndex", 45)
 
 	var err error
-	comment := model.NewComment() // empty comments are valid comments
+	comment := model.NewComment()
+	comment.Description = "myDesc"
 	err = store.validateComment(comment)
 	assert.NoError(tester, err)
 
@@ -299,6 +360,157 @@ func TestValidateCommentValid(tester *testing.T) {
 		comment.Description += "this is my reasonably long description\n"
 	}
 	err = store.validateComment(comment)
+	assert.NoError(tester, err)
+}
+
+func TestValidateArtifactInvalid(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+
+	var err error
+	artifact := model.NewArtifact()
+
+	for x := 1; x < 30000; x++ {
+		artifact.Value += "this is my unreasonably long value\n"
+	}
+	err = store.validateArtifact(artifact)
+	assert.EqualError(tester, err, "value is too long (1049965/1000000)")
+	artifact.Value = "myValue"
+
+	err = store.validateArtifact(artifact)
+	assert.EqualError(tester, err, "invalid ID for groupType")
+	artifact.GroupType = "myGroupType"
+
+	artifact.Id = "this is an invalid id"
+	err = store.validateArtifact(artifact)
+	assert.EqualError(tester, err, "invalid ID for artifactId")
+	artifact.Id = "myArtifactId"
+
+	artifact.UserId = "this is an invalid id"
+	err = store.validateArtifact(artifact)
+	assert.EqualError(tester, err, "invalid ID for userId")
+	artifact.UserId = "myUserId"
+
+	artifact.GroupId = "this is an invalid id"
+	err = store.validateArtifact(artifact)
+	assert.EqualError(tester, err, "invalid ID for groupId")
+	artifact.GroupId = "myGroupId"
+
+	artifact.CaseId = "this is an invalid id"
+	err = store.validateArtifact(artifact)
+	assert.EqualError(tester, err, "invalid ID for caseId")
+	artifact.CaseId = "myCaseId"
+
+	for x := 1; x < 5; x++ {
+		artifact.ArtifactType += "this is my unreasonably long artifactType\n"
+	}
+	err = store.validateArtifact(artifact)
+	assert.EqualError(tester, err, "artifactType is too long (168/100)")
+	artifact.ArtifactType = "myArtifactType"
+
+	for x := 1; x < 30000; x++ {
+		artifact.Description += "this is my unreasonably long description\n"
+	}
+	err = store.validateArtifact(artifact)
+	assert.EqualError(tester, err, "description is too long (1229959/1000000)")
+	artifact.Description = "myDescription"
+
+	artifact.StreamLen = 123
+	err = store.validateArtifact(artifact)
+	assert.EqualError(tester, err, "Invalid streamLength")
+	artifact.StreamLen = 0
+
+	for x := 1; x < 5; x++ {
+		artifact.MimeType += "this is my unreasonably long severity\n"
+	}
+	err = store.validateArtifact(artifact)
+	assert.EqualError(tester, err, "mimeType is too long (152/100)")
+	artifact.MimeType = "image/jpg"
+
+	for x := 1; x < 5; x++ {
+		artifact.Tlp += "this is my unreasonably long tlp\n"
+	}
+	err = store.validateArtifact(artifact)
+	assert.EqualError(tester, err, "tlp is too long (132/100)")
+	artifact.Tlp = "myTlp"
+
+	artifact.Kind = "myKind"
+	err = store.validateArtifact(artifact)
+	assert.EqualError(tester, err, "Field 'Kind' must not be specified")
+	artifact.Kind = ""
+
+	artifact.Operation = "myOperation"
+	err = store.validateArtifact(artifact)
+	assert.EqualError(tester, err, "Field 'Operation' must not be specified")
+	artifact.Operation = ""
+
+	tag := ""
+	for x := 1; x < 5; x++ {
+		tag += "this is my unreasonably long tag\n"
+	}
+	artifact.Tags = append(artifact.Tags, tag)
+	err = store.validateArtifact(artifact)
+	assert.EqualError(tester, err, "tag[0] is too long (132/100)")
+	artifact.Tags = nil
+
+	for x := 1; x < 500; x++ {
+		artifact.Tags = append(artifact.Tags, "myTag")
+	}
+	err = store.validateArtifact(artifact)
+	assert.EqualError(tester, err, "Field 'Tags' contains excessive elements (499/50)")
+	artifact.Tags = nil
+}
+
+func TestValidateArtifactValid(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+
+	var err error
+	artifact := model.NewArtifact()
+	artifact.Id = "123456"
+	artifact.UserId = "myUserId"
+	artifact.GroupType = "myGroupType"
+	artifact.ArtifactType = "myArtifactType"
+	for x := 1; x < 500; x++ {
+		artifact.Value += "this is my reasonably long description\n"
+	}
+	err = store.validateArtifact(artifact)
+	assert.NoError(tester, err)
+}
+
+func TestValidateArtifactStreamInvalid(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+
+	var err error
+	artifactstream := model.NewArtifactStream()
+
+	artifactstream.Id = "this is an invalid id"
+	err = store.validateArtifactStream(artifactstream)
+	assert.EqualError(tester, err, "invalid ID for artifactStreamId")
+	artifactstream.Id = ""
+
+	artifactstream.UserId = "this is an invalid id"
+	err = store.validateArtifactStream(artifactstream)
+	assert.EqualError(tester, err, "invalid ID for userId")
+	artifactstream.UserId = ""
+
+	err = store.validateArtifactStream(artifactstream)
+	assert.EqualError(tester, err, "Missing stream content")
+}
+
+func TestValidateArtifactStreamValid(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+
+	var err error
+	artifactstream := model.NewArtifactStream()
+	artifactstream.Id = "123456"
+	artifactstream.UserId = "myUserId"
+	for x := 1; x < 500; x++ {
+		artifactstream.Content += "this is my reasonably long description\n"
+	}
+	err = store.validateArtifactStream(artifactstream)
 	assert.NoError(tester, err)
 }
 
@@ -434,6 +646,9 @@ func TestUpdateError(tester *testing.T) {
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 	myCase := model.NewCase()
 	myCase.Id = ""
+	myCase.Title = "myTitle"
+	myCase.Description = "myDesc"
+	myCase.Status = "myStatus"
 	newCase, err := store.Update(ctx, myCase)
 	assert.Error(tester, err)
 	assert.Equal(tester, "Missing case ID", err.Error())
@@ -466,7 +681,7 @@ func TestGetCaseHistory(tester *testing.T) {
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myAuditIndex" AND (so_audit_doc_id:"myCaseId" OR comment.caseId:"myCaseId" OR related.caseId:"myCaseId") | sortby @timestamp^`
+	query := `_index:"myAuditIndex" AND (so_audit_doc_id:"myCaseId" OR comment.caseId:"myCaseId" OR related.caseId:"myCaseId" OR artifact.caseId:"myCaseId") | sortby @timestamp^`
 	casePayload := make(map[string]interface{})
 	casePayload["kind"] = "case"
 	caseEvent := &model.EventRecord{
@@ -485,6 +700,7 @@ func TestCreateCommentUnexpectedId(tester *testing.T) {
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 	comment := model.NewComment()
 	comment.Id = "123444"
+	comment.Description = "myDesc"
 	_, err := store.CreateComment(ctx, comment)
 	assert.Error(tester, err)
 	assert.Equal(tester, "Unexpected ID found in new comment", err.Error())
@@ -494,6 +710,7 @@ func TestCreateCommentMissingCaseId(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 	comment := model.NewComment()
+	comment.Description = "myDesc"
 	_, err := store.CreateComment(ctx, comment)
 	assert.Error(tester, err)
 	assert.Equal(tester, "Missing Case ID in new comment", err.Error())
@@ -575,6 +792,7 @@ func TestUpdateComment(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 	comment := model.NewComment()
+	comment.Description = "myDesc"
 	_, err := store.UpdateComment(ctx, comment)
 	assert.Error(tester, err)
 	assert.Equal(tester, "Missing comment ID", err.Error())
@@ -791,6 +1009,7 @@ func TestCreateArtifactMissingGroupType(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 	artifact := model.NewArtifact()
+	artifact.Value = "myValue"
 	_, err := store.CreateArtifact(ctx, artifact)
 	assert.Error(tester, err)
 	assert.Equal(tester, "invalid ID for groupType", err.Error())
@@ -802,9 +1021,10 @@ func TestCreateArtifactMissingArtifactType(tester *testing.T) {
 	artifact := model.NewArtifact()
 	artifact.GroupType = "myGroupType"
 	artifact.CaseId = "12345"
+	artifact.Value = "myValue"
 	_, err := store.CreateArtifact(ctx, artifact)
 	assert.Error(tester, err)
-	assert.Equal(tester, "Missing ArtifactType in new artifact", err.Error())
+	assert.Equal(tester, "artifactType is too short (0/1)", err.Error())
 }
 
 func TestCreateArtifactMissingValue(tester *testing.T) {
@@ -816,7 +1036,7 @@ func TestCreateArtifactMissingValue(tester *testing.T) {
 	artifact.CaseId = "12345"
 	_, err := store.CreateArtifact(ctx, artifact)
 	assert.Error(tester, err)
-	assert.Equal(tester, "Missing Value in new artifact", err.Error())
+	assert.Equal(tester, "value is too short (0/1)", err.Error())
 }
 
 func TestCreateArtifact(tester *testing.T) {
@@ -899,7 +1119,7 @@ func TestGetArtifactsNoGroupId(tester *testing.T) {
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myIndex" AND kind:"artifact" AND artifact.caseId:"myCaseId" AND artifact.groupType:"myGroupType" | sortby @timestamp^`
+	query := `_index:"myIndex" AND kind:"artifact" AND artifact.caseId:"myCaseId" AND artifact.groupType:"myGroupType" | sortby artifact.createTime^`
 	eventPayload := make(map[string]interface{})
 	eventPayload["kind"] = "artifact"
 	elasticEvent := &model.EventRecord{
@@ -919,7 +1139,7 @@ func TestGetArtifacts(tester *testing.T) {
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myIndex" AND kind:"artifact" AND artifact.caseId:"myCaseId" AND artifact.groupType:"myGroupType" AND artifact.groupId:"myGroupId" | sortby @timestamp^`
+	query := `_index:"myIndex" AND kind:"artifact" AND artifact.caseId:"myCaseId" AND artifact.groupType:"myGroupType" AND artifact.groupId:"myGroupId" | sortby artifact.createTime^`
 	eventPayload := make(map[string]interface{})
 	eventPayload["kind"] = "artifact"
 	elasticEvent := &model.EventRecord{
@@ -954,4 +1174,166 @@ func TestDeleteArtifact(tester *testing.T) {
 	assert.Len(tester, fakeEventStore.InputIds, 2) // Delete and Index (for audit)
 	assert.Equal(tester, "myArtifactId", fakeEventStore.InputIds[0])
 	assert.Equal(tester, "", fakeEventStore.InputIds[1])
+}
+
+func TestCreateArtifactStreamUnexpectedId(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	artifactstream := model.NewArtifactStream()
+	artifactstream.Id = "123444"
+	artifactstream.Content = "Value"
+	_, err := store.CreateArtifactStream(ctx, artifactstream)
+	assert.Error(tester, err)
+	assert.Equal(tester, "Unexpected ID found in new artifactstream", err.Error())
+}
+
+func TestCreateArtifactStreamMissingValue(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	artifactstream := model.NewArtifactStream()
+	artifactstream.Id = "123444"
+	_, err := store.CreateArtifactStream(ctx, artifactstream)
+	assert.Error(tester, err)
+	assert.Equal(tester, "Missing stream content", err.Error())
+}
+
+func TestCreateArtifactStream(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+
+	casePayload := make(map[string]interface{})
+	casePayload["kind"] = "artifactstream"
+	caseEvent := &model.EventRecord{
+		Payload: casePayload,
+		Id:      "123444",
+	}
+	eventPayload := make(map[string]interface{})
+	eventPayload["kind"] = "artifactstream"
+	elasticEvent := &model.EventRecord{
+		Payload: eventPayload,
+	}
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, caseEvent)
+	fakeEventStore.IndexResults[0].Success = true
+	fakeEventStore.IndexResults[0].DocumentId = "myArtifactStreamId"
+	eventSearchResults := model.NewEventSearchResults()
+	eventSearchResults.Events = append(eventSearchResults.Events, elasticEvent)
+	fakeEventStore.SearchResults = append(fakeEventStore.SearchResults, eventSearchResults)
+	artifact := model.NewArtifactStream()
+	artifact.Content = "Content"
+	newEvent, err := store.CreateArtifactStream(ctx, artifact)
+	assert.NoError(tester, err)
+	assert.NotNil(tester, newEvent)
+}
+
+func TestGetArtifactStream(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	query := `_index:"myIndex" AND kind:"artifactstream" AND _id:"myArtifactStreamId"`
+	eventPayload := make(map[string]interface{})
+	eventPayload["kind"] = "artifactstream"
+	elasticEvent := &model.EventRecord{
+		Payload: eventPayload,
+	}
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, elasticEvent)
+	obj, err := store.GetArtifactStream(ctx, "myArtifactStreamId")
+	assert.NoError(tester, err)
+	assert.Len(tester, fakeEventStore.InputSearchCriterias, 1)
+	assert.Equal(tester, query, fakeEventStore.InputSearchCriterias[0].RawQuery)
+	assert.NotNil(tester, obj)
+}
+
+func TestGetArtifactStreamBadId(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	_, err := store.GetArtifactStream(ctx, "stream id is invalid")
+	assert.EqualError(tester, err, "invalid ID for artifactStreamId")
+}
+
+func TestDeleteArtifactStream(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	query := `_index:"myIndex" AND kind:"artifactstream" AND _id:"myArtifactStreamId"`
+	elasticPayload := make(map[string]interface{})
+	elasticPayload["kind"] = "artifactstream"
+	elasticEvent := &model.EventRecord{
+		Payload: elasticPayload,
+		Id:      "myArtifactStreamId",
+	}
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, elasticEvent)
+	err := store.DeleteArtifactStream(ctx, "myArtifactStreamId")
+	assert.NoError(tester, err)
+	assert.Len(tester, fakeEventStore.InputSearchCriterias, 1) // Search to ensure it exists first
+	assert.Equal(tester, query, fakeEventStore.InputSearchCriterias[0].RawQuery)
+	assert.Len(tester, fakeEventStore.InputIds, 2) // Delete and Index (for audit)
+	assert.Equal(tester, "myArtifactStreamId", fakeEventStore.InputIds[0])
+	assert.Equal(tester, "", fakeEventStore.InputIds[1])
+}
+
+func TestUpdateArtifact(tester *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45)
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+	query := `_index:"myIndex" AND kind:"artifact" AND _id:"myArtifactId"`
+	eventPayload := make(map[string]interface{})
+	eventPayload["kind"] = "artifact"
+	eventPayload["artifact.artifactType"] = "myArtifactType"
+	eventPayload["artifact.groupType"] = "myGroupType"
+	eventPayload["artifact.groupId"] = "myGroupId"
+	eventPayload["artifact.value"] = "myValue"
+	eventPayload["artifact.streamLength"] = 123.0
+	eventPayload["artifact.mimeType"] = "myMimeType"
+	eventPayload["artifact.streamId"] = "myStreamId"
+	eventPayload["artifact.description"] = "myDesc"
+	elasticEvent := &model.EventRecord{
+		Payload: eventPayload,
+	}
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, elasticEvent)
+	fakeEventStore.IndexResults[0].DocumentId = "myArtifactId"
+
+	artifact := model.NewArtifact()
+	artifact.Value = "myNewValue"
+	artifact.GroupType = "myNewGroupType"
+	artifact.GroupId = "myNewGroupId"
+	artifact.ArtifactType = "file"
+	artifact.GroupId = "myNewGroupId"
+	artifact.MimeType = "myNewMimeType"
+	artifact.StreamId = "myNewStreamId"
+	artifact.StreamLen = 456
+	artifact.Description = "myNewDesc"
+
+	_, err := store.UpdateArtifact(ctx, artifact)
+	assert.Equal(tester, "Missing artifact ID", err.Error())
+
+	artifact.Id = "myArtifactId"
+	_, err = store.UpdateArtifact(ctx, artifact)
+	assert.NoError(tester, err)
+	assert.Equal(tester, query, fakeEventStore.InputSearchCriterias[0].RawQuery)
+	assert.Equal(tester, "update", fakeEventStore.InputDocuments[0]["operation"])
+
+	newArtifact := fakeEventStore.InputDocuments[0]["artifact"].(*model.Artifact)
+	assert.Equal(tester, "myNewDesc", newArtifact.Description)
+
+	// Should have preserved read-only props
+	assert.Equal(tester, "myArtifactType", newArtifact.ArtifactType)
+	assert.Equal(tester, "myGroupType", newArtifact.GroupType)
+	assert.Equal(tester, "myGroupId", newArtifact.GroupId)
+	assert.Equal(tester, "myStreamId", newArtifact.StreamId)
+	assert.Equal(tester, "myMimeType", newArtifact.MimeType)
+	assert.Equal(tester, "myValue", newArtifact.Value)
+	assert.Equal(tester, 123, newArtifact.StreamLen)
 }

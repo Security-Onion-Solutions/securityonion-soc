@@ -516,6 +516,9 @@ func convertElasticEventToArtifact(event *model.EventRecord) (*model.Artifact, e
 			if value, ok := event.Payload["artifact.streamLength"]; ok {
 				obj.StreamLen = int(value.(float64))
 			}
+			if value, ok := event.Payload["artifact.streamId"]; ok {
+				obj.StreamId = value.(string)
+			}
 			if value, ok := event.Payload["artifact.mimeType"]; ok {
 				obj.MimeType = value.(string)
 			}
@@ -538,6 +541,27 @@ func convertElasticEventToArtifact(event *model.EventRecord) (*model.Artifact, e
 	return obj, err
 }
 
+func convertElasticEventToArtifactStream(event *model.EventRecord) (*model.ArtifactStream, error) {
+	var err error
+	var obj *model.ArtifactStream
+
+	if event != nil {
+		obj = model.NewArtifactStream()
+		err = convertElasticEventToAuditable(event, &obj.Auditable)
+		if err == nil {
+			if value, ok := event.Payload["artifactstream.userId"]; ok {
+				obj.UserId = value.(string)
+			}
+			if value, ok := event.Payload["artifactstream.content"]; ok {
+				obj.Content = value.(string)
+			}
+			obj.CreateTime = parseTime(event.Payload, "artifactstream.createTime")
+		}
+	}
+
+	return obj, err
+}
+
 func convertElasticEventToObject(event *model.EventRecord) (interface{}, error) {
 	var obj interface{}
 	var err error
@@ -552,6 +576,8 @@ func convertElasticEventToObject(event *model.EventRecord) (interface{}, error) 
 			obj, err = convertElasticEventToRelatedEvent(event)
 		case "artifact":
 			obj, err = convertElasticEventToArtifact(event)
+		case "artifactstream":
+			obj, err = convertElasticEventToArtifactStream(event)
 		}
 	} else {
 		err = errors.New("Unknown object kind; id=" + event.Id)

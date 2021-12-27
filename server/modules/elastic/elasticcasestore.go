@@ -17,7 +17,6 @@ import (
   "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/server"
   "github.com/security-onion-solutions/securityonion-soc/web"
-  "io"
   "regexp"
   "strconv"
   "time"
@@ -59,10 +58,16 @@ func (store *ElasticCasestore) validateId(id string, label string) error {
 }
 
 func (store *ElasticCasestore) validateString(str string, max int, label string) error {
+  return store.validateStringRequired(str, 0, max, label)
+}
+
+func (store *ElasticCasestore) validateStringRequired(str string, min int, max int, label string) error {
   var err error
   length := len(str)
   if length > max {
     err = errors.New(fmt.Sprintf("%s is too long (%d/%d)", label, length, max))
+  } else if length < min {
+    err = errors.New(fmt.Sprintf("%s is too short (%d/%d)", label, length, min))
   }
   return err
 }
@@ -108,13 +113,13 @@ func (store *ElasticCasestore) validateCase(socCase *model.Case) error {
     err = errors.New("Field 'Operation' must not be specified")
   }
   if err == nil {
-    err = store.validateString(socCase.Title, SHORT_STRING_MAX, "title")
+    err = store.validateStringRequired(socCase.Title, 1, SHORT_STRING_MAX, "title")
   }
   if err == nil {
     err = store.validateString(socCase.Category, SHORT_STRING_MAX, "category")
   }
   if err == nil {
-    err = store.validateString(socCase.Status, SHORT_STRING_MAX, "status")
+    err = store.validateStringRequired(socCase.Status, 1, SHORT_STRING_MAX, "status")
   }
   if err == nil {
     err = store.validateString(socCase.Template, SHORT_STRING_MAX, "template")
@@ -126,7 +131,7 @@ func (store *ElasticCasestore) validateCase(socCase *model.Case) error {
     err = store.validateString(socCase.Pap, SHORT_STRING_MAX, "pap")
   }
   if err == nil {
-    err = store.validateString(socCase.Description, LONG_STRING_MAX, "description")
+    err = store.validateStringRequired(socCase.Description, 1, LONG_STRING_MAX, "description")
   }
   if err == nil {
     err = store.validateStringArray(socCase.Tags, SHORT_STRING_MAX, MAX_ARRAY_ELEMENTS, "tags")
@@ -177,7 +182,7 @@ func (store *ElasticCasestore) validateComment(comment *model.Comment) error {
     err = errors.New("Field 'Operation' must not be specified")
   }
   if err == nil {
-    err = store.validateString(comment.Description, LONG_STRING_MAX, "description")
+    err = store.validateStringRequired(comment.Description, 1, LONG_STRING_MAX, "description")
   }
   return err
 }
@@ -194,7 +199,7 @@ func (store *ElasticCasestore) validateArtifact(artifact *model.Artifact) error 
   if err == nil && artifact.CaseId != "" {
     err = store.validateId(artifact.CaseId, "caseId")
   }
-  if err == nil && artifact.StreamLen != 0 {
+  if err == nil && artifact.StreamLen != 0 && artifact.ArtifactType != "file" {
     err = errors.New("Invalid streamLength")
   }
   if err == nil && len(artifact.Kind) > 0 {
@@ -204,7 +209,7 @@ func (store *ElasticCasestore) validateArtifact(artifact *model.Artifact) error 
     err = errors.New("Field 'Operation' must not be specified")
   }
   if err == nil {
-    err = store.validateString(artifact.Value, LONG_STRING_MAX, "value")
+    err = store.validateStringRequired(artifact.Value, 1, LONG_STRING_MAX, "value")
   }
   if err == nil {
     err = store.validateId(artifact.GroupType, "groupType")
@@ -213,7 +218,7 @@ func (store *ElasticCasestore) validateArtifact(artifact *model.Artifact) error 
     err = store.validateId(artifact.GroupId, "groupId")
   }
   if err == nil {
-    err = store.validateString(artifact.ArtifactType, SHORT_STRING_MAX, "artifactType")
+    err = store.validateStringRequired(artifact.ArtifactType, 1, SHORT_STRING_MAX, "artifactType")
   }
   if err == nil {
     err = store.validateString(artifact.Tlp, SHORT_STRING_MAX, "tlp")
@@ -226,6 +231,27 @@ func (store *ElasticCasestore) validateArtifact(artifact *model.Artifact) error 
   }
   if err == nil {
     err = store.validateStringArray(artifact.Tags, SHORT_STRING_MAX, MAX_ARRAY_ELEMENTS, "tags")
+  }
+  return err
+}
+
+func (store *ElasticCasestore) validateArtifactStream(artifactstream *model.ArtifactStream) error {
+  var err error
+
+  if err == nil && artifactstream.Id != "" {
+    err = store.validateId(artifactstream.Id, "artifactStreamId")
+  }
+  if err == nil && artifactstream.UserId != "" {
+    err = store.validateId(artifactstream.UserId, "userId")
+  }
+  if err == nil && len(artifactstream.Content) == 0 {
+    err = errors.New("Missing stream content")
+  }
+  if err == nil && len(artifactstream.Kind) > 0 {
+    err = errors.New("Field 'Kind' must not be specified")
+  }
+  if err == nil && len(artifactstream.Operation) > 0 {
+    err = errors.New("Field 'Operation' must not be specified")
   }
   return err
 }
@@ -346,13 +372,13 @@ func (store *ElasticCasestore) getAll(ctx context.Context, query string, max int
 func (store *ElasticCasestore) Create(ctx context.Context, socCase *model.Case) (*model.Case, error) {
   var err error
 
+  socCase.Status = model.CASE_STATUS_NEW
   err = store.validateCase(socCase)
   if err == nil {
     if socCase.Id != "" {
       err = errors.New("Unexpected ID found in new case")
     } else {
       socCase = store.applyTemplate(ctx, socCase)
-      socCase.Status = model.CASE_STATUS_NEW
       now := time.Now()
       socCase.CreateTime = &now
       var results *model.EventIndexResults
@@ -414,7 +440,8 @@ func (store *ElasticCasestore) GetCaseHistory(ctx context.Context, caseId string
 
   err = store.validateId(caseId, "caseId")
   if err == nil {
-    query := fmt.Sprintf(`_index:"%s" AND (%s:"%s" OR comment.caseId:"%s" OR related.caseId:"%s") | sortby @timestamp^`, store.auditIndex, AUDIT_DOC_ID, caseId, caseId, caseId)
+    query := fmt.Sprintf(`_index:"%s" AND (%s:"%s" OR comment.caseId:"%s" OR related.caseId:"%s" OR artifact.caseId:"%s") | sortby @timestamp^`,
+      store.auditIndex, AUDIT_DOC_ID, caseId, caseId, caseId, caseId)
     history, err = store.getAll(ctx, query, store.maxAssociations)
   }
   return history, err
@@ -619,10 +646,6 @@ func (store *ElasticCasestore) CreateArtifact(ctx context.Context, artifact *mod
       return nil, errors.New("Missing Case ID in new artifact")
     } else if artifact.GroupType == "" {
       return nil, errors.New("Missing GroupType in new artifact")
-    } else if artifact.ArtifactType == "" {
-      return nil, errors.New("Missing ArtifactType in new artifact")
-    } else if artifact.Value == "" {
-      return nil, errors.New("Missing Value in new artifact")
     } else {
       _, err = store.GetCase(ctx, artifact.CaseId)
       if err == nil {
@@ -655,10 +678,6 @@ func (store *ElasticCasestore) GetArtifact(ctx context.Context, id string) (*mod
   return artifact, err
 }
 
-func (store *ElasticCasestore) GetArtifactStream(ctx context.Context, id string) (io.ReadCloser, error) {
-  return nil, errors.New("Unsupported operation by this module")
-}
-
 func (store *ElasticCasestore) GetArtifacts(ctx context.Context, caseId string, groupType string, groupId string) ([]*model.Artifact, error) {
   var err error
   var artifacts []*model.Artifact
@@ -677,7 +696,7 @@ func (store *ElasticCasestore) GetArtifacts(ctx context.Context, caseId string, 
         if len(groupId) > 0 {
           groupIdTerm = fmt.Sprintf(`AND artifact.groupId:"%s" `, groupId)
         }
-        query := fmt.Sprintf(`_index:"%s" AND kind:"artifact" AND artifact.caseId:"%s" AND artifact.groupType:"%s" %s| sortby @timestamp^`, store.index, caseId, groupType, groupIdTerm)
+        query := fmt.Sprintf(`_index:"%s" AND kind:"artifact" AND artifact.caseId:"%s" AND artifact.groupType:"%s" %s| sortby artifact.createTime^`, store.index, caseId, groupType, groupIdTerm)
         var objects []interface{}
         objects, err = store.getAll(ctx, query, store.maxAssociations)
         if err == nil {
@@ -691,13 +710,94 @@ func (store *ElasticCasestore) GetArtifacts(ctx context.Context, caseId string, 
   return artifacts, err
 }
 
-func (store *ElasticCasestore) DeleteArtifact(ctx context.Context, id string) error {
+func (store *ElasticCasestore) UpdateArtifact(ctx context.Context, artifact *model.Artifact) (*model.Artifact, error) {
   var err error
 
-  var artifact *model.Artifact
-  artifact, err = store.GetArtifact(ctx, id)
+  err = store.validateArtifact(artifact)
   if err == nil {
+    if artifact.Id == "" {
+      err = errors.New("Missing artifact ID")
+    } else {
+      var old *model.Artifact
+      old, err = store.GetArtifact(ctx, artifact.Id)
+      if err == nil {
+        // Preserve read-only fields
+        artifact.CreateTime = old.CreateTime
+        artifact.ArtifactType = old.ArtifactType
+        artifact.Value = old.Value
+        artifact.GroupType = old.GroupType
+        artifact.GroupId = old.GroupId
+        artifact.StreamLen = old.StreamLen
+        artifact.MimeType = old.MimeType
+        artifact.StreamId = old.StreamId
+        var results *model.EventIndexResults
+        results, err = store.save(ctx, artifact, "artifact", store.prepareForSave(ctx, &artifact.Auditable))
+        if err == nil {
+          // Read object back to get new modify date, etc
+          artifact, err = store.GetArtifact(ctx, results.DocumentId)
+        }
+      }
+    }
+  }
+  return artifact, err
+}
+
+func (store *ElasticCasestore) DeleteArtifact(ctx context.Context, id string) error {
+  artifact, err := store.GetArtifact(ctx, id)
+  if err == nil {
+    if len(artifact.StreamId) > 0 {
+      err = store.DeleteArtifactStream(ctx, artifact.StreamId)
+      if err != nil {
+        log.WithFields(log.Fields{
+          "artifactStreamId": artifact.StreamId,
+          "artifactId":       artifact.Id,
+        }).Error("Unable to delete artifact stream; proceeding with artifact deletion anyway")
+      }
+    }
     err = store.delete(ctx, artifact, "artifact", store.prepareForSave(ctx, &artifact.Auditable))
+  }
+
+  return err
+}
+
+func (store *ElasticCasestore) CreateArtifactStream(ctx context.Context, artifactstream *model.ArtifactStream) (string, error) {
+  var id string
+  err := store.validateArtifactStream(artifactstream)
+  if err == nil {
+    if artifactstream.Id != "" {
+      return "", errors.New("Unexpected ID found in new artifactstream")
+    } else {
+      now := time.Now()
+      artifactstream.CreateTime = &now
+      var results *model.EventIndexResults
+      results, err = store.save(ctx, artifactstream, "artifactstream", store.prepareForSave(ctx, &artifactstream.Auditable))
+      if err == nil {
+        id = results.DocumentId
+      }
+    }
+  }
+  return id, err
+}
+
+func (store *ElasticCasestore) GetArtifactStream(ctx context.Context, id string) (*model.ArtifactStream, error) {
+  var err error
+  var artifactstream *model.ArtifactStream
+
+  err = store.validateId(id, "artifactStreamId")
+  if err == nil {
+    var obj interface{}
+    obj, err = store.get(ctx, id, "artifactstream")
+    if err == nil {
+      artifactstream = obj.(*model.ArtifactStream)
+    }
+  }
+  return artifactstream, err
+}
+
+func (store *ElasticCasestore) DeleteArtifactStream(ctx context.Context, id string) error {
+  artifactstream, err := store.GetArtifactStream(ctx, id)
+  if err == nil {
+    err = store.delete(ctx, artifactstream, "artifactstream", store.prepareForSave(ctx, &artifactstream.Auditable))
   }
 
   return err

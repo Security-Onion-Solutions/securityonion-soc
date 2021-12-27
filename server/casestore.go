@@ -12,7 +12,6 @@ package server
 import (
 	"context"
 	"github.com/security-onion-solutions/securityonion-soc/model"
-	"io"
 )
 
 type Casestore interface {
@@ -32,9 +31,13 @@ type Casestore interface {
 	GetRelatedEvents(ctx context.Context, caseId string) ([]*model.RelatedEvent, error)
 	DeleteRelatedEvent(ctx context.Context, id string) error
 
-	CreateArtifact(ctx context.Context, attachment *model.Artifact) (*model.Artifact, error)
+	CreateArtifact(ctx context.Context, artifact *model.Artifact) (*model.Artifact, error)
 	GetArtifact(ctx context.Context, id string) (*model.Artifact, error)
-	GetArtifactStream(ctx context.Context, id string) (io.ReadCloser, error)
 	GetArtifacts(ctx context.Context, caseId string, groupType string, groupId string) ([]*model.Artifact, error)
 	DeleteArtifact(ctx context.Context, id string) error
+	UpdateArtifact(ctx context.Context, artifact *model.Artifact) (*model.Artifact, error)
+
+	CreateArtifactStream(ctx context.Context, artifactstream *model.ArtifactStream) (string, error)
+	GetArtifactStream(ctx context.Context, id string) (*model.ArtifactStream, error)
+	DeleteArtifactStream(ctx context.Context, id string) error
 }

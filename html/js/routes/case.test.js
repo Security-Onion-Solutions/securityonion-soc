@@ -37,12 +37,17 @@ const fakeComment = {
   id: 'myCommentId',
   description: 'myDescription',
 };
+const fakeComment2 = {
+  userId: 'myUserId2',
+  id: 'myCommentId2',
+  description: 'myDescription2',
+};
 const fakeFormKeyStr = 'description';
 const fakeEditVal = 'fakeVal';
 const fakeId = 'fakeId';
 const fakeEditFieldObj = {
   val: fakeEditVal,
-  id: fakeId
+  field: fakeId
 };
 
 let comp;
@@ -134,7 +139,7 @@ test('loadSingleAssociation', async () => {
   const params = { params: {
           id: 'myUserId',
           offset: 0,
-          count: comp.count,
+          count: 500,
         }};
 
   resetPapi();
@@ -163,16 +168,6 @@ test('loadSignleAssociationError', async () => {
 });
 
 expectCaseDetails = () => {
-  expect(comp.mainForm.id).toBe(fakeCase.id);
-  expect(comp.mainForm.title).toBe(fakeCase.title);
-  expect(comp.mainForm.description).toBe(fakeCase.description);
-  expect(comp.mainForm.severity).toBe(fakeCase.severity);
-  expect(comp.mainForm.priority).toBe(fakeCase.priority);
-  expect(comp.mainForm.status).toBe(fakeCase.status);
-  expect(comp.mainForm.tlp).toBe(fakeCase.tlp);
-  expect(comp.mainForm.pap).toBe(fakeCase.pap);
-  expect(comp.mainForm.category).toBe(fakeCase.category);
-  expect(comp.mainForm.tags).toBe(fakeCase.tags);
   expect(comp.caseObj).toBe(fakeCase);
   expect(comp.caseObj.owner).toBe(fakeEmail);
   expect(comp.caseObj.assignee).toBe(fakeAssigneeEmail);
@@ -223,24 +218,26 @@ test('modifyCase', async () => {
   // API call #2 is to get the user list
   const getMock = mockPapi("get", {'data':fakeUsers});
 
-  comp.mainForm.priority = '' + fakePriority;
-  comp.mainForm.severity = fakeSeverity;
-  comp.mainForm.id = 'myCaseId';
-  comp.mainForm.title = 'myTitle';
-  comp.mainForm.description = 'myDescription';
-  comp.mainForm.status = 'open';
-  comp.mainForm.tlp = 'myTlp';
-  comp.mainForm.pap = 'myPap';
-  comp.mainForm.category = 'myCategory';
-  comp.mainForm.tags = ['tag1', 'tag2'];
-  comp.mainForm.assigneeId = 'myAssigneeId';
+  comp.caseObj.priority = '' + fakePriority;
+  comp.caseObj.severity = fakeSeverity;
+  comp.caseObj.id = 'myCaseId';
+  comp.caseObj.title = 'myTitle';
+  comp.caseObj.description = 'myDescription';
+  comp.caseObj.status = 'open';
+  comp.caseObj.tlp = 'myTlp';
+  comp.caseObj.pap = 'myPap';
+  comp.caseObj.category = 'myCategory';
+  comp.caseObj.tags = ['tag1', 'tag2'];
+  comp.caseObj.assigneeId = 'myAssigneeId';
+  comp.editForm.val = "myNewDescription";
+  comp.editForm.field = "description"
   const showErrorMock = mockShowError(true);
 
   expect(comp.mruCases.length).toBe(0);
 
   await comp.modifyCase();
 
-  const body =  "{\"valid\":false,\"title\":\"myTitle\",\"assigneeId\":\"myAssigneeId\",\"status\":\"open\",\"id\":\"myCaseId\",\"description\":\"myDescription\",\"severity\":\"High\",\"priority\":33,\"tags\":[\"tag1\",\"tag2\"],\"tlp\":\"myTlp\",\"pap\":\"myPap\",\"category\":\"myCategory\"}";
+  const body =  "{\"priority\":\"33\",\"severity\":\"High\",\"id\":\"myCaseId\",\"title\":\"myTitle\",\"description\":\"myNewDescription\",\"status\":\"open\",\"tlp\":\"myTlp\",\"pap\":\"myPap\",\"category\":\"myCategory\",\"tags\":[\"tag1\",\"tag2\"],\"assigneeId\":\"myAssigneeId\"}";
   expect(putMock).toHaveBeenCalledWith('case/', body);
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expectCaseDetails();
@@ -254,6 +251,11 @@ test('modifyCaseNotFound', async () => {
   const error = new Error("not found")
   error.response = { status: 404 };
   mockPapi("put", null, error);
+
+  comp.caseObj.description = 'myDescription';
+  comp.editForm.val = "myNewDescription";
+  comp.editForm.field = "description"
+
   await comp.modifyCase();
   expect(showErrorMock).toHaveBeenCalledWith(comp.i18n.notFound);
 });
@@ -261,6 +263,11 @@ test('modifyCaseNotFound', async () => {
 test('modifyCaseError', async () => {
   const showErrorMock = mockShowError();
   mockPapi("put", null, new Error("something bad"));
+
+  comp.caseObj.description = 'myDescription';
+  comp.editForm.val = "myNewDescription";
+  comp.editForm.field = "description"
+
   await comp.modifyCase();
   expect(showErrorMock).toHaveBeenCalledTimes(1);
 });
@@ -268,15 +275,15 @@ test('modifyCaseError', async () => {
 test('addAssociation', async () => {
   const mock = mockPapi("post", {'data':fakeComment});
 
-  comp.associatedForm.description = 'myDescription';
+  comp.associatedForms['comments'].description = 'myDescription';
   comp.caseObj.id = 'myCaseId';
   const showErrorMock = mockShowError();
   expect(comp.associations['comments'].length).toBe(0);
 
   await comp.addAssociation('comments');
 
-  const body =  "{\"id\":\"\",\"caseId\":\"myCaseId\",\"description\":\"myDescription\"}";
-  expect(mock).toHaveBeenCalledWith('case/comments', body);
+  const body =  "{\"description\":\"myDescription\",\"caseId\":\"myCaseId\",\"id\":\"\"}";
+  expect(mock).toHaveBeenCalledWith('case/comments', body, undefined);
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expect(comp.associations['comments'].length).toBe(1);
   expect(comp.$root.loading).toBe(false);
@@ -300,18 +307,16 @@ test('modifyAssociation', async () => {
   const showErrorMock = mockShowError();
 
   comp.caseObj.id = 'myCaseId';
-  comp.editField.val = 'myDescription2';
+  comp.editForm.val = 'myDescription2';
+  comp.editForm.field = 'description';
   comp.associations['comments'] = [fakeComment];
-  comp.updateCollapsible = jest.fn();
-  await comp.modifyAssociation('comments', fakeComment, fakeId);
+  await comp.modifyAssociation('comments', fakeComment);
 
-  const body = "{\"id\":\"myCommentId\",\"caseId\":\"myCaseId\",\"description\":\"myDescription2\"}";
+  const body = "{\"userId\":\"myUserId\",\"id\":\"myCommentId\",\"description\":\"myDescription2\",\"owner\":\"my@email.invalid\"}";
   expect(mock).toHaveBeenCalledWith('case/comments', body);
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expect(comp.associations['comments'].length).toBe(1);
   expect(comp.associations['comments'][0].description).toBe('myDescription2');
-  expect(comp.updateCollapsible).toHaveBeenCalledTimes(1)
-  expect(comp.updateCollapsible).toHaveBeenCalledWith(fakeId);
   expect(comp.$root.loading).toBe(false);
 });
 
@@ -320,7 +325,7 @@ test('modifyAssociationNotFound', async () => {
   const error = new Error("not found")
   error.response = { status: 404 };
   mockPapi("put", null, error);
-  comp.associatedForm.id = fakeComment.id;
+  comp.editForm.val = fakeComment.id;
   comp.associations['comments'] = [fakeComment];
   await comp.modifyAssociation('comments', fakeComment, fakeId);
   expect(showErrorMock).toHaveBeenCalledWith(comp.i18n.notFound);
@@ -329,7 +334,8 @@ test('modifyAssociationNotFound', async () => {
 test('modifyAssociationError', async () => {
   const showErrorMock = mockShowError();
   mockPapi("put", null, new Error("something bad"));
-  comp.associatedForm.id = fakeComment.id;
+  comp.editForm.val = "new desc";
+  comp.editForm.field = "description";
   comp.associations['comments'] = [fakeComment];
   await comp.modifyAssociation('comments', fakeComment, fakeId);
   expect(showErrorMock).toHaveBeenCalledTimes(1);
@@ -372,16 +378,16 @@ test('deleteAssociationError', async () => {
   expect(showErrorMock).toHaveBeenCalledTimes(1);
 });
 
-test('editComment', () => {
-  comp.editComment(fakeComment);
-  expect(comp.associatedForms['comments'].id).toBe(fakeComment.id);
-  expect(comp.editField.val).toBe(fakeComment.description);
+test('resetFormComments', () => {
+  comp.associatedForms['comments'].description = "something";
+  comp.resetForm('comments');
+  expect(comp.associatedForms['comments'].description).toBe(undefined);
 });
 
-test('cancelComment', () => {
-  comp.cancelComment(fakeComment);
-  expect(comp.associatedForms['comments'].id).toBe("");
-  expect(comp.associatedForm.description).toBe("");
+test('resetFormArtifacts', () => {
+  comp.associatedForms['artifacts'].description = "something";
+  comp.resetForm('artifacts');
+  expect(comp.associatedForms['artifacts'].description).toBe(undefined);
 });
 
 test('presets', () => {
@@ -422,156 +428,67 @@ test('presets', () => {
 });
 
 test('isEdit', () => {
-  comp.editField = fakeEditFieldObj;
+  comp.editForm.roId = "fakeId";
   expect(comp.isEdit('fakeId')).toBe(true);
 })
 
 test('isEdit_False', () => {
-  comp.editField = fakeEditFieldObj;
+  comp.editForm = fakeEditFieldObj;
 
   expect(comp.isEdit('otherFakeId')).toBe(false);
 })
 
 test('startEdit', () => {
+  const fn = jest.fn();
 
-  comp.startEdit(fakeEditVal, fakeId);
+  comp.startEdit('myFid', 'myVal', 'myRoId', 'myField', fn, ['foo'], true);
 
-  const expectedObj = { val: 'fakeVal', id: 'fakeId' };
-  expect(comp.editField).toStrictEqual(expectedObj);
+  const expectedObj = { 
+    callback: fn,
+    callbackArgs: ['foo'],
+    field: 'myField',
+    focusId: 'myFid',
+    isMultiline: true,
+    orig: 'myVal',
+    roId: 'myRoId',
+    val: 'myVal',
+    valid: true,    
+  };
+  expect(comp.editForm).toStrictEqual(expectedObj);
 })
 
 test('stopEdit', () => {
-  comp.editField = fakeEditFieldObj;
+  comp.editForm = fakeEditFieldObj;
 
   comp.stopEdit();
 
-  expect(comp.editField).toStrictEqual({})
+  expect(comp.editForm).toStrictEqual({valid:true})
 })
 
-test('saveEdit', async () => {
-  comp.mainForm[fakeFormKeyStr] = 'fakeValOld';
-  comp.editField.val = fakeEditVal;
-
-  comp.stopEdit = jest.fn();
+test('stopEditSave', async () => {
+  const fn = jest.fn();
+  comp.editForm.field = 'fakeValOld';
+  comp.editForm.val = 'fakeEditVal';
+  comp.editForm.valid = true
+  comp.editForm.callback = fn;
   comp.modifyCase = jest.fn();
 
-  await comp.saveEdit('description')
+  await comp.stopEdit(true)
 
-  expect(comp.stopEdit).toHaveBeenCalledTimes(0);
-  expect(comp.modifyCase).toHaveBeenCalledTimes(1);
-  expect(comp.modifyCase).toHaveBeenCalledWith('description');
+  expect(fn).toHaveBeenCalledTimes(1);
 })
 
-test('saveEdit_NoChanges', async () => {
-  comp.mainForm[fakeFormKeyStr] = fakeEditVal;
-  comp.editField.val = fakeEditVal;
-  comp.stopEdit = jest.fn();
+test('saveEditInvalidForm', async () => {
+  const fn = jest.fn();
+  comp.editForm.field = 'fakeValOld';
+  comp.editForm.val = 'fakeEditVal';
+  comp.editForm.valid = false
+  comp.editForm.callback = fn;
   comp.modifyCase = jest.fn();
 
-  await comp.saveEdit('description');
+  await comp.stopEdit(true)
 
-  expect(comp.stopEdit).toHaveBeenCalledTimes(1);
-  expect(comp.modifyCase).toHaveBeenCalledTimes(0);
-})
-
-test('updateCollapsible_HeightOverflow', () => {
-  const fakeElement = {
-    offsetHeight: 10,
-    scrollHeight: 11
-  };
-  document.getElementById = jest.fn(_ => fakeElement);
-  comp.updateCollapsible(fakeId);
-
-  expect(comp.collapsible).toStrictEqual({'fakeId': true});
-})
-
-test('updateCollapsible_WidthOverflow', () => {
-  const fakeElement = {
-    offsetWidth: 10,
-    scrollWidth: 11
-  };
-  document.getElementById = jest.fn(_ => fakeElement);
-  comp.updateCollapsible(fakeId);
-
-  expect(comp.collapsible).toStrictEqual({'fakeId': true});
-})
-
-test('updateCollapsible_NoOverflow', () => {
-  const fakeElement = {
-    offsetHeight: 10,
-    scrollHeight: 10
-  };
-  document.getElementById = jest.fn(_ => fakeElement);
-  comp.updateCollapsible(fakeId);
-
-  expect(comp.collapsible).toStrictEqual({'fakeId': false});
-})
-
-test('updateCollapsible_RemoveId', () => {
-  const fakeElement = {
-    offsetHeight: 10,
-    scrollHeight: 10
-  };
-  comp.collapsible = {fakeId: true}
-
-  document.getElementById = jest.fn(_ => fakeElement);
-  comp.updateCollapsible(fakeId);
-
-  expect(comp.collapsible).toStrictEqual({'fakeId': false});
-})
-
-test('updateCollapsible_StillCollapsible', () => {
-  const fakeElement = {
-    offsetHeight: 10,
-    scrollHeight: 11
-  };
-  comp.collapsible = {fakeId: true}
-
-  document.getElementById = jest.fn(_ => fakeElement);
-  comp.updateCollapsible(fakeId);
-
-  expect(comp.collapsible).toStrictEqual({'fakeId': true});
-})
-
-test('isCollapsible', () => {
-  comp.collapsible = {fakeId: true};
-
-  expect(comp.isCollapsible('fakeId')).toBe(true);
-})
-
-test('isCollapsible_False', () => {
-  comp.collapsible =  {fakeId: false};
-
-  expect(comp.isCollapsible('fakeId')).toBe(false);
-})
-
-test('isCollapsed', () => {
-  comp.collapsed = [ fakeId ];
-
-  expect(comp.isCollapsed('fakeId')).toBe(true);
-})
-
-test('isCollapsed_False', () => {
-  comp.collapsed =  [];
-
-  expect(comp.isCollapsed('fakeId')).toBe(false);
-})
-
-
-test('toggleCollapse_Add', () => {
-  comp.collapsed = [];
-  
-  comp.toggleCollapse(fakeId);
-
-  expect(comp.collapsed).toStrictEqual(['fakeId']);
-})
-
-test('toggleCollapse_Remove', () => {
-  comp.collapsed = [fakeId];
-  
-  comp.toggleCollapse('fakeId');
-
-  expect(comp.collapsed).toStrictEqual([]);
+  expect(fn).toHaveBeenCalledTimes(0);
 })
 
 test('selectList', () => {
@@ -623,13 +540,44 @@ test('selectList_CustomEnabledAndCustomVal', () => {
     },
   }
 
-  comp.mainForm['severity'] = 'customSeverity1'
-  
   const expectedList = [
     'presetSeverity1',
     'presetSeverity2',
-    'customSeverity1'
+    'new value'
   ]
 
-  expect(comp.selectList('severity')).toStrictEqual(expectedList)
+  expect(comp.selectList('severity', 'new value')).toStrictEqual(expectedList)
 })
+
+test('expandRow', () => {
+  comp.expandRow('comments', fakeComment);
+  expect(comp.associatedTable['comments'].expanded.length).toBe(1);
+  comp.expandRow('comments', fakeComment2);
+  expect(comp.associatedTable['comments'].expanded.length).toBe(2);
+  comp.expandRow('comments', fakeComment);
+  expect(comp.associatedTable['comments'].expanded.length).toBe(1);
+})
+
+test('withDefault', () => {
+  expect(comp.withDefault('foo', 'bar')).toBe('foo');
+  expect(comp.withDefault('', 'bar')).toBe('bar');
+  expect(comp.withDefault(null, 'bar')).toBe('bar');
+  expect(comp.withDefault(undefined, 'bar')).toBe('bar');
+})
+
+test('getAttachmentHelp', () => {
+  expect(comp.getAttachmentHelp()).toBe('Click to attach a file to upload. (Note: max upload size is 26,214,400 bytes)');
+});
+
+test('isEdited', () => {
+  const fakeArtifact1 = {
+    createTime: "12/25/2021, 6:01:21 PM",
+    updateTime: "12/25/2021, 6:01:20 PM",
+  };
+  const fakeArtifact2 = {
+    createTime: "12/25/2021, 6:01:21 PM",
+    updateTime: "12/25/2021, 6:01:21 PM",
+  };
+  expect(comp.isEdited(fakeArtifact1)).toBe(true);
+  expect(comp.isEdited(fakeArtifact2)).toBe(false);
+});

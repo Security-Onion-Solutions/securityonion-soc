@@ -376,6 +376,7 @@ func TestConvertElasticEventToArtifact(tester *testing.T) {
 	event.Payload["artifact.value"] = "myValue"
 	event.Payload["artifact.description"] = "myDesc"
 	event.Payload["artifact.streamLength"] = float64(123)
+	event.Payload["artifact.streamId"] = "myStreamId"
 	event.Payload["artifact.groupType"] = "myGroupType"
 	event.Payload["artifact.groupId"] = "myGroupId"
 	event.Payload["artifact.userId"] = "myUserId"
@@ -397,6 +398,7 @@ func TestConvertElasticEventToArtifact(tester *testing.T) {
 	assert.Equal(tester, "myValue", artifactObj.Value)
 	assert.Equal(tester, "myDesc", artifactObj.Description)
 	assert.Equal(tester, 123, artifactObj.StreamLen)
+	assert.Equal(tester, "myStreamId", artifactObj.StreamId)
 	assert.Equal(tester, "myGroupType", artifactObj.GroupType)
 	assert.Equal(tester, "myGroupId", artifactObj.GroupId)
 	assert.Equal(tester, "myUserId", artifactObj.UserId)
@@ -408,6 +410,35 @@ func TestConvertElasticEventToArtifact(tester *testing.T) {
 	assert.Equal(tester, tags[1], "tag2")
 	assert.Equal(tester, &myTime, artifactObj.UpdateTime)
 	assert.Equal(tester, &myCreateTime, artifactObj.CreateTime)
+}
+
+func TestConvertElasticEventToArtifactStreamNil(tester *testing.T) {
+	artifactObj, err := convertElasticEventToArtifactStream(nil)
+	assert.NoError(tester, err)
+	assert.Nil(tester, artifactObj)
+}
+
+func TestConvertElasticEventToArtifactStream(tester *testing.T) {
+	myTime := time.Now()
+	myCreateTime := myTime.Add(time.Hour * -1)
+
+	event := &model.EventRecord{}
+	event.Payload = make(map[string]interface{})
+	event.Payload["kind"] = "artifactstream"
+	event.Payload["operation"] = "create"
+	event.Payload["artifactstream.content"] = "myValue"
+	event.Payload["artifactstream.userId"] = "myUserId"
+	event.Time = myTime
+	event.Payload["artifactstream.createTime"] = myCreateTime
+	interf, err := convertElasticEventToObject(event)
+	assert.NoError(tester, err)
+	obj := interf.(*model.ArtifactStream)
+	assert.Equal(tester, "artifactstream", obj.Kind)
+	assert.Equal(tester, "create", obj.Operation)
+	assert.Equal(tester, "myUserId", obj.UserId)
+	assert.Equal(tester, &myTime, obj.UpdateTime)
+	assert.Equal(tester, &myCreateTime, obj.CreateTime)
+	assert.Equal(tester, "myValue", obj.Content)
 }
 
 func TestParseTime(tester *testing.T) {

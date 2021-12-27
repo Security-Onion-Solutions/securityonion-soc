@@ -27,6 +27,7 @@ const DEFAULT_CACHE_MS = 86400000
 const DEFAULT_INDEX = "*:so-*"
 const DEFAULT_ASYNC_THRESHOLD = 10
 const DEFAULT_INTERVALS = 25
+const DEFAULT_MAX_LOG_LENGTH = 1024
 
 type Elastic struct {
   config module.ModuleConfig
@@ -63,8 +64,10 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
   index := module.GetStringDefault(cfg, "index", DEFAULT_INDEX)
   asyncThreshold := module.GetIntDefault(cfg, "asyncThreshold", DEFAULT_ASYNC_THRESHOLD)
   intervals := module.GetIntDefault(cfg, "intervals", DEFAULT_INTERVALS)
+  maxLogLength := module.GetIntDefault(cfg, "maxLogLength", DEFAULT_MAX_LOG_LENGTH)
   casesEnabled := module.GetBoolDefault(cfg, "casesEnabled", true)
-  err := elastic.store.Init(host, remoteHosts, username, password, verifyCert, timeShiftMs, defaultDurationMs, esSearchOffsetMs, timeoutMs, cacheMs, index, asyncThreshold, intervals)
+  err := elastic.store.Init(host, remoteHosts, username, password, verifyCert, timeShiftMs, defaultDurationMs,
+    esSearchOffsetMs, timeoutMs, cacheMs, index, asyncThreshold, intervals, maxLogLength)
   if err == nil && elastic.server != nil {
     elastic.server.Eventstore = elastic.store
     if casesEnabled {

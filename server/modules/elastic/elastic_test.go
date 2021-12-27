@@ -39,6 +39,7 @@ func TestElasticInit(tester *testing.T) {
 	assert.Equal(tester, expectedCache, elastic.store.cacheMs)
 	assert.Equal(tester, DEFAULT_INDEX, elastic.store.index)
 	assert.Equal(tester, DEFAULT_INTERVALS, elastic.store.intervals)
+	assert.Equal(tester, DEFAULT_MAX_LOG_LENGTH, elastic.store.maxLogLength)
 
 	// Ensure casestore has been setup
 	assert.NotNil(tester, srv.Casestore)
