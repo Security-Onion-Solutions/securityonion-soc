@@ -111,3 +111,5 @@ require('./app.js');
 // Import external dependencies
 ////////////////////////////////////
 global.moment = require('./external/moment-2.29.1.min.js');
+global.marked = require('./external/marked-2.1.3.min.js');
+global.DOMPurify = require('./external/purify-2.3.4.min.js');
