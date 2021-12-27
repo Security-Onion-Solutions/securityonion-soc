@@ -259,7 +259,7 @@
         </v-row>
         <v-row>
           <v-col class="mx-auto px-12">
-            <div id="motd" v-html="motd"></div>
+            <div id="motd" :inner-html.prop="motd | formatMarkdown"></div>
           </v-col>
           <v-col class="mx-auto text-center">
             <div v-html="i18n.sponsorsIntro" class="mb-6"></div>
@@ -1242,7 +1242,7 @@
             <div class="mb-6 mb-md-3">
               <div class="case detail-field clicktoedit d-flex align-start pa-2" v-if="!isEdit('case-description')" @click="startEdit('case-desc-input',  caseObj.description, 'case-description', 'description', modifyCase, [], true)">
                 <div class="d-block">
-                  <div id="case-description" class="rounded case">{{ caseObj.description }}</div>
+                  <div id="case-description" class="rounded case" :inner-html.prop="caseObj.description | formatMarkdown"></div>
                 </div>
               </div>
               <div class="d-flex flex-column" v-if="isEdit('case-description')">
@@ -1293,7 +1293,7 @@
                           <div class="d-flex flex-column align-start">
                             <div class="case d-flex align-start" v-if="!isEdit(`comment-${index}`)">
                               <div class="d-block mb-8">
-                                <div :id="`comment-${index}`" class="case detail-field">{{ comment.description }}</div>
+                                <div :id="`comment-${index}`" class="case detail-field" :inner-html.prop="comment.description | formatMarkdown"></div>
                               </div>
                             </div>
                             <div class="d-flex flex-column" v-if="isEdit(`comment-${index}`)" style="width: 100%;">
@@ -1398,7 +1398,7 @@
                           <v-container fluid class="my-2">
                             <div class="clicktoedit" @click="startEdit(`artifact-${props.index}-description-input`, props.item.description, `artifact-${props.index}-description`, 'description', modifyAssociation, ['artifacts', props.item], true)">
                               <div class="font-weight-bold">{{i18n.artifactDescription}}: </div>
-                              <div id="`artifact-${props.index}-description`" class="case detail-field" v-if="!isEdit(`artifact-${props.index}-description`)">{{ withDefault(props.item.description) }}</div>
+                              <div id="`artifact-${props.index}-description`" class="case detail-field" v-if="!isEdit(`artifact-${props.index}-description`)" :inner-html.prop="props.item.description | formatMarkdown"></div>
                             </div>
                             <div class="d-flex flex-column" v-if="isEdit(`artifact-${props.index}-description`)">
                               <v-form v-model="editForm.valid">
@@ -2155,6 +2155,7 @@
     <script src="js/external/vue-chartjs-3.5.1.min.js"></script>
     <script src="js/external/daterangepicker-3.1.0.min.js"></script>
     <script src="js/external/marked-2.1.3.min.js"></script>
+    <script src="js/external/purify-2.3.4.min.js"></script>
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>

@@ -429,6 +429,14 @@ $(document).ready(function() {
         }
         return "";
       },
+      formatMarkdown(str) {
+        var md = str;
+        if (str) {
+          md = marked(str);
+          md = DOMPurify.sanitize(md);
+        }
+        return md;
+      },
       generateDatePickerPreselects() {
         var preselects = {};
         preselects[this.i18n.datePreselectToday] = [moment().startOf('day'), moment().endOf('day')];
@@ -755,6 +763,7 @@ $(document).ready(function() {
       Vue.filter('formatDateTime', this.formatDateTime);
       Vue.filter('formatDuration', this.formatDuration);
       Vue.filter('formatCount', this.formatCount);
+      Vue.filter('formatMarkdown', this.formatMarkdown);
       Vue.filter('formatTimestamp', this.formatTimestamp);
       $('#app')[0].style.display = "block";
       this.log("Initialization complete");
