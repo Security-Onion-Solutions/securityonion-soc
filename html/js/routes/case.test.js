@@ -581,3 +581,10 @@ test('isEdited', () => {
   expect(comp.isEdited(fakeArtifact1)).toBe(true);
   expect(comp.isEdited(fakeArtifact2)).toBe(false);
 });
+
+test('mapAssociatedPath', () => {
+  expect(comp.mapAssociatedPath('comments')).teBe('comments');
+  expect(comp.mapAssociatedPath('comments', true)).teBe('comments');
+  expect(comp.mapAssociatedPath('evidence')).teBe('artifacts');
+  expect(comp.mapAssociatedPath('evidence', true)).teBe('artifacts/evidence');
+});
