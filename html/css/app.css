@@ -62,6 +62,10 @@
   margin-right: 6px;
 }
 
+.contrast-bg {
+  background-color: var(--v-drawer_background-base) !important;
+}
+
 /* animations */
 .waggle {
   animation-name: waggle;
@@ -162,6 +166,53 @@ a#title, a#title:visited, a#title:active, a#title:hover {
   text-align: left;
   font-weight: bold;
   white-space: nowrap;
+}
+
+.case.summary {
+  overflow-x: hidden;
+  white-space: nowrap;
+  opacity: 60%;
+  font-size: 75%;
+}
+
+.case.label {
+  display: inline-block;
+  width: 15%;
+  min-width: 6.0em;
+  padding-right: 10px;
+  text-align: right;
+  font-weight: bold;
+}
+
+.case.value {
+  text-align: left;
+}
+
+.case.raw {
+  overflow-x: hidden;
+}
+
+.case.detail-field {
+  border-radius: .25em;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.no-underline {
+  text-decoration: none;
+}
+
+.clicktoedit:hover {
+  cursor: pointer;
+  color: var(--v-primary-lighten1) !important;
+}
+
+tr.expandable:hover {
+  cursor: pointer;
+}
+
+td.case {
+  white-space: normal !important;
 }
 
 td {

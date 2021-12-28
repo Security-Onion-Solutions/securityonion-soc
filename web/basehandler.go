@@ -16,12 +16,12 @@ import (
   "context"
   "encoding/json"
   "errors"
+  "github.com/apex/log"
+  "github.com/security-onion-solutions/securityonion-soc/model"
   "net/http"
   "reflect"
   "strings"
   "time"
-  "github.com/apex/log"
-  "github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type HandlerImpl interface {
@@ -29,13 +29,13 @@ type HandlerImpl interface {
 }
 
 type BaseHandler struct {
-  Host					*Host
-  Impl					HandlerImpl
+  Host *Host
+  Impl HandlerImpl
 }
 
 func (handler *BaseHandler) Handle(responseWriter http.ResponseWriter, request *http.Request) {
   var statusCode, contentLength int
- 	var err error
+  var err error
 
   defer request.Body.Close()
   start := time.Now()
@@ -55,10 +55,10 @@ func (handler *BaseHandler) Handle(responseWriter http.ResponseWriter, request *
 
   if err != nil {
     log.WithError(err).WithFields(log.Fields{
-	    "requestId": context.Value(ContextKeyRequestId),
-	    "requestor": context.Value(ContextKeyRequestor),
+      "requestId": context.Value(ContextKeyRequestId),
+      "requestor": context.Value(ContextKeyRequestor),
     }).Warn("Request did not complete successfully")
-  
+
     var unauthorizedError *model.Unauthorized
     if errors.As(err, &unauthorizedError) {
       statusCode = http.StatusUnauthorized
@@ -71,17 +71,17 @@ func (handler *BaseHandler) Handle(responseWriter http.ResponseWriter, request *
     responseWriter.Write(bytes)
   }
   log.WithFields(log.Fields{
-    "remoteAddr": request.RemoteAddr,
-    "sourceIp": handler.Host.GetSourceIp(request),
-    "path": request.URL.Path,
-    "query": request.URL.Query(),
-    "impl": reflect.TypeOf(handler.Impl),
-    "statusCode": statusCode,
+    "remoteAddr":    request.RemoteAddr,
+    "sourceIp":      handler.Host.GetSourceIp(request),
+    "path":          request.URL.Path,
+    "query":         request.URL.Query(),
+    "impl":          reflect.TypeOf(handler.Impl),
+    "statusCode":    statusCode,
     "contentLength": contentLength,
-    "method": request.Method,
-    "elapsedMs": elapsed,
-    "requestId": context.Value(ContextKeyRequestId),
-    "requestor": context.Value(ContextKeyRequestor),
+    "method":        request.Method,
+    "elapsedMs":     elapsed,
+    "requestId":     context.Value(ContextKeyRequestId),
+    "requestor":     context.Value(ContextKeyRequestor),
   }).Info("Handled request")
 }
 
@@ -115,9 +115,9 @@ func (handler *BaseHandler) ReadJson(request *http.Request, obj interface{}) err
 
 func (handler *BaseHandler) GetPathParameter(path string, paramIndex int) string {
   p := strings.Split(path, "/")
-  if paramIndex < 0 || paramIndex + 1 >= len(p) {
+  if paramIndex < 0 || paramIndex+1 >= len(p) {
     return ""
   } else {
-    return p[paramIndex + 1]
+    return p[paramIndex+1]
   }
 }

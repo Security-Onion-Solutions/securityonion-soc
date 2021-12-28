@@ -230,11 +230,11 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
             jobId: this.$route.params.jobId
         }});
         this.job = response.data;
-        this.$root.populateJobDetails(this.job);
+        this.$root.populateUserDetails(this.job, "userId", "owner");
         this.loadPackets(this.isOptionEnabled('unwrap'));
       } catch (error) {
         if (error.response != undefined && error.response.status == 404) {
-          this.$root.showError(this.i18n.jobNotFound);
+          this.$root.showError(this.i18n.notFound);
         } else {
           this.$root.showError(error);
         }

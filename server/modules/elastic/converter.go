@@ -11,11 +11,10 @@ package elastic
 
 import (
 	"errors"
-	"strings"
-	"time"
-
 	"github.com/security-onion-solutions/securityonion-soc/json"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"strings"
+	"time"
 )
 
 func makeAggregation(store *ElasticEventstore, prefix string, keys []string, count int, ascending bool) (map[string]interface{}, string) {
@@ -93,21 +92,22 @@ func makeQuery(store *ElasticEventstore, parsedQuery *model.Query, beginTime tim
 
 	query := make(map[string]interface{})
 	query["query_string"] = queryDetails
-
-	timestampDetails := make(map[string]interface{})
-	timestampDetails["gte"] = beginTime.Format(time.RFC3339)
-	timestampDetails["lte"] = endTime.Format(time.RFC3339)
-	timestampDetails["format"] = "strict_date_optional_time"
-
-	timerangeDetails := make(map[string]interface{})
-	timerangeDetails["@timestamp"] = timestampDetails
-
-	timerange := make(map[string]interface{})
-	timerange["range"] = timerangeDetails
-
 	must := make([]interface{}, 0, 0)
 	must = append(must, query)
-	must = append(must, timerange)
+
+	if !endTime.IsZero() {
+		timestampDetails := make(map[string]interface{})
+		timestampDetails["gte"] = beginTime.Format(time.RFC3339)
+		timestampDetails["lte"] = endTime.Format(time.RFC3339)
+		timestampDetails["format"] = "strict_date_optional_time"
+
+		timerangeDetails := make(map[string]interface{})
+		timerangeDetails["@timestamp"] = timestampDetails
+
+		timerange := make(map[string]interface{})
+		timerange["range"] = timerangeDetails
+		must = append(must, timerange)
+	}
 
 	terms := make(map[string]interface{})
 	terms["must"] = must
@@ -186,17 +186,48 @@ func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSear
 	esMap["query"] = makeQuery(store, criteria.ParsedQuery, criteria.BeginTime, criteria.EndTime)
 
 	aggregations := make(map[string]interface{})
-	esMap["aggs"] = aggregations
-	aggregations["timeline"] = makeTimeline(calcTimelineInterval(store.intervals, criteria.BeginTime, criteria.EndTime))
 
-	segment := criteria.ParsedQuery.NamedSegment(model.SegmentKind_GroupBy)
+	if criteria.MetricLimit > 0 {
+		if !criteria.EndTime.IsZero() {
+			aggregations["timeline"] = makeTimeline(calcTimelineInterval(store.intervals, criteria.BeginTime, criteria.EndTime))
+		}
+		segment := criteria.ParsedQuery.NamedSegment(model.SegmentKind_GroupBy)
+		if segment != nil {
+			groupBySegment := segment.(*model.GroupBySegment)
+			fields := groupBySegment.Fields()
+			if len(fields) > 0 {
+				agg, name := makeAggregation(store, "groupby", fields, criteria.MetricLimit, false)
+				aggregations[name] = agg
+				aggregations["bottom"], _ = makeAggregation(store, "", fields[0:1], criteria.MetricLimit, true)
+			}
+		}
+	}
+
+	if len(aggregations) > 0 {
+		esMap["aggs"] = aggregations
+	}
+
+	segment := criteria.ParsedQuery.NamedSegment(model.SegmentKind_SortBy)
 	if segment != nil {
-		groupBySegment := segment.(*model.GroupBySegment)
-		fields := groupBySegment.Fields()
+		sortBySegment := segment.(*model.SortBySegment)
+		fields := sortBySegment.Fields()
 		if len(fields) > 0 {
-			agg, name := makeAggregation(store, "groupby", fields, criteria.MetricLimit, false)
-			aggregations[name] = agg
-			aggregations["bottom"], _ = makeAggregation(store, "", fields[0:1], criteria.MetricLimit, true)
+			sorting := make([]map[string]map[string]string, 0, 0)
+			for _, field := range fields {
+				newSort := make(map[string]map[string]string)
+				order := "desc"
+				if strings.HasSuffix(field, "^") {
+					field = strings.TrimSuffix(field, "^")
+					order = "asc"
+				}
+				sortParams := make(map[string]string)
+				sortParams["order"] = order
+				sortParams["missing"] = "_last"
+				sortParams["unmapped_type"] = "date"
+				newSort[field] = sortParams
+				sorting = append(sorting, newSort)
+			}
+			esMap["sort"] = sorting
 		}
 	}
 
@@ -290,15 +321,17 @@ func convertFromElasticResults(store *ElasticEventstore, esJson string, results 
 		event.Source = esRecord["_index"].(string)
 		event.Id = esRecord["_id"].(string)
 		event.Type = esRecord["_type"].(string)
-		event.Score = esRecord["_score"].(float64)
-		event.Payload = flatten(store, esRecord["_source"].(map[string]interface{}))
-		var ts time.Time
-		if event.Payload["@timestamp"] != nil {
-			ts, _ = time.Parse(time.RFC3339, event.Payload["@timestamp"].(string))
-		} else if event.Payload["timestamp"] != nil {
-			ts, _ = time.Parse(time.RFC3339, event.Payload["timestamp"].(string))
+		if esRecord["_score"] != nil {
+			event.Score = esRecord["_score"].(float64)
 		}
-		event.Timestamp = ts.Format("2006-01-02T15:04:05.000Z")
+		event.Payload = flatten(store, esRecord["_source"].(map[string]interface{}))
+
+		if event.Payload["@timestamp"] != nil {
+			event.Time, _ = time.Parse(time.RFC3339, event.Payload["@timestamp"].(string))
+		} else if event.Payload["timestamp"] != nil {
+			event.Time, _ = time.Parse(time.RFC3339, event.Payload["timestamp"].(string))
+		}
+		event.Timestamp = event.Time.Format("2006-01-02T15:04:05.000Z")
 		results.Events = append(results.Events, event)
 	}
 
@@ -311,6 +344,245 @@ func convertFromElasticResults(store *ElasticEventstore, esJson string, results 
 	}
 
 	return err
+}
+
+func parseTime(fieldmap map[string]interface{}, key string) *time.Time {
+	var t time.Time
+
+	if value, ok := fieldmap[key]; ok {
+		switch value.(type) {
+		case time.Time:
+			t = value.(time.Time)
+		case *time.Time:
+			t = *(value.(*time.Time))
+		case string:
+			t, _ = time.Parse(time.RFC3339, value.(string))
+		}
+	}
+
+	return &t
+}
+
+func convertElasticEventToAuditable(event *model.EventRecord, auditable *model.Auditable) error {
+	auditable.Id = event.Id
+	auditable.UpdateTime = &event.Time
+	if value, ok := event.Payload["kind"]; ok {
+		auditable.Kind = value.(string)
+	}
+	if value, ok := event.Payload["operation"]; ok {
+		auditable.Operation = value.(string)
+	}
+	return nil
+}
+
+func convertElasticEventToCase(event *model.EventRecord) (*model.Case, error) {
+	var err error
+	var obj *model.Case
+
+	if event != nil {
+		obj = model.NewCase()
+		err = convertElasticEventToAuditable(event, &obj.Auditable)
+		if err == nil {
+			if value, ok := event.Payload["case.title"]; ok {
+				obj.Title = value.(string)
+			}
+			if value, ok := event.Payload["case.description"]; ok {
+				obj.Description = value.(string)
+			}
+			if value, ok := event.Payload["case.priority"]; ok {
+				obj.Priority = int(value.(float64))
+			}
+			if value, ok := event.Payload["case.severity"]; ok {
+				obj.Severity = value.(string)
+			}
+			if value, ok := event.Payload["case.status"]; ok {
+				obj.Status = value.(string)
+			}
+			if value, ok := event.Payload["case.template"]; ok {
+				obj.Template = value.(string)
+			}
+			if value, ok := event.Payload["case.userId"]; ok {
+				obj.UserId = value.(string)
+			}
+			if value, ok := event.Payload["case.assigneeId"]; ok {
+				obj.AssigneeId = value.(string)
+			}
+			if value, ok := event.Payload["case.tlp"]; ok {
+				obj.Tlp = value.(string)
+			}
+			if value, ok := event.Payload["case.category"]; ok {
+				obj.Category = value.(string)
+			}
+			if value, ok := event.Payload["case.pap"]; ok {
+				obj.Pap = value.(string)
+			}
+			if value, ok := event.Payload["case.tags"]; ok && value != nil {
+				obj.Tags = convertToStringArray(value.([]interface{}))
+			}
+			obj.CreateTime = parseTime(event.Payload, "case.createTime")
+			obj.StartTime = parseTime(event.Payload, "case.startTime")
+			obj.CompleteTime = parseTime(event.Payload, "case.completeTime")
+		}
+	}
+	return obj, err
+}
+
+func convertToStringArray(input []interface{}) []string {
+	out := make([]string, len(input), len(input))
+	for idx, value := range input {
+		out[idx] = value.(string)
+	}
+	return out
+}
+
+func convertElasticEventToComment(event *model.EventRecord) (*model.Comment, error) {
+	var err error
+	var obj *model.Comment
+
+	if event != nil {
+		obj = model.NewComment()
+		err = convertElasticEventToAuditable(event, &obj.Auditable)
+		if err == nil {
+			if value, ok := event.Payload["comment.description"]; ok {
+				obj.Description = value.(string)
+			}
+			if value, ok := event.Payload["comment.userId"]; ok {
+				obj.UserId = value.(string)
+			}
+			if value, ok := event.Payload["comment.caseId"]; ok {
+				obj.CaseId = value.(string)
+			}
+			obj.CreateTime = parseTime(event.Payload, "comment.createTime")
+		}
+	}
+
+	return obj, err
+}
+
+func convertElasticEventToRelatedEvent(event *model.EventRecord) (*model.RelatedEvent, error) {
+	var err error
+	var obj *model.RelatedEvent
+
+	if event != nil {
+		obj = model.NewRelatedEvent()
+		err = convertElasticEventToAuditable(event, &obj.Auditable)
+		if err == nil {
+			obj.Fields = make(map[string]interface{})
+			for key, value := range event.Payload {
+				if strings.HasPrefix(key, "related.fields.") {
+					key = strings.TrimPrefix(key, "related.fields.")
+					obj.Fields[key] = value
+				}
+			}
+			if value, ok := event.Payload["related.userId"]; ok {
+				obj.UserId = value.(string)
+			}
+			if value, ok := event.Payload["related.caseId"]; ok {
+				obj.CaseId = value.(string)
+			}
+			obj.CreateTime = parseTime(event.Payload, "related.createTime")
+		}
+	}
+
+	return obj, err
+}
+
+func convertElasticEventToArtifact(event *model.EventRecord) (*model.Artifact, error) {
+	var err error
+	var obj *model.Artifact
+
+	if event != nil {
+		obj = model.NewArtifact()
+		err = convertElasticEventToAuditable(event, &obj.Auditable)
+		if err == nil {
+			if value, ok := event.Payload["artifact.userId"]; ok {
+				obj.UserId = value.(string)
+			}
+			if value, ok := event.Payload["artifact.caseId"]; ok {
+				obj.CaseId = value.(string)
+			}
+			if value, ok := event.Payload["artifact.groupType"]; ok {
+				obj.GroupType = value.(string)
+			}
+			if value, ok := event.Payload["artifact.groupId"]; ok {
+				obj.GroupId = value.(string)
+			}
+			if value, ok := event.Payload["artifact.description"]; ok {
+				obj.Description = value.(string)
+			}
+			if value, ok := event.Payload["artifact.artifactType"]; ok {
+				obj.ArtifactType = value.(string)
+			}
+			if value, ok := event.Payload["artifact.streamLength"]; ok {
+				obj.StreamLen = int(value.(float64))
+			}
+			if value, ok := event.Payload["artifact.streamId"]; ok {
+				obj.StreamId = value.(string)
+			}
+			if value, ok := event.Payload["artifact.mimeType"]; ok {
+				obj.MimeType = value.(string)
+			}
+			if value, ok := event.Payload["artifact.value"]; ok {
+				obj.Value = value.(string)
+			}
+			if value, ok := event.Payload["artifact.tlp"]; ok {
+				obj.Tlp = value.(string)
+			}
+			if value, ok := event.Payload["artifact.tags"]; ok && value != nil {
+				obj.Tags = convertToStringArray(value.([]interface{}))
+			}
+			if value, ok := event.Payload["artifact.ioc"]; ok {
+				obj.Ioc = value.(bool)
+			}
+			obj.CreateTime = parseTime(event.Payload, "artifact.createTime")
+		}
+	}
+
+	return obj, err
+}
+
+func convertElasticEventToArtifactStream(event *model.EventRecord) (*model.ArtifactStream, error) {
+	var err error
+	var obj *model.ArtifactStream
+
+	if event != nil {
+		obj = model.NewArtifactStream()
+		err = convertElasticEventToAuditable(event, &obj.Auditable)
+		if err == nil {
+			if value, ok := event.Payload["artifactstream.userId"]; ok {
+				obj.UserId = value.(string)
+			}
+			if value, ok := event.Payload["artifactstream.content"]; ok {
+				obj.Content = value.(string)
+			}
+			obj.CreateTime = parseTime(event.Payload, "artifactstream.createTime")
+		}
+	}
+
+	return obj, err
+}
+
+func convertElasticEventToObject(event *model.EventRecord) (interface{}, error) {
+	var obj interface{}
+	var err error
+
+	if value, ok := event.Payload["kind"]; ok {
+		switch value.(string) {
+		case "case":
+			obj, err = convertElasticEventToCase(event)
+		case "comment":
+			obj, err = convertElasticEventToComment(event)
+		case "related":
+			obj, err = convertElasticEventToRelatedEvent(event)
+		case "artifact":
+			obj, err = convertElasticEventToArtifact(event)
+		case "artifactstream":
+			obj, err = convertElasticEventToArtifactStream(event)
+		}
+	} else {
+		err = errors.New("Unknown object kind; id=" + event.Id)
+	}
+	return obj, err
 }
 
 func convertToElasticUpdateRequest(store *ElasticEventstore, criteria *model.EventUpdateCriteria) (string, error) {
@@ -347,6 +619,36 @@ func convertFromElasticUpdateResults(store *ElasticEventstore, esJson string, re
 
 	results.UpdatedCount = int(esResults["updated"].(float64))
 	results.UnchangedCount = int(esResults["noops"].(float64))
+
+	return err
+}
+
+func convertObjectToDocumentMap(name string, obj interface{}) map[string]interface{} {
+	doc := make(map[string]interface{})
+	doc[name] = obj
+	doc["@timestamp"] = time.Now()
+	return doc
+}
+
+func convertToElasticIndexRequest(store *ElasticEventstore, event map[string]interface{}) (string, error) {
+	var err error
+	var esJson string
+
+	bytes, err := json.WriteJson(event)
+	if err == nil {
+		esJson = string(bytes)
+	}
+
+	return esJson, err
+}
+
+func convertFromElasticIndexResults(store *ElasticEventstore, esJson string, results *model.EventIndexResults) error {
+	esResults := make(map[string]interface{})
+	err := json.LoadJson([]byte(esJson), &esResults)
+
+	results.DocumentId = esResults["_id"].(string)
+	result := esResults["result"].(string)
+	results.Success = result == "created" || result == "updated"
 
 	return err
 }

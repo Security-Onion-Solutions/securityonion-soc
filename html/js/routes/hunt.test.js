@@ -125,3 +125,80 @@ test('saveTimezone', () => {
   comp.loadLocalSettings();
   expect(comp.zone).toBe("Foo/Bar");
 });
+
+test('removeFilter', () => {
+  comp.query = "abc def | groupby foo bar*"; 
+  comp.removeFilter('def')
+  expect(comp.query).toBe("abc  | groupby foo bar*");
+
+  comp.removeFilter('abc')
+  expect(comp.query).toBe("* | groupby foo bar*");
+
+  // no-op
+  comp.removeFilter('*')
+  expect(comp.query).toBe("* | groupby foo bar*");
+});
+
+test('removeGroupBy', () => {
+  comp.query = "abc | groupby foo bar*"; 
+  comp.removeGroupBy('foo')
+  expect(comp.query).toBe("abc | groupby bar*");
+
+  comp.removeGroupBy('bar*')
+  expect(comp.query).toBe("abc");
+
+  // no-op
+  comp.removeGroupBy('bar*')
+  expect(comp.query).toBe("abc");
+});
+
+test('removeSortBy', () => {
+  comp.query = "abc | sortby foo bar^"; 
+  comp.removeSortBy('foo')
+  expect(comp.query).toBe("abc | sortby bar^");
+
+  comp.removeSortBy('bar^')
+  expect(comp.query).toBe("abc");
+
+  // no-op
+  comp.removeSortBy('bar^')
+  expect(comp.query).toBe("abc");
+
+  comp.query = "abc | sortby foo bar^ | groupby xyz"; 
+  comp.removeSortBy('foo')
+  expect(comp.query).toBe("abc | sortby bar^ | groupby xyz");
+
+  comp.removeSortBy('bar^')
+  expect(comp.query).toBe("abc | groupby xyz");
+
+  // no-op
+  comp.removeSortBy('bar^')
+  expect(comp.query).toBe("abc | groupby xyz");
+});
+
+test('formatCaseSummary', () => {
+  const caseObj = {id:"12", title:"This is a case title"};
+  const summary = comp.formatCaseSummary(caseObj);
+  expect(summary).toBe('This is a case title');
+});
+
+test('toggleEscalationMenu', () => {
+  comp.escalateRelatedEventsEnabled = true;
+  const domEvent = {clientX: 12, clientY: 34};
+  const event = {id:"33",foo:"bar"};
+  comp.$nextTick = function(fn) { fn(); };
+  comp.toggleEscalationMenu(domEvent, event);
+  expect(comp.escalationMenuX).toBe(12);
+  expect(comp.escalationMenuY).toBe(34);
+  expect(comp.escalationItem).toBe(event);
+  expect(comp.escalationMenuVisible).toBe(true);
+});
+
+test('toggleEscalationMenuAlreadyOpen', () => {
+  comp.escalateRelatedEventsEnabled = true;
+  comp.quickActionVisible = true;
+  comp.escalationMenuVisible = true;
+  comp.toggleEscalationMenu();
+  expect(comp.quickActionVisible).toBe(false);
+  expect(comp.escalationMenuVisible).toBe(false);
+});

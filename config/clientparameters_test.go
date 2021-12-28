@@ -19,23 +19,31 @@ import (
 func TestVerifyClientParameters(tester *testing.T) {
 	params := &ClientParameters{}
 	err := params.Verify()
-	if assert.Nil(tester, err) {
-		assert.Zero(tester, params.WebSocketTimeoutMs)
-		assert.Zero(tester, params.TipTimeoutMs)
-		assert.Zero(tester, params.ApiTimeoutMs)
-		assert.Zero(tester, params.CacheExpirationMs)
-	}
+	assert.Nil(tester, err)
+	assert.Zero(tester, params.WebSocketTimeoutMs)
+	assert.Zero(tester, params.TipTimeoutMs)
+	assert.Zero(tester, params.ApiTimeoutMs)
+	assert.Zero(tester, params.CacheExpirationMs)
+	assert.False(tester, params.CasesEnabled)
+	verifyInitialHuntingParams(tester, &params.HuntingParams)
+	verifyInitialHuntingParams(tester, &params.AlertingParams)
+	verifyInitialHuntingParams(tester, &params.CasesParams)
 }
 
 func TestVerifyHuntingParams(tester *testing.T) {
 	params := &HuntingParameters{}
 	err := params.Verify()
-	if assert.Nil(tester, err) {
-		assert.Equal(tester, DEFAULT_GROUP_FETCH_LIMIT, params.GroupFetchLimit)
-		assert.Equal(tester, DEFAULT_EVENT_FETCH_LIMIT, params.EventFetchLimit)
-		assert.Equal(tester, DEFAULT_RELATIVE_TIME_VALUE, params.RelativeTimeValue)
-		assert.Equal(tester, DEFAULT_RELATIVE_TIME_UNIT, params.RelativeTimeUnit)
-	}
+	assert.Nil(tester, err)
+	verifyInitialHuntingParams(tester, params)
+}
+
+func verifyInitialHuntingParams(tester *testing.T, params *HuntingParameters) {
+	assert.Equal(tester, DEFAULT_GROUP_FETCH_LIMIT, params.GroupFetchLimit)
+	assert.Equal(tester, DEFAULT_EVENT_FETCH_LIMIT, params.EventFetchLimit)
+	assert.Equal(tester, DEFAULT_RELATIVE_TIME_VALUE, params.RelativeTimeValue)
+	assert.Equal(tester, DEFAULT_RELATIVE_TIME_UNIT, params.RelativeTimeUnit)
+	assert.Equal(tester, false, params.EscalateRelatedEventsEnabled)
+	assert.Equal(tester, false, params.EscalateEnabled)
 }
 
 func TestCombineEmptyDeprecatedLinkIntoEmptyLinks(tester *testing.T) {
@@ -70,4 +78,12 @@ func TestCombineDeprecatedLinkIntoNonEmptyLinks(tester *testing.T) {
 	params.combineDeprecatedLinkIntoLinks()
 	assert.Len(tester, action.Links, 2)
 	assert.Len(tester, action.Link, 0)
+}
+
+func TestVerifyCaseParams(tester *testing.T) {
+	params := &CaseParameters{}
+	params.MostRecentlyUsedLimit = -1
+	err := params.Verify()
+	assert.Nil(tester, err)
+	assert.Equal(tester, params.MostRecentlyUsedLimit, 0)
 }

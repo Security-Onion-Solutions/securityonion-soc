@@ -22,6 +22,7 @@ func TestVerifyServer(tester *testing.T) {
 	if assert.Error(tester, err) {
 		assert.Equal(tester, DEFAULT_MAX_PACKET_COUNT, cfg.MaxPacketCount)
 		assert.Equal(tester, DEFAULT_IDLE_CONNECTION_TIMEOUT_MS, cfg.IdleConnectionTimeoutMs)
+		assert.Equal(tester, DEFAULT_MAX_UPLOAD_SIZE_BYTES, cfg.MaxUploadSizeBytes)
 		assert.False(tester, cfg.DeveloperEnabled)
 	}
 

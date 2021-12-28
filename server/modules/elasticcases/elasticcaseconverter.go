@@ -39,13 +39,13 @@ func convertFromElasticCase(inputCase *ElasticCase) (*model.Case, error) {
 	outputCase.Id = inputCase.Id
 	outputCase.Status = inputCase.Status
 	if inputCase.CreatedDate != nil {
-		outputCase.CreateTime = *inputCase.CreatedDate
+		outputCase.CreateTime = inputCase.CreatedDate
 	}
 	if inputCase.ModifiedDate != nil {
-		outputCase.StartTime = *inputCase.ModifiedDate
+		outputCase.UpdateTime = inputCase.ModifiedDate
 	}
 	if inputCase.ClosedDate != nil {
-		outputCase.CompleteTime = *inputCase.ClosedDate
+		outputCase.CompleteTime = inputCase.ClosedDate
 	}
 	return outputCase, nil
 }

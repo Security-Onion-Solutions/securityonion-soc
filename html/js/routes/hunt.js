@@ -30,6 +30,7 @@ const huntComponent = {
     queryName: '',
     queryFilters: [],
     queryGroupBys: [],
+    querySortBys: [],
     eventFields: {},
     dateRange: '',
     relativeTimeEnabled: true,
@@ -46,6 +47,7 @@ const huntComponent = {
     huntPending: false,
     ackEnabled: false,
     escalateEnabled: false,
+    viewEnabled: false,
     collapsedSections: [],
 
     filterToggles: [],
@@ -91,6 +93,7 @@ const huntComponent = {
     fetchTimeSecs: 0,
     roundTripTimeSecs: 0,
     mruQueries: [],
+    mruCases: [],
 
     autohunt: true,
 
@@ -105,6 +108,11 @@ const huntComponent = {
     quickActionEvent: null,
     quickActionField: "",
     quickActionValue: "",
+    escalationMenuVisible: false,
+    escalationMenuX: 0,
+    escalationMenuY: 0,
+    escalationItem: null,
+    escalateRelatedEventsEnabled: false,
     actions: [],
   }},
   created() {
@@ -190,6 +198,8 @@ const huntComponent = {
       this.advanced = params["advanced"];
       this.ackEnabled = params["ackEnabled"];
       this.escalateEnabled = params["escalateEnabled"];
+      this.escalateRelatedEventsEnabled = params["escalateRelatedEventsEnabled"];
+      this.viewEnabled = params["viewEnabled"];
       if (this.queries != null && this.queries.length > 0) {
         this.query = this.queries[0].query;
       }
@@ -404,7 +414,7 @@ const huntComponent = {
         this.$root.showError(error);
       }
     },  
-    async ack(event, item, idx, acknowledge, escalate = false) {
+    async ack(event, item, idx, acknowledge, escalate = false, caseId = null) {
       this.$root.startLoading();
       try {
         var docEvent = item;
@@ -414,45 +424,49 @@ const huntComponent = {
         }
         var isAlert = ('rule.name' in item || 'event.severity_label' in item);
         if (escalate) {
-          var title = item['rule.name'];
-          if (!title) {
-            title = this.i18n.eventCaseTitle;
-            if (item['event.module'] || item['event.dataset']) {
-              title = title + ": ";
-              if (item['event.module']) {
-                title = title + item['event.module'];
+          if (!caseId || !this.escalateRelatedEventsEnabled) {
+            // Add to new case
+            var title = item['rule.name'];
+            if (!title) {
+              title = this.i18n.eventCaseTitle;
+              if (item['event.module'] || item['event.dataset']) {
+                title = title + ": ";
+                if (item['event.module']) {
+                  title = title + item['event.module'];
+                  if (item['event.dataset']) {
+                    title = title + " - ";
+                  }
+                }
                 if (item['event.dataset']) {
-                  title = title + " - ";
+                  title = title + item['event.dataset'];
                 }
               }
-              if (item['event.dataset']) {
-                title = title + item['event.dataset'];
-              }
+            }
+
+            var description = item['message'];
+            if (!description) description = JSON.stringify(item);
+
+            var severity = item['event.severity'];
+            var template = 'rule.case_template' in item ? item['rule.case_template'] : '';
+
+            const response = await this.$root.papi.post('case/', {
+              title: title,
+              description: description,
+              severity: severity,
+              template: template,
+            });
+            if (response && response.data) {
+              caseId = response.data.id;
             }
           }
 
-          var description = item['message'];
-          if (!description) description = JSON.stringify(item);
-
-          var severity = item['event.severity'];
-          if (!severity || isNaN(severity)) {
-            switch (item['event.severity_label']) {
-            case 'low': severity = 1; break;
-            case 'medium': severity = 2; break;
-            case 'high': severity = 3; break;
-            case 'critical': severity = 4; break;
-            default: severity = 3;
-            }
+          // Attach the event to the case
+          if (caseId && this.escalateRelatedEventsEnabled) {
+            const response = await this.$root.papi.post('case/events', {
+              fields: item,
+              caseId: caseId,
+            });
           }
-
-          var template = 'rule.case_template' in item ? item['rule.case_template'] : '';
-
-          const response = await this.$root.papi.post('case', {
-            title: title,
-            description: description,
-            severity: severity,
-            template: template,
-          });
         }
         if (isAlert) {
           const response = await this.$root.papi.post('events/ack', {
@@ -536,6 +550,7 @@ const huntComponent = {
       this.queryName = "";
       this.queryFilters = [];
       this.queryGroupBys = [];
+      this.querySortBys = [];
       var route = this;
       if (this.query) {
         var segments = this.query.split("|");
@@ -564,7 +579,13 @@ const huntComponent = {
                   route.queryGroupBys.push(item);
                 }
               });
-              break;
+            }
+            if (segment.indexOf("sortby") == 0) {
+              segment.split(" ").forEach(function(item, index) {
+                if (index > 0 && item.trim().length > 0) {
+                  route.querySortBys.push(item);
+                }
+              });
             }
           }
         }
@@ -601,7 +622,27 @@ const huntComponent = {
           }
         }
         if (segments[i].length > 0) {
-          newQuery = newQuery.trim() + " | " + segments[i];
+          newQuery = newQuery.trim() + " | " + segments[i].trim();
+        }
+      }
+      this.query = newQuery.trim();
+      if (!this.notifyInputsChanged()) {
+        this.obtainQueryDetails();
+      }        
+    },
+    removeSortBy(sortBy) {
+      var segments = this.query.split("|");
+      var newQuery = segments[0];
+      for (var i = 1; i < segments.length; i++) {
+        if (segments[i].trim().indexOf("sortby") == 0) {
+          segments[i].replace(/,/g, ' ');
+          segments[i] = segments[i].replace(" " + sortBy, "");
+          if (segments[i].trim() == "sortby") {
+            segments[i] = "";
+          }
+        }
+        if (segments[i].length > 0) {
+          newQuery = newQuery.trim() + " | " + segments[i].trim();
         }
       }
       this.query = newQuery.trim();
@@ -630,9 +671,28 @@ const huntComponent = {
         this.$router.push(this.filterRouteDrilldown);
       }
     },
-    toggleQuickAction(domEvent, event, field, value) {
-      if (!domEvent || this.quickActionVisible) {
+    toggleEscalationMenu(domEvent, event) {
+      if (!this.escalateRelatedEventsEnabled) {
+        this.ack(domEvent, event, 0, true, true);
+        return;
+      }
+
+      if (!domEvent || this.quickActionVisible || this.escalationMenuVisible) {
         this.quickActionVisible = false;
+        this.escalationMenuVisible = false;
+        return;
+      }
+      this.escalationMenuX = domEvent.clientX;
+      this.escalationMenuY = domEvent.clientY;
+      this.escalationItem = event;
+      this.$nextTick(() => { 
+        this.escalationMenuVisible = true; 
+      });      
+    },
+    toggleQuickAction(domEvent, event, field, value) {
+      if (!domEvent || this.quickActionVisible || this.escalationMenuVisible) {
+        this.quickActionVisible = false;
+        this.escalationMenuVisible = false;
         return;
       }
 
@@ -1060,6 +1120,9 @@ const huntComponent = {
         localStorage.removeItem(item);
       }
     },
+    formatCaseSummary(socCase) {
+      return socCase.title;
+    },
     saveTimezone() {
       localStorage['timezone'] = this.zone;
     },
@@ -1095,6 +1158,8 @@ const huntComponent = {
       if (localStorage[prefix + '.relativeTimeValue']) this.relativeTimeValue = parseInt(localStorage[prefix + '.relativeTimeValue']);
       if (localStorage[prefix + '.relativeTimeUnit']) this.relativeTimeUnit = parseInt(localStorage[prefix + '.relativeTimeUnit']);
       if (localStorage[prefix + '.autohunt']) this.autohunt = localStorage[prefix + '.autohunt'] == 'true';
+
+      if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
     toggleShowSection(item) {
       if (this.isExpandedSection(item)) {
@@ -1113,3 +1178,6 @@ routes.push({ path: '/hunt', name: 'hunt', component: huntComponent});
 
 const alertsComponent = Object.assign({}, huntComponent);
 routes.push({ path: '/alerts', name: 'alerts', component: alertsComponent});
+
+const casesComponent = Object.assign({}, huntComponent);
+routes.push({ path: '/cases', name: 'cases', component: casesComponent});

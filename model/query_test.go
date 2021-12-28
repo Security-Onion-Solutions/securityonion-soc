@@ -72,6 +72,12 @@ func TestQueries(tester *testing.T) {
 
 	validateQuery(tester, "abcA|groupby", "QUERY_INVALID__GROUPBY_TERMS_MISSING")
 	validateQuery(tester, "abcA|groupby ", "QUERY_INVALID__GROUPBY_TERMS_MISSING")
+
+	validateQuery(tester, "abcA|sortby\njjj, lll", "abcA | sortby jjj lll")
+	validateQuery(tester, "abcA|\nsortby\tjjj", "abcA | sortby jjj")
+
+	validateQuery(tester, "abcA|sortby", "QUERY_INVALID__SORTBY_TERMS_MISSING")
+	validateQuery(tester, "abcA|sortby ", "QUERY_INVALID__SORTBY_TERMS_MISSING")
 }
 
 func validateGroup(tester *testing.T, orig string, group string, expected string) {
@@ -88,6 +94,22 @@ func TestGroup(tester *testing.T) {
 	validateGroup(tester, "a", "b", "a | groupby b")
 	validateGroup(tester, "a|groupby b", "c", "a | groupby b c")
 	validateGroup(tester, "a|groupby b", "b", "a | groupby b")
+}
+
+func validateSort(tester *testing.T, orig string, sort string, expected string) {
+	query := NewQuery()
+	query.Parse(orig)
+	actual, err := query.Sort(sort)
+	if err != nil {
+		actual = err.Error()
+	}
+	assert.Equal(tester, expected, actual)
+}
+
+func TestSort(tester *testing.T) {
+	validateSort(tester, "a", "b", "a | sortby b")
+	validateSort(tester, "a|sortby b", "c", "a | sortby b c")
+	validateSort(tester, "a|sortby b", "b", "a | sortby b")
 }
 
 func validateFilter(tester *testing.T, orig string, key string, value string, scalar bool, mode string, expected string) {

@@ -71,3 +71,83 @@ func (store *HttpCasestore) Create(ctx context.Context, socCase *model.Case) (*m
   }
   return nil, err
 }
+
+func (store *HttpCasestore) Update(ctx context.Context, socCase *model.Case) (*model.Case, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) GetCase(ctx context.Context, caseId string) (*model.Case, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) GetCaseHistory(ctx context.Context, caseId string) ([]interface{}, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) CreateComment(ctx context.Context, comment *model.Comment) (*model.Comment, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) GetComment(ctx context.Context, commentId string) (*model.Comment, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) GetComments(ctx context.Context, commentId string) ([]*model.Comment, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) UpdateComment(ctx context.Context, comment *model.Comment) (*model.Comment, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) DeleteComment(ctx context.Context, id string) error {
+  return errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) CreateRelatedEvent(ctx context.Context, event *model.RelatedEvent) (*model.RelatedEvent, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) GetRelatedEvent(ctx context.Context, id string) (*model.RelatedEvent, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) GetRelatedEvents(ctx context.Context, caseId string) ([]*model.RelatedEvent, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) DeleteRelatedEvent(ctx context.Context, id string) error {
+  return errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) CreateArtifact(ctx context.Context, attachment *model.Artifact) (*model.Artifact, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) GetArtifact(ctx context.Context, id string) (*model.Artifact, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) GetArtifacts(ctx context.Context, caseId string, groupType string, groupId string) ([]*model.Artifact, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) DeleteArtifact(ctx context.Context, id string) error {
+  return errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) UpdateArtifact(ctx context.Context, artifact *model.Artifact) (*model.Artifact, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) CreateArtifactStream(ctx context.Context, artifactstream *model.ArtifactStream) (string, error) {
+  return "", errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) GetArtifactStream(ctx context.Context, id string) (*model.ArtifactStream, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) DeleteArtifactStream(ctx context.Context, id string) error {
+  return errors.New("Unsupported operation by this module")
+}
