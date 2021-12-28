@@ -241,3 +241,39 @@ td {
 #connection-indicator {
   color: white;
 }
+
+.comment-body {
+  width: 100%;
+}
+
+.markdown-body {
+  overflow: auto;
+  position: relative;
+  padding: 0.75em 1.25em;
+  border-radius: 0.25em;
+  background-color: rgba(0,0,0,.2);
+}
+
+.markdown-body pre {
+  overflow-x: scroll;
+}
+
+.v-application .markdown-body pre code {
+  display: block;
+  background-color: revert !important;
+  padding: 0.25 !important;
+}
+
+.theme--light.v-application .markdown-body pre {
+  background-color: rgba(0,0,0,.05);
+  border-radius: 0.25em;
+}
+
+.theme--dark.v-application .markdown-body pre {
+  background-color: hsla(0,0%,100%,.1);
+  border-radius: 0.25em;
+}
+
+.case.avatar-font {
+  font-size: 11px;
+}

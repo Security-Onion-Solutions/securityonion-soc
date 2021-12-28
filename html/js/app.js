@@ -7,6 +7,7 @@
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
 const routes = [];
 
 if (typeof global !== 'undefined') global.routes = routes;
@@ -430,6 +431,10 @@ $(document).ready(function() {
         return "";
       },
       formatMarkdown(str) {
+        marked.setOptions({
+          renderer: new marked.Renderer(),
+          smartLists: true
+        })
         var md = str;
         if (str) {
           md = marked(str);
