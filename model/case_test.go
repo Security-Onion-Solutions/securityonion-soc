@@ -31,10 +31,13 @@ func TestNewArtifactStream(tester *testing.T) {
 	event := NewArtifactStream()
 	assert.NotZero(tester, event.CreateTime)
 	reader := strings.NewReader("hello world")
-	len, mimeType, err := event.Write(reader)
+	len, mimeType, md5, sha1, sha256, err := event.Write(reader)
 	assert.NoError(tester, err)
 	assert.Equal(tester, 11, len)
 	assert.Equal(tester, "text/plain; charset=utf-8", mimeType)
+	assert.Equal(tester, "5eb63bbbe01eeed093cb22bb8f5acdc3", md5)
+	assert.Equal(tester, "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed", sha1)
+	assert.Equal(tester, "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9", sha256)
 	assert.Equal(tester, "aGVsbG8gd29ybGQ=", event.Content)
 
 	var buffer bytes.Buffer

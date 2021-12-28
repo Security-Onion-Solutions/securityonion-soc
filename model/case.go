@@ -11,10 +11,13 @@ package model
 
 import (
   "bytes"
+  "crypto/md5"
+  "crypto/sha1"
+  "crypto/sha256"
   "encoding/base64"
   "fmt"
+  "hash"
   "io"
-  "math"
   "net/http"
   "strings"
   "time"
@@ -92,6 +95,9 @@ type Artifact struct {
   Tags         []string `json:"tags"`
   Description  string   `json:"description"`
   Ioc          bool     `json:"ioc"`
+  Md5          string   `json:"md5"`
+  Sha1         string   `json:"sha1"`
+  Sha256       string   `json:"sha256"`
 }
 
 func NewArtifact() *Artifact {
@@ -113,20 +119,27 @@ func NewArtifactStream() *ArtifactStream {
   return newStream
 }
 
-func (stream *ArtifactStream) Write(reader io.Reader) (int, string, error) {
-  var buffer bytes.Buffer
-  var mimeType string
-  b64 := base64.NewEncoder(base64.StdEncoding, &buffer)
-  copyLen, err := io.Copy(b64, reader)
+func (stream *ArtifactStream) hashBytes(hasher hash.Hash, input []byte) string {
+  hasher.Write(input)
+  output := hasher.Sum(nil)
+  return fmt.Sprintf("%x", output)
+}
 
+func (stream *ArtifactStream) Write(reader io.Reader) (int, string, string, string, string, error) {
+  var buffer bytes.Buffer
+  var mimeType, md5hash, sha1hash, sha256hash string
+
+  // Collect bytes in memory
+  copyLen, err := buffer.ReadFrom(reader)
   if err == nil {
-    b64.Close()
-    stream.Content = buffer.String()
-    preview := stream.Content[:int64(math.Min(1024, float64(copyLen)))]
-    previewDecoded, _ := base64.StdEncoding.DecodeString(preview)
-    mimeType = http.DetectContentType(previewDecoded)
+    raw := buffer.Bytes()
+    stream.Content = base64.StdEncoding.EncodeToString(raw)
+    mimeType = http.DetectContentType(raw)
+    md5hash = stream.hashBytes(md5.New(), raw)
+    sha1hash = stream.hashBytes(sha1.New(), raw)
+    sha256hash = stream.hashBytes(sha256.New(), raw)
   }
-  return int(copyLen), mimeType, err
+  return int(copyLen), mimeType, md5hash, sha1hash, sha256hash, err
 }
 
 func (stream *ArtifactStream) Read() io.Reader {

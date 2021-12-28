@@ -140,6 +140,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       longLengthLimit: value => (encodeURI(value).split(/%..|./).length - 1 < 10000000) || this.$root.i18n.required,
       fileSizeLimit: value => (value == null || value.size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
       fileNotEmpty: value => (value == null || value.size > 0) || this.$root.i18n.fileEmpty,
+      fileRequired: value => (value != null) || this.$root.i18n.required,
     },
     attachment: null,
     maxUploadSizeBytes: 26214400,
@@ -391,7 +392,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
 
         let config = undefined;
         let data = JSON.stringify(form);
-        if (this.attachment) {
+        if (this.attachment && form.artifactType == 'file') {
           let jsonData = data;
           data = new FormData();
           data.append("json", jsonData);
@@ -515,6 +516,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     },
     resetForm(ref) {
       const form = { valid: false };
+      this.attachment = null;
       switch (ref) {
         case "attachments": 
           form.tlp = this.getDefaultPreset('tlp');

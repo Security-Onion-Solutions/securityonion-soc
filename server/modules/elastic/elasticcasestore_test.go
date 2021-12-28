@@ -421,11 +421,32 @@ func TestValidateArtifactInvalid(tester *testing.T) {
 	artifact.StreamLen = 0
 
 	for x := 1; x < 5; x++ {
-		artifact.MimeType += "this is my unreasonably long severity\n"
+		artifact.MimeType += "this is my unreasonably long str\n"
 	}
 	err = store.validateArtifact(artifact)
-	assert.EqualError(tester, err, "mimeType is too long (152/100)")
+	assert.EqualError(tester, err, "mimeType is too long (132/100)")
 	artifact.MimeType = "image/jpg"
+
+	for x := 1; x < 5; x++ {
+		artifact.Md5 += "this is my unreasonably long str\n"
+	}
+	err = store.validateArtifact(artifact)
+	assert.EqualError(tester, err, "md5 is too long (132/100)")
+	artifact.Md5 = "myMd5"
+
+	for x := 1; x < 5; x++ {
+		artifact.Sha1 += "this is my unreasonably long str\n"
+	}
+	err = store.validateArtifact(artifact)
+	assert.EqualError(tester, err, "sha1 is too long (132/100)")
+	artifact.Sha1 = "mySha1"
+
+	for x := 1; x < 5; x++ {
+		artifact.Sha256 += "this is my unreasonably long str\n"
+	}
+	err = store.validateArtifact(artifact)
+	assert.EqualError(tester, err, "sha256 is too long (132/100)")
+	artifact.Sha256 = "mySha256"
 
 	for x := 1; x < 5; x++ {
 		artifact.Tlp += "this is my unreasonably long tlp\n"
@@ -1297,6 +1318,9 @@ func TestUpdateArtifact(tester *testing.T) {
 	eventPayload["artifact.value"] = "myValue"
 	eventPayload["artifact.streamLength"] = 123.0
 	eventPayload["artifact.mimeType"] = "myMimeType"
+	eventPayload["artifact.md5"] = "myMd5"
+	eventPayload["artifact.sha1"] = "mySha1"
+	eventPayload["artifact.sha256"] = "mySha256"
 	eventPayload["artifact.streamId"] = "myStreamId"
 	eventPayload["artifact.description"] = "myDesc"
 	elasticEvent := &model.EventRecord{
@@ -1312,6 +1336,9 @@ func TestUpdateArtifact(tester *testing.T) {
 	artifact.ArtifactType = "file"
 	artifact.GroupId = "myNewGroupId"
 	artifact.MimeType = "myNewMimeType"
+	artifact.Md5 = "myNewMd5"
+	artifact.Sha1 = "myNewSha1"
+	artifact.Sha256 = "myNewSha256"
 	artifact.StreamId = "myNewStreamId"
 	artifact.StreamLen = 456
 	artifact.Description = "myNewDesc"
@@ -1334,6 +1361,9 @@ func TestUpdateArtifact(tester *testing.T) {
 	assert.Equal(tester, "myGroupId", newArtifact.GroupId)
 	assert.Equal(tester, "myStreamId", newArtifact.StreamId)
 	assert.Equal(tester, "myMimeType", newArtifact.MimeType)
+	assert.Equal(tester, "myMd5", newArtifact.Md5)
+	assert.Equal(tester, "mySha1", newArtifact.Sha1)
+	assert.Equal(tester, "mySha256", newArtifact.Sha256)
 	assert.Equal(tester, "myValue", newArtifact.Value)
 	assert.Equal(tester, 123, newArtifact.StreamLen)
 }

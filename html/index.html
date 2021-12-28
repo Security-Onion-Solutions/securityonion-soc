@@ -1395,6 +1395,27 @@
                               ({{ props.item.streamLength | formatCount }} 
                               {{ i18n.bytes }})
                             </a>
+                            <div class="mt-4">
+                              <div class="font-weight-bold">{{i18n.sha256}}: </div>
+                              <div id="`attachments-${props.index}-sha256`" class="case">
+                                {{ withDefault(props.item.sha256, i18n.unknown) }}
+                                <v-icon class="ml-1" @click="$root.copyToClipboard(props.item.sha256)" :title="i18n.copyToClipboard">fa-copy</v-icon>
+                              </div>
+                            </div>
+                            <div class="mt-2">
+                              <div class="font-weight-bold">{{i18n.sha1}}: </div>
+                              <div id="`attachments-${props.index}-sha1`" class="case">
+                                {{ withDefault(props.item.sha1, i18n.unknown) }}
+                                <v-icon class="ml-1" @click="$root.copyToClipboard(props.item.sha1)" :title="i18n.copyToClipboard">fa-copy</v-icon>
+                              </div>
+                            </div>
+                            <div class="mt-2">
+                              <div class="font-weight-bold">{{i18n.md5}}: </div>
+                              <div id="`attachments-${props.index}-md5`" class="case">
+                                {{ withDefault(props.item.md5, i18n.unknown) }}
+                                <v-icon class="ml-1" @click="$root.copyToClipboard(props.item.md5)" :title="i18n.copyToClipboard">fa-copy</v-icon>
+                              </div>
+                            </div>
                           </v-container>
                           <v-container fluid class="my-2">
                             <div class="clicktoedit" @click="startEdit(`attachments-${props.index}-description-input`, props.item.description, `attachments-${props.index}-description`, 'description', modifyAssociation, ['attachments', props.item], true)">
@@ -1561,6 +1582,27 @@
                               ({{ props.item.streamLength | formatCount }} 
                               {{ i18n.bytes }})
                             </a>
+                            <div class="mt-4">
+                              <div class="font-weight-bold">{{i18n.sha256}}: </div>
+                              <div id="`attachments-${props.index}-sha256`" class="case">
+                                {{ withDefault(props.item.sha256, i18n.unknown) }}
+                                <v-icon class="ml-1" @click="$root.copyToClipboard(props.item.sha256)" :title="i18n.copyToClipboard">fa-copy</v-icon>
+                              </div>
+                            </div>
+                            <div class="mt-2">
+                              <div class="font-weight-bold">{{i18n.sha1}}: </div>
+                              <div id="`attachments-${props.index}-sha1`" class="case">
+                                {{ withDefault(props.item.sha1, i18n.unknown) }}
+                                <v-icon class="ml-1" @click="$root.copyToClipboard(props.item.sha1)" :title="i18n.copyToClipboard">fa-copy</v-icon>
+                              </div>
+                            </div>
+                            <div class="mt-2">
+                              <div class="font-weight-bold">{{i18n.md5}}: </div>
+                              <div id="`attachments-${props.index}-md5`" class="case">
+                                {{ withDefault(props.item.md5, i18n.unknown) }}
+                                <v-icon class="ml-1" @click="$root.copyToClipboard(props.item.md5)" :title="i18n.copyToClipboard">fa-copy</v-icon>
+                              </div>
+                            </div>
                           </v-container>
                           <v-container fluid class="my-2">
                             <div class="clicktoedit" @click="startEdit(`evidence-${props.index}-description-input`, props.item.description, `evidence-${props.index}-description`, 'description', modifyAssociation, ['evidence', props.item], true)">
@@ -1676,7 +1718,7 @@
                           <v-form ref="evidence" v-model="associatedForms['evidence'].valid">
                             <v-select v-if="!isPresetCustomEnabled('artifactType')" v-model="associatedForms['evidence'].artifactType" :items="selectList('artifactType')" persistent-hint :hint="i18n.artifactTypeHelp"/>
                             <v-combobox v-if="isPresetCustomEnabled('artifactType')" v-model="associatedForms['evidence'].artifactType" :items="selectList('artifactType')" persistent-hint :hint="i18n.artifactTypeHelp"/>
-                            <v-file-input v-if="associatedForms['evidence'].artifactType == 'file'" show-size v-model="attachment" persistent-hint :hint="getAttachmentHelp()" :rules="[rules.fileSizeLimit, rules.fileNotEmpty]"/>
+                            <v-file-input v-if="associatedForms['evidence'].artifactType == 'file'" show-size v-model="attachment" persistent-hint :hint="getAttachmentHelp()" :rules="[rules.fileSizeLimit, rules.fileNotEmpty, rules.fileRequired]"/>
                             <v-textarea v-if="associatedForms['evidence'].artifactType != 'file'" rows="2" v-model="associatedForms['evidence'].value" :rules="[rules.required]" :placeholder="i18n.artifactValue" persistent-hint :hint="i18n.artifactValueHelp"/>
                             <v-textarea rows="2" v-model="associatedForms['evidence'].description" :placeholder="i18n.artifactDescription" persistent-hint :hint="i18n.artifactDescriptionHelp"/>
                             <v-checkbox v-model="associatedForms['evidence'].ioc" persistent-hint :hint="i18n.artifactIocHelp"/>

@@ -232,6 +232,15 @@ func (store *ElasticCasestore) validateArtifact(artifact *model.Artifact) error 
   if err == nil {
     err = store.validateStringArray(artifact.Tags, SHORT_STRING_MAX, MAX_ARRAY_ELEMENTS, "tags")
   }
+  if err == nil {
+    err = store.validateString(artifact.Md5, SHORT_STRING_MAX, "md5")
+  }
+  if err == nil {
+    err = store.validateString(artifact.Sha1, SHORT_STRING_MAX, "sha1")
+  }
+  if err == nil {
+    err = store.validateString(artifact.Sha256, SHORT_STRING_MAX, "sha256")
+  }
   return err
 }
 
@@ -730,6 +739,9 @@ func (store *ElasticCasestore) UpdateArtifact(ctx context.Context, artifact *mod
         artifact.StreamLen = old.StreamLen
         artifact.MimeType = old.MimeType
         artifact.StreamId = old.StreamId
+        artifact.Md5 = old.Md5
+        artifact.Sha1 = old.Sha1
+        artifact.Sha256 = old.Sha256
         var results *model.EventIndexResults
         results, err = store.save(ctx, artifact, "artifact", store.prepareForSave(ctx, &artifact.Auditable))
         if err == nil {

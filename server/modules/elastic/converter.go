@@ -534,6 +534,15 @@ func convertElasticEventToArtifact(event *model.EventRecord) (*model.Artifact, e
 			if value, ok := event.Payload["artifact.ioc"]; ok {
 				obj.Ioc = value.(bool)
 			}
+			if value, ok := event.Payload["artifact.md5"]; ok {
+				obj.Md5 = value.(string)
+			}
+			if value, ok := event.Payload["artifact.sha1"]; ok {
+				obj.Sha1 = value.(string)
+			}
+			if value, ok := event.Payload["artifact.sha256"]; ok {
+				obj.Sha256 = value.(string)
+			}
 			obj.CreateTime = parseTime(event.Payload, "artifact.createTime")
 		}
 	}
