@@ -15,6 +15,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestGroupWithQuotes(tester *testing.T) {
+	query := NewQuery()
+	err := query.Parse(`foo:"bar" | groupby "complex field" "another complex field"`)
+	assert.NoError(tester, err)
+	groupbySegment := query.NamedSegment(SegmentKind_GroupBy).(*GroupBySegment)
+	assert.Len(tester, groupbySegment.Fields(), 2)
+}
+
 func validateQuery(tester *testing.T, args ...string) {
 	query := NewQuery()
 	err := query.Parse(args[0])

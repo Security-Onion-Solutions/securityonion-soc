@@ -527,3 +527,38 @@ func TestConvertElasticEventToRelatedEvent(tester *testing.T) {
 	assert.Equal(tester, &myCreateTime, obj.CreateTime)
 	assert.Equal(tester, "bar", obj.Fields["foo"])
 }
+
+func TestUnquote(tester *testing.T) {
+	input := make([]string, 0, 0)
+	input = append(input, "\"one\"")
+	input = append(input, "\"two")
+	input = append(input, "three")
+	input = append(input, "\"fo ur\"")
+	input = append(input, "\"five six\"")
+	input = append(input, "se\"v\"en")
+
+	output := unquoteStringArray(input)
+	assert.Equal(tester, "one", output[0])
+	assert.Equal(tester, "two", output[1])
+	assert.Equal(tester, "three", output[2])
+	assert.Equal(tester, "fo ur", output[3])
+	assert.Equal(tester, "five six", output[4])
+	assert.Equal(tester, "se\"v\"en", output[5])
+}
+
+func TestConvertSeverity(tester *testing.T) {
+	assert.Equal(tester, "high", convertSeverity(""))
+	assert.Equal(tester, "unknown", convertSeverity("unknown"))
+	assert.Equal(tester, "low", convertSeverity("low"))
+	assert.Equal(tester, "low", convertSeverity("Low"))
+	assert.Equal(tester, "low", convertSeverity("1"))
+	assert.Equal(tester, "medium", convertSeverity("medium"))
+	assert.Equal(tester, "medium", convertSeverity("Medium"))
+	assert.Equal(tester, "medium", convertSeverity("2"))
+	assert.Equal(tester, "high", convertSeverity("high"))
+	assert.Equal(tester, "high", convertSeverity("High"))
+	assert.Equal(tester, "high", convertSeverity("3"))
+	assert.Equal(tester, "critical", convertSeverity("critical"))
+	assert.Equal(tester, "critical", convertSeverity("4"))
+	assert.Equal(tester, "critical", convertSeverity("Critical"))
+}

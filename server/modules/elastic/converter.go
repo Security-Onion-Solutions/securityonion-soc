@@ -177,6 +177,20 @@ func calcTimelineInterval(intervals int, beginTime time.Time, endTime time.Time)
 	return "30d"
 }
 
+func unquoteString(field string) string {
+	field = strings.TrimSuffix(field, `"`)
+	field = strings.TrimPrefix(field, `"`)
+	return field
+}
+
+func unquoteStringArray(fields []string) []string {
+	newFields := make([]string, 0, 0)
+	for _, field := range fields {
+		newFields = append(newFields, unquoteString(field))
+	}
+	return newFields
+}
+
 func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSearchCriteria) (string, error) {
 	var err error
 	var esJson string
@@ -196,6 +210,7 @@ func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSear
 			groupBySegment := segment.(*model.GroupBySegment)
 			fields := groupBySegment.Fields()
 			if len(fields) > 0 {
+				fields = unquoteStringArray(fields)
 				agg, name := makeAggregation(store, "groupby", fields, criteria.MetricLimit, false)
 				aggregations[name] = agg
 				aggregations["bottom"], _ = makeAggregation(store, "", fields[0:1], criteria.MetricLimit, true)
@@ -375,6 +390,25 @@ func convertElasticEventToAuditable(event *model.EventRecord, auditable *model.A
 	return nil
 }
 
+func convertSeverity(sev string) string {
+	sev = strings.ToLower(sev)
+	if len(sev) != 0 {
+		switch sev {
+		case "1":
+			sev = "low"
+		case "2":
+			sev = "medium"
+		case "3":
+			sev = "high"
+		case "4":
+			sev = "critical"
+		}
+	} else {
+		sev = "high"
+	}
+	return sev
+}
+
 func convertElasticEventToCase(event *model.EventRecord) (*model.Case, error) {
 	var err error
 	var obj *model.Case
@@ -393,7 +427,7 @@ func convertElasticEventToCase(event *model.EventRecord) (*model.Case, error) {
 				obj.Priority = int(value.(float64))
 			}
 			if value, ok := event.Payload["case.severity"]; ok {
-				obj.Severity = value.(string)
+				obj.Severity = convertSeverity(value.(string))
 			}
 			if value, ok := event.Payload["case.status"]; ok {
 				obj.Status = value.(string)
