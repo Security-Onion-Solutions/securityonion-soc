@@ -528,24 +528,6 @@ func TestConvertElasticEventToRelatedEvent(tester *testing.T) {
 	assert.Equal(tester, "bar", obj.Fields["foo"])
 }
 
-func TestUnquote(tester *testing.T) {
-	input := make([]string, 0, 0)
-	input = append(input, "\"one\"")
-	input = append(input, "\"two")
-	input = append(input, "three")
-	input = append(input, "\"fo ur\"")
-	input = append(input, "\"five six\"")
-	input = append(input, "se\"v\"en")
-
-	output := unquoteStringArray(input)
-	assert.Equal(tester, "one", output[0])
-	assert.Equal(tester, "two", output[1])
-	assert.Equal(tester, "three", output[2])
-	assert.Equal(tester, "fo ur", output[3])
-	assert.Equal(tester, "five six", output[4])
-	assert.Equal(tester, "se\"v\"en", output[5])
-}
-
 func TestConvertSeverity(tester *testing.T) {
 	assert.Equal(tester, "high", convertSeverity(""))
 	assert.Equal(tester, "unknown", convertSeverity("unknown"))

@@ -250,16 +250,17 @@ func (segment *GroupBySegment) Fields() []string {
 }
 
 func (segment *GroupBySegment) AddGrouping(group string) error {
+  group = UnquoteString(group)
   fields := segment.Fields()
   alreadyGrouped := false
   for _, field := range fields {
-    if field == group {
+    if UnquoteString(field) == group {
       alreadyGrouped = true
     }
   }
   var err error
   if !alreadyGrouped {
-    term, err := NewQueryTerm(group)
+    term, err := NewQueryTerm(QuoteString(group))
     if err == nil {
       segment.terms = append(segment.terms, term)
     }
@@ -553,4 +554,22 @@ func (query *Query) Sort(field string) (string, error) {
   err = sortBySegment.AddSortField(field)
 
   return query.String(), err
+}
+
+func QuoteString(field string) string {
+  return `"` + field + `"`
+}
+
+func UnquoteString(field string) string {
+  field = strings.TrimSuffix(field, `"`)
+  field = strings.TrimPrefix(field, `"`)
+  return field
+}
+
+func UnquoteStringArray(fields []string) []string {
+  newFields := make([]string, 0, 0)
+  for _, field := range fields {
+    newFields = append(newFields, UnquoteString(field))
+  }
+  return newFields
 }
