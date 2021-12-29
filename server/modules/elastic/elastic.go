@@ -16,8 +16,8 @@ import (
   "github.com/security-onion-solutions/securityonion-soc/server"
 )
 
-const DEFAULT_CASE_INDEX = "so-case"
-const DEFAULT_CASE_AUDIT_INDEX = "so-casehistory"
+const DEFAULT_CASE_INDEX = "*:so-case"
+const DEFAULT_CASE_AUDIT_INDEX = "*:so-casehistory"
 const DEFAULT_CASE_ASSOCIATIONS_MAX = 1000
 const DEFAULT_TIME_SHIFT_MS = 120000
 const DEFAULT_DURATION_MS = 1800000

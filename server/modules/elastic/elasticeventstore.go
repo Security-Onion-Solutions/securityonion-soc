@@ -198,12 +198,17 @@ func (store *ElasticEventstore) Search(ctx context.Context, criteria *model.Even
 	return results, err
 }
 
+func (store *ElasticEventstore) disableCrossClusterIndex(index string) string {
+	pieces := strings.SplitN(index, ":", 2)
+	if len(pieces) == 2 {
+		index = pieces[1]
+	}
+	return index
+}
+
 func (store *ElasticEventstore) disableCrossClusterIndexing(indexes []string) []string {
 	for idx, index := range indexes {
-		pieces := strings.SplitN(index, ":", 2)
-		if len(pieces) == 2 {
-			indexes[idx] = pieces[1]
-		}
+		indexes[idx] = store.disableCrossClusterIndex(index)
 	}
 	return indexes
 }
@@ -264,7 +269,7 @@ func (store *ElasticEventstore) Index(ctx context.Context, index string, documen
 			var response string
 
 			log.Debug("Sending index request to primary Elasticsearch client")
-			response, err = store.indexDocument(ctx, index, request, id)
+			response, err = store.indexDocument(ctx, store.disableCrossClusterIndex(index), request, id)
 			if err == nil {
 				err = convertFromElasticIndexResults(store, response, results)
 				if err != nil {
@@ -284,7 +289,7 @@ func (store *ElasticEventstore) Delete(ctx context.Context, index string, id str
 	if err = store.server.CheckAuthorized(ctx, "write", "events"); err == nil {
 		var response string
 		log.Debug("Sending delete request to primary Elasticsearch client")
-		response, err = store.deleteDocument(ctx, index, id)
+		response, err = store.deleteDocument(ctx, store.disableCrossClusterIndex(index), id)
 		if err == nil {
 			err = convertFromElasticIndexResults(store, response, results)
 			if err != nil {
