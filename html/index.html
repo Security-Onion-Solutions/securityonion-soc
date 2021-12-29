@@ -1779,7 +1779,7 @@
                     <template v-slot:item="props">
                       <tr @click="expandRow('events', props.item)" class="expandable">
                         <td>
-                          <router-link class="no-underline" :to="{ name: 'hunt', query: {q:`_id:${props.item.id}`}}" :title="i18n.huntForEvent"><v-icon>fa-crosshairs</v-icon></router-link>
+                          <router-link class="no-underline" :to="{ name: 'hunt', query: {q:`_id:${props.item.fields['soc_id']}`}}" :title="i18n.huntForEvent"><v-icon>fa-crosshairs</v-icon></router-link>
                         </td>
                         <td>{{ props.item.fields.timestamp | formatTimestamp }}</td>
                         <td class="case">
