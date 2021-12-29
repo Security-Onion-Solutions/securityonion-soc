@@ -390,6 +390,25 @@ func convertElasticEventToAuditable(event *model.EventRecord, auditable *model.A
 	return nil
 }
 
+func convertSeverity(sev string) string {
+	sev = strings.ToLower(sev)
+	if len(sev) != 0 {
+		switch sev {
+		case "1":
+			sev = "low"
+		case "2":
+			sev = "medium"
+		case "3":
+			sev = "high"
+		case "4":
+			sev = "critical"
+		}
+	} else {
+		sev = "high"
+	}
+	return sev
+}
+
 func convertElasticEventToCase(event *model.EventRecord) (*model.Case, error) {
 	var err error
 	var obj *model.Case
@@ -408,7 +427,7 @@ func convertElasticEventToCase(event *model.EventRecord) (*model.Case, error) {
 				obj.Priority = int(value.(float64))
 			}
 			if value, ok := event.Payload["case.severity"]; ok {
-				obj.Severity = value.(string)
+				obj.Severity = convertSeverity(value.(string))
 			}
 			if value, ok := event.Payload["case.status"]; ok {
 				obj.Status = value.(string)

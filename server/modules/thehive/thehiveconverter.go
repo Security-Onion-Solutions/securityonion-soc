@@ -22,13 +22,13 @@ func convertSeverity(sev string) int {
 
 	if len(sev) != 0 {
 		switch strings.ToLower(sev) {
-		case "low":
+		case "low", "1":
 			severity = 1
-		case "medium":
+		case "medium", "2":
 			severity = 2
-		case "high":
+		case "high", "3":
 			severity = 3
-		case "critical":
+		case "critical", "4":
 			severity = 4
 		default:
 			severity = 3
