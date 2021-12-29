@@ -246,12 +246,27 @@ td {
   width: 100%;
 }
 
+.case-table table {
+  width: 100% !important;
+  table-layout:fixed;
+}
+
 .markdown-body {
   overflow: auto;
   position: relative;
+}
+
+.comment-body .markdown-body {
   padding: 0.75em 1.25em;
   border-radius: 0.25em;
+}
+
+.theme--dark.v-application .comment-body .markdown-body {
   background-color: rgba(0,0,0,.2);
+}
+
+.theme--light.v-application .comment-body .markdown-body {
+  background-color: rgba(0,0,0,.03);
 }
 
 .markdown-body pre {
