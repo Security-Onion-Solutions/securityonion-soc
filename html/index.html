@@ -1237,12 +1237,12 @@
         <v-row class="mx-sm-8 mx-md-12 mx-lg-4 flex-column flex-md-row">
           <v-col cols="12" md="9" class="case main" order="2" order-md="1">
             <div class="d-block d-md-none">
-              <h2>Description</h2>
+              <h2>{{ i18n.description }}</h2>
             </div>
             <div class="mb-6 mb-md-3">
-              <div class="case detail-field clicktoedit d-flex align-start pa-2" v-if="!isEdit('case-description')" @click="startEdit('case-desc-input',  caseObj.description, 'case-description', 'description', modifyCase, [], true)">
-                <div class="d-block">
-                  <div id="case-description" class="rounded case" :inner-html.prop="caseObj.description | formatMarkdown"></div>
+              <div class="clicktoedit d-flex align-start pa-2" v-if="!isEdit('case-description')" @click="startEdit('case-desc-input',  caseObj.description, 'case-description', 'description', modifyCase, [], true)">
+                <div class="d-block" style="width: 100%;">
+                  <div id="case-description" class="rounded case markdown-body" :inner-html.prop="caseObj.description | formatMarkdown"></div>
                 </div>
               </div>
               <div class="d-flex flex-column" v-if="isEdit('case-description')">
@@ -1379,7 +1379,7 @@
                   <v-text-field v-model="associatedTable['attachments'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
                   <v-data-table ref="attachmentsTable" :sort-by.sync="associatedTable['attachments'].sortBy" :sort-desc.sync="associatedTable['attachments'].sortDesc" :items-per-page.sync="associatedTable['attachments'].itemsPerPage" 
                     :search="associatedTable['attachments'].search" :footer-props="associatedTable['attachments'].footerProps" must-sort :headers="associatedTable['attachments'].headers"
-                    :items="associations['attachments']" item-key="id" :loading="associatedTable['attachments'].loading" :expanded="associatedTable['attachments'].expanded">
+                    :items="associations['attachments']" item-key="id" :loading="associatedTable['attachments'].loading" :expanded="associatedTable['attachments'].expanded" class="case-table">
                     <template v-slot:item="props">
                       <tr @click="expandRow('attachments', props.item)" class="expandable">
                         <td>{{ props.item.createTime | formatDateTime }}</td>
@@ -1392,7 +1392,7 @@
                     <template v-slot:expanded-item="props">
                       <tr>
                         <td :colspan="3" class="case">
-                          <v-container fluid class="my-2">
+                          <v-container fluid class="py-1">
                             <a target="soc-download" :href="`/api/case/artifactstream?id=${props.item.id}`" class="no-underline">
                               <v-icon>fa-download</v-icon>
                               {{ props.item.value }}
@@ -1421,10 +1421,10 @@
                               </div>
                             </div>
                           </v-container>
-                          <v-container fluid class="my-2">
+                          <v-container fluid class="pt-2 pb-0">
                             <div class="clicktoedit" @click="startEdit(`attachments-${props.index}-description-input`, props.item.description, `attachments-${props.index}-description`, 'description', modifyAssociation, ['attachments', props.item], true)">
                               <div class="font-weight-bold">{{i18n.artifactDescription}}: </div>
-                              <div id="`attachments-${props.index}-description`" class="case detail-field" v-if="!isEdit(`attachments-${props.index}-description`)" :inner-html.prop="props.item.description | formatMarkdown"></div>
+                              <div id="`attachments-${props.index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`attachments-${props.index}-description`)" :inner-html.prop="props.item.description | formatMarkdown"></div>
                             </div>
                             <div class="d-flex flex-column" v-if="isEdit(`attachments-${props.index}-description`)">
                               <v-form v-model="editForm.valid">
@@ -1442,7 +1442,7 @@
                               </v-form>
                             </div>
                           </v-container>
-                          <v-container fluid class="my-2">
+                          <v-container fluid class="py-1">
                             <div class="clicktoedit" @click="startEdit(`attachments-${props.index}-tlp-input`, props.item.tlp, `attachments-${props.index}-tlp`, 'tlp', modifyAssociation, ['attachments', props.item])">
                               <div class="font-weight-bold">{{i18n.caseTlp}}: </div>
                               <div id="`attachments-${props.index}-tlp`" class="case detail-field" v-if="!isEdit(`attachments-${props.index}-tlp`)">{{ withDefault(props.item.tlp, i18n.unknown) }}</div>
@@ -1461,10 +1461,10 @@
                               />
                             </v-select>
                           </v-container>
-                          <v-container fluid class="my-2">
+                          <v-container fluid class="py-1">
                             <div class="clicktoedit" @click="startEdit(`attachments-${props.index}-tags-input`, props.item.tags, `attachments-${props.index}-tags`, 'tags', modifyAssociation, ['attachments', props.item])">
                               <div class="font-weight-bold">{{i18n.caseTags}}: </div>
-                              <div id="`attachments-${props.index}-tags`" class="case detail-field" v-if="!isEdit(`attachments-${props.index}-tags`)">
+                              <div id="`attachments-${props.index}-tags`" class="case detail-field mt-1" v-if="!isEdit(`attachments-${props.index}-tags`)">
                                 <v-chip class="mx-1" v-for="tag in props.item.tags" color="primary">{{ tag }}</v-chip>
                               </div>
                             </div>
@@ -1570,7 +1570,7 @@
                   <v-text-field v-model="associatedTable['evidence'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
                   <v-data-table ref="evidenceTable" :sort-by.sync="associatedTable['evidence'].sortBy" :sort-desc.sync="associatedTable['evidence'].sortDesc" :items-per-page.sync="associatedTable['evidence'].itemsPerPage" 
                     :search="associatedTable['evidence'].search" :footer-props="associatedTable['evidence'].footerProps" must-sort :headers="associatedTable['evidence'].headers"
-                    :items="associations['evidence']" item-key="id" :loading="associatedTable['evidence'].loading" :expanded="associatedTable['evidence'].expanded">
+                    :items="associations['evidence']" item-key="id" :loading="associatedTable['evidence'].loading" :expanded="associatedTable['evidence'].expanded" class="case-table">
                     <template v-slot:item="props">
                       <tr @click="expandRow('evidence', props.item)" class="expandable">
                         <td>{{ props.item.createTime | formatDateTime }}</td>
@@ -1615,10 +1615,10 @@
                               </div>
                             </div>
                           </v-container>
-                          <v-container fluid class="my-2">
+                          <v-container fluid class="pt-2 pb-0">
                             <div class="clicktoedit" @click="startEdit(`evidence-${props.index}-description-input`, props.item.description, `evidence-${props.index}-description`, 'description', modifyAssociation, ['evidence', props.item], true)">
                               <div class="font-weight-bold">{{i18n.artifactDescription}}: </div>
-                              <div id="`evidence-${props.index}-description`" class="case detail-field" v-if="!isEdit(`evidence-${props.index}-description`)" :inner-html.prop="props.item.description | formatMarkdown"></div>
+                              <div id="`evidence-${props.index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`evidence-${props.index}-description`)" :inner-html.prop="props.item.description | formatMarkdown"></div>
                             </div>
                             <div class="d-flex flex-column" v-if="isEdit(`evidence-${props.index}-description`)">
                               <v-form v-model="editForm.valid">
@@ -1636,14 +1636,14 @@
                               </v-form>
                             </div>
                           </v-container>
-                          <v-container fluid class="my-2">
+                          <v-container fluid class="py-1">
                             <div class="clicktoedit" @click="startEdit(`evidence-${props.index}-ioc-input`, props.item.ioc, `evidence-${props.index}-ioc`, 'ioc', modifyAssociation, ['evidence', props.item])">
                               <div class="font-weight-bold">{{i18n.artifactIoc}}: </div>
                               <div id="`evidence-${props.index}-ioc`" class="case detail-field" v-if="!isEdit(`evidence-${props.index}-ioc`)">{{ props.item.ioc ? i18n.yes : i18n.no }}</div>
                             </div>
                             <v-checkbox :id="`evidence-${props.index}-ioc-input`" v-if="isEdit(`evidence-${props.index}-ioc`)" v-model="editForm.val" v-on:change="stopEdit(true)" persistent-hint :hint="i18n.artifactIocHelp"/>
                           </v-container>
-                          <v-container fluid class="my-2">
+                          <v-container fluid class="py-1">
                             <div class="clicktoedit" @click="startEdit(`evidence-${props.index}-tlp-input`, props.item.tlp, `evidence-${props.index}-tlp`, 'tlp', modifyAssociation, ['evidence', props.item])">
                               <div class="font-weight-bold">{{i18n.caseTlp}}: </div>
                               <div id="`evidence-${props.index}-tlp`" class="case detail-field" v-if="!isEdit(`evidence-${props.index}-tlp`)">{{ withDefault(props.item.tlp, i18n.unknown) }}</div>
@@ -1662,10 +1662,10 @@
                               />
                             </v-select>
                           </v-container>
-                          <v-container fluid class="my-2">
+                          <v-container fluid class="py-1">
                             <div class="clicktoedit" @click="startEdit(`evidence-${props.index}-tags-input`, props.item.tags, `evidence-${props.index}-tags`, 'tags', modifyAssociation, ['evidence', props.item])">
                               <div class="font-weight-bold">{{i18n.caseTags}}: </div>
-                              <div id="`evidence-${props.index}-tags`" class="case detail-field" v-if="!isEdit(`evidence-${props.index}-tags`)">
+                              <div id="`evidence-${props.index}-tags`" class="case detail-field mt-1" v-if="!isEdit(`evidence-${props.index}-tags`)">
                                 <v-chip class="mx-1" v-for="tag in props.item.tags" color="primary">{{ tag }}</v-chip>
                               </div>
                             </div>
@@ -2167,7 +2167,7 @@
                               <v-col cols="12">
                                 <div class="clicktoedit" @click="startEdit('case-tags-input', caseObj.tags, 'case-tags', 'tags', modifyCase)">
                                   <div class="font-weight-bold">{{i18n.caseTags}}: </div>
-                                  <div id="case-tags" class="case detail-field" v-if="!isEdit('case-tags')">
+                                  <div id="case-tags" class="case detail-field mt-1" v-if="!isEdit('case-tags')">
                                     <v-chip class="mx-1" v-for="tag in caseObj.tags" color="primary">{{ tag }}</v-chip>
                                   </div>
                                 </div>
