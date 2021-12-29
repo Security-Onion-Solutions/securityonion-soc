@@ -99,9 +99,9 @@ func validateGroup(tester *testing.T, orig string, group string, expected string
 }
 
 func TestGroup(tester *testing.T) {
-	validateGroup(tester, "a", "b", "a | groupby b")
-	validateGroup(tester, "a|groupby b", "c", "a | groupby b c")
-	validateGroup(tester, "a|groupby b", "b", "a | groupby b")
+	validateGroup(tester, "a", "b", `a | groupby "b"`)
+	validateGroup(tester, "a|groupby b", "c", `a | groupby b "c"`)
+	validateGroup(tester, "a|groupby b", "b", `a | groupby b`)
 }
 
 func validateSort(tester *testing.T, orig string, sort string, expected string) {
@@ -162,4 +162,22 @@ func TestRemoveTermsWith(tester *testing.T) {
 	segment.AddFilter("and", "c", false, false)
 	segment.AddFilter("goodbye", "d", false, false)
 	assert.Equal(tester, 2, segment.RemoveTermsWith("e"))
+}
+
+func TestUnquote(tester *testing.T) {
+	input := make([]string, 0, 0)
+	input = append(input, "\"one\"")
+	input = append(input, "\"two")
+	input = append(input, "three")
+	input = append(input, "\"fo ur\"")
+	input = append(input, "\"five six\"")
+	input = append(input, "se\"v\"en")
+
+	output := UnquoteStringArray(input)
+	assert.Equal(tester, "one", output[0])
+	assert.Equal(tester, "two", output[1])
+	assert.Equal(tester, "three", output[2])
+	assert.Equal(tester, "fo ur", output[3])
+	assert.Equal(tester, "five six", output[4])
+	assert.Equal(tester, "se\"v\"en", output[5])
 }
