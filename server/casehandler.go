@@ -101,7 +101,7 @@ func (caseHandler *CaseHandler) create(ctx context.Context, writer http.Response
               inputArtifact.ArtifactType = "file"
 
               artifactStream := model.NewArtifactStream()
-              inputArtifact.StreamLen, inputArtifact.MimeType, err = artifactStream.Write(file)
+              inputArtifact.StreamLen, inputArtifact.MimeType, inputArtifact.Md5, inputArtifact.Sha1, inputArtifact.Sha256, err = artifactStream.Write(file)
               if err == nil {
                 if inputArtifact.StreamLen != int(handler.Size) {
                   log.WithFields(log.Fields{

@@ -384,6 +384,9 @@ func TestConvertElasticEventToArtifact(tester *testing.T) {
 	event.Payload["artifact.tlp"] = "myTlp"
 	event.Payload["artifact.mimeType"] = "myMimeType"
 	event.Payload["artifact.ioc"] = true
+	event.Payload["artifact.md5"] = "myMd5"
+	event.Payload["artifact.sha1"] = "mySha1"
+	event.Payload["artifact.sha256"] = "mySha256"
 	tags := make([]interface{}, 2, 2)
 	tags[0] = "tag1"
 	tags[1] = "tag2"
@@ -408,6 +411,9 @@ func TestConvertElasticEventToArtifact(tester *testing.T) {
 	assert.Equal(tester, true, artifactObj.Ioc)
 	assert.Equal(tester, tags[0], "tag1")
 	assert.Equal(tester, tags[1], "tag2")
+	assert.Equal(tester, "myMd5", artifactObj.Md5)
+	assert.Equal(tester, "mySha1", artifactObj.Sha1)
+	assert.Equal(tester, "mySha256", artifactObj.Sha256)
 	assert.Equal(tester, &myTime, artifactObj.UpdateTime)
 	assert.Equal(tester, &myCreateTime, artifactObj.CreateTime)
 }
