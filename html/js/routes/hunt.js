@@ -426,7 +426,7 @@ const huntComponent = {
         if (escalate) {
           if (!caseId || !this.escalateRelatedEventsEnabled) {
             // Add to new case
-            var title = item['rule.name'];
+            var title = '' + item['rule.name'];
             if (!title) {
               title = this.i18n.eventCaseTitle;
               if (item['event.module'] || item['event.dataset']) {
@@ -446,8 +446,8 @@ const huntComponent = {
             var description = item['message'];
             if (!description) description = JSON.stringify(item);
 
-            var severity = item['event.severity'];
-            var template = 'rule.case_template' in item ? item['rule.case_template'] : '';
+            var severity = 'event.severity' in item ? '' + item['event.severity'] : '';
+            var template = 'rule.case_template' in item ? '' + item['rule.case_template'] : '';
 
             const response = await this.$root.papi.post('case/', {
               title: title,
