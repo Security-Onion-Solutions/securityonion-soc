@@ -202,3 +202,58 @@ test('toggleEscalationMenuAlreadyOpen', () => {
   expect(comp.quickActionVisible).toBe(false);
   expect(comp.escalationMenuVisible).toBe(false);
 });
+
+function validateCase(
+    name, template, mod, dataset, severity, message,
+    expectedTitle, expectedDescription, expectedSeverity, expectedTemplate) {
+  const item = {
+    "rule.name": name,
+    "rule.case_template": template,
+    "event.module": mod,
+    "event.dataset": dataset,
+    "event.severity": severity,
+    "message": message,
+  };
+  const caseObj = comp.buildCase(item)
+  expect(caseObj.title).toBe(expectedTitle);
+  expect(caseObj.description).toBe(expectedDescription);
+  expect(caseObj.severity).toBe(expectedSeverity);
+  expect(caseObj.template).toBe(expectedTemplate);
+}
+
+test('buildCase', () => {
+  // has rule name and message, etc (happy path)
+  validateCase('myTitle', 'myTemplate', 'myModule', 'myDataset', 'mySeverity', 'myMessage',
+      'myTitle', 'myMessage', 'mySeverity', 'myTemplate');
+
+  // missing rule name, module, and dataset
+  validateCase('', 'myTemplate', '', '', 'mySeverity', 'myMessage',
+      'Event Escalation from SOC', 'myMessage', 'mySeverity', 'myTemplate');
+
+  // missing rule name but has module
+  validateCase('', 'myTemplate', 'myModule', '', 'mySeverity', 'myMessage',
+      'Event Escalation from SOC: myModule', 'myMessage', 'mySeverity', 'myTemplate');
+
+  // missing rule name but has dataset
+  validateCase('', 'myTemplate', '', 'myDataset', 'mySeverity', 'myMessage',
+      'Event Escalation from SOC: myDataset', 'myMessage', 'mySeverity', 'myTemplate');
+
+  // missing rule name but has module and dataset
+  validateCase('', 'myTemplate', 'myModule', 'myDataset', 'mySeverity', 'myMessage',
+      'Event Escalation from SOC: myModule - myDataset', 'myMessage', 'mySeverity', 'myTemplate');
+  validateCase(null, 'myTemplate', 'myModule', 'myDataset', 'mySeverity', 'myMessage',
+      'Event Escalation from SOC: myModule - myDataset', 'myMessage', 'mySeverity', 'myTemplate');
+
+  // missing message
+  validateCase('myTitle', 'myTemplate', 'myModule', 'myDataset', 'mySeverity', '',
+      'myTitle', '{\"rule.name\":\"myTitle\",\"rule.case_template\":\"myTemplate\",\"event.module\":\"myModule\",\"event.dataset\":\"myDataset\",\"event.severity\":\"mySeverity\",\"message\":\"\"}', 'mySeverity', 'myTemplate');
+
+  // missing severity
+  validateCase('myTitle', 'myTemplate', 'myModule', 'myDataset', '', 'myMessage',
+      'myTitle', 'myMessage', '', 'myTemplate');
+
+  // missing template
+  validateCase('myTitle', '', 'myModule', 'myDataset', 'mySeverity', 'myMessage',
+      'myTitle', 'myMessage', 'mySeverity', '');
+
+});
