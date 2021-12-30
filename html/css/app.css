@@ -261,6 +261,11 @@ td {
   border-radius: 0.25em;
 }
 
+.comment-body .markdown-body pre,
+.comment-body .markdown-body p {
+  margin: 8px 0;
+}
+
 .theme--dark.v-application .comment-body .markdown-body {
   background-color: rgba(0,0,0,.2);
 }
