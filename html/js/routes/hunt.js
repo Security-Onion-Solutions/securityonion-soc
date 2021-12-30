@@ -457,7 +457,7 @@ const huntComponent = {
         if (escalate) {
           if (!caseId || !this.escalateRelatedEventsEnabled) {
             // Add to new case
-            const response = await this.$root.papi.post('case/', buildCase(item));
+            const response = await this.$root.papi.post('case/', this.buildCase(item));
             if (response && response.data) {
               caseId = response.data.id;
             }
