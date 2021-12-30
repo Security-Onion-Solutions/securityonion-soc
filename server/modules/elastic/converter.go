@@ -194,9 +194,8 @@ func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSear
 		segment := criteria.ParsedQuery.NamedSegment(model.SegmentKind_GroupBy)
 		if segment != nil {
 			groupBySegment := segment.(*model.GroupBySegment)
-			fields := groupBySegment.Fields()
+			fields := groupBySegment.RawFields()
 			if len(fields) > 0 {
-				fields = model.UnquoteStringArray(fields)
 				agg, name := makeAggregation(store, "groupby", fields, criteria.MetricLimit, false)
 				aggregations[name] = agg
 				aggregations["bottom"], _ = makeAggregation(store, "", fields[0:1], criteria.MetricLimit, true)
@@ -211,7 +210,7 @@ func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSear
 	segment := criteria.ParsedQuery.NamedSegment(model.SegmentKind_SortBy)
 	if segment != nil {
 		sortBySegment := segment.(*model.SortBySegment)
-		fields := sortBySegment.Fields()
+		fields := sortBySegment.RawFields()
 		if len(fields) > 0 {
 			sorting := make([]map[string]map[string]string, 0, 0)
 			for _, field := range fields {

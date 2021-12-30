@@ -20,7 +20,21 @@ func TestGroupWithQuotes(tester *testing.T) {
 	err := query.Parse(`foo:"bar" | groupby "complex field" "another complex field"`)
 	assert.NoError(tester, err)
 	groupbySegment := query.NamedSegment(SegmentKind_GroupBy).(*GroupBySegment)
-	assert.Len(tester, groupbySegment.Fields(), 2)
+	fields := groupbySegment.Fields()
+	assert.Len(tester, fields, 2)
+	assert.Equal(tester, `"complex field"`, fields[0])
+	assert.Equal(tester, `"another complex field"`, fields[1])
+}
+
+func TestRawFields(tester *testing.T) {
+	query := NewQuery()
+	err := query.Parse(`foo:"bar" | groupby "complex field" "another complex field"`)
+	assert.NoError(tester, err)
+	groupbySegment := query.NamedSegment(SegmentKind_GroupBy).(*GroupBySegment)
+	rawFields := groupbySegment.RawFields()
+	assert.Len(tester, rawFields, 2)
+	assert.Equal(tester, "complex field", rawFields[0])
+	assert.Equal(tester, "another complex field", rawFields[1])
 }
 
 func validateQuery(tester *testing.T, args ...string) {
@@ -115,8 +129,8 @@ func validateSort(tester *testing.T, orig string, sort string, expected string) 
 }
 
 func TestSort(tester *testing.T) {
-	validateSort(tester, "a", "b", "a | sortby b")
-	validateSort(tester, "a|sortby b", "c", "a | sortby b c")
+	validateSort(tester, "a", "b", `a | sortby "b"`)
+	validateSort(tester, "a|sortby b", "c", `a | sortby b "c"`)
 	validateSort(tester, "a|sortby b", "b", "a | sortby b")
 }
 
@@ -162,22 +176,4 @@ func TestRemoveTermsWith(tester *testing.T) {
 	segment.AddFilter("and", "c", false, false)
 	segment.AddFilter("goodbye", "d", false, false)
 	assert.Equal(tester, 2, segment.RemoveTermsWith("e"))
-}
-
-func TestUnquote(tester *testing.T) {
-	input := make([]string, 0, 0)
-	input = append(input, "\"one\"")
-	input = append(input, "\"two")
-	input = append(input, "three")
-	input = append(input, "\"fo ur\"")
-	input = append(input, "\"five six\"")
-	input = append(input, "se\"v\"en")
-
-	output := UnquoteStringArray(input)
-	assert.Equal(tester, "one", output[0])
-	assert.Equal(tester, "two", output[1])
-	assert.Equal(tester, "three", output[2])
-	assert.Equal(tester, "fo ur", output[3])
-	assert.Equal(tester, "five six", output[4])
-	assert.Equal(tester, "se\"v\"en", output[5])
 }
