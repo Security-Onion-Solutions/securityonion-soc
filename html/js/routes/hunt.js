@@ -576,14 +576,20 @@ const huntComponent = {
             if (segment.indexOf("groupby") == 0) {
               segment.split(" ").forEach(function(item, index) {
                 if (index > 0 && item.trim().length > 0) {
-                  route.queryGroupBys.push(item);
+                  if (item.split("\"").length % 2 == 1) {
+                    // Will currently skip quoted items with spaces. 
+                    route.queryGroupBys.push(item);
+                  }
                 }
               });
             }
             if (segment.indexOf("sortby") == 0) {
               segment.split(" ").forEach(function(item, index) {
                 if (index > 0 && item.trim().length > 0) {
-                  route.querySortBys.push(item);
+                  if (item.split("\"").length % 2 == 1) {
+                    // Will currently skip quoted items with spaces. 
+                    route.querySortBys.push(item);
+                  }
                 }
               });
             }

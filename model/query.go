@@ -131,6 +131,41 @@ func (segment *BaseSegment) RemoveTermsWith(raw string) int {
   return removed
 }
 
+func (segment *BaseSegment) RawFields() []string {
+  fields := make([]string, 0, 0)
+  for _, field := range segment.terms {
+    fields = append(fields, field.Raw)
+  }
+  return fields
+}
+
+func (segment *BaseSegment) Fields() []string {
+  fields := make([]string, 0, 0)
+  for _, field := range segment.terms {
+    fields = append(fields, field.String())
+  }
+  return fields
+}
+
+func (segment *BaseSegment) AddField(field string) error {
+  alreadyIncluded := false
+  for _, term := range segment.terms {
+    if term.Raw == field {
+      alreadyIncluded = true
+    }
+  }
+  var err error
+  if !alreadyIncluded {
+    term, err := NewQueryTerm(field)
+    if err == nil {
+      term.Quoted = true
+      term.Quote = '"'
+      segment.terms = append(segment.terms, term)
+    }
+  }
+  return err
+}
+
 type SearchSegment struct {
   *BaseSegment
 }
@@ -241,33 +276,6 @@ func (segment *GroupBySegment) String() string {
   return segment.Kind() + " " + segment.TermsAsString()
 }
 
-func (segment *GroupBySegment) Fields() []string {
-  fields := make([]string, 0, 0)
-  for _, field := range segment.terms {
-    fields = append(fields, field.String())
-  }
-  return fields
-}
-
-func (segment *GroupBySegment) AddGrouping(group string) error {
-  group = UnquoteString(group)
-  fields := segment.Fields()
-  alreadyGrouped := false
-  for _, field := range fields {
-    if UnquoteString(field) == group {
-      alreadyGrouped = true
-    }
-  }
-  var err error
-  if !alreadyGrouped {
-    term, err := NewQueryTerm(QuoteString(group))
-    if err == nil {
-      segment.terms = append(segment.terms, term)
-    }
-  }
-  return err
-}
-
 type SortBySegment struct {
   *BaseSegment
 }
@@ -297,32 +305,6 @@ func (segment *SortBySegment) Kind() string {
 
 func (segment *SortBySegment) String() string {
   return segment.Kind() + " " + segment.TermsAsString()
-}
-
-func (segment *SortBySegment) Fields() []string {
-  fields := make([]string, 0, 0)
-  for _, field := range segment.terms {
-    fields = append(fields, field.String())
-  }
-  return fields
-}
-
-func (segment *SortBySegment) AddSortField(sortField string) error {
-  fields := segment.Fields()
-  alreadySorted := false
-  for _, field := range fields {
-    if field == sortField {
-      alreadySorted = true
-    }
-  }
-  var err error
-  if !alreadySorted {
-    term, err := NewQueryTerm(sortField)
-    if err == nil {
-      segment.terms = append(segment.terms, term)
-    }
-  }
-  return err
 }
 
 type Query struct {
@@ -537,7 +519,7 @@ func (query *Query) Group(field string) (string, error) {
     query.AddSegment(segment)
   }
   groupBySegment := segment.(*GroupBySegment)
-  err = groupBySegment.AddGrouping(field)
+  err = groupBySegment.AddField(field)
 
   return query.String(), err
 }
@@ -551,25 +533,7 @@ func (query *Query) Sort(field string) (string, error) {
     query.AddSegment(segment)
   }
   sortBySegment := segment.(*SortBySegment)
-  err = sortBySegment.AddSortField(field)
+  err = sortBySegment.AddField(field)
 
   return query.String(), err
-}
-
-func QuoteString(field string) string {
-  return `"` + field + `"`
-}
-
-func UnquoteString(field string) string {
-  field = strings.TrimSuffix(field, `"`)
-  field = strings.TrimPrefix(field, `"`)
-  return field
-}
-
-func UnquoteStringArray(fields []string) []string {
-  newFields := make([]string, 0, 0)
-  for _, field := range fields {
-    newFields = append(newFields, UnquoteString(field))
-  }
-  return newFields
 }
