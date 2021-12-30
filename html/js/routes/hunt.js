@@ -413,7 +413,38 @@ const huntComponent = {
       } catch (error) {
         this.$root.showError(error);
       }
-    },  
+    },
+    buildCase(item) {
+      var title = 'rule.name' in item && item['rule.name'] ? '' + item['rule.name'] : null;
+      if (!title) {
+        title = this.i18n.eventCaseTitle;
+        if (item['event.module'] || item['event.dataset']) {
+          title = title + ": ";
+          if (item['event.module']) {
+            title = title + item['event.module'];
+            if (item['event.dataset']) {
+              title = title + " - ";
+            }
+          }
+          if (item['event.dataset']) {
+            title = title + item['event.dataset'];
+          }
+        }
+      }
+
+      var description = item['message'];
+      if (!description) description = JSON.stringify(item);
+
+      var severity = 'event.severity' in item && item['event.severity'] ? '' + item['event.severity'] : '';
+      var template = 'rule.case_template' in item && item['rule.case_template'] ? '' + item['rule.case_template'] : '';
+
+      return {
+        title: title,
+        description: description,
+        severity: severity,
+        template: template,
+      };
+    },
     async ack(event, item, idx, acknowledge, escalate = false, caseId = null) {
       this.$root.startLoading();
       try {
@@ -426,35 +457,7 @@ const huntComponent = {
         if (escalate) {
           if (!caseId || !this.escalateRelatedEventsEnabled) {
             // Add to new case
-            var title = '' + item['rule.name'];
-            if (!title) {
-              title = this.i18n.eventCaseTitle;
-              if (item['event.module'] || item['event.dataset']) {
-                title = title + ": ";
-                if (item['event.module']) {
-                  title = title + item['event.module'];
-                  if (item['event.dataset']) {
-                    title = title + " - ";
-                  }
-                }
-                if (item['event.dataset']) {
-                  title = title + item['event.dataset'];
-                }
-              }
-            }
-
-            var description = item['message'];
-            if (!description) description = JSON.stringify(item);
-
-            var severity = 'event.severity' in item ? '' + item['event.severity'] : '';
-            var template = 'rule.case_template' in item ? '' + item['rule.case_template'] : '';
-
-            const response = await this.$root.papi.post('case/', {
-              title: title,
-              description: description,
-              severity: severity,
-              template: template,
-            });
+            const response = await this.$root.papi.post('case/', this.buildCase(item));
             if (response && response.data) {
               caseId = response.data.id;
             }

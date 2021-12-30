@@ -1242,7 +1242,7 @@
             <div class="mb-6 mb-md-3">
               <div class="clicktoedit d-flex align-start pa-2" v-if="!isEdit('case-description')" @click="startEdit('case-desc-input',  caseObj.description, 'case-description', 'description', modifyCase, [], true)">
                 <div class="d-block" style="width: 100%;">
-                  <div id="case-description" class="rounded case markdown-body" :inner-html.prop="caseObj.description | formatMarkdown"></div>
+                  <div id="case-description" class="rounded case detail-field markdown-body" :inner-html.prop="caseObj.description | formatMarkdown"></div>
                 </div>
               </div>
               <div class="d-flex flex-column" v-if="isEdit('case-description')">
@@ -2020,36 +2020,40 @@
                           <h3>{{ i18n.summary }}</h3>
                         </v-expansion-panel-header>
                         <v-expansion-panel-content class="my-2">
-                            <v-row class="clicktoedit" @click="startEdit('case-assignee-input', caseObj.assigneeId, 'case-assignee', 'assigneeId', modifyCase)">
+                            <v-row>
                               <v-col cols="12">
-                                <div class="font-weight-bold">{{i18n.caseAssignee}}: </div>
-                                <div id='case-assignee' class="case detail-field" v-if="!isEdit('case-assignee')">{{ withDefault(caseObj.assignee, i18n.unassigned) }}</div>
-                                <v-select id='case-assignee-input' v-if="isEdit('case-assignee')"
-                                  dense eager outlined hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseAssigneeHelp"
-                                  v-model="editForm.val"
-                                  :items="userList"
-                                  item-text="email"
-                                  item-value="id"
-                                  v-on:change="stopEdit(true)"
-                                />
+                                <div class="clicktoedit" @click="startEdit('case-assignee-input', caseObj.assigneeId, 'case-assignee', 'assigneeId', modifyCase)">
+                                  <div class="font-weight-bold">{{i18n.caseAssignee}}: </div>
+                                  <div id='case-assignee' class="case detail-field" v-if="!isEdit('case-assignee')">{{ withDefault(caseObj.assignee, i18n.unassigned) }}</div>
+                                  <v-select id='case-assignee-input' v-if="isEdit('case-assignee')"
+                                    dense eager outlined hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseAssigneeHelp"
+                                    v-model="editForm.val"
+                                    :items="userList"
+                                    item-text="email"
+                                    item-value="id"
+                                    v-on:change="stopEdit(true)"
+                                  />
+                                </div>
                               </v-col>
                             </v-row>
-                            <v-row class="clicktoedit" @click="startEdit('case-status-input', caseObj.status, 'case-status', 'status', modifyCase)">
+                            <v-row>
                               <v-col cols="12">
-                                <div class="font-weight-bold">{{i18n.status}}: </div>
-                                <div id="case-status" class="case detail-field" v-if="!isEdit('case-status')">{{ withDefault(caseObj.status, i18n.unknown) }}</div>
-                                <v-select id="case-status-input" v-if="isEdit('case-status') && !isPresetCustomEnabled('status')"
-                                  dense eager outlined hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseStatusHelp"
-                                  v-model="editForm.val"
-                                  :items="selectList('status', caseObj.status)"
-                                  v-on:change="stopEdit(true)"
-                                />
-                                <v-combobox id="case-status-input" v-if="isEdit('case-status') && isPresetCustomEnabled('status')"
-                                  dense eager outlined hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseStatusHelp"
-                                  v-model="editForm.val"
-                                  :items="selectList('status', caseObj.status)"
-                                  v-on:change="stopEdit(true)"
-                                />
+                                <div class="clicktoedit" @click="startEdit('case-status-input', caseObj.status, 'case-status', 'status', modifyCase)">
+                                  <div class="font-weight-bold">{{i18n.status}}: </div>
+                                  <div id="case-status" class="case detail-field" v-if="!isEdit('case-status')">{{ withDefault(caseObj.status, i18n.unknown) }}</div>
+                                  <v-select id="case-status-input" v-if="isEdit('case-status') && !isPresetCustomEnabled('status')"
+                                    dense eager outlined hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseStatusHelp"
+                                    v-model="editForm.val"
+                                    :items="selectList('status', caseObj.status)"
+                                    v-on:change="stopEdit(true)"
+                                  />
+                                  <v-combobox id="case-status-input" v-if="isEdit('case-status') && isPresetCustomEnabled('status')"
+                                    dense eager outlined hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseStatusHelp"
+                                    v-model="editForm.val"
+                                    :items="selectList('status', caseObj.status)"
+                                    v-on:change="stopEdit(true)"
+                                  />
+                                </div>
                               </v-col>
                             </v-row>
                         </v-expansion-panel-content>
