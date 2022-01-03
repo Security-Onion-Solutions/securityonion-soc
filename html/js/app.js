@@ -435,6 +435,13 @@ $(document).ready(function() {
           renderer: new marked.Renderer(),
           smartLists: true
         })
+        marked.use({
+          tokenizer: {
+            url(src) {
+              // Blank function disables bare url tokenization
+            }
+          }
+        })
         var md = str;
         if (str) {
           md = marked(str);
