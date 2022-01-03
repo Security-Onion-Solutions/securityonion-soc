@@ -1551,16 +1551,16 @@
                             <h3 class="text--primary">{{ i18n.attachmentAdd }}</h3>
                           </div>
                           <v-form ref="attachments" v-model="associatedForms['attachments'].valid">
-                            <v-file-input show-size v-model="attachment" persistent-hint :hint="getAttachmentHelp()" :rules="[rules.fileSizeLimit, rules.fileNotEmpty]"/>
-                            <v-textarea rows="2" v-model="associatedForms['attachments'].description" :placeholder="i18n.artifactDescription" persistent-hint :hint="i18n.artifactDescriptionHelp"/>
-                            <v-select v-if="!isPresetCustomEnabled('tlp')" v-model="associatedForms['attachments'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
-                            <v-combobox v-if="isPresetCustomEnabled('tlp')" v-model="associatedForms['attachments'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
-                            <v-select v-if="!isPresetCustomEnabled('tags')" v-model="associatedForms['attachments'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
+                            <v-file-input id="attachments-file" show-size v-model="attachment" persistent-hint :hint="getAttachmentHelp()" :rules="[rules.fileSizeLimit, rules.fileNotEmpty]"/>
+                            <v-textarea id="attachments-description" rows="2" v-model="associatedForms['attachments'].description" :placeholder="i18n.artifactDescription" persistent-hint :hint="i18n.artifactDescriptionHelp"/>
+                            <v-select id="attachments-tlp" v-if="!isPresetCustomEnabled('tlp')" v-model="associatedForms['attachments'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
+                            <v-combobox id="attachments-tlp" v-if="isPresetCustomEnabled('tlp')" v-model="associatedForms['attachments'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
+                            <v-select id="attachments-tags" v-if="!isPresetCustomEnabled('tags')" v-model="associatedForms['attachments'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
                               <template #selection="{ item }">
                                 <v-chip color="primary">{{item}}</v-chip>
                               </template>
                             </v-select>
-                            <v-combobox v-if="isPresetCustomEnabled('tags')" v-model="associatedForms['attachments'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
+                            <v-combobox id="attachments-tags" v-if="isPresetCustomEnabled('tags')" v-model="associatedForms['attachments'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
                               <template #selection="{ item }">
                                 <v-chip color="primary">{{item}}</v-chip>
                               </template>
@@ -1756,20 +1756,20 @@
                             <h3 class="text--primary">{{ i18n.evidenceAdd }}</h3>
                           </div>
                           <v-form ref="evidence" v-model="associatedForms['evidence'].valid">
-                            <v-select v-if="!isPresetCustomEnabled('artifactType')" v-model="associatedForms['evidence'].artifactType" :items="selectList('artifactType')" persistent-hint :hint="i18n.artifactTypeHelp"/>
-                            <v-combobox v-if="isPresetCustomEnabled('artifactType')" v-model="associatedForms['evidence'].artifactType" :items="selectList('artifactType')" persistent-hint :hint="i18n.artifactTypeHelp"/>
-                            <v-file-input v-if="associatedForms['evidence'].artifactType == 'file'" show-size v-model="attachment" persistent-hint :hint="getAttachmentHelp()" :rules="[rules.fileSizeLimit, rules.fileNotEmpty, rules.fileRequired]"/>
-                            <v-textarea v-if="associatedForms['evidence'].artifactType != 'file'" rows="2" v-model="associatedForms['evidence'].value" :rules="[rules.required]" :placeholder="i18n.artifactValue" persistent-hint :hint="i18n.artifactValueHelp"/>
-                            <v-textarea rows="2" v-model="associatedForms['evidence'].description" :placeholder="i18n.artifactDescription" persistent-hint :hint="i18n.artifactDescriptionHelp"/>
-                            <v-checkbox v-model="associatedForms['evidence'].ioc" persistent-hint :hint="i18n.artifactIocHelp"/>
-                            <v-select v-if="!isPresetCustomEnabled('tlp')" v-model="associatedForms['evidence'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
-                            <v-combobox v-if="isPresetCustomEnabled('tlp')" v-model="associatedForms['evidence'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
-                            <v-select v-if="!isPresetCustomEnabled('tags')" v-model="associatedForms['evidence'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
+                            <v-select id="evidence-type" v-if="!isPresetCustomEnabled('artifactType')" v-model="associatedForms['evidence'].artifactType" :items="selectList('artifactType')" persistent-hint :hint="i18n.artifactTypeHelp"/>
+                            <v-combobox id="evidence-type" v-if="isPresetCustomEnabled('artifactType')" v-model="associatedForms['evidence'].artifactType" :items="selectList('artifactType')" persistent-hint :hint="i18n.artifactTypeHelp"/>
+                            <v-file-input id="evidence-value" v-if="associatedForms['evidence'].artifactType == 'file'" show-size v-model="attachment" persistent-hint :hint="getAttachmentHelp()" :rules="[rules.fileSizeLimit, rules.fileNotEmpty, rules.fileRequired]"/>
+                            <v-textarea id="evidence-value" v-if="associatedForms['evidence'].artifactType != 'file'" rows="2" v-model="associatedForms['evidence'].value" :rules="[rules.required]" :placeholder="i18n.artifactValue" persistent-hint :hint="i18n.artifactValueHelp"/>
+                            <v-textarea id="evidence-description" rows="2" v-model="associatedForms['evidence'].description" :placeholder="i18n.artifactDescription" persistent-hint :hint="i18n.artifactDescriptionHelp"/>
+                            <v-checkbox id="evidence-ioc" v-model="associatedForms['evidence'].ioc" persistent-hint :hint="i18n.artifactIocHelp"/>
+                            <v-select id="evidence-tlp" v-if="!isPresetCustomEnabled('tlp')" v-model="associatedForms['evidence'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
+                            <v-combobox id="evidence-tlp" v-if="isPresetCustomEnabled('tlp')" v-model="associatedForms['evidence'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
+                            <v-select id="evidence-tags" v-if="!isPresetCustomEnabled('tags')" v-model="associatedForms['evidence'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
                               <template #selection="{ item }">
                                 <v-chip color="primary">{{item}}</v-chip>
                               </template>
                             </v-select>
-                            <v-combobox v-if="isPresetCustomEnabled('tags')" v-model="associatedForms['evidence'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
+                            <v-combobox id="evidence-tags" v-if="isPresetCustomEnabled('tags')" v-model="associatedForms['evidence'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
                               <template #selection="{ item }">
                                 <v-chip color="primary">{{item}}</v-chip>
                               </template>
