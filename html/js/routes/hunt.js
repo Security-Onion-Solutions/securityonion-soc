@@ -48,6 +48,7 @@ const huntComponent = {
     ackEnabled: false,
     escalateEnabled: false,
     viewEnabled: false,
+    createLink: '',
     collapsedSections: [],
 
     filterToggles: [],
@@ -200,6 +201,7 @@ const huntComponent = {
       this.escalateEnabled = params["escalateEnabled"];
       this.escalateRelatedEventsEnabled = params["escalateRelatedEventsEnabled"];
       this.viewEnabled = params["viewEnabled"];
+      this.createLink = params["createLink"];
       if (this.queries != null && this.queries.length > 0) {
         this.query = this.queries[0].query;
       }

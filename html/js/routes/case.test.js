@@ -160,7 +160,7 @@ test('loadSingleAssociation', async () => {
   expect(comp.$root.loading).toBe(false);
 });
 
-test('loadSignleAssociationError', async () => {
+test('loadSingleAssociationError', async () => {
   const showErrorMock = mockShowError();
   resetPapi().mockPapi("get", null, new Error("something bad"));
   await comp.loadAssociation('comments');
@@ -172,6 +172,28 @@ expectCaseDetails = () => {
   expect(comp.caseObj.owner).toBe(fakeEmail);
   expect(comp.caseObj.assignee).toBe(fakeAssigneeEmail);
 }
+
+test('createCase', async () => {
+  const params = { 
+    "description": comp.i18n.caseDefaultDescription,
+    "title": comp.i18n.caseDefaultTitle,
+  };
+
+  // API call #1 is to get the comment list
+  mockPapi("post", {'data':fakeCase});
+
+  comp.$route.params.id = 'myCaseId';
+  const showErrorMock = mockShowError(true);
+  comp.loadAssociations = jest.fn();
+  comp.$router.replace = jest.fn();
+
+  await comp.createCase();
+
+  expect(mock).toHaveBeenCalledWith('case/', params);
+  expect(showErrorMock).toHaveBeenCalledTimes(0);
+  expect(comp.$router.replace).toHaveBeenCalledWith({ name: 'case', params: { id: fakeCase.id }});
+  expect(comp.$root.loading).toBe(false);
+});
 
 test('loadData', async () => {
   const params = { params: {
@@ -438,10 +460,10 @@ test('isEdit_False', () => {
   expect(comp.isEdit('otherFakeId')).toBe(false);
 })
 
-test('startEdit', () => {
+test('startEdit', async () => {
   const fn = jest.fn();
 
-  comp.startEdit('myFid', 'myVal', 'myRoId', 'myField', fn, ['foo'], true);
+  await comp.startEdit('myFid', 'myVal', 'myRoId', 'myField', fn, ['foo'], true);
 
   const expectedObj = { 
     callback: fn,

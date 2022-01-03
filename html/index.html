@@ -300,9 +300,17 @@
           <v-spacer></v-spacer>
           <v-col cols="2" align="end">
             <h4 v-if="loaded">{{ i18n.eventTotal }} {{ totalEvents.toLocaleString() }}</h4>
-            <p>
-            <h5>
-            </h5>
+          </v-col>
+        </v-row>
+        <v-row align="start" v-if="createLink != ''">
+          <v-col cols="12">
+            <v-toolbar class="elevation-0" fixed>
+              <router-link :to="createLink" style="text-decoration: none; cursor: 'pointer'">
+                <v-btn color="primary" id="add-case-button">
+                  <v-icon :title="i18n.create">fa-plus</v-icon>
+                </v-btn>
+              </router-link>
+            </v-toolbar>
           </v-col>
         </v-row>
         <v-row align="start">

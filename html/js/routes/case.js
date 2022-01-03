@@ -151,7 +151,11 @@ routes.push({ path: '/case/:id', name: 'case', component: {
   },
   async mounted() {
     this.$root.loadParameters('case', this.initCase);
-    await this.loadData();
+    if (this.$route.params.id == 'create') {
+      await this.createCase();
+    } else {
+      await this.loadData();
+    }
   },
   destroyed() {
     this.$root.unsubscribe("case", this.updateCase);
@@ -309,6 +313,24 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         this.saveLocalSettings();
       }
     },
+    async createCase() {
+      this.$root.startLoading();
+      try {
+        const response = await this.$root.papi.post('case/', {
+          title: this.i18n.caseDefaultTitle,
+          description: this.i18n.caseDefaultDescription,
+        });
+        if (response && response.data && response.data.id) {
+          this.$router.replace({ name: 'case', params: { id: response.data.id } });
+        } else {
+          this.$root.showError(i18n.createFailed);
+        }
+      }
+      catch (error) {
+        this.$root.showError(error);
+      }
+      this.$root.stopLoading();
+    },
     async loadData() {
       this.$root.startLoading();
 
@@ -360,7 +382,6 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         if (form) {
           const response = await this.$root.papi.put('case/', JSON.stringify(form));
           if (response.data) {
-            this.stopEdit();
             await this.updateCaseDetails(response.data);
             success = true;
           }
@@ -465,12 +486,13 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     isEdit(roId) {
       return this.editForm.roId == roId;
     },
-    startEdit(focusId, val, roId, field, callback, callbackArgs, isMultiline) {
+    async startEdit(focusId, val, roId, field, callback, callbackArgs, isMultiline) {
       if (this.editForm.focusId == focusId) {
         // We're already editing this field.
         return;
       }
-      if (this.stopEdit(true)) {
+      if (await this.stopEdit(true)) {
+        this.editForm = { valid: true };
         this.editForm.focusId = focusId;
         this.editForm.orig = val;
         this.editForm.val = val;
