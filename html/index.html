@@ -1572,11 +1572,11 @@
                       </div>
                       <div class="d-flex align-center align-self-end text-body-2 mt-2">
                       <div class="d-inline-flex justify-end">
-                        <v-btn text small color="primary" class="align-self-end" @click="resetForm('attachments')">
-                        {{ i18n.cancel }}
+                        <v-btn id="attachment-cancel" text small color="primary" class="align-self-end" @click="resetForm('attachments')">
+                          {{ i18n.cancel }}
                         </v-btn>
-                        <v-btn :disabled="!associatedForms['attachments'].valid" text small color="primary" class="align-self-end" @click="addAssociation('attachments', {'groupType': 'attachments', 'artifactType':'file'})">
-                        {{ i18n.add }}
+                        <v-btn id="attachment-add" :disabled="!associatedForms['attachments'].valid" text small color="primary" class="align-self-end" @click="addAssociation('attachments', {'groupType': 'attachments', 'artifactType':'file'})">
+                          {{ i18n.add }}
                         </v-btn>
                       </div>
                       </div>
@@ -1781,11 +1781,11 @@
                       </div>
                       <div class="d-flex align-center align-self-end text-body-2 mt-2">
                       <div class="d-inline-flex justify-end">
-                        <v-btn text small color="primary" class="align-self-end" @click="resetForm('evidence')">
-                        {{ i18n.cancel }}
+                        <v-btn id="evidence-cancel" text small color="primary" class="align-self-end" @click="resetForm('evidence')">
+                          {{ i18n.cancel }}
                         </v-btn>
-                        <v-btn :disabled="!associatedForms['evidence'].valid" text small color="primary" class="align-self-end" @click="addAssociation('evidence', {'groupType': 'evidence'})">
-                        {{ i18n.add }}
+                        <v-btn id="evidence-add" :disabled="!associatedForms['evidence'].valid" text small color="primary" class="align-self-end" @click="addAssociation('evidence', {'groupType': 'evidence'})">
+                          {{ i18n.add }}
                         </v-btn>
                       </div>
                       </div>
