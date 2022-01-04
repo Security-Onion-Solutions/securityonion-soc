@@ -1416,21 +1416,21 @@
                             </a>
                             <div class="mt-4">
                               <div class="font-weight-bold">{{i18n.sha256}}: </div>
-                              <div id="`attachments-${props.index}-sha256`" class="case">
+                              <div :id="`attachments-${props.index}-sha256`" class="case">
                                 {{ withDefault(props.item.sha256, i18n.unknown) }}
                                 <v-icon class="ml-1" @click="$root.copyToClipboard(props.item.sha256)" :title="i18n.copyToClipboard">fa-copy</v-icon>
                               </div>
                             </div>
                             <div class="mt-2">
                               <div class="font-weight-bold">{{i18n.sha1}}: </div>
-                              <div id="`attachments-${props.index}-sha1`" class="case">
+                              <div :id="`attachments-${props.index}-sha1`" class="case">
                                 {{ withDefault(props.item.sha1, i18n.unknown) }}
                                 <v-icon class="ml-1" @click="$root.copyToClipboard(props.item.sha1)" :title="i18n.copyToClipboard">fa-copy</v-icon>
                               </div>
                             </div>
                             <div class="mt-2">
                               <div class="font-weight-bold">{{i18n.md5}}: </div>
-                              <div id="`attachments-${props.index}-md5`" class="case">
+                              <div :id="`attachments-${props.index}-md5`" class="case">
                                 {{ withDefault(props.item.md5, i18n.unknown) }}
                                 <v-icon class="ml-1" @click="$root.copyToClipboard(props.item.md5)" :title="i18n.copyToClipboard">fa-copy</v-icon>
                               </div>
@@ -1440,7 +1440,7 @@
                             <div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${props.index}-description-input`, props.item.description, `attachments-${props.index}-description`, 'description', modifyAssociation, ['attachments', props.item], true)"
                               @keypress.space.prevent="startEdit(`attachments-${props.index}-description-input`, props.item.description, `attachments-${props.index}-description`, 'description', modifyAssociation, ['attachments', props.item], true)">
                               <div class="font-weight-bold">{{i18n.artifactDescription}}: </div>
-                              <div id="`attachments-${props.index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`attachments-${props.index}-description`)" :inner-html.prop="props.item.description | formatMarkdown"></div>
+                              <div :id="`attachments-${props.index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`attachments-${props.index}-description`)" :inner-html.prop="props.item.description | formatMarkdown"></div>
                             </div>
                             <div class="d-flex flex-column" v-if="isEdit(`attachments-${props.index}-description`)">
                               <v-form v-model="editForm.valid">
@@ -1482,7 +1482,7 @@
                             <div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${props.index}-tags-input`, props.item.tags, `attachments-${props.index}-tags`, 'tags', modifyAssociation, ['attachments', props.item])"
                               @keypress.space.prevent="startEdit(`attachments-${props.index}-tags-input`, props.item.tags, `attachments-${props.index}-tags`, 'tags', modifyAssociation, ['attachments', props.item])">
                               <div class="font-weight-bold">{{i18n.caseTags}}: </div>
-                              <div id="`attachments-${props.index}-tags`" class="case detail-field mt-1" v-if="!isEdit(`attachments-${props.index}-tags`)">
+                              <div :id="`attachments-${props.index}-tags`" class="case detail-field mt-1" v-if="!isEdit(`attachments-${props.index}-tags`)">
                                 <v-chip class="mx-1" v-for="tag in props.item.tags" color="primary">{{ tag }}</v-chip>
                               </div>
                             </div>
@@ -1613,21 +1613,21 @@
                             </a>
                             <div class="mt-4">
                               <div class="font-weight-bold">{{i18n.sha256}}: </div>
-                              <div id="`attachments-${props.index}-sha256`" class="case">
+                              <div :id="`evidence-${props.index}-sha256`" class="case">
                                 {{ withDefault(props.item.sha256, i18n.unknown) }}
                                 <v-icon class="ml-1" @click="$root.copyToClipboard(props.item.sha256)" :title="i18n.copyToClipboard">fa-copy</v-icon>
                               </div>
                             </div>
                             <div class="mt-2">
                               <div class="font-weight-bold">{{i18n.sha1}}: </div>
-                              <div id="`attachments-${props.index}-sha1`" class="case">
+                              <div :id="`evidence-${props.index}-sha1`" class="case">
                                 {{ withDefault(props.item.sha1, i18n.unknown) }}
                                 <v-icon class="ml-1" @click="$root.copyToClipboard(props.item.sha1)" :title="i18n.copyToClipboard">fa-copy</v-icon>
                               </div>
                             </div>
                             <div class="mt-2">
                               <div class="font-weight-bold">{{i18n.md5}}: </div>
-                              <div id="`attachments-${props.index}-md5`" class="case">
+                              <div :id="`evidence-${props.index}-md5`" class="case">
                                 {{ withDefault(props.item.md5, i18n.unknown) }}
                                 <v-icon class="ml-1" @click="$root.copyToClipboard(props.item.md5)" :title="i18n.copyToClipboard">fa-copy</v-icon>
                               </div>
@@ -1637,7 +1637,7 @@
                             <div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${props.index}-description-input`, props.item.description, `evidence-${props.index}-description`, 'description', modifyAssociation, ['evidence', props.item], true)"
                               @keypress.space.prevent="startEdit(`evidence-${props.index}-description-input`, props.item.description, `evidence-${props.index}-description`, 'description', modifyAssociation, ['evidence', props.item], true)">
                               <div class="font-weight-bold">{{i18n.artifactDescription}}: </div>
-                              <div id="`evidence-${props.index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`evidence-${props.index}-description`)" :inner-html.prop="props.item.description | formatMarkdown"></div>
+                              <div :id="`evidence-${props.index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`evidence-${props.index}-description`)" :inner-html.prop="props.item.description | formatMarkdown"></div>
                             </div>
                             <div class="d-flex flex-column" v-if="isEdit(`evidence-${props.index}-description`)">
                               <v-form v-model="editForm.valid">
@@ -1659,7 +1659,7 @@
                             <div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${props.index}-ioc-input`, props.item.ioc, `evidence-${props.index}-ioc`, 'ioc', modifyAssociation, ['evidence', props.item])"
                               @keypress.space.prevent="startEdit(`evidence-${props.index}-ioc-input`, props.item.ioc, `evidence-${props.index}-ioc`, 'ioc', modifyAssociation, ['evidence', props.item])">
                               <div class="font-weight-bold">{{i18n.artifactIoc}}: </div>
-                              <div id="`evidence-${props.index}-ioc`" class="case detail-field" v-if="!isEdit(`evidence-${props.index}-ioc`)">{{ props.item.ioc ? i18n.yes : i18n.no }}</div>
+                              <div :id="`evidence-${props.index}-ioc`" class="case detail-field" v-if="!isEdit(`evidence-${props.index}-ioc`)">{{ props.item.ioc ? i18n.yes : i18n.no }}</div>
                             </div>
                             <v-checkbox :id="`evidence-${props.index}-ioc-input`" v-if="isEdit(`evidence-${props.index}-ioc`)" v-model="editForm.val" v-on:change="stopEdit(true)" persistent-hint :hint="i18n.artifactIocHelp"/>
                           </v-container>
@@ -1667,7 +1667,7 @@
                             <div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${props.index}-tlp-input`, props.item.tlp, `evidence-${props.index}-tlp`, 'tlp', modifyAssociation, ['evidence', props.item])"
                               @keypress.space.prevent="startEdit(`evidence-${props.index}-tlp-input`, props.item.tlp, `evidence-${props.index}-tlp`, 'tlp', modifyAssociation, ['evidence', props.item])">
                               <div class="font-weight-bold">{{i18n.caseTlp}}: </div>
-                              <div id="`evidence-${props.index}-tlp`" class="case detail-field" v-if="!isEdit(`evidence-${props.index}-tlp`)">{{ withDefault(props.item.tlp, i18n.unknown) }}</div>
+                              <div :id="`evidence-${props.index}-tlp`" class="case detail-field" v-if="!isEdit(`evidence-${props.index}-tlp`)">{{ withDefault(props.item.tlp, i18n.unknown) }}</div>
                             </div>
                             <v-select :id="`evidence-${props.index}-tlp-input`" v-if="isEdit(`evidence-${props.index}-tlp`) && !isPresetCustomEnabled('tlp')"
                               dense eager outlined hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
@@ -1687,7 +1687,7 @@
                             <div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${props.index}-tags-input`, props.item.tags, `evidence-${props.index}-tags`, 'tags', modifyAssociation, ['evidence', props.item])"
                               @keypress.space.prevent="startEdit(`evidence-${props.index}-tags-input`, props.item.tags, `evidence-${props.index}-tags`, 'tags', modifyAssociation, ['evidence', props.item])">
                               <div class="font-weight-bold">{{i18n.caseTags}}: </div>
-                              <div id="`evidence-${props.index}-tags`" class="case detail-field mt-1" v-if="!isEdit(`evidence-${props.index}-tags`)">
+                              <div :id="`evidence-${props.index}-tags`" class="case detail-field mt-1" v-if="!isEdit(`evidence-${props.index}-tags`)">
                                 <v-chip class="mx-1" v-for="tag in props.item.tags" color="primary">{{ tag }}</v-chip>
                               </div>
                             </div>
