@@ -46,6 +46,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         sortDesc: false,
         search: '',
         headers: [
+          { text: this.$root.i18n.actions, width: '10.0em' },
           { text: this.$root.i18n.dateCreated, value: 'createTime' },
           { text: this.$root.i18n.dateModified, value: 'updateTime' },
           { text: this.$root.i18n.filename, value: 'value' },
@@ -61,6 +62,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         sortDesc: false,
         search: '',
         headers: [
+          { text: this.$root.i18n.actions, width: '10.0em' },
           { text: this.$root.i18n.dateCreated, value: 'createTime' },
           { text: this.$root.i18n.dateModified, value: 'updateTime' },
           { text: this.$root.i18n.artifactType, value: 'artifactType' },
@@ -77,7 +79,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         sortDesc: false,
         search: '',
         headers: [
-          { text: this.$root.i18n.actions },
+          { text: this.$root.i18n.actions, width: '10.0em' },
           { text: this.$root.i18n.timestamp, value: 'fields.timestamp' },
           { text: this.$root.i18n.id, value: 'fields["soc_id"]' },
           { text: this.$root.i18n.category, value: 'fields["event.category"]' },
@@ -109,12 +111,11 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         sortDesc: false,
         search: '',
         headers: [
+          { text: this.$root.i18n.actions, width: '10.0em' },
           { text: this.$root.i18n.username, value: 'owner' },
           { text: this.$root.i18n.time, value: 'updateTime' },
           { text: this.$root.i18n.kind, value: 'kind' },
           { text: this.$root.i18n.operation, value: 'operation' },
-          { text: '', value: 'kindLocalized', align: ' d-none' },
-          { text: '', value: 'operationLocalized', align: ' d-none' },
         ],
         itemsPerPage: 10,
         footerProps: { 'items-per-page-options': [10,50,250,1000] },
@@ -259,14 +260,23 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           for (var idx = 0; idx < response.data.length; idx++) {
             const obj = response.data[idx];
             await this.$root.populateUserDetails(obj, "userId", "owner");
-            obj.kindLocalized = this.$root.localizeMessage(this.mapAssociatedKind(obj));
-            obj.operationLocalized = this.$root.localizeMessage(obj.operation);
+            obj.kind = this.$root.localizeMessage(this.mapAssociatedKind(obj));
+            obj.operation = this.$root.localizeMessage(obj.operation);
             this.associations[association].push(obj);
           }
         }
       } catch (error) {
         this.$root.showError(error);
       }
+    },
+    isExpanded(association, row) {
+      const expanded = this.associatedTable[association].expanded;
+      for (var i = 0; i < expanded.length; i++) {
+        if (expanded[i].id == row.id) {
+          return true;
+        }
+      }
+      return false;
     },
     expandRow(association, row) {
       const expanded = this.associatedTable[association].expanded;

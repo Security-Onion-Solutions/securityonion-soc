@@ -334,7 +334,7 @@ test('modifyAssociation', async () => {
   comp.associations['comments'] = [fakeComment];
   await comp.modifyAssociation('comments', fakeComment);
 
-  const body = "{\"userId\":\"myUserId\",\"id\":\"myCommentId\",\"description\":\"myDescription2\",\"owner\":\"my@email.invalid\",\"kindLocalized\":\"\",\"operationLocalized\":\"\"}";
+  const body = "{\"userId\":\"myUserId\",\"id\":\"myCommentId\",\"description\":\"myDescription2\",\"owner\":\"my@email.invalid\"}";
   expect(mock).toHaveBeenCalledWith('case/comments', body);
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expect(comp.associations['comments'].length).toBe(1);

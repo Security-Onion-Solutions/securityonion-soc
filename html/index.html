@@ -1396,17 +1396,23 @@
                     :search="associatedTable['attachments'].search" :footer-props="associatedTable['attachments'].footerProps" must-sort :headers="associatedTable['attachments'].headers"
                     :items="associations['attachments']" item-key="id" :loading="associatedTable['attachments'].loading" :expanded="associatedTable['attachments'].expanded" class="case-table">
                     <template v-slot:item="props">
-                      <tr @click="expandRow('attachments', props.item)" class="expandable">
-                        <td>{{ props.item.createTime | formatDateTime }}</td>
-                        <td>{{ props.item.updateTime | formatDateTime }}</td>
-                        <td class="case">
+                      <tr>
+                        <td class="associated actions">
+                          <v-btn :id="`attachments-${props.index}-expand`" icon small @click="expandRow('attachments', props.item)">
+                            <v-icon v-if="isExpanded('attachments', props.item)" :alt="i18n.expand" :title="i18n.expandHelp">fa-angle-down</v-icon>
+                            <v-icon v-if="!isExpanded('attachments', props.item)" :alt="i18n.expand" :title="i18n.expandHelp">fa-angle-right</v-icon>
+                          </v-btn>
+                        </td>                          
+                        <td class="associated">{{ props.item.createTime | formatDateTime }}</td>
+                        <td class="associated">{{ props.item.updateTime | formatDateTime }}</td>
+                        <td class="associated">
                           <div class="rounded">{{ props.item.value }}</div>
                         </td>                  
                       </tr>
                     </template>
                     <template v-slot:expanded-item="props">
                       <tr>
-                        <td :colspan="3" class="case">
+                        <td :colspan="4" class="case">
                           <v-container fluid class="py-1">
                             <a target="soc-download" :href="`/api/case/artifactstream?id=${props.item.id}`" class="no-underline">
                               <v-icon>fa-download</v-icon>
@@ -1599,20 +1605,26 @@
                     :search="associatedTable['evidence'].search" :footer-props="associatedTable['evidence'].footerProps" must-sort :headers="associatedTable['evidence'].headers"
                     :items="associations['evidence']" item-key="id" :loading="associatedTable['evidence'].loading" :expanded="associatedTable['evidence'].expanded" class="case-table">
                     <template v-slot:item="props">
-                      <tr @click="expandRow('evidence', props.item)" class="expandable">
-                        <td>{{ props.item.createTime | formatDateTime }}</td>
-                        <td>{{ props.item.updateTime | formatDateTime }}</td>
-                        <td class="case">
+                      <tr>
+                        <td class="association actions">
+                          <v-btn :id="`evidence-${props.index}-expand`" icon small @click="expandRow('evidence', props.item)">
+                            <v-icon v-if="isExpanded('evidence', props.item)" :alt="i18n.expand" :title="i18n.expandHelp">fa-angle-down</v-icon>
+                            <v-icon v-if="!isExpanded('evidence', props.item)" :alt="i18n.expand" :title="i18n.expandHelp">fa-angle-right</v-icon>
+                          </v-btn>
+                        </td>                        
+                        <td class="associated">{{ props.item.createTime | formatDateTime }}</td>
+                        <td class="associated">{{ props.item.updateTime | formatDateTime }}</td>
+                        <td class="associated case">
                           <div class="rounded">{{ props.item.artifactType }}</div>
                         </td>
-                        <td class="case">
+                        <td class="associated case">
                           <div class="rounded">{{ props.item.value }}</div>
                         </td>                  
                       </tr>
                     </template>
                     <template v-slot:expanded-item="props">
                       <tr>
-                        <td :colspan="4" class="case">
+                        <td :colspan="5" class="case">
                           <v-container fluid class="my-2" v-if="props.item.artifactType == 'file'">
                             <a target="soc-download" :href="`/api/case/artifactstream?id=${props.item.id}`" class="no-underline">
                               <v-icon>fa-download</v-icon>
@@ -1640,6 +1652,12 @@
                                 {{ withDefault(props.item.md5, i18n.unknown) }}
                                 <v-icon class="ml-1" @click="$root.copyToClipboard(props.item.md5)" :title="i18n.copyToClipboard">fa-copy</v-icon>
                               </div>
+                            </div>
+                          </v-container>
+                          <v-container fluid class="pt-2 pb-0" v-if="props.item.artifactType != 'file'">
+                            <div>
+                              <div class="font-weight-bold">{{i18n.artifactValue}}: </div>
+                              <div :id="`evidence-${props.index}-value`" class="case detail-field" :inner-html.prop="props.item.value | formatMarkdown"></div>
                             </div>
                           </v-container>
                           <v-container fluid class="pt-2 pb-0">
@@ -1815,23 +1833,27 @@
                   <v-text-field v-model="associatedTable['events'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
                   <v-data-table ref="eventsTable" :sort-by.sync="associatedTable['events'].sortBy" :sort-desc.sync="associatedTable['events'].sortDesc" :items-per-page.sync="associatedTable['events'].itemsPerPage" 
                     :search="associatedTable['events'].search" :footer-props="associatedTable['events'].footerProps" must-sort :headers="associatedTable['events'].headers"
-                    :items="associations['events']" item-key="id" :loading="associatedTable['events'].loading" :expanded="associatedTable['events'].expanded">
+                    :items="associations['events']" item-key="id" :loading="associatedTable['events'].loading" :expanded="associatedTable['events'].expanded" class="case-table">
                     <template v-slot:item="props">
-                      <tr @click="expandRow('events', props.item)" class="expandable">
-                        <td>
+                      <tr>
+                        <td class="associated actions">
+                          <v-btn :id="`events-${props.index}-expand`" icon small @click="expandRow('events', props.item)">
+                            <v-icon v-if="isExpanded('events', props.item)" :alt="i18n.expand" :title="i18n.expandHelp">fa-angle-down</v-icon>
+                            <v-icon v-if="!isExpanded('events', props.item)" :alt="i18n.expand" :title="i18n.expandHelp">fa-angle-right</v-icon>
+                          </v-btn>
                           <router-link class="no-underline" :to="{ name: 'hunt', query: {q: buildHuntQuery(props.item)}}" :title="i18n.huntForEvent" v-if="props.item.fields['soc_id']"><v-icon>fa-crosshairs</v-icon></router-link>
                         </td>
-                        <td>{{ props.item.fields["@timestamp"] | formatTimestamp }}</td>
-                        <td class="case">
+                        <td class="associated">{{ props.item.fields["@timestamp"] | formatTimestamp }}</td>
+                        <td class="associated case">
                           <div class="rounded">{{ getEventId(props.item) }}</div>
                         </td>
-                        <td class="case">
+                        <td class="associated case">
                           <div class="rounded">{{ props.item.fields['event.category'] }}</div>
                         </td>
-                        <td class="case">
+                        <td class="associated case">
                           <div class="rounded">{{ props.item.fields['event.module'] }}</div>
                         </td>                        
-                        <td class="case">
+                        <td class="associated case">
                           <div class="rounded">{{ props.item.fields['event.dataset'] }}</div>
                         </td>
                       </tr>
@@ -1840,10 +1862,10 @@
                       <tr>
                         <td :colspan="6" class="case">
                           <div class="mt-2">
-                            <div v-for="value, key in props.item.fields">
-                              <span class="case label" :title="key">{{ key }}:</span>
-                              <span class="case value">{{ value }}</span>
-                            </div>
+                            <v-row no-gutters class="py-1 case tabular-row" v-for="value, key in props.item.fields">
+                              <v-col cols="4"><span class="case tabular-label">{{ key }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ value }}</span></v-col>
+                            </v-row>
                           </div>
 
                           <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
@@ -1879,146 +1901,212 @@
                   <v-text-field v-model="associatedTable['history'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
                   <v-data-table ref="historyTable" :sort-by.sync="associatedTable['history'].sortBy" :sort-desc.sync="associatedTable['history'].sortDesc" :items-per-page.sync="associatedTable['history'].itemsPerPage" 
                     :search="associatedTable['history'].search" :footer-props="associatedTable['history'].footerProps" must-sort :headers="associatedTable['history'].headers"
-                    :items="associations['history']" item-key="id" :loading="associatedTable['history'].loading" :expanded="associatedTable['history'].expanded">
+                    :items="associations['history']" item-key="id" :loading="associatedTable['history'].loading" :expanded="associatedTable['history'].expanded" class="case-table">
                     <template v-slot:item="props">
-                      <tr @click="expandRow('history', props.item)" class="expandable">
-                        <td>
-                          <v-avatar color="primary" size="32">
+                      <tr>
+                        <td class="associated actions">
+                          <v-btn :id="`history-${props.index}-expand`" icon small @click="expandRow('history', props.item)">
+                            <v-icon v-if="isExpanded('history', props.item)" :alt="i18n.expand" :title="i18n.expandHelp">fa-angle-down</v-icon>
+                            <v-icon v-if="!isExpanded('history', props.item)" :alt="i18n.expand" :title="i18n.expandHelp">fa-angle-right</v-icon>
+                          </v-btn>
+                        </td>
+                        <td class="associated">
+                          <v-avatar color="primary" class="mr-1" size="32">
                             <div class="font-weight-bold" :title="props.item.owner">
                               {{ $root.getAvatar(props.item.owner) }}
                             </div>
                           </v-avatar>
+                          {{ props.item.owner }} 
                         </td>
-                        <td>{{ props.item.updateTime | formatDateTime }}</td>
-                        <td>
-                          <v-icon v-if="props.item.kind == 'case'">fa-briefcase</v-icon>
-                          <v-icon v-if="props.item.kind == 'comment'">fa-comments</v-icon>
-                          <v-icon v-if="props.item.kind == 'artifact' && props.item.groupType == 'attachments'">fa-paperclip</v-icon>
-                          <v-icon v-if="props.item.kind == 'artifact' && props.item.groupType == 'evidence'">fa-eye</v-icon>
-                          <v-icon v-if="props.item.kind == 'related'">fa-link</v-icon>
-                          <span class="rounded ml-2">{{ props.item.kindLocalized }}</span>
+                        <td class="associated">{{ props.item.updateTime | formatDateTime }}</td>
+                        <td class="associated">
+                          <v-icon v-if="props.item.kind == i18n.case">fa-briefcase</v-icon>
+                          <v-icon v-if="props.item.kind == i18n.comments">fa-comments</v-icon>
+                          <v-icon v-if="props.item.kind == i18n.attachments">fa-paperclip</v-icon>
+                          <v-icon v-if="props.item.kind == i18n.evidence">fa-eye</v-icon>
+                          <v-icon v-if="props.item.kind == i18n.events">fa-link</v-icon>
+                          <span class="rounded ml-2">{{ props.item.kind }}</span>
                         </td>
-                        <td>
-                          <span class="rounded mr-2">{{ props.item.operationLocalized }}</span>
+                        <td class="associated">
+                          <span class="rounded mr-2">{{ props.item.operation }}</span>
                           <v-icon v-if="props.item.operation == 'update'">fa-pencil-alt</v-icon>
                         </td>
                       </tr>
                     </template>
                     <template v-slot:expanded-item="props">
                       <tr>
-                        <td :colspan="4" class="case">
+                        <td colspan="5" class="case">
                           <div class="mt-2">
-                            <span class="case label" :title="i18n.kind">{{ i18n.kind }}:</span>
-                            <span class="case value">{{ props.item.kindLocalized }}</span>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.id }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.id }}</span></v-col>
+                            </v-row>
                           </div>
                           <div>
-                            <span class="case label" :title="i18n.operation">{{ i18n.operation }}:</span>
-                            <span class="case value">{{ props.item.operationLocalized }}</span>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.kind }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.kind }}</span></v-col>
+                            </v-row>
                           </div>
                           <div>
-                            <span class="case label" :title="i18n.dateCreated">{{ i18n.dateCreated }}:</span>
-                            <span class="case value">{{ props.item.createTime | formatDateTime }}</span>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.operation }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.operation }}</span></v-col>
+                            </v-row>
                           </div>
                           <div>
-                            <span class="case label" :title="i18n.dateModified">{{ i18n.dateModified }}:</span>
-                            <span class="case value">{{ props.item.updateTime | formatDateTime }}</span>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.dateCreated }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.createTime | formatDateTime }}</span></v-col>
+                            </v-row>
                           </div>
-                          <div v-if="props.item.kind == 'case'">
-                            <div>
-                              <span class="case label" :title="i18n.caseTitle">{{ i18n.caseTitle}}:</span>
-                              <span class="case value">{{ props.item.title }}</span>
-                            </div>
-                            <div>
-                              <span class="case label" :title="i18n.caseDescription">{{ i18n.caseDescription }}:</span>
-                              <span class="case value">{{ props.item.description }}</span>
-                            </div>
-                            <div>
-                              <span class="case label" :title="i18n.caseStatus">{{ i18n.caseStatus }}:</span>
-                              <span class="case value">{{ props.item.status }}</span>
-                            </div>
-                            <div>
-                              <span class="case label" :title="i18n.caseSeverity">{{ i18n.caseSeverity }}:</span>
-                              <span class="case value">{{ props.item.severity }}</span>
-                            </div>
-                            <div>
-                              <span class="case label" :title="i18n.casePriority">{{ i18n.casePriority }}:</span>
-                              <span class="case value">{{ props.item.priority }}</span>
-                            </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.dateModified }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.updateTime | formatDateTime }}</span></v-col>
+                            </v-row>
                           </div>
-                          <div v-if="props.item.kind == 'comment'">
+                          <div v-if="props.item.kind == i18n.case">
                             <div>
-                              <span class="case label" :title="i18n.commentDescription">{{ i18n.commentDescription }}:</span>
-                              <span class="case value">{{ props.item.description }}</span>
-                            </div>
-                          </div>
-                          <div v-if="props.item.kind == 'related'">
-                            <div>
-                              <span class="case label" :title="i18n.relatedEventId">{{ i18n.relatedEventId }}:</span>
-                              <span class="case value">
-                                <router-link class="no-underline" :to="{ name: 'hunt', query: {q:`_id:${props.item.fields.soc_id}`}}">
-                                  {{ props.item.fields.soc_id }}
-                                </router-link>
-                              </span>
-                            </div>
-                          </div>
-                          <div v-if="props.item.kind == 'artifact' && props.item.groupType == 'attachments'">
-                            <div>
-                              <span class="case label" :title="i18n.artifactGroupType">{{ i18n.artifactGroupType }}:</span>
-                              <span class="case value">{{ props.item.groupType }}</span>
+                              <v-row no-gutters class="py-1 case tabular-row">
+                                <v-col cols="4"><span class="case tabular-label">{{ i18n.caseTitle }}:</span></v-col>
+                                <v-col cols="8"><span class="case">{{ props.item.title }}</span></v-col>
+                              </v-row>
                             </div>
                             <div>
-                              <span class="case label" :title="i18n.artifactGroupId">{{ i18n.artifactGroupId }}:</span>
-                              <span class="case value">{{ props.item.groupId }}</span>
+                              <v-row no-gutters class="py-1 case tabular-row">
+                                <v-col cols="4"><span class="case tabular-label">{{ i18n.caseDescription }}:</span></v-col>
+                                <v-col cols="8"><span class="case">{{ props.item.description }}</span></v-col>
+                              </v-row>
                             </div>
                             <div>
-                              <span class="case label" :title="i18n.filename">{{ i18n.filename }}:</span>
-                              <span class="case value">{{ props.item.value }}</span>
+                              <v-row no-gutters class="py-1 case tabular-row">
+                                <v-col cols="4"><span class="case tabular-label">{{ i18n.caseStatus }}:</span></v-col>
+                                <v-col cols="8"><span class="case">{{ props.item.status }}</span></v-col>
+                              </v-row>
                             </div>
                             <div>
-                              <span class="case label" :title="i18n.description">{{ i18n.description }}:</span>
-                              <span class="case value">{{ props.item.description }}</span>
+                              <v-row no-gutters class="py-1 case tabular-row">
+                                <v-col cols="4"><span class="case tabular-label">{{ i18n.caseSeverity }}:</span></v-col>
+                                <v-col cols="8"><span class="case">{{ props.item.severity }}</span></v-col>
+                              </v-row>                                
                             </div>
                             <div>
-                              <span class="case label" :title="i18n.caseTlp">{{ i18n.caseTlp }}:</span>
-                              <span class="case value">{{ props.item.tlp }}</span>
-                            </div>
-                            <div>
-                              <span class="case label" :title="i18n.caseTags">{{ i18n.caseTags }}:</span>
-                              <span class="case value">{{ props.item.tags }}</span>
+                              <v-row no-gutters class="py-1 case tabular-row">
+                                <v-col cols="4"><span class="case tabular-label">{{ i18n.casePriority }}:</span></v-col>
+                                <v-col cols="8"><span class="case">{{ props.item.priority }}</span></v-col>
+                              </v-row>
                             </div>
                           </div>
-                          <div v-if="props.item.kind == 'artifact' && props.item.groupType == 'evidence'">
+                          <div v-if="props.item.kind == i18n.comments">
                             <div>
-                              <span class="case label" :title="i18n.artifactGroupType">{{ i18n.artifactGroupType }}:</span>
-                              <span class="case value">{{ props.item.groupType }}</span>
+                              <v-row no-gutters class="py-1 case tabular-row">
+                                <v-col cols="4"><span class="case tabular-label">{{ i18n.commentDescription }}:</span></v-col>
+                                <v-col cols="8"><span class="case">{{ props.item.description }}</span></v-col>
+                              </v-row>
+                            </div>
+                          </div>
+                          <div v-if="props.item.kind == i18n.events">
+                            <div>
+                              <v-row no-gutters class="py-1 case tabular-row">
+                                <v-col cols="4"><span class="case tabular-label">{{ i18n.relatedEventId }}:</span></v-col>
+                                <v-col cols="8"><span class="case value">
+                                  <router-link v-if="props.item.fields.soc_id" class="no-underline" :to="{ name: 'hunt', query: {q: buildHuntQuery(props.item) }}">
+                                    {{ props.item.fields.soc_id }}
+                                  </router-link>
+                                  <span v-if="!props.item.fields.soc_id">
+                                    {{ i18n.caseEventIdAggregation }}
+                                  </span>
+                                </span></v-col>
+                              </v-row>
+                            </div>
+                          </div>
+                          <div v-if="props.item.kind == i18n.attachments">
+                            <div>
+                              <v-row no-gutters class="py-1 case tabular-row">
+                                <v-col cols="4"><span class="case tabular-label">{{ i18n.artifactGroupType }}:</span></v-col>
+                                <v-col cols="8"><span class="case">{{ props.item.groupType }}</span></v-col>
+                              </v-row>
                             </div>
                             <div>
-                              <span class="case label" :title="i18n.artifactGroupId">{{ i18n.artifactGroupId }}:</span>
-                              <span class="case value">{{ props.item.groupId }}</span>
+                              <v-row no-gutters class="py-1 case tabular-row">
+                                <v-col cols="4"><span class="case tabular-label">{{ i18n.artifactGroupId }}:</span></v-col>
+                                <v-col cols="8"><span class="case">{{ props.item.groupId }}</span></v-col>
+                              </v-row>
                             </div>
                             <div>
-                              <span class="case label" :title="i18n.artifactType">{{ i18n.artifactType }}:</span>
-                              <span class="case value">{{ props.item.artifactType }}</span>
+                              <v-row no-gutters class="py-1 case tabular-row">
+                                <v-col cols="4"><span class="case tabular-label">{{ i18n.filename }}:</span></v-col>
+                                <v-col cols="8"><span class="case">{{ props.item.value }}</span></v-col>
+                              </v-row>
                             </div>
                             <div>
-                              <span class="case label" :title="i18n.value">{{ i18n.value }}:</span>
-                              <span class="case value">{{ props.item.value }}</span>
+                              <v-row no-gutters class="py-1 case tabular-row">
+                                <v-col cols="4"><span class="case tabular-label">{{ i18n.description }}:</span></v-col>
+                                <v-col cols="8"><span class="case">{{ props.item.description }}</span></v-col>
+                              </v-row>
                             </div>
                             <div>
-                              <span class="case label" :title="i18n.description">{{ i18n.description }}:</span>
-                              <span class="case value">{{ props.item.description }}</span>
+                              <v-row no-gutters class="py-1 case tabular-row">
+                                <v-col cols="4"><span class="case tabular-label">{{ i18n.caseTlp }}:</span></v-col>
+                                <v-col cols="8"><span class="case">{{ props.item.tlp }}</span></v-col>
+                              </v-row>
                             </div>
                             <div>
-                              <span class="case label" :title="i18n.caseTlp">{{ i18n.caseTlp }}:</span>
-                              <span class="case value">{{ props.item.tlp }}</span>
+                              <v-row no-gutters class="py-1 case tabular-row">
+                                <v-col cols="4"><span class="case tabular-label">{{ i18n.caseTags }}:</span></v-col>
+                                <v-col cols="8"><span class="case">{{ props.item.tags }}</span></v-col>
+                              </v-row>
+                            </div>
+                          </div>
+                          <div v-if="props.item.kind == i18n.evidence">
+                            <div>
+                              <v-row no-gutters class="py-1 case tabular-row">
+                                <v-col cols="4"><span class="case tabular-label">{{ i18n.artifactGroupType }}:</span></v-col>
+                                <v-col cols="8"><span class="case">{{ props.item.groupType }}</span></v-col>
+                              </v-row>
                             </div>
                             <div>
-                              <span class="case label" :title="i18n.artifactIoc">{{ i18n.artifactIoc }}:</span>
-                              <span class="case value">{{ props.item.ioc }}</span>
+                              <v-row no-gutters class="py-1 case tabular-row">
+                                <v-col cols="4"><span class="case tabular-label">{{ i18n.artifactGroupId }}:</span></v-col>
+                                <v-col cols="8"><span class="case">{{ props.item.groupId }}</span></v-col>
+                              </v-row>
                             </div>
                             <div>
-                              <span class="case label" :title="i18n.caseTags">{{ i18n.caseTags }}:</span>
-                              <span class="case value">{{ props.item.tags }}</span>
+                              <v-row no-gutters class="py-1 case tabular-row">
+                                <v-col cols="4"><span class="case tabular-label">{{ i18n.artifactType }}:</span></v-col>
+                                <v-col cols="8"><span class="case">{{ props.item.artifactType }}</span></v-col>
+                              </v-row>
+                            </div>
+                            <div>
+                              <v-row no-gutters class="py-1 case tabular-row">
+                                <v-col cols="4"><span class="case tabular-label">{{ i18n.value }}:</span></v-col>
+                                <v-col cols="8"><span class="case">{{ props.item.value }}</span></v-col>
+                              </v-row>
+                            </div>
+                            <div>
+                              <v-row no-gutters class="py-1 case tabular-row">
+                                <v-col cols="4"><span class="case tabular-label">{{ i18n.description }}:</span></v-col>
+                                <v-col cols="8"><span class="case">{{ props.item.description }}</span></v-col>
+                              </v-row>
+                            </div>
+                            <div>
+                              <v-row no-gutters class="py-1 case tabular-row">
+                                <v-col cols="4"><span class="case tabular-label">{{ i18n.caseTlp }}:</span></v-col>
+                                <v-col cols="8"><span class="case">{{ props.item.tlp }}</span></v-col>
+                              </v-row>
+                            </div>
+                            <div>
+                              <v-row no-gutters class="py-1 case tabular-row">
+                                <v-col cols="4"><span class="case tabular-label">{{ i18n.artifactIoc }}:</span></v-col>
+                                <v-col cols="8"><span class="case">{{ props.item.ioc }}</span></v-col>
+                              </v-row>
+                            </div>
+                            <div>
+                              <v-row no-gutters class="py-1 case tabular-row">
+                                <v-col cols="4"><span class="case tabular-label">{{ i18n.caseTags }}:</span></v-col>
+                                <v-col cols="8"><span class="case">{{ props.item.tags }}</span></v-col>
+                              </v-row>
                             </div>
                           </div>
 
@@ -2312,8 +2400,8 @@
                 <tr>
                   <td>
                     <v-btn id="expandNode" icon small @click="expand(props.item)">
-                      <v-icon v-if="isExpanded(props.item)" :alt="i18n.nodeExpand" :title="i18n.nodeExpandHelp">fa-angle-down</v-icon>
-                      <v-icon v-if="!isExpanded(props.item)" :alt="i18n.nodeExpand" :title="i18n.nodeExpandHelp">fa-angle-right</v-icon>
+                      <v-icon v-if="isExpanded(props.item)" :alt="i18n.expand" :title="i18n.nodeExpandHelp">fa-angle-down</v-icon>
+                      <v-icon v-if="!isExpanded(props.item)" :alt="i18n.expand" :title="i18n.nodeExpandHelp">fa-angle-right</v-icon>
                     </v-btn>
                   </td>
                   <td v-text="props.item.id"></td>
