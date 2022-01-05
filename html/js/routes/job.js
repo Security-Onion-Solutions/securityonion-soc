@@ -52,6 +52,9 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     this.loadData();
     this.$root.loadParameters('job', this.initActions);
   },
+  beforeDestroy() {
+    this.$root.setSubtitle("");
+  },  
   destroyed() {
     this.$root.unsubscribe("job", this.updateJob);
   },
@@ -231,6 +234,7 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
         }});
         this.job = response.data;
         this.$root.populateUserDetails(this.job, "userId", "owner");
+        this.$root.setSubtitle(this.i18n.jobs + " - " + this.job.id); 
         this.loadPackets(this.isOptionEnabled('unwrap'));
       } catch (error) {
         if (error.response != undefined && error.response.status == 404) {

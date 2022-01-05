@@ -158,6 +158,9 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       await this.loadData();
     }
   },
+  beforeDestroy() {
+    this.$root.setSubtitle("");
+  },  
   destroyed() {
     this.$root.unsubscribe("case", this.updateCase);
   },
@@ -356,6 +359,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       await this.$root.populateUserDetails(caseObj, "userId", "owner", this.i18n.unknown);
       await this.$root.populateUserDetails(caseObj, "assigneeId", "assignee", this.i18n.unassigned);
       this.addMRUCaseObj(caseObj);
+      this.$root.setSubtitle(this.i18n.case + " - " + caseObj.title); 
       this.caseObj = caseObj;
     },
 
