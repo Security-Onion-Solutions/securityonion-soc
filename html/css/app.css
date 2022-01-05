@@ -248,11 +248,12 @@ td {
 
 .case-table table {
   width: 100% !important;
-  table-layout:fixed;
+  table-layout: fixed;
 }
 
 .markdown-body {
   overflow: auto;
+  white-space: revert !important;
   position: relative;
 }
 
