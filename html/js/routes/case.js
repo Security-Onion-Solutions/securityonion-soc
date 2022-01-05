@@ -145,6 +145,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     },
     attachment: null,
     maxUploadSizeBytes: 26214400,
+    addingAssociation: null,
   }},
   computed: {
   },
@@ -553,12 +554,19 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           form.artifactType = this.getDefaultPreset('artifactType');
           break;
       }
+      this.addingAssociation = null;
       Vue.set(this.associatedForms, ref, form)
     },
     isEdited(association) {
       const createTime = Date.parse(association.createTime);
       const updateTime = Date.parse(association.updateTime);
       return Math.abs(updateTime - createTime) >= 1000;
+    },
+    enableAdding(association) {
+      this.addingAssociation = association;
+    },
+    isAdding(association) {
+      return this.addingAssociation == association;
     },
      
     updateCase(caseObj) {

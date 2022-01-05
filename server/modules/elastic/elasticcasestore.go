@@ -104,6 +104,7 @@ func (store *ElasticCasestore) validateCase(socCase *model.Case) error {
     err = errors.New("Invalid priority")
   }
   if err == nil {
+    socCase.Severity = convertSeverity(socCase.Severity)
     err = store.validateString(socCase.Severity, SHORT_STRING_MAX, "severity")
   }
   if err == nil && len(socCase.Kind) > 0 {

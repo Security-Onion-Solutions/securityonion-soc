@@ -1536,7 +1536,16 @@
                   <div class="text-xs-center pt-2 d-none">
                       <v-btn v-text="i18n.loadMore" @click="loadAssociation('attachments')"></v-btn>
                   </div>
-                  <v-row>
+                  <v-row v-if="!isAdding('attachments')">
+                    <v-col>
+                      <v-toolbar class="elevation-0" fixed>
+                        <v-btn color="primary" @click.stop="enableAdding('attachments')" id="add-attachment-button">
+                          <v-icon>fa-plus</v-icon>
+                        </v-btn>
+                      </v-toolbar>
+                    </v-col>
+                  </v-row>                    
+                  <v-row v-if="isAdding('attachments')">
                     <v-col>
                       <div class="ml-1 ml-md-3 py-3 px-4 contrast-bg rounded rounded-md" style="width: 100%;">
                       <div class="d-flex flex-column align-start">
@@ -1741,7 +1750,16 @@
                   <div class="text-xs-center pt-2 d-none">
                       <v-btn v-text="i18n.loadMore" @click="loadAssociation('evidence')"></v-btn>
                   </div>
-                  <v-row>
+                  <v-row v-if="!isAdding('evidence')">
+                    <v-col>
+                      <v-toolbar class="elevation-0" fixed>
+                        <v-btn color="primary" @click.stop="enableAdding('evidence')" id="add-evidence-button">
+                          <v-icon>fa-plus</v-icon>
+                        </v-btn>
+                      </v-toolbar>
+                    </v-col>
+                  </v-row>                    
+                  <v-row v-if="isAdding('evidence')">
                     <v-col>
                       <div class="ml-1 ml-md-3 py-3 px-4 contrast-bg rounded rounded-md" style="width: 100%;">
                       <div class="d-flex flex-column align-start">
@@ -1803,7 +1821,7 @@
                         <td>
                           <router-link class="no-underline" :to="{ name: 'hunt', query: {q: buildHuntQuery(props.item)}}" :title="i18n.huntForEvent" v-if="props.item.fields['soc_id']"><v-icon>fa-crosshairs</v-icon></router-link>
                         </td>
-                        <td>{{ props.item.fields.timestamp | formatTimestamp }}</td>
+                        <td>{{ props.item.fields["@timestamp"] | formatTimestamp }}</td>
                         <td class="case">
                           <div class="rounded">{{ getEventId(props.item) }}</div>
                         </td>
@@ -1823,7 +1841,7 @@
                         <td :colspan="6" class="case">
                           <div class="mt-2">
                             <div v-for="value, key in props.item.fields">
-                              <span class="case label">{{ key }}:</span>
+                              <span class="case label" :title="key">{{ key }}:</span>
                               <span class="case value">{{ value }}</span>
                             </div>
                           </div>
@@ -1890,52 +1908,52 @@
                       <tr>
                         <td :colspan="4" class="case">
                           <div class="mt-2">
-                            <span class="case label">{{ i18n.kind }}:</span>
+                            <span class="case label" :title="i18n.kind">{{ i18n.kind }}:</span>
                             <span class="case value">{{ props.item.kindLocalized }}</span>
                           </div>
                           <div>
-                            <span class="case label">{{ i18n.operation }}:</span>
+                            <span class="case label" :title="i18n.operation">{{ i18n.operation }}:</span>
                             <span class="case value">{{ props.item.operationLocalized }}</span>
                           </div>
                           <div>
-                            <span class="case label">{{ i18n.dateCreated }}:</span>
+                            <span class="case label" :title="i18n.dateCreated">{{ i18n.dateCreated }}:</span>
                             <span class="case value">{{ props.item.createTime | formatDateTime }}</span>
                           </div>
                           <div>
-                            <span class="case label">{{ i18n.dateModified }}:</span>
+                            <span class="case label" :title="i18n.dateModified">{{ i18n.dateModified }}:</span>
                             <span class="case value">{{ props.item.updateTime | formatDateTime }}</span>
                           </div>
                           <div v-if="props.item.kind == 'case'">
                             <div>
-                              <span class="case label">{{ i18n.caseTitle}}:</span>
+                              <span class="case label" :title="i18n.caseTitle">{{ i18n.caseTitle}}:</span>
                               <span class="case value">{{ props.item.title }}</span>
                             </div>
                             <div>
-                              <span class="case label">{{ i18n.caseDescription }}:</span>
+                              <span class="case label" :title="i18n.caseDescription">{{ i18n.caseDescription }}:</span>
                               <span class="case value">{{ props.item.description }}</span>
                             </div>
                             <div>
-                              <span class="case label">{{ i18n.caseStatus }}:</span>
+                              <span class="case label" :title="i18n.caseStatus">{{ i18n.caseStatus }}:</span>
                               <span class="case value">{{ props.item.status }}</span>
                             </div>
                             <div>
-                              <span class="case label">{{ i18n.caseSeverity }}:</span>
+                              <span class="case label" :title="i18n.caseSeverity">{{ i18n.caseSeverity }}:</span>
                               <span class="case value">{{ props.item.severity }}</span>
                             </div>
                             <div>
-                              <span class="case label">{{ i18n.casePriority }}:</span>
+                              <span class="case label" :title="i18n.casePriority">{{ i18n.casePriority }}:</span>
                               <span class="case value">{{ props.item.priority }}</span>
                             </div>
                           </div>
                           <div v-if="props.item.kind == 'comment'">
                             <div>
-                              <span class="case label">{{ i18n.commentDescription }}:</span>
+                              <span class="case label" :title="i18n.commentDescription">{{ i18n.commentDescription }}:</span>
                               <span class="case value">{{ props.item.description }}</span>
                             </div>
                           </div>
                           <div v-if="props.item.kind == 'related'">
                             <div>
-                              <span class="case label">{{ i18n.relatedEventId }}:</span>
+                              <span class="case label" :title="i18n.relatedEventId">{{ i18n.relatedEventId }}:</span>
                               <span class="case value">
                                 <router-link class="no-underline" :to="{ name: 'hunt', query: {q:`_id:${props.item.fields.soc_id}`}}">
                                   {{ props.item.fields.soc_id }}
@@ -1945,61 +1963,61 @@
                           </div>
                           <div v-if="props.item.kind == 'artifact' && props.item.groupType == 'attachments'">
                             <div>
-                              <span class="case label">{{ i18n.artifactGroupType }}:</span>
+                              <span class="case label" :title="i18n.artifactGroupType">{{ i18n.artifactGroupType }}:</span>
                               <span class="case value">{{ props.item.groupType }}</span>
                             </div>
                             <div>
-                              <span class="case label">{{ i18n.artifactGroupId }}:</span>
+                              <span class="case label" :title="i18n.artifactGroupId">{{ i18n.artifactGroupId }}:</span>
                               <span class="case value">{{ props.item.groupId }}</span>
                             </div>
                             <div>
-                              <span class="case label">{{ i18n.filename }}:</span>
+                              <span class="case label" :title="i18n.filename">{{ i18n.filename }}:</span>
                               <span class="case value">{{ props.item.value }}</span>
                             </div>
                             <div>
-                              <span class="case label">{{ i18n.description }}:</span>
+                              <span class="case label" :title="i18n.description">{{ i18n.description }}:</span>
                               <span class="case value">{{ props.item.description }}</span>
                             </div>
                             <div>
-                              <span class="case label">{{ i18n.caseTlp }}:</span>
+                              <span class="case label" :title="i18n.caseTlp">{{ i18n.caseTlp }}:</span>
                               <span class="case value">{{ props.item.tlp }}</span>
                             </div>
                             <div>
-                              <span class="case label">{{ i18n.caseTags }}:</span>
+                              <span class="case label" :title="i18n.caseTags">{{ i18n.caseTags }}:</span>
                               <span class="case value">{{ props.item.tags }}</span>
                             </div>
                           </div>
                           <div v-if="props.item.kind == 'artifact' && props.item.groupType == 'evidence'">
                             <div>
-                              <span class="case label">{{ i18n.artifactGroupType }}:</span>
+                              <span class="case label" :title="i18n.artifactGroupType">{{ i18n.artifactGroupType }}:</span>
                               <span class="case value">{{ props.item.groupType }}</span>
                             </div>
                             <div>
-                              <span class="case label">{{ i18n.artifactGroupId }}:</span>
+                              <span class="case label" :title="i18n.artifactGroupId">{{ i18n.artifactGroupId }}:</span>
                               <span class="case value">{{ props.item.groupId }}</span>
                             </div>
                             <div>
-                              <span class="case label">{{ i18n.artifactType }}:</span>
+                              <span class="case label" :title="i18n.artifactType">{{ i18n.artifactType }}:</span>
                               <span class="case value">{{ props.item.artifactType }}</span>
                             </div>
                             <div>
-                              <span class="case label">{{ i18n.value }}:</span>
+                              <span class="case label" :title="i18n.value">{{ i18n.value }}:</span>
                               <span class="case value">{{ props.item.value }}</span>
                             </div>
                             <div>
-                              <span class="case label">{{ i18n.description }}:</span>
+                              <span class="case label" :title="i18n.description">{{ i18n.description }}:</span>
                               <span class="case value">{{ props.item.description }}</span>
                             </div>
                             <div>
-                              <span class="case label">{{ i18n.caseTlp }}:</span>
+                              <span class="case label" :title="i18n.caseTlp">{{ i18n.caseTlp }}:</span>
                               <span class="case value">{{ props.item.tlp }}</span>
                             </div>
                             <div>
-                              <span class="case label">{{ i18n.artifactIoc }}:</span>
+                              <span class="case label" :title="i18n.artifactIoc">{{ i18n.artifactIoc }}:</span>
                               <span class="case value">{{ props.item.ioc }}</span>
                             </div>
                             <div>
-                              <span class="case label">{{ i18n.caseTags }}:</span>
+                              <span class="case label" :title="i18n.caseTags">{{ i18n.caseTags }}:</span>
                               <span class="case value">{{ props.item.tags }}</span>
                             </div>
                           </div>

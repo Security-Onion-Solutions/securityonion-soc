@@ -721,7 +721,13 @@ const huntComponent = {
         this.groupByRoute = this.buildGroupByRoute(field);
         var route = this;
         this.actions.forEach(function(action, index) {
-          if (action.fields) {
+          action.enabled = true;
+
+          if (action.categories && action.categories.indexOf(this.category) == -1) {
+            action.enabled = false;
+          }
+
+          if (action.enabled && action.fields) {
             action.enabled = false;
             for (var x = 0; x < action.fields.length; x++) {
               if (action.fields[x] == field) {
@@ -731,16 +737,16 @@ const huntComponent = {
             }
           }
 
-          var link = route.$root.findEligibleActionLinkForEvent(action, event);
-          if (link) {
-            action.enabled = true;
-            action.linkFormatted = route.$root.formatActionContent(link, event, field, value, true);
-            action.bodyFormatted = route.$root.formatActionContent(action.body, event, field, value, action.encodeBody);
-            action.backgroundSuccessLinkFormatted = route.$root.formatActionContent(action.backgroundSuccessLink, event, field, value, true);
-            action.backgroundFailureLinkFormatted = route.$root.formatActionContent(action.backgroundFailureLink, event, field, value, true);
-            
-          } else {
-            action.enabled = false;
+          if (action.enabled) {
+            var link = route.$root.findEligibleActionLinkForEvent(action, event);
+            if (link) {
+              action.linkFormatted = route.$root.formatActionContent(link, event, field, value, true);
+              action.bodyFormatted = route.$root.formatActionContent(action.body, event, field, value, action.encodeBody);
+              action.backgroundSuccessLinkFormatted = route.$root.formatActionContent(action.backgroundSuccessLink, event, field, value, true);
+              action.backgroundFailureLinkFormatted = route.$root.formatActionContent(action.backgroundFailureLink, event, field, value, true);
+            } else {
+              action.enabled = false;
+            }
           }
         });
         this.quickActionEvent = event;

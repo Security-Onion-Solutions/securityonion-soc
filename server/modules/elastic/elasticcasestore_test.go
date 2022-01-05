@@ -167,7 +167,7 @@ func TestValidateCaseInvalid(tester *testing.T) {
 		socCase.Severity += "this is my unreasonably long severity\n"
 	}
 	err = store.validateCase(socCase)
-	assert.EqualError(tester, err, "severity is too long (152/100)")
+	assert.EqualError(tester, err, "severity is too long (156/100)")
 	socCase.Severity = "medium"
 
 	for x := 1; x < 5; x++ {
@@ -243,7 +243,7 @@ func TestValidateCaseValid(tester *testing.T) {
 		socCase.Description += "this is my reasonably long description\n"
 	}
 	socCase.Priority = 123
-	socCase.Severity = "medium"
+	socCase.Severity = "2"
 	socCase.Tags = append(socCase.Tags, "tag1")
 	socCase.Tags = append(socCase.Tags, "tag2")
 	socCase.Tlp = "amber"
@@ -255,6 +255,7 @@ func TestValidateCaseValid(tester *testing.T) {
 	socCase.AssigneeId = "myAssigneeId"
 	err = store.validateCase(socCase)
 	assert.NoError(tester, err)
+	assert.Equal(tester, "medium", socCase.Severity)
 }
 
 func TestValidateRelatedEventInvalid(tester *testing.T) {
