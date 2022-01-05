@@ -48,6 +48,7 @@ const huntComponent = {
     ackEnabled: false,
     escalateEnabled: false,
     viewEnabled: false,
+    createLink: '',
     collapsedSections: [],
 
     filterToggles: [],
@@ -200,6 +201,7 @@ const huntComponent = {
       this.escalateEnabled = params["escalateEnabled"];
       this.escalateRelatedEventsEnabled = params["escalateRelatedEventsEnabled"];
       this.viewEnabled = params["viewEnabled"];
+      this.createLink = params["createLink"];
       if (this.queries != null && this.queries.length > 0) {
         this.query = this.queries[0].query;
       }
@@ -433,7 +435,13 @@ const huntComponent = {
       }
 
       var description = item['message'];
-      if (!description) description = JSON.stringify(item);
+      if (!description) {
+        if (!this.escalateRelatedEventsEnabled) {
+          description = JSON.stringify(item);
+        } else {
+          description = this.i18n.caseEscalatedDescription;
+        }
+      }
 
       var severity = 'event.severity' in item && item['event.severity'] ? '' + item['event.severity'] : '';
       var template = 'rule.case_template' in item && item['rule.case_template'] ? '' + item['rule.case_template'] : '';

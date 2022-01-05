@@ -245,8 +245,13 @@ test('buildCase', () => {
       'Event Escalation from SOC: myModule - myDataset', 'myMessage', 'mySeverity', 'myTemplate');
 
   // missing message
+  comp.escalateRelatedEventsEnabled = false;
   validateCase('myTitle', 'myTemplate', 'myModule', 'myDataset', 'mySeverity', '',
       'myTitle', '{\"rule.name\":\"myTitle\",\"rule.case_template\":\"myTemplate\",\"event.module\":\"myModule\",\"event.dataset\":\"myDataset\",\"event.severity\":\"mySeverity\",\"message\":\"\"}', 'mySeverity', 'myTemplate');
+
+  comp.escalateRelatedEventsEnabled = true;
+  validateCase('myTitle', 'myTemplate', 'myModule', 'myDataset', 'mySeverity', '',
+      'myTitle', comp.i18n.caseEscalatedDescription, 'mySeverity', 'myTemplate');
 
   // missing severity
   validateCase('myTitle', 'myTemplate', 'myModule', 'myDataset', '', 'myMessage',

@@ -300,9 +300,17 @@
           <v-spacer></v-spacer>
           <v-col cols="2" align="end">
             <h4 v-if="loaded">{{ i18n.eventTotal }} {{ totalEvents.toLocaleString() }}</h4>
-            <p>
-            <h5>
-            </h5>
+          </v-col>
+        </v-row>
+        <v-row align="start" v-if="createLink != ''">
+          <v-col cols="12">
+            <v-toolbar class="elevation-0" fixed>
+              <router-link :to="createLink" style="text-decoration: none; cursor: 'pointer'">
+                <v-btn color="primary" id="add-case-button">
+                  <v-icon :title="i18n.create">fa-plus</v-icon>
+                </v-btn>
+              </router-link>
+            </v-toolbar>
           </v-col>
         </v-row>
         <v-row align="start">
@@ -1215,7 +1223,8 @@
     <script type="text/x-template" id="page-case">
       <v-container fluid>
         <div class="mx-sm-12 mx-lg-6 mt-2 mb-6 mb-md-1">
-          <div class="case detail-field clicktoedit d-flex align-start pa-2" v-if="!isEdit('case-title')" @click="startEdit('case-title-input', caseObj.title, 'case-title', 'title', modifyCase)">
+          <div tabindex="0" class="case detail-field clicktoedit d-flex align-start pa-2" v-if="!isEdit('case-title')" 
+            @click="startEdit('case-title-input', caseObj.title, 'case-title', 'title', modifyCase)" @keypress.space.prevent="startEdit('case-title-input', caseObj.title, 'case-title', 'title', modifyCase)">
             <h2 id="case-title" class="rounded">{{ caseObj.title }}</h2>
           </div>
           <div class="d-flex flex-column" v-if="isEdit('case-title')">
@@ -1240,7 +1249,8 @@
               <h2>{{ i18n.description }}</h2>
             </div>
             <div class="mb-6 mb-md-3">
-              <div class="clicktoedit d-flex align-start pa-2" v-if="!isEdit('case-description')" @click="startEdit('case-desc-input',  caseObj.description, 'case-description', 'description', modifyCase, [], true)">
+              <div tabindex="0" class="clicktoedit d-flex align-start pa-2" v-if="!isEdit('case-description')" @click="startEdit('case-desc-input',  caseObj.description, 'case-description', 'description', modifyCase, [], true)"
+              @keypress.space.prevent="startEdit('case-desc-input',  caseObj.description, 'case-description', 'description', modifyCase, [], true)">
                 <div class="d-block" style="width: 100%;">
                   <div id="case-description" class="rounded case detail-field markdown-body" :inner-html.prop="caseObj.description | formatMarkdown"></div>
                 </div>
@@ -1332,7 +1342,10 @@
                                   {{ i18n.edited }}
                                 </div>
                                 <div class="ml-1 d-flex mt-1 mt-sm-0">
-                                  <v-btn text small color="primary" v-if="!isEdit(`comment-${index}`)" @click="startEdit('comment-desc-input', comment.description, `comment-${index}`, 'description', modifyAssociation, ['comments', comment], true)" icon><v-icon style="font-size: 14px !important;">fa-edit</v-icon></v-btn>
+                                  <v-btn text small icon color="primary" v-if="!isEdit(`comment-${index}`)" @click="startEdit('comment-desc-input', comment.description, `comment-${index}`, 'description', modifyAssociation, ['comments', comment], true)" 
+                                    @keypress.space.prevent="startEdit('comment-desc-input', comment.description, `comment-${index}`, 'description', modifyAssociation, ['comments', comment], true)">
+                                    <v-icon style="font-size: 14px !important;">fa-edit</v-icon>
+                                  </v-btn>
                                   <v-btn text small color="red" @click="deleteAssociation('comments', comment)" icon><v-icon style="font-size: 14px !important;">fa-trash</v-icon></v-btn>
                                 </div>
                               </div>
@@ -1403,30 +1416,31 @@
                             </a>
                             <div class="mt-4">
                               <div class="font-weight-bold">{{i18n.sha256}}: </div>
-                              <div id="`attachments-${props.index}-sha256`" class="case">
+                              <div :id="`attachments-${props.index}-sha256`" class="case">
                                 {{ withDefault(props.item.sha256, i18n.unknown) }}
                                 <v-icon class="ml-1" @click="$root.copyToClipboard(props.item.sha256)" :title="i18n.copyToClipboard">fa-copy</v-icon>
                               </div>
                             </div>
                             <div class="mt-2">
                               <div class="font-weight-bold">{{i18n.sha1}}: </div>
-                              <div id="`attachments-${props.index}-sha1`" class="case">
+                              <div :id="`attachments-${props.index}-sha1`" class="case">
                                 {{ withDefault(props.item.sha1, i18n.unknown) }}
                                 <v-icon class="ml-1" @click="$root.copyToClipboard(props.item.sha1)" :title="i18n.copyToClipboard">fa-copy</v-icon>
                               </div>
                             </div>
                             <div class="mt-2">
                               <div class="font-weight-bold">{{i18n.md5}}: </div>
-                              <div id="`attachments-${props.index}-md5`" class="case">
+                              <div :id="`attachments-${props.index}-md5`" class="case">
                                 {{ withDefault(props.item.md5, i18n.unknown) }}
                                 <v-icon class="ml-1" @click="$root.copyToClipboard(props.item.md5)" :title="i18n.copyToClipboard">fa-copy</v-icon>
                               </div>
                             </div>
                           </v-container>
                           <v-container fluid class="pt-2 pb-0">
-                            <div class="clicktoedit" @click="startEdit(`attachments-${props.index}-description-input`, props.item.description, `attachments-${props.index}-description`, 'description', modifyAssociation, ['attachments', props.item], true)">
+                            <div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${props.index}-description-input`, props.item.description, `attachments-${props.index}-description`, 'description', modifyAssociation, ['attachments', props.item], true)"
+                              @keypress.space.prevent="startEdit(`attachments-${props.index}-description-input`, props.item.description, `attachments-${props.index}-description`, 'description', modifyAssociation, ['attachments', props.item], true)">
                               <div class="font-weight-bold">{{i18n.artifactDescription}}: </div>
-                              <div id="`attachments-${props.index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`attachments-${props.index}-description`)" :inner-html.prop="props.item.description | formatMarkdown"></div>
+                              <div :id="`attachments-${props.index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`attachments-${props.index}-description`)" :inner-html.prop="props.item.description | formatMarkdown"></div>
                             </div>
                             <div class="d-flex flex-column" v-if="isEdit(`attachments-${props.index}-description`)">
                               <v-form v-model="editForm.valid">
@@ -1445,7 +1459,8 @@
                             </div>
                           </v-container>
                           <v-container fluid class="py-1">
-                            <div class="clicktoedit" @click="startEdit(`attachments-${props.index}-tlp-input`, props.item.tlp, `attachments-${props.index}-tlp`, 'tlp', modifyAssociation, ['attachments', props.item])">
+                            <div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${props.index}-tlp-input`, props.item.tlp, `attachments-${props.index}-tlp`, 'tlp', modifyAssociation, ['attachments', props.item])"
+                              @keypress.space.prevent="startEdit(`attachments-${props.index}-tlp-input`, props.item.tlp, `attachments-${props.index}-tlp`, 'tlp', modifyAssociation, ['attachments', props.item])">
                               <div class="font-weight-bold">{{i18n.caseTlp}}: </div>
                               <div id="`attachments-${props.index}-tlp`" class="case detail-field" v-if="!isEdit(`attachments-${props.index}-tlp`)">{{ withDefault(props.item.tlp, i18n.unknown) }}</div>
                             </div>
@@ -1464,9 +1479,10 @@
                             </v-select>
                           </v-container>
                           <v-container fluid class="py-1">
-                            <div class="clicktoedit" @click="startEdit(`attachments-${props.index}-tags-input`, props.item.tags, `attachments-${props.index}-tags`, 'tags', modifyAssociation, ['attachments', props.item])">
+                            <div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${props.index}-tags-input`, props.item.tags, `attachments-${props.index}-tags`, 'tags', modifyAssociation, ['attachments', props.item])"
+                              @keypress.space.prevent="startEdit(`attachments-${props.index}-tags-input`, props.item.tags, `attachments-${props.index}-tags`, 'tags', modifyAssociation, ['attachments', props.item])">
                               <div class="font-weight-bold">{{i18n.caseTags}}: </div>
-                              <div id="`attachments-${props.index}-tags`" class="case detail-field mt-1" v-if="!isEdit(`attachments-${props.index}-tags`)">
+                              <div :id="`attachments-${props.index}-tags`" class="case detail-field mt-1" v-if="!isEdit(`attachments-${props.index}-tags`)">
                                 <v-chip class="mx-1" v-for="tag in props.item.tags" color="primary">{{ tag }}</v-chip>
                               </div>
                             </div>
@@ -1535,16 +1551,16 @@
                             <h3 class="text--primary">{{ i18n.attachmentAdd }}</h3>
                           </div>
                           <v-form ref="attachments" v-model="associatedForms['attachments'].valid">
-                            <v-file-input show-size v-model="attachment" persistent-hint :hint="getAttachmentHelp()" :rules="[rules.fileSizeLimit, rules.fileNotEmpty]"/>
-                            <v-textarea rows="2" v-model="associatedForms['attachments'].description" :placeholder="i18n.artifactDescription" persistent-hint :hint="i18n.artifactDescriptionHelp"/>
-                            <v-select v-if="!isPresetCustomEnabled('tlp')" v-model="associatedForms['attachments'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
-                            <v-combobox v-if="isPresetCustomEnabled('tlp')" v-model="associatedForms['attachments'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
-                            <v-select v-if="!isPresetCustomEnabled('tags')" v-model="associatedForms['attachments'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
+                            <v-file-input id="attachments-file" show-size v-model="attachment" persistent-hint :hint="getAttachmentHelp()" :rules="[rules.fileSizeLimit, rules.fileNotEmpty]"/>
+                            <v-textarea id="attachments-description" rows="2" v-model="associatedForms['attachments'].description" :placeholder="i18n.artifactDescription" persistent-hint :hint="i18n.artifactDescriptionHelp"/>
+                            <v-select id="attachments-tlp" v-if="!isPresetCustomEnabled('tlp')" v-model="associatedForms['attachments'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
+                            <v-combobox id="attachments-tlp" v-if="isPresetCustomEnabled('tlp')" v-model="associatedForms['attachments'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
+                            <v-select id="attachments-tags" v-if="!isPresetCustomEnabled('tags')" v-model="associatedForms['attachments'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
                               <template #selection="{ item }">
                                 <v-chip color="primary">{{item}}</v-chip>
                               </template>
                             </v-select>
-                            <v-combobox v-if="isPresetCustomEnabled('tags')" v-model="associatedForms['attachments'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
+                            <v-combobox id="attachments-tags" v-if="isPresetCustomEnabled('tags')" v-model="associatedForms['attachments'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
                               <template #selection="{ item }">
                                 <v-chip color="primary">{{item}}</v-chip>
                               </template>
@@ -1556,11 +1572,11 @@
                       </div>
                       <div class="d-flex align-center align-self-end text-body-2 mt-2">
                       <div class="d-inline-flex justify-end">
-                        <v-btn text small color="primary" class="align-self-end" @click="resetForm('attachments')">
-                        {{ i18n.cancel }}
+                        <v-btn id="attachment-cancel" text small color="primary" class="align-self-end" @click="resetForm('attachments')">
+                          {{ i18n.cancel }}
                         </v-btn>
-                        <v-btn :disabled="!associatedForms['attachments'].valid" text small color="primary" class="align-self-end" @click="addAssociation('attachments', {'groupType': 'attachments', 'artifactType':'file'})">
-                        {{ i18n.add }}
+                        <v-btn id="attachment-add" :disabled="!associatedForms['attachments'].valid" text small color="primary" class="align-self-end" @click="addAssociation('attachments', {'groupType': 'attachments', 'artifactType':'file'})">
+                          {{ i18n.add }}
                         </v-btn>
                       </div>
                       </div>
@@ -1597,30 +1613,31 @@
                             </a>
                             <div class="mt-4">
                               <div class="font-weight-bold">{{i18n.sha256}}: </div>
-                              <div id="`attachments-${props.index}-sha256`" class="case">
+                              <div :id="`evidence-${props.index}-sha256`" class="case">
                                 {{ withDefault(props.item.sha256, i18n.unknown) }}
                                 <v-icon class="ml-1" @click="$root.copyToClipboard(props.item.sha256)" :title="i18n.copyToClipboard">fa-copy</v-icon>
                               </div>
                             </div>
                             <div class="mt-2">
                               <div class="font-weight-bold">{{i18n.sha1}}: </div>
-                              <div id="`attachments-${props.index}-sha1`" class="case">
+                              <div :id="`evidence-${props.index}-sha1`" class="case">
                                 {{ withDefault(props.item.sha1, i18n.unknown) }}
                                 <v-icon class="ml-1" @click="$root.copyToClipboard(props.item.sha1)" :title="i18n.copyToClipboard">fa-copy</v-icon>
                               </div>
                             </div>
                             <div class="mt-2">
                               <div class="font-weight-bold">{{i18n.md5}}: </div>
-                              <div id="`attachments-${props.index}-md5`" class="case">
+                              <div :id="`evidence-${props.index}-md5`" class="case">
                                 {{ withDefault(props.item.md5, i18n.unknown) }}
                                 <v-icon class="ml-1" @click="$root.copyToClipboard(props.item.md5)" :title="i18n.copyToClipboard">fa-copy</v-icon>
                               </div>
                             </div>
                           </v-container>
                           <v-container fluid class="pt-2 pb-0">
-                            <div class="clicktoedit" @click="startEdit(`evidence-${props.index}-description-input`, props.item.description, `evidence-${props.index}-description`, 'description', modifyAssociation, ['evidence', props.item], true)">
+                            <div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${props.index}-description-input`, props.item.description, `evidence-${props.index}-description`, 'description', modifyAssociation, ['evidence', props.item], true)"
+                              @keypress.space.prevent="startEdit(`evidence-${props.index}-description-input`, props.item.description, `evidence-${props.index}-description`, 'description', modifyAssociation, ['evidence', props.item], true)">
                               <div class="font-weight-bold">{{i18n.artifactDescription}}: </div>
-                              <div id="`evidence-${props.index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`evidence-${props.index}-description`)" :inner-html.prop="props.item.description | formatMarkdown"></div>
+                              <div :id="`evidence-${props.index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`evidence-${props.index}-description`)" :inner-html.prop="props.item.description | formatMarkdown"></div>
                             </div>
                             <div class="d-flex flex-column" v-if="isEdit(`evidence-${props.index}-description`)">
                               <v-form v-model="editForm.valid">
@@ -1639,16 +1656,18 @@
                             </div>
                           </v-container>
                           <v-container fluid class="py-1">
-                            <div class="clicktoedit" @click="startEdit(`evidence-${props.index}-ioc-input`, props.item.ioc, `evidence-${props.index}-ioc`, 'ioc', modifyAssociation, ['evidence', props.item])">
+                            <div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${props.index}-ioc-input`, props.item.ioc, `evidence-${props.index}-ioc`, 'ioc', modifyAssociation, ['evidence', props.item])"
+                              @keypress.space.prevent="startEdit(`evidence-${props.index}-ioc-input`, props.item.ioc, `evidence-${props.index}-ioc`, 'ioc', modifyAssociation, ['evidence', props.item])">
                               <div class="font-weight-bold">{{i18n.artifactIoc}}: </div>
-                              <div id="`evidence-${props.index}-ioc`" class="case detail-field" v-if="!isEdit(`evidence-${props.index}-ioc`)">{{ props.item.ioc ? i18n.yes : i18n.no }}</div>
+                              <div :id="`evidence-${props.index}-ioc`" class="case detail-field" v-if="!isEdit(`evidence-${props.index}-ioc`)">{{ props.item.ioc ? i18n.yes : i18n.no }}</div>
                             </div>
                             <v-checkbox :id="`evidence-${props.index}-ioc-input`" v-if="isEdit(`evidence-${props.index}-ioc`)" v-model="editForm.val" v-on:change="stopEdit(true)" persistent-hint :hint="i18n.artifactIocHelp"/>
                           </v-container>
                           <v-container fluid class="py-1">
-                            <div class="clicktoedit" @click="startEdit(`evidence-${props.index}-tlp-input`, props.item.tlp, `evidence-${props.index}-tlp`, 'tlp', modifyAssociation, ['evidence', props.item])">
+                            <div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${props.index}-tlp-input`, props.item.tlp, `evidence-${props.index}-tlp`, 'tlp', modifyAssociation, ['evidence', props.item])"
+                              @keypress.space.prevent="startEdit(`evidence-${props.index}-tlp-input`, props.item.tlp, `evidence-${props.index}-tlp`, 'tlp', modifyAssociation, ['evidence', props.item])">
                               <div class="font-weight-bold">{{i18n.caseTlp}}: </div>
-                              <div id="`evidence-${props.index}-tlp`" class="case detail-field" v-if="!isEdit(`evidence-${props.index}-tlp`)">{{ withDefault(props.item.tlp, i18n.unknown) }}</div>
+                              <div :id="`evidence-${props.index}-tlp`" class="case detail-field" v-if="!isEdit(`evidence-${props.index}-tlp`)">{{ withDefault(props.item.tlp, i18n.unknown) }}</div>
                             </div>
                             <v-select :id="`evidence-${props.index}-tlp-input`" v-if="isEdit(`evidence-${props.index}-tlp`) && !isPresetCustomEnabled('tlp')"
                               dense eager outlined hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
@@ -1665,9 +1684,10 @@
                             </v-select>
                           </v-container>
                           <v-container fluid class="py-1">
-                            <div class="clicktoedit" @click="startEdit(`evidence-${props.index}-tags-input`, props.item.tags, `evidence-${props.index}-tags`, 'tags', modifyAssociation, ['evidence', props.item])">
+                            <div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${props.index}-tags-input`, props.item.tags, `evidence-${props.index}-tags`, 'tags', modifyAssociation, ['evidence', props.item])"
+                              @keypress.space.prevent="startEdit(`evidence-${props.index}-tags-input`, props.item.tags, `evidence-${props.index}-tags`, 'tags', modifyAssociation, ['evidence', props.item])">
                               <div class="font-weight-bold">{{i18n.caseTags}}: </div>
-                              <div id="`evidence-${props.index}-tags`" class="case detail-field mt-1" v-if="!isEdit(`evidence-${props.index}-tags`)">
+                              <div :id="`evidence-${props.index}-tags`" class="case detail-field mt-1" v-if="!isEdit(`evidence-${props.index}-tags`)">
                                 <v-chip class="mx-1" v-for="tag in props.item.tags" color="primary">{{ tag }}</v-chip>
                               </div>
                             </div>
@@ -1736,20 +1756,20 @@
                             <h3 class="text--primary">{{ i18n.evidenceAdd }}</h3>
                           </div>
                           <v-form ref="evidence" v-model="associatedForms['evidence'].valid">
-                            <v-select v-if="!isPresetCustomEnabled('artifactType')" v-model="associatedForms['evidence'].artifactType" :items="selectList('artifactType')" persistent-hint :hint="i18n.artifactTypeHelp"/>
-                            <v-combobox v-if="isPresetCustomEnabled('artifactType')" v-model="associatedForms['evidence'].artifactType" :items="selectList('artifactType')" persistent-hint :hint="i18n.artifactTypeHelp"/>
-                            <v-file-input v-if="associatedForms['evidence'].artifactType == 'file'" show-size v-model="attachment" persistent-hint :hint="getAttachmentHelp()" :rules="[rules.fileSizeLimit, rules.fileNotEmpty, rules.fileRequired]"/>
-                            <v-textarea v-if="associatedForms['evidence'].artifactType != 'file'" rows="2" v-model="associatedForms['evidence'].value" :rules="[rules.required]" :placeholder="i18n.artifactValue" persistent-hint :hint="i18n.artifactValueHelp"/>
-                            <v-textarea rows="2" v-model="associatedForms['evidence'].description" :placeholder="i18n.artifactDescription" persistent-hint :hint="i18n.artifactDescriptionHelp"/>
-                            <v-checkbox v-model="associatedForms['evidence'].ioc" persistent-hint :hint="i18n.artifactIocHelp"/>
-                            <v-select v-if="!isPresetCustomEnabled('tlp')" v-model="associatedForms['evidence'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
-                            <v-combobox v-if="isPresetCustomEnabled('tlp')" v-model="associatedForms['evidence'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
-                            <v-select v-if="!isPresetCustomEnabled('tags')" v-model="associatedForms['evidence'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
+                            <v-select id="evidence-type" v-if="!isPresetCustomEnabled('artifactType')" v-model="associatedForms['evidence'].artifactType" :items="selectList('artifactType')" persistent-hint :hint="i18n.artifactTypeHelp"/>
+                            <v-combobox id="evidence-type" v-if="isPresetCustomEnabled('artifactType')" v-model="associatedForms['evidence'].artifactType" :items="selectList('artifactType')" persistent-hint :hint="i18n.artifactTypeHelp"/>
+                            <v-file-input id="evidence-value" v-if="associatedForms['evidence'].artifactType == 'file'" show-size v-model="attachment" persistent-hint :hint="getAttachmentHelp()" :rules="[rules.fileSizeLimit, rules.fileNotEmpty, rules.fileRequired]"/>
+                            <v-textarea id="evidence-value" v-if="associatedForms['evidence'].artifactType != 'file'" rows="2" v-model="associatedForms['evidence'].value" :rules="[rules.required]" :placeholder="i18n.artifactValue" persistent-hint :hint="i18n.artifactValueHelp"/>
+                            <v-textarea id="evidence-description" rows="2" v-model="associatedForms['evidence'].description" :placeholder="i18n.artifactDescription" persistent-hint :hint="i18n.artifactDescriptionHelp"/>
+                            <v-checkbox id="evidence-ioc" v-model="associatedForms['evidence'].ioc" persistent-hint :hint="i18n.artifactIocHelp"/>
+                            <v-select id="evidence-tlp" v-if="!isPresetCustomEnabled('tlp')" v-model="associatedForms['evidence'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
+                            <v-combobox id="evidence-tlp" v-if="isPresetCustomEnabled('tlp')" v-model="associatedForms['evidence'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
+                            <v-select id="evidence-tags" v-if="!isPresetCustomEnabled('tags')" v-model="associatedForms['evidence'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
                               <template #selection="{ item }">
                                 <v-chip color="primary">{{item}}</v-chip>
                               </template>
                             </v-select>
-                            <v-combobox v-if="isPresetCustomEnabled('tags')" v-model="associatedForms['evidence'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
+                            <v-combobox id="evidence-tags" v-if="isPresetCustomEnabled('tags')" v-model="associatedForms['evidence'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
                               <template #selection="{ item }">
                                 <v-chip color="primary">{{item}}</v-chip>
                               </template>
@@ -1761,11 +1781,11 @@
                       </div>
                       <div class="d-flex align-center align-self-end text-body-2 mt-2">
                       <div class="d-inline-flex justify-end">
-                        <v-btn text small color="primary" class="align-self-end" @click="resetForm('evidence')">
-                        {{ i18n.cancel }}
+                        <v-btn id="evidence-cancel" text small color="primary" class="align-self-end" @click="resetForm('evidence')">
+                          {{ i18n.cancel }}
                         </v-btn>
-                        <v-btn :disabled="!associatedForms['evidence'].valid" text small color="primary" class="align-self-end" @click="addAssociation('evidence', {'groupType': 'evidence'})">
-                        {{ i18n.add }}
+                        <v-btn id="evidence-add" :disabled="!associatedForms['evidence'].valid" text small color="primary" class="align-self-end" @click="addAssociation('evidence', {'groupType': 'evidence'})">
+                          {{ i18n.add }}
                         </v-btn>
                       </div>
                       </div>
@@ -1781,23 +1801,26 @@
                     <template v-slot:item="props">
                       <tr @click="expandRow('events', props.item)" class="expandable">
                         <td>
-                          <router-link class="no-underline" :to="{ name: 'hunt', query: {q:`_id:${props.item.fields['soc_id']}`}}" :title="i18n.huntForEvent"><v-icon>fa-crosshairs</v-icon></router-link>
+                          <router-link class="no-underline" :to="{ name: 'hunt', query: {q: buildHuntQuery(props.item)}}" :title="i18n.huntForEvent" v-if="props.item.fields['soc_id']"><v-icon>fa-crosshairs</v-icon></router-link>
                         </td>
                         <td>{{ props.item.fields.timestamp | formatTimestamp }}</td>
+                        <td class="case">
+                          <div class="rounded">{{ getEventId(props.item) }}</div>
+                        </td>
                         <td class="case">
                           <div class="rounded">{{ props.item.fields['event.category'] }}</div>
                         </td>
                         <td class="case">
+                          <div class="rounded">{{ props.item.fields['event.module'] }}</div>
+                        </td>                        
+                        <td class="case">
                           <div class="rounded">{{ props.item.fields['event.dataset'] }}</div>
                         </td>
-                        <td class="case">
-                          <div class="rounded">{{ props.item.fields.message }}</div>
-                        </td>                        
                       </tr>
                     </template>
                     <template v-slot:expanded-item="props">
                       <tr>
-                        <td :colspan="5" class="case">
+                        <td :colspan="6" class="case">
                           <div class="mt-2">
                             <div v-for="value, key in props.item.fields">
                               <span class="case label">{{ key }}:</span>
@@ -2022,7 +2045,8 @@
                         <v-expansion-panel-content class="my-2">
                             <v-row>
                               <v-col cols="12">
-                                <div class="clicktoedit" @click="startEdit('case-assignee-input', caseObj.assigneeId, 'case-assignee', 'assigneeId', modifyCase)">
+                                <div tabindex="0" class="clicktoedit" @click="startEdit('case-assignee-input', caseObj.assigneeId, 'case-assignee', 'assigneeId', modifyCase)"
+                                  @keypress.space.prevent="startEdit('case-assignee-input', caseObj.assigneeId, 'case-assignee', 'assigneeId', modifyCase)">
                                   <div class="font-weight-bold">{{i18n.caseAssignee}}: </div>
                                   <div id='case-assignee' class="case detail-field" v-if="!isEdit('case-assignee')">{{ withDefault(caseObj.assignee, i18n.unassigned) }}</div>
                                   <v-select id='case-assignee-input' v-if="isEdit('case-assignee')"
@@ -2038,7 +2062,8 @@
                             </v-row>
                             <v-row>
                               <v-col cols="12">
-                                <div class="clicktoedit" @click="startEdit('case-status-input', caseObj.status, 'case-status', 'status', modifyCase)">
+                                <div tabindex="0" class="clicktoedit" @click="startEdit('case-status-input', caseObj.status, 'case-status', 'status', modifyCase)"
+                                  @keypress.space.prevent="startEdit('case-status-input', caseObj.status, 'case-status', 'status', modifyCase)">
                                   <div class="font-weight-bold">{{i18n.status}}: </div>
                                   <div id="case-status" class="case detail-field" v-if="!isEdit('case-status')">{{ withDefault(caseObj.status, i18n.unknown) }}</div>
                                   <v-select id="case-status-input" v-if="isEdit('case-status') && !isPresetCustomEnabled('status')"
@@ -2067,7 +2092,8 @@
 
                             <v-row>
                               <v-col cols="12">
-                                <div class="clicktoedit" @click="startEdit('case-severity-input', caseObj.severity, 'case-severity', 'severity', modifyCase)">
+                                <div tabindex="0" class="clicktoedit" @click="startEdit('case-severity-input', caseObj.severity, 'case-severity', 'severity', modifyCase)"
+                                  @keypress.space.prevent="startEdit('case-severity-input', caseObj.severity, 'case-severity', 'severity', modifyCase)">
                                   <div class="font-weight-bold">{{i18n.caseSeverity}}: </div>
                                   <div id="case-severity" class="case detail-field" v-if="!isEdit('case-severity')">{{ withDefault(caseObj.severity, i18n.unknown) }}</div>
                                 </div>
@@ -2087,7 +2113,8 @@
                             </v-row>
                             <v-row>
                               <v-col cols="12">
-                                <div class="clicktoedit" @click="startEdit('case-priority-input', caseObj.priority, 'case-priority', 'priority', modifyCase)">
+                                <div tabindex="0" class="clicktoedit" @click="startEdit('case-priority-input', caseObj.priority, 'case-priority', 'priority', modifyCase)"
+                                  @keypress.space.prevent="startEdit('case-priority-input', caseObj.priority, 'case-priority', 'priority', modifyCase)">
                                   <div class="font-weight-bold">{{i18n.casePriority}}: </div>
                                   <div id="case-priority" class="case detail-field" v-if="!isEdit('case-priority')">{{ caseObj.priority }}</div>
                                 </div>
@@ -2110,7 +2137,8 @@
                             </v-row>
                             <v-row>
                               <v-col cols="12">
-                                <div class="clicktoedit" @click="startEdit('case-tlp-input', caseObj.tlp, 'case-tlp', 'tlp', modifyCase)">
+                                <div tabindex="0" class="clicktoedit" @click="startEdit('case-tlp-input', caseObj.tlp, 'case-tlp', 'tlp', modifyCase)"
+                                  @keypress.space.prevent="startEdit('case-tlp-input', caseObj.tlp, 'case-tlp', 'tlp', modifyCase)">
                                   <div class="font-weight-bold">{{i18n.caseTlp}}: </div>
                                   <div id="case-tlp" class="case detail-field" v-if="!isEdit('case-tlp')">{{ withDefault(caseObj.tlp, i18n.unknown) }}</div>
                                 </div>
@@ -2131,7 +2159,8 @@
                             </v-row>
                             <v-row>
                               <v-col cols="12">
-                                <div class="clicktoedit" @click="startEdit('case-pap-input', caseObj.pap, 'case-pap', 'pap', modifyCase)">
+                                <div tabindex="0" class="clicktoedit" @click="startEdit('case-pap-input', caseObj.pap, 'case-pap', 'pap', modifyCase)"
+                                  @keypress.space.prevent="startEdit('case-pap-input', caseObj.pap, 'case-pap', 'pap', modifyCase)">
                                   <div class="font-weight-bold">{{i18n.casePap}}: </div>
                                   <div id="case-pap" class="case detail-field" v-if="!isEdit('case-pap')">{{ withDefault(caseObj.pap, i18n.unknown) }}</div>
                                 </div>
@@ -2151,7 +2180,8 @@
                             </v-row>
                             <v-row>
                               <v-col cols="12">
-                                <div class="clicktoedit" @click="startEdit('case-category-input', caseObj.category, 'case-category', 'category', modifyCase)">
+                                <div tabindex="0" class="clicktoedit" @click="startEdit('case-category-input', caseObj.category, 'case-category', 'category', modifyCase)"
+                                  @keypress.space.prevent="startEdit('case-category-input', caseObj.category, 'case-category', 'category', modifyCase)">
                                   <div class="font-weight-bold">{{i18n.caseCategory}}: </div>
                                   <div id="case-category" class="case detail-field" v-if="!isEdit('case-category')">{{ withDefault(caseObj.category, i18n.unknown) }}</div>
                                 </div>
@@ -2171,7 +2201,8 @@
                             </v-row>
                             <v-row>
                               <v-col cols="12">
-                                <div class="clicktoedit" @click="startEdit('case-tags-input', caseObj.tags, 'case-tags', 'tags', modifyCase)">
+                                <div tabindex="0" class="clicktoedit" @click="startEdit('case-tags-input', caseObj.tags, 'case-tags', 'tags', modifyCase)"
+                                  @keypress.space.prevent="startEdit('case-tags-input', caseObj.tags, 'case-tags', 'tags', modifyCase)">
                                   <div class="font-weight-bold">{{i18n.caseTags}}: </div>
                                   <div id="case-tags" class="case detail-field mt-1" v-if="!isEdit('case-tags')">
                                     <v-chip class="mx-1" v-for="tag in caseObj.tags" color="primary">{{ tag }}</v-chip>

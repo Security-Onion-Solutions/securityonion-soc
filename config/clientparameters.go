@@ -105,6 +105,7 @@ type HuntingParameters struct {
 	EscalateEnabled              bool                `json:"escalateEnabled"`
 	EscalateRelatedEventsEnabled bool                `json:"escalateRelatedEventsEnabled"`
 	ViewEnabled                  bool                `json:"viewEnabled"`
+	CreateLink                   string              `json:"createLink"`
 }
 
 func (params *HuntingParameters) Verify() error {
