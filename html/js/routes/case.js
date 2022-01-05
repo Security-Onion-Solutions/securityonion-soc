@@ -79,9 +79,10 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         headers: [
           { text: this.$root.i18n.actions },
           { text: this.$root.i18n.timestamp, value: 'fields.timestamp' },
+          { text: this.$root.i18n.id, value: 'fields["soc_id"]' },
           { text: this.$root.i18n.category, value: 'fields["event.category"]' },
+          { text: this.$root.i18n.module, value: 'fields["event.module"]' },
           { text: this.$root.i18n.dataset, value: 'fields["event.dataset"]' },
-          { text: this.$root.i18n.message, value: 'fields.message' },
         ],
         itemsPerPage: 10,
         footerProps: { 'items-per-page-options': [10,50,250,1000] },
@@ -563,6 +564,17 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       // if (!caseObj || caseObj.id != this.caseObj.id) return;
       // this.updateCaseDetails(caseObj)
       // this.loadAssociations();
+    },
+
+    buildHuntQuery(event) {
+      return '_id: "' + event.fields["soc_id"] + '"';
+    },
+    getEventId(event) {
+      var id = event.fields['soc_id'];
+      if (!id) {
+        id = this.i18n.caseEventIdAggregation;
+      }
+      return id;
     },
 
     saveLocalSettings() {

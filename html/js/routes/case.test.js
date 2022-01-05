@@ -612,3 +612,14 @@ test('mapAssociatedPath', () => {
   expect(comp.mapAssociatedPath('attachments')).toBe('artifacts');
   expect(comp.mapAssociatedPath('attachments', true)).toBe('artifacts/attachments');
 });
+
+test('buildHuntQuery', () => {
+  const fakeEvent = { fields: { soc_id: 'xyz' }};
+  expect(comp.buildHuntQuery(fakeEvent)).toBe('_id: "xyz"');
+});
+
+test('getEventId', () => {
+  const fakeEvent = { fields: { soc_id: 'xyz' }};
+  expect(comp.getEventId(fakeEvent)).toBe('xyz');
+  expect(comp.getEventId({ fields: {}})).toBe(comp.i18n.caseEventIdAggregation);
+});

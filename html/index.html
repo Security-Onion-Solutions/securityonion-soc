@@ -1801,23 +1801,26 @@
                     <template v-slot:item="props">
                       <tr @click="expandRow('events', props.item)" class="expandable">
                         <td>
-                          <router-link class="no-underline" :to="{ name: 'hunt', query: {q:`_id:${props.item.fields['soc_id']}`}}" :title="i18n.huntForEvent"><v-icon>fa-crosshairs</v-icon></router-link>
+                          <router-link class="no-underline" :to="{ name: 'hunt', query: {q: buildHuntQuery(props.item)}}" :title="i18n.huntForEvent" v-if="props.item.fields['soc_id']"><v-icon>fa-crosshairs</v-icon></router-link>
                         </td>
                         <td>{{ props.item.fields.timestamp | formatTimestamp }}</td>
+                        <td class="case">
+                          <div class="rounded">{{ getEventId(props.item) }}</div>
+                        </td>
                         <td class="case">
                           <div class="rounded">{{ props.item.fields['event.category'] }}</div>
                         </td>
                         <td class="case">
+                          <div class="rounded">{{ props.item.fields['event.module'] }}</div>
+                        </td>                        
+                        <td class="case">
                           <div class="rounded">{{ props.item.fields['event.dataset'] }}</div>
                         </td>
-                        <td class="case">
-                          <div class="rounded">{{ props.item.fields.message }}</div>
-                        </td>                        
                       </tr>
                     </template>
                     <template v-slot:expanded-item="props">
                       <tr>
-                        <td :colspan="5" class="case">
+                        <td :colspan="6" class="case">
                           <div class="mt-2">
                             <div v-for="value, key in props.item.fields">
                               <span class="case label">{{ key }}:</span>

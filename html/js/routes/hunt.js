@@ -435,7 +435,13 @@ const huntComponent = {
       }
 
       var description = item['message'];
-      if (!description) description = JSON.stringify(item);
+      if (!description) {
+        if (!this.escalateRelatedEventsEnabled) {
+          description = JSON.stringify(item);
+        } else {
+          description = this.i18n.caseEscalatedDescription;
+        }
+      }
 
       var severity = 'event.severity' in item && item['event.severity'] ? '' + item['event.severity'] : '';
       var template = 'rule.case_template' in item && item['rule.case_template'] ? '' + item['rule.case_template'] : '';
