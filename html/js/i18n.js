@@ -345,6 +345,7 @@ const i18n = {
       ruleMinLen: 'The provided value is too short',
       ruleMaxLen: 'The provided value is too long',
       save: 'Save',
+      saveSuccess: 'Save successfull!',
       seconds: 'seconds',
       security: 'Security',
       sensor: 'Sensor',

@@ -446,6 +446,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           await this.$root.populateUserDetails(response.data, "userId", "owner");
           this.associations[association].push(response.data);
           this.resetForm(association);
+          this.$root.showTip(this.i18n.saveSuccess);
         }
       } catch (error) {
         this.$root.showError(error);

@@ -296,6 +296,7 @@ test('modifyCaseError', async () => {
 
 test('addAssociation', async () => {
   const mock = mockPapi("post", {'data':fakeComment});
+  getApp().showTip = jest.fn();
 
   comp.associatedForms['comments'].description = 'myDescription';
   comp.caseObj.id = 'myCaseId';
@@ -309,6 +310,7 @@ test('addAssociation', async () => {
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expect(comp.associations['comments'].length).toBe(1);
   expect(comp.$root.loading).toBe(false);
+  expect(getApp().showTip).toHaveBeenCalledWith(comp.i18n.saveSuccess);
 });
 
 test('addAssociationError', async () => {
