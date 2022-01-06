@@ -104,6 +104,7 @@ func (store *ElasticCasestore) validateCase(socCase *model.Case) error {
     err = errors.New("Invalid priority")
   }
   if err == nil {
+    socCase.Severity = convertSeverity(socCase.Severity)
     err = store.validateString(socCase.Severity, SHORT_STRING_MAX, "severity")
   }
   if err == nil && len(socCase.Kind) > 0 {
@@ -416,6 +417,7 @@ func (store *ElasticCasestore) Update(ctx context.Context, socCase *model.Case) 
         socCase.CreateTime = oldCase.CreateTime
         socCase.CompleteTime = oldCase.CompleteTime
         socCase.StartTime = oldCase.StartTime
+        socCase.ProcessWorkflowForStatus(oldCase)
         var results *model.EventIndexResults
         results, err = store.save(ctx, socCase, "case", store.prepareForSave(ctx, &socCase.Auditable))
         if err == nil {

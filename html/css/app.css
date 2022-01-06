@@ -175,6 +175,25 @@ a#title, a#title:visited, a#title:active, a#title:hover {
   font-size: 75%;
 }
 
+.case.blocked {
+  display: block;
+  width: auto !important;
+  min-width: auto !important;
+}
+
+.theme--light.v-application .case.tabular-row {
+  border-bottom: 1px dotted rgba(0,0,0,.05);
+}
+
+.theme--dark.v-application .case.tabular-row {
+  border-bottom: 1px dotted hsla(0,0%,100%,.05);
+}
+
+.case.tabular-label {
+  word-wrap: break-word;
+  font-weight: bold;
+}
+
 .case.label {
   display: inline-block;
   width: 15%;
@@ -182,10 +201,12 @@ a#title, a#title:visited, a#title:active, a#title:hover {
   padding-right: 10px;
   text-align: right;
   font-weight: bold;
+  word-wrap: break-word;
 }
 
 .case.value {
   text-align: left;
+  word-wrap: break-word;
 }
 
 .case.raw {
@@ -205,6 +226,11 @@ a#title, a#title:visited, a#title:active, a#title:hover {
 .clicktoedit:hover {
   cursor: pointer;
   color: var(--v-primary-lighten1) !important;
+}
+
+td.associated {
+  overflow-x: hidden;
+  text-overflow: ellipsis;
 }
 
 tr.expandable:hover {
@@ -248,11 +274,12 @@ td {
 
 .case-table table {
   width: 100% !important;
-  table-layout:fixed;
+  table-layout: fixed;
 }
 
 .markdown-body {
   overflow: auto;
+  white-space: revert !important;
   position: relative;
 }
 

@@ -46,6 +46,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         sortDesc: false,
         search: '',
         headers: [
+          { text: this.$root.i18n.actions, width: '10.0em' },
           { text: this.$root.i18n.dateCreated, value: 'createTime' },
           { text: this.$root.i18n.dateModified, value: 'updateTime' },
           { text: this.$root.i18n.filename, value: 'value' },
@@ -61,6 +62,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         sortDesc: false,
         search: '',
         headers: [
+          { text: this.$root.i18n.actions, width: '10.0em' },
           { text: this.$root.i18n.dateCreated, value: 'createTime' },
           { text: this.$root.i18n.dateModified, value: 'updateTime' },
           { text: this.$root.i18n.artifactType, value: 'artifactType' },
@@ -77,7 +79,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         sortDesc: false,
         search: '',
         headers: [
-          { text: this.$root.i18n.actions },
+          { text: this.$root.i18n.actions, width: '10.0em' },
           { text: this.$root.i18n.timestamp, value: 'fields.timestamp' },
           { text: this.$root.i18n.id, value: 'fields["soc_id"]' },
           { text: this.$root.i18n.category, value: 'fields["event.category"]' },
@@ -109,12 +111,11 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         sortDesc: false,
         search: '',
         headers: [
+          { text: this.$root.i18n.actions, width: '10.0em' },
           { text: this.$root.i18n.username, value: 'owner' },
           { text: this.$root.i18n.time, value: 'updateTime' },
           { text: this.$root.i18n.kind, value: 'kind' },
           { text: this.$root.i18n.operation, value: 'operation' },
-          { text: '', value: 'kindLocalized', align: ' d-none' },
-          { text: '', value: 'operationLocalized', align: ' d-none' },
         ],
         itemsPerPage: 10,
         footerProps: { 'items-per-page-options': [10,50,250,1000] },
@@ -145,6 +146,8 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     },
     attachment: null,
     maxUploadSizeBytes: 26214400,
+    addingAssociation: null,
+    activeTab: null,
   }},
   computed: {
   },
@@ -158,6 +161,9 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       await this.loadData();
     }
   },
+  beforeDestroy() {
+    this.$root.setSubtitle("");
+  },  
   destroyed() {
     this.$root.unsubscribe("case", this.updateCase);
   },
@@ -255,14 +261,26 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           for (var idx = 0; idx < response.data.length; idx++) {
             const obj = response.data[idx];
             await this.$root.populateUserDetails(obj, "userId", "owner");
-            obj.kindLocalized = this.$root.localizeMessage(this.mapAssociatedKind(obj));
-            obj.operationLocalized = this.$root.localizeMessage(obj.operation);
+            if (obj.assigneeId) {
+              await this.$root.populateUserDetails(obj, "assigneeId", "assignee");
+            }
+            obj.kind = this.$root.localizeMessage(this.mapAssociatedKind(obj));
+            obj.operation = this.$root.localizeMessage(obj.operation);
             this.associations[association].push(obj);
           }
         }
       } catch (error) {
         this.$root.showError(error);
       }
+    },
+    isExpanded(association, row) {
+      const expanded = this.associatedTable[association].expanded;
+      for (var i = 0; i < expanded.length; i++) {
+        if (expanded[i].id == row.id) {
+          return true;
+        }
+      }
+      return false;
     },
     expandRow(association, row) {
       const expanded = this.associatedTable[association].expanded;
@@ -356,6 +374,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       await this.$root.populateUserDetails(caseObj, "userId", "owner", this.i18n.unknown);
       await this.$root.populateUserDetails(caseObj, "assigneeId", "assignee", this.i18n.unassigned);
       this.addMRUCaseObj(caseObj);
+      this.$root.setSubtitle(this.i18n.case + " - " + caseObj.title); 
       this.caseObj = caseObj;
     },
 
@@ -549,12 +568,28 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           form.artifactType = this.getDefaultPreset('artifactType');
           break;
       }
+      this.addingAssociation = null;
       Vue.set(this.associatedForms, ref, form)
     },
     isEdited(association) {
       const createTime = Date.parse(association.createTime);
       const updateTime = Date.parse(association.updateTime);
       return Math.abs(updateTime - createTime) >= 1000;
+    },
+    enableAdding(association) {
+      this.addingAssociation = association;
+    },
+    isAdding(association) {
+      return this.addingAssociation == association;
+    },
+    populateAddForm(association, key, value) {
+      this.enableAdding(association);
+      this.associatedForms[association].value = value.toString();
+      this.associatedForms[association].description = key;
+      this.switchToTab(association);
+    },
+    switchToTab(association) {
+      this.activeTab = association;
     },
      
     updateCase(caseObj) {
@@ -566,8 +601,26 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       // this.loadAssociations();
     },
 
+    colorizeChip(color) {
+      if (color == "white" && !this.$root.$vuetify.theme.dark) {
+        color = "grey";
+      } else if (color == "amber" && !this.$root.$vuetify.theme.dark) {
+        color = "orange";
+      }
+
+      return color;
+    },
+
+    escapeQueryValue(value) {
+      return this.$root.escape(value.toString());
+    },
     buildHuntQuery(event) {
-      return '_id: "' + event.fields["soc_id"] + '"';
+      var value = this.escapeQueryValue(event.fields["soc_id"]);
+      return '_id: "' + value + '"';
+    },
+    buildHuntQueryForValue(value) {
+      var value = this.escapeQueryValue(value);
+      return '"' + value + '"';
     },
     getEventId(event) {
       var id = event.fields['soc_id'];

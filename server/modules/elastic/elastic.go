@@ -27,7 +27,7 @@ const DEFAULT_CACHE_MS = 86400000
 const DEFAULT_INDEX = "*:so-*"
 const DEFAULT_ASYNC_THRESHOLD = 10
 const DEFAULT_INTERVALS = 25
-const DEFAULT_MAX_LOG_LENGTH = 1024
+const DEFAULT_MAX_LOG_LENGTH = 10240
 
 type Elastic struct {
   config module.ModuleConfig

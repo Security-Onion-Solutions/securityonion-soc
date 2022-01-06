@@ -76,6 +76,7 @@ type HuntingAction struct {
 	Method                string                 `json:"method"`
 	Body                  string                 `json:"body"`
 	Options               map[string]interface{} `json:"options"`
+	Categories            []string               `json:"categories"`
 }
 
 type ToggleFilter struct {

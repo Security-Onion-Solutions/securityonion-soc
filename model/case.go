@@ -56,6 +56,20 @@ func NewCase() *Case {
   return newCase
 }
 
+func (socCase *Case) ProcessWorkflowForStatus(oldCase *Case) {
+  now := time.Now()
+  if oldCase.CompleteTime != nil && !oldCase.CompleteTime.IsZero() {
+    socCase.CompleteTime = oldCase.CompleteTime
+  } else if socCase.Status == "closed" && oldCase.Status != "closed" {
+    socCase.CompleteTime = &now
+  }
+  if oldCase.StartTime != nil && !oldCase.StartTime.IsZero() {
+    socCase.StartTime = oldCase.StartTime
+  } else if socCase.Status == "in progress" && oldCase.Status != "in progress" {
+    socCase.StartTime = &now
+  }
+}
+
 type Comment struct {
   Auditable
   CaseId      string `json:"caseId"`
