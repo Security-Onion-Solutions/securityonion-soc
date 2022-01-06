@@ -296,6 +296,7 @@ test('modifyCaseError', async () => {
 
 test('addAssociation', async () => {
   const mock = mockPapi("post", {'data':fakeComment});
+  getApp().showTip = jest.fn();
 
   comp.associatedForms['comments'].description = 'myDescription';
   comp.caseObj.id = 'myCaseId';
@@ -309,6 +310,7 @@ test('addAssociation', async () => {
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expect(comp.associations['comments'].length).toBe(1);
   expect(comp.$root.loading).toBe(false);
+  expect(getApp().showTip).toHaveBeenCalledWith(comp.i18n.saveSuccess);
 });
 
 test('addAssociationError', async () => {
@@ -602,6 +604,22 @@ test('isEdited', () => {
   };
   expect(comp.isEdited(fakeArtifact1)).toBe(true);
   expect(comp.isEdited(fakeArtifact2)).toBe(false);
+});
+
+test('mapArtifactTypeFromValue', () => {
+  expect(comp.mapArtifactTypeFromValue('sub.subber.short.com')).toBe('fqdn')
+  expect(comp.mapArtifactTypeFromValue('sub.short.io')).toBe('fqdn')
+  expect(comp.mapArtifactTypeFromValue('short.io')).toBe('domain')
+  expect(comp.mapArtifactTypeFromValue('sensoroni.com')).toBe('domain')
+  expect(comp.mapArtifactTypeFromValue('/var/log/syslog.tgz')).toBe('filename')
+  expect(comp.mapArtifactTypeFromValue('c:/windows/system32/malware.exe')).toBe('filename')
+  expect(comp.mapArtifactTypeFromValue('/some/path/around/there')).toBe('uri_path')
+  expect(comp.mapArtifactTypeFromValue('/some/path')).toBe('uri_path')
+  expect(comp.mapArtifactTypeFromValue('file://some/file/path.txt')).toBe('url')
+  expect(comp.mapArtifactTypeFromValue('https://some.where/out?there=foo')).toBe('url')
+  expect(comp.mapArtifactTypeFromValue('2.3.113.234')).toBe('ip')
+  expect(comp.mapArtifactTypeFromValue('ff02::1:ffc5:a922')).toBe('ip')
+  expect(comp.mapArtifactTypeFromValue('ff02::16')).toBe('ip')
 });
 
 test('mapAssociatedPath', () => {

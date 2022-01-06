@@ -66,6 +66,14 @@ func TestWorkflowForStatus(tester *testing.T) {
 	assert.NotNil(tester, newCase.CompleteTime)
 	assert.True(tester, newCase.CompleteTime.After(*newCase.StartTime))
 
+	oldCase.Status = "in progress"
+	oldCase.CompleteTime = &now
+	newCase.CompleteTime = nil
+	newCase.Status = "closed"
+	newCase.ProcessWorkflowForStatus(oldCase)
+	assert.NotNil(tester, newCase.CompleteTime)
+	assert.True(tester, newCase.CompleteTime.After(*oldCase.CompleteTime))
+
 	oldCase.Status = "new"
 	oldCase.StartTime = &now
 	newCase.Status = "in progress"

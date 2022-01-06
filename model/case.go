@@ -58,9 +58,7 @@ func NewCase() *Case {
 
 func (socCase *Case) ProcessWorkflowForStatus(oldCase *Case) {
   now := time.Now()
-  if oldCase.CompleteTime != nil && !oldCase.CompleteTime.IsZero() {
-    socCase.CompleteTime = oldCase.CompleteTime
-  } else if socCase.Status == "closed" && oldCase.Status != "closed" {
+  if socCase.Status == "closed" && oldCase.Status != "closed" {
     socCase.CompleteTime = &now
   }
   if oldCase.StartTime != nil && !oldCase.StartTime.IsZero() {
