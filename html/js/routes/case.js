@@ -147,6 +147,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     attachment: null,
     maxUploadSizeBytes: 26214400,
     addingAssociation: null,
+    activeTab: null,
   }},
   computed: {
   },
@@ -260,6 +261,9 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           for (var idx = 0; idx < response.data.length; idx++) {
             const obj = response.data[idx];
             await this.$root.populateUserDetails(obj, "userId", "owner");
+            if (obj.assigneeId) {
+              await this.$root.populateUserDetails(obj, "assigneeId", "assignee");
+            }
             obj.kind = this.$root.localizeMessage(this.mapAssociatedKind(obj));
             obj.operation = this.$root.localizeMessage(obj.operation);
             this.associations[association].push(obj);
@@ -578,6 +582,15 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     isAdding(association) {
       return this.addingAssociation == association;
     },
+    populateAddForm(association, key, value) {
+      this.enableAdding(association);
+      this.associatedForms[association].value = value.toString();
+      this.associatedForms[association].description = key;
+      this.switchToTab(association);
+    },
+    switchToTab(association) {
+      this.activeTab = association;
+    },
      
     updateCase(caseObj) {
       // No-op until we can detect if the user has made any changes to the form. We don't
@@ -588,8 +601,26 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       // this.loadAssociations();
     },
 
+    colorizeChip(color) {
+      if (color == "white" && !this.$root.$vuetify.theme.dark) {
+        color = "grey";
+      } else if (color == "amber" && !this.$root.$vuetify.theme.dark) {
+        color = "orange";
+      }
+
+      return color;
+    },
+
+    escapeQueryValue(value) {
+      return this.$root.escape(value.toString());
+    },
     buildHuntQuery(event) {
-      return '_id: "' + event.fields["soc_id"] + '"';
+      var value = this.escapeQueryValue(event.fields["soc_id"]);
+      return '_id: "' + value + '"';
+    },
+    buildHuntQueryForValue(value) {
+      var value = this.escapeQueryValue(value);
+      return '"' + value + '"';
     },
     getEventId(event) {
       var id = event.fields['soc_id'];

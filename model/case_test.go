@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewRelatedEvent(tester *testing.T) {
@@ -44,4 +45,30 @@ func TestNewArtifactStream(tester *testing.T) {
 	_, err = buffer.ReadFrom(event.Read())
 	assert.NoError(tester, err)
 	assert.Equal(tester, "hello world", buffer.String())
+}
+
+func TestWorkflowForStatus(tester *testing.T) {
+	now := time.Now()
+
+	oldCase := NewCase()
+	newCase := NewCase()
+	newCase.ProcessWorkflowForStatus(oldCase)
+	assert.Nil(tester, newCase.CompleteTime)
+	assert.Nil(tester, newCase.StartTime)
+
+	newCase.Status = "in progress"
+	newCase.ProcessWorkflowForStatus(oldCase)
+	assert.Nil(tester, newCase.CompleteTime)
+	assert.NotNil(tester, newCase.StartTime)
+
+	newCase.Status = "closed"
+	newCase.ProcessWorkflowForStatus(oldCase)
+	assert.NotNil(tester, newCase.CompleteTime)
+	assert.True(tester, newCase.CompleteTime.After(*newCase.StartTime))
+
+	oldCase.Status = "new"
+	oldCase.StartTime = &now
+	newCase.Status = "in progress"
+	newCase.ProcessWorkflowForStatus(oldCase)
+	assert.Equal(tester, oldCase.StartTime, newCase.StartTime)
 }

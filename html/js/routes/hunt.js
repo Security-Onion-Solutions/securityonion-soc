@@ -434,12 +434,11 @@ const huntComponent = {
         }
       }
 
-      var description = item['message'];
-      if (!description) {
-        if (!this.escalateRelatedEventsEnabled) {
+      var description = this.i18n.caseEscalatedDescription;
+      if (!this.escalateRelatedEventsEnabled) {
+        var description = item['message'];
+        if (!description) {
           description = JSON.stringify(item);
-        } else {
-          description = this.i18n.caseEscalatedDescription;
         }
       }
 

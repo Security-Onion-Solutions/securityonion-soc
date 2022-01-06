@@ -417,6 +417,7 @@ func (store *ElasticCasestore) Update(ctx context.Context, socCase *model.Case) 
         socCase.CreateTime = oldCase.CreateTime
         socCase.CompleteTime = oldCase.CompleteTime
         socCase.StartTime = oldCase.StartTime
+        socCase.ProcessWorkflowForStatus(oldCase)
         var results *model.EventIndexResults
         results, err = store.save(ctx, socCase, "case", store.prepareForSave(ctx, &socCase.Auditable))
         if err == nil {

@@ -224,25 +224,25 @@ function validateCase(
 test('buildCase', () => {
   // has rule name and message, etc (happy path)
   validateCase('myTitle', 'myTemplate', 'myModule', 'myDataset', 'mySeverity', 'myMessage',
-      'myTitle', 'myMessage', 'mySeverity', 'myTemplate');
+      'myTitle', comp.i18n.caseEscalatedDescription, 'mySeverity', 'myTemplate');
 
   // missing rule name, module, and dataset
   validateCase('', 'myTemplate', '', '', 'mySeverity', 'myMessage',
-      'Event Escalation from SOC', 'myMessage', 'mySeverity', 'myTemplate');
+      'Event Escalation from SOC', comp.i18n.caseEscalatedDescription, 'mySeverity', 'myTemplate');
 
   // missing rule name but has module
   validateCase('', 'myTemplate', 'myModule', '', 'mySeverity', 'myMessage',
-      'Event Escalation from SOC: myModule', 'myMessage', 'mySeverity', 'myTemplate');
+      'Event Escalation from SOC: myModule', comp.i18n.caseEscalatedDescription, 'mySeverity', 'myTemplate');
 
   // missing rule name but has dataset
   validateCase('', 'myTemplate', '', 'myDataset', 'mySeverity', 'myMessage',
-      'Event Escalation from SOC: myDataset', 'myMessage', 'mySeverity', 'myTemplate');
+      'Event Escalation from SOC: myDataset', comp.i18n.caseEscalatedDescription, 'mySeverity', 'myTemplate');
 
   // missing rule name but has module and dataset
   validateCase('', 'myTemplate', 'myModule', 'myDataset', 'mySeverity', 'myMessage',
-      'Event Escalation from SOC: myModule - myDataset', 'myMessage', 'mySeverity', 'myTemplate');
+      'Event Escalation from SOC: myModule - myDataset', comp.i18n.caseEscalatedDescription, 'mySeverity', 'myTemplate');
   validateCase(null, 'myTemplate', 'myModule', 'myDataset', 'mySeverity', 'myMessage',
-      'Event Escalation from SOC: myModule - myDataset', 'myMessage', 'mySeverity', 'myTemplate');
+      'Event Escalation from SOC: myModule - myDataset', comp.i18n.caseEscalatedDescription, 'mySeverity', 'myTemplate');
 
   // missing message
   comp.escalateRelatedEventsEnabled = false;
@@ -255,10 +255,10 @@ test('buildCase', () => {
 
   // missing severity
   validateCase('myTitle', 'myTemplate', 'myModule', 'myDataset', '', 'myMessage',
-      'myTitle', 'myMessage', '', 'myTemplate');
+      'myTitle', comp.i18n.caseEscalatedDescription, '', 'myTemplate');
 
   // missing template
   validateCase('myTitle', '', 'myModule', 'myDataset', 'mySeverity', 'myMessage',
-      'myTitle', 'myMessage', 'mySeverity', '');
+      'myTitle', comp.i18n.caseEscalatedDescription, 'mySeverity', '');
 
 });
