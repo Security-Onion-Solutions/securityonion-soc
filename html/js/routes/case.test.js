@@ -606,6 +606,22 @@ test('isEdited', () => {
   expect(comp.isEdited(fakeArtifact2)).toBe(false);
 });
 
+test('mapArtifactTypeFromValue', () => {
+  expect(comp.mapArtifactTypeFromValue('sub.subber.short.com')).toBe('fqdn')
+  expect(comp.mapArtifactTypeFromValue('sub.short.io')).toBe('fqdn')
+  expect(comp.mapArtifactTypeFromValue('short.io')).toBe('domain')
+  expect(comp.mapArtifactTypeFromValue('sensoroni.com')).toBe('domain')
+  expect(comp.mapArtifactTypeFromValue('/var/log/syslog.tgz')).toBe('filename')
+  expect(comp.mapArtifactTypeFromValue('c:/windows/system32/malware.exe')).toBe('filename')
+  expect(comp.mapArtifactTypeFromValue('/some/path/around/there')).toBe('uri_path')
+  expect(comp.mapArtifactTypeFromValue('/some/path')).toBe('uri_path')
+  expect(comp.mapArtifactTypeFromValue('file://some/file/path.txt')).toBe('url')
+  expect(comp.mapArtifactTypeFromValue('https://some.where/out?there=foo')).toBe('url')
+  expect(comp.mapArtifactTypeFromValue('2.3.113.234')).toBe('ip')
+  expect(comp.mapArtifactTypeFromValue('ff02::1:ffc5:a922')).toBe('ip')
+  expect(comp.mapArtifactTypeFromValue('ff02::16')).toBe('ip')
+});
+
 test('mapAssociatedPath', () => {
   expect(comp.mapAssociatedPath('comments')).toBe('comments');
   expect(comp.mapAssociatedPath('comments', true)).toBe('comments');

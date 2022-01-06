@@ -1852,7 +1852,7 @@
                           <div class="mt-2">
                             <v-row no-gutters class="py-1 case tabular-row" v-for="value, key in props.item.fields">
                               <v-col cols="1">
-                                <v-btn :id="`events-${props.index}-addobservable`" icon small @click="populateAddForm('evidence', key, value)">
+                                <v-btn :id="`events-${props.index}-addobservable`" icon small @click="populateAddObservableForm(key, value)">
                                   <v-icon :title="i18n.addObservable">fa-eye</v-icon>
                                 </v-btn>
                                 <router-link class="no-underline" :to="{ name: 'hunt', query: {q: buildHuntQueryForValue(value) }}">
