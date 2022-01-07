@@ -722,7 +722,7 @@ const huntComponent = {
         this.actions.forEach(function(action, index) {
           action.enabled = true;
 
-          if (action.categories && action.categories.indexOf(this.category) == -1) {
+          if (action.categories && action.categories.indexOf(route.category) == -1) {
             action.enabled = false;
           }
 
