@@ -94,6 +94,7 @@ const i18n = {
       caseTitleHelp: 'Brief summary of the case',
       caseTlp: 'TLP',
       caseTlpHelp: 'Traffic Light Protocol',
+      caseExcludeToggle: 'Exclude case data',
       category: 'Category',
 
       chartTitleBottom: 'Fewest Occurrences',
