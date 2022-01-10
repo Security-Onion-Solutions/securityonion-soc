@@ -23,7 +23,7 @@ users/delete:     user-admin
 
 # Define low-level permission set inheritence relationships
 # Syntax      => roleB: roleA
-# Explanation => roleA inherits all of roleA's permissions
+# Explanation => roleA inherits all of roleB's permissions
 
 case-monitor:     case-admin
 event-monitor:    event-admin
