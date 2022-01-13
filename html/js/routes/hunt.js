@@ -193,7 +193,7 @@ const huntComponent = {
       this.relativeTimeUnit = params["relativeTimeUnit"];
       this.mruQueryLimit = params["mostRecentlyUsedLimit"];
       this.queryBaseFilter = params["queryBaseFilter"];
-      this.queries = params["queries"];
+      this.queries = this.applyQuerySubstitutions(params["queries"]);
       this.filterToggles = params["queryToggleFilters"];
       this.eventFields = params["eventFields"];
       this.advanced = params["advanced"];
@@ -229,6 +229,12 @@ const huntComponent = {
       if (this.$route.query.q || (this.shouldAutohunt() && this.query)) {
         this.hunt(true);
       }
+    },
+    applyQuerySubstitutions(queries) {
+      queries.forEach(query => {
+        query.query = query.query.replace(/\{myId\}/g, this.$root.user.id);
+      });
+      return queries;
     },
     notifyInputsChanged(replaceHistory = false) {
       var hunted = false;
