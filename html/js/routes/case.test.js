@@ -620,6 +620,10 @@ test('mapArtifactTypeFromValue', () => {
   expect(comp.mapArtifactTypeFromValue('2.3.113.234')).toBe('ip')
   expect(comp.mapArtifactTypeFromValue('ff02::1:ffc5:a922')).toBe('ip')
   expect(comp.mapArtifactTypeFromValue('ff02::16')).toBe('ip')
+  expect(comp.mapArtifactTypeFromValue('0e2fc59194659497c8d0aec1762add1324ad2e02549bb3e41d58ca8f39e14843')).toBe('hash')
+  expect(comp.mapArtifactTypeFromValue('3b43c8fadd64750525a2e285d83fa01d62227999')).toBe('hash')
+  expect(comp.mapArtifactTypeFromValue('0e2fc59194659497c8d0aec1762add1324ad2e02549bb3e41d58ca8f39e14843')).toBe('hash')
+  expect(comp.mapArtifactTypeFromValue('ea04541a17986a92e4d68f57e97d477845e778721044d0dcf96d380a7eddfc427a7ff0528931c39c35428cf78176da2c9741023b9c298be82521c96d547d68e8')).toBe('hash')
 });
 
 test('mapAssociatedPath', () => {
