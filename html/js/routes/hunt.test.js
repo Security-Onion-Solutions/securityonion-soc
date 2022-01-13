@@ -262,12 +262,3 @@ test('buildCase', () => {
       'myTitle', comp.i18n.caseEscalatedDescription, 'mySeverity', '');
 
 });
-
-test('applyQuerySubstitutions', () => {
-  comp.$root.user = {id:'123'};
-  const queries = [{ query: 'foo'}, { query: 'bar:{myId}' }];
-  const newQueries = comp.applyQuerySubstitutions(queries);
-  expect(newQueries).toBe(queries);
-  expect(newQueries[0].query).toBe('foo');
-  expect(newQueries[1].query).toBe('bar:123');
-});
