@@ -15,6 +15,7 @@ const domainRegex = /^(xn\-\-)?([a-z0-9\-]{1,61}|[a-z0-9\-]{1,30})\.[a-z]{2,}$/;
 const urlRegex = /^[a-z]+:\/\//;
 const filenameRegex = /(\/)?[\w,\s-]+\.[A-Za-z]{3}$/;
 const uriPathRegex = /^\/[\w,\s-]/;
+const hashRegex = /^[0-9a-fA-F]{32}$|^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$|^[0-9a-fA-F]{128}$/;
 
 routes.push({ path: '/case/:id', name: 'case', component: {
   template: '#page-case',
@@ -603,6 +604,8 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         artifactType = "filename"
       } else if (uriPathRegex.test(value)) {
         artifactType = "uri_path"
+      } else if (hashRegex.test(value)) {
+        artifactType = "hash"
       }
       return artifactType;
     },
@@ -612,7 +615,8 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       this.associatedForms[association].value = value.toString();
       this.associatedForms[association].description = key;
       const artifactType = this.mapArtifactTypeFromValue(value.toString());
-      if (artifactType) {
+      typePresets = this.getPresets('evidence');
+      if (artifactType && typePresets && typePresets.indexOf(artifactType)) {
         this.associatedForms[association].artifactType = artifactType;
       }
       this.switchToTab(association);

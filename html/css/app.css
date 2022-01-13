@@ -324,3 +324,15 @@ td {
 .case.avatar-font {
   font-size: 11px;
 }
+
+.case.markdown-icon{
+  text-decoration: none;
+}
+
+.case.markdown-icon i {
+  color: var(--v-secondary-lighten3);
+}
+
+.case.markdown-icon:hover i {
+  color: var(--v-primary-base);
+}

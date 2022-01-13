@@ -433,7 +433,8 @@ $(document).ready(function() {
       formatMarkdown(str) {
         marked.setOptions({
           renderer: new marked.Renderer(),
-          smartLists: true
+          smartLists: true,
+          breaks: true
         })
         marked.use({
           tokenizer: {

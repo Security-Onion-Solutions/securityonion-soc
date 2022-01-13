@@ -283,6 +283,7 @@ const i18n = {
       loginTitle: 'Login to Security Onion',
       logout: 'Logout',
       logoutFailure: 'Unable to initiate logout. Ensure server is accessible.',
+      markdownFormattingSupported: 'Markdown formatting supported',
       md5: 'MD5',
       message: 'Message',
       minutes: 'minutes',
