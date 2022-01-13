@@ -324,3 +324,25 @@ td {
 .case.avatar-font {
   font-size: 11px;
 }
+
+.case.markdown-icon{
+  text-decoration: none;
+}
+
+.theme--light.v-application .case.description {
+  background-color: rgba(0,0,0,.05);
+  border-radius: 0.25em;
+}
+
+.theme--dark.v-application .case.description {
+  background-color: hsla(0,0%,100%,.1);
+  border-radius: 0.25em;
+}
+
+.case.markdown-icon i {
+  color: var(--v-secondary-lighten3);
+}
+
+.case.markdown-icon:hover i {
+  color: var(--v-primary-base);
+}
