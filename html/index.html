@@ -1278,29 +1278,29 @@
               <v-tabs grow v-model="activeTab">
                 <v-tab id="case_commentsTab" href="#comments">
                   <v-icon left>fa-comments</v-icon>
-                  <div class="d-none d-sm-block">{{ i18n.comments }}</div>
+                  <div class="d-none d-lg-block">{{ i18n.comments }}</div>
                 </v-tab>
                 <v-tab id="case_attachmentTab" href="#attachments">
                   <v-icon left>fa-paperclip</v-icon>
-                  <div class="d-none d-sm-block">{{ i18n.attachments }}</div>
+                  <div class="d-none d-lg-block">{{ i18n.attachments }}</div>
                 </v-tab>
                 <v-tab id="case_evidenceTab" href="#evidence">
                   <v-icon left>fa-eye</v-icon>
-                  <div class="d-none d-sm-block">{{ i18n.evidence }}</div>
+                  <div class="d-none d-lg-block">{{ i18n.evidence }}</div>
                 </v-tab>
                 <v-tab id="case_eventsTab" href="#events">
                   <v-icon left>fa-link</v-icon>
-                  <div class="d-none d-sm-block">{{ i18n.events }}</div>
+                  <div class="d-none d-lg-block">{{ i18n.events }}</div>
                 </v-tab>
                 <v-tab id="case_historyTab" href="#history">
                   <v-icon left>fa-history</v-icon>
-                  <div class="d-none d-sm-block">{{ i18n.history }}</div>
+                  <div class="d-none d-lg-block">{{ i18n.history }}</div>
                 </v-tab>
   
                 <v-tab-item value="comments">
                   <div id="comment-list">
                     <div v-for="(comment, index) in associations.comments" class="mb-8">
-                      <div class="d-flex flex-column align-start ma-4">
+                      <div class="d-flex flex-column align-start my-4">
                         <v-col class="d-flex flex-column align-start pt-2 pt-md-0">
                           <div class="mt-1 mt-md-3 pt-1 pb-2 px-2 contrast-bg rounded rounded-md" style="width: 100%;">
                             <div class="d-flex flex-column align-start">
@@ -1329,7 +1329,7 @@
                               </div>
                               <div class="d-flex flex-column flex-sm-row align-sm-center align-self-end text-body-2">
                                 <div class="d-inline-flex align-center mr-1">
-                                  <v-avatar color="primary" size="24" class="mr-2">
+                                  <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex">
                                     <div class="case avatar-font" :title="comment.owner">
                                       {{ $root.getAvatar(comment.owner) }}
                                     </div>
@@ -1361,7 +1361,7 @@
                       </div>           
                     </div>
                   </div>
-                  <div class="d-flex flex-column align-start ma-4">
+                  <div class="d-flex flex-column align-start my-4">
                     <v-col id="new-comment" class="d-flex flex-column align-start pt-2 pt-md-0">
                       <div class="mt-1 mt-md-3 pb-3 pt-1 contrast-bg rounded rounded-md" style="width: 100%;">
                         <div class="d-flex flex-column align-start">
