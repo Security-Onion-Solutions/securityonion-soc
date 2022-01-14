@@ -37,7 +37,7 @@ func NewCaseHandler(srv *Server) *CaseHandler {
 
 func (caseHandler *CaseHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
   if caseHandler.server.Casestore == nil {
-    return http.StatusMethodNotAllowed, nil, errors.New("CASE_MODULE_NOT_ENABLED")
+    return http.StatusMethodNotAllowed, nil, errors.New("ERROR_CASE_MODULE_NOT_ENABLED")
   }
 
   if caseHandler.server.Casestore != nil {

@@ -615,8 +615,8 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       this.associatedForms[association].value = value.toString();
       this.associatedForms[association].description = key;
       const artifactType = this.mapArtifactTypeFromValue(value.toString());
-      typePresets = this.getPresets('evidence');
-      if (artifactType && typePresets && typePresets.indexOf(artifactType)) {
+      const typePresets = this.getPresets('artifactType');
+      if (artifactType && typePresets && typePresets.indexOf(artifactType) != -1) {
         this.associatedForms[association].artifactType = artifactType;
       }
       this.switchToTab(association);

@@ -73,33 +73,33 @@ func TestQueries(tester *testing.T) {
 	validateQuery(tester, "abcA|groupby\njjj", "abcA | groupby jjj")
 	validateQuery(tester, "abcA|\ngroupby\tjjj", "abcA | groupby jjj")
 
-	validateQuery(tester, "'abc4 def", "QUERY_INVALID__QUOTE_INCOMPLETE")
-	validateQuery(tester, "'abc9|", "QUERY_INVALID__QUOTE_INCOMPLETE")
+	validateQuery(tester, "'abc4 def", "ERROR_QUERY_INVALID__QUOTE_INCOMPLETE")
+	validateQuery(tester, "'abc9|", "ERROR_QUERY_INVALID__QUOTE_INCOMPLETE")
 
-	validateQuery(tester, "|", "QUERY_INVALID__SEGMENT_EMPTY")
-	validateQuery(tester, " |", "QUERY_INVALID__SEGMENT_EMPTY")
-	validateQuery(tester, " | abc", "QUERY_INVALID__SEGMENT_EMPTY")
-	validateQuery(tester, "abc6 def | |", "QUERY_INVALID__SEGMENT_EMPTY")
-	validateQuery(tester, "abc7 def || ", "QUERY_INVALID__SEGMENT_EMPTY")
+	validateQuery(tester, "|", "ERROR_QUERY_INVALID__SEGMENT_EMPTY")
+	validateQuery(tester, " |", "ERROR_QUERY_INVALID__SEGMENT_EMPTY")
+	validateQuery(tester, " | abc", "ERROR_QUERY_INVALID__SEGMENT_EMPTY")
+	validateQuery(tester, "abc6 def | |", "ERROR_QUERY_INVALID__SEGMENT_EMPTY")
+	validateQuery(tester, "abc7 def || ", "ERROR_QUERY_INVALID__SEGMENT_EMPTY")
 
-	validateQuery(tester, "abc7 def ) ", "QUERY_INVALID__GROUP_NOT_STARTED")
-	validateQuery(tester, "abc7 def () ", "QUERY_INVALID__GROUP_EMPTY")
-	validateQuery(tester, "abc (d e f", "QUERY_INVALID__GROUP_INCOMPLETE")
-	validateQuery(tester, "abc (d e f | ghi 'jkl' | mno", "QUERY_INVALID__GROUP_INCOMPLETE")
+	validateQuery(tester, "abc7 def ) ", "ERROR_QUERY_INVALID__GROUP_NOT_STARTED")
+	validateQuery(tester, "abc7 def () ", "ERROR_QUERY_INVALID__GROUP_EMPTY")
+	validateQuery(tester, "abc (d e f", "ERROR_QUERY_INVALID__GROUP_INCOMPLETE")
+	validateQuery(tester, "abc (d e f | ghi 'jkl' | mno", "ERROR_QUERY_INVALID__GROUP_INCOMPLETE")
 
-	validateQuery(tester, "abc (d e f) | groupby 'jkl' | mno", "QUERY_INVALID__SEGMENT_UNSUPPORTED")
+	validateQuery(tester, "abc (d e f) | groupby 'jkl' | mno", "ERROR_QUERY_INVALID__SEGMENT_UNSUPPORTED")
 
-	validateQuery(tester, "", "QUERY_INVALID__SEARCH_MISSING")
-	validateQuery(tester, " ", "QUERY_INVALID__SEARCH_MISSING")
+	validateQuery(tester, "", "ERROR_QUERY_INVALID__SEARCH_MISSING")
+	validateQuery(tester, " ", "ERROR_QUERY_INVALID__SEARCH_MISSING")
 
-	validateQuery(tester, "abcA|groupby", "QUERY_INVALID__GROUPBY_TERMS_MISSING")
-	validateQuery(tester, "abcA|groupby ", "QUERY_INVALID__GROUPBY_TERMS_MISSING")
+	validateQuery(tester, "abcA|groupby", "ERROR_QUERY_INVALID__GROUPBY_TERMS_MISSING")
+	validateQuery(tester, "abcA|groupby ", "ERROR_QUERY_INVALID__GROUPBY_TERMS_MISSING")
 
 	validateQuery(tester, "abcA|sortby\njjj, lll", "abcA | sortby jjj lll")
 	validateQuery(tester, "abcA|\nsortby\tjjj", "abcA | sortby jjj")
 
-	validateQuery(tester, "abcA|sortby", "QUERY_INVALID__SORTBY_TERMS_MISSING")
-	validateQuery(tester, "abcA|sortby ", "QUERY_INVALID__SORTBY_TERMS_MISSING")
+	validateQuery(tester, "abcA|sortby", "ERROR_QUERY_INVALID__SORTBY_TERMS_MISSING")
+	validateQuery(tester, "abcA|sortby ", "ERROR_QUERY_INVALID__SORTBY_TERMS_MISSING")
 }
 
 func validateGroup(tester *testing.T, orig string, group string, expected string) {

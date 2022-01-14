@@ -43,7 +43,7 @@ func sanitize(field string) string {
 func NewQueryTerm(str string) (*QueryTerm, error) {
   field := sanitize(str)
   if len(field) == 0 {
-    return nil, errors.New("QUERY_INVALID__TERM_MISSING")
+    return nil, errors.New("ERROR_QUERY_INVALID__TERM_MISSING")
   }
 
   term := &QueryTerm{
@@ -96,7 +96,7 @@ func NewSegment(kind string, terms []*QueryTerm) (QuerySegment, error) {
   case SegmentKind_SortBy:
     return NewSortBySegment(terms)
   }
-  return nil, errors.New("QUERY_INVALID__SEGMENT_UNSUPPORTED")
+  return nil, errors.New("ERROR_QUERY_INVALID__SEGMENT_UNSUPPORTED")
 }
 
 func (segment *BaseSegment) TermsAsString() string {
@@ -180,7 +180,7 @@ func NewSearchSegmentEmpty() *SearchSegment {
 
 func NewSearchSegment(terms []*QueryTerm) (*SearchSegment, error) {
   if terms == nil || len(terms) == 0 {
-    return nil, errors.New("QUERY_INVALID__SEARCH_TERMS_MISSING")
+    return nil, errors.New("ERROR_QUERY_INVALID__SEARCH_TERMS_MISSING")
   }
 
   segment := NewSearchSegmentEmpty()
@@ -259,7 +259,7 @@ func NewGroupBySegmentEmpty() *GroupBySegment {
 
 func NewGroupBySegment(terms []*QueryTerm) (*GroupBySegment, error) {
   if terms == nil || len(terms) == 0 {
-    return nil, errors.New("QUERY_INVALID__GROUPBY_TERMS_MISSING")
+    return nil, errors.New("ERROR_QUERY_INVALID__GROUPBY_TERMS_MISSING")
   }
 
   segment := NewGroupBySegmentEmpty()
@@ -290,7 +290,7 @@ func NewSortBySegmentEmpty() *SortBySegment {
 
 func NewSortBySegment(terms []*QueryTerm) (*SortBySegment, error) {
   if terms == nil || len(terms) == 0 {
-    return nil, errors.New("QUERY_INVALID__SORTBY_TERMS_MISSING")
+    return nil, errors.New("ERROR_QUERY_INVALID__SORTBY_TERMS_MISSING")
   }
 
   segment := NewSortBySegmentEmpty()
@@ -372,7 +372,7 @@ func (query *Query) Parse(str string) error {
             currentTermBuilder.Reset()
           }
           if len(currentSegmentTerms) == 0 {
-            return errors.New("QUERY_INVALID__SEGMENT_EMPTY")
+            return errors.New("ERROR_QUERY_INVALID__SEGMENT_EMPTY")
           }
           if currentSegmentKind == "" {
             currentSegmentKind = currentSegmentTerms[0].String()
@@ -397,13 +397,13 @@ func (query *Query) Parse(str string) error {
         } else if !escaping && ch == '(' {
           grouping++
         } else if !escaping && ch == ')' {
-          return errors.New("QUERY_INVALID__GROUP_NOT_STARTED")
+          return errors.New("ERROR_QUERY_INVALID__GROUP_NOT_STARTED")
         } else {
           currentTermBuilder.WriteRune(ch)
         }
       } else if !escaping && ch == ')' && grouping == 1 {
         if currentTermBuilder.Len() == 0 {
-          return errors.New("QUERY_INVALID__GROUP_EMPTY")
+          return errors.New("ERROR_QUERY_INVALID__GROUP_EMPTY")
         }
         term, err := NewQueryTerm(currentTermBuilder.String())
         if err != nil {
@@ -441,10 +441,10 @@ func (query *Query) Parse(str string) error {
     }
   }
   if quoting {
-    return errors.New("QUERY_INVALID__QUOTE_INCOMPLETE")
+    return errors.New("ERROR_QUERY_INVALID__QUOTE_INCOMPLETE")
   }
   if grouping > 0 {
-    return errors.New("QUERY_INVALID__GROUP_INCOMPLETE")
+    return errors.New("ERROR_QUERY_INVALID__GROUP_INCOMPLETE")
   }
   if currentTermBuilder.Len() > 0 {
     term, err := NewQueryTerm(currentTermBuilder.String())
@@ -469,7 +469,7 @@ func (query *Query) Parse(str string) error {
   }
 
   if len(query.Segments) == 0 {
-    return errors.New("QUERY_INVALID__SEARCH_MISSING")
+    return errors.New("ERROR_QUERY_INVALID__SEARCH_MISSING")
   }
 
   return nil
