@@ -479,7 +479,7 @@ func (store *ElasticCasestore) CreateRelatedEvent(ctx context.Context, event *mo
             if value, ok := existingEvent.Fields["soc_id"]; ok {
               existingId := value.(string)
               if existingId == newId {
-                err = errors.New(fmt.Sprintf("Event ID '%s' has already been attached to this case", existingId))
+                err = errors.New("ERROR_CASE_EVENT_ALREADY_ATTACHED")
                 break
               }
             }
