@@ -443,6 +443,7 @@ const i18n = {
       whatsnew: 'What\'s New',
       yes: 'Yes',
 
+      ERROR_CASE_EVENT_ALREADY_ATTACHED: 'The event is already attached to the selected case.',
       ERROR_CASE_MODULE_NOT_ENABLED: 'A case module has not been configured for this installation. Unable to proceed with request.',
       ERROR_QUERY_INVALID__GROUP_EMPTY: 'The search query has an empty group.',
       ERROR_QUERY_INVALID__GROUP_INCOMPLETE: 'The search query is missing an ending parenthesis.',
