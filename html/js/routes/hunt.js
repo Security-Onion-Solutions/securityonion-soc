@@ -507,6 +507,7 @@ const huntComponent = {
           this.removeDataItemFromView(item["count"] ? this.groupByData : this.eventData, item);
         } else if (escalate) {
           this.$root.showTip(this.i18n.escalatedEventTip);
+          item['event.escalated'] = true;
         }
       } catch (error) {
         this.$root.showError(error);

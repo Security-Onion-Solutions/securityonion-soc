@@ -1677,6 +1677,9 @@
                             <v-icon v-if="isExpanded('evidence', props.item)" :alt="i18n.expand" :title="i18n.expandHelp">fa-angle-down</v-icon>
                             <v-icon v-if="!isExpanded('evidence', props.item)" :alt="i18n.expand" :title="i18n.expandHelp">fa-angle-right</v-icon>
                           </v-btn>
+                          <router-link class="no-underline" :to="{ name: 'hunt', query: {q: buildHuntQueryForValue(props.item.value)}}" :title="i18n.huntForEvidence">
+                            <v-icon :title="i18n.huntForEvidence">fa-crosshairs</v-icon>
+                          </router-link>
                         </td>                        
                         <td class="associated">{{ props.item.createTime | formatDateTime }}</td>
                         <td class="associated">{{ props.item.updateTime | formatDateTime }}</td>

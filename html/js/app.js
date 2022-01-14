@@ -256,6 +256,7 @@ $(document).ready(function() {
         const redirectPage = this.getRedirectPage();
         if (redirectPage) {
           location.hash = '#' + redirectPage;
+          this.removeSearchParam('r');
         }
       },
       async loadServerSettings(background) {
@@ -332,6 +333,11 @@ $(document).ready(function() {
         const searchParams = new URLSearchParams(window.location.search);
         const value = searchParams.get(param);
         return value;
+      },
+      removeSearchParam(param) {
+        const searchParams = new URLSearchParams(window.location.search);
+        searchParams.delete(param);
+        window.location.search = searchParams.toString();
       },
       loadParameters(section, callback) {
         if (this.parametersLoaded) {

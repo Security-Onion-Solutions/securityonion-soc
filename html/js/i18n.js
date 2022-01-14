@@ -242,6 +242,7 @@ const i18n = {
       hunt: 'Hunt',
       huntForEvent: 'Hunt for this event',
       huntForFieldValue: 'Hunt for this field\'s value',
+      huntForEvidence: 'Hunt for this observable value',
       huntHelp: 'Start a new hunt based on the current filters',
       id: 'ID',
       importId: 'Import ID',
