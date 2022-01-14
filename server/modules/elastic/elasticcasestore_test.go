@@ -936,7 +936,7 @@ func TestCreateRelatedEventAlreadyExists(tester *testing.T) {
 	event.CaseId = "123444"
 	event.Fields["soc_id"] = "myEventId"
 	_, err := store.CreateRelatedEvent(ctx, event)
-	assert.EqualError(tester, err, "Event ID 'myEventId' has already been attached to this case")
+	assert.EqualError(tester, err, "ERROR_CASE_EVENT_ALREADY_ATTACHED")
 }
 
 func TestGetRelatedEvent(tester *testing.T) {
