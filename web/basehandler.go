@@ -24,6 +24,8 @@ import (
   "time"
 )
 
+const GENERIC_ERROR_MESSAGE = "The request could not be processed. Contact a server admin for assistance with reviewing error details in SOC logs."
+
 type HandlerImpl interface {
   HandleNow(ctx context.Context, responseWriter http.ResponseWriter, request *http.Request) (int, interface{}, error)
 }
@@ -66,7 +68,8 @@ func (handler *BaseHandler) Handle(responseWriter http.ResponseWriter, request *
       statusCode = http.StatusInternalServerError
     }
     responseWriter.WriteHeader(statusCode)
-    bytes := []byte(err.Error())
+
+    bytes := []byte(handler.convertErrorToSafeString(err))
     contentLength = len(bytes)
     responseWriter.Write(bytes)
   }
@@ -83,6 +86,14 @@ func (handler *BaseHandler) Handle(responseWriter http.ResponseWriter, request *
     "requestId":     context.Value(ContextKeyRequestId),
     "requestor":     context.Value(ContextKeyRequestor),
   }).Info("Handled request")
+}
+
+func (handler *BaseHandler) convertErrorToSafeString(err error) string {
+  msg := err.Error()
+  if !strings.HasPrefix(msg, "ERROR_") {
+    msg = GENERIC_ERROR_MESSAGE
+  }
+  return msg
 }
 
 func (handler *BaseHandler) WriteJson(responseWriter http.ResponseWriter, request *http.Request, statusCode int, obj interface{}) (int, error) {

@@ -10,6 +10,7 @@
 package web
 
 import (
+  "errors"
   "github.com/stretchr/testify/assert"
   "strconv"
   "testing"
@@ -23,6 +24,7 @@ func NewTestHandler() *TestHandler {
   handler := &TestHandler{}
   return handler
 }
+
 func TestGetPathParameter(tester *testing.T) {
   handler := NewTestHandler()
   var testTable = []struct {
@@ -51,4 +53,11 @@ func TestGetPathParameter(tester *testing.T) {
       assert.Equal(tester, test.expected, actual)
     })
   }
+}
+
+func TestConvertErrorToSafeString(tester *testing.T) {
+  handler := NewTestHandler()
+
+  assert.Equal(tester, "ERROR_FOO", handler.convertErrorToSafeString(errors.New("ERROR_FOO")))
+  assert.Equal(tester, GENERIC_ERROR_MESSAGE, handler.convertErrorToSafeString(errors.New("ERROR2_FOO")))
 }
