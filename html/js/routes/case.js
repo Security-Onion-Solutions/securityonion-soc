@@ -87,7 +87,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         search: '',
         headers: [
           { text: this.$root.i18n.actions, width: '10.0em' },
-          { text: this.$root.i18n.timestamp, value: 'fields.timestamp' },
+          { text: this.$root.i18n.timestamp, value: 'fields["soc_timestamp"]' },
           { text: this.$root.i18n.id, value: 'fields["soc_id"]' },
           { text: this.$root.i18n.category, value: 'fields["event.category"]' },
           { text: this.$root.i18n.module, value: 'fields["event.module"]' },

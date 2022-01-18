@@ -1851,7 +1851,7 @@
                             <v-icon :title="i18n.huntForEvent">fa-crosshairs</v-icon>
                           </router-link>
                         </td>
-                        <td class="associated">{{ props.item.fields["@timestamp"] | formatTimestamp }}</td>
+                        <td class="associated">{{ props.item.fields["soc_timestamp"] | formatTimestamp }}</td>
                         <td class="associated">{{ getEventId(props.item) }}</td>
                         <td class="associated">{{ props.item.fields['event.category'] }}</td>
                         <td class="associated">{{ props.item.fields['event.module'] }}</td>                        
