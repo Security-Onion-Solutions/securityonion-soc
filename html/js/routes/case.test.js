@@ -646,6 +646,19 @@ test('getEventId', () => {
   expect(comp.getEventId({ fields: {}})).toBe(comp.i18n.caseEventIdAggregation);
 });
 
+test('duplicateEventFields', () => {
+    obj = { fields: { 'event.dataset': 'foo', 'event.module': 'bar', 'event.category': 'sho', 'event.blah': 'nope' }};
+    comp.duplicateEventFields(obj);
+    expect(obj.fields['event.dataset']).toBe('foo');
+    expect(obj.fields['event.module']).toBe('bar');
+    expect(obj.fields['event.category']).toBe('sho');
+    expect(obj.fields['event.blah']).toBe('nope');
+    expect(obj.fields['___event_dataset']).toBe('foo');
+    expect(obj.fields['___event_module']).toBe('bar');
+    expect(obj.fields['___event_category']).toBe('sho');
+    expect(obj.fields['___event_blah']).toBe(undefined);
+});
+
 test('populateAddObservableForm', () => {
   comp.presets['artifactType'] = {labels:['ip']};
   comp.activeTab = 'something';

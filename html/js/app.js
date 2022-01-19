@@ -406,6 +406,11 @@ $(document).ready(function() {
       formatDateTime(date) {
         return this.formatDate(date, this.i18n.dateTimeFormat, this.i18n.dateUnknown);
       },
+      formatLocalTimestamp(date, tz) {
+        var utcTime = moment.utc(date);
+        var localTime = utcTime.tz(tz);
+        return localTime.format(this.i18n.timestampFormat);
+      },
       formatTimestamp(date) {
         return this.formatDate(date, this.i18n.timestampFormat, this.i18n.dateUnknown);
       },

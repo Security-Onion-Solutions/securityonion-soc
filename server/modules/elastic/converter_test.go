@@ -258,6 +258,19 @@ func TestConvertObjectToDocumentMap(tester *testing.T) {
 	assert.NotNil(tester, actual["@timestamp"])
 }
 
+func TestConvertObjectToDocumentMapRelatedEvent(tester *testing.T) {
+	related := model.NewRelatedEvent()
+	related.UserId = "123"
+	related.Fields["foo"] = "bar"
+	actual := convertObjectToDocumentMap("related", related)
+	assert.NotNil(tester, actual)
+	assert.Equal(tester, "bar", actual["foo"])
+	assert.Equal(tester, "123", actual["related"].(*model.RelatedEvent).UserId)
+	assert.Nil(tester, actual["related.fields.foo"])
+	assert.Len(tester, related.Fields, 0)
+	assert.NotNil(tester, actual["@timestamp"])
+}
+
 func TestConvertToElasticIndexRequest(tester *testing.T) {
 	store := NewTestStore()
 	event := make(map[string]interface{})
@@ -511,7 +524,7 @@ func TestConvertElasticEventToRelatedEvent(tester *testing.T) {
 	event.Payload = make(map[string]interface{})
 	event.Payload["kind"] = "related"
 	event.Payload["operation"] = "create"
-	event.Payload["related.fields.foo"] = "bar"
+	event.Payload["foo"] = "bar"
 	event.Payload["related.userId"] = "myUserId"
 	event.Payload["related.caseId"] = "myCaseId"
 	event.Time = myTime
@@ -525,6 +538,7 @@ func TestConvertElasticEventToRelatedEvent(tester *testing.T) {
 	assert.Equal(tester, "myCaseId", obj.CaseId)
 	assert.Equal(tester, &myTime, obj.UpdateTime)
 	assert.Equal(tester, &myCreateTime, obj.CreateTime)
+	assert.Len(tester, obj.Fields, 1)
 	assert.Equal(tester, "bar", obj.Fields["foo"])
 }
 

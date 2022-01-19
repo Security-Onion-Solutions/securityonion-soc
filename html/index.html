@@ -589,7 +589,10 @@
                         </router-link>
                       </td>
                       <td v-for="field in eventHeaders" :key="field.value">
-                        <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction($event, item, field.value, item[field.value])"></div>
+                        <div class="quick-action-trigger d-inline-block" @click="toggleQuickAction($event, item, field.value, item[field.value])">
+                          <span v-if="field.value != 'soc_timestamp'" v-text="item[field.value]"/>
+                          <span v-if="field.value == 'soc_timestamp'" v-text="$root.formatLocalTimestamp(item[field.value], zone)"/>
+                        </div>
                       </td>
                     </tr>
                   </template>
@@ -1258,7 +1261,7 @@
               <div class="d-flex flex-column" v-if="isEdit('case-description')">
                 <div class="mb-2 pt-1 px-2 rounded rounded-md contrast-bg d-flex flex-column">
                   <div class="d-flex flex-column flex-sm-row align-sm-center align-self-start text-body-2 mb-1 ml-1">
-                    <a class="case markdown-icon" href="https://www.markdownguide.org/" target="_blank" :title="i18n.markdownFormattingSupported"><v-icon>fab fa-markdown</v-icon></a>
+                    <a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" target="_blank" :title="i18n.markdownFormattingSupported"><v-icon>fab fa-markdown</v-icon></a>
                   </div>
                   <v-form v-model="editForm.valid" @submit.prevent>
                     <v-textarea id="case-desc-input" solo flat hide-details="auto" rows="5" dense color="text--black" v-model="editForm.val" :rules="[rules.required]" persistent-hint :hint="i18n.caseDescriptionHelp"/>
@@ -1298,6 +1301,18 @@
                 </v-tab>
   
                 <v-tab-item value="comments">
+                  <v-row>
+                    <v-col>
+                      <v-toolbar class="elevation-0" fixed>
+                        <v-btn :title="i18n.addCommentHelp" color="primary" @click.stop="prepareForInput('comment-input')" id="add-comment-button">
+                          <v-icon>fa-plus</v-icon>
+                        </v-btn>
+                        <v-btn class="mx-1" :title="i18n.refreshCommentsHelp" color="secondary" @click.stop="reloadAssociation('comments', true)" id="refresh-comments-button">
+                          <v-icon>fa-sync</v-icon>
+                        </v-btn>
+                      </v-toolbar>
+                    </v-col>
+                  </v-row>  
                   <div id="comment-list">
                     <div v-for="(comment, index) in associations.comments" class="mb-8">
                       <div class="d-flex flex-column align-start my-4">
@@ -1311,7 +1326,7 @@
                               </div>
                               <div class="d-flex flex-column" v-if="isEdit(`comment-${index}`)" style="width: 100%;">
                                 <div class="d-flex flex-column flex-sm-row align-sm-center align-self-start text-body-2 mb-1 ml-1">
-                                  <a class="case markdown-icon" href="https://www.markdownguide.org/" target="_blank" :title="i18n.markdownFormattingSupported"><v-icon>fab fa-markdown</v-icon></a>
+                                  <a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" target="_blank" :title="i18n.markdownFormattingSupported"><v-icon>fab fa-markdown</v-icon></a>
                                 </div>
                                 <div class="mb-3">
                                   <v-form v-model="editForm.valid" @submit.prevent>
@@ -1375,11 +1390,11 @@
                           </div>
                           <div class="d-flex flex-column" style="width: 100%;">
                             <div class="d-flex flex-column flex-sm-row align-sm-center align-self-start text-body-2 mb-1 ml-3">
-                              <a class="case markdown-icon" href="https://www.markdownguide.org/" target="_blank" :title="i18n.markdownFormattingSupported"><v-icon>fab fa-markdown</v-icon></a>
+                              <a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" target="_blank" :title="i18n.markdownFormattingSupported"><v-icon>fab fa-markdown</v-icon></a>
                             </div>
                             <div class="mx-2">
                               <v-form ref="comments" v-model="associatedForms['comments'].valid" @submit.prevent>
-                                <v-textarea  solo flat hide-details="auto" rows="5" color="text--black" v-model="associatedForms['comments'].description" :rules="[rules.required]" class="mb-1" persistent-hint :hint="i18n.commentDescriptionHelp"/>
+                                <v-textarea id="comment-input" solo flat hide-details="auto" rows="5" color="text--black" v-model="associatedForms['comments'].description" :rules="[rules.required]" class="mb-1" persistent-hint :hint="i18n.commentDescriptionHelp"/>
                               </v-form>
                             </div>
                           </div>
@@ -1403,8 +1418,11 @@
                   <v-row v-if="!isAdding('attachments')">
                     <v-col>
                       <v-toolbar class="elevation-0" fixed>
-                        <v-btn color="primary" @click.stop="enableAdding('attachments')" id="add-attachment-button">
+                        <v-btn :title="i18n.addAttachmentHelp" color="primary" @click.stop="enableAdding('attachments')" id="add-attachment-button">
                           <v-icon>fa-plus</v-icon>
+                        </v-btn>
+                        <v-btn class="mx-1" :title="i18n.refreshAttachmentsHelp" color="secondary" @click.stop="reloadAssociation('attachments', true)" id="refresh-attachments-button">
+                          <v-icon>fa-sync</v-icon>
                         </v-btn>
                       </v-toolbar>
                     </v-col>
@@ -1610,8 +1628,11 @@
                   <v-row v-if="!isAdding('evidence')">
                     <v-col>
                       <v-toolbar class="elevation-0" fixed>
-                        <v-btn color="primary" @click.stop="enableAdding('evidence')" id="add-evidence-button">
+                        <v-btn :title="i18n.addObservableHelp" color="primary" @click.stop="enableAdding('evidence')" id="add-evidence-button">
                           <v-icon>fa-plus</v-icon>
+                        </v-btn>
+                        <v-btn class="mx-1" :title="i18n.refreshObservablesHelp" color="secondary" @click.stop="reloadAssociation('evidence', true)" id="refresh-observables-button">
+                          <v-icon>fa-sync</v-icon>
                         </v-btn>
                       </v-toolbar>
                     </v-col>
@@ -1836,6 +1857,15 @@
                 </v-tab-item>
 
                 <v-tab-item value="events">
+                  <v-row>
+                    <v-col>
+                      <v-toolbar class="elevation-0" fixed>
+                        <v-btn :title="i18n.refreshEventsHelp" color="secondary" @click.stop="reloadAssociation('events', true)" id="refresh-events-button">
+                          <v-icon>fa-sync</v-icon>
+                        </v-btn>
+                      </v-toolbar>
+                    </v-col>
+                  </v-row>                   
                   <v-text-field v-model="associatedTable['events'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
                   <v-data-table ref="eventsTable" :sort-by.sync="associatedTable['events'].sortBy" :sort-desc.sync="associatedTable['events'].sortDesc" :items-per-page.sync="associatedTable['events'].itemsPerPage" 
                     :search="associatedTable['events'].search" :footer-props="associatedTable['events'].footerProps" must-sort :headers="associatedTable['events'].headers"
@@ -1851,7 +1881,7 @@
                             <v-icon :title="i18n.huntForEvent">fa-crosshairs</v-icon>
                           </router-link>
                         </td>
-                        <td class="associated">{{ props.item.fields["@timestamp"] | formatTimestamp }}</td>
+                        <td class="associated">{{ props.item.fields["soc_timestamp"] | formatTimestamp }}</td>
                         <td class="associated">{{ getEventId(props.item) }}</td>
                         <td class="associated">{{ props.item.fields['event.category'] }}</td>
                         <td class="associated">{{ props.item.fields['event.module'] }}</td>                        
@@ -1862,7 +1892,7 @@
                       <tr>
                         <td :colspan="6" class="case">
                           <div class="mt-2">
-                            <v-row no-gutters class="py-1 case tabular-row" v-for="value, key in props.item.fields">
+                            <v-row no-gutters class="py-1 case tabular-row" v-for="value, key in props.item.fields" v-if="!key.startsWith(internalPrefix)">
                               <v-col cols="1">
                                 <v-btn :id="`events-${props.index}-addobservable`" icon small @click="populateAddObservableForm(key, value)">
                                   <v-icon :title="i18n.addObservable">fa-eye</v-icon>
@@ -1906,6 +1936,15 @@
                 </v-tab-item>
   
                 <v-tab-item value="history">
+                  <v-row>
+                    <v-col>
+                      <v-toolbar class="elevation-0" fixed>
+                        <v-btn :title="i18n.refreshHistoryHelp" color="secondary" @click.stop="reloadAssociation('history', true)" id="refresh-history-button">
+                          <v-icon>fa-sync</v-icon>
+                        </v-btn>
+                      </v-toolbar>
+                    </v-col>
+                  </v-row>                    
                   <v-text-field v-model="associatedTable['history'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
                   <v-data-table ref="historyTable" :sort-by.sync="associatedTable['history'].sortBy" :sort-desc.sync="associatedTable['history'].sortDesc" :items-per-page.sync="associatedTable['history'].itemsPerPage" 
                     :search="associatedTable['history'].search" :footer-props="associatedTable['history'].footerProps" must-sort :headers="associatedTable['history'].headers"

@@ -843,9 +843,7 @@ const huntComponent = {
           record.soc_id = event.id;
           record.soc_score = event.score;
           record.soc_type = event.type;
-          var utcTime = moment.utc(event.timestamp);
-          var localTime = utcTime.tz(route.zone);
-          record.soc_timestamp = localTime.format(route.i18n.timestampFormat);
+          record.soc_timestamp = event.timestamp;
           record.soc_source = event.source;
           records.push(record);
 
