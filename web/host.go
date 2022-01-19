@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -13,14 +13,14 @@ package web
 import (
   "context"
   "errors"
+  "github.com/apex/log"
+  "github.com/gorilla/websocket"
   "net/http"
   "reflect"
   "sort"
   "strconv"
   "sync"
   "time"
-  "github.com/apex/log"
-  "github.com/gorilla/websocket"
 )
 
 type HostHandler interface {
@@ -33,25 +33,25 @@ type Preprocessor interface {
 }
 
 type Host struct {
-  preprocessors             []Preprocessor
-  bindAddress	              string
-  htmlDir			              string
-  idleConnectionTimeoutMs   int
-  server    	              *http.Server
-  running			              bool
-  Version			              string
-  connections               []*Connection
-  lock				              sync.Mutex
+  preprocessors           []Preprocessor
+  bindAddress             string
+  htmlDir                 string
+  idleConnectionTimeoutMs int
+  server                  *http.Server
+  running                 bool
+  Version                 string
+  connections             []*Connection
+  lock                    sync.Mutex
 }
 
 func NewHost(address string, htmlDir string, timeoutMs int, version string) *Host {
-  host := &Host {
-    preprocessors: make([]Preprocessor, 0),
-    running: false,
-    bindAddress: address,
-    htmlDir: htmlDir,
+  host := &Host{
+    preprocessors:           make([]Preprocessor, 0),
+    running:                 false,
+    bindAddress:             address,
+    htmlDir:                 htmlDir,
     idleConnectionTimeoutMs: timeoutMs,
-    Version: version,
+    Version:                 version,
   }
   err := host.AddPreprocessor(NewBasePreprocessor())
   if err != nil {
@@ -102,17 +102,17 @@ func (host *Host) IsRunning() bool {
 }
 
 func (host *Host) AddConnection(wsConn *websocket.Conn, ip string) *Connection {
-  host.lock.Lock();
+  host.lock.Lock()
   defer host.lock.Unlock()
 
   conn := NewConnection(wsConn, ip)
-  host.connections = append(host.connections, conn);
+  host.connections = append(host.connections, conn)
   log.WithField("Connections", len(host.connections)).Debug("Added WebSocket connection")
   return conn
 }
 
 func (host *Host) RemoveConnection(wsConn *websocket.Conn) {
-  host.lock.Lock();
+  host.lock.Lock()
   defer host.lock.Unlock()
   remaining := make([]*Connection, 0)
   for _, connection := range host.connections {
@@ -128,29 +128,29 @@ func (host *Host) Broadcast(kind string, obj interface{}) {
   host.lock.Lock()
   defer host.lock.Unlock()
   msg := &WebSocketMessage{
-    Kind: kind,
+    Kind:   kind,
     Object: obj,
   }
   for _, connection := range host.connections {
-    if (connection.IsAuthorized(kind)) {
-      log.WithFields(log.Fields {
-        "kind": kind,
+    if connection.IsAuthorized(kind) {
+      log.WithFields(log.Fields{
+        "kind":       kind,
         "remoteAddr": connection.websocket.RemoteAddr().String(),
-        "sourceIp": connection.ip,
+        "sourceIp":   connection.ip,
       }).Debug("Broadcasting message to WebSocket connection")
       connection.websocket.WriteJSON(msg)
     } else {
-      log.WithFields(log.Fields {
-        "kind": kind,
+      log.WithFields(log.Fields{
+        "kind":       kind,
         "remoteAddr": connection.websocket.RemoteAddr().String(),
-        "sourceIp": connection.ip,
+        "sourceIp":   connection.ip,
       }).Debug("Skipping broadcast due to insufficient authorization")
     }
   }
 }
 
 func (host *Host) pruneConnections() {
-  host.lock.Lock();
+  host.lock.Lock()
   defer host.lock.Unlock()
 
   activeConnections := make([]*Connection, 0)
@@ -163,9 +163,9 @@ func (host *Host) pruneConnections() {
     }
   }
 
-  log.WithFields(log.Fields {
+  log.WithFields(log.Fields{
     "before": len(host.connections),
-    "after": len(activeConnections),
+    "after":  len(activeConnections),
   }).Debug("Prune connections complete")
 
   host.connections = activeConnections
@@ -179,9 +179,9 @@ func (host *Host) manageConnections(sleepDuration time.Duration) {
 }
 
 func (host *Host) AddPreprocessor(preprocessor Preprocessor) error {
-  log.WithFields(log.Fields {
+  log.WithFields(log.Fields{
     "priority": preprocessor.PreprocessPriority(),
-    "type": reflect.TypeOf(preprocessor).String(),
+    "type":     reflect.TypeOf(preprocessor).String(),
   }).Info("Adding new preprocessor")
 
   unsortedMap := make(map[int]Preprocessor)
@@ -205,9 +205,9 @@ func (host *Host) AddPreprocessor(preprocessor Preprocessor) error {
 
   for _, priority := range priorities {
     preprocessor := unsortedMap[priority]
-    log.WithFields(log.Fields {
+    log.WithFields(log.Fields{
       "priority": preprocessor.PreprocessPriority(),
-      "type": reflect.TypeOf(preprocessor).String(),
+      "type":     reflect.TypeOf(preprocessor).String(),
     }).Debug("Prioritized preprocessor")
     sortedList = append(sortedList, preprocessor)
   }
@@ -231,9 +231,9 @@ func (host *Host) Preprocess(ctx context.Context, req *http.Request) (context.Co
   var err error
 
   for _, preprocessor := range host.preprocessors {
-    log.WithFields(log.Fields {
+    log.WithFields(log.Fields{
       "priority": preprocessor.PreprocessPriority(),
-      "type": reflect.TypeOf(preprocessor).String(),
+      "type":     reflect.TypeOf(preprocessor).String(),
     }).Debug("Preprocessing request")
     ctx, statusCode, err = preprocessor.Preprocess(ctx, req)
     if err != nil {

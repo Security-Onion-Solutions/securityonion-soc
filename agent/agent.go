@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -17,19 +17,19 @@ import (
 )
 
 type Agent struct {
-  Client			*web.Client
-  Config 			*config.AgentConfig
-  JobMgr			*JobManager
-  stoppedChan	chan bool
-  Version			string
+  Client      *web.Client
+  Config      *config.AgentConfig
+  JobMgr      *JobManager
+  stoppedChan chan bool
+  Version     string
 }
 
 func NewAgent(cfg *config.AgentConfig, version string) *Agent {
   agent := &Agent{
-    Config: cfg,
-    Client: web.NewClient(cfg.ServerUrl, cfg.VerifyCert),
+    Config:      cfg,
+    Client:      web.NewClient(cfg.ServerUrl, cfg.VerifyCert),
     stoppedChan: make(chan bool, 1),
-    Version: version,
+    Version:     version,
   }
   agent.JobMgr = NewJobManager(agent)
   return agent
@@ -47,5 +47,5 @@ func (agent *Agent) Stop() {
 }
 
 func (agent *Agent) Wait() {
-  <- agent.stoppedChan
+  <-agent.stoppedChan
 }

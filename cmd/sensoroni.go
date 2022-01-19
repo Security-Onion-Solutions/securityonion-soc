@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -13,10 +13,6 @@ package main
 import (
   "flag"
   "fmt"
-  "os"
-  "os/signal"
-  "syscall"
-  "time"
   "github.com/apex/log"
   "github.com/apex/log/handlers/logfmt"
   "github.com/apex/log/handlers/text"
@@ -26,6 +22,10 @@ import (
   "github.com/security-onion-solutions/securityonion-soc/module"
   "github.com/security-onion-solutions/securityonion-soc/server"
   serverModules "github.com/security-onion-solutions/securityonion-soc/server/modules"
+  "os"
+  "os/signal"
+  "syscall"
+  "time"
 )
 
 var (
@@ -58,10 +58,10 @@ func main() {
     logFile, _ := InitLogging(cfg.LogFilename, cfg.LogLevel)
     defer logFile.Close()
 
-    log.WithFields(log.Fields {
-      "version": cfg.Version,
+    log.WithFields(log.Fields{
+      "version":   cfg.Version,
       "buildTime": cfg.BuildTime,
-    }).Info("Version Information")	
+    }).Info("Version Information")
 
     moduleMgr := module.NewModuleManager()
     var srv *server.Server

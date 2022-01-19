@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -11,20 +11,20 @@
 package web
 
 import (
-  "time"
   "github.com/gorilla/websocket"
+  "time"
 )
 
 type Connection struct {
-  websocket     *websocket.Conn
-  lastPingTime  time.Time
-  ip            string
-} 
+  websocket    *websocket.Conn
+  lastPingTime time.Time
+  ip           string
+}
 
 func NewConnection(wsConn *websocket.Conn, ip string) *Connection {
   conn := &Connection{
     websocket: wsConn,
-    ip: ip,
+    ip:        ip,
   }
   conn.UpdatePingTime()
   return conn
