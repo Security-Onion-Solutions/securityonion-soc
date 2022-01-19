@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -12,16 +12,16 @@ package packet
 
 import (
   "encoding/base64"
-  "os"
   "github.com/apex/log"
   "github.com/google/gopacket"
   "github.com/google/gopacket/layers"
   "github.com/google/gopacket/pcap"
   "github.com/google/gopacket/pcapgo"
   "github.com/security-onion-solutions/securityonion-soc/model"
+  "os"
 )
 
-var SupportedLayerTypes = [...]gopacket.LayerType {
+var SupportedLayerTypes = [...]gopacket.LayerType{
   layers.LayerTypeARP,
   layers.LayerTypeICMPv4,
   layers.LayerTypeICMPv6,
@@ -47,7 +47,7 @@ func ParsePcap(filename string, offset int, count int, unwrap bool) ([]*model.Pa
 
 func UnwrapPcap(filename string, unwrappedFilename string) bool {
   unwrapped := false
-  info, err := os.Stat(unwrappedFilename) 
+  info, err := os.Stat(unwrappedFilename)
   if os.IsNotExist(err) {
     unwrappedFile, err := os.Create(unwrappedFilename)
     if err != nil {
@@ -63,9 +63,9 @@ func UnwrapPcap(filename string, unwrappedFilename string) bool {
           newPacket := unwrapVxlanPacket(pcapPacket, nil)
           err = writer.WritePacket(newPacket.Metadata().CaptureInfo, newPacket.Data())
           if err != nil {
-            log.WithError(err).WithFields(log.Fields {
+            log.WithError(err).WithFields(log.Fields{
               "unwrappedFilename": unwrappedFilename,
-              "index": index,
+              "index":             index,
             }).Error("Unable to write unwrapped file packet")
             return false
           }
@@ -208,13 +208,13 @@ func parseData(pcapPacket gopacket.Packet, packet *model.Packet, unwrap bool) {
     overrideType(packet, layer.LayerType())
   }
 
-  packetLayers := pcapPacket.Layers();
+  packetLayers := pcapPacket.Layers()
   topLayer := packetLayers[len(packetLayers)-1]
   overrideType(packet, topLayer.LayerType())
-  
+
   packet.Payload = base64.StdEncoding.EncodeToString(pcapPacket.Data())
-  packet.PayloadOffset = 0;
-  appLayer := pcapPacket.ApplicationLayer();
+  packet.PayloadOffset = 0
+  appLayer := pcapPacket.ApplicationLayer()
   if appLayer != nil {
     packet.PayloadOffset = len(pcapPacket.Data()) - len(appLayer.Payload())
   }

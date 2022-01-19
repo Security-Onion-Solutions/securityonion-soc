@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -15,14 +15,14 @@ import (
 )
 
 type Filter struct {
-  ImportId                  string                  `json:"importId"`
-  BeginTime             		time.Time 							`json:"beginTime"`
-  EndTime             			time.Time 							`json:"endTime"`
-  SrcIp											string									`json:"srcIp"`
-  SrcPort										int											`json:"srcPort"`
-  DstIp											string									`json:"dstIp"`
-  DstPort										int											`json:"dstPort"`
-  Parameters								map[string]interface{}	`json:"parameters"`
+  ImportId   string                 `json:"importId"`
+  BeginTime  time.Time              `json:"beginTime"`
+  EndTime    time.Time              `json:"endTime"`
+  SrcIp      string                 `json:"srcIp"`
+  SrcPort    int                    `json:"srcPort"`
+  DstIp      string                 `json:"dstIp"`
+  DstPort    int                    `json:"dstPort"`
+  Parameters map[string]interface{} `json:"parameters"`
 }
 
 func NewFilter() *Filter {
