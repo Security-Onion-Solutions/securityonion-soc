@@ -28,6 +28,7 @@ const DEFAULT_INDEX = "*:so-*"
 const DEFAULT_ASYNC_THRESHOLD = 10
 const DEFAULT_INTERVALS = 25
 const DEFAULT_MAX_LOG_LENGTH = 1024
+const DEFAULT_CASE_SCHEMA_PREFIX = "so_"
 
 type Elastic struct {
   config module.ModuleConfig
@@ -77,8 +78,9 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
         caseIndex := module.GetStringDefault(cfg, "caseIndex", DEFAULT_CASE_INDEX)
         auditIndex := module.GetStringDefault(cfg, "auditIndex", DEFAULT_CASE_AUDIT_INDEX)
         maxCaseAssociations := module.GetIntDefault(cfg, "maxCaseAssociations", DEFAULT_CASE_ASSOCIATIONS_MAX)
+        schemaPrefix := module.GetStringDefault(cfg, "schemaPrefix", DEFAULT_CASE_SCHEMA_PREFIX)
         casestore := NewElasticCasestore(elastic.server)
-        err = casestore.Init(caseIndex, auditIndex, maxCaseAssociations)
+        err = casestore.Init(caseIndex, auditIndex, maxCaseAssociations, schemaPrefix)
         if err == nil {
           elastic.server.Casestore = casestore
         }

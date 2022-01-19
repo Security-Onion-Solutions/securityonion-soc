@@ -21,15 +21,15 @@ import (
 
 func TestApplyTemplate(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myIndex" AND kind:"case" AND _id:"myTemplateId"`
+	query := `_index:"myIndex" AND so_kind:"case" AND _id:"myTemplateId"`
 	casePayload := make(map[string]interface{})
-	casePayload["kind"] = "case"
-	casePayload["case.title"] = "myTemplateTitle {}"
-	casePayload["case.description"] = "myTemplateDescription {}"
+	casePayload["so_kind"] = "case"
+	casePayload["so_case.title"] = "myTemplateTitle {}"
+	casePayload["so_case.description"] = "myTemplateDescription {}"
 	caseEvent := &model.EventRecord{
 		Payload: casePayload,
 	}

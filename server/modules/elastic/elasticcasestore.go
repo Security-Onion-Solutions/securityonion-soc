@@ -22,7 +22,7 @@ import (
   "time"
 )
 
-const AUDIT_DOC_ID = "so_audit_doc_id"
+const AUDIT_DOC_ID = "audit_doc_id"
 const SHORT_STRING_MAX = 100
 const LONG_STRING_MAX = 1000000
 const MAX_ARRAY_ELEMENTS = 50
@@ -32,6 +32,7 @@ type ElasticCasestore struct {
   index           string
   auditIndex      string
   maxAssociations int
+  schemaPrefix    string
 }
 
 func NewElasticCasestore(srv *server.Server) *ElasticCasestore {
@@ -40,10 +41,11 @@ func NewElasticCasestore(srv *server.Server) *ElasticCasestore {
   }
 }
 
-func (store *ElasticCasestore) Init(index string, auditIndex string, maxAssociations int) error {
+func (store *ElasticCasestore) Init(index string, auditIndex string, maxAssociations int, schemaPrefix string) error {
   store.index = index
   store.auditIndex = auditIndex
   store.maxAssociations = maxAssociations
+  store.schemaPrefix = schemaPrefix
   return nil
 }
 
@@ -282,15 +284,15 @@ func (store *ElasticCasestore) save(ctx context.Context, obj interface{}, kind s
   var err error
 
   if err = store.server.CheckAuthorized(ctx, "write", "cases"); err == nil {
-    document := convertObjectToDocumentMap(kind, obj)
-    document["kind"] = kind
+    document := convertObjectToDocumentMap(kind, obj, store.schemaPrefix)
+    document[store.schemaPrefix+"kind"] = kind
     results, err = store.server.Eventstore.Index(ctx, store.index, document, id)
     if err == nil {
-      document[AUDIT_DOC_ID] = results.DocumentId
+      document[store.schemaPrefix+AUDIT_DOC_ID] = results.DocumentId
       if id == "" {
-        document["operation"] = "create"
+        document[store.schemaPrefix+"operation"] = "create"
       } else {
-        document["operation"] = "update"
+        document[store.schemaPrefix+"operation"] = "update"
       }
       _, err = store.server.Eventstore.Index(ctx, store.auditIndex, document, "")
       if err != nil {
@@ -311,10 +313,10 @@ func (store *ElasticCasestore) delete(ctx context.Context, obj interface{}, kind
   if err = store.server.CheckAuthorized(ctx, "write", "cases"); err == nil {
     err = store.server.Eventstore.Delete(ctx, store.index, id)
     if err == nil {
-      document := convertObjectToDocumentMap(kind, obj)
-      document[AUDIT_DOC_ID] = id
-      document["kind"] = kind
-      document["operation"] = "delete"
+      document := convertObjectToDocumentMap(kind, obj, store.schemaPrefix)
+      document[store.schemaPrefix+AUDIT_DOC_ID] = id
+      document[store.schemaPrefix+"kind"] = kind
+      document[store.schemaPrefix+"operation"] = "delete"
       _, err = store.server.Eventstore.Index(ctx, store.auditIndex, document, "")
       if err != nil {
         log.WithFields(log.Fields{
@@ -329,7 +331,7 @@ func (store *ElasticCasestore) delete(ctx context.Context, obj interface{}, kind
 }
 
 func (store *ElasticCasestore) get(ctx context.Context, id string, kind string) (interface{}, error) {
-  query := fmt.Sprintf(`_index:"%s" AND kind:"%s" AND _id:"%s"`, store.index, kind, id)
+  query := fmt.Sprintf(`_index:"%s" AND %skind:"%s" AND _id:"%s"`, store.index, store.schemaPrefix, kind, id)
   objects, err := store.getAll(ctx, query, 1)
   if err == nil {
     if len(objects) > 0 {
@@ -365,7 +367,7 @@ func (store *ElasticCasestore) getAll(ctx context.Context, query string, max int
       if err == nil {
         for _, event := range results.Events {
           var obj interface{}
-          obj, err = convertElasticEventToObject(event)
+          obj, err = convertElasticEventToObject(event, store.schemaPrefix)
           if err == nil {
             objects = append(objects, obj)
           } else {
@@ -451,8 +453,8 @@ func (store *ElasticCasestore) GetCaseHistory(ctx context.Context, caseId string
 
   err = store.validateId(caseId, "caseId")
   if err == nil {
-    query := fmt.Sprintf(`_index:"%s" AND (%s:"%s" OR comment.caseId:"%s" OR related.caseId:"%s" OR artifact.caseId:"%s") | sortby @timestamp^`,
-      store.auditIndex, AUDIT_DOC_ID, caseId, caseId, caseId, caseId)
+    query := fmt.Sprintf(`_index:"%s" AND (%s%s:"%s" OR %scomment.caseId:"%s" OR %srelated.caseId:"%s" OR %sartifact.caseId:"%s") | sortby @timestamp^`,
+      store.auditIndex, store.schemaPrefix, AUDIT_DOC_ID, caseId, store.schemaPrefix, caseId, store.schemaPrefix, caseId, store.schemaPrefix, caseId)
     history, err = store.getAll(ctx, query, store.maxAssociations)
   }
   return history, err
@@ -522,7 +524,7 @@ func (store *ElasticCasestore) GetRelatedEvents(ctx context.Context, caseId stri
   err = store.validateId(caseId, "caseId")
   if err == nil {
     events = make([]*model.RelatedEvent, 0)
-    query := fmt.Sprintf(`_index:"%s" AND kind:"related" AND related.caseId:"%s" | sortby related.fields.timestamp^`, store.index, caseId)
+    query := fmt.Sprintf(`_index:"%s" AND %skind:"related" AND %srelated.caseId:"%s" | sortby %srelated.fields.timestamp^`, store.index, store.schemaPrefix, store.schemaPrefix, caseId, store.schemaPrefix)
     var objects []interface{}
     objects, err = store.getAll(ctx, query, store.maxAssociations)
     if err == nil {
@@ -597,7 +599,7 @@ func (store *ElasticCasestore) GetComments(ctx context.Context, caseId string) (
   err = store.validateId(caseId, "caseId")
   if err == nil {
     comments = make([]*model.Comment, 0)
-    query := fmt.Sprintf(`_index:"%s" AND kind:"comment" AND comment.caseId:"%s" | sortby comment.createTime^`, store.index, caseId)
+    query := fmt.Sprintf(`_index:"%s" AND %skind:"comment" AND %scomment.caseId:"%s" | sortby %scomment.createTime^`, store.index, store.schemaPrefix, store.schemaPrefix, caseId, store.schemaPrefix)
     var objects []interface{}
     objects, err = store.getAll(ctx, query, store.maxAssociations)
     if err == nil {
@@ -705,9 +707,10 @@ func (store *ElasticCasestore) GetArtifacts(ctx context.Context, caseId string, 
         artifacts = make([]*model.Artifact, 0)
         var groupIdTerm string
         if len(groupId) > 0 {
-          groupIdTerm = fmt.Sprintf(`AND artifact.groupId:"%s" `, groupId)
+          groupIdTerm = fmt.Sprintf(`AND %sartifact.groupId:"%s" `, store.schemaPrefix, groupId)
         }
-        query := fmt.Sprintf(`_index:"%s" AND kind:"artifact" AND artifact.caseId:"%s" AND artifact.groupType:"%s" %s| sortby artifact.createTime^`, store.index, caseId, groupType, groupIdTerm)
+        query := fmt.Sprintf(`_index:"%s" AND %skind:"artifact" AND %sartifact.caseId:"%s" AND %sartifact.groupType:"%s" %s| sortby %sartifact.createTime^`,
+          store.index, store.schemaPrefix, store.schemaPrefix, caseId, store.schemaPrefix, groupType, groupIdTerm, store.schemaPrefix)
         var objects []interface{}
         objects, err = store.getAll(ctx, query, store.maxAssociations)
         if err == nil {

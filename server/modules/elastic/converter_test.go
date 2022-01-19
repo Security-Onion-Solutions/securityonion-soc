@@ -252,9 +252,9 @@ func TestMapSearch(tester *testing.T) {
 
 func TestConvertObjectToDocumentMap(tester *testing.T) {
 	caseObj := model.NewCase()
-	actual := convertObjectToDocumentMap("test", caseObj)
+	actual := convertObjectToDocumentMap("test", caseObj, DEFAULT_CASE_SCHEMA_PREFIX)
 	assert.NotNil(tester, actual)
-	assert.Equal(tester, caseObj, actual["test"])
+	assert.Equal(tester, caseObj, actual["so_test"])
 	assert.NotNil(tester, actual["@timestamp"])
 }
 
@@ -262,11 +262,11 @@ func TestConvertObjectToDocumentMapRelatedEvent(tester *testing.T) {
 	related := model.NewRelatedEvent()
 	related.UserId = "123"
 	related.Fields["foo"] = "bar"
-	actual := convertObjectToDocumentMap("related", related)
+	actual := convertObjectToDocumentMap("related", related, DEFAULT_CASE_SCHEMA_PREFIX)
 	assert.NotNil(tester, actual)
 	assert.Equal(tester, "bar", actual["foo"])
-	assert.Equal(tester, "123", actual["related"].(*model.RelatedEvent).UserId)
-	assert.Nil(tester, actual["related.fields.foo"])
+	assert.Equal(tester, "123", actual["so_related"].(*model.RelatedEvent).UserId)
+	assert.Nil(tester, actual["so_related.fields.foo"])
 	assert.Len(tester, related.Fields, 0)
 	assert.NotNil(tester, actual["@timestamp"])
 }
@@ -292,7 +292,7 @@ func TestConvertFromElasticIndexResults(tester *testing.T) {
 }
 
 func TestConvertElasticEventToCaseNil(tester *testing.T) {
-	caseObj, err := convertElasticEventToCase(nil)
+	caseObj, err := convertElasticEventToCase(nil, DEFAULT_CASE_SCHEMA_PREFIX)
 	assert.NoError(tester, err)
 	assert.Nil(tester, caseObj)
 }
@@ -304,7 +304,7 @@ func TestConvertElasticEventToCaseWithoutTags(tester *testing.T) {
 	event.Payload["operation"] = "create"
 	event.Payload["case.tags"] = nil
 
-	_, err := convertElasticEventToCase(event)
+	_, err := convertElasticEventToCase(event, DEFAULT_CASE_SCHEMA_PREFIX)
 	assert.NoError(tester, err)
 }
 
@@ -316,28 +316,28 @@ func TestConvertElasticEventToCase(tester *testing.T) {
 
 	event := &model.EventRecord{}
 	event.Payload = make(map[string]interface{})
-	event.Payload["kind"] = "case"
-	event.Payload["operation"] = "update"
-	event.Payload["case.title"] = "myTitle"
-	event.Payload["case.description"] = "myDesc"
-	event.Payload["case.priority"] = float64(123)
-	event.Payload["case.severity"] = "medium"
-	event.Payload["case.status"] = "myStatus"
-	event.Payload["case.template"] = "myTemplate"
-	event.Payload["case.userId"] = "myUserId"
-	event.Payload["case.assigneeId"] = "myAssigneeId"
-	event.Payload["case.tlp"] = "myTlp"
-	event.Payload["case.pap"] = "myPap"
-	event.Payload["case.category"] = "myCategory"
+	event.Payload["so_kind"] = "case"
+	event.Payload["so_operation"] = "update"
+	event.Payload["so_case.title"] = "myTitle"
+	event.Payload["so_case.description"] = "myDesc"
+	event.Payload["so_case.priority"] = float64(123)
+	event.Payload["so_case.severity"] = "medium"
+	event.Payload["so_case.status"] = "myStatus"
+	event.Payload["so_case.template"] = "myTemplate"
+	event.Payload["so_case.userId"] = "myUserId"
+	event.Payload["so_case.assigneeId"] = "myAssigneeId"
+	event.Payload["so_case.tlp"] = "myTlp"
+	event.Payload["so_case.pap"] = "myPap"
+	event.Payload["so_case.category"] = "myCategory"
 	tags := make([]interface{}, 2, 2)
 	tags[0] = "tag1"
 	tags[1] = "tag2"
-	event.Payload["case.tags"] = tags
+	event.Payload["so_case.tags"] = tags
 	event.Time = myTime
-	event.Payload["case.createTime"] = myCreateTime
-	event.Payload["case.completeTime"] = myCompleteTime
-	event.Payload["case.startTime"] = myStartTime
-	interf, err := convertElasticEventToObject(event)
+	event.Payload["so_case.createTime"] = myCreateTime
+	event.Payload["so_case.completeTime"] = myCompleteTime
+	event.Payload["so_case.startTime"] = myStartTime
+	interf, err := convertElasticEventToObject(event, DEFAULT_CASE_SCHEMA_PREFIX)
 	assert.NoError(tester, err)
 	caseObj := interf.(*model.Case)
 	assert.Equal(tester, "case", caseObj.Kind)
@@ -362,7 +362,7 @@ func TestConvertElasticEventToCase(tester *testing.T) {
 }
 
 func TestConvertElasticEventToArtifactNil(tester *testing.T) {
-	artifactObj, err := convertElasticEventToArtifact(nil)
+	artifactObj, err := convertElasticEventToArtifact(nil, DEFAULT_CASE_SCHEMA_PREFIX)
 	assert.NoError(tester, err)
 	assert.Nil(tester, artifactObj)
 }
@@ -370,11 +370,11 @@ func TestConvertElasticEventToArtifactNil(tester *testing.T) {
 func TestConvertElasticEventToArtifactWithoutTags(tester *testing.T) {
 	event := &model.EventRecord{}
 	event.Payload = make(map[string]interface{})
-	event.Payload["kind"] = "artifact"
-	event.Payload["operation"] = "create"
-	event.Payload["case.tags"] = nil
+	event.Payload["so_kind"] = "artifact"
+	event.Payload["so_operation"] = "create"
+	event.Payload["so_case.tags"] = nil
 
-	_, err := convertElasticEventToCase(event)
+	_, err := convertElasticEventToCase(event, DEFAULT_CASE_SCHEMA_PREFIX)
 	assert.NoError(tester, err)
 }
 
@@ -384,29 +384,29 @@ func TestConvertElasticEventToArtifact(tester *testing.T) {
 
 	event := &model.EventRecord{}
 	event.Payload = make(map[string]interface{})
-	event.Payload["kind"] = "artifact"
-	event.Payload["operation"] = "update"
-	event.Payload["artifact.value"] = "myValue"
-	event.Payload["artifact.description"] = "myDesc"
-	event.Payload["artifact.streamLength"] = float64(123)
-	event.Payload["artifact.streamId"] = "myStreamId"
-	event.Payload["artifact.groupType"] = "myGroupType"
-	event.Payload["artifact.groupId"] = "myGroupId"
-	event.Payload["artifact.userId"] = "myUserId"
-	event.Payload["artifact.artifactType"] = "myArtifactType"
-	event.Payload["artifact.tlp"] = "myTlp"
-	event.Payload["artifact.mimeType"] = "myMimeType"
-	event.Payload["artifact.ioc"] = true
-	event.Payload["artifact.md5"] = "myMd5"
-	event.Payload["artifact.sha1"] = "mySha1"
-	event.Payload["artifact.sha256"] = "mySha256"
+	event.Payload["so_kind"] = "artifact"
+	event.Payload["so_operation"] = "update"
+	event.Payload["so_artifact.value"] = "myValue"
+	event.Payload["so_artifact.description"] = "myDesc"
+	event.Payload["so_artifact.streamLength"] = float64(123)
+	event.Payload["so_artifact.streamId"] = "myStreamId"
+	event.Payload["so_artifact.groupType"] = "myGroupType"
+	event.Payload["so_artifact.groupId"] = "myGroupId"
+	event.Payload["so_artifact.userId"] = "myUserId"
+	event.Payload["so_artifact.artifactType"] = "myArtifactType"
+	event.Payload["so_artifact.tlp"] = "myTlp"
+	event.Payload["so_artifact.mimeType"] = "myMimeType"
+	event.Payload["so_artifact.ioc"] = true
+	event.Payload["so_artifact.md5"] = "myMd5"
+	event.Payload["so_artifact.sha1"] = "mySha1"
+	event.Payload["so_artifact.sha256"] = "mySha256"
 	tags := make([]interface{}, 2, 2)
 	tags[0] = "tag1"
 	tags[1] = "tag2"
-	event.Payload["artifact.tags"] = tags
+	event.Payload["so_artifact.tags"] = tags
 	event.Time = myTime
-	event.Payload["artifact.createTime"] = myCreateTime
-	interf, err := convertElasticEventToObject(event)
+	event.Payload["so_artifact.createTime"] = myCreateTime
+	interf, err := convertElasticEventToObject(event, DEFAULT_CASE_SCHEMA_PREFIX)
 	assert.NoError(tester, err)
 	artifactObj := interf.(*model.Artifact)
 	assert.Equal(tester, "artifact", artifactObj.Kind)
@@ -432,7 +432,7 @@ func TestConvertElasticEventToArtifact(tester *testing.T) {
 }
 
 func TestConvertElasticEventToArtifactStreamNil(tester *testing.T) {
-	artifactObj, err := convertElasticEventToArtifactStream(nil)
+	artifactObj, err := convertElasticEventToArtifactStream(nil, DEFAULT_CASE_SCHEMA_PREFIX)
 	assert.NoError(tester, err)
 	assert.Nil(tester, artifactObj)
 }
@@ -443,13 +443,13 @@ func TestConvertElasticEventToArtifactStream(tester *testing.T) {
 
 	event := &model.EventRecord{}
 	event.Payload = make(map[string]interface{})
-	event.Payload["kind"] = "artifactstream"
-	event.Payload["operation"] = "create"
-	event.Payload["artifactstream.content"] = "myValue"
-	event.Payload["artifactstream.userId"] = "myUserId"
+	event.Payload["so_kind"] = "artifactstream"
+	event.Payload["so_operation"] = "create"
+	event.Payload["so_artifactstream.content"] = "myValue"
+	event.Payload["so_artifactstream.userId"] = "myUserId"
 	event.Time = myTime
-	event.Payload["artifactstream.createTime"] = myCreateTime
-	interf, err := convertElasticEventToObject(event)
+	event.Payload["so_artifactstream.createTime"] = myCreateTime
+	interf, err := convertElasticEventToObject(event, DEFAULT_CASE_SCHEMA_PREFIX)
 	assert.NoError(tester, err)
 	obj := interf.(*model.ArtifactStream)
 	assert.Equal(tester, "artifactstream", obj.Kind)
@@ -486,7 +486,7 @@ func TestParseTime(tester *testing.T) {
 }
 
 func TestConvertElasticEventToCommentNil(tester *testing.T) {
-	obj, err := convertElasticEventToComment(nil)
+	obj, err := convertElasticEventToComment(nil, DEFAULT_CASE_SCHEMA_PREFIX)
 	assert.NoError(tester, err)
 	assert.Nil(tester, obj)
 }
@@ -497,14 +497,14 @@ func TestConvertElasticEventToComment(tester *testing.T) {
 
 	event := &model.EventRecord{}
 	event.Payload = make(map[string]interface{})
-	event.Payload["kind"] = "comment"
-	event.Payload["operation"] = "create"
-	event.Payload["comment.description"] = "myDesc"
-	event.Payload["comment.userId"] = "myUserId"
-	event.Payload["comment.caseId"] = "myCaseId"
+	event.Payload["so_kind"] = "comment"
+	event.Payload["so_operation"] = "create"
+	event.Payload["so_comment.description"] = "myDesc"
+	event.Payload["so_comment.userId"] = "myUserId"
+	event.Payload["so_comment.caseId"] = "myCaseId"
 	event.Time = myTime
-	event.Payload["comment.createTime"] = myCreateTime
-	interf, err := convertElasticEventToObject(event)
+	event.Payload["so_comment.createTime"] = myCreateTime
+	interf, err := convertElasticEventToObject(event, DEFAULT_CASE_SCHEMA_PREFIX)
 	assert.NoError(tester, err)
 	obj := interf.(*model.Comment)
 	assert.Equal(tester, "comment", obj.Kind)
@@ -522,14 +522,14 @@ func TestConvertElasticEventToRelatedEvent(tester *testing.T) {
 
 	event := &model.EventRecord{}
 	event.Payload = make(map[string]interface{})
-	event.Payload["kind"] = "related"
-	event.Payload["operation"] = "create"
+	event.Payload["so_kind"] = "related"
+	event.Payload["so_operation"] = "create"
 	event.Payload["foo"] = "bar"
-	event.Payload["related.userId"] = "myUserId"
-	event.Payload["related.caseId"] = "myCaseId"
+	event.Payload["so_related.userId"] = "myUserId"
+	event.Payload["so_related.caseId"] = "myCaseId"
 	event.Time = myTime
-	event.Payload["related.createTime"] = myCreateTime
-	interf, err := convertElasticEventToObject(event)
+	event.Payload["so_related.createTime"] = myCreateTime
+	interf, err := convertElasticEventToObject(event, DEFAULT_CASE_SCHEMA_PREFIX)
 	assert.NoError(tester, err)
 	obj := interf.(*model.RelatedEvent)
 	assert.Equal(tester, "related", obj.Kind)

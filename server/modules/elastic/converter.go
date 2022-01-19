@@ -363,13 +363,13 @@ func parseTime(fieldmap map[string]interface{}, key string) *time.Time {
 	return &t
 }
 
-func convertElasticEventToAuditable(event *model.EventRecord, auditable *model.Auditable) error {
+func convertElasticEventToAuditable(event *model.EventRecord, auditable *model.Auditable, schemaPrefix string) error {
 	auditable.Id = event.Id
 	auditable.UpdateTime = &event.Time
-	if value, ok := event.Payload["kind"]; ok {
+	if value, ok := event.Payload[schemaPrefix+"kind"]; ok {
 		auditable.Kind = value.(string)
 	}
-	if value, ok := event.Payload["operation"]; ok {
+	if value, ok := event.Payload[schemaPrefix+"operation"]; ok {
 		auditable.Operation = value.(string)
 	}
 	return nil
@@ -394,53 +394,53 @@ func convertSeverity(sev string) string {
 	return sev
 }
 
-func convertElasticEventToCase(event *model.EventRecord) (*model.Case, error) {
+func convertElasticEventToCase(event *model.EventRecord, schemaPrefix string) (*model.Case, error) {
 	var err error
 	var obj *model.Case
 
 	if event != nil {
 		obj = model.NewCase()
-		err = convertElasticEventToAuditable(event, &obj.Auditable)
+		err = convertElasticEventToAuditable(event, &obj.Auditable, schemaPrefix)
 		if err == nil {
-			if value, ok := event.Payload["case.title"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"case.title"]; ok {
 				obj.Title = value.(string)
 			}
-			if value, ok := event.Payload["case.description"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"case.description"]; ok {
 				obj.Description = value.(string)
 			}
-			if value, ok := event.Payload["case.priority"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"case.priority"]; ok {
 				obj.Priority = int(value.(float64))
 			}
-			if value, ok := event.Payload["case.severity"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"case.severity"]; ok {
 				obj.Severity = convertSeverity(value.(string))
 			}
-			if value, ok := event.Payload["case.status"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"case.status"]; ok {
 				obj.Status = value.(string)
 			}
-			if value, ok := event.Payload["case.template"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"case.template"]; ok {
 				obj.Template = value.(string)
 			}
-			if value, ok := event.Payload["case.userId"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"case.userId"]; ok {
 				obj.UserId = value.(string)
 			}
-			if value, ok := event.Payload["case.assigneeId"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"case.assigneeId"]; ok {
 				obj.AssigneeId = value.(string)
 			}
-			if value, ok := event.Payload["case.tlp"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"case.tlp"]; ok {
 				obj.Tlp = value.(string)
 			}
-			if value, ok := event.Payload["case.category"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"case.category"]; ok {
 				obj.Category = value.(string)
 			}
-			if value, ok := event.Payload["case.pap"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"case.pap"]; ok {
 				obj.Pap = value.(string)
 			}
-			if value, ok := event.Payload["case.tags"]; ok && value != nil {
+			if value, ok := event.Payload[schemaPrefix+"case.tags"]; ok && value != nil {
 				obj.Tags = convertToStringArray(value.([]interface{}))
 			}
-			obj.CreateTime = parseTime(event.Payload, "case.createTime")
-			obj.StartTime = parseTime(event.Payload, "case.startTime")
-			obj.CompleteTime = parseTime(event.Payload, "case.completeTime")
+			obj.CreateTime = parseTime(event.Payload, schemaPrefix+"case.createTime")
+			obj.StartTime = parseTime(event.Payload, schemaPrefix+"case.startTime")
+			obj.CompleteTime = parseTime(event.Payload, schemaPrefix+"case.completeTime")
 		}
 	}
 	return obj, err
@@ -454,37 +454,37 @@ func convertToStringArray(input []interface{}) []string {
 	return out
 }
 
-func convertElasticEventToComment(event *model.EventRecord) (*model.Comment, error) {
+func convertElasticEventToComment(event *model.EventRecord, schemaPrefix string) (*model.Comment, error) {
 	var err error
 	var obj *model.Comment
 
 	if event != nil {
 		obj = model.NewComment()
-		err = convertElasticEventToAuditable(event, &obj.Auditable)
+		err = convertElasticEventToAuditable(event, &obj.Auditable, schemaPrefix)
 		if err == nil {
-			if value, ok := event.Payload["comment.description"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"comment.description"]; ok {
 				obj.Description = value.(string)
 			}
-			if value, ok := event.Payload["comment.userId"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"comment.userId"]; ok {
 				obj.UserId = value.(string)
 			}
-			if value, ok := event.Payload["comment.caseId"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"comment.caseId"]; ok {
 				obj.CaseId = value.(string)
 			}
-			obj.CreateTime = parseTime(event.Payload, "comment.createTime")
+			obj.CreateTime = parseTime(event.Payload, schemaPrefix+"comment.createTime")
 		}
 	}
 
 	return obj, err
 }
 
-func convertElasticEventToRelatedEvent(event *model.EventRecord) (*model.RelatedEvent, error) {
+func convertElasticEventToRelatedEvent(event *model.EventRecord, schemaPrefix string) (*model.RelatedEvent, error) {
 	var err error
 	var obj *model.RelatedEvent
 
 	if event != nil {
 		obj = model.NewRelatedEvent()
-		err = convertElasticEventToAuditable(event, &obj.Auditable)
+		err = convertElasticEventToAuditable(event, &obj.Auditable, schemaPrefix)
 		if err == nil {
 			obj.Fields = make(map[string]interface{})
 			for key, value := range event.Payload {
@@ -493,130 +493,124 @@ func convertElasticEventToRelatedEvent(event *model.EventRecord) (*model.Related
 				// of related events performed by sibling function convertObjectToDocumentMap().
 				if !strings.HasPrefix(key, "@") &&
 					!strings.HasPrefix(key, "_") &&
-					key != "related.userId" &&
-					key != "related.caseId" &&
-					key != "related.createTime" &&
-					key != "related.updateTime" &&
-					key != "kind" &&
-					key != "operation" {
-
+					!strings.HasPrefix(key, schemaPrefix) {
 					obj.Fields[key] = value
 				}
 			}
 
-			if value, ok := event.Payload["related.userId"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"related.userId"]; ok {
 				obj.UserId = value.(string)
 			}
-			if value, ok := event.Payload["related.caseId"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"related.caseId"]; ok {
 				obj.CaseId = value.(string)
 			}
-			obj.CreateTime = parseTime(event.Payload, "related.createTime")
+			obj.CreateTime = parseTime(event.Payload, schemaPrefix+"related.createTime")
 		}
 	}
 
 	return obj, err
 }
 
-func convertElasticEventToArtifact(event *model.EventRecord) (*model.Artifact, error) {
+func convertElasticEventToArtifact(event *model.EventRecord, schemaPrefix string) (*model.Artifact, error) {
 	var err error
 	var obj *model.Artifact
 
 	if event != nil {
 		obj = model.NewArtifact()
-		err = convertElasticEventToAuditable(event, &obj.Auditable)
+		err = convertElasticEventToAuditable(event, &obj.Auditable, schemaPrefix)
 		if err == nil {
-			if value, ok := event.Payload["artifact.userId"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"artifact.userId"]; ok {
 				obj.UserId = value.(string)
 			}
-			if value, ok := event.Payload["artifact.caseId"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"artifact.caseId"]; ok {
 				obj.CaseId = value.(string)
 			}
-			if value, ok := event.Payload["artifact.groupType"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"artifact.groupType"]; ok {
 				obj.GroupType = value.(string)
 			}
-			if value, ok := event.Payload["artifact.groupId"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"artifact.groupId"]; ok {
 				obj.GroupId = value.(string)
 			}
-			if value, ok := event.Payload["artifact.description"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"artifact.description"]; ok {
 				obj.Description = value.(string)
 			}
-			if value, ok := event.Payload["artifact.artifactType"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"artifact.artifactType"]; ok {
 				obj.ArtifactType = value.(string)
 			}
-			if value, ok := event.Payload["artifact.streamLength"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"artifact.streamLength"]; ok {
 				obj.StreamLen = int(value.(float64))
 			}
-			if value, ok := event.Payload["artifact.streamId"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"artifact.streamId"]; ok {
 				obj.StreamId = value.(string)
 			}
-			if value, ok := event.Payload["artifact.mimeType"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"artifact.mimeType"]; ok {
 				obj.MimeType = value.(string)
 			}
-			if value, ok := event.Payload["artifact.value"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"artifact.value"]; ok {
 				obj.Value = value.(string)
 			}
-			if value, ok := event.Payload["artifact.tlp"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"artifact.tlp"]; ok {
 				obj.Tlp = value.(string)
 			}
-			if value, ok := event.Payload["artifact.tags"]; ok && value != nil {
+			if value, ok := event.Payload[schemaPrefix+"artifact.tags"]; ok && value != nil {
 				obj.Tags = convertToStringArray(value.([]interface{}))
 			}
-			if value, ok := event.Payload["artifact.ioc"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"artifact.ioc"]; ok {
 				obj.Ioc = value.(bool)
 			}
-			if value, ok := event.Payload["artifact.md5"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"artifact.md5"]; ok {
 				obj.Md5 = value.(string)
 			}
-			if value, ok := event.Payload["artifact.sha1"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"artifact.sha1"]; ok {
 				obj.Sha1 = value.(string)
 			}
-			if value, ok := event.Payload["artifact.sha256"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"artifact.sha256"]; ok {
 				obj.Sha256 = value.(string)
 			}
-			obj.CreateTime = parseTime(event.Payload, "artifact.createTime")
+			obj.CreateTime = parseTime(event.Payload, schemaPrefix+"artifact.createTime")
 		}
 	}
 
 	return obj, err
 }
 
-func convertElasticEventToArtifactStream(event *model.EventRecord) (*model.ArtifactStream, error) {
+func convertElasticEventToArtifactStream(event *model.EventRecord, schemaPrefix string) (*model.ArtifactStream, error) {
 	var err error
 	var obj *model.ArtifactStream
 
 	if event != nil {
 		obj = model.NewArtifactStream()
-		err = convertElasticEventToAuditable(event, &obj.Auditable)
+		err = convertElasticEventToAuditable(event, &obj.Auditable, schemaPrefix)
 		if err == nil {
-			if value, ok := event.Payload["artifactstream.userId"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"artifactstream.userId"]; ok {
 				obj.UserId = value.(string)
 			}
-			if value, ok := event.Payload["artifactstream.content"]; ok {
+			if value, ok := event.Payload[schemaPrefix+"artifactstream.content"]; ok {
 				obj.Content = value.(string)
 			}
-			obj.CreateTime = parseTime(event.Payload, "artifactstream.createTime")
+			obj.CreateTime = parseTime(event.Payload, schemaPrefix+"artifactstream.createTime")
 		}
 	}
 
 	return obj, err
 }
 
-func convertElasticEventToObject(event *model.EventRecord) (interface{}, error) {
+func convertElasticEventToObject(event *model.EventRecord, schemaPrefix string) (interface{}, error) {
 	var obj interface{}
 	var err error
 
-	if value, ok := event.Payload["kind"]; ok {
+	if value, ok := event.Payload[schemaPrefix+"kind"]; ok {
 		switch value.(string) {
 		case "case":
-			obj, err = convertElasticEventToCase(event)
+			obj, err = convertElasticEventToCase(event, schemaPrefix)
 		case "comment":
-			obj, err = convertElasticEventToComment(event)
+			obj, err = convertElasticEventToComment(event, schemaPrefix)
 		case "related":
-			obj, err = convertElasticEventToRelatedEvent(event)
+			obj, err = convertElasticEventToRelatedEvent(event, schemaPrefix)
 		case "artifact":
-			obj, err = convertElasticEventToArtifact(event)
+			obj, err = convertElasticEventToArtifact(event, schemaPrefix)
 		case "artifactstream":
-			obj, err = convertElasticEventToArtifactStream(event)
+			obj, err = convertElasticEventToArtifactStream(event, schemaPrefix)
 		}
 	} else {
 		err = errors.New("Unknown object kind; id=" + event.Id)
@@ -662,9 +656,9 @@ func convertFromElasticUpdateResults(store *ElasticEventstore, esJson string, re
 	return err
 }
 
-func convertObjectToDocumentMap(name string, obj interface{}) map[string]interface{} {
+func convertObjectToDocumentMap(name string, obj interface{}, schemaPrefix string) map[string]interface{} {
 	doc := make(map[string]interface{})
-	doc[name] = obj
+	doc[schemaPrefix+name] = obj
 
 	switch name {
 	case "related":
