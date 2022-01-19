@@ -16,6 +16,7 @@ const urlRegex = /^[a-z]+:\/\//;
 const filenameRegex = /(\/)?[\w,\s-]+\.[A-Za-z]{3}$/;
 const uriPathRegex = /^\/[\w,\s-]/;
 const hashRegex = /^[0-9a-fA-F]{32}$|^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$|^[0-9a-fA-F]{128}$/;
+const internalPrefix = "___";
 
 routes.push({ path: '/case/:id', name: 'case', component: {
   template: '#page-case',
@@ -82,16 +83,16 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         loading: false,
       },
       events: {
-        sortBy: 'fields.timestamp',
+        sortBy: 'fields.soc_timestamp',
         sortDesc: false,
         search: '',
         headers: [
           { text: this.$root.i18n.actions, width: '10.0em' },
-          { text: this.$root.i18n.timestamp, value: 'fields["soc_timestamp"]' },
-          { text: this.$root.i18n.id, value: 'fields["soc_id"]' },
-          { text: this.$root.i18n.category, value: 'fields["event.category"]' },
-          { text: this.$root.i18n.module, value: 'fields["event.module"]' },
-          { text: this.$root.i18n.dataset, value: 'fields["event.dataset"]' },
+          { text: this.$root.i18n.timestamp, value: 'fields.soc_timestamp' },
+          { text: this.$root.i18n.id, value: 'fields.soc_id' },
+          { text: this.$root.i18n.category, value: 'fields.' + internalPrefix + 'event_category' },
+          { text: this.$root.i18n.module, value: 'fields.' + internalPrefix + 'event_module' },
+          { text: this.$root.i18n.dataset, value: 'fields.' + internalPrefix + 'event_dataset' },
         ],
         itemsPerPage: 10,
         footerProps: { 'items-per-page-options': [10,50,250,1000] },
@@ -236,25 +237,20 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     async loadAssociations() {
       this.associationsLoading = true;
 
-      this.associations["comments"] = [];
-      this.loadAssociation('comments');
-
-      this.associations["tasks"] = [];
-      this.loadAssociation('tasks');
-
-      this.associations["attachments"] = [];
-      this.loadAssociation('attachments');
-
-      this.associations["evidence"] = [];
-      this.loadAssociation('evidence');
-
-      this.associations["events"] = [];
-      this.loadAssociation('events');
-
-      this.associations["history"] = [];
-      this.loadAssociation('history');
+      this.reloadAssociation("comments");
+      this.reloadAssociation("tasks");
+      this.reloadAssociation("attachments");
+      this.reloadAssociation("evidence");
+      this.reloadAssociation("events");
+      this.reloadAssociation("history");
 
       this.associationsLoading = false;
+    },
+    async reloadAssociation(association, showLoadingIndicator = false) {
+      if (showLoadingIndicator) this.$root.startLoading();
+      this.associations[association] = [];
+      this.loadAssociation(association);
+      if (showLoadingIndicator) this.$root.stopLoading();
     },
     async loadAssociation(association) {
       try {
@@ -274,10 +270,26 @@ routes.push({ path: '/case/:id', name: 'case', component: {
             obj.kind = this.$root.localizeMessage(this.mapAssociatedKind(obj));
             obj.operation = this.$root.localizeMessage(obj.operation);
             this.associations[association].push(obj);
+            this.duplicateEventFields(obj);
           }
         }
       } catch (error) {
         this.$root.showError(error);
+      }
+    },
+    duplicateEventFields(obj) {
+      // Vuetify Data Tables has a flaw in that it cannot resolve object properties
+      // for the purpose of filtering, when the property name contains a dot (.)
+      // character. So our obj.fields["event.module"] won't work with filtering.
+      // To resolve this, we have to duplicate the field name into one with an 
+      // underscore instead of a dot. Fortunately these three event fields are
+      // small so it's not going cost much overhead.
+      if (obj && obj.fields) {
+        ["event.module", "event.category", "event.dataset"].forEach( field => {
+          if (obj.fields[field]) {
+            obj.fields[internalPrefix + field.replace(".", "_")] = obj.fields[field];
+          }
+        });
       }
     },
     isExpanded(association, row) {
@@ -664,6 +676,11 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         id = this.i18n.caseEventIdAggregation;
       }
       return id;
+    },
+    prepareForInput(id) {
+      const el = document.getElementById(id)
+      el.scrollIntoView()
+      el.focus();
     },
 
     saveLocalSettings() {
