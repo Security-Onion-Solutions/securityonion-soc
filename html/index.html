@@ -1544,7 +1544,7 @@
                               </div>
                             </div>
                           </v-container>
-                          <v-container fluid class="py-1">
+                          <v-container fluid class="py-2">
                             <div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${props.index}-tlp-input`, props.item.tlp, `attachments-${props.index}-tlp`, 'tlp', modifyAssociation, ['attachments', props.item])"
                               @keypress.space.prevent="startEdit(`attachments-${props.index}-tlp-input`, props.item.tlp, `attachments-${props.index}-tlp`, 'tlp', modifyAssociation, ['attachments', props.item])">
                               <div class="font-weight-bold">{{i18n.caseTlp}}: </div>
@@ -1564,7 +1564,7 @@
                               />
                             </v-select>
                           </v-container>
-                          <v-container fluid class="py-1">
+                          <v-container fluid class="py-2">
                             <div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${props.index}-tags-input`, props.item.tags, `attachments-${props.index}-tags`, 'tags', modifyAssociation, ['attachments', props.item])"
                               @keypress.space.prevent="startEdit(`attachments-${props.index}-tags-input`, props.item.tags, `attachments-${props.index}-tags`, 'tags', modifyAssociation, ['attachments', props.item])">
                               <div class="font-weight-bold">{{i18n.caseTags}}: </div>
@@ -1768,7 +1768,7 @@
                               </div>
                             </div>
                           </v-container>
-                          <v-container fluid class="py-1">
+                          <v-container fluid class="py-2">
                             <div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${props.index}-ioc-input`, props.item.ioc, `evidence-${props.index}-ioc`, 'ioc', modifyAssociation, ['evidence', props.item])"
                               @keypress.space.prevent="startEdit(`evidence-${props.index}-ioc-input`, props.item.ioc, `evidence-${props.index}-ioc`, 'ioc', modifyAssociation, ['evidence', props.item])">
                               <div class="font-weight-bold">{{i18n.artifactIoc}}: </div>
@@ -1776,7 +1776,7 @@
                             </div>
                             <v-checkbox :id="`evidence-${props.index}-ioc-input`" v-if="isEdit(`evidence-${props.index}-ioc`)" v-model="editForm.val" v-on:change="stopEdit(true)" persistent-hint :hint="i18n.artifactIocHelp"/>
                           </v-container>
-                          <v-container fluid class="py-1">
+                          <v-container fluid class="py-2">
                             <div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${props.index}-tlp-input`, props.item.tlp, `evidence-${props.index}-tlp`, 'tlp', modifyAssociation, ['evidence', props.item])"
                               @keypress.space.prevent="startEdit(`evidence-${props.index}-tlp-input`, props.item.tlp, `evidence-${props.index}-tlp`, 'tlp', modifyAssociation, ['evidence', props.item])">
                               <div class="font-weight-bold">{{i18n.caseTlp}}: </div>
@@ -1796,7 +1796,7 @@
                               />
                             </v-select>
                           </v-container>
-                          <v-container fluid class="py-1">
+                          <v-container fluid class="py-2">
                             <div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${props.index}-tags-input`, props.item.tags, `evidence-${props.index}-tags`, 'tags', modifyAssociation, ['evidence', props.item])"
                               @keypress.space.prevent="startEdit(`evidence-${props.index}-tags-input`, props.item.tags, `evidence-${props.index}-tags`, 'tags', modifyAssociation, ['evidence', props.item])">
                               <div class="font-weight-bold">{{i18n.caseTags}}: </div>
@@ -1975,8 +1975,10 @@
                           <span class="rounded ml-2">{{ props.item.kind }}</span>
                         </td>
                         <td class="associated">
-                          <span class="rounded mr-2">{{ props.item.operation }}</span>
-                          <v-icon v-if="props.item.operation == 'update'">fa-pencil-alt</v-icon>
+                          <v-icon v-if="props.item.operation == i18n.create">fa-plus</v-icon>
+                          <v-icon v-if="props.item.operation == i18n.delete">fa-trash</v-icon>
+                          <v-icon v-if="props.item.operation == i18n.update">fa-pencil-alt</v-icon>
+                          <span class="rounded ml-2">{{ props.item.operation }}</span>
                         </td>
                       </tr>
                     </template>

@@ -21,7 +21,7 @@ import (
 
 func TestInit(tester *testing.T) {
 	store := NewElasticCasestore(nil)
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	assert.Equal(tester, "myIndex", store.index)
 	assert.Equal(tester, "myAuditIndex", store.auditIndex)
 	assert.Equal(tester, 45, store.maxAssociations)
@@ -42,7 +42,7 @@ func TestPrepareForSave(tester *testing.T) {
 
 func TestValidateIdInvalid(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 
 	var err error
 	err = store.validateId("", "test")
@@ -69,7 +69,7 @@ func TestValidateIdInvalid(tester *testing.T) {
 
 func TestValidateIdValid(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 
 	var err error
 	err = store.validateId("12345", "test")
@@ -90,7 +90,7 @@ func TestValidateIdValid(tester *testing.T) {
 
 func TestValidateStringInvalid(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 
 	var err error
 	err = store.validateString("1234567", 6, "test")
@@ -102,7 +102,7 @@ func TestValidateStringInvalid(tester *testing.T) {
 
 func TestValidateStringValid(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 
 	var err error
 	err = store.validateString("12345", 6, "test")
@@ -117,7 +117,7 @@ func TestValidateStringValid(tester *testing.T) {
 
 func TestValidateCaseInvalid(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 
 	var err error
 	socCase := model.NewCase()
@@ -227,7 +227,7 @@ func TestValidateCaseInvalid(tester *testing.T) {
 
 func TestValidateCaseValid(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 
 	var err error
 	socCase := model.NewCase()
@@ -260,7 +260,7 @@ func TestValidateCaseValid(tester *testing.T) {
 
 func TestValidateRelatedEventInvalid(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 
 	var err error
 	event := model.NewRelatedEvent()
@@ -296,7 +296,7 @@ func TestValidateRelatedEventInvalid(tester *testing.T) {
 
 func TestValidateRelatedEventValid(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 
 	var err error
 	event := model.NewRelatedEvent()
@@ -307,7 +307,7 @@ func TestValidateRelatedEventValid(tester *testing.T) {
 
 func TestValidateCommentInvalid(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 
 	var err error
 	comment := model.NewComment()
@@ -347,7 +347,7 @@ func TestValidateCommentInvalid(tester *testing.T) {
 
 func TestValidateCommentValid(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 
 	var err error
 	comment := model.NewComment()
@@ -366,7 +366,7 @@ func TestValidateCommentValid(tester *testing.T) {
 
 func TestValidateArtifactInvalid(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 
 	var err error
 	artifact := model.NewArtifact()
@@ -485,7 +485,7 @@ func TestValidateArtifactInvalid(tester *testing.T) {
 
 func TestValidateArtifactValid(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 
 	var err error
 	artifact := model.NewArtifact()
@@ -502,7 +502,7 @@ func TestValidateArtifactValid(tester *testing.T) {
 
 func TestValidateArtifactStreamInvalid(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 
 	var err error
 	artifactstream := model.NewArtifactStream()
@@ -523,7 +523,7 @@ func TestValidateArtifactStreamInvalid(tester *testing.T) {
 
 func TestValidateArtifactStreamValid(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 
 	var err error
 	artifactstream := model.NewArtifactStream()
@@ -538,7 +538,7 @@ func TestValidateArtifactStreamValid(tester *testing.T) {
 
 func TestSaveCreate(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
@@ -551,14 +551,14 @@ func TestSaveCreate(tester *testing.T) {
 	assert.Equal(tester, "myIndex", fakeEventStore.InputIndexes[0])
 	assert.Equal(tester, "myAuditIndex", fakeEventStore.InputIndexes[1])
 	assert.Equal(tester, 2, len(fakeEventStore.InputDocuments))
-	assert.Equal(tester, "case", fakeEventStore.InputDocuments[0]["kind"])
-	assert.Equal(tester, "create", fakeEventStore.InputDocuments[1]["operation"])
+	assert.Equal(tester, "case", fakeEventStore.InputDocuments[0]["so_kind"])
+	assert.Equal(tester, "create", fakeEventStore.InputDocuments[1]["so_operation"])
 	assert.NotNil(tester, results)
 }
 
 func TestSaveUpdate(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
@@ -571,14 +571,14 @@ func TestSaveUpdate(tester *testing.T) {
 	assert.Equal(tester, "myIndex", fakeEventStore.InputIndexes[0])
 	assert.Equal(tester, "myAuditIndex", fakeEventStore.InputIndexes[1])
 	assert.Equal(tester, 2, len(fakeEventStore.InputDocuments))
-	assert.Equal(tester, "case", fakeEventStore.InputDocuments[0]["kind"])
-	assert.Equal(tester, "update", fakeEventStore.InputDocuments[1]["operation"])
+	assert.Equal(tester, "case", fakeEventStore.InputDocuments[0]["so_kind"])
+	assert.Equal(tester, "update", fakeEventStore.InputDocuments[1]["so_operation"])
 	assert.NotNil(tester, results)
 }
 
 func TestDelete(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
@@ -591,24 +591,25 @@ func TestDelete(tester *testing.T) {
 	assert.Equal(tester, "myIndex", fakeEventStore.InputIndexes[0])
 	assert.Equal(tester, "myAuditIndex", fakeEventStore.InputIndexes[1])
 	assert.Equal(tester, 1, len(fakeEventStore.InputDocuments))
-	assert.Equal(tester, "case", fakeEventStore.InputDocuments[0]["kind"])
-	assert.Equal(tester, "delete", fakeEventStore.InputDocuments[0]["operation"])
+	assert.Equal(tester, "case", fakeEventStore.InputDocuments[0]["so_kind"])
+	assert.Equal(tester, "delete", fakeEventStore.InputDocuments[0]["so_operation"])
 }
 
 func TestGetAll(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 	query := "some query"
 	casePayload := make(map[string]interface{})
-	casePayload["kind"] = "case"
+	casePayload["so_kind"] = "case"
 	caseEvent := &model.EventRecord{
 		Payload: casePayload,
 	}
 
 	commentPayload := make(map[string]interface{})
-	commentPayload["kind"] = "comment"
+	commentPayload["so_kind"] = "comment"
 	commentEvent := &model.EventRecord{
 		Payload: commentPayload,
 	}
@@ -624,13 +625,13 @@ func TestGetAll(tester *testing.T) {
 
 func TestGet(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myIndex" AND kind:"case" AND _id:"myCaseId"`
+	query := `_index:"myIndex" AND so_kind:"case" AND _id:"myCaseId"`
 	casePayload := make(map[string]interface{})
-	casePayload["kind"] = "case"
+	casePayload["so_kind"] = "case"
 	caseEvent := &model.EventRecord{
 		Payload: casePayload,
 	}
@@ -644,7 +645,7 @@ func TestGet(tester *testing.T) {
 
 func TestGetNotFound(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
@@ -679,13 +680,13 @@ func TestUpdateError(tester *testing.T) {
 
 func TestGetCase(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myIndex" AND kind:"case" AND _id:"myCaseId"`
+	query := `_index:"myIndex" AND so_kind:"case" AND _id:"myCaseId"`
 	casePayload := make(map[string]interface{})
-	casePayload["kind"] = "case"
+	casePayload["so_kind"] = "case"
 	caseEvent := &model.EventRecord{
 		Payload: casePayload,
 	}
@@ -699,13 +700,13 @@ func TestGetCase(tester *testing.T) {
 
 func TestGetCaseHistory(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myAuditIndex" AND (so_audit_doc_id:"myCaseId" OR comment.caseId:"myCaseId" OR related.caseId:"myCaseId" OR artifact.caseId:"myCaseId") | sortby @timestamp^`
+	query := `_index:"myAuditIndex" AND (so_audit_doc_id:"myCaseId" OR so_comment.caseId:"myCaseId" OR so_related.caseId:"myCaseId" OR so_artifact.caseId:"myCaseId") | sortby @timestamp^`
 	casePayload := make(map[string]interface{})
-	casePayload["kind"] = "case"
+	casePayload["so_kind"] = "case"
 	caseEvent := &model.EventRecord{
 		Payload: casePayload,
 	}
@@ -740,19 +741,19 @@ func TestCreateCommentMissingCaseId(tester *testing.T) {
 
 func TestCreateComment(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
 	casePayload := make(map[string]interface{})
-	casePayload["kind"] = "case"
+	casePayload["so_kind"] = "case"
 	caseEvent := &model.EventRecord{
 		Payload: casePayload,
 		Id:      "123444",
 	}
 	commentPayload := make(map[string]interface{})
-	commentPayload["kind"] = "comment"
+	commentPayload["so_kind"] = "comment"
 	commentEvent := &model.EventRecord{
 		Payload: commentPayload,
 	}
@@ -772,13 +773,13 @@ func TestCreateComment(tester *testing.T) {
 
 func TestGetComment(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myIndex" AND kind:"comment" AND _id:"myCommentId"`
+	query := `_index:"myIndex" AND so_kind:"comment" AND _id:"myCommentId"`
 	commentPayload := make(map[string]interface{})
-	commentPayload["kind"] = "comment"
+	commentPayload["so_kind"] = "comment"
 	commentEvent := &model.EventRecord{
 		Payload: commentPayload,
 	}
@@ -792,13 +793,13 @@ func TestGetComment(tester *testing.T) {
 
 func TestGetComments(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myIndex" AND kind:"comment" AND comment.caseId:"myCaseId" | sortby comment.createTime^`
+	query := `_index:"myIndex" AND so_kind:"comment" AND so_comment.caseId:"myCaseId" | sortby so_comment.createTime^`
 	commentPayload := make(map[string]interface{})
-	commentPayload["kind"] = "comment"
+	commentPayload["so_kind"] = "comment"
 	commentEvent := &model.EventRecord{
 		Payload: commentPayload,
 	}
@@ -822,13 +823,13 @@ func TestUpdateComment(tester *testing.T) {
 
 func TestDeleteComment(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myIndex" AND kind:"comment" AND _id:"myCommentId"`
+	query := `_index:"myIndex" AND so_kind:"comment" AND _id:"myCommentId"`
 	commentPayload := make(map[string]interface{})
-	commentPayload["kind"] = "comment"
+	commentPayload["so_kind"] = "comment"
 	commentEvent := &model.EventRecord{
 		Payload: commentPayload,
 		Id:      "myCommentId",
@@ -875,19 +876,19 @@ func TestCreateRelatedEventMissingFields(tester *testing.T) {
 
 func TestCreateRelatedEvent(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
 	casePayload := make(map[string]interface{})
-	casePayload["kind"] = "case"
+	casePayload["so_kind"] = "case"
 	caseEvent := &model.EventRecord{
 		Payload: casePayload,
 		Id:      "123444",
 	}
 	eventPayload := make(map[string]interface{})
-	eventPayload["kind"] = "related"
+	eventPayload["so_kind"] = "related"
 	elasticEvent := &model.EventRecord{
 		Payload: eventPayload,
 	}
@@ -907,14 +908,14 @@ func TestCreateRelatedEvent(tester *testing.T) {
 
 func TestCreateRelatedEventAlreadyExists(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
 	// Mock the search for case cll
 	casePayload := make(map[string]interface{})
-	casePayload["kind"] = "case"
+	casePayload["so_kind"] = "case"
 	caseEvent := &model.EventRecord{
 		Payload: casePayload,
 		Id:      "123444",
@@ -923,7 +924,7 @@ func TestCreateRelatedEventAlreadyExists(tester *testing.T) {
 
 	// Mock the search for existing related events call
 	eventPayload := make(map[string]interface{})
-	eventPayload["kind"] = "related"
+	eventPayload["so_kind"] = "related"
 	eventPayload["soc_id"] = "myEventId"
 	elasticEvent := &model.EventRecord{
 		Payload: eventPayload,
@@ -941,13 +942,13 @@ func TestCreateRelatedEventAlreadyExists(tester *testing.T) {
 
 func TestGetRelatedEvent(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myIndex" AND kind:"related" AND _id:"myEventId"`
+	query := `_index:"myIndex" AND so_kind:"related" AND _id:"myEventId"`
 	eventPayload := make(map[string]interface{})
-	eventPayload["kind"] = "related"
+	eventPayload["so_kind"] = "related"
 	elasticEvent := &model.EventRecord{
 		Payload: eventPayload,
 	}
@@ -961,13 +962,13 @@ func TestGetRelatedEvent(tester *testing.T) {
 
 func TestGetRelatedEvents(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myIndex" AND kind:"related" AND related.caseId:"myCaseId" | sortby related.fields.timestamp^`
+	query := `_index:"myIndex" AND so_kind:"related" AND so_related.caseId:"myCaseId" | sortby so_related.fields.timestamp^`
 	eventPayload := make(map[string]interface{})
-	eventPayload["kind"] = "related"
+	eventPayload["so_kind"] = "related"
 	elasticEvent := &model.EventRecord{
 		Payload: eventPayload,
 	}
@@ -981,13 +982,13 @@ func TestGetRelatedEvents(tester *testing.T) {
 
 func TestDeleteRelatedEvent(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myIndex" AND kind:"related" AND _id:"myEventId"`
+	query := `_index:"myIndex" AND so_kind:"related" AND _id:"myEventId"`
 	elasticPayload := make(map[string]interface{})
-	elasticPayload["kind"] = "related"
+	elasticPayload["so_kind"] = "related"
 	elasticEvent := &model.EventRecord{
 		Payload: elasticPayload,
 		Id:      "myEventId",
@@ -1063,19 +1064,19 @@ func TestCreateArtifactMissingValue(tester *testing.T) {
 
 func TestCreateArtifact(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
 	casePayload := make(map[string]interface{})
-	casePayload["kind"] = "case"
+	casePayload["so_kind"] = "case"
 	caseEvent := &model.EventRecord{
 		Payload: casePayload,
 		Id:      "123444",
 	}
 	eventPayload := make(map[string]interface{})
-	eventPayload["kind"] = "artifact"
+	eventPayload["so_kind"] = "artifact"
 	elasticEvent := &model.EventRecord{
 		Payload: eventPayload,
 	}
@@ -1097,13 +1098,13 @@ func TestCreateArtifact(tester *testing.T) {
 
 func TestGetArtifact(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myIndex" AND kind:"artifact" AND _id:"myArtifactId"`
+	query := `_index:"myIndex" AND so_kind:"artifact" AND _id:"myArtifactId"`
 	eventPayload := make(map[string]interface{})
-	eventPayload["kind"] = "artifact"
+	eventPayload["so_kind"] = "artifact"
 	elasticEvent := &model.EventRecord{
 		Payload: eventPayload,
 	}
@@ -1117,7 +1118,7 @@ func TestGetArtifact(tester *testing.T) {
 
 func TestGetArtifactsBadGroupType(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
@@ -1127,7 +1128,7 @@ func TestGetArtifactsBadGroupType(tester *testing.T) {
 
 func TestGetArtifactsBadGroupId(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
@@ -1137,13 +1138,13 @@ func TestGetArtifactsBadGroupId(tester *testing.T) {
 
 func TestGetArtifactsNoGroupId(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myIndex" AND kind:"artifact" AND artifact.caseId:"myCaseId" AND artifact.groupType:"myGroupType" | sortby artifact.createTime^`
+	query := `_index:"myIndex" AND so_kind:"artifact" AND so_artifact.caseId:"myCaseId" AND so_artifact.groupType:"myGroupType" | sortby so_artifact.createTime^`
 	eventPayload := make(map[string]interface{})
-	eventPayload["kind"] = "artifact"
+	eventPayload["so_kind"] = "artifact"
 	elasticEvent := &model.EventRecord{
 		Payload: eventPayload,
 	}
@@ -1157,13 +1158,13 @@ func TestGetArtifactsNoGroupId(tester *testing.T) {
 
 func TestGetArtifacts(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myIndex" AND kind:"artifact" AND artifact.caseId:"myCaseId" AND artifact.groupType:"myGroupType" AND artifact.groupId:"myGroupId" | sortby artifact.createTime^`
+	query := `_index:"myIndex" AND so_kind:"artifact" AND so_artifact.caseId:"myCaseId" AND so_artifact.groupType:"myGroupType" AND so_artifact.groupId:"myGroupId" | sortby so_artifact.createTime^`
 	eventPayload := make(map[string]interface{})
-	eventPayload["kind"] = "artifact"
+	eventPayload["so_kind"] = "artifact"
 	elasticEvent := &model.EventRecord{
 		Payload: eventPayload,
 	}
@@ -1177,13 +1178,13 @@ func TestGetArtifacts(tester *testing.T) {
 
 func TestDeleteArtifact(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myIndex" AND kind:"artifact" AND _id:"myArtifactId"`
+	query := `_index:"myIndex" AND so_kind:"artifact" AND _id:"myArtifactId"`
 	elasticPayload := make(map[string]interface{})
-	elasticPayload["kind"] = "artifact"
+	elasticPayload["so_kind"] = "artifact"
 	elasticEvent := &model.EventRecord{
 		Payload: elasticPayload,
 		Id:      "myArtifactId",
@@ -1221,19 +1222,19 @@ func TestCreateArtifactStreamMissingValue(tester *testing.T) {
 
 func TestCreateArtifactStream(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
 	casePayload := make(map[string]interface{})
-	casePayload["kind"] = "artifactstream"
+	casePayload["so_kind"] = "artifactstream"
 	caseEvent := &model.EventRecord{
 		Payload: casePayload,
 		Id:      "123444",
 	}
 	eventPayload := make(map[string]interface{})
-	eventPayload["kind"] = "artifactstream"
+	eventPayload["so_kind"] = "artifactstream"
 	elasticEvent := &model.EventRecord{
 		Payload: eventPayload,
 	}
@@ -1252,13 +1253,13 @@ func TestCreateArtifactStream(tester *testing.T) {
 
 func TestGetArtifactStream(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myIndex" AND kind:"artifactstream" AND _id:"myArtifactStreamId"`
+	query := `_index:"myIndex" AND so_kind:"artifactstream" AND _id:"myArtifactStreamId"`
 	eventPayload := make(map[string]interface{})
-	eventPayload["kind"] = "artifactstream"
+	eventPayload["so_kind"] = "artifactstream"
 	elasticEvent := &model.EventRecord{
 		Payload: eventPayload,
 	}
@@ -1272,7 +1273,7 @@ func TestGetArtifactStream(tester *testing.T) {
 
 func TestGetArtifactStreamBadId(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
@@ -1282,13 +1283,13 @@ func TestGetArtifactStreamBadId(tester *testing.T) {
 
 func TestDeleteArtifactStream(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myIndex" AND kind:"artifactstream" AND _id:"myArtifactStreamId"`
+	query := `_index:"myIndex" AND so_kind:"artifactstream" AND _id:"myArtifactStreamId"`
 	elasticPayload := make(map[string]interface{})
-	elasticPayload["kind"] = "artifactstream"
+	elasticPayload["so_kind"] = "artifactstream"
 	elasticEvent := &model.EventRecord{
 		Payload: elasticPayload,
 		Id:      "myArtifactStreamId",
@@ -1305,25 +1306,25 @@ func TestDeleteArtifactStream(tester *testing.T) {
 
 func TestUpdateArtifact(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
-	store.Init("myIndex", "myAuditIndex", 45)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
-	query := `_index:"myIndex" AND kind:"artifact" AND _id:"myArtifactId"`
+	query := `_index:"myIndex" AND so_kind:"artifact" AND _id:"myArtifactId"`
 	eventPayload := make(map[string]interface{})
-	eventPayload["kind"] = "artifact"
-	eventPayload["artifact.artifactType"] = "myArtifactType"
-	eventPayload["artifact.groupType"] = "myGroupType"
-	eventPayload["artifact.groupId"] = "myGroupId"
-	eventPayload["artifact.value"] = "myValue"
-	eventPayload["artifact.streamLength"] = 123.0
-	eventPayload["artifact.mimeType"] = "myMimeType"
-	eventPayload["artifact.md5"] = "myMd5"
-	eventPayload["artifact.sha1"] = "mySha1"
-	eventPayload["artifact.sha256"] = "mySha256"
-	eventPayload["artifact.streamId"] = "myStreamId"
-	eventPayload["artifact.description"] = "myDesc"
+	eventPayload["so_kind"] = "artifact"
+	eventPayload["so_artifact.artifactType"] = "myArtifactType"
+	eventPayload["so_artifact.groupType"] = "myGroupType"
+	eventPayload["so_artifact.groupId"] = "myGroupId"
+	eventPayload["so_artifact.value"] = "myValue"
+	eventPayload["so_artifact.streamLength"] = 123.0
+	eventPayload["so_artifact.mimeType"] = "myMimeType"
+	eventPayload["so_artifact.md5"] = "myMd5"
+	eventPayload["so_artifact.sha1"] = "mySha1"
+	eventPayload["so_artifact.sha256"] = "mySha256"
+	eventPayload["so_artifact.streamId"] = "myStreamId"
+	eventPayload["so_artifact.description"] = "myDesc"
 	elasticEvent := &model.EventRecord{
 		Payload: eventPayload,
 	}
@@ -1351,9 +1352,9 @@ func TestUpdateArtifact(tester *testing.T) {
 	_, err = store.UpdateArtifact(ctx, artifact)
 	assert.NoError(tester, err)
 	assert.Equal(tester, query, fakeEventStore.InputSearchCriterias[0].RawQuery)
-	assert.Equal(tester, "update", fakeEventStore.InputDocuments[0]["operation"])
+	assert.Equal(tester, "update", fakeEventStore.InputDocuments[0]["so_operation"])
 
-	newArtifact := fakeEventStore.InputDocuments[0]["artifact"].(*model.Artifact)
+	newArtifact := fakeEventStore.InputDocuments[0]["so_artifact"].(*model.Artifact)
 	assert.Equal(tester, "myNewDesc", newArtifact.Description)
 
 	// Should have preserved read-only props
