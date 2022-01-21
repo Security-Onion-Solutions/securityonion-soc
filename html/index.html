@@ -259,7 +259,7 @@
         </v-row>
         <v-row>
           <v-col class="mx-auto px-12">
-            <div id="motd" :inner-html.prop="motd | formatMarkdown"></div>
+            <div id="motd" class="markdown-body" :inner-html.prop="motd | formatMarkdown"></div>
           </v-col>
           <v-col class="mx-auto text-center">
             <div v-html="i18n.sponsorsIntro" class="mb-6"></div>

@@ -293,6 +293,49 @@ td {
   margin: 8px 0;
 }
 
+.markdown-body table {
+  border-collapse: collapse;
+  margin: 8px 0 24px 0;
+  text-align: left;
+}
+
+.markdown-body td,
+.markdown-body th {
+  padding: 8px;
+}
+ 
+.theme--dark.v-application .markdown-body td,
+.theme--dark.v-application  .markdown-body th {
+  border: 1px solid hsla(0,0%,100%,.1);
+}
+
+.theme--light.v-application .markdown-body td,
+.theme--light.v-application  .markdown-body th {
+  border: 1px solid rgba(0,0,0,.2);
+}
+
+.theme--dark.v-application .markdown-body tr:nth-child(even) {
+  background-color: hsla(0,0%,100%,.05);
+}
+
+.theme--light.v-application .markdown-body tr:nth-child(even) {
+  background-color: rgba(0,0,0,.05);
+}
+
+.markdown-body th {
+  background-color: rgba(0,0,0,.1);
+}
+
+/* motd background is darker, so some markdown table colors need to be different */
+.theme--dark.v-application #motd.markdown-body th {
+  background-color: rgba(0,0,0,.25);
+}
+
+.theme--light.v-application  #motd.markdown-body th {
+  background-color: rgba(0,0,0,.1);
+}
+
+
 .theme--dark.v-application .comment-body .markdown-body {
   background-color: rgba(0,0,0,.2);
 }
