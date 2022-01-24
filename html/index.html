@@ -1344,7 +1344,7 @@
                               </div>
                               <div class="d-flex flex-column flex-sm-row align-sm-center align-self-end text-body-2">
                                 <div class="d-inline-flex align-center mr-1">
-                                  <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex">
+                                  <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text">
                                     <div class="case avatar-font" :title="comment.owner">
                                       {{ $root.getAvatar(comment.owner) }}
                                     </div>
@@ -1381,7 +1381,7 @@
                       <div class="mt-1 mt-md-3 pb-3 pt-1 contrast-bg rounded rounded-md" style="width: 100%;">
                         <div class="d-flex flex-column align-start">
                           <div class="d-inline-flex align-center mt-3 mx-2 mb-4">
-                            <v-avatar color="primary" size="28" class="mr-2">
+                            <v-avatar color="primary" size="28" class="mr-2 white--text">
                               <div class="font-weight-bold" :title="$root.username">
                               {{ $root.getAvatar($root.username) }}
                               </div>
@@ -1434,7 +1434,7 @@
                         <div class="d-flex flex-column" style="width: 100%;">
                         <div class="mb-2">
                           <div class="d-inline-flex align-center mb-3">
-                            <v-avatar color="primary" size="28" class="mr-2">
+                            <v-avatar color="primary" size="28" class="mr-2 white--text">
                               <div class="font-weight-bold" :title="$root.username">
                               {{ $root.getAvatar($root.username) }}
                               </div>
@@ -1594,6 +1594,11 @@
 
                           <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
                             <v-spacer/>
+                            <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text">
+                              <div class="case avatar-font" :title="props.item.owner">
+                                {{ $root.getAvatar(props.item.owner) }}
+                              </div>
+                            </v-avatar>
                             <div class="mr-1">
                               {{ props.item.owner }}
                             </div>
@@ -1644,7 +1649,7 @@
                         <div class="d-flex flex-column" style="width: 100%;">
                         <div class="mb-2">
                           <div class="d-inline-flex align-center mb-3">
-                            <v-avatar color="primary" size="28" class="mr-2">
+                            <v-avatar color="primary" size="28" class="mr-2 white--text">
                               <div class="font-weight-bold" :title="$root.username">
                               {{ $root.getAvatar($root.username) }}
                               </div>
@@ -1826,6 +1831,11 @@
 
                           <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
                             <v-spacer/>
+                            <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text">
+                              <div class="case avatar-font" :title="props.item.owner">
+                                {{ $root.getAvatar(props.item.owner) }}
+                              </div>
+                            </v-avatar>
                             <div class="mr-1">
                               {{ props.item.owner }}
                             </div>
@@ -1908,6 +1918,11 @@
 
                           <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
                             <v-spacer/>
+                            <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text">
+                              <div class="case avatar-font" :title="props.item.owner">
+                                {{ $root.getAvatar(props.item.owner) }}
+                              </div>
+                            </v-avatar>
                             <div class="mr-1">
                               {{ props.item.owner }}
                             </div>
@@ -1958,7 +1973,7 @@
                           </v-btn>
                         </td>
                         <td class="associated">
-                          <v-avatar color="primary" class="mr-1" size="32">
+                          <v-avatar color="primary" class="mr-2 white--text" size="28">
                             <div class="font-weight-bold" :title="props.item.owner">
                               {{ $root.getAvatar(props.item.owner) }}
                             </div>
@@ -2185,6 +2200,11 @@
 
                           <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
                             <v-spacer/>
+                            <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text">
+                              <div class="case avatar-font" :title="props.item.owner">
+                                {{ $root.getAvatar(props.item.owner) }}
+                              </div>
+                            </v-avatar>
                             <div class="mr-1">
                               {{ props.item.owner }}
                             </div>
