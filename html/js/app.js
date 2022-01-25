@@ -54,6 +54,8 @@ $(document).ready(function() {
       infoMessage: "",
       tipMessage: "",
       tipTimeout: 6000,
+      warningTimeout: 30000,
+      errorTimeout: 120000,
       toolbar: null,
       wsUrl: (location.protocol == 'https:' ?  'wss://' : 'ws://') + location.host + location.pathname + 'ws',
       apiUrl: location.origin + location.pathname + 'api/',
