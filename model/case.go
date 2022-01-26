@@ -82,7 +82,7 @@ func NewComment() *Comment {
 type RelatedEvent struct {
   Auditable
   CaseId string                 `json:"caseId"`
-  Fields map[string]interface{} `json:"fields,omitempty"`
+  Fields map[string]interface{} `json:"fields"`
 }
 
 func NewRelatedEvent() *RelatedEvent {
