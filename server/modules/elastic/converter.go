@@ -488,12 +488,8 @@ func convertElasticEventToRelatedEvent(event *model.EventRecord, schemaPrefix st
 		if err == nil {
 			obj.Fields = make(map[string]interface{})
 			for key, value := range event.Payload {
-
-				// The following logic unwinds the complications caused by the special treatment
-				// of related events performed by sibling function convertObjectToDocumentMap().
-				if !strings.HasPrefix(key, "@") &&
-					!strings.HasPrefix(key, "_") &&
-					!strings.HasPrefix(key, schemaPrefix) {
+				if strings.HasPrefix(key, schemaPrefix+"related.fields.") {
+					key = strings.TrimPrefix(key, schemaPrefix+"related.fields.")
 					obj.Fields[key] = value
 				}
 			}
@@ -659,20 +655,6 @@ func convertFromElasticUpdateResults(store *ElasticEventstore, esJson string, re
 func convertObjectToDocumentMap(name string, obj interface{}, schemaPrefix string) map[string]interface{} {
 	doc := make(map[string]interface{})
 	doc[schemaPrefix+name] = obj
-
-	switch name {
-	case "related":
-		// Related events have special handling in order to coerce the original event fields
-		// back to the root of the document. This is needed to re-use existing field mappings
-		related := obj.(*model.RelatedEvent)
-		for k, v := range related.Fields {
-			doc[k] = v
-		}
-
-		// Wipe out fields to avoid duplicating data
-		related.Fields = make(map[string]interface{})
-	}
-
 	doc["@timestamp"] = time.Now()
 	return doc
 }

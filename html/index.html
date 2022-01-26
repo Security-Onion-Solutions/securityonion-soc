@@ -209,8 +209,22 @@
         <v-overlay id="loading" :value="loading">
           <v-progress-circular indeterminate color="primary" width="2" size="64"></v-progress-circular>
         </v-overlay>
-        <v-alert dismissible type="error" icon="fa-exclamation-triangle" v-model="error" transition="scale-transition" v-text="errorMessage"></v-alert>
-        <v-alert dismissible type="warning" icon="fa-exclamation" v-model="warning" transition="scale-transition" v-text="warningMessage"></v-alert>
+        <v-snackbar id="error" top centered rounded close :timeout="errorTimeout" v-model="error" color="error">
+          <template v-slot:action="{ attrs }">
+            <v-btn icon small v-bind="attrs" @click="error = false">
+              <v-icon>fa-times</v-icon>
+            </v-btn>
+          </template>
+          {{ errorMessage }}
+        </v-snackbar>
+        <v-snackbar id="warning" top centered rounded close :timeout="warningTimeout" v-model="warning" color="warning">
+          <template v-slot:action="{ attrs }">
+            <v-btn icon small v-bind="attrs" @click="warning = false">
+              <v-icon>fa-times</v-icon>
+            </v-btn>
+          </template>
+          {{ warningMessage }}
+        </v-snackbar>
         <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" v-text="infoMessage"></v-alert>
         <v-snackbar id="tip" top centered rounded close :timeout="tipTimeout" v-model="tip" color="info">
           <template v-slot:action="{ attrs }">

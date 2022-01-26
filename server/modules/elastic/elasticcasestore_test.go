@@ -925,7 +925,7 @@ func TestCreateRelatedEventAlreadyExists(tester *testing.T) {
 	// Mock the search for existing related events call
 	eventPayload := make(map[string]interface{})
 	eventPayload["so_kind"] = "related"
-	eventPayload["soc_id"] = "myEventId"
+	eventPayload["so_related.fields.soc_id"] = "myEventId"
 	elasticEvent := &model.EventRecord{
 		Payload: eventPayload,
 	}
