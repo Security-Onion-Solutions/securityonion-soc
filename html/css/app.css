@@ -113,6 +113,12 @@
   color: white !important;
 }
 
+.show-all {
+  padding: 10px;
+  border-top: 2px dotted;
+  border-bottom: 2px dotted;
+}
+
 /* Sensoroni-specific element styles */
 .hardwrap {
   word-wrap: break-word;

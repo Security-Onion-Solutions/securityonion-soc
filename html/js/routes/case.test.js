@@ -132,7 +132,6 @@ test('loadAssociations', () => {
   expect(comp.loadAssociation).toHaveBeenCalledWith('evidence');
   expect(comp.loadAssociation).toHaveBeenCalledWith('events');
   expect(comp.loadAssociation).toHaveBeenCalledWith('history');
-  expect(comp.associationsLoading).toBe(false);
 });
 
 test('loadSingleAssociation', async () => {
@@ -156,7 +155,6 @@ test('loadSingleAssociation', async () => {
   expect(mock).toHaveBeenCalledWith('case/comments', params);
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expect(comp.associations['comments'].length).toBe(1);
-  expect(comp.associations['comments'][0].owner).toBe(fakeEmail);
   expect(comp.$root.loading).toBe(false);
 });
 
@@ -678,4 +676,85 @@ test('populateAddObservableForm', () => {
   expect(comp.associatedForms['evidence'].value).toBe('12.34.56.78');
   expect(comp.associatedForms['evidence'].description).toBe('foo');
   expect(comp.associatedForms['evidence'].artifactType).toBe('ip');
+});
+
+test('getUnrenderedCount', () => {
+  // Empty list
+  expect(comp.getUnrenderedCount('comments')).toBe(0);
+
+  // Not quite enough to hide any
+  for (var i = 0; i < 30; i++) {
+    comp.associations['comments'].push({id:i});
+  }
+  expect(comp.getUnrenderedCount('comments')).toBe(0);
+
+  // Now some are hidden
+  for (var i = 0; i < 10; i++) {
+    comp.associations['comments'].push({id:i});
+  }
+  expect(comp.getUnrenderedCount('comments')).toBe(10);
+});
+
+test('renderAllAssociations', () => {
+  expect(comp.associatedTable['comments'].showAll).toBe(false);
+  comp.renderAllAssociations('comments');
+  expect(comp.associatedTable['comments'].showAll).toBe(true);
+});
+
+
+test('shouldRenderShowAll', () => {
+  // Empty list
+  expect(comp.shouldRenderShowAll('comments', 0)).toBe(false);
+  expect(comp.shouldRenderShowAll('comments', 10)).toBe(false);
+
+  // Not quite enough to hide any
+  for (var i = 0; i < 30; i++) {
+    comp.associations['comments'].push({id:i});
+  }
+  expect(comp.shouldRenderShowAll('comments', 0)).toBe(false);
+  expect(comp.shouldRenderShowAll('comments', 10)).toBe(false);
+  expect(comp.shouldRenderShowAll('comments', 14)).toBe(false);
+  expect(comp.shouldRenderShowAll('comments', 20)).toBe(false);
+  expect(comp.shouldRenderShowAll('comments', 30)).toBe(false);
+
+  // Now some are hidden
+  for (var i = 0; i < 30; i++) {
+    comp.associations['comments'].push({id:i});
+  }
+  expect(comp.shouldRenderShowAll('comments', 0)).toBe(false);
+  expect(comp.shouldRenderShowAll('comments', 10)).toBe(false);
+  expect(comp.shouldRenderShowAll('comments', 14)).toBe(true);
+  expect(comp.shouldRenderShowAll('comments', 20)).toBe(false);
+  expect(comp.shouldRenderShowAll('comments', 30)).toBe(false);
+});
+
+test('shouldRenderAssociationRecord', () => {
+  // Empty list
+  expect(comp.shouldRenderAssociationRecord('comments', null, 0)).toBe(true);
+  expect(comp.shouldRenderAssociationRecord('comments', null, 10)).toBe(true);
+
+  // Not quite enough to hide any
+  for (var i = 0; i < 30; i++) {
+    comp.associations['comments'].push({id:i});
+  }
+  expect(comp.shouldRenderAssociationRecord('comments', null, 0)).toBe(true);
+  expect(comp.shouldRenderAssociationRecord('comments', null, 10)).toBe(true);
+  expect(comp.shouldRenderAssociationRecord('comments', null, 14)).toBe(true);
+  expect(comp.shouldRenderAssociationRecord('comments', null, 20)).toBe(true);
+  expect(comp.shouldRenderAssociationRecord('comments', null, 30)).toBe(true);
+
+  // Now some are hidden
+  for (var i = 0; i < 30; i++) {
+    comp.associations['comments'].push({id:i});
+  }
+  expect(comp.shouldRenderAssociationRecord('comments', null, 0)).toBe(true);
+  expect(comp.shouldRenderAssociationRecord('comments', null, 10)).toBe(true);
+  expect(comp.shouldRenderAssociationRecord('comments', null, 14)).toBe(true);
+  expect(comp.shouldRenderAssociationRecord('comments', null, 15)).toBe(false);
+  expect(comp.shouldRenderAssociationRecord('comments', null, 20)).toBe(false);
+  expect(comp.shouldRenderAssociationRecord('comments', null, 30)).toBe(false);
+  expect(comp.shouldRenderAssociationRecord('comments', null, 44)).toBe(false);
+  expect(comp.shouldRenderAssociationRecord('comments', null, 45)).toBe(true);
+  expect(comp.shouldRenderAssociationRecord('comments', null, 50)).toBe(true);
+  expect(comp.shouldRenderAssociationRecord('comments', null, 59)).toBe(true);
 });

@@ -23,7 +23,6 @@ routes.push({ path: '/case/:id', name: 'case', component: {
   data() { return {
     i18n: this.$root.i18n,
     caseObj: {},
-    associationsLoading: false,
     associations: {
       comments: [],
       attachments: [],
@@ -34,6 +33,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     },
     associatedTable: {
       comments: {
+        showAll: false,
         sortBy: 'createTime',
         sortDesc: false,
         search: '',
@@ -156,6 +156,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     maxUploadSizeBytes: 26214400,
     addingAssociation: null,
     activeTab: null,
+    renderAbbreviatedCount: 30,
   }},
   computed: {
   },
@@ -182,6 +183,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     initCase(params) {
       this.params = params;
       this.mruCaseLimit = params["mostRecentlyUsedLimit"];
+      this.renderAbbreviatedCount = params["renderAbbreviatedCount"];
       this.presets = params["presets"];
       if (params["maxUploadSizeBytes"]) {
         this.maxUploadSizeBytes = params.maxUploadSizeBytes;
@@ -234,22 +236,18 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       }
       return name;
     },
-    async loadAssociations() {
-      this.associationsLoading = true;
-
+    loadAssociations() {
       this.reloadAssociation("comments");
       this.reloadAssociation("tasks");
       this.reloadAssociation("attachments");
       this.reloadAssociation("evidence");
       this.reloadAssociation("events");
       this.reloadAssociation("history");
-
-      this.associationsLoading = false;
     },
     async reloadAssociation(association, showLoadingIndicator = false) {
       if (showLoadingIndicator) this.$root.startLoading();
       this.associations[association] = [];
-      this.loadAssociation(association);
+      await this.loadAssociation(association);
       if (showLoadingIndicator) this.$root.stopLoading();
     },
     async loadAssociation(association) {
@@ -263,9 +261,13 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         if (response && response.data) {
           for (var idx = 0; idx < response.data.length; idx++) {
             const obj = response.data[idx];
-            await this.$root.populateUserDetails(obj, "userId", "owner");
+
+            // Don't await the user details -- takes too long for the task scheduler to
+            // complete all these futures when looping across hundreds of records. Let
+            // the UI update as they finish, for a better user experience.
+            this.$root.populateUserDetails(obj, "userId", "owner");
             if (obj.assigneeId) {
-              await this.$root.populateUserDetails(obj, "assigneeId", "assignee");
+              this.$root.populateUserDetails(obj, "assigneeId", "assignee");
             }
             obj.kind = this.$root.localizeMessage(this.mapAssociatedKind(obj));
             obj.operation = this.$root.localizeMessage(obj.operation);
@@ -291,6 +293,46 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           }
         });
       }
+    },
+    getUnrenderedCount(association) {
+      var hiddenCount = 0;
+      if (!this.associatedTable[association].showAll && this.renderAbbreviatedCount) {
+        const count = this.associations[association] ? this.associations[association].length : 0;
+        if (count > this.renderAbbreviatedCount) {
+          hiddenCount = count - this.renderAbbreviatedCount;
+        }
+      }
+      return hiddenCount;
+    },
+    renderAllAssociations(association) {
+      this.associatedTable[association].showAll = true;
+    },
+    shouldRenderShowAll(association, index) {
+      var render = false;
+      if (!this.associatedTable[association].showAll && this.renderAbbreviatedCount) {
+        const count = this.associations[association] ? this.associations[association].length : 0;
+        const lowerCutoff = Math.floor(this.renderAbbreviatedCount / 2);
+        if (count - this.renderAbbreviatedCount > lowerCutoff) {
+          if (index == lowerCutoff-1) {
+            render = true;
+          }
+        }
+      }
+      return render;
+    },
+    shouldRenderAssociationRecord(association, obj, index) {
+      var render = true;
+      if (!this.associatedTable[association].showAll && this.renderAbbreviatedCount) {      
+        const count = this.associations[association] ? this.associations[association].length : 0;
+        const lowerCutoff = Math.floor(this.renderAbbreviatedCount / 2);
+        if (count - this.renderAbbreviatedCount > lowerCutoff) {
+          const upperCutoff = count - lowerCutoff;
+          if (index >= lowerCutoff && index < upperCutoff) {
+            render = false;
+          }
+        }
+      }
+      return render;
     },
     isExpanded(association, row) {
       const expanded = this.associatedTable[association].expanded;
@@ -378,7 +420,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         }});
         this.userList = await this.$root.getUsers();
         await this.updateCaseDetails(response.data);
-        await this.loadAssociations();
+        this.loadAssociations();
       } catch (error) {
         if (error.response != undefined && error.response.status == 404) {
           this.$root.showError(this.i18n.notFound);
@@ -586,6 +628,11 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         case "evidence": 
           form.tlp = this.getDefaultPreset('tlp');
           form.artifactType = this.getDefaultPreset('artifactType');
+          break;
+        case "comments":
+          if (this.$refs) {
+            this.$refs[ref].reset();
+          }
           break;
       }
       this.addingAssociation = null;

@@ -1328,7 +1328,7 @@
                     </v-col>
                   </v-row>  
                   <div id="comment-list">
-                    <div v-for="(comment, index) in associations.comments" class="mb-8">
+                    <div v-for="(comment, index) in associations.comments" class="mb-8" v-if="shouldRenderAssociationRecord('comments', comment, index)">
                       <div class="d-flex flex-column align-start my-4">
                         <v-col class="d-flex flex-column align-start pt-2 pt-md-0">
                           <div class="mt-1 mt-md-3 pt-1 pb-2 px-2 contrast-bg rounded rounded-md" style="width: 100%;">
@@ -1387,7 +1387,15 @@
                             </div>
                           </div>
                         </v-col> 
-                      </div>           
+                      </div>
+                      <div v-if="shouldRenderShowAll('comments', index)" class="d-flex-block justify-center my-4 show-all">
+                        <div class="d-flex justify-center">
+                          <div>{{ getUnrenderedCount('comments') }} {{ i18n.hidden }} {{ i18n.comments }}</div>
+                        </div>
+                        <div class="d-flex justify-center">
+                          <v-btn @click="renderAllAssociations('comments')">{{ i18n.showAll }}</v-btn>
+                        </div>
+                      </div>
                     </div>
                   </div>
                   <div class="d-flex flex-column align-start my-4">
@@ -1408,7 +1416,7 @@
                             </div>
                             <div class="mx-2">
                               <v-form ref="comments" v-model="associatedForms['comments'].valid" @submit.prevent>
-                                <v-textarea id="comment-input" solo flat hide-details="auto" rows="5" color="text--black" v-model="associatedForms['comments'].description" :rules="[rules.required]" class="mb-1" persistent-hint :hint="i18n.commentDescriptionHelp"/>
+                                <v-textarea id="comment-input" solo flat hide-details="auto" rows="5" color="text--black" :value="associatedForms['comments'].description" @change="val => associatedForms['comments'].description = val" :rules="[rules.required]" class="mb-1" persistent-hint :hint="i18n.commentDescriptionHelp"/>
                               </v-form>
                             </div>
                           </div>
@@ -1457,7 +1465,9 @@
                           </div>
                           <v-form ref="attachments" v-model="associatedForms['attachments'].valid" @submit.prevent>
                             <v-file-input id="attachments-file" show-size v-model="attachment" persistent-hint :hint="getAttachmentHelp()" :rules="[rules.fileSizeLimit, rules.fileNotEmpty]"/>
-                            <v-textarea id="attachments-description" rows="2" v-model="associatedForms['attachments'].description" :placeholder="i18n.artifactDescription" persistent-hint :hint="i18n.artifactDescriptionHelp"/>
+                            <v-textarea id="attachments-description" rows="2"
+                            :value="associatedForms['attachments'].description" @change="val => associatedForms['attachments'].description = val"
+                            :placeholder="i18n.artifactDescription" persistent-hint :hint="i18n.artifactDescriptionHelp"/>
                             <v-select id="attachments-tlp" v-if="!isPresetCustomEnabled('tlp')" v-model="associatedForms['attachments'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
                             <v-combobox id="attachments-tlp" v-if="isPresetCustomEnabled('tlp')" v-model="associatedForms['attachments'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
                             <v-select id="attachments-tags" v-if="!isPresetCustomEnabled('tags')" v-model="associatedForms['attachments'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
@@ -1674,8 +1684,8 @@
                             <v-select id="evidence-type" v-if="!isPresetCustomEnabled('artifactType')" v-model="associatedForms['evidence'].artifactType" :items="selectList('artifactType')" persistent-hint :hint="i18n.artifactTypeHelp"/>
                             <v-combobox id="evidence-type" v-if="isPresetCustomEnabled('artifactType')" v-model="associatedForms['evidence'].artifactType" :items="selectList('artifactType')" persistent-hint :hint="i18n.artifactTypeHelp"/>
                             <v-file-input id="evidence-value" v-if="associatedForms['evidence'].artifactType == 'file'" show-size v-model="attachment" persistent-hint :hint="getAttachmentHelp()" :rules="[rules.fileSizeLimit, rules.fileNotEmpty, rules.fileRequired]"/>
-                            <v-textarea id="evidence-value" v-if="associatedForms['evidence'].artifactType != 'file'" rows="2" v-model="associatedForms['evidence'].value" :rules="[rules.required]" :placeholder="i18n.artifactValue" persistent-hint :hint="i18n.artifactValueHelp"/>
-                            <v-textarea id="evidence-description" rows="2" v-model="associatedForms['evidence'].description" :placeholder="i18n.artifactDescription" persistent-hint :hint="i18n.artifactDescriptionHelp"/>
+                            <v-textarea id="evidence-value" v-if="associatedForms['evidence'].artifactType != 'file'" rows="2" :value="associatedForms['evidence'].value" @change="val => associatedForms['evidence'].value = val" :rules="[rules.required]" :placeholder="i18n.artifactValue" persistent-hint :hint="i18n.artifactValueHelp"/>
+                            <v-textarea id="evidence-description" rows="2" :value="associatedForms['evidence'].description" @change="val => associatedForms['evidence'].description = val" :placeholder="i18n.artifactDescription" persistent-hint :hint="i18n.artifactDescriptionHelp"/>
                             <v-checkbox id="evidence-ioc" v-model="associatedForms['evidence'].ioc" persistent-hint :hint="i18n.artifactIocHelp"/>
                             <v-select id="evidence-tlp" v-if="!isPresetCustomEnabled('tlp')" v-model="associatedForms['evidence'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
                             <v-combobox id="evidence-tlp" v-if="isPresetCustomEnabled('tlp')" v-model="associatedForms['evidence'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
