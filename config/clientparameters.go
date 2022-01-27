@@ -145,8 +145,9 @@ type PresetParameters struct {
 }
 
 type CaseParameters struct {
-	MostRecentlyUsedLimit int                         `json:"mostRecentlyUsedLimit"`
-	Presets               map[string]PresetParameters `json:"presets"`
+	MostRecentlyUsedLimit  int                         `json:"mostRecentlyUsedLimit"`
+	RenderAbbreviatedCount int                         `json:"renderAbbreviatedCount"`
+	Presets                map[string]PresetParameters `json:"presets"`
 }
 
 func (params *CaseParameters) Verify() error {

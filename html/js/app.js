@@ -757,7 +757,7 @@ $(document).ready(function() {
         if (obj[idField] && obj[idField].length > 0) {
           const user = await this.$root.getUserById(obj[idField]);
           if (user) {
-            obj[outputField] = user.email;
+            Vue.set(obj, outputField, user.email);
           }
         }
       },
