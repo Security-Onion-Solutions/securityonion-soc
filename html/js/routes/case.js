@@ -630,7 +630,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           form.artifactType = this.getDefaultPreset('artifactType');
           break;
         case "comments":
-          if (this.$refs) {
+          if (this.$refs && this.$refs[ref]) {
             this.$refs[ref].reset();
           }
           break;
