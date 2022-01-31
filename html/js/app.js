@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -7,6 +7,7 @@
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
 const routes = [];
 
 if (typeof global !== 'undefined') global.routes = routes;
@@ -53,6 +54,8 @@ $(document).ready(function() {
       infoMessage: "",
       tipMessage: "",
       tipTimeout: 6000,
+      warningTimeout: 30000,
+      errorTimeout: 120000,
       toolbar: null,
       wsUrl: (location.protocol == 'https:' ?  'wss://' : 'ws://') + location.host + location.pathname + 'ws',
       apiUrl: location.origin + location.pathname + 'api/',
@@ -72,6 +75,7 @@ $(document).ready(function() {
       parameterSection: null,
       chartsInitialized: false,
       tools: [],
+      casesEnabled: false,
       subtitle: '',
       currentStatus: null,
       connected: false,
@@ -254,6 +258,7 @@ $(document).ready(function() {
         const redirectPage = this.getRedirectPage();
         if (redirectPage) {
           location.hash = '#' + redirectPage;
+          this.removeSearchParam('r');
         }
       },
       async loadServerSettings(background) {
@@ -304,6 +309,8 @@ $(document).ready(function() {
                     }
                   }
                 }
+                this.casesEnabled = this.parameters.casesEnabled;
+
                 this.subscribe("status", this.updateStatus);
               }
             } catch (error) {
@@ -328,6 +335,11 @@ $(document).ready(function() {
         const searchParams = new URLSearchParams(window.location.search);
         const value = searchParams.get(param);
         return value;
+      },
+      removeSearchParam(param) {
+        const searchParams = new URLSearchParams(window.location.search);
+        searchParams.delete(param);
+        window.location.search = searchParams.toString();
       },
       loadParameters(section, callback) {
         if (this.parametersLoaded) {
@@ -396,6 +408,11 @@ $(document).ready(function() {
       formatDateTime(date) {
         return this.formatDate(date, this.i18n.dateTimeFormat, this.i18n.dateUnknown);
       },
+      formatLocalTimestamp(date, tz) {
+        var utcTime = moment.utc(date);
+        var localTime = utcTime.tz(tz);
+        return localTime.format(this.i18n.timestampFormat);
+      },
       formatTimestamp(date) {
         return this.formatDate(date, this.i18n.timestampFormat, this.i18n.dateUnknown);
       },
@@ -426,6 +443,26 @@ $(document).ready(function() {
         }
         return "";
       },
+      formatMarkdown(str) {
+        marked.setOptions({
+          renderer: new marked.Renderer(),
+          smartLists: true,
+          breaks: true
+        })
+        marked.use({
+          tokenizer: {
+            url(src) {
+              // Blank function disables bare url tokenization
+            }
+          }
+        })
+        var md = str;
+        if (str) {
+          md = marked(str);
+          md = DOMPurify.sanitize(md);
+        }
+        return md;
+      },
       generateDatePickerPreselects() {
         var preselects = {};
         preselects[this.i18n.datePreselectToday] = [moment().startOf('day'), moment().endOf('day')];
@@ -445,6 +482,7 @@ $(document).ready(function() {
         return preselects;
       },
       localizeMessage(origMsg) {
+        if (!origMsg) return "";
         var msg = origMsg;
         if (msg.response && msg.response.data) {
           msg = msg.response.data;
@@ -467,6 +505,9 @@ $(document).ready(function() {
       showError(msg) {
         this.error = true;
         this.errorMessage = this.localizeMessage(msg);
+        if (this.debug) {
+          console.log(msg.stack);
+        }
       },
       showWarning(msg) {
         this.warning = true;
@@ -683,6 +724,12 @@ $(document).ready(function() {
         
         return "#"+RR+GG+BB;
       },
+      getAvatar(user) {
+        if (user && user.length > 0) {
+          return user.charAt(0).toLocaleUpperCase();
+        }
+        return this.i18n.na;
+      },
       async getUsers() {
         try {
           const response = await this.papi.get('users/');
@@ -706,11 +753,11 @@ $(document).ready(function() {
         }
         return null;
       },
-      async populateJobDetails(job) {
-        if (job.userId && job.userId.length > 0) {
-          const user = await this.$root.getUserById(job.userId);
+      async populateUserDetails(obj, idField, outputField) {
+        if (obj[idField] && obj[idField].length > 0) {
+          const user = await this.$root.getUserById(obj[idField]);
           if (user) {
-            job.owner = user.email;
+            Vue.set(obj, outputField, user.email);
           }
         }
       },
@@ -743,6 +790,7 @@ $(document).ready(function() {
       Vue.filter('formatDateTime', this.formatDateTime);
       Vue.filter('formatDuration', this.formatDuration);
       Vue.filter('formatCount', this.formatCount);
+      Vue.filter('formatMarkdown', this.formatMarkdown);
       Vue.filter('formatTimestamp', this.formatTimestamp);
       $('#app')[0].style.display = "block";
       this.log("Initialization complete");

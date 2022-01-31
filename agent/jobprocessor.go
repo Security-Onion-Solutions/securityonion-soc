@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -11,9 +11,9 @@
 package agent
 
 import (
+  "github.com/security-onion-solutions/securityonion-soc/model"
   "io"
   "time"
-  "github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type JobProcessor interface {

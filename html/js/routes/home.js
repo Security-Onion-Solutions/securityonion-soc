@@ -1,4 +1,4 @@
-// Copyright 2020,2021 Security Onion Solutions. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -24,7 +24,7 @@ routes.push({ path: '/', name: 'home', component: {
       try {
         const response = await this.$root.createApi().get('motd.md?v=' + Date.now());
         if (response.data) {
-          this.motd = marked(response.data);
+          this.motd = response.data;
         }
       } catch (error) {
         this.$root.showError(error);

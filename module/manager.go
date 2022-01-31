@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -16,8 +16,8 @@ import (
 )
 
 type ModuleManager struct {
-  enabled					[]Module
-  stoppedChan	chan string
+  enabled     []Module
+  stoppedChan chan string
 }
 
 func NewModuleManager() *ModuleManager {
@@ -41,12 +41,12 @@ func (mgr *ModuleManager) LaunchModules(available map[string]Module, modules Mod
   return err
 }
 
-func (mgr *ModuleManager) initModules(available map[string]Module, modules ModuleConfigMap, skipFailures bool) (map[string]Module, error) {	
+func (mgr *ModuleManager) initModules(available map[string]Module, modules ModuleConfigMap, skipFailures bool) (map[string]Module, error) {
   var err error
   initialized := make(map[string]Module)
   for moduleName, moduleConfig := range modules {
     log.WithField("module", moduleName).Info("Initializing module")
-    
+
     instance := available[moduleName]
     if instance == nil {
       log.WithField("module", moduleName).Error("Module does not exist")
@@ -67,7 +67,7 @@ func (mgr *ModuleManager) initModules(available map[string]Module, modules Modul
           }
         }
       }
-    }	
+    }
   }
   return initialized, err
 }
@@ -78,17 +78,17 @@ func (mgr *ModuleManager) meetsPrerequisites(prereqs []string, modules ModuleCon
       return false
     }
   }
-  return true 
+  return true
 }
 
-func (mgr *ModuleManager)startModules(modules map[string]Module, skipFailures bool) {
+func (mgr *ModuleManager) startModules(modules map[string]Module, skipFailures bool) {
   for name, instance := range modules {
     go mgr.runModule(name, instance)
     mgr.enabled = append(mgr.enabled, instance)
   }
 }
 
-func (mgr *ModuleManager)runModule(name string, module Module) {
+func (mgr *ModuleManager) runModule(name string, module Module) {
   log.WithField("module", name).Info("Starting module")
   err := module.Start()
   if err != nil {
@@ -107,7 +107,7 @@ func (mgr *ModuleManager) TerminateModules() {
 
   completedCount := 0
   for completedCount < len(mgr.enabled) {
-    name := <- mgr.stoppedChan
+    name := <-mgr.stoppedChan
     log.WithField("module", name).Info("Module stopped")
     completedCount++
   }

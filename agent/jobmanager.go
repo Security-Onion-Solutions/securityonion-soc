@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -12,12 +12,12 @@ package agent
 
 import (
   "errors"
+  "github.com/apex/log"
+  "github.com/security-onion-solutions/securityonion-soc/model"
   "io"
   "strconv"
   "sync"
   "time"
-  "github.com/apex/log"
-  "github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type JobManager struct {
@@ -31,10 +31,10 @@ type JobManager struct {
 func NewJobManager(agent *Agent) *JobManager {
   mgr := &JobManager{
     agent: agent,
-    node: model.NewNode(agent.Config.NodeId),
+    node:  model.NewNode(agent.Config.NodeId),
   }
 
-  // Any field/value added to this list must be manually copied to the 
+  // Any field/value added to this list must be manually copied to the
   // existing node object in filedatastoreimpl.go::UpdateNode()
   mgr.node.Role = agent.Config.Role
   mgr.node.Description = agent.Config.Description
@@ -59,7 +59,7 @@ func (mgr *JobManager) Start() {
     } else {
       log.WithField("jobId", job.Id).Info("Discovered pending job")
       var reader io.ReadCloser
-      reader, err = mgr.ProcessJob(job) 
+      reader, err = mgr.ProcessJob(job)
       if err == nil {
         if reader != nil {
           defer reader.Close()
@@ -104,7 +104,7 @@ func (mgr *JobManager) ProcessJob(job *model.Job) (io.ReadCloser, error) {
   for _, processor := range mgr.jobProcessors {
     reader, err = processor.ProcessJob(job, reader)
     if err != nil {
-      log.WithError(err).WithFields(log.Fields {
+      log.WithError(err).WithFields(log.Fields{
         "jobId": job.Id,
       }).Error("Failed to process job; job processing aborted")
       break
@@ -115,7 +115,7 @@ func (mgr *JobManager) ProcessJob(job *model.Job) (io.ReadCloser, error) {
 
 func (mgr *JobManager) CleanupJob(job *model.Job) {
   for _, processor := range mgr.jobProcessors {
-    processor.CleanupJob(job) 
+    processor.CleanupJob(job)
   }
 }
 
@@ -131,7 +131,7 @@ func (mgr *JobManager) updateDataEpoch() {
 }
 
 func (mgr *JobManager) StreamJobResults(job *model.Job, reader io.ReadCloser) error {
-  resp, err := mgr.agent.Client.SendAuthorizedRequest("POST", "/api/stream?jobId=" + strconv.Itoa(job.Id), "application/octet-stream", reader)
+  resp, err := mgr.agent.Client.SendAuthorizedRequest("POST", "/api/stream?jobId="+strconv.Itoa(job.Id), "application/octet-stream", reader)
   if resp.StatusCode != 200 {
     err = errors.New("Unable to submit job results (" + strconv.Itoa(resp.StatusCode) + "): " + resp.Status)
   }

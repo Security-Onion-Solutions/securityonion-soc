@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -12,8 +12,8 @@ package kratos
 
 import (
 	"context"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 	"net/http"
-  "github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type KratosPreprocessor struct {
@@ -34,15 +34,14 @@ func (proc *KratosPreprocessor) Preprocess(ctx context.Context, request *http.Re
 	var statusCode int
 	var err error
 
-  userId := request.Header.Get("x-user-id")
-  if userId != "" {
-  	ctx = context.WithValue(ctx, web.ContextKeyRequestorId, userId)
-  	user, err := proc.userstore.GetUser(ctx, userId)
-  	if err == nil {
-  		ctx = context.WithValue(ctx, web.ContextKeyRequestor, user)
-  	}
-  }
+	userId := request.Header.Get("x-user-id")
+	if userId != "" {
+		ctx = context.WithValue(ctx, web.ContextKeyRequestorId, userId)
+		user, err := proc.userstore.GetUser(ctx, userId)
+		if err == nil {
+			ctx = context.WithValue(ctx, web.ContextKeyRequestor, user)
+		}
+	}
 
-  return ctx, statusCode, err
+	return ctx, statusCode, err
 }
-

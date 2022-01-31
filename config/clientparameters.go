@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -19,6 +19,8 @@ const DEFAULT_MOST_RECENTLY_USED_LIMIT = 5
 type ClientParameters struct {
 	HuntingParams      HuntingParameters `json:"hunt"`
 	AlertingParams     HuntingParameters `json:"alerts"`
+	CasesParams        HuntingParameters `json:"cases"`
+	CaseParams         CaseParameters    `json:"case"`
 	JobParams          HuntingParameters `json:"job"`
 	DocsUrl            string            `json:"docsUrl"`
 	CheatsheetUrl      string            `json:"cheatsheetUrl"`
@@ -30,6 +32,7 @@ type ClientParameters struct {
 	CacheExpirationMs  int               `json:"cacheExpirationMs"`
 	InactiveTools      []string          `json:"inactiveTools"`
 	Tools              []ClientTool      `json:"tools"`
+	CasesEnabled       bool              `json:"casesEnabled"`
 }
 
 func (config *ClientParameters) Verify() error {
@@ -37,6 +40,9 @@ func (config *ClientParameters) Verify() error {
 		return err
 	}
 	if err := config.AlertingParams.Verify(); err != nil {
+		return err
+	}
+	if err := config.CasesParams.Verify(); err != nil {
 		return err
 	}
 	return config.JobParams.Verify()
@@ -70,6 +76,7 @@ type HuntingAction struct {
 	Method                string                 `json:"method"`
 	Body                  string                 `json:"body"`
 	Options               map[string]interface{} `json:"options"`
+	Categories            []string               `json:"categories"`
 }
 
 type ToggleFilter struct {
@@ -82,24 +89,24 @@ type ToggleFilter struct {
 }
 
 type HuntingParameters struct {
-	GroupItemsPerPage     int                 `json:"groupItemsPerPage"`
-	GroupFetchLimit       int                 `json:"groupFetchLimit"`
-	EventItemsPerPage     int                 `json:"eventItemsPerPage"`
-	EventFetchLimit       int                 `json:"eventFetchLimit"`
-	RelativeTimeValue     int                 `json:"relativeTimeValue"`
-	RelativeTimeUnit      int                 `json:"relativeTimeUnit"`
-	MostRecentlyUsedLimit int                 `json:"mostRecentlyUsedLimit"`
-	EventFields           map[string][]string `json:"eventFields"`
-	QueryBaseFilter       string              `json:"queryBaseFilter"`
-	QueryToggleFilters    []*ToggleFilter     `json:"queryToggleFilters"`
-	Queries               []*HuntingQuery     `json:"queries"`
-	Actions               []*HuntingAction    `json:"actions"`
-	Advanced              bool                `json:"advanced"`
-	AckEnabled            bool                `json:"ackEnabled"`
-	EscalateEnabled       bool                `json:"escalateEnabled"`
-}
-
-type GridParameters struct {
+	GroupItemsPerPage            int                 `json:"groupItemsPerPage"`
+	GroupFetchLimit              int                 `json:"groupFetchLimit"`
+	EventItemsPerPage            int                 `json:"eventItemsPerPage"`
+	EventFetchLimit              int                 `json:"eventFetchLimit"`
+	RelativeTimeValue            int                 `json:"relativeTimeValue"`
+	RelativeTimeUnit             int                 `json:"relativeTimeUnit"`
+	MostRecentlyUsedLimit        int                 `json:"mostRecentlyUsedLimit"`
+	EventFields                  map[string][]string `json:"eventFields"`
+	QueryBaseFilter              string              `json:"queryBaseFilter"`
+	QueryToggleFilters           []*ToggleFilter     `json:"queryToggleFilters"`
+	Queries                      []*HuntingQuery     `json:"queries"`
+	Actions                      []*HuntingAction    `json:"actions"`
+	Advanced                     bool                `json:"advanced"`
+	AckEnabled                   bool                `json:"ackEnabled"`
+	EscalateEnabled              bool                `json:"escalateEnabled"`
+	EscalateRelatedEventsEnabled bool                `json:"escalateRelatedEventsEnabled"`
+	ViewEnabled                  bool                `json:"viewEnabled"`
+	CreateLink                   string              `json:"createLink"`
 }
 
 func (params *HuntingParameters) Verify() error {
@@ -130,4 +137,26 @@ func (params *HuntingParameters) combineDeprecatedLinkIntoLinks() {
 			action.Link = ""
 		}
 	}
+}
+
+type PresetParameters struct {
+	Labels        []string `json:"labels"`
+	CustomEnabled bool     `json:"customEnabled"`
+}
+
+type CaseParameters struct {
+	MostRecentlyUsedLimit  int                         `json:"mostRecentlyUsedLimit"`
+	RenderAbbreviatedCount int                         `json:"renderAbbreviatedCount"`
+	Presets                map[string]PresetParameters `json:"presets"`
+}
+
+func (params *CaseParameters) Verify() error {
+	var err error
+	if params.MostRecentlyUsedLimit < 0 {
+		params.MostRecentlyUsedLimit = 0
+	}
+	return err
+}
+
+type GridParameters struct {
 }

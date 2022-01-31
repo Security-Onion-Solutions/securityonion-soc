@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -18,6 +18,7 @@ import (
 
 const DEFAULT_MAX_PACKET_COUNT = 5000
 const DEFAULT_IDLE_CONNECTION_TIMEOUT_MS = 300000
+const DEFAULT_MAX_UPLOAD_SIZE_BYTES = 26214400
 
 type ServerConfig struct {
   AirgapEnabled           bool                   `json:"airgapEnabled"`
@@ -31,6 +32,7 @@ type ServerConfig struct {
   ClientParams            ClientParameters       `json:"client"`
   IdleConnectionTimeoutMs int                    `json:"idleConnectionTimeoutMs"`
   TimezoneScript          string                 `json:"timezoneScript"`
+  MaxUploadSizeBytes      int                    `json:"maxUploadSizeBytes"`
 }
 
 func (config *ServerConfig) Verify() error {
@@ -55,6 +57,9 @@ func (config *ServerConfig) Verify() error {
   }
   if len(config.TimezoneScript) == 0 {
     config.TimezoneScript = "/opt/sensoroni/scripts/timezones.sh"
+  }
+  if config.MaxUploadSizeBytes == 0 {
+    config.MaxUploadSizeBytes = DEFAULT_MAX_UPLOAD_SIZE_BYTES
   }
   return err
 }

@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -12,23 +12,23 @@ package config
 
 import (
   "errors"
-  "os"
   "github.com/security-onion-solutions/securityonion-soc/module"
+  "os"
 )
 
 const DEFAULT_POLL_INTERVAL_MS = 1000
 
 type AgentConfig struct {
-  NodeId                          string                            `json:"nodeId"`
-  Role                            string                            `json:"role"`
-  Description                     string                            `json:"description"`
-  Address                         string                            `json:"address"`
-  Model                           string                            `json:"model"`
-  ServerUrl                       string                            `json:"serverUrl"`
-  VerifyCert                      bool                              `json:"verifyCert"`
-  PollIntervalMs                  int                               `json:"pollIntervalMs"`
-  Modules                         module.ModuleConfigMap            `json:"modules"`
-  ModuleFailuresIgnored           bool                              `json:"moduleFailuresIgnored"`
+  NodeId                string                 `json:"nodeId"`
+  Role                  string                 `json:"role"`
+  Description           string                 `json:"description"`
+  Address               string                 `json:"address"`
+  Model                 string                 `json:"model"`
+  ServerUrl             string                 `json:"serverUrl"`
+  VerifyCert            bool                   `json:"verifyCert"`
+  PollIntervalMs        int                    `json:"pollIntervalMs"`
+  Modules               module.ModuleConfigMap `json:"modules"`
+  ModuleFailuresIgnored bool                   `json:"moduleFailuresIgnored"`
 }
 
 func (config *AgentConfig) Verify() error {

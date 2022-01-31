@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -12,22 +12,22 @@ package web
 
 import (
   "context"
-	"errors"
-	"net/http"
+  "errors"
   "github.com/apex/log"
   "github.com/gorilla/websocket"
   "github.com/security-onion-solutions/securityonion-soc/json"
+  "net/http"
 )
 
 type WebSocketHandler struct {
-	BaseHandler
+  BaseHandler
 }
 
 func NewWebSocketHandler(host *Host) *WebSocketHandler {
-	handler := &WebSocketHandler {}
-	handler.Host = host
-	handler.Impl = handler
-	return handler
+  handler := &WebSocketHandler{}
+  handler.Host = host
+  handler.Impl = handler
+  return handler
 }
 
 func (webSocketHandler *WebSocketHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
@@ -37,16 +37,16 @@ func (webSocketHandler *WebSocketHandler) HandleNow(ctx context.Context, writer 
   if err != nil {
     log.WithError(err).WithFields(log.Fields{
       "remoteAddr": request.RemoteAddr,
-      "sourceIp": ip,
-      "path": request.URL.Path,
+      "sourceIp":   ip,
+      "path":       request.URL.Path,
     }).Warn("Failed to upgrade websocket")
     return http.StatusBadRequest, nil, errors.New("Unable to upgrade request to websocket")
   }
 
   log.WithFields(log.Fields{
     "remoteAddr": request.RemoteAddr,
-    "sourceIp": ip,
-    "path": request.URL.Path,
+    "sourceIp":   ip,
+    "path":       request.URL.Path,
   }).Info("WebSocket connected")
   conn := webSocketHandler.Host.AddConnection(connection, ip)
 
@@ -58,10 +58,10 @@ func (webSocketHandler *WebSocketHandler) HandleNow(ctx context.Context, writer 
     }
     log.WithFields(log.Fields{
       "remoteAddr": request.RemoteAddr,
-      "sourceIp": ip,
-      "path": request.URL.Path,
-      "msg": string(messageBytes),
-      "type": messageType,
+      "sourceIp":   ip,
+      "path":       request.URL.Path,
+      "msg":        string(messageBytes),
+      "type":       messageType,
     }).Info("WebSocket message received")
 
     msg := &WebSocketMessage{}
@@ -70,15 +70,15 @@ func (webSocketHandler *WebSocketHandler) HandleNow(ctx context.Context, writer 
   }
   log.WithFields(log.Fields{
     "remoteAddr": request.RemoteAddr,
-    "sourceIp": ip,
-    "path": request.URL.Path,
+    "sourceIp":   ip,
+    "path":       request.URL.Path,
   }).Info("WebSocket disconnected")
   webSocketHandler.Host.RemoveConnection(connection)
-	return http.StatusOK, nil, nil
+  return http.StatusOK, nil, nil
 }
 
 func (webSocketHandler *WebSocketHandler) handleMessage(msg *WebSocketMessage, conn *Connection) {
   if msg.Kind == "Ping" {
-    conn.UpdatePingTime();
+    conn.UpdatePingTime()
   }
 }

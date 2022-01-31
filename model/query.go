@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -43,7 +43,7 @@ func sanitize(field string) string {
 func NewQueryTerm(str string) (*QueryTerm, error) {
   field := sanitize(str)
   if len(field) == 0 {
-    return nil, errors.New("QUERY_INVALID__TERM_MISSING")
+    return nil, errors.New("ERROR_QUERY_INVALID__TERM_MISSING")
   }
 
   term := &QueryTerm{
@@ -85,6 +85,7 @@ func (segment *BaseSegment) Terms() []*QueryTerm {
 
 const SegmentKind_Search = "search"
 const SegmentKind_GroupBy = "groupby"
+const SegmentKind_SortBy = "sortby"
 
 func NewSegment(kind string, terms []*QueryTerm) (QuerySegment, error) {
   switch kind {
@@ -92,8 +93,10 @@ func NewSegment(kind string, terms []*QueryTerm) (QuerySegment, error) {
     return NewSearchSegment(terms)
   case SegmentKind_GroupBy:
     return NewGroupBySegment(terms)
+  case SegmentKind_SortBy:
+    return NewSortBySegment(terms)
   }
-  return nil, errors.New("QUERY_INVALID__SEGMENT_UNSUPPORTED")
+  return nil, errors.New("ERROR_QUERY_INVALID__SEGMENT_UNSUPPORTED")
 }
 
 func (segment *BaseSegment) TermsAsString() string {
@@ -128,6 +131,41 @@ func (segment *BaseSegment) RemoveTermsWith(raw string) int {
   return removed
 }
 
+func (segment *BaseSegment) RawFields() []string {
+  fields := make([]string, 0, 0)
+  for _, field := range segment.terms {
+    fields = append(fields, field.Raw)
+  }
+  return fields
+}
+
+func (segment *BaseSegment) Fields() []string {
+  fields := make([]string, 0, 0)
+  for _, field := range segment.terms {
+    fields = append(fields, field.String())
+  }
+  return fields
+}
+
+func (segment *BaseSegment) AddField(field string) error {
+  alreadyIncluded := false
+  for _, term := range segment.terms {
+    if term.Raw == field {
+      alreadyIncluded = true
+    }
+  }
+  var err error
+  if !alreadyIncluded {
+    term, err := NewQueryTerm(field)
+    if err == nil {
+      term.Quoted = true
+      term.Quote = '"'
+      segment.terms = append(segment.terms, term)
+    }
+  }
+  return err
+}
+
 type SearchSegment struct {
   *BaseSegment
 }
@@ -142,7 +180,7 @@ func NewSearchSegmentEmpty() *SearchSegment {
 
 func NewSearchSegment(terms []*QueryTerm) (*SearchSegment, error) {
   if terms == nil || len(terms) == 0 {
-    return nil, errors.New("QUERY_INVALID__SEARCH_TERMS_MISSING")
+    return nil, errors.New("ERROR_QUERY_INVALID__SEARCH_TERMS_MISSING")
   }
 
   segment := NewSearchSegmentEmpty()
@@ -168,7 +206,7 @@ func (segment *SearchSegment) escape(value string) string {
 func (segment *SearchSegment) AddFilter(field string, value string, scalar bool, inclusive bool) error {
   // This flag can be adjust to true once the query parser is more robust and better able to determine
   // when an inclusive filter already exists in a query, so that two inclusive filters are not allowed
-  // to exist in a query together. For example, the following filters will prevent any matches: 
+  // to exist in a query together. For example, the following filters will prevent any matches:
   // Ex: foo:1 AND foo:2
   alreadyFiltered := false
 
@@ -221,7 +259,7 @@ func NewGroupBySegmentEmpty() *GroupBySegment {
 
 func NewGroupBySegment(terms []*QueryTerm) (*GroupBySegment, error) {
   if terms == nil || len(terms) == 0 {
-    return nil, errors.New("QUERY_INVALID__GROUPBY_TERMS_MISSING")
+    return nil, errors.New("ERROR_QUERY_INVALID__GROUPBY_TERMS_MISSING")
   }
 
   segment := NewGroupBySegmentEmpty()
@@ -238,30 +276,35 @@ func (segment *GroupBySegment) String() string {
   return segment.Kind() + " " + segment.TermsAsString()
 }
 
-func (segment *GroupBySegment) Fields() []string {
-  fields := make([]string, 0, 0)
-  for _, field := range segment.terms {
-    fields = append(fields, field.String())
-  }
-  return fields
+type SortBySegment struct {
+  *BaseSegment
 }
 
-func (segment *GroupBySegment) AddGrouping(group string) error {
-  fields := segment.Fields()
-  alreadyGrouped := false
-  for _, field := range fields {
-    if field == group {
-      alreadyGrouped = true
-    }
+func NewSortBySegmentEmpty() *SortBySegment {
+  return &SortBySegment{
+    &BaseSegment{
+      terms: make([]*QueryTerm, 0, 0),
+    },
   }
-  var err error
-  if !alreadyGrouped {
-    term, err := NewQueryTerm(group)
-    if err == nil {
-      segment.terms = append(segment.terms, term)
-    }
+}
+
+func NewSortBySegment(terms []*QueryTerm) (*SortBySegment, error) {
+  if terms == nil || len(terms) == 0 {
+    return nil, errors.New("ERROR_QUERY_INVALID__SORTBY_TERMS_MISSING")
   }
-  return err
+
+  segment := NewSortBySegmentEmpty()
+  segment.terms = terms
+
+  return segment, nil
+}
+
+func (segment *SortBySegment) Kind() string {
+  return SegmentKind_SortBy
+}
+
+func (segment *SortBySegment) String() string {
+  return segment.Kind() + " " + segment.TermsAsString()
 }
 
 type Query struct {
@@ -329,7 +372,7 @@ func (query *Query) Parse(str string) error {
             currentTermBuilder.Reset()
           }
           if len(currentSegmentTerms) == 0 {
-            return errors.New("QUERY_INVALID__SEGMENT_EMPTY")
+            return errors.New("ERROR_QUERY_INVALID__SEGMENT_EMPTY")
           }
           if currentSegmentKind == "" {
             currentSegmentKind = currentSegmentTerms[0].String()
@@ -354,13 +397,13 @@ func (query *Query) Parse(str string) error {
         } else if !escaping && ch == '(' {
           grouping++
         } else if !escaping && ch == ')' {
-          return errors.New("QUERY_INVALID__GROUP_NOT_STARTED")
+          return errors.New("ERROR_QUERY_INVALID__GROUP_NOT_STARTED")
         } else {
           currentTermBuilder.WriteRune(ch)
         }
       } else if !escaping && ch == ')' && grouping == 1 {
         if currentTermBuilder.Len() == 0 {
-          return errors.New("QUERY_INVALID__GROUP_EMPTY")
+          return errors.New("ERROR_QUERY_INVALID__GROUP_EMPTY")
         }
         term, err := NewQueryTerm(currentTermBuilder.String())
         if err != nil {
@@ -398,10 +441,10 @@ func (query *Query) Parse(str string) error {
     }
   }
   if quoting {
-    return errors.New("QUERY_INVALID__QUOTE_INCOMPLETE")
+    return errors.New("ERROR_QUERY_INVALID__QUOTE_INCOMPLETE")
   }
   if grouping > 0 {
-    return errors.New("QUERY_INVALID__GROUP_INCOMPLETE")
+    return errors.New("ERROR_QUERY_INVALID__GROUP_INCOMPLETE")
   }
   if currentTermBuilder.Len() > 0 {
     term, err := NewQueryTerm(currentTermBuilder.String())
@@ -426,7 +469,7 @@ func (query *Query) Parse(str string) error {
   }
 
   if len(query.Segments) == 0 {
-    return errors.New("QUERY_INVALID__SEARCH_MISSING")
+    return errors.New("ERROR_QUERY_INVALID__SEARCH_MISSING")
   }
 
   return nil
@@ -476,7 +519,21 @@ func (query *Query) Group(field string) (string, error) {
     query.AddSegment(segment)
   }
   groupBySegment := segment.(*GroupBySegment)
-  err = groupBySegment.AddGrouping(field)
+  err = groupBySegment.AddField(field)
+
+  return query.String(), err
+}
+
+func (query *Query) Sort(field string) (string, error) {
+  var err error
+
+  segment := query.NamedSegment(SegmentKind_SortBy)
+  if segment == nil {
+    segment = NewSortBySegmentEmpty()
+    query.AddSegment(segment)
+  }
+  sortBySegment := segment.(*SortBySegment)
+  err = sortBySegment.AddField(field)
 
   return query.String(), err
 }

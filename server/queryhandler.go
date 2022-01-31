@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -83,6 +83,9 @@ func (queryHandler *QueryHandler) get(ctx context.Context, writer http.ResponseW
 	case "grouped":
 		field := request.Form.Get("field")
 		alteredQuery, err = query.Group(field)
+	case "sorted":
+		field := request.Form.Get("field")
+		alteredQuery, err = query.Sort(field)
 	default:
 		return http.StatusBadRequest, nil, errors.New("Unsupported query operation")
 	}

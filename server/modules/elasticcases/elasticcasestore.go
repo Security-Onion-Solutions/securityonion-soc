@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -12,6 +12,7 @@ package elasticcases
 import (
   "context"
   "encoding/base64"
+  "errors"
   "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/server"
   "github.com/security-onion-solutions/securityonion-soc/web"
@@ -64,4 +65,84 @@ func (store *ElasticCasestore) Create(ctx context.Context, socCase *model.Case) 
     newCase, err = convertFromElasticCase(&outputCase)
   }
   return newCase, err
+}
+
+func (store *ElasticCasestore) Update(ctx context.Context, socCase *model.Case) (*model.Case, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) GetCase(ctx context.Context, caseId string) (*model.Case, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) GetCaseHistory(ctx context.Context, caseId string) ([]interface{}, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) CreateComment(ctx context.Context, comment *model.Comment) (*model.Comment, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) GetComment(ctx context.Context, commentId string) (*model.Comment, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) GetComments(ctx context.Context, commentId string) ([]*model.Comment, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) UpdateComment(ctx context.Context, comment *model.Comment) (*model.Comment, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) DeleteComment(ctx context.Context, id string) error {
+  return errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) CreateRelatedEvent(ctx context.Context, event *model.RelatedEvent) (*model.RelatedEvent, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) GetRelatedEvent(ctx context.Context, id string) (*model.RelatedEvent, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) GetRelatedEvents(ctx context.Context, caseId string) ([]*model.RelatedEvent, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) DeleteRelatedEvent(ctx context.Context, id string) error {
+  return errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) CreateArtifact(ctx context.Context, attachment *model.Artifact) (*model.Artifact, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) GetArtifact(ctx context.Context, id string) (*model.Artifact, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) GetArtifacts(ctx context.Context, caseId string, groupType string, groupId string) ([]*model.Artifact, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) DeleteArtifact(ctx context.Context, id string) error {
+  return errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) UpdateArtifact(ctx context.Context, artifact *model.Artifact) (*model.Artifact, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) CreateArtifactStream(ctx context.Context, artifactstream *model.ArtifactStream) (string, error) {
+  return "", errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) GetArtifactStream(ctx context.Context, id string) (*model.ArtifactStream, error) {
+  return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) DeleteArtifactStream(ctx context.Context, id string) error {
+  return errors.New("Unsupported operation by this module")
 }

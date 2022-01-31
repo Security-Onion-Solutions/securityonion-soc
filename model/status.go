@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -9,27 +9,26 @@
 
 package model
 
-import (
-)
+import ()
 
 type Status struct {
-  Grid        *GridStatus     `json:"grid"`
-  Alerts      *AlertsStatus   `json:"alerts"`
+  Grid   *GridStatus   `json:"grid"`
+  Alerts *AlertsStatus `json:"alerts"`
 }
 
 type GridStatus struct {
-  TotalNodeCount      int     `json:"totalNodeCount"`
-  UnhealthyNodeCount  int     `json:"unhealthyNodeCount"`
-  Eps                 int     `json:"eps"`
+  TotalNodeCount     int `json:"totalNodeCount"`
+  UnhealthyNodeCount int `json:"unhealthyNodeCount"`
+  Eps                int `json:"eps"`
 }
 
 type AlertsStatus struct {
-  NewCount      int     `json:"newCount"`
+  NewCount int `json:"newCount"`
 }
 
 func NewStatus() *Status {
   newStatus := &Status{
-    Grid: &GridStatus{},
+    Grid:   &GridStatus{},
     Alerts: &AlertsStatus{},
   }
   return newStatus

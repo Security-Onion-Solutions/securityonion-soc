@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -33,7 +33,7 @@ func TestConvertFromTheHiveCase(tester *testing.T) {
 	assert.Nil(tester, err)
 	assert.Equal(tester, thehiveCase.Title, socCase.Title)
 	assert.Equal(tester, thehiveCase.Description, socCase.Description)
-	assert.Equal(tester, thehiveCase.Severity, socCase.Severity)
+	assert.Equal(tester, "3", socCase.Severity)
 	assert.Equal(tester, strconv.Itoa(thehiveCase.Id), socCase.Id)
 
 	tm := socCase.CreateTime.Format(time.RFC3339)
@@ -50,7 +50,7 @@ func TestConvertToTheHiveCase(tester *testing.T) {
 	socCase := model.NewCase()
 	socCase.Title = "my title"
 	socCase.Description = "my description.\nline 2.\n"
-	socCase.Severity = 3
+	socCase.Severity = "low"
 	socCase.Id = "my id"
 	socCase.Template = "someTemplate"
 
@@ -59,7 +59,24 @@ func TestConvertToTheHiveCase(tester *testing.T) {
 
 	assert.Equal(tester, thehiveCase.Title, socCase.Title)
 	assert.Equal(tester, thehiveCase.Description, socCase.Description)
-	assert.Equal(tester, thehiveCase.Severity, socCase.Severity)
+	assert.Equal(tester, thehiveCase.Severity, 1)
 	assert.Len(tester, thehiveCase.Tags, 1)
 	assert.Equal(tester, thehiveCase.Template, socCase.Template)
+}
+
+func TestConvertSeverity(tester *testing.T) {
+	assert.Equal(tester, 3, convertSeverity(""))
+	assert.Equal(tester, 3, convertSeverity("unknown"))
+	assert.Equal(tester, 1, convertSeverity("low"))
+	assert.Equal(tester, 1, convertSeverity("Low"))
+	assert.Equal(tester, 1, convertSeverity("1"))
+	assert.Equal(tester, 2, convertSeverity("medium"))
+	assert.Equal(tester, 2, convertSeverity("Medium"))
+	assert.Equal(tester, 2, convertSeverity("2"))
+	assert.Equal(tester, 3, convertSeverity("high"))
+	assert.Equal(tester, 3, convertSeverity("High"))
+	assert.Equal(tester, 3, convertSeverity("3"))
+	assert.Equal(tester, 4, convertSeverity("critical"))
+	assert.Equal(tester, 4, convertSeverity("4"))
+	assert.Equal(tester, 4, convertSeverity("Critical"))
 }

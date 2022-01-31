@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -11,12 +11,12 @@ package elastic
 
 import (
   "crypto/tls"
-  "net"
-  "net/http"
-  "time"
   "github.com/apex/log"
   "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/web"
+  "net"
+  "net/http"
+  "time"
 )
 
 type ElasticTransport struct {
@@ -34,7 +34,7 @@ func NewElasticTransport(user string, pass string, timeoutMs time.Duration, veri
   }
 
   if len(user) > 0 && len(pass) > 0 {
-    return &ElasticTransport {
+    return &ElasticTransport{
       internal: httpTransport,
     }
   }
@@ -44,10 +44,10 @@ func NewElasticTransport(user string, pass string, timeoutMs time.Duration, veri
 
 func (transport *ElasticTransport) RoundTrip(req *http.Request) (*http.Response, error) {
   if user, ok := req.Context().Value(web.ContextKeyRequestor).(*model.User); ok {
-    log.WithFields(log.Fields {
-      "username": user.Email,
+    log.WithFields(log.Fields{
+      "username":       user.Email,
       "searchUsername": user.SearchUsername,
-      "requestId": req.Context().Value(web.ContextKeyRequestId),
+      "requestId":      req.Context().Value(web.ContextKeyRequestId),
     }).Debug("Executing Elastic request on behalf of user")
     username := user.Email
     if user.SearchUsername != "" {

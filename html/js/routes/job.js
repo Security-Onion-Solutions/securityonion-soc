@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -52,6 +52,9 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     this.loadData();
     this.$root.loadParameters('job', this.initActions);
   },
+  beforeDestroy() {
+    this.$root.setSubtitle("");
+  },  
   destroyed() {
     this.$root.unsubscribe("job", this.updateJob);
   },
@@ -230,11 +233,12 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
             jobId: this.$route.params.jobId
         }});
         this.job = response.data;
-        this.$root.populateJobDetails(this.job);
+        this.$root.populateUserDetails(this.job, "userId", "owner");
+        this.$root.setSubtitle(this.i18n.jobs + " - " + this.job.id); 
         this.loadPackets(this.isOptionEnabled('unwrap'));
       } catch (error) {
         if (error.response != undefined && error.response.status == 404) {
-          this.$root.showError(this.i18n.jobNotFound);
+          this.$root.showError(this.i18n.notFound);
         } else {
           this.$root.showError(error);
         }

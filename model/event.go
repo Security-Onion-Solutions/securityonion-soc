@@ -1,4 +1,4 @@
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -50,6 +50,11 @@ func NewEventSearchResults() *EventSearchResults {
 	return results
 }
 
+type SortCriteria struct {
+	Field string
+	Order string
+}
+
 type EventSearchCriteria struct {
 	RawQuery    string `json:"query"`
 	DateRange   string `json:"dateRange"`
@@ -59,6 +64,7 @@ type EventSearchCriteria struct {
 	EndTime     time.Time
 	CreateTime  time.Time
 	ParsedQuery *Query
+	SortFields  []*SortCriteria
 }
 
 func (criteria *EventSearchCriteria) initSearchCriteria() {
@@ -118,7 +124,8 @@ type EventMetric struct {
 }
 
 type EventRecord struct {
-	Source    string                 `json:"source"`
+	Source    string `json:"source"`
+	Time      time.Time
 	Timestamp string                 `json:"timestamp"`
 	Id        string                 `json:"id"`
 	Type      string                 `json:"type"`
@@ -173,4 +180,14 @@ type EventAckCriteria struct {
 
 func NewEventAckCriteria() *EventAckCriteria {
 	return &EventAckCriteria{}
+}
+
+type EventIndexResults struct {
+	Success    bool   `json:"success"`
+	DocumentId string `json:"id"`
+}
+
+func NewEventIndexResults() *EventIndexResults {
+	results := &EventIndexResults{}
+	return results
 }

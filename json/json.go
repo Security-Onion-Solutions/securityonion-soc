@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -12,8 +12,8 @@ package json
 
 import (
   "encoding/json"
-  "io/ioutil"
   "github.com/apex/log"
+  "io/ioutil"
 )
 
 func WriteJsonFile(filename string, obj interface{}) error {
@@ -22,7 +22,7 @@ func WriteJsonFile(filename string, obj interface{}) error {
     err = ioutil.WriteFile(filename, bytes, 0644)
   }
   if err != nil {
-    log.WithError(err).WithFields(log.Fields{ 
+    log.WithError(err).WithFields(log.Fields{
       "filename": filename,
     }).Errorf("Error writing json object: %T", err)
   }
@@ -46,11 +46,11 @@ func LoadJson(content []byte, obj interface{}) error {
   err := json.Unmarshal(content, &obj)
   if err != nil {
     if jsonErr, ok := err.(*json.SyntaxError); ok {
-      log.WithError(err).WithFields(log.Fields{ 
+      log.WithError(err).WithFields(log.Fields{
         "offset": jsonErr.Offset,
       }).Error("Syntax error reading json object")
     } else if jsonErr, ok := err.(*json.UnmarshalTypeError); ok {
-      log.WithError(err).WithFields(log.Fields{ 
+      log.WithError(err).WithFields(log.Fields{
         "offset": jsonErr.Offset,
       }).Error("Unmarshal error reading json object")
     } else {

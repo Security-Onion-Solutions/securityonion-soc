@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -64,7 +64,7 @@ func (server *Server) Start() {
   } else {
     log.Info("Starting server")
 
-    server.Host.Register("/api/case", NewCaseHandler(server))
+    server.Host.Register("/api/case/", NewCaseHandler(server))
     server.Host.Register("/api/events/", NewEventHandler(server))
     server.Host.Register("/api/info", NewInfoHandler(server))
     server.Host.Register("/api/job/", NewJobHandler(server))

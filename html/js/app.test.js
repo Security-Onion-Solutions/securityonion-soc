@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -43,6 +43,11 @@ test('base64encode', () => {
   expect(app.base64encode('hello')).toBe('aGVsbG8=');
 });
 
+test('formatMarkdown', () => {
+  expect(app.formatMarkdown('```code```')).toBe('<p><code>code</code></p>\n');
+  expect(app.formatMarkdown('<scripts src="https://somebad.place"></script>bad')).toBe('<p>bad</p>\n');
+});
+
 test('formatStringArray', () => {
   expect(app.formatStringArray(['hi','there','foo'])).toBe('hi, there, foo');
   expect(app.formatStringArray(['hi','there'])).toBe('hi, there');
@@ -66,4 +71,74 @@ test('generateDatePickerPreselects', () => {
   expect(preselects[app.i18n.datePreselect4dToNow].length).toBe(2);
   expect(preselects[app.i18n.datePreselect7dToNow].length).toBe(2);
   expect(preselects[app.i18n.datePreselect30dToNow].length).toBe(2);
+});
+
+test('populateUserDetailsEmpty', async () => {
+  const obj = {};
+  await app.populateUserDetails(obj, "userId", "owner")
+  expect(obj.owner).toBe(undefined);
+});
+
+test('populateUserDetailsNonEmptyNoUser', async () => {
+  const obj = {userId:'123'}
+  app.users = [{id:'111',email:'hi@there.net'}];
+  app.usersLoadedTime = new Date().time;
+  await app.populateUserDetails(obj, "userId", "owner")
+  expect(obj.owner).toBe(undefined);
+});
+
+test('populateUserDetails', async () => {
+  const obj = {userId:'123'};
+  app.users = [{id:'123',email:'hi@there.net'}];
+  app.usersLoadedTime = new Date().time;
+  await app.populateUserDetails(obj, "userId", "owner")
+  expect(obj.owner).toBe('hi@there.net');
+});
+
+test('loadServerSettings', async () => {
+  const fakeInfo = {
+    version: 'myVersion',
+    license: 'myLicense',
+    parameters: {
+      webSocketTimeoutMs: 456,
+      apiTimeoutMs: 123,
+      cacheExpirationMs: 789,
+      tipTimeoutMs: 222,
+      tools: [{"name": "tool1"},{"name": "tool2"}],
+      inactiveTools: ['tool2'],
+      casesEnabled: true
+    },
+    elasticVersion: 'myElasticVersion',
+    wazuhVersion: 'myWazuhVersion',
+    timezones: ['UTC'],
+    userId: 'myUserId'
+  };
+
+  expect(app.casesEnabled).toBe(false);
+  const getElementByIdMock = global.document.getElementById = jest.fn().mockReturnValueOnce(true);
+  resetPapi();
+  const mock = mockPapi("get", {data: fakeInfo});
+  const showErrorMock = mockShowError();
+  await app.loadServerSettings();
+  expect(mock).toHaveBeenCalledWith('info');
+  expect(showErrorMock).toHaveBeenCalledTimes(0);
+  expect(app.version).toBe('myVersion');
+  expect(app.license).toBe('myLicense');
+  expect(app.elasticVersion).toBe('myElasticVersion');
+  expect(app.wazuhVersion).toBe('myWazuhVersion');
+  expect(app.timezones[0]).toBe('UTC');
+  expect(app.wsConnectionTimeout).toBe(456);
+  expect(app.connectionTimeout).toBe(123);
+  expect(app.cacheRefreshIntervalMs).toBe(789);
+  expect(app.tipTimeout).toBe(222);
+  expect(app.tools[0].name).toBe('tool1');
+  expect(app.tools[0].enabled).toBe(true);
+  expect(app.tools[1].name).toBe('tool2');
+  expect(app.tools[1].enabled).toBe(false);
+  expect(app.casesEnabled).toBe(true);
+});
+
+test('localizeMessage', () => {
+  expect(app.localizeMessage(null)).toBe("");
+  expect(app.localizeMessage('create')).toBe("Create");
 });

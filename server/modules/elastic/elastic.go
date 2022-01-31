@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -11,10 +11,14 @@
 package elastic
 
 import (
+  "errors"
   "github.com/security-onion-solutions/securityonion-soc/module"
   "github.com/security-onion-solutions/securityonion-soc/server"
 )
 
+const DEFAULT_CASE_INDEX = "*:so-case"
+const DEFAULT_CASE_AUDIT_INDEX = "*:so-casehistory"
+const DEFAULT_CASE_ASSOCIATIONS_MAX = 1000
 const DEFAULT_TIME_SHIFT_MS = 120000
 const DEFAULT_DURATION_MS = 1800000
 const DEFAULT_ES_SEARCH_OFFSET_MS = 1800000
@@ -23,6 +27,8 @@ const DEFAULT_CACHE_MS = 86400000
 const DEFAULT_INDEX = "*:so-*"
 const DEFAULT_ASYNC_THRESHOLD = 10
 const DEFAULT_INTERVALS = 25
+const DEFAULT_MAX_LOG_LENGTH = 1024
+const DEFAULT_CASE_SCHEMA_PREFIX = "so_"
 
 type Elastic struct {
   config module.ModuleConfig
@@ -59,9 +65,27 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
   index := module.GetStringDefault(cfg, "index", DEFAULT_INDEX)
   asyncThreshold := module.GetIntDefault(cfg, "asyncThreshold", DEFAULT_ASYNC_THRESHOLD)
   intervals := module.GetIntDefault(cfg, "intervals", DEFAULT_INTERVALS)
-  err := elastic.store.Init(host, remoteHosts, username, password, verifyCert, timeShiftMs, defaultDurationMs, esSearchOffsetMs, timeoutMs, cacheMs, index, asyncThreshold, intervals)
+  maxLogLength := module.GetIntDefault(cfg, "maxLogLength", DEFAULT_MAX_LOG_LENGTH)
+  casesEnabled := module.GetBoolDefault(cfg, "casesEnabled", true)
+  err := elastic.store.Init(host, remoteHosts, username, password, verifyCert, timeShiftMs, defaultDurationMs,
+    esSearchOffsetMs, timeoutMs, cacheMs, index, asyncThreshold, intervals, maxLogLength)
   if err == nil && elastic.server != nil {
     elastic.server.Eventstore = elastic.store
+    if casesEnabled {
+      if elastic.server.Casestore != nil {
+        err = errors.New("Multiple case modules cannot be enabled concurrently")
+      } else {
+        caseIndex := module.GetStringDefault(cfg, "caseIndex", DEFAULT_CASE_INDEX)
+        auditIndex := module.GetStringDefault(cfg, "auditIndex", DEFAULT_CASE_AUDIT_INDEX)
+        maxCaseAssociations := module.GetIntDefault(cfg, "maxCaseAssociations", DEFAULT_CASE_ASSOCIATIONS_MAX)
+        schemaPrefix := module.GetStringDefault(cfg, "schemaPrefix", DEFAULT_CASE_SCHEMA_PREFIX)
+        casestore := NewElasticCasestore(elastic.server)
+        err = casestore.Init(caseIndex, auditIndex, maxCaseAssociations, schemaPrefix)
+        if err == nil {
+          elastic.server.Casestore = casestore
+        }
+      }
+    }
   }
   return err
 }

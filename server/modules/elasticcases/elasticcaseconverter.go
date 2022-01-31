@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2021 Security Onion Solutions, LLC. All rights reserved.
+// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
 //
 // This program is distributed under the terms of version 2 of the
 // GNU General Public License.  See LICENSE for further details.
@@ -39,13 +39,13 @@ func convertFromElasticCase(inputCase *ElasticCase) (*model.Case, error) {
 	outputCase.Id = inputCase.Id
 	outputCase.Status = inputCase.Status
 	if inputCase.CreatedDate != nil {
-		outputCase.CreateTime = *inputCase.CreatedDate
+		outputCase.CreateTime = inputCase.CreatedDate
 	}
 	if inputCase.ModifiedDate != nil {
-		outputCase.StartTime = *inputCase.ModifiedDate
+		outputCase.UpdateTime = inputCase.ModifiedDate
 	}
 	if inputCase.ClosedDate != nil {
-		outputCase.CompleteTime = *inputCase.ClosedDate
+		outputCase.CompleteTime = inputCase.ClosedDate
 	}
 	return outputCase, nil
 }
