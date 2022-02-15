@@ -21,6 +21,7 @@ type User struct {
   Email          string    `json:"email"`
   FirstName      string    `json:"firstName"`
   LastName       string    `json:"lastName"`
+  MfaStatus      string    `json:"mfaStatus"`
   Note           string    `json:"note"`
   Roles          []string  `json:"roles"`
   Status         string    `json:"status"`

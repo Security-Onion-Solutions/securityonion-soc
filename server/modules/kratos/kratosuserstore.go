@@ -82,6 +82,13 @@ func (kratos *KratosUserstore) GetUsers(ctx context.Context) ([]*model.User, err
   users := make([]*model.User, 0, 0)
   for _, kratosUser := range kratosUsers {
     user := model.NewUser()
+
+    // If the requesting user has write access to all users, then also fetch the detailed
+    // data about each user.
+    if err := kratos.server.CheckAuthorized(ctx, "write", "users"); err == nil {
+      kratos.populateUserDetails(ctx, kratosUser)
+    }
+
     kratosUser.copyToUser(user)
     if kratos.server.Rolestore != nil {
       kratos.server.Rolestore.PopulateUserRoles(ctx, user)
@@ -89,6 +96,16 @@ func (kratos *KratosUserstore) GetUsers(ctx context.Context) ([]*model.User, err
     users = append(users, user)
   }
   return users, nil
+}
+
+func (kratos *KratosUserstore) populateUserDetails(ctx context.Context, kratosUser *KratosUser) {
+  log.Info("Populating user details for " + kratosUser.Id)
+  _, err := kratos.client.SendObject("GET", "/identities/"+kratosUser.Id, "", &kratosUser, false)
+  if err != nil {
+    log.WithError(err).WithFields(log.Fields{
+      "requestId": ctx.Value(web.ContextKeyRequestId),
+    }).Error("Failed to fetch user details from Kratos")
+  }
 }
 
 func (kratos *KratosUserstore) DeleteUser(ctx context.Context, id string) error {
