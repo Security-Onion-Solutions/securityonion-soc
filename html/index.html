@@ -2636,7 +2636,7 @@
                       <v-text-field name="traits.note" v-model="profileForm.note" :placeholder="i18n.note" type="text" type="text":rules="[rules.maxlen]"></v-text-field>
                       <v-text-field name="csrf_token" v-model="profileForm.csrfToken" class="d-none"></v-text-field>
                       <v-text-field name="method" value="profile" class="d-none"></v-text-field>
-                      <v-btn type="submit" color="primary" :disabled="!profileForm.valid" v-text="i18n.save"></v-btn>
+                      <v-btn id="settingsProfileChangeSubmit" type="submit" color="primary" :disabled="!profileForm.valid" v-text="i18n.save"></v-btn>
                     </v-form>
                   </v-card-text>
                 </v-card>
@@ -2655,7 +2655,7 @@
                       <v-text-field :placeholder="i18n.passwordConfirm" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.maxpasslen, rules.matches]"></v-text-field>
                       <v-text-field name="csrf_token" v-model="passwordForm.csrfToken" class="d-none"></v-text-field>
                       <v-text-field name="method" value="password" class="d-none"></v-text-field>
-                      <v-btn type="submit" color="primary" :disabled="!passwordForm.valid" v-text="i18n.save"></v-btn>
+                      <v-btn  id="settingsPasswordChangeSubmit" type="submit" color="primary" :disabled="!passwordForm.valid" v-text="i18n.save"></v-btn>
                     </v-form>
                   </v-card-text>
                 </v-card>
@@ -2674,7 +2674,7 @@
                       <v-text-field name="totp_code" autocomplete="off" v-model="totpForm.code" :placeholder="i18n.totpCodeHelp" type="text" :rules="[rules.required, rules.mintotplen, rules.maxtotplen]"></v-text-field>
                       <v-text-field name="csrf_token" v-model="totpForm.csrfToken" class="d-none"></v-text-field>
                       <v-text-field name="method" value="totp" class="d-none"></v-text-field>
-                      <v-btn type="submit" color="primary" :disabled="!totpForm.valid" v-text="i18n.totpActivate"></v-btn>
+                      <v-btn id="settingsTotpActivateSubmit" type="submit" color="primary" :disabled="!totpForm.valid" v-text="i18n.totpActivate"></v-btn>
                     </v-form>
                   </v-card-text>
                 </v-card>
@@ -2686,7 +2686,7 @@
                       <div class="mb-4" v-text="i18n.totpUnlinkInstructions"></div>
                       <v-text-field name="csrf_token" v-model="totpForm.csrfToken" class="d-none"></v-text-field>
                       <v-text-field name="totp_unlink" value="true" class="d-none"></v-text-field>
-                      <v-btn type="submit" color="primary" v-text="i18n.totpDeactivate"></v-btn>
+                      <v-btn id="settingsTotpDeactivateSubmit" type="submit" color="primary" v-text="i18n.totpDeactivate"></v-btn>
                     </v-form>
                   </v-card-text>
                 </v-card>
