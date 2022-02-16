@@ -52,13 +52,23 @@ func NewAddresses(email string) []*KratosAddress {
 	return addresses
 }
 
+type KratosCredential struct {
+	Type        string    `json:"type"`
+	Identifiers []string  `json:"identifiers"`
+	CreateDate  time.Time `json:"created_at"`
+	UpdateDate  time.Time `json:"updated_at"`
+}
+
 type KratosUser struct {
-	Id        string           `json:"id"`
-	SchemaId  string           `json:"schema_id"`
-	SchemaUrl string           `json:"schema_url"`
-	State     string           `json:"state"`
-	Traits    *KratosTraits    `json:"traits"`
-	Addresses []*KratosAddress `json:"verifiable_addresses"`
+	Id          string                       `json:"id"`
+	SchemaId    string                       `json:"schema_id"`
+	SchemaUrl   string                       `json:"schema_url"`
+	State       string                       `json:"state"`
+	Traits      *KratosTraits                `json:"traits"`
+	Addresses   []*KratosAddress             `json:"verifiable_addresses"`
+	Credentials map[string]*KratosCredential `json:"credentials"`
+	CreateDate  time.Time                    `json:"created_at"`
+	UpdateDate  time.Time                    `json:"updated_at"`
 }
 
 func NewKratosUser(email string, firstName string, lastName string, note string, state string) *KratosUser {
@@ -80,6 +90,13 @@ func (kratosUser *KratosUser) copyToUser(user *model.User) {
 		user.Status = "locked"
 	} else {
 		user.Status = ""
+	}
+	if len(kratosUser.Credentials) > 0 {
+		if kratosUser.Credentials["totp"] != nil {
+			user.MfaStatus = "enabled"
+		} else {
+			user.MfaStatus = "disabled"
+		}
 	}
 }
 

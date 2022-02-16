@@ -17,9 +17,11 @@ routes.push({ path: '*', name: 'login', component: {
       valid: false,
       email: null,
       password: null,
+      totpCode: null,
       csrfToken: null,
       method: null,
     },
+    totpCodeLength: 6,
     rules: {
       required: value => !!value || this.$root.i18n.required,
     },
@@ -47,6 +49,16 @@ routes.push({ path: '*', name: 'login', component: {
         response = await this.$root.authApi.get('login/flows?id=' + this.$root.getAuthFlowId());
         this.form.csrfToken = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'csrf_token').attributes.value;
         this.form.method = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'method').attributes.value;
+        this.$nextTick(function () {
+          // Wait for next Vue tick to set focus, since at the time of this function call (or even mounted() hook), this element won't be 
+          // loaded, due to v-if's that have yet to process.
+          if (this.form.method == "totp") {
+            const ele = document.getElementById("totp--0");
+            if (ele) {
+              ele.focus();
+            }
+          }
+        });
         if (response.data.ui.messages) {
           const error = response.data.ui.messages.find(item => item.type == "error");
           if (error && error.text) {
@@ -61,5 +73,10 @@ routes.push({ path: '*', name: 'login', component: {
         }
       }
     },
-  }
+    submitTotp(code) {
+      this.form.totpCode = code;
+      document.getElementById("totp_code").value = code;
+      document.getElementById("loginForm").submit();
+    }
+  },
 }});

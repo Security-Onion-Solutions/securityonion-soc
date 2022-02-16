@@ -19,7 +19,7 @@
     <link rel="mask-icon" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
     <link rel="alternate icon" class="so-favicon" type="image/png" href="images/favicon/onion.png?v=VERSION_PLACEHOLDER">
     <link rel="icon" class="so-favicon" type="image/svg+xml" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
-    <link rel="stylesheet" href="css/external/vuetify-v2.4.7.min.css">
+    <link rel="stylesheet" href="css/external/vuetify-v2.6.3.min.css">
     <link rel="stylesheet" href="css/external/all-5.15.2.min.css">
     <link rel="stylesheet" href="css/external/daterangepicker-3.1.0.css">
     <link rel="stylesheet" href="css/app.css?v=VERSION_PLACEHOLDER">
@@ -906,8 +906,9 @@
                   <td v-text="props.item.note"></td>
                   <td v-text="$root.formatStringArray(props.item.roles)"></td>
                   <td>
-                    <v-icon v-if="props.item.status != 'locked'" :title="i18n.loginEnabled">fa-check</v-icon>
-                    <v-icon v-if="props.item.status == 'locked'" :title="i18n.loginDisabled">fa-lock</v-icon>
+                    <v-icon v-if="props.item.mfaStatus == 'enabled' && props.item.status != 'locked'" :title="i18n.totpEnabled">fa-user-shield</v-icon>
+                    <v-icon v-if="props.item.mfaStatus != 'enabled' && props.item.status != 'locked'" :title="i18n.loginEnabled">fa-user</v-icon>
+                    <v-icon v-if="props.item.status == 'locked'" :title="i18n.loginDisabled">fa-user-slash</v-icon>
                   </td>
                   <td>
                     <router-link :to="{ name: 'user', params: {id: props.item.id}}" :style="{ cursor: 'pointer'}">
@@ -2595,7 +2596,7 @@
         </v-row>
         <v-row>
           <v-col>
-            <v-tabs>
+            <v-tabs grow>
 
               <v-tab id="userSettings_generalTab">
                 <v-icon left>fa-cogs</v-icon>
@@ -2611,7 +2612,8 @@
               </v-tab>
 
               <v-tab-item>
-                <v-card>
+                <v-card outlined class="my-4">
+                  <v-card-title>{{ i18n.defaults }}</v-card-title>
                   <v-card-text>
                     <div v-text="i18n.resetDefaultsHint"></div>
                     <p/>
@@ -2621,32 +2623,70 @@
               </v-tab-item>
 
               <v-tab-item>
-                <v-card>
+                <v-alert class="mt-2" type="warning" icon="fa-key" text dense>
+                  {{ i18n.profileInstructions }}
+                </v-alert>
+                <v-card outlined class="my-4">
+                  <v-card-title>{{ i18n.profileDetails }}</v-card-title>
                   <v-card-text>
                     <v-form v-model="profileForm.valid" method="post" :action="authSettingsUrl">
-                      <div v-text="i18n.profileInstructions"></div>
                       <v-text-field name="traits.email" v-model="profileForm.email" :placeholder="i18n.email" :rules="[rules.required, rules.minemaillen]" class="d-none"></v-text-field>
                       <v-text-field name="traits.firstName" v-model="profileForm.firstName" :placeholder="i18n.firstName" type="text":rules="[rules.maxlen]"></v-text-field>
                       <v-text-field name="traits.lastName" v-model="profileForm.lastName" :placeholder="i18n.lastName" type="text" type="text":rules="[rules.maxlen]"></v-text-field>
                       <v-text-field name="traits.note" v-model="profileForm.note" :placeholder="i18n.note" type="text" type="text":rules="[rules.maxlen]"></v-text-field>
                       <v-text-field name="csrf_token" v-model="profileForm.csrfToken" class="d-none"></v-text-field>
                       <v-text-field name="method" value="profile" class="d-none"></v-text-field>
-                      <v-btn type="submit" color="primary" :disabled="!profileForm.valid" v-text="i18n.save"></v-btn>
+                      <v-btn id="settingsProfileChangeSubmit" type="submit" color="primary" :disabled="!profileForm.valid" v-text="i18n.save"></v-btn>
                     </v-form>
                   </v-card-text>
                 </v-card>
               </v-tab-item>
 
               <v-tab-item>
-                <v-card>
+                <v-alert class="mt-2" type="warning" icon="fa-key" text dense>
+                  {{ i18n.securityInstructions }}
+                </v-alert>
+                <v-card outlined class="my-4">
+                  <v-card-title>{{ i18n.password }}</v-card-title>
                   <v-card-text>
                     <v-form v-model="passwordForm.valid" method="post" :action="authSettingsUrl">
-                      <div v-text="i18n.passwordInstructions"></div>
-                      <v-text-field name="password" v-model="passwordForm.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.maxpasslen]"></v-text-field>
+                      <div class="mb-4" v-text="i18n.passwordInstructions"></div>
+                      <v-text-field name="password" v-model="passwordForm.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.minpasslen, rules.maxpasslen]"></v-text-field>
                       <v-text-field :placeholder="i18n.passwordConfirm" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.maxpasslen, rules.matches]"></v-text-field>
                       <v-text-field name="csrf_token" v-model="passwordForm.csrfToken" class="d-none"></v-text-field>
                       <v-text-field name="method" value="password" class="d-none"></v-text-field>
-                      <v-btn type="submit" color="primary" :disabled="!passwordForm.valid" v-text="i18n.save"></v-btn>
+                      <v-btn  id="settingsPasswordChangeSubmit" type="submit" color="primary" :disabled="!passwordForm.valid" v-text="i18n.save"></v-btn>
+                    </v-form>
+                  </v-card-text>
+                </v-card>
+                
+                <v-card outlined class="my-4" v-if="totpForm.qr && totpForm.secret">
+                  <v-card-title>{{ i18n.totp }}</v-card-title>
+                  <v-card-text>
+                    <v-form v-model="totpForm.valid" method="post" :action="authSettingsUrl">
+                      <div class="mb-4" v-text="i18n.totpQrInstructions"></div>
+                      <v-img id="totp-qr" class="my-4" width="320" :src="totpForm.qr"></v-img>
+                      <div id="totp-secret" v-text="i18n.totpSecretInstructions"></div>
+                      <div class="my-4 mx-4">
+                        {{ totpForm.secret }}
+                        <v-icon class="ml-1" @click="$root.copyToClipboard(totpForm.secret)" :title="i18n.copyToClipboard">fa-copy</v-icon>
+                      </div>
+                      <v-text-field name="totp_code" autocomplete="off" v-model="totpForm.code" :placeholder="i18n.totpCodeHelp" type="text" :rules="[rules.required, rules.mintotplen, rules.maxtotplen]"></v-text-field>
+                      <v-text-field name="csrf_token" v-model="totpForm.csrfToken" class="d-none"></v-text-field>
+                      <v-text-field name="method" value="totp" class="d-none"></v-text-field>
+                      <v-btn id="settingsTotpActivateSubmit" type="submit" color="primary" :disabled="!totpForm.valid" v-text="i18n.totpActivate"></v-btn>
+                    </v-form>
+                  </v-card-text>
+                </v-card>
+
+                <v-card outlined class="my-4" v-if="unlink_totp_available">
+                  <v-card-title>{{ i18n.totp }}</v-card-title>
+                  <v-card-text>
+                    <v-form method="post" :action="authSettingsUrl">
+                      <div class="mb-4" v-text="i18n.totpUnlinkInstructions"></div>
+                      <v-text-field name="csrf_token" v-model="totpForm.csrfToken" class="d-none"></v-text-field>
+                      <v-text-field name="totp_unlink" value="true" class="d-none"></v-text-field>
+                      <v-btn id="settingsTotpDeactivateSubmit" type="submit" color="primary" v-text="i18n.totpDeactivate"></v-btn>
                     </v-form>
                   </v-card-text>
                 </v-card>
@@ -2661,7 +2701,7 @@
     <script src="js/external/jquery-3.6.0.min.js"></script>
     <script src="js/external/vue-2.6.14.min.js"></script>
     <script src="js/external/vue-router-3.5.2.min.js"></script>
-    <script src="js/external/vuetify-v2.5.8.min.js"></script>
+    <script src="js/external/vuetify-v2.6.3.min.js"></script>
     <script src="js/external/axios-0.21.4.min.js"></script>
     <script src="js/external/moment-2.29.1.min.js"></script>
     <script src="js/external/moment-timezone-with-data-0.5.33.min.js"></script>
