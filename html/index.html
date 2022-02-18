@@ -2661,6 +2661,9 @@
                 </v-card>
                 
                 <v-card outlined class="my-4" v-if="totpForm.qr && totpForm.secret">
+                  <v-alert type="error" border="bottom" colored-border text dense>
+                    {{ i18n.securityInstructionsTotp }}
+                  </v-alert>
                   <v-card-title>{{ i18n.totp }}</v-card-title>
                   <v-card-text>
                     <v-form v-model="totpForm.valid" method="post" :action="authSettingsUrl">
