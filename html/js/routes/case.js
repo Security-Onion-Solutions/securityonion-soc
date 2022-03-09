@@ -10,7 +10,7 @@
 
 const MAX_TIMEOUT_ATTEMPTS=20;
 const ipRegex = /^[0-9a-fA-F:]*([0-9a-fA-F]{1,4}:){1,7}[0-9a-fA-F:]*$|^(\d{1,3}\.){3}\d{1,3}$/;
-const fqdnRegex = /(?=^.{4,253}$)(^((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63}$)/;
+const fqdnRegex = /(?=^.{4,253}$)(^((?!-)[a-zA-Z0-9-]{1,63}\.)+[a-zA-Z]{2,63}$)/;
 const domainRegex = /^(xn\-\-)?([a-z0-9\-]{1,61}|[a-z0-9\-]{1,30})\.[a-z]{2,}$/;
 const urlRegex = /^[a-z]+:\/\//;
 const filenameRegex = /(\/)?[\w,\s-]+\.[A-Za-z]{3}$/;

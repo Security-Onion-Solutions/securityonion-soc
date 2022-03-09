@@ -66,6 +66,10 @@
   background-color: var(--v-drawer_background-base) !important;
 }
 
+.v-otp-input {
+  max-width: 300px;
+}
+
 /* animations */
 .waggle {
   animation-name: waggle;
