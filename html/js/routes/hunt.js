@@ -805,6 +805,22 @@ const huntComponent = {
       });
       return headers;
     },
+    lookupSocId(data) {
+      if (data && data.length == 36 && data.indexOf("-") == 8) {
+        const user = this.$root.getUserByIdViaCache(data);
+        if (user && user.email) {
+          data = user.email;
+        }
+      }
+      return data;
+    },
+    lookupSocIds(record) {
+      for (const key in record) {
+        if (key.endsWith("case.assigneeId") || key.endsWith("case.userId")) {
+          record[key] = this.lookupSocId(record[key]);
+        }
+      }
+    },
     constructGroupByRows(fields, data) {
       const records = [];
       const route = this;
@@ -815,6 +831,7 @@ const huntComponent = {
         fields.forEach(function(field, index) {
           record[field] = route.localizeValue(row.keys[index]);
         });
+        route.lookupSocIds(record);
         records.push(record);
       });
       return records;
@@ -845,6 +862,7 @@ const huntComponent = {
           record.soc_type = event.type;
           record.soc_timestamp = event.timestamp;
           record.soc_source = event.source;
+          route.lookupSocIds(record);
           records.push(record);
 
           var currentModule = record["event.module"];
@@ -872,7 +890,7 @@ const huntComponent = {
       if (!data) return;
       const route = this;
       data.forEach(function(item, index) {
-        chart.labels.push(route.localizeValue(item.keys[0]));
+        chart.labels.push(route.localizeValue(route.lookupSocId(item.keys[0])));
         chart.datasets[0].data.push(item.value);
       });
       if (chart.obj) {

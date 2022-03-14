@@ -271,3 +271,22 @@ test('applyQuerySubstitutions', () => {
   expect(newQueries[0].query).toBe('foo');
   expect(newQueries[1].query).toBe('bar:123');
 });
+
+test('lookupSocIds', () => {
+  comp.$root.users = [{id:'12345678-1234-5678-0123-123456789012', email:'test@test.invalid'}];
+  var record = { 'so_case.assigneeId': '123'}; // invalid UUID
+  comp.lookupSocIds(record);
+  expect(record['so_case.assigneeId']).toBe('123');
+
+  var record = { 'assigneeId': '12345678-1234-5678-0123-123456789012'}; // invalid key
+  comp.lookupSocIds(record);
+  expect(record['assigneeId']).toBe('12345678-1234-5678-0123-123456789012');
+
+  var record = { 'so_case.assigneeId': '12345678-1234-5678-0123-123456789012'}; 
+  comp.lookupSocIds(record);
+  expect(record['so_case.assigneeId']).toBe('test@test.invalid');
+
+  var record = { 'so_case.userId': '12345678-1234-5678-0123-123456789012'};
+  comp.lookupSocIds(record);
+  expect(record['so_case.userId']).toBe('test@test.invalid');
+});
