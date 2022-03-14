@@ -839,7 +839,7 @@ func (store *ElasticEventstore) Acknowledge(ctx context.Context, ackCriteria *mo
 			for key, value := range ackCriteria.EventFilter {
 				if strings.ToLower(key) != "count" {
 					valueStr := fmt.Sprintf("%v", value)
-					searchSegment.AddFilter(store.mapElasticField(key), valueStr, model.IsScalar(value), true)
+					searchSegment.AddFilter(store.mapElasticField(key), valueStr, model.IsScalar(value), true, false)
 				} else if int(value.(float64)) > store.asyncThreshold {
 					log.WithFields(log.Fields{
 						key:         value,

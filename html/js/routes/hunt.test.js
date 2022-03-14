@@ -10,7 +10,12 @@
 require('../test_common.js');
 require('./hunt.js');
 
-const comp = getComponent("hunt");
+let comp;
+
+beforeEach(() => {
+  comp = getComponent("hunt");
+  resetPapi();
+});
 
 test('localizeValue', () => {
   expect(comp.localizeValue('foo')).toBe('foo');
@@ -222,6 +227,8 @@ function validateCase(
 }
 
 test('buildCase', () => {
+  comp.escalateRelatedEventsEnabled = true;
+
   // has rule name and message, etc (happy path)
   validateCase('myTitle', 'myTemplate', 'myModule', 'myDataset', 'mySeverity', 'myMessage',
       'myTitle', comp.i18n.caseEscalatedDescription, 'mySeverity', 'myTemplate');
@@ -289,4 +296,16 @@ test('lookupSocIds', () => {
   var record = { 'so_case.userId': '12345678-1234-5678-0123-123456789012'};
   comp.lookupSocIds(record);
   expect(record['so_case.userId']).toBe('test@test.invalid');
+});
+
+test('getQuery', async () => {
+  comp.query = "a:1 OR b:2";
+  comp.queryBaseFilter = "c:3";
+  comp.filterToggles = [{enabled: true, filter: "e:4"},{enabled: false, filter: "f:5", exclusive: true}];
+  mock = mockPapi("get", {'data':'(a:1 OR b:2) AND c:3 AND e:4 AND NOT f:5'});
+
+  const newQuery = await comp.getQuery();
+  const params = { params: { query: 'a:1 OR b:2', field: '', value: 'c:3 AND e:4 AND NOT f:5', scalar: true, mode: 'INCLUDE', condense: true } };
+  expect(mock).toHaveBeenCalledWith('query/filtered', params);
+  expect(newQuery).toBe("(a:1 OR b:2) AND c:3 AND e:4 AND NOT f:5")
 });

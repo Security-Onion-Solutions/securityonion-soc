@@ -134,10 +134,10 @@ func TestSort(tester *testing.T) {
 	validateSort(tester, "a|sortby b", "b", "a | sortby b")
 }
 
-func validateFilter(tester *testing.T, orig string, key string, value string, scalar bool, mode string, expected string) {
+func validateFilter(tester *testing.T, orig string, key string, value string, scalar bool, mode string, condense bool, expected string) {
 	query := NewQuery()
 	query.Parse(orig)
-	actual, err := query.Filter(key, value, scalar, mode)
+	actual, err := query.Filter(key, value, scalar, mode, condense)
 	if err != nil {
 		actual = err.Error()
 	}
@@ -145,16 +145,17 @@ func validateFilter(tester *testing.T, orig string, key string, value string, sc
 }
 
 func TestFilter(tester *testing.T) {
-	validateFilter(tester, "a", "b", "c", false, FILTER_INCLUDE, "a AND b:\"c\"")
-	validateFilter(tester, "a", "b", "c", false, FILTER_EXCLUDE, "a AND NOT b:\"c\"")
-	validateFilter(tester, "", "b", "c", false, FILTER_INCLUDE, "b:\"c\"")
-	validateFilter(tester, "", "b", "1", true, FILTER_INCLUDE, "b:1")
-	validateFilter(tester, "(a:1 OR c:2) | groupby z", "b", "1", true, FILTER_EXACT, "b:1 | groupby z")
-	validateFilter(tester, "(a:1 OR c:2) | groupby z", "b", "1", true, FILTER_DRILLDOWN, "(a:1 OR c:2) AND b:1")
-	validateFilter(tester, "a", "soc_b", "1", true, FILTER_INCLUDE, "a AND _b:1")
-	validateFilter(tester, "a:1", "a", "2", true, FILTER_INCLUDE, "a:1 AND a:2")
-	validateFilter(tester, "a: 1", "a", "2", true, FILTER_INCLUDE, "a: 1 AND a:2")
-	validateFilter(tester, "NOT a:1", "a", "2", true, FILTER_EXCLUDE, "NOT a:1 AND NOT a:2")
+	validateFilter(tester, "a", "b", "c", false, FILTER_INCLUDE, false, "a AND b:\"c\"")
+	validateFilter(tester, "a", "b", "c", false, FILTER_EXCLUDE, false, "a AND NOT b:\"c\"")
+	validateFilter(tester, "", "b", "c", false, FILTER_INCLUDE, false, "b:\"c\"")
+	validateFilter(tester, "", "b", "1", true, FILTER_INCLUDE, false, "b:1")
+	validateFilter(tester, "(a:1 OR c:2) | groupby z", "b", "1", true, FILTER_EXACT, false, "b:1 | groupby z")
+	validateFilter(tester, "(a:1 OR c:2) | groupby z", "b", "1", true, FILTER_DRILLDOWN, false, "(a:1 OR c:2) AND b:1")
+	validateFilter(tester, "a", "soc_b", "1", true, FILTER_INCLUDE, false, "a AND _b:1")
+	validateFilter(tester, "a:1", "a", "2", true, FILTER_INCLUDE, false, "a:1 AND a:2")
+	validateFilter(tester, "a: 1", "a", "2", true, FILTER_INCLUDE, false, "a: 1 AND a:2")
+	validateFilter(tester, "NOT a:1", "a", "2", true, FILTER_EXCLUDE, false, "NOT a:1 AND NOT a:2")
+	validateFilter(tester, "a:1 OR b:1", "c", "3", true, FILTER_INCLUDE, true, "(a:1 OR b:1) AND c:3")
 }
 
 func TestIsScalar(tester *testing.T) {
@@ -168,12 +169,12 @@ func TestIsScalar(tester *testing.T) {
 func TestRemoveTermsWith(tester *testing.T) {
 	segment := NewSearchSegmentEmpty()
 	assert.Zero(tester, segment.RemoveTermsWith("hello"), "Expected no terms removed on empty segment")
-	segment.AddFilter("hello", "a", false, false)
+	segment.AddFilter("hello", "a", false, false, false)
 	assert.Equal(tester, 1, segment.RemoveTermsWith("hello"))
 	assert.Zero(tester, segment.RemoveTermsWith("hello"), "Expected no terms removed on already removed term")
-	segment.AddFilter("there", "b", false, false)
+	segment.AddFilter("there", "b", false, false, false)
 	assert.Zero(tester, segment.RemoveTermsWith("hello"), "Expected no terms removed on unmatched term")
-	segment.AddFilter("and", "c", false, false)
-	segment.AddFilter("goodbye", "d", false, false)
+	segment.AddFilter("and", "c", false, false, false)
+	segment.AddFilter("goodbye", "d", false, false, false)
 	assert.Equal(tester, 2, segment.RemoveTermsWith("e"))
 }
