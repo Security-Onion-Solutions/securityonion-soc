@@ -298,20 +298,39 @@ const huntComponent = {
       this.query = query;
       this.hunt();
     },
-    getQuery() {
+    async getQuery() {
       var q = "";
       if (this.queryBaseFilter.length > 0) {
-        q = this.queryBaseFilter + " AND ";
+        q = this.queryBaseFilter;
       }
+
       for (var i = 0; i < this.filterToggles.length; i++) {
         filter = this.filterToggles[i];
+
+        if (q.length > 0) {
+          q = q + " AND ";
+        }
+
         if (filter.enabled) {
-          q = q + filter.filter + " AND ";
+          q = q + filter.filter;
         } else if (filter.exclusive) {
-          q = q + " NOT " + filter.filter + " AND ";
+          q = q + "NOT " + filter.filter;
         }
       }
-      return q + this.query;
+
+      if (q.length > 0) {
+        const response = await this.$root.papi.get('query/filtered', { params: { 
+          query: this.query,
+          field: "",
+          value: q,
+          scalar: true,
+          mode: FILTER_INCLUDE,
+          condense: true,
+        }});
+
+        return response.data;
+      }
+      return this.query;
     },
     parseUrlParameters() {
       this.category = this.$route.path.replace("/", "");
@@ -352,7 +371,7 @@ const huntComponent = {
       try {
         this.obtainQueryDetails();
         const response = await this.$root.papi.get('events/', { params: { 
-          query: this.getQuery(),
+          query: await this.getQuery(),
           range: this.dateRange, 
           format: this.i18n.timePickerSample, 
           zone: this.zone, 
@@ -486,7 +505,7 @@ const huntComponent = {
         }
         if (isAlert) {
           const response = await this.$root.papi.post('events/ack', {
-            searchFilter: this.getQuery(),
+            searchFilter: await this.getQuery(),
             eventFilter: docEvent,
             dateRange: this.dateRange, 
             dateRangeFormat: this.i18n.timePickerSample, 
