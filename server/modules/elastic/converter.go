@@ -320,7 +320,9 @@ func convertFromElasticResults(store *ElasticEventstore, esJson string, results 
 		esRecord := record.(map[string]interface{})
 		event.Source = esRecord["_index"].(string)
 		event.Id = esRecord["_id"].(string)
-		event.Type = esRecord["_type"].(string)
+		if esRecord["_type"] != nil {
+			event.Type = esRecord["_type"].(string)
+		}
 		if esRecord["_score"] != nil {
 			event.Score = esRecord["_score"].(float64)
 		}
