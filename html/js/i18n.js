@@ -473,7 +473,7 @@ const i18n = {
       ERROR_QUERY_INVALID__GROUP_EMPTY: 'The search query has an empty group.',
       ERROR_QUERY_INVALID__GROUP_INCOMPLETE: 'The search query is missing an ending parenthesis.',
       ERROR_QUERY_INVALID__GROUP_NOT_STARTED: 'The search query has an extra parenthesis.',
-      ERROR_QUERY_INVALID__GROUPBY_TERMS_MISSING: 'The search query is has a malformed groupby segment.',
+      ERROR_QUERY_INVALID__GROUPBY_TERMS_MISSING: 'The search query has a malformed groupby segment.',
       ERROR_QUERY_INVALID__QUOTE_INCOMPLETE: 'The search query is missing an ending double quote.',
       ERROR_QUERY_INVALID__SEARCH_MISSING: 'The search query is missing the search criteria.',
       ERROR_QUERY_INVALID__SEARCH_TERMS_MISSING: 'The search query is missing search terms.',
