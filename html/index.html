@@ -955,12 +955,13 @@
       <v-container fluid>
         <v-row>
           <v-col>
-            <h2 v-text="i18n.jobs"></h2>
+            <h2 v-if="isKind('pcap')" v-text="i18n.jobs"></h2>
+            <h2 v-if="!isKind('pcap')" v-text="kind"></h2>
           </v-col>
         </v-row>
         <v-row>
           <v-col>
-            <v-toolbar class="elevation-0" fixed>
+            <v-toolbar v-if="isKind('pcap')" class="elevation-0" fixed>
               <v-btn color="primary" @click.stop="dialog = !dialog" id="add-pcap-job-button">
                 <v-icon>fa-plus</v-icon>
               </v-btn>
@@ -1731,6 +1732,10 @@
                           <router-link class="no-underline" :to="{ name: 'hunt', query: {q: buildHuntQueryForValue(props.item.value)}}" :title="i18n.huntForEvidence">
                             <v-icon :title="i18n.huntForEvidence">fa-crosshairs</v-icon>
                           </router-link>
+                          <v-btn :id="`evidence-${props.index}-analyze`" icon small @click="analyze(props.item)" :disabled="analyzeInProgress(props.item)">
+                            <v-icon v-if="analyzeInProgress(props.item)" :alt="i18n.analyzeInProgress" :title="i18n.analyzeHelp">fa-clock</v-icon>
+                            <v-icon v-if="!analyzeInProgress(props.item)" :alt="i18n.analyze" :title="i18n.analyzeHelp">fa-bolt</v-icon>
+                          </v-btn>                          
                         </td>                        
                         <td class="associated">{{ props.item.createTime | formatDateTime }}</td>
                         <td class="associated">{{ props.item.updateTime | formatDateTime }}</td>
@@ -1852,6 +1857,79 @@
                                 <v-chip color="primary">{{item}}</v-chip>
                               </template>
                             </v-combobox>
+                          </v-container>
+
+                          <v-container :id="`evidence-${props.index}-analyze-container`" fluid class="py-2" v-if="getAnalyzeJobs(props.item)">
+                            <div>
+                              <div class="font-weight-bold">{{i18n.analyzeJobs}}: </div>
+                              <v-expansion-panels class="mb-6" hover="true" multiple="true">
+                                <v-expansion-panel v-for="job in getAnalyzeJobs(props.item)" :id="`evidence-${props.index}-analyze-job-${job.id}`" >
+                                  <v-expansion-panel-header disable-icon-rotate>
+                                    <v-row>
+                                      <v-col cols="12" md="4">
+                                        {{ i18n.job }}: {{ job.id }} 
+                                      </v-col>
+                                      <v-col cols="12" md="4">
+                                        {{ job.createTime | formatDateTime }} 
+                                      </v-col>
+                                      <v-col cols="12" md="4">
+                                        {{ i18n.analyzers }}: {{ getAnalyzersInJob(job) }}
+                                      </v-col>
+                                    </v-row>
+                                    <template v-slot:actions>
+                                      <v-icon v-if="job.status == JobStatusPending" color="info">fa-clock</v-icon>
+                                      <v-icon v-if="job.status == JobStatusCompleted" color="success">fa-check</v-icon>
+                                      <v-icon v-if="job.status == JobStatusIncomplete" color="error">fa-exclamation</v-icon>
+                                    </template>
+                                  </v-expansion-panel-header>
+                                  <v-expansion-panel-content>
+
+                                    <v-expansion-panels class="mb-1" flat>
+                                      <v-expansion-panel v-for="analyzer in job.results" :id="`evidence-${props.index}-analyze-job-${job.id}`" >
+                                        <v-expansion-panel-header>
+                                          <v-row>
+                                            <v-col cols="12" md="3" class="font-weight-bold">
+                                              {{ analyzer.id }}
+                                            </v-col>
+                                            <v-col cols="12" md="6">
+                                              {{ analyzer.summary }}
+                                            </v-col>
+                                            <v-col cols="12" md="3">
+                                              {{ i18n.bytes }}: {{ JSON.stringify(analyzer.data).length | formatCount }}
+                                            </v-col>
+                                          </v-row>
+                                        </v-expansion-panel-header>
+                                        <v-expansion-panel-content>
+                                          <pre class="hardwrap">{{ analyzer.data }}</pre>
+                                        </v-expansion-panel-content>
+                                      </v-expansion-panel>
+                                    </v-expansion-panels>
+
+                                    <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
+                                      <v-spacer/>
+                                      <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text">
+                                        <div class="case avatar-font" :title="job.owner">
+                                          {{ $root.getAvatar(job.owner) }}
+                                        </div>
+                                      </v-avatar>
+                                      <div class="mr-1">
+                                        {{ job.owner }}
+                                      </div>
+                                      <div class="mr-1 d-none d-sm-block">
+                                        &bull;
+                                      </div>
+                                      <div>
+                                        {{ job.completeTime | formatDateTime }}
+                                      </div>
+                                      <div class="ml-1 d-flex">
+                                        <v-btn text small color="red" @click="deleteAnalyzeJob(job)" icon><v-icon style="font-size: 14px !important;">fa-trash</v-icon></v-btn>
+                                      </div>
+                                    </div>
+                                    
+                                  </v-expansion-panel-content>
+                                </v-expansion-panel>
+                              </v-expansion-panels>
+                            </div>
                           </v-container>
 
                           <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">

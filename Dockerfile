@@ -16,7 +16,7 @@ WORKDIR /build
 RUN npm install jest --global
 RUN ./build.sh "$VERSION"
 
-FROM ghcr.io/security-onion-solutions/alpine:latest
+FROM ghcr.io/security-onion-solutions/python:3-alpine
 
 ARG UID=939
 ARG GID=939

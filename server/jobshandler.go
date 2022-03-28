@@ -13,6 +13,7 @@ package server
 import (
   "context"
   "errors"
+  "github.com/security-onion-solutions/securityonion-soc/json"
   "github.com/security-onion-solutions/securityonion-soc/web"
   "net/http"
 )
@@ -39,5 +40,14 @@ func (jobsHandler *JobsHandler) HandleNow(ctx context.Context, writer http.Respo
 }
 
 func (jobsHandler *JobsHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-  return http.StatusOK, jobsHandler.server.Datastore.GetJobs(ctx), nil
+  kind := request.URL.Query().Get("kind")
+  paramsStr := request.URL.Query().Get("parameters")
+  var params map[string]interface{}
+  if paramsStr != "" {
+    err := json.LoadJson([]byte(paramsStr), &params)
+    if err != nil {
+      return http.StatusBadRequest, nil, err
+    }
+  }
+  return http.StatusOK, jobsHandler.server.Datastore.GetJobs(ctx, kind, params), nil
 }

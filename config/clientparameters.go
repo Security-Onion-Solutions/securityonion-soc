@@ -147,6 +147,7 @@ type PresetParameters struct {
 type CaseParameters struct {
 	MostRecentlyUsedLimit  int                         `json:"mostRecentlyUsedLimit"`
 	RenderAbbreviatedCount int                         `json:"renderAbbreviatedCount"`
+	AnalyzerNodeId         string                      `json:"analyzerNodeId"`
 	Presets                map[string]PresetParameters `json:"presets"`
 }
 

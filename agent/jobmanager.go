@@ -65,7 +65,7 @@ func (mgr *JobManager) Start() {
           defer reader.Close()
           err = mgr.StreamJobResults(job, reader)
         } else {
-          log.WithField("jobId", job.Id).Info("Job completed without stream result")
+          log.WithField("jobId", job.Id).Debug("Job completed without stream result")
         }
       }
       if err == nil {
