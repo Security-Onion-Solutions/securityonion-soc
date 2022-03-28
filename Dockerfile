@@ -10,7 +10,7 @@
 
 FROM ghcr.io/security-onion-solutions/golang:alpine as builder
 ARG VERSION=0.0.0
-RUN apk update && apk add libpcap-dev bash git musl-dev gcc npm
+RUN apk update && apk add libpcap-dev bash git musl-dev gcc npm python3
 COPY . /build
 WORKDIR /build
 RUN npm install jest --global

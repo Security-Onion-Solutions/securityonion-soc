@@ -30,18 +30,20 @@ import (
 )
 
 const DEFAULT_ANALYZERS_PATH = "/opt/sensoroni/analyzers"
+const DEFAULT_ANALYZER_EXECUTABLE = "python3"
 const DEFAULT_TIMEOUT_MS = 900000
 const DEFAULT_PARALLEL_LIMIT = 5
 const DEFAULT_SUMMARY_LENGTH = 50
 
 type Analyze struct {
-	config        module.ModuleConfig
-	analyzersPath string
-	agent         *agent.Agent
-	timeoutMs     int
-	analyzers     []*model.Analyzer
-	parallelLimit int
-	summaryLength int
+	config             module.ModuleConfig
+	analyzersPath      string
+	analyzerExecutable string
+	agent              *agent.Agent
+	timeoutMs          int
+	analyzers          []*model.Analyzer
+	parallelLimit      int
+	summaryLength      int
 }
 
 func NewAnalyze(agt *agent.Agent) *Analyze {
@@ -61,6 +63,7 @@ func (analyze *Analyze) Init(cfg module.ModuleConfig) error {
 	analyze.timeoutMs = module.GetIntDefault(cfg, "timeoutMs", DEFAULT_TIMEOUT_MS)
 	analyze.parallelLimit = module.GetIntDefault(cfg, "parallelLimit", DEFAULT_PARALLEL_LIMIT)
 	analyze.summaryLength = module.GetIntDefault(cfg, "summaryLength", DEFAULT_SUMMARY_LENGTH)
+	analyze.analyzerExecutable = strings.TrimSuffix(module.GetStringDefault(cfg, "analyzerExecutable", DEFAULT_ANALYZER_EXECUTABLE), "/")
 	if analyze.agent == nil {
 		err = errors.New("Unable to invoke JobMgr.AddJobProcessor due to nil agent")
 	} else {
@@ -206,25 +209,35 @@ func (analyze *Analyze) filterAnalyzers(job *model.Job) []*model.Analyzer {
 
 func (analyze *Analyze) startAnalyzer(job *model.Job, analyzer *model.Analyzer, input string) ([]byte, error) {
 	log.WithFields(log.Fields{
-		"jobId":         job.Id,
-		"analyzersPath": analyze.analyzersPath,
-		"analyzer":      analyzer.Id,
+		"jobId":               job.Id,
+		"analyzersPath":       analyze.analyzersPath,
+		"analyzerInterpretor": analyze.analyzerExecutable,
+		"analyzer":            analyzer.Id,
 	}).Info("Executing python analyzer for job")
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(analyze.timeoutMs)*time.Millisecond)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "python", "-m", analyzer.GetModule(), "-i", input)
+	cmd := exec.CommandContext(ctx, analyze.analyzerExecutable, "-m", analyzer.GetModule(), "-i", input)
 	cmd.Env = append(os.Environ(),
 		"PYTHONPATH="+analyze.analyzersPath,
 	)
 
 	output, err := cmd.CombinedOutput()
-	log.WithFields(log.Fields{
-		"analyzer": analyzer.Id,
-		"input":    input,
-		"output":   string(output),
-		"err":      err,
-	}).Debug("Executed analyzer")
+	if err == nil {
+		log.WithFields(log.Fields{
+			"analyzer": analyzer.Id,
+			"input":    input,
+			"output":   string(output),
+			"err":      err,
+		}).Debug("Executed analyzer")
+	} else {
+		log.WithFields(log.Fields{
+			"analyzer": analyzer.Id,
+			"input":    input,
+			"output":   string(output),
+			"err":      err,
+		}).WithError(err).Error("Failed to execute analyzer")
+	}
 
 	return output, err
 }
