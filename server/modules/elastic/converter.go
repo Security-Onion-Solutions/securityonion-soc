@@ -331,7 +331,7 @@ func convertFromElasticResults(store *ElasticEventstore, esJson string, results 
 		} else if event.Payload["timestamp"] != nil {
 			event.Time, _ = time.Parse(time.RFC3339, event.Payload["timestamp"].(string))
 		}
-		event.Timestamp = event.Time.Format("2006-01-02T15:04:05.000Z")
+		event.Timestamp = event.Time.UTC().Format("2006-01-02T15:04:05.000Z")
 		results.Events = append(results.Events, event)
 	}
 
