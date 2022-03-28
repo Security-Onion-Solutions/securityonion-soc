@@ -725,7 +725,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     },
     buildHuntQueryForValue(value) {
       var value = this.escapeQueryValue(value);
-      return '"' + value + '"';
+      return '"' + value + '" | groupby event.module event.dataset';
     },
     getEventId(event) {
       var id = event.fields['soc_id'];

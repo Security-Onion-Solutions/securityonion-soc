@@ -644,6 +644,10 @@ test('buildHuntQuery', () => {
   expect(comp.buildHuntQuery(fakeEvent)).toBe('_id: "xyz"');
 });
 
+test('buildHuntQueryForValue', () => {
+  expect(comp.buildHuntQueryForValue("foo")).toBe('"foo" | groupby event.module event.dataset');
+});
+
 test('getEventId', () => {
   const fakeEvent = { fields: { soc_id: 'xyz' }};
   expect(comp.getEventId(fakeEvent)).toBe('xyz');
