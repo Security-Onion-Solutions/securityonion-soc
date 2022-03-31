@@ -12,6 +12,7 @@ package analyze
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"io/ioutil"
@@ -30,7 +31,10 @@ import (
 )
 
 const DEFAULT_ANALYZERS_PATH = "/opt/sensoroni/analyzers"
-const DEFAULT_ANALYZER_EXECUTABLE = "python3"
+const DEFAULT_SITE_PACKAGES_PATH = "/opt/sensoroni/site-packages"
+const DEFAULT_SOURCE_PACKAGES_PATH = "/opt/sensoroni/source-packages"
+const DEFAULT_ANALYZER_EXECUTABLE = "python"
+const DEFAULT_ANALYZER_INSTALLER = "pip"
 const DEFAULT_TIMEOUT_MS = 900000
 const DEFAULT_PARALLEL_LIMIT = 5
 const DEFAULT_SUMMARY_LENGTH = 50
@@ -38,7 +42,10 @@ const DEFAULT_SUMMARY_LENGTH = 50
 type Analyze struct {
 	config             module.ModuleConfig
 	analyzersPath      string
+	sitePackagesPath   string
+	sourcePackagesPath string
 	analyzerExecutable string
+	analyzerInstaller  string
 	agent              *agent.Agent
 	timeoutMs          int
 	analyzers          []*model.Analyzer
@@ -60,17 +67,18 @@ func (analyze *Analyze) Init(cfg module.ModuleConfig) error {
 	var err error
 	analyze.config = cfg
 	analyze.analyzersPath = strings.TrimSuffix(module.GetStringDefault(cfg, "analyzersPath", DEFAULT_ANALYZERS_PATH), "/")
+	analyze.sitePackagesPath = strings.TrimSuffix(module.GetStringDefault(cfg, "sitePackagesPath", DEFAULT_SITE_PACKAGES_PATH), "/")
+	analyze.sourcePackagesPath = strings.TrimSuffix(module.GetStringDefault(cfg, "sourcePackagesPath", DEFAULT_SOURCE_PACKAGES_PATH), "/")
 	analyze.timeoutMs = module.GetIntDefault(cfg, "timeoutMs", DEFAULT_TIMEOUT_MS)
 	analyze.parallelLimit = module.GetIntDefault(cfg, "parallelLimit", DEFAULT_PARALLEL_LIMIT)
 	analyze.summaryLength = module.GetIntDefault(cfg, "summaryLength", DEFAULT_SUMMARY_LENGTH)
 	analyze.analyzerExecutable = strings.TrimSuffix(module.GetStringDefault(cfg, "analyzerExecutable", DEFAULT_ANALYZER_EXECUTABLE), "/")
-	if analyze.agent == nil {
+	analyze.analyzerInstaller = strings.TrimSuffix(module.GetStringDefault(cfg, "analyzerInstaller", DEFAULT_ANALYZER_INSTALLER), "/")
+	err = analyze.refreshAnalyzers()
+	if err == nil && analyze.agent == nil {
 		err = errors.New("Unable to invoke JobMgr.AddJobProcessor due to nil agent")
-	} else {
-		err = analyze.refreshAnalyzers()
-		if err == nil {
-			analyze.agent.JobMgr.AddJobProcessor(analyze)
-		}
+	} else if err == nil {
+		analyze.agent.JobMgr.AddJobProcessor(analyze)
 	}
 	return err
 }
@@ -88,7 +96,7 @@ func (analyze *Analyze) IsRunning() bool {
 }
 
 func (analyze *Analyze) createAnalyzer(entry fs.FileInfo) *model.Analyzer {
-	if entry.IsDir() || strings.HasSuffix(entry.Name(), ".py") {
+	if !strings.HasPrefix(entry.Name(), ".") && !strings.HasPrefix(entry.Name(), "__") && (entry.IsDir() || strings.HasSuffix(entry.Name(), ".py")) {
 		name := strings.TrimSuffix(entry.Name(), ".py")
 		log.WithFields(log.Fields{
 			"Id":      name,
@@ -108,7 +116,10 @@ func (analyze *Analyze) refreshAnalyzers() error {
 		for _, entry := range entries {
 			analyzer := analyze.createAnalyzer(entry)
 			if analyzer != nil {
-				analyze.analyzers = append(analyze.analyzers, analyzer)
+				err = analyze.initAnalyzer(analyzer)
+				if err == nil {
+					analyze.analyzers = append(analyze.analyzers, analyzer)
+				}
 			}
 		}
 	}
@@ -207,19 +218,67 @@ func (analyze *Analyze) filterAnalyzers(job *model.Job) []*model.Analyzer {
 	return analyze.analyzers
 }
 
+func (analyze *Analyze) fileExists(path string) bool {
+	stats, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !stats.IsDir()
+}
+
+func (analyze *Analyze) initAnalyzer(analyzer *model.Analyzer) error {
+	var err error
+
+	requirementsPath := fmt.Sprintf("%s/%s/requirements.txt", analyze.analyzersPath, analyzer.Id)
+	if analyze.fileExists(requirementsPath) {
+		log.WithFields(log.Fields{
+			"sitePackagesPath":    analyze.sitePackagesPath,
+			"sourcePackagesPath":  analyze.sourcePackagesPath,
+			"analyzersPath":       analyze.analyzersPath,
+			"analyzerInterpretor": analyze.analyzerExecutable,
+			"analyzer":            analyzer.Id,
+			"requirementsPath":    requirementsPath,
+		}).Info("Installing python analyzer dependencies")
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(analyze.timeoutMs)*time.Millisecond)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, analyze.analyzerInstaller,
+			"install", "--no-input", "--find-links="+analyze.sourcePackagesPath, "-r", requirementsPath,
+			"-t", analyze.sitePackagesPath)
+
+		output, err := cmd.CombinedOutput()
+		if err == nil {
+			log.WithFields(log.Fields{
+				"analyzer": analyzer.Id,
+				"output":   string(output),
+				"err":      err,
+			}).Debug("Installation completed")
+		} else {
+			log.WithFields(log.Fields{
+				"analyzer": analyzer.Id,
+				"output":   string(output),
+				"err":      err,
+			}).WithError(err).Error("Failed to install analyzer dependencies")
+		}
+	}
+
+	return err
+}
+
 func (analyze *Analyze) startAnalyzer(job *model.Job, analyzer *model.Analyzer, input string) ([]byte, error) {
 	log.WithFields(log.Fields{
 		"jobId":               job.Id,
 		"analyzersPath":       analyze.analyzersPath,
+		"sitePackagesPath":    analyze.sitePackagesPath,
 		"analyzerInterpretor": analyze.analyzerExecutable,
 		"analyzer":            analyzer.Id,
 	}).Info("Executing python analyzer for job")
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(analyze.timeoutMs)*time.Millisecond)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, analyze.analyzerExecutable, "-m", analyzer.GetModule(), "-i", input)
+	cmd := exec.CommandContext(ctx, analyze.analyzerExecutable, "-m", analyzer.GetModule(), input)
 	cmd.Env = append(os.Environ(),
-		"PYTHONPATH="+analyze.analyzersPath,
+		"PYTHONPATH="+analyze.analyzersPath+":"+analyze.sitePackagesPath,
 	)
 
 	output, err := cmd.CombinedOutput()

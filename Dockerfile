@@ -24,7 +24,7 @@ ARG VERSION=0.0.0
 ARG ELASTIC_VERSION=0.0.0
 ARG WAZUH_VERSION=0.0.0
 
-RUN apk update && apk add tzdata ca-certificates curl tcpdump && update-ca-certificates
+RUN apk update && apk add tzdata ca-certificates curl tcpdump build-base gcc libffi-dev && update-ca-certificates
 RUN addgroup --gid "$GID" socore
 RUN adduser -D -u "$UID" -G socore -g '' socore
 RUN mkdir -p /opt/sensoroni/jobs && chown socore:socore /opt/sensoroni/jobs

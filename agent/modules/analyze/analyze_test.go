@@ -10,11 +10,27 @@
 package analyze
 
 import (
+	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/stretchr/testify/assert"
 )
+
+const TMP_DIR = "/tmp/sensoroni.python"
+
+func cleanup_tmp() {
+	os.RemoveAll(TMP_DIR)
+}
+
+func init_tmp(tester *testing.T) {
+	os.MkdirAll(TMP_DIR, 0777)
+
+	entries, err := ioutil.ReadDir(TMP_DIR)
+	assert.NoError(tester, err)
+	assert.Equal(tester, 0, len(entries))
+}
 
 func TestInitAnalyze(tester *testing.T) {
 	cfg := make(map[string]interface{})
@@ -22,15 +38,38 @@ func TestInitAnalyze(tester *testing.T) {
 	err := sq.Init(cfg)
 	assert.NotNil(tester, err)
 	assert.Equal(tester, DEFAULT_ANALYZERS_PATH, sq.analyzersPath)
+	assert.Equal(tester, DEFAULT_SITE_PACKAGES_PATH, sq.sitePackagesPath)
+	assert.Equal(tester, DEFAULT_SOURCE_PACKAGES_PATH, sq.sourcePackagesPath)
+	assert.Equal(tester, DEFAULT_ANALYZER_EXECUTABLE, sq.analyzerExecutable)
+	assert.Equal(tester, DEFAULT_ANALYZER_INSTALLER, sq.analyzerInstaller)
 	assert.Equal(tester, DEFAULT_TIMEOUT_MS, sq.timeoutMs)
 	assert.Equal(tester, DEFAULT_PARALLEL_LIMIT, sq.parallelLimit)
 	assert.Equal(tester, DEFAULT_SUMMARY_LENGTH, sq.summaryLength)
+}
+
+func TestCreateAnalyzer(tester *testing.T) {
+	init_tmp(tester)
+	defer cleanup_tmp()
+
+	cfg := make(map[string]interface{})
+	cfg["analyzersPath"] = "test-resources"
+	cfg["sourcePackagesPath"] = "test-source-packages"
+	cfg["sitePackagesPath"] = TMP_DIR
+	sq := NewAnalyze(nil)
+	err := sq.Init(cfg)
+	assert.Error(tester, err, "Unable to invoke JobMgr.AddJobProcessor due to nil agent")
+	assert.Equal(tester, 2, len(sq.analyzers))
+
+	entries, err := ioutil.ReadDir(TMP_DIR)
+	assert.NoError(tester, err)
+	assert.Equal(tester, 15, len(entries))
 }
 
 func TestProcessJob(tester *testing.T) {
 	cfg := make(map[string]interface{})
 	sq := NewAnalyze(nil)
 	err := sq.Init(cfg)
+	assert.NotNil(tester, err)
 
 	// Job kind is not set to analyze, so nothing should execute
 	job := model.NewJob()
