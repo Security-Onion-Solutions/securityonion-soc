@@ -25,6 +25,7 @@ func cleanup_tmp() {
 }
 
 func init_tmp(tester *testing.T) {
+	cleanup_tmp()
 	os.MkdirAll(TMP_DIR, 0777)
 
 	entries, err := ioutil.ReadDir(TMP_DIR)
@@ -65,11 +66,17 @@ func TestCreateAnalyzer(tester *testing.T) {
 	assert.Equal(tester, 15, len(entries))
 }
 
-func TestProcessJob(tester *testing.T) {
+func TestInit(tester *testing.T) {
 	cfg := make(map[string]interface{})
 	sq := NewAnalyze(nil)
 	err := sq.Init(cfg)
 	assert.NotNil(tester, err)
+}
+
+func TestJobKindMissing(tester *testing.T) {
+	cfg := make(map[string]interface{})
+	sq := NewAnalyze(nil)
+	sq.Init(cfg)
 
 	// Job kind is not set to analyze, so nothing should execute
 	job := model.NewJob()
@@ -77,27 +84,52 @@ func TestProcessJob(tester *testing.T) {
 	assert.Nil(tester, reader)
 	assert.Nil(tester, err)
 	assert.Empty(tester, job.Results)
+}
 
-	// Proper filter, so should execute, but no analyzers exist yet
+func TestJobFilterMissing(tester *testing.T) {
+	cfg := make(map[string]interface{})
+	sq := NewAnalyze(nil)
+	sq.Init(cfg)
+
+	// Proper job kind, but no filter set yet
+	job := model.NewJob()
 	job.Kind = "analyze"
-	reader, err = sq.ProcessJob(job, nil)
+	reader, err := sq.ProcessJob(job, nil)
 	assert.Nil(tester, reader)
 	assert.Nil(tester, err)
 	assert.Empty(tester, job.Results)
+}
 
-	// Now analyzers should exist, but still no params set
-	sq.analyzersPath = "test-resources"
-	sq.refreshAnalyzers()
-	reader, err = sq.ProcessJob(job, nil)
-	assert.Nil(tester, reader)
-	assert.Nil(tester, err)
-	assert.Empty(tester, job.Results)
+func TestAnalyzersMissing(tester *testing.T) {
+	cfg := make(map[string]interface{})
+	sq := NewAnalyze(nil)
+	sq.Init(cfg)
 
-	// Everything in its place, all test analyzers should execute
+	// Job kind and filter parameters specified but still no analyzers
+	job := model.NewJob()
+	job.Kind = "analyze"
 	job.Filter.Parameters["foo"] = "bar"
-	sq.analyzersPath = "test-resources"
-	sq.refreshAnalyzers()
-	reader, err = sq.ProcessJob(job, nil)
+	reader, err := sq.ProcessJob(job, nil)
+	assert.Nil(tester, reader)
+	assert.Error(tester, err, "No analyzers processed successfully")
+	assert.Empty(tester, job.Results)
+}
+
+func TestAnalyzersExecuted(tester *testing.T) {
+	init_tmp(tester)
+	defer cleanup_tmp()
+
+	cfg := make(map[string]interface{})
+	cfg["analyzersPath"] = "test-resources"
+	cfg["sourcePackagesPath"] = "test-source-packages"
+	cfg["sitePackagesPath"] = TMP_DIR
+	sq := NewAnalyze(nil)
+	sq.Init(cfg)
+
+	job := model.NewJob()
+	job.Kind = "analyze"
+	job.Filter.Parameters["foo"] = "bar"
+	reader, err := sq.ProcessJob(job, nil)
 	assert.Nil(tester, reader)
 	assert.Nil(tester, err)
 	assert.Len(tester, job.Results, 2)

@@ -170,10 +170,8 @@ func (analyze *Analyze) ProcessJob(job *model.Job, reader io.ReadCloser) (io.Rea
 				waitGroup.Add(1)
 				go func(analyzer *model.Analyzer) {
 					defer waitGroup.Done()
-					var output []byte
 
-					output, err = analyze.startAnalyzer(job, analyzer, input)
-
+					output, err := analyze.startAnalyzer(job, analyzer, input)
 					if err == nil {
 						// parse into JSON to verify syntax is correct
 						result := make(map[string]interface{})
@@ -209,6 +207,10 @@ func (analyze *Analyze) ProcessJob(job *model.Job, reader io.ReadCloser) (io.Rea
 			sort.SliceStable(job.Results, func(i, j int) bool {
 				return job.Results[i].Id < job.Results[j].Id
 			})
+
+			if len(job.Results) == 0 {
+				err = errors.New("No analyzers processed successfully")
+			}
 		}
 	}
 	return reader, err
