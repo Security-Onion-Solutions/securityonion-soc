@@ -627,15 +627,20 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         case 'Enter': if (!this.editForm.isMultiline) this.stopEdit(true); break;
       }
     },
-    resetForm(ref) {
-      const form = { valid: false };
-      this.attachment = null;
+    getTlp() {
+      var tlp = this.caseObj.tlp;
+      if (!tlp) {
+        tlp = this.getDefaultPreset('tlp');
+      }
+      return tlp;
+    },
+    resetFormDefaults(form, ref) {
       switch (ref) {
         case "attachments": 
-          form.tlp = this.getDefaultPreset('tlp');
+          form.tlp = this.getTlp();
           break;
         case "evidence": 
-          form.tlp = this.getDefaultPreset('tlp');
+          form.tlp = this.getTlp();
           form.artifactType = this.getDefaultPreset('artifactType');
           break;
         case "comments":
@@ -643,7 +648,12 @@ routes.push({ path: '/case/:id', name: 'case', component: {
             this.$refs[ref].reset();
           }
           break;
-      }
+      }      
+    },
+    resetForm(ref) {
+      const form = { valid: false };
+      this.attachment = null;
+      this.resetFormDefaults(form, ref);
       this.addingAssociation = null;
       Vue.set(this.associatedForms, ref, form)
     },
@@ -654,6 +664,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     },
     enableAdding(association) {
       this.addingAssociation = association;
+      this.resetFormDefaults(this.associatedForms[association], association);
     },
     isAdding(association) {
       return this.addingAssociation == association;
@@ -682,7 +693,6 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       this.enableAdding(association);
       this.associatedForms[association].value = value.toString();
       this.associatedForms[association].description = key;
-      this.associatedForms[association].tlp = this.caseObj.tlp;
       const artifactType = this.mapArtifactTypeFromValue(value.toString());
       const typePresets = this.getPresets('artifactType');
       if (artifactType && typePresets && typePresets.indexOf(artifactType) != -1) {
