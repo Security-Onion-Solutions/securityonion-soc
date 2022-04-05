@@ -20,7 +20,7 @@
     <link rel="alternate icon" class="so-favicon" type="image/png" href="images/favicon/onion.png?v=VERSION_PLACEHOLDER">
     <link rel="icon" class="so-favicon" type="image/svg+xml" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
     <link rel="stylesheet" href="css/external/vuetify-v2.6.3.min.css">
-    <link rel="stylesheet" href="css/external/all-5.15.2.min.css">
+    <link rel="stylesheet" href="css/external/all-6.1.1.min.css">
     <link rel="stylesheet" href="css/external/daterangepicker-3.1.0.css">
     <link rel="stylesheet" href="css/app.css?v=VERSION_PLACEHOLDER">
     <title>Security Onion</title>
@@ -1878,7 +1878,7 @@
                                     </v-row>
                                     <template v-slot:actions>
                                       <v-icon v-if="job.status == JobStatusPending" color="info">fa-clock</v-icon>
-                                      <v-icon v-if="job.status == JobStatusCompleted" color="success">fa-check</v-icon>
+                                      <v-icon v-if="job.status == JobStatusCompleted" :title="$root.localizeMessage(getAnalyzeJobDecoration(job).help)" :color="getAnalyzeJobDecoration(job).color">{{ getAnalyzeJobDecoration(job).icon }}</v-icon>
                                       <v-icon v-if="job.status == JobStatusIncomplete" color="error">fa-exclamation</v-icon>
                                     </template>
                                   </v-expansion-panel-header>
@@ -1892,7 +1892,8 @@
                                               {{ analyzer.id }}
                                             </v-col>
                                             <v-col cols="12" md="6">
-                                              {{ analyzer.summary }}
+                                              <v-icon class="mr-2" :title="$root.localizeMessage(getAnalyzerDecoration(analyzer).help)" :color="getAnalyzerDecoration(analyzer).color">{{ getAnalyzerDecoration(analyzer).icon }}</v-icon>
+                                              {{ getAnalyzerSummary(analyzer) }}
                                             </v-col>
                                             <v-col cols="12" md="3">
                                               {{ i18n.bytes }}: {{ JSON.stringify(analyzer.data).length | formatCount }}
@@ -1906,7 +1907,6 @@
                                     </v-expansion-panels>
 
                                     <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
-                                      <v-spacer/>
                                       <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text">
                                         <div class="case avatar-font" :title="job.owner">
                                           {{ $root.getAvatar(job.owner) }}
@@ -1924,6 +1924,7 @@
                                       <div class="ml-1 d-flex">
                                         <v-btn text small color="red" @click="deleteAnalyzeJob(job)" icon><v-icon style="font-size: 14px !important;">fa-trash</v-icon></v-btn>
                                       </div>
+                                      <v-spacer/>
                                     </div>
                                     
                                   </v-expansion-panel-content>

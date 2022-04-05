@@ -869,6 +869,68 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         }
       }
     },
+    getAnalyzerSummary(analyzer) {
+      var i18nKey = "analyzer_" + analyzer.id + "_" + analyzer.summary;
+      var msg = this.$root.localizeMessage(i18nKey);
+      if (msg == i18nKey) {
+        i18nKey = "analyzer_" + analyzer.summary;
+        msg = this.$root.localizeMessage(i18nKey);
+        if (msg == i18nKey) {
+          msg = analyzer.summary;
+        }
+      }
+      return msg;
+    },
+    getAnalyzerDecoration(analyzer) {
+      var decoration = {
+        color: "", // Use default color scheme
+        icon: "fa-circle-question",
+        severity: 50, // unknown, place severity in middle of the range
+        help: "analyzer_result_unknown",
+      }
+      if (analyzer.data) {
+        switch (analyzer.data.status) {
+          case "info":
+            decoration.color = "info"; 
+            decoration.icon = "fa-circle-info";
+            decoration.severity = 10;
+            decoration.help = "analyzer_result_info";
+            break;
+          case "ok":
+            decoration.color = "success"; 
+            decoration.icon = "fa-circle-check";
+            decoration.severity = 0;
+            decoration.help = "analyzer_result_ok";
+            break;
+          case "caution":
+            decoration.color = "warning"; 
+            decoration.icon = "fa-circle-exclamation";
+            decoration.severity = 80;
+            decoration.help = "analyzer_result_caution";
+            break;
+          case "threat":
+            decoration.color = "danger"; 
+            decoration.icon = "fa-triangle-exclamation";
+            decoration.severity = 100;
+            decoration.help = "analyzer_result_threat";
+            break;
+        }
+      }
+      return decoration;
+    },
+    getAnalyzeJobDecoration(job) {
+      var current = { severity: -1 };
+      if (job && job.results) {
+        for (var idx = 0; idx < job.results.length; idx++) {
+          var result = job.results[idx];
+          var decoration = this.getAnalyzerDecoration(result);
+          if (decoration.severity > current.severity) {
+            current = decoration;
+          }
+        }
+      }
+      return current;
+    },
 
     saveLocalSettings() {
       localStorage['settings.case.mruCases'] = JSON.stringify(this.mruCases);

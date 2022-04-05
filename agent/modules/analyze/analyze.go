@@ -96,8 +96,8 @@ func (analyze *Analyze) IsRunning() bool {
 }
 
 func (analyze *Analyze) createAnalyzer(entry fs.FileInfo) *model.Analyzer {
-	if !strings.HasPrefix(entry.Name(), ".") && !strings.HasPrefix(entry.Name(), "__") && (entry.IsDir() || strings.HasSuffix(entry.Name(), ".py")) {
-		name := strings.TrimSuffix(entry.Name(), ".py")
+	if !strings.HasPrefix(entry.Name(), ".") && !strings.HasPrefix(entry.Name(), "__") && entry.IsDir() {
+		name := entry.Name()
 		log.WithFields(log.Fields{
 			"Id":      name,
 			"Package": entry.IsDir(),
@@ -172,25 +172,11 @@ func (analyze *Analyze) ProcessJob(job *model.Job, reader io.ReadCloser) (io.Rea
 					defer waitGroup.Done()
 
 					output, err := analyze.startAnalyzer(job, analyzer, input)
-					if err == nil {
-						// parse into JSON to verify syntax is correct
-						result := make(map[string]interface{})
-						err = json.LoadJson(output, &result)
-						if err == nil {
-							resultsLock.Lock()
-							defer resultsLock.Unlock()
-							var summary string
-							if value, ok := result["summary"]; ok {
-								summary = value.(string)
-							} else {
-								summary = string(output)
-							}
-							if len(summary) > analyze.summaryLength {
-								summary = summary[:analyze.summaryLength] + "..."
-							}
-							jobResult := model.NewJobResult(analyzer.Id, result, string(summary))
-							job.Results = append(job.Results, jobResult)
-						}
+					jobResult := analyze.createJobResult(analyzer, input, output, err)
+					if jobResult != nil {
+						resultsLock.Lock()
+						defer resultsLock.Unlock()
+						job.Results = append(job.Results, jobResult)
 					}
 
 				}(analyzer)
@@ -214,6 +200,51 @@ func (analyze *Analyze) ProcessJob(job *model.Job, reader io.ReadCloser) (io.Rea
 		}
 	}
 	return reader, err
+}
+
+func (analyze *Analyze) createJobResult(analyzer *model.Analyzer, input string, output []byte, err error) *model.JobResult {
+	exitCode := 0
+	result := make(map[string]interface{})
+
+	if err == nil {
+		// parse into JSON to verify syntax is correct
+		err = json.LoadJson(output, &result)
+	}
+
+	if err != nil {
+		if exitError, ok := err.(*exec.ExitError); ok {
+			exitCode = exitError.ExitCode()
+		}
+		result["error"] = err.Error()
+		result["output"] = string(output)
+		result["summary"] = "internal_failure"
+		result["status"] = "caution"
+	}
+
+	// Exit code 126 represents that the analyzer isn't compatible
+	// with this artifact type.
+	if exitCode != 126 {
+		if err != nil {
+			log.WithFields(log.Fields{
+				"analyzer": analyzer.Id,
+				"input":    input,
+				"output":   string(output),
+				"err":      err,
+			}).WithError(err).Error("Failed to execute analyzer")
+		}
+		var summary string
+		if value, ok := result["summary"]; ok {
+			summary = value.(string)
+		} else {
+			summary = string(output)
+		}
+		if len(summary) > analyze.summaryLength {
+			summary = summary[:analyze.summaryLength] + "..."
+		}
+		return model.NewJobResult(analyzer.Id, result, string(summary))
+	}
+
+	return nil
 }
 
 func (analyze *Analyze) filterAnalyzers(job *model.Job) []*model.Analyzer {
@@ -291,13 +322,6 @@ func (analyze *Analyze) startAnalyzer(job *model.Job, analyzer *model.Analyzer, 
 			"output":   string(output),
 			"err":      err,
 		}).Debug("Executed analyzer")
-	} else {
-		log.WithFields(log.Fields{
-			"analyzer": analyzer.Id,
-			"input":    input,
-			"output":   string(output),
-			"err":      err,
-		}).WithError(err).Error("Failed to execute analyzer")
 	}
 
 	return output, err

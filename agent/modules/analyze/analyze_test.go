@@ -12,6 +12,7 @@ package analyze
 import (
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -59,7 +60,7 @@ func TestCreateAnalyzer(tester *testing.T) {
 	sq := NewAnalyze(nil)
 	err := sq.Init(cfg)
 	assert.Error(tester, err, "Unable to invoke JobMgr.AddJobProcessor due to nil agent")
-	assert.Equal(tester, 2, len(sq.analyzers))
+	assert.Equal(tester, 1, len(sq.analyzers))
 
 	entries, err := ioutil.ReadDir(TMP_DIR)
 	assert.NoError(tester, err)
@@ -132,9 +133,27 @@ func TestAnalyzersExecuted(tester *testing.T) {
 	reader, err := sq.ProcessJob(job, nil)
 	assert.Nil(tester, reader)
 	assert.Nil(tester, err)
-	assert.Len(tester, job.Results, 2)
-	assert.Equal(tester, "virustotal", job.Results[0].Id)
+	assert.Len(tester, job.Results, 1)
+	assert.Equal(tester, "whois", job.Results[0].Id)
 	assert.Equal(tester, "something here that is so long it will need to be ...", job.Results[0].Summary)
-	assert.Equal(tester, "whois", job.Results[1].Id)
-	assert.Equal(tester, "botsrv.btc-goblin.ru", job.Results[1].Summary)
+}
+
+func TestCreateResult(tester *testing.T) {
+	cfg := make(map[string]interface{})
+	analyzer := model.NewAnalyzer("test", true)
+	sq := NewAnalyze(nil)
+	sq.Init(cfg)
+	result := sq.createJobResult(analyzer, "myinput", []byte(`{"foo":"bar"}`), nil)
+	assert.Equal(tester, `{"foo":"bar"}`, result.Summary)
+
+	result = sq.createJobResult(analyzer, "myinput", []byte(`{"foo":"bar", "status": "threat", "data":"this is a long piece of data"}`), nil)
+	assert.Equal(tester, `{"foo":"bar", "status": "threat", "data":"this is ...`, result.Summary)
+
+	result = sq.createJobResult(analyzer, "myinput", []byte(`{"foo":"bar", "status": "threat", "summary":"this is a long piece of data"}`), nil)
+	assert.Equal(tester, `this is a long piece of data`, result.Summary)
+
+	// Normal exit
+	err := exec.ExitError{}
+	result = sq.createJobResult(analyzer, "myinput", []byte(`{"foo":"bar"}`), &err)
+	assert.Equal(tester, `internal_failure`, result.Summary)
 }

@@ -856,3 +856,68 @@ test('shouldGetAnalyzersInJob', () => {
   expect(comp.getAnalyzersInJob(job1)).toBe(0);
   expect(comp.getAnalyzersInJob(job2)).toBe(2);
 });
+
+test('shouldGetAnalyzerSummary', () => {
+  var actual = comp.getAnalyzerSummary({id:'urlhaus', summary:'no_results'});
+  expect(actual).toBe('No results found');
+
+  var actual = comp.getAnalyzerSummary({id:'urlhaus', summary:'internal_failure'});
+  expect(actual).toBe('Internal Analyzer Failure');
+
+  var actual = comp.getAnalyzerSummary({id:'urlhaus', summary:'foo'});
+  expect(actual).toBe('foo');
+});
+
+test('shouldGetAnalyzerDecoration', () => {
+  var decor;
+
+  decor = comp.getAnalyzerDecoration({data:{status:'foo'}});
+  expect(decor.color).toBe('');
+  expect(decor.icon).toBe('fa-circle-question');
+  expect(decor.severity).toBe(50);
+  expect(decor.help).toBe('analyzer_result_unknown');
+
+  decor = comp.getAnalyzerDecoration({data:{status:'info'}});
+  expect(decor.color).toBe('info');
+  expect(decor.icon).toBe('fa-circle-info');
+  expect(decor.severity).toBe(10);
+  expect(decor.help).toBe('analyzer_result_info');
+
+  decor = comp.getAnalyzerDecoration({data:{status:'ok'}});
+  expect(decor.color).toBe('success');
+  expect(decor.icon).toBe('fa-circle-check');
+  expect(decor.severity).toBe(0);
+  expect(decor.help).toBe('analyzer_result_ok');
+
+  decor = comp.getAnalyzerDecoration({data:{status:'caution'}});
+  expect(decor.color).toBe('warning');
+  expect(decor.icon).toBe('fa-circle-exclamation');
+  expect(decor.severity).toBe(80);
+  expect(decor.help).toBe('analyzer_result_caution');
+
+  decor = comp.getAnalyzerDecoration({data:{status:'threat'}});
+  expect(decor.color).toBe('danger');
+  expect(decor.icon).toBe('fa-triangle-exclamation');
+  expect(decor.severity).toBe(100);
+  expect(decor.help).toBe('analyzer_result_threat');
+});
+
+test('shouldGetAnalyzJobDecoration', () => {
+  decor = comp.getAnalyzeJobDecoration({results:[{data:{status:'threat'}},{data:{status:'ok'}},{data:{status:'info'}}]});
+  expect(decor.color).toBe('danger');
+  expect(decor.icon).toBe('fa-triangle-exclamation');
+  expect(decor.severity).toBe(100);
+  expect(decor.help).toBe('analyzer_result_threat');
+
+  decor = comp.getAnalyzeJobDecoration({results:[{data:{status:'unknown'}},{data:{status:'ok'}},{data:{status:'info'}}]});
+  expect(decor.color).toBe('');
+  expect(decor.icon).toBe('fa-circle-question');
+  expect(decor.severity).toBe(50);
+  expect(decor.help).toBe('analyzer_result_unknown');
+
+  decor = comp.getAnalyzeJobDecoration({results:[{data:{status:'ok'}},{data:{status:'ok'}},{data:{status:'ok'}}]});
+  expect(decor.color).toBe('success');
+  expect(decor.icon).toBe('fa-circle-check');
+  expect(decor.severity).toBe(0);
+  expect(decor.help).toBe('analyzer_result_ok');
+});

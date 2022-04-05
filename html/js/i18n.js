@@ -51,6 +51,18 @@ const i18n = {
       analyzeHelp: 'Enqueues a new analyze job for this observable',
       analyzeJobEnqueued: 'A new analyze job has been enqueued; results will be available within the observable details, after the analysis completes.',
       analyzeJobs: 'Analyzer Results',
+
+      analyzer_result_unknown: 'Unable to conclusively determine threat level',
+      analyzer_result_info: 'Informative data collected',
+      analyzer_result_ok: 'No threat detected',
+      analyzer_result_caution: 'Possible threat; manual review advised',
+      analyzer_result_threat: 'Confirmed threat detected',
+
+      analyzer_internal_failure: 'Internal Analyzer Failure',
+      analyzer_urlhaus_invalid_url: 'Invalid URL',
+      analyzer_urlhaus_malware_download: 'Malware Download',
+      analyzer_urlhaus_no_results: 'No results found',
+
       artifactDescription: 'Description',
       artifactDescriptionHelp: 'Provide an optional description',
       artifactIoc: 'IOC',
