@@ -909,7 +909,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
             decoration.help = "analyzer_result_caution";
             break;
           case "threat":
-            decoration.color = "danger"; 
+            decoration.color = "error"; 
             decoration.icon = "fa-triangle-exclamation";
             decoration.severity = 100;
             decoration.help = "analyzer_result_threat";

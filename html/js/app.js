@@ -621,12 +621,13 @@ $(document).ready(function() {
         location.href = this.authUrl + "login/browser";
       },
       checkForUnauthorized(response) {
-          if (response) {
+        if (response) {
           const redirectCookie = this.getCookie('AUTH_REDIRECT');
           if ((response.headers && response.headers['content-type'] == "text/html") ||
               (response.status == 401) ||
               (redirectCookie != null && redirectCookie.length > 0)) {
             this.deleteCookie('AUTH_REDIRECT');
+            this.deleteCookie('ory_kratos_session');
             this.showLogin();
             return null
           }

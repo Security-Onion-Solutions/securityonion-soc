@@ -896,7 +896,7 @@ test('shouldGetAnalyzerDecoration', () => {
   expect(decor.help).toBe('analyzer_result_caution');
 
   decor = comp.getAnalyzerDecoration({data:{status:'threat'}});
-  expect(decor.color).toBe('danger');
+  expect(decor.color).toBe('error');
   expect(decor.icon).toBe('fa-triangle-exclamation');
   expect(decor.severity).toBe(100);
   expect(decor.help).toBe('analyzer_result_threat');
@@ -904,7 +904,7 @@ test('shouldGetAnalyzerDecoration', () => {
 
 test('shouldGetAnalyzJobDecoration', () => {
   decor = comp.getAnalyzeJobDecoration({results:[{data:{status:'threat'}},{data:{status:'ok'}},{data:{status:'info'}}]});
-  expect(decor.color).toBe('danger');
+  expect(decor.color).toBe('error');
   expect(decor.icon).toBe('fa-triangle-exclamation');
   expect(decor.severity).toBe(100);
   expect(decor.help).toBe('analyzer_result_threat');
