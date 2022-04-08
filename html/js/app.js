@@ -627,7 +627,6 @@ $(document).ready(function() {
               (response.status == 401) ||
               (redirectCookie != null && redirectCookie.length > 0)) {
             this.deleteCookie('AUTH_REDIRECT');
-            this.deleteCookie('ory_kratos_session');
             this.showLogin();
             return null
           }

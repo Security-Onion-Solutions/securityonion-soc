@@ -19,7 +19,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const TMP_DIR = "/tmp/sensoroni.python"
+const TMP_DIR = "test-resources/whois/site-packages"
 
 func cleanup_tmp() {
 	os.RemoveAll(TMP_DIR)
@@ -40,8 +40,6 @@ func TestInitAnalyze(tester *testing.T) {
 	err := sq.Init(cfg)
 	assert.NotNil(tester, err)
 	assert.Equal(tester, DEFAULT_ANALYZERS_PATH, sq.analyzersPath)
-	assert.Equal(tester, DEFAULT_SITE_PACKAGES_PATH, sq.sitePackagesPath)
-	assert.Equal(tester, DEFAULT_SOURCE_PACKAGES_PATH, sq.sourcePackagesPath)
 	assert.Equal(tester, DEFAULT_ANALYZER_EXECUTABLE, sq.analyzerExecutable)
 	assert.Equal(tester, DEFAULT_ANALYZER_INSTALLER, sq.analyzerInstaller)
 	assert.Equal(tester, DEFAULT_TIMEOUT_MS, sq.timeoutMs)
@@ -55,8 +53,6 @@ func TestCreateAnalyzer(tester *testing.T) {
 
 	cfg := make(map[string]interface{})
 	cfg["analyzersPath"] = "test-resources"
-	cfg["sourcePackagesPath"] = "test-source-packages"
-	cfg["sitePackagesPath"] = TMP_DIR
 	sq := NewAnalyze(nil)
 	err := sq.Init(cfg)
 	assert.Error(tester, err, "Unable to invoke JobMgr.AddJobProcessor due to nil agent")
@@ -140,7 +136,7 @@ func TestAnalyzersExecuted(tester *testing.T) {
 
 func TestCreateResult(tester *testing.T) {
 	cfg := make(map[string]interface{})
-	analyzer := model.NewAnalyzer("test", true)
+	analyzer := model.NewAnalyzer("test", "path")
 	sq := NewAnalyze(nil)
 	sq.Init(cfg)
 	result := sq.createJobResult(analyzer, "myinput", []byte(`{"foo":"bar"}`), nil)

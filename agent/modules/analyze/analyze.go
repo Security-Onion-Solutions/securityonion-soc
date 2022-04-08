@@ -12,7 +12,6 @@ package analyze
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"io/ioutil"
@@ -31,8 +30,6 @@ import (
 )
 
 const DEFAULT_ANALYZERS_PATH = "/opt/sensoroni/analyzers"
-const DEFAULT_SITE_PACKAGES_PATH = "/opt/sensoroni/site-packages"
-const DEFAULT_SOURCE_PACKAGES_PATH = "/opt/sensoroni/source-packages"
 const DEFAULT_ANALYZER_EXECUTABLE = "python"
 const DEFAULT_ANALYZER_INSTALLER = "pip"
 const DEFAULT_TIMEOUT_MS = 900000
@@ -42,8 +39,6 @@ const DEFAULT_SUMMARY_LENGTH = 50
 type Analyze struct {
 	config             module.ModuleConfig
 	analyzersPath      string
-	sitePackagesPath   string
-	sourcePackagesPath string
 	analyzerExecutable string
 	analyzerInstaller  string
 	agent              *agent.Agent
@@ -67,8 +62,6 @@ func (analyze *Analyze) Init(cfg module.ModuleConfig) error {
 	var err error
 	analyze.config = cfg
 	analyze.analyzersPath = strings.TrimSuffix(module.GetStringDefault(cfg, "analyzersPath", DEFAULT_ANALYZERS_PATH), "/")
-	analyze.sitePackagesPath = strings.TrimSuffix(module.GetStringDefault(cfg, "sitePackagesPath", DEFAULT_SITE_PACKAGES_PATH), "/")
-	analyze.sourcePackagesPath = strings.TrimSuffix(module.GetStringDefault(cfg, "sourcePackagesPath", DEFAULT_SOURCE_PACKAGES_PATH), "/")
 	analyze.timeoutMs = module.GetIntDefault(cfg, "timeoutMs", DEFAULT_TIMEOUT_MS)
 	analyze.parallelLimit = module.GetIntDefault(cfg, "parallelLimit", DEFAULT_PARALLEL_LIMIT)
 	analyze.summaryLength = module.GetIntDefault(cfg, "summaryLength", DEFAULT_SUMMARY_LENGTH)
@@ -99,10 +92,9 @@ func (analyze *Analyze) createAnalyzer(entry fs.FileInfo) *model.Analyzer {
 	if !strings.HasPrefix(entry.Name(), ".") && !strings.HasPrefix(entry.Name(), "__") && entry.IsDir() {
 		name := entry.Name()
 		log.WithFields(log.Fields{
-			"Id":      name,
-			"Package": entry.IsDir(),
+			"Id": name,
 		}).Info("Added analyzer")
-		return model.NewAnalyzer(name, entry.IsDir())
+		return model.NewAnalyzer(name, analyze.analyzersPath+"/"+name)
 	}
 	return nil
 }
@@ -262,22 +254,18 @@ func (analyze *Analyze) fileExists(path string) bool {
 func (analyze *Analyze) initAnalyzer(analyzer *model.Analyzer) error {
 	var err error
 
-	requirementsPath := fmt.Sprintf("%s/%s/requirements.txt", analyze.analyzersPath, analyzer.Id)
-	if analyze.fileExists(requirementsPath) {
+	if analyze.fileExists(analyzer.GetRequirementsPath()) {
 		log.WithFields(log.Fields{
-			"sitePackagesPath":    analyze.sitePackagesPath,
-			"sourcePackagesPath":  analyze.sourcePackagesPath,
 			"analyzersPath":       analyze.analyzersPath,
 			"analyzerInterpretor": analyze.analyzerExecutable,
 			"analyzer":            analyzer.Id,
-			"requirementsPath":    requirementsPath,
 		}).Info("Installing python analyzer dependencies")
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(analyze.timeoutMs)*time.Millisecond)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, analyze.analyzerInstaller,
-			"install", "--no-input", "--find-links="+analyze.sourcePackagesPath, "-r", requirementsPath,
-			"-t", analyze.sitePackagesPath)
+			"install", "--upgrade", "--no-input", "--find-links="+analyzer.GetSourcePackagesPath(), "-r", analyzer.GetRequirementsPath(),
+			"-t", analyzer.GetSitePackagesPath())
 
 		output, err := cmd.CombinedOutput()
 		if err == nil {
@@ -302,7 +290,6 @@ func (analyze *Analyze) startAnalyzer(job *model.Job, analyzer *model.Analyzer, 
 	log.WithFields(log.Fields{
 		"jobId":               job.Id,
 		"analyzersPath":       analyze.analyzersPath,
-		"sitePackagesPath":    analyze.sitePackagesPath,
 		"analyzerInterpretor": analyze.analyzerExecutable,
 		"analyzer":            analyzer.Id,
 	}).Info("Executing python analyzer for job")
@@ -311,7 +298,7 @@ func (analyze *Analyze) startAnalyzer(job *model.Job, analyzer *model.Analyzer, 
 	defer cancel()
 	cmd := exec.CommandContext(ctx, analyze.analyzerExecutable, "-m", analyzer.GetModule(), input)
 	cmd.Env = append(os.Environ(),
-		"PYTHONPATH="+analyze.analyzersPath+":"+analyze.sitePackagesPath,
+		"PYTHONPATH="+analyze.analyzersPath+":"+analyzer.GetSitePackagesPath(),
 	)
 
 	output, err := cmd.CombinedOutput()
