@@ -58,10 +58,13 @@ const i18n = {
       analyzer_result_caution: 'Possible threat; manual review advised',
       analyzer_result_threat: 'Confirmed threat detected',
 
+      analyzer_excessive_usage: 'Excessive Analyzer Usage',
       analyzer_internal_failure: 'Internal Analyzer Failure',
       analyzer_malicious: 'Malicious',
       analyzer_harmless: 'Harmless',
       analyzer_suspicious: 'Suspicious',
+      analyzer_phishing: 'Phishing',
+      analyzer_spam: 'Spam',
       analyzer_timeout: 'Remote Host Timed Out',
       analyzer_urlhaus_invalid_url: 'Invalid URL',
       analyzer_urlhaus_malware_download: 'Malware Download',
