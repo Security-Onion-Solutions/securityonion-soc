@@ -815,7 +815,14 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     getAnalyzeJobs(evidence) {
       const jobs = this.analyzeJobs[evidence.id];
       if (jobs && jobs.length > 0) {
-        return jobs;
+        return jobs.sort(function(a, b) { 
+          if (a.id < b.id) {
+            return -1;
+          } else if (a.id > b.id) {
+            return 1;
+          }
+          return 0;
+        });
       }
       return null;
     },

@@ -849,6 +849,20 @@ test('shouldGetAnalyzeJobs', () => {
   expect(comp.getAnalyzeJobs(fakeEvidence3)).toBe(null);
 });
 
+test('shouldGetAnalyzeJobsSorted', () => {
+  const fakeEvidence = { id: 'artifact1' };
+  const job1 = { id: '1001', status: JobStatusPending, filter: { parameters: { artifact: { id: 'artifact1' } } } };
+  const job2 = { id: '1002', status: JobStatusCompleted, filter: { parameters: { artifact: { id: 'artifact1' } } } };
+  const job3 = { id: '1003', status: JobStatusCompleted, filter: { parameters: { artifact: { id: 'artifact2' } } } };
+  comp.analyzeJobs['artifact1'] = [job2, job3, job1];
+
+  const jobs = comp.getAnalyzeJobs(fakeEvidence);
+  expect(jobs.length).toBe(3);
+  expect(jobs[0].id).toBe('1001');
+  expect(jobs[1].id).toBe('1002');
+  expect(jobs[2].id).toBe('1003');
+});
+
 test('shouldGetAnalyzersInJob', () => {
   const job1 = { id: '1001', status: JobStatusPending, results: []};
   const job2 = { id: '1001', status: JobStatusCompleted, results: [{ id: 'analyzer1'}, {id: 'analyzer2'}]};
