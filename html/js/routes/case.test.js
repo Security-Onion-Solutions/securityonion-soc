@@ -921,8 +921,8 @@ test('shouldGetAnalyzJobDecoration', () => {
   expect(decor.severity).toBe(0);
   expect(decor.help).toBe('analyzer_result_ok');
 
-  decor = comp.getAnalyzeJobDecoration({results: None});
-  expect(decor.color).toBe('');
+  decor = comp.getAnalyzeJobDecoration({results: null, status: JobStatusCompleted});
+  expect(decor.color).toBe(undefined);
   expect(decor.icon).toBe('fa-ban');
   expect(decor.severity).toBe(-1);
   expect(decor.help).toBe('analyzer_result_none');
