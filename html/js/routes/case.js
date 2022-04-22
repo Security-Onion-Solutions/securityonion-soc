@@ -781,14 +781,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
                 }
               }
           }});
-          jobs = response.data.sort((a, b) => { 
-            if (a.id < b.id) {
-              return -1;
-            } else if (a.id > b.id) {
-              return 1;
-            }
-            return 0;
-          });
+          const jobs = response.data;
 
           for (var idx = 0; idx < jobs.length; idx++) {
             const job = jobs[idx];
@@ -815,14 +808,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     getAnalyzeJobs(evidence) {
       const jobs = this.analyzeJobs[evidence.id];
       if (jobs && jobs.length > 0) {
-        return jobs.sort(function(a, b) { 
-          if (a.id < b.id) {
-            return -1;
-          } else if (a.id > b.id) {
-            return 1;
-          }
-          return 0;
-        });
+        return jobs;
       }
       return null;
     },
@@ -853,7 +839,6 @@ routes.push({ path: '/case/:id', name: 'case', component: {
             var existingResults = this.analyzeJobs[artifactId];
             if (!existingResults) {
               existingResults = [];
-              Vue.set(this.analyzeJobs, artifactId, existingResults);
             }
             var found = false;
             for (var jobIndex = 0; jobIndex< existingResults.length; jobIndex++) {
@@ -867,10 +852,21 @@ routes.push({ path: '/case/:id', name: 'case', component: {
                 found = true;
                 break;
               }
-            } 
+            }
+
             if (!found) {
               existingResults.push(job);
+              existingResults.sort((a, b) => { 
+                if (a.id < b.id) {
+                  return -1;
+                } else if (a.id > b.id) {
+                  return 1;
+                }
+                return 0;
+              });
+              Vue.set(this.analyzeJobs, artifactId, existingResults);
             }
+
             break;
           }
         }
