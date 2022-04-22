@@ -108,7 +108,7 @@ func TestAnalyzersMissing(tester *testing.T) {
 	job.Filter.Parameters["foo"] = "bar"
 	reader, err := sq.ProcessJob(job, nil)
 	assert.Nil(tester, reader)
-	assert.Error(tester, err, "No analyzers processed successfully")
+	assert.NoError(tester, err)
 	assert.Empty(tester, job.Results)
 }
 

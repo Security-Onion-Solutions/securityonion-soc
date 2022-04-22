@@ -1885,6 +1885,9 @@
                                   <v-expansion-panel-content>
 
                                     <v-expansion-panels class="mb-1" flat>
+                                      <div class="my-4" v-if="job.status == JobStatusCompleted && !job.results">
+                                        {{ i18n.analyzersUnavailable }}
+                                      </div>
                                       <v-expansion-panel v-for="analyzer in job.results" :id="`evidence-${props.index}-analyze-job-${job.id}`" >
                                         <v-expansion-panel-header>
                                           <v-row>

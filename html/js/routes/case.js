@@ -931,6 +931,9 @@ routes.push({ path: '/case/:id', name: 'case', component: {
             current = decoration;
           }
         }
+      } else if (job.status == JobStatusCompleted) {
+        current.icon = "fa-ban";
+        current.help = "analyzer_result_none";
       }
       return current;
     },

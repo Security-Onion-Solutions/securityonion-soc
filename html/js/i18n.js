@@ -51,7 +51,9 @@ const i18n = {
       analyzeHelp: 'Enqueues a new analyze job for this observable',
       analyzeJobEnqueued: 'A new analyze job has been enqueued; results will be available within the observable details, after the analysis completes.',
       analyzeJobs: 'Analyzer Results',
+      analyzersUnavailable: 'No analyzers are applicable to this observable. This can also occur if there are applicable analyzers but they are not properly configured. Review the SOC logs for more information.',
 
+      analyzer_result_none: 'No analyzers available',
       analyzer_result_unknown: 'Unable to conclusively determine threat level',
       analyzer_result_info: 'Informative data collected',
       analyzer_result_ok: 'No threat detected',
@@ -59,16 +61,17 @@ const i18n = {
       analyzer_result_threat: 'Confirmed threat detected',
 
       analyzer_excessive_usage: 'Excessive Analyzer Usage',
+      analyzer_harmless: 'Harmless',
       analyzer_internal_failure: 'Internal Analyzer Failure',
       analyzer_malicious: 'Malicious',
-      analyzer_harmless: 'Harmless',
+      analyzer_no_results: 'No results found',
       analyzer_suspicious: 'Suspicious',
       analyzer_phishing: 'Phishing',
       analyzer_spam: 'Spam',
       analyzer_timeout: 'Remote Host Timed Out',
       analyzer_urlhaus_invalid_url: 'Invalid URL',
       analyzer_urlhaus_malware_download: 'Malware Download',
-      analyzer_urlhaus_no_results: 'No results found',
+      
 
       artifactDescription: 'Description',
       artifactDescriptionHelp: 'Provide an optional description',

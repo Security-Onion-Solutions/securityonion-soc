@@ -185,10 +185,6 @@ func (analyze *Analyze) ProcessJob(job *model.Job, reader io.ReadCloser) (io.Rea
 			sort.SliceStable(job.Results, func(i, j int) bool {
 				return job.Results[i].Id < job.Results[j].Id
 			})
-
-			if len(job.Results) == 0 {
-				err = errors.New("No analyzers processed successfully")
-			}
 		}
 	}
 	return reader, err
