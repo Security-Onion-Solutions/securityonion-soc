@@ -13,7 +13,7 @@ ARG VERSION=0.0.0
 RUN apk update && apk add libpcap-dev bash git musl-dev gcc npm python3 py3-pip
 COPY . /build
 WORKDIR /build
-RUN npm install jest --global
+RUN npm install jest jest-environment-jsdom --global
 RUN ln -s /usr/bin/python3 /usr/bin/python
 RUN ./build.sh "$VERSION"
 
