@@ -203,7 +203,7 @@ func (segment *SearchSegment) escape(value string) string {
   return value
 }
 
-func (segment *SearchSegment) AddFilter(field string, value string, scalar bool, inclusive bool) error {
+func (segment *SearchSegment) AddFilter(field string, value string, scalar bool, inclusive bool, condense bool) error {
   // This flag can be adjust to true once the query parser is more robust and better able to determine
   // when an inclusive filter already exists in a query, so that two inclusive filters are not allowed
   // to exist in a query together. For example, the following filters will prevent any matches:
@@ -212,6 +212,14 @@ func (segment *SearchSegment) AddFilter(field string, value string, scalar bool,
 
   if len(field) > 4 && field[:4] == "soc_" {
     field = field[3:]
+  }
+
+  if condense {
+    // Combine existing terms into a single grouped term
+    condensed, _ := NewQueryTerm(segment.String())
+    condensed.Grouped = true
+    segment.Clear()
+    segment.terms = append(segment.terms, condensed)
   }
 
   var err error
@@ -232,11 +240,12 @@ func (segment *SearchSegment) AddFilter(field string, value string, scalar bool,
     }
     if !scalar {
       strBuilder.WriteRune('"')
-    }
-    strBuilder.WriteString(segment.escape(value))
-    if !scalar {
+      strBuilder.WriteString(segment.escape(value))
       strBuilder.WriteRune('"')
+    } else {
+      strBuilder.WriteString(value)
     }
+
     term, err := NewQueryTerm(strBuilder.String())
     if err == nil {
       segment.terms = append(segment.terms, term)
@@ -486,7 +495,7 @@ func (query *Query) String() string {
   return queryBuilder.String()
 }
 
-func (query *Query) Filter(field string, value string, scalar bool, mode string) (string, error) {
+func (query *Query) Filter(field string, value string, scalar bool, mode string, condense bool) (string, error) {
   var err error
 
   segment := query.NamedSegment(SegmentKind_Search)
@@ -501,7 +510,7 @@ func (query *Query) Filter(field string, value string, scalar bool, mode string)
   }
 
   include := mode != FILTER_EXCLUDE
-  err = searchSegment.AddFilter(field, value, scalar, include)
+  err = searchSegment.AddFilter(field, value, scalar, include, condense)
 
   if mode == FILTER_DRILLDOWN {
     query.RemoveSegment(SegmentKind_GroupBy)

@@ -638,6 +638,10 @@ test('buildHuntQuery', () => {
   expect(comp.buildHuntQuery(fakeEvent)).toBe('_id: "xyz"');
 });
 
+test('buildHuntQueryForValue', () => {
+  expect(comp.buildHuntQueryForValue("foo")).toBe('"foo" | groupby event.module event.dataset');
+});
+
 test('getEventId', () => {
   const fakeEvent = { fields: { soc_id: 'xyz' }};
   expect(comp.getEventId(fakeEvent)).toBe('xyz');
@@ -658,23 +662,28 @@ test('duplicateEventFields', () => {
 });
 
 test('populateAddObservableForm', () => {
-  comp.presets['artifactType'] = {labels:['ip']};
+  comp.presets['artifactType'] = {labels:['default','ip']};
+  comp.presets['tlp'] = {labels:['gr','rd'], default: 'rd'};
   comp.activeTab = 'something';
 
   comp.populateAddObservableForm('foo', 'bar');
   expect(comp.associatedForms['evidence'].value).toBe('bar');
   expect(comp.associatedForms['evidence'].description).toBe('foo');
-  expect(comp.associatedForms['evidence'].artifactType).toBe(undefined);
+  expect(comp.associatedForms['evidence'].tlp).toBe('gr');
+  expect(comp.associatedForms['evidence'].artifactType).toBe('default');
   expect(comp.activeTab).toBe('evidence');
 
   comp.populateAddObservableForm('foo', '3b43c8fadd64750525a2e285d83fa01d62227999');
   expect(comp.associatedForms['evidence'].value).toBe('3b43c8fadd64750525a2e285d83fa01d62227999');
   expect(comp.associatedForms['evidence'].description).toBe('foo');
-  expect(comp.associatedForms['evidence'].artifactType).toBe(undefined);
+  expect(comp.associatedForms['evidence'].tlp).toBe('gr');
+  expect(comp.associatedForms['evidence'].artifactType).toBe('default');
 
+  comp.caseObj = { tlp: 'rd' };
   comp.populateAddObservableForm('foo', '12.34.56.78');
   expect(comp.associatedForms['evidence'].value).toBe('12.34.56.78');
   expect(comp.associatedForms['evidence'].description).toBe('foo');
+  expect(comp.associatedForms['evidence'].tlp).toBe('rd');
   expect(comp.associatedForms['evidence'].artifactType).toBe('ip');
 });
 

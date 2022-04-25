@@ -66,12 +66,13 @@ func (queryHandler *QueryHandler) get(ctx context.Context, writer http.ResponseW
 		scalar := request.Form.Get("scalar") == "true"
 		mode := request.Form.Get("mode")
 		value := request.Form.Get("value")
+		condense := request.Form.Get("condense") == "true"
 		if len(value) > 0 {
-			alteredQuery, err = query.Filter(field, value, scalar, mode)
+			alteredQuery, err = query.Filter(field, value, scalar, mode, condense)
 		} else {
 			values := request.Form["value[]"]
 			for _, value := range values {
-				alteredQuery, err = query.Filter(field, value, scalar, mode)
+				alteredQuery, err = query.Filter(field, value, scalar, mode, condense)
 				queryStr = query.String()
 				query = model.NewQuery()
 				err = query.Parse(queryStr)

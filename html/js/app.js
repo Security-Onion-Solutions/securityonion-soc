@@ -745,10 +745,15 @@ $(document).ready(function() {
           await this.getUsers();
           this.usersLoadedTime = nowTime;
         }
-        for (var idx = 0; idx < this.users.length; idx++) {
-          const user = this.users[idx];
-          if (user.id == id) {
-            return user;
+        return this.getUserByIdViaCache(id);
+      },
+      getUserByIdViaCache(id) {
+        if (this.users) {
+          for (var idx = 0; idx < this.users.length; idx++) {
+            const user = this.users[idx];
+            if (user.id == id) {
+              return user;
+            }
           }
         }
         return null;
