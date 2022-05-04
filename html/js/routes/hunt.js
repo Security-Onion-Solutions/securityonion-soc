@@ -1527,3 +1527,6 @@ routes.push({ path: '/alerts', name: 'alerts', component: alertsComponent});
 
 const casesComponent = Object.assign({}, huntComponent);
 routes.push({ path: '/cases', name: 'cases', component: casesComponent});
+
+const dashboardsComponent = Object.assign({}, huntComponent);
+routes.push({ path: '/dashboards', name: 'dashboards', component: dashboardsComponent});
