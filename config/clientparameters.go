@@ -61,9 +61,10 @@ type ClientTool struct {
 }
 
 type HuntingQuery struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Query       string `json:"query"`
+	Name         string `json:"name"`
+	Description  string `json:"description"`
+	Query        string `json:"query"`
+	ShowSubtitle bool   `json:"showSubtitle"`
 }
 
 type HuntingAction struct {

@@ -337,7 +337,7 @@
         </v-row>
         <v-row align="start">
           <v-col cols="12" md="7">
-            <v-textarea v-if="isAdvanced()" clearable auto-grow :disabled="loading()" @change="notifyInputsChanged" class="mx-2" v-model="query" :hint="i18n.queryHelp" rows="1" persistent-hint autofocus prepend-icon="fa-search" @keydown.enter.prevent="hunt" id="hunt-query-input">
+            <v-textarea :clearable="isAdvanced()" :auto-grow="isAdvanced()" :readonly="!isAdvanced()" :disabled="loading()" @change="notifyInputsChanged" class="mx-2" v-model="query" :hint="i18n.queryHelp" rows="1" persistent-hint autofocus prepend-icon="fa-search" @keydown.enter.prevent="hunt" id="hunt-query-input">
               <template v-slot:prepend-inner>
                 <v-menu dense bottom three-line offset-y>
                   <template v-slot:activator="{ on: menu }">
@@ -351,7 +351,7 @@
                     </v-tooltip>
                   </template>
                   <v-list dense class="overflow-y-auto" style="max-height: 600px" id="hunt-query-dropdown-list">
-                    <v-list-item v-for="query in mruQueries" :key="query">
+                    <v-list-item v-if="isAdvanced()" v-for="query in mruQueries" :key="query">
                       <v-list-item-content @click="huntQuery(query)" :style="{ cursor: 'pointer'}">
                         <v-list-item-title v-text="query"></v-list-item-title>
                         <v-list-item-subtitle>
@@ -360,49 +360,19 @@
                         </v-list-item-subtitle>
                       </v-list-item-content>
                     </v-list-item>
-                    <v-divider></v-divider>
+                    <v-divider v-if="isAdvanced()"></v-divider>
                     <v-list-item v-for="query in queries" :key="query.query">
-                      <v-list-item-content @click="huntQuery(query.query)" :style="{ cursor: 'pointer'}">
-                        <v-list-item-title v-text="query.query"></v-list-item-title>
-                        <v-list-item-subtitle>
-                          <span v-if="query.name.length > 0" class="text-primary">{{ query.name }} &mdash;</span>
-                          {{ query.description }}
-                        </v-list-item-subtitle>
+                      <v-list-item-content @click="huntQuery(query.query)" :style="{ cursor: 'pointer'}" :title="query.description">
+                        <v-list-item-title class="text-primary">
+                          {{ query.name }}
+                        </v-list-item-title>
+                        <v-list-item-subtitle v-if="query.showSubtitle" v-text="query.query"></v-list-item-subtitle>
                       </v-list-item-content>
                     </v-list-item>
                   </v-list>
                 </v-menu>
               </template>
             </v-textarea>
-            <v-textarea v-if="!isAdvanced()" no-resize readonly @change="notifyInputsChanged" class="mx-2" v-model="queryName" rows="1" 
-              prepend-icon="fa-search" @keydown.enter.prevent="hunt" id="hunt-query-input">
-              <template v-slot:prepend-inner>
-                <v-menu dense bottom three-line offset-y>
-                  <template v-slot:activator="{ on: menu }">
-                    <v-tooltip bottom>
-                      <template v-slot:activator="{ on: tooltip }">
-                        <v-btn icon small v-on="{ ...tooltip, ...menu }" id="hunt-query-dropdown-button">
-                          <v-icon>fa-angle-down</v-icon>
-                        </v-btn>
-                      </template>
-                      <span>{{ i18n.queriesHelp }}</span>
-                    </v-tooltip>
-                  </template>
-                  <v-list dense class="overflow-y-auto" style="max-height: 600px" id="hunt-query-dropdown-list">
-                    <v-list-item v-for="query in queries" :key="query.query">
-                      <v-list-item-content @click="huntQuery(query.query)" :style="{ cursor: 'pointer'}">
-                        <v-list-item-title v-text="query.name"></v-list-item-title>
-                      </v-list-item-content>
-                    </v-list-item>
-                  </v-list>
-                </v-menu>
-              </template>
-              <template v-slot:append-outer>
-                <v-btn small icon id="switch-to-hunt-button" :title="i18n.huntHelp" @click="switchToHunt()">
-                  <v-icon>fa-crosshairs</v-icon>
-                </v-btn>
-              </template>
-            </v-textarea>            
           </v-col>
           <v-col cols="12" md="5" class="d-flex flex-nowrap align-center">
             <v-text-field :disabled="loading()" v-if="relativeTimeEnabled" id="huntrelativetimevalue" @change="notifyInputsChanged" class="mx-2" 
@@ -430,10 +400,10 @@
               </template>
             </v-text-field>
             <v-btn id="hunt" :disabled="loading()" :color="huntPending ? 'light-green accent-4' : (autoRefreshInterval ? 'secondary' : 'primary')" @click.stop="hunt">
-              <span v-if="isAdvanced()" class="d-sm-none d-lg-inline pr-2" v-text="i18n.hunt"></span>
-              <span v-if="!isAdvanced()" class="d-sm-none d-lg-inline pr-2" v-text="i18n.refresh"></span>
-              <v-icon v-if="isAdvanced() && !autoRefreshInterval">fa-crosshairs</v-icon>
-              <v-icon v-if="!isAdvanced() && !autoRefreshInterval">fa-sync</v-icon>
+              <span v-if="isCategory('hunt')" class="d-sm-none d-lg-inline pr-2" v-text="i18n.hunt"></span>
+              <span v-if="!isCategory('hunt')" class="d-sm-none d-lg-inline pr-2" v-text="i18n.refresh"></span>
+              <v-icon v-if="isCategory('hunt') && !autoRefreshInterval">fa-crosshairs</v-icon>
+              <v-icon v-if="!isCategory('hunt') && !autoRefreshInterval">fa-sync</v-icon>
               <v-icon v-if="autoRefreshInterval">fa-hourglass-half</v-icon>
             </v-btn>
           </v-col>
