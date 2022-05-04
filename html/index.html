@@ -435,17 +435,14 @@
             <span v-for="filter in queryFilters" :key="filter">
               <v-chip class="filter mx-1 my-1" color="primary" close @click:close="removeFilter(filter)">{{ filter }}</v-chip>
             </span>
-            <span v-for="groupBy in queryGroupBys" :key="groupBy">
-              <v-chip class="groupBy mx-1 my-1" color="accent" close @click:close="removeGroupBy(groupBy)">{{ i18n.groupedBy }} {{ groupBy }}</v-chip>
-            </span>
             <span v-for="sortBy in querySortBys" :key="sortBy">
               <v-chip class="sortBy mx-1 my-1" color="secondary" close @click:close="removeSortBy(sortBy)">{{ i18n.sortedBy }} {{ sortBy }}</v-chip>
             </span>
           </v-col>
         </v-row>
-        <v-col  id="graphs" v-if="loaded && isAdvanced()">
+        <v-col id="graphs" v-if="loaded && isAdvanced()">
           <v-toolbar dense flat>
-            <v-toolbar-title>{{ i18n.graphs }}</v-toolbar-title>
+            <v-toolbar-title>{{ i18n.standardMetrics }}</v-toolbar-title>
             <v-spacer />
             <v-btn
               plain
@@ -473,7 +470,7 @@
                   <line-chart id="timelineChart" :height="chartHeight" :chartdata="timelineChartData" :options="timelineChartOptions"/>
                 </v-col>
                 <v-col cols="12" md="4">
-                  <bar-chart id="bottomChart":height="chartHeight" :chartdata="bottomChartData" :options="bottomChartOptions"/>
+                  <bar-chart id="bottomChart" :height="chartHeight" :chartdata="bottomChartData" :options="bottomChartOptions"/>
                 </v-col>
               </v-row>
             </div>
@@ -497,53 +494,85 @@
           <v-expand-transition>
             <v-row v-if="isExpandedSection('hunt-groups')">
               <v-col cols="12">
-                <v-data-table :search="groupByFilter" dense :sort-by.sync="groupBySortBy" :sort-desc.sync="groupBySortDesc" :footer-props="groupByFooters" 
-                  :items-per-page.sync="groupByItemsPerPage" must-sort :headers="groupByHeaders" :items="groupByData" :page.sync="groupByPage" :custom-sort="sortEvents">
-                  <template v-slot:top v-if="isAdvanced()">
-                    <v-container fluid>
-                      <v-row>
-                        <v-col cols="4"></v-col>
-                        <v-col cols="2">
-                          <v-select :disabled="loading()" @change="notifyInputsChanged" v-model="groupByLimit" :items="groupByLimitOptions" :label="i18n.fetchLimit"></v-select>
-                        </v-col>
-                        <v-col cols="6">
-                          <v-text-field v-model="groupByFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
-                        </v-col>
-                      </v-row>
-                    </v-container>        
-                  </template>
-                  <template v-slot:item="{ item, index }">
-                    <tr>
-                      <td>
-                        <v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" class="mx-2" icon x-small
-                          @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))"
-                          :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
-                          <v-icon :title="isFilterToggleEnabled('acknowledged') ? i18n.alertUndoAcknowledge : i18n.alertAcknowledge">fa-bell</v-icon>
+                <v-container fluid>
+                  <v-row>
+                    <v-col cols="4"></v-col>
+                    <v-col cols="2">
+                      <v-select :disabled="loading()" @change="notifyInputsChanged" v-model="groupByLimit" :items="groupByLimitOptions" :label="i18n.fetchLimit"></v-select>
+                    </v-col>
+                    <v-col cols="6">
+                      <v-text-field v-model="groupByFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
+                    </v-col>
+                  </v-row>
+                  <v-row>
+                    <v-col v-for="(group, groupIdx) in groupBys" class="groupBy">
+                      <div v-if="group.chart_type">
+                        <v-btn icon class="mx-1" x-small :to="buildGroupWithoutOptionsRoute(groupIdx)" :title="i18n.showTable">
+                          <v-icon>fa-table-cells</v-icon>
                         </v-btn>
-                        <v-btn id="escalateButton" v-if="escalateEnabled" class="mx-2" icon x-small
-                          @click="toggleEscalationMenu($event, item)"
-                          :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
-                          <v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate">fa-exclamation-triangle</v-icon>
+                        <v-btn icon class="mx-1"  x-small :to="buildToggleLegendRoute(group, groupIdx)" :title="i18n.toggleLegend">
+                          <v-icon>fa-list</v-icon>
                         </v-btn>
-                      </td>
-                      <td>
-                        <v-tooltip bottom v-if="loaded && eventsEnabled && metricsEnabled && ( (groupByHeaders.length==3 && groupByHeaders[1]['value']=='count' ) || (groupByHeaders.length==5 && groupByHeaders[1]['value']=='count' && groupByHeaders[2]['value']=='rule.name' && groupByHeaders[3]['value']=='event.module' && groupByHeaders[4]['value']=='event.severity_label') ) ">
-                          <template v-slot:activator="{ on, attrs }">
-                            <span v-bind="attrs" v-on="on">
-                              <div class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()" v-bind="attrs" @click="countDrilldown(item)"></div>
-                            </span>
-                          </template>
-                          <span>{{ i18n.quickDrilldown }}</span>
-                        </v-tooltip>
-                         <div v-else class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()"></div>
-                      </td>
-                      <td v-for="field in groupByHeaders.slice(2)" :key="field.value">
-                        <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction($event, item, field.value, item[field.value])"></div>
-                      </td>
-                    </tr>
-                  </template>
-    
-                </v-data-table>
+                        <v-btn icon class="mx-1"  x-small @click="removeGroupBy(groupIdx, -1)" :title="i18n.remove">
+                          <v-icon>fa-trash</v-icon>
+                        </v-btn>
+                        <pie-chart v-if="group.chart_type == 'pie'" :chartdata="group.chart_data" :options="group.chart_options"/>
+                        <bar-chart v-if="group.chart_type == 'bar'" :chartdata="group.chart_data" :options="group.chart_options"/>
+                        <sankey-chart v-if="group.chart_type == 'sankey'" :chartdata="group.chart_data" :options="group.chart_options"/>
+                      </div>
+                      <v-data-table v-if="!group.chart_type" class="elevation-1" :search="groupByFilter" dense :footer-props="groupByFooters" 
+                        :items-per-page.sync="groupByItemsPerPage" must-sort :headers="group.headers" :items="group.data" :custom-sort="sortEvents">
+                        <template v-if="isAdvanced()" v-slot:header="{ props }">
+                          <th v-for="(header, headerIdx) in group.headers" style="white-space: nowrap; text-align: left; padding-left: 1em;">
+                            <v-btn v-if="header.value == 'count'" icon x-small :to="buildGroupOptionRoute(groupIdx, [], 'pie')" :title="i18n.showPieChart">
+                              <v-icon>fa-chart-pie</v-icon>
+                            </v-btn>
+                            <v-btn v-if="header.value == 'count'" icon x-small :to="buildGroupOptionRoute(groupIdx, [], 'bar')" :title="i18n.showBarChart">
+                              <v-icon>fa-chart-column</v-icon>
+                            </v-btn>
+                            <v-btn v-if="header.value == 'count' && isGroupSankeyCapable(group, groupIdx)" icon x-small :to="buildGroupOptionRoute(groupIdx, [], 'sankey')" :title="i18n.showBarChart">
+                              <v-icon>fa-diagram-project</v-icon>
+                            </v-btn>
+                            <v-btn v-if="header.value != 'count' && header.value != ''" icon x-small @click="removeGroupBy(groupIdx,headerIdx - 2)" :title="i18n.remove">
+                              <v-icon>fa-trash</v-icon>
+                            </v-btn>
+                          </th>
+                        </template>
+                        <template v-slot:item="{ item, index }">
+                          <tr>
+                            <td>
+                              <v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" class="mx-2" icon x-small
+                                @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))"
+                                :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
+                                <v-icon :title="isFilterToggleEnabled('acknowledged') ? i18n.alertUndoAcknowledge : i18n.alertAcknowledge">fa-bell</v-icon>
+                              </v-btn>
+                              <v-btn id="escalateButton" v-if="escalateEnabled" class="mx-2" icon x-small
+                                @click="toggleEscalationMenu($event, item)"
+                                :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
+                                <v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate">fa-exclamation-triangle</v-icon>
+                              </v-btn>
+                            </td>
+                            <td>
+                              <v-tooltip bottom v-if="loaded && eventsEnabled && metricsEnabled && ( (group.headers.length==3 && group.headers[1]['value']=='count' ) || (group.headers.length==5 && group.headers[1]['value']=='count' && group.headers[2]['value']=='rule.name' && group.headers[3]['value']=='event.module' && group.headers[4]['value']=='event.severity_label') ) ">
+                                <template v-slot:activator="{ on, attrs }">
+                                  <span v-bind="attrs" v-on="on">
+                                    <div class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()" v-bind="attrs" @click="countDrilldown(item)"></div>
+                                  </span>
+                                </template>
+                                <span>{{ i18n.quickDrilldown }}</span>
+                              </v-tooltip>
+                               <div v-else class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()"></div>
+                            </td>
+                            <td v-for="field in group.headers.slice(2)" :key="field.value">
+                              <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction($event, item, field.value, item[field.value])"></div>
+                            </td>
+                          </tr>
+                        </template>
+          
+                      </v-data-table>
+                    </v-col>
+                  </v-row>
+                </v-container>
               </v-col>
             </v-row>
           </v-expand-transition>
@@ -684,6 +713,14 @@
               </v-list-item-icon>
               <v-list-item-title class="white--text">
                 {{ i18n.groupInclude }}
+              </v-list-item-title>
+            </v-list-item>
+            <v-list-item id="actionGroupByNew" dense :to="groupByNewRoute" :title="i18n.groupNewHelp">
+              <v-list-item-icon>
+                <v-icon :alt="i18n.groupNew" color="white">fa-layer-group</v-icon>
+              </v-list-item-icon>
+              <v-list-item-title class="white--text">
+                {{ i18n.groupNew }}
               </v-list-item-title>
             </v-list-item>
             <v-list-group dense @click.stop>
@@ -2790,11 +2827,13 @@
     <script src="js/external/axios-0.21.4.min.js"></script>
     <script src="js/external/moment-2.29.1.min.js"></script>
     <script src="js/external/moment-timezone-with-data-0.5.33.min.js"></script>
-    <script src="js/external/chart-2.9.4.min.js"></script>
+    <script src="js/external/chart-3.7.1.min.js"></script>
     <script src="js/external/vue-chartjs-3.5.1.min.js"></script>
     <script src="js/external/daterangepicker-3.1.0.min.js"></script>
     <script src="js/external/marked-2.1.3.min.js"></script>
     <script src="js/external/purify-2.3.4.min.js"></script>
+    <script src="js/external/chartjs-chart-sankey-0.9.0.min.js"></script>
+    <script src="js/external/chartjs-adapter-moment-1.0.0.min.js"></script>
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>

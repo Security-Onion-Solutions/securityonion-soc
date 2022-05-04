@@ -698,13 +698,19 @@ $(document).ready(function() {
         if (this.chartsInitialized) return;
         this.registerChart(VueChartJs.Bar, 'bar-chart'); 
         this.registerChart(VueChartJs.Line, 'line-chart');
+        this.registerChart(VueChartJs.Pie, 'pie-chart');
+
+        // Sankey is a separate third-party lib, so use the VueChartJs helper to add the custom chart
+        const Sankey = VueChartJs.generateChart('sankey-chart', 'sankey', Chart.controllers['sankey']);
+        this.registerChart(Sankey, 'sankey-chart');
+
         this.chartsInitialized = true; 
       },
       getColor(colorName, percent = 0) {
-        percent = this.$root.$vuetify.theme.dark ? percent * -1 : percent;
-        var color = this.$root.$vuetify.theme.currentTheme[colorName];
-        if (!color) {
-          color = colorName;
+        percent = this.$root.$vuetify && this.$root.$vuetify.theme.dark ? percent * -1 : percent;
+        var color = colorName;
+        if (this.$root.$vuetify && this.$root.$vuetify.theme.currentTheme[colorName]) {
+          color = this.$root.$vuetify.theme.currentTheme[colorName];
         }
         var R = parseInt(color.substring(1,3),16);
         var G = parseInt(color.substring(3,5),16);
@@ -723,6 +729,14 @@ $(document).ready(function() {
         var BB = ((B.toString(16).length==1)?"0"+B.toString(16):B.toString(16));
         
         return "#"+RR+GG+BB;
+      },
+      truncate(value, max) {
+        const ellipses = "...";
+        if (value.length > max + ellipses.length) {
+          const half = max / 2;
+          value = value.substring(0, half - 1) + ellipses + value.substring(value.length - half);
+        }
+        return value;
       },
       getAvatar(user) {
         if (user && user.length > 0) {

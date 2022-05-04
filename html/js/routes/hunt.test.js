@@ -21,6 +21,7 @@ test('localizeValue', () => {
   expect(comp.localizeValue('foo')).toBe('foo');
   expect(comp.localizeValue('__missing__')).toBe('*Missing');
   expect(comp.localizeValue(123)).toBe(123);
+  expect(comp.localizeValue(null)).toBe(null);
 });
 
 test('removeDataFromView', () => {
@@ -146,15 +147,36 @@ test('removeFilter', () => {
 
 test('removeGroupBy', () => {
   comp.query = "abc | groupby foo bar*"; 
-  comp.removeGroupBy('foo')
+  comp.queryGroupBys = [['foo','bar*']];
+  comp.removeGroupBy(0, 0)
   expect(comp.query).toBe("abc | groupby bar*");
 
-  comp.removeGroupBy('bar*')
+  comp.query = "abc | groupby foo bar*"; 
+  comp.queryGroupBys = [['foo','bar*']];
+  comp.removeGroupBy(0, 1)
+  expect(comp.query).toBe("abc | groupby foo");
+
+  comp.query = "abc | groupby bar*"; 
+  comp.queryGroupBys = [['bar*']];
+  comp.removeGroupBy(0, 0)
   expect(comp.query).toBe("abc");
 
   // no-op
-  comp.removeGroupBy('bar*')
+  comp.query = "abc"; 
+  comp.queryGroupBys = [];
+  comp.removeGroupBy(0, 0)
   expect(comp.query).toBe("abc");
+
+  comp.query = "abc | groupby foo bar* | groupby a b"; 
+  comp.queryGroupBys = [['foo','bar*'],['a','b']];
+  comp.removeGroupBy(1, 1)
+  expect(comp.query).toBe("abc | groupby foo bar* | groupby a");
+
+  // Remove entire group
+  comp.query = "abc | groupby foo bar* | groupby a b"; 
+  comp.queryGroupBys = [['foo','bar*'],['a','b']];
+  comp.removeGroupBy(1, -1)
+  expect(comp.query).toBe("abc | groupby foo bar*");
 });
 
 test('removeSortBy', () => {
@@ -308,4 +330,309 @@ test('getQuery', async () => {
   const params = { params: { query: 'a:1 OR b:2', field: '', value: 'c:3 AND e:4 AND NOT f:5', scalar: true, mode: 'INCLUDE', condense: true } };
   expect(mock).toHaveBeenCalledWith('query/filtered', params);
   expect(newQuery).toBe("(a:1 OR b:2) AND c:3 AND e:4 AND NOT f:5")
+});
+
+test('buildGroupByNew', () => {
+  comp.groupBys = ['foo', 'bar'];
+  var route = comp.buildGroupByRoute('car');
+  expect(route.query.groupByField).toBe('car');
+  expect(route.query.groupByGroup).toBe(1);
+});
+
+test('buildGroupByNewRoute', () => {
+  comp.groupBys = ['foo', 'bar'];
+  var route = comp.buildGroupByNewRoute('car');
+  expect(route.query.groupByField).toBe('car');
+  expect(route.query.groupByGroup).toBe(-1);
+});
+
+test('constructGroupMetrics', () => {
+  var data = [{value: 12, keys: ['foo', 'bar']}, {value:3, keys:['car']}];
+  var records = comp.constructChartMetrics(data);
+  expect(records.length).toBe(2);
+  expect(records[0].value).toBe(12);
+  expect(records[0].keys.length).toBe(1);
+  expect(records[0].keys[0]).toBe('foo, bar');
+  expect(records[1].value).toBe(3);
+  expect(records[1].keys[0]).toBe('car');
+  expect(records[1].keys.length).toBe(1);
+});
+
+test('populateGroupByTables', () => {
+  var metrics = {
+    "groupby_0|foo": [{ value: 37, keys: ['moo'] }],
+    "groupby_0|foo|bar": [{ value: 23, keys: ['moo', 'mar'] }],
+    "groupby_1|car": [{ value: 9, keys: ['mis'] }],
+  }
+  comp.queryGroupByOptions = [[],[]];
+  var result = comp.populateGroupByTables(metrics);
+  expect(comp.groupBys.length).toBe(2);
+  expect(comp.groupBys[0].title).toBe("foo, bar");
+  expect(comp.groupBys[0].fields.length).toBe(2);
+  expect(comp.groupBys[0].data[0].count).toBe(23);
+  expect(comp.groupBys[0].data[0].foo).toBe('moo');
+  expect(comp.groupBys[0].data[0].bar).toBe('mar');
+  expect(comp.groupBys[0].headers).toStrictEqual([{text: '', value: ''}, {text: 'Count', value:'count'}, {text: 'foo', value: 'foo'}, {text: 'bar', value: 'bar'}]);
+  expect(comp.groupBys[0].chart_metrics).toStrictEqual([{value: 23, keys:['moo, mar']}]);
+  expect(comp.groupBys[1].title).toBe("car");
+  expect(comp.groupBys[1].fields.length).toBe(1);
+  expect(comp.groupBys[1].data[0].count).toBe(9);
+  expect(comp.groupBys[1].data[0].car).toBe('mis');
+  expect(comp.groupBys[1].headers).toStrictEqual([{text: '', value: ''}, {text: 'Count', value:'count'}, {text: 'car', value: 'car'}]);
+  expect(comp.groupBys[1].chart_metrics).toStrictEqual([{value: 9, keys:['mis']}]);
+});
+
+test('displayTable', () => {
+  var group = {chart_type: 'pie'};
+  comp.groupBys = [group];
+  comp.displayTable(group, 0);
+  expect(group.chart_type).toBe('');
+});
+
+test('displayPieChart', () => {
+  var group = {chart_type: ''};
+  comp.groupBys = [group];
+  comp.queryGroupByOptions = [[]];
+  comp.displayPieChart(group, 0);
+  expect(group.chart_type).toBe('pie');
+});
+
+test('displaySankeyChart', () => {
+  var group = {chart_type: ''};
+  group.data = [{ count: 1, foo: 'moo', bar: 'mar' }, { count: 12, foo: 'moo', bar: 'car' }]
+  group.fields = ['foo', 'bar'];
+  comp.groupBys = [group];
+  comp.queryGroupByOptions = [[]];
+  comp.displaySankeyChart(group, 0);
+  expect(group.chart_type).toBe('sankey');
+  expect(group.chart_data.flowMax).toBe(13);
+  expect(group.chart_data.datasets[0].data).toStrictEqual([
+    {
+      "flow": 1,
+      "from": "moo",
+      "to": "mar",
+    },
+    {
+      "flow": 12,
+      "from": "moo",
+      "to": "car",
+    },
+  ]);
+});
+
+test('displayBarChart', () => {
+  var group = {chart_type: ''};
+  comp.groupBys = [group];
+  comp.queryGroupByOptions = [[]];
+  comp.displayBarChart(group, 0);
+  expect(group.chart_type).toBe('bar');
+});
+
+test('lookupGroupByMetricKey', () => {
+  var metrics = {
+    "groupby_0|foo": [{ value: 37, keys: ['moo'] }],
+    "groupby_0|foo|bar": [{ value: 23, keys: ['moo', 'mar'] }],
+    "groupby_1|car": [{ value: 9, keys: ['mis'] }],
+  }
+  var result = comp.lookupGroupByMetricKey(metrics, 0, true);
+  expect(result).toBe("groupby_0|foo|bar");
+
+  result = comp.lookupGroupByMetricKey(metrics, 0, false);
+  expect(result).toBe("groupby_0|foo");
+});
+
+test('setupPieChart', () => {
+  var options = {};
+  var data = {};
+  comp.setupPieChart(options, data, 'some title');
+  expect(options).toStrictEqual({
+      responsive: true, 
+      maintainAspectRatio: false, 
+      plugins: {
+        legend: { 
+          display: true, 
+          position: 'left', 
+        },
+        title: {
+          display: true,
+          text: 'some title',
+        }
+      }
+    });
+  expect(data).toStrictEqual({
+      labels: [],
+      datasets: [{
+        backgroundColor: [
+          'rgba(77, 201, 246, 1)',
+          'rgba(246, 112, 25, 1)',
+          'rgba(245, 55, 148, 1)',
+          'rgba(83, 123, 196, 1)',
+          'rgba(172, 194, 54, 1)',
+          'rgba(22, 106, 143, 1)',
+          'rgba(0, 169, 80, 1)',
+          'rgba(88, 89, 91, 1)',
+          'rgba(133, 73, 186, 1)',
+          'rgba(235, 204, 52, 1)',
+          "rgba(127, 127, 127, 1)",
+        ],
+        borderColor: 'rgba(255, 255, 255, 0.5)',
+        data: [],
+        label: 'Count',
+      }],
+    });
+});
+
+test('setupSankeyChart', () => {
+  var options = {};
+  var data = {};
+  comp.setupSankeyChart(options, data, 'some title');
+  expect(options).toStrictEqual({
+      responsive: true, 
+      maintainAspectRatio: false, 
+      plugins: {
+        legend: { 
+          display: false, 
+        },
+        title: {
+          display: true,
+          text: 'some title',
+        }
+      }
+    });
+  expect(data.labels).toStrictEqual([]);
+  expect(data.datasets[0].data).toStrictEqual([]);
+  expect(data.datasets[0].label).toBe('Count');
+  expect(data.datasets[0].color).toBe('black');
+});
+
+test('getSankeyColor', () => {
+  var source = {};
+  expect(comp.getSankeyColor('foo', 'bar', source, 100)).toBe('steelblue');
+
+  var source = { parsed: { _custom: { foo: { bar: 100 }}}};
+  expect(comp.getSankeyColor('foo', 'bar', source, 91)).toBe('crimson');
+
+  var source = { parsed: { _custom: { foo: { bar: 89 }}}};
+  expect(comp.getSankeyColor('foo', 'bar', source, 100)).toBe('red');
+
+  var source = { parsed: { _custom: { foo: { bar: 71 }}}};
+  expect(comp.getSankeyColor('foo', 'bar', source, 100)).toBe('orangered');
+
+  var source = { parsed: { _custom: { foo: { bar: 65 }}}};
+  expect(comp.getSankeyColor('foo', 'bar', source, 100)).toBe('darkorange');
+
+  var source = { parsed: { _custom: { foo: { bar: 54 }}}};
+  expect(comp.getSankeyColor('foo', 'bar', source, 100)).toBe('orange');
+
+  var source = { parsed: { _custom: { foo: { bar: 41 }}}};
+  expect(comp.getSankeyColor('foo', 'bar', source, 100)).toBe('goldenrod');
+
+  var source = { parsed: { _custom: { foo: { bar: 34 }}}};
+  expect(comp.getSankeyColor('foo', 'bar', source, 100)).toBe('gold');
+
+  var source = { parsed: { _custom: { foo: { bar: 26 }}}};
+  expect(comp.getSankeyColor('foo', 'bar', source, 100)).toBe('yellow');
+
+  var source = { parsed: { _custom: { foo: { bar: 21 }}}};
+  expect(comp.getSankeyColor('foo', 'bar', source, 100)).toBe('yellowgreen');
+
+  var source = { parsed: { _custom: { foo: { bar: 16 }}}};
+  expect(comp.getSankeyColor('foo', 'bar', source, 100)).toBe('limegreen');
+
+  var source = { parsed: { _custom: { foo: { bar: 12 }}}};
+  expect(comp.getSankeyColor('foo', 'bar', source, 100)).toBe('green');
+
+  var source = { parsed: { _custom: { foo: { bar: 6 }}}};
+  expect(comp.getSankeyColor('foo', 'bar', source, 100)).toBe('aquamarine');
+
+  var source = { parsed: { _custom: { foo: { bar: 5 }}}};
+  expect(comp.getSankeyColor('foo', 'bar', source, 100)).toBe('cyan');
+
+  var source = { parsed: { _custom: { foo: { bar: 4 }}}};
+  expect(comp.getSankeyColor('foo', 'bar', source, 100)).toBe('darkturquoise');
+
+  var source = { parsed: { _custom: { foo: { bar: 3 }}}};
+  expect(comp.getSankeyColor('foo', 'bar', source, 100)).toBe('lightskyblue');
+
+  var source = { parsed: { _custom: { foo: { bar: 2 }}}};
+  expect(comp.getSankeyColor('foo', 'bar', source, 100)).toBe('royalblue');
+});
+
+test('applyLegendOption', () => {
+  const group = {
+    chart_options: {
+      plugins: {
+        legend: {
+          display: true
+        }
+      }
+    }
+  };
+  comp.queryGroupByOptions = [["bar"],["pie", "nolegend"]];
+  comp.applyLegendOption(group, 1);
+  expect(group.chart_options.plugins.legend.display).toBe(false);
+
+  comp.queryGroupByOptions = [["bar"],["pie", "legend"]];
+  comp.applyLegendOption(group, 1);
+  expect(group.chart_options.plugins.legend.display).toBe(true);
+});
+
+test('buildGroupOptionRoute', () => {
+  comp.query = "* | groupby -foo something | groupby something else";
+  var route = comp.buildGroupOptionRoute(1, ["foo"], "bar");
+  expect(route.query.q).toBe("* | groupby -foo something | groupby -bar something else");
+
+  var route = comp.buildGroupOptionRoute(0, ["foo"], "bar");
+  expect(route.query.q).toBe("* | groupby -bar something | groupby something else");
+});
+
+test('buildToggleLegendRoute', () => {
+  var group = {
+    chart_options: {
+      plugins: {
+        legend: {
+          display: true
+        }
+      }
+    }
+  };
+  comp.query = "* | groupby -pie -legend something | groupby something else";
+  var route = comp.buildToggleLegendRoute(group, 0);
+  expect(route.query.q).toBe("* | groupby -nolegend -pie something | groupby something else");
+
+  var group = {
+    chart_options: {
+      plugins: {
+        legend: {
+          display: false
+        }
+      }
+    }
+  };
+  comp.query = "* | groupby -pie -nolegend something | groupby something else";
+  var route = comp.buildToggleLegendRoute(group, 0);
+  expect(route.query.q).toBe("* | groupby -legend -pie something | groupby something else");
+});
+
+test('buildGroupWithoutOptionsRoute', () => {
+  comp.query = "* | groupby -pie something | groupby something else";
+  var route = comp.buildGroupWithoutOptionsRoute(1);
+  expect(route.query.q).toBe("* | groupby -pie something | groupby something else");
+
+  var route = comp.buildGroupWithoutOptionsRoute(0);
+  expect(route.query.q).toBe("* | groupby something | groupby something else");
+});
+
+test('isGroupSankeyCapable', () => {
+  var group = {  };
+  expect(comp.isGroupSankeyCapable(group)).toBe(false);
+
+  var group = { fields: ['foo'] };
+  expect(comp.isGroupSankeyCapable(group)).toBe(false);
+
+  var group = { fields: ['foo', 'bar'] };
+  expect(comp.isGroupSankeyCapable(group)).toBe(true);
+
+  var group = { fields: ['foo', 'bar', 'car'] };
+  expect(comp.isGroupSankeyCapable(group)).toBe(true);
 });

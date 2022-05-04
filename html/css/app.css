@@ -164,6 +164,10 @@ a#title, a#title:visited, a#title:active, a#title:hover {
   font-weight: bold;
 }
 
+.v-data-footer {
+  min-width: 32em;
+}
+
 .filter.label {
   display: inline-block;
   padding-right: 10px;

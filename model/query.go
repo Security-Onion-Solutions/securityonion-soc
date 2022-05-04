@@ -335,6 +335,16 @@ func (query *Query) NamedSegment(name string) QuerySegment {
   return nil
 }
 
+func (query *Query) NamedSegments(name string) []QuerySegment {
+  segments := make([]QuerySegment, 0, 0)
+  for _, segment := range query.Segments {
+    if segment.Kind() == name {
+      segments = append(segments, segment)
+    }
+  }
+  return segments
+}
+
 func (query *Query) AddSegment(segment QuerySegment) {
   query.Segments = append(query.Segments, segment)
 }
@@ -519,15 +529,17 @@ func (query *Query) Filter(field string, value string, scalar bool, mode string,
   return query.String(), err
 }
 
-func (query *Query) Group(field string) (string, error) {
+func (query *Query) Group(segmentIdx int, field string) (string, error) {
   var err error
+  var groupBySegment *GroupBySegment
 
-  segment := query.NamedSegment(SegmentKind_GroupBy)
-  if segment == nil {
-    segment = NewGroupBySegmentEmpty()
-    query.AddSegment(segment)
+  segments := query.NamedSegments(SegmentKind_GroupBy)
+  if segmentIdx < 0 || len(segments) <= segmentIdx {
+    groupBySegment = NewGroupBySegmentEmpty()
+    query.AddSegment(groupBySegment)
+  } else {
+    groupBySegment = segments[segmentIdx].(*GroupBySegment)
   }
-  groupBySegment := segment.(*GroupBySegment)
   err = groupBySegment.AddField(field)
 
   return query.String(), err

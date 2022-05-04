@@ -180,7 +180,7 @@ func (store *ElasticEventstore) unmapElasticField(field string) string {
 func (store *ElasticEventstore) Search(ctx context.Context, criteria *model.EventSearchCriteria) (*model.EventSearchResults, error) {
 	var err error
 	results := model.NewEventSearchResults()
-	if err := store.server.CheckAuthorized(ctx, "read", "events"); err == nil {
+	if err = store.server.CheckAuthorized(ctx, "read", "events"); err == nil {
 		store.refreshCache(ctx)
 
 		var query string

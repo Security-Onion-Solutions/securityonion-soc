@@ -14,6 +14,7 @@ import (
 	"errors"
 	"net/http"
 	"regexp"
+	"strconv"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -83,7 +84,12 @@ func (queryHandler *QueryHandler) get(ctx context.Context, writer http.ResponseW
 		}
 	case "grouped":
 		field := request.Form.Get("field")
-		alteredQuery, err = query.Group(field)
+		groupStr := request.Form.Get("group")
+		groupIdx, err := strconv.ParseInt(groupStr, 10, 32)
+		if err != nil {
+			groupIdx = 0
+		}
+		alteredQuery, err = query.Group(int(groupIdx), field)
 	case "sorted":
 		field := request.Form.Get("field")
 		alteredQuery, err = query.Sort(field)
