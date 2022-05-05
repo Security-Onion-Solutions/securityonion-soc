@@ -372,6 +372,11 @@
                   </v-list>
                 </v-menu>
               </template>
+              <template v-if="!isCategory('hunt')" v-slot:append-outer>
+                <v-btn small icon id="switch-to-hunt-button" :title="i18n.huntHelp" @click="switchToHunt()">
+                  <v-icon>fa-crosshairs</v-icon>
+                </v-btn>
+              </template>
             </v-textarea>
           </v-col>
           <v-col cols="12" md="5" class="d-flex flex-nowrap align-center">
@@ -485,13 +490,13 @@
                   <v-row>
                     <v-col v-for="(group, groupIdx) in groupBys" class="groupBy">
                       <div v-if="group.chart_type">
-                        <v-btn icon class="mx-1" x-small :to="buildGroupWithoutOptionsRoute(groupIdx)" :title="i18n.showTable">
+                        <router-link class="mx-1" :to="buildGroupWithoutOptionsRoute(groupIdx)" :title="i18n.showTable" style="text-decoration: none; cursor: 'pointer'">
                           <v-icon>fa-table-cells</v-icon>
-                        </v-btn>
-                        <v-btn icon class="mx-1"  x-small :to="buildToggleLegendRoute(group, groupIdx)" :title="i18n.toggleLegend">
+                        </router-link>
+                        <router-link class="mx-1" :to="buildToggleLegendRoute(group, groupIdx)" :title="i18n.toggleLegend" style="text-decoration: none; cursor: 'pointer'">
                           <v-icon>fa-list</v-icon>
-                        </v-btn>
-                        <v-btn icon class="mx-1"  x-small @click="removeGroupBy(groupIdx, -1)" :title="i18n.remove">
+                        </router-link>
+                        <v-btn icon class="mx-1" @click="removeGroupBy(groupIdx, -1)" :title="i18n.remove">
                           <v-icon>fa-trash</v-icon>
                         </v-btn>
                         <pie-chart v-if="group.chart_type == 'pie'" :chartdata="group.chart_data" :options="group.chart_options"/>
@@ -500,17 +505,17 @@
                       </div>
                       <v-data-table v-if="!group.chart_type" class="elevation-1" :search="groupByFilter" dense :footer-props="groupByFooters" 
                         :items-per-page.sync="groupByItemsPerPage" must-sort :headers="group.headers" :items="group.data" :custom-sort="sortEvents">
-                        <template v-if="isAdvanced()" v-slot:header="{ props }">
+                        <template v-slot:header="{ props }">
                           <th v-for="(header, headerIdx) in group.headers" style="white-space: nowrap; text-align: left; padding-left: 1em;">
-                            <v-btn v-if="header.value == 'count'" icon x-small :to="buildGroupOptionRoute(groupIdx, [], 'pie')" :title="i18n.showPieChart">
+                            <router-link v-if="header.value == 'count' && isAdvanced()" :to="buildGroupOptionRoute(groupIdx, [], 'pie')" :title="i18n.showPieChart" style="text-decoration: none; cursor: 'pointer'">
                               <v-icon>fa-chart-pie</v-icon>
-                            </v-btn>
-                            <v-btn v-if="header.value == 'count'" icon x-small :to="buildGroupOptionRoute(groupIdx, [], 'bar')" :title="i18n.showBarChart">
+                            </router-link>
+                            <router-link v-if="header.value == 'count' && isAdvanced()" :to="buildGroupOptionRoute(groupIdx, [], 'bar')" :title="i18n.showBarChart" style="text-decoration: none; cursor: 'pointer'">
                               <v-icon>fa-chart-column</v-icon>
-                            </v-btn>
-                            <v-btn v-if="header.value == 'count' && isGroupSankeyCapable(group, groupIdx)" icon x-small :to="buildGroupOptionRoute(groupIdx, [], 'sankey')" :title="i18n.showBarChart">
+                            </router-link>
+                            <router-link v-if="header.value == 'count' && isAdvanced() && isGroupSankeyCapable(group, groupIdx)" icon x-small :to="buildGroupOptionRoute(groupIdx, [], 'sankey')" :title="i18n.showBarChart" style="text-decoration: none; cursor: 'pointer'">
                               <v-icon>fa-diagram-project</v-icon>
-                            </v-btn>
+                            </router-link>
                             <v-btn v-if="header.value != 'count' && header.value != ''" icon x-small @click="removeGroupBy(groupIdx,headerIdx - 2)" :title="i18n.remove">
                               <v-icon>fa-trash</v-icon>
                             </v-btn>
