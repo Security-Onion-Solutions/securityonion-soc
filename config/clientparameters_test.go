@@ -28,6 +28,7 @@ func TestVerifyClientParameters(tester *testing.T) {
 	verifyInitialHuntingParams(tester, &params.HuntingParams)
 	verifyInitialHuntingParams(tester, &params.AlertingParams)
 	verifyInitialHuntingParams(tester, &params.CasesParams)
+	verifyInitialHuntingParams(tester, &params.DashboardsParams)
 }
 
 func TestVerifyHuntingParams(tester *testing.T) {

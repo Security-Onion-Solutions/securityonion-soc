@@ -49,6 +49,9 @@ func (config *ClientParameters) Verify() error {
 	if err := config.CasesParams.Verify(); err != nil {
 		return err
 	}
+	if err := config.DashboardsParams.Verify(); err != nil {
+		return err
+	}
 	return config.JobParams.Verify()
 }
 
