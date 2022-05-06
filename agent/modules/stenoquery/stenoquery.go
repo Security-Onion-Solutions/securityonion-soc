@@ -92,6 +92,13 @@ func (steno *StenoQuery) getDataLagDate() time.Time {
 
 func (steno *StenoQuery) ProcessJob(job *model.Job, reader io.ReadCloser) (io.ReadCloser, error) {
 	var err error
+	if job.GetKind() != "pcap" {
+		log.WithFields(log.Fields{
+			"jobId": job.Id,
+			"kind":  job.GetKind(),
+		}).Debug("Skipping steno processor due to unsupported job")
+		return reader, nil
+	}
 	if len(job.Filter.ImportId) > 0 {
 		log.WithFields(log.Fields{
 			"jobId":    job.Id,
@@ -140,8 +147,8 @@ func (steno *StenoQuery) ProcessJob(job *model.Job, reader io.ReadCloser) (io.Re
 }
 
 func (steno *StenoQuery) CleanupJob(job *model.Job) {
-    pcapOutputFilepath := fmt.Sprintf("%s/%d.%s", steno.pcapOutputPath, job.Id, sanitize.Name(job.FileExtension))
-    os.Remove(pcapOutputFilepath)	
+	pcapOutputFilepath := fmt.Sprintf("%s/%d.%s", steno.pcapOutputPath, job.Id, sanitize.Name(job.FileExtension))
+	os.Remove(pcapOutputFilepath)
 }
 
 func (steno *StenoQuery) CreateQuery(job *model.Job) string {

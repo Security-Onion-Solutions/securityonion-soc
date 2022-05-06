@@ -1,11 +1,22 @@
 {
   "took": 9534,
   "timed_out": false,
-  "_shards": {
-    "total": 32,
-    "successful": 32,
-    "skipped": 0,
-    "failed": 0
+  "_shards" : {
+    "total" : 3,
+    "successful" : 2,
+    "skipped" : 0,
+    "failed" : 1,
+    "failures" : [
+      {
+        "shard" : 0,
+        "index" : "so-import-2010.01.27_restored",
+        "node" : "Pw5fNWFxTFu-ouVCTScgyg",
+        "reason" : {
+          "type" : "number_format_exception",
+          "reason" : "For input string: \"__missing__\""
+        }
+      }
+    ]
   },
   "_clusters": {
     "total": 1,

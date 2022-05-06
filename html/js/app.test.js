@@ -142,3 +142,11 @@ test('localizeMessage', () => {
   expect(app.localizeMessage(null)).toBe("");
   expect(app.localizeMessage('create')).toBe("Create");
 });
+
+test('truncate', () => {
+  expect(app.truncate("short", 10)).toBe("short");
+  expect(app.truncate("atthelimit!", 10)).toBe("atthelimit!");
+  expect(app.truncate("atthelimit!!", 10)).toBe("atthelimit!!");
+  expect(app.truncate("atthelimit!!!", 10)).toBe("atthelimit!!!");
+  expect(app.truncate("much longer value", 10)).toBe("much...value");
+});

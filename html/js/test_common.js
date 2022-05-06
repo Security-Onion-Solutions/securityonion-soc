@@ -107,6 +107,11 @@ global.mockShowError = function(logError = false) {
 require('./i18n.js');
 require('./app.js');
 
+global.JobStatusPending = 0;
+global.JobStatusCompleted = 1;
+global.JobStatusIncomplete = 2;
+global.JobStatusDeleted = 3;
+
 ////////////////////////////////////
 // Import external dependencies
 ////////////////////////////////////

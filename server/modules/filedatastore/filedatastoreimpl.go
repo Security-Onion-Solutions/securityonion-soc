@@ -204,13 +204,46 @@ func (datastore *FileDatastoreImpl) GetJob(ctx context.Context, jobId int) *mode
   return job
 }
 
-func (datastore *FileDatastoreImpl) GetJobs(ctx context.Context) []*model.Job {
+func (datastore *FileDatastoreImpl) filterParameterMatches(parameters map[string]interface{}, jobParams map[string]interface{}) bool {
+  if len(parameters) > 0 {
+    for key, value := range parameters {
+      if jobValue, ok := jobParams[key]; ok {
+        if nested, ok := value.(map[string]interface{}); ok {
+          if jobNested, ok := jobValue.(map[string]interface{}); ok {
+            // this nested input filter param also exists in the job filter params
+            subresult := datastore.filterParameterMatches(nested, jobNested)
+            if !subresult {
+              return false // nested map failed to match
+            }
+          } else {
+            return false // equivalent input job param is not also a map, therefore it can't possibly match
+          }
+        } else if value != jobValue {
+          return false // input filter param is not a map so check for simple equivalency
+        }
+        // Making it this far indicates the values matched, including if they were nested maps
+      } else {
+        return false // filter param doesn't exist in job
+      }
+    }
+    return true // all params matched
+  }
+  return true // no parameters specified, so all jobs will match
+}
+
+func (datastore *FileDatastoreImpl) GetJobs(ctx context.Context, kind string, parameters map[string]interface{}) []*model.Job {
+  if kind == "" {
+    kind = model.DEFAULT_JOB_KIND
+  }
+
   datastore.lock.RLock()
   defer datastore.lock.RUnlock()
   allJobs := make([]*model.Job, 0)
   for _, job := range datastore.jobsById {
     if datastore.jobIsAllowed(ctx, job, "read") {
-      allJobs = append(allJobs, job)
+      if job.GetKind() == kind && datastore.filterParameterMatches(parameters, job.Filter.Parameters) {
+        allJobs = append(allJobs, job)
+      }
     }
   }
   return allJobs

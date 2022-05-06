@@ -31,4 +31,4 @@ shift
     --show-error \
     -d "$query" \
     "$URL" |
-    /usr/sbin/tcpdump -r /dev/stdin -s 0 "$@"
+    /usr/bin/tcpdump -r /dev/stdin -s 0 "$@"

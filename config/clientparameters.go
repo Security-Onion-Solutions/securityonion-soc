@@ -15,12 +15,16 @@ const DEFAULT_EVENT_FETCH_LIMIT = 100
 const DEFAULT_RELATIVE_TIME_VALUE = 24
 const DEFAULT_RELATIVE_TIME_UNIT = 30
 const DEFAULT_MOST_RECENTLY_USED_LIMIT = 5
+const DEFAULT_CHART_LABEL_MAX_LENGTH = 35
+const DEFAULT_CHART_LABEL_OTHER_LIMIT = 10
+const DEFAULT_CHART_LABEL_FIELD_SEPARATOR = ", "
 
 type ClientParameters struct {
 	HuntingParams      HuntingParameters `json:"hunt"`
 	AlertingParams     HuntingParameters `json:"alerts"`
 	CasesParams        HuntingParameters `json:"cases"`
 	CaseParams         CaseParameters    `json:"case"`
+	DashboardsParams   HuntingParameters `json:"dashboards"`
 	JobParams          HuntingParameters `json:"job"`
 	DocsUrl            string            `json:"docsUrl"`
 	CheatsheetUrl      string            `json:"cheatsheetUrl"`
@@ -57,9 +61,10 @@ type ClientTool struct {
 }
 
 type HuntingQuery struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Query       string `json:"query"`
+	Name         string `json:"name"`
+	Description  string `json:"description"`
+	Query        string `json:"query"`
+	ShowSubtitle bool   `json:"showSubtitle"`
 }
 
 type HuntingAction struct {
@@ -107,6 +112,9 @@ type HuntingParameters struct {
 	EscalateRelatedEventsEnabled bool                `json:"escalateRelatedEventsEnabled"`
 	ViewEnabled                  bool                `json:"viewEnabled"`
 	CreateLink                   string              `json:"createLink"`
+	ChartLabelMaxLength          int                 `json:"chartLabelMaxLength"`
+	ChartLabelOtherLimit         int                 `json:"chartLabelOtherLimit"`
+	ChartLabelFieldSeparator     string              `json:"chartLabelFieldSeparator"`
 }
 
 func (params *HuntingParameters) Verify() error {
@@ -125,6 +133,15 @@ func (params *HuntingParameters) Verify() error {
 	}
 	if params.MostRecentlyUsedLimit < 10 {
 		params.MostRecentlyUsedLimit = DEFAULT_MOST_RECENTLY_USED_LIMIT
+	}
+	if params.ChartLabelMaxLength <= 0 {
+		params.ChartLabelMaxLength = DEFAULT_CHART_LABEL_MAX_LENGTH
+	}
+	if params.ChartLabelOtherLimit <= 0 {
+		params.ChartLabelOtherLimit = DEFAULT_CHART_LABEL_OTHER_LIMIT
+	}
+	if params.ChartLabelFieldSeparator == "" {
+		params.ChartLabelFieldSeparator = DEFAULT_CHART_LABEL_FIELD_SEPARATOR
 	}
 	params.combineDeprecatedLinkIntoLinks()
 	return err
@@ -147,6 +164,7 @@ type PresetParameters struct {
 type CaseParameters struct {
 	MostRecentlyUsedLimit  int                         `json:"mostRecentlyUsedLimit"`
 	RenderAbbreviatedCount int                         `json:"renderAbbreviatedCount"`
+	AnalyzerNodeId         string                      `json:"analyzerNodeId"`
 	Presets                map[string]PresetParameters `json:"presets"`
 }
 
