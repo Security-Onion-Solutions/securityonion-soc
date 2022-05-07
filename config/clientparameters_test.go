@@ -28,6 +28,7 @@ func TestVerifyClientParameters(tester *testing.T) {
 	verifyInitialHuntingParams(tester, &params.HuntingParams)
 	verifyInitialHuntingParams(tester, &params.AlertingParams)
 	verifyInitialHuntingParams(tester, &params.CasesParams)
+	verifyInitialHuntingParams(tester, &params.DashboardsParams)
 }
 
 func TestVerifyHuntingParams(tester *testing.T) {
@@ -42,6 +43,9 @@ func verifyInitialHuntingParams(tester *testing.T, params *HuntingParameters) {
 	assert.Equal(tester, DEFAULT_EVENT_FETCH_LIMIT, params.EventFetchLimit)
 	assert.Equal(tester, DEFAULT_RELATIVE_TIME_VALUE, params.RelativeTimeValue)
 	assert.Equal(tester, DEFAULT_RELATIVE_TIME_UNIT, params.RelativeTimeUnit)
+	assert.Equal(tester, DEFAULT_CHART_LABEL_MAX_LENGTH, params.ChartLabelMaxLength)
+	assert.Equal(tester, DEFAULT_CHART_LABEL_OTHER_LIMIT, params.ChartLabelOtherLimit)
+	assert.Equal(tester, DEFAULT_CHART_LABEL_FIELD_SEPARATOR, params.ChartLabelFieldSeparator)
 	assert.Equal(tester, false, params.EscalateRelatedEventsEnabled)
 	assert.Equal(tester, false, params.EscalateEnabled)
 }

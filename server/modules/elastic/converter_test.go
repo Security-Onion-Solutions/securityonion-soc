@@ -28,8 +28,8 @@ func NewTestStore() *ElasticEventstore {
 
 func TestMakeAggregation(tester *testing.T) {
 	keys := []string{"one*", "two", "three*"}
-	agg, name := makeAggregation(NewTestStore(), "groupby", keys, 10, false)
-	assert.Equal(tester, "groupby|one", name)
+	agg, name := makeAggregation(NewTestStore(), "groupby_0", keys, 10, false)
+	assert.Equal(tester, "groupby_0|one", name)
 
 	assert.NotNil(tester, agg["terms"])
 	terms := agg["terms"].(map[string]interface{})
@@ -43,15 +43,15 @@ func TestMakeAggregation(tester *testing.T) {
 
 	assert.NotNil(tester, agg["aggs"])
 	secondAggs := agg["aggs"].(map[string]interface{})
-	assert.NotNil(tester, secondAggs["groupby|one|two"])
-	secondAgg := secondAggs["groupby|one|two"].(map[string]interface{})
+	assert.NotNil(tester, secondAggs["groupby_0|one|two"])
+	secondAgg := secondAggs["groupby_0|one|two"].(map[string]interface{})
 	assert.NotNil(tester, secondAgg["aggs"])
 	terms = secondAgg["terms"].(map[string]interface{})
 	assert.Nil(tester, terms["missing"])
 
 	thirdAggs := secondAgg["aggs"].(map[string]interface{})
-	assert.NotNil(tester, thirdAggs["groupby|one|two|three"])
-	thirdAgg := thirdAggs["groupby|one|two|three"].(map[string]interface{})
+	assert.NotNil(tester, thirdAggs["groupby_0|one|two|three"])
+	thirdAgg := thirdAggs["groupby_0|one|two|three"].(map[string]interface{})
 	assert.Nil(tester, thirdAgg["aggs"])
 	terms = thirdAgg["terms"].(map[string]interface{})
 	assert.Equal(tester, "__missing__", terms["missing"])
@@ -96,11 +96,11 @@ func TestConvertToElasticRequestEmptyCriteria(tester *testing.T) {
 
 func TestConvertToElasticRequestGroupByCriteria(tester *testing.T) {
 	criteria := model.NewEventSearchCriteria()
-	criteria.Populate(`abc AND def AND q:"\\\\file\\path" | groupby "ghi" jkl*`, "2020-01-02T12:13:14Z - 2020-01-02T13:13:14Z", time.RFC3339, "America/New_York", "10", "25")
+	criteria.Populate(`abc AND def AND q:"\\\\file\\path" | groupby -something "ghi" jkl*`, "2020-01-02T12:13:14Z - 2020-01-02T13:13:14Z", time.RFC3339, "America/New_York", "10", "25")
 	actualJson, err := convertToElasticRequest(NewTestStore(), criteria)
 	assert.Nil(tester, err)
 
-	expectedJson := `{"aggs":{"bottom":{"terms":{"field":"ghi","order":{"_count":"asc"},"size":10}},"groupby|ghi":{"aggs":{"groupby|ghi|jkl":{"terms":{"field":"jkl","missing":"__missing__","order":{"_count":"desc"},"size":10}}},"terms":{"field":"ghi","order":{"_count":"desc"},"size":10}},"timeline":{"date_histogram":{"field":"@timestamp","fixed_interval":"1m","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"abc AND def AND q: \"\\\\\\\\file\\\\path\""}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"2020-01-02T12:13:14Z","lte":"2020-01-02T13:13:14Z"}}}],"must_not":[],"should":[]}},"size":25}`
+	expectedJson := `{"aggs":{"bottom":{"terms":{"field":"ghi","order":{"_count":"asc"},"size":10}},"groupby_0|ghi":{"aggs":{"groupby_0|ghi|jkl":{"terms":{"field":"jkl","missing":"__missing__","order":{"_count":"desc"},"size":10}}},"terms":{"field":"ghi","order":{"_count":"desc"},"size":10}},"timeline":{"date_histogram":{"field":"@timestamp","fixed_interval":"1m","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"abc AND def AND q: \"\\\\\\\\file\\\\path\""}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"2020-01-02T12:13:14Z","lte":"2020-01-02T13:13:14Z"}}}],"must_not":[],"should":[]}},"size":25}`
 	assert.Equal(tester, expectedJson, actualJson)
 }
 
@@ -116,11 +116,11 @@ func TestConvertToElasticRequestSortByCriteria(tester *testing.T) {
 
 func TestConvertToElasticRequestGroupBySortByCriteria(tester *testing.T) {
 	criteria := model.NewEventSearchCriteria()
-	criteria.Populate(`abc AND def AND q:"\\\\file\\path" | groupby ghi jkl* | sortby ghi jkl^`, "2020-01-02T12:13:14Z - 2020-01-02T13:13:14Z", time.RFC3339, "America/New_York", "10", "25")
+	criteria.Populate(`abc AND def AND q:"\\\\file\\path" | groupby ghi jkl* | groupby mno | sortby ghi jkl^`, "2020-01-02T12:13:14Z - 2020-01-02T13:13:14Z", time.RFC3339, "America/New_York", "10", "25")
 	actualJson, err := convertToElasticRequest(NewTestStore(), criteria)
 	assert.Nil(tester, err)
 
-	expectedJson := `{"aggs":{"bottom":{"terms":{"field":"ghi","order":{"_count":"asc"},"size":10}},"groupby|ghi":{"aggs":{"groupby|ghi|jkl":{"terms":{"field":"jkl","missing":"__missing__","order":{"_count":"desc"},"size":10}}},"terms":{"field":"ghi","order":{"_count":"desc"},"size":10}},"timeline":{"date_histogram":{"field":"@timestamp","fixed_interval":"1m","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"abc AND def AND q: \"\\\\\\\\file\\\\path\""}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"2020-01-02T12:13:14Z","lte":"2020-01-02T13:13:14Z"}}}],"must_not":[],"should":[]}},"size":25,"sort":[{"ghi":{"missing":"_last","order":"desc","unmapped_type":"date"}},{"jkl":{"missing":"_last","order":"asc","unmapped_type":"date"}}]}`
+	expectedJson := `{"aggs":{"bottom":{"terms":{"field":"ghi","order":{"_count":"asc"},"size":10}},"groupby_0|ghi":{"aggs":{"groupby_0|ghi|jkl":{"terms":{"field":"jkl","missing":"__missing__","order":{"_count":"desc"},"size":10}}},"terms":{"field":"ghi","order":{"_count":"desc"},"size":10}},"groupby_1|mno":{"terms":{"field":"mno","order":{"_count":"desc"},"size":10}},"timeline":{"date_histogram":{"field":"@timestamp","fixed_interval":"1m","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"abc AND def AND q: \"\\\\\\\\file\\\\path\""}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"2020-01-02T12:13:14Z","lte":"2020-01-02T13:13:14Z"}}}],"must_not":[],"should":[]}},"size":25,"sort":[{"ghi":{"missing":"_last","order":"desc","unmapped_type":"date"}},{"jkl":{"missing":"_last","order":"asc","unmapped_type":"date"}}]}`
 	assert.Equal(tester, expectedJson, actualJson)
 }
 
@@ -137,12 +137,32 @@ func TestConvertFromElasticResultsSuccess(tester *testing.T) {
 		assert.Equal(tester, "2020-04-24T03:00:55.300Z", results.Events[0].Timestamp)
 		assert.Equal(tester, "2020-04-24T03:00:55.038Z", results.Events[1].Timestamp) // Check for alternate timestamp field
 		assert.Equal(tester, "so16:logstash-bro-2020.04.24", results.Events[0].Source)
-		assert.NotNil(tester, results.Metrics["groupby|source_ip"])
-		assert.NotNil(tester, results.Metrics["groupby|source_ip|destination_ip"])
-		assert.NotNil(tester, results.Metrics["groupby|source_ip|destination_ip|protocol"])
-		assert.NotNil(tester, results.Metrics["groupby|source_ip|destination_ip|protocol|destination_port"])
+		assert.NotNil(tester, results.Metrics["groupby_0|source_ip"])
+		assert.NotNil(tester, results.Metrics["groupby_0|source_ip|destination_ip"])
+		assert.NotNil(tester, results.Metrics["groupby_0|source_ip|destination_ip|protocol"])
+		assert.NotNil(tester, results.Metrics["groupby_0|source_ip|destination_ip|protocol|destination_port"])
 	}
+}
 
+func TestConvertFromElasticResultsFailure(tester *testing.T) {
+	esData, err := ioutil.ReadFile("converter_response_failure.json")
+	assert.Nil(tester, err)
+
+	results := model.NewEventSearchResults()
+	err = convertFromElasticResults(NewTestStore(), string(esData), results)
+	if assert.NotNil(tester, err) {
+		assert.Error(tester, err, "ERROR_QUERY_FAILED_ELASTICSEARCH")
+		assert.Equal(tester, 9534, results.ElapsedMs)
+		assert.Equal(tester, 23689430, results.TotalEvents)
+		assert.Len(tester, results.Events, 25)
+		assert.Equal(tester, "2020-04-24T03:00:55.300Z", results.Events[0].Timestamp)
+		assert.Equal(tester, "2020-04-24T03:00:55.038Z", results.Events[1].Timestamp) // Check for alternate timestamp field
+		assert.Equal(tester, "so16:logstash-bro-2020.04.24", results.Events[0].Source)
+		assert.NotNil(tester, results.Metrics["groupby_0|source_ip"])
+		assert.NotNil(tester, results.Metrics["groupby_0|source_ip|destination_ip"])
+		assert.NotNil(tester, results.Metrics["groupby_0|source_ip|destination_ip|protocol"])
+		assert.NotNil(tester, results.Metrics["groupby_0|source_ip|destination_ip|protocol|destination_port"])
+	}
 }
 
 func TestConvertFromElasticResultsTimedOut(tester *testing.T) {

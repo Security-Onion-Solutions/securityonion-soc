@@ -11,11 +11,23 @@ package elastic
 
 import (
 	"errors"
+	"fmt"
+	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/json"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"strings"
 	"time"
 )
+
+func stripSegmentOptions(keys []string) []string {
+	tmp := make([]string, 0, 0)
+	for _, k := range keys {
+		if !strings.HasPrefix(k, "-") {
+			tmp = append(tmp, k)
+		}
+	}
+	return tmp
+}
 
 func makeAggregation(store *ElasticEventstore, prefix string, keys []string, count int, ascending bool) (map[string]interface{}, string) {
 	agg := make(map[string]interface{})
@@ -191,14 +203,18 @@ func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSear
 		if !criteria.EndTime.IsZero() {
 			aggregations["timeline"] = makeTimeline(calcTimelineInterval(store.intervals, criteria.BeginTime, criteria.EndTime))
 		}
-		segment := criteria.ParsedQuery.NamedSegment(model.SegmentKind_GroupBy)
-		if segment != nil {
+		segments := criteria.ParsedQuery.NamedSegments(model.SegmentKind_GroupBy)
+		for idx, segment := range segments {
 			groupBySegment := segment.(*model.GroupBySegment)
 			fields := groupBySegment.RawFields()
+			fields = stripSegmentOptions(fields)
 			if len(fields) > 0 {
-				agg, name := makeAggregation(store, "groupby", fields, criteria.MetricLimit, false)
+				prefix := fmt.Sprintf("groupby_%d", idx)
+				agg, name := makeAggregation(store, prefix, fields, criteria.MetricLimit, false)
 				aggregations[name] = agg
-				aggregations["bottom"], _ = makeAggregation(store, "", fields[0:1], criteria.MetricLimit, true)
+				if aggregations["bottom"] == nil {
+					aggregations["bottom"], _ = makeAggregation(store, "", fields[0:1], criteria.MetricLimit, true)
+				}
 			}
 		}
 	}
@@ -264,7 +280,7 @@ func parseAggregation(name string, aggObj interface{}, keys []interface{}, resul
 					metric.Keys = tmpKeys
 					metrics = append(metrics, metric)
 					for innerName, innerAgg := range bucket {
-						if strings.HasPrefix(innerName, "groupby|") {
+						if strings.HasPrefix(innerName, "groupby_") {
 							parseAggregation(innerName, innerAgg, tmpKeys, results)
 						}
 					}
@@ -342,6 +358,23 @@ func convertFromElasticResults(store *ElasticEventstore, esJson string, results 
 		for name, aggObj := range aggs.(map[string]interface{}) {
 			keys := make([]interface{}, 0, 0)
 			parseAggregation(name, aggObj, keys, results)
+		}
+	}
+
+	shards := esResults["_shards"].(map[string]interface{})
+	failed := shards["failed"].(float64)
+	if failed > 0 {
+		failures := shards["failures"].([]interface{})
+		for _, failureGeneric := range failures {
+			failure := failureGeneric.(map[string]interface{})
+			reason := failure["reason"].(map[string]interface{})
+			reasonType := reason["type"].(string)
+			reasonDetails := reason["reason"].(string)
+			log.WithFields(log.Fields{
+				"type":   reasonType,
+				"reason": reasonDetails,
+			}).Warn("Shard failure")
+			err = errors.New("ERROR_QUERY_FAILED_ELASTICSEARCH")
 		}
 	}
 

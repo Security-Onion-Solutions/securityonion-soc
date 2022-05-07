@@ -157,6 +157,8 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     addingAssociation: null,
     activeTab: null,
     renderAbbreviatedCount: 30,
+    analyzerNodeId: null,
+    analyzeJobs: {},
   }},
   computed: {
   },
@@ -169,12 +171,14 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     } else {
       await this.loadData();
     }
+    this.$root.subscribe("job", this.updateJob);
   },
   beforeDestroy() {
     this.$root.setSubtitle("");
   },  
   destroyed() {
     this.$root.unsubscribe("case", this.updateCase);
+    this.$root.unsubscribe("job", this.updateJob);
   },
   watch: {
     '$route': 'loadData',
@@ -188,6 +192,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       if (params["maxUploadSizeBytes"]) {
         this.maxUploadSizeBytes = params.maxUploadSizeBytes;
       }
+      this.analyzerNodeId = params["analyzerNodeId"];
       this.loadLocalSettings();
       this.resetForm('attachments');
       this.resetForm('evidence');
@@ -343,7 +348,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       }
       return false;
     },
-    expandRow(association, row) {
+    async expandRow(association, row) {
       const expanded = this.associatedTable[association].expanded;
       for (var i = 0; i < expanded.length; i++) {
         if (expanded[i].id == row.id) {
@@ -352,6 +357,10 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         }
       }
       expanded.push(row);
+
+      if (association == "evidence") {
+        this.loadAnalyzeJobs(row.id);
+      }
     },    
     withDefault(value, deflt) {
       if (value == null || value == undefined || value == "") {
@@ -618,15 +627,20 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         case 'Enter': if (!this.editForm.isMultiline) this.stopEdit(true); break;
       }
     },
-    resetForm(ref) {
-      const form = { valid: false };
-      this.attachment = null;
+    getTlp() {
+      var tlp = this.caseObj.tlp;
+      if (!tlp) {
+        tlp = this.getDefaultPreset('tlp');
+      }
+      return tlp;
+    },
+    resetFormDefaults(form, ref) {
       switch (ref) {
         case "attachments": 
-          form.tlp = this.getDefaultPreset('tlp');
+          form.tlp = this.getTlp();
           break;
         case "evidence": 
-          form.tlp = this.getDefaultPreset('tlp');
+          form.tlp = this.getTlp();
           form.artifactType = this.getDefaultPreset('artifactType');
           break;
         case "comments":
@@ -634,7 +648,12 @@ routes.push({ path: '/case/:id', name: 'case', component: {
             this.$refs[ref].reset();
           }
           break;
-      }
+      }      
+    },
+    resetForm(ref) {
+      const form = { valid: false };
+      this.attachment = null;
+      this.resetFormDefaults(form, ref);
       this.addingAssociation = null;
       Vue.set(this.associatedForms, ref, form)
     },
@@ -645,6 +664,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     },
     enableAdding(association) {
       this.addingAssociation = association;
+      this.resetFormDefaults(this.associatedForms[association], association);
     },
     isAdding(association) {
       return this.addingAssociation == association;
@@ -715,7 +735,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     },
     buildHuntQueryForValue(value) {
       var value = this.escapeQueryValue(value);
-      return '"' + value + '"';
+      return '"' + value + '" | groupby event.module event.dataset';
     },
     getEventId(event) {
       var id = event.fields['soc_id'];
@@ -728,6 +748,194 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       const el = document.getElementById(id)
       el.scrollIntoView()
       el.focus();
+    },
+
+    async analyze(evidence) {
+      try {
+        const response = await this.$root.papi.post('job/', {
+          kind: 'analyze',
+          nodeId: this.analyzerNodeId,
+          filter: {
+            parameters: {
+              artifact: evidence
+            }
+          }
+        });
+        this.$root.showTip(this.i18n.analyzeJobEnqueued);
+      } catch (error) {
+        this.$root.showError(error);
+      }
+    },
+    async loadAnalyzeJobs(artifactId) {
+      var existingResults = this.analyzeJobs[artifactId];
+      if (!existingResults) {
+        existingResults = [];
+        Vue.set(this.analyzeJobs, artifactId, existingResults);
+
+        try {
+          const response = await this.$root.papi.get('jobs/', { params: {
+              kind: 'analyze',
+              parameters: {
+                artifact: {
+                  id: artifactId
+                }
+              }
+          }});
+          const jobs = response.data;
+
+          for (var idx = 0; idx < jobs.length; idx++) {
+            const job = jobs[idx];
+            this.updateJob(job);
+          }
+        } catch (error) {
+          if (error.response != undefined && error.response.status == 404) {
+            // If none found, it's ok
+          } else {
+            this.$root.showError(error);
+          }
+        }
+
+      }
+    },
+    analyzeInProgress(evidence) {
+      const jobs = this.analyzeJobs[evidence.id];
+      if (jobs) {
+        const pending = jobs.find((job) => job.status == JobStatusPending);
+        return pending != null;
+      }
+      return false;
+    },
+    getAnalyzeJobs(evidence) {
+      const jobs = this.analyzeJobs[evidence.id];
+      if (jobs && jobs.length > 0) {
+        return jobs;
+      }
+      return null;
+    },
+    getAnalyzersInJob(job) {
+      if (job && job.results) {
+        return job.results.length;
+      }
+      return 0;
+    },
+    async deleteAnalyzeJob(job) {
+      try {
+        if (job) {
+          await this.$root.papi.delete('job/' + job.id);
+
+        }
+      } catch (error) {
+         this.$root.showError(error);
+      }
+    },
+    updateJob(job) {
+      if (job.filter.parameters && job.filter.parameters.artifact) {
+        const artifactId = job.filter.parameters.artifact.id;
+        const artifacts = this.associations['evidence'];
+        for (var i = 0; i < artifacts.length; i++) {
+          const artifact = artifacts[i];
+          if (artifact.id == artifactId) {
+            this.$root.populateUserDetails(job, "userId", "owner");
+            var existingResults = this.analyzeJobs[artifactId];
+            if (!existingResults) {
+              existingResults = [];
+            }
+            var found = false;
+            for (var jobIndex = 0; jobIndex< existingResults.length; jobIndex++) {
+              const existingJob = existingResults[jobIndex];
+              if (existingJob.id == job.id) {
+                if (job.status == JobStatusDeleted) {
+                  Vue.delete(existingResults, jobIndex);
+                } else {
+                  Vue.set(existingResults, jobIndex, job);
+                }
+                found = true;
+                break;
+              }
+            }
+
+            if (!found) {
+              existingResults.push(job);
+              existingResults.sort((a, b) => { 
+                if (a.id < b.id) {
+                  return -1;
+                } else if (a.id > b.id) {
+                  return 1;
+                }
+                return 0;
+              });
+              Vue.set(this.analyzeJobs, artifactId, existingResults);
+            }
+
+            break;
+          }
+        }
+      }
+    },
+    getAnalyzerSummary(analyzer) {
+      var i18nKey = "analyzer_" + analyzer.id + "_" + analyzer.summary;
+      var msg = this.$root.localizeMessage(i18nKey);
+      if (msg == i18nKey) {
+        i18nKey = "analyzer_" + analyzer.summary;
+        msg = this.$root.localizeMessage(i18nKey);
+        if (msg == i18nKey) {
+          msg = analyzer.summary;
+        }
+      }
+      return msg;
+    },
+    getAnalyzerDecoration(analyzer) {
+      var decoration = {
+        color: "", // Use default color scheme
+        icon: "fa-circle-question",
+        severity: 50, // unknown, place severity in middle of the range
+        help: "analyzer_result_unknown",
+      }
+      if (analyzer.data) {
+        switch (analyzer.data.status) {
+          case "info":
+            decoration.color = "info"; 
+            decoration.icon = "fa-circle-info";
+            decoration.severity = 10;
+            decoration.help = "analyzer_result_info";
+            break;
+          case "ok":
+            decoration.color = "success"; 
+            decoration.icon = "fa-circle-check";
+            decoration.severity = 0;
+            decoration.help = "analyzer_result_ok";
+            break;
+          case "caution":
+            decoration.color = "warning"; 
+            decoration.icon = "fa-circle-exclamation";
+            decoration.severity = 80;
+            decoration.help = "analyzer_result_caution";
+            break;
+          case "threat":
+            decoration.color = "error"; 
+            decoration.icon = "fa-triangle-exclamation";
+            decoration.severity = 100;
+            decoration.help = "analyzer_result_threat";
+            break;
+        }
+      }
+      return decoration;
+    },
+    getAnalyzeJobDecoration(job) {
+      var current = { severity: -1 };
+      if (job && job.results) {
+        for (var idx = 0; idx < job.results.length; idx++) {
+          var result = job.results[idx];
+          var decoration = this.getAnalyzerDecoration(result);
+          if (decoration.severity > current.severity) {
+            current = decoration;
+          }
+        }
+      } else if (job.status == JobStatusCompleted) {
+        current.icon = "fa-ban";
+        current.help = "analyzer_result_none";
+      }
+      return current;
     },
 
     saveLocalSettings() {

@@ -30,6 +30,7 @@ const huntComponent = {
     queryName: '',
     queryFilters: [],
     queryGroupBys: [],
+    queryGroupByOptions: [],
     querySortBys: [],
     eventFields: {},
     dateRange: '',
@@ -62,17 +63,16 @@ const huntComponent = {
     topChartData: {},
     bottomChartOptions: {},
     bottomChartData: {},
-    groupByFields: '',
+    groupBys: [],
     groupByLimitOptions: [10,25,50,100,200,500],
     groupByLimit: 10,
     groupByFilter: '',
-    groupByData: [],
-    groupByHeaders: [],
-    groupBySortBy: 'count',
-    groupBySortDesc: true,
     groupByItemsPerPage: 10,
     groupByFooters: { 'items-per-page-options': [10,25,50,100,200,500] },
     groupByPage: 1,
+    chartLabelMaxLength: 30,
+    chartLabelOtherLimit: 10,
+    chartLabelFieldSeparator: ', ',
 
     eventLimitOptions: [10,25,50,100,200,500,1000,2000,5000],
     eventLimit: 100,
@@ -103,6 +103,7 @@ const huntComponent = {
     filterRouteExact: "",
     filterRouteDrilldown: "",
     groupByRoute: "",
+    groupByNewRoute: "",
     quickActionVisible: false,
     quickActionX: 0,
     quickActionY: 0,
@@ -157,8 +158,6 @@ const huntComponent = {
   },
   watch: {
     '$route': 'loadData',
-    'groupBySortBy': 'saveLocalSettings',
-    'groupBySortDesc': 'saveLocalSettings',
     'groupByItemsPerPage': 'groupByItemsPerPageChanged',
     'groupByLimit': 'groupByLimitChanged',
     'sortBy': 'saveLocalSettings',
@@ -202,6 +201,9 @@ const huntComponent = {
       this.escalateRelatedEventsEnabled = params["escalateRelatedEventsEnabled"];
       this.viewEnabled = params["viewEnabled"];
       this.createLink = params["createLink"];
+      this.chartLabelMaxLength = params["chartLabelMaxLength"]
+      this.chartLabelOtherLimit = params["chartLabelOtherLimit"]
+      this.chartLabelFieldSeparator = params["chartLabelFieldSeparator"]
       if (this.queries != null && this.queries.length > 0) {
         this.query = this.queries[0].query;
       }
@@ -358,7 +360,7 @@ const huntComponent = {
         reRoute = true;
       }
       if (this.$route.query.groupByField) {
-        this.groupQuery(this.$route.query.groupByField);
+        this.groupQuery(this.$route.query.groupByField, this.$route.query.groupByGroup);
         reRoute = true;
       }
       if (reRoute) return false;
@@ -370,6 +372,10 @@ const huntComponent = {
       this.$root.startLoading();
       try {
         this.obtainQueryDetails();
+
+        // This must occur before the following await, so that Vue flushes the old groupby DOM renders
+        this.groupBys.splice(0);
+
         const response = await this.$root.papi.get('events/', { params: { 
           query: await this.getQuery(),
           range: this.dateRange, 
@@ -390,7 +396,7 @@ const huntComponent = {
         this.metricsEnabled = false;
         if (response.data.metrics["bottom"] != undefined) {
           this.metricsEnabled = true;
-          this.populateGroupByTable(response.data.metrics);
+          this.populateGroupByTables(response.data.metrics);
           this.populateChart(this.topChartData, response.data.metrics[this.lookupTopMetricKey(response.data.metrics)]);
           this.populateChart(this.bottomChartData, response.data.metrics["bottom"]);
         }
@@ -427,11 +433,12 @@ const huntComponent = {
         this.$root.showError(error);
       }
     },
-    async groupQuery(field, notify = true) {
+    async groupQuery(field, group, notify = true) {
       try {
         const response = await this.$root.papi.get('query/grouped', { params: { 
           query: this.query,
           field: field,
+          group: group,
         }});
         this.query = response.data;
         if (notify) {
@@ -586,6 +593,7 @@ const huntComponent = {
       this.queryName = "";
       this.queryFilters = [];
       this.queryGroupBys = [];
+      this.queryGroupByOptions = [];
       this.querySortBys = [];
       var route = this;
       if (this.query) {
@@ -610,14 +618,21 @@ const huntComponent = {
           for (var segmentIdx = 1; segmentIdx < segments.length; segmentIdx++) {
             var segment = segments[segmentIdx].trim().replace(/,/g, ' ');
             if (segment.indexOf("groupby") == 0) {
+              var fields = [];
+              var options = [];
               segment.split(" ").forEach(function(item, index) {
-                if (index > 0 && item.trim().length > 0) {
+                // Skip empty fields and segment options (they start with a hyphen)
+                if (item[0] == "-") {
+                  options.push(item.substring(1));
+                } else if (index > 0 && item.trim().length > 0) {
                   if (item.split("\"").length % 2 == 1) {
                     // Will currently skip quoted items with spaces. 
-                    route.queryGroupBys.push(item);
+                    fields.push(item);
                   }
                 }
               });
+              route.queryGroupBys.push(fields);
+              route.queryGroupByOptions.push(options);
             }
             if (segment.indexOf("sortby") == 0) {
               segment.split(" ").forEach(function(item, index) {
@@ -652,15 +667,32 @@ const huntComponent = {
         this.obtainQueryDetails();
       }
     },
-    removeGroupBy(groupBy) {
+    removeGroupBy(groupIdx, fieldIdx) {
+      if (groupIdx < 0 || groupIdx >= this.queryGroupBys.length) {
+        return;
+      }
+      var group = this.queryGroupBys[groupIdx];
+      if (fieldIdx >= group.length) {
+        return;
+      }
+      var field = null;
+      if (fieldIdx >= 0) {
+        field = group[fieldIdx];
+      }
+
       var segments = this.query.split("|");
       var newQuery = segments[0];
+      var currentGroupIdx = 0;
       for (var i = 1; i < segments.length; i++) {
         if (segments[i].trim().indexOf("groupby") == 0) {
-          segments[i].replace(/,/g, ' ');
-          segments[i] = segments[i].replace(" " + groupBy, "");
-          if (segments[i].trim() == "groupby") {
-            segments[i] = "";
+          if (currentGroupIdx++ == groupIdx) {
+            segments[i].replace(/,/g, ' ');
+            segments[i] = segments[i].replace(" " + field, "");
+
+            // Assume groupby's of a single field no longer have anything to group by
+            if (group.length == 1 || !field) {
+              segments[i] = "";
+            }
           }
         }
         if (segments[i].length > 0) {
@@ -705,7 +737,45 @@ const huntComponent = {
     buildGroupByRoute(field) {
       route = this.buildCurrentRoute()
       route.query.groupByField = field;
+      route.query.groupByGroup = this.groupBys.length - 1;
       return route;
+    },
+    buildGroupByNewRoute(field) {
+      route = this.buildCurrentRoute()
+      route.query.groupByField = field;
+      route.query.groupByGroup = -1;
+      return route;
+    },
+    buildGroupOptionRoute(groupIdx, removals, addition) {
+      var segments = this.query.split("|");
+      var newQuery = segments[0];
+      var currentGroupIdx = 0;
+      for (var i = 1; i < segments.length; i++) {
+        if (segments[i].trim().indexOf("groupby") == 0) {
+          if (currentGroupIdx++ == groupIdx) {
+            segments[i].replace(/,/g, ' ');
+            removals.forEach(function(removal, index) {
+              segments[i] = segments[i].replace(" -" + removal + " ", " ");
+            });
+            if (addition) {
+              segments[i] = "groupby -" + addition + " " + segments[i].substring("groupby ".length + 1);
+            }
+          }
+        }
+        newQuery = newQuery.trim() + " | " + segments[i].trim();
+      }
+      var route = this.buildCurrentRoute();
+      route.query.q = newQuery;
+      return route;
+    },
+    buildToggleLegendRoute(group, groupIdx) {
+      var addition = group.chart_options && group.chart_options.plugins.legend.display ? "nolegend" : "legend";
+      var removal = group.chart_options && group.chart_options.plugins.legend.display ? "legend" : "nolegend";
+      return this.buildGroupOptionRoute(groupIdx, [removal], addition);
+    },
+    buildGroupWithoutOptionsRoute(groupIdx) {
+      const removals = ["pie", "bar", "legend", "nolegend", "sankey"];
+      return this.buildGroupOptionRoute(groupIdx, removals, '');
     },
     countDrilldown(event) {
       if ( (Object.keys(event).length == 2 && Object.keys(event)[0] == "count") || (Object.keys(event).length == 4 && Object.keys(event)[0] == "count" && Object.keys(event)[1] == "rule.name" && Object.keys(event)[2] == "event.module" && Object.keys(event)[3] == "event.severity_label") ) {
@@ -744,6 +814,7 @@ const huntComponent = {
         this.filterRouteExact = this.buildFilterRoute(field, value, FILTER_EXACT);
         this.filterRouteDrilldown = this.buildFilterRoute(field, value, FILTER_DRILLDOWN);
         this.groupByRoute = this.buildGroupByRoute(field);
+        this.groupByNewRoute = this.buildGroupByNewRoute(field);
         var route = this;
         this.actions.forEach(function(action, index) {
           action.enabled = true;
@@ -777,8 +848,8 @@ const huntComponent = {
         this.quickActionEvent = event;
         this.quickActionField = field;
         this.quickActionValue = value;
-        this.quickActionX = domEvent.clientX;
-        this.quickActionY = domEvent.clientY;
+        this.quickActionX = domEvent.native && domEvent.native.clientX ? domEvent.native.clientX : domEvent.clientX;
+        this.quickActionY = domEvent.native && domEvent.native.clientY ? domEvent.native.clientY : domEvent.clientY;
         this.$nextTick(() => { 
           this.quickActionVisible = true; 
         });
@@ -806,7 +877,7 @@ const huntComponent = {
       return fields;
     },
     localizeValue(value) {
-      if (value.startsWith && value.startsWith("__")) {
+      if (value && value.startsWith && value.startsWith("__")) {
         value = this.$root.localizeMessage(value);
       }
       return value;
@@ -855,17 +926,75 @@ const huntComponent = {
       });
       return records;
     },
-    populateGroupByTable(metrics) {
-      var key = this.lookupFullGroupByMetricKey(metrics);
-      var fields = key.split("|");
-      if (fields.length > 1 && fields[0] == "groupby") {
-        fields.shift();
-        this.groupByFields = [...fields];
-        this.groupByData = this.constructGroupByRows(fields, metrics[key])
-        fields.unshift("count");
-        fields.unshift(""); // Leave empty header column for optional action buttons/icons
-        this.groupByHeaders = this.constructHeaders(fields);
+    constructChartMetrics(data) {
+      const records = [];
+      const route = this;
+      var other = 0;
+      data.forEach(function(row, index) {
+        var record = {
+          value: row.value,
+          keys: [row.keys.join(route.chartLabelFieldSeparator)],
+        };
+        if (records.length >= route.chartLabelOtherLimit) {
+          other += row.value;
+        } else {
+          records.push(record);
+        }
+      });
+      if (other > 0) {
+        records.push({value: other, keys: [this.i18n.other]});
       }
+      return records;
+    },
+    populateGroupByTables(metrics) {
+      var idx = 0;
+      this.groupBys = [];
+      while (this.populateGroupByTable(metrics, idx++)) {};
+    },
+    populateGroupByTable(metrics, groupIdx) {
+      var key = this.lookupGroupByMetricKey(metrics, groupIdx, true);
+      if (key) {
+        var fields = key.split("|");
+        if (fields.length > 1 && fields[0] == "groupby_" + groupIdx) {
+          fields.shift();
+
+          // Group objects have the following attributes:
+          // title:         Chart title
+          // fields:        Array of field names in the group, starting with an empty string (for the action 
+          //                buttons column, and then the 'count', followed by the actual field names.
+          // data:          The rows of tabular data in the format: 
+          //                { count: <count>, keys: [fieldValue0, fieldValue1, fieldValueN] }
+          // headers:       Array of header objects for the table view, in the format: 
+          //                { text: 'Human Friendly', value: 'field_name0' }
+          // chart_metrics: Alternative data format for chart rendering, in the 
+          //                format: { value: <count>, keys: ["fieldValue0, fieldValue1, fieldValueN"] }
+          //                Note that the keys array is always of length one, containing the concatenated
+          //                 string of field values.
+          // chart_type:    ChartJS type, such as pie, bar, sankey, etc.
+          // chart_options: ChartJS options. See setupBarChart, etc.
+          // chart_data:    ChartJS labels and datasets. See setupBarChart and populateBarChart.
+          var group = {};
+          group.title = fields.join(this.chartLabelFieldSeparator);
+          group.fields = [...fields];
+          group.data = this.constructGroupByRows(fields, metrics[key])
+          fields.unshift("count");
+          fields.unshift(""); // Leave empty header column for optional action buttons/icons
+          group.headers = this.constructHeaders(fields);
+          group.chart_metrics = this.constructChartMetrics(metrics[key]);
+          this.groupBys.push(group);
+
+          var options = this.queryGroupByOptions[groupIdx];
+          if (options.indexOf("pie") != -1) {
+            this.displayPieChart(group, groupIdx);
+          } else if (options.indexOf("bar") != -1) {
+            this.displayBarChart(group, groupIdx);
+          } else if (options.indexOf("sankey") != -1) {
+            this.displaySankeyChart(group, groupIdx);
+          }
+        }
+        return true;
+      }
+      return false;
     },
     populateEventTable(events) {
       var records = [];
@@ -903,13 +1032,85 @@ const huntComponent = {
       this.eventHeaders = this.constructHeaders(this.filterVisibleFields(eventModule, eventDataset, fields));
       this.eventData = records;
     },
+    displayTable(group, groupIdx) {
+      group.chart_type = "";
+      Vue.set(this.groupBys, groupIdx, group);
+    },
+    displayPieChart(group, groupIdx) {
+      group.chart_type = "pie";
+      group.chart_options = {};
+      group.chart_data = {};
+      this.setupPieChart(group.chart_options, group.chart_data, group.title);
+      this.applyLegendOption(group, groupIdx);
+      this.populateChart(group.chart_data, group.chart_metrics);
+      Vue.set(this.groupBys, groupIdx, group);
+    },
+    displayBarChart(group, groupIdx) {
+      group.chart_type = "bar";
+      group.chart_options = {};
+      group.chart_data = {};
+      this.setupBarChart(group.chart_options, group.chart_data, group.title);
+      this.applyLegendOption(group, groupIdx);
+      this.populateChart(group.chart_data, group.chart_metrics);
+      Vue.set(this.groupBys, groupIdx, group);
+    },
+    displaySankeyChart(group, groupIdx) {
+      if (!this.isGroupSankeyCapable(group)) {
+        return;
+      }
+      group.chart_type = "sankey";
+      group.chart_options = {};
+      group.chart_data = {};
+      this.setupSankeyChart(group.chart_options, group.chart_data, group.title);
+      this.applyLegendOption(group, groupIdx);
+
+      // Sankey has a unique dataset format, build it out here instead of using populateChartData().
+      // While building the new format, also calculate the max value across all nodes to be used
+      // as a scale factor for choosing colors of the sankey flows.
+      var flowMax = 0;
+      updateMaxMap = function(map, key, value) {
+        var max = map[key];
+        if (!max) {
+          max = 0;
+        }
+        max = max + value;
+        maxFlowMap[key] = max;
+        flowMax = Math.max(flowMax, max);
+      }
+      var data = [];
+      var maxFlowMap = {};
+      group.data.forEach(function(item, index) {
+        for (var idx = 0; idx < group.fields.length - 1; idx++) {
+          var from = item[group.fields[idx]];
+          var to = item[group.fields[idx+1]];
+          updateMaxMap(maxFlowMap, from, item.count);
+          updateMaxMap(maxFlowMap, to, item.count);
+          var flow = { from: from, to: to, flow: item.count };
+          data.push(flow);
+        }
+      });
+      group.chart_data.datasets[0].data = data;
+      group.chart_data.flowMax = flowMax;
+      Vue.set(this.groupBys, groupIdx, group);
+    },
+    isGroupSankeyCapable(group, groupIdx) {
+      return group.fields != undefined && group.fields.length >= 2;
+    },
+    applyLegendOption(group, groupIdx) {
+      const options = this.queryGroupByOptions[groupIdx];
+      if (options.indexOf("legend") != -1) {
+        group.chart_options.plugins.legend.display = true;
+      } else if (options.indexOf("nolegend") != -1) {
+        group.chart_options.plugins.legend.display = false;
+      }
+    },
     populateChart(chart, data) {
       chart.labels = [];
       chart.datasets[0].data = [];
       if (!data) return;
       const route = this;
       data.forEach(function(item, index) {
-        chart.labels.push(route.localizeValue(route.lookupSocId(item.keys[0])));
+        chart.labels.push(route.$root.truncate(route.localizeValue(route.lookupSocId(item.keys[0])), route.chartLabelMaxLength));
         chart.datasets[0].data.push(item.value);
       });
       if (chart.obj) {
@@ -942,13 +1143,15 @@ const huntComponent = {
     canQuery(key) {
       return !key.startsWith("soc_");
     },
-    lookupFullGroupByMetricKey(metrics) {
+    lookupGroupByMetricKey(metrics, groupIdx, longest) {
       var desiredKey = null;
       for (const key in metrics) {
-        if (key.startsWith("groupby|")) {
+        if (key.startsWith("groupby_" + groupIdx +"|")) {
           if (desiredKey == null) {
             desiredKey = key;
-          } else if (key.length > desiredKey.length) {
+          } else if (longest && key.length > desiredKey.length) {
+            desiredKey = key;
+          } else if (!longest && key.length < desiredKey.length) {
             desiredKey = key;
           }
         }
@@ -956,17 +1159,7 @@ const huntComponent = {
       return desiredKey;
     },
     lookupTopMetricKey(metrics) {
-      var desiredKey = null;
-      for (const key in metrics) {
-        if (key.startsWith("groupby|")) {
-          if (desiredKey == null) {
-            desiredKey = key;
-          } else if (key.length < desiredKey.length) {
-            desiredKey = key;
-          }
-        }
-      }
-      return desiredKey;
+      return this.lookupGroupByMetricKey(metrics, 0, false);
     },
     showDateRangePicker() {
       if (this.relativeTimeEnabled) return;
@@ -1042,20 +1235,21 @@ const huntComponent = {
       var fontColor = this.$root.getColor("#888888", -40);
       var dataColor = this.$root.getColor("primary");
       var gridColor = this.$root.getColor("#888888", 65);
-      options.events = ['click'];
       options.onClick = this.handleChartClick;
       options.responsive = true;
       options.maintainAspectRatio = false;
-      options.legend = {
-        display: false,
-      };
-      options.title = {
-        display: true,
-        text: title,
+      options.plugins = {
+        legend: {
+          display: false,
+        },
+        title: {
+          display: true,
+          text: title,
+        }
       };
       options.scales = {
-        yAxes: [{
-          gridLines: {
+        yAxes: {
+          grid: {
             color: gridColor,
           },
           ticks: {
@@ -1063,15 +1257,15 @@ const huntComponent = {
             fontColor: fontColor,
             precision: 0,
           }
-        }],
-        xAxes: [{
+        },
+        xAxes: {
           gridLines: {
             color: gridColor,
           },
           ticks: {
             fontColor: fontColor,
           }
-        }],
+        },
       };
 
       data.labels = [];
@@ -1081,24 +1275,116 @@ const huntComponent = {
         pointRadius: 3,
         fill: false,
         data: [],
+        label: this.i18n.field_count,
       }];
     },
     setupTimelineChart(options, data, title) {
       this.setupBarChart(options, data, title);
-      options.scales.xAxes[0].type = 'time';
-      options.scales.xAxes[0].distribution = 'series';
-      options.scales.xAxes[0].time = {
-        displayFormats: {
-          hour: 'MMM D hA',
+      options.onClick = null;
+      options.scales.xAxes.type = 'timeseries';
+    },
+    setupPieChart(options, data, title) {
+      options.responsive = true;
+      options.maintainAspectRatio = false;
+      options.plugins = {
+        legend: {
+          display: true,
+          position: 'left',
+        },
+        title: {
+          display: true,
+          text: title,
         }
       };
+      data.labels = [];
+      data.datasets = [{
+        backgroundColor: [
+          'rgba(77, 201, 246, 1)',
+          'rgba(246, 112, 25, 1)',
+          'rgba(245, 55, 148, 1)',
+          'rgba(83, 123, 196, 1)',
+          'rgba(172, 194, 54, 1)',
+          'rgba(22, 106, 143, 1)',
+          'rgba(0, 169, 80, 1)',
+          'rgba(88, 89, 91, 1)',
+          'rgba(133, 73, 186, 1)',
+          'rgba(235, 204, 52, 1)',
+          'rgba(127, 127, 127, 1)',
+        ],
+        borderColor: 'rgba(255, 255, 255, 0.5)',
+        data: [],
+        label: this.i18n.field_count,
+      }];
     },
-    async handleChartClick(e, activeElement) {
+    setupSankeyChart(options, data, title) {
+      const route = this;
+      options.responsive = true;
+      options.maintainAspectRatio = false;
+      options.plugins = {
+        legend: {
+          display: false,
+        },
+        title: {
+          display: true,
+          text: title,
+        }
+      };
+      data.flowMax = 0; // This is a custom attribute used for color selection
+      data.labels = [];
+      data.datasets = [{
+        data: [],
+        label: this.i18n.field_count,
+        color: this.$root.$vuetify && this.$root.$vuetify.theme.dark ? 'white' : 'black',
+        colorFrom: c => route.getSankeyColor('from', 'out', c, data.flowMax),
+        colorTo: c => route.getSankeyColor('to', 'in', c, data.flowMax),
+      }];
+    },
+    getSankeyColor(tag, dir, source, max) {
+      var color = 'steelblue';
+      if (source && source.parsed && source.parsed._custom) {
+        var value = source.parsed._custom[tag][dir] / (max > 0 ? max : 1);
+        if (value > 0.90) {
+          color = 'crimson';
+        } else if (value > 0.80) {
+          color = 'red';
+        } else if (value > 0.70) {
+          color = 'orangered';
+        } else if (value > 0.60) {
+          color = 'darkorange';
+        } else if (value > 0.50) {
+          color = 'orange';
+        } else if (value > 0.40) {
+          color = 'goldenrod';
+        } else if (value > 0.30) {
+          color = 'gold';
+        } else if (value > 0.25) {
+          color = 'yellow';
+        } else if (value > 0.20) {
+          color = 'yellowgreen';
+        } else if (value > 0.15) {
+          color = 'limegreen';
+        } else if (value > 0.10) {
+          color = 'green';
+        } else if (value > 0.05) {
+          color = 'aquamarine';
+        } else if (value > 0.04) {
+          color = 'cyan';
+        } else if (value > 0.03) {
+          color = 'darkturquoise';
+        } else if (value > 0.02) {
+          color = 'lightskyblue';
+        } else if (value > 0.01) {
+          color = 'royalblue'; 
+        }
+      }
+      return color;
+    },
+    async handleChartClick(e, activeElement, chart) {
       if (activeElement.length > 0) {
-        var clickedValue = activeElement[0]._model.label;
+        var clickedValue = chart.data.labels[activeElement[0].index] + "";
         if (clickedValue && clickedValue.length > 0) {
           if (this.canQuery(clickedValue)) {
-            var chartGroupByField = this.groupByFields[0];
+            var chartGroupByField = this.groupBys[0].fields[0];
             this.toggleQuickAction(e, {}, chartGroupByField, clickedValue);
           }
         }
@@ -1191,8 +1477,6 @@ const huntComponent = {
       localStorage['timezone'] = this.zone;
     },
     saveLocalSettings() {
-      this.saveSetting('groupBySortBy', this.groupBySortBy, 'timestamp');
-      this.saveSetting('groupBySortDesc', this.groupBySortDesc, true);
       this.saveSetting('groupByItemsPerPage', this.groupByItemsPerPage, this.params['groupItemsPerPage']);
       this.saveSetting('groupByLimit', this.groupByLimit, this.params['groupFetchLimit']);
       this.saveSetting('sortBy', this.sortBy, 'timestamp');
@@ -1210,8 +1494,6 @@ const huntComponent = {
 
       // Module settings
       var prefix = 'settings.' + this.category;
-      if (localStorage[prefix + '.groupBySortBy']) this.groupBySortBy = localStorage[prefix + '.groupBySortBy'];
-      if (localStorage[prefix + '.groupBySortDesc']) this.groupBySortDesc = localStorage[prefix + '.groupBySortDesc'] == "true";
       if (localStorage[prefix + '.groupByItemsPerPage']) this.groupByItemsPerPage = parseInt(localStorage[prefix + '.groupByItemsPerPage']);
       if (localStorage[prefix + '.groupByLimit']) this.groupByLimit = parseInt(localStorage[prefix + '.groupByLimit']);
       if (localStorage[prefix + '.sortBy']) this.sortBy = localStorage[prefix + '.sortBy'];
@@ -1245,3 +1527,6 @@ routes.push({ path: '/alerts', name: 'alerts', component: alertsComponent});
 
 const casesComponent = Object.assign({}, huntComponent);
 routes.push({ path: '/cases', name: 'cases', component: casesComponent});
+
+const dashboardsComponent = Object.assign({}, huntComponent);
+routes.push({ path: '/dashboards', name: 'dashboards', component: dashboardsComponent});
