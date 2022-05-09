@@ -372,14 +372,20 @@ test('populateGroupByTables', () => {
   expect(comp.groupBys[0].data[0].count).toBe(23);
   expect(comp.groupBys[0].data[0].foo).toBe('moo');
   expect(comp.groupBys[0].data[0].bar).toBe('mar');
-  expect(comp.groupBys[0].headers).toStrictEqual([{text: '', value: ''}, {text: 'Count', value:'count'}, {text: 'foo', value: 'foo'}, {text: 'bar', value: 'bar'}]);
+  expect(comp.groupBys[0].headers).toStrictEqual([{text: 'Count', value:'count'}, {text: 'foo', value: 'foo'}, {text: 'bar', value: 'bar'}]);
   expect(comp.groupBys[0].chart_metrics).toStrictEqual([{value: 23, keys:['moo, mar']}]);
   expect(comp.groupBys[1].title).toBe("car");
   expect(comp.groupBys[1].fields.length).toBe(1);
   expect(comp.groupBys[1].data[0].count).toBe(9);
   expect(comp.groupBys[1].data[0].car).toBe('mis');
-  expect(comp.groupBys[1].headers).toStrictEqual([{text: '', value: ''}, {text: 'Count', value:'count'}, {text: 'car', value: 'car'}]);
+  expect(comp.groupBys[1].headers).toStrictEqual([{text: 'Count', value:'count'}, {text: 'car', value: 'car'}]);
   expect(comp.groupBys[1].chart_metrics).toStrictEqual([{value: 9, keys:['mis']}]);
+
+  // Now include action column
+  comp.aggregationActionsEnabled = true;
+  result = comp.populateGroupByTables(metrics);
+  expect(comp.groupBys[0].headers).toStrictEqual([{text: '', value: ''}, {text: 'Count', value:'count'}, {text: 'foo', value: 'foo'}, {text: 'bar', value: 'bar'}]);  
+  expect(comp.groupBys[1].headers).toStrictEqual([{text: '', value: ''}, {text: 'Count', value:'count'}, {text: 'car', value: 'car'}]);
 });
 
 test('displayTable', () => {
