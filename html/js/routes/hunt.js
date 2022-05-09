@@ -115,6 +115,7 @@ const huntComponent = {
     escalationMenuY: 0,
     escalationItem: null,
     escalateRelatedEventsEnabled: false,
+    aggregationActionsEnabled: false,
     actions: [],
   }},
   created() {
@@ -199,6 +200,7 @@ const huntComponent = {
       this.ackEnabled = params["ackEnabled"];
       this.escalateEnabled = params["escalateEnabled"];
       this.escalateRelatedEventsEnabled = params["escalateRelatedEventsEnabled"];
+      this.aggregationActionsEnabled = params["aggregationActionsEnabled"];
       this.viewEnabled = params["viewEnabled"];
       this.createLink = params["createLink"];
       this.chartLabelMaxLength = params["chartLabelMaxLength"]
@@ -978,7 +980,9 @@ const huntComponent = {
           group.fields = [...fields];
           group.data = this.constructGroupByRows(fields, metrics[key])
           fields.unshift("count");
-          fields.unshift(""); // Leave empty header column for optional action buttons/icons
+          if (this.aggregationActionsEnabled) {
+            fields.unshift(""); // Leave empty header column for optional action buttons/icons
+          }
           group.headers = this.constructHeaders(fields);
           group.chart_metrics = this.constructChartMetrics(metrics[key]);
           this.groupBys.push(group);

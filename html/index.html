@@ -523,7 +523,7 @@
                         </template>
                         <template v-slot:item="{ item, index }">
                           <tr>
-                            <td>
+                            <td v-if="aggregationActionsEnabled">
                               <v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" class="mx-2" icon x-small
                                 @click="ack($event, item, index, !isFilterToggleEnabled('acknowledged'))"
                                 :color="item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged') | colorSeverity">
@@ -546,7 +546,7 @@
                               </v-tooltip>
                                <div v-else class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()"></div>
                             </td>
-                            <td v-for="field in group.headers.slice(2)" :key="field.value">
+                            <td v-for="field in group.headers.slice(aggregationActionsEnabled ? 2 : 1)" :key="field.value">
                               <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction($event, item, field.value, item[field.value])"></div>
                             </td>
                           </tr>
