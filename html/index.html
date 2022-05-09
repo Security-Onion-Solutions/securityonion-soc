@@ -351,7 +351,7 @@
                     </v-tooltip>
                   </template>
                   <v-list dense class="overflow-y-auto" style="max-height: 600px" id="hunt-query-dropdown-list">
-                    <v-list-item v-if="isAdvanced()" v-for="query in mruQueries" :key="query">
+                    <v-list-item v-if="isAdvanced() && mruQueryLimit > 0" v-for="query in mruQueries" :key="query">
                       <v-list-item-content @click="huntQuery(query)" :style="{ cursor: 'pointer'}">
                         <v-list-item-title v-text="query"></v-list-item-title>
                         <v-list-item-subtitle>
