@@ -369,7 +369,7 @@ const i18n = {
       product: 'Security Onion',
       profile: 'Profile',
       queriesHelp: 'Choose from several pre-defined queries',
-      queryHelp: 'Specify a hunting query in Onion Query Language (OQL)',
+      queryHelp: 'Specify a query in Onion Query Language (OQL)',
       quickActions: 'Actions',
       quickDrilldown: 'Quick Drilldown',
       reason: 'Reason',
