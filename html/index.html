@@ -509,7 +509,7 @@
                         <bar-chart v-if="group.chart_type == 'bar'" :chartdata="group.chart_data" :options="group.chart_options"/>
                         <sankey-chart v-if="group.chart_type == 'sankey'" :chartdata="group.chart_data" :options="group.chart_options"/>
                       </div>
-                      <v-data-table v-if="!group.chart_type" class="elevation-1" :search="groupByFilter" dense :footer-props="groupByFooters" 
+                      <v-data-table v-if="!group.chart_type" class="elevation-1" :search="groupByFilter" dense :footer-props="groupByFooters" sort-by="count" sort-desc="true"
                         :items-per-page.sync="groupByItemsPerPage" must-sort :headers="group.headers" :items="group.data" :custom-sort="sortEvents">
                         <template v-for="(header, headerIdx) in group.headers" v-slot:["header." + header.value]="{ props }">
                           {{ header.text }}
