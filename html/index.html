@@ -224,6 +224,12 @@
             </v-btn>
           </template>
           {{ errorMessage }}
+          <div class="mt-2 no-underline">
+            {{ i18n.errorHelp }}
+            <a target="so-help" :href="parameters.docsUrl + '/help'">
+              <v-icon>fa-life-ring</v-icon>
+            </a>
+          </div>
         </v-snackbar>
         <v-snackbar id="warning" top centered rounded close :timeout="warningTimeout" v-model="warning" color="warning">
           <template v-slot:action="{ attrs }">

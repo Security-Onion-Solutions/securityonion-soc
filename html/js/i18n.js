@@ -208,6 +208,7 @@ const i18n = {
       epsProduction: 'Production EPS:',
       epsConsumption: 'Consumption EPS:',
       error: 'Error',
+      errorHelp: 'See the Help section of the Security Onion documentation for additional troubleshooting guidance.',
       escalate: 'Escalate',
       escalationInvalid: 'Invalid alert - cannot escalate to a case due to insufficient alert information',
       escalateExistingCase: 'Attach event to a recently viewed case:',
@@ -518,7 +519,7 @@ const i18n = {
       ERROR_QUERY_INVALID__SEGMENT_EMPTY: 'The search query has an incomplete segment (pipe) function.',
       ERROR_QUERY_INVALID__SEGMENT_UNSUPPORTED: 'The search query contains an unsupported segment (pipe) function.',
       ERROR_QUERY_INVALID__TERM_MISSING: 'The search query is incomplete.',
-      ERROR_QUERY_FAILED_ELASTICSEARCH: 'The search query encountered a failure within the Elasticsearch cluster.',
+      ERROR_QUERY_FAILED_ELASTICSEARCH: 'The search query encountered a failure within the Elasticsearch cluster. Check SOC logs for details.',
     },
   },
 
