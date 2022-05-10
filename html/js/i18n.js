@@ -439,6 +439,8 @@ const i18n = {
       'so-standalone': 'Standalone',
       'so-standalone-keywords': 'Elastic, Elasticsearch, Fleet, Forward, Ingest, Manager, Master, Search, Sensor, Sensoroni, Soc, Stenographer, Web',
       showPieChart: 'Show pie chart',
+      showBarChart: 'Show bar chart',
+      showSankeyChart: 'Show Sankey diagram',
       showTable: 'Show table',
       sortedBy: 'Sort:',
       sortInclude: "Sort By",

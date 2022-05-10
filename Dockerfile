@@ -17,7 +17,7 @@ RUN npm install jest jest-environment-jsdom --global
 RUN ln -s /usr/bin/python3 /usr/bin/python
 RUN ./build.sh "$VERSION"
 
-FROM ghcr.io/security-onion-solutions/python:3-alpine
+FROM ghcr.io/security-onion-solutions/python:3-slim
 
 ARG UID=939
 ARG GID=939
@@ -25,9 +25,9 @@ ARG VERSION=0.0.0
 ARG ELASTIC_VERSION=0.0.0
 ARG WAZUH_VERSION=0.0.0
 
-RUN apk update && apk add tzdata ca-certificates curl tcpdump build-base gcc libffi-dev && update-ca-certificates
+RUN apt update -y && apt install -y bash tzdata ca-certificates wget curl tcpdump && update-ca-certificates
 RUN addgroup --gid "$GID" socore
-RUN adduser -D -u "$UID" -G socore -g '' socore
+RUN adduser --disabled-password --uid "$UID" --ingroup socore --gecos '' socore
 RUN mkdir -p /opt/sensoroni/jobs && chown socore:socore /opt/sensoroni/jobs
 RUN mkdir -p /opt/sensoroni/logs && chown socore:socore /opt/sensoroni/logs
 WORKDIR /opt/sensoroni
@@ -44,7 +44,7 @@ RUN chmod u+x scripts/*
 RUN chown 939:939 scripts/*
 RUN find . -name \*.html -exec sed -i -e "s/VERSION_PLACEHOLDER/$VERSION/g" {} \;
 
-RUN [[ $ELASTIC_VERSION == '0.0.0' ]] || \
+RUN bash -c "[[ $ELASTIC_VERSION == '0.0.0' ]]" || \
     (mkdir -p html/downloads && \
      wget https://artifacts.elastic.co/downloads/beats/winlogbeat/winlogbeat-oss-$(echo $ELASTIC_VERSION)-windows-x86_64.msi -P html/downloads/ && \
      wget https://artifacts.elastic.co/downloads/beats/metricbeat/metricbeat-oss-$(echo $ELASTIC_VERSION)-x86_64.rpm -P html/downloads/ && \
@@ -54,14 +54,14 @@ RUN [[ $ELASTIC_VERSION == '0.0.0' ]] || \
      wget https://artifacts.elastic.co/downloads/beats/filebeat/filebeat-oss-$(echo $ELASTIC_VERSION)-amd64.deb -P html/downloads/ && \
      wget https://artifacts.elastic.co/downloads/beats/auditbeat/auditbeat-oss-$(echo $ELASTIC_VERSION)-amd64.deb -P html/downloads/)
 
-RUN [[ $WAZUH_VERSION == '0.0.0' ]] || \
+RUN bash -c "[[ $WAZUH_VERSION == '0.0.0' ]]" || \
     (mkdir -p html/downloads && \
      wget https://packages.wazuh.com/3.x/osx/wazuh-agent-$(echo $WAZUH_VERSION).pkg -P html/downloads/ && \
      wget https://packages.wazuh.com/3.x/yum/wazuh-agent-$(echo $WAZUH_VERSION).x86_64.rpm -P html/downloads/ && \
      wget https://packages.wazuh.com/3.x/apt/pool/main/w/wazuh-agent/wazuh-agent_$(echo $WAZUH_VERSION)_amd64.deb -P html/downloads/ && \
      wget https://packages.wazuh.com/3.x/windows/wazuh-agent-$(echo $WAZUH_VERSION).msi -P html/downloads/)
 
-RUN [[ $VERSION == '0.0.0' ]] || \
+RUN bash -c "[[ $VERSION == '0.0.0' ]]" || \
     (wget https://docs.securityonion.net/_/downloads/en/$(echo $VERSION | cut -d'.' -f 1,2)/htmlzip/ -O /tmp/docs.zip && \
     unzip -o /tmp/docs.zip -d html/docs && \
     rm -f /tmp/docs.zip && \

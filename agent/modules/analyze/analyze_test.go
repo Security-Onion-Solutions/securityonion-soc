@@ -60,7 +60,7 @@ func TestCreateAnalyzer(tester *testing.T) {
 
 	entries, err := ioutil.ReadDir(TMP_DIR)
 	assert.NoError(tester, err)
-	assert.Equal(tester, 15, len(entries))
+	assert.Equal(tester, 2, len(entries))
 }
 
 func TestInit(tester *testing.T) {
