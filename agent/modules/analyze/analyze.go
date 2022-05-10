@@ -260,7 +260,7 @@ func (analyze *Analyze) initAnalyzer(analyzer *model.Analyzer) error {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(analyze.timeoutMs)*time.Millisecond)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, analyze.analyzerInstaller,
-			"install", "--upgrade", "--no-input", "--find-links="+analyzer.GetSourcePackagesPath(), "-r", analyzer.GetRequirementsPath(),
+			"install", "--no-index", "--upgrade", "--no-input", "--find-links="+analyzer.GetSourcePackagesPath(), "-r", analyzer.GetRequirementsPath(),
 			"-t", analyzer.GetSitePackagesPath())
 
 		output, err := cmd.CombinedOutput()

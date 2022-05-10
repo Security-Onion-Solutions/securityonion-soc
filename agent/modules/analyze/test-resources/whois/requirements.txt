@@ -1,2 +1,1 @@
-requests>=2.27.1
-tzlocal==2.1
+dnspython>=2.2.1
