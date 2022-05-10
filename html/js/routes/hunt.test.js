@@ -642,3 +642,11 @@ test('isGroupSankeyCapable', () => {
   var group = { fields: ['foo', 'bar', 'car'] };
   expect(comp.isGroupSankeyCapable(group)).toBe(true);
 });
+
+test('getGroupByFieldStartIndex', () => {
+  comp.aggregationActionsEnabled = false;
+  expect(comp.getGroupByFieldStartIndex()).toBe(1);
+
+  comp.aggregationActionsEnabled = true;
+  expect(comp.getGroupByFieldStartIndex()).toBe(2);
+});

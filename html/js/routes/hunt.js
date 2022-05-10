@@ -1162,6 +1162,9 @@ const huntComponent = {
       }
       return desiredKey;
     },
+    getGroupByFieldStartIndex() {
+      return this.aggregationActionsEnabled ? 2 : 1;
+    },
     lookupTopMetricKey(metrics) {
       return this.lookupGroupByMetricKey(metrics, 0, false);
     },
