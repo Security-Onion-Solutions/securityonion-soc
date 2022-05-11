@@ -118,6 +118,7 @@ func TestAnalyzersExecuted(tester *testing.T) {
 
 	cfg := make(map[string]interface{})
 	cfg["analyzersPath"] = "test-resources"
+	cfg["analyzerExecutable"] = "python3"
 	cfg["sourcePackagesPath"] = "test-source-packages"
 	cfg["sitePackagesPath"] = TMP_DIR
 	sq := NewAnalyze(nil)

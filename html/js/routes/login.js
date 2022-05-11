@@ -44,7 +44,7 @@ routes.push({ path: '*', name: 'login', component: {
       try {
         var response = await axios.create().get('/login/banner.md?v=' + Date.now());
         if (response.data) {
-          this.banner = marked(response.data);
+          this.banner = marked.parse(response.data);
         }
         response = await this.$root.authApi.get('login/flows?id=' + this.$root.getAuthFlowId());
         this.form.csrfToken = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'csrf_token').attributes.value;
