@@ -114,6 +114,7 @@ const huntComponent = {
     escalationMenuX: 0,
     escalationMenuY: 0,
     escalationItem: null,
+    escalationGroupIdx: -1,
     escalateRelatedEventsEnabled: false,
     aggregationActionsEnabled: false,
     actions: [],
@@ -486,7 +487,7 @@ const huntComponent = {
         template: template,
       };
     },
-    async ack(event, item, idx, acknowledge, escalate = false, caseId = null) {
+    async ack(event, item, idx, acknowledge, escalate, caseId, groupIdx) {
       this.$root.startLoading();
       try {
         var docEvent = item;
@@ -532,7 +533,13 @@ const huntComponent = {
           } else {
             this.$root.showTip(escalate ? this.i18n.escalatedSingleTip : (acknowledge ? this.i18n.ackSingleTip : this.i18n.ackUndoSingleTip));
           }
-          this.removeDataItemFromView(item["count"] ? this.groupByData : this.eventData, item);
+          var data;
+          if (item["count"] && groupIdx >= 0) {
+            data = this.groupBys[groupIdx].data;
+          } else {
+            data = this.eventData;
+          }
+          this.removeDataItemFromView(data, item);
         } else if (escalate) {
           this.$root.showTip(this.i18n.escalatedEventTip);
           item['event.escalated'] = true;
@@ -785,9 +792,9 @@ const huntComponent = {
         this.$router.push(this.filterRouteDrilldown);
       }
     },
-    toggleEscalationMenu(domEvent, event) {
+    toggleEscalationMenu(domEvent, event, groupIdx) {
       if (!this.escalateRelatedEventsEnabled) {
-        this.ack(domEvent, event, 0, true, true);
+        this.ack(domEvent, event, 0, true, true, null, -1);
         return;
       }
 
@@ -799,6 +806,7 @@ const huntComponent = {
       this.escalationMenuX = domEvent.clientX;
       this.escalationMenuY = domEvent.clientY;
       this.escalationItem = event;
+      this.escalationGroupIdx = groupIdx;
       this.$nextTick(() => { 
         this.escalationMenuVisible = true; 
       });      
