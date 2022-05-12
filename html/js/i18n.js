@@ -89,7 +89,7 @@ const i18n = {
       attachmentHelp: 'Click to attach a file to upload. (Note: max upload size is {maxUploadSizeBytes} bytes)',
       attempt: 'Attempt',
       author: 'Author',
-      autohunt: 'Automatically Hunt after changing filters, groupings, and date-ranges',
+      autohunt: 'Automatically apply filters, groupings, and date ranges',
       autoRefresh: 'Automatic refresh interval',
       beginTime: 'Filter Begin',
       beginTimeHelp: 'Filter start time in RFC 3339 format (Ex: 2020-10-16 13:00:00.230-04:00). Unused for imported PCAPs.',
