@@ -214,18 +214,21 @@ test('toggleEscalationMenu', () => {
   const domEvent = {clientX: 12, clientY: 34};
   const event = {id:"33",foo:"bar"};
   comp.$nextTick = function(fn) { fn(); };
-  comp.toggleEscalationMenu(domEvent, event);
+  comp.toggleEscalationMenu(domEvent, event, 2);
   expect(comp.escalationMenuX).toBe(12);
   expect(comp.escalationMenuY).toBe(34);
   expect(comp.escalationItem).toBe(event);
+  expect(comp.escalationGroupIdx).toBe(2);
   expect(comp.escalationMenuVisible).toBe(true);
 });
 
 test('toggleEscalationMenuAlreadyOpen', () => {
   comp.escalateRelatedEventsEnabled = true;
+  const domEvent = {clientX: 12, clientY: 34};
+  const event = {id:"33",foo:"bar"};
   comp.quickActionVisible = true;
   comp.escalationMenuVisible = true;
-  comp.toggleEscalationMenu();
+  comp.toggleEscalationMenu(domEvent, event, 2);
   expect(comp.quickActionVisible).toBe(false);
   expect(comp.escalationMenuVisible).toBe(false);
 });
