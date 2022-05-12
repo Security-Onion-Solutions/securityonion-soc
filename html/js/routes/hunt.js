@@ -794,7 +794,7 @@ const huntComponent = {
     },
     toggleEscalationMenu(domEvent, event, groupIdx) {
       if (!this.escalateRelatedEventsEnabled) {
-        this.ack(domEvent, event, 0, true, true, null, -1);
+        this.ack(domEvent, event, 0, true, true, null, groupIdx);
         return;
       }
 

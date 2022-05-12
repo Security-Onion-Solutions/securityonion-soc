@@ -224,9 +224,11 @@ test('toggleEscalationMenu', () => {
 
 test('toggleEscalationMenuAlreadyOpen', () => {
   comp.escalateRelatedEventsEnabled = true;
+  const domEvent = {clientX: 12, clientY: 34};
+  const event = {id:"33",foo:"bar"};
   comp.quickActionVisible = true;
   comp.escalationMenuVisible = true;
-  comp.toggleEscalationMenu();
+  comp.toggleEscalationMenu(domEvent, event, 2);
   expect(comp.quickActionVisible).toBe(false);
   expect(comp.escalationMenuVisible).toBe(false);
 });
