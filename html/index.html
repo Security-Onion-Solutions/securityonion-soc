@@ -1558,6 +1558,7 @@
                               <div :id="`attachments-${props.index}-sha256`" class="case">
                                 {{ withDefault(props.item.sha256, i18n.unknown) }}
                                 <v-icon class="ml-1" @click="$root.copyToClipboard(props.item.sha256)" :title="i18n.copyToClipboard">fa-copy</v-icon>
+                                <v-icon class="ml-1" @click="populateAddObservableForm('sha256', props.item.sha256)" :title="i18n.addObservable">fa-eye</v-icon>
                               </div>
                             </div>
                             <div class="mt-2">
@@ -1565,6 +1566,7 @@
                               <div :id="`attachments-${props.index}-sha1`" class="case">
                                 {{ withDefault(props.item.sha1, i18n.unknown) }}
                                 <v-icon class="ml-1" @click="$root.copyToClipboard(props.item.sha1)" :title="i18n.copyToClipboard">fa-copy</v-icon>
+                                <v-icon class="ml-1" @click="populateAddObservableForm('sha1', props.item.sha1)" :title="i18n.addObservable">fa-eye</v-icon>
                               </div>
                             </div>
                             <div class="mt-2">
@@ -1572,6 +1574,7 @@
                               <div :id="`attachments-${props.index}-md5`" class="case">
                                 {{ withDefault(props.item.md5, i18n.unknown) }}
                                 <v-icon class="ml-1" @click="$root.copyToClipboard(props.item.md5)" :title="i18n.copyToClipboard">fa-copy</v-icon>
+                                <v-icon class="ml-1" @click="populateAddObservableForm('md5', props.item.md5)" :title="i18n.addObservable">fa-eye</v-icon>
                               </div>
                             </div>
                           </v-container>
