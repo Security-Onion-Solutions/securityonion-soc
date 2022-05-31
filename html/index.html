@@ -343,7 +343,7 @@
         </v-row>
         <v-row align="start">
           <v-col cols="12" md="7">
-            <v-textarea :clearable="isAdvanced()" :auto-grow="isAdvanced()" :readonly="!isAdvanced()" :disabled="loading()" @change="notifyInputsChanged" class="mx-2" v-model="$data[isAdvanced() ? 'query' : 'queryName']" :hint="i18n.queryHelp" rows="1" persistent-hint autofocus prepend-icon="fa-search" @keydown.enter.prevent="hunt" id="hunt-query-input">
+            <v-textarea :clearable="isAdvanced()" :auto-grow="isAdvanced()" :readonly="!isAdvanced()" :disabled="loading()" @change="notifyInputsChanged" class="mx-2" v-model="$data[isAdvanced() ? 'query' : 'queryName']" :hint="isAdvanced() ? i18n.queryHelp : ''" rows="1" persistent-hint autofocus prepend-icon="fa-search" @keydown.enter.prevent="hunt" id="hunt-query-input">
               <template v-slot:prepend-inner>
                 <v-menu dense bottom three-line offset-y>
                   <template v-slot:activator="{ on: menu }">
