@@ -286,6 +286,11 @@ const huntComponent = {
         this.$router.push(this.buildCurrentRoute(), onSuccess, onFail);
       }
       this.resetRefreshTimer();
+
+      if (document.activeElement) {
+        // Release focus to avoid clicking away causing a second hunt
+        document.activeElement.blur();
+      }
     },
     stopRefreshTimer() {
       if (this.autoRefreshTimer) {
