@@ -818,7 +818,7 @@ const huntComponent = {
         return;
       }
 
-      if (value && this.canQuery(field)) {
+      if (value != null && this.canQuery(field)) {
         this.filterRouteInclude = this.buildFilterRoute(field, value, FILTER_INCLUDE);
         this.filterRouteExclude = this.buildFilterRoute(field, value, FILTER_EXCLUDE);
         this.filterRouteExact = this.buildFilterRoute(field, value, FILTER_EXACT);
