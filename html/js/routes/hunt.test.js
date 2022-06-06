@@ -408,14 +408,19 @@ test('displayPieChart', () => {
 
 test('displaySankeyChart', () => {
   var group = {chart_type: ''};
-  group.data = [{ count: 1, foo: 'moo', bar: 'mar' }, { count: 12, foo: 'moo', bar: 'car' }]
+  group.data = [{ count: 10, foo: 'mog', bar: 'mop' }, { count: 1, foo: 'moo', bar: 'mar' }, { count: 12, foo: 'moo', bar: 'car' }, { count: 2, foo: 'moo', bar: 'mog' }, { count: 2, foo: 'mop', bar: 'moo' },{ count: 2, foo: 'moo', bar: 'moo' }, { count: 3, foo: 'mop', bar: 'baz' }]
   group.fields = ['foo', 'bar'];
   comp.groupBys = [group];
   comp.queryGroupByOptions = [[]];
   comp.displaySankeyChart(group, 0);
   expect(group.chart_type).toBe('sankey');
-  expect(group.chart_data.flowMax).toBe(13);
+  expect(group.chart_data.flowMax).toBe(15);
   expect(group.chart_data.datasets[0].data).toStrictEqual([
+    {
+      "flow": 10,
+      "from": "mog",
+      "to": "mop",
+    },
     {
       "flow": 1,
       "from": "moo",
@@ -425,6 +430,16 @@ test('displaySankeyChart', () => {
       "flow": 12,
       "from": "moo",
       "to": "car",
+    },
+    {
+      "flow": 2,
+      "from": "moo",
+      "to": "mog",
+    },
+    {
+      "flow": 3,
+      "from": "mop",
+      "to": "baz",
     },
   ]);
 });

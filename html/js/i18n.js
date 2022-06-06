@@ -131,6 +131,7 @@ const i18n = {
       category: 'Category',
 
       chartTitleBottom: 'Fewest Occurrences',
+      chartTitleIncomplete: '(partial)',
       chartTitleTimeline: 'Timeline',
       chartTitleTop: 'Most Occurrences',
       cheatsheet: 'Cheat Sheet',
