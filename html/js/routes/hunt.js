@@ -988,6 +988,7 @@ const huntComponent = {
           // chart_type:    ChartJS type, such as pie, bar, sankey, etc.
           // chart_options: ChartJS options. See setupBarChart, etc.
           // chart_data:    ChartJS labels and datasets. See setupBarChart and populateBarChart.
+          // is_incomplete: True if only partial data is rendered to avoid complete render failure.
           var group = {};
           group.title = fields.join(this.chartLabelFieldSeparator);
           group.fields = [...fields];
@@ -1078,34 +1079,62 @@ const huntComponent = {
       group.chart_type = "sankey";
       group.chart_options = {};
       group.chart_data = {};
-      this.setupSankeyChart(group.chart_options, group.chart_data, group.title);
-      this.applyLegendOption(group, groupIdx);
 
       // Sankey has a unique dataset format, build it out here instead of using populateChartData().
       // While building the new format, also calculate the max value across all nodes to be used
       // as a scale factor for choosing colors of the sankey flows.
       var flowMax = 0;
-      updateMaxMap = function(map, key, value) {
+      var updateMaxMap = function(map, key, value) {
         var max = map[key];
         if (!max) {
           max = 0;
         }
         max = max + value;
-        maxFlowMap[key] = max;
+        map[key] = max;
         flowMax = Math.max(flowMax, max);
-      }
+      };
+
+      var isRecursive = function(map, from, to, current, max) {
+        if (current > max || from == to) {
+          return true;
+        }
+
+        for (var i = 0; i < map.length; i++) {
+          var item = map[i];
+          if (item.from == to) {
+            if (isRecursive(map, item.from, item.to, current + 1, max)) {
+              return true;
+            }
+          }
+        }
+        return false;
+      };
+
       var data = [];
       var maxFlowMap = {};
       group.data.forEach(function(item, index) {
         for (var idx = 0; idx < group.fields.length - 1; idx++) {
           var from = item[group.fields[idx]];
           var to = item[group.fields[idx+1]];
-          updateMaxMap(maxFlowMap, from, item.count);
-          updateMaxMap(maxFlowMap, to, item.count);
           var flow = { from: from, to: to, flow: item.count };
           data.push(flow);
+
+          if (isRecursive(data, from, to, 0, group.fields.length)) {
+            group.is_incomplete = true;
+            data.pop();
+          } else {
+            updateMaxMap(maxFlowMap, from, item.count);
+            updateMaxMap(maxFlowMap, to, item.count);
+          }
         }
       });
+
+      if (group.is_incomplete) {
+        group.title += " " + this.i18n.chartTitleIncomplete;
+      }
+      this.setupSankeyChart(group.chart_options, group.chart_data, group.title);
+      this.applyLegendOption(group, groupIdx);
+
       group.chart_data.datasets[0].data = data;
       group.chart_data.flowMax = flowMax;
       Vue.set(this.groupBys, groupIdx, group);
