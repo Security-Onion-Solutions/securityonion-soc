@@ -42,6 +42,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       endTime: null,
     },
     footerProps: { 'items-per-page-options': [10,50,250,1000] },
+    kind: "",
   }},
   created() {
     Vue.filter('formatJobStatus', this.formatJobStatus);
@@ -61,7 +62,10 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
     async loadData() {
       this.$root.startLoading();
       try {
-        const response = await this.$root.papi.get('jobs');
+        if (this.$route.query.k) {
+          this.kind = this.$route.query.k;
+        }
+        const response = await this.$root.papi.get('jobs', { params: { kind: this.kind }});
         this.jobs = response.data;
         this.loadUserDetails();
         this.loadLocalSettings();
@@ -198,6 +202,12 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
         color = "warning";
       }
       return color;
+    },
+    isKind(kind) {
+      if (this.kind == '' && kind == 'pcap') {
+        return true;
+      }
+      return this.kind == kind;
     }
   }
 }});

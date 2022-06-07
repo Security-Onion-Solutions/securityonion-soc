@@ -78,6 +78,13 @@ func (importer *Importer) IsRunning() bool {
 
 func (importer *Importer) ProcessJob(job *model.Job, reader io.ReadCloser) (io.ReadCloser, error) {
 	var err error
+	if job.GetKind() != "pcap" {
+		log.WithFields(log.Fields{
+			"jobId": job.Id,
+			"kind":  job.GetKind(),
+		}).Debug("Skipping import processor due to unsupported job")
+		return reader, nil
+	}
 	if len(job.Filter.ImportId) == 0 {
 		log.WithFields(log.Fields{
 			"jobId":    job.Id,

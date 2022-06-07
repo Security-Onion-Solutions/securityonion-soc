@@ -107,9 +107,14 @@ global.mockShowError = function(logError = false) {
 require('./i18n.js');
 require('./app.js');
 
+global.JobStatusPending = 0;
+global.JobStatusCompleted = 1;
+global.JobStatusIncomplete = 2;
+global.JobStatusDeleted = 3;
+
 ////////////////////////////////////
 // Import external dependencies
 ////////////////////////////////////
-global.moment = require('./external/moment-2.29.1.min.js');
-global.marked = require('./external/marked-2.1.3.min.js');
-global.DOMPurify = require('./external/purify-2.3.4.min.js');
+global.moment = require('./external/moment-2.29.3.min.js');
+global.marked = require('./external/marked-4.0.15.min.js');
+global.DOMPurify = require('./external/purify-2.3.6.min.js');

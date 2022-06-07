@@ -1427,28 +1427,28 @@
     ]
   },
   "aggregations": {
-    "groupby|source_ip": {
+    "groupby_0|source_ip": {
       "doc_count_error_upper_bound": 15932,
       "sum_other_doc_count": 1533142,
       "buckets": [
         {
           "key": "10.200.1.86",
           "doc_count": 5664949,
-          "groupby|source_ip|destination_ip": {
+          "groupby_0|source_ip|destination_ip": {
             "doc_count_error_upper_bound": 0,
             "sum_other_doc_count": 0,
             "buckets": [
               {
                 "key": "10.50.1.20",
                 "doc_count": 2533045,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 2532968,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1457,7 +1457,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 42,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1466,7 +1466,7 @@
                     {
                       "key": "udp",
                       "doc_count": 35,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1478,14 +1478,14 @@
               {
                 "key": "10.50.1.10",
                 "doc_count": 1716131,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 1716089,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1494,7 +1494,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 42,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1506,14 +1506,14 @@
               {
                 "key": "10.50.1.52",
                 "doc_count": 785761,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 785073,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1522,7 +1522,7 @@
                     {
                       "key": "udp",
                       "doc_count": 681,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1531,7 +1531,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1543,14 +1543,14 @@
               {
                 "key": "10.200.1.15",
                 "doc_count": 244794,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 244163,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1559,7 +1559,7 @@
                     {
                       "key": "udp",
                       "doc_count": 624,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1568,7 +1568,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1580,14 +1580,14 @@
               {
                 "key": "10.200.1.18",
                 "doc_count": 244559,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 243158,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1596,7 +1596,7 @@
                     {
                       "key": "udp",
                       "doc_count": 1326,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1605,7 +1605,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 75,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1617,14 +1617,14 @@
               {
                 "key": "10.50.1.54",
                 "doc_count": 124720,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 123980,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1633,7 +1633,7 @@
                     {
                       "key": "udp",
                       "doc_count": 672,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1642,7 +1642,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 68,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1654,14 +1654,14 @@
               {
                 "key": "10.50.1.50",
                 "doc_count": 15939,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 15918,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1670,7 +1670,7 @@
                     {
                       "key": "udp",
                       "doc_count": 14,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1679,7 +1679,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1694,21 +1694,21 @@
         {
           "key": "10.200.1.108",
           "doc_count": 3604794,
-          "groupby|source_ip|destination_ip": {
+          "groupby_0|source_ip|destination_ip": {
             "doc_count_error_upper_bound": 0,
             "sum_other_doc_count": 0,
             "buckets": [
               {
                 "key": "10.200.1.18",
                 "doc_count": 2665069,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 2664585,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1717,7 +1717,7 @@
                     {
                       "key": "udp",
                       "doc_count": 468,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1726,7 +1726,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 16,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1738,14 +1738,14 @@
               {
                 "key": "10.50.1.20",
                 "doc_count": 664216,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 664202,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1754,7 +1754,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 14,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1766,14 +1766,14 @@
               {
                 "key": "10.50.1.50",
                 "doc_count": 93695,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 93681,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1782,7 +1782,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 14,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1794,14 +1794,14 @@
               {
                 "key": "10.50.1.54",
                 "doc_count": 87186,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 87186,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1813,14 +1813,14 @@
               {
                 "key": "10.50.1.52",
                 "doc_count": 44468,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 44460,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1829,7 +1829,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 8,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1841,14 +1841,14 @@
               {
                 "key": "10.50.1.10",
                 "doc_count": 38003,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 37975,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1857,7 +1857,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 28,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1869,14 +1869,14 @@
               {
                 "key": "10.200.1.15",
                 "doc_count": 12157,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 12157,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1891,21 +1891,21 @@
         {
           "key": "10.200.1.174",
           "doc_count": 3040631,
-          "groupby|source_ip|destination_ip": {
+          "groupby_0|source_ip|destination_ip": {
             "doc_count_error_upper_bound": 0,
             "sum_other_doc_count": 0,
             "buckets": [
               {
                 "key": "10.200.1.18",
                 "doc_count": 1322164,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 1298666,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1914,7 +1914,7 @@
                     {
                       "key": "udp",
                       "doc_count": 23461,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1923,7 +1923,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 37,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1935,14 +1935,14 @@
               {
                 "key": "10.50.1.52",
                 "doc_count": 645390,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 645354,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1951,7 +1951,7 @@
                     {
                       "key": "udp",
                       "doc_count": 22,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1960,7 +1960,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 14,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1972,14 +1972,14 @@
               {
                 "key": "10.50.1.54",
                 "doc_count": 610016,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 609967,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1988,7 +1988,7 @@
                     {
                       "key": "udp",
                       "doc_count": 28,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -1997,7 +1997,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 21,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2009,14 +2009,14 @@
               {
                 "key": "10.200.1.15",
                 "doc_count": 462718,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 445236,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2025,7 +2025,7 @@
                     {
                       "key": "udp",
                       "doc_count": 17475,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2034,7 +2034,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2046,14 +2046,14 @@
               {
                 "key": "10.50.1.20",
                 "doc_count": 154,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 112,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2062,7 +2062,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 42,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2074,14 +2074,14 @@
               {
                 "key": "10.50.1.10",
                 "doc_count": 105,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 77,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2090,7 +2090,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 28,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2102,14 +2102,14 @@
               {
                 "key": "10.50.1.50",
                 "doc_count": 84,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 70,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2118,7 +2118,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 14,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2133,21 +2133,21 @@
         {
           "key": "10.200.1.252",
           "doc_count": 2208773,
-          "groupby|source_ip|destination_ip": {
+          "groupby_0|source_ip|destination_ip": {
             "doc_count_error_upper_bound": 0,
             "sum_other_doc_count": 0,
             "buckets": [
               {
                 "key": "10.200.1.18",
                 "doc_count": 1337314,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 1333250,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2156,7 +2156,7 @@
                     {
                       "key": "udp",
                       "doc_count": 4013,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2165,7 +2165,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 51,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2177,14 +2177,14 @@
               {
                 "key": "10.50.1.52",
                 "doc_count": 834884,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 834884,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2196,14 +2196,14 @@
               {
                 "key": "10.50.1.54",
                 "doc_count": 12712,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 12712,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2215,14 +2215,14 @@
               {
                 "key": "10.50.1.10",
                 "doc_count": 12152,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 12089,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2231,7 +2231,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 63,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2243,14 +2243,14 @@
               {
                 "key": "10.200.1.15",
                 "doc_count": 6174,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 6174,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2262,14 +2262,14 @@
               {
                 "key": "10.50.1.20",
                 "doc_count": 5292,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 5285,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2278,7 +2278,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2290,14 +2290,14 @@
               {
                 "key": "10.50.1.50",
                 "doc_count": 245,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 238,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2306,7 +2306,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2321,21 +2321,21 @@
         {
           "key": "10.200.1.151",
           "doc_count": 1992893,
-          "groupby|source_ip|destination_ip": {
+          "groupby_0|source_ip|destination_ip": {
             "doc_count_error_upper_bound": 0,
             "sum_other_doc_count": 0,
             "buckets": [
               {
                 "key": "10.200.1.18",
                 "doc_count": 1802763,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 1799638,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2344,7 +2344,7 @@
                     {
                       "key": "udp",
                       "doc_count": 3075,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2353,7 +2353,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 50,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2365,14 +2365,14 @@
               {
                 "key": "10.50.1.52",
                 "doc_count": 114152,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 113486,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2381,7 +2381,7 @@
                     {
                       "key": "udp",
                       "doc_count": 614,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2390,7 +2390,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 52,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2402,14 +2402,14 @@
               {
                 "key": "10.50.1.54",
                 "doc_count": 70462,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 69825,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2418,7 +2418,7 @@
                     {
                       "key": "udp",
                       "doc_count": 609,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2427,7 +2427,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 28,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2439,14 +2439,14 @@
               {
                 "key": "10.200.1.15",
                 "doc_count": 5509,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 5495,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2455,7 +2455,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2464,7 +2464,7 @@
                     {
                       "key": "udp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2476,14 +2476,14 @@
               {
                 "key": "10.50.1.20",
                 "doc_count": 7,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2498,21 +2498,21 @@
         {
           "key": "10.200.1.163",
           "doc_count": 1021731,
-          "groupby|source_ip|destination_ip": {
+          "groupby_0|source_ip|destination_ip": {
             "doc_count_error_upper_bound": 0,
             "sum_other_doc_count": 0,
             "buckets": [
               {
                 "key": "10.200.1.18",
                 "doc_count": 1018720,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 1018720,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2524,14 +2524,14 @@
               {
                 "key": "10.50.1.52",
                 "doc_count": 2724,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 2724,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2543,14 +2543,14 @@
               {
                 "key": "10.50.1.10",
                 "doc_count": 119,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 77,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2559,7 +2559,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 42,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2571,14 +2571,14 @@
               {
                 "key": "10.50.1.20",
                 "doc_count": 91,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 63,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2587,7 +2587,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 28,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2599,14 +2599,14 @@
               {
                 "key": "10.50.1.50",
                 "doc_count": 70,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 56,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2615,7 +2615,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 14,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2627,14 +2627,14 @@
               {
                 "key": "10.50.1.54",
                 "doc_count": 7,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2649,21 +2649,21 @@
         {
           "key": "10.200.1.40",
           "doc_count": 611626,
-          "groupby|source_ip|destination_ip": {
+          "groupby_0|source_ip|destination_ip": {
             "doc_count_error_upper_bound": 0,
             "sum_other_doc_count": 0,
             "buckets": [
               {
                 "key": "10.200.1.15",
                 "doc_count": 355196,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 355149,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2672,7 +2672,7 @@
                     {
                       "key": "udp",
                       "doc_count": 41,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2681,7 +2681,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 6,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2693,14 +2693,14 @@
               {
                 "key": "10.50.1.50",
                 "doc_count": 185320,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 185306,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2709,7 +2709,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 14,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2721,14 +2721,14 @@
               {
                 "key": "10.200.1.18",
                 "doc_count": 69204,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 69110,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2737,7 +2737,7 @@
                     {
                       "key": "udp",
                       "doc_count": 86,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2746,7 +2746,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 8,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2758,14 +2758,14 @@
               {
                 "key": "10.50.1.54",
                 "doc_count": 770,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 763,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2774,7 +2774,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2786,14 +2786,14 @@
               {
                 "key": "10.50.1.52",
                 "doc_count": 744,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 736,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2802,7 +2802,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 8,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2814,14 +2814,14 @@
               {
                 "key": "10.50.1.20",
                 "doc_count": 231,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 217,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2830,7 +2830,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 14,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2842,14 +2842,14 @@
               {
                 "key": "10.50.1.10",
                 "doc_count": 119,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 105,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2858,7 +2858,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 14,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2870,14 +2870,14 @@
               {
                 "key": "131.94.238.11",
                 "doc_count": 42,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 35,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2886,7 +2886,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2901,21 +2901,21 @@
         {
           "key": "10.200.1.153",
           "doc_count": 580374,
-          "groupby|source_ip|destination_ip": {
+          "groupby_0|source_ip|destination_ip": {
             "doc_count_error_upper_bound": 0,
             "sum_other_doc_count": 0,
             "buckets": [
               {
                 "key": "10.200.1.18",
                 "doc_count": 518374,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 518316,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2924,7 +2924,7 @@
                     {
                       "key": "udp",
                       "doc_count": 58,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2936,14 +2936,14 @@
               {
                 "key": "10.50.1.52",
                 "doc_count": 27958,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 27951,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2952,7 +2952,7 @@
                     {
                       "key": "udp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2964,14 +2964,14 @@
               {
                 "key": "10.50.1.54",
                 "doc_count": 16247,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 16247,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2983,14 +2983,14 @@
               {
                 "key": "10.50.1.50",
                 "doc_count": 13530,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 13524,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -2999,7 +2999,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 6,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3011,14 +3011,14 @@
               {
                 "key": "10.200.1.15",
                 "doc_count": 3880,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 3880,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3030,14 +3030,14 @@
               {
                 "key": "10.50.1.20",
                 "doc_count": 252,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 252,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3049,14 +3049,14 @@
               {
                 "key": "10.50.1.10",
                 "doc_count": 133,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 126,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3065,7 +3065,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3080,21 +3080,21 @@
         {
           "key": "10.200.1.216",
           "doc_count": 386096,
-          "groupby|source_ip|destination_ip": {
+          "groupby_0|source_ip|destination_ip": {
             "doc_count_error_upper_bound": 0,
             "sum_other_doc_count": 0,
             "buckets": [
               {
                 "key": "10.200.1.15",
                 "doc_count": 385913,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 385899,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3103,7 +3103,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3112,7 +3112,7 @@
                     {
                       "key": "udp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3124,14 +3124,14 @@
               {
                 "key": "10.50.1.52",
                 "doc_count": 141,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 134,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3140,7 +3140,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3152,14 +3152,14 @@
               {
                 "key": "10.50.1.54",
                 "doc_count": 21,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 21,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3171,14 +3171,14 @@
               {
                 "key": "10.200.1.18",
                 "doc_count": 21,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 21,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3193,21 +3193,21 @@
         {
           "key": "10.200.1.162",
           "doc_count": 347890,
-          "groupby|source_ip|destination_ip": {
+          "groupby_0|source_ip|destination_ip": {
             "doc_count_error_upper_bound": 0,
             "sum_other_doc_count": 0,
             "buckets": [
               {
                 "key": "10.50.1.52",
                 "doc_count": 108198,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 93851,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3216,7 +3216,7 @@
                     {
                       "key": "udp",
                       "doc_count": 14318,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3225,7 +3225,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 29,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3237,14 +3237,14 @@
               {
                 "key": "10.200.1.18",
                 "doc_count": 105642,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 105389,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3253,7 +3253,7 @@
                     {
                       "key": "udp",
                       "doc_count": 217,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3262,7 +3262,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 36,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3274,14 +3274,14 @@
               {
                 "key": "10.50.1.54",
                 "doc_count": 91102,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 78334,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3290,7 +3290,7 @@
                     {
                       "key": "udp",
                       "doc_count": 12740,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3299,7 +3299,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 28,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3311,14 +3311,14 @@
               {
                 "key": "10.50.1.50",
                 "doc_count": 23891,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 12082,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3327,7 +3327,7 @@
                     {
                       "key": "udp",
                       "doc_count": 11795,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3336,7 +3336,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 14,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3348,14 +3348,14 @@
               {
                 "key": "10.200.1.15",
                 "doc_count": 18800,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 18773,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3364,7 +3364,7 @@
                     {
                       "key": "udp",
                       "doc_count": 21,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3373,7 +3373,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 6,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3385,14 +3385,14 @@
               {
                 "key": "10.50.1.20",
                 "doc_count": 154,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 105,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3401,7 +3401,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 49,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3413,14 +3413,14 @@
               {
                 "key": "10.50.1.10",
                 "doc_count": 103,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 75,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3429,7 +3429,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 28,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3444,21 +3444,21 @@
         {
           "key": "10.200.1.202",
           "doc_count": 333119,
-          "groupby|source_ip|destination_ip": {
+          "groupby_0|source_ip|destination_ip": {
             "doc_count_error_upper_bound": 0,
             "sum_other_doc_count": 0,
             "buckets": [
               {
                 "key": "10.50.1.52",
                 "doc_count": 239860,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 239860,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3470,14 +3470,14 @@
               {
                 "key": "10.200.1.18",
                 "doc_count": 58853,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 56804,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3486,7 +3486,7 @@
                     {
                       "key": "udp",
                       "doc_count": 2049,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3498,14 +3498,14 @@
               {
                 "key": "10.50.1.20",
                 "doc_count": 17227,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 17213,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3514,7 +3514,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 14,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3526,14 +3526,14 @@
               {
                 "key": "10.200.1.15",
                 "doc_count": 16796,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 16796,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3545,14 +3545,14 @@
               {
                 "key": "10.50.1.50",
                 "doc_count": 302,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 295,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3561,7 +3561,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3573,14 +3573,14 @@
               {
                 "key": "131.94.238.11",
                 "doc_count": 81,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 42,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3589,7 +3589,7 @@
                     {
                       "key": "udp",
                       "doc_count": 39,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3604,21 +3604,21 @@
         {
           "key": "10.200.1.179",
           "doc_count": 330885,
-          "groupby|source_ip|destination_ip": {
+          "groupby_0|source_ip|destination_ip": {
             "doc_count_error_upper_bound": 0,
             "sum_other_doc_count": 0,
             "buckets": [
               {
                 "key": "10.200.1.18",
                 "doc_count": 281235,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 281164,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3627,7 +3627,7 @@
                     {
                       "key": "udp",
                       "doc_count": 48,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3636,7 +3636,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 23,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3648,14 +3648,14 @@
               {
                 "key": "10.200.1.15",
                 "doc_count": 49650,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 49650,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3670,21 +3670,21 @@
         {
           "key": "10.200.1.233",
           "doc_count": 314949,
-          "groupby|source_ip|destination_ip": {
+          "groupby_0|source_ip|destination_ip": {
             "doc_count_error_upper_bound": 0,
             "sum_other_doc_count": 0,
             "buckets": [
               {
                 "key": "10.200.1.18",
                 "doc_count": 198761,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 198745,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3693,7 +3693,7 @@
                     {
                       "key": "udp",
                       "doc_count": 16,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3705,14 +3705,14 @@
               {
                 "key": "10.50.1.52",
                 "doc_count": 32711,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 32671,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3721,7 +3721,7 @@
                     {
                       "key": "udp",
                       "doc_count": 24,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3730,7 +3730,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 16,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3742,14 +3742,14 @@
               {
                 "key": "10.200.1.15",
                 "doc_count": 20152,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 20020,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3758,7 +3758,7 @@
                     {
                       "key": "udp",
                       "doc_count": 125,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3767,7 +3767,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3779,14 +3779,14 @@
               {
                 "key": "10.50.1.54",
                 "doc_count": 17577,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 17542,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3795,7 +3795,7 @@
                     {
                       "key": "udp",
                       "doc_count": 28,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3804,7 +3804,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3816,14 +3816,14 @@
               {
                 "key": "10.50.1.50",
                 "doc_count": 16663,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 16642,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3832,7 +3832,7 @@
                     {
                       "key": "udp",
                       "doc_count": 14,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3841,7 +3841,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3853,14 +3853,14 @@
               {
                 "key": "10.50.1.10",
                 "doc_count": 15470,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 15442,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3869,7 +3869,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 14,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3878,7 +3878,7 @@
                     {
                       "key": "udp",
                       "doc_count": 14,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3890,14 +3890,14 @@
               {
                 "key": "10.50.1.20",
                 "doc_count": 13615,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 13587,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3906,7 +3906,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 14,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3915,7 +3915,7 @@
                     {
                       "key": "udp",
                       "doc_count": 14,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3930,21 +3930,21 @@
         {
           "key": "10.200.1.166",
           "doc_count": 312873,
-          "groupby|source_ip|destination_ip": {
+          "groupby_0|source_ip|destination_ip": {
             "doc_count_error_upper_bound": 0,
             "sum_other_doc_count": 0,
             "buckets": [
               {
                 "key": "10.50.1.52",
                 "doc_count": 81133,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 80786,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3953,7 +3953,7 @@
                     {
                       "key": "udp",
                       "doc_count": 269,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3962,7 +3962,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 78,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3974,14 +3974,14 @@
               {
                 "key": "10.50.1.54",
                 "doc_count": 68780,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 68514,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3990,7 +3990,7 @@
                     {
                       "key": "udp",
                       "doc_count": 210,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -3999,7 +3999,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 56,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4011,14 +4011,14 @@
               {
                 "key": "10.200.1.18",
                 "doc_count": 47514,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 47289,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4027,7 +4027,7 @@
                     {
                       "key": "udp",
                       "doc_count": 196,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4036,7 +4036,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 29,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4048,14 +4048,14 @@
               {
                 "key": "10.50.1.20",
                 "doc_count": 40803,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 40250,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4064,7 +4064,7 @@
                     {
                       "key": "udp",
                       "doc_count": 476,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4073,7 +4073,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 77,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4085,14 +4085,14 @@
               {
                 "key": "10.50.1.10",
                 "doc_count": 35609,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 35161,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4101,7 +4101,7 @@
                     {
                       "key": "udp",
                       "doc_count": 336,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4110,7 +4110,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 112,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4122,14 +4122,14 @@
               {
                 "key": "10.50.1.50",
                 "doc_count": 30022,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 29799,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4138,7 +4138,7 @@
                     {
                       "key": "udp",
                       "doc_count": 196,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4147,7 +4147,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 27,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4159,14 +4159,14 @@
               {
                 "key": "10.200.1.15",
                 "doc_count": 9012,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 8935,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4175,7 +4175,7 @@
                     {
                       "key": "udp",
                       "doc_count": 63,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4184,7 +4184,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 14,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4199,21 +4199,21 @@
         {
           "key": "10.200.1.124",
           "doc_count": 288344,
-          "groupby|source_ip|destination_ip": {
+          "groupby_0|source_ip|destination_ip": {
             "doc_count_error_upper_bound": 0,
             "sum_other_doc_count": 0,
             "buckets": [
               {
                 "key": "10.50.1.10",
                 "doc_count": 222488,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 222376,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4222,7 +4222,7 @@
                     {
                       "key": "udp",
                       "doc_count": 105,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4231,7 +4231,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4243,14 +4243,14 @@
               {
                 "key": "10.50.1.50",
                 "doc_count": 47594,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 47496,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4259,7 +4259,7 @@
                     {
                       "key": "udp",
                       "doc_count": 84,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4268,7 +4268,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 14,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4280,14 +4280,14 @@
               {
                 "key": "10.50.1.52",
                 "doc_count": 15966,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "udp",
                       "doc_count": 14552,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4296,7 +4296,7 @@
                     {
                       "key": "tcp",
                       "doc_count": 1407,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4305,7 +4305,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4317,14 +4317,14 @@
               {
                 "key": "10.50.1.54",
                 "doc_count": 1660,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 1583,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4333,7 +4333,7 @@
                     {
                       "key": "udp",
                       "doc_count": 77,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4345,14 +4345,14 @@
               {
                 "key": "10.200.1.18",
                 "doc_count": 373,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 373,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4364,14 +4364,14 @@
               {
                 "key": "10.50.1.20",
                 "doc_count": 231,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 161,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4380,7 +4380,7 @@
                     {
                       "key": "udp",
                       "doc_count": 70,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4392,14 +4392,14 @@
               {
                 "key": "10.200.1.15",
                 "doc_count": 32,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 25,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4408,7 +4408,7 @@
                     {
                       "key": "udp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4423,21 +4423,21 @@
         {
           "key": "10.200.1.72",
           "doc_count": 279482,
-          "groupby|source_ip|destination_ip": {
+          "groupby_0|source_ip|destination_ip": {
             "doc_count_error_upper_bound": 0,
             "sum_other_doc_count": 0,
             "buckets": [
               {
                 "key": "10.50.1.52",
                 "doc_count": 115287,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 115204,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4446,7 +4446,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 46,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4455,7 +4455,7 @@
                     {
                       "key": "udp",
                       "doc_count": 37,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4467,14 +4467,14 @@
               {
                 "key": "10.200.1.18",
                 "doc_count": 94833,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 94646,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4483,7 +4483,7 @@
                     {
                       "key": "udp",
                       "doc_count": 158,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4492,7 +4492,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 29,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4504,14 +4504,14 @@
               {
                 "key": "10.50.1.54",
                 "doc_count": 56700,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 56609,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4520,7 +4520,7 @@
                     {
                       "key": "udp",
                       "doc_count": 56,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4529,7 +4529,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 35,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4541,14 +4541,14 @@
               {
                 "key": "10.200.1.15",
                 "doc_count": 12025,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 12011,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4557,7 +4557,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4566,7 +4566,7 @@
                     {
                       "key": "udp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4578,14 +4578,14 @@
               {
                 "key": "10.50.1.20",
                 "doc_count": 406,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 357,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4594,7 +4594,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 49,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4606,14 +4606,14 @@
               {
                 "key": "10.50.1.10",
                 "doc_count": 189,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 147,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4622,7 +4622,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 42,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4634,14 +4634,14 @@
               {
                 "key": "10.50.1.50",
                 "doc_count": 42,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 28,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4650,7 +4650,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 14,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4665,21 +4665,21 @@
         {
           "key": "10.200.1.253",
           "doc_count": 229301,
-          "groupby|source_ip|destination_ip": {
+          "groupby_0|source_ip|destination_ip": {
             "doc_count_error_upper_bound": 0,
             "sum_other_doc_count": 0,
             "buckets": [
               {
                 "key": "10.200.1.15",
                 "doc_count": 135823,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 135823,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4691,14 +4691,14 @@
               {
                 "key": "10.200.1.18",
                 "doc_count": 93210,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 93210,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4710,14 +4710,14 @@
               {
                 "key": "10.50.1.54",
                 "doc_count": 224,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 224,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4729,14 +4729,14 @@
               {
                 "key": "10.50.1.52",
                 "doc_count": 44,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 44,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4751,21 +4751,21 @@
         {
           "key": "10.200.1.196",
           "doc_count": 206349,
-          "groupby|source_ip|destination_ip": {
+          "groupby_0|source_ip|destination_ip": {
             "doc_count_error_upper_bound": 0,
             "sum_other_doc_count": 0,
             "buckets": [
               {
                 "key": "10.50.1.52",
                 "doc_count": 110242,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 110235,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4774,7 +4774,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4786,14 +4786,14 @@
               {
                 "key": "10.50.1.54",
                 "doc_count": 76153,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 76153,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4805,14 +4805,14 @@
               {
                 "key": "10.200.1.15",
                 "doc_count": 10458,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 10458,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4824,14 +4824,14 @@
               {
                 "key": "10.50.1.50",
                 "doc_count": 9177,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 9177,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4843,14 +4843,14 @@
               {
                 "key": "10.200.1.18",
                 "doc_count": 158,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 158,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4862,14 +4862,14 @@
               {
                 "key": "10.50.1.10",
                 "doc_count": 84,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 84,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4881,14 +4881,14 @@
               {
                 "key": "10.50.1.20",
                 "doc_count": 77,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 77,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4903,21 +4903,21 @@
         {
           "key": "10.200.1.15",
           "doc_count": 205243,
-          "groupby|source_ip|destination_ip": {
+          "groupby_0|source_ip|destination_ip": {
             "doc_count_error_upper_bound": 590,
             "sum_other_doc_count": 19985,
             "buckets": [
               {
                 "key": "10.200.1.216",
                 "doc_count": 78902,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 78895,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4926,7 +4926,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4938,14 +4938,14 @@
               {
                 "key": "10.200.1.40",
                 "doc_count": 51697,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 51670,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4954,7 +4954,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 20,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4963,7 +4963,7 @@
                     {
                       "key": "udp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4975,14 +4975,14 @@
               {
                 "key": "10.200.1.174",
                 "doc_count": 21343,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 21336,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -4991,7 +4991,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5003,14 +5003,14 @@
               {
                 "key": "10.200.1.77",
                 "doc_count": 9416,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 9402,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5019,7 +5019,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5028,7 +5028,7 @@
                     {
                       "key": "udp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5040,14 +5040,14 @@
               {
                 "key": "10.200.1.86",
                 "doc_count": 5834,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 5822,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5056,7 +5056,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 12,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5068,14 +5068,14 @@
               {
                 "key": "10.200.1.168",
                 "doc_count": 5277,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 5270,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5084,7 +5084,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5096,14 +5096,14 @@
               {
                 "key": "10.200.1.98",
                 "doc_count": 4368,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 4368,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5115,14 +5115,14 @@
               {
                 "key": "10.200.1.233",
                 "doc_count": 3132,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 3125,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5131,7 +5131,7 @@
                     {
                       "key": "udp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5143,14 +5143,14 @@
               {
                 "key": "10.200.1.36",
                 "doc_count": 2865,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 2865,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5162,14 +5162,14 @@
               {
                 "key": "10.200.1.162",
                 "doc_count": 2424,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 2416,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5178,7 +5178,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 8,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5193,21 +5193,21 @@
         {
           "key": "10.200.1.77",
           "doc_count": 195986,
-          "groupby|source_ip|destination_ip": {
+          "groupby_0|source_ip|destination_ip": {
             "doc_count_error_upper_bound": 0,
             "sum_other_doc_count": 0,
             "buckets": [
               {
                 "key": "10.200.1.18",
                 "doc_count": 118040,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 114927,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5216,7 +5216,7 @@
                     {
                       "key": "udp",
                       "doc_count": 3029,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5225,7 +5225,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 84,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5237,14 +5237,14 @@
               {
                 "key": "10.200.1.15",
                 "doc_count": 77273,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 77232,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5253,7 +5253,7 @@
                     {
                       "key": "udp",
                       "doc_count": 34,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5262,7 +5262,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5274,14 +5274,14 @@
               {
                 "key": "10.50.1.54",
                 "doc_count": 196,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 196,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5293,14 +5293,14 @@
               {
                 "key": "10.50.1.52",
                 "doc_count": 176,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 176,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5312,14 +5312,14 @@
               {
                 "key": "10.50.1.10",
                 "doc_count": 126,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 112,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5328,7 +5328,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 14,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5340,14 +5340,14 @@
               {
                 "key": "10.50.1.50",
                 "doc_count": 126,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 126,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5359,14 +5359,14 @@
               {
                 "key": "10.50.1.20",
                 "doc_count": 28,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 28,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5378,14 +5378,14 @@
               {
                 "key": "131.94.238.11",
                 "doc_count": 21,
-                "groupby|source_ip|destination_ip|protocol": {
+                "groupby_0|source_ip|destination_ip|protocol": {
                   "doc_count_error_upper_bound": 0,
                   "sum_other_doc_count": 0,
                   "buckets": [
                     {
                       "key": "tcp",
                       "doc_count": 14,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []
@@ -5394,7 +5394,7 @@
                     {
                       "key": "icmp",
                       "doc_count": 7,
-                      "groupby|source_ip|destination_ip|protocol|destination_port": {
+                      "groupby_0|source_ip|destination_ip|protocol|destination_port": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 0,
                         "buckets": []

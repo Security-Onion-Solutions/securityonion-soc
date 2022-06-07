@@ -79,3 +79,11 @@ func TestCanProcess(tester *testing.T) {
 	job.Status = JobStatusDeleted
 	assert.False(tester, job.CanProcess())
 }
+
+func TestKind(tester *testing.T) {
+	job := NewJob()
+	assert.Equal(tester, DEFAULT_JOB_KIND, job.GetKind())
+
+	job.Kind = "foo"
+	assert.Equal(tester, "foo", job.GetKind())
+}

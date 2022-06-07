@@ -96,6 +96,11 @@ func TestJobs(tester *testing.T) {
 	assert.Equal(tester, 1002, job.Id)
 	ds.addJob(job)
 
+	// Add non-default job kind
+	job = ds.CreateJob(newContext())
+	job.Kind = "foo"
+	ds.addJob(job)
+
 	// Test fetching a job
 	job = ds.getJobById(1001)
 	assert.Equal(tester, 1001, job.Id)
@@ -104,19 +109,26 @@ func TestJobs(tester *testing.T) {
 	assert.Equal(tester, 1002, job.Id)
 
 	job = ds.GetJob(newContext(), 1003)
+	assert.Equal(tester, 1003, job.Id)
+	assert.Equal(tester, "foo", job.GetKind())
+
+	job = ds.GetJob(newContext(), 1004)
 	assert.Nil(tester, job)
 
-	// Test fetching all jobs
-	jobs := ds.GetJobs(newContext())
+	// Test fetching all default jobs
+	jobs := ds.GetJobs(newContext(), "", nil)
 	assert.Len(tester, jobs, 2)
 
 	// Test deleting jobs
 	ds.deleteJob(jobs[0])
-	jobs = ds.GetJobs(newContext())
+	jobs = ds.GetJobs(newContext(), "", nil)
 	assert.Len(tester, jobs, 1)
 	ds.deleteJob(jobs[0])
-	jobs = ds.GetJobs(newContext())
+	jobs = ds.GetJobs(newContext(), "", nil)
 	assert.Len(tester, jobs, 0)
+
+	jobs = ds.GetJobs(newContext(), "foo", nil)
+	assert.Len(tester, jobs, 1)
 }
 
 func TestJobAddUnauthorized(tester *testing.T) {
@@ -200,7 +212,7 @@ func TestJobReadAuthorization(tester *testing.T) {
 	assert.Nil(tester, job)
 
 	// Test fetching all jobs
-	jobs := ds.GetJobs(newContext())
+	jobs := ds.GetJobs(newContext(), "", nil)
 	assert.Len(tester, jobs, 1) // Only has my job
 }
 
@@ -273,4 +285,53 @@ func TestUpdatePreserveData(tester *testing.T) {
 	assert.NoError(tester, err)
 	assert.Equal(tester, job.UserId, newJob.UserId)
 	assert.Equal(tester, job.NodeId, newJob.NodeId)
+}
+
+func TestFilterMatches(tester *testing.T) {
+	defer cleanup()
+	ds, _ := createDatastore(true)
+
+	params := make(map[string]interface{})
+	jobParams := make(map[string]interface{})
+	nested := make(map[string]interface{})
+	jobNested := make(map[string]interface{})
+	jobNested["mar"] = "tar"
+
+	// simple match with no params
+	assert.True(tester, ds.filterParameterMatches(params, jobParams))
+
+	// parameters exist on job, but not on search filter, so match is true
+	jobParams["foo"] = "bar"
+	assert.True(tester, ds.filterParameterMatches(params, jobParams))
+
+	// params exist on both, and match
+	params["foo"] = "bar"
+	assert.True(tester, ds.filterParameterMatches(params, jobParams))
+
+	// params exist on both, but do not match
+	params["foo"] = "bar"
+	jobParams["foo"] = 1.23
+	assert.False(tester, ds.filterParameterMatches(params, jobParams))
+
+	// nested params exist on both, and match
+	nested["hello"] = 1.2
+	params["foo"] = nested
+	jobNested["hello"] = 1.2
+	jobParams["foo"] = jobNested
+	assert.True(tester, ds.filterParameterMatches(params, jobParams))
+
+	// nest params exist on both, but do not match
+	nested["hello"] = 1.2
+	params["foo"] = nested
+	jobNested["hello"] = 1.3
+	jobParams["foo"] = jobNested
+	assert.False(tester, ds.filterParameterMatches(params, jobParams))
+
+	// nested parameters exist on search filter, but not on job
+	nested["hello"] = 1.2
+	params["foo"] = nested
+	jobNested = make(map[string]interface{})
+	jobNested["bye"] = "unused"
+	jobParams["foo"] = jobNested
+	assert.False(tester, ds.filterParameterMatches(params, jobParams))
 }

@@ -572,12 +572,18 @@ test('selectList_CustomEnabledAndCustomVal', () => {
 })
 
 test('expandRow', () => {
+  comp.loadAnalyzeJobs = jest.fn()
   comp.expandRow('comments', fakeComment);
   expect(comp.associatedTable['comments'].expanded.length).toBe(1);
   comp.expandRow('comments', fakeComment2);
   expect(comp.associatedTable['comments'].expanded.length).toBe(2);
   comp.expandRow('comments', fakeComment);
   expect(comp.associatedTable['comments'].expanded.length).toBe(1);
+  expect(comp.loadAnalyzeJobs).not.toHaveBeenCalled();
+
+  const fakeEvidence = { id: '123' };
+  comp.expandRow('evidence', fakeEvidence);
+  expect(comp.loadAnalyzeJobs).toHaveBeenCalledWith('123');
 })
 
 test('withDefault', () => {
@@ -766,4 +772,158 @@ test('shouldRenderAssociationRecord', () => {
   expect(comp.shouldRenderAssociationRecord('comments', null, 45)).toBe(true);
   expect(comp.shouldRenderAssociationRecord('comments', null, 50)).toBe(true);
   expect(comp.shouldRenderAssociationRecord('comments', null, 59)).toBe(true);
+});
+
+test('shouldAnalyze', () => {
+  mock = mockPapi("post");
+  const fakeEvidence = { id: 'myEvidenceId' };
+  comp.analyzerNodeId = 'myNodeId';
+  const showErrorMock = mockShowError();
+  comp.analyze(fakeEvidence);
+
+  expect(mock).toHaveBeenCalledWith('job/', { kind: 'analyze', nodeId: 'myNodeId', filter: { parameters: { artifact: fakeEvidence }}});
+  expect(showErrorMock).toHaveBeenCalledTimes(0);
+});
+
+test('shouldLoadAndUpdateAnalyzeJobs', async () => {
+  const job1 = { id: '1001', status: JobStatusPending, filter: { parameters: { artifact: { id: 'artifact1' } } } };
+  const job2 = { id: '1002', status: JobStatusCompleted, filter: { parameters: { artifact: { id: 'artifact1' } } } };
+  const job3 = { id: '1003', status: JobStatusCompleted, filter: { parameters: { artifact: { id: 'artifact1' } } } };
+
+  mock = mockPapi("get", { data: [job3, job1, job2]});
+  const showErrorMock = mockShowError();
+  comp.associations['evidence'] = [ 
+    { id: 'artifact1' },
+    { id: 'artifact2' },
+    ];
+  await comp.loadAnalyzeJobs('artifact1');
+
+  expect(mock).toHaveBeenCalledWith('jobs/', { params: { kind: 'analyze', parameters: { artifact: { id: 'artifact1' }}}});
+  expect(showErrorMock).toHaveBeenCalledTimes(0);
+  expect(comp.analyzeJobs['artifact1'].length).toBe(3);
+
+  // Now delete a job
+  job2.status = JobStatusDeleted;
+  await comp.updateJob(job2);
+  expect(mock).toHaveBeenCalledWith('jobs/', { params: { kind: 'analyze', parameters: { artifact: { id: 'artifact1' }}}});
+  expect(showErrorMock).toHaveBeenCalledTimes(0);
+  expect(comp.analyzeJobs['artifact1'].length).toBe(2);
+});
+
+test('shouldDeleteAnalyzeJob', async () => {
+  mock = mockPapi("delete");
+  const showErrorMock = mockShowError();
+
+  const job = { id: '1001', status: JobStatusPending, filter: { parameters: { artifact: { id: 'artifact1' } } } };
+  await comp.deleteAnalyzeJob(job);
+
+  expect(mock).toHaveBeenCalledWith('job/1001');
+  expect(showErrorMock).toHaveBeenCalledTimes(0);
+});
+
+test('shouldAnalyzeInProgress', () => {
+  const fakeEvidence = { id: 'artifact1' };
+  const fakeEvidence2 = { id: 'artifact2' };
+  const job1 = { id: '1001', status: JobStatusPending, filter: { parameters: { artifact: { id: 'artifact1' } } } };
+  const job2 = { id: '1002', status: JobStatusCompleted, filter: { parameters: { artifact: { id: 'artifact1' } } } };
+  const job3 = { id: '1003', status: JobStatusCompleted, filter: { parameters: { artifact: { id: 'artifact2' } } } };
+  comp.analyzeJobs['artifact1'] = [job1, job2];
+  comp.analyzeJobs['artifact2'] = [job3];
+
+  expect(comp.analyzeInProgress(fakeEvidence)).toBe(true);
+  expect(comp.analyzeInProgress(fakeEvidence2)).toBe(false);
+});
+
+test('shouldGetAnalyzeJobs', () => {
+  const fakeEvidence = { id: 'artifact1' };
+  const fakeEvidence2 = { id: 'artifact2' };
+  const fakeEvidence3 = { id: 'artifact3' };
+  const job1 = { id: '1001', status: JobStatusPending, filter: { parameters: { artifact: { id: 'artifact1' } } } };
+  const job2 = { id: '1002', status: JobStatusCompleted, filter: { parameters: { artifact: { id: 'artifact1' } } } };
+  const job3 = { id: '1003', status: JobStatusCompleted, filter: { parameters: { artifact: { id: 'artifact2' } } } };
+  comp.analyzeJobs['artifact1'] = [job1, job2];
+  comp.analyzeJobs['artifact2'] = [job3];
+
+  expect(comp.getAnalyzeJobs(fakeEvidence).length).toBe(2);
+  expect(comp.getAnalyzeJobs(fakeEvidence2).length).toBe(1);
+  expect(comp.getAnalyzeJobs(fakeEvidence3)).toBe(null);
+});
+
+test('shouldGetAnalyzersInJob', () => {
+  const job1 = { id: '1001', status: JobStatusPending, results: []};
+  const job2 = { id: '1001', status: JobStatusCompleted, results: [{ id: 'analyzer1'}, {id: 'analyzer2'}]};
+
+  expect(comp.getAnalyzersInJob(job1)).toBe(0);
+  expect(comp.getAnalyzersInJob(job2)).toBe(2);
+});
+
+test('shouldGetAnalyzerSummary', () => {
+  var actual = comp.getAnalyzerSummary({id:'urlhaus', summary:'no_results'});
+  expect(actual).toBe('No results found');
+
+  var actual = comp.getAnalyzerSummary({id:'urlhaus', summary:'internal_failure'});
+  expect(actual).toBe('Internal analyzer failure');
+
+  var actual = comp.getAnalyzerSummary({id:'urlhaus', summary:'foo'});
+  expect(actual).toBe('foo');
+});
+
+test('shouldGetAnalyzerDecoration', () => {
+  var decor;
+
+  decor = comp.getAnalyzerDecoration({data:{status:'foo'}});
+  expect(decor.color).toBe('');
+  expect(decor.icon).toBe('fa-circle-question');
+  expect(decor.severity).toBe(50);
+  expect(decor.help).toBe('analyzer_result_unknown');
+
+  decor = comp.getAnalyzerDecoration({data:{status:'info'}});
+  expect(decor.color).toBe('info');
+  expect(decor.icon).toBe('fa-circle-info');
+  expect(decor.severity).toBe(10);
+  expect(decor.help).toBe('analyzer_result_info');
+
+  decor = comp.getAnalyzerDecoration({data:{status:'ok'}});
+  expect(decor.color).toBe('success');
+  expect(decor.icon).toBe('fa-circle-check');
+  expect(decor.severity).toBe(0);
+  expect(decor.help).toBe('analyzer_result_ok');
+
+  decor = comp.getAnalyzerDecoration({data:{status:'caution'}});
+  expect(decor.color).toBe('warning');
+  expect(decor.icon).toBe('fa-circle-exclamation');
+  expect(decor.severity).toBe(80);
+  expect(decor.help).toBe('analyzer_result_caution');
+
+  decor = comp.getAnalyzerDecoration({data:{status:'threat'}});
+  expect(decor.color).toBe('error');
+  expect(decor.icon).toBe('fa-triangle-exclamation');
+  expect(decor.severity).toBe(100);
+  expect(decor.help).toBe('analyzer_result_threat');
+});
+
+test('shouldGetAnalyzJobDecoration', () => {
+  decor = comp.getAnalyzeJobDecoration({results:[{data:{status:'threat'}},{data:{status:'ok'}},{data:{status:'info'}}]});
+  expect(decor.color).toBe('error');
+  expect(decor.icon).toBe('fa-triangle-exclamation');
+  expect(decor.severity).toBe(100);
+  expect(decor.help).toBe('analyzer_result_threat');
+
+  decor = comp.getAnalyzeJobDecoration({results:[{data:{status:'unknown'}},{data:{status:'ok'}},{data:{status:'info'}}]});
+  expect(decor.color).toBe('');
+  expect(decor.icon).toBe('fa-circle-question');
+  expect(decor.severity).toBe(50);
+  expect(decor.help).toBe('analyzer_result_unknown');
+
+  decor = comp.getAnalyzeJobDecoration({results:[{data:{status:'ok'}},{data:{status:'ok'}},{data:{status:'ok'}}]});
+  expect(decor.color).toBe('success');
+  expect(decor.icon).toBe('fa-circle-check');
+  expect(decor.severity).toBe(0);
+  expect(decor.help).toBe('analyzer_result_ok');
+
+  decor = comp.getAnalyzeJobDecoration({results: null, status: JobStatusCompleted});
+  expect(decor.color).toBe(undefined);
+  expect(decor.icon).toBe('fa-ban');
+  expect(decor.severity).toBe(-1);
+  expect(decor.help).toBe('analyzer_result_none');
 });

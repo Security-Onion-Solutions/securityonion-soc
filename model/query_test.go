@@ -102,10 +102,10 @@ func TestQueries(tester *testing.T) {
 	validateQuery(tester, "abcA|sortby ", "ERROR_QUERY_INVALID__SORTBY_TERMS_MISSING")
 }
 
-func validateGroup(tester *testing.T, orig string, group string, expected string) {
+func validateGroup(tester *testing.T, orig string, groupIdx int, group string, expected string) {
 	query := NewQuery()
 	query.Parse(orig)
-	actual, err := query.Group(group)
+	actual, err := query.Group(groupIdx, group)
 	if err != nil {
 		actual = err.Error()
 	}
@@ -113,9 +113,12 @@ func validateGroup(tester *testing.T, orig string, group string, expected string
 }
 
 func TestGroup(tester *testing.T) {
-	validateGroup(tester, "a", "b", `a | groupby "b"`)
-	validateGroup(tester, "a|groupby b", "c", `a | groupby b "c"`)
-	validateGroup(tester, "a|groupby b", "b", `a | groupby b`)
+	validateGroup(tester, "a", 0, "b", `a | groupby "b"`)
+	validateGroup(tester, "a|groupby b", 0, "c", `a | groupby b "c"`)
+	validateGroup(tester, "a|groupby b", 0, "b", `a | groupby b`)
+	validateGroup(tester, "a|groupby b", 1, "c", `a | groupby b | groupby "c"`)
+	validateGroup(tester, "a|groupby b", 2, "c", `a | groupby b | groupby "c"`)
+	validateGroup(tester, "a|groupby b", -2, "c", `a | groupby b | groupby "c"`)
 }
 
 func validateSort(tester *testing.T, orig string, sort string, expected string) {
@@ -177,4 +180,21 @@ func TestRemoveTermsWith(tester *testing.T) {
 	segment.AddFilter("and", "c", false, false, false)
 	segment.AddFilter("goodbye", "d", false, false, false)
 	assert.Equal(tester, 2, segment.RemoveTermsWith("e"))
+}
+
+func TestNamedSegments(tester *testing.T) {
+	query := NewQuery()
+	t1, _ := NewQueryTerm("t1")
+	t2, _ := NewQueryTerm("t2")
+	t3, _ := NewQueryTerm("t3")
+	terms := []*QueryTerm{t1, t2}
+	segment1, _ := NewGroupBySegment(terms)
+	query.AddSegment(segment1)
+	terms = []*QueryTerm{t3}
+	segment2, _ := NewGroupBySegment(terms)
+	query.AddSegment(segment2)
+	segments := query.NamedSegments(SegmentKind_GroupBy)
+	assert.Equal(tester, 2, len(segments))
+	assert.Equal(tester, segment1, segments[0])
+	assert.Equal(tester, segment2, segments[1])
 }
