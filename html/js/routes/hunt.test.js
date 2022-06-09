@@ -367,6 +367,10 @@ test('populateGroupByTables', () => {
     "groupby_0|foo|bar": [{ value: 23, keys: ['moo', 'mar'] }],
     "groupby_1|car": [{ value: 9, keys: ['mis'] }],
   }
+
+  comp.groupBySortBy = "foo";
+  comp.groupBySortDesc = false;
+
   comp.queryGroupByOptions = [[],[]];
   var result = comp.populateGroupByTables(metrics);
   expect(comp.groupBys.length).toBe(2);
@@ -377,12 +381,16 @@ test('populateGroupByTables', () => {
   expect(comp.groupBys[0].data[0].bar).toBe('mar');
   expect(comp.groupBys[0].headers).toStrictEqual([{text: 'Count', value:'count'}, {text: 'foo', value: 'foo'}, {text: 'bar', value: 'bar'}]);
   expect(comp.groupBys[0].chart_metrics).toStrictEqual([{value: 23, keys:['moo, mar']}]);
+  expect(comp.groupBys[0].sortBy).toBe('foo');
+  expect(comp.groupBys[0].sortDesc).toBe(false);
   expect(comp.groupBys[1].title).toBe("car");
   expect(comp.groupBys[1].fields.length).toBe(1);
   expect(comp.groupBys[1].data[0].count).toBe(9);
   expect(comp.groupBys[1].data[0].car).toBe('mis');
   expect(comp.groupBys[1].headers).toStrictEqual([{text: 'Count', value:'count'}, {text: 'car', value: 'car'}]);
   expect(comp.groupBys[1].chart_metrics).toStrictEqual([{value: 9, keys:['mis']}]);
+  expect(comp.groupBys[1].sortBy).toBe('count');
+  expect(comp.groupBys[1].sortDesc).toBe(true);
 
   // Now include action column
   comp.aggregationActionsEnabled = true;

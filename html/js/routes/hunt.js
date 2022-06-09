@@ -70,6 +70,8 @@ const huntComponent = {
     groupByItemsPerPage: 10,
     groupByFooters: { 'items-per-page-options': [10,25,50,100,200,500] },
     groupByPage: 1,
+    groupBySortBy: 'count',
+    groupBySortDesc: true,
     chartLabelMaxLength: 30,
     chartLabelOtherLimit: 10,
     chartLabelFieldSeparator: ', ',
@@ -160,6 +162,8 @@ const huntComponent = {
   },
   watch: {
     '$route': 'loadData',
+    'groupBySortBy': 'saveLocalSettings',
+    'groupBySortDesc': 'saveLocalSettings',
     'groupByItemsPerPage': 'groupByItemsPerPageChanged',
     'groupByLimit': 'groupByLimitChanged',
     'sortBy': 'saveLocalSettings',
@@ -989,6 +993,8 @@ const huntComponent = {
           // chart_options: ChartJS options. See setupBarChart, etc.
           // chart_data:    ChartJS labels and datasets. See setupBarChart and populateBarChart.
           // is_incomplete: True if only partial data is rendered to avoid complete render failure.
+          // sortBy:        Optional name of a field to sort by.
+          // sortDesc:      True if the optional sort should be in descending order.
           var group = {};
           group.title = fields.join(this.chartLabelFieldSeparator);
           group.fields = [...fields];
@@ -999,6 +1005,15 @@ const huntComponent = {
           }
           group.headers = this.constructHeaders(fields);
           group.chart_metrics = this.constructChartMetrics(metrics[key]);
+
+          // Preserve group-by sort settings only for first group. Useful for non-advanced views.
+          group.sortBy = 'count';
+          group.sortDesc = true;
+          if (this.groupBys.length == 0 && this.groupBySortBy) {
+            group.sortBy = this.groupBySortBy;
+            group.sortDesc = this.groupBySortDesc;
+          }
+
           this.groupBys.push(group);
 
           var options = this.queryGroupByOptions[groupIdx];
@@ -1013,6 +1028,12 @@ const huntComponent = {
         return true;
       }
       return false;
+    },
+    updateGroupBySort() {
+      if (this.groupBys.length > 0) {
+        this.groupBySortBy = this.groupBys[0].sortBy;
+        this.groupBySortDesc = this.groupBys[0].sortDesc;
+      }
     },
     populateEventTable(events) {
       var records = [];
@@ -1526,6 +1547,8 @@ const huntComponent = {
       localStorage['timezone'] = this.zone;
     },
     saveLocalSettings() {
+      this.saveSetting('groupBySortBy', this.groupBySortBy, 'count');
+      this.saveSetting('groupBySortDesc', this.groupBySortDesc, true);
       this.saveSetting('groupByItemsPerPage', this.groupByItemsPerPage, this.params['groupItemsPerPage']);
       this.saveSetting('groupByLimit', this.groupByLimit, this.params['groupFetchLimit']);
       this.saveSetting('sortBy', this.sortBy, 'timestamp');
@@ -1543,6 +1566,8 @@ const huntComponent = {
 
       // Module settings
       var prefix = 'settings.' + this.category;
+      if (localStorage[prefix + '.groupBySortBy']) this.groupBySortBy = localStorage[prefix + '.groupBySortBy'];
+      if (localStorage[prefix + '.groupBySortDesc']) this.groupBySortDesc = localStorage[prefix + '.groupBySortDesc'] == "true";
       if (localStorage[prefix + '.groupByItemsPerPage']) this.groupByItemsPerPage = parseInt(localStorage[prefix + '.groupByItemsPerPage']);
       if (localStorage[prefix + '.groupByLimit']) this.groupByLimit = parseInt(localStorage[prefix + '.groupByLimit']);
       if (localStorage[prefix + '.sortBy']) this.sortBy = localStorage[prefix + '.sortBy'];
