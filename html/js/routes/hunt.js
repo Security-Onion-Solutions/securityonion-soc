@@ -70,6 +70,8 @@ const huntComponent = {
     groupByItemsPerPage: 10,
     groupByFooters: { 'items-per-page-options': [10,25,50,100,200,500] },
     groupByPage: 1,
+    groupBySortBy: 'count',
+    groupBySortDesc: true,
     chartLabelMaxLength: 30,
     chartLabelOtherLimit: 10,
     chartLabelFieldSeparator: ', ',
@@ -114,7 +116,9 @@ const huntComponent = {
     escalationMenuX: 0,
     escalationMenuY: 0,
     escalationItem: null,
+    escalationGroupIdx: -1,
     escalateRelatedEventsEnabled: false,
+    aggregationActionsEnabled: false,
     actions: [],
   }},
   created() {
@@ -158,6 +162,8 @@ const huntComponent = {
   },
   watch: {
     '$route': 'loadData',
+    'groupBySortBy': 'saveLocalSettings',
+    'groupBySortDesc': 'saveLocalSettings',
     'groupByItemsPerPage': 'groupByItemsPerPageChanged',
     'groupByLimit': 'groupByLimitChanged',
     'sortBy': 'saveLocalSettings',
@@ -199,6 +205,7 @@ const huntComponent = {
       this.ackEnabled = params["ackEnabled"];
       this.escalateEnabled = params["escalateEnabled"];
       this.escalateRelatedEventsEnabled = params["escalateRelatedEventsEnabled"];
+      this.aggregationActionsEnabled = params["aggregationActionsEnabled"];
       this.viewEnabled = params["viewEnabled"];
       this.createLink = params["createLink"];
       this.chartLabelMaxLength = params["chartLabelMaxLength"]
@@ -283,6 +290,11 @@ const huntComponent = {
         this.$router.push(this.buildCurrentRoute(), onSuccess, onFail);
       }
       this.resetRefreshTimer();
+
+      if (document.activeElement) {
+        // Release focus to avoid clicking away causing a second hunt
+        document.activeElement.blur();
+      }
     },
     stopRefreshTimer() {
       if (this.autoRefreshTimer) {
@@ -484,7 +496,7 @@ const huntComponent = {
         template: template,
       };
     },
-    async ack(event, item, idx, acknowledge, escalate = false, caseId = null) {
+    async ack(event, item, idx, acknowledge, escalate, caseId, groupIdx) {
       this.$root.startLoading();
       try {
         var docEvent = item;
@@ -530,7 +542,13 @@ const huntComponent = {
           } else {
             this.$root.showTip(escalate ? this.i18n.escalatedSingleTip : (acknowledge ? this.i18n.ackSingleTip : this.i18n.ackUndoSingleTip));
           }
-          this.removeDataItemFromView(item["count"] ? this.groupByData : this.eventData, item);
+          var data;
+          if (item["count"] && groupIdx >= 0) {
+            data = this.groupBys[groupIdx].data;
+          } else {
+            data = this.eventData;
+          }
+          this.removeDataItemFromView(data, item);
         } else if (escalate) {
           this.$root.showTip(this.i18n.escalatedEventTip);
           item['event.escalated'] = true;
@@ -783,9 +801,9 @@ const huntComponent = {
         this.$router.push(this.filterRouteDrilldown);
       }
     },
-    toggleEscalationMenu(domEvent, event) {
+    toggleEscalationMenu(domEvent, event, groupIdx) {
       if (!this.escalateRelatedEventsEnabled) {
-        this.ack(domEvent, event, 0, true, true);
+        this.ack(domEvent, event, 0, true, true, null, groupIdx);
         return;
       }
 
@@ -797,6 +815,7 @@ const huntComponent = {
       this.escalationMenuX = domEvent.clientX;
       this.escalationMenuY = domEvent.clientY;
       this.escalationItem = event;
+      this.escalationGroupIdx = groupIdx;
       this.$nextTick(() => { 
         this.escalationMenuVisible = true; 
       });      
@@ -808,7 +827,7 @@ const huntComponent = {
         return;
       }
 
-      if (value && this.canQuery(field)) {
+      if (value != null && this.canQuery(field)) {
         this.filterRouteInclude = this.buildFilterRoute(field, value, FILTER_INCLUDE);
         this.filterRouteExclude = this.buildFilterRoute(field, value, FILTER_EXCLUDE);
         this.filterRouteExact = this.buildFilterRoute(field, value, FILTER_EXACT);
@@ -973,14 +992,28 @@ const huntComponent = {
           // chart_type:    ChartJS type, such as pie, bar, sankey, etc.
           // chart_options: ChartJS options. See setupBarChart, etc.
           // chart_data:    ChartJS labels and datasets. See setupBarChart and populateBarChart.
+          // is_incomplete: True if only partial data is rendered to avoid complete render failure.
+          // sortBy:        Optional name of a field to sort by.
+          // sortDesc:      True if the optional sort should be in descending order.
           var group = {};
           group.title = fields.join(this.chartLabelFieldSeparator);
           group.fields = [...fields];
           group.data = this.constructGroupByRows(fields, metrics[key])
           fields.unshift("count");
-          fields.unshift(""); // Leave empty header column for optional action buttons/icons
+          if (this.aggregationActionsEnabled) {
+            fields.unshift(""); // Leave empty header column for optional action buttons/icons
+          }
           group.headers = this.constructHeaders(fields);
           group.chart_metrics = this.constructChartMetrics(metrics[key]);
+
+          // Preserve group-by sort settings only for first group. Useful for non-advanced views.
+          group.sortBy = 'count';
+          group.sortDesc = true;
+          if (this.groupBys.length == 0 && this.groupBySortBy) {
+            group.sortBy = this.groupBySortBy;
+            group.sortDesc = this.groupBySortDesc;
+          }
+
           this.groupBys.push(group);
 
           var options = this.queryGroupByOptions[groupIdx];
@@ -995,6 +1028,12 @@ const huntComponent = {
         return true;
       }
       return false;
+    },
+    updateGroupBySort() {
+      if (this.groupBys.length > 0) {
+        this.groupBySortBy = this.groupBys[0].sortBy;
+        this.groupBySortDesc = this.groupBys[0].sortDesc;
+      }
     },
     populateEventTable(events) {
       var records = [];
@@ -1061,34 +1100,62 @@ const huntComponent = {
       group.chart_type = "sankey";
       group.chart_options = {};
       group.chart_data = {};
-      this.setupSankeyChart(group.chart_options, group.chart_data, group.title);
-      this.applyLegendOption(group, groupIdx);
 
       // Sankey has a unique dataset format, build it out here instead of using populateChartData().
       // While building the new format, also calculate the max value across all nodes to be used
       // as a scale factor for choosing colors of the sankey flows.
       var flowMax = 0;
-      updateMaxMap = function(map, key, value) {
+      var updateMaxMap = function(map, key, value) {
         var max = map[key];
         if (!max) {
           max = 0;
         }
         max = max + value;
-        maxFlowMap[key] = max;
+        map[key] = max;
         flowMax = Math.max(flowMax, max);
-      }
+      };
+
+      var isRecursive = function(map, from, to, current, max) {
+        if (current > max || from == to) {
+          return true;
+        }
+
+        for (var i = 0; i < map.length; i++) {
+          var item = map[i];
+          if (item.from == to) {
+            if (isRecursive(map, item.from, item.to, current + 1, max)) {
+              return true;
+            }
+          }
+        }
+        return false;
+      };
+
       var data = [];
       var maxFlowMap = {};
       group.data.forEach(function(item, index) {
         for (var idx = 0; idx < group.fields.length - 1; idx++) {
           var from = item[group.fields[idx]];
           var to = item[group.fields[idx+1]];
-          updateMaxMap(maxFlowMap, from, item.count);
-          updateMaxMap(maxFlowMap, to, item.count);
           var flow = { from: from, to: to, flow: item.count };
           data.push(flow);
+
+          if (isRecursive(data, from, to, 0, group.fields.length)) {
+            group.is_incomplete = true;
+            data.pop();
+          } else {
+            updateMaxMap(maxFlowMap, from, item.count);
+            updateMaxMap(maxFlowMap, to, item.count);
+          }
         }
       });
+
+      if (group.is_incomplete) {
+        group.title += " " + this.i18n.chartTitleIncomplete;
+      }
+      this.setupSankeyChart(group.chart_options, group.chart_data, group.title);
+      this.applyLegendOption(group, groupIdx);
+
       group.chart_data.datasets[0].data = data;
       group.chart_data.flowMax = flowMax;
       Vue.set(this.groupBys, groupIdx, group);
@@ -1157,6 +1224,9 @@ const huntComponent = {
         }
       }
       return desiredKey;
+    },
+    getGroupByFieldStartIndex() {
+      return this.aggregationActionsEnabled ? 2 : 1;
     },
     lookupTopMetricKey(metrics) {
       return this.lookupGroupByMetricKey(metrics, 0, false);
@@ -1477,6 +1547,8 @@ const huntComponent = {
       localStorage['timezone'] = this.zone;
     },
     saveLocalSettings() {
+      this.saveSetting('groupBySortBy', this.groupBySortBy, 'count');
+      this.saveSetting('groupBySortDesc', this.groupBySortDesc, true);
       this.saveSetting('groupByItemsPerPage', this.groupByItemsPerPage, this.params['groupItemsPerPage']);
       this.saveSetting('groupByLimit', this.groupByLimit, this.params['groupFetchLimit']);
       this.saveSetting('sortBy', this.sortBy, 'timestamp');
@@ -1494,6 +1566,8 @@ const huntComponent = {
 
       // Module settings
       var prefix = 'settings.' + this.category;
+      if (localStorage[prefix + '.groupBySortBy']) this.groupBySortBy = localStorage[prefix + '.groupBySortBy'];
+      if (localStorage[prefix + '.groupBySortDesc']) this.groupBySortDesc = localStorage[prefix + '.groupBySortDesc'] == "true";
       if (localStorage[prefix + '.groupByItemsPerPage']) this.groupByItemsPerPage = parseInt(localStorage[prefix + '.groupByItemsPerPage']);
       if (localStorage[prefix + '.groupByLimit']) this.groupByLimit = parseInt(localStorage[prefix + '.groupByLimit']);
       if (localStorage[prefix + '.sortBy']) this.sortBy = localStorage[prefix + '.sortBy'];

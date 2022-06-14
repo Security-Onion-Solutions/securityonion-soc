@@ -60,7 +60,7 @@ func TestCreateAnalyzer(tester *testing.T) {
 
 	entries, err := ioutil.ReadDir(TMP_DIR)
 	assert.NoError(tester, err)
-	assert.Equal(tester, 15, len(entries))
+	assert.Equal(tester, 2, len(entries))
 }
 
 func TestInit(tester *testing.T) {
@@ -118,6 +118,7 @@ func TestAnalyzersExecuted(tester *testing.T) {
 
 	cfg := make(map[string]interface{})
 	cfg["analyzersPath"] = "test-resources"
+	cfg["analyzerExecutable"] = "python3"
 	cfg["sourcePackagesPath"] = "test-source-packages"
 	cfg["sitePackagesPath"] = TMP_DIR
 	sq := NewAnalyze(nil)

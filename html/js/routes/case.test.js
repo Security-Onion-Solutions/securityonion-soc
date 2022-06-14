@@ -862,7 +862,7 @@ test('shouldGetAnalyzerSummary', () => {
   expect(actual).toBe('No results found');
 
   var actual = comp.getAnalyzerSummary({id:'urlhaus', summary:'internal_failure'});
-  expect(actual).toBe('Internal Analyzer Failure');
+  expect(actual).toBe('Internal analyzer failure');
 
   var actual = comp.getAnalyzerSummary({id:'urlhaus', summary:'foo'});
   expect(actual).toBe('foo');

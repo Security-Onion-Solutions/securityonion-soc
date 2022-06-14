@@ -214,18 +214,21 @@ test('toggleEscalationMenu', () => {
   const domEvent = {clientX: 12, clientY: 34};
   const event = {id:"33",foo:"bar"};
   comp.$nextTick = function(fn) { fn(); };
-  comp.toggleEscalationMenu(domEvent, event);
+  comp.toggleEscalationMenu(domEvent, event, 2);
   expect(comp.escalationMenuX).toBe(12);
   expect(comp.escalationMenuY).toBe(34);
   expect(comp.escalationItem).toBe(event);
+  expect(comp.escalationGroupIdx).toBe(2);
   expect(comp.escalationMenuVisible).toBe(true);
 });
 
 test('toggleEscalationMenuAlreadyOpen', () => {
   comp.escalateRelatedEventsEnabled = true;
+  const domEvent = {clientX: 12, clientY: 34};
+  const event = {id:"33",foo:"bar"};
   comp.quickActionVisible = true;
   comp.escalationMenuVisible = true;
-  comp.toggleEscalationMenu();
+  comp.toggleEscalationMenu(domEvent, event, 2);
   expect(comp.quickActionVisible).toBe(false);
   expect(comp.escalationMenuVisible).toBe(false);
 });
@@ -364,6 +367,10 @@ test('populateGroupByTables', () => {
     "groupby_0|foo|bar": [{ value: 23, keys: ['moo', 'mar'] }],
     "groupby_1|car": [{ value: 9, keys: ['mis'] }],
   }
+
+  comp.groupBySortBy = "foo";
+  comp.groupBySortDesc = false;
+
   comp.queryGroupByOptions = [[],[]];
   var result = comp.populateGroupByTables(metrics);
   expect(comp.groupBys.length).toBe(2);
@@ -372,14 +379,24 @@ test('populateGroupByTables', () => {
   expect(comp.groupBys[0].data[0].count).toBe(23);
   expect(comp.groupBys[0].data[0].foo).toBe('moo');
   expect(comp.groupBys[0].data[0].bar).toBe('mar');
-  expect(comp.groupBys[0].headers).toStrictEqual([{text: '', value: ''}, {text: 'Count', value:'count'}, {text: 'foo', value: 'foo'}, {text: 'bar', value: 'bar'}]);
+  expect(comp.groupBys[0].headers).toStrictEqual([{text: 'Count', value:'count'}, {text: 'foo', value: 'foo'}, {text: 'bar', value: 'bar'}]);
   expect(comp.groupBys[0].chart_metrics).toStrictEqual([{value: 23, keys:['moo, mar']}]);
+  expect(comp.groupBys[0].sortBy).toBe('foo');
+  expect(comp.groupBys[0].sortDesc).toBe(false);
   expect(comp.groupBys[1].title).toBe("car");
   expect(comp.groupBys[1].fields.length).toBe(1);
   expect(comp.groupBys[1].data[0].count).toBe(9);
   expect(comp.groupBys[1].data[0].car).toBe('mis');
-  expect(comp.groupBys[1].headers).toStrictEqual([{text: '', value: ''}, {text: 'Count', value:'count'}, {text: 'car', value: 'car'}]);
+  expect(comp.groupBys[1].headers).toStrictEqual([{text: 'Count', value:'count'}, {text: 'car', value: 'car'}]);
   expect(comp.groupBys[1].chart_metrics).toStrictEqual([{value: 9, keys:['mis']}]);
+  expect(comp.groupBys[1].sortBy).toBe('count');
+  expect(comp.groupBys[1].sortDesc).toBe(true);
+
+  // Now include action column
+  comp.aggregationActionsEnabled = true;
+  result = comp.populateGroupByTables(metrics);
+  expect(comp.groupBys[0].headers).toStrictEqual([{text: '', value: ''}, {text: 'Count', value:'count'}, {text: 'foo', value: 'foo'}, {text: 'bar', value: 'bar'}]);  
+  expect(comp.groupBys[1].headers).toStrictEqual([{text: '', value: ''}, {text: 'Count', value:'count'}, {text: 'car', value: 'car'}]);
 });
 
 test('displayTable', () => {
@@ -399,14 +416,19 @@ test('displayPieChart', () => {
 
 test('displaySankeyChart', () => {
   var group = {chart_type: ''};
-  group.data = [{ count: 1, foo: 'moo', bar: 'mar' }, { count: 12, foo: 'moo', bar: 'car' }]
+  group.data = [{ count: 10, foo: 'mog', bar: 'mop' }, { count: 1, foo: 'moo', bar: 'mar' }, { count: 12, foo: 'moo', bar: 'car' }, { count: 2, foo: 'moo', bar: 'mog' }, { count: 2, foo: 'mop', bar: 'moo' },{ count: 2, foo: 'moo', bar: 'moo' }, { count: 3, foo: 'mop', bar: 'baz' }]
   group.fields = ['foo', 'bar'];
   comp.groupBys = [group];
   comp.queryGroupByOptions = [[]];
   comp.displaySankeyChart(group, 0);
   expect(group.chart_type).toBe('sankey');
-  expect(group.chart_data.flowMax).toBe(13);
+  expect(group.chart_data.flowMax).toBe(15);
   expect(group.chart_data.datasets[0].data).toStrictEqual([
+    {
+      "flow": 10,
+      "from": "mog",
+      "to": "mop",
+    },
     {
       "flow": 1,
       "from": "moo",
@@ -416,6 +438,16 @@ test('displaySankeyChart', () => {
       "flow": 12,
       "from": "moo",
       "to": "car",
+    },
+    {
+      "flow": 2,
+      "from": "moo",
+      "to": "mog",
+    },
+    {
+      "flow": 3,
+      "from": "mop",
+      "to": "baz",
     },
   ]);
 });
@@ -635,4 +667,12 @@ test('isGroupSankeyCapable', () => {
 
   var group = { fields: ['foo', 'bar', 'car'] };
   expect(comp.isGroupSankeyCapable(group)).toBe(true);
+});
+
+test('getGroupByFieldStartIndex', () => {
+  comp.aggregationActionsEnabled = false;
+  expect(comp.getGroupByFieldStartIndex()).toBe(1);
+
+  comp.aggregationActionsEnabled = true;
+  expect(comp.getGroupByFieldStartIndex()).toBe(2);
 });

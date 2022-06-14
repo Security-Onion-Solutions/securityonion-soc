@@ -458,7 +458,7 @@ $(document).ready(function() {
         })
         var md = str;
         if (str) {
-          md = marked(str);
+          md = marked.parse(str);
           md = DOMPurify.sanitize(md);
         }
         return md;

@@ -14,7 +14,6 @@ const DEFAULT_GROUP_FETCH_LIMIT = 10
 const DEFAULT_EVENT_FETCH_LIMIT = 100
 const DEFAULT_RELATIVE_TIME_VALUE = 24
 const DEFAULT_RELATIVE_TIME_UNIT = 30
-const DEFAULT_MOST_RECENTLY_USED_LIMIT = 5
 const DEFAULT_CHART_LABEL_MAX_LENGTH = 35
 const DEFAULT_CHART_LABEL_OTHER_LIMIT = 10
 const DEFAULT_CHART_LABEL_FIELD_SEPARATOR = ", "
@@ -118,6 +117,7 @@ type HuntingParameters struct {
 	ChartLabelMaxLength          int                 `json:"chartLabelMaxLength"`
 	ChartLabelOtherLimit         int                 `json:"chartLabelOtherLimit"`
 	ChartLabelFieldSeparator     string              `json:"chartLabelFieldSeparator"`
+	AggregationActionsEnabled    bool                `json:"aggregationActionsEnabled"`
 }
 
 func (params *HuntingParameters) Verify() error {
@@ -134,8 +134,8 @@ func (params *HuntingParameters) Verify() error {
 	if params.RelativeTimeUnit <= 0 {
 		params.RelativeTimeUnit = DEFAULT_RELATIVE_TIME_UNIT
 	}
-	if params.MostRecentlyUsedLimit < 10 {
-		params.MostRecentlyUsedLimit = DEFAULT_MOST_RECENTLY_USED_LIMIT
+	if params.MostRecentlyUsedLimit < 0 {
+		params.MostRecentlyUsedLimit = 0
 	}
 	if params.ChartLabelMaxLength <= 0 {
 		params.ChartLabelMaxLength = DEFAULT_CHART_LABEL_MAX_LENGTH

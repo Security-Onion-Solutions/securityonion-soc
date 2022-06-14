@@ -765,12 +765,31 @@ func (store *ElasticCasestore) DeleteArtifact(ctx context.Context, id string) er
     if len(artifact.StreamId) > 0 {
       err = store.DeleteArtifactStream(ctx, artifact.StreamId)
       if err != nil {
-        log.WithFields(log.Fields{
+        log.WithError(err).WithFields(log.Fields{
           "artifactStreamId": artifact.StreamId,
           "artifactId":       artifact.Id,
         }).Error("Unable to delete artifact stream; proceeding with artifact deletion anyway")
       }
     }
+
+    // Delete analyzer results
+    if store.server.Datastore != nil {
+      idPair := make(map[string]interface{})
+      idPair["id"] = id
+      params := make(map[string]interface{})
+      params["artifact"] = idPair
+      jobs := store.server.Datastore.GetJobs(ctx, "analyze", params)
+      for _, job := range jobs {
+        job, err := store.server.Datastore.DeleteJob(ctx, job.Id)
+        if err != nil {
+          log.WithError(err).WithFields(log.Fields{
+            "artifactId": artifact.Id,
+            "jobId":      job.Id,
+          }).Error("Unable to delete analyze job; continuing")
+        }
+      }
+    }
+
     err = store.delete(ctx, artifact, "artifact", store.prepareForSave(ctx, &artifact.Auditable))
   }
 
