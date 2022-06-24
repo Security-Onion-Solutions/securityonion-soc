@@ -753,6 +753,10 @@ $(document).ready(function() {
         }
         return this.i18n.na;
       },
+      async getActiveUsers() {
+        const users = await this.getUsers();
+        return users.filter(user => user.status != 'locked');
+      },
       async getUsers() {
         try {
           const response = await this.papi.get('users/');

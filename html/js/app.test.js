@@ -199,3 +199,22 @@ test('maximize', () => {
 	expect(element.classList).not.toContain('maximized');
 	expect(document.documentElement.classList).not.toContain('maximized-bg');
 });
+
+test('getUsers', async () => {
+	const fakeUsers = [{ status: ''}, {status: 'locked'}];
+	var mock = mockPapi("get", {data: fakeUsers});
+  const showErrorMock = mockShowError(true);
+
+  const users = await app.getUsers();
+
+  expect(mock).toHaveBeenCalledWith('users/');
+  expect(showErrorMock).toHaveBeenCalledTimes(0);
+  expect(users.length).toBe(2);
+
+	mock = mockPapi("get", {data: fakeUsers});
+  const activeUsers = await app.getActiveUsers();
+
+  expect(mock).toHaveBeenCalledTimes(2);
+  expect(showErrorMock).toHaveBeenCalledTimes(0);
+  expect(activeUsers.length).toBe(1);
+});
