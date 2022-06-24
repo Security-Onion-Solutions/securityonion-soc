@@ -15,7 +15,7 @@ global.$ = function(doc) {
 	return doc;
 };
 global.document.ready = function(fn) { fn(); };
-
+global.window.scrollTo = jest.fn();
 ////////////////////////////////////
 // Mock Vue
 ////////////////////////////////////

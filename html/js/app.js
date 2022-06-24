@@ -810,7 +810,11 @@ $(document).ready(function() {
         return this.maximizedTarget != null;
       },
       maximizeById(targetId, escapeFn=null) {
-        this.maximize(document.getElementById(targetId), escapeFn);
+        const target = document.getElementById(targetId);
+        if (target) {
+          return this.maximize(target, escapeFn);
+        }
+        return false;
       },
       maximize(target, escapeFn=null) {
         this.unmaximize();
@@ -818,8 +822,10 @@ $(document).ready(function() {
         this.maximizedOrigWidth = target.style.width;
         this.maximizedOrigHeight = target.style.height;
         target.classList.add("maximized");
+        window.scrollTo(0,0);
         this.maximizedCancelFn = escapeFn;
         document.addEventListener('keydown', this.unmaximizeEscapeListener);
+        return true;
       },
       unmaximize(userInitiated=false) {
         if (!this.maximizedTarget) return;
@@ -837,6 +843,7 @@ $(document).ready(function() {
         if (event.code == "Escape") { 
           this.unmaximize(true);
         }
+        event.cancel();
       },
     },
     created() {
