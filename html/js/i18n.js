@@ -328,6 +328,7 @@ const i18n = {
       logout: 'Logout',
       logoutFailure: 'Unable to initiate logout. Ensure server is accessible.',
       markdownFormattingSupported: 'Markdown formatting supported',
+      maximize: 'Maximize View (ESC to cancel)',
       md5: 'MD5',
       message: 'Message',
       minutes: 'minutes',

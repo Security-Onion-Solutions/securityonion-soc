@@ -427,7 +427,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         const response = await this.$root.papi.get('case/', { params: {
             id: this.$route.params.id
         }});
-        this.userList = await this.$root.getUsers();
+        this.userList = await this.$root.getActiveUsers();
         await this.updateCaseDetails(response.data);
         this.loadAssociations();
       } catch (error) {

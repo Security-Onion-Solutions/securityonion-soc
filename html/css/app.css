@@ -403,3 +403,17 @@ td {
 .case.markdown-icon:hover i {
   color: var(--v-primary-base);
 }
+
+.maximized {
+  position: absolute;
+  left: 0px;
+  top: 0px;
+  width: 100%;
+  height: calc(100vh - 100px);
+  background-color: var(--v-background-base);
+  z-index: 1;
+}
+
+.maximized-bg {
+  overflow: hidden;
+}

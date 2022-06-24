@@ -15,7 +15,7 @@ global.$ = function(doc) {
 	return doc;
 };
 global.document.ready = function(fn) { fn(); };
-
+global.window.scrollTo = jest.fn();
 ////////////////////////////////////
 // Mock Vue
 ////////////////////////////////////
@@ -23,6 +23,12 @@ var app = null;
 global.Vue = function(obj) {
 	app = this;
 	app.$root = this;
+	app.$vuetify = { 
+		theme: { 
+			dark: false,
+			currentTheme: {}
+		}
+	};
 	app.debug = true;
 	Object.assign(app, obj.data, obj.methods);
 	this.ensureConnected = jest.fn();

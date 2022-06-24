@@ -791,8 +791,14 @@ const huntComponent = {
       var removal = group.chart_options && group.chart_options.plugins.legend.display ? "legend" : "nolegend";
       return this.buildGroupOptionRoute(groupIdx, [removal], addition);
     },
+    buildMaximizeRoute(group, groupIdx) {
+      return this.buildGroupOptionRoute(groupIdx, [], "maximize");
+    },
+    buildNonMaximizedRoute(group, groupIdx) {
+      return this.buildGroupOptionRoute(groupIdx, ["maximize"], '');
+    },
     buildGroupWithoutOptionsRoute(groupIdx) {
-      const removals = ["pie", "bar", "legend", "nolegend", "sankey"];
+      const removals = ["pie", "bar", "legend", "nolegend", "sankey", "maximize"];
       return this.buildGroupOptionRoute(groupIdx, removals, '');
     },
     countDrilldown(event) {
@@ -971,6 +977,7 @@ const huntComponent = {
       while (this.populateGroupByTable(metrics, idx++)) {};
     },
     populateGroupByTable(metrics, groupIdx) {
+      const route = this;
       var key = this.lookupGroupByMetricKey(metrics, groupIdx, true);
       if (key) {
         var fields = key.split("|");
@@ -995,6 +1002,7 @@ const huntComponent = {
           // is_incomplete: True if only partial data is rendered to avoid complete render failure.
           // sortBy:        Optional name of a field to sort by.
           // sortDesc:      True if the optional sort should be in descending order.
+          // maximized:     True if this group view has been maximized.
           var group = {};
           group.title = fields.join(this.chartLabelFieldSeparator);
           group.fields = [...fields];
@@ -1023,6 +1031,16 @@ const huntComponent = {
             this.displayBarChart(group, groupIdx);
           } else if (options.indexOf("sankey") != -1) {
             this.displaySankeyChart(group, groupIdx);
+          }
+          group.maximized = options.indexOf("maximize") != -1;
+          if (group.maximized) {
+            const unmaximizeFn = function() {
+              const newRoute = route.buildNonMaximizedRoute(group, groupIdx);
+              route.$router.push(newRoute, function() {}, function() {});
+            };
+            this.$nextTick(() => { 
+              route.$root.maximizeById("group-" + groupIdx, unmaximizeFn);
+            });
           }
         }
         return true;

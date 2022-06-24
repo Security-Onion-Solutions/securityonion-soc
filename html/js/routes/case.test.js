@@ -204,7 +204,7 @@ test('loadData', async () => {
   mock = mockPapi("get", {'data':fakeUsers});
 
   comp.$route.params.id = 'myCaseId';
-  const showErrorMock = mockShowError();
+  const showErrorMock = mockShowError(true);
   comp.loadAssociations = jest.fn();
 
   await comp.loadData();
