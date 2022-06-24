@@ -86,9 +86,14 @@ $(document).ready(function() {
       loadServerSettingsTime: 0,
       user: null,
       username: '',
+      maximizedParent: null,
+      maximizedOrigWidth: null,
+      maximizedOrigHeight: null,
+      maximizedCancelFn: null,
     },
     watch: {
       '$vuetify.theme.dark': 'saveLocalSettings',
+      'toolbar': 'saveLocalSettings',
     },
     methods: {
       formatActionContent(content, event, field, value, uriEncode = true) {
@@ -532,10 +537,14 @@ $(document).ready(function() {
       },
       saveLocalSettings() {
         localStorage['settings.app.dark'] = this.$vuetify.theme.dark;
+        localStorage['settings.app.navbar'] = this.toolbar;
       },
       loadLocalSettings() {
         if (localStorage['settings.app.dark'] != undefined) {
           this.$vuetify.theme.dark = localStorage['settings.app.dark'] == "true";
+        }
+        if (localStorage['settings.app.navbar'] != undefined) {
+          this.toolbar = localStorage['settings.app.navbar'] == "true";
         }
       },
       subscribe(kind, fn) {
@@ -796,7 +805,39 @@ $(document).ready(function() {
       },
       isAttentionNeeded() {
         return this.isNewAlert() || this.isGridUnhealthy() || !this.connected || this.reconnecting;
-      }
+      },
+      isMaximized() {
+        return this.maximizedTarget != null;
+      },
+      maximizeById(targetId, escapeFn=null) {
+        this.maximize(document.getElementById(targetId), escapeFn);
+      },
+      maximize(target, escapeFn=null) {
+        this.unmaximize();
+        this.maximizedTarget = target;
+        this.maximizedOrigWidth = target.style.width;
+        this.maximizedOrigHeight = target.style.height;
+        target.classList.add("maximized");
+        this.maximizedCancelFn = escapeFn;
+        document.addEventListener('keydown', this.unmaximizeEscapeListener);
+      },
+      unmaximize(userInitiated=false) {
+        if (!this.maximizedTarget) return;
+        if (userInitiated && this.maximizedCancelFn) {
+          if (this.maximizedCancelFn(this.maximizeTarget)) return;
+        }
+        this.maximizedTarget.classList.remove("maximized");
+        this.maximizedTarget.style.width = this.maximizedOrigWidth;
+        this.maximizedTarget.style.height = this.maximizedOrigHeight;
+        this.maximizedTarget = null;
+        this.maximizedCancelFn = null;
+        document.removeEventListener('keydown', this.unmaximizeEscapeListener); 
+      },
+      unmaximizeEscapeListener(event) {
+        if (event.code == "Escape") { 
+          this.unmaximize(true);
+        }
+      },
     },
     created() {
       this.log("Initializing application components");

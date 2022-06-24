@@ -150,3 +150,46 @@ test('truncate', () => {
   expect(app.truncate("atthelimit!!!", 10)).toBe("atthelimit!!!");
   expect(app.truncate("much longer value", 10)).toBe("much...value");
 });
+
+test('localSettings', () => {
+	app.toolbar = true;
+	app.saveLocalSettings();
+	app.toolbar = null;
+	app.loadLocalSettings();
+	expect(app.toolbar).toBe(true);
+});
+
+test('maximize', () => {
+	const element = document.createElement('div');
+	element.style.width = '12px';
+	element.style.height = '13px';
+
+	const cancelMock = jest.fn();
+	expect(app.isMaximized()).toBe(false);
+
+	app.maximize(element, cancelMock);
+
+	expect(app.isMaximized()).toBe(true);
+	expect(app.maximizedOrigWidth).toBe("12px");
+	expect(app.maximizedOrigHeight).toBe("13px");
+
+	app.unmaximize(true);
+
+	expect(app.isMaximized()).toBe(false);
+	expect(app.maximizedCancelFn).toBeNull();
+	expect(cancelMock).toHaveBeenCalledTimes(1);
+
+	// Maximize again
+	app.maximize(element);
+
+	expect(app.isMaximized()).toBe(true);
+
+	app.unmaximize(false);
+
+	expect(app.isMaximized()).toBe(false);
+
+	// should still only have been called once
+	expect(cancelMock).toHaveBeenCalledTimes(1);
+
+	expect(app.maximizedCancelFn).toBeNull();
+});

@@ -248,7 +248,7 @@
           </template>
           {{ tipMessage }}
         </v-snackbar>
-        <router-view></router-view>
+        <router-view id="main-view"></router-view>
         <textarea id="clipboardBuffer"></textarea>
       </v-main>
       <v-footer app>
@@ -502,17 +502,22 @@
                         <router-link class="mx-1" :to="buildToggleLegendRoute(group, groupIdx)" :title="i18n.toggleLegend" style="text-decoration: none; cursor: 'pointer'">
                           <v-icon>fa-list</v-icon>
                         </router-link>
+                        <router-link class="mx-1" :to="buildMaximizeRoute(group, groupIdx)" :title="i18n.maximize" style="text-decoration: none; cursor: 'pointer'">
+                          <v-icon>fa-expand</v-icon>
+                        </router-link>
                         <v-btn icon class="mx-1" @click="removeGroupBy(groupIdx, -1)" :title="i18n.remove">
                           <v-icon>fa-trash</v-icon>
                         </v-btn>
-                        <pie-chart v-if="group.chart_type == 'pie'" :chartdata="group.chart_data" :options="group.chart_options"/>
-                        <bar-chart v-if="group.chart_type == 'bar'" :chartdata="group.chart_data" :options="group.chart_options"/>
-                        <sankey-chart v-if="group.chart_type == 'sankey'" :chartdata="group.chart_data" :options="group.chart_options"/>
+                        <pie-chart v-if="group.chart_type == 'pie'" :id="'group-' + groupIdx" :chartdata="group.chart_data" :options="group.chart_options"/>
+                        <bar-chart v-if="group.chart_type == 'bar'" :id="'group-' + groupIdx" :chartdata="group.chart_data" :options="group.chart_options"/>
+                        <sankey-chart v-if="group.chart_type == 'sankey'" :id="'group-' + groupIdx" :chartdata="group.chart_data" :options="group.chart_options"/>
                       </div>
-                      <v-data-table v-if="!group.chart_type" class="elevation-1" :search="groupByFilter" dense 
-                       :footer-props="groupByFooters" :sort-by.sync="group.sortBy" :sort-desc.sync="group.sortDesc" @update:sort-by="updateGroupBySort" @update:sort-desc="updateGroupBySort"
+                      <v-data-table v-if="!group.chart_type" :id="'group-' + groupIdx" class="elevation-1" 
+                        :search="groupByFilter" dense 
+                        :footer-props="groupByFooters" :sort-by.sync="group.sortBy" :sort-desc.sync="group.sortDesc" 
+                        @update:sort-by="updateGroupBySort" @update:sort-desc="updateGroupBySort"
                         :items-per-page.sync="groupByItemsPerPage" must-sort :headers="group.headers" :items="group.data" :custom-sort="sortEvents">
-                        <template v-for="(header, headerIdx) in group.headers" v-slot:["header." + header.value]="{ props }">
+                        <template v-if="!group.maximized" v-for="(header, headerIdx) in group.headers" v-slot:["header." + header.value]="{ props }">
                           {{ header.text }}
                           <span class="table-header-actions mx-2">
                             <router-link v-if="header.value == 'count' && isAdvanced()" :to="buildGroupOptionRoute(groupIdx, [], 'pie')" :title="i18n.showPieChart" style="text-decoration: none; cursor: 'pointer'">
@@ -524,12 +529,15 @@
                             <router-link v-if="header.value == 'count' && isAdvanced() && isGroupSankeyCapable(group, groupIdx)" icon x-small :to="buildGroupOptionRoute(groupIdx, [], 'sankey')" :title="i18n.showSankeyChart" style="text-decoration: none; cursor: 'pointer'">
                               <v-icon>fa-diagram-project</v-icon>
                             </router-link>
+                            <router-link v-if="header.value == 'count' && isAdvanced()" class="mx-1" :to="buildMaximizeRoute(group, groupIdx)" :title="i18n.maximize" style="text-decoration: none; cursor: 'pointer'">
+                              <v-icon>fa-expand</v-icon>
+                            </router-link>
                             <v-btn v-if="header.value != 'count' && header.value != ''" icon x-small @click.stop="removeGroupBy(groupIdx,headerIdx - getGroupByFieldStartIndex())" :title="i18n.remove">
                               <v-icon>fa-trash</v-icon>
                             </v-btn>
                           </span>
                         </template>
-                        <template v-slot:item="{ item, index }">
+                        <template v-if="!group.maximized" v-slot:item="{ item, index }">
                           <tr>
                             <td v-if="aggregationActionsEnabled">
                               <v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" class="mx-2" icon x-small
