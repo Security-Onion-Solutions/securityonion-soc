@@ -172,12 +172,16 @@ test('maximize', () => {
 	expect(app.isMaximized()).toBe(true);
 	expect(app.maximizedOrigWidth).toBe("12px");
 	expect(app.maximizedOrigHeight).toBe("13px");
+	expect(element.classList).toContain('maximized');
+	expect(document.documentElement.classList).toContain('maximized-bg');
 
 	app.unmaximize(true);
 
 	expect(app.isMaximized()).toBe(false);
 	expect(app.maximizedCancelFn).toBeNull();
 	expect(cancelMock).toHaveBeenCalledTimes(1);
+	expect(element.classList).not.toContain('maximized');
+	expect(document.documentElement.classList).not.toContain('maximized-bg');
 
 	// Maximize again
 	app.maximize(element);
@@ -192,4 +196,6 @@ test('maximize', () => {
 	expect(cancelMock).toHaveBeenCalledTimes(1);
 
 	expect(app.maximizedCancelFn).toBeNull();
+	expect(element.classList).not.toContain('maximized');
+	expect(document.documentElement.classList).not.toContain('maximized-bg');
 });

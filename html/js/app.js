@@ -822,6 +822,7 @@ $(document).ready(function() {
         this.maximizedOrigWidth = target.style.width;
         this.maximizedOrigHeight = target.style.height;
         target.classList.add("maximized");
+        document.documentElement.classList.add("maximized-bg");
         window.scrollTo(0,0);
         this.maximizedCancelFn = escapeFn;
         document.addEventListener('keydown', this.unmaximizeEscapeListener);
@@ -833,6 +834,7 @@ $(document).ready(function() {
           if (this.maximizedCancelFn(this.maximizeTarget)) return;
         }
         this.maximizedTarget.classList.remove("maximized");
+        document.documentElement.classList.remove("maximized-bg");
         this.maximizedTarget.style.width = this.maximizedOrigWidth;
         this.maximizedTarget.style.height = this.maximizedOrigHeight;
         this.maximizedTarget = null;
