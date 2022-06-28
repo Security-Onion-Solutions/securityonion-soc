@@ -135,7 +135,13 @@ func (analyze *Analyze) ProcessJob(job *model.Job, reader io.ReadCloser) (io.Rea
 	} else {
 		input := "{}"
 		if val, ok := job.Filter.Parameters["artifact"]; ok {
-			bytes, err := json.WriteJson(val)
+			var bytes []byte
+			switch val.(type) {
+			case string:
+				bytes, err = json.WriteJson(strings.TrimSpace(val.(string)))
+			default:
+				bytes, err = json.WriteJson(val)
+			}
 			if err != nil {
 				log.WithError(err).Error("Unable to convert artifact parameter to JSON string")
 			} else {
