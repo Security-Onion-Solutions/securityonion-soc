@@ -311,6 +311,31 @@ test('addAssociation', async () => {
   expect(getApp().showTip).toHaveBeenCalledWith(comp.i18n.saveSuccess);
 });
 
+test('addAssociationBulk', async () => {
+  // Mock two responses
+  mockPapi("post", {'data':fakeComment});
+  mock = mockPapi("post", {'data':fakeComment});
+  getApp().showTip = jest.fn();
+
+  comp.associatedForms['evidence'].artifactType = "domain";
+  comp.associatedForms['evidence'].bulk = true;
+  comp.associatedForms['evidence'].value = "line1\nline2";
+  comp.caseObj.id = 'myCaseId';
+  const showErrorMock = mockShowError();
+  expect(comp.associations['evidence'].length).toBe(0);
+
+  await comp.addAssociation('evidence');
+
+  const body1 =  "{\"artifactType\":\"domain\",\"bulk\":true,\"value\":\"line1\",\"caseId\":\"myCaseId\",\"id\":\"\"}";
+  const body2 =  "{\"artifactType\":\"domain\",\"bulk\":true,\"value\":\"line2\",\"caseId\":\"myCaseId\",\"id\":\"\"}";
+  expect(mock).toHaveBeenNthCalledWith(1, 'case/artifacts', body1, undefined);
+  expect(mock).toHaveBeenNthCalledWith(2, 'case/artifacts', body2, undefined);
+  expect(showErrorMock).toHaveBeenCalledTimes(0);
+  expect(comp.associations['evidence'].length).toBe(2);
+  expect(comp.$root.loading).toBe(false);
+  expect(getApp().showTip).toHaveBeenCalledWith(comp.i18n.saveSuccess);
+});
+
 test('addAssociationError', async () => {
   const showErrorMock = mockShowError();
   mockPapi("post", null, new Error("something bad"));
@@ -408,8 +433,20 @@ test('resetFormComments', () => {
 
 test('resetFormEvidence', () => {
   comp.associatedForms['evidence'].description = "something";
+  comp.associatedForms['evidence'].bulk = true;
   comp.resetForm('evidence');
   expect(comp.associatedForms['evidence'].description).toBe(undefined);
+  expect(comp.associatedForms['evidence'].bulk).toBe(false);
+});
+
+test('isEvidenceBulkCapable', () => {
+  comp.associatedForms['evidence'].artifactType = 'domain';
+  var result = comp.isEvidenceBulkCapable();
+  expect(result).toBe(true);
+
+  comp.associatedForms['evidence'].artifactType = 'file';
+  var result = comp.isEvidenceBulkCapable();
+  expect(result).toBe(false);
 });
 
 test('presets', () => {
