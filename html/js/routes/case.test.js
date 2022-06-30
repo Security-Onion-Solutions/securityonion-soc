@@ -297,13 +297,14 @@ test('addAssociation', async () => {
   getApp().showTip = jest.fn();
 
   comp.associatedForms['comments'].description = 'myDescription';
+  comp.associatedForms['comments'].value = ' some padding \n';
   comp.caseObj.id = 'myCaseId';
   const showErrorMock = mockShowError();
   expect(comp.associations['comments'].length).toBe(0);
 
   await comp.addAssociation('comments');
 
-  const body =  "{\"description\":\"myDescription\",\"caseId\":\"myCaseId\",\"id\":\"\"}";
+  const body =  "{\"description\":\"myDescription\",\"value\":\"some padding\",\"caseId\":\"myCaseId\",\"id\":\"\"}";
   expect(mock).toHaveBeenCalledWith('case/comments', body, undefined);
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expect(comp.associations['comments'].length).toBe(1);

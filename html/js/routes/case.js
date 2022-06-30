@@ -500,6 +500,9 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         }
         form.caseId = this.caseObj.id;
         form.id = '';
+        if (form.value) {
+          form.value = form.value.trim();
+        }
 
         let response = undefined;
         let config = undefined;
