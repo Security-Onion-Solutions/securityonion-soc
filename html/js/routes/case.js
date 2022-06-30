@@ -500,19 +500,47 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         }
         form.caseId = this.caseObj.id;
         form.id = '';
+        if (form.value) {
+          form.value = form.value.trim();
+        }
 
+        let response = undefined;
         let config = undefined;
-        let data = JSON.stringify(form);
         if (this.attachment && form.artifactType == 'file') {
-          let jsonData = data;
-          data = new FormData();
-          data.append("json", jsonData);
+          const data = new FormData();
+          data.append("json", JSON.stringify(form));
           data.append("attachment", this.attachment);
           headers = { 'Content-Type': 'multipart/form-data; boundary=' + data._boundary }
           config = { 'headers': headers };
+          response = await this.$root.papi.post('case/' + this.mapAssociatedPath(association), data, config);
+        } else if (association == 'evidence' && this.isEvidenceBulkCapable() && form.bulk) {
+          let added = 0;
+          const combined = form.value;
+          const values = combined.split("\n")
+          for (var i = 0; i < values.length; i++) {
+            const val = values[i];
+            if (val.trim().length > 0) {
+              form.value = val.trim();
+              let data = JSON.stringify(form);
+              response = await this.$root.papi.post('case/' + this.mapAssociatedPath(association), data, config);
+              if (response && response.data) {
+                await this.$root.populateUserDetails(response.data, "userId", "owner");
+                this.associations[association].push(response.data);
+                added++;
+              }
+              response = null;
+            }
+          }
+          if (added > 0) {
+            this.resetForm(association);
+            this.$root.showTip(this.i18n.saveSuccess);
+          }
+        } else {
+          let data = JSON.stringify(form);
+          response = await this.$root.papi.post('case/' + this.mapAssociatedPath(association), data, config);
         }
-        const response = await this.$root.papi.post('case/' + this.mapAssociatedPath(association), data, config);
-        if (response.data) {
+        
+        if (response && response.data) {
           await this.$root.populateUserDetails(response.data, "userId", "owner");
           this.associations[association].push(response.data);
           this.resetForm(association);
@@ -634,6 +662,9 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       }
       return tlp;
     },
+    isEvidenceBulkCapable() {
+      return this.associatedForms['evidence'].artifactType != "file";
+    },
     resetFormDefaults(form, ref) {
       switch (ref) {
         case "attachments": 
@@ -641,6 +672,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           break;
         case "evidence": 
           form.tlp = this.getTlp();
+          form.bulk = false;
           form.artifactType = this.getDefaultPreset('artifactType');
           break;
         case "comments":

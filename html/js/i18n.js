@@ -75,7 +75,8 @@ const i18n = {
       analyzer_urlhaus_invalid_url: 'Invalid URL',
       analyzer_urlhaus_malware_download: 'Malware download',
       
-
+      artifactBulk: 'Bulk Add',
+      artifactBulkHelp: 'Enable this checkbox to have a separate observable added for each line of the provided value above',
       artifactDescription: 'Description',
       artifactDescriptionHelp: 'Provide an optional description',
       artifactIoc: 'IOC',
