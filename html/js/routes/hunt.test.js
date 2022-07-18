@@ -367,7 +367,11 @@ test('populateGroupByTables', () => {
     "groupby_0|foo|bar": [{ value: 23, keys: ['moo', 'mar'] }],
     "groupby_1|car": [{ value: 9, keys: ['mis'] }],
   }
-  comp.queryGroupByOptions = [[],[]];
+
+  comp.groupBySortBy = "foo";
+  comp.groupBySortDesc = false;
+
+  comp.queryGroupByOptions = [[],["maximize"]];
   var result = comp.populateGroupByTables(metrics);
   expect(comp.groupBys.length).toBe(2);
   expect(comp.groupBys[0].title).toBe("foo, bar");
@@ -377,12 +381,18 @@ test('populateGroupByTables', () => {
   expect(comp.groupBys[0].data[0].bar).toBe('mar');
   expect(comp.groupBys[0].headers).toStrictEqual([{text: 'Count', value:'count'}, {text: 'foo', value: 'foo'}, {text: 'bar', value: 'bar'}]);
   expect(comp.groupBys[0].chart_metrics).toStrictEqual([{value: 23, keys:['moo, mar']}]);
+  expect(comp.groupBys[0].sortBy).toBe('foo');
+  expect(comp.groupBys[0].sortDesc).toBe(false);
+  expect(comp.groupBys[0].maximized).toBe(false);
   expect(comp.groupBys[1].title).toBe("car");
   expect(comp.groupBys[1].fields.length).toBe(1);
   expect(comp.groupBys[1].data[0].count).toBe(9);
   expect(comp.groupBys[1].data[0].car).toBe('mis');
   expect(comp.groupBys[1].headers).toStrictEqual([{text: 'Count', value:'count'}, {text: 'car', value: 'car'}]);
   expect(comp.groupBys[1].chart_metrics).toStrictEqual([{value: 9, keys:['mis']}]);
+  expect(comp.groupBys[1].sortBy).toBe('count');
+  expect(comp.groupBys[1].sortDesc).toBe(true);
+  expect(comp.groupBys[1].maximized).toBe(true);
 
   // Now include action column
   comp.aggregationActionsEnabled = true;
@@ -638,10 +648,20 @@ test('buildToggleLegendRoute', () => {
   expect(route.query.q).toBe("* | groupby -legend -pie something | groupby something else");
 });
 
-test('buildGroupWithoutOptionsRoute', () => {
+test('buildMaximizeRoute', () => {
+  var group = {};
   comp.query = "* | groupby -pie something | groupby something else";
-  var route = comp.buildGroupWithoutOptionsRoute(1);
+  var route = comp.buildMaximizeRoute(group, 0);
+  expect(route.query.q).toBe("* | groupby -maximize -pie something | groupby something else");
+
+  route = comp.buildNonMaximizedRoute(group, 0);
   expect(route.query.q).toBe("* | groupby -pie something | groupby something else");
+});
+
+test('buildGroupWithoutOptionsRoute', () => {
+  comp.query = "* | groupby -maximize -pie something | groupby something else";
+  var route = comp.buildGroupWithoutOptionsRoute(1);
+  expect(route.query.q).toBe("* | groupby -maximize -pie something | groupby something else");
 
   var route = comp.buildGroupWithoutOptionsRoute(0);
   expect(route.query.q).toBe("* | groupby something | groupby something else");

@@ -126,13 +126,15 @@ func TestAnalyzersExecuted(tester *testing.T) {
 
 	job := model.NewJob()
 	job.Kind = "analyze"
-	job.Filter.Parameters["foo"] = "bar"
+	job.Filter.Parameters["artifact"] = " bar\n"
 	reader, err := sq.ProcessJob(job, nil)
 	assert.Nil(tester, reader)
 	assert.Nil(tester, err)
 	assert.Len(tester, job.Results, 1)
 	assert.Equal(tester, "whois", job.Results[0].Id)
 	assert.Equal(tester, "something here that is so long it will need to be ...", job.Results[0].Summary)
+	data := job.Results[0].Data.(map[string]interface{})
+	assert.Equal(tester, "bar", data["input"])
 }
 
 func TestCreateResult(tester *testing.T) {

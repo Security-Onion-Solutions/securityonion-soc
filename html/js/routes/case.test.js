@@ -204,7 +204,7 @@ test('loadData', async () => {
   mock = mockPapi("get", {'data':fakeUsers});
 
   comp.$route.params.id = 'myCaseId';
-  const showErrorMock = mockShowError();
+  const showErrorMock = mockShowError(true);
   comp.loadAssociations = jest.fn();
 
   await comp.loadData();
@@ -297,16 +297,42 @@ test('addAssociation', async () => {
   getApp().showTip = jest.fn();
 
   comp.associatedForms['comments'].description = 'myDescription';
+  comp.associatedForms['comments'].value = ' some padding \n';
   comp.caseObj.id = 'myCaseId';
   const showErrorMock = mockShowError();
   expect(comp.associations['comments'].length).toBe(0);
 
   await comp.addAssociation('comments');
 
-  const body =  "{\"description\":\"myDescription\",\"caseId\":\"myCaseId\",\"id\":\"\"}";
+  const body =  "{\"description\":\"myDescription\",\"value\":\"some padding\",\"caseId\":\"myCaseId\",\"id\":\"\"}";
   expect(mock).toHaveBeenCalledWith('case/comments', body, undefined);
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expect(comp.associations['comments'].length).toBe(1);
+  expect(comp.$root.loading).toBe(false);
+  expect(getApp().showTip).toHaveBeenCalledWith(comp.i18n.saveSuccess);
+});
+
+test('addAssociationBulk', async () => {
+  // Mock two responses
+  mockPapi("post", {'data':fakeComment});
+  mock = mockPapi("post", {'data':fakeComment});
+  getApp().showTip = jest.fn();
+
+  comp.associatedForms['evidence'].artifactType = "domain";
+  comp.associatedForms['evidence'].bulk = true;
+  comp.associatedForms['evidence'].value = "line1\nline2";
+  comp.caseObj.id = 'myCaseId';
+  const showErrorMock = mockShowError();
+  expect(comp.associations['evidence'].length).toBe(0);
+
+  await comp.addAssociation('evidence');
+
+  const body1 =  "{\"artifactType\":\"domain\",\"bulk\":true,\"value\":\"line1\",\"caseId\":\"myCaseId\",\"id\":\"\"}";
+  const body2 =  "{\"artifactType\":\"domain\",\"bulk\":true,\"value\":\"line2\",\"caseId\":\"myCaseId\",\"id\":\"\"}";
+  expect(mock).toHaveBeenNthCalledWith(1, 'case/artifacts', body1, undefined);
+  expect(mock).toHaveBeenNthCalledWith(2, 'case/artifacts', body2, undefined);
+  expect(showErrorMock).toHaveBeenCalledTimes(0);
+  expect(comp.associations['evidence'].length).toBe(2);
   expect(comp.$root.loading).toBe(false);
   expect(getApp().showTip).toHaveBeenCalledWith(comp.i18n.saveSuccess);
 });
@@ -408,8 +434,20 @@ test('resetFormComments', () => {
 
 test('resetFormEvidence', () => {
   comp.associatedForms['evidence'].description = "something";
+  comp.associatedForms['evidence'].bulk = true;
   comp.resetForm('evidence');
   expect(comp.associatedForms['evidence'].description).toBe(undefined);
+  expect(comp.associatedForms['evidence'].bulk).toBe(false);
+});
+
+test('isEvidenceBulkCapable', () => {
+  comp.associatedForms['evidence'].artifactType = 'domain';
+  var result = comp.isEvidenceBulkCapable();
+  expect(result).toBe(true);
+
+  comp.associatedForms['evidence'].artifactType = 'file';
+  var result = comp.isEvidenceBulkCapable();
+  expect(result).toBe(false);
 });
 
 test('presets', () => {

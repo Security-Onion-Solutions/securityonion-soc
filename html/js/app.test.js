@@ -150,3 +150,71 @@ test('truncate', () => {
   expect(app.truncate("atthelimit!!!", 10)).toBe("atthelimit!!!");
   expect(app.truncate("much longer value", 10)).toBe("much...value");
 });
+
+test('localSettings', () => {
+	app.toolbar = true;
+	app.saveLocalSettings();
+	app.toolbar = null;
+	app.loadLocalSettings();
+	expect(app.toolbar).toBe(true);
+});
+
+test('maximize', () => {
+	const element = document.createElement('div');
+	element.style.width = '12px';
+	element.style.height = '13px';
+
+	const cancelMock = jest.fn();
+	expect(app.isMaximized()).toBe(false);
+
+	app.maximize(element, cancelMock);
+
+	expect(app.isMaximized()).toBe(true);
+	expect(app.maximizedOrigWidth).toBe("12px");
+	expect(app.maximizedOrigHeight).toBe("13px");
+	expect(element.classList).toContain('maximized');
+	expect(document.documentElement.classList).toContain('maximized-bg');
+
+	app.unmaximize(true);
+
+	expect(app.isMaximized()).toBe(false);
+	expect(app.maximizedCancelFn).toBeNull();
+	expect(cancelMock).toHaveBeenCalledTimes(1);
+	expect(element.classList).not.toContain('maximized');
+	expect(document.documentElement.classList).not.toContain('maximized-bg');
+
+	// Maximize again
+	app.maximize(element);
+
+	expect(app.isMaximized()).toBe(true);
+
+	app.unmaximize(false);
+
+	expect(app.isMaximized()).toBe(false);
+
+	// should still only have been called once
+	expect(cancelMock).toHaveBeenCalledTimes(1);
+
+	expect(app.maximizedCancelFn).toBeNull();
+	expect(element.classList).not.toContain('maximized');
+	expect(document.documentElement.classList).not.toContain('maximized-bg');
+});
+
+test('getUsers', async () => {
+	const fakeUsers = [{ status: ''}, {status: 'locked'}];
+	var mock = mockPapi("get", {data: fakeUsers});
+  const showErrorMock = mockShowError(true);
+
+  const users = await app.getUsers();
+
+  expect(mock).toHaveBeenCalledWith('users/');
+  expect(showErrorMock).toHaveBeenCalledTimes(0);
+  expect(users.length).toBe(2);
+
+	mock = mockPapi("get", {data: fakeUsers});
+  const activeUsers = await app.getActiveUsers();
+
+  expect(mock).toHaveBeenCalledTimes(2);
+  expect(showErrorMock).toHaveBeenCalledTimes(0);
+  expect(activeUsers.length).toBe(1);
+});
