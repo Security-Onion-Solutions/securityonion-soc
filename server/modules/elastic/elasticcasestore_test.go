@@ -246,7 +246,7 @@ func TestValidateCaseValid(tester *testing.T) {
 	socCase.Severity = "2"
 	socCase.Tags = append(socCase.Tags, "tag1")
 	socCase.Tags = append(socCase.Tags, "tag2")
-	socCase.Tlp = "AMBER"
+	socCase.Tlp = "amber"
 	socCase.Pap = "check"
 	socCase.Category = "confirmed"
 	socCase.Status = "in progress"
