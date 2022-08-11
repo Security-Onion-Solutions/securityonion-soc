@@ -746,6 +746,9 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     },
 
     colorizeChip(color) {
+      if (typeof color === 'string') {
+        color = color.toLowerCase().split('+')[0];
+      }
       if (color == "white" && !this.$root.$vuetify.theme.dark) {
         color = "grey";
       } else if (color == "amber" && !this.$root.$vuetify.theme.dark) {
