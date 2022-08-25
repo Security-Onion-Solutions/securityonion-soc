@@ -42,7 +42,7 @@ const i18n = {
       addObservable: 'Add as new observable...',
       address: 'Address',
       admin: 'Administration',
-      advanced: 'Enable advanced interface features',
+      advanced: 'Temporarily enable advanced interface features',
       alertAcknowledge: 'Acknowledge',
       alertEscalated: 'This alert has already been escalated',
       alertUndoAcknowledge: 'Undo Acknowledge',
