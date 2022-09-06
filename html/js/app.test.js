@@ -1,12 +1,8 @@
-// Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
-//
-// This program is distributed under the terms of version 2 of the
-// GNU General Public License.  See LICENSE for further details.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// Copyright Jason Ertel (github.com/jertel).
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
 
 require('./test_common.js');
 
@@ -95,8 +91,20 @@ test('populateUserDetails', async () => {
   expect(obj.owner).toBe('hi@there.net');
 });
 
+test('isUserAdmin', async () => {
+  var user = {id:'123',email:'hi@there.net',roles:['nope', 'peon']};
+  app.user = user;
+  expect(app.isUserAdmin(user)).toBe(false);
+  expect(app.isUserAdmin()).toBe(false);
+
+  user.roles.push("superuser");
+  expect(app.isUserAdmin(user)).toBe(true);
+  expect(app.isUserAdmin()).toBe(true);
+});
+
 test('loadServerSettings', async () => {
   const fakeInfo = {
+    srvToken: 'xyz',
     version: 'myVersion',
     license: 'myLicense',
     parameters: {
@@ -118,7 +126,7 @@ test('loadServerSettings', async () => {
   const getElementByIdMock = global.document.getElementById = jest.fn().mockReturnValueOnce(true);
   resetPapi();
   const mock = mockPapi("get", {data: fakeInfo});
-  const showErrorMock = mockShowError();
+  const showErrorMock = mockShowError(true);
   await app.loadServerSettings();
   expect(mock).toHaveBeenCalledWith('info');
   expect(showErrorMock).toHaveBeenCalledTimes(0);
@@ -136,6 +144,7 @@ test('loadServerSettings', async () => {
   expect(app.tools[1].name).toBe('tool2');
   expect(app.tools[1].enabled).toBe(false);
   expect(app.casesEnabled).toBe(true);
+  expect(app.papi.defaults.headers.common['X-Srv-Token']).toBe('xyz');
 });
 
 test('localizeMessage', () => {
@@ -217,4 +226,67 @@ test('getUsers', async () => {
   expect(mock).toHaveBeenCalledTimes(2);
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expect(activeUsers.length).toBe(1);
+});
+
+test('setFavicon', () => {
+  var svg_icon = {};
+  var png_icon = {};
+  svg_icon.href = "https://somehost.com/so.svg";
+  png_icon.href = "https://somehost.com/so.png";
+
+  var mock = jest.fn();
+  mock.mockImplementation((path) => { 
+    if (path.indexOf("png") != -1) {
+      return png_icon;
+    }
+    return svg_icon;
+  });
+  global.document.querySelector = mock;
+
+  // Should be no change
+  app.connected = true;
+  app.setFavicon();
+  expect(svg_icon.href).toBe("https://somehost.com/so.svg");
+  expect(png_icon.href).toBe("https://somehost.com/so.png");
+
+  // Needs attention
+  app.connected = false;
+  app.setFavicon();
+  expect(svg_icon.href).toBe("https://somehost.com/so-attention.svg");
+  expect(png_icon.href).toBe("https://somehost.com/so-attention.png");
+
+  // Repeat the tests but with a hyphen in the hostname.
+  svg_icon.href = "https://some-host.com/so.svg";
+  png_icon.href = "https://some-host.com/so.png";
+
+  // Should be no change
+  app.connected = true;
+  app.setFavicon();
+  expect(svg_icon.href).toBe("https://some-host.com/so.svg");
+  expect(png_icon.href).toBe("https://some-host.com/so.png");
+
+  // Needs attention and host has hyphen
+  app.connected = false;
+  app.setFavicon();
+  expect(svg_icon.href).toBe("https://some-host.com/so-attention.svg");
+  expect(png_icon.href).toBe("https://some-host.com/so-attention.png");
+
+  // Repeat the tests but with a hyphen in the hostname AND dark mode
+  var darkMock = jest.fn();
+  darkMock.mockImplementation((pattern) => { return { matches: true }; });
+  global.window.matchMedia = darkMock;
+  svg_icon.href = "https://some-host.com/so.svg";
+  png_icon.href = "https://some-host.com/so.png";
+
+  // Should be no change
+  app.connected = true;
+  app.setFavicon();
+  expect(svg_icon.href).toBe("https://some-host.com/so-dark.svg");
+  expect(png_icon.href).toBe("https://some-host.com/so-dark.png");
+
+  // Needs attention and host has hyphen
+  app.connected = false;
+  app.setFavicon();
+  expect(svg_icon.href).toBe("https://some-host.com/so-dark-attention.svg");
+  expect(png_icon.href).toBe("https://some-host.com/so-dark-attention.png");
 });

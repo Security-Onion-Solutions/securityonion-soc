@@ -1,24 +1,25 @@
-// Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
-//
-// This program is distributed under the terms of version 2 of the
-// GNU General Public License.  See LICENSE for further details.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// Copyright Jason Ertel (github.com/jertel).
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
 
 package config
 
 import (
+  "crypto/rand"
   "errors"
+  "github.com/apex/log"
   "github.com/security-onion-solutions/securityonion-soc/module"
+  "io"
   "strings"
 )
 
 const DEFAULT_MAX_PACKET_COUNT = 5000
 const DEFAULT_IDLE_CONNECTION_TIMEOUT_MS = 300000
 const DEFAULT_MAX_UPLOAD_SIZE_BYTES = 26214400
+const DEFAULT_SRV_EXP_SECONDS = 600
+const REQUIRED_SRV_KEY_LENGTH = 64
 
 type ServerConfig struct {
   AirgapEnabled           bool                   `json:"airgapEnabled"`
@@ -33,6 +34,9 @@ type ServerConfig struct {
   IdleConnectionTimeoutMs int                    `json:"idleConnectionTimeoutMs"`
   TimezoneScript          string                 `json:"timezoneScript"`
   MaxUploadSizeBytes      int                    `json:"maxUploadSizeBytes"`
+  SrvKey                  string                 `json:"srvKey"`
+  SrvKeyBytes             []byte
+  SrvExpSeconds           int `json:"srvExpSeconds"`
 }
 
 func (config *ServerConfig) Verify() error {
@@ -61,5 +65,23 @@ func (config *ServerConfig) Verify() error {
   if config.MaxUploadSizeBytes == 0 {
     config.MaxUploadSizeBytes = DEFAULT_MAX_UPLOAD_SIZE_BYTES
   }
+  if config.SrvExpSeconds <= 0 {
+    config.SrvExpSeconds = DEFAULT_SRV_EXP_SECONDS
+  }
+
+  keyLen := len(config.SrvKey)
+  if keyLen != REQUIRED_SRV_KEY_LENGTH {
+    log.WithFields(log.Fields{
+      "required": REQUIRED_SRV_KEY_LENGTH,
+      "actual":   keyLen,
+    }).Warn("Generating temporary, random SRV key")
+    config.SrvKeyBytes = make([]byte, REQUIRED_SRV_KEY_LENGTH)
+    if _, err := io.ReadFull(rand.Reader, config.SrvKeyBytes); err != nil {
+      log.WithError(err).Error("Unable to generate SRV key")
+    }
+  } else {
+    config.SrvKeyBytes = []byte(config.SrvKey)
+  }
+
   return err
 }

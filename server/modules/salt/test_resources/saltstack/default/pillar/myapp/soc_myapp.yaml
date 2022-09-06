@@ -1,0 +1,8 @@
+myapp:
+  int:
+    description: test desc
+    global: true
+    default: my_default
+    readonly: true
+    regex: "([0-9]+){3}"
+    regexFailureMessage: Invalid!

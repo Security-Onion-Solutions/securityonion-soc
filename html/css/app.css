@@ -1,15 +1,10 @@
 /*
-  Copyright 2019 Jason Ertel (jertel). All rights reserved.
-  Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
-
-  This program is distributed under the terms of version 2 of the
-  GNU General Public License.  See LICENSE for further details.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// Copyright Jason Ertel (github.com/jertel).
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
 */
-
 /* Vuetify theme overrides */
 .v-application {
   background-color: var(--v-background-base) !important;
@@ -416,4 +411,29 @@ td {
 
 .maximized-bg {
   overflow: hidden;
+}
+
+.theme--dark.v-card.config-setting {
+  background-color: var(--v-drawer_background-base);
+}
+
+.theme--light.v-card.config-setting {
+  background-color: var(--v-drawer_background-base);
+}
+
+.theme--dark.editing .v-input__slot {
+  background-color: var(--v-drawer_background-lighten1);
+}
+
+.theme--light.editing .v-input__slot {
+  background-color: var(--v-drawer_background-lighten1);
+}
+
+#config-tree {
+    height: calc(100vh - 325px);
+    overflow-y: auto;
+}
+
+.v-input.config-editor {
+    font-family: Consolas,Monaco,Lucida Console,Liberation Mono,DejaVu Sans Mono,Bitstream Vera Sans Mono,Courier New, monospace;
 }

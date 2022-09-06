@@ -1,0 +1,25 @@
+{
+  "minions": { 
+    "mia-test-001_manager":"ba:30:65:2a:d6:9e:20:4f:d8:b2:f3:a7:d4:65:22:01",
+    "mia-test-102_search":"ba:30:65:2a:d6:9e:20:4f:d8:b2:f3:a7:d4:65:22:02",
+    "mia-test-103_search":"ba:30:65:2a:d6:9e:20:4f:d8:b2:f3:a7:d4:65:22:03",
+    "chi-test-101_search":"ba:30:65:2a:d6:9e:20:4f:d8:b2:f3:a7:d4:65:22:04",
+    "las-test-001_sensor":"ba:30:65:2a:d6:9e:20:4f:d8:b2:f3:a7:d4:65:22:05",
+    "mwo-test-001_sensor":"ba:30:65:2a:d6:9e:20:4f:d8:b2:f3:a7:d4:65:22:06",
+    "nyc-test-001_sensor":"ba:30:65:2a:d6:9e:20:4f:d8:b2:f3:a7:d4:65:22:07",
+    "dal-test-001_sensor":"ba:30:65:2a:d6:9e:20:4f:d8:b2:f3:a7:d4:65:22:08",
+    "aus-test-001_sensor":"ba:30:65:2a:d6:9e:20:4f:d8:b2:f3:a7:d4:65:22:09",
+    "mco-test-001_sensor":"ba:30:65:2a:d6:9e:20:4f:d8:b2:f3:a7:d4:65:22:10"
+  },
+  "minions_rejected": {
+    "fya-test-001_idh":"ba:30:65:2a:d6:9e:20:4f:d8:b2:f3:a7:d4:65:22:11"
+  },
+  "minions_denied": {
+    "chi-test-001_sensor":"ba:30:65:2a:d6:9e:20:4f:d8:b2:f3:a7:d4:65:22:12",
+    "lga-test-001_sensor":"ba:30:65:2a:d6:9e:20:4f:d8:b2:f3:a7:d4:65:22:13"
+  },
+  "minions_pre": {
+    "lis-test-001_sensor":"ba:30:65:2a:d6:9e:20:4f:d8:b2:f3:a7:d4:65:22:14",
+    "cro-test-001_sensor":"ba:30:65:2a:d6:9e:20:4f:d8:b2:f3:a7:d4:65:22:15"
+  }
+}

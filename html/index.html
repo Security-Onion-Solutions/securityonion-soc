@@ -1,14 +1,10 @@
 <!doctype html>
 <!--
-  Copyright 2019 Jason Ertel (jertel). All rights reserved.
-  Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
-
-  This program is distributed under the terms of version 2 of the
-  GNU General Public License.  See LICENSE for further details.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// Copyright Jason Ertel (github.com/jertel).
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
 -->
 
 <html lang="en">
@@ -108,6 +104,18 @@
                 <v-icon>fa-users</v-icon>
               </v-list-item-icon>
               <v-list-item-title v-text="i18n.users"></v-list-item-title>
+            </v-list-item>
+            <v-list-item v-if="$root.isUserAdmin()" @click="" to="/gridmembers">
+              <v-list-item-icon>
+                <v-icon>fa-circle-nodes</v-icon>
+              </v-list-item-icon>
+              <v-list-item-title v-text="i18n.gridMembers"></v-list-item-title>
+            </v-list-item>
+            <v-list-item v-if="$root.isUserAdmin()"  @click="" to="/config">
+              <v-list-item-icon>
+                <v-icon>fa-gear</v-icon>
+              </v-list-item-icon>
+              <v-list-item-title v-text="i18n.config"></v-list-item-title>
             </v-list-item>
           </v-list-item-group>
         </v-list>
@@ -226,7 +234,7 @@
           {{ errorMessage }}
           <div class="mt-2 no-underline">
             {{ i18n.errorHelp }}
-            <a target="so-help" :href="parameters.docsUrl + '/help'">
+            <a target="so-help" :href="parameters.docsUrl + '/help'" class="text-decoration-none">
               <v-icon>fa-life-ring</v-icon>
             </a>
           </div>
@@ -270,7 +278,7 @@
         </span>
         <v-spacer></v-spacer>
         <span class="text-no-wrap d-none d-lg-flex">
-          <router-link id="termsLink" to="/terms" class="footer">{{ i18n.terms }}</router-link>
+          <router-link id="termsLink" to="/terms" class="footer">{{ i18n.license }}</router-link>
         </span>
         <span class="text-no-wrap d-lg-none">
           <router-link id="termsLink" to="/terms" class="footer">{{ i18n.tcs }}</router-link>
@@ -815,12 +823,70 @@
       <v-container fluid>
         <v-row>
           <v-col>
-            <h2 v-text="i18n.terms"></h2>
-            {{ i18n.licenseInfo }} (<a id="licenseLink" target="new" href="https://raw.githubusercontent.com/security-onion-solutions/securityonion-soc/master/LICENSE">GPLv2</a>)
-          </v-col>
-        </v-row>
-        <v-row>
-          <v-col v-html="i18n.termDetails">
+            <div class="text-h4 mt-8 mb-3">
+              Elastic License 2.0 (ELv2)
+            </div>
+
+            <div class="text-h5 mt-8 mb-3">
+              Acceptance
+            </div>
+            By using the software, you agree to all of the terms and conditions below.
+
+            <div class="text-h5 mt-8 mb-3">
+              Copyright License
+            </div>
+            The licensor grants you a non-exclusive, royalty-free, worldwide, non-sublicensable, non-transferable license to use, copy, distribute, make available, and prepare derivative works of the software, in each case subject to the limitations and conditions below.
+
+            <div class="text-h5 mt-8 mb-3">
+              Limitations
+            </div>
+            You may not provide the software to third parties as a hosted or managed service, where the service provides users with access to any substantial set of the features or functionality of the software.
+            <p class="mb-3" />
+            You may not move, change, disable, or circumvent the license key functionality in the software, and you may not remove or obscure any functionality in the software that is protected by the license key.
+            <p class="mb-3" />
+            You may not alter, remove, or obscure any licensing, copyright, or other notices of the licensor in the software. Any use of the licensor’s trademarks is subject to applicable law.
+
+            <div class="text-h5 mt-8 mb-3">
+              Patents
+            </div>
+            The licensor grants you a license, under any patent claims the licensor can license, or becomes able to license, to make, have made, use, sell, offer for sale, import and have imported the software, in each case subject to the limitations and conditions in this license. This license does not cover any patent claims that you cause to be infringed by modifications or additions to the software. If you or your company make any written claim that the software infringes or contributes to infringement of any patent, your patent license for the software granted under these terms ends immediately. If your company makes such a claim, your patent license ends immediately for work on behalf of your company.
+
+            <div class="text-h5 mt-8 mb-3">
+              Notices
+            </div>
+            You must ensure that anyone who gets a copy of any part of the software from you also gets a copy of these terms.
+            <p class="mb-3" />
+            If you modify the software, you must include in any modified copies of the software prominent notices stating that you have modified the software.
+
+            <div class="text-h5 mt-8 mb-3">
+              No Other Rights
+            </div>
+            These terms do not imply any licenses other than those expressly granted in these terms.
+
+            <div class="text-h5 mt-8 mb-3">
+              Termination
+            </div>
+            If you use the software in violation of these terms, such use is not licensed, and your licenses will automatically terminate. If the licensor provides you with a notice of your violation, and you cease all violation of this license no later than 30 days after you receive that notice, your licenses will be reinstated retroactively. However, if you violate these terms after such reinstatement, any additional violation of these terms will cause your licenses to terminate automatically and permanently.
+
+            <div class="text-h5 mt-8 mb-3">
+              No Liability
+            </div>
+            <b><i>As far as the law allows, the software comes as is, without any warranty or condition, and the licensor will not be liable to you for any damages arising out of these terms or the use or nature of the software, under any kind of legal claim.</i></b>
+
+            <div class="text-h5 mt-8 mb-3">
+              Definitions
+            </div>
+            The <b>licensor</b> is the entity offering these terms, and the <b>software</b> is the software the licensor makes available under these terms, including any portion of it.
+            <p class="mb-3" />
+            <b>you</b> refers to the individual or entity agreeing to these terms.
+            <p class="mb-3" />
+            <b>your company</b> is any legal entity, sole proprietorship, or other kind of organization that you work for, plus all organizations that have control over, are under the control of, or are under common control with that organization. <b>control</b> means ownership of substantially all the assets of an entity, or the power to direct its management and policies by vote, contract, or otherwise. Control can be direct or indirect.
+            <p class="mb-3" />
+            <b>your licenses</b> are all the licenses granted to you for the software under these terms.
+            <p class="mb-3" />
+            <b>use</b> means anything you do with the software requiring one of your licenses.
+            <p class="mb-3" />
+            <b>trademark</b> means trademarks, service marks, and similar rights.
           </v-col>
         </v-row>
       </v-container>
@@ -899,7 +965,6 @@
                   </v-card-actions>
                 </v-form>
               </v-card>
-            </v-dialog>
           </v-col>
         </v-row>
       </v-container>
@@ -2823,6 +2888,329 @@
       </v-container>
     </script>
 
+    <script type="text/x-template" id="page-config">
+      <v-container fluid>
+        <v-row>
+          <v-col cols="3">
+            <h2 v-text="i18n.configTitle"></h2>
+          </v-col>
+          <v-col cols="5">
+            <v-expansion-panels>
+              <v-expansion-panel>
+                <v-expansion-panel-header id="configOptionsHeader">{{i18n.options}}</v-expansion-panel-header>
+                <v-expansion-panel-content>
+                  <v-switch id="option-advanced" :disabled="$root.loading" v-model="advanced" dense class="my-0" :label="i18n.settingsAdvanced" :hint="i18n.settingsAdvancedHelp" persistent-hint></v-switch>
+                </v-expansion-panel-content>
+              </v-expansion-panel>
+            </v-expansion-panels>
+          </v-col>
+          <v-spacer></v-spacer>
+          <v-col cols="2" align="end">
+            <h4 v-if="!$root.loading">{{ i18n.settingsCustomized }} {{ settingsCustomized }} / {{ settingsAvailable }} </h4>
+          </v-col>
+        </v-row>
+        <v-row>
+        </v-row>
+        <v-row>
+          <v-col cols="6">
+            <v-container fluid>
+              <v-row>
+                <v-col>
+                  <v-text-field :label="i18n.filter" v-model="search" clearable :hint="i18n.filterHelp" persistent-hint @click:clear="clearFilter()" class="mb-3" />
+                </v-col>
+                <v-col>
+                  <span class="mt-3">
+                    <v-btn icon @click="expand()" :title="i18n.expandAll">
+                      <v-icon>fa-angles-down</v-icon>
+                    </v-btn>
+                    <v-btn icon @click="collapse()" :title="i18n.collapseAll">
+                      <v-icon>fa-angles-up</v-icon>
+                    </v-btn>
+                    <v-btn icon @click="expand(null, isSettingModified)" :title="i18n.settingIsModifiedHelp">
+                      <v-icon color="primary">fa-pencil</v-icon>
+                    </v-btn>
+                    <v-btn icon @click="expand(null, isSettingModifiedPerNode)" :title="i18n.settingHasNodeValuesHelp">
+                      <v-icon color="warning">fa-circle-nodes</v-icon>
+                    </v-btn>
+                  </span>
+                </v-col>
+              </v-row>
+            </v-container>
+            <v-treeview
+              id="config-tree"
+              :active.sync="active"
+              :items="hierarchy"
+              :open.sync="open"
+              :search="search"
+              :filter="filter"
+              activatable
+              color="primary"
+              open-on-click
+              transition
+            >
+              <template v-slot:label="{item}">
+                {{ getSettingName(item) }}
+                <v-icon v-if="isSettingModified(item)" class="ml-1" color="primary" :title="i18n.settingIsModified">fa-pencil</v-icon>
+                <v-icon v-if="isSettingModifiedPerNode(item)" class="ml-1" color="warning" :title="i18n.settingHasNodeValues">fa-circle-nodes</v-icon>
+              </template>
+            </v-treeview>          
+          </v-col>
+          <v-divider vertical />
+          <v-col cols="6">
+            <v-fade-transition mode="out-in" duration="100">
+              <v-alert v-if="!selected" v-text="i18n.settingSelect" type="info" />
+              <v-card v-else :key="selected.id" class="pt-6 mx-auto config-setting" flat>
+                <v-card-text>
+                  <div class="text-h5 mb-4" v-text="getSettingDescription(selected)" />
+                  <div v-if="selected.readonly" :title="i18n.settingReadOnlyHelp">
+                    <v-icon class="ma-2" color="warning">fa-ban</v-icon>
+                    <v-subtitle v-text="i18n.settingReadOnly" />
+                  </div>
+                  <v-container fluid>
+                    <v-row v-if="!selected.readonly && selected.default">
+                      <v-col>
+                        <v-textarea v-if="isMultiline(selected)" :label="i18n.settingDefault" :value="selected.default" readonly class="config-editor" />
+                        <v-text-field v-if="!isMultiline(selected)" :label="i18n.settingDefault" :value="selected.default" readonly />
+                      </v-col>
+                    </v-row>
+                    <v-row v-if="selected.global || !selected.node">
+                      <v-col>
+                        <div v-if="!selected.readonly" class="mb-n1 text-right">
+                          <v-btn id="setting-global-reset" icon @click="remove(selected)" :title="i18n.settingResetHelp" :disabled="!isSettingModified(selected) || isPendingSave(selected)" >
+                            <v-icon color="primary">fa-circle-arrow-left</v-icon>
+                          </v-btn>
+                          <v-btn id="setting-global-save" icon @click="save(selected)" :disabled="!isPendingSave(selected)" :title="i18n.settingSaveHelp" @>
+                            <v-icon color="success">fa-check</v-icon>
+                          </v-btn>
+                          <v-btn id="setting-global-cancel" icon @click="cancel(true)" :disabled="!isPendingSave(selected)" :title="i18n.settingCancelHelp">
+                            <v-icon color="error">fa-xmark</v-icon>
+                          </v-btn>
+                        </div>
+                        <div v-if="isMultiline(selected)">
+                          <v-textarea v-if="form.key != selected.id" outlined :label="i18n.settingGlobal" @focus="edit(selected)" :value="selected.value" readonly :disabled="selected.readonly" class="config-editor" />
+                          <v-textarea v-else outlined :label="i18n.settingGlobal" v-model="form.value" class="editing config-editor" />
+                        </div>
+                        <div v-else>
+                          <v-text-field v-if="form.key != selected.id" outlined :label="i18n.settingGlobal" @focus="edit(selected)" :value="selected.value" readonly :disabled="selected.readonly" :type="selected.sensitive ? 'password' : 'text'" />
+                          <v-text-field v-else outlined :label="i18n.settingGlobal" v-model="form.value" class="editing"  @keydown.enter.prevent="save(selected)" />
+                        </div>
+                      </v-col>
+                    </v-row>
+                    <v-row v-for="item in selected.nodeValues" :key="item[0]">
+                      <v-col>
+                        <div class="mb-n1 text-right">
+                          <v-btn :id="'setting-node-reset-' + item[0]" icon @click="remove(selected, item[0])" :title="i18n.settingRemoveHelp" :disabled="isPendingSave(selected, item[0])" >
+                            <v-icon color="warning">fa-trash</v-icon>
+                          </v-btn>
+                          <v-btn :id="'setting-node-save-' + item[0]" icon @click="save(selected, item[0])" :disabled="!isPendingSave(selected, item[0])" :title="i18n.settingSaveHelp">
+                            <v-icon color="success">fa-check</v-icon>
+                          </v-btn>
+                          <v-btn :id="'setting-node-cancel-' + item[0]" icon @click="cancel(true)" :disabled="!isPendingSave(selected, item[0])" :title="i18n.settingCancelHelp">
+                            <v-icon color="error">fa-xmark</v-icon>
+                          </v-btn>
+                        </div>
+                        <div v-if="isMultiline(selected)">
+                          <v-textarea v-if="form.key != item[0]" outlined :label="item[0]" @focus="edit(selected, item[0])" :value="item[1]"  readonly :disabled="selected.readonly" class="config-editor" />
+                          <v-textarea v-else outlined :label="item[0]" v-model="form.value" class="editing config-editor" />
+                        </div>
+                        <div v-else>
+                          <v-text-field v-if="form.key != item[0]" outlined :label="item[0]" @focus="edit(selected, item[0])" :value="item[1]" readonly :disabled="selected.readonly" :type="selected.sensitive ? 'password' : 'text'" /> 
+                          <v-text-field v-else outlined :label="item[0]" v-model="form.value" class="editing"  @keydown.enter.prevent="save(selected, item[0])" />
+                        </div>
+                      </v-col>
+                    </v-row>
+                  </v-container>
+                  <v-select v-if="selected.node || !selected.global" outlined id="config-select-node" :label="i18n.settingSelectNode" :items="availableNodes" :title="i18n.settingSelectNodeHelp" @change="addNode(selected, $event)" v-model.sync="selectedNode" />
+                </v-card-text>
+              </v-card>
+            </v-scroll-y-transition>
+          </v-col>
+        </v-row>
+        <v-dialog v-model="cancelDialog" persistent max-width="290">
+          <v-card>
+            <v-card-title class="text-h5" v-text="i18n.settingConfirmCancel" />
+            <v-card-text v-text="i18n.settingConfirmCancelHelp" />
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn text @click="cancel(true)" v-text="i18n.yes" />
+              <v-btn text @click="cancelDialog = false" v-text="i18n.no" />
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+      </v-container>
+    </script>
+
+    <script type="text/x-template" id="page-gridmembers">
+      <v-container fluid>
+        <v-row>
+          <v-col>
+            <v-container fluid>
+              <v-row>
+                <v-col cols="12">
+                  <h2 v-text="i18n.gridMembers"></h2>
+                  <v-subheader v-text="i18n.gridMembersHelp" class="mt-3" />
+                </v-col>
+              </v-row>
+            </v-container>
+          </v-col>
+        </v-row>
+        <v-row>
+          <v-col cols="6">
+            <v-list flat class="mb-4" outlined>
+              <v-header v-text="i18n.gridMembersPending" class="ml-2" />
+              <v-list-item-group>
+                <v-subheader v-if="unaccepted.length == 0" v-text="i18n.none" />
+                <v-list-item v-for="node in unaccepted" @click="show(node)">
+                  <v-list-item-icon>
+                    <v-icon class="mt-1" :title="i18n.gridMembersPendingHelp">fa-circle-question</v-icon>
+                  </v-list-item-icon>
+                  <v-list-item-content>
+                    <v-list-item-title>
+                      {{ node.id }}
+                    </v-list-item-title>
+                  </v-list-item-content>
+                  <v-list-item-action>
+                    <v-btn :title="i18n.gridMemberShow">
+                      {{ i18n.review }}
+                      <v-icon right>fa-binoculars</v-icon>
+                    </v-btn>                    
+                  </v-list-item-action>
+                </v-list-item>
+              </v-list-item-group>
+            </v-list>
+
+            <v-list flat class="mb-4" outlined>
+              <v-header v-text="i18n.gridMembersDenied" class="ml-2" />
+              <v-list-item-group>
+                <v-subheader v-if="denied.length == 0" v-text="i18n.none" />
+                <v-list-item v-for="node in denied" @click="show(node)">
+                  <v-list-item-icon>
+                    <v-icon color="warning" class="mt-1" :title="i18n.gridMembersDeniedHelp">fa-circle-minus</v-icon>
+                  </v-list-item-icon>
+                  <v-list-item-content>
+                    <v-list-item-title>
+                      {{ node.id }}
+                    </v-list-item-title>
+                  </v-list-item-content>
+                  <v-list-item-action>
+                    <v-btn :title="i18n.gridMemberShow">
+                      {{ i18n.review }}
+                      <v-icon right>fa-binoculars</v-icon>
+                    </v-btn>                    
+                  </v-list-item-action>
+                </v-list-item>
+              </v-list-item-group>
+            </v-list>
+
+            <v-list flat class="mb-4" outlined>
+              <v-header v-text="i18n.gridMembersRejected" class="ml-2" />
+              <v-list-item-group>
+                <v-subheader v-if="rejected.length == 0" v-text="i18n.none" />
+                <v-list-item v-for="node in rejected" @click="show(node)">
+                  <v-list-item-icon>
+                    <v-icon color="error" class="mt-1" :title="i18n.gridMembersRejectedHelp">fa-circle-xmark</v-icon>
+                  </v-list-item-icon>
+                  <v-list-item-content>
+                    <v-list-item-title>
+                      {{ node.id }}
+                    </v-list-item-title>
+                  </v-list-item-content>
+                  <v-list-item-action>
+                    <v-btn :title="i18n.gridMemberShow">
+                      {{ i18n.review }}
+                      <v-icon right>fa-binoculars</v-icon>
+                    </v-btn>                    
+                  </v-list-item-action>
+                </v-list-item>
+              </v-list-item-group>
+            </v-list>
+
+          </v-col>
+          <v-col cols="6">
+            <v-list flat outlined>
+              <v-header v-text="i18n.gridMembersAccepted" class="ml-2" />
+              <v-list-item-group>
+                <v-subheader v-if="accepted.length == 0" v-text="i18n.none" />
+                <v-list-item v-for="node in accepted" @click="show(node)">
+                  <v-list-item-icon>
+                    <v-icon color="green" class="mt-1" :title="i18n.gridMembersAcceptedHelp">fa-circle-check</v-icon>
+                  </v-list-item-icon>
+                  <v-list-item-content>
+                    <v-list-item-title>
+                      {{ node.id }}
+                    </v-list-item-title>
+                  </v-list-item-content>
+                  <v-list-item-action>
+                    <v-btn :title="i18n.gridMemberShow">
+                      {{ i18n.review }}
+                      <v-icon right>fa-binoculars</v-icon>
+                    </v-btn>                    
+                  </v-list-item-action>
+                </v-list-item>
+              </v-list-item-group>
+            </v-list>
+          </v-col>
+        </v-row>
+        <v-dialog v-model="dialog" max-width="600">
+          <v-card v-if="selected">
+            <v-card-title class="headline" v-text="i18n.gridMemberReviewTitle"></v-card-title>
+            <v-card-subtitle v-text="selected.id" />
+            <v-container fluid>
+              <v-row>
+                <v-col cols="4">
+                  <v-card-text class="font-weight-bold">
+                    {{ i18n.name }}:
+                  </v-card-text>
+                  <v-card-text class="font-weight-bold">
+                    {{ i18n.rolePrimary }}:
+                  </v-card-text>
+                  <v-card-text class="font-weight-bold">
+                    {{ i18n.fingerprint }}:
+                  </v-card-text>
+                  <v-card-text class="font-weight-bold">
+                    {{ i18n.status }}:
+                  </v-card-text>
+                </v-col>
+                <v-col cols="8">
+                  <v-card-text>
+                    {{ selected.name }}
+                  </v-card-text>
+                  <v-card-text>
+                    {{ selected.role }}
+                  </v-card-text>
+                  <v-card-text>
+                    {{ selected.fingerprint }}
+                    <v-icon id="fingerprintCopyValue" class="mx-1" color="white" dense @click.stop="$root.copyToClipboard(selected.fingerprint)" :title="i18n.copyToClipboard">
+                      fa-copy
+                    </v-icon>
+                  </v-card-text>
+                  <v-card-text>
+                    <v-chip :color="selected.status | colorNodeStatus" v-text="i18n[selected.status]" />
+                  </v-card-text>
+                </v-col>
+              </v-row>
+            </v-container>
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn @click.stop="hide()" v-text="i18n.cancel"></v-btn>
+              <v-btn @click.stop="accept(selected)" v-if="isUnaccepted(selected)">
+                {{ i18n.accept }}
+                <v-icon right>fa-check</v-icon>
+              </v-btn>
+              <v-btn @click.stop="reject(selected)" v-if="isUnaccepted(selected)">
+                {{ i18n.reject }}
+                <v-icon right>fa-xmark</v-icon>
+              </v-btn>
+              <v-btn @click.stop="remove(selected)">
+                {{ i18n.delete }}
+                <v-icon right>fa-trash</v-icon>
+              </v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+      </v-container>
+    </script>
+
     <script src="js/external/jquery-3.6.0.min.js"></script>
     <script src="js/external/vue-2.6.14.min.js"></script>
     <script src="js/external/vue-router-3.5.2.min.js"></script>
@@ -2841,6 +3229,7 @@
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/case.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/config.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/downloads.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/home.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/hunt.js?v=VERSION_PLACEHOLDER"></script>
@@ -2848,6 +3237,7 @@
     <script src="js/routes/job.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/settings.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/grid.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/gridmembers.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/terms.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/user.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/users.js?v=VERSION_PLACEHOLDER"></script>

@@ -1,12 +1,8 @@
-// Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
-//
-// This program is distributed under the terms of version 2 of the
-// GNU General Public License.  See LICENSE for further details.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// Copyright Jason Ertel (github.com/jertel).
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
 
 package web
 
@@ -35,6 +31,26 @@ type BaseHandler struct {
   Impl HandlerImpl
 }
 
+func (handler *BaseHandler) validateRequest(ctx context.Context, request *http.Request) error {
+  if request.Method == http.MethodPost ||
+    request.Method == http.MethodPut ||
+    request.Method == http.MethodPatch ||
+    request.Method == http.MethodDelete {
+
+    userId := ctx.Value(ContextKeyRequestorId).(string)
+    if userId != handler.Host.SrvExemptId {
+
+      token := request.Header.Get("x-srv-token")
+      if len(token) == 0 {
+        return errors.New("Missing SRV token on request")
+      }
+
+      return model.ValidateSrvToken(handler.Host.SrvKey, userId, token)
+    }
+  }
+  return nil
+}
+
 func (handler *BaseHandler) Handle(responseWriter http.ResponseWriter, request *http.Request) {
   var statusCode, contentLength int
   var err error
@@ -45,11 +61,15 @@ func (handler *BaseHandler) Handle(responseWriter http.ResponseWriter, request *
   context, statusCode, err := handler.Host.Preprocess(request.Context(), request)
   if err == nil {
     var obj interface{}
-    responseWriter.Header().Set("Version", handler.Host.Version)
 
-    statusCode, obj, err = handler.Impl.HandleNow(context, responseWriter, request.WithContext(context))
-    if err == nil && obj != nil {
-      contentLength, err = handler.WriteJson(responseWriter, request, statusCode, obj)
+    err = handler.validateRequest(context, request)
+    if err == nil {
+      responseWriter.Header().Set("Version", handler.Host.Version)
+
+      statusCode, obj, err = handler.Impl.HandleNow(context, responseWriter, request.WithContext(context))
+      if err == nil && obj != nil {
+        contentLength, err = handler.WriteJson(responseWriter, request, statusCode, obj)
+      }
     }
   }
   stop := time.Now()

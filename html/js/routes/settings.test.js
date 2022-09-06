@@ -1,11 +1,8 @@
-// Copyright 2020-2022 Security Onion Solutions. All rights reserved.
-//
-// This program is distributed under the terms of version 2 of the
-// GNU General Public License.  See LICENSE for further details.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// Copyright Jason Ertel (github.com/jertel).
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
 
 require('../test_common.js');
 require('./settings.js');

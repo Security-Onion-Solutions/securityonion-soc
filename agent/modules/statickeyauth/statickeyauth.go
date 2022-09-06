@@ -1,29 +1,26 @@
-// Copyright 2019 Jason Ertel (jertel). All rights reserved.
-//
-// This program is distributed under the terms of version 2 of the
-// GNU General Public License.  See LICENSE for further details.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// Copyright Jason Ertel (github.com/jertel).
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
 
 package statickeyauth
 
 import (
   "errors"
-  "net/http"
   "github.com/security-onion-solutions/securityonion-soc/agent"
   "github.com/security-onion-solutions/securityonion-soc/module"
+  "net/http"
 )
 
 type StaticKeyAuth struct {
-  config			module.ModuleConfig
-  apiKey			string
-  agent				*agent.Agent
+  config module.ModuleConfig
+  apiKey string
+  agent  *agent.Agent
 }
 
 func NewStaticKeyAuth(agt *agent.Agent) *StaticKeyAuth {
-  return &StaticKeyAuth {
+  return &StaticKeyAuth{
     agent: agt,
   }
 }
@@ -57,7 +54,6 @@ func (skmodule *StaticKeyAuth) Stop() error {
 func (skmodule *StaticKeyAuth) IsRunning() bool {
   return false
 }
-
 
 func (skmodule *StaticKeyAuth) Authorize(request *http.Request) error {
   request.Header.Add("Authorization", skmodule.apiKey)

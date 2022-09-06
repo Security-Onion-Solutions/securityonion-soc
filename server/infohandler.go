@@ -1,12 +1,8 @@
-// Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
-//
-// This program is distributed under the terms of version 2 of the
-// GNU General Public License.  See LICENSE for further details.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// Copyright Jason Ertel (github.com/jertel).
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
 
 package server
 
@@ -46,14 +42,19 @@ func (infoHandler *InfoHandler) get(ctx context.Context, writer http.ResponseWri
   var err error
   var info *model.Info
   if user, ok := request.Context().Value(web.ContextKeyRequestor).(*model.User); ok {
-    info = &model.Info{
-      Version:        infoHandler.Host.Version,
-      License:        "GPL v2",
-      Parameters:     &infoHandler.server.Config.ClientParams,
-      ElasticVersion: os.Getenv("ELASTIC_VERSION"),
-      WazuhVersion:   os.Getenv("WAZUH_VERSION"),
-      UserId:         user.Id,
-      Timezones:      infoHandler.timezones,
+    var srvToken string
+    srvToken, err = model.GenerateSrvToken(infoHandler.server.Config.SrvKeyBytes, user.Id, infoHandler.server.Config.SrvExpSeconds)
+    if err == nil {
+      info = &model.Info{
+        Version:        infoHandler.Host.Version,
+        License:        "Elastic License 2.0 (ELv2)",
+        Parameters:     &infoHandler.server.Config.ClientParams,
+        ElasticVersion: os.Getenv("ELASTIC_VERSION"),
+        WazuhVersion:   os.Getenv("WAZUH_VERSION"),
+        UserId:         user.Id,
+        Timezones:      infoHandler.timezones,
+        SrvToken:       srvToken,
+      }
     }
   } else {
     err = errors.New("Unable to determine logged in user from context")

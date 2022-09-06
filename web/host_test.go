@@ -1,12 +1,8 @@
-// Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
-//
-// This program is distributed under the terms of version 2 of the
-// GNU General Public License.  See LICENSE for further details.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// Copyright Jason Ertel (github.com/jertel).
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
 
 package web
 
@@ -20,7 +16,7 @@ import (
 )
 
 func TestAddRemoveConnection(tester *testing.T) {
-	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test")
+	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil, "")
 	conn := &websocket.Conn{}
 	tester.Run("testing add connection", func(t *testing.T) {
 		socConn := host.AddConnection(conn, "1.2.3.4")
@@ -35,7 +31,7 @@ func TestAddRemoveConnection(tester *testing.T) {
 }
 
 func TestMultipleConnections(tester *testing.T) {
-	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test")
+	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil, "")
 	conn1 := &websocket.Conn{}
 	conn2 := &websocket.Conn{}
 	tester.Run("testing add multiple connections", func(t *testing.T) {
@@ -54,7 +50,7 @@ func TestMultipleConnections(tester *testing.T) {
 }
 
 func TestManageConnections(tester *testing.T) {
-	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test")
+	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil, "")
 	conn := host.AddConnection(nil, "")
 
 	conn.lastPingTime = time.Time{}
@@ -71,7 +67,7 @@ func TestManageConnections(tester *testing.T) {
 }
 
 func TestGetSourceIp(tester *testing.T) {
-	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test")
+	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil, "")
 	request, _ := http.NewRequest("GET", "", nil)
 
 	expected := "1.1.1.1"
@@ -95,7 +91,7 @@ func (dummy *DummyPreprocessor) Preprocess(ctx context.Context, request *http.Re
 }
 
 func TestPreprocessorSetup(tester *testing.T) {
-	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test")
+	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil, "")
 	assert.Len(tester, host.Preprocessors(), 1)
 
 	newPreprocessor := &DummyPreprocessor{priority: 123}
@@ -119,7 +115,7 @@ func TestPreprocessorSetup(tester *testing.T) {
 }
 
 func TestPreprocessExecute(tester *testing.T) {
-	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test")
+	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil, "")
 	newPreprocessor := &DummyPreprocessor{priority: 123, statusCode: 321}
 	host.AddPreprocessor(newPreprocessor)
 	request, _ := http.NewRequest("GET", "", nil)

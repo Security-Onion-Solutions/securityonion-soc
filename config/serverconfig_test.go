@@ -1,12 +1,8 @@
-// Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
-//
-// This program is distributed under the terms of version 2 of the
-// GNU General Public License.  See LICENSE for further details.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// Copyright Jason Ertel (github.com/jertel).
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
 
 package config
 
@@ -23,15 +19,27 @@ func TestVerifyServer(tester *testing.T) {
 		assert.Equal(tester, DEFAULT_MAX_PACKET_COUNT, cfg.MaxPacketCount)
 		assert.Equal(tester, DEFAULT_IDLE_CONNECTION_TIMEOUT_MS, cfg.IdleConnectionTimeoutMs)
 		assert.Equal(tester, DEFAULT_MAX_UPLOAD_SIZE_BYTES, cfg.MaxUploadSizeBytes)
+		assert.Equal(tester, DEFAULT_SRV_EXP_SECONDS, cfg.SrvExpSeconds)
 		assert.False(tester, cfg.DeveloperEnabled)
+		assert.Equal(tester, REQUIRED_SRV_KEY_LENGTH, len(cfg.SrvKeyBytes))
 	}
 
 	cfg.BindAddress = "http://some.where"
 	cfg.MaxPacketCount = 123
+	cfg.SrvKey = "xyz"
 	err = cfg.Verify()
 	if assert.Nil(tester, err) {
 		assert.Equal(tester, 123, cfg.MaxPacketCount)
 		assert.Equal(tester, "/opt/sensoroni/scripts/timezones.sh", cfg.TimezoneScript)
 		assert.False(tester, cfg.DeveloperEnabled)
+		assert.Equal(tester, "xyz", cfg.SrvKey)
+		assert.Equal(tester, REQUIRED_SRV_KEY_LENGTH, len(cfg.SrvKeyBytes))
+	}
+
+	cfg.SrvKey = "0123456789012345678901234567890123456789012345678901234567890123"
+	err = cfg.Verify()
+	if assert.Nil(tester, err) {
+		assert.Equal(tester, []byte(cfg.SrvKey), cfg.SrvKeyBytes)
+		assert.Equal(tester, REQUIRED_SRV_KEY_LENGTH, len(cfg.SrvKeyBytes))
 	}
 }

@@ -1,12 +1,8 @@
-// Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
-//
-// This program is distributed under the terms of version 2 of the
-// GNU General Public License.  See LICENSE for further details.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// Copyright Jason Ertel (github.com/jertel).
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
 
 package server
 
@@ -21,29 +17,33 @@ import (
   "strings"
 )
 
+const AGENT_ID = "agent"
+
 type Authorizer interface {
   CheckContextOperationAuthorized(ctx context.Context, operation string, target string) error
 }
 
 type Server struct {
-  Config      *config.ServerConfig
-  Host        *web.Host
-  Datastore   Datastore
-  Userstore   Userstore
-  Rolestore   Rolestore
-  Eventstore  Eventstore
-  Casestore   Casestore
-  Metrics     Metrics
-  stoppedChan chan bool
-  Authorizer  Authorizer
-  Agent       *model.User
-  Context     context.Context
+  Config           *config.ServerConfig
+  Host             *web.Host
+  Datastore        Datastore
+  Userstore        Userstore
+  Rolestore        Rolestore
+  Eventstore       Eventstore
+  Casestore        Casestore
+  Configstore      Configstore
+  GridMembersstore GridMembersstore
+  Metrics          Metrics
+  stoppedChan      chan bool
+  Authorizer       Authorizer
+  Agent            *model.User
+  Context          context.Context
 }
 
 func NewServer(cfg *config.ServerConfig, version string) *Server {
   server := &Server{
     Config:      cfg,
-    Host:        web.NewHost(cfg.BindAddress, cfg.HtmlDir, cfg.IdleConnectionTimeoutMs, version),
+    Host:        web.NewHost(cfg.BindAddress, cfg.HtmlDir, cfg.IdleConnectionTimeoutMs, version, cfg.SrvKeyBytes, AGENT_ID),
     stoppedChan: make(chan bool, 1),
   }
   server.initContext()
@@ -53,7 +53,7 @@ func NewServer(cfg *config.ServerConfig, version string) *Server {
 func (server *Server) initContext() {
   // Server will retain the role of an agent until there's a need for higher privileges
   server.Agent = model.NewUser()
-  server.Agent.Id = "agent"
+  server.Agent.Id = AGENT_ID
   server.Agent.Email = server.Agent.Id
   server.Context = context.WithValue(context.Background(), web.ContextKeyRequestor, server.Agent)
 }
@@ -76,6 +76,8 @@ func (server *Server) Start() {
     server.Host.Register("/api/stream", NewStreamHandler(server))
     server.Host.Register("/api/user/", NewUserHandler(server))
     server.Host.Register("/api/users/", NewUsersHandler(server))
+    server.Host.Register("/api/config/", NewConfigHandler(server))
+    server.Host.Register("/api/gridmembers/", NewGridMembersHandler(server))
 
     server.Host.Start()
   }

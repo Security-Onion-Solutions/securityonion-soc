@@ -1,12 +1,22 @@
+# Copyright Jason Ertel (github.com/jertel).
+# Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+# or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+# https://securityonion.net/license; you may not use this file except in compliance with the
+# Elastic License 2.0.
+
 # Define low-level permissions and which permission set roles can use them
 # Syntax      => permX: roleY roleZ
 # Explanation => roleY and roleZ are granted permission permX
 
 cases/read:       case-monitor
 cases/write:      case-admin
+config/read:      config-monitor
+config/write:     config-admin
 events/read:      event-monitor
 events/write:     event-admin
 events/ack:       event-admin
+grid/read:				grid-monitor
+grid/write:				grid-admin
 jobs/read:        job-monitor
 jobs/pivot:       job-user
 jobs/write:       job-admin
@@ -26,7 +36,9 @@ users/delete:     user-admin
 # Explanation => roleA inherits all of roleB's permissions
 
 case-monitor:     case-admin
+config-monitor:		config-admin
 event-monitor:    event-admin
+grid-monitor:			grid-admin
 job-monitor:      job-admin
 job-user:         job-admin
 node-monitor:     node-admin

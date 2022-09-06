@@ -1,11 +1,19 @@
+# Copyright Jason Ertel (github.com/jertel).
+# Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+# or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+# https://securityonion.net/license; you may not use this file except in compliance with the
+# Elastic License 2.0.
+
 # Define which business level roles can access which permission set roles.
 # Syntax      => roleX: roleY roleZ
 # Explanation => roleY and roleZ are granted permissions of roleX
 
 case-monitor:     auditor limited-auditor
 case-admin:       analyst limited-analyst superuser
+config-admin:     superuser
 event-admin:      analyst limited-analyst superuser
 event-monitor:    auditor limited-auditor
+grid-admin:				superuser
 node-admin:       agent
 node-monitor:     analyst limited-analyst auditor limited-auditor superuser
 user-admin:       superuser

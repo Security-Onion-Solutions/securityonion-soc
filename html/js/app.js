@@ -1,12 +1,8 @@
-// Copyright 2019 Jason Ertel (jertel). All rights reserved.
-// Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
-//
-// This program is distributed under the terms of version 2 of the
-// GNU General Public License.  See LICENSE for further details.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// Copyright Jason Ertel (github.com/jertel).
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
 
 const routes = [];
 
@@ -275,6 +271,7 @@ $(document).ready(function() {
             try {
               const response = await this.papi.get('info');
               if (response) {
+                this.papi.defaults.headers.common['X-Srv-Token'] = response.data.srvToken;
                 this.version = response.data.version;
                 this.license = response.data.license;
                 this.parameters = response.data.parameters;
@@ -376,8 +373,9 @@ $(document).ready(function() {
     
         if (pngFavicon && svgFavicon) {
           const ext = ".svg";
-          var tagIndex = svgFavicon.href.indexOf("-");
-          const extIndex = svgFavicon.href.indexOf(ext);
+          var iconIndex = svgFavicon.href.lastIndexOf("/");
+          var tagIndex = svgFavicon.href.indexOf("-", iconIndex);
+          const extIndex = svgFavicon.href.indexOf(ext, iconIndex);
           if (tagIndex > extIndex) tagIndex = -1;
           const baseText = svgFavicon.href.substring(0, tagIndex !== -1 ? tagIndex : extIndex);
           const queryParam = svgFavicon.href.substring(extIndex + ext.length);
@@ -402,10 +400,12 @@ $(document).ready(function() {
       },
       drawAttention(elementId) {
         var element = $(elementId);
-        element.removeClass('waggle');
-        setTimeout(function() {
-          element.addClass('waggle');
-        }, 100);
+        if (element && element.removeClass) {
+          element.removeClass('waggle');
+          setTimeout(function() {
+            element.addClass('waggle');
+          }, 100);
+        }
       },
       makeHeader(label, value) {
         return { text: label, value: value };
@@ -523,6 +523,10 @@ $(document).ready(function() {
         this.infoMessage = msg;
       },
       showTip(msg) {
+        this.error = false;
+        this.warning = false;
+        this.info = false;
+
         this.tip = true;
         this.tipMessage = msg;
       },
@@ -792,6 +796,18 @@ $(document).ready(function() {
             Vue.set(obj, outputField, user.email);
           }
         }
+      },
+      isUserAdmin(user = null) {
+        return this.userHasRole("superuser", user);
+      },
+      userHasRole(role, user = null) {
+        if (!user) {
+          user = this.user;
+        }
+
+        if (!user) return false;
+
+        return user.roles.indexOf(role) != -1;
       },
       updateStatus(status) {
         if (status) {
