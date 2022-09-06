@@ -41,6 +41,7 @@ const i18n = {
       addSuccessful: 'Added successfully!',
       address: 'Address',
       admin: 'Administration',
+      advanced: 'Temporarily enable advanced interface features',
       alertAcknowledge: 'Acknowledge',
       alertEscalated: 'This alert has already been escalated',
       alertUndoAcknowledge: 'Undo Acknowledge',

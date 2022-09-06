@@ -319,6 +319,7 @@
               <v-expansion-panel>
                 <v-expansion-panel-header id="huntOptionsHeader">{{i18n.options}}</v-expansion-panel-header>
                 <v-expansion-panel-content>
+                  <v-switch v-if="isCategory('alerts') || isCategory('cases')" id="enable-advanced" :disabled="loading()" v-model="advanced" dense hide-details class="my-0" :label="i18n.advanced"></v-switch>
                   <v-switch v-if="isAdvanced()" id="auto-hunt" :disabled="loading()" v-model="autohunt" dense hide-details class="my-0" :label="i18n.autohunt"></v-switch>
                   <v-switch v-for="toggle in filterToggles" :key="toggle.name"
                     :id="'filterToggle-' + toggle.name" 
