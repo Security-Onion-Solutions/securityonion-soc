@@ -46,12 +46,10 @@ func TestFullValidity(tester *testing.T) {
   assert.EqualError(tester, err, "SRV token HMAC failed validation")
 
   // test manipulated username inside of token
-  decoded := make([]byte, base64.URLEncoding.DecodedLen(len([]byte(token))))
-  _, err = base64.URLEncoding.Decode(decoded, []byte(token))
-  assert.NoError(tester, err)
+  decoded, noerr := base64.StdEncoding.DecodeString(token)
+  assert.NoError(tester, noerr)
   manipulated := strings.Replace(string(decoded), "myId", "byId", 1)
-  encoded := make([]byte, base64.URLEncoding.EncodedLen(len([]byte(manipulated))))
-  base64.URLEncoding.Encode(encoded, []byte(manipulated))
-  err = ValidateSrvToken(key, "myId", string(encoded))
+  encoded := base64.StdEncoding.EncodeToString([]byte(manipulated))
+  err = ValidateSrvToken(key, "myId", encoded)
   assert.EqualError(tester, err, "SRV token HMAC failed validation")
 }
