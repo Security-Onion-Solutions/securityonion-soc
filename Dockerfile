@@ -31,7 +31,6 @@ COPY --from=builder /build/sensoroni .
 COPY --from=builder /build/scripts ./scripts
 COPY --from=builder /build/html ./html
 COPY --from=builder /build/rbac ./rbac
-COPY --from=builder /build/COPYING .
 COPY --from=builder /build/LICENSE .
 COPY --from=builder /build/README.md .
 COPY --from=builder /build/sensoroni.json .
