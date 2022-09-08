@@ -916,21 +916,11 @@
               <li><a :href="'/downloads/auditbeat-oss-' + $root.elasticVersion + '-amd64.deb'" :download="'auditbeat-oss-' +  $root.elasticVersion + '-amd64.deb'">Auditbeat DEB</a> (Linux [amd64]: Debian, Ubuntu)</li>
               <li><a :href="'/downloads/auditbeat-oss-' + $root.elasticVersion + '-x86_64.rpm'" :download="'auditbeat-oss-' +  $root.elasticVersion + '-x86_64.rpm'">Auditbeat RPM</a> (Linux [x86_64]: Amazon, CentOS, Rocky, Fedora, Oracle, SUSE)</li>
             </ul>
-            <h3 class="mt-2" id="download-wazuh">{{ i18n.downloadsWazuh }} ({{ $root.wazuhVersion }})</h3>
+            <h3 class="mt-2" v-text="i18n.downloadsElasticAgent" id="download-elasticagent"></h3>
             <ul>
-              <li><a :href="'/downloads/wazuh-agent-' + $root.wazuhVersion + '.msi'" :download="'wazuh-agent-' +  $root.wazuhVersion + '.msi'">MSI</a> (Windows)</li>
-              <li><a :href="'/downloads/wazuh-agent_' + $root.wazuhVersion + '_amd64.deb'" :download="'wazuh-agent_' +  $root.wazuhVersion + '_amd64.deb'">DEB</a> (Linux [amd64]: Debian, Ubuntu)</li>
-              <li><a :href="'/downloads/wazuh-agent-' + $root.wazuhVersion + '.x86_64.rpm'" :download="'wazuh-agent-' +  $root.wazuhVersion + '.x86_64.rpm'">RPM</a> (Linux [x86_64]: Amazon, CentOS, Rocky, Fedora, Oracle, SUSE)</li>
-              <li><a :href="'/downloads/wazuh-agent-' + $root.wazuhVersion + '.pkg'" :download="'wazuh-agent-' +  $root.wazuhVersion + '.pkg'">PKG</a> (MacOS)</li>
-            </ul>
-            <h3 class="mt-2" v-text="i18n.downloadsOsquery" id="download-osquery"></h3>
-            <ul>
-              <li><a href="/packages/launcher.msi" download="msi-launcher.msi">MSI</a> (Windows)</li>
-              <li><a href="/packages/launcher.deb" download="deb-launcher.deb">DEB</a> (Linux [amd64]: Debian, Ubuntu)</li>
-              <li><a href="/packages/launcher.rpm" download="rpm-launcher.rpm">RPM</a> (Linux [x86_64]: Amazon, CentOS, Rocky, Fedora, Oracle, SUSE)</li>
-              <li><a href="/packages/launcher.pkg" download="pkg-launcher.pkg">PKG</a> (MacOS)</li>
-              <li><a href="/packages/launcher.flags" download="launcher.flags.txt">RPM & DEB Config Flag File</a></li>
-              <li><a href="/packages/launcher-msi.flags" download="launcher-msi.flags.txt">MSI Config Flag File</a></li>
+              <li><a href="/packages/so-elastic-agent_windows" download="so-elastic-agent_windows.exe">Installer</a> (Windows [x86_64])</li>
+              <li><a href="/packages/so-elastic-agent_linux" download="so-elastic-agent_linux">Installer</a> (Linux [x86_64])</li>
+              <li><a href="/packages/so-elastic-agent_darwin" download="so-elastic-agent_darwin">Installer</a> (macOS [x86_64])</li>
             </ul>
             <p></p>
             <div v-html="i18n.downloadsInfo"></div>
