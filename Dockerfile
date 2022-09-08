@@ -49,13 +49,6 @@ RUN bash -c "[[ $ELASTIC_VERSION == '0.0.0' ]]" || \
      wget https://artifacts.elastic.co/downloads/beats/filebeat/filebeat-oss-$(echo $ELASTIC_VERSION)-amd64.deb -P html/downloads/ && \
      wget https://artifacts.elastic.co/downloads/beats/auditbeat/auditbeat-oss-$(echo $ELASTIC_VERSION)-amd64.deb -P html/downloads/)
 
-RUN bash -c "[[ $WAZUH_VERSION == '0.0.0' ]]" || \
-    (mkdir -p html/downloads && \
-     wget https://packages.wazuh.com/3.x/osx/wazuh-agent-$(echo $WAZUH_VERSION).pkg -P html/downloads/ && \
-     wget https://packages.wazuh.com/3.x/yum/wazuh-agent-$(echo $WAZUH_VERSION).x86_64.rpm -P html/downloads/ && \
-     wget https://packages.wazuh.com/3.x/apt/pool/main/w/wazuh-agent/wazuh-agent_$(echo $WAZUH_VERSION)_amd64.deb -P html/downloads/ && \
-     wget https://packages.wazuh.com/3.x/windows/wazuh-agent-$(echo $WAZUH_VERSION).msi -P html/downloads/)
-
 RUN bash -c "[[ $VERSION == '0.0.0' ]]" || \
     (wget https://docs.securityonion.net/_/downloads/en/$(echo $VERSION | cut -d'.' -f 1,2)/htmlzip/ -O /tmp/docs.zip && \
     unzip -o /tmp/docs.zip -d html/docs && \
