@@ -452,7 +452,7 @@ const i18n = {
       settingDeleted: 'Setting deleted/reset successfully. Changes typically apply within 15 minutes.',
       settingDeleteError: 'Setting could not be deleted.',
       settingSelect: 'Select a setting on the left',
-      settingGlobal: 'Current Cluster Value',
+      settingGlobal: 'Current Grid Value',
       settingIsModified: 'This setting has been modified to something other than the default.',
       settingIsModifiedHelp: 'Show all settings that have been modified to something other than the default.',
       settingHasNodeValues: 'This setting has unique values specified for one or more nodes in the grid.',
