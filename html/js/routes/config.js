@@ -62,6 +62,10 @@ routes.push({ path: '/config', name: 'config', component: {
              (item.description && item.description.toLowerCase().indexOf(search) > -1);
     },
     addToNode(node, parent, path, setting) {
+      if (node.children == undefined) {
+        throw new Error("Setting name '" + node.name + "' conflicts with another similarly named setting");
+      }
+
       const name = path.shift();
       if (path.length == 0) {
         if (!setting.name) {
@@ -87,10 +91,14 @@ routes.push({ path: '/config', name: 'config', component: {
       this.settingsAvailable = 0;
       const route = this;
       settings.forEach((setting) => {
-        path = setting.id.split(".");
-        if (setting.description || this.advanced) {
-          this.addToNode(root, "", path, setting);
-          this.settingsAvailable++;
+        try {
+          path = setting.id.split(".");
+          if (setting.description || this.advanced) {
+            this.addToNode(root, "", path, setting);
+            this.settingsAvailable++;
+          }
+        } catch(e) {
+          route.$root.showError(route.i18n.settingMalformed + " (" + setting.id + "): " + e);
         }
       });
       this.countCustomized();

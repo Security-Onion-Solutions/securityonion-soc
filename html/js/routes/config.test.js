@@ -431,3 +431,10 @@ test('addNode', () => {
   expect(comp.form.value).toBe("touched-value");
   expect(comp.cancelDialog).toBe(true);  
 });
+
+test('addToNode_Malformed', () => {
+  const closure = () => {
+    comp.addToNode({name: 'test'}, {}, ['parent'], {name: 'test'});
+  };
+  expect(closure).toThrow("Setting name 'test' conflicts with another similarly named setting");
+});

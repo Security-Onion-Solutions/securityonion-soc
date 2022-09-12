@@ -455,6 +455,7 @@ const i18n = {
       settingIsModifiedHelp: 'Show all settings that have been modified to something other than the default.',
       settingHasNodeValues: 'This setting has unique values specified for one or more nodes in the grid.',
       settingHasNodeValuesHelp: 'Show all settings with unique values specified for one or more nodes in the grid.',
+      settingMalformed: 'Malformed config setting',
       settingReadOnly: 'This is a read-only setting and cannot be modified.',
       settingReadOnlyHelp: 'Modifying this setting can cause severe problems within the grid, often requiring a full grid re-installation.',
       settingRemoveHelp: 'Remove this node override value',
