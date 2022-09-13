@@ -235,7 +235,7 @@ func TestGetSettings(tester *testing.T) {
 	count++
 
 	assert.Equal(tester, "myapp.foo__txt", settings[count].Id)
-	assert.Equal(tester, "anything", settings[count].Value)
+	assert.Equal(tester, "old", settings[count].Value)
 	assert.Equal(tester, true, settings[count].File)
 	count++
 
