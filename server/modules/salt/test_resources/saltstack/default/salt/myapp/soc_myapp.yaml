@@ -1,0 +1,4 @@
+myapp:
+  foo__txt:
+    description: Test file annotation
+    file: True

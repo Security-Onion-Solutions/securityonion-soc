@@ -48,8 +48,10 @@ test('loadData', async () => {
   const m1 = new Map();
   m1.set('mia-test-001', 'hi');
   const expectedSettings = [{
+      "advanced": undefined,
       "default": null,
       "description": "Nearby",
+      "file": undefined,
       "global": false,
       "id": "fake.setting.foo",
       "multiline": undefined,
@@ -64,8 +66,10 @@ test('loadData', async () => {
       "value": null,
     },
     {
+      "advanced": undefined,
       "default": undefined,
       "description": "NADA",
+      "file": undefined,
       "global": undefined,
       "id": "car",
       "multiline": undefined,
@@ -80,8 +84,10 @@ test('loadData', async () => {
       "value": undefined,
     },
     {
+      "advanced": undefined,
       "default": undefined,
       "description": "Cocoa",
+      "file": undefined,
       "global": undefined,
       "id": "fake.setting.bar",
       "multiline": undefined,
@@ -103,8 +109,10 @@ test('loadData', async () => {
         {
           "children": [
             {
+              "advanced": undefined,
               "default": null, 
               "description": "Nearby", 
+              "file": undefined,
               "global": false, 
               "id": "fake.setting.foo", 
               "multiline": undefined, 
@@ -119,8 +127,10 @@ test('loadData', async () => {
               "value": null
             }, 
             {
+              "advanced": undefined,
               "default": undefined, 
               "description": "Cocoa", 
+              "file": undefined,
               "global": undefined, 
               "id": "fake.setting.bar", 
               "multiline": undefined, 
@@ -143,8 +153,10 @@ test('loadData', async () => {
       "name": "fake"
     }, 
     {
+      "advanced": undefined,
       "default": undefined, 
       "description": "NADA", 
+      "file": undefined,
       "global": undefined, 
       "id": "car", 
       "multiline": undefined, 
@@ -164,7 +176,7 @@ test('loadData', async () => {
 });
 
 test('getSettingName', () => {
-  expect(comp.getSettingName({id:"fake.setting.foo", name: 'fake'})).toBe("fake (Fake Setting Translated)");
+  expect(comp.getSettingName({id:"fake.setting.foo", name: 'fake'})).toBe("Fake Setting Translated");
   expect(comp.getSettingName({id:"fake.setting.untranslated", name: "Untranslated Name"})).toBe("Untranslated Name");
   expect(comp.getSettingName({id:"fake.setting.untranslated"})).toBe(undefined);
 });

@@ -19,7 +19,7 @@ import (
 
 const TMP_SALTSTACK_PATH = "/tmp/gotest-soc-saltstore"
 const TMP_REQUEST_PIPE = "/tmp/gotest-soc-salt-req.pipe"
-const TEST_SETTINGS_COUNT = 19
+const TEST_SETTINGS_COUNT = 20
 
 func Cleanup() {
 	exec.Command("rm", "-fr", TMP_SALTSTACK_PATH).Run()
@@ -232,6 +232,11 @@ func TestGetSettings(tester *testing.T) {
 	assert.Equal(tester, "myapp.foo", settings[count].Id)
 	assert.Equal(tester, "minion-born", settings[count].Value)
 	assert.Equal(tester, "normal_import", settings[count].NodeId)
+	count++
+
+	assert.Equal(tester, "myapp.foo__txt", settings[count].Id)
+	assert.Equal(tester, "anything", settings[count].Value)
+	assert.Equal(tester, true, settings[count].File)
 	count++
 
 	assert.Equal(tester, "myapp.int", settings[count].Id)
@@ -452,6 +457,24 @@ func TestUpdateSetting_UpdateAdvanced(tester *testing.T) {
 	updated_setting := findSetting(settings, "myapp.advanced", "")
 	assert.Equal(tester, "something: new", updated_setting.Value)
 	assert.Equal(tester, "", updated_setting.NodeId)
+}
+
+func TestUpdateSetting_UpdateFile(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSalt()
+
+	// Update setting
+	setting := model.NewSetting("myapp.foo__txt")
+	setting.File = true
+	setting.Value = "something"
+	err := salt.UpdateSetting(context.Background(), setting, false)
+	assert.NoError(tester, err)
+
+	settings, get_err := salt.GetSettings(context.Background())
+	assert.NoError(tester, get_err)
+	updated_setting := findSetting(settings, "myapp.foo__txt", "")
+	assert.Equal(tester, "anything", updated_setting.Default)
+	assert.Equal(tester, "something", updated_setting.Value)
 }
 
 func TestUpdateSetting_UpdateAdvancedFailToParse(tester *testing.T) {

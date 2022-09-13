@@ -14,18 +14,18 @@ type Setting struct {
   Id                  string `json:"id"`
   Title               string `json:"title"`
   Description         string `json:"description"`
-  Kind                string `json:"kind"`
   Global              bool   `json:"global"` // If Global == Node then the setting applies to both
   Node                bool   `json:"node"`
   NodeId              string `json:"nodeId"`
   Default             string `json:"default"`
   Value               string `json:"value"`
-  Quoted              bool   `json:"quoted"`
   Multiline           bool   `json:"multiline"`
   Readonly            bool   `json:"readonly"`
   Sensitive           bool   `json:"sensitive"`
   Regex               string `json:"regex"`
   RegexFailureMessage string `json:"regexFailureMessage"`
+  File                bool   `json:"file"`
+  Advanced            bool   `json:"advanced"`
 }
 
 func NewSetting(Id string) *Setting {

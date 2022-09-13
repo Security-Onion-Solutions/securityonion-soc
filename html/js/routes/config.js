@@ -93,7 +93,7 @@ routes.push({ path: '/config', name: 'config', component: {
       settings.forEach((setting) => {
         try {
           path = setting.id.split(".");
-          if (setting.description || this.advanced) {
+          if ((setting.description && !setting.advanced) || this.advanced) {
             this.addToNode(root, "", path, setting);
             this.settingsAvailable++;
           }
@@ -129,6 +129,8 @@ routes.push({ path: '/config', name: 'config', component: {
         sensitive: setting.sensitive,
         regex: setting.regex,
         regexFailureMessage: setting.regexFailureMessage,
+        file: setting.file,
+        advanced: setting.advanced,
       };
       this.merge(created, setting);
       return created;
@@ -212,7 +214,7 @@ routes.push({ path: '/config', name: 'config', component: {
       var name = setting.name;
       var title = this.translate("setting_", setting.id, setting.title);
       if (title) {
-        name = name + " (" + title + ")";
+        return title;
       }
       return name;
     },
@@ -332,6 +334,7 @@ routes.push({ path: '/config', name: 'config', component: {
             id: setting.id,
             nodeId: nodeId,
             value: this.form.value,
+            file: setting.file,
           };
           await this.$root.papi.post('config/', server_setting);
 

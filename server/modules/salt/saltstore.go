@@ -473,24 +473,52 @@ func (store *Saltstore) updateSettingWithAnnotation(setting *model.Setting, anno
       setting.Regex = fmt.Sprintf("%v", value)
     case "regexFailureMessage":
       setting.RegexFailureMessage = fmt.Sprintf("%v", value)
+    case "advanced":
+      setting.Advanced = value.(bool)
+    case "file":
+      // This is a special type of annotation. It allows the contents
+      // of any salt file to become a setting.
+      setting.File = value.(bool)
+      if setting.File {
+        setting.Multiline = true
+
+        relpath := store.relPathFromId(setting.Id)
+        setting.Default, _ = store.readFile(fmt.Sprintf("%s/default/salt/%s", store.saltstackDir, relpath))
+        setting.Value, _ = store.readFile(fmt.Sprintf("%s/local/salt/%s", store.saltstackDir, relpath))
+        if setting.Value == "" {
+          setting.Value = setting.Default
+        }
+      }
     }
   }
 }
 
-func (store *Saltstore) parseAdvanced(path string, settings []*model.Setting, minion string, id string) []*model.Setting {
+func (store *Saltstore) relPathFromId(id string) string {
+  // Example of an ID conversion to path: soc.files.soc.banner_md -> soc/files/soc/banner.md
+  relpath := strings.ReplaceAll(id, ".", "/")
+  relpath = strings.ReplaceAll(relpath, "__", ".")
+  return relpath
+}
+
+func (store *Saltstore) readFile(path string) (string, error) {
   content, err := os.ReadFile(path)
   if err != nil {
     log.WithFields(log.Fields{
-      "minion": minion,
-      "path":   path,
-    }).WithError(err).Error("Unable to read advanced settings file")
+      "path": path,
+    }).WithError(err).Info("Unable to read config file")
   } else {
     log.WithFields(log.Fields{
-      "minion": minion,
       "path":   path,
       "length": len(content),
-    }).Debug("Reading advanced settings")
+    }).Debug("Reading config file")
+    return string(content), nil
+  }
+  return "", err
+}
 
+func (store *Saltstore) parseAdvanced(path string, settings []*model.Setting, minion string, id string) []*model.Setting {
+  content, err := store.readFile(path)
+  if err == nil {
     setting := model.NewSetting(id)
     if minion != "" {
       setting.Global = false
@@ -499,7 +527,7 @@ func (store *Saltstore) parseAdvanced(path string, settings []*model.Setting, mi
       setting.Global = true
       setting.Node = false
     }
-    setting.Value = string(content)
+    setting.Value = content
     setting.NodeId = minion
     setting.Multiline = true
     settings = append(settings, setting)
@@ -625,6 +653,16 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
     }).Info("Updating advanced settings to new value")
     os.WriteFile(path, []byte(setting.Value), 0600)
 
+  } else if setting.File {
+    path := fmt.Sprintf("%s/local/salt/%s", store.saltstackDir, store.relPathFromId(setting.Id))
+
+    log.WithFields(log.Fields{
+      "settingId": setting.Id,
+      "path":      path,
+      "length":    len(setting.Value),
+    }).Info("Updating custom file setting to new value")
+
+    os.WriteFile(path, []byte(setting.Value), 0600)
   } else {
     var path string
     if setting.NodeId == "" {
