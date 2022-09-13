@@ -443,7 +443,7 @@ func (store *Saltstore) recursivelyParseAnnotations(
           settings = append(settings, setting)
           log.WithFields(log.Fields{
             id: newId,
-          }).Warn("Found annotation without a setting")
+          }).Debug("Found annotation without a setting")
         }
       }
     default:
@@ -662,7 +662,7 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
       "length":    len(setting.Value),
     }).Info("Updating custom file setting to new value")
 
-    os.WriteFile(path, []byte(setting.Value), 0600)
+    err = os.WriteFile(path, []byte(setting.Value), 0600)
   } else {
     var path string
     if setting.NodeId == "" {
