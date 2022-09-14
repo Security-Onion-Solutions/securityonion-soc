@@ -108,7 +108,7 @@ routes.push({ path: '/config', name: 'config', component: {
       this.settingsCustomized = 0;
       const route = this;
       this.settings.forEach((setting) => {
-        if (route.isSettingModified(setting) || (setting.default && route.isSettingModifiedPerNode(setting)) ||
+        if (route.isSettingModified(setting) || (setting.defaultAvailable && route.isSettingModifiedPerNode(setting)) ||
           (route.isAdvanced(setting) && (setting.value || setting.nodeValues.size > 0))) {
           route.settingsCustomized++;
         }
@@ -125,11 +125,13 @@ routes.push({ path: '/config', name: 'config', component: {
         value: null,
         nodeValues: new Map(),
         default: null,
+        defaultAvailable: false,
         readonly: setting.readonly,
         sensitive: setting.sensitive,
         regex: setting.regex,
         regexFailureMessage: setting.regexFailureMessage,
         file: setting.file,
+        helpLink: setting.helpLink,
         advanced: setting.advanced,
       };
       this.merge(created, setting);
@@ -142,6 +144,7 @@ routes.push({ path: '/config', name: 'config', component: {
       } else {
         existing.value = setting.value;
         existing.default = setting.default;
+        existing.defaultAvailable = setting.defaultAvailable;
         existing.global = setting.global;
         existing.node = false;
       }
@@ -165,7 +168,7 @@ routes.push({ path: '/config', name: 'config', component: {
       }
     },
     isSettingModified(setting) {
-      return setting.default && setting.default != setting.value;
+      return setting.defaultAvailable && setting.default != setting.value;
     },
     isSettingModifiedPerNode(setting) {
       if (setting.nodeValues && setting.nodeValues.size > 0) {
@@ -371,7 +374,7 @@ routes.push({ path: '/config', name: 'config', component: {
         this.form.key = setting.id;
         this.form.value = setting.value;
         this.$root.drawAttention('#setting-global-save');
-      }       
+      }
     },
     addNode(setting, nodeId) {
       if (this.cancel() && setting && nodeId) {

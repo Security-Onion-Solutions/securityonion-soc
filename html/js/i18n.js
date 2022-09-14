@@ -260,7 +260,7 @@ const i18n = {
       fileEmpty: 'The chosen file appears to have no content; consider using a "filename" artifact instead',
 
       filter: 'Filter',
-      filterHelp: 'Filter the items on this page by the provided keyword',
+      filterHelp: 'Filter the items on this page by keyword',
       filterDrilldown: 'Drilldown',
       filterDrilldownHelp: 'Drilldown into this value',
       filterExact: 'Only',
@@ -449,6 +449,7 @@ const i18n = {
       settingDefault: 'Default Value',
       settingDeleted: 'Setting deleted/reset successfully. Changes typically apply within 15 minutes.',
       settingDeleteError: 'Setting could not be deleted.',
+      settingHelp: 'View documentation or related information for this setting',
       settingSelect: 'Select a setting on the left',
       settingGlobal: 'Current Grid Value',
       settingIsModified: 'This setting has been modified to something other than the default.',

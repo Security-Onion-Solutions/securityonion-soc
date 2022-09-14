@@ -189,6 +189,7 @@ func (store *Saltstore) GetSettings(ctx context.Context) ([]*model.Setting, erro
   // overrides.
   for _, setting := range settings {
     setting.Default = setting.Value
+    setting.DefaultAvailable = true
   }
 
   // Now parse the local pillar overrides
@@ -475,6 +476,8 @@ func (store *Saltstore) updateSettingWithAnnotation(setting *model.Setting, anno
       setting.RegexFailureMessage = fmt.Sprintf("%v", value)
     case "advanced":
       setting.Advanced = value.(bool)
+    case "helpLink":
+      setting.HelpLink = fmt.Sprintf("%v", value)
     case "file":
       // This is a special type of annotation. It allows the contents
       // of any salt file to become a setting.
@@ -483,7 +486,11 @@ func (store *Saltstore) updateSettingWithAnnotation(setting *model.Setting, anno
         setting.Multiline = true
 
         relpath := store.relPathFromId(setting.Id)
-        setting.Default, _ = store.readFile(fmt.Sprintf("%s/default/salt/%s", store.saltstackDir, relpath))
+        var err error
+        setting.Default, err = store.readFile(fmt.Sprintf("%s/default/salt/%s", store.saltstackDir, relpath))
+        if err == nil {
+          setting.DefaultAvailable = true
+        }
         setting.Value, _ = store.readFile(fmt.Sprintf("%s/local/salt/%s", store.saltstackDir, relpath))
         if setting.Value == "" {
           setting.Value = setting.Default
@@ -505,7 +512,7 @@ func (store *Saltstore) readFile(path string) (string, error) {
   if err != nil {
     log.WithFields(log.Fields{
       "path": path,
-    }).WithError(err).Info("Unable to read config file")
+    }).WithError(err).Debug("Unable to read config file")
   } else {
     log.WithFields(log.Fields{
       "path":   path,

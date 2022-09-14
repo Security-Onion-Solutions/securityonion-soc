@@ -2939,13 +2939,18 @@
               <v-alert v-if="!selected" v-text="i18n.settingSelect" type="info" />
               <v-card v-else :key="selected.id" class="pt-6 mx-auto config-setting" flat>
                 <v-card-text>
-                  <div class="text-h5 mb-4" v-text="getSettingDescription(selected)" />
+                  <div class="text-h5 mb-4">
+                    {{ getSettingDescription(selected) }}
+                    <a v-if="selected.helpLink" target="so-help" :href="$root.parameters.docsUrl + selected.helpLink" style="text-decoration: none; cursor: 'pointer'" :title="i18n.settingHelp">
+                      <v-icon color="info" class="mb-2">fa-circle-question</v-icon>
+                    </router-link>
+                  </div>
                   <div v-if="selected.readonly" :title="i18n.settingReadOnlyHelp">
                     <v-icon class="ma-2" color="warning">fa-ban</v-icon>
                     <v-subtitle v-text="i18n.settingReadOnly" />
                   </div>
                   <v-container fluid>
-                    <v-row v-if="!selected.readonly && selected.default">
+                    <v-row v-if="!selected.readonly && selected.defaultAvailable">
                       <v-col>
                         <v-textarea v-if="isMultiline(selected)" :label="i18n.settingDefault" :value="selected.default" readonly class="config-editor" />
                         <v-text-field v-if="!isMultiline(selected)" :label="i18n.settingDefault" :value="selected.default" readonly />
@@ -2998,7 +3003,7 @@
                       </v-col>
                     </v-row>
                   </v-container>
-                  <v-select v-if="selected.node || !selected.global" outlined id="config-select-node" :label="i18n.settingSelectNode" :items="availableNodes" :title="i18n.settingSelectNodeHelp" @change="addNode(selected, $event)" v-model.sync="selectedNode" />
+                  <v-select v-if="(selected.node || !selected.global) && availableNodes.length > 0" outlined id="config-select-node" :label="i18n.settingSelectNode" :items="availableNodes" :title="i18n.settingSelectNodeHelp" @change="addNode(selected, $event)" v-model.sync="selectedNode" />
                 </v-card-text>
               </v-card>
             </v-scroll-y-transition>

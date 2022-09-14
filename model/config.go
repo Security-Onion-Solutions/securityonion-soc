@@ -18,6 +18,7 @@ type Setting struct {
   Node                bool   `json:"node"`
   NodeId              string `json:"nodeId"`
   Default             string `json:"default"`
+  DefaultAvailable    bool   `json:"defaultAvailable"`
   Value               string `json:"value"`
   Multiline           bool   `json:"multiline"`
   Readonly            bool   `json:"readonly"`
@@ -26,6 +27,7 @@ type Setting struct {
   RegexFailureMessage string `json:"regexFailureMessage"`
   File                bool   `json:"file"`
   Advanced            bool   `json:"advanced"`
+  HelpLink            string `json:"helpLink"`
 }
 
 func NewSetting(Id string) *Setting {

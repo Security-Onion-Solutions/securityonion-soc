@@ -50,6 +50,7 @@ test('loadData', async () => {
   const expectedSettings = [{
       "advanced": undefined,
       "default": null,
+      "defaultAvailable": false, 
       "description": "Nearby",
       "file": undefined,
       "global": false,
@@ -68,6 +69,7 @@ test('loadData', async () => {
     {
       "advanced": undefined,
       "default": undefined,
+      "defaultAvailable": undefined, 
       "description": "NADA",
       "file": undefined,
       "global": undefined,
@@ -86,6 +88,7 @@ test('loadData', async () => {
     {
       "advanced": undefined,
       "default": undefined,
+      "defaultAvailable": undefined, 
       "description": "Cocoa",
       "file": undefined,
       "global": undefined,
@@ -111,6 +114,7 @@ test('loadData', async () => {
             {
               "advanced": undefined,
               "default": null, 
+              "defaultAvailable": false, 
               "description": "Nearby", 
               "file": undefined,
               "global": false, 
@@ -128,7 +132,8 @@ test('loadData', async () => {
             }, 
             {
               "advanced": undefined,
-              "default": undefined, 
+              "default": undefined,
+              "defaultAvailable": undefined, 
               "description": "Cocoa", 
               "file": undefined,
               "global": undefined, 
@@ -154,7 +159,8 @@ test('loadData', async () => {
     }, 
     {
       "advanced": undefined,
-      "default": undefined, 
+      "default": undefined,
+      "defaultAvailable": undefined, 
       "description": "NADA", 
       "file": undefined,
       "global": undefined, 
