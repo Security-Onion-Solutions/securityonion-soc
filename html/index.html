@@ -2680,12 +2680,15 @@
                 </v-container>        
               </template>
               <template v-slot:item="props">
-                <tr>
+                <tr color="error">
                   <td>
                     <v-btn id="expandNode" icon small @click="expand(props.item)">
                       <v-icon v-if="isExpanded(props.item)" :alt="i18n.expand" :title="i18n.nodeExpandHelp">fa-angle-down</v-icon>
                       <v-icon v-if="!isExpanded(props.item)" :alt="i18n.expand" :title="i18n.nodeExpandHelp">fa-angle-right</v-icon>
                     </v-btn>
+                  </td>
+                  <td>
+                    <v-icon v-if="props.item.status == 'fault'" :color="props.item.status | colorNodeStatus">{{ props.item.status | iconNodeStatus }}</v-icon>
                   </td>
                   <td v-text="props.item.id"></td>
                   <td v-text="$root.localizeMessage(props.item.role)"></td>

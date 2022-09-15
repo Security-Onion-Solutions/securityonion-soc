@@ -891,3 +891,10 @@ func TestUpdateSetting_AlignNonStringListType(tester *testing.T) {
 	updated_setting := findSetting(settings, "myapp.lists.list_str", "")
 	assert.Equal(tester, "123\n456", updated_setting.Value)
 }
+
+func TestRelPathFromId(tester *testing.T) {
+	salt := NewTestSalt()
+	assert.Equal(tester, "foo/bar/test.md", salt.relPathFromId("foo.bar.test__md"))
+	assert.Equal(tester, "____/____/____/etc/passwd", salt.relPathFromId("____.____.____.etc.passwd"))
+	assert.Equal(tester, "____./____./____./etc/passwd", salt.relPathFromId("______.______.______.etc.passwd"))
+}

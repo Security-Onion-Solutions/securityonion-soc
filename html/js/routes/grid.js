@@ -15,6 +15,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
     nodes: [],
     gridFilter: '',
     headers: [
+      { text: "", value: 'indicators' },
       { text: this.$root.i18n.id, value: 'id' },
       { text: this.$root.i18n.role, value: 'role' },
       { text: this.$root.i18n.address, value: 'address' },
@@ -38,6 +39,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
   }},
   created() { 
     Vue.filter('colorNodeStatus', this.colorNodeStatus);
+    Vue.filter('iconNodeStatus', this.iconNodeStatus);
   },
   beforeDestroy() {
   },  
@@ -148,6 +150,14 @@ routes.push({ path: '/grid', name: 'grid', component: {
         case NodeStatusOk: color = "success"; break;
       }
       return color;
+    },
+    iconNodeStatus(status) {
+      var icon = "fa-circle-question";
+      switch (status) {
+        case NodeStatusFault: icon = "fa-triangle-exclamation"; break;
+        case NodeStatusOk: icon = "fa-circle-check"; break;
+      }
+      return icon;
     }
   }
 }});

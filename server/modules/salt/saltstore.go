@@ -504,6 +504,7 @@ func (store *Saltstore) relPathFromId(id string) string {
   // Example of an ID conversion to path: soc.files.soc.banner_md -> soc/files/soc/banner.md
   relpath := strings.ReplaceAll(id, ".", "/")
   relpath = strings.ReplaceAll(relpath, "__", ".")
+  relpath = strings.ReplaceAll(relpath, "..", "____") // Shenannigans
   return relpath
 }
 
