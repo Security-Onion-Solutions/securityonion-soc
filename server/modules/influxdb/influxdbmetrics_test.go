@@ -52,6 +52,17 @@ func TestGetRaidStatus(tester *testing.T) {
 	assert.Equal(tester, model.NodeStatusUnknown, metrics.getRaidStatus("missing"))
 }
 
+func TestGetProcessJson(tester *testing.T) {
+	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
+	metrics.lastProcessUpdateTime = time.Now()
+	metrics.processJson["foo"] = `{"some":"value"}`
+	metrics.processJson["bar"] = `{"some":"other"}`
+
+	assert.Equal(tester, `{"some":"value"}`, metrics.getProcessJson("foo"))
+	assert.Equal(tester, `{"some":"other"}`, metrics.getProcessJson("bar"))
+	assert.Equal(tester, ``, metrics.getProcessJson("missing"))
+}
+
 func TestGetProcessStatus(tester *testing.T) {
 	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
 	metrics.lastProcessUpdateTime = time.Now()

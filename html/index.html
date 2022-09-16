@@ -16,7 +16,7 @@
     <link rel="alternate icon" class="so-favicon" type="image/png" href="images/favicon/onion.png?v=VERSION_PLACEHOLDER">
     <link rel="icon" class="so-favicon" type="image/svg+xml" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
     <link rel="stylesheet" href="css/external/vuetify-v2.6.5.min.css">
-    <link rel="stylesheet" href="css/external/all-6.1.1.min.css">
+    <link rel="stylesheet" href="css/external/all-6.2.0.min.css">
     <link rel="stylesheet" href="css/external/daterangepicker-3.14.1.css">
     <link rel="stylesheet" href="css/app.css?v=VERSION_PLACEHOLDER">
     <title>Security Onion</title>
@@ -2712,37 +2712,87 @@
                     <v-container fluid grid-list-sm class="pa-4">
                       <v-row>
                         <v-col>
-                          <img class="rounded-lg elevation-5" v-if="item.imageFront" :src="'images/appliances/' + item.imageFront">
-                          <span v-if="!item.imageFront">{{ i18n.nodeImageUnavailable }}</span>
+                          <v-card>
+                            <v-card-title v-text="i18n.nodeStatus"/>
+                            <v-card-text>
+                              <div>
+                                <span class="filter label">{{ i18n.dateOnline }}</span>
+                                <span class="filter value">{{ item.onlineTime | formatDateTime }}</span>
+                              </div>
+                              <div v-if="item.metricsEnabled">
+                                <span class="filter label">{{ i18n.epsProduction }}</span>
+                                <span class="filter value">{{ item.productionEps | formatCount }}</span>
+                              </div>
+                              <div v-if="item.metricsEnabled">
+                                <span class="filter label">{{ i18n.epsConsumption }}</span>
+                                <span class="filter value">{{ item.consumptionEps | formatCount }}</span>
+                              </div>
+                              <div v-if="item.metricsEnabled">
+                                <span class="filter label">{{ i18n.nodeStatusProcess }}</span>
+                                <span :class="colorProcessStatus(item.processStatus) + '--text'" class="filter value">{{ $root.localizeMessage(item.processStatus) }}</span>
+                              </div>
+                              <div>
+                                <span class="filter label">{{ i18n.nodeStatusConnection }}</span>
+                                <span :class="colorProcessStatus(item.connectionStatus) + '--text'" class="filter value">{{ $root.localizeMessage(item.connectionStatus) }}</span>
+                              </div>
+                              <div v-if="item.metricsEnabled">
+                                <span class="filter label">{{ i18n.nodeStatusRaid }}</span>
+                                <span :class="colorProcessStatus(item.raidStatus) + '--text'" class="filter value">{{ $root.localizeMessage(item.raidStatus) }}</span>
+                              </div>
+                              <p/>
+                              <div class="text-justify">
+                                <a target="grafana" :href="item.dashboardLink" class="no-underline">
+                                  <v-btn icon :title="i18n.nodeDashboard">
+                                    <v-icon>fa-chart-line</v-icon>
+                                  </v-btn>
+                                </a>
+                              </div>
+                            </v-card-text>
+                          </v-card>
                         </v-col>
                         <v-col>
-                          <img class="rounded-lg elevation-5" v-if="item.imageBack" :src="'images/appliances/' + item.imageBack">
+                          <v-card>
+                            <v-card-title v-text="i18n.containerStatus"/>
+                            <v-card-text>
+                              <v-simple-table v-if="item.statusCode <= 1">
+                                <template v-slot:default>
+                                  <thead>
+                                    <tr>
+                                      <th class="text-right" v-text="i18n.container"/>
+                                      <th class="text-left" v-text="i18n.status"/>
+                                      <th class="text-right" v-text="i18n.details"/>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    <tr v-for="container in item.containers" :key="container.Name">
+                                      <td class="text-right">
+                                        {{ container.Name }}
+                                      </td>
+                                      <td :class="colorContainerStatus(container.Status) + '--text text-right'">
+                                        {{ $root.localizeMessage(container.Status) }}
+                                      </td>
+                                      <td class="text-right cyan--text">
+                                        {{ container.Details }}
+                                      </td>
+                                    </tr>
+                                  </tbody>
+                                </template>
+                              </v-simple-table>
+                              <div v-else>
+                                {{ i18n["nodeStatusCode_" + item.statusCode] }}
+                              </div>
+                            </v-card-text>
+                          </v-card>
                         </v-col>
                         <v-col>
-                          <div>
-                            <span class="filter label">{{ i18n.dateOnline }}</span>
-                            <span class="filter value">{{ item.onlineTime | formatDateTime }}</span>
-                          </div>
-                          <div v-if="item.metricsEnabled">
-                            <span class="filter label">{{ i18n.epsProduction }}</span>
-                            <span class="filter value">{{ item.productionEps | formatCount }}</span>
-                          </div>
-                          <div v-if="item.metricsEnabled">
-                            <span class="filter label">{{ i18n.epsConsumption }}</span>
-                            <span class="filter value">{{ item.consumptionEps | formatCount }}</span>
-                          </div>
-                          <div v-if="item.metricsEnabled">
-                            <span class="filter label">{{ i18n.nodeStatusProcess }}</span>
-                            <span class="filter value">{{ $root.localizeMessage(item.processStatus) }}</span>
-                          </div>
-                          <div>
-                            <span class="filter label">{{ i18n.nodeStatusConnection }}</span>
-                            <span class="filter value">{{ $root.localizeMessage(item.connectionStatus) }}</span>
-                          </div>
-                          <div v-if="item.metricsEnabled">
-                            <span class="filter label">{{ i18n.nodeStatusRaid }}</span>
-                            <span class="filter value">{{ $root.localizeMessage(item.raidStatus) }}</span>
-                          </div>
+                          <v-card>
+                            <v-card-title v-text="i18n.nodeImages"/>
+                            <v-card-text>
+                              <span v-if="!item.imageFront">{{ i18n.nodeImageUnavailable }}</span>
+                              <img class="rounded-lg elevation-5" v-if="item.imageFront" :src="'images/appliances/' + item.imageFront">
+                              <img class="rounded-lg elevation-5" v-if="item.imageBack" :src="'images/appliances/' + item.imageBack">
+                            </v-card-text>
+                          </v-card>
                         </v-col>
                       </v-row>
                     </v-container>
@@ -3173,6 +3223,11 @@
                   <v-card-text>
                     <v-chip :color="selected.status | colorNodeStatus" v-text="i18n[selected.status]" />
                   </v-card-text>
+                </v-col>
+              </v-row>
+              <v-row v-if="isUnaccepted(selected)">
+                <v-col>
+                  <v-banner v-text="18n.acceptingMinionsTakesTime"/>
                 </v-col>
               </v-row>
             </v-container>

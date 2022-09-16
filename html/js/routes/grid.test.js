@@ -42,3 +42,36 @@ function testUpdateMetricsEnabled(node1MetricsEnabled, node2MetricsEnabled, expe
 		expect(epsColumn.align).toBe('');
 	}
 }
+
+test('colorNodeStatus', () => {
+	expect(comp.colorNodeStatus("ok")).toBe("success");
+  expect(comp.colorNodeStatus("fault")).toBe("error");
+  expect(comp.colorNodeStatus("unknown")).toBe("gray");
+});
+
+test('iconNodeStatus', () => {
+	expect(comp.iconNodeStatus("fault")).toBe("fa-triangle-exclamation");
+  expect(comp.iconNodeStatus("ok")).toBe("fa-circle-check");
+  expect(comp.iconNodeStatus("other")).toBe("fa-circle-question");
+});
+
+test('colorContainerStatus', () => {
+	expect(comp.colorContainerStatus("running")).toBe("green");
+  expect(comp.colorContainerStatus("broken")).toBe("error");
+});
+
+test('colorProcessStatus', () => {
+	expect(comp.colorProcessStatus("ok")).toBe("green");
+  expect(comp.colorProcessStatus("notok")).toBe("error");
+});
+
+test('formatNode', () => {
+	node = {
+		processJson: '{"containers": [{ "Name": "a" },{ "Name": "c" },{ "Name": "b" }]}',
+		role: 'standalone',
+	}
+
+	node = comp.formatNode(node);
+
+	expect(node.containers).toStrictEqual([{"Name": "a"}, {"Name": "b"}, {"Name": "c"}]);
+});

@@ -141,6 +141,17 @@ routes.push({ path: '/grid', name: 'grid', component: {
     },
     formatNode(node) {
       node['keywords'] = this.$root.localizeMessage(node["role"] + '-keywords');
+      node['dashboardLink'] = "/grafana/d/so_node/" + node.role.substring(3) + "?orgId=1&refresh=5m&var-servername=" + node.id;
+
+      if (node.processJson) {
+        const details = JSON.parse(node.processJson);
+        if (details) {
+          node.statusCode = details.status_code;
+          node.containers = details.containers.sort((a, b) => {
+            return a.Name > b.Name ? 1 : -1 
+          });
+        }
+      }
       return node;
     },
     colorNodeStatus(status) {
@@ -158,6 +169,12 @@ routes.push({ path: '/grid', name: 'grid', component: {
         case NodeStatusOk: icon = "fa-circle-check"; break;
       }
       return icon;
-    }
+    },
+    colorContainerStatus(status) {
+      return status == "running" ? "green" : "error";
+    },
+    colorProcessStatus(status) {
+      return status == "ok" ? "green" : "error";
+    },
   }
 }});

@@ -31,6 +31,7 @@ type Node struct {
 	ConnectionStatus string    `json:"connectionStatus"`
 	RaidStatus       string    `json:"raidStatus"`
 	ProcessStatus    string    `json:"processStatus"`
+	ProcessJson      string    `json:"processJson"`
 	ProductionEps    int       `json:"productionEps"`
 	ConsumptionEps   int       `json:"consumptionEps"`
 	FailedEvents     int       `json:"failedEvents"`
@@ -44,6 +45,7 @@ func NewNode(id string) *Node {
 		ConnectionStatus: NodeStatusUnknown,
 		RaidStatus:       NodeStatusUnknown,
 		ProcessStatus:    NodeStatusUnknown,
+		ProcessJson:      "",
 		OnlineTime:       time.Now(),
 		UpdateTime:       time.Now(),
 	}

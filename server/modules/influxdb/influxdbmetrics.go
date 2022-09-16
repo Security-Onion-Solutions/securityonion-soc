@@ -35,6 +35,7 @@ type InfluxDBMetrics struct {
   lastEpsUpdateTime     time.Time
   raidStatus            map[string]int
   processStatus         map[string]int
+  processJson           map[string]string
   consumptionEps        map[string]int
   productionEps         map[string]int
   failedEvents          map[string]int
@@ -45,6 +46,7 @@ func NewInfluxDBMetrics(srv *server.Server) *InfluxDBMetrics {
     server:         srv,
     raidStatus:     make(map[string]int),
     processStatus:  make(map[string]int),
+    processJson:    make(map[string]string),
     consumptionEps: make(map[string]int),
     productionEps:  make(map[string]int),
     failedEvents:   make(map[string]int),
@@ -162,6 +164,10 @@ func (metrics *InfluxDBMetrics) updateProcessStatus() {
   if now.Sub(metrics.lastProcessUpdateTime).Milliseconds() > int64(metrics.cacheExpirationMs) {
     values := metrics.fetchLatestValuesByHost("sostatus", "status")
     metrics.processStatus = metrics.convertValuesToInt(values)
+
+    details := metrics.fetchLatestValuesByHost("sostatus", "json")
+    metrics.processJson = metrics.convertValuesToString(details)
+
     metrics.lastProcessUpdateTime = now
   }
 }
@@ -230,6 +236,22 @@ func (metrics *InfluxDBMetrics) getProcessStatus(host string) string {
   return status
 }
 
+func (metrics *InfluxDBMetrics) getProcessJson(host string) string {
+  details := ""
+
+  metrics.updateProcessStatus()
+
+  if hostJson, exists := metrics.processJson[host]; exists {
+    details = hostJson
+  } else {
+    log.WithFields(log.Fields{
+      "host": host,
+    }).Warn("Host not found in process details metrics")
+  }
+
+  return details
+}
+
 func (metrics *InfluxDBMetrics) getProductionEps(host string) int {
   metrics.updateEps()
 
@@ -265,6 +287,7 @@ func (metrics *InfluxDBMetrics) UpdateNodeMetrics(ctx context.Context, node *mod
   if err := metrics.server.CheckAuthorized(ctx, "write", "nodes"); err == nil {
     node.RaidStatus = metrics.getRaidStatus(node.Id)
     node.ProcessStatus = metrics.getProcessStatus(node.Id)
+    node.ProcessJson = metrics.getProcessJson(node.Id)
     node.ProductionEps = metrics.getProductionEps(node.Id)
     node.ConsumptionEps = metrics.getConsumptionEps(node.Id)
     node.FailedEvents = metrics.getFailedEvents(node.Id)
