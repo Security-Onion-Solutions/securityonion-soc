@@ -466,6 +466,8 @@ func (store *Saltstore) updateSettingWithAnnotation(setting *model.Setting, anno
       setting.Readonly = value.(bool)
     case "global":
       setting.Global = value.(bool)
+    case "multiline":
+      setting.Multiline = value.(bool)
     case "node":
       setting.Node = value.(bool)
     case "sensitive":

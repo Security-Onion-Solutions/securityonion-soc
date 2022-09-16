@@ -893,8 +893,48 @@ func TestUpdateSetting_AlignNonStringListType(tester *testing.T) {
 }
 
 func TestRelPathFromId(tester *testing.T) {
+	defer Cleanup()
 	salt := NewTestSalt()
+
 	assert.Equal(tester, "foo/bar/test.md", salt.relPathFromId("foo.bar.test__md"))
 	assert.Equal(tester, "____/____/____/etc/passwd", salt.relPathFromId("____.____.____.etc.passwd"))
 	assert.Equal(tester, "____./____./____./etc/passwd", salt.relPathFromId("______.______.______.etc.passwd"))
+}
+
+func TestUpdateSettingWithAnnotation(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSalt()
+
+	setting := model.NewSetting("myapp.some_file__txt")
+	annotations := make(map[string]interface{})
+	annotations["multiline"] = true
+	annotations["sensitive"] = true
+	annotations["global"] = true
+	annotations["node"] = true
+	annotations["file"] = true
+	annotations["advanced"] = true
+	annotations["readonly"] = true
+	annotations["description"] = "My Desc"
+	annotations["title"] = "My Title"
+	annotations["regex"] = "My Regex"
+	annotations["regexFailureMessage"] = "My Failure Message"
+	annotations["helpLink"] = "My help link"
+
+	assert.False(tester, setting.Multiline)
+	salt.updateSettingWithAnnotation(setting, annotations)
+	assert.True(tester, setting.Multiline)
+	assert.True(tester, setting.Sensitive)
+	assert.True(tester, setting.Global)
+	assert.True(tester, setting.Node)
+	assert.True(tester, setting.File)
+	assert.True(tester, setting.Advanced)
+	assert.True(tester, setting.Readonly)
+	assert.Equal(tester, "My Desc", setting.Description)
+	assert.Equal(tester, "My Title", setting.Title)
+	assert.Equal(tester, "My Regex", setting.Regex)
+	assert.Equal(tester, "My Failure Message", setting.RegexFailureMessage)
+	assert.Equal(tester, "My help link", setting.HelpLink)
+	assert.True(tester, setting.DefaultAvailable)
+	assert.Equal(tester, "some default", setting.Default)
+	assert.Equal(tester, "some local", setting.Value)
 }
