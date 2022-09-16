@@ -484,6 +484,7 @@ func TestUpdateSetting_UpdateAdvancedFailToParse(tester *testing.T) {
 	// Update setting
 	setting := model.NewSetting("myapp.advanced")
 	setting.Value = "new advanced"
+	setting.Syntax = "yaml"
 	err := salt.UpdateSetting(context.Background(), setting, false)
 	assert.EqualError(tester, err, "ERROR_MALFORMED_YAML -> yaml: unmarshal errors:\n  line 1: cannot unmarshal !!str `new adv...`")
 }
@@ -919,6 +920,7 @@ func TestUpdateSettingWithAnnotation(tester *testing.T) {
 	annotations["regex"] = "My Regex"
 	annotations["regexFailureMessage"] = "My Failure Message"
 	annotations["helpLink"] = "My help link"
+	annotations["syntax"] = "yaml"
 
 	assert.False(tester, setting.Multiline)
 	salt.updateSettingWithAnnotation(setting, annotations)
@@ -937,4 +939,5 @@ func TestUpdateSettingWithAnnotation(tester *testing.T) {
 	assert.True(tester, setting.DefaultAvailable)
 	assert.Equal(tester, "some default", setting.Default)
 	assert.Equal(tester, "some local", setting.Value)
+	assert.Equal(tester, "yaml", setting.Syntax)
 }

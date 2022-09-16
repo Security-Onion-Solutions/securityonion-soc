@@ -14,6 +14,7 @@ import (
   "github.com/security-onion-solutions/securityonion-soc/json"
   "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/server"
+  "github.com/security-onion-solutions/securityonion-soc/syntax"
   "github.com/security-onion-solutions/securityonion-soc/web"
   "gopkg.in/yaml.v3"
   "os"
@@ -480,6 +481,8 @@ func (store *Saltstore) updateSettingWithAnnotation(setting *model.Setting, anno
       setting.Advanced = value.(bool)
     case "helpLink":
       setting.HelpLink = fmt.Sprintf("%v", value)
+    case "syntax":
+      setting.Syntax = fmt.Sprintf("%v", value)
     case "file":
       // This is a special type of annotation. It allows the contents
       // of any salt file to become a setting.
@@ -540,6 +543,7 @@ func (store *Saltstore) parseAdvanced(path string, settings []*model.Setting, mi
     setting.Value = content
     setting.NodeId = minion
     setting.Multiline = true
+    setting.Syntax = "yaml"
     settings = append(settings, setting)
   }
 
@@ -630,24 +634,14 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
     return errors.New("Invalid setting id: " + setting.Id)
   }
 
-  if len(sections) <= 2 && sections[len(sections)-1] == "advanced" {
-    // Check if input is valid YAML
-    log.WithFields(log.Fields{
-      "id":     setting.Id,
-      "length": len(setting.Value),
-    }).Debug("Parsing YAML to verify good syntax")
-    mapped := make(map[string]interface{})
-    err = yaml.Unmarshal([]byte(setting.Value), &mapped)
+  if !remove {
+    err = syntax.Validate(setting.Value, setting.Syntax)
     if err != nil {
-      log.WithFields(log.Fields{
-        "id":     setting.Id,
-        "length": len(setting.Value),
-      }).WithError(err).Error("Unable to parse custom YAML for advanced field")
-
-      // Prepend error message with ERROR_ to ensure the string does not get replaced by the safestring method in BaseHandler.
-      return errors.New("ERROR_MALFORMED_YAML -> " + strings.Replace(err.Error(), " into map[string]interface {}", "", 1))
+      return err
     }
+  }
 
+  if len(sections) <= 2 && sections[len(sections)-1] == "advanced" {
     var path string
     if setting.NodeId == "" {
       path = fmt.Sprintf("%s/local/pillar/%s/adv_%s.sls", store.saltstackDir, sections[0], sections[0])

@@ -64,6 +64,7 @@ test('loadData', async () => {
       "regex": "True|False",
       "regexFailureMessage": "Wrong!",
       "sensitive": undefined,
+      "syntax": undefined,
       "title": "Farout",
       "value": null,
     },
@@ -84,6 +85,7 @@ test('loadData', async () => {
       "regex": undefined,
       "regexFailureMessage": undefined,
       "sensitive": undefined,
+      "syntax": undefined,
       "title": "CCA",
       "value": undefined,
     },
@@ -104,6 +106,7 @@ test('loadData', async () => {
       "regex": undefined,
       "regexFailureMessage": undefined,
       "sensitive": undefined,
+      "syntax": undefined,
       "title": "Barley",
       "value": undefined,
     }
@@ -131,6 +134,7 @@ test('loadData', async () => {
               "regex": "True|False",
               "regexFailureMessage": "Wrong!",
               "sensitive": undefined, 
+              "syntax": undefined,
               "title": "Farout", 
               "value": null
             }, 
@@ -151,6 +155,7 @@ test('loadData', async () => {
               "regex": undefined,
               "regexFailureMessage": undefined,
               "sensitive": undefined, 
+              "syntax": undefined,
               "title": "Barley", 
               "value": undefined
             }
@@ -179,6 +184,7 @@ test('loadData', async () => {
       "regex": undefined,
       "regexFailureMessage": undefined,
       "sensitive": undefined, 
+      "syntax": undefined,
       "title": "CCA", 
       "value": undefined
     }

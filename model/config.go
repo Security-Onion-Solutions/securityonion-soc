@@ -28,6 +28,7 @@ type Setting struct {
   File                bool   `json:"file"`
   Advanced            bool   `json:"advanced"`
   HelpLink            string `json:"helpLink"`
+  Syntax              string `json:"syntax"`
 }
 
 func NewSetting(Id string) *Setting {

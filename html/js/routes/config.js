@@ -134,6 +134,7 @@ routes.push({ path: '/config', name: 'config', component: {
         file: setting.file,
         helpLink: setting.helpLink,
         advanced: setting.advanced,
+        syntax: setting.syntax,
       };
       this.merge(created, setting);
       return created;
@@ -339,6 +340,7 @@ routes.push({ path: '/config', name: 'config', component: {
             nodeId: nodeId,
             value: this.form.value,
             file: setting.file,
+            syntax: setting.syntax,
           };
           await this.$root.papi.post('config/', server_setting);
 
@@ -356,7 +358,7 @@ routes.push({ path: '/config', name: 'config', component: {
           this.$root.showTip(this.i18n.settingSaved);
         } catch (error) {
           var msg = this.i18n.settingSaveError;
-          if (error.response && error.response.data && error.response.data.startsWith("ERROR_MALFORMED_YAML")) {
+          if (error.response && error.response.data && error.response.data.startsWith("ERROR_")) {
             msg = error.response.data;
           }
           this.$root.showError(msg);
