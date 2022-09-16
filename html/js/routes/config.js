@@ -27,6 +27,7 @@ routes.push({ path: '/config', name: 'config', component: {
     advanced: false,
     settingsCustomized: 0,
     settingsAvailable: 0,
+    showDefault: false,
   }},
   mounted() {
     this.loadData()

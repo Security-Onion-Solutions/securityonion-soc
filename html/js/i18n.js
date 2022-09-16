@@ -475,6 +475,8 @@ const i18n = {
       settingSaveHelp: 'Save changes',
       settingSelectNode: 'Select a node to modify',
       settingSelectNodeHelp: 'Select a node if a unique value is desired for that specific node',
+      settingShowDefault: 'View Default',
+      settingHideDefault: 'Hide Default',
       settingValidationFailed: 'The specified value is not valid.',
       settings: 'Settings',
       settingsAdvanced: 'Show all configurable settings, including advanced settings.',

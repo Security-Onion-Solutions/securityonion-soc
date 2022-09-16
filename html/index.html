@@ -3005,8 +3005,11 @@
                   <v-container fluid>
                     <v-row v-if="!selected.readonly && selected.defaultAvailable">
                       <v-col>
-                        <v-textarea v-if="isMultiline(selected)" :label="i18n.settingDefault" :value="selected.default" readonly class="config-editor" />
-                        <v-text-field v-if="!isMultiline(selected)" :label="i18n.settingDefault" :value="selected.default" readonly />
+                        <v-btn @click="showDefault = !showDefault" v-text="showDefault ? i18n.settingHideDefault : i18n.settingShowDefault"/>
+                        <div v-if="showDefault" class="mt-8">
+                          <v-textarea v-if="isMultiline(selected)" :label="i18n.settingDefault" :value="selected.default" readonly class="config-editor" />
+                          <v-text-field v-if="!isMultiline(selected)" :label="i18n.settingDefault" :value="selected.default" readonly />
+                        </div>
                       </v-col>
                     </v-row>
                     <v-row v-if="selected.global || !selected.node">
