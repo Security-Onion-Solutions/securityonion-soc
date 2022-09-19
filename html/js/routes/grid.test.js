@@ -75,3 +75,14 @@ test('formatNode', () => {
 
 	expect(node.containers).toStrictEqual([{"Name": "a"}, {"Name": "b"}, {"Name": "c"}]);
 });
+
+test('formatNode_MissingContainers', () => {
+	node = {
+		processJson: '{}',
+		role: 'standalone',
+	}
+
+	node = comp.formatNode(node);
+
+	expect(node.containers).toStrictEqual([]);
+});

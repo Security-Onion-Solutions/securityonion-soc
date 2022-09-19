@@ -147,9 +147,13 @@ routes.push({ path: '/grid', name: 'grid', component: {
         const details = JSON.parse(node.processJson);
         if (details) {
           node.statusCode = details.status_code;
-          node.containers = details.containers.sort((a, b) => {
-            return a.Name > b.Name ? 1 : -1 
-          });
+          if (details.containers) {
+            node.containers = details.containers.sort((a, b) => {
+              return a.Name > b.Name ? 1 : -1 
+            });
+          } else {
+            node.containers = [];
+          }
         }
       }
       return node;
