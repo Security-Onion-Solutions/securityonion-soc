@@ -6,9 +6,20 @@
 
 FROM ghcr.io/security-onion-solutions/golang:alpine as builder
 ARG VERSION=0.0.0
-RUN apk update && apk add libpcap-dev bash git musl-dev gcc npm python3 py3-pip
+RUN apk update && apk add libpcap-dev bash git musl-dev gcc npm python3 py3-pip py3-virtualenv
 COPY . /build
 WORKDIR /build
+RUN mkdir gitdocs && cd gitdocs && \
+	git clone --no-single-branch --depth 50 https://github.com/Security-Onion-Solutions/securityonion-docs.git . && \
+	bash -c "[[ $VERSION == '0.0.0' ]]" || git checkout --force origin/$(echo $VERSION | cut -d'.' -f1,2) && \
+	git clean -d -f -f && \
+	sed -i "s|'display_github': True|'display_github': False|g" conf.py && \
+	python3 -mvirtualenv /tmp/virtualenv && \
+	/tmp/virtualenv/bin/python -m pip install --upgrade --no-cache-dir pip "setuptools<58.3.0" && \
+	/tmp/virtualenv/bin/python -m pip install --upgrade --no-cache-dir pillow "mock==1.0.1" "alabaster>=0.7,<0.8,!=0.7.5" "commonmark==0.9.1" "recommonmark==0.5.0" "sphinx<2" "sphinx-rtd-theme<0.5" "readthedocs-sphinx-ext<2.2" "jinja2<3.1.0" && \
+	/tmp/virtualenv/bin/python -m pip install --exists-action=w --no-cache-dir -r requirements.txt && \
+	for i in /tmp/virtualenv/lib/python*/site-packages/sphinx_rtd_theme/versions.html; do echo > $i; done && \
+	/tmp/virtualenv/bin/python -m sphinx -T -E -b html -d _build/doctrees -D language=en . _build/html
 RUN npm install jest jest-environment-jsdom --global
 RUN ln -s /usr/bin/python3 /usr/bin/python
 RUN ./build.sh "$VERSION"
@@ -34,18 +45,14 @@ COPY --from=builder /build/rbac ./rbac
 COPY --from=builder /build/LICENSE .
 COPY --from=builder /build/README.md .
 COPY --from=builder /build/sensoroni.json .
+COPY --from=builder /build/gitdocs/_build/html ./html/docs
 RUN find html/js -name "*test*.js" -delete
 RUN chmod u+x scripts/*
 RUN chown 939:939 scripts/*
 RUN find . -name \*.html -exec sed -i -e "s/VERSION_PLACEHOLDER/$VERSION/g" {} \;
 
 RUN bash -c "[[ $VERSION == '0.0.0' ]]" || \
-    (wget https://docs.securityonion.net/_/downloads/en/$(echo $VERSION | cut -d'.' -f 1,2)/htmlzip/ -O /tmp/docs.zip && \
-    unzip -o /tmp/docs.zip -d html/docs && \
-    rm -f /tmp/docs.zip && \
-    mv -f html/docs/securityonion-*/* html/docs && \
-    rm -fr html/docs/securityonion-* && \
-    wget https://github.com/Security-Onion-Solutions/securityonion-docs/raw/$(echo $VERSION | cut -d'.' -f 1,2)/images/cheat-sheet/Security-Onion-Cheat-Sheet.pdf -O html/docs/cheatsheet.pdf)
+    wget https://github.com/Security-Onion-Solutions/securityonion-docs/raw/$(echo $VERSION | cut -d'.' -f 1,2)/images/cheat-sheet/Security-Onion-Cheat-Sheet.pdf -O html/docs/cheatsheet.pdf
 
 ENV ELASTIC_VERSION=$ELASTIC_VERSION
 ENV WAZUH_VERSION=$WAZUH_VERSION
