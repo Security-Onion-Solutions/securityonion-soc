@@ -46,7 +46,7 @@ function testUpdateMetricsEnabled(node1MetricsEnabled, node2MetricsEnabled, expe
 test('colorNodeStatus', () => {
 	expect(comp.colorNodeStatus("ok")).toBe("success");
   expect(comp.colorNodeStatus("fault")).toBe("error");
-  expect(comp.colorNodeStatus("unknown")).toBe("gray");
+  expect(comp.colorNodeStatus("unknown")).toBe("warning");
 });
 
 test('iconNodeStatus', () => {
@@ -58,11 +58,6 @@ test('iconNodeStatus', () => {
 test('colorContainerStatus', () => {
 	expect(comp.colorContainerStatus("running")).toBe("green");
   expect(comp.colorContainerStatus("broken")).toBe("error");
-});
-
-test('colorProcessStatus', () => {
-	expect(comp.colorProcessStatus("ok")).toBe("green");
-  expect(comp.colorProcessStatus("notok")).toBe("error");
 });
 
 test('formatNode', () => {

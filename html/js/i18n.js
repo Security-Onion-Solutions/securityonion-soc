@@ -139,6 +139,7 @@ const i18n = {
       chartTitleTop: 'Most Occurrences',
       cheatsheet: 'Cheat Sheet',
       clear: 'Clear',
+      clickForMoreInformation: 'Click for more information',
       collapse: 'Collapse',
       collapseAll: 'Collapse All',
       collapseHelp: 'Collapse all packet data',
@@ -248,6 +249,7 @@ const i18n = {
       incomplete: 'Incomplete',
       failedEvents: 'Failed Events',
       fault: 'Fault',
+      featureRequiresAppliance: 'Feature Unavailable',
       fetchLimit: 'Fetch Limit',
       
       'field_case.createTime': 'Create Date',

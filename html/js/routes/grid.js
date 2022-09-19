@@ -159,7 +159,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
       return node;
     },
     colorNodeStatus(status) {
-      var color = "gray";
+      var color = "warning";
       switch (status) {
         case NodeStatusFault: color = "error"; break;
         case NodeStatusOk: color = "success"; break;
@@ -176,9 +176,6 @@ routes.push({ path: '/grid', name: 'grid', component: {
     },
     colorContainerStatus(status) {
       return status == "running" ? "green" : "error";
-    },
-    colorProcessStatus(status) {
-      return status == "ok" ? "green" : "error";
     },
   }
 }});
