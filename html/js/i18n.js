@@ -381,7 +381,7 @@ const i18n = {
       nodeStatusCode_99: 'Installation has not yet completed',
       nodeStatusConnection: 'Connection Status:',
       nodeStatusProcess: 'Process Status:',
-      nodeStatusRaid: 'Raid Status:',
+      nodeStatusRaid: 'RAID Status:',
       noSearchResults: 'No search results were found.',
       none: 'None',
       note: 'Note',
