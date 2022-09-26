@@ -11,9 +11,11 @@ import (
   "github.com/security-onion-solutions/securityonion-soc/model"
 )
 
+/**
+ * Note that this interface is intended for direct interface into the auth system for reads only.
+ * For synchronization reasons, user administration (writes) is fulfilled by the AdminUserstore.
+ */
 type Userstore interface {
   GetUsers(ctx context.Context) ([]*model.User, error)
-  DeleteUser(ctx context.Context, id string) error
-  GetUser(ctx context.Context, id string) (*model.User, error)
-  UpdateUser(ctx context.Context, id string, user *model.User) error
+  GetUserById(ctx context.Context, id string) (*model.User, error)
 }

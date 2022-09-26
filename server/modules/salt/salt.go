@@ -43,6 +43,7 @@ func (mod *Salt) Init(cfg module.ModuleConfig) error {
   if err == nil {
     mod.server.Configstore = mod.impl
     mod.server.GridMembersstore = mod.impl
+    mod.server.AdminUserstore = mod.impl
   }
   return err
 }

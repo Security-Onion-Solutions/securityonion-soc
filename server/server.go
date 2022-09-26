@@ -27,6 +27,7 @@ type Server struct {
   Config           *config.ServerConfig
   Host             *web.Host
   Datastore        Datastore
+  AdminUserstore   AdminUserstore
   Userstore        Userstore
   Rolestore        Rolestore
   Eventstore       Eventstore
@@ -74,10 +75,10 @@ func (server *Server) Start() {
     server.Host.Register("/api/node", NewNodeHandler(server))
     server.Host.Register("/api/grid", NewGridHandler(server))
     server.Host.Register("/api/stream", NewStreamHandler(server))
-    server.Host.Register("/api/user/", NewUserHandler(server))
     server.Host.Register("/api/users/", NewUsersHandler(server))
     server.Host.Register("/api/config/", NewConfigHandler(server))
     server.Host.Register("/api/gridmembers/", NewGridMembersHandler(server))
+    server.Host.Register("/api/roles/", NewRolesHandler(server))
 
     server.Host.Start()
   }

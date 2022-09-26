@@ -102,6 +102,27 @@ func (impl *StaticRbacAuthorizer) GetAssignments(ctx context.Context) (map[strin
   return userMap, nil
 }
 
+func (impl *StaticRbacAuthorizer) GetRoles(ctx context.Context) []string {
+  roles := make([]string, 0, 0)
+  tmp_roles := make([]string, 0, 0)
+  perm_map := make(map[string]bool)
+  if err := impl.CheckContextOperationAuthorized(ctx, "read", "roles"); err == nil {
+    for role, perms := range impl.roleMap {
+      tmp_roles = append(tmp_roles, role)
+      for _, perm := range perms {
+        perm_map[perm] = true
+      }
+    }
+    for _, role := range tmp_roles {
+      if _, ok := perm_map[role]; !ok {
+        roles = append(roles, role)
+      }
+    }
+    sort.Strings(roles)
+  }
+  return roles
+}
+
 func (impl *StaticRbacAuthorizer) PopulateUserRoles(ctx context.Context, user *model.User) error {
   // Use the returned roles instead of the struct roles so that they are filtered for access permissions
   userMap, _ := impl.GetAssignments(ctx)

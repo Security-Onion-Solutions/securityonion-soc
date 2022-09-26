@@ -916,38 +916,6 @@
       </v-container>
     </script>
 
-    <script type="text/x-template" id="page-user">
-      <v-container fluid>
-        <v-row>
-          <v-col>
-            <h2 v-text="i18n.user"></h2>
-          </v-col>
-        </v-row>
-        <v-row>
-          <v-col>
-              <v-card>
-                <v-form v-model="form.valid">
-                  <v-container grid-list-sm class="pa-4">
-                    <v-row>
-                      <v-col xs12>
-                        <v-text-field v-model="form.email" :placeholder="i18n.email" autofocus="true" :rules="[rules.required]"></v-text-field>
-                        <v-text-field v-model="form.firstName" :placeholder="i18n.firstName"></v-text-field>
-                        <v-text-field v-model="form.lastName" :placeholder="i18n.lastName"></v-text-field>
-                        <v-text-field v-model="form.note" :placeholder="i18n.note"></v-text-field>
-                      </v-col>
-                    </v-row>
-                  </v-container>
-                  <v-card-actions>
-                    <v-spacer></v-spacer>
-                    <v-btn :disabled="!form.valid" text color="primary" @click="updateUser" v-text="i18n.update"></v-btn>
-                  </v-card-actions>
-                </v-form>
-              </v-card>
-          </v-col>
-        </v-row>
-      </v-container>
-    </script>
-
     <script type="text/x-template" id="page-users">
       <v-container fluid>
         <v-row>
@@ -957,48 +925,12 @@
         </v-row>
         <v-row>
           <v-col>
-            <v-toolbar class="elevation-0" class="d-none">
-              <v-btn class="action" color="blue" @click.stop="dialog = !dialog">
+            <v-toolbar v-if="$root.isUserAdmin()" class="elevation-0">
+              <v-btn class="action" color="blue" @click.stop="showAdd()">
                 <v-icon>fa-plus</v-icon>
               </v-btn>
             </v-toolbar>
-            <v-dialog v-model="deleteUserDialog" persistent max-width="390">
-              <v-card>
-                <v-card-title class="headline" v-text="i18n.deleteUserTitle"></v-card-title>
-                <v-card-text v-text="i18n.deleteUserConfirm"></v-card-text>
-                <v-card-text v-text="deleteUserEmail"></v-card-text>
-                <v-card-text v-text="i18n.continue"></v-card-text>
-                <v-card-actions>
-                  <v-spacer></v-spacer>
-                  <v-btn text @click.stop="hideDeleteConfirm()" v-text="i18n.cancel"></v-btn>
-                  <v-btn color="warning" text @click.stop="removeUser(deleteUserId)" v-text="i18n.delete"></v-btn>
-                </v-card-actions>
-              </v-card>
-            </v-dialog>
-            <v-data-table :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps" 
-              :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="users">
-              <template v-slot:item="props">
-                <tr>
-                  <td v-text="props.item.email"></td>
-                  <td v-text="props.item.firstName"></td>
-                  <td v-text="props.item.lastName"></td>
-                  <td v-text="props.item.note"></td>
-                  <td v-text="$root.formatStringArray(props.item.roles)"></td>
-                  <td>
-                    <v-icon v-if="props.item.mfaStatus == 'enabled' && props.item.status != 'locked'" :title="i18n.totpEnabled">fa-user-shield</v-icon>
-                    <v-icon v-if="props.item.mfaStatus != 'enabled' && props.item.status != 'locked'" :title="i18n.loginEnabled">fa-user</v-icon>
-                    <v-icon v-if="props.item.status == 'locked'" :title="i18n.loginDisabled">fa-user-slash</v-icon>
-                  </td>
-                  <td>
-                    <router-link :to="{ name: 'user', params: {id: props.item.id}}" :style="{ cursor: 'pointer'}">
-                      <v-icon class="mr-2 d-none" :title="i18n.edit">fa-edit</v-icon>
-                    </router-link>
-                    <v-icon class="mr-2 d-none" :title="i18n.delete" @click.stop="showDeleteConfirm(props.item)">fa-times-circle</v-icon>
-                  </td>
-                </tr>
-              </template>
-            </v-data-table>
-            <v-dialog v-model="dialog" width="800px">
+            <v-dialog v-model="dialog" persistent width="800px">
               <v-card>
                 <v-card-title class="lighten-4 py-4 title">{{ i18n.add }} {{ i18n.user }}</v-card-title>
                 <v-form v-model="form.valid">
@@ -1009,22 +941,102 @@
                         <v-text-field v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" 
                           @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" 
                           :rules="[rules.required]"></v-text-field>
+                        <v-select v-model="form.role" :items="roles" :label="i18n.role" :rules="[rules.required]"></v-select>
                         <v-text-field v-model="form.firstName" :placeholder="i18n.firstName"></v-text-field>
                         <v-text-field v-model="form.lastName" :placeholder="i18n.lastName"></v-text-field>
                         <v-text-field v-model="form.note" :placeholder="i18n.note"></v-text-field>
-                        <v-text-field name="csrf_token" v-model="form.csrfToken" class="d-none"></v-text-field>
-                        <v-text-field name="method" v-model="form.method" class="d-none"></v-text-field>
                       </v-col>
                     </v-row>
                   </v-container>
                   <v-card-actions>
                     <v-spacer></v-spacer>
                     <v-btn text @click="dialog = false">{{ i18n.cancel }}</v-btn>
-                    <v-btn :disabled="!form.valid" text color="primary" @click="submitAddUser" v-text="i18n.add"></v-btn>
+                    <v-btn :disabled="!form.valid" color="primary" @click="add()" v-text="i18n.add"></v-btn>
                   </v-card-actions>
                 </v-form>
               </v-card>
             </v-dialog>
+            <v-dialog v-model="deleteUserDialog" persistent max-width="390">
+              <v-card>
+                <v-card-title class="headline" v-text="i18n.deleteUserTitle"></v-card-title>
+                <v-card-text v-text="i18n.deleteUserConfirm"></v-card-text>
+                <v-card-text v-text="form.email" class="font-weight-bold"></v-card-text>
+                <v-card-text v-text="i18n.continue"></v-card-text>
+                <v-card-actions>
+                  <v-spacer></v-spacer>
+                  <v-btn text @click.stop="hideDeleteConfirm()" v-text="i18n.cancel"></v-btn>
+                  <v-btn color="warning" text @click.stop="removeUser(form.id)" v-text="i18n.delete"></v-btn>
+                </v-card-actions>
+              </v-card>
+            </v-dialog>
+            <v-data-table :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps" 
+              :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="users" :expanded.sync="expanded" :show-expand="$root.isUserAdmin()">
+              <template v-slot:item="props">
+                <tr>
+                  <td>
+                    <v-btn id="expandNode" icon small @click="expand(props.item)">
+                      <v-icon v-if="isExpanded(props.item)" :alt="i18n.expand" :title="i18n.nodeExpandHelp">fa-angle-down</v-icon>
+                      <v-icon v-if="!isExpanded(props.item)" :alt="i18n.expand" :title="i18n.nodeExpandHelp">fa-angle-right</v-icon>
+                    </v-btn>
+                  </td>
+                  <td v-text="props.item.email"></td>
+                  <td v-text="props.item.firstName"></td>
+                  <td v-text="props.item.lastName"></td>
+                  <td v-text="props.item.note"></td>
+                  <td v-text="$root.formatStringArray(props.item.roles)"></td>
+                  <td>
+                    <v-icon v-if="props.item.mfaStatus == 'enabled' && props.item.status != 'locked'" color="success" :title="i18n.totpEnabled">fa-user-shield</v-icon>
+                    <v-icon v-if="props.item.mfaStatus != 'enabled' && props.item.status != 'locked'" :title="i18n.loginEnabled">fa-user</v-icon>
+                    <v-icon v-if="props.item.status == 'locked'" color="grey" :title="i18n.loginDisabled">fa-user-slash</v-icon>
+                  </td>
+                </tr>
+              </template>
+              <template v-slot:expanded-item="{ item }">
+                <tr>
+                  <td :colspan="headers.length + 1" class="px-0">
+                    <v-container fluid grid-list-sm class="pa-4">
+                      <v-row>
+                        <v-col>
+                          <v-card>
+                            <v-card-title v-text="i18n.profile"/>
+                            <v-card-text>
+                              <v-text-field v-model="form.firstName" :placeholder="i18n.firstName"></v-text-field>
+                              <v-text-field v-model="form.lastName" :placeholder="i18n.lastName"></v-text-field>
+                              <v-text-field v-model="form.note" :placeholder="i18n.note"></v-text-field>
+
+                              <v-btn @click="updateProfile(item)" v-text="i18n.update"></v-btn>
+                            </v-card-text>
+                          </v-card>
+                        </v-col>
+                        <v-col>
+                          <v-card>
+                            <v-card-title>{{ i18n.roles }}</v-card-title>
+                            <v-card-text>
+                              <v-checkbox v-for="role in roles" :key="role" dense :input-value="hasRole(item, role)" :label="role" @click.stop="return toggleRole(item, role)">
+                            </v-card-text>
+                          </v-card>
+                        </v-col>
+                        <v-col>
+                          <v-card>
+                            <v-card-title>{{ i18n.access }}</v-card-title>
+                            <v-card-text>
+                              <v-form v-model="form.valid">
+                                <v-text-field v-model="form.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" 
+                                  @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" 
+                                  :rules="[rules.required]"></v-text-field>
+                              </v-form>
+                              <v-btn :disabled="!form.valid" @click="updatePassword(item)" v-text="i18n.passwordReset"></v-btn>
+                              <v-btn v-text="item.status == 'locked' ? i18n.unlock : i18n.lock" @click.stop="toggleStatus(item)" class="mr-2"/>
+                              <v-btn v-text="i18n.delete" color="error" @click.stop="showDeleteConfirm(item)" class="mr-2"/>
+                            </v-card-text>
+                          </v-card>
+                        </v-col>
+                      </v-row>
+                    </v-container>
+                  </td>
+                </tr>
+              </template>
+            </v-data-table>
           </v-col>
         </v-row>
       </v-container>
@@ -3214,7 +3226,7 @@
                     {{ i18n.name }}:
                   </v-card-text>
                   <v-card-text class="font-weight-bold">
-                    {{ i18n.rolePrimary }}:
+                    {{ i18n.role }}:
                   </v-card-text>
                   <v-card-text class="font-weight-bold">
                     {{ i18n.fingerprint }}:
@@ -3296,7 +3308,6 @@
     <script src="js/routes/grid.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/gridmembers.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/terms.js?v=VERSION_PLACEHOLDER"></script>
-    <script src="js/routes/user.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/users.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/custom.js?v=VERSION_PLACEHOLDER"></script>
   </body>

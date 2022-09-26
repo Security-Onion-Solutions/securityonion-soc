@@ -8,6 +8,7 @@ package server
 
 import (
   "context"
+  "errors"
   "github.com/security-onion-solutions/securityonion-soc/config"
   "github.com/security-onion-solutions/securityonion-soc/model"
 )
@@ -23,6 +24,23 @@ func (fake FakeAuthorizer) CheckContextOperationAuthorized(ctx context.Context, 
   return model.NewUnauthorized("fake-subject", operation, target)
 }
 
+type FakeUserstore struct {
+  users []*model.User
+}
+
+func (impl *FakeUserstore) GetUsers(ctx context.Context) ([]*model.User, error) {
+  return impl.users, nil
+}
+
+func (impl *FakeUserstore) GetUserById(ctx context.Context, id string) (*model.User, error) {
+  for _, user := range impl.users {
+    if user.Id == id {
+      return user, nil
+    }
+  }
+  return nil, errors.New("not found")
+}
+
 type FakeRolestore struct {
   roleMap map[string][]string
 }
@@ -36,6 +54,14 @@ func (impl *FakeRolestore) PopulateUserRoles(ctx context.Context, user *model.Us
   return nil
 }
 
+func (impl *FakeRolestore) GetRoles(ctx context.Context) []string {
+  roles := make([]string, 0, 0)
+  for role := range impl.roleMap {
+    roles = append(roles, role)
+  }
+  return roles
+}
+
 func NewFakeServer(authorized bool, roleMap map[string][]string) *Server {
   cfg := &config.ServerConfig{}
   srv := NewServer(cfg, "")
@@ -44,6 +70,19 @@ func NewFakeServer(authorized bool, roleMap map[string][]string) *Server {
   }
   srv.Rolestore = &FakeRolestore{
     roleMap: roleMap,
+  }
+
+  users := make([]*model.User, 0, 0)
+  users = append(users, &model.User{
+    Id:    "user-id-1",
+    Email: "user1@somewhere.invalid",
+  })
+  users = append(users, &model.User{
+    Id:    "user-id-2",
+    Email: "user2@somewhere.invalid",
+  })
+  srv.Userstore = &FakeUserstore{
+    users: users,
   }
   return srv
 }

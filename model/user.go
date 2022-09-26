@@ -22,6 +22,7 @@ type User struct {
   Roles          []string  `json:"roles"`
   Status         string    `json:"status"`
   SearchUsername string    `json:"searchUsername"`
+  Password       string    `json:"password"`
 }
 
 func NewUser() *User {
@@ -33,6 +34,7 @@ func NewUser() *User {
     Note:           "",
     Status:         "",
     SearchUsername: "",
+    Password:       "",
   }
 }
 

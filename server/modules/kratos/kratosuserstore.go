@@ -36,6 +36,43 @@ func (kratos *KratosUserstore) fetchUser(id string) (*KratosUser, error) {
   return kratosUser, err
 }
 
+func (kratos *KratosUserstore) GetUserById(ctx context.Context, id string) (*model.User, error) {
+  var err error
+  var user *model.User
+
+  if err = kratos.server.CheckAuthorized(ctx, "read", "users"); err == nil {
+    log.WithFields(log.Fields{
+      "userId":    id,
+      "requestId": ctx.Value(web.ContextKeyRequestId),
+    }).Debug("Fetching user by ID")
+
+    var kratosUser KratosUser
+    _, err = kratos.client.SendObject("GET", "/identities/"+id, "", &kratosUser, false)
+    if err != nil {
+      log.WithError(err).WithFields(log.Fields{
+        "userId":    id,
+        "requestId": ctx.Value(web.ContextKeyRequestId),
+      }).Error("Failed to fetch user from Kratos")
+      return nil, err
+    }
+
+    user = model.NewUser()
+
+    // If the requesting user has write access to all users, then also fetch the detailed
+    // data about each user.
+    if err := kratos.server.CheckAuthorized(ctx, "write", "users"); err == nil {
+      kratos.populateUserDetails(ctx, &kratosUser)
+    }
+
+    kratosUser.copyToUser(user)
+    if kratos.server.Rolestore != nil {
+      kratos.server.Rolestore.PopulateUserRoles(ctx, user)
+    }
+  }
+
+  return user, err
+}
+
 func (kratos *KratosUserstore) GetUsers(ctx context.Context) ([]*model.User, error) {
   kratosUsers := make([]*KratosUser, 0, 0)
 
@@ -105,23 +142,6 @@ func (kratos *KratosUserstore) populateUserDetails(ctx context.Context, kratosUs
   }
 }
 
-func (kratos *KratosUserstore) DeleteUser(ctx context.Context, id string) error {
-  var err error
-  if err = kratos.server.CheckAuthorized(ctx, "delete", "users"); err != nil {
-    log.WithFields(log.Fields{
-      "id":        id,
-      "requestId": ctx.Value(web.ContextKeyRequestId),
-    }).Debug("Deleting user")
-    _, err := kratos.client.SendObject("DELETE", "/identities/"+id, "", nil, false)
-    if err != nil {
-      log.WithError(err).WithFields(log.Fields{
-        "requestId": ctx.Value(web.ContextKeyRequestId),
-      }).Error("Failed to delete user from Kratos")
-    }
-  }
-  return err
-}
-
 func (kratos *KratosUserstore) GetUser(ctx context.Context, id string) (*model.User, error) {
   var err error
   var user *model.User
@@ -136,25 +156,4 @@ func (kratos *KratosUserstore) GetUser(ctx context.Context, id string) (*model.U
     }
   }
   return user, err
-}
-
-func (kratos *KratosUserstore) UpdateUser(ctx context.Context, id string, user *model.User) error {
-  var err error
-  if err = kratos.server.CheckAuthorized(ctx, "write", "users"); err != nil {
-    kratosUser, err := kratos.fetchUser(id)
-    if err != nil {
-      log.WithError(err).WithFields(log.Fields{
-        "requestId": ctx.Value(web.ContextKeyRequestId),
-      }).Error("Original user not found")
-    } else {
-      kratosUser.copyFromUser(user)
-      _, err = kratos.client.SendObject("PUT", "/identities/"+id, kratosUser, nil, false)
-      if err != nil {
-        log.WithError(err).WithFields(log.Fields{
-          "requestId": ctx.Value(web.ContextKeyRequestId),
-        }).Error("Failed to update user in Kratos")
-      }
-    }
-  }
-  return err
 }

@@ -53,7 +53,7 @@ func (store *Saltstore) Init(timeoutMs int, saltstackDir string, saltPipeReq str
   return nil
 }
 
-func (store *Saltstore) execCommand(ctx context.Context, args ...string) (string, error) {
+func (store *Saltstore) execCommand(ctx context.Context, args map[string]string) (string, error) {
   // Obtain exclusive lock to avoid interleaved responses
   store.saltPipeMutex.Lock()
   defer store.saltPipeMutex.Unlock()
@@ -62,7 +62,6 @@ func (store *Saltstore) execCommand(ctx context.Context, args ...string) (string
   if err != nil {
     log.WithFields(log.Fields{
       "saltPipeReq": store.saltPipeReq,
-      "args":        args,
     }).WithError(err).Error("Unable to open salt pipe")
     return "", err
   }
@@ -72,19 +71,24 @@ func (store *Saltstore) execCommand(ctx context.Context, args ...string) (string
 
   log.WithFields(log.Fields{
     "saltPipeReq": store.saltPipeReq,
-    "args":        args,
     "timeoutNs":   nanoseconds,
   }).Info("Executing command via salt pipe")
 
   // Write command to pipe
   var wrote int
-  request := strings.Join(args, " ")
+
+  var request_bytes []byte
+  request_bytes, err = json.WriteJson(args)
+  if err != nil {
+    log.WithFields(log.Fields{}).WithError(err).Error("Unable to convert command args to JSON")
+    return "", err
+  }
+  request := string(request_bytes)
   pipe.SetDeadline(time.Now().Add(time.Duration(nanoseconds)))
   wrote, err = pipe.WriteString(request)
   if err != nil || wrote != len(request) {
     log.WithFields(log.Fields{
       "saltPipeReq": store.saltPipeReq,
-      "request":     request,
       "wrote":       wrote,
       "length":      len(request),
     }).WithError(err).Error("Unable to write to salt pipe")
@@ -96,14 +100,13 @@ func (store *Saltstore) execCommand(ctx context.Context, args ...string) (string
   if err != nil {
     log.WithFields(log.Fields{
       "saltPipeReq": store.saltPipeReq,
-      "args":        args,
     }).WithError(err).Error("Unable to close pipe after writing request")
     return "", err
   }
 
   log.WithFields(log.Fields{
     "saltPipeResp": store.saltPipeResp,
-    "request":      request,
+    "length":       len(request),
   }).Info("Reading response via salt pipe")
 
   // Read up to 1MB response from pipe
@@ -114,7 +117,7 @@ func (store *Saltstore) execCommand(ctx context.Context, args ...string) (string
   if err != nil {
     log.WithFields(log.Fields{
       "saltPipeResp": store.saltPipeResp,
-      "args":         args,
+      "length":       len(request),
     }).WithError(err).Error("Unable to open salt pipe for read")
     return "", err
   }
@@ -124,7 +127,7 @@ func (store *Saltstore) execCommand(ctx context.Context, args ...string) (string
     if err != nil {
       log.WithFields(log.Fields{
         "saltPipeResp": store.saltPipeResp,
-        "request":      request,
+        "length":       len(request),
       }).WithError(err).Debug("Unable to read response")
     }
 
@@ -132,7 +135,7 @@ func (store *Saltstore) execCommand(ctx context.Context, args ...string) (string
       totalRead += read
       log.WithFields(log.Fields{
         "saltPipeResp": store.saltPipeResp,
-        "request":      request,
+        "length":       len(request),
         "read":         read,
         "totalRead":    totalRead,
       }).Debug("Appending more read bytes to response")
@@ -151,7 +154,7 @@ func (store *Saltstore) execCommand(ctx context.Context, args ...string) (string
 
   log.WithFields(log.Fields{
     "saltPipeResp": store.saltPipeResp,
-    "args":         args,
+    "length":       len(request),
     "bytesRead":    len(response),
     "response":     response,
   }).Debug("Finished reading response")
@@ -930,7 +933,9 @@ func (store *Saltstore) GetMembers(ctx context.Context) ([]*model.GridMember, er
   }
 
   var members []*model.GridMember
-  output, err := store.execCommand(ctx, "list-minions")
+  args := make(map[string]string)
+  args["command"] = "list-minions"
+  output, err := store.execCommand(ctx, args)
   if err == nil {
     if output == "false" {
       err = errors.New("ERROR_SALT_MANAGE_MEMBER")
@@ -947,10 +952,187 @@ func (store *Saltstore) ManageMember(ctx context.Context, operation string, id s
     return err
   }
 
-  output, err := store.execCommand(ctx, "manage-minion", operation, id)
+  args := make(map[string]string)
+  args["command"] = "manage-minions"
+  args["operation"] = operation
+  args["id"] = id
+  output, err := store.execCommand(ctx, args)
   if err == nil {
     if output == "false" {
       err = errors.New("ERROR_SALT_MANAGE_MEMBER")
+    }
+  }
+
+  return err
+}
+
+func (store *Saltstore) lookupEmailFromId(ctx context.Context, id string) string {
+  user, _ := store.server.Userstore.GetUserById(ctx, id)
+  if user != nil && user.Id == id {
+    return user.Email
+  }
+  return ""
+}
+
+func (store *Saltstore) Add(ctx context.Context, user *model.User) error {
+  if err := store.server.CheckAuthorized(ctx, "write", "users"); err != nil {
+    return err
+  }
+
+  args := make(map[string]string)
+  args["command"] = "manage-user"
+  args["operation"] = "add"
+  args["email"] = user.Email
+  if len(user.Roles) > 0 {
+    args["role"] = user.Roles[0]
+  }
+  args["firstName"] = user.FirstName
+  args["lastName"] = user.LastName
+  args["note"] = user.Note
+  args["password"] = user.Password
+  output, err := store.execCommand(ctx, args)
+  if err == nil {
+    if output == "false" {
+      err = errors.New("ERROR_SALT_MANAGE_USER")
+    }
+  }
+
+  return err
+}
+
+func (store *Saltstore) Delete(ctx context.Context, id string) error {
+  if err := store.server.CheckAuthorized(ctx, "delete", "users"); err != nil {
+    return err
+  }
+
+  args := make(map[string]string)
+  args["command"] = "manage-user"
+  args["operation"] = "delete"
+  args["email"] = store.lookupEmailFromId(ctx, id)
+  output, err := store.execCommand(ctx, args)
+  if err == nil {
+    if output == "false" {
+      err = errors.New("ERROR_SALT_MANAGE_USER")
+    }
+  }
+
+  return err
+}
+
+func (store *Saltstore) UpdateProfile(ctx context.Context, user *model.User) error {
+  if err := store.server.CheckAuthorized(ctx, "write", "users"); err != nil {
+    return err
+  }
+
+  args := make(map[string]string)
+  args["command"] = "manage-user"
+  args["operation"] = "profile"
+  args["email"] = store.lookupEmailFromId(ctx, user.Id)
+  args["firstName"] = user.FirstName
+  args["lastName"] = user.LastName
+  args["note"] = user.Note
+  output, err := store.execCommand(ctx, args)
+  if err == nil {
+    if output == "false" {
+      err = errors.New("ERROR_SALT_MANAGE_USER")
+    }
+  }
+
+  return err
+}
+
+func (store *Saltstore) ResetPassword(ctx context.Context, id string, password string) error {
+  if err := store.server.CheckAuthorized(ctx, "write", "users"); err != nil {
+    return err
+  }
+
+  args := make(map[string]string)
+  args["command"] = "manage-user"
+  args["operation"] = "password"
+  args["email"] = store.lookupEmailFromId(ctx, id)
+  args["password"] = password
+  output, err := store.execCommand(ctx, args)
+  if err == nil {
+    if output == "false" {
+      err = errors.New("ERROR_SALT_MANAGE_USER")
+    }
+  }
+
+  return err
+}
+
+func (store *Saltstore) Enable(ctx context.Context, id string) error {
+  if err := store.server.CheckAuthorized(ctx, "write", "users"); err != nil {
+    return err
+  }
+
+  args := make(map[string]string)
+  args["command"] = "manage-user"
+  args["operation"] = "enable"
+  args["email"] = store.lookupEmailFromId(ctx, id)
+  output, err := store.execCommand(ctx, args)
+  if err == nil {
+    if output == "false" {
+      err = errors.New("ERROR_SALT_MANAGE_USER")
+    }
+  }
+
+  return err
+}
+
+func (store *Saltstore) Disable(ctx context.Context, id string) error {
+  if err := store.server.CheckAuthorized(ctx, "write", "users"); err != nil {
+    return err
+  }
+
+  args := make(map[string]string)
+  args["command"] = "manage-user"
+  args["operation"] = "disable"
+  args["email"] = store.lookupEmailFromId(ctx, id)
+  output, err := store.execCommand(ctx, args)
+  if err == nil {
+    if output == "false" {
+      err = errors.New("ERROR_SALT_MANAGE_USER")
+    }
+  }
+
+  return err
+}
+
+func (store *Saltstore) AddRole(ctx context.Context, id string, role string) error {
+  if err := store.server.CheckAuthorized(ctx, "write", "users"); err != nil {
+    return err
+  }
+
+  args := make(map[string]string)
+  args["command"] = "manage-user"
+  args["operation"] = "addrole"
+  args["email"] = store.lookupEmailFromId(ctx, id)
+  args["role"] = role
+  output, err := store.execCommand(ctx, args)
+  if err == nil {
+    if output == "false" {
+      err = errors.New("ERROR_SALT_MANAGE_USER")
+    }
+  }
+
+  return err
+}
+
+func (store *Saltstore) DeleteRole(ctx context.Context, id string, role string) error {
+  if err := store.server.CheckAuthorized(ctx, "write", "users"); err != nil {
+    return err
+  }
+
+  args := make(map[string]string)
+  args["command"] = "manage-user"
+  args["operation"] = "delrole"
+  args["email"] = store.lookupEmailFromId(ctx, id)
+  args["role"] = role
+  output, err := store.execCommand(ctx, args)
+  if err == nil {
+    if output == "false" {
+      err = errors.New("ERROR_SALT_MANAGE_USER")
     }
   }
 

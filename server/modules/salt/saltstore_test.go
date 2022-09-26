@@ -111,7 +111,7 @@ func TestGetMembers(tester *testing.T) {
 	assert.Equal(tester, 15, len(members))
 
 	request := ReadReqPipe()
-	assert.Equal(tester, "list-minions", request)
+	assert.Equal(tester, "{\"command\":\"list-minions\"}", request)
 }
 
 func TestGetMembers_Failure(tester *testing.T) {
@@ -122,7 +122,7 @@ func TestGetMembers_Failure(tester *testing.T) {
 	assert.Equal(tester, 0, len(members))
 
 	request := ReadReqPipe()
-	assert.Equal(tester, "list-minions", request)
+	assert.Equal(tester, "{\"command\":\"list-minions\"}", request)
 }
 
 func TestManageMemberUnauthorized(tester *testing.T) {
@@ -153,7 +153,7 @@ func TestManageMember(tester *testing.T) {
 		assert.NoError(tester, err)
 
 		request := ReadReqPipe()
-		assert.Equal(tester, "manage-minion "+op+" foo", request)
+		assert.Equal(tester, `{"command":"manage-minions","id":"foo","operation":"`+op+`"}`, request)
 	}
 }
 
@@ -165,7 +165,7 @@ func TestManageMember_Failure(tester *testing.T) {
 		assert.EqualError(tester, err, "ERROR_SALT_MANAGE_MEMBER")
 
 		request := ReadReqPipe()
-		assert.Equal(tester, "manage-minion "+op+" foo", request)
+		assert.Equal(tester, `{"command":"manage-minions","id":"foo","operation":"`+op+`"}`, request)
 	}
 }
 
@@ -940,4 +940,102 @@ func TestUpdateSettingWithAnnotation(tester *testing.T) {
 	assert.Equal(tester, "some default", setting.Default)
 	assert.Equal(tester, "some local", setting.Value)
 	assert.Equal(tester, "yaml", setting.Syntax)
+}
+
+func TestManageUser_Add(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSaltPipe("true.resp")
+	roles := make([]string, 0, 0)
+	roles = append(roles, "analyst")
+	user := &model.User{
+		Email:     "user1@somewhere.invalid",
+		Password:  "dontlook!",
+		FirstName: "My First",
+		LastName:  "My Last",
+		Note:      "My Note",
+		Roles:     roles,
+	}
+	err := salt.Add(context.Background(), user)
+	assert.NoError(tester, err)
+
+	request := ReadReqPipe()
+	assert.Equal(tester, `{"command":"manage-user","email":"user1@somewhere.invalid","firstName":"My First","lastName":"My Last","note":"My Note","operation":"add","password":"dontlook!","role":"analyst"}`, request)
+}
+
+func TestManageUser_Enable(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSaltPipe("true.resp")
+	err := salt.Enable(context.Background(), "user-id-1")
+	assert.NoError(tester, err)
+
+	request := ReadReqPipe()
+	assert.Equal(tester, `{"command":"manage-user","email":"user1@somewhere.invalid","operation":"enable"}`, request)
+}
+
+func TestManageUser_Disable(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSaltPipe("true.resp")
+	err := salt.Disable(context.Background(), "user-id-1")
+	assert.NoError(tester, err)
+
+	request := ReadReqPipe()
+	assert.Equal(tester, `{"command":"manage-user","email":"user1@somewhere.invalid","operation":"disable"}`, request)
+}
+
+func TestManageUser_Delete(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSaltPipe("true.resp")
+	err := salt.Delete(context.Background(), "user-id-1")
+	assert.NoError(tester, err)
+
+	request := ReadReqPipe()
+	assert.Equal(tester, `{"command":"manage-user","email":"user1@somewhere.invalid","operation":"delete"}`, request)
+}
+
+func TestManageUser_UpdateProfile(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSaltPipe("true.resp")
+	roles := make([]string, 0, 0)
+	roles = append(roles, "analyst")
+	user := &model.User{
+		Id:        "user-id-1",
+		FirstName: "My First",
+		LastName:  "My Last",
+		Note:      "My Note",
+	}
+	err := salt.UpdateProfile(context.Background(), user)
+	assert.NoError(tester, err)
+
+	request := ReadReqPipe()
+	assert.Equal(tester, `{"command":"manage-user","email":"user1@somewhere.invalid","firstName":"My First","lastName":"My Last","note":"My Note","operation":"profile"}`, request)
+}
+
+func TestManageUser_UpdatePassword(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSaltPipe("true.resp")
+	err := salt.ResetPassword(context.Background(), "user-id-1", "newone#")
+	assert.NoError(tester, err)
+
+	request := ReadReqPipe()
+	assert.Equal(tester, `{"command":"manage-user","email":"user1@somewhere.invalid","operation":"password","password":"newone#"}`, request)
+}
+
+func TestManageUser_AddRole(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSaltPipe("true.resp")
+	err := salt.AddRole(context.Background(), "user-id-1", "broker")
+	assert.NoError(tester, err)
+
+	request := ReadReqPipe()
+	assert.Equal(tester, `{"command":"manage-user","email":"user1@somewhere.invalid","operation":"addrole","role":"broker"}`, request)
+}
+
+func TestManageUser_DeleteRole(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSaltPipe("true.resp")
+	err := salt.DeleteRole(context.Background(), "user-id-1", "broker")
+	assert.NoError(tester, err)
+
+	request := ReadReqPipe()
+	assert.Equal(tester, `{"command":"manage-user","email":"user1@somewhere.invalid","operation":"delrole","role":"broker"}`, request)
 }

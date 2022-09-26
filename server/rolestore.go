@@ -14,4 +14,9 @@ import (
 type Rolestore interface {
   GetAssignments(ctx context.Context) (map[string][]string, error)
   PopulateUserRoles(ctx context.Context, user *model.User) error
+
+  /**
+   * Return only top-level roles (roles that are not a child of another role.
+   */
+  GetRoles(ctx context.Context) []string
 }

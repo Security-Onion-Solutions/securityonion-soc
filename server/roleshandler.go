@@ -39,9 +39,6 @@ func (rolesHandler *RolesHandler) HandleNow(ctx context.Context, writer http.Res
 }
 
 func (rolesHandler *RolesHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-  roles, err := rolesHandler.server.Rolestore.GetAssignments(ctx)
-  if err != nil {
-    return http.StatusBadRequest, nil, err
-  }
+  roles := rolesHandler.server.Rolestore.GetRoles(ctx)
   return http.StatusOK, roles, nil
 }

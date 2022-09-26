@@ -186,3 +186,12 @@ func TestAddRemoveRole(tester *testing.T) {
   assert.Len(tester, roles[auth.identifyUser(user)], 1)
   assert.NotContains(tester, roles[auth.identifyUser(user)], "fruity")
 }
+
+func TestGetRoles(tester *testing.T) {
+  auth, ctx, _ := prepareTest(tester, "some@one.invalid", "a1-id")
+
+  roles := auth.GetRoles(ctx)
+
+  var expectedRoles = [...]string{"anotherrole", "fifthrole", "somerole", "superuser", "user"}
+  assert.ElementsMatch(tester, expectedRoles, roles)
+}
