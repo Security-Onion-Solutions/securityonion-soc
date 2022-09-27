@@ -45,6 +45,9 @@ type FakeRolestore struct {
   roleMap map[string][]string
 }
 
+func (impl *FakeRolestore) Reload() {
+}
+
 func (impl *FakeRolestore) GetAssignments(ctx context.Context) (map[string][]string, error) {
   return impl.roleMap, nil
 }

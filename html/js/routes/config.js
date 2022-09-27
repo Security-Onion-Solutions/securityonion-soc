@@ -367,12 +367,14 @@ routes.push({ path: '/config', name: 'config', component: {
       }
     },
     async sync() {
+      this.$root.startLoading();
       try {
         const response = await this.$root.papi.put('config/sync');
         this.$root.showTip(this.i18n.settingsSynchronized);
       } catch (error) {
          this.$root.showError(error);
-      }      
+      }
+      this.$root.stopLoading();      
     },
     edit(setting, nodeId) {
       if (nodeId) {

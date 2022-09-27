@@ -249,6 +249,10 @@ func (impl *StaticRbacAuthorizer) isAuthorized(subject string, requestedPermissi
   return false
 }
 
+func (impl *StaticRbacAuthorizer) Reload() {
+  impl.scanNow()
+}
+
 func (impl *StaticRbacAuthorizer) scanLoop() {
   log.WithField("scanIntervalMs", impl.scanIntervalMs).Info("Starting periodic role file scanner")
   for impl.running {

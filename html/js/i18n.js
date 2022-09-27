@@ -491,7 +491,7 @@ const i18n = {
       settingsTitle: 'User Settings',
       settingsSynchronize: 'Synchronize Grid',
       settingsSynchronizeHelp: 'Manually synchronize the entire grid state. This can take several minutes to complete.',
-      settingsSynchronized: 'Synchronization complete.',
+      settingsSynchronized: 'Synchronization has been initiated in the background; this process can take several minute to complete.',
 
       setting_fake_setting_foo: 'Fake Setting Translated',
       settingHelp_fake_setting_foo: 'This is a transalated fake setting description.',
@@ -602,7 +602,7 @@ const i18n = {
       usersEnabled: 'Users Enabled:',
       usersSynchronize: 'Synchronize Users',
       usersSynchronizeHelp: 'Synchronize users across all backend applications. This can take several minutes to complete.',
-      usersSynchronized: 'Users synchronized successfully',
+      usersSynchronized: 'User synchronization has been initiated in the background; this process can take several minute to complete.',
       value: 'Value',
       version: 'Version',
       view: 'View',

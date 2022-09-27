@@ -997,6 +997,8 @@ func (store *Saltstore) AddUser(ctx context.Context, user *model.User) error {
     }
   }
 
+  store.server.Rolestore.Reload()
+
   return err
 }
 
@@ -1116,6 +1118,8 @@ func (store *Saltstore) AddRole(ctx context.Context, id string, role string) err
     }
   }
 
+  store.server.Rolestore.Reload()
+
   return err
 }
 
@@ -1135,6 +1139,8 @@ func (store *Saltstore) DeleteRole(ctx context.Context, id string, role string) 
       err = errors.New("ERROR_SALT_MANAGE_USER")
     }
   }
+
+  store.server.Rolestore.Reload()
 
   return err
 }

@@ -12,6 +12,7 @@ import (
 )
 
 type Rolestore interface {
+  Reload()
   GetAssignments(ctx context.Context) (map[string][]string, error)
   PopulateUserRoles(ctx context.Context, user *model.User) error
 
