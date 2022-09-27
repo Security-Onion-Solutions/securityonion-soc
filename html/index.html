@@ -923,7 +923,7 @@
             <h2 v-text="i18n.users"></h2>
           </v-col>
           <v-col cols="5">
-            <v-expansion-panels>
+            <v-expansion-panels v-if="$root.isUserAdmin()">
               <v-expansion-panel>
                 <v-expansion-panel-header id="configOptionsHeader">{{i18n.options}}</v-expansion-panel-header>
                 <v-expansion-panel-content>
@@ -990,7 +990,7 @@
               :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="users" :expanded.sync="expanded" :show-expand="$root.isUserAdmin()">
               <template v-slot:item="props">
                 <tr>
-                  <td>
+                  <td v-if="$root.isUserAdmin()">
                     <v-btn id="expandNode" icon small @click="expand(props.item)">
                       <v-icon v-if="isExpanded(props.item)" :alt="i18n.expand" :title="i18n.nodeExpandHelp">fa-angle-down</v-icon>
                       <v-icon v-if="!isExpanded(props.item)" :alt="i18n.expand" :title="i18n.nodeExpandHelp">fa-angle-right</v-icon>
