@@ -602,7 +602,7 @@ const i18n = {
       usersEnabled: 'Users Enabled:',
       usersSynchronize: 'Synchronize Users',
       usersSynchronizeHelp: 'Synchronize users across all backend applications. This can take several minutes to complete.',
-      usersSynchronized: 'User synchronization has been initiated in the background; this process can take several minutes to complete.',
+      usersSynchronized: 'User synchronization successful.',
       value: 'Value',
       version: 'Version',
       view: 'View',
