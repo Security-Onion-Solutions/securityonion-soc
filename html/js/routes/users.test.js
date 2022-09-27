@@ -91,3 +91,12 @@ test('add', async () => {
   expect(mock).toHaveBeenCalledWith('users/', {email: 'my email', roles: ['my role'], password: 'my pass', firstName: 'my first', lastName: 'my last', note: 'my note'});
   expect(getUsersMock).toHaveBeenCalledTimes(1);
 });
+
+test('hasRole', () => {
+  expect(comp.hasRole(null, 'test')).toBe(false);
+  expect(comp.hasRole({}, 'test')).toBe(false);
+  expect(comp.hasRole({roles: null}, 'test')).toBe(false);
+  expect(comp.hasRole({roles: []}, 'test')).toBe(false);
+  expect(comp.hasRole({roles: ['foo']}, 'test')).toBe(false);
+  expect(comp.hasRole({roles: ['foo','test']}, 'test')).toBe(true);
+});

@@ -162,7 +162,7 @@ routes.push({ path: '/users', name: 'users', component: {
       this.$root.stopLoading();
     },
     hasRole(item, role) {
-      return item.roles.indexOf(role) != -1;
+      return item != null && item.roles != null && item.roles.indexOf(role) != -1;
     },
     toggleRole(item, role) {
       if (this.hasRole(item, role)) {
