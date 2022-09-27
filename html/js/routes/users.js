@@ -136,7 +136,7 @@ routes.push({ path: '/users', name: 'users', component: {
             "note": this.form.note,
           });
 
-          this.users = this.$root.getUsers();
+          this.users = await this.$root.getUsers();
           this.$root.showTip(this.i18n.userAdded);
           this.hideAdd();
         } catch (error) {
@@ -154,7 +154,7 @@ routes.push({ path: '/users', name: 'users', component: {
           "note": this.form.note,
         });
 
-        this.users = this.$root.getUsers();
+        this.users = await this.$root.getUsers();
         this.$root.showTip(this.i18n.userProfileUpdated);
       } catch (error) {
          this.$root.showError(error);
@@ -175,7 +175,7 @@ routes.push({ path: '/users', name: 'users', component: {
       this.$root.startLoading();
       try {
         const response = await this.$root.papi.post('users/' + user.id + '/role/' + role);
-        this.users = this.$root.getUsers();
+        this.users = await this.$root.getUsers();
         this.$root.showTip(this.i18n.userRoleAdded);
       } catch (error) {
          this.$root.showError(error);
@@ -186,7 +186,7 @@ routes.push({ path: '/users', name: 'users', component: {
       this.$root.startLoading();
       try {
         const response = await this.$root.papi.delete('users/' + user.id + "/role/" + role);
-        this.users = this.$root.getUsers();
+        this.users = await this.$root.getUsers();
         this.$root.showTip(this.i18n.userRoleDeleted);
       } catch (error) {
          this.$root.showError(error);
@@ -231,7 +231,7 @@ routes.push({ path: '/users', name: 'users', component: {
       this.$root.startLoading();
       try {
         const response = await this.$root.papi.put('users/' + user.id + '/' + (user.status == 'locked' ? 'enable' : 'disable'));
-        this.users = this.$root.getUsers()
+        this.users = await this.$root.getUsers()
         this.$root.showTip(user.status == 'locked' ? this.i18n.userEnabled : this.i18n.userDisabled);
         this.hideDeleteConfirm();
       } catch (error) {
@@ -243,7 +243,7 @@ routes.push({ path: '/users', name: 'users', component: {
       this.$root.startLoading();
       try {
         const response = await this.$root.papi.put('users/sync');
-        this.users = this.$root.getUsers()
+        this.users = await this.$root.getUsers()
         this.$root.showTip(this.i18n.usersSynchronized);
       } catch (error) {
          this.$root.showError(error);
