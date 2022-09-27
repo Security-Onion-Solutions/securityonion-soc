@@ -1042,7 +1042,7 @@
                                   @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" 
                                   :rules="[rules.required]"></v-text-field>
                               </v-form>
-                              <v-btn :disabled="!form.valid" @click="updatePassword(item)" v-text="i18n.passwordReset"></v-btn>
+                              <v-btn :disabled="!form.valid" @click="updatePassword(item)" v-text="i18n.passwordReset" class="mr-2"></v-btn>
                               <v-btn v-text="item.status == 'locked' ? i18n.unlock : i18n.lock" @click.stop="toggleStatus(item)" class="mr-2"/>
                               <v-btn v-text="i18n.delete" color="error" @click.stop="showDeleteConfirm(item)" class="mr-2"/>
                             </v-card-text>
