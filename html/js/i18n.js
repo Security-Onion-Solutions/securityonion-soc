@@ -490,7 +490,7 @@ const i18n = {
       settingsCustomized: 'Modified: ',
       settingsTitle: 'User Settings',
       settingsSynchronize: 'Synchronize Grid',
-      settingsSynchronizeHelp: 'Manually synchronize the entire grid state. This can take several minutes to complete.',
+      settingsSynchronizeHelp: 'Manually synchronize the manager node. This can take several minutes to complete. The rest of the grid nodes will synchronize on their own schedule.',
       settingsSynchronized: 'Synchronization has been initiated in the background; this process can take several minute to complete.',
 
       setting_fake_setting_foo: 'Fake Setting Translated',
