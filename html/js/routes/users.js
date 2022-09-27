@@ -155,7 +155,7 @@ routes.push({ path: '/users', name: 'users', component: {
         });
 
         this.users = this.$root.getUsers();
-        this.$root.showTip(this.i18n.userModified);
+        this.$root.showTip(this.i18n.userProfileUpdated);
       } catch (error) {
          this.$root.showError(error);
       }
@@ -176,7 +176,7 @@ routes.push({ path: '/users', name: 'users', component: {
       try {
         const response = await this.$root.papi.post('users/' + user.id + '/role/' + role);
         this.users = this.$root.getUsers();
-        this.$root.showTip(this.i18n.userModified);
+        this.$root.showTip(this.i18n.userRoleAdded);
       } catch (error) {
          this.$root.showError(error);
       }
@@ -187,7 +187,7 @@ routes.push({ path: '/users', name: 'users', component: {
       try {
         const response = await this.$root.papi.delete('users/' + user.id + "/role/" + role);
         this.users = this.$root.getUsers();
-        this.$root.showTip(this.i18n.userModified);
+        this.$root.showTip(this.i18n.userRoleDeleted);
       } catch (error) {
          this.$root.showError(error);
       }
@@ -211,6 +211,7 @@ routes.push({ path: '/users', name: 'users', component: {
       this.$root.stopLoading();
     },
     async removeUser(id) {
+      this.hideDeleteConfirm();
       this.$root.startLoading();
       try {
         const response = await this.$root.papi.delete('users/' + id);
@@ -225,7 +226,6 @@ routes.push({ path: '/users', name: 'users', component: {
          this.$root.showError(error);
       }      
       this.$root.stopLoading();
-      this.hideDeleteConfirm();
     },
     async toggleStatus(user) {
       this.$root.startLoading();
@@ -238,6 +238,23 @@ routes.push({ path: '/users', name: 'users', component: {
          this.$root.showError(error);
       }      
       this.$root.stopLoading();
+    },
+    async sync() {
+      this.$root.startLoading();
+      try {
+        const response = await this.$root.papi.put('users/sync');
+        this.users = this.$root.getUsers()
+        this.$root.showTip(this.i18n.usersSynchronized);
+      } catch (error) {
+         this.$root.showError(error);
+      }
+      this.$root.stopLoading();
+    },
+    countUsersEnabled() {
+      return this.users.filter((user) => user.status != 'locked' ).length;
+    },
+    countUsers() {
+      return this.users.length;
     },
   }
 }});

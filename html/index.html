@@ -919,8 +919,24 @@
     <script type="text/x-template" id="page-users">
       <v-container fluid>
         <v-row>
-          <v-col>
+          <v-col cols="3">
             <h2 v-text="i18n.users"></h2>
+          </v-col>
+          <v-col cols="5">
+            <v-expansion-panels>
+              <v-expansion-panel>
+                <v-expansion-panel-header id="configOptionsHeader">{{i18n.options}}</v-expansion-panel-header>
+                <v-expansion-panel-content>
+                  <v-btn :title="i18n.usersSynchronizeHelp" @click.stop="sync()" class="my-4">
+                    {{ i18n.usersSynchronize }}
+                  </v-btn>
+                </v-expansion-panel-content>
+              </v-expansion-panel>
+            </v-expansion-panels>
+          </v-col>
+          <v-spacer></v-spacer>
+          <v-col cols="2" align="end">
+            <h4 v-if="!$root.loading">{{ i18n.usersEnabled }} {{ countUsersEnabled() }} / {{ countUsers() }} </h4>
           </v-col>
         </v-row>
         <v-row>
@@ -2956,6 +2972,9 @@
                 <v-expansion-panel-header id="configOptionsHeader">{{i18n.options}}</v-expansion-panel-header>
                 <v-expansion-panel-content>
                   <v-switch id="option-advanced" :disabled="$root.loading" v-model="advanced" dense class="my-0" :label="i18n.settingsAdvanced" :hint="i18n.settingsAdvancedHelp" persistent-hint></v-switch>
+                  <v-btn :title="i18n.settingsSynchronizeHelp" @click.stop="sync()" class="my-4">
+                    {{ i18n.settingsSynchronize }}
+                  </v-btn>
                 </v-expansion-panel-content>
               </v-expansion-panel>
             </v-expansion-panels>

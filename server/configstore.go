@@ -14,4 +14,5 @@ import (
 type Configstore interface {
   GetSettings(ctx context.Context) ([]*model.Setting, error)
   UpdateSetting(ctx context.Context, setting *model.Setting, remove bool) error
+  SyncSettings(ctx context.Context) error
 }

@@ -942,7 +942,7 @@ func TestUpdateSettingWithAnnotation(tester *testing.T) {
 	assert.Equal(tester, "yaml", setting.Syntax)
 }
 
-func TestManageUser_Add(tester *testing.T) {
+func TestManageUser_AddUser(tester *testing.T) {
 	defer Cleanup()
 	salt := NewTestSaltPipe("true.resp")
 	roles := make([]string, 0, 0)
@@ -955,37 +955,37 @@ func TestManageUser_Add(tester *testing.T) {
 		Note:      "My Note",
 		Roles:     roles,
 	}
-	err := salt.Add(context.Background(), user)
+	err := salt.AddUser(context.Background(), user)
 	assert.NoError(tester, err)
 
 	request := ReadReqPipe()
 	assert.Equal(tester, `{"command":"manage-user","email":"user1@somewhere.invalid","firstName":"My First","lastName":"My Last","note":"My Note","operation":"add","password":"dontlook!","role":"analyst"}`, request)
 }
 
-func TestManageUser_Enable(tester *testing.T) {
+func TestManageUser_EnableUser(tester *testing.T) {
 	defer Cleanup()
 	salt := NewTestSaltPipe("true.resp")
-	err := salt.Enable(context.Background(), "user-id-1")
+	err := salt.EnableUser(context.Background(), "user-id-1")
 	assert.NoError(tester, err)
 
 	request := ReadReqPipe()
 	assert.Equal(tester, `{"command":"manage-user","email":"user1@somewhere.invalid","operation":"enable"}`, request)
 }
 
-func TestManageUser_Disable(tester *testing.T) {
+func TestManageUser_DisableUser(tester *testing.T) {
 	defer Cleanup()
 	salt := NewTestSaltPipe("true.resp")
-	err := salt.Disable(context.Background(), "user-id-1")
+	err := salt.DisableUser(context.Background(), "user-id-1")
 	assert.NoError(tester, err)
 
 	request := ReadReqPipe()
 	assert.Equal(tester, `{"command":"manage-user","email":"user1@somewhere.invalid","operation":"disable"}`, request)
 }
 
-func TestManageUser_Delete(tester *testing.T) {
+func TestManageUser_DeleteUser(tester *testing.T) {
 	defer Cleanup()
 	salt := NewTestSaltPipe("true.resp")
-	err := salt.Delete(context.Background(), "user-id-1")
+	err := salt.DeleteUser(context.Background(), "user-id-1")
 	assert.NoError(tester, err)
 
 	request := ReadReqPipe()
@@ -1038,4 +1038,24 @@ func TestManageUser_DeleteRole(tester *testing.T) {
 
 	request := ReadReqPipe()
 	assert.Equal(tester, `{"command":"manage-user","email":"user1@somewhere.invalid","operation":"delrole","role":"broker"}`, request)
+}
+
+func TestSyncUsers(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSaltPipe("true.resp")
+	err := salt.SyncUsers(context.Background())
+	assert.NoError(tester, err)
+
+	request := ReadReqPipe()
+	assert.Equal(tester, `{"command":"manage-user","operation":"sync"}`, request)
+}
+
+func TestSyncSettings(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSaltPipe("true.resp")
+	err := salt.SyncSettings(context.Background())
+	assert.NoError(tester, err)
+
+	request := ReadReqPipe()
+	assert.Equal(tester, `{"command":"manage-salt","operation":"highstate"}`, request)
 }

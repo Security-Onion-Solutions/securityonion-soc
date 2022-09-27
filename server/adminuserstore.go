@@ -12,12 +12,13 @@ import (
 )
 
 type AdminUserstore interface {
-  Add(ctx context.Context, user *model.User) error
-  Delete(ctx context.Context, id string) error
+  AddUser(ctx context.Context, user *model.User) error
+  DeleteUser(ctx context.Context, id string) error
   UpdateProfile(ctx context.Context, user *model.User) error
   ResetPassword(ctx context.Context, id string, password string) error
-  Enable(ctx context.Context, id string) error
-  Disable(ctx context.Context, id string) error
+  EnableUser(ctx context.Context, id string) error
+  DisableUser(ctx context.Context, id string) error
   AddRole(ctx context.Context, id string, role string) error
   DeleteRole(ctx context.Context, id string, role string) error
+  SyncUsers(ctx context.Context) error
 }

@@ -974,7 +974,7 @@ func (store *Saltstore) lookupEmailFromId(ctx context.Context, id string) string
   return ""
 }
 
-func (store *Saltstore) Add(ctx context.Context, user *model.User) error {
+func (store *Saltstore) AddUser(ctx context.Context, user *model.User) error {
   if err := store.server.CheckAuthorized(ctx, "write", "users"); err != nil {
     return err
   }
@@ -1000,7 +1000,7 @@ func (store *Saltstore) Add(ctx context.Context, user *model.User) error {
   return err
 }
 
-func (store *Saltstore) Delete(ctx context.Context, id string) error {
+func (store *Saltstore) DeleteUser(ctx context.Context, id string) error {
   if err := store.server.CheckAuthorized(ctx, "delete", "users"); err != nil {
     return err
   }
@@ -1061,7 +1061,7 @@ func (store *Saltstore) ResetPassword(ctx context.Context, id string, password s
   return err
 }
 
-func (store *Saltstore) Enable(ctx context.Context, id string) error {
+func (store *Saltstore) EnableUser(ctx context.Context, id string) error {
   if err := store.server.CheckAuthorized(ctx, "write", "users"); err != nil {
     return err
   }
@@ -1080,7 +1080,7 @@ func (store *Saltstore) Enable(ctx context.Context, id string) error {
   return err
 }
 
-func (store *Saltstore) Disable(ctx context.Context, id string) error {
+func (store *Saltstore) DisableUser(ctx context.Context, id string) error {
   if err := store.server.CheckAuthorized(ctx, "write", "users"); err != nil {
     return err
   }
@@ -1133,6 +1133,42 @@ func (store *Saltstore) DeleteRole(ctx context.Context, id string, role string) 
   if err == nil {
     if output == "false" {
       err = errors.New("ERROR_SALT_MANAGE_USER")
+    }
+  }
+
+  return err
+}
+
+func (store *Saltstore) SyncUsers(ctx context.Context) error {
+  if err := store.server.CheckAuthorized(ctx, "write", "users"); err != nil {
+    return err
+  }
+
+  args := make(map[string]string)
+  args["command"] = "manage-user"
+  args["operation"] = "sync"
+  output, err := store.execCommand(ctx, args)
+  if err == nil {
+    if output == "false" {
+      err = errors.New("ERROR_SALT_MANAGE_USER")
+    }
+  }
+
+  return err
+}
+
+func (store *Saltstore) SyncSettings(ctx context.Context) error {
+  if err := store.server.CheckAuthorized(ctx, "write", "config"); err != nil {
+    return err
+  }
+
+  args := make(map[string]string)
+  args["command"] = "manage-salt"
+  args["operation"] = "highstate"
+  output, err := store.execCommand(ctx, args)
+  if err == nil {
+    if output == "false" {
+      err = errors.New("ERROR_SALT_STATE")
     }
   }
 

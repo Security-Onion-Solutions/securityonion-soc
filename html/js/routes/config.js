@@ -342,7 +342,7 @@ routes.push({ path: '/config', name: 'config', component: {
             file: setting.file,
             syntax: setting.syntax,
           };
-          await this.$root.papi.post('config/', server_setting);
+          await this.$root.papi.put('config/', server_setting);
 
           // Update UI
           if (!nodeId) {
@@ -365,6 +365,14 @@ routes.push({ path: '/config', name: 'config', component: {
         }
         this.$root.stopLoading();
       }
+    },
+    async sync() {
+      try {
+        const response = await this.$root.papi.put('config/sync');
+        this.$root.showTip(this.i18n.settingsSynchronized);
+      } catch (error) {
+         this.$root.showError(error);
+      }      
     },
     edit(setting, nodeId) {
       if (nodeId) {

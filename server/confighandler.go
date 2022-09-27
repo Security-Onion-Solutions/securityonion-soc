@@ -37,7 +37,9 @@ func (configHandler *ConfigHandler) HandleNow(ctx context.Context, writer http.R
   case http.MethodGet:
     return configHandler.get(ctx, writer, request)
   case http.MethodPost:
-    return configHandler.post(ctx, writer, request)
+    return configHandler.put(ctx, writer, request)
+  case http.MethodPut:
+    return configHandler.put(ctx, writer, request)
   case http.MethodDelete:
     return configHandler.delete(ctx, writer, request)
   }
@@ -52,17 +54,24 @@ func (configHandler *ConfigHandler) get(ctx context.Context, writer http.Respons
   return http.StatusOK, settings, nil
 }
 
-func (configHandler *ConfigHandler) post(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-  setting := model.Setting{}
-  err := json.NewDecoder(request.Body).Decode(&setting)
-  if err == nil {
-    if !model.IsValidSettingId(setting.Id) || (setting.NodeId != "" && !model.IsValidMinionId(setting.NodeId)) {
-      err = errors.New("Invalid setting")
-    } else {
-      remove := false
-      err = configHandler.server.Configstore.UpdateSetting(ctx, &setting, remove)
+func (configHandler *ConfigHandler) put(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+  var err error
+  op := configHandler.GetPathParameter(request.URL.Path, 2)
+  if op == "sync" {
+    err = configHandler.server.Configstore.SyncSettings(ctx)
+  } else {
+    setting := model.Setting{}
+    err = json.NewDecoder(request.Body).Decode(&setting)
+    if err == nil {
+      if !model.IsValidSettingId(setting.Id) || (setting.NodeId != "" && !model.IsValidMinionId(setting.NodeId)) {
+        err = errors.New("Invalid setting")
+      } else {
+        remove := false
+        err = configHandler.server.Configstore.UpdateSetting(ctx, &setting, remove)
+      }
     }
   }
+
   if err != nil {
     return http.StatusBadRequest, nil, err
   }

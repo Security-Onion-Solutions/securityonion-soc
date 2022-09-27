@@ -65,7 +65,7 @@ func (usersHandler *UsersHandler) post(ctx context.Context, writer http.Response
     user := model.NewUser()
     err = usersHandler.ReadJson(request, user)
     if err == nil {
-      err = usersHandler.server.AdminUserstore.Add(ctx, user)
+      err = usersHandler.server.AdminUserstore.AddUser(ctx, user)
     }
   } else {
     safe, _ := regexp.MatchString(`^[A-Za-z0-9-]+$`, id)
@@ -113,7 +113,7 @@ func (usersHandler *UsersHandler) delete(ctx context.Context, writer http.Respon
       err = usersHandler.server.AdminUserstore.DeleteRole(ctx, id, role)
     }
   case "":
-    err = usersHandler.server.AdminUserstore.Delete(ctx, id)
+    err = usersHandler.server.AdminUserstore.DeleteUser(ctx, id)
   default:
     err = errors.New("Invalid object specified for deletion")
   }
@@ -125,34 +125,38 @@ func (usersHandler *UsersHandler) delete(ctx context.Context, writer http.Respon
 }
 
 func (usersHandler *UsersHandler) put(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
+  var err error
   id := usersHandler.GetPathParameter(request.URL.Path, 2)
   safe, _ := regexp.MatchString(`^[A-Za-z0-9-]+$`, id)
   if !safe {
     return http.StatusBadRequest, nil, errors.New("Invalid id")
   }
 
-  object := usersHandler.GetPathParameter(request.URL.Path, 3)
-  var err error
-  switch object {
-  case "enable":
-    err = usersHandler.server.AdminUserstore.Enable(ctx, id)
-  case "disable":
-    err = usersHandler.server.AdminUserstore.Disable(ctx, id)
-  case "password":
-    user := model.NewUser()
-    err = usersHandler.ReadJson(request, user)
-    if err == nil {
-      err = usersHandler.server.AdminUserstore.ResetPassword(ctx, id, user.Password)
+  if id == "sync" {
+    err = usersHandler.server.AdminUserstore.SyncUsers(ctx)
+  } else {
+    object := usersHandler.GetPathParameter(request.URL.Path, 3)
+    switch object {
+    case "enable":
+      err = usersHandler.server.AdminUserstore.EnableUser(ctx, id)
+    case "disable":
+      err = usersHandler.server.AdminUserstore.DisableUser(ctx, id)
+    case "password":
+      user := model.NewUser()
+      err = usersHandler.ReadJson(request, user)
+      if err == nil {
+        err = usersHandler.server.AdminUserstore.ResetPassword(ctx, id, user.Password)
+      }
+    case "":
+      user := model.NewUser()
+      err = usersHandler.ReadJson(request, user)
+      if err == nil {
+        user.Id = id
+        err = usersHandler.server.AdminUserstore.UpdateProfile(ctx, user)
+      }
+    default:
+      err = errors.New("Invalid object specified for deletion")
     }
-  case "":
-    user := model.NewUser()
-    err = usersHandler.ReadJson(request, user)
-    if err == nil {
-      user.Id = id
-      err = usersHandler.server.AdminUserstore.UpdateProfile(ctx, user)
-    }
-  default:
-    err = errors.New("Invalid object specified for deletion")
   }
 
   if err != nil {

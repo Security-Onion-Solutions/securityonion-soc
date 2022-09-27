@@ -357,7 +357,7 @@ test('save', async () => {
   // Global save
   comp.form.value = "test-value";
   comp.form.key = "s-id";
-  var mock = mockPapi("post");
+  var mock = mockPapi("put");
   await comp.save(comp.settings[0], null);
   expect(comp.settings[0].value).toBe("test-value")
   expect(comp.cancelDialog).toBe(false);
@@ -368,7 +368,7 @@ test('save', async () => {
   setupSettings();
   comp.form.value = "test-value"
   comp.form.key = "n2";
-  mock = mockPapi("post");
+  mock = mockPapi("put");
   await comp.save(comp.settings[0], "n2");
   expect(comp.settings[0].value).toBe("orig-value")
   expectedNodeValues = new Map();
