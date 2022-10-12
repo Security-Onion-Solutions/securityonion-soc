@@ -101,7 +101,7 @@ routes.push({ path: '/settings', name: 'settings', component: {
         if (errorsMessage) {
           this.$root.showWarning(this.i18n.settingsInvalid + errorsMessage);
         } else if (response.data.state == "success") {
-          this.$root.showInfo(this.i18n.settingsSaved);
+          this.$root.showTip(this.i18n.saveSuccess);
         }
       } catch (error) {
         if (error != null && error.response != null && error.response.status == 410) {

@@ -445,7 +445,7 @@ const i18n = {
       ruleMinLen: 'The provided value is too short',
       ruleMaxLen: 'The provided value is too long',
       save: 'Save',
-      saveSuccess: 'Save successfull!',
+      saveSuccess: 'Save successful!',
       seconds: 'seconds',
       security: 'Security',
       securityInstructions: 'You may be prompted to login again when updating your security settings. If submitting a new password, you will need to verify your identity first with the old password. This is a security measure to protect your account.',
