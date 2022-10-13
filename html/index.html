@@ -925,9 +925,9 @@
           <v-col cols="5">
             <v-expansion-panels v-if="$root.isUserAdmin()">
               <v-expansion-panel>
-                <v-expansion-panel-header id="configOptionsHeader">{{i18n.options}}</v-expansion-panel-header>
+                <v-expansion-panel-header id="users-options-header">{{i18n.options}}</v-expansion-panel-header>
                 <v-expansion-panel-content>
-                  <v-btn @click.stop="sync()" class="mt-6 mb-1">
+                  <v-btn id="users-sync-button" @click.stop="sync()" class="mt-6 mb-1">
                     {{ i18n.usersSynchronize }}
                   </v-btn>
                   <div class="text-caption" v-text="i18n.usersSynchronizeHelp"/>
@@ -943,7 +943,7 @@
         <v-row>
           <v-col>
             <v-toolbar v-if="$root.isUserAdmin()" class="elevation-0">
-              <v-btn class="action" color="blue" @click.stop="showAdd()">
+              <v-btn id="add-user-button" class="action" color="blue" @click.stop="showAdd()">
                 <v-icon>fa-plus</v-icon>
               </v-btn>
             </v-toolbar>
@@ -954,21 +954,21 @@
                   <v-container grid-list-sm class="pa-4">
                     <v-row>
                       <v-col xs12>
-                        <v-text-field v-model="form.email" :placeholder="i18n.email" autofocus="true" :rules="[rules.required]"></v-text-field>
-                        <v-text-field v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" 
+                        <v-text-field id="email-input" v-model="form.email" :placeholder="i18n.email" autofocus="true" :rules="[rules.required]"></v-text-field>
+                        <v-text-field id="password-input" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" 
                           @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" 
                           :rules="[rules.required]"></v-text-field>
-                        <v-select v-model="form.role" :items="roles" :label="i18n.role" :rules="[rules.required]"></v-select>
-                        <v-text-field v-model="form.firstName" :placeholder="i18n.firstName"></v-text-field>
-                        <v-text-field v-model="form.lastName" :placeholder="i18n.lastName"></v-text-field>
-                        <v-text-field v-model="form.note" :placeholder="i18n.note"></v-text-field>
+                        <v-select id="roles-select" v-model="form.role" :items="roles" :label="i18n.role" :rules="[rules.required]"></v-select>
+                        <v-text-field id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName"></v-text-field>
+                        <v-text-field id="lastname-input" v-model="form.lastName" :placeholder="i18n.lastName"></v-text-field>
+                        <v-text-field id="note-input" v-model="form.note" :placeholder="i18n.note"></v-text-field>
                       </v-col>
                     </v-row>
                   </v-container>
                   <v-card-actions>
                     <v-spacer></v-spacer>
-                    <v-btn text @click="dialog = false">{{ i18n.cancel }}</v-btn>
-                    <v-btn :disabled="!form.valid" color="primary" @click="add()" v-text="i18n.add"></v-btn>
+                    <v-btn id="add-cancel-button" text @click="dialog = false">{{ i18n.cancel }}</v-btn>
+                    <v-btn id="add-confirm-button" :disabled="!form.valid" color="primary" @click="add()" v-text="i18n.add"></v-btn>
                   </v-card-actions>
                 </v-form>
               </v-card>
@@ -977,12 +977,12 @@
               <v-card>
                 <v-card-title class="headline" v-text="i18n.deleteUserTitle"></v-card-title>
                 <v-card-text v-text="i18n.deleteUserConfirm"></v-card-text>
-                <v-card-text v-text="form.email" class="font-weight-bold"></v-card-text>
+                <v-card-text id="email-output" v-text="form.email" class="font-weight-bold"></v-card-text>
                 <v-card-text v-text="i18n.continue"></v-card-text>
                 <v-card-actions>
                   <v-spacer></v-spacer>
-                  <v-btn text @click.stop="hideDeleteConfirm()" v-text="i18n.cancel"></v-btn>
-                  <v-btn color="warning" text @click.stop="removeUser(form.id)" v-text="i18n.delete"></v-btn>
+                  <v-btn id="delete-cancel-button" text @click.stop="hideDeleteConfirm()" v-text="i18n.cancel"></v-btn>
+                  <v-btn id="delete-confirm-button" color="warning" text @click.stop="removeUser(form.id)" v-text="i18n.delete"></v-btn>
                 </v-card-actions>
               </v-card>
             </v-dialog>
@@ -1017,11 +1017,11 @@
                           <v-card>
                             <v-card-title v-text="i18n.profile"/>
                             <v-card-text>
-                              <v-text-field v-model="form.firstName" :placeholder="i18n.firstName"></v-text-field>
-                              <v-text-field v-model="form.lastName" :placeholder="i18n.lastName"></v-text-field>
-                              <v-text-field v-model="form.note" :placeholder="i18n.note"></v-text-field>
+                              <v-text-field id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName"></v-text-field>
+                              <v-text-field id="lastname-input" v-model="form.lastName" :placeholder="i18n.lastName"></v-text-field>
+                              <v-text-field id="note-input" v-model="form.note" :placeholder="i18n.note"></v-text-field>
 
-                              <v-btn @click="updateProfile(item)" v-text="i18n.update"></v-btn>
+                              <v-btn id="update-profile-button" @click="updateProfile(item)" v-text="i18n.update"></v-btn>
                             </v-card-text>
                           </v-card>
                         </v-col>
@@ -1029,7 +1029,7 @@
                           <v-card>
                             <v-card-title>{{ i18n.roles }}</v-card-title>
                             <v-card-text>
-                              <v-checkbox v-for="role in roles" :key="role" dense :input-value="hasRole(item, role)" :label="role" @click.stop="return toggleRole(item, role)">
+                              <v-checkbox v-for="role in roles" :key="role" :id="'role-checkbox-' + role" dense :input-value="hasRole(item, role)" :label="role" @click.stop="return toggleRole(item, role)">
                             </v-card-text>
                           </v-card>
                         </v-col>
@@ -1038,13 +1038,13 @@
                             <v-card-title>{{ i18n.access }}</v-card-title>
                             <v-card-text>
                               <v-form v-model="form.valid">
-                                <v-text-field v-model="form.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" 
+                                <v-text-field id="password-input" v-model="form.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" 
                                   @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" 
                                   :rules="[rules.required]"></v-text-field>
                               </v-form>
-                              <v-btn :disabled="!form.valid" @click="updatePassword(item)" v-text="i18n.passwordReset" class="mr-2"></v-btn>
-                              <v-btn v-text="item.status == 'locked' ? i18n.unlock : i18n.lock" @click.stop="toggleStatus(item)" class="mr-2"/>
-                              <v-btn v-text="i18n.delete" color="error" @click.stop="showDeleteConfirm(item)" class="mr-2"/>
+                              <v-btn id="update-password-button" :disabled="!form.valid" @click="updatePassword(item)" v-text="i18n.passwordReset" class="mr-2"></v-btn>
+                              <v-btn id="toggle-locked-button" v-text="item.status == 'locked' ? i18n.unlock : i18n.lock" @click.stop="toggleStatus(item)" class="mr-2"/>
+                              <v-btn id="delete-user-button" v-text="i18n.delete" color="error" @click.stop="showDeleteConfirm(item)" class="mr-2"/>
                             </v-card-text>
                           </v-card>
                         </v-col>

@@ -58,6 +58,10 @@ func (store *Saltstore) execCommand(ctx context.Context, args map[string]string)
   store.saltPipeMutex.Lock()
   defer store.saltPipeMutex.Unlock()
 
+  log.WithFields(log.Fields{
+    "saltPipeReq": store.saltPipeReq,
+  }).Debug("Opening salt pipe")
+
   pipe, err := os.OpenFile(store.saltPipeReq, os.O_WRONLY|os.O_APPEND, 0660)
   if err != nil {
     log.WithFields(log.Fields{
