@@ -3143,19 +3143,19 @@
           <v-col cols="6">
             <v-list flat class="mb-4" outlined>
               <v-header v-text="i18n.gridMembersPending" class="ml-2" />
-              <v-list-item-group>
+              <v-list-item-group id="gridmembers-pending">
                 <v-subheader v-if="unaccepted.length == 0" v-text="i18n.none" />
                 <v-list-item v-for="node in unaccepted" @click="show(node)">
                   <v-list-item-icon>
                     <v-icon class="mt-1" :title="i18n.gridMembersPendingHelp">fa-circle-question</v-icon>
                   </v-list-item-icon>
                   <v-list-item-content>
-                    <v-list-item-title>
+                    <v-list-item-title :id="'pending-output-' + node.id">
                       {{ node.id }}
                     </v-list-item-title>
                   </v-list-item-content>
                   <v-list-item-action>
-                    <v-btn :title="i18n.gridMemberShow">
+                    <v-btn :title="i18n.gridMemberShow" class="review" :id="'review-pending-button-' + node.id">
                       {{ i18n.review }}
                       <v-icon right>fa-binoculars</v-icon>
                     </v-btn>                    
@@ -3166,19 +3166,19 @@
 
             <v-list flat class="mb-4" outlined>
               <v-header v-text="i18n.gridMembersDenied" class="ml-2" />
-              <v-list-item-group>
+              <v-list-item-group id="gridmembers-denied">
                 <v-subheader v-if="denied.length == 0" v-text="i18n.none" />
                 <v-list-item v-for="node in denied" @click="show(node)">
                   <v-list-item-icon>
                     <v-icon color="warning" class="mt-1" :title="i18n.gridMembersDeniedHelp">fa-circle-minus</v-icon>
                   </v-list-item-icon>
                   <v-list-item-content>
-                    <v-list-item-title>
+                    <v-list-item-title :id="'denied-output-' + node.id">
                       {{ node.id }}
                     </v-list-item-title>
                   </v-list-item-content>
                   <v-list-item-action>
-                    <v-btn :title="i18n.gridMemberShow">
+                    <v-btn :title="i18n.gridMemberShow" class="review" :id="'review-denied-button-' + node.id">
                       {{ i18n.review }}
                       <v-icon right>fa-binoculars</v-icon>
                     </v-btn>                    
@@ -3189,19 +3189,19 @@
 
             <v-list flat class="mb-4" outlined>
               <v-header v-text="i18n.gridMembersRejected" class="ml-2" />
-              <v-list-item-group>
+              <v-list-item-group id="gridmembers-rejected">
                 <v-subheader v-if="rejected.length == 0" v-text="i18n.none" />
                 <v-list-item v-for="node in rejected" @click="show(node)">
                   <v-list-item-icon>
                     <v-icon color="error" class="mt-1" :title="i18n.gridMembersRejectedHelp">fa-circle-xmark</v-icon>
                   </v-list-item-icon>
                   <v-list-item-content>
-                    <v-list-item-title>
+                    <v-list-item-title :id="'rejected-output-' + node.id">
                       {{ node.id }}
                     </v-list-item-title>
                   </v-list-item-content>
                   <v-list-item-action>
-                    <v-btn :title="i18n.gridMemberShow">
+                    <v-btn :title="i18n.gridMemberShow" class="review" :id="'review-rejected-button-' + node.id">
                       {{ i18n.review }}
                       <v-icon right>fa-binoculars</v-icon>
                     </v-btn>                    
@@ -3214,19 +3214,19 @@
           <v-col cols="6">
             <v-list flat outlined>
               <v-header v-text="i18n.gridMembersAccepted" class="ml-2" />
-              <v-list-item-group>
+              <v-list-item-group id="gridmembers-accepted">
                 <v-subheader v-if="accepted.length == 0" v-text="i18n.none" />
                 <v-list-item v-for="node in accepted" @click="show(node)">
                   <v-list-item-icon>
                     <v-icon color="green" class="mt-1" :title="i18n.gridMembersAcceptedHelp">fa-circle-check</v-icon>
                   </v-list-item-icon>
                   <v-list-item-content>
-                    <v-list-item-title>
+                    <v-list-item-title :id="'accepted-output-' + node.id">
                       {{ node.id }}
                     </v-list-item-title>
                   </v-list-item-content>
                   <v-list-item-action>
-                    <v-btn :title="i18n.gridMemberShow">
+                    <v-btn :title="i18n.gridMemberShow" class="review" :id="'review-accepted-button-' + node.id">
                       {{ i18n.review }}
                       <v-icon right>fa-binoculars</v-icon>
                     </v-btn>                    
