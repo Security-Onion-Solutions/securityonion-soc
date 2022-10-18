@@ -2973,7 +2973,7 @@
                 <v-expansion-panel-header id="configOptionsHeader">{{i18n.options}}</v-expansion-panel-header>
                 <v-expansion-panel-content>
                   <v-switch id="option-advanced" :disabled="$root.loading" v-model="advanced" dense class="my-0" :label="i18n.settingsAdvanced" :hint="i18n.settingsAdvancedHelp" persistent-hint></v-switch>
-                  <v-btn @click.stop="sync()" class="mt-6 mb-1">
+                  <v-btn id="option-synchronize" @click.stop="sync()" class="mt-6 mb-1">
                     {{ i18n.settingsSynchronize }}
                   </v-btn>
                   <div class="text-caption" v-text="i18n.settingsSynchronizeHelp"/>
