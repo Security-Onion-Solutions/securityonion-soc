@@ -3026,7 +3026,7 @@
               transition
             >
               <template v-slot:label="{item}">
-                {{ getSettingName(item) }}
+                <span :id="'config-item-' + item.id">{{ getSettingName(item) }}</span>
                 <v-icon v-if="isSettingModified(item)" class="ml-1" color="primary" :title="i18n.settingIsModified">fa-pencil</v-icon>
                 <v-icon v-if="isSettingModifiedPerNode(item)" class="ml-1" color="warning" :title="i18n.settingHasNodeValues">fa-circle-nodes</v-icon>
               </template>
