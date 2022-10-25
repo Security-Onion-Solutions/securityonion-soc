@@ -17,6 +17,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
 	"testing"
+	"time"
 )
 
 func TestInit(tester *testing.T) {
@@ -966,18 +967,47 @@ func TestGetRelatedEvents(tester *testing.T) {
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-	query := `_index:"myIndex" AND so_kind:"related" AND so_related.caseId:"myCaseId" | sortby so_related.fields.timestamp^`
+	// JBE: 10/20/2022 - Remove sortby and perform it manually due to ES issue with flattened fields
+	//query := `_index:"myIndex" AND so_kind:"related" AND so_related.caseId:"myCaseId" | sortby so_related.fields.timestamp^`
+	query := `_index:"myIndex" AND so_kind:"related" AND so_related.caseId:"myCaseId"`
 	eventPayload := make(map[string]interface{})
 	eventPayload["so_kind"] = "related"
 	elasticEvent := &model.EventRecord{
 		Payload: eventPayload,
 	}
 	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, elasticEvent)
+
+	// Add a related event with a timestamp field
+	timeA, _ := time.Parse(time.RFC3339, "2006-01-02T15:04:05Z")
+	eventPayloadWithTimestamp := make(map[string]interface{})
+	eventPayloadWithTimestamp["so_kind"] = "related"
+	eventPayloadWithTimestamp["so_related.fields.timestamp"] = timeA
+	elasticEventWithTimestamp := &model.EventRecord{
+		Payload: eventPayloadWithTimestamp,
+	}
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, elasticEventWithTimestamp)
+
+	// Add another related event with an earlier timestamp field
+	timeB, _ := time.Parse(time.RFC3339, "2006-01-01T15:04:05Z")
+	eventPayloadWithTimestamp2 := make(map[string]interface{})
+	eventPayloadWithTimestamp2["so_kind"] = "related"
+	eventPayloadWithTimestamp2["so_related.fields.timestamp"] = timeB
+	elasticEventWithTimestamp2 := &model.EventRecord{
+		Payload: eventPayloadWithTimestamp2,
+	}
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, elasticEventWithTimestamp2)
+
 	obj, err := store.GetRelatedEvents(ctx, "myCaseId")
 	assert.NoError(tester, err)
 	assert.Len(tester, fakeEventStore.InputSearchCriterias, 1)
 	assert.Equal(tester, query, fakeEventStore.InputSearchCriterias[0].RawQuery)
 	assert.NotNil(tester, obj)
+
+	// Ensure manual sorting functions as expected (only has effect if the sortby claused is removed)
+	assert.Len(tester, obj, 3)
+	assert.Nil(tester, obj[0].Fields["timestamp"])
+	assert.Equal(tester, timeB, obj[1].Fields["timestamp"])
+	assert.Equal(tester, timeA, obj[2].Fields["timestamp"])
 }
 
 func TestDeleteRelatedEvent(tester *testing.T) {
