@@ -15,6 +15,7 @@ import (
   "github.com/security-onion-solutions/securityonion-soc/server"
   "github.com/security-onion-solutions/securityonion-soc/web"
   "regexp"
+  "sort"
   "strconv"
   "time"
 )
@@ -521,13 +522,30 @@ func (store *ElasticCasestore) GetRelatedEvents(ctx context.Context, caseId stri
   err = store.validateId(caseId, "caseId")
   if err == nil {
     events = make([]*model.RelatedEvent, 0)
-    query := fmt.Sprintf(`_index:"%s" AND %skind:"related" AND %srelated.caseId:"%s" | sortby %srelated.fields.timestamp^`, store.index, store.schemaPrefix, store.schemaPrefix, caseId, store.schemaPrefix)
+    // JBE 10/20/2022: Remove sortby due to issue with Elastic 8.4 causing incompatible sort field types
+    //  | sortby %srelated.fields.timestamp^
+    query := fmt.Sprintf(`_index:"%s" AND %skind:"related" AND %srelated.caseId:"%s"`, store.index, store.schemaPrefix, store.schemaPrefix, caseId)
     var objects []interface{}
     objects, err = store.getAll(ctx, query, store.maxAssociations)
     if err == nil {
       for _, obj := range objects {
         events = append(events, obj.(*model.RelatedEvent))
       }
+
+      // JBE 10/20/2022: Manually sort the related events by the timestamp field, in ascending order. This can remain
+      // in place even if the above ES issue is resolved.
+      sort.Slice(events, func(a, b int) bool {
+        if ts_a, ts_a_exists := events[a].Fields["timestamp"]; ts_a_exists {
+          if ts_a_typed, ts_a_correct_type := ts_a.(time.Time); ts_a_correct_type {
+            if ts_b, ts_b_exists := events[b].Fields["timestamp"]; ts_b_exists {
+              if ts_b_typed, ts_b_correct_type := ts_b.(time.Time); ts_b_correct_type {
+                return ts_a_typed.Before(ts_b_typed)
+              }
+            }
+          }
+        }
+        return false
+      })
     }
   }
   return events, err
