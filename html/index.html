@@ -3053,8 +3053,8 @@
                       <v-col>
                         <v-btn id="config-toggle-default-button" @click="showDefault = !showDefault" v-text="showDefault ? i18n.settingHideDefault : i18n.settingShowDefault"/>
                         <div v-if="showDefault" class="mt-8">
-                          <v-textarea v-if="isMultiline(selected)" id="default-input" :label="i18n.settingDefault" :value="selected.default" readonly class="config-editor" />
-                          <v-text-field v-if="!isMultiline(selected)" id="default-input" :label="i18n.settingDefault" :value="selected.default" readonly />
+                          <v-textarea v-if="isMultiline(selected)" id="default-output" :label="i18n.settingDefault" :value="selected.default" readonly class="config-editor" />
+                          <v-text-field v-if="!isMultiline(selected)" id="default-output" :label="i18n.settingDefault" :value="selected.default" readonly />
                         </div>
                       </v-col>
                     </v-row>
@@ -3072,12 +3072,12 @@
                           </v-btn>
                         </div>
                         <div v-if="isMultiline(selected)">
-                          <v-textarea v-if="form.key != selected.id" id="value-input" outlined :label="i18n.settingGlobal" @focus="edit(selected)" :value="selected.value" readonly :disabled="selected.readonly" class="config-editor" />
-                          <v-textarea v-else outlined :label="i18n.settingGlobal" v-model="form.value" class="editing config-editor" />
+                          <v-textarea v-if="form.key != selected.id" id="value-output" outlined :label="i18n.settingGlobal" @focus="edit(selected)" :value="selected.value" readonly :disabled="selected.readonly" class="config-editor" />
+                          <v-textarea v-else id="value-input" outlined :label="i18n.settingGlobal" v-model="form.value" class="editing config-editor" />
                         </div>
                         <div v-else>
-                          <v-text-field v-if="form.key != selected.id" id="value-input" outlined :label="i18n.settingGlobal" @focus="edit(selected)" :value="selected.value" readonly :disabled="selected.readonly" :type="selected.sensitive ? 'password' : 'text'" />
-                          <v-text-field v-else outlined :label="i18n.settingGlobal" v-model="form.value" class="editing"  @keydown.enter.prevent="save(selected)" />
+                          <v-text-field v-if="form.key != selected.id" id="value-output" outlined :label="i18n.settingGlobal" @focus="edit(selected)" :value="selected.value" readonly :disabled="selected.readonly" :type="selected.sensitive ? 'password' : 'text'" />
+                          <v-text-field v-else id="value-input" outlined :label="i18n.settingGlobal" v-model="form.value" class="editing"  @keydown.enter.prevent="save(selected)" />
                         </div>
                       </v-col>
                     </v-row>
@@ -3095,12 +3095,12 @@
                           </v-btn>
                         </div>
                         <div v-if="isMultiline(selected)">
-                          <v-textarea v-if="form.key != item[0]" id="node-value-output" outlined :label="item[0]" @focus="edit(selected, item[0])" :value="item[1]"  readonly :disabled="selected.readonly" class="config-editor" />
-                          <v-textarea v-else outlined id="value-input" :label="item[0]" v-model="form.value" class="editing config-editor" />
+                          <v-textarea v-if="form.key != item[0]" :id="'node-value-output-' + item[0]" outlined :label="item[0]" @focus="edit(selected, item[0])" :value="item[1]"  readonly :disabled="selected.readonly" class="config-editor" />
+                          <v-textarea v-else outlined :id="'node-value-input-' + item[0]" :label="item[0]" v-model="form.value" class="editing config-editor" />
                         </div>
                         <div v-else>
-                          <v-text-field v-if="form.key != item[0]" id="node-value-output" outlined :label="item[0]" @focus="edit(selected, item[0])" :value="item[1]" readonly :disabled="selected.readonly" :type="selected.sensitive ? 'password' : 'text'" /> 
-                          <v-text-field v-else outlined :label="item[0]" id="value-input" v-model="form.value" class="editing"  @keydown.enter.prevent="save(selected, item[0])" />
+                          <v-text-field v-if="form.key != item[0]" :id="'node-value-output-' + item[0]" outlined :label="item[0]" @focus="edit(selected, item[0])" :value="item[1]" readonly :disabled="selected.readonly" :type="selected.sensitive ? 'password' : 'text'" /> 
+                          <v-text-field v-else outlined :label="item[0]" :id="'node-value-input-' + item[0]" v-model="form.value" class="editing"  @keydown.enter.prevent="save(selected, item[0])" />
                         </div>
                       </v-col>
                     </v-row>
