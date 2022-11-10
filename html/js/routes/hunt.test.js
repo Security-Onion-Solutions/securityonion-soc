@@ -685,3 +685,43 @@ test('getGroupByFieldStartIndex', () => {
   comp.aggregationActionsEnabled = true;
   expect(comp.getGroupByFieldStartIndex()).toBe(2);
 });
+
+test('obtainQueryDetails_blank', () => {
+  comp.query = ""
+  comp.obtainQueryDetails();
+  expect(comp.queryName).toBe("");
+  expect(comp.queryFilters).toStrictEqual([]);
+  expect(comp.queryGroupBys).toStrictEqual([]);
+  expect(comp.queryGroupByOptions).toStrictEqual([]);
+  expect(comp.querySortBys).toStrictEqual([]);
+});
+
+test('obtainQueryDetails_queryOnly', () => {
+  comp.query = "foo: bar AND x:1"
+  comp.obtainQueryDetails();
+  expect(comp.queryName).toBe("Custom");
+  expect(comp.queryFilters).toStrictEqual(["foo: bar", "x:1"]);
+  expect(comp.queryGroupBys).toStrictEqual([]);
+  expect(comp.queryGroupByOptions).toStrictEqual([]);
+  expect(comp.querySortBys).toStrictEqual([]);
+});
+
+test('obtainQueryDetails_queryGroupedOptionsSorted', () => {
+  comp.query = "foo: bar AND x:1 | groupby -opt1 z | groupby -optB r^ | sortby y"
+  comp.obtainQueryDetails();
+  expect(comp.queryName).toBe("Custom");
+  expect(comp.queryFilters).toStrictEqual(["foo: bar", "x:1"]);
+  expect(comp.queryGroupBys).toStrictEqual([["z"], ["r^"]]);
+  expect(comp.queryGroupByOptions).toStrictEqual([["opt1"], ["optB"]]);
+  expect(comp.querySortBys).toStrictEqual(["y"]);
+});
+
+test('obtainQueryDetails_queryGroupedFilterPipe', () => {
+  comp.query = "foo: bar AND x:\"with | this\" | groupby z"
+  comp.obtainQueryDetails();
+  expect(comp.queryName).toBe("Custom");
+  expect(comp.queryFilters).toStrictEqual(["foo: bar", "x:\"with | this\""]);
+  expect(comp.queryGroupBys).toStrictEqual([["z"]]);
+  expect(comp.queryGroupByOptions).toStrictEqual([[]]);
+  expect(comp.querySortBys).toStrictEqual([]);
+});

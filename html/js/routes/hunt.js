@@ -613,7 +613,35 @@ const huntComponent = {
       this.querySortBys = [];
       var route = this;
       if (this.query) {
-        var segments = this.query.split("|");
+        this.query = this.query.trim();
+
+        // find first segment
+        var insideQuote = false;
+        var escaping = false;
+        var segmentDelimIdx = -1;
+        for (var i = 0; i < this.query.length; i++) {
+          if (this.query[i] == "|" && !insideQuote && !escaping) {
+            segmentDelimIdx = i;
+            break;
+          } else if (this.query[i] == "\"" && !escaping) {
+            insideQuote = !insideQuote;
+          } else if (this.query[i] == "\\") {
+            escaping = true;
+          } else {
+            escaping = false;
+          }
+        }
+
+        var segments = [];
+
+        if (segmentDelimIdx > -1 && this.query.length > segmentDelimIdx + 1) {
+          // Filter/group/sort/etc segments cannot have | in them.
+          segments = this.query.substring(segmentDelimIdx + 1).split("|");
+          segments.unshift(this.query.substring(0, segmentDelimIdx));
+        } else {
+          segments = [this.query];
+        }
+
         if (segments.length > 0) {
           var search = segments[0].trim();
           var matchingQueryName = this.i18n.custom;
@@ -630,6 +658,7 @@ const huntComponent = {
             }
           });
         }
+
         if (segments.length > 1) {
           for (var segmentIdx = 1; segmentIdx < segments.length; segmentIdx++) {
             var segment = segments[segmentIdx].trim().replace(/,/g, ' ');
