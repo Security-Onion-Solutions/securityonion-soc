@@ -131,7 +131,7 @@ func TestPreprocessExecute(tester *testing.T) {
 	assert.NotNil(tester, ctx.Value(ContextKeyRequestId), "Context mismatch after preprocessing")
 }
 
-func setupWebsocket(tester *testing.T) string {
+func setupWebsocket(tester *testing.T) *Host {
 	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil, "")
 	srv := httptest.NewServer(http.HandlerFunc(handlerToBeTested))
 	u, _ := url.Parse(srv.URL)
