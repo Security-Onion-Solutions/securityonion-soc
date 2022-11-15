@@ -44,6 +44,7 @@ func (auth *StaticRbac) Init(cfg module.ModuleConfig) error {
       if err == nil {
         auth.server.Rolestore = auth.impl
         auth.server.Authorizer = auth.impl
+        auth.server.Host.Authorizer = auth.impl
       }
     }
   }

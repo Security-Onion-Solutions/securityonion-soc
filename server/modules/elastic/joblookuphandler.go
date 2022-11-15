@@ -55,7 +55,7 @@ func (handler *JobLookupHandler) get(ctx context.Context, writer http.ResponseWr
   if err == nil {
     err = handler.server.Datastore.AddPivotJob(ctx, job)
     if err == nil {
-      handler.Host.Broadcast("job", job)
+      handler.Host.Broadcast("job", "jobs", job)
       statusCode = http.StatusOK
       redirectUrl := handler.server.Config.BaseUrl + "#/job/" + strconv.Itoa(job.Id)
       http.Redirect(writer, request, redirectUrl, http.StatusFound)

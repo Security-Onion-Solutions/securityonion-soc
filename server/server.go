@@ -12,16 +12,13 @@ import (
   "github.com/apex/log"
   "github.com/security-onion-solutions/securityonion-soc/config"
   "github.com/security-onion-solutions/securityonion-soc/model"
+  "github.com/security-onion-solutions/securityonion-soc/rbac"
   "github.com/security-onion-solutions/securityonion-soc/web"
   "os/exec"
   "strings"
 )
 
 const AGENT_ID = "agent"
-
-type Authorizer interface {
-  CheckContextOperationAuthorized(ctx context.Context, operation string, target string) error
-}
 
 type Server struct {
   Config           *config.ServerConfig
@@ -36,7 +33,7 @@ type Server struct {
   GridMembersstore GridMembersstore
   Metrics          Metrics
   stoppedChan      chan bool
-  Authorizer       Authorizer
+  Authorizer       rbac.Authorizer
   Agent            *model.User
   Context          context.Context
 }

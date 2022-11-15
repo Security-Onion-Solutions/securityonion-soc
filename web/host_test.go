@@ -9,17 +9,23 @@ package web
 import (
 	"context"
 	"github.com/gorilla/websocket"
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/rbac"
 	"github.com/stretchr/testify/assert"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 )
+
+var webSocketReadString string
 
 func TestAddRemoveConnection(tester *testing.T) {
 	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil, "")
 	conn := &websocket.Conn{}
 	tester.Run("testing add connection", func(t *testing.T) {
-		socConn := host.AddConnection(conn, "1.2.3.4")
+		socConn := host.AddConnection(nil, conn, "1.2.3.4")
 		assert.Len(tester, host.connections, 1)
 		assert.Equal(tester, socConn.ip, "1.2.3.4", socConn.ip)
 		assert.Equal(tester, 123, host.idleConnectionTimeoutMs)
@@ -35,8 +41,8 @@ func TestMultipleConnections(tester *testing.T) {
 	conn1 := &websocket.Conn{}
 	conn2 := &websocket.Conn{}
 	tester.Run("testing add multiple connections", func(t *testing.T) {
-		host.AddConnection(conn1, "1.2.3.4")
-		host.AddConnection(conn2, "1.2.3.4")
+		host.AddConnection(nil, conn1, "1.2.3.4")
+		host.AddConnection(nil, conn2, "1.2.3.4")
 		assert.Len(tester, host.connections, 2)
 	})
 	tester.Run("testing remove first connection", func(t *testing.T) {
@@ -51,7 +57,7 @@ func TestMultipleConnections(tester *testing.T) {
 
 func TestManageConnections(tester *testing.T) {
 	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil, "")
-	conn := host.AddConnection(nil, "")
+	conn := host.AddConnection(nil, nil, "")
 
 	conn.lastPingTime = time.Time{}
 
@@ -123,4 +129,56 @@ func TestPreprocessExecute(tester *testing.T) {
 	assert.NoError(tester, err)
 	assert.Equal(tester, 321, statusCode)
 	assert.NotNil(tester, ctx.Value(ContextKeyRequestId), "Context mismatch after preprocessing")
+}
+
+func setupWebsocket(tester *testing.T) string {
+	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil, "")
+	srv := httptest.NewServer(http.HandlerFunc(handlerToBeTested))
+	u, _ := url.Parse(srv.URL)
+	u.Scheme = "ws"
+	ws, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	assert.NoError(tester, err)
+
+	user := model.NewUser()
+	user.Roles = append(user.Roles, "jobs/read")
+	conn := NewConnection(user, ws, "1.2.3.4")
+	host.connections = append(host.connections, conn)
+	webSocketReadString = ""
+	return host
+}
+
+func handlerToBeTested(w http.ResponseWriter, req *http.Request) {
+	var upgrader = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+	}
+
+	conn, _ := upgrader.Upgrade(w, req, nil)
+	_, p, _ := conn.ReadMessage()
+
+	webSocketReadString = string(p)
+}
+
+func TestBroadcastDenied(tester *testing.T) {
+	host := setupWebsocket(tester)
+	host.Authorizer = &rbac.FakeAuthorizer{
+		Authorized: false,
+	}
+	job := model.NewJob()
+	host.Broadcast("test", "jobs", job)
+
+	time.Sleep(1 * time.Second) // If this test file continues to evolve, replace this with a httptest shutdown
+	assert.Equal(tester, webSocketReadString, "")
+}
+
+func TestBroadcastAllowed(tester *testing.T) {
+	host := setupWebsocket(tester)
+	host.Authorizer = &rbac.FakeAuthorizer{
+		Authorized: true,
+	}
+	job := model.NewJob()
+	host.Broadcast("test", "jobs", job)
+
+	time.Sleep(1 * time.Second) // If this test file continues to evolve, replace this with a httptest shutdown
+	assert.Contains(tester, webSocketReadString, "\"Kind\":\"test\"")
 }

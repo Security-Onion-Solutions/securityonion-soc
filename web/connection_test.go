@@ -12,13 +12,8 @@ import (
 	"time"
 )
 
-func TestIsAuthorized(tester *testing.T) {
-	conn := NewConnection(nil, "")
-	assert.True(tester, conn.IsAuthorized("test"))
-}
-
 func TestUpdatePingTime(tester *testing.T) {
-	conn := NewConnection(nil, "")
+	conn := NewConnection(nil, nil, "")
 	oldPingTime := conn.lastPingTime
 	time.Sleep(3 * time.Millisecond)
 	conn.UpdatePingTime()

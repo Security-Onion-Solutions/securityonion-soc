@@ -11,6 +11,8 @@ import (
   "errors"
   "github.com/apex/log"
   "github.com/gorilla/websocket"
+  "github.com/security-onion-solutions/securityonion-soc/model"
+  "github.com/security-onion-solutions/securityonion-soc/rbac"
   "net/http"
   "reflect"
   "sort"
@@ -33,11 +35,12 @@ type Host struct {
   bindAddress             string
   htmlDir                 string
   idleConnectionTimeoutMs int
-  server                  *http.Server
+  httpServer              *http.Server
   running                 bool
   Version                 string
   connections             []*Connection
   lock                    sync.Mutex
+  Authorizer              rbac.Authorizer
   SrvKey                  []byte
   SrvExemptId             string
 }
@@ -75,8 +78,8 @@ func (host *Host) Register(route string, handler HostHandler) {
 
 func (host *Host) Stop() {
   if host.running {
-    if err := host.server.Shutdown(context.Background()); err != nil {
-      log.WithError(err).Error("Error while shutting down server")
+    if err := host.httpServer.Shutdown(context.Background()); err != nil {
+      log.WithError(err).Error("Error while shutting down HTTP server")
     }
   }
 }
@@ -87,9 +90,9 @@ func (host *Host) Start() {
   host.connections = make([]*Connection, 0)
   http.Handle("/", http.FileServer(http.Dir(host.htmlDir)))
   host.Register("/ws", NewWebSocketHandler(host))
-  host.server = &http.Server{Addr: host.bindAddress}
+  host.httpServer = &http.Server{Addr: host.bindAddress}
   go host.manageConnections(60000 * time.Millisecond)
-  err := host.server.ListenAndServe()
+  err := host.httpServer.ListenAndServe()
   if err != http.ErrServerClosed {
     log.WithError(err).Error("Unexpected fatal error in host")
   }
@@ -101,11 +104,11 @@ func (host *Host) IsRunning() bool {
   return host.running
 }
 
-func (host *Host) AddConnection(wsConn *websocket.Conn, ip string) *Connection {
+func (host *Host) AddConnection(user *model.User, wsConn *websocket.Conn, ip string) *Connection {
   host.lock.Lock()
   defer host.lock.Unlock()
 
-  conn := NewConnection(wsConn, ip)
+  conn := NewConnection(user, wsConn, ip)
   host.connections = append(host.connections, conn)
   log.WithField("Connections", len(host.connections)).Debug("Added WebSocket connection")
   return conn
@@ -124,7 +127,7 @@ func (host *Host) RemoveConnection(wsConn *websocket.Conn) {
   log.WithField("Connections", len(host.connections)).Debug("Removed WebSocket connection")
 }
 
-func (host *Host) Broadcast(kind string, obj interface{}) {
+func (host *Host) Broadcast(kind string, reqPermission string, obj interface{}) {
   host.lock.Lock()
   defer host.lock.Unlock()
   msg := &WebSocketMessage{
@@ -132,18 +135,17 @@ func (host *Host) Broadcast(kind string, obj interface{}) {
     Object: obj,
   }
   for _, connection := range host.connections {
-    if connection.IsAuthorized(kind) {
+    if err := host.Authorizer.CheckUserOperationAuthorized(connection.user, "read", reqPermission); err == nil {
       log.WithFields(log.Fields{
-        "kind":       kind,
-        "remoteAddr": connection.websocket.RemoteAddr().String(),
-        "sourceIp":   connection.ip,
+        "kind": kind,
+        // "remoteAddr": connection.websocket.RemoteAddr().String(),
+        "sourceIp": connection.ip,
       }).Debug("Broadcasting message to WebSocket connection")
       connection.websocket.WriteJSON(msg)
     } else {
       log.WithFields(log.Fields{
-        "kind":       kind,
-        "remoteAddr": connection.websocket.RemoteAddr().String(),
-        "sourceIp":   connection.ip,
+        "kind":     kind,
+        "sourceIp": connection.ip,
       }).Debug("Skipping broadcast due to insufficient authorization")
     }
   }

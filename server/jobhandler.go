@@ -62,7 +62,7 @@ func (jobHandler *JobHandler) post(ctx context.Context, writer http.ResponseWrit
   if err == nil {
     err = jobHandler.server.Datastore.AddJob(ctx, job)
     if err == nil {
-      jobHandler.Host.Broadcast("job", job)
+      jobHandler.Host.Broadcast("job", "jobs", job)
       statusCode = http.StatusCreated
     }
   }
@@ -76,7 +76,7 @@ func (jobHandler *JobHandler) put(ctx context.Context, writer http.ResponseWrite
   if err == nil {
     err = jobHandler.server.Datastore.UpdateJob(ctx, job)
     if err == nil {
-      jobHandler.Host.Broadcast("job", job)
+      jobHandler.Host.Broadcast("job", "jobs", job)
       statusCode = http.StatusOK
     } else {
       statusCode = http.StatusNotFound
@@ -100,7 +100,7 @@ func (jobHandler *JobHandler) delete(ctx context.Context, writer http.ResponseWr
     var job *model.Job
     job, err = jobHandler.server.Datastore.DeleteJob(ctx, int(jobId))
     if err == nil {
-      jobHandler.Host.Broadcast("job", job)
+      jobHandler.Host.Broadcast("job", "jobs", job)
       statusCode = http.StatusOK
     }
   }

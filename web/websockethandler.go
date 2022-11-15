@@ -12,6 +12,7 @@ import (
   "github.com/apex/log"
   "github.com/gorilla/websocket"
   "github.com/security-onion-solutions/securityonion-soc/json"
+  "github.com/security-onion-solutions/securityonion-soc/model"
   "net/http"
 )
 
@@ -39,12 +40,24 @@ func (webSocketHandler *WebSocketHandler) HandleNow(ctx context.Context, writer 
     return http.StatusBadRequest, nil, errors.New("Unable to upgrade request to websocket")
   }
 
+  var user *model.User
+  var ok bool
+  user, ok = ctx.Value(ContextKeyRequestor).(*model.User)
+  if !ok {
+    log.WithError(err).WithFields(log.Fields{
+      "remoteAddr": request.RemoteAddr,
+      "sourceIp":   ip,
+      "path":       request.URL.Path,
+    }).Warn("User does not exist in context")
+    return http.StatusBadRequest, nil, errors.New("User does not exist in context; unable to complete websocket")
+  }
+
   log.WithFields(log.Fields{
     "remoteAddr": request.RemoteAddr,
     "sourceIp":   ip,
     "path":       request.URL.Path,
   }).Info("WebSocket connected")
-  conn := webSocketHandler.Host.AddConnection(connection, ip)
+  conn := webSocketHandler.Host.AddConnection(user, connection, ip)
 
   defer connection.Close()
   for {

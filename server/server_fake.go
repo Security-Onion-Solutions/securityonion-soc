@@ -11,18 +11,8 @@ import (
   "errors"
   "github.com/security-onion-solutions/securityonion-soc/config"
   "github.com/security-onion-solutions/securityonion-soc/model"
+  "github.com/security-onion-solutions/securityonion-soc/rbac"
 )
-
-type FakeAuthorizer struct {
-  authorized bool
-}
-
-func (fake FakeAuthorizer) CheckContextOperationAuthorized(ctx context.Context, operation string, target string) error {
-  if fake.authorized {
-    return nil
-  }
-  return model.NewUnauthorized("fake-subject", operation, target)
-}
 
 type FakeUserstore struct {
   users []*model.User
@@ -68,8 +58,8 @@ func (impl *FakeRolestore) GetRoles(ctx context.Context) []string {
 func NewFakeServer(authorized bool, roleMap map[string][]string) *Server {
   cfg := &config.ServerConfig{}
   srv := NewServer(cfg, "")
-  srv.Authorizer = &FakeAuthorizer{
-    authorized: authorized,
+  srv.Authorizer = &rbac.FakeAuthorizer{
+    Authorized: authorized,
   }
   srv.Rolestore = &FakeRolestore{
     roleMap: roleMap,

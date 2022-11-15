@@ -43,7 +43,7 @@ func (nodeHandler *NodeHandler) post(ctx context.Context, writer http.ResponseWr
     node, err = nodeHandler.server.Datastore.UpdateNode(ctx, node)
     if err == nil {
       nodeHandler.server.Metrics.UpdateNodeMetrics(ctx, node)
-      nodeHandler.Host.Broadcast("node", node)
+      nodeHandler.Host.Broadcast("node", "nodes", node)
       job = nodeHandler.server.Datastore.GetNextJob(ctx, node.Id)
     }
   }

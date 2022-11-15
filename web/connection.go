@@ -8,6 +8,7 @@ package web
 
 import (
   "github.com/gorilla/websocket"
+  "github.com/security-onion-solutions/securityonion-soc/model"
   "time"
 )
 
@@ -15,19 +16,17 @@ type Connection struct {
   websocket    *websocket.Conn
   lastPingTime time.Time
   ip           string
+  user         *model.User
 }
 
-func NewConnection(wsConn *websocket.Conn, ip string) *Connection {
+func NewConnection(user *model.User, wsConn *websocket.Conn, ip string) *Connection {
   conn := &Connection{
     websocket: wsConn,
     ip:        ip,
+    user:      user,
   }
   conn.UpdatePingTime()
   return conn
-}
-
-func (connection *Connection) IsAuthorized(kind string) bool {
-  return true
 }
 
 func (connection *Connection) UpdatePingTime() {

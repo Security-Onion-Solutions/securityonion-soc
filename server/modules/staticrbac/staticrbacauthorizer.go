@@ -197,39 +197,51 @@ func (impl *StaticRbacAuthorizer) adjustMap(mp map[string][]string, subject stri
 
 func (impl *StaticRbacAuthorizer) CheckContextOperationAuthorized(ctx context.Context, operation string, target string) error {
   var err error
-  permission := target + "/" + operation
-
   if user, ok := ctx.Value(web.ContextKeyRequestor).(*model.User); ok {
-    impl.mutex.Lock()
-    defer impl.mutex.Unlock()
-
-    authorized := false
-    userIdentifier := impl.identifyUser(user)
-    var primaryRoles []string
-    if primaryRoles, ok = impl.userMap[userIdentifier]; ok {
-      for _, role := range primaryRoles {
-        if impl.isAuthorized(role, permission) {
-          authorized = true
-          break
-        }
-      }
-    }
-
-    log.WithFields(log.Fields{
-      "user":         userIdentifier,
-      "requestId":    ctx.Value(web.ContextKeyRequestId),
-      "permission":   permission,
-      "primaryRoles": primaryRoles,
-      "authorized":   authorized,
-    }).Debug("Evaluated authorization for requestor")
-
-    if !authorized {
-      err = model.NewUnauthorized(userIdentifier, operation, target)
-    }
+    err = impl.CheckUserOperationAuthorized(user, operation, target)
   } else {
-    log.Debug("Authorization user not found in context")
+    log.WithFields(log.Fields{
+      "requestId": ctx.Value(web.ContextKeyRequestId),
+      "operation": operation,
+      "target":    target,
+    }).Debug("Authorization user not found in context")
     err = model.NewUnauthorized("", operation, target)
   }
+
+  return err
+}
+
+func (impl *StaticRbacAuthorizer) CheckUserOperationAuthorized(user *model.User, operation string, target string) error {
+  var err error
+  permission := target + "/" + operation
+
+  impl.mutex.Lock()
+  defer impl.mutex.Unlock()
+
+  authorized := false
+  userIdentifier := impl.identifyUser(user)
+  var primaryRoles []string
+  var ok bool
+  if primaryRoles, ok = impl.userMap[userIdentifier]; ok {
+    for _, role := range primaryRoles {
+      if impl.isAuthorized(role, permission) {
+        authorized = true
+        break
+      }
+    }
+  }
+
+  log.WithFields(log.Fields{
+    "user":         userIdentifier,
+    "permission":   permission,
+    "primaryRoles": primaryRoles,
+    "authorized":   authorized,
+  }).Debug("Evaluated authorization for requestor")
+
+  if !authorized {
+    err = model.NewUnauthorized(userIdentifier, operation, target)
+  }
+
   return err
 }
 

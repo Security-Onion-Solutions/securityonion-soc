@@ -87,7 +87,7 @@ func (status *SoStatus) IsRunning() bool {
 func (status *SoStatus) Refresh(ctx context.Context) {
 	log.Debug("Updating grid status")
 	status.refreshGrid(ctx)
-	status.server.Host.Broadcast("status", status.currentStatus)
+	status.server.Host.Broadcast("status", "nodes", status.currentStatus)
 }
 
 func (status *SoStatus) refreshGrid(ctx context.Context) {
@@ -120,7 +120,7 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 		}).Debug("Node Status")
 
 		if updated {
-			status.server.Host.Broadcast("node", node)
+			status.server.Host.Broadcast("node", "nodes", node)
 		}
 
 		if node.Status != model.NodeStatusOk {
