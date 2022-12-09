@@ -216,6 +216,7 @@ func startExpirationMonitor() {
 		duration := manager.licenseKey.Expiration.Sub(time.Now())
 		if manager.expirationTimer != nil {
 			log.Error("Expiration timer is already running; aborting thread")
+			return
 		}
 		manager.expirationTimer = time.NewTimer(duration)
 		<-manager.expirationTimer.C
@@ -233,6 +234,7 @@ func startEffectiveMonitor() {
 		duration := manager.licenseKey.Effective.Sub(time.Now())
 		if manager.effectiveTimer != nil {
 			log.Error("Effective timer is already running; aborting thread")
+			return
 		}
 		manager.effectiveTimer = time.NewTimer(duration)
 		<-manager.effectiveTimer.C
