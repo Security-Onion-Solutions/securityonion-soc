@@ -9,9 +9,9 @@ ARG VERSION=0.0.0
 RUN apk update && apk add libpcap-dev bash git musl-dev gcc npm python3 py3-pip py3-virtualenv
 COPY . /build
 WORKDIR /build
-RUN mkdir gitdocs && cd gitdocs && \
+RUN if [ "$VERSION" != "0.0.0" ]; then mkdir gitdocs && cd gitdocs && \
 	git clone --no-single-branch --depth 50 https://github.com/Security-Onion-Solutions/securityonion-docs.git . && \
-	bash -c "[[ $VERSION == '0.0.0' ]]" || git checkout --force origin/$(echo $VERSION | cut -d'.' -f1,2) && \
+	git checkout --force origin/$(echo $VERSION | cut -d'.' -f1,2) && \
 	git clean -d -f -f && \
 	sed -i "s|'display_github': True|'display_github': False|g" conf.py && \
 	python3 -mvirtualenv /tmp/virtualenv && \
@@ -19,7 +19,8 @@ RUN mkdir gitdocs && cd gitdocs && \
 	/tmp/virtualenv/bin/python -m pip install --upgrade --no-cache-dir pillow "mock==1.0.1" "alabaster>=0.7,<0.8,!=0.7.5" "commonmark==0.9.1" "recommonmark==0.5.0" "sphinx<2" "sphinx-rtd-theme<0.5" "readthedocs-sphinx-ext<2.2" "jinja2<3.1.0" && \
 	/tmp/virtualenv/bin/python -m pip install --exists-action=w --no-cache-dir -r requirements.txt && \
 	for i in /tmp/virtualenv/lib/python*/site-packages/sphinx_rtd_theme/versions.html; do echo > $i; done && \
-	/tmp/virtualenv/bin/python -m sphinx -T -E -b html -d _build/doctrees -D language=en . _build/html
+	/tmp/virtualenv/bin/python -m sphinx -T -E -b html -d _build/doctrees -D language=en . _build/html; \
+	else mkdir -p gitdocs/_build/html; fi
 RUN npm install jest jest-environment-jsdom --global
 RUN ln -s /usr/bin/python3 /usr/bin/python
 RUN ./build.sh "$VERSION"

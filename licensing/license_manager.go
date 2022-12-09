@@ -193,8 +193,10 @@ func createManager(status string, available []string, licenseKey *LicenseKey) {
 	manager.available = available
 	manager.licenseKey = licenseKey
 
-	go startExpirationMonitor()
-	go startEffectiveMonitor()
+	if status == LICENSE_STATUS_ACTIVE || status == LICENSE_STATUS_PENDING {
+		go startExpirationMonitor()
+		go startEffectiveMonitor()
+	}
 
 	log.WithFields(log.Fields{
 		"status":     manager.status,
@@ -212,6 +214,9 @@ func createManager(status string, available []string, licenseKey *LicenseKey) {
 func startExpirationMonitor() {
 	if manager.licenseKey.Expiration.After(time.Now()) {
 		duration := manager.licenseKey.Expiration.Sub(time.Now())
+		if manager.expirationTimer != nil {
+			log.Error("Expiration timer is already running; aborting thread")
+		}
 		manager.expirationTimer = time.NewTimer(duration)
 		<-manager.expirationTimer.C
 		log.WithFields(log.Fields{
@@ -226,6 +231,9 @@ func startExpirationMonitor() {
 func startEffectiveMonitor() {
 	if manager.licenseKey.Effective.After(time.Now()) {
 		duration := manager.licenseKey.Effective.Sub(time.Now())
+		if manager.effectiveTimer != nil {
+			log.Error("Effective timer is already running; aborting thread")
+		}
 		manager.effectiveTimer = time.NewTimer(duration)
 		<-manager.effectiveTimer.C
 
@@ -262,7 +270,11 @@ func stopMonitor() {
 			manager.effectiveTimer.Stop()
 		}
 
-		for loops := 0; (manager.expirationTimer != nil || manager.effectiveTimer != nil) && loops < 30; loops++ {
+		for loops := 0; loops < 30; loops++ {
+			if manager.expirationTimer == nil && manager.effectiveTimer == nil {
+				log.Info("stopped all license monitors")
+				break
+			}
 			time.Sleep(100)
 		}
 	}
