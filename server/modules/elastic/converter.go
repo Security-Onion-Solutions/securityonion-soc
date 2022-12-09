@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/json"
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"strings"
 	"time"
@@ -502,6 +503,11 @@ func convertElasticEventToComment(event *model.EventRecord, schemaPrefix string)
 			}
 			if value, ok := event.Payload[schemaPrefix+"comment.caseId"]; ok {
 				obj.CaseId = value.(string)
+			}
+			if licensing.IsEnabled(licensing.FEAT_TIMETRACKING) {
+				if value, ok := event.Payload[schemaPrefix+"comment.hours"]; ok {
+					obj.Hours = value.(float64)
+				}
 			}
 			obj.CreateTime = parseTime(event.Payload, schemaPrefix+"comment.createTime")
 		}

@@ -9,6 +9,7 @@ package kratos
 import (
   "context"
   "github.com/apex/log"
+  "github.com/security-onion-solutions/securityonion-soc/licensing"
   "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/server"
   "github.com/security-onion-solutions/securityonion-soc/web"
@@ -114,6 +115,7 @@ func (kratos *KratosUserstore) GetUsers(ctx context.Context) ([]*model.User, err
 
   // Convert the kratos users to SOC users
   users := make([]*model.User, 0, 0)
+  enabledCount := 0
   for _, kratosUser := range kratosUsers {
     user := model.NewUser()
 
@@ -128,7 +130,13 @@ func (kratos *KratosUserstore) GetUsers(ctx context.Context) ([]*model.User, err
       kratos.server.Rolestore.PopulateUserRoles(ctx, user)
     }
     users = append(users, user)
+    if user.Status != "locked" {
+      enabledCount = enabledCount + 1
+    }
   }
+
+  licensing.ValidateUserCount(enabledCount)
+
   return users, nil
 }
 

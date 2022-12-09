@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/stretchr/testify/assert"
@@ -41,6 +42,13 @@ func TestElasticInit(tester *testing.T) {
 	assert.NotNil(tester, srv.Casestore)
 
 	// Ensure failure it attempting to init when a casestore is already setup
+	licensing.Test("foo", 0, 0, "", "")
 	err = elastic.Init(cfg)
 	assert.Error(tester, err)
+	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+
+	// Ensure license is exceeded due to mismatched elastic URL (blank vs foo)
+	licensing.Test("foo", 0, 0, "", "foo")
+	err = elastic.Init(cfg)
+	assert.Equal(tester, licensing.LICENSE_STATUS_EXCEEDED, licensing.GetStatus())
 }

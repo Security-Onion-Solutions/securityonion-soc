@@ -6,6 +6,15 @@
 
 const routes = [];
 
+const FEAT_TIMETRACKING = 'timetracking';
+
+const LICENSE_STATUS_ACTIVE = "active";
+const LICENSE_STATUS_EXCEEDED = "exceeded";
+const LICENSE_STATUS_EXPIRED = "expired";
+const LICENSE_STATUS_INVALID = "invalid";
+const LICENSE_STATUS_PENDING = "pending";
+const LICENSE_STATUS_UNPROVISIONED = "unprovisioned";
+
 if (typeof global !== 'undefined') global.routes = routes;
 
 $(document).ready(function() {
@@ -86,6 +95,8 @@ $(document).ready(function() {
       maximizedOrigWidth: null,
       maximizedOrigHeight: null,
       maximizedCancelFn: null,
+      licenseKey: null,
+      licenseStatus: null,
     },
     watch: {
       '$vuetify.theme.dark': 'saveLocalSettings',
@@ -274,6 +285,8 @@ $(document).ready(function() {
                 this.papi.defaults.headers.common['X-Srv-Token'] = response.data.srvToken;
                 this.version = response.data.version;
                 this.license = response.data.license;
+                this.licenseKey = response.data.licenseKey;
+                this.licenseStatus = response.data.licenseStatus;
                 this.parameters = response.data.parameters;
                 this.elasticVersion = response.data.elasticVersion;
                 this.wazuhVersion = response.data.wazuhVersion;
@@ -407,6 +420,21 @@ $(document).ready(function() {
           }, 100);
         }
       },
+      isLicenseUnprovisioned() {
+        return this.licenseStatus == null || this.licenseStatus == LICENSE_STATUS_UNPROVISIONED;
+      },
+      isLicensed(feat) {
+        return this.licenseKey != null && this.licenseStatus == LICENSE_STATUS_ACTIVE &&
+            (!this.licenseKey.features.length || this.licenseKey.features.indexOf(feat) != -1);
+      },
+      colorLicenseStatus(value) {
+        if (value == LICENSE_STATUS_ACTIVE) return "success";
+        if (value == LICENSE_STATUS_EXCEEDED) return "warning";
+        if (value == LICENSE_STATUS_EXPIRED) return "warning";
+        if (value == LICENSE_STATUS_INVALID) return "error";
+        if (value == LICENSE_STATUS_PENDING) return "warning";
+        return "info";
+      },  
       makeHeader(label, value) {
         return { text: label, value: value };
       },
@@ -438,6 +466,12 @@ $(document).ready(function() {
         if (duration != null) {
           return moment.duration(duration,"s").humanize();
         }
+      },
+      formatHours(hours) {
+        if (!hours) {
+          hours = 0.0;
+        }
+        return hours.toFixed(2);
       },
       formatCount(count) {
         return Number(count).toLocaleString();
@@ -878,6 +912,7 @@ $(document).ready(function() {
       this.loadLocalSettings();
       Vue.filter('formatDateTime', this.formatDateTime);
       Vue.filter('formatDuration', this.formatDuration);
+      Vue.filter('formatHours', this.formatHours);
       Vue.filter('formatCount', this.formatCount);
       Vue.filter('formatMarkdown', this.formatMarkdown);
       Vue.filter('formatTimestamp', this.formatTimestamp);

@@ -8,15 +8,27 @@ package server
 
 import (
 	"github.com/security-onion-solutions/securityonion-soc/config"
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
 func TestNewServer(tester *testing.T) {
+	licensing.Test("foo", 0, 0, "", "")
 	cfg := &config.ServerConfig{}
 	srv := NewServer(cfg, "")
 	assert.NotNil(tester, srv.Host)
 	assert.NotNil(tester, srv.stoppedChan)
+	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+}
+
+func TestNewServer_SocUrlExceeded(tester *testing.T) {
+	licensing.Test("foo", 0, 0, "foo", "")
+	cfg := &config.ServerConfig{}
+	srv := NewServer(cfg, "")
+	assert.NotNil(tester, srv.Host)
+	assert.NotNil(tester, srv.stoppedChan)
+	assert.Equal(tester, licensing.LICENSE_STATUS_EXCEEDED, licensing.GetStatus())
 }
 
 func TestDeveloperAuthorization(tester *testing.T) {

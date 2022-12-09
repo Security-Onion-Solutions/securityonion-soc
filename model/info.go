@@ -8,6 +8,7 @@ package model
 
 import (
   "github.com/security-onion-solutions/securityonion-soc/config"
+  "github.com/security-onion-solutions/securityonion-soc/licensing"
 )
 
 type Info struct {
@@ -19,4 +20,6 @@ type Info struct {
   UserId         string                   `json:"userId"`
   Timezones      []string                 `json:"timezones"`
   SrvToken       string                   `json:"srvToken"`
+  LicenseKey     *licensing.LicenseKey    `json:"licenseKey"`
+  LicenseStatus  string                   `json:"licenseStatus"`
 }

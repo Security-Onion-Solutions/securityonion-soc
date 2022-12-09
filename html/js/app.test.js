@@ -44,6 +44,17 @@ test('formatMarkdown', () => {
   expect(app.formatMarkdown('<scripts src="https://somebad.place"></script>bad')).toBe('<p>bad</p>\n');
 });
 
+test('formatHours', () => {
+  expect(app.formatHours(null)).toBe("0.00");
+  expect(app.formatHours(undefined)).toBe("0.00");
+  expect(app.formatHours("")).toBe("0.00");
+  expect(app.formatHours(0)).toBe("0.00");
+  expect(app.formatHours(false)).toBe("0.00");
+  expect(app.formatHours(1)).toBe("1.00");
+  expect(app.formatHours(1.0)).toBe("1.00");
+  expect(app.formatHours(10.14)).toBe("10.14");
+});
+
 test('formatStringArray', () => {
   expect(app.formatStringArray(['hi','there','foo'])).toBe('hi, there, foo');
   expect(app.formatStringArray(['hi','there'])).toBe('hi, there');
@@ -289,4 +300,47 @@ test('setFavicon', () => {
   app.setFavicon();
   expect(svg_icon.href).toBe("https://some-host.com/so-dark-attention.svg");
   expect(png_icon.href).toBe("https://some-host.com/so-dark-attention.png");
+});
+
+test('isLicenseUnprovisioned', () => {
+  app.licenseStatus = null;
+  expect(app.isLicenseUnprovisioned()).toBe(true);
+
+  app.licenseStatus = "unprovisioned";
+  expect(app.isLicenseUnprovisioned()).toBe(true);
+
+  app.licenseStatus = "active";
+  expect(app.isLicenseUnprovisioned()).toBe(false);
+});
+
+test('isLicensed', () => {
+  app.licenseKey = null;
+  app.licenseStatus = null;
+  expect(app.isLicensed('foo')).toBe(false);
+
+  app.licenseKey = { features: [] };
+  app.licenseStatus = "unprovisioned";
+  expect(app.isLicensed('foo')).toBe(false);
+
+  app.licenseKey = { features: [] };
+  app.licenseStatus = "active";
+  expect(app.isLicensed('foo')).toBe(true);
+
+  app.licenseKey = { features: ['bar'] };
+  app.licenseStatus = "active";
+  expect(app.isLicensed('foo')).toBe(false);
+
+  app.licenseKey = { features: ['bar','foo'] };
+  app.licenseStatus = "active";
+  expect(app.isLicensed('foo')).toBe(true);
+});
+
+test('colorLicenseStatus', () => {
+  expect(app.colorLicenseStatus('foo')).toBe('info');
+  expect(app.colorLicenseStatus(null)).toBe('info');
+  expect(app.colorLicenseStatus("active")).toBe('success');
+  expect(app.colorLicenseStatus("exceeded")).toBe('warning');
+  expect(app.colorLicenseStatus("expired")).toBe('warning');
+  expect(app.colorLicenseStatus("invalid")).toBe('error');
+  expect(app.colorLicenseStatus("pending")).toBe('warning');
 });

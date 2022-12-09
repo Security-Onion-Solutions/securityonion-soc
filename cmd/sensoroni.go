@@ -15,6 +15,7 @@ import (
   "github.com/security-onion-solutions/securityonion-soc/agent"
   agentModules "github.com/security-onion-solutions/securityonion-soc/agent/modules"
   "github.com/security-onion-solutions/securityonion-soc/config"
+  "github.com/security-onion-solutions/securityonion-soc/licensing"
   "github.com/security-onion-solutions/securityonion-soc/module"
   "github.com/security-onion-solutions/securityonion-soc/server"
   serverModules "github.com/security-onion-solutions/securityonion-soc/server/modules"
@@ -59,6 +60,8 @@ func main() {
       "buildTime": cfg.BuildTime,
     }).Info("Version Information")
 
+    licensing.Init(cfg.LicenseKey)
+
     moduleMgr := module.NewModuleManager()
     var srv *server.Server
     if cfg.Server != nil {
@@ -92,6 +95,7 @@ func main() {
       if srv != nil {
         srv.Stop()
       }
+      licensing.Shutdown()
 
       time.Sleep(time.Duration(cfg.ShutdownGracePeriodMs) * time.Millisecond)
       log.WithField("ShutdownGracePeriodMs", cfg.ShutdownGracePeriodMs).Warn("Shutdown did not exit within grace period; aborting")

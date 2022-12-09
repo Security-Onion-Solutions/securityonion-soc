@@ -18,6 +18,7 @@ type Config struct {
   LoadTime              time.Time
   LogLevel              string        `json:"logLevel"`
   LogFilename           string        `json:"logFilename"`
+  LicenseKey            string        `json:"licenseKey"`
   ShutdownGracePeriodMs int           `json:"shutdownGracePeriodMs"`
   Server                *ServerConfig `json:"server"`
   Agent                 *AgentConfig  `json:"agent"`

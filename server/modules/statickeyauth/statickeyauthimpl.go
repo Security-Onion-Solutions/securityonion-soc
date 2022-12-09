@@ -74,15 +74,18 @@ func (auth *StaticKeyAuthImpl) validateAuthorization(ctx context.Context, key st
 	}
 
 	// API Key was not provided, check for anon network access
-	pieces := strings.Split(ipStr, ":")
-	if pieces != nil && len(pieces) > 0 {
-		ipStr = pieces[0]
+	idx := strings.LastIndex(ipStr, ":")
+	if idx > 0 {
+		ipStr = ipStr[0:idx]
+		ipStr = strings.TrimPrefix(ipStr, "[")
+		ipStr = strings.TrimSuffix(ipStr, "]")
 	}
 	remoteIp := net.ParseIP(ipStr)
 	isAnonymousIp := auth.anonymousNetwork.Contains(remoteIp)
 	log.WithFields(log.Fields{
 		"anonymousNetwork": auth.anonymousNetwork,
 		"remoteIp":         remoteIp,
+		"ipStr":            ipStr,
 		"isAnonymousIp":    isAnonymousIp,
 		"requestId":        ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Authorization check via remote IP")

@@ -11,6 +11,7 @@ import (
   "errors"
   "github.com/apex/log"
   "github.com/security-onion-solutions/securityonion-soc/config"
+  "github.com/security-onion-solutions/securityonion-soc/licensing"
   "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/rbac"
   "github.com/security-onion-solutions/securityonion-soc/web"
@@ -45,6 +46,9 @@ func NewServer(cfg *config.ServerConfig, version string) *Server {
     stoppedChan: make(chan bool, 1),
   }
   server.initContext()
+
+  licensing.ValidateSocUrl(server.Config.BaseUrl)
+
   return server
 }
 

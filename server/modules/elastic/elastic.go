@@ -8,6 +8,7 @@ package elastic
 
 import (
   "errors"
+  "github.com/security-onion-solutions/securityonion-soc/licensing"
   "github.com/security-onion-solutions/securityonion-soc/module"
   "github.com/security-onion-solutions/securityonion-soc/server"
 )
@@ -83,6 +84,9 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
       }
     }
   }
+
+  licensing.ValidateDataUrl(host)
+
   return err
 }
 

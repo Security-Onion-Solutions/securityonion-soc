@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/stretchr/testify/assert"
 )
@@ -498,11 +499,14 @@ func TestConvertElasticEventToComment(tester *testing.T) {
 	myTime := time.Now()
 	myCreateTime := myTime.Add(time.Hour * -1)
 
+	licensing.Test(licensing.FEAT_TIMETRACKING, 0, 0, "", "")
+
 	event := &model.EventRecord{}
 	event.Payload = make(map[string]interface{})
 	event.Payload["so_kind"] = "comment"
 	event.Payload["so_operation"] = "create"
 	event.Payload["so_comment.description"] = "myDesc"
+	event.Payload["so_comment.hours"] = 1.52
 	event.Payload["so_comment.userId"] = "myUserId"
 	event.Payload["so_comment.caseId"] = "myCaseId"
 	event.Time = myTime
@@ -513,6 +517,7 @@ func TestConvertElasticEventToComment(tester *testing.T) {
 	assert.Equal(tester, "comment", obj.Kind)
 	assert.Equal(tester, "create", obj.Operation)
 	assert.Equal(tester, "myDesc", obj.Description)
+	assert.Equal(tester, 1.52, obj.Hours)
 	assert.Equal(tester, "myUserId", obj.UserId)
 	assert.Equal(tester, "myCaseId", obj.CaseId)
 	assert.Equal(tester, &myTime, obj.UpdateTime)
