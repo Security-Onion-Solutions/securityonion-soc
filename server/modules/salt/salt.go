@@ -13,7 +13,7 @@ import (
 
 const DEFAULT_TIMEOUT_MS = 30000
 const DEFAULT_SALTSTACK_DIR = "/opt/so/saltstack"
-const DEFAULT_SALT_PIPE = "/opt/so/conf/soc/salt.pipe"
+const DEFAULT_SALT_PIPE = "/opt/so/conf/soc/salt/pipe"
 const DEFAULT_BYPASS_ERRORS = false
 
 type Salt struct {

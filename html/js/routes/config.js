@@ -10,6 +10,8 @@ routes.push({ path: '/config', name: 'config', component: {
     i18n: this.$root.i18n,
     settings: [],
     search: "",
+    autoExpand: false,
+    autoSelect: "",
     form: {
       valid: true,
       key: "",
@@ -30,7 +32,18 @@ routes.push({ path: '/config', name: 'config', component: {
     showDefault: false,
   }},
   mounted() {
-    this.loadData()
+    if (this.$route.query.f) {
+      this.search = this.$route.query.f;
+    }
+    if (this.$route.query.e == "1") {
+      this.autoExpand = true;
+    }
+    if (this.$route.query.s) {
+      this.autoSelect = this.$route.query.s;
+      this.autoExpand = true;
+      this.search = this.$route.query.s;
+    }
+    this.loadData();
   },
   watch: {
     "active": "selectSetting",
@@ -45,7 +58,10 @@ routes.push({ path: '/config', name: 'config', component: {
     findActiveSetting() {
       if (this.active.length > 0) {
         const id = this.active[0];
-        return this.settings.find(s => s.id == id);
+        const found = this.settings.find(s => s.id == id);
+        if (found) {
+          return found;
+        }
       }
       return null;
     },
@@ -86,6 +102,13 @@ routes.push({ path: '/config', name: 'config', component: {
 
     async refreshTree() {
       this.hierarchy = this.organizeTree(this.settings);
+      if (this.autoExpand) {
+        this.expand();
+        this.autoExpand = false;
+      }
+      if (this.autoSelect) {
+        this.active = [this.autoSelect];
+      }
     },
     organizeTree(settings) {
       const root = {children: []};
@@ -201,7 +224,7 @@ routes.push({ path: '/config', name: 'config', component: {
             this.merge(existing, setting);
           }
         });
-        this.hierarchy = this.organizeTree(this.settings);
+        this.refreshTree();
       } catch (error) {
         this.$root.showError(error);
       }

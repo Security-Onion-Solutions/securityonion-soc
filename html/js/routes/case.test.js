@@ -33,11 +33,13 @@ const fakeComment = {
   userId: 'myUserId',
   id: 'myCommentId',
   description: 'myDescription',
+  hours: 0.25,
 };
 const fakeComment2 = {
   userId: 'myUserId2',
   id: 'myCommentId2',
   description: 'myDescription2',
+  hours: 1.5,
 };
 const fakeFormKeyStr = 'description';
 const fakeEditVal = 'fakeVal';
@@ -357,7 +359,32 @@ test('modifyAssociation', async () => {
   comp.associations['comments'] = [fakeComment];
   await comp.modifyAssociation('comments', fakeComment);
 
-  const body = "{\"userId\":\"myUserId\",\"id\":\"myCommentId\",\"description\":\"myDescription2\",\"owner\":\"my@email.invalid\"}";
+  const body = "{\"userId\":\"myUserId\",\"id\":\"myCommentId\",\"description\":\"myDescription2\",\"hours\":0.25,\"owner\":\"my@email.invalid\"}";
+  expect(mock).toHaveBeenCalledWith('case/comments', body);
+  expect(showErrorMock).toHaveBeenCalledTimes(0);
+  expect(comp.associations['comments'].length).toBe(1);
+  expect(comp.associations['comments'][0].description).toBe('myDescription2');
+  expect(comp.$root.loading).toBe(false);
+});
+
+test('modifyAssociationDecimal', async () => {
+  const fakeComment2 = {
+    id: fakeComment.id,
+    description: 'myDescription2',
+    caseId: fakeCase.id,
+    userId: 'myUserId',
+  }
+  const mock = mockPapi("put", {'data':fakeComment2});
+  const showErrorMock = mockShowError();
+
+  comp.caseObj.id = 'myCaseId';
+  comp.editForm.orig = 1.5;
+  comp.editForm.val = '1.15';
+  comp.editForm.field = 'hours';
+  comp.associations['comments'] = [fakeComment];
+  await comp.modifyAssociation('comments', fakeComment);
+
+  const body = "{\"userId\":\"myUserId\",\"id\":\"myCommentId\",\"description\":\"myDescription\",\"hours\":1.15,\"owner\":\"my@email.invalid\"}";
   expect(mock).toHaveBeenCalledWith('case/comments', body);
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expect(comp.associations['comments'].length).toBe(1);
@@ -961,4 +988,33 @@ test('shouldGetAnalyzJobDecoration', () => {
   expect(decor.icon).toBe('fa-ban');
   expect(decor.severity).toBe(-1);
   expect(decor.help).toBe('analyzer_result_none');
+});
+
+test('sumHours', () => {
+  comp.associations['comments'] = [fakeComment,fakeComment2];
+  expect(comp.sumHours()).toBe(1.75);
+});
+
+test.each([
+  ["1.2345", 1.2345],
+  ["12", 12.0],
+  ["0", 0.0],
+  ["", 0.0],
+  [null, 0.0],
+])("addComment, actual hours %s should be %s", (actualHours, expectedHours) => {
+  const oldFn = comp.addAssociation;
+  comp.addAssociation = jest.fn();
+  comp.associatedForms['comments'].hours = actualHours;
+  comp.addComment();
+  expect(comp.addAssociation).toHaveBeenCalledWith('comments', {'hours': expectedHours});
+  comp.addAssociation = oldFn;
+});
+
+test('sumHours', () => {
+  comp.associations["comments"] = [
+    { hours: 1.2 },
+    { hours: 0.0 },
+    { hours: 4.1 },
+    ];
+  expect(comp.sumHours()).toBe(5.3);
 });

@@ -67,8 +67,9 @@ func (socCase *Case) ProcessWorkflowForStatus(oldCase *Case) {
 
 type Comment struct {
   Auditable
-  CaseId      string `json:"caseId"`
-  Description string `json:"description"`
+  CaseId      string  `json:"caseId"`
+  Description string  `json:"description"`
+  Hours       float64 `json:"hours"`
 }
 
 func NewComment() *Comment {

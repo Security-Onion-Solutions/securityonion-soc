@@ -9,6 +9,7 @@ package server
 import (
   "context"
   "errors"
+  "github.com/security-onion-solutions/securityonion-soc/licensing"
   "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/web"
   "net/http"
@@ -48,6 +49,8 @@ func (infoHandler *InfoHandler) get(ctx context.Context, writer http.ResponseWri
       info = &model.Info{
         Version:        infoHandler.Host.Version,
         License:        "Elastic License 2.0 (ELv2)",
+        LicenseKey:     licensing.GetLicenseKey(),
+        LicenseStatus:  licensing.GetStatus(),
         Parameters:     &infoHandler.server.Config.ClientParams,
         ElasticVersion: os.Getenv("ELASTIC_VERSION"),
         WazuhVersion:   os.Getenv("WAZUH_VERSION"),

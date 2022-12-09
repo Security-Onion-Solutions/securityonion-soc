@@ -38,6 +38,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           { text: this.$root.i18n.dateCreated, value: 'createTime' },
           { text: this.$root.i18n.dateModified, value: 'updateTime' },
           { text: this.$root.i18n.commentDescription, value: 'description' },
+          { text: this.$root.i18n.commentHours, value: 'hours' },
         ],
         itemsPerPage: 10,
         footerProps: { 'items-per-page-options': [10,50,250,1000] },
@@ -142,6 +143,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     rules: {
       required: value => (value && value.length > 0) || this.$root.i18n.required,
       number: value => (! isNaN(+value) && Number.isInteger(parseFloat(value))) || this.$root.i18n.required,
+      hours: value => (!value || /^\d{1,4}(\.\d{1,4})?$/.test(value)) || this.$root.i18n.invalidHours,
       shortLengthLimit: value => (value.length < 100) || this.$root.i18n.required,
       longLengthLimit: value => (encodeURI(value).split(/%..|./).length - 1 < 10000000) || this.$root.i18n.required,
       fileSizeLimit: value => (value == null || value.size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
@@ -449,7 +451,11 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       let val = this.editForm.val;
       if (typeof this.editForm.orig == 'number' &&
           typeof val == 'string') {
-        val = parseInt(val, 10);
+        if (val.indexOf(".") != -1) {
+          val = parseFloat(val);
+        } else {
+          val = parseInt(val, 10);
+        }
       }
       
       if (form[this.editForm.field] == val) return false;
@@ -483,6 +489,17 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       }
       this.$root.stopLoading();
       return success;
+    },
+    addComment() {
+      var hours = 0.0;
+      if (this.associatedForms['comments'].hours) {
+        hours = parseFloat(this.associatedForms['comments'].hours);
+        if (hours == NaN) {
+          hours = 0.0;
+        }
+      }
+      this.associatedForms['comments'].hours = hours;
+      this.addAssociation('comments', {'hours': hours });
     },
     async addAssociation(association, additionalProps) {
       if (this.$refs && this.$refs[association] && !this.$refs[association].validate()) {
@@ -967,6 +984,13 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         current.help = "analyzer_result_none";
       }
       return current;
+    },
+    sumHours() {
+      var hours = 0.0;
+      this.associations["comments"].forEach((comment) => {
+        hours += comment.hours;
+      });
+      return hours;
     },
 
     saveLocalSettings() {

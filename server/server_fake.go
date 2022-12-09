@@ -12,6 +12,7 @@ import (
   "github.com/security-onion-solutions/securityonion-soc/config"
   "github.com/security-onion-solutions/securityonion-soc/model"
   "github.com/security-onion-solutions/securityonion-soc/rbac"
+  "io"
 )
 
 type FakeUserstore struct {
@@ -55,6 +56,109 @@ func (impl *FakeRolestore) GetRoles(ctx context.Context) []string {
   return roles
 }
 
+type FakeDatastore struct {
+  nodes   []*model.Node
+  jobs    []*model.Job
+  packets []*model.Packet
+}
+
+func NewFakeDatastore() *FakeDatastore {
+  nodes := make([]*model.Node, 0)
+  nodes = append(nodes, &model.Node{})
+  nodes = append(nodes, &model.Node{})
+
+  jobs := make([]*model.Job, 0)
+  jobs = append(jobs, &model.Job{})
+  jobs = append(jobs, &model.Job{})
+  jobs = append(jobs, &model.Job{})
+
+  packets := make([]*model.Packet, 0)
+  packets = append(packets, &model.Packet{})
+  packets = append(packets, &model.Packet{})
+  packets = append(packets, &model.Packet{})
+
+  return &FakeDatastore{
+    nodes:   nodes,
+    jobs:    jobs,
+    packets: packets,
+  }
+}
+
+func (impl *FakeDatastore) CreateNode(ctx context.Context, id string) *model.Node {
+  return nil
+}
+
+func (impl *FakeDatastore) GetNodes(ctx context.Context) []*model.Node {
+  return impl.nodes
+}
+
+func (impl *FakeDatastore) AddNode(ctx context.Context, node *model.Node) error {
+  return nil
+}
+
+func (impl *FakeDatastore) UpdateNode(ctx context.Context, newNode *model.Node) (*model.Node, error) {
+  return nil, nil
+}
+
+func (impl *FakeDatastore) GetNextJob(ctx context.Context, nodeId string) *model.Job {
+  return nil
+}
+
+func (impl *FakeDatastore) CreateJob(ctx context.Context) *model.Job {
+  return nil
+}
+
+func (impl *FakeDatastore) GetJob(ctx context.Context, jobId int) *model.Job {
+  return nil
+}
+
+func (impl *FakeDatastore) GetJobs(ctx context.Context, kind string, parameters map[string]interface{}) []*model.Job {
+  return impl.jobs
+}
+
+func (impl *FakeDatastore) AddJob(ctx context.Context, job *model.Job) error {
+  return nil
+}
+
+func (impl *FakeDatastore) AddPivotJob(ctx context.Context, job *model.Job) error {
+  return nil
+}
+
+func (impl *FakeDatastore) UpdateJob(ctx context.Context, job *model.Job) error {
+  return nil
+}
+
+func (impl *FakeDatastore) DeleteJob(ctx context.Context, jobId int) (*model.Job, error) {
+  return nil, nil
+}
+
+func (impl *FakeDatastore) GetPackets(ctx context.Context, jobId int, offset int, count int, unwrap bool) ([]*model.Packet, error) {
+  return impl.packets, nil
+}
+
+func (impl *FakeDatastore) SavePacketStream(ctx context.Context, jobId int, reader io.ReadCloser) error {
+  return nil
+}
+
+func (impl *FakeDatastore) GetPacketStream(ctx context.Context, jobId int, unwrap bool) (io.ReadCloser, string, int64, error) {
+  return nil, "", 0, nil
+}
+
+type FakeMetrics struct {
+}
+
+func NewFakeMetrics() *FakeMetrics {
+  return &FakeMetrics{}
+}
+
+func (impl *FakeMetrics) GetGridEps(ctx context.Context) int {
+  return 12
+}
+
+func (impl *FakeMetrics) UpdateNodeMetrics(ctx context.Context, node *model.Node) bool {
+  return false
+}
+
 func NewFakeServer(authorized bool, roleMap map[string][]string) *Server {
   cfg := &config.ServerConfig{}
   srv := NewServer(cfg, "")
@@ -77,6 +181,10 @@ func NewFakeServer(authorized bool, roleMap map[string][]string) *Server {
   srv.Userstore = &FakeUserstore{
     users: users,
   }
+
+  srv.Datastore = NewFakeDatastore()
+  srv.Metrics = NewFakeMetrics()
+
   return srv
 }
 

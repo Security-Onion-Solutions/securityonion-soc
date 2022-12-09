@@ -7,19 +7,40 @@
 package sostatus
 
 import (
+	"context"
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
-func TestSoStatusInit(tester *testing.T) {
+func NewTestStatus() (*SoStatus, error) {
 	status := NewSoStatus(server.NewFakeUnauthorizedServer())
 	cfg := make(map[string]interface{})
 	cfg["refreshIntervalMs"] = float64(1000)
 	cfg["offlineThresholdMs"] = float64(2000)
 	err := status.Init(cfg)
+	return status, err
+}
+
+func TestSoStatusInit(tester *testing.T) {
+	status, err := NewTestStatus()
 	if assert.Nil(tester, err) {
 		assert.Equal(tester, 1000, status.refreshIntervalMs)
 		assert.Equal(tester, 2000, status.offlineThresholdMs)
 	}
+}
+
+func TestRefreshGrid(tester *testing.T) {
+	status, _ := NewTestStatus()
+
+	// 0 = unlimited nodes
+	licensing.Test("foo", 0, 0, "", "")
+	status.refreshGrid(context.Background())
+	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+
+	// FakeServer has 2 fake nodes, since 2 > 1 the license will be exceeded
+	licensing.Test("foo", 0, 1, "", "")
+	status.refreshGrid(context.Background())
+	assert.Equal(tester, licensing.LICENSE_STATUS_EXCEEDED, licensing.GetStatus())
 }

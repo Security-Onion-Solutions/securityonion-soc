@@ -9,6 +9,7 @@ package sostatus
 import (
 	"context"
 	"github.com/apex/log"
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -130,4 +131,6 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 	status.currentStatus.Grid.TotalNodeCount = len(nodes)
 	status.currentStatus.Grid.UnhealthyNodeCount = unhealthyNodes
 	status.currentStatus.Grid.Eps = status.server.Metrics.GetGridEps(ctx)
+
+	licensing.ValidateNodeCount(len(nodes))
 }
