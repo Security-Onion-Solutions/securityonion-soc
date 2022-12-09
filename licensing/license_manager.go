@@ -220,6 +220,7 @@ func startExpirationMonitor() {
 		}).Warn("License has expired")
 		manager.status = LICENSE_STATUS_EXPIRED
 	}
+	manager.expirationTimer = nil
 }
 
 func startEffectiveMonitor() {
@@ -249,17 +250,20 @@ func startEffectiveMonitor() {
 			}).Warn("License has become effective but current status is no longer pending")
 		}
 	}
+	manager.effectiveTimer = nil
 }
 
 func stopMonitor() {
 	if manager != nil {
 		if manager.expirationTimer != nil {
 			manager.expirationTimer.Stop()
-			manager.expirationTimer = nil
 		}
 		if manager.effectiveTimer != nil {
 			manager.effectiveTimer.Stop()
-			manager.effectiveTimer = nil
+		}
+
+		for loops := 0; (manager.expirationTimer != nil || manager.effectiveTimer != nil) && loops < 30; loops++ {
+			time.Sleep(100)
 		}
 	}
 	manager = nil
