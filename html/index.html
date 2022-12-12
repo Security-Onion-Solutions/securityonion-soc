@@ -2652,7 +2652,7 @@
                   <td v-text="props.item.version"></td>
                   <td v-text="props.item.model"></td>
                   <td v-if="metricsEnabled">
-                    <span v-if="props.item.metricsEnabled">{{ props.item.productionEps | formatCount }}</span>
+                    <span v-if="props.item.metricsEnabled">{{ props.item.productionEps | formatCount }} / {{ props.item.consumptionEps | formatCount }}</span>
                     <span v-if="!props.item.metricsEnabled">{{ i18n.na }}</span>
                   </td>
                   <td>{{ props.item.updateTime | formatTimestamp }}</td>
