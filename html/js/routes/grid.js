@@ -25,7 +25,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
       { text: this.$root.i18n.description, value: 'description' },
       { text: this.$root.i18n.version, value: 'version' },
       { text: this.$root.i18n.model, value: 'model' },
-      { text: this.$root.i18n.eps, value: 'eps' },
+      { text: this.$root.i18n.eps, value: 'productionEps' },
       { text: this.$root.i18n.dateUpdated, value: 'updateTime' },
       { text: this.$root.i18n.dateDataEpoch, value: 'epochTime' },
       { text: this.$root.i18n.uptime, value: 'uptimeSeconds' },
