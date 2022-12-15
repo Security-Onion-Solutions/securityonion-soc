@@ -859,7 +859,7 @@ func (store *Saltstore) alignType(oldValue interface{}, newValue string) (interf
   if oldValue != nil {
     switch oldValue.(type) {
     case string:
-      return newValue
+      return newValue, nil
     case float64:
       return strconv.ParseFloat(newValue, 64)
     case int:
