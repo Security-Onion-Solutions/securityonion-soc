@@ -858,6 +858,8 @@ func (store *Saltstore) alignBestGuessList(newValue string) (interface{}, error)
 func (store *Saltstore) alignType(oldValue interface{}, newValue string) (interface{}, error) {
   if oldValue != nil {
     switch oldValue.(type) {
+    case string:
+      return newValue
     case float64:
       return strconv.ParseFloat(newValue, 64)
     case int:
