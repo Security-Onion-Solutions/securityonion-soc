@@ -99,7 +99,7 @@ func getPublicKey() (*rsa.PublicKey, error) {
 }
 
 func parseLicense(key string) (*LicenseKey, []byte, []byte, error) {
-	decodedKey, decodeErr := base64.StdEncoding.DecodeString(key)
+	decodedKey, decodeErr := base64.StdEncoding.DecodeString(strings.TrimSpace(key))
 	if decodeErr != nil {
 		return nil, nil, nil, decodeErr
 	}
