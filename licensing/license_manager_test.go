@@ -19,21 +19,7 @@ import (
 	"time"
 )
 
-const EXPIRED_KEY = `
-{
-  "effective": "2021-01-01T00:00:00Z",
-  "expiration": "2022-01-01T00:00:00Z",
-  "name": "Test License - NOT FOR USE IN PRODUCTION",
-  "id": "fake-001",
-  "licensee": "Fake License Key",
-  "features": [],
-  "users": 1,
-  "nodes": 1,
-  "socUrl": "https://somewhere.invalid",
-  "dataUrl": "https://another.place",
-  "signature": "gSnmOaKcpmENJh9aJ+pMxhZED4u17nYz6bbhfTULx6JBFmtYst9NfSTiMQ6w/+PEcAGe+5D6jCC/o33fsqfJKSGqBoaF82dB2cXVNCnwFnBG4LIeK4H5ohZWC4S/4Rf0YAzIaf6Q/CL5flkXLE36GLhLJQ/YxOKgg6r9HqD8jU2f5BMzcgTaYt/VbTT8oR0rGGR0thcT85B6rtKHpWPt/m5DDFrKSJELN6HsliTzPk6iFYMlHyptYWdQeQTy96wdg/cyvvyStELhaA8Zh8ohJ4yjPQ02AxGgoinW3tCSEWUDY5zQ+yY4bocaIc9ekxvp71Snyqfgc2I6uAP5KtlmZN12xI0CEfMRYQk6Pc20qyLsOwvB1zrYHye2upFjELPVXgix7Lsc5qTYKXSCIEpsRn7kbUX4RrUv2TPYfCnwmdzJTQ86F0VJ0zEgziNaaD3lEJpSpY+onwV3QaM/q5xxJ5ixqgzx9nmdBo7G4/m4LTpnVGoyB4S4G6jIWBwv733y"
-}
-`
+const EXPIRED_KEY = `H4sIAIvZnGMAA22QR4+bUBSF9/kVFlvPBExz2ZlqijHVNo6yeMaPYsOjPWMgyn8PMyNFihTpLm75zjnS/UXAOIYRzjpIbAiaohfv1Ef5FLX5rAvxRsC+yhqAsxJ9MfR/GASKDwcftnhmZhFELZy9z6yDP1MO7izw5JlmzWz3IAWirx2sSZHdJj4GD/hOUYtpzr9UHy7KtP3rYsBhusYQ4GcDW2Lz4+cb8WxhM7WLKbe8wa+uLaOgySd1inHVbkiyLQv4SmEDv2eoA/mU90bcAAb/UgCVeIK+VzmI4ES0WYI+oyYm8VBxAEZUFbKlp2ugz6t9n15kiX0uligc+es1jf3A7HldUAoctnhtxZ6f7R3+Rc5tOdqqcM5J/F0UyZJh4raOdcNTa6EEyoq+CXR0PloieilIUFlTgwa748r0chJZj2TdmAq3owZi3iFFk4vzx9mUGV41U1N3yLA/GEnCN+tdLa3uAR1zwn6MEh+EmDxefX9VulSjqi6F08hfcQLfYGNXnWxMFpwkKY3h6bJp8bs2z/zRfvCZEu7z3VDh8HRzoOMPa/51S8ho6LrBw7KZgu3qkq7KVGeHu+1Q9LZXkzJDJwaLnnwKpJAbnfkQstcyAlq0ho++q5YLDw11nES0xj+3NmfgvLhYC7rXKFGO927oPHg7oql6MNvDqxMWYxPuBkg/K+Uum/bxnGT90mwjrvZD4+yJmly1Llo+rsGZdZugo307jKf/FbdR950Vr1BHnRrlZMwsACQml/XKq8J5iV5HxgF7sub6Xueyvk7Gfo2Km1AuVZYsWNOv0FEtB4H1WJW/ayfh1S0ZZiB+f/sDb9bxLiEDAAA=`
 
 func TestInit_Missing(tester *testing.T) {
 	// None
@@ -45,7 +31,7 @@ func TestInit_Missing(tester *testing.T) {
 	assert.Equal(tester, LICENSE_STATUS_INVALID, GetStatus())
 
 	// Compromised
-	Init(strings.Replace(EXPIRED_KEY, "2022", "2122", 1))
+	Init(strings.Replace(EXPIRED_KEY, "MAA22QR4", "foobar", 1))
 	assert.Equal(tester, LICENSE_STATUS_INVALID, GetStatus())
 
 	// Expired

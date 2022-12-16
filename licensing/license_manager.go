@@ -13,6 +13,8 @@
 package licensing
 
 import (
+	"bytes"
+	"compress/gzip"
 	"crypto"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -21,6 +23,7 @@ import (
 	"encoding/pem"
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/json"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -96,8 +99,23 @@ func getPublicKey() (*rsa.PublicKey, error) {
 }
 
 func parseLicense(key string) (*LicenseKey, []byte, []byte, error) {
+	decodedKey, decodeErr := base64.StdEncoding.DecodeString(key)
+	if decodeErr != nil {
+		return nil, nil, nil, decodeErr
+	}
+
+	gr, gerr := gzip.NewReader(bytes.NewReader(decodedKey))
+	if gerr != nil {
+		return nil, nil, nil, gerr
+	}
+
+	keyBytes, readErr := io.ReadAll(gr)
+	if readErr != nil {
+		return nil, nil, nil, readErr
+	}
+
 	originalKey := &SignedLicenseKey{}
-	loadOrigErr := json.LoadJson([]byte(key), originalKey)
+	loadOrigErr := json.LoadJson(keyBytes, originalKey)
 	if loadOrigErr != nil {
 		return nil, nil, nil, loadOrigErr
 	}
