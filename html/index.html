@@ -1067,7 +1067,7 @@
                         <v-text-field id="email-input" v-model="form.email" :placeholder="i18n.email" autofocus="true" :rules="[rules.required]"></v-text-field>
                         <v-text-field id="password-input" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" 
                           @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" 
-                          :rules="[rules.required]"></v-text-field>
+                          :rules="[rules.required, rules.maxpasslen, rules.minpasslen]"></v-text-field>
                         <v-select id="roles-select" v-model="form.role" :items="roles" :label="i18n.role" :rules="[rules.required]"></v-select>
                         <v-text-field id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName"></v-text-field>
                         <v-text-field id="lastname-input" v-model="form.lastName" :placeholder="i18n.lastName"></v-text-field>
@@ -1150,7 +1150,7 @@
                               <v-form v-model="form.valid">
                                 <v-text-field id="password-input" v-model="form.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" 
                                   @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" 
-                                  :rules="[rules.required]"></v-text-field>
+                                  :rules="[rules.required, rules.maxpasslen, rules.minpasslen]"></v-text-field>
                               </v-form>
                               <v-btn id="update-password-button" :disabled="!form.valid" @click="updatePassword(item)" v-text="i18n.passwordReset" class="mr-2 mb-2"></v-btn>
                               <v-btn id="toggle-locked-button" v-text="item.status == 'locked' ? i18n.unlock : i18n.lock" @click.stop="toggleStatus(item)" class="mr-2 mb-2"/>

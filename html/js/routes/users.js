@@ -7,7 +7,7 @@
 routes.push({ path: '/users', name: 'users', component: {
   template: '#page-users',
   data() { return {
-    i18n: this.$root.i18n,
+    i18n: this.$root.i18n,  
     users: [],
     headers: [
       { text: this.$root.i18n.email, value: 'email' },
@@ -35,6 +35,8 @@ routes.push({ path: '/users', name: 'users', component: {
     showPassword: false,
     rules: {
       required: value => !!value || this.$root.i18n.required,
+      minpasslen: value => (!value || value.length >= USER_PASSWORD_LENGTH_MIN) || this.$root.i18n.ruleMinLen,
+      maxpasslen: value => (!value || value.length <= USER_PASSWORD_LENGTH_MAX) || this.$root.i18n.ruleMaxLen,
     },
     footerProps: { 'items-per-page-options': [10,50,250,1000] },
     expanded: [],
