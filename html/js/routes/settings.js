@@ -41,6 +41,7 @@ routes.push({ path: '/settings', name: 'settings', component: {
       maxlen: value => (!value || value.length <= this.maxInputLen) || this.$root.i18n.ruleMaxLen,
       minpasslen: value => (!value || value.length >= USER_PASSWORD_LENGTH_MIN) || this.$root.i18n.ruleMinLen,
       maxpasslen: value => (!value || value.length <= USER_PASSWORD_LENGTH_MAX) || this.$root.i18n.ruleMaxLen,
+      badpasschs: value => (!value || !value.match(USER_PASSWORD_INVALID_RX)) || this.$root.i18n.rulePassBadChars,
       mintotplen: value => (!value || value.length >= this.minTotpCodeLen) || this.$root.i18n.ruleMinLen,
       maxtotplen: value => (!value || value.length <= this.maxTotpCodeLen) || this.$root.i18n.ruleMaxLen,
     },

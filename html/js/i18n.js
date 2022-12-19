@@ -466,6 +466,7 @@ const i18n = {
       roleAnalyst: 'Analyst',
       ruleMinLen: 'The provided value is too short',
       ruleMaxLen: 'The provided value is too long',
+      rulePassBadChars: 'The password must not contain the following characters: " \' $ & !',
       save: 'Save',
       saveSuccess: 'Save successful!',
       seconds: 'seconds',
