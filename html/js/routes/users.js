@@ -37,6 +37,7 @@ routes.push({ path: '/users', name: 'users', component: {
       required: value => !!value || this.$root.i18n.required,
       minpasslen: value => (!value || value.length >= USER_PASSWORD_LENGTH_MIN) || this.$root.i18n.ruleMinLen,
       maxpasslen: value => (!value || value.length <= USER_PASSWORD_LENGTH_MAX) || this.$root.i18n.ruleMaxLen,
+      badpasschs: value => (!value || !value.match(USER_PASSWORD_INVALID_RX)) || this.$root.i18n.rulePassBadChars,
     },
     footerProps: { 'items-per-page-options': [10,50,250,1000] },
     expanded: [],
