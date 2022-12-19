@@ -15,6 +15,9 @@ const LICENSE_STATUS_INVALID = "invalid";
 const LICENSE_STATUS_PENDING = "pending";
 const LICENSE_STATUS_UNPROVISIONED = "unprovisioned";
 
+const USER_PASSWORD_LENGTH_MIN = 8;
+const USER_PASSWORD_LENGTH_MAX = 72;
+
 if (typeof global !== 'undefined') global.routes = routes;
 
 $(document).ready(function() {
