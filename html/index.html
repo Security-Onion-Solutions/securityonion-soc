@@ -317,10 +317,10 @@
     <script type="text/x-template" id="page-hunt">
       <v-container fluid>
         <v-row>
-          <v-col cols="3">
+          <v-col cols="12" lg="3">
             <h2 v-text="i18n[category]"></h2>
           </v-col>
-          <v-col cols="5">
+          <v-col cols="12" lg="5">
             <v-expansion-panels>
               <v-expansion-panel>
                 <v-expansion-panel-header id="huntOptionsHeader">{{i18n.options}}</v-expansion-panel-header>
@@ -341,7 +341,7 @@
             </v-expansion-panels>
           </v-col>
           <v-spacer></v-spacer>
-          <v-col cols="2" align="end">
+          <v-col cols="12" lg="2" align="end">
             <h4 v-if="loaded">{{ i18n.eventTotal }} {{ totalEvents.toLocaleString() }}</h4>
           </v-col>
         </v-row>
@@ -1028,10 +1028,10 @@
     <script type="text/x-template" id="page-users">
       <v-container fluid>
         <v-row>
-          <v-col cols="3">
+          <v-col cols="12" lg="3">
             <h2 v-text="i18n.users"></h2>
           </v-col>
-          <v-col cols="5">
+          <v-col cols="12" lg="5">
             <v-expansion-panels v-if="$root.isUserAdmin()">
               <v-expansion-panel>
                 <v-expansion-panel-header id="users-options-header">{{i18n.options}}</v-expansion-panel-header>
@@ -3119,10 +3119,10 @@
     <script type="text/x-template" id="page-config">
       <v-container fluid>
         <v-row>
-          <v-col cols="3">
+          <v-col cols="12" lg="3">
             <h2 v-text="i18n.configTitle"></h2>
           </v-col>
-          <v-col cols="5">
+          <v-col cols="12" lg="5">
             <v-expansion-panels>
               <v-expansion-panel>
                 <v-expansion-panel-header id="configOptionsHeader">{{i18n.options}}</v-expansion-panel-header>
@@ -3137,21 +3137,21 @@
             </v-expansion-panels>
           </v-col>
           <v-spacer></v-spacer>
-          <v-col cols="2" align="end">
+          <v-col cols="12" lg="2" align="end">
             <h4 v-if="!$root.loading">{{ i18n.settingsCustomized }} {{ settingsCustomized }} / {{ settingsAvailable }} </h4>
           </v-col>
         </v-row>
         <v-row>
         </v-row>
         <v-row>
-          <v-col cols="6" lg="4">
+          <v-col cols="12" lg="4">
             <v-container fluid>
               <v-row>
                 <v-col>
                   <v-text-field id="filter-input" :label="i18n.filter" v-model="search" clearable :hint="i18n.filterHelp" persistent-hint @click:clear="clearFilter()" class="mb-3" />
                 </v-col>
                 <v-col>
-                  <span class="mt-3">
+                  <span class="mt-3 text-no-wrap overflow-x-hidden">
                     <v-btn id="expand-all-button" icon @click="expand()" :title="i18n.expandAll">
                       <v-icon>fa-angles-down</v-icon>
                     </v-btn>
@@ -3188,7 +3188,7 @@
             </v-treeview>          
           </v-col>
           <v-divider vertical />
-          <v-col cols="6" lg="8">
+          <v-col cols="12" lg="8">
             <v-fade-transition mode="out-in" duration="100">
               <v-alert v-if="!selected" v-text="i18n.settingSelect" type="info" />
               <v-card v-else :key="selected.id" class="pt-6 mx-auto config-setting" flat>

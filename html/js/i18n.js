@@ -487,7 +487,7 @@ const i18n = {
       settingDeleted: 'Setting deleted/reset successfully. Changes typically apply within 15 minutes.',
       settingDeleteError: 'Setting could not be deleted.',
       settingHelp: 'View documentation or related information for this setting',
-      settingSelect: 'Select a setting on the left',
+      settingSelect: 'Select a setting from the tree view.',
       settingGlobal: 'Current Grid Value',
       settingIsModified: 'This setting has been modified to something other than the default.',
       settingIsModifiedHelp: 'Show all settings that have been modified to something other than the default.',
