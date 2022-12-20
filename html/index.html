@@ -300,10 +300,10 @@
           </v-col>
         </v-row>
         <v-row>
-          <v-col class="mx-auto px-12">
+          <v-col cols="12" lg="6" class="mx-auto px-12">
             <div id="motd" class="markdown-body" :inner-html.prop="motd | formatMarkdown"></div>
           </v-col>
-          <v-col class="mx-auto text-center">
+          <v-col cols="12" lg="6" class="mx-auto text-center">
             <div v-html="i18n.sponsorsIntro" class="mb-6"></div>
             <a target="sos" href="https://securityonionsolutions.com/" class="text-decoration-none">
               <img v-if="!$vuetify.theme.dark" height="200" src="images/sos-logo.svg">
@@ -1045,7 +1045,7 @@
             </v-expansion-panels>
           </v-col>
           <v-spacer></v-spacer>
-          <v-col cols="2" align="end">
+          <v-col cols="12" lg="2" align="end">
             <h4 v-if="!$root.loading">{{ i18n.usersEnabled }} {{ countUsersEnabled() }} / {{ countUsers() }} </h4>
           </v-col>
         </v-row>
@@ -1106,10 +1106,10 @@
                     </v-btn>
                   </td>
                   <td v-text="props.item.email"></td>
-                  <td v-text="props.item.firstName"></td>
-                  <td v-text="props.item.lastName"></td>
-                  <td v-text="props.item.note"></td>
-                  <td v-text="$root.formatStringArray(props.item.roles)"></td>
+                  <td v-text="props.item.firstName" class="d-none d-lg-table-cell"></td>
+                  <td v-text="props.item.lastName" class="d-none d-lg-table-cell"></td>
+                  <td v-text="props.item.note" class="d-none d-lg-table-cell"></td>
+                  <td v-text="$root.formatStringArray(props.item.roles)" class="d-none d-lg-table-cell"></td>
                   <td>
                     <v-icon v-if="props.item.mfaStatus == 'enabled' && props.item.status != 'locked'" color="success" :title="i18n.totpEnabled">fa-user-shield</v-icon>
                     <v-icon v-if="props.item.mfaStatus != 'enabled' && props.item.status != 'locked'" :title="i18n.loginEnabled">fa-user</v-icon>
@@ -1122,7 +1122,7 @@
                   <td :colspan="headers.length + 1" class="px-0">
                     <v-container fluid grid-list-sm class="pa-4">
                       <v-row>
-                        <v-col>
+                        <v-col cols="12" lg="4">
                           <v-card>
                             <v-card-title v-text="i18n.profile"/>
                             <v-card-text>
@@ -1134,7 +1134,7 @@
                             </v-card-text>
                           </v-card>
                         </v-col>
-                        <v-col>
+                        <v-col cols="12" lg="4">
                           <v-card>
                             <v-card-title>{{ i18n.roles }}</v-card-title>
                             <v-card-text>
@@ -1142,7 +1142,7 @@
                             </v-card-text>
                           </v-card>
                         </v-col>
-                        <v-col>
+                        <v-col cols="12" lg="4">
                           <v-card>
                             <v-card-title>{{ i18n.access }}</v-card-title>
                             <v-card-text>
