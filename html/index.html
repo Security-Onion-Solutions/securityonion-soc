@@ -300,14 +300,14 @@
           </v-col>
         </v-row>
         <v-row>
-          <v-col class="mx-auto px-12">
+          <v-col cols="12" lg="6" class="mx-auto px-12">
             <div id="motd" class="markdown-body" :inner-html.prop="motd | formatMarkdown"></div>
           </v-col>
-          <v-col class="mx-auto text-center">
+          <v-col cols="12" lg="6" class="mx-auto text-center">
             <div v-html="i18n.sponsorsIntro" class="mb-6"></div>
             <a target="sos" href="https://securityonionsolutions.com/" class="text-decoration-none">
-              <img v-if="!$vuetify.theme.dark" height="200" src="images/sos-logo.svg">
-              <img v-if="$vuetify.theme.dark" height="200" src="images/sos-logo-white.svg">
+              <img v-if="!$vuetify.theme.dark" height="100" src="images/sos-logo.svg">
+              <img v-if="$vuetify.theme.dark" height="100" src="images/sos-logo-white.svg">
             </a>
           </v-col>
         </v-row>
@@ -317,10 +317,10 @@
     <script type="text/x-template" id="page-hunt">
       <v-container fluid>
         <v-row>
-          <v-col cols="3">
+          <v-col cols="12" lg="3">
             <h2 v-text="i18n[category]"></h2>
           </v-col>
-          <v-col cols="5">
+          <v-col cols="12" lg="5">
             <v-expansion-panels>
               <v-expansion-panel>
                 <v-expansion-panel-header id="huntOptionsHeader">{{i18n.options}}</v-expansion-panel-header>
@@ -341,7 +341,7 @@
             </v-expansion-panels>
           </v-col>
           <v-spacer></v-spacer>
-          <v-col cols="2" align="end">
+          <v-col cols="12" lg="2" align="end">
             <h4 v-if="loaded">{{ i18n.eventTotal }} {{ totalEvents.toLocaleString() }}</h4>
           </v-col>
         </v-row>
@@ -870,50 +870,50 @@
                       </v-row>
                       <span v-if="$root.licenseKey && ($root.licenseStatus != LICENSE_STATUS_UNPROVISIONED && $root.licenseStatus != LICENSE_STATUS_INVALID)">
                         <v-row class="my-1">
-                          <v-col cols="3" class="pa-1 text-right font-weight-bold">{{ i18n.licenseId }}:</v-col>
+                          <v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseId }}:</v-col>
                           <v-col cols="9" class="pa-1">{{ $root.licenseKey.id }}</v-col>
                         </v-row>
                         <v-row class="my-1">
-                          <v-col cols="3" class="pa-1 text-right font-weight-bold">{{ i18n.licenseName }}:</v-col>
+                          <v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseName }}:</v-col>
                           <v-col cols="9" class="pa-1">{{ $root.licenseKey.name }}</v-col>
                         </v-row>
                         <v-row class="my-1">
-                          <v-col cols="3" class="pa-1 text-right font-weight-bold">{{ i18n.licensee }}:</v-col>
+                          <v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licensee }}:</v-col>
                           <v-col cols="9" class="pa-1">{{ $root.licenseKey.licensee }}</v-col>
                         </v-row>
                         <v-row class="my-1">
-                          <v-col cols="3" class="pa-1 text-right font-weight-bold">{{ i18n.licenseEffective }}:</v-col>
+                          <v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseEffective }}:</v-col>
                           <v-col cols="9" class="pa-1">{{ $root.licenseKey.effective | formatDateTime }}</v-col>
                         </v-row>
                         <v-row class="my-1">
-                          <v-col cols="3" class="pa-1 text-right font-weight-bold">{{ i18n.licenseExpiration }}:</v-col>
+                          <v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseExpiration }}:</v-col>
                           <v-col cols="9" class="pa-1">{{ $root.licenseKey.expiration | formatDateTime }}</v-col>
                         </v-row>
                       </span>
                     </v-container>
                     <v-container v-if="$root.licenseKey && ($root.licenseStatus != LICENSE_STATUS_UNPROVISIONED && $root.licenseStatus != LICENSE_STATUS_INVALID)" fluid id="licenseDetails" class="float">
                       <v-row class="my-1">
-                        <v-col cols="3" class="pa-1 text-right font-weight-bold">{{ i18n.userLimit }}:</v-col>
+                        <v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.userLimit }}:</v-col>
                         <v-col v-if="$root.licenseKey.users > 0" cols="9" class="pa-1">{{ $root.licenseKey.users }}</v-col>
                         <v-col v-else cols="9" class="pa-1">{{ i18n.unlimited }}</v-col>
                       </v-row>
                       <v-row class="my-1">
-                        <v-col cols="3" class="pa-1 text-right font-weight-bold">{{ i18n.nodeLimit }}:</v-col>
+                        <v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.nodeLimit }}:</v-col>
                         <v-col v-if="$root.licenseKey.nodes > 0" cols="9" class="pa-1">{{ $root.licenseKey.nodes }}</v-col>
                         <v-col v-else cols="9" class="pa-1">{{ i18n.unlimited }}</v-col>
                       </v-row>
                       <v-row class="my-1">
-                        <v-col cols="3" class="pa-1 text-right font-weight-bold">{{ i18n.socUrl }}:</v-col>
+                        <v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.socUrl }}:</v-col>
                         <v-col v-if="$root.licenseKey.socUrl" cols="9" class="pa-1">{{ $root.licenseKey.socUrl }}</v-col>
                         <v-col v-else cols="9" class="pa-1">{{ i18n.unlocked }}</v-col>
                       </v-row>
                       <v-row class="my-1">
-                        <v-col cols="3" class="pa-1 text-right font-weight-bold">{{ i18n.dataUrl }}:</v-col>
+                        <v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.dataUrl }}:</v-col>
                         <v-col v-if="$root.licenseKey.dataUrl" cols="9" class="pa-1">{{ $root.licenseKey.dataUrl }}</v-col>
                         <v-col v-else cols="9" class="pa-1">{{ i18n.unlocked }}</v-col>
                       </v-row>
                       <v-row class="my-1">
-                        <v-col cols="3" class="pa-1 text-right font-weight-bold">{{ i18n.features }}:</v-col>
+                        <v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.features }}:</v-col>
                         <v-col v-if="$root.licenseKey.features" cols="9" class="pa-1">
                           <v-chip v-for="feature in $root.licenseKey.features" small class="mx-1">
                             {{ $root.localizeMessage(feature) }}
@@ -1028,10 +1028,10 @@
     <script type="text/x-template" id="page-users">
       <v-container fluid>
         <v-row>
-          <v-col cols="3">
+          <v-col cols="12" lg="3">
             <h2 v-text="i18n.users"></h2>
           </v-col>
-          <v-col cols="5">
+          <v-col cols="12" lg="5">
             <v-expansion-panels v-if="$root.isUserAdmin()">
               <v-expansion-panel>
                 <v-expansion-panel-header id="users-options-header">{{i18n.options}}</v-expansion-panel-header>
@@ -1045,7 +1045,7 @@
             </v-expansion-panels>
           </v-col>
           <v-spacer></v-spacer>
-          <v-col cols="2" align="end">
+          <v-col cols="12" lg="2" align="end">
             <h4 v-if="!$root.loading">{{ i18n.usersEnabled }} {{ countUsersEnabled() }} / {{ countUsers() }} </h4>
           </v-col>
         </v-row>
@@ -1106,10 +1106,10 @@
                     </v-btn>
                   </td>
                   <td v-text="props.item.email"></td>
-                  <td v-text="props.item.firstName"></td>
-                  <td v-text="props.item.lastName"></td>
-                  <td v-text="props.item.note"></td>
-                  <td v-text="$root.formatStringArray(props.item.roles)"></td>
+                  <td v-text="props.item.firstName" class="d-none d-lg-table-cell"></td>
+                  <td v-text="props.item.lastName" class="d-none d-lg-table-cell"></td>
+                  <td v-text="props.item.note" class="d-none d-lg-table-cell"></td>
+                  <td v-text="$root.formatStringArray(props.item.roles)" class="d-none d-lg-table-cell"></td>
                   <td>
                     <v-icon v-if="props.item.mfaStatus == 'enabled' && props.item.status != 'locked'" color="success" :title="i18n.totpEnabled">fa-user-shield</v-icon>
                     <v-icon v-if="props.item.mfaStatus != 'enabled' && props.item.status != 'locked'" :title="i18n.loginEnabled">fa-user</v-icon>
@@ -1122,7 +1122,7 @@
                   <td :colspan="headers.length + 1" class="px-0">
                     <v-container fluid grid-list-sm class="pa-4">
                       <v-row>
-                        <v-col>
+                        <v-col cols="12" lg="4">
                           <v-card>
                             <v-card-title v-text="i18n.profile"/>
                             <v-card-text>
@@ -1134,7 +1134,7 @@
                             </v-card-text>
                           </v-card>
                         </v-col>
-                        <v-col>
+                        <v-col cols="12" lg="4">
                           <v-card>
                             <v-card-title>{{ i18n.roles }}</v-card-title>
                             <v-card-text>
@@ -1142,7 +1142,7 @@
                             </v-card-text>
                           </v-card>
                         </v-col>
-                        <v-col>
+                        <v-col cols="12" lg="4">
                           <v-card>
                             <v-card-title>{{ i18n.access }}</v-card-title>
                             <v-card-text>
@@ -2855,9 +2855,9 @@
               <template v-slot:top>
                 <v-container fluid>
                   <v-row>
-                    <v-col cols="6">
+                    <v-col lg="6" class="d-none d-lg-block">
                     </v-col>
-                    <v-col cols="6">
+                    <v-col cols="12" lg="6">
                       <v-text-field v-model="gridFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
                     </v-col>
                   </v-row>
@@ -2875,19 +2875,19 @@
                     <v-icon v-if="props.item.status == 'fault'" :color="props.item.status | colorNodeStatus">{{ props.item.status | iconNodeStatus }}</v-icon>
                   </td>
                   <td v-text="props.item.id"></td>
-                  <td v-text="$root.localizeMessage(props.item.role)"></td>
-                  <td v-text="props.item.address"></td>
-                  <td v-text="props.item.description"></td>
-                  <td v-text="props.item.version"></td>
-                  <td v-text="props.item.model"></td>
-                  <td v-if="metricsEnabled">
+                  <td v-text="$root.localizeMessage(props.item.role)" class="d-none d-md-table-cell"></td>
+                  <td v-text="props.item.address" class="d-none d-lg-table-cell"></td>
+                  <td v-text="props.item.description" class="d-none d-lg-table-cell"></td>
+                  <td v-text="props.item.version" class="d-none d-lg-table-cell"></td>
+                  <td v-text="props.item.model" class="d-none d-lg-table-cell"></td>
+                  <td v-if="metricsEnabled" class="d-none d-lg-table-cell">
                     <span v-if="props.item.metricsEnabled">{{ props.item.productionEps | formatCount }} / {{ props.item.consumptionEps | formatCount }}</span>
                     <span v-if="!props.item.metricsEnabled">{{ i18n.na }}</span>
                   </td>
-                  <td>{{ props.item.updateTime | formatTimestamp }}</td>
-                  <td>{{ props.item.epochTime | formatTimestamp }}</td>
-                  <td>{{ props.item.uptimeSeconds | formatDuration }}</td>
-                  <td><v-chip class="nodeStatus" @click="expand(props.item)" :color="props.item.status | colorNodeStatus">{{ $root.localizeMessage(props.item.status) }}</v-chip></td>
+                  <td class="d-none d-lg-table-cell">{{ props.item.updateTime | formatTimestamp }}</td>
+                  <td class="d-none d-lg-table-cell">{{ props.item.epochTime | formatTimestamp }}</td>
+                  <td class="d-none d-lg-table-cell">{{ props.item.uptimeSeconds | formatDuration }}</td>
+                  <td class="d-none d-lg-table-cell"><v-chip class="nodeStatus" @click="expand(props.item)" :color="props.item.status | colorNodeStatus">{{ $root.localizeMessage(props.item.status) }}</v-chip></td>
                 </tr>
               </template>
               <template v-slot:expanded-item="{ item }">
@@ -2895,31 +2895,67 @@
                   <td :colspan="headers.length" class="px-0">
                     <v-container fluid grid-list-sm class="pa-4">
                       <v-row>
-                        <v-col>
+                        <v-col cols="12" lg="4">
                           <v-card>
                             <v-card-title v-text="i18n.nodeStatus"/>
                             <v-card-text>
-                              <div>
-                                <span class="filter label">{{ i18n.dateOnline }}</span>
+                              <div class="text-no-wrap">
+                                <span class="filter label">{{ i18n.id }}:</span>
+                                <span class="filter value">{{ item.id }}</span>
+                              </div>
+                              <div class="text-no-wrap">
+                                <span class="filter label">{{ i18n.role }}:</span>
+                                <span class="filter value">{{ $root.localizeMessage(item.role) }}</span>
+                              </div>
+                              <div class="text-no-wrap">
+                                <span class="filter label">{{ i18n.address }}:</span>
+                                <span class="filter value">{{ item.address }}</span>
+                              </div>
+                              <div class="text-no-wrap">
+                                <span class="filter label">{{ i18n.description }}:</span>
+                                <span class="filter value">{{ item.description }}</span>
+                              </div>
+                              <div class="text-no-wrap">
+                                <span class="filter label">{{ i18n.version }}:</span>
+                                <span class="filter value">{{ item.version }}</span>
+                              </div>
+                              <div class="text-no-wrap">
+                                <span class="filter label">{{ i18n.model }}:</span>
+                                <span class="filter value">{{ item.model }}</span>
+                              </div>
+                              <div class="text-no-wrap">
+                                <span class="filter label">{{ i18n.dateOnline }}:</span>
                                 <span class="filter value">{{ item.onlineTime | formatDateTime }}</span>
                               </div>
-                              <div v-if="item.metricsEnabled">
+                              <div class="text-no-wrap">
+                                <span class="filter label">{{ i18n.dateDataEpoch }}:</span>
+                                <span class="filter value">{{ item.epochTime | formatTimestamp }}</span>
+                              </div>
+                              <div class="text-no-wrap">
+                                <span class="filter label">{{ i18n.dateUpdated }}:</span>
+                                <span class="filter value">{{ item.updateTime | formatTimestamp }}</span>
+                              </div>
+                              <div class="text-no-wrap">
+                                <span class="filter label">{{ i18n.uptime }}:</span>
+                                <span class="filter value">{{ item.uptimeSeconds | formatDuration }}</span>
+                              </div>
+                              <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.epsProduction }}</span>
                                 <span class="filter value">{{ item.productionEps | formatCount }}</span>
                               </div>
-                              <div v-if="item.metricsEnabled">
+                              <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.epsConsumption }}</span>
                                 <span class="filter value">{{ item.consumptionEps | formatCount }}</span>
                               </div>
-                              <div v-if="item.metricsEnabled">
+                              <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.nodeStatusProcess }}</span>
                                 <span :class="colorNodeStatus(item.processStatus) + '--text'" class="filter value">{{ $root.localizeMessage(item.processStatus) }}</span>
                               </div>
-                              <div>
+                              <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.nodeStatusConnection }}</span>
                                 <span :class="colorNodeStatus(item.connectionStatus) + '--text'" class="filter value">{{ $root.localizeMessage(item.connectionStatus) }}</span>
                               </div>
-                              <div v-if="item.metricsEnabled">
+                              <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.nodeStatusRaid }}</span>
                                 <span :class="colorNodeStatus(item.raidStatus) + '--text'" class="filter value">
                                   <span v-if="item.raidStatus">
@@ -2942,7 +2978,7 @@
                             </v-card-text>
                           </v-card>
                         </v-col>
-                        <v-col>
+                        <v-col cols="12" lg="4">
                           <v-card>
                             <v-card-title v-text="i18n.containerStatus"/>
                             <v-card-text>
@@ -2952,7 +2988,7 @@
                                     <tr>
                                       <th class="text-right" v-text="i18n.container"/>
                                       <th class="text-left" v-text="i18n.status"/>
-                                      <th class="text-right" v-text="i18n.details"/>
+                                      <th class="text-right" v-text="i18n.details" class="d-none d-lg-table-cell"/>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -2963,7 +2999,7 @@
                                       <td :class="colorContainerStatus(container.Status) + '--text text-right'">
                                         {{ $root.localizeMessage(container.Status) }}
                                       </td>
-                                      <td class="text-right cyan--text">
+                                      <td class="text-right cyan--text" class="d-none d-lg-table-cell">
                                         {{ container.Details }}
                                       </td>
                                     </tr>
@@ -2976,7 +3012,7 @@
                             </v-card-text>
                           </v-card>
                         </v-col>
-                        <v-col>
+                        <v-col cols="12" lg="4">
                           <v-card>
                             <v-card-title v-text="i18n.nodeImages"/>
                             <v-card-text>
@@ -3119,10 +3155,10 @@
     <script type="text/x-template" id="page-config">
       <v-container fluid>
         <v-row>
-          <v-col cols="3">
+          <v-col cols="12" lg="3">
             <h2 v-text="i18n.configTitle"></h2>
           </v-col>
-          <v-col cols="5">
+          <v-col cols="12" lg="5">
             <v-expansion-panels>
               <v-expansion-panel>
                 <v-expansion-panel-header id="configOptionsHeader">{{i18n.options}}</v-expansion-panel-header>
@@ -3137,21 +3173,21 @@
             </v-expansion-panels>
           </v-col>
           <v-spacer></v-spacer>
-          <v-col cols="2" align="end">
+          <v-col cols="12" lg="2" align="end">
             <h4 v-if="!$root.loading">{{ i18n.settingsCustomized }} {{ settingsCustomized }} / {{ settingsAvailable }} </h4>
           </v-col>
         </v-row>
         <v-row>
         </v-row>
         <v-row>
-          <v-col cols="6" lg="4">
+          <v-col cols="12" lg="4">
             <v-container fluid>
               <v-row>
                 <v-col>
                   <v-text-field id="filter-input" :label="i18n.filter" v-model="search" clearable :hint="i18n.filterHelp" persistent-hint @click:clear="clearFilter()" class="mb-3" />
                 </v-col>
                 <v-col>
-                  <span class="mt-3">
+                  <span class="mt-3 text-no-wrap overflow-x-hidden">
                     <v-btn id="expand-all-button" icon @click="expand()" :title="i18n.expandAll">
                       <v-icon>fa-angles-down</v-icon>
                     </v-btn>
@@ -3188,7 +3224,7 @@
             </v-treeview>          
           </v-col>
           <v-divider vertical />
-          <v-col cols="6" lg="8">
+          <v-col cols="12" lg="8">
             <v-fade-transition mode="out-in" duration="100">
               <v-alert v-if="!selected" v-text="i18n.settingSelect" type="info" />
               <v-card v-else :key="selected.id" class="pt-6 mx-auto config-setting" flat>
@@ -3288,14 +3324,14 @@
               <v-row>
                 <v-col cols="12">
                   <h2 v-text="i18n.gridMembers"></h2>
-                  <v-subheader v-text="i18n.gridMembersHelp" class="mt-3" />
+                  <v-subheader v-text="i18n.gridMembersHelp" class="my-12 my-lg-3" />
                 </v-col>
               </v-row>
             </v-container>
           </v-col>
         </v-row>
         <v-row>
-          <v-col cols="6">
+          <v-col cols="12" lg="6">
             <v-list flat class="mb-4" outlined>
               <v-header v-text="i18n.gridMembersPending" class="ml-2" />
               <v-list-item-group id="gridmembers-pending">
@@ -3366,7 +3402,7 @@
             </v-list>
 
           </v-col>
-          <v-col cols="6">
+          <v-col cols="12" lg="6">
             <v-list flat outlined>
               <v-header v-text="i18n.gridMembersAccepted" class="ml-2" />
               <v-list-item-group id="gridmembers-accepted">
