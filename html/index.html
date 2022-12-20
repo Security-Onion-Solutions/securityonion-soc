@@ -263,7 +263,6 @@
           {{ tipMessage }}
         </v-snackbar>
         <router-view id="main-view"></router-view>
-        <textarea id="clipboardBuffer"></textarea>
       </v-main>
       <v-footer app>
         <span id="version" class="text-no-wrap">
@@ -3397,34 +3396,52 @@
             <v-card-title class="headline" v-text="i18n.gridMemberReviewTitle"></v-card-title>
             <v-card-subtitle v-text="selected.id" />
             <v-container fluid>
-              <v-row>
-                <v-col cols="4">
+              <v-row class="my-0">
+                <v-col cols="4" class="pa-0">
                   <v-card-text class="font-weight-bold">
                     {{ i18n.name }}:
                   </v-card-text>
-                  <v-card-text class="font-weight-bold">
-                    {{ i18n.role }}:
-                  </v-card-text>
-                  <v-card-text class="font-weight-bold">
-                    {{ i18n.fingerprint }}:
-                  </v-card-text>
-                  <v-card-text class="font-weight-bold">
-                    {{ i18n.status }}:
-                  </v-card-text>
                 </v-col>
-                <v-col cols="8">
+                <v-col cols="8" class="pa-0">
                   <v-card-text>
                     {{ selected.name }}
                   </v-card-text>
+                </v-col>
+              </v-row>
+              <v-row class="my-0">
+                <v-col cols="4" class="pa-0">
+                  <v-card-text class="font-weight-bold">
+                    {{ i18n.role }}:
+                  </v-card-text>
+                </v-col>
+                <v-col cols="8" class="pa-0">
                   <v-card-text>
                     {{ selected.role }}
                   </v-card-text>
+                </v-col>
+              </v-row>
+              <v-row class="my-0">
+                <v-col cols="4" class="pa-0">
+                  <v-card-text class="font-weight-bold">
+                    {{ i18n.fingerprint }}:
+                  </v-card-text>
+                </v-col>
+                <v-col cols="8" class="pa-0">
                   <v-card-text>
                     {{ selected.fingerprint }}
                     <v-icon id="fingerprintCopyValue" class="mx-1" color="white" dense @click.stop="$root.copyToClipboard(selected.fingerprint)" :title="i18n.copyToClipboard">
                       fa-copy
                     </v-icon>
                   </v-card-text>
+                </v-col>
+              </v-row>
+              <v-row class="my-0">
+                <v-col cols="4" class="pa-0">
+                  <v-card-text class="font-weight-bold">
+                    {{ i18n.status }}:
+                  </v-card-text>
+                </v-col>
+                <v-col cols="8" class="pa-0">
                   <v-card-text>
                     <v-chip :color="selected.status | colorNodeStatus" v-text="i18n[selected.status]" />
                   </v-card-text>

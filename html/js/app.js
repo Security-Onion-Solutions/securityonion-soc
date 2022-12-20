@@ -195,7 +195,6 @@ $(document).ready(function() {
         return content;
       },
       copyToClipboard(data, style) {
-        const buffer = document.getElementById('clipboardBuffer');
         // Convert entire item into text
         if (style == 'json') {
           data = JSON.stringify(data);
@@ -206,10 +205,8 @@ $(document).ready(function() {
           }
           data = text;
         }
-        buffer.value = data;
-        buffer.select();
-        buffer.setSelectionRange(0, 99999);
-        document.execCommand("copy");
+
+        navigator.clipboard.writeText(data);
       },
       findEligibleActionLinkForEvent(action, event) {
         if (action && action.links) {
