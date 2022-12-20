@@ -2855,9 +2855,9 @@
               <template v-slot:top>
                 <v-container fluid>
                   <v-row>
-                    <v-col cols="6">
+                    <v-col lg="6" class="d-none d-lg-block">
                     </v-col>
-                    <v-col cols="6">
+                    <v-col cols="12" lg="6">
                       <v-text-field v-model="gridFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
                     </v-col>
                   </v-row>
@@ -2875,19 +2875,19 @@
                     <v-icon v-if="props.item.status == 'fault'" :color="props.item.status | colorNodeStatus">{{ props.item.status | iconNodeStatus }}</v-icon>
                   </td>
                   <td v-text="props.item.id"></td>
-                  <td v-text="$root.localizeMessage(props.item.role)"></td>
-                  <td v-text="props.item.address"></td>
-                  <td v-text="props.item.description"></td>
-                  <td v-text="props.item.version"></td>
-                  <td v-text="props.item.model"></td>
-                  <td v-if="metricsEnabled">
+                  <td v-text="$root.localizeMessage(props.item.role)" class="d-none d-md-table-cell"></td>
+                  <td v-text="props.item.address" class="d-none d-lg-table-cell"></td>
+                  <td v-text="props.item.description" class="d-none d-lg-table-cell"></td>
+                  <td v-text="props.item.version" class="d-none d-lg-table-cell"></td>
+                  <td v-text="props.item.model" class="d-none d-lg-table-cell"></td>
+                  <td v-if="metricsEnabled" class="d-none d-lg-table-cell">
                     <span v-if="props.item.metricsEnabled">{{ props.item.productionEps | formatCount }} / {{ props.item.consumptionEps | formatCount }}</span>
                     <span v-if="!props.item.metricsEnabled">{{ i18n.na }}</span>
                   </td>
-                  <td>{{ props.item.updateTime | formatTimestamp }}</td>
-                  <td>{{ props.item.epochTime | formatTimestamp }}</td>
-                  <td>{{ props.item.uptimeSeconds | formatDuration }}</td>
-                  <td><v-chip class="nodeStatus" @click="expand(props.item)" :color="props.item.status | colorNodeStatus">{{ $root.localizeMessage(props.item.status) }}</v-chip></td>
+                  <td class="d-none d-lg-table-cell">{{ props.item.updateTime | formatTimestamp }}</td>
+                  <td class="d-none d-lg-table-cell">{{ props.item.epochTime | formatTimestamp }}</td>
+                  <td class="d-none d-lg-table-cell">{{ props.item.uptimeSeconds | formatDuration }}</td>
+                  <td class="d-none d-lg-table-cell"><v-chip class="nodeStatus" @click="expand(props.item)" :color="props.item.status | colorNodeStatus">{{ $root.localizeMessage(props.item.status) }}</v-chip></td>
                 </tr>
               </template>
               <template v-slot:expanded-item="{ item }">
@@ -2895,31 +2895,67 @@
                   <td :colspan="headers.length" class="px-0">
                     <v-container fluid grid-list-sm class="pa-4">
                       <v-row>
-                        <v-col>
+                        <v-col cols="12" lg="4">
                           <v-card>
                             <v-card-title v-text="i18n.nodeStatus"/>
                             <v-card-text>
-                              <div>
-                                <span class="filter label">{{ i18n.dateOnline }}</span>
+                              <div class="text-no-wrap">
+                                <span class="filter label">{{ i18n.id }}:</span>
+                                <span class="filter value">{{ item.id }}</span>
+                              </div>
+                              <div class="text-no-wrap">
+                                <span class="filter label">{{ i18n.role }}:</span>
+                                <span class="filter value">{{ $root.localizeMessage(item.role) }}</span>
+                              </div>
+                              <div class="text-no-wrap">
+                                <span class="filter label">{{ i18n.address }}:</span>
+                                <span class="filter value">{{ item.address }}</span>
+                              </div>
+                              <div class="text-no-wrap">
+                                <span class="filter label">{{ i18n.description }}:</span>
+                                <span class="filter value">{{ item.description }}</span>
+                              </div>
+                              <div class="text-no-wrap">
+                                <span class="filter label">{{ i18n.version }}:</span>
+                                <span class="filter value">{{ item.version }}</span>
+                              </div>
+                              <div class="text-no-wrap">
+                                <span class="filter label">{{ i18n.model }}:</span>
+                                <span class="filter value">{{ item.model }}</span>
+                              </div>
+                              <div class="text-no-wrap">
+                                <span class="filter label">{{ i18n.dateOnline }}:</span>
                                 <span class="filter value">{{ item.onlineTime | formatDateTime }}</span>
                               </div>
-                              <div v-if="item.metricsEnabled">
+                              <div class="text-no-wrap">
+                                <span class="filter label">{{ i18n.dateDataEpoch }}:</span>
+                                <span class="filter value">{{ item.epochTime | formatTimestamp }}</span>
+                              </div>
+                              <div class="text-no-wrap">
+                                <span class="filter label">{{ i18n.dateUpdated }}:</span>
+                                <span class="filter value">{{ item.updateTime | formatTimestamp }}</span>
+                              </div>
+                              <div class="text-no-wrap">
+                                <span class="filter label">{{ i18n.uptime }}:</span>
+                                <span class="filter value">{{ item.uptimeSeconds | formatDuration }}</span>
+                              </div>
+                              <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.epsProduction }}</span>
                                 <span class="filter value">{{ item.productionEps | formatCount }}</span>
                               </div>
-                              <div v-if="item.metricsEnabled">
+                              <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.epsConsumption }}</span>
                                 <span class="filter value">{{ item.consumptionEps | formatCount }}</span>
                               </div>
-                              <div v-if="item.metricsEnabled">
+                              <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.nodeStatusProcess }}</span>
                                 <span :class="colorNodeStatus(item.processStatus) + '--text'" class="filter value">{{ $root.localizeMessage(item.processStatus) }}</span>
                               </div>
-                              <div>
+                              <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.nodeStatusConnection }}</span>
                                 <span :class="colorNodeStatus(item.connectionStatus) + '--text'" class="filter value">{{ $root.localizeMessage(item.connectionStatus) }}</span>
                               </div>
-                              <div v-if="item.metricsEnabled">
+                              <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.nodeStatusRaid }}</span>
                                 <span :class="colorNodeStatus(item.raidStatus) + '--text'" class="filter value">
                                   <span v-if="item.raidStatus">
@@ -2942,7 +2978,7 @@
                             </v-card-text>
                           </v-card>
                         </v-col>
-                        <v-col>
+                        <v-col cols="12" lg="4">
                           <v-card>
                             <v-card-title v-text="i18n.containerStatus"/>
                             <v-card-text>
@@ -2952,7 +2988,7 @@
                                     <tr>
                                       <th class="text-right" v-text="i18n.container"/>
                                       <th class="text-left" v-text="i18n.status"/>
-                                      <th class="text-right" v-text="i18n.details"/>
+                                      <th class="text-right" v-text="i18n.details" class="d-none d-lg-table-cell"/>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -2963,7 +2999,7 @@
                                       <td :class="colorContainerStatus(container.Status) + '--text text-right'">
                                         {{ $root.localizeMessage(container.Status) }}
                                       </td>
-                                      <td class="text-right cyan--text">
+                                      <td class="text-right cyan--text" class="d-none d-lg-table-cell">
                                         {{ container.Details }}
                                       </td>
                                     </tr>
@@ -2976,7 +3012,7 @@
                             </v-card-text>
                           </v-card>
                         </v-col>
-                        <v-col>
+                        <v-col cols="12" lg="4">
                           <v-card>
                             <v-card-title v-text="i18n.nodeImages"/>
                             <v-card-text>
