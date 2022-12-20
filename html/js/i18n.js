@@ -302,7 +302,7 @@ const i18n = {
       gridMembersAcceptedHelp: 'Accepted members are trusted grid members',
       gridMembersDenied: 'Denied Members',
       gridMembersDeniedHelp: 'Denied nodes have been automatically rejected by the system, due to conflicting or missing information',
-      gridMembersHelp: 'A distributed grid is made of up member nodes. Member nodes will request to join the grid and remain in a pending state until an admninistrator has accepted the node. If a pending member node is not yet listed as pending, then it\'s possible that the wrong manager host was provided during setup or there could be a connectivity problem.',
+      gridMembersHelp: 'A distributed grid is made of up member nodes. Member nodes will request to join the grid and remain in a pending state until an administrator has accepted the node. If a pending member node is not yet listed as pending, then it\'s possible that the wrong manager host was provided during setup or there could be a connectivity problem.',
       gridMembersPending: 'Pending Members',
       gridMembersPendingHelp: 'This node is awaiting acceptance to join the grid',
       gridMembersRejected: 'Rejected Members',
