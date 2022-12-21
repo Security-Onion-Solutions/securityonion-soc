@@ -3229,7 +3229,7 @@
               <v-alert v-if="!selected" v-text="i18n.settingSelect" type="info" />
               <v-card v-else :key="selected.id" class="pt-6 mx-auto config-setting" flat>
                 <v-card-text>
-                  <div class="text-h5 mb-4">
+                  <div class="text-subtitle-1 mb-4">
                     {{ getSettingDescription(selected) }}
                     <a v-if="selected.helpLink" target="so-help" :href="$root.parameters.docsUrl + selected.helpLink" style="text-decoration: none; cursor: 'pointer'" :title="i18n.settingHelp">
                       <v-icon color="info" class="mb-2">fa-circle-question</v-icon>
