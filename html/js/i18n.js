@@ -430,6 +430,7 @@ const i18n = {
       passwordChange: 'New password',
       passwordRequired: 'A password must be specified.',
       passwordReset: 'Change Password',
+      passwordNeedsChanged: 'User has not yet changed their password',
       profileDetails: 'Profile Details',
       profileInstructions: 'You may be prompted to login again when updating your profile. This is a security measure to protect your account.',
       pcap: 'PCAP',

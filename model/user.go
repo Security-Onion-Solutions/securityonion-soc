@@ -11,18 +11,19 @@ import (
 )
 
 type User struct {
-  Id             string    `json:"id"`
-  CreateTime     time.Time `json:"createTime"`
-  UpdateTime     time.Time `json:"updateTime"`
-  Email          string    `json:"email"`
-  FirstName      string    `json:"firstName"`
-  LastName       string    `json:"lastName"`
-  MfaStatus      string    `json:"mfaStatus"`
-  Note           string    `json:"note"`
-  Roles          []string  `json:"roles"`
-  Status         string    `json:"status"`
-  SearchUsername string    `json:"searchUsername"`
-  Password       string    `json:"password"`
+  Id              string    `json:"id"`
+  CreateTime      time.Time `json:"createTime"`
+  UpdateTime      time.Time `json:"updateTime"`
+  Email           string    `json:"email"`
+  FirstName       string    `json:"firstName"`
+  LastName        string    `json:"lastName"`
+  MfaStatus       string    `json:"mfaStatus"`
+  Note            string    `json:"note"`
+  Roles           []string  `json:"roles"`
+  Status          string    `json:"status"`
+  SearchUsername  string    `json:"searchUsername"`
+  Password        string    `json:"password"`
+  PasswordChanged bool      `json:"passwordChanged"`
 }
 
 func NewUser() *User {
