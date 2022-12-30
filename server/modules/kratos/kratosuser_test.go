@@ -8,6 +8,7 @@ package kratos
 
 import (
 	"testing"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/stretchr/testify/assert"
@@ -52,6 +53,18 @@ func TestCopyToUser(tester *testing.T) {
 	assert.Equal(tester, kratosUser.Addresses[0].Value, user.Email)
 	assert.Equal(tester, "locked", user.Status)
 	assert.Equal(tester, "enabled", user.MfaStatus)
+	assert.Equal(tester, false, user.PasswordChanged)
+
+	kratosUser.Credentials = make(map[string]*KratosCredential)
+	kratosUser.Credentials["password"] = &KratosCredential{
+		Type:       "password",
+		CreateDate: time.Now(),
+		UpdateDate: time.Now().Add(time.Minute),
+	}
+	user = model.NewUser()
+	kratosUser.copyToUser(user)
+	assert.Equal(tester, "disabled", user.MfaStatus)
+	assert.Equal(tester, true, user.PasswordChanged)
 }
 
 func TestCopyToUserActive(tester *testing.T) {
