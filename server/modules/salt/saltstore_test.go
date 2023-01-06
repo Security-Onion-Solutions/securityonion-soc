@@ -153,7 +153,7 @@ func TestManageMember(tester *testing.T) {
 		assert.NoError(tester, err)
 
 		request := ReadReqPipe()
-		assert.Equal(tester, `{"command":"manage-minions","id":"foo","operation":"`+op+`"}`, request)
+		assert.Equal(tester, `{"command":"manage-minion","id":"foo","operation":"`+op+`"}`, request)
 	}
 }
 
@@ -165,7 +165,7 @@ func TestManageMember_Failure(tester *testing.T) {
 		assert.EqualError(tester, err, "ERROR_SALT_MANAGE_MEMBER")
 
 		request := ReadReqPipe()
-		assert.Equal(tester, `{"command":"manage-minions","id":"foo","operation":"`+op+`"}`, request)
+		assert.Equal(tester, `{"command":"manage-minion","id":"foo","operation":"`+op+`"}`, request)
 	}
 }
 

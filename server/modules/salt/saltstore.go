@@ -957,7 +957,7 @@ func (store *Saltstore) ManageMember(ctx context.Context, operation string, id s
   }
 
   args := make(map[string]string)
-  args["command"] = "manage-minions"
+  args["command"] = "manage-minion"
   args["operation"] = operation
   args["id"] = id
   output, err := store.execCommand(ctx, args)
