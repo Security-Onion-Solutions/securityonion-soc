@@ -3310,7 +3310,7 @@
             <v-card-actions>
               <v-spacer></v-spacer>
               <v-btn text id="config-discard-proceed-button" @click="cancel(true)" v-text="i18n.yes" />
-              <v-btn text id="config-discard-cancel-button" @click="cancelDialog = false" v-text="i18n.no" />
+              <v-btn text id="config-discard-cancel-button" @click="retainChanges()" v-text="i18n.no" />
             </v-card-actions>
           </v-card>
         </v-dialog>

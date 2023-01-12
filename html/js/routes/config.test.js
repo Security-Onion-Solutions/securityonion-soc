@@ -282,7 +282,8 @@ test('reset', () => {
 
 setupSettings = () => {
   comp.cancelDialog = true;
-  comp.nodes = [{id: "n1", status: GridMemberAccepted }, {id: "n1a", status: GridMemberAccepted }, {id: "n2", name: "node2", role: "standalone", status: "accepted" }, {id:"n3", status: "pending" }];
+  comp.nodes = [{id: "n1", status: GridMemberAccepted }, {id: "n1a", status: GridMemberAccepted }, 
+                {id: "n2", name: "node2", role: "standalone", status: "accepted" }, {id:"n3", status: "pending" }];
 
   const nodeValues = new Map();
   nodeValues.set("n1", "123");
@@ -293,7 +294,9 @@ setupSettings = () => {
   nodeValues2.set("n1a", "abc-2");
 
   comp.active = ["s-id"];
-  comp.settings = [{id: "s-id", value: 'orig-value', default: 'def-value', nodeValues: nodeValues},{id: "s-id2", value: 'orig-value2', nodeValues: nodeValues2}];
+  comp.activeBackup = ["s-id"];
+  comp.settings = [{id: "s-id", value: 'orig-value', default: 'def-value', nodeValues: nodeValues},
+                   {id: "s-id2", value: 'orig-value2', nodeValues: nodeValues2}];
 };
 
 test('selectSetting', () => {
@@ -320,6 +323,7 @@ test('cancel', () => {
 
   // Normal cancel - expect popup
   comp.form.key = "cancel-id";
+  comp.activeBackup = ["cancel-id"];
   comp.cancelDialog = true;
   comp.cancel(false);
   expect(comp.cancelDialog).toBe(true);
@@ -418,6 +422,7 @@ test('edit', () => {
   comp.cancelDialog = false;
   comp.form.value = "touched-value";
   comp.form.key = "s-id2";
+  comp.activeBackup = ["s-id2"];
   comp.edit(comp.settings[0], null);
   expect(comp.form.key).toBe("s-id2");
   expect(comp.form.value).toBe("touched-value");
