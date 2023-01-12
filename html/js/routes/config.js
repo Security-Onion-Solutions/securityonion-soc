@@ -30,6 +30,7 @@ routes.push({ path: '/config', name: 'config', component: {
     settingsCustomized: 0,
     settingsAvailable: 0,
     showDefault: false,
+    nextStopId: null,
   }},
   mounted() {
     if (this.$route.query.f) {
@@ -282,6 +283,10 @@ routes.push({ path: '/config', name: 'config', component: {
         this.form.key = setting.id;
       }
     },
+    retainChanges() {
+      this.cancelDialog = false;
+      this.nextStopId = null;
+    },
     selectSetting() {
       if (!this.cancel()) {
         // User chose not to discard unsaved settings, go back
@@ -298,14 +303,39 @@ routes.push({ path: '/config', name: 'config', component: {
       window.scrollTo(0,0);
     },
     cancel(force) {
-      const setting = this.findActiveSetting();
+      var setting = this.findActiveSetting();
+      if (this.activeBackup && this.active[0] != this.activeBackup[0]) {
+        // User has clicked on another setting. Grab the setting
+        // from the backup so we can check if the edited value has been modified
+        const currentSettingId = this.activeBackup[0];
+        setting = this.settings.find(s => s.id == currentSettingId);
+      }
       if (!force && setting && this.form.key && this.isPendingSave(setting, setting.id == this.form.key ? null : this.form.key)) {
         document.activeElement.blur();
         this.cancelDialog = true;
+
+        // Save the active setting ID so we can forward the user over to that setting
+        // once they approve the discard changes prompt.
+        if (this.activeBackup && this.active[0] != this.activeBackup[0]) {
+          this.nextStopId = this.active[0];
+        }
+
         return false;
       }
       this.form.key = null;
       this.cancelDialog = false;
+
+      // If the user has discarded the changes, and if there's a next-stop
+      // forward the user there now.
+      if (force) {
+        if (this.nextStopId) {
+          this.$nextTick(() => {
+            this.active = [this.nextStopId];
+            this.nextStopId = null;
+          });
+        }
+      }
+
       return true;
     },
     async remove(setting, nodeId) {
