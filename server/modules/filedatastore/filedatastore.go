@@ -7,44 +7,44 @@
 package filedatastore
 
 import (
-  "github.com/security-onion-solutions/securityonion-soc/module"
-  "github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 )
 
 type FileDatastore struct {
-  config module.ModuleConfig
-  server *server.Server
-  impl   *FileDatastoreImpl
+	config module.ModuleConfig
+	server *server.Server
+	impl   *FileDatastoreImpl
 }
 
 func NewFileDatastore(srv *server.Server) *FileDatastore {
-  return &FileDatastore{
-    server: srv,
-    impl:   NewFileDatastoreImpl(srv),
-  }
+	return &FileDatastore{
+		server: srv,
+		impl:   NewFileDatastoreImpl(srv),
+	}
 }
 
 func (fdmodule *FileDatastore) PrerequisiteModules() []string {
-  return nil
+	return nil
 }
 
 func (fdmodule *FileDatastore) Init(cfg module.ModuleConfig) error {
-  fdmodule.config = cfg
-  err := fdmodule.impl.Init(cfg)
-  if err == nil {
-    fdmodule.server.Datastore = fdmodule.impl
-  }
-  return err
+	fdmodule.config = cfg
+	err := fdmodule.impl.Init(cfg)
+	if err == nil {
+		fdmodule.server.Datastore = fdmodule.impl
+	}
+	return err
 }
 
 func (fdmodule *FileDatastore) Start() error {
-  return nil
+	return nil
 }
 
 func (fdmodule *FileDatastore) Stop() error {
-  return nil
+	return nil
 }
 
 func (fdmodule *FileDatastore) IsRunning() bool {
-  return false
+	return false
 }

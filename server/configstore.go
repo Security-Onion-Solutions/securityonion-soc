@@ -7,12 +7,12 @@
 package server
 
 import (
-  "context"
-  "github.com/security-onion-solutions/securityonion-soc/model"
+	"context"
+	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type Configstore interface {
-  GetSettings(ctx context.Context) ([]*model.Setting, error)
-  UpdateSetting(ctx context.Context, setting *model.Setting, remove bool) error
-  SyncSettings(ctx context.Context) error
+	GetSettings(ctx context.Context) ([]*model.Setting, error)
+	UpdateSetting(ctx context.Context, setting *model.Setting, remove bool) error
+	SyncSettings(ctx context.Context) error
 }

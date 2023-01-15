@@ -7,40 +7,40 @@
 package model
 
 import (
-  "regexp"
+	"regexp"
 )
 
 type Setting struct {
-  Id                  string `json:"id"`
-  Title               string `json:"title"`
-  Description         string `json:"description"`
-  Global              bool   `json:"global"` // If Global == Node then the setting applies to both
-  Node                bool   `json:"node"`
-  NodeId              string `json:"nodeId"`
-  Default             string `json:"default"`
-  DefaultAvailable    bool   `json:"defaultAvailable"`
-  Value               string `json:"value"`
-  Multiline           bool   `json:"multiline"`
-  Readonly            bool   `json:"readonly"`
-  Sensitive           bool   `json:"sensitive"`
-  Regex               string `json:"regex"`
-  RegexFailureMessage string `json:"regexFailureMessage"`
-  File                bool   `json:"file"`
-  Advanced            bool   `json:"advanced"`
-  HelpLink            string `json:"helpLink"`
-  Syntax              string `json:"syntax"`
+	Id                  string `json:"id"`
+	Title               string `json:"title"`
+	Description         string `json:"description"`
+	Global              bool   `json:"global"` // If Global == Node then the setting applies to both
+	Node                bool   `json:"node"`
+	NodeId              string `json:"nodeId"`
+	Default             string `json:"default"`
+	DefaultAvailable    bool   `json:"defaultAvailable"`
+	Value               string `json:"value"`
+	Multiline           bool   `json:"multiline"`
+	Readonly            bool   `json:"readonly"`
+	Sensitive           bool   `json:"sensitive"`
+	Regex               string `json:"regex"`
+	RegexFailureMessage string `json:"regexFailureMessage"`
+	File                bool   `json:"file"`
+	Advanced            bool   `json:"advanced"`
+	HelpLink            string `json:"helpLink"`
+	Syntax              string `json:"syntax"`
 }
 
 func NewSetting(Id string) *Setting {
-  return &Setting{
-    Id: Id,
-  }
+	return &Setting{
+		Id: Id,
+	}
 }
 
 func IsValidMinionId(id string) bool {
-  return regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`).MatchString(id)
+	return regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`).MatchString(id)
 }
 
 func IsValidSettingId(id string) bool {
-  return regexp.MustCompile(`^[a-zA-Z0-9:_.-]+$`).MatchString(id)
+	return regexp.MustCompile(`^[a-zA-Z0-9:_.-]+$`).MatchString(id)
 }

@@ -7,52 +7,52 @@
 package generichttp
 
 import (
-  "errors"
-  "github.com/security-onion-solutions/securityonion-soc/module"
-  "github.com/security-onion-solutions/securityonion-soc/server"
+	"errors"
+	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 )
 
 type HttpCase struct {
-  config module.ModuleConfig
-  server *server.Server
-  store  *HttpCasestore
+	config module.ModuleConfig
+	server *server.Server
+	store  *HttpCasestore
 }
 
 func NewHttpCase(srv *server.Server) *HttpCase {
-  return &HttpCase{
-    server: srv,
-    store:  NewHttpCasestore(srv),
-  }
+	return &HttpCase{
+		server: srv,
+		store:  NewHttpCasestore(srv),
+	}
 }
 
 func (somodule *HttpCase) PrerequisiteModules() []string {
-  return nil
+	return nil
 }
 
 func (somodule *HttpCase) Init(cfg module.ModuleConfig) error {
-  somodule.config = cfg
-  host, _ := module.GetString(cfg, "hostUrl")
-  verifyCert := module.GetBoolDefault(cfg, "verifyCert", true)
-  headers := module.GetStringArrayDefault(cfg, "headers", nil)
-  createParams := NewGenericHttpParams(cfg, "create")
-  err := somodule.store.Init(host, verifyCert, headers, createParams)
-  if err == nil && somodule.server != nil {
-    if somodule.server.Casestore != nil {
-      err = errors.New("Multiple case modules cannot be enabled concurrently")
-    }
-    somodule.server.Casestore = somodule.store
-  }
-  return err
+	somodule.config = cfg
+	host, _ := module.GetString(cfg, "hostUrl")
+	verifyCert := module.GetBoolDefault(cfg, "verifyCert", true)
+	headers := module.GetStringArrayDefault(cfg, "headers", nil)
+	createParams := NewGenericHttpParams(cfg, "create")
+	err := somodule.store.Init(host, verifyCert, headers, createParams)
+	if err == nil && somodule.server != nil {
+		if somodule.server.Casestore != nil {
+			err = errors.New("Multiple case modules cannot be enabled concurrently")
+		}
+		somodule.server.Casestore = somodule.store
+	}
+	return err
 }
 
 func (somodule *HttpCase) Start() error {
-  return nil
+	return nil
 }
 
 func (somodule *HttpCase) Stop() error {
-  return nil
+	return nil
 }
 
 func (somodule *HttpCase) IsRunning() bool {
-  return false
+	return false
 }

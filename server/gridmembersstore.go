@@ -7,11 +7,11 @@
 package server
 
 import (
-  "context"
-  "github.com/security-onion-solutions/securityonion-soc/model"
+	"context"
+	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type GridMembersstore interface {
-  GetMembers(ctx context.Context) ([]*model.GridMember, error)
-  ManageMember(ctx context.Context, operation string, id string) error
+	GetMembers(ctx context.Context) ([]*model.GridMember, error)
+	ManageMember(ctx context.Context, operation string, id string) error
 }

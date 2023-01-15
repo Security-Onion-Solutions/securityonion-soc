@@ -7,17 +7,17 @@
 package generichttp
 
 import (
-  "github.com/security-onion-solutions/securityonion-soc/module"
-  "github.com/stretchr/testify/assert"
-  "testing"
+	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
 func TestNewHttpParams(tester *testing.T) {
-  cfg := make(module.ModuleConfig)
-  params := NewGenericHttpParams(cfg, "create")
-  assert.Equal(tester, "POST", params.Method)
-  assert.Equal(tester, "", params.Path)
-  assert.Equal(tester, "application/json", params.ContentType)
-  assert.Equal(tester, "", params.Body)
-  assert.Equal(tester, 200, params.SuccessStatusCode)
+	cfg := make(module.ModuleConfig)
+	params := NewGenericHttpParams(cfg, "create")
+	assert.Equal(tester, "POST", params.Method)
+	assert.Equal(tester, "", params.Path)
+	assert.Equal(tester, "application/json", params.ContentType)
+	assert.Equal(tester, "", params.Body)
+	assert.Equal(tester, 200, params.SuccessStatusCode)
 }

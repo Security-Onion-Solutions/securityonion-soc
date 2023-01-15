@@ -7,13 +7,13 @@
 package agent
 
 import (
-  "github.com/security-onion-solutions/securityonion-soc/model"
-  "io"
-  "time"
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"io"
+	"time"
 )
 
 type JobProcessor interface {
-  ProcessJob(*model.Job, io.ReadCloser) (io.ReadCloser, error)
-  CleanupJob(*model.Job)
-  GetDataEpoch() time.Time
+	ProcessJob(*model.Job, io.ReadCloser) (io.ReadCloser, error)
+	CleanupJob(*model.Job)
+	GetDataEpoch() time.Time
 }

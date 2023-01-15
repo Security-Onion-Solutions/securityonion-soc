@@ -7,6 +7,6 @@
 package web
 
 type WebSocketMessage struct {
-  Kind   string
-  Object interface{}
+	Kind   string
+	Object interface{}
 }

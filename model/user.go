@@ -7,38 +7,38 @@
 package model
 
 import (
-  "time"
+	"time"
 )
 
 type User struct {
-  Id              string    `json:"id"`
-  CreateTime      time.Time `json:"createTime"`
-  UpdateTime      time.Time `json:"updateTime"`
-  Email           string    `json:"email"`
-  FirstName       string    `json:"firstName"`
-  LastName        string    `json:"lastName"`
-  MfaStatus       string    `json:"mfaStatus"`
-  Note            string    `json:"note"`
-  Roles           []string  `json:"roles"`
-  Status          string    `json:"status"`
-  SearchUsername  string    `json:"searchUsername"`
-  Password        string    `json:"password"`
-  PasswordChanged bool      `json:"passwordChanged"`
+	Id              string    `json:"id"`
+	CreateTime      time.Time `json:"createTime"`
+	UpdateTime      time.Time `json:"updateTime"`
+	Email           string    `json:"email"`
+	FirstName       string    `json:"firstName"`
+	LastName        string    `json:"lastName"`
+	MfaStatus       string    `json:"mfaStatus"`
+	Note            string    `json:"note"`
+	Roles           []string  `json:"roles"`
+	Status          string    `json:"status"`
+	SearchUsername  string    `json:"searchUsername"`
+	Password        string    `json:"password"`
+	PasswordChanged bool      `json:"passwordChanged"`
 }
 
 func NewUser() *User {
-  return &User{
-    CreateTime:     time.Now(),
-    Email:          "",
-    FirstName:      "",
-    LastName:       "",
-    Note:           "",
-    Status:         "",
-    SearchUsername: "",
-    Password:       "",
-  }
+	return &User{
+		CreateTime:     time.Now(),
+		Email:          "",
+		FirstName:      "",
+		LastName:       "",
+		Note:           "",
+		Status:         "",
+		SearchUsername: "",
+		Password:       "",
+	}
 }
 
 func (user *User) String() string {
-  return user.Id
+	return user.Id
 }

@@ -7,45 +7,45 @@
 package generichttp
 
 import (
-  "context"
-  "github.com/security-onion-solutions/securityonion-soc/model"
-  "github.com/security-onion-solutions/securityonion-soc/module"
-  "github.com/security-onion-solutions/securityonion-soc/server"
-  "github.com/stretchr/testify/assert"
-  "testing"
+	"context"
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
 func TestCreateUnauthorized(tester *testing.T) {
-  casestore := NewHttpCasestore(server.NewFakeUnauthorizedServer())
-  casestore.Init("some/url", true, nil, nil)
-  socCase := model.NewCase()
-  newCase, err := casestore.Create(context.Background(), socCase)
-  assert.Error(tester, err)
-  assert.Nil(tester, newCase)
+	casestore := NewHttpCasestore(server.NewFakeUnauthorizedServer())
+	casestore.Init("some/url", true, nil, nil)
+	socCase := model.NewCase()
+	newCase, err := casestore.Create(context.Background(), socCase)
+	assert.Error(tester, err)
+	assert.Nil(tester, newCase)
 }
 
 func TestCreate(tester *testing.T) {
-  casestore := NewHttpCasestore(server.NewFakeAuthorizedServer(nil))
-  cfg := make(module.ModuleConfig)
-  params := NewGenericHttpParams(cfg, "create")
-  casestore.Init("some/url", true, nil, params)
-  caseResponse := ""
-  casestore.client.MockStringResponse(caseResponse, 200, nil)
-  socCase := model.NewCase()
-  newCase, err := casestore.Create(context.Background(), socCase)
-  assert.NoError(tester, err)
-  assert.Nil(tester, newCase)
+	casestore := NewHttpCasestore(server.NewFakeAuthorizedServer(nil))
+	cfg := make(module.ModuleConfig)
+	params := NewGenericHttpParams(cfg, "create")
+	casestore.Init("some/url", true, nil, params)
+	caseResponse := ""
+	casestore.client.MockStringResponse(caseResponse, 200, nil)
+	socCase := model.NewCase()
+	newCase, err := casestore.Create(context.Background(), socCase)
+	assert.NoError(tester, err)
+	assert.Nil(tester, newCase)
 }
 
 func TestCreateFail(tester *testing.T) {
-  casestore := NewHttpCasestore(server.NewFakeAuthorizedServer(nil))
-  cfg := make(module.ModuleConfig)
-  params := NewGenericHttpParams(cfg, "create")
-  casestore.Init("some/url", true, nil, params)
-  caseResponse := ""
-  casestore.client.MockStringResponse(caseResponse, 500, nil)
-  socCase := model.NewCase()
-  newCase, err := casestore.Create(context.Background(), socCase)
-  assert.Error(tester, err)
-  assert.Nil(tester, newCase)
+	casestore := NewHttpCasestore(server.NewFakeAuthorizedServer(nil))
+	cfg := make(module.ModuleConfig)
+	params := NewGenericHttpParams(cfg, "create")
+	casestore.Init("some/url", true, nil, params)
+	caseResponse := ""
+	casestore.client.MockStringResponse(caseResponse, 500, nil)
+	socCase := model.NewCase()
+	newCase, err := casestore.Create(context.Background(), socCase)
+	assert.Error(tester, err)
+	assert.Nil(tester, newCase)
 }

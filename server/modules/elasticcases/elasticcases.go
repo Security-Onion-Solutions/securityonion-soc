@@ -7,52 +7,52 @@
 package elasticcases
 
 import (
-  "errors"
-  "github.com/security-onion-solutions/securityonion-soc/module"
-  "github.com/security-onion-solutions/securityonion-soc/server"
+	"errors"
+	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 )
 
 type ElasticCases struct {
-  config module.ModuleConfig
-  server *server.Server
-  store  *ElasticCasestore
+	config module.ModuleConfig
+	server *server.Server
+	store  *ElasticCasestore
 }
 
 func NewElasticCases(srv *server.Server) *ElasticCases {
-  return &ElasticCases{
-    server: srv,
-    store:  NewElasticCasestore(srv),
-  }
+	return &ElasticCases{
+		server: srv,
+		store:  NewElasticCasestore(srv),
+	}
 }
 
 func (somodule *ElasticCases) PrerequisiteModules() []string {
-  return nil
+	return nil
 }
 
 func (somodule *ElasticCases) Init(cfg module.ModuleConfig) error {
-  somodule.config = cfg
-  host := module.GetStringDefault(cfg, "hostUrl", "kibana")
-  verifyCert := module.GetBoolDefault(cfg, "verifyCert", true)
-  username := module.GetStringDefault(cfg, "username", "")
-  password := module.GetStringDefault(cfg, "password", "")
-  err := somodule.store.Init(host, username, password, verifyCert)
-  if err == nil && somodule.server != nil {
-    if somodule.server.Casestore != nil {
-      err = errors.New("Multiple case modules cannot be enabled concurrently")
-    }
-    somodule.server.Casestore = somodule.store
-  }
-  return err
+	somodule.config = cfg
+	host := module.GetStringDefault(cfg, "hostUrl", "kibana")
+	verifyCert := module.GetBoolDefault(cfg, "verifyCert", true)
+	username := module.GetStringDefault(cfg, "username", "")
+	password := module.GetStringDefault(cfg, "password", "")
+	err := somodule.store.Init(host, username, password, verifyCert)
+	if err == nil && somodule.server != nil {
+		if somodule.server.Casestore != nil {
+			err = errors.New("Multiple case modules cannot be enabled concurrently")
+		}
+		somodule.server.Casestore = somodule.store
+	}
+	return err
 }
 
 func (somodule *ElasticCases) Start() error {
-  return nil
+	return nil
 }
 
 func (somodule *ElasticCases) Stop() error {
-  return nil
+	return nil
 }
 
 func (somodule *ElasticCases) IsRunning() bool {
-  return false
+	return false
 }
