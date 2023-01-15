@@ -7,52 +7,52 @@
 package elastic
 
 import (
-  "crypto/tls"
-  "github.com/apex/log"
-  "github.com/security-onion-solutions/securityonion-soc/model"
-  "github.com/security-onion-solutions/securityonion-soc/web"
-  "net"
-  "net/http"
-  "time"
+	"crypto/tls"
+	"github.com/apex/log"
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/web"
+	"net"
+	"net/http"
+	"time"
 )
 
 type ElasticTransport struct {
-  internal http.RoundTripper
+	internal http.RoundTripper
 }
 
 func NewElasticTransport(user string, pass string, timeoutMs time.Duration, verifyCert bool) http.RoundTripper {
-  httpTransport := &http.Transport{
-    MaxIdleConnsPerHost:   10,
-    ResponseHeaderTimeout: timeoutMs,
-    DialContext:           (&net.Dialer{Timeout: timeoutMs}).DialContext,
-    TLSClientConfig: &tls.Config{
-      InsecureSkipVerify: !verifyCert,
-    },
-  }
+	httpTransport := &http.Transport{
+		MaxIdleConnsPerHost:   10,
+		ResponseHeaderTimeout: timeoutMs,
+		DialContext:           (&net.Dialer{Timeout: timeoutMs}).DialContext,
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: !verifyCert,
+		},
+	}
 
-  if len(user) > 0 && len(pass) > 0 {
-    return &ElasticTransport{
-      internal: httpTransport,
-    }
-  }
+	if len(user) > 0 && len(pass) > 0 {
+		return &ElasticTransport{
+			internal: httpTransport,
+		}
+	}
 
-  return httpTransport
+	return httpTransport
 }
 
 func (transport *ElasticTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-  if user, ok := req.Context().Value(web.ContextKeyRequestor).(*model.User); ok {
-    log.WithFields(log.Fields{
-      "username":       user.Email,
-      "searchUsername": user.SearchUsername,
-      "requestId":      req.Context().Value(web.ContextKeyRequestId),
-    }).Debug("Executing Elastic request on behalf of user")
-    username := user.Email
-    if user.SearchUsername != "" {
-      username = user.SearchUsername
-    }
-    req.Header.Set("es-security-runas-user", username)
-  } else {
-    log.Warn("User not found in context")
-  }
-  return transport.internal.RoundTrip(req)
+	if user, ok := req.Context().Value(web.ContextKeyRequestor).(*model.User); ok {
+		log.WithFields(log.Fields{
+			"username":       user.Email,
+			"searchUsername": user.SearchUsername,
+			"requestId":      req.Context().Value(web.ContextKeyRequestId),
+		}).Debug("Executing Elastic request on behalf of user")
+		username := user.Email
+		if user.SearchUsername != "" {
+			username = user.SearchUsername
+		}
+		req.Header.Set("es-security-runas-user", username)
+	} else {
+		log.Warn("User not found in context")
+	}
+	return transport.internal.RoundTrip(req)
 }

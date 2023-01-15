@@ -7,38 +7,38 @@
 package server
 
 import (
-  "context"
-  "errors"
-  "github.com/security-onion-solutions/securityonion-soc/web"
-  "net/http"
+	"context"
+	"errors"
+	"github.com/security-onion-solutions/securityonion-soc/web"
+	"net/http"
 )
 
 type RolesHandler struct {
-  web.BaseHandler
-  server *Server
+	web.BaseHandler
+	server *Server
 }
 
 func NewRolesHandler(srv *Server) *RolesHandler {
-  handler := &RolesHandler{}
-  handler.Host = srv.Host
-  handler.server = srv
-  handler.Impl = handler
-  return handler
+	handler := &RolesHandler{}
+	handler.Host = srv.Host
+	handler.server = srv
+	handler.Impl = handler
+	return handler
 }
 
 func (rolesHandler *RolesHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-  if rolesHandler.server.Rolestore == nil {
-    return http.StatusMethodNotAllowed, nil, errors.New("Roles module not enabled")
-  }
+	if rolesHandler.server.Rolestore == nil {
+		return http.StatusMethodNotAllowed, nil, errors.New("Roles module not enabled")
+	}
 
-  switch request.Method {
-  case http.MethodGet:
-    return rolesHandler.get(ctx, writer, request)
-  }
-  return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
+	switch request.Method {
+	case http.MethodGet:
+		return rolesHandler.get(ctx, writer, request)
+	}
+	return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
 }
 
 func (rolesHandler *RolesHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-  roles := rolesHandler.server.Rolestore.GetRoles(ctx)
-  return http.StatusOK, roles, nil
+	roles := rolesHandler.server.Rolestore.GetRoles(ctx)
+	return http.StatusOK, roles, nil
 }

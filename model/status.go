@@ -7,24 +7,24 @@
 package model
 
 type Status struct {
-  Grid   *GridStatus   `json:"grid"`
-  Alerts *AlertsStatus `json:"alerts"`
+	Grid   *GridStatus   `json:"grid"`
+	Alerts *AlertsStatus `json:"alerts"`
 }
 
 type GridStatus struct {
-  TotalNodeCount     int `json:"totalNodeCount"`
-  UnhealthyNodeCount int `json:"unhealthyNodeCount"`
-  Eps                int `json:"eps"`
+	TotalNodeCount     int `json:"totalNodeCount"`
+	UnhealthyNodeCount int `json:"unhealthyNodeCount"`
+	Eps                int `json:"eps"`
 }
 
 type AlertsStatus struct {
-  NewCount int `json:"newCount"`
+	NewCount int `json:"newCount"`
 }
 
 func NewStatus() *Status {
-  newStatus := &Status{
-    Grid:   &GridStatus{},
-    Alerts: &AlertsStatus{},
-  }
-  return newStatus
+	newStatus := &Status{
+		Grid:   &GridStatus{},
+		Alerts: &AlertsStatus{},
+	}
+	return newStatus
 }

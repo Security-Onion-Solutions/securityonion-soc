@@ -7,25 +7,25 @@
 package rbac
 
 import (
-  "context"
-  "github.com/security-onion-solutions/securityonion-soc/model"
+	"context"
+	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type FakeAuthorizer struct {
-  Authorized bool
+	Authorized bool
 }
 
 func (fake FakeAuthorizer) CheckContextOperationAuthorized(ctx context.Context, operation string, target string) error {
-  if fake.Authorized {
-    return nil
-  }
-  return model.NewUnauthorized("fake-subject", operation, target)
+	if fake.Authorized {
+		return nil
+	}
+	return model.NewUnauthorized("fake-subject", operation, target)
 }
 
 func (fake FakeAuthorizer) CheckUserOperationAuthorized(user *model.User, operation string, target string) error {
-  if fake.Authorized {
+	if fake.Authorized {
 
-    return nil
-  }
-  return model.NewUnauthorized("fake-subject", operation, target)
+		return nil
+	}
+	return model.NewUnauthorized("fake-subject", operation, target)
 }

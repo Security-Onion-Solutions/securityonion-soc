@@ -7,32 +7,32 @@
 package model
 
 import (
-  "time"
+	"time"
 )
 
 type Packet struct {
-  Number        int       `json:"number"`
-  Type          string    `json:"type"`
-  SrcMac        string    `json:"srcMac"`
-  DstMac        string    `json:"dstMac"`
-  SrcIp         string    `json:"srcIp"`
-  SrcPort       int       `json:"srcPort"`
-  DstIp         string    `json:"dstIp"`
-  DstPort       int       `json:"dstPort"`
-  Length        int       `json:"length"`
-  Timestamp     time.Time `json:"timestamp"`
-  Sequence      int       `json:"sequence"`
-  Acknowledge   int       `json:"acknowledge"`
-  Window        int       `json:"window"`
-  Checksum      int       `json:"checksum"`
-  Flags         []string  `json:"flags"`
-  Payload       string    `json:"payload"`
-  PayloadOffset int       `json:"payloadOffset"`
+	Number        int       `json:"number"`
+	Type          string    `json:"type"`
+	SrcMac        string    `json:"srcMac"`
+	DstMac        string    `json:"dstMac"`
+	SrcIp         string    `json:"srcIp"`
+	SrcPort       int       `json:"srcPort"`
+	DstIp         string    `json:"dstIp"`
+	DstPort       int       `json:"dstPort"`
+	Length        int       `json:"length"`
+	Timestamp     time.Time `json:"timestamp"`
+	Sequence      int       `json:"sequence"`
+	Acknowledge   int       `json:"acknowledge"`
+	Window        int       `json:"window"`
+	Checksum      int       `json:"checksum"`
+	Flags         []string  `json:"flags"`
+	Payload       string    `json:"payload"`
+	PayloadOffset int       `json:"payloadOffset"`
 }
 
 func NewPacket(number int) *Packet {
-  return &Packet{
-    Number: number,
-    Type:   "UNKNOWN",
-  }
+	return &Packet{
+		Number: number,
+		Type:   "UNKNOWN",
+	}
 }

@@ -7,20 +7,20 @@
 package generichttp
 
 import (
-  "testing"
+	"testing"
 
-  "github.com/security-onion-solutions/securityonion-soc/module"
-  "github.com/security-onion-solutions/securityonion-soc/server"
-  "github.com/stretchr/testify/assert"
+	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestHttpCase(tester *testing.T) {
-  httpCase := NewHttpCase(server.NewFakeUnauthorizedServer())
-  cfg := make(module.ModuleConfig)
-  err := httpCase.Init(cfg)
-  assert.Nil(tester, err)
+	httpCase := NewHttpCase(server.NewFakeUnauthorizedServer())
+	cfg := make(module.ModuleConfig)
+	err := httpCase.Init(cfg)
+	assert.Nil(tester, err)
 
-  // Fail if casestore already initialized
-  err = httpCase.Init(cfg)
-  assert.Error(tester, err)
+	// Fail if casestore already initialized
+	err = httpCase.Init(cfg)
+	assert.Error(tester, err)
 }
