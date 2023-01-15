@@ -7,8 +7,9 @@
 package kratos
 
 import (
-	"github.com/security-onion-solutions/securityonion-soc/model"
 	"time"
+
+	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type KratosTraits struct {

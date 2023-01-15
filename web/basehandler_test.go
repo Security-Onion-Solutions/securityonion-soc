@@ -9,11 +9,12 @@ package web
 import (
 	"context"
 	"errors"
-	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/stretchr/testify/assert"
 	"net/http"
 	"strconv"
 	"testing"
+
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/stretchr/testify/assert"
 )
 
 type TestHandler struct {

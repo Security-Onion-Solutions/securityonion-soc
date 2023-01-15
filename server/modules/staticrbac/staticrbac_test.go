@@ -7,11 +7,12 @@
 package staticrbac
 
 import (
+	"testing"
+
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestInit(tester *testing.T) {

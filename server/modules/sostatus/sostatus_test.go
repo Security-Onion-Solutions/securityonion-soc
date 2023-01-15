@@ -8,10 +8,11 @@ package sostatus
 
 import (
 	"context"
+	"testing"
+
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func NewTestStatus() (*SoStatus, error) {

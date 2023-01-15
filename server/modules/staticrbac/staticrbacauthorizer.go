@@ -11,15 +11,16 @@ import (
 	"context"
 	"crypto/md5"
 	"errors"
-	"github.com/apex/log"
-	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/server"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 	"os"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/apex/log"
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type StaticRbacAuthorizer struct {

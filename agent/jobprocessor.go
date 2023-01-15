@@ -7,9 +7,10 @@
 package agent
 
 import (
-	"github.com/security-onion-solutions/securityonion-soc/model"
 	"io"
 	"time"
+
+	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type JobProcessor interface {

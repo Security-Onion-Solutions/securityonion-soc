@@ -7,9 +7,10 @@
 package generichttp
 
 import (
+	"testing"
+
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestNewHttpParams(tester *testing.T) {

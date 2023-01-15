@@ -9,10 +9,11 @@ package server
 import (
 	"context"
 	"errors"
-	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 	"net/http"
 	"regexp"
+
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type UsersHandler struct {

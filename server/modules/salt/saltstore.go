@@ -10,13 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/apex/log"
-	"github.com/security-onion-solutions/securityonion-soc/json"
-	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/server"
-	"github.com/security-onion-solutions/securityonion-soc/syntax"
-	"github.com/security-onion-solutions/securityonion-soc/web"
-	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
 	"sort"
@@ -24,6 +17,14 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/apex/log"
+	"github.com/security-onion-solutions/securityonion-soc/json"
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/syntax"
+	"github.com/security-onion-solutions/securityonion-soc/web"
+	"gopkg.in/yaml.v3"
 )
 
 type Saltstore struct {

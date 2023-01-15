@@ -8,12 +8,13 @@ package elastic
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
-	"testing"
-	"time"
 )
 
 func TestInit(tester *testing.T) {

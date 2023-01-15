@@ -9,9 +9,10 @@ package server
 import (
 	"context"
 	"errors"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 	"net/http"
 	"strconv"
+
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type PacketHandler struct {

@@ -8,11 +8,12 @@ package generichttp
 
 import (
 	"context"
+	"testing"
+
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestCreateUnauthorized(tester *testing.T) {

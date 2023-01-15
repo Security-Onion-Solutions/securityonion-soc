@@ -8,12 +8,13 @@ package statickeyauth
 
 import (
 	"context"
+	"net/http"
+	"testing"
+
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
-	"net/http"
-	"testing"
 )
 
 func TestValidateAuthorization(tester *testing.T) {

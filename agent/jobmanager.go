@@ -8,12 +8,13 @@ package agent
 
 import (
 	"errors"
-	"github.com/apex/log"
-	"github.com/security-onion-solutions/securityonion-soc/model"
 	"io"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/apex/log"
+	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type JobManager struct {

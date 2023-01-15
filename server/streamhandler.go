@@ -9,13 +9,14 @@ package server
 import (
 	"context"
 	"errors"
-	"github.com/apex/log"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 	"io"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/apex/log"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type StreamHandler struct {

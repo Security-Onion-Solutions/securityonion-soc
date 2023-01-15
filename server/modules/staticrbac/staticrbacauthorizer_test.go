@@ -8,11 +8,12 @@ package staticrbac
 
 import (
 	"context"
+	"testing"
+
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func prepareTest(tester *testing.T, email string, id string) (*StaticRbacAuthorizer, context.Context, *model.User) {

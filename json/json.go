@@ -8,8 +8,9 @@ package json
 
 import (
 	"encoding/json"
-	"github.com/apex/log"
 	"os"
+
+	"github.com/apex/log"
 )
 
 func WriteJsonFile(filename string, obj interface{}) error {

@@ -7,8 +7,9 @@
 package config
 
 import (
-	"github.com/security-onion-solutions/securityonion-soc/json"
 	"time"
+
+	"github.com/security-onion-solutions/securityonion-soc/json"
 )
 
 type Config struct {

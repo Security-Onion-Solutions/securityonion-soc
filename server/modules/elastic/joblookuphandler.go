@@ -9,10 +9,11 @@ package elastic
 import (
 	"context"
 	"errors"
-	"github.com/security-onion-solutions/securityonion-soc/server"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 	"net/http"
 	"strconv"
+
+	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type JobLookupHandler struct {
