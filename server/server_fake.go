@@ -9,10 +9,11 @@ package server
 import (
 	"context"
 	"errors"
+	"io"
+
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
-	"io"
 )
 
 type FakeUserstore struct {

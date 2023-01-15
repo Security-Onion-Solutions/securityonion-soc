@@ -9,14 +9,15 @@ package influxdb
 import (
 	"context"
 	"crypto/tls"
-	"github.com/apex/log"
-	"github.com/influxdata/influxdb-client-go/v2"
-	"github.com/influxdata/influxdb-client-go/v2/api"
-	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/server"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/apex/log"
+	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
+	"github.com/influxdata/influxdb-client-go/v2/api"
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 )
 
 type InfluxDBMetrics struct {

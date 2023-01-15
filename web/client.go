@@ -11,12 +11,13 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
-	"github.com/apex/log"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/apex/log"
 )
 
 type ClientAuth interface {

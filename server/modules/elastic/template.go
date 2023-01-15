@@ -8,9 +8,10 @@ package elastic
 
 import (
 	"context"
+	"strings"
+
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
-	"strings"
 )
 
 func (store *ElasticCasestore) applyTemplate(ctx context.Context, socCase *model.Case) *model.Case {

@@ -9,12 +9,13 @@ package generichttp
 import (
 	"context"
 	"errors"
-	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/server"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type HttpCasestore struct {

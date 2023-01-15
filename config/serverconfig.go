@@ -9,10 +9,11 @@ package config
 import (
 	"crypto/rand"
 	"errors"
-	"github.com/apex/log"
-	"github.com/security-onion-solutions/securityonion-soc/module"
 	"io"
 	"strings"
+
+	"github.com/apex/log"
+	"github.com/security-onion-solutions/securityonion-soc/module"
 )
 
 const DEFAULT_MAX_PACKET_COUNT = 5000

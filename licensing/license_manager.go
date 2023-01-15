@@ -21,12 +21,13 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
-	"github.com/apex/log"
-	"github.com/security-onion-solutions/securityonion-soc/json"
 	"io"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/apex/log"
+	"github.com/security-onion-solutions/securityonion-soc/json"
 )
 
 const LICENSE_STATUS_ACTIVE = "active"

@@ -8,9 +8,10 @@ package web
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
 	"net/http"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPreprocessPriority(tester *testing.T) {

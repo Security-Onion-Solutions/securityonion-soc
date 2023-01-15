@@ -9,8 +9,9 @@ package server
 import (
 	"context"
 	"errors"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 	"net/http"
+
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type RolesHandler struct {

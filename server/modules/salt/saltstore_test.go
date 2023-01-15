@@ -9,12 +9,13 @@ package salt
 import (
 	"context"
 	"errors"
-	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/server"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"os/exec"
 	"testing"
+
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/stretchr/testify/assert"
 )
 
 const TMP_SALTSTACK_PATH = "/tmp/gotest-soc-saltstore"

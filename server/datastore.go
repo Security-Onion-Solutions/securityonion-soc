@@ -8,8 +8,9 @@ package server
 
 import (
 	"context"
-	"github.com/security-onion-solutions/securityonion-soc/model"
 	"io"
+
+	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type Datastore interface {

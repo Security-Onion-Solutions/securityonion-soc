@@ -9,11 +9,12 @@ package server
 import (
 	"context"
 	"errors"
-	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 	"net/http"
 	"regexp"
 	"strconv"
+
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type JobHandler struct {

@@ -10,6 +10,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/apex/log"
 	"github.com/kennygrant/sanitize"
 	"github.com/security-onion-solutions/securityonion-soc/json"
@@ -18,12 +25,6 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/packet"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
-	"io"
-	"os"
-	"path/filepath"
-	"strings"
-	"sync"
-	"time"
 )
 
 const DEFAULT_RETRY_FAILURE_INTERVAL_MS = 600000

@@ -8,6 +8,7 @@ package kratos
 
 import (
 	"context"
+
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"

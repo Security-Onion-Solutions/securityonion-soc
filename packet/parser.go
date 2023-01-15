@@ -8,13 +8,14 @@ package packet
 
 import (
 	"encoding/base64"
+	"os"
+
 	"github.com/apex/log"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	"github.com/google/gopacket/pcapgo"
 	"github.com/security-onion-solutions/securityonion-soc/model"
-	"os"
 )
 
 var SupportedLayerTypes = [...]gopacket.LayerType{

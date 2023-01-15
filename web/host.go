@@ -9,16 +9,17 @@ package web
 import (
 	"context"
 	"errors"
-	"github.com/apex/log"
-	"github.com/gorilla/websocket"
-	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/rbac"
 	"net/http"
 	"reflect"
 	"sort"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/apex/log"
+	"github.com/gorilla/websocket"
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/rbac"
 )
 
 type HostHandler interface {

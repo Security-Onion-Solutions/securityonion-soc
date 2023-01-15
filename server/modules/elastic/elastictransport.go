@@ -8,12 +8,13 @@ package elastic
 
 import (
 	"crypto/tls"
-	"github.com/apex/log"
-	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/apex/log"
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type ElasticTransport struct {

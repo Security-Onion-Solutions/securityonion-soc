@@ -8,6 +8,7 @@ package elastic
 
 import (
 	"errors"
+
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
