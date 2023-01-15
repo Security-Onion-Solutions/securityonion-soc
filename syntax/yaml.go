@@ -8,9 +8,10 @@ package syntax
 
 import (
 	"errors"
+	"strings"
+
 	"github.com/apex/log"
 	"gopkg.in/yaml.v3"
-	"strings"
 )
 
 func ValidateYaml(value string) error {

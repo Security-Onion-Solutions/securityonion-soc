@@ -9,6 +9,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
 	"github.com/apex/log"
 	"github.com/apex/log/handlers/logfmt"
 	"github.com/apex/log/handlers/text"
@@ -19,10 +24,6 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	serverModules "github.com/security-onion-solutions/securityonion-soc/server/modules"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 )
 
 var (

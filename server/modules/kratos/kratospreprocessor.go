@@ -8,8 +8,9 @@ package kratos
 
 import (
 	"context"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 	"net/http"
+
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type KratosPreprocessor struct {

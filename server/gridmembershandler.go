@@ -9,9 +9,10 @@ package server
 import (
 	"context"
 	"errors"
+	"net/http"
+
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
-	"net/http"
 )
 
 type GridMembersHandler struct {

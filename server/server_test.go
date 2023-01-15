@@ -7,10 +7,11 @@
 package server
 
 import (
+	"testing"
+
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestNewServer(tester *testing.T) {

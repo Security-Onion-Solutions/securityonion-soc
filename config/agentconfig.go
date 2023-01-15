@@ -8,8 +8,9 @@ package config
 
 import (
 	"errors"
-	"github.com/security-onion-solutions/securityonion-soc/module"
 	"os"
+
+	"github.com/security-onion-solutions/securityonion-soc/module"
 )
 
 const DEFAULT_POLL_INTERVAL_MS = 1000

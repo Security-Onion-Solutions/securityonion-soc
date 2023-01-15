@@ -7,10 +7,11 @@
 package thehive
 
 import (
-	"github.com/security-onion-solutions/securityonion-soc/model"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 func convertSeverity(sev string) int {

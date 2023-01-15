@@ -9,11 +9,12 @@ package web
 import (
 	"context"
 	"errors"
+	"net/http"
+
 	"github.com/apex/log"
 	"github.com/gorilla/websocket"
 	"github.com/security-onion-solutions/securityonion-soc/json"
 	"github.com/security-onion-solutions/securityonion-soc/model"
-	"net/http"
 )
 
 type WebSocketHandler struct {

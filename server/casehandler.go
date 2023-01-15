@@ -10,13 +10,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/apex/log"
-	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/apex/log"
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type CaseHandler struct {

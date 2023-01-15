@@ -7,11 +7,12 @@
 package generichttp
 
 import (
-	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"testing"
 	"time"
+
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestConvertCaseToReader(tester *testing.T) {

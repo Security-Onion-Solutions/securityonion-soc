@@ -8,9 +8,10 @@ package statickeyauth
 
 import (
 	"errors"
+	"net/http"
+
 	"github.com/security-onion-solutions/securityonion-soc/agent"
 	"github.com/security-onion-solutions/securityonion-soc/module"
-	"net/http"
 )
 
 type StaticKeyAuth struct {

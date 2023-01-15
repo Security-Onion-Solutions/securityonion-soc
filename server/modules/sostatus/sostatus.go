@@ -8,12 +8,13 @@ package sostatus
 
 import (
 	"context"
+	"time"
+
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
-	"time"
 )
 
 const DEFAULT_REFRESH_INTERVAL_MS = 30000

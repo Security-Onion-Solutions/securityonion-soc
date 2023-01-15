@@ -9,11 +9,12 @@ package server
 import (
 	"context"
 	"errors"
+	"net/http"
+	"os"
+
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
-	"net/http"
-	"os"
 )
 
 type InfoHandler struct {

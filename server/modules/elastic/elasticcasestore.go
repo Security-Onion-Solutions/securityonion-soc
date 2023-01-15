@@ -10,14 +10,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/apex/log"
-	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/server"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 	"regexp"
 	"sort"
 	"strconv"
 	"time"
+
+	"github.com/apex/log"
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 const AUDIT_DOC_ID = "audit_doc_id"

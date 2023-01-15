@@ -9,9 +9,10 @@ package server
 import (
 	"context"
 	"errors"
+	"net/http"
+
 	"github.com/security-onion-solutions/securityonion-soc/json"
 	"github.com/security-onion-solutions/securityonion-soc/web"
-	"net/http"
 )
 
 type JobsHandler struct {

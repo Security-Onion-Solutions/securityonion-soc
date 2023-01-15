@@ -8,6 +8,7 @@ package module
 
 import (
 	"errors"
+
 	"github.com/apex/log"
 )
 

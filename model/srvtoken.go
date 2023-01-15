@@ -11,10 +11,11 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/json"
 	"golang.org/x/crypto/sha3"
-	"time"
 )
 
 type SrvToken struct {

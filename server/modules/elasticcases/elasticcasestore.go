@@ -10,10 +10,11 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"net/http"
+
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
-	"net/http"
 )
 
 type ElasticCasestore struct {

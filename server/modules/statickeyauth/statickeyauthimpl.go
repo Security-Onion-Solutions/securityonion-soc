@@ -9,12 +9,13 @@ package statickeyauth
 import (
 	"context"
 	"errors"
-	"github.com/apex/log"
-	"github.com/security-onion-solutions/securityonion-soc/server"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 	"net"
 	"net/http"
 	"strings"
+
+	"github.com/apex/log"
+	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type StaticKeyAuthImpl struct {

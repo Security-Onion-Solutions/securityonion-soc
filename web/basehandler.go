@@ -12,12 +12,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/apex/log"
-	"github.com/security-onion-solutions/securityonion-soc/model"
 	"net/http"
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/apex/log"
+	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 const GENERIC_ERROR_MESSAGE = "The request could not be processed. Contact a server admin for assistance with reviewing error details in SOC logs."
