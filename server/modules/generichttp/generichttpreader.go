@@ -7,16 +7,16 @@
 package generichttp
 
 import (
-  "github.com/security-onion-solutions/securityonion-soc/model"
-  "strings"
-  "text/template"
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"strings"
+	"text/template"
 )
 
 func convertCaseToReader(source string, socCase *model.Case) (*strings.Reader, error) {
-  builder := new(strings.Builder)
-  parsedTemplate, err := template.New("case").Parse(source)
-  if err == nil {
-    err = parsedTemplate.Execute(builder, socCase)
-  }
-  return strings.NewReader(builder.String()), err
+	builder := new(strings.Builder)
+	parsedTemplate, err := template.New("case").Parse(source)
+	if err == nil {
+		err = parsedTemplate.Execute(builder, socCase)
+	}
+	return strings.NewReader(builder.String()), err
 }

@@ -10,15 +10,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
-	"sort"
-	"strconv"
-	"time"
-
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+	"regexp"
+	"sort"
+	"strconv"
+	"time"
 )
 
 const AUDIT_DOC_ID = "audit_doc_id"
@@ -34,6 +33,11 @@ type ElasticCasestore struct {
 	schemaPrefix      string
 	commonObservables []string
 	observables       Observables
+	server          *server.Server
+	index           string
+	auditIndex      string
+	maxAssociations int
+	schemaPrefix    string
 }
 
 func NewElasticCasestore(srv *server.Server) *ElasticCasestore {
@@ -45,6 +49,11 @@ func NewElasticCasestore(srv *server.Server) *ElasticCasestore {
 
 func (store *ElasticCasestore) Init(index string, auditIndex string, maxAssociations int, schemaPrefix string,
 	commonObservables []string) error {
+		server: srv,
+	}
+}
+
+func (store *ElasticCasestore) Init(index string, auditIndex string, maxAssociations int, schemaPrefix string) error {
 	store.index = index
 	store.auditIndex = auditIndex
 	store.maxAssociations = maxAssociations
@@ -882,5 +891,4 @@ func (store *ElasticCasestore) ExtractCommonObservables(ctx context.Context, eve
 			}
 		}
 	}
-	return nil
 }
