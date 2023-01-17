@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   Copyright 2019 Jason Ertel (jertel). All rights reserved.
-  Copyright 2020-2022 Security Onion Solutions, LLC. All rights reserved.
+  Copyright 2020-2023 Security Onion Solutions, LLC. All rights reserved.
 
   This program is distributed under the terms of version 2 of the
   GNU General Public License.  See LICENSE for further details.
@@ -2652,7 +2652,7 @@
                   <td v-text="props.item.version"></td>
                   <td v-text="props.item.model"></td>
                   <td v-if="metricsEnabled">
-                    <span v-if="props.item.metricsEnabled">{{ props.item.productionEps | formatCount }}</span>
+                    <span v-if="props.item.metricsEnabled">{{ props.item.productionEps | formatCount }} / {{ props.item.consumptionEps | formatCount }}</span>
                     <span v-if="!props.item.metricsEnabled">{{ i18n.na }}</span>
                   </td>
                   <td>{{ props.item.updateTime | formatTimestamp }}</td>
