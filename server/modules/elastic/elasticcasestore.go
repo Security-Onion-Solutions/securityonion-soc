@@ -34,11 +34,6 @@ type ElasticCasestore struct {
 	schemaPrefix      string
 	commonObservables []string
 	observables       Observables
-	server          *server.Server
-	index           string
-	auditIndex      string
-	maxAssociations int
-	schemaPrefix    string
 }
 
 func NewElasticCasestore(srv *server.Server) *ElasticCasestore {
@@ -50,11 +45,7 @@ func NewElasticCasestore(srv *server.Server) *ElasticCasestore {
 
 func (store *ElasticCasestore) Init(index string, auditIndex string, maxAssociations int, schemaPrefix string,
 	commonObservables []string) error {
-		server: srv,
-	}
-}
 
-func (store *ElasticCasestore) Init(index string, auditIndex string, maxAssociations int, schemaPrefix string) error {
 	store.index = index
 	store.auditIndex = auditIndex
 	store.maxAssociations = maxAssociations
@@ -508,9 +499,10 @@ func (store *ElasticCasestore) CreateRelatedEvent(ctx context.Context, event *mo
 						// Read object back to get new modify date, etc
 						event, err = store.GetRelatedEvent(ctx, results.DocumentId)
 						if err == nil {
-							if err = store.ExtractCommonObservables(ctx, event); err != nil {
-								return nil, fmt.Errorf("error extracting common observables: %w", err)
-							}
+							// Extraction is a nice-to-have, and failures should not prevent an analyst
+							// from completing their work if some Elastic field mapping conflict
+							// arose. The function itself will log relevant details.
+							store.ExtractCommonObservables(ctx, event)
 						}
 					}
 				}
@@ -877,19 +869,28 @@ func (store *ElasticCasestore) DeleteArtifactStream(ctx context.Context, id stri
 
 func (store *ElasticCasestore) ExtractCommonObservables(ctx context.Context, event *model.RelatedEvent) error {
 	for key, value := range event.Fields {
+		valueStr := fmt.Sprintf("%v", value)
+		if len(valueStr) == 0 {
+			continue
+		}
 		for _, obs := range store.commonObservables {
 			if key == obs {
 				artifact := model.NewArtifact()
 				artifact.CaseId = event.CaseId
-				artifact.Value = fmt.Sprintf("%v", value)
+				artifact.Value = valueStr
 				artifact.ArtifactType = string(store.observables.GetType(artifact.Value))
 				artifact.GroupType = "evidence"
 				_, err := store.CreateArtifact(ctx, artifact)
 				if err != nil {
-					// TODO: log warning and continue?
+					log.WithFields(log.Fields{
+						"key":          key,
+						"caseId":       event.CaseId,
+						"artifactType": artifact.ArtifactType,
+					}).WithError(err).Warn("automated observable extraction failed")
 					return err
 				}
 			}
 		}
 	}
+	return nil
 }

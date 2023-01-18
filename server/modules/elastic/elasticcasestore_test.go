@@ -882,30 +882,91 @@ func TestCreateRelatedEvent(tester *testing.T) {
 	store.server.Eventstore = fakeEventStore
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
+	// Prepare fake search results for the case
 	casePayload := make(map[string]interface{})
 	casePayload["so_kind"] = "case"
 	caseEvent := &model.EventRecord{
 		Payload: casePayload,
 		Id:      "123444",
 	}
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, caseEvent)
+
+	// Control how the fake event store should behave when the first document is indexed: we'll
+	// pretend it succeeded and was assigned case ID "myCaseId"
+	fakeEventStore.IndexResults[0].Success = true
+	fakeEventStore.IndexResults[0].DocumentId = "myRelatedEventId"
+
+	// Prepare fake search results for the newly added related event
 	eventPayload := make(map[string]interface{})
 	eventPayload["so_kind"] = "related"
+	eventPayload["so_related.caseId"] = "123444"
+	eventPayload["so_related.fields.source.ip"] = "127.0.0.1"
+	eventPayload["so_related.fields.foo"] = "bar"
 	elasticEvent := &model.EventRecord{
 		Payload: eventPayload,
 	}
-	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, caseEvent)
-	fakeEventStore.IndexResults[0].Success = true
-	fakeEventStore.IndexResults[0].DocumentId = "myCaseId"
 	eventSearchResults := model.NewEventSearchResults()
 	eventSearchResults.Events = append(eventSearchResults.Events, elasticEvent)
 	fakeEventStore.SearchResults = append(fakeEventStore.SearchResults, eventSearchResults)
+
+	// Prepare a duplicate search result with the same case as before, for the createArtifact call,
+	// which also looks up the case.
+	caseSearchResults_createArtifact := fakeEventStore.SearchResults[0]
+	fakeEventStore.SearchResults = append(fakeEventStore.SearchResults, caseSearchResults_createArtifact)
+
+	// Control how the fake event store should behave when this second document is indexed: we'll
+	// pretend it succeeded and was assigned related event ID "myRelatedEventId"
+	relatedEventIndexInstruction := model.NewEventIndexResults()
+	relatedEventIndexInstruction.Success = true
+	relatedEventIndexInstruction.DocumentId = "myArtifactId"
+	fakeEventStore.IndexResults = append(fakeEventStore.IndexResults, relatedEventIndexInstruction)
+
+	// Finally, prepare a fake search result for the newly indexed artifact.
+	// Prepare fake search results for the newly added related event. This isn't needed
+	// for the test, but including here for illustration purposes.
+	artifactPayload := make(map[string]interface{})
+	artifactPayload["so_kind"] = "artifact"
+	artifactPayload["so_artifact.artifactType"] = "ip"
+	artifactPayload["so_artifact.groupType"] = "evidence"
+	artifactEvent := &model.EventRecord{
+		Payload: artifactPayload,
+	}
+	artifactSearchResults := model.NewEventSearchResults()
+	artifactSearchResults.Events = append(artifactSearchResults.Events, artifactEvent)
+	fakeEventStore.SearchResults = append(fakeEventStore.SearchResults, artifactSearchResults)
+
 	event := model.NewRelatedEvent()
 	event.CaseId = "123444"
 	event.Fields["foo"] = "bar"
 	event.Fields["source.ip"] = "127.0.0.1"
+
+	// Perform the actual code execution being tested
 	newEvent, err := store.CreateRelatedEvent(ctx, event)
 	assert.NoError(tester, err)
 	assert.NotNil(tester, newEvent)
+
+	// Ensure that the new related event and the new observable was created
+	assert.Equal(tester, 4, len(fakeEventStore.InputDocuments)) // 2 records for related event, 2 for observable (includes audit records)
+
+	// first doc is the related event
+	doc0 := fakeEventStore.InputDocuments[0]
+	assert.Equal(tester, "create", doc0["so_operation"])
+	assert.Equal(tester, "myRelatedEventId", doc0["so_audit_doc_id"])
+	writtenEvent := doc0["so_related"].(*model.RelatedEvent)
+	assert.Equal(tester, event, writtenEvent)
+
+	// second doc is the related event audit record, no need to test that part of the code here
+
+	// third doc is the newly extract artifact
+	doc2 := fakeEventStore.InputDocuments[2]
+	assert.Equal(tester, "create", doc2["so_operation"])
+	assert.Equal(tester, "myArtifactId", doc2["so_audit_doc_id"])
+	writtenArtifact := doc2["so_artifact"].(*model.Artifact)
+	assert.Equal(tester, "evidence", writtenArtifact.GroupType)
+	assert.Equal(tester, "ip", writtenArtifact.ArtifactType)
+	assert.Equal(tester, "127.0.0.1", writtenArtifact.Value)
+
+	// fourth doc is the artifact audit record, no need to test that part of the code here
 }
 
 func TestCreateRelatedEventAlreadyExists(tester *testing.T) {
@@ -1409,6 +1470,11 @@ func TestExtractCommonObservables(t *testing.T) {
 	event.CaseId = "testID"
 
 	// Test with no observable
+	assert.NoError(t, store.ExtractCommonObservables(ctx, event))
+
+	// Test with empty observable field. If it actually tried to save an observable,
+	// it would have panic'd since there is no Eventstore configured.
+	event.Fields["my IP addr"] = ""
 	assert.NoError(t, store.ExtractCommonObservables(ctx, event))
 
 	// Test with observable

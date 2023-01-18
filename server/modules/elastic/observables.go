@@ -11,7 +11,6 @@ package elastic
 
 import (
 	"net"
-	"net/url"
 	"regexp"
 )
 
@@ -46,27 +45,24 @@ func NewObservables() Observables {
 	//obs[ObservableIP] = &matcher{exp: regexp.MustCompile(`/^[0-9a-fA-F:]*([0-9a-fA-F]{1,4}:){1,7}[0-9a-fA-F:]*$|^(\d{1,3}\.){3}\d{1,3}$/`)}
 	match[ObservableIP] = &matcher{matcher: func(s string) bool { return net.ParseIP(s) != nil }}
 
-	// Regexp too simplistic, let Go parse URL and ensure it is a full URL.
-	//obs[ObservableURL] = &matcher{exp: regexp.MustCompile(`/^[a-z]+:\/\//`)}
-	match[ObservableURL] = &matcher{matcher: func(s string) bool { u, err := url.Parse(s); return err == nil && u.Scheme != "" }}
+	// Regexp is simplistic, but Go's URL parser is too aggressive, and classifies filepaths as URLs
+	// while technically correct, that's not how an analyst wants to classify observables.
+	match[ObservableURL] = &matcher{exp: regexp.MustCompile(`^[a-zA-Z]+:\/\/`)}
 
-	// Perl regexp for fqdn not supported in Go, use alternate expression, source:
-	// https://www.folkstalk.com/2022/09/golang-regular-expression-to-validate-domain-name-with-code-examples.html
-	//obs[ObservableFQDN] = regexp.MustCompile(`/(?=^.{4,253}$)(^((?!-)[a-zA-Z0-9-]{1,63}\.)+[a-zA-Z]{2,63}$)/`)
+	// Perl regexp for fqdn not supported in Go, use alternate expression
 	match[ObservableFQDN] = &matcher{exp: regexp.MustCompile(
-		`(\b(?:(?:[^.-/]{0,1})[\w-]{1,63}[-]{0,1}[.]{1})+(?:[a-zA-Z]{2,63})\b)`)}
-	//`^(([a-zA-Z]{1})|([a-zA-Z]{1}[a-zA-Z]{1})|([a-zA-Z]{1}[0-9]{1})|([0-9]{1}[a-zA-Z]{1})|([a-zA-Z0-9][a-zA-Z0-9-_]{1,61}[a-zA-Z0-9]))\.([a-zA-Z]{2,6}|[a-zA-Z0-9-]{2,30}\.[a-zA-Z]{2,3})$`)}
+		`^(([a-z0-9][a-z0-9\-]*[a-z0-9]|[a-z0-9])+\.){2,}([a-z]{2,}|xn\-\-[a-z0-9]+)\.?$`)}
 
-	match[ObservableDomain] = &matcher{exp: regexp.MustCompile(`/^(xn\-\-)?([a-z0-9\-]{1,61}|[a-z0-9\-]{1,30})\.[a-z]{2,}$/`)}
-
-	match[ObservableFilename] = &matcher{exp: regexp.MustCompile(`/(\/)?[\w,\\s-]+\.[A-Za-z]{3}$/`)}
-	match[ObservableURIPath] = &matcher{exp: regexp.MustCompile(`/^\/[\w,\s-]/`)}
-	match[ObservableHash] = &matcher{exp: regexp.MustCompile(`/^[0-9a-fA-F]{32}$|^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$|^[0-9a-fA-F]{128}$/`)}
+	match[ObservableDomain] = &matcher{exp: regexp.MustCompile(`^([a-z0-9][a-z0-9\-]*[a-z0-9]|[a-z0-9])\.([a-z]{2,}|xn\-\-[a-z0-9]+)\.?$`)}
+	match[ObservableFilename] = &matcher{exp: regexp.MustCompile(`(\/)?[\w,\\s-]+\.[A-Za-z]{3}$`)}
+	match[ObservableURIPath] = &matcher{exp: regexp.MustCompile(`^\/[\w,\s-]`)}
+	match[ObservableHash] = &matcher{exp: regexp.MustCompile(`^[0-9a-fA-F]{32}$|^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$|^[0-9a-fA-F]{128}$`)}
 	return Observables{
 		match: match,
 		order: []ObservableType{
-			ObservableIP, ObservableURL, ObservableFilename, ObservableFQDN,
-			ObservableDomain, ObservableURIPath, ObservableHash},
+			// Note - this order must match case.js
+			ObservableIP, ObservableDomain, ObservableFQDN, ObservableURL, ObservableFilename,
+			ObservableURIPath, ObservableHash},
 	}
 }
 
