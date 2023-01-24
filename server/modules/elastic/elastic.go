@@ -49,6 +49,7 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
 	elastic.config = cfg
 	host := module.GetStringDefault(cfg, "hostUrl", "elasticsearch")
 	remoteHosts := module.GetStringArrayDefault(cfg, "remoteHostUrls", make([]string, 0, 0))
+	commonObservables := module.GetStringArrayDefault(cfg, "extractCommonObservables", make([]string, 0, 0))
 	verifyCert := module.GetBoolDefault(cfg, "verifyCert", true)
 	username := module.GetStringDefault(cfg, "username", "")
 	password := module.GetStringDefault(cfg, "password", "")
@@ -78,7 +79,7 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
 				maxCaseAssociations := module.GetIntDefault(cfg, "maxCaseAssociations", DEFAULT_CASE_ASSOCIATIONS_MAX)
 				schemaPrefix := module.GetStringDefault(cfg, "schemaPrefix", DEFAULT_CASE_SCHEMA_PREFIX)
 				casestore := NewElasticCasestore(elastic.server)
-				err = casestore.Init(caseIndex, auditIndex, maxCaseAssociations, schemaPrefix)
+				err = casestore.Init(caseIndex, auditIndex, maxCaseAssociations, schemaPrefix, commonObservables)
 				if err == nil {
 					elastic.server.Casestore = casestore
 				}

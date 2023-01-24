@@ -27,24 +27,30 @@ const LONG_STRING_MAX = 1000000
 const MAX_ARRAY_ELEMENTS = 50
 
 type ElasticCasestore struct {
-	server          *server.Server
-	index           string
-	auditIndex      string
-	maxAssociations int
-	schemaPrefix    string
+	server            *server.Server
+	index             string
+	auditIndex        string
+	maxAssociations   int
+	schemaPrefix      string
+	commonObservables []string
+	observables       Observables
 }
 
 func NewElasticCasestore(srv *server.Server) *ElasticCasestore {
 	return &ElasticCasestore{
-		server: srv,
+		server:      srv,
+		observables: NewObservables(),
 	}
 }
 
-func (store *ElasticCasestore) Init(index string, auditIndex string, maxAssociations int, schemaPrefix string) error {
+func (store *ElasticCasestore) Init(index string, auditIndex string, maxAssociations int, schemaPrefix string,
+	commonObservables []string) error {
+
 	store.index = index
 	store.auditIndex = auditIndex
 	store.maxAssociations = maxAssociations
 	store.schemaPrefix = schemaPrefix
+	store.commonObservables = commonObservables
 	return nil
 }
 
@@ -53,7 +59,7 @@ func (store *ElasticCasestore) validateId(id string, label string) error {
 
 	isValidId := regexp.MustCompile(`^[A-Za-z0-9-_]{5,50}$`).MatchString
 	if !isValidId(id) {
-		err = errors.New(fmt.Sprintf("invalid ID for %s", label))
+		err = fmt.Errorf("invalid ID for %s", label)
 	}
 	return err
 }
@@ -492,6 +498,12 @@ func (store *ElasticCasestore) CreateRelatedEvent(ctx context.Context, event *mo
 					if err == nil {
 						// Read object back to get new modify date, etc
 						event, err = store.GetRelatedEvent(ctx, results.DocumentId)
+						if err == nil {
+							// Extraction is a nice-to-have, and failures should not prevent an analyst
+							// from completing their work if some Elastic field mapping conflict
+							// arose. The function itself will log relevant details.
+							store.ExtractCommonObservables(ctx, event)
+						}
 					}
 				}
 			}
@@ -853,4 +865,32 @@ func (store *ElasticCasestore) DeleteArtifactStream(ctx context.Context, id stri
 	}
 
 	return err
+}
+
+func (store *ElasticCasestore) ExtractCommonObservables(ctx context.Context, event *model.RelatedEvent) error {
+	for key, value := range event.Fields {
+		valueStr := fmt.Sprintf("%v", value)
+		if len(valueStr) == 0 {
+			continue
+		}
+		for _, obs := range store.commonObservables {
+			if key == obs {
+				artifact := model.NewArtifact()
+				artifact.CaseId = event.CaseId
+				artifact.Value = valueStr
+				artifact.ArtifactType = string(store.observables.GetType(artifact.Value))
+				artifact.GroupType = "evidence"
+				_, err := store.CreateArtifact(ctx, artifact)
+				if err != nil {
+					log.WithFields(log.Fields{
+						"key":          key,
+						"caseId":       event.CaseId,
+						"artifactType": artifact.ArtifactType,
+					}).WithError(err).Warn("automated observable extraction failed")
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }
