@@ -141,8 +141,8 @@ routes.push({ path: '/grid', name: 'grid', component: {
     },
     formatNode(node) {
       node['keywords'] = this.$root.localizeMessage(node["role"] + '-keywords');
-      node['dashboardLink'] = "/grafana/d/" + node.role.substring(3) + "?orgId=1&refresh=5m&var-servername=" + node.id;
-
+      node['dashboardLink'] = "/influxdb/orgs/1/dashboards/1?vars%5BRole%5D=" + node.role.substring(3) + "&vars%5BHost%5D=" + node.id;
+      //node['dashboardLink'] = "/influxdb/orgs/<orgid>/dashboards/<dashboardid>?vars%5BRole%5D=" + node.role.substring(3) + "&vars%5BHost%5D=" + node.id;
       if (node.processJson) {
         const details = JSON.parse(node.processJson);
         if (details) {
