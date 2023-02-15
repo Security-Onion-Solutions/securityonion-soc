@@ -488,7 +488,7 @@ const huntComponent = {
       var template = 'rule.case_template' in item && item['rule.case_template'] ? '' + item['rule.case_template'] : '';
 
       return {
-        title: title,
+        title: title.substring(0, 100),
         description: description,
         severity: severity,
         template: template,
