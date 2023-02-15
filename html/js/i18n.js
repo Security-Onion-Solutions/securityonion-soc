@@ -425,7 +425,7 @@ const i18n = {
       password: 'Password',
       passwordConfirm: 'Confirm password',
       passwordHelp: 'Passwords must meet strength requirements',
-      passwordInstructions: 'Update your password using the fields below.',
+      passwordInstructions: 'Update your password using the fields below. Note: InfluxDB passwords are not updated when using this self-service screen.',
       passwordMustMatch: 'Passwords must match',
       passwordChange: 'New password',
       passwordRequired: 'A password must be specified.',
