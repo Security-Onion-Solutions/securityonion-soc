@@ -141,7 +141,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
     },
     formatNode(node) {
       node['keywords'] = this.$root.localizeMessage(node["role"] + '-keywords');
-      node['dashboardLink'] = this.$root.getMetricsUrl() + "?Role=" + node.role.substring(3) + "&Host=" + node.id;
+      node['dashboardLink'] = this.$root.getMetricsUrl() + "?vars%5BRole%5D=" + node.role.substring(3) + "&vars%5BHost%5D=" + node.id;
       if (node.processJson) {
         const details = JSON.parse(node.processJson);
         if (details) {
