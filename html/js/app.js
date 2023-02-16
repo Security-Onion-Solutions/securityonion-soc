@@ -107,6 +107,15 @@ $(document).ready(function() {
       'toolbar': 'saveLocalSettings',
     },
     methods: {
+      getMetricsUrl() {
+        for (var i = 0; i < this.tools.length; i++) {
+          const tool = this.tools[i];
+          if (tool.name == "toolInfluxDb") {
+            return tool.link;
+          }
+        }
+        return "/";
+      },
       formatActionContent(content, event, field, value, uriEncode = true) {
         if (!content) return null;
 
