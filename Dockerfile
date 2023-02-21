@@ -8,7 +8,7 @@
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-FROM ghcr.io/security-onion-solutions/golang:alpine as builder
+FROM ghcr.io/security-onion-solutions/golang:1.20.1-alpine as builder
 ARG VERSION=0.0.0
 RUN apk update && apk add libpcap-dev bash git musl-dev gcc npm python3 py3-pip py3-virtualenv
 COPY . /build
@@ -25,7 +25,6 @@ RUN mkdir gitdocs && cd gitdocs && \
 	for i in /tmp/virtualenv/lib/python*/site-packages/sphinx_rtd_theme/versions.html; do echo > $i; done && \
 	/tmp/virtualenv/bin/python -m sphinx -T -E -b html -d _build/doctrees -D language=en . _build/html
 RUN npm install jest jest-environment-jsdom --global
-RUN ln -s /usr/bin/python3 /usr/bin/python
 RUN ./build.sh "$VERSION"
 
 FROM ghcr.io/security-onion-solutions/python:3-slim
