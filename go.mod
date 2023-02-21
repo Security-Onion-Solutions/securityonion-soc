@@ -13,6 +13,7 @@ require (
 	github.com/stretchr/testify v1.8.0
 	github.com/tidwall/gjson v1.14.3
 	golang.org/x/crypto v0.0.0-20220919173607-35f4265a4bc0
+	golang.org/x/net v0.0.0-20220906165146-f3363e06e74c // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -27,7 +28,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
-	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
-	golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1 // indirect
+	golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10 // indirect
 	gopkg.in/yaml.v2 v2.3.0 // indirect
 )
