@@ -122,6 +122,7 @@ $(document).ready(function() {
         content = this.replaceActionVar(content, "eventId", event["soc_id"], uriEncode)
         content = this.replaceActionVar(content, "field", field, uriEncode)
         content = this.replaceActionVar(content, "value", value, uriEncode)
+        content = this.replaceActionVar(content, "eventJson", JSON.stringify(event))
 
         const fields = this.getDynamicActionFieldNames(content);
         const route = this;
