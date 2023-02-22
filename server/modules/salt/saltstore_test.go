@@ -20,7 +20,7 @@ import (
 
 const TMP_SALTSTACK_PATH = "/tmp/gotest-soc-saltstore"
 const TMP_REQUEST_PIPE = "/tmp/gotest-soc-salt-req.pipe"
-const TEST_SETTINGS_COUNT = 20
+const TEST_SETTINGS_COUNT = 22
 
 func Cleanup() {
 	exec.Command("rm", "-fr", TMP_SALTSTACK_PATH).Run()
@@ -250,6 +250,22 @@ func TestGetSettings(tester *testing.T) {
 	assert.Equal(tester, true, settings[count].Readonly)
 	count++
 
+	assert.Equal(tester, "myapp.int_list_nodefault", settings[count].Id)
+	assert.Equal(tester, "", settings[count].Value)
+	assert.Equal(tester, "", settings[count].NodeId)
+	assert.Equal(tester, "no default provided", settings[count].Description)
+	assert.Equal(tester, true, settings[count].Global)
+	assert.Equal(tester, "[]int", settings[count].ForcedType)
+	count++
+
+	assert.Equal(tester, "myapp.int_nodefault", settings[count].Id)
+	assert.Equal(tester, "", settings[count].Value)
+	assert.Equal(tester, "", settings[count].NodeId)
+	assert.Equal(tester, "no default provided", settings[count].Description)
+	assert.Equal(tester, true, settings[count].Global)
+	assert.Equal(tester, "int", settings[count].ForcedType)
+	count++
+
 	assert.Equal(tester, "myapp.lists.list_bool", settings[count].Id)
 	assert.Equal(tester, "true\nfalse", settings[count].Value)
 	assert.Equal(tester, "", settings[count].NodeId)
@@ -298,7 +314,7 @@ func TestUpdateSetting_MissingSettingFile(tester *testing.T) {
 	salt := NewSaltstore(srv)
 	setting := model.NewSetting("some.setting")
 	err := salt.UpdateSetting(context.Background(), setting, false)
-	assert.EqualError(tester, err, "open /local/pillar/some/soc_some.sls: no such file or directory")
+	assert.EqualError(tester, err, "lstat /default: no such file or directory")
 }
 
 func findSetting(settings []*model.Setting, id string, nodeId string) *model.Setting {
@@ -572,6 +588,38 @@ func TestUpdateSetting_AlignEmptyListIntType(tester *testing.T) {
 	setting.Value = "cannot set string on int list"
 	err = salt.UpdateSetting(context.Background(), setting, false)
 	assert.EqualError(tester, err, `strconv.ParseInt: parsing "cannot set string on int list": invalid syntax`)
+}
+
+func TestUpdateSetting_ForceIntType(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSalt()
+
+	// Update setting
+	setting := model.NewSetting("myapp.int_nodefault")
+	setting.Value = "44"
+	err := salt.UpdateSetting(context.Background(), setting, false)
+	assert.NoError(tester, err)
+
+	settings, get_err := salt.GetSettings(context.Background())
+	assert.NoError(tester, get_err)
+	updated_setting := findSetting(settings, "myapp.int_nodefault", "")
+	assert.Equal(tester, "44", updated_setting.Value)
+}
+
+func TestUpdateSetting_ForceListIntType(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSalt()
+
+	// Update setting
+	setting := model.NewSetting("myapp.int_list_nodefault")
+	setting.Value = "44\n55"
+	err := salt.UpdateSetting(context.Background(), setting, false)
+	assert.NoError(tester, err)
+
+	settings, get_err := salt.GetSettings(context.Background())
+	assert.NoError(tester, get_err)
+	updated_setting := findSetting(settings, "myapp.int_list_nodefault", "")
+	assert.Equal(tester, "44\n55", updated_setting.Value)
 }
 
 ///// FLOAT TYPE
@@ -1059,4 +1107,45 @@ func TestSyncSettings(tester *testing.T) {
 
 	request := ReadReqPipe()
 	assert.Equal(tester, `{"command":"manage-salt","operation":"highstate"}`, request)
+}
+
+func TestForceType(tester *testing.T) {
+	store := NewTestSalt()
+
+	testCases := []struct {
+		value       string
+		forcedType  string
+		expected    interface{}
+		errorString string
+	}{
+		{value: "44", forcedType: "int", expected: int64(44), errorString: ""},
+		{value: "44", forcedType: "[]int", expected: []int64{44}, errorString: ""},
+		{value: "44\n55", forcedType: "[]int", expected: []int64{44, 55}, errorString: ""},
+		{value: "blah", forcedType: "[]int", expected: []int64{}, errorString: "invalid syntax"},
+		{value: "44.4", forcedType: "float", expected: float64(44.4), errorString: ""},
+		{value: "44.3", forcedType: "[]float", expected: []float64{44.3}, errorString: ""},
+		{value: "44.2\n55", forcedType: "[]float", expected: []float64{44.2, 55}, errorString: ""},
+		{value: "blah", forcedType: "[]float", expected: []float64{}, errorString: "invalid syntax"},
+		{value: "true", forcedType: "bool", expected: true, errorString: ""},
+		{value: "true", forcedType: "[]bool", expected: []bool{true}, errorString: ""},
+		{value: "true\nfalse", forcedType: "[]bool", expected: []bool{true, false}, errorString: ""},
+		{value: "blah", forcedType: "[]bool", expected: []bool{}, errorString: "invalid syntax"},
+		{value: "hello", forcedType: "string", expected: "hello", errorString: ""},
+		{value: "hello", forcedType: "[]string", expected: []string{"hello"}, errorString: ""},
+		{value: "hello\nthere", forcedType: "[]string", expected: []string{"hello", "there"}, errorString: ""},
+		{value: "blah", forcedType: "[]string", expected: []string{"blah"}, errorString: ""},
+		{value: "[\"hello\"]", forcedType: "[][]", expected: [][]interface{}([][]interface{}{[]interface{}{"hello"}}), errorString: ""},
+		{value: "[\"hello\"]\n[\"there\"]", forcedType: "[][]", expected: [][]interface{}([][]interface{}{[]interface{}{"hello"}, []interface{}{"there"}}), errorString: ""},
+		{value: "{\"name\":\"hello\"}", forcedType: "[]{}", expected: []map[string]interface{}([]map[string]interface{}{map[string]interface{}{"name": "hello"}}), errorString: ""},
+		{value: "{\"name\":\"hello\"}\n{\"name\":\"there\"}", forcedType: "[]{}", expected: []map[string]interface{}([]map[string]interface{}{map[string]interface{}{"name": "hello"}, map[string]interface{}{"name": "there"}}), errorString: ""},
+	}
+
+	for _, testCase := range testCases {
+		actual, err := store.forceType(testCase.value, testCase.forcedType)
+		if testCase.errorString != "" {
+			assert.ErrorContains(tester, err, testCase.errorString)
+		} else {
+			assert.Equal(tester, testCase.expected, actual)
+		}
+	}
 }
