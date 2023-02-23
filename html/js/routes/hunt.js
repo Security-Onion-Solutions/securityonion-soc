@@ -118,6 +118,7 @@ const huntComponent = {
     escalateRelatedEventsEnabled: false,
     aggregationActionsEnabled: false,
     actions: [],
+    safeStringMaxLength: Number.MAX_SAFE_INTEGER,
   }},
   created() {
     this.$root.initializeCharts();
@@ -195,6 +196,7 @@ const huntComponent = {
       this.relativeTimeValue = params["relativeTimeValue"];
       this.relativeTimeUnit = params["relativeTimeUnit"];
       this.mruQueryLimit = params["mostRecentlyUsedLimit"];
+      this.safeStringMaxLength = params["safeStringMaxLength"];
       this.queryBaseFilter = params["queryBaseFilter"];
       this.queries = this.applyQuerySubstitutions(params["queries"]);
       this.filterToggles = params["queryToggleFilters"];
@@ -488,7 +490,7 @@ const huntComponent = {
       var template = 'rule.case_template' in item && item['rule.case_template'] ? '' + item['rule.case_template'] : '';
 
       return {
-        title: title.substring(0, 100),
+        title: this.formatSafeString(title),
         description: description,
         severity: severity,
         template: template,
@@ -604,6 +606,12 @@ const huntComponent = {
           }
         });        
       }
+    },
+    formatSafeString(item) {
+      if (item.length > this.safeStringMaxLength) {
+        return item.substring(0, this.safeStringMaxLength) + "...";
+      }
+      return item;
     },
     obtainQueryDetails() {
       this.queryName = "";

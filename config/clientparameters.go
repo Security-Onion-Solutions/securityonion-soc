@@ -10,6 +10,7 @@ const DEFAULT_GROUP_FETCH_LIMIT = 10
 const DEFAULT_EVENT_FETCH_LIMIT = 100
 const DEFAULT_RELATIVE_TIME_VALUE = 24
 const DEFAULT_RELATIVE_TIME_UNIT = 30
+const DEFAULT_SAFE_STRING_MAX_LENGTH = 100
 const DEFAULT_CHART_LABEL_MAX_LENGTH = 35
 const DEFAULT_CHART_LABEL_OTHER_LIMIT = 10
 const DEFAULT_CHART_LABEL_FIELD_SEPARATOR = ", "
@@ -100,6 +101,7 @@ type HuntingParameters struct {
 	RelativeTimeUnit             int                 `json:"relativeTimeUnit"`
 	MostRecentlyUsedLimit        int                 `json:"mostRecentlyUsedLimit"`
 	EventFields                  map[string][]string `json:"eventFields"`
+	SafeStringMaxLength          int                 `json:"safeStringMaxLength"`
 	QueryBaseFilter              string              `json:"queryBaseFilter"`
 	QueryToggleFilters           []*ToggleFilter     `json:"queryToggleFilters"`
 	Queries                      []*HuntingQuery     `json:"queries"`
@@ -132,6 +134,9 @@ func (params *HuntingParameters) Verify() error {
 	}
 	if params.MostRecentlyUsedLimit < 0 {
 		params.MostRecentlyUsedLimit = 0
+	}
+	if params.SafeStringMaxLength <= 0 {
+		params.SafeStringMaxLength = DEFAULT_SAFE_STRING_MAX_LENGTH
 	}
 	if params.ChartLabelMaxLength <= 0 {
 		params.ChartLabelMaxLength = DEFAULT_CHART_LABEL_MAX_LENGTH

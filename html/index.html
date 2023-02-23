@@ -437,10 +437,10 @@
         <v-row v-if="loaded && (queryFilters.length > 0 || queryGroupBys.length > 0 || querySortBys.length > 0)">
           <v-col cols="12">
             <span v-for="filter in queryFilters" :key="filter">
-              <v-chip class="filter mx-1 my-1" color="primary" close @click:close="removeFilter(filter)">{{ filter }}</v-chip>
+              <v-chip class="filter mx-1 my-1" color="primary" close @click:close="removeFilter(filter)">{{ formatSafeString(filter) }}</v-chip>
             </span>
             <span v-for="sortBy in querySortBys" :key="sortBy">
-              <v-chip class="sortBy mx-1 my-1" color="secondary" close @click:close="removeSortBy(sortBy)">{{ i18n.sortedBy }} {{ sortBy }}</v-chip>
+              <v-chip class="sortBy mx-1 my-1" color="secondary" close @click:close="removeSortBy(sortBy)">{{ i18n.sortedBy }} {{ formatSafeString(sortBy) }}</v-chip>
             </span>
           </v-col>
         </v-row>

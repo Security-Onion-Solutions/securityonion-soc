@@ -167,6 +167,15 @@ func (store *Saltstore) execCommand(ctx context.Context, args map[string]string)
 	return response, err
 }
 
+func (store *Saltstore) GetSetting(settings []*model.Setting, id string) *model.Setting {
+	for _, setting := range settings {
+		if setting.Id == id {
+			return setting
+		}
+	}
+	return nil
+}
+
 func (store *Saltstore) GetSettings(ctx context.Context) ([]*model.Setting, error) {
 	var err error
 	if err = store.server.CheckAuthorized(ctx, "read", "config"); err != nil {
@@ -491,6 +500,8 @@ func (store *Saltstore) updateSettingWithAnnotation(setting *model.Setting, anno
 			setting.HelpLink = fmt.Sprintf("%v", value)
 		case "syntax":
 			setting.Syntax = fmt.Sprintf("%v", value)
+		case "forcedType":
+			setting.ForcedType = fmt.Sprintf("%v", value)
 		case "file":
 			// This is a special type of annotation. It allows the contents
 			// of any salt file to become a setting.
@@ -558,7 +569,7 @@ func (store *Saltstore) parseAdvanced(path string, settings []*model.Setting, mi
 	return settings
 }
 
-func (store *Saltstore) updateSetting(mapped map[string]interface{}, sections []string, value string) error {
+func (store *Saltstore) updateSetting(mapped map[string]interface{}, sections []string, setting *model.Setting) error {
 	if mapped == nil || len(sections) == 0 {
 		return errors.New("Settings map to section id mismatch")
 	}
@@ -577,18 +588,34 @@ func (store *Saltstore) updateSetting(mapped map[string]interface{}, sections []
 			if len(sections) == 1 {
 				return errors.New("Unexpected setting value of map type during update")
 			}
-			return store.updateSetting(child.(map[string]interface{}), sections[1:], value)
+			return store.updateSetting(child.(map[string]interface{}), sections[1:], setting)
 		}
 	}
+
+	value := setting.Value
 
 	var err error
 	if len(sections) == 1 {
 		log.WithFields(log.Fields{
-			"name":          name,
-			"length":        len(value),
-			"alreadyExists": mapped[name] != nil,
+			"name":             name,
+			"length":           len(value),
+			"alreadyExists":    mapped[name] != nil,
+			"defaultAvailable": setting.DefaultAvailable,
 		}).Debug("Updating setting value")
-		mapped[name], err = store.alignType(mapped[name], value)
+
+		if setting.ForcedType != "" {
+			log.WithFields(log.Fields{
+				"name":       name,
+				"forcedType": setting.ForcedType,
+			}).Info("Forcing setting type")
+			mapped[name], err = store.forceType(value, setting.ForcedType)
+		} else {
+			currentValue := mapped[name]
+			if currentValue == nil && setting.DefaultAvailable {
+				currentValue = store.alignBestGuess(setting.Default)
+			}
+			mapped[name], err = store.alignType(currentValue, value)
+		}
 	}
 
 	return err
@@ -642,6 +669,27 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 		return errors.New("Invalid setting id: " + setting.Id)
 	}
 
+	settings, err := store.GetSettings(ctx)
+	if err != nil {
+		return err
+	} else {
+		settingDef := store.GetSetting(settings, setting.Id)
+		if settingDef == nil {
+			log.WithFields(log.Fields{
+				"settingId": setting.Id,
+			}).Info("Setting definition not found; assuming new, undefined setting")
+		} else {
+			if settingDef.Readonly {
+				return errors.New("Unable to modify or remove a readonly setting")
+			}
+			setting.Syntax = settingDef.Syntax
+			setting.ForcedType = settingDef.ForcedType
+			setting.Default = settingDef.Default
+			setting.DefaultAvailable = settingDef.DefaultAvailable
+			setting.File = settingDef.File
+		}
+	}
+
 	if !remove {
 		err = syntax.Validate(setting.Value, setting.Syntax)
 		if err != nil {
@@ -692,7 +740,7 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 					"path":      path,
 					"length":    len(setting.Value),
 				}).Info("Updating setting to new value")
-				err = store.updateSetting(mapped, sections, setting.Value)
+				err = store.updateSetting(mapped, sections, setting)
 			} else {
 				log.WithFields(log.Fields{
 					"settingId": setting.Id,
@@ -826,6 +874,32 @@ func (store *Saltstore) alignBestGuess(newValue string) interface{} {
 		}
 	}
 	return newValue
+}
+
+func (store *Saltstore) forceType(newValue string, forcedType string) (interface{}, error) {
+	switch forcedType {
+	case "float":
+		return strconv.ParseFloat(newValue, 64)
+	case "int":
+		return strconv.ParseInt(newValue, 10, 64)
+	case "bool":
+		return strconv.ParseBool(newValue)
+	case "string":
+		return newValue, nil
+	case "[]int":
+		return store.alignInt64List(newValue)
+	case "[]bool":
+		return store.alignBoolList(newValue)
+	case "[]float":
+		return store.alignFloat64List(newValue)
+	case "[]string":
+		return strings.Split(newValue, "\n"), nil
+	case "[][]":
+		return store.alignListList(newValue)
+	case "[]{}":
+		return store.alignMapList(newValue)
+	}
+	return "", errors.New("Unsupported forced type: " + forcedType)
 }
 
 func (store *Saltstore) alignBestGuessList(newValue string) (interface{}, error) {

@@ -29,6 +29,7 @@ type Setting struct {
 	Advanced            bool   `json:"advanced"`
 	HelpLink            string `json:"helpLink"`
 	Syntax              string `json:"syntax"`
+	ForcedType          string `json:"forcedType"`
 }
 
 func NewSetting(Id string) *Setting {
