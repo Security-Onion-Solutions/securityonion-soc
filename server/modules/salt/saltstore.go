@@ -679,10 +679,14 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 				"settingId": setting.Id,
 			}).Info("Setting definition not found; assuming new, undefined setting")
 		} else {
+			if settingDef.Readonly {
+				return errors.New("Unable to modify or remove a readonly setting")
+			}
 			setting.Syntax = settingDef.Syntax
 			setting.ForcedType = settingDef.ForcedType
 			setting.Default = settingDef.Default
 			setting.DefaultAvailable = settingDef.DefaultAvailable
+			setting.File = settingDef.File
 		}
 	}
 

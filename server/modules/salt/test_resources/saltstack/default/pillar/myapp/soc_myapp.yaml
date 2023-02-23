@@ -2,7 +2,7 @@ myapp:
   int:
     description: test desc
     global: true
-    readonly: true
+    readonly: false
     regex: "([0-9]+){3}"
     regexFailureMessage: Invalid!
   int_nodefault:

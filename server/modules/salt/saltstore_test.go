@@ -20,7 +20,7 @@ import (
 
 const TMP_SALTSTACK_PATH = "/tmp/gotest-soc-saltstore"
 const TMP_REQUEST_PIPE = "/tmp/gotest-soc-salt-req.pipe"
-const TEST_SETTINGS_COUNT = 23
+const TEST_SETTINGS_COUNT = 24
 
 func Cleanup() {
 	exec.Command("rm", "-fr", TMP_SALTSTACK_PATH).Run()
@@ -247,7 +247,7 @@ func TestGetSettings(tester *testing.T) {
 	assert.Equal(tester, "Invalid!", settings[count].RegexFailureMessage)
 	assert.Equal(tester, "test desc", settings[count].Description)
 	assert.Equal(tester, true, settings[count].Global)
-	assert.Equal(tester, true, settings[count].Readonly)
+	assert.Equal(tester, false, settings[count].Readonly)
 	count++
 
 	assert.Equal(tester, "myapp.int_list_nodefault", settings[count].Id)
@@ -301,6 +301,11 @@ func TestGetSettings(tester *testing.T) {
 	assert.Equal(tester, "", settings[count].NodeId)
 	count++
 
+	assert.Equal(tester, "myapp.ro", settings[count].Id)
+	assert.Equal(tester, true, settings[count].Readonly)
+	assert.Equal(tester, "", settings[count].NodeId)
+	count++
+
 	assert.Equal(tester, "myapp.str", settings[count].Id)
 	assert.Equal(tester, "my_str", settings[count].Value)
 	assert.Equal(tester, "", settings[count].NodeId)
@@ -312,6 +317,14 @@ func TestGetSettings(tester *testing.T) {
 	count++
 
 	assert.Equal(tester, count, len(settings))
+}
+
+func TestUpdateSetting_Readonly(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSalt()
+	setting := model.NewSetting("myapp.ro")
+	err := salt.UpdateSetting(context.Background(), setting, false)
+	assert.EqualError(tester, err, "Unable to modify or remove a readonly setting")
 }
 
 func TestUpdateSetting_MissingSettingFile(tester *testing.T) {
