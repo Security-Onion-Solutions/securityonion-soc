@@ -609,7 +609,7 @@ const huntComponent = {
     },
     formatSafeString(item) {
       if (item.length > this.safeStringMaxLength) {
-        return item.substring(0, this.safeStringMaxLength) + "...";
+        return item.substring(0, this.safeStringMaxLength - 3) + "...";
       }
       return item;
     },
