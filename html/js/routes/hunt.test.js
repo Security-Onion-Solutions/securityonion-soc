@@ -206,6 +206,14 @@ test('formatCaseSummary', () => {
   expect(summary).toBe('This is a case title');
 });
 
+test('formatSafeString', () => {
+  const longstr =  "123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890";
+  const expected = "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890...";
+  comp.safeStringMaxLength = 100;
+  const actual = comp.formatSafeString(longstr);
+  expect(actual).toBe(expected);
+});
+
 test('toggleEscalationMenu', () => {
   comp.escalateRelatedEventsEnabled = true;
   const domEvent = {clientX: 12, clientY: 34};
