@@ -20,7 +20,7 @@ import (
 
 const TMP_SALTSTACK_PATH = "/tmp/gotest-soc-saltstore"
 const TMP_REQUEST_PIPE = "/tmp/gotest-soc-salt-req.pipe"
-const TEST_SETTINGS_COUNT = 22
+const TEST_SETTINGS_COUNT = 23
 
 func Cleanup() {
 	exec.Command("rm", "-fr", TMP_SALTSTACK_PATH).Run()
@@ -296,6 +296,11 @@ func TestGetSettings(tester *testing.T) {
 	assert.Equal(tester, "", settings[count].NodeId)
 	count++
 
+	assert.Equal(tester, "myapp.my_def", settings[count].Id)
+	assert.Equal(tester, "item1\nitem2", settings[count].Value)
+	assert.Equal(tester, "", settings[count].NodeId)
+	count++
+
 	assert.Equal(tester, "myapp.str", settings[count].Id)
 	assert.Equal(tester, "my_str", settings[count].Value)
 	assert.Equal(tester, "", settings[count].NodeId)
@@ -324,6 +329,24 @@ func findSetting(settings []*model.Setting, id string, nodeId string) *model.Set
 		}
 	}
 	return nil
+}
+
+func TestUpdateSetting_OverrideDefault(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSalt()
+
+	// Add new setting
+	setting := model.NewSetting("myapp.my_def")
+	setting.Value = "new setting"
+	err := salt.UpdateSetting(context.Background(), setting, false)
+	assert.NoError(tester, err)
+
+	// Ensure there's an additional setting listed
+	settings, get_err := salt.GetSettings(context.Background())
+	assert.NoError(tester, get_err)
+
+	new_setting := findSetting(settings, "myapp.my_def", "")
+	assert.Equal(tester, "new setting", new_setting.Value)
 }
 
 func TestUpdateSetting_AddGlobal(tester *testing.T) {

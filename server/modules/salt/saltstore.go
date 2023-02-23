@@ -597,9 +597,10 @@ func (store *Saltstore) updateSetting(mapped map[string]interface{}, sections []
 	var err error
 	if len(sections) == 1 {
 		log.WithFields(log.Fields{
-			"name":          name,
-			"length":        len(value),
-			"alreadyExists": mapped[name] != nil,
+			"name":             name,
+			"length":           len(value),
+			"alreadyExists":    mapped[name] != nil,
+			"defaultAvailable": setting.DefaultAvailable,
 		}).Debug("Updating setting value")
 
 		if setting.ForcedType != "" {
@@ -609,7 +610,11 @@ func (store *Saltstore) updateSetting(mapped map[string]interface{}, sections []
 			}).Info("Forcing setting type")
 			mapped[name], err = store.forceType(value, setting.ForcedType)
 		} else {
-			mapped[name], err = store.alignType(mapped[name], value)
+			currentValue := mapped[name]
+			if currentValue == nil && setting.DefaultAvailable {
+				currentValue = store.alignBestGuess(setting.Default)
+			}
+			mapped[name], err = store.alignType(currentValue, value)
 		}
 	}
 
@@ -676,6 +681,8 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 		} else {
 			setting.Syntax = settingDef.Syntax
 			setting.ForcedType = settingDef.ForcedType
+			setting.Default = settingDef.Default
+			setting.DefaultAvailable = settingDef.DefaultAvailable
 		}
 	}
 
