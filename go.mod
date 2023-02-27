@@ -13,8 +13,8 @@ require (
 	github.com/stretchr/testify v1.8.0
 	github.com/tidwall/gjson v1.14.3
 	golang.org/x/crypto v0.0.0-20220919173607-35f4265a4bc0
-	golang.org/x/net v0.0.0-20220906165146-f3363e06e74c // indirect
-	golang.org/x/sys v0.1.0 // indirect
+	golang.org/x/net v0.7.0 // indirect
+	golang.org/x/sys v0.5.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
 
