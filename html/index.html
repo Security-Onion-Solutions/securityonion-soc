@@ -128,7 +128,7 @@
         <v-divider></v-divider>
         <v-list subheader dense id="external-tools-list">
           <v-subheader>Tools</v-subheader>
-          <v-list-item v-for="tool in tools" v-if="tool.enabled" :key="tool.name" :target="tool.target" :href="tool.link" :title="$root.localizeMessage(tool.description)">
+          <v-list-item v-for="tool in tools" v-if="tool.enabled" :key="tool.name" :id="tool.target" :target="tool.target" :href="tool.link" :title="$root.localizeMessage(tool.description)">
             <v-list-item-action>
               <v-icon>{{ tool.icon }}</v-icon>
             </v-list-item-action>
