@@ -128,7 +128,7 @@
         <v-divider></v-divider>
         <v-list subheader dense id="external-tools-list">
           <v-subheader>Tools</v-subheader>
-          <v-list-item v-for="tool in tools" v-if="tool.enabled" :key="tool.name" :id="tool.target" :target="tool.target" :href="tool.link" :title="$root.localizeMessage(tool.description)">
+          <v-list-item v-for="tool in tools" v-if="tool.enabled" :key="tool.name" :id="tool.name" :target="$root.target(tool.target)" :href="tool.link" :title="$root.localizeMessage(tool.description)">
             <v-list-item-action>
               <v-icon>{{ tool.icon }}</v-icon>
             </v-list-item-action>
@@ -175,7 +175,7 @@
                 <v-list-item-title v-text="i18n.darkMode"></v-list-item-title>
               </v-list-item-content>
             </v-list-item>
-            <v-list-item target="so-help" :href="parameters.releaseNotesUrl">
+            <v-list-item :target="$root.target('so-help')" :href="parameters.releaseNotesUrl">
               <v-list-item-action>
                 <v-icon class="mx-auto">fa-gift</v-icon>
               </v-list-item-action>
@@ -183,7 +183,7 @@
                 <v-list-item-title v-text="i18n.whatsnew"></v-list-item-title>
               </v-list-item-content>
             </v-list-item>
-            <v-list-item target="so-help" :href="parameters.docsUrl">
+            <v-list-item :target="$root.target('so-help')" :href="parameters.docsUrl">
               <v-list-item-action>
                 <v-icon class="mx-auto">fa-question</v-icon>
               </v-list-item-action>
@@ -191,7 +191,7 @@
                 <v-list-item-title v-text="i18n.help"></v-list-item-title>
               </v-list-item-content>
             </v-list-item>
-            <v-list-item target="so-cheatsheet" :href="parameters.cheatsheetUrl">
+            <v-list-item :target="$root.target('so-cheatsheet')" :href="parameters.cheatsheetUrl">
               <v-list-item-action>
                 <v-icon class="mx-auto">fa-scroll</v-icon>
               </v-list-item-action>
@@ -199,7 +199,7 @@
                 <v-list-item-title v-text="i18n.cheatsheet"></v-list-item-title>
               </v-list-item-content>
             </v-list-item>
-            <v-list-item target="so-blog" href="https://blog.securityonion.net/">
+            <v-list-item :target="$root.target('so-blog')" href="https://blog.securityonion.net/">
               <v-list-item-action>
                 <v-icon class="mx-auto">fa-info</v-icon>
               </v-list-item-action>
@@ -240,7 +240,7 @@
           {{ errorMessage }}
           <div class="mt-2 no-underline">
             {{ i18n.errorHelp }}
-            <a target="so-help" :href="parameters.docsUrl + 'help.html'" class="text-decoration-none">
+            <a :target="$root.target('so-help')" :href="parameters.docsUrl + 'help.html'" class="text-decoration-none">
               <v-icon>fa-life-ring</v-icon>
             </a>
           </div>
@@ -271,13 +271,13 @@
         <v-spacer></v-spacer>
         <span class="text-no-wrap d-none d-md-flex">
           &copy; {{ new Date().getFullYear() }} 
-          <a class="footer mx-1" target="sos" href="https://securityonionsolutions.com/">
+          <a class="footer mx-1" :target="$root.target('sos')" href="https://securityonionsolutions.com/">
             Security Onion Solutions, LLC
           </a>
         </span>
         <span class="text-no-wrap d-md-none">
           &copy; {{ new Date().getFullYear() }} 
-          <a class="footer mx-1" target="sos" href="https://securityonionsolutions.com/">
+          <a class="footer mx-1" :target="$root.target('sos')" href="https://securityonionsolutions.com/">
             SOS
           </a>
         </span>
@@ -305,7 +305,7 @@
           </v-col>
           <v-col cols="12" lg="6" class="mx-auto text-center">
             <div v-html="i18n.sponsorsIntro" class="mb-6"></div>
-            <a target="sos" href="https://securityonionsolutions.com/" class="text-decoration-none">
+            <a :target="$root.target('sos')" href="https://securityonionsolutions.com/" class="text-decoration-none">
               <img v-if="!$vuetify.theme.dark" height="100" src="images/sos-logo.svg">
               <img v-if="$vuetify.theme.dark" height="100" src="images/sos-logo-white.svg">
             </a>
@@ -788,7 +788,7 @@
                   {{ i18n.quickActions }}
                 </v-list-item-title>
               </template>
-              <v-list-item dense v-for="action in actions" class="custom-quick-action-button" v-if="action.enabled" :key="action.link" :href="action.background ? '' : action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="action.target" @click="$root.performAction($event, action)">
+              <v-list-item dense v-for="action in actions" class="custom-quick-action-button" v-if="action.enabled" :key="action.link" :href="action.background ? '' : action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="$root.target(action.target)" @click="$root.performAction($event, action)">
                 <v-list-item-icon>
                   <v-icon :alt="action.name" color="white">{{ action.icon }}</v-icon>
                 </v-list-item-icon>
@@ -1444,7 +1444,7 @@
                   {{ i18n.quickActions }}                                           
                 </v-list-item-title>                                                                                      
               </template>                                                                                                 
-              <v-list-item dense v-for="action in actions" class="custom-quick-action-button" v-if="action.enabled" :key="action.link" :href="action.background ? '' : action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="action.target" @click="$root.performAction($event, action)">
+              <v-list-item dense v-for="action in actions" class="custom-quick-action-button" v-if="action.enabled" :key="action.link" :href="action.background ? '' : action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="$root.target(action.target)" @click="$root.performAction($event, action)">
                 <v-list-item-icon>
                   <v-icon :alt="action.name" color="white">{{ action.icon }}</v-icon>
                 </v-list-item-icon>                                                     
@@ -1560,7 +1560,7 @@
                               </div>
                               <div v-else class="d-flex flex-column" style="width: 100%;">
                                 <div class="d-flex flex-column flex-sm-row align-sm-center align-self-start text-body-2 mb-1 ml-1">
-                                  <a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" target="_blank" :title="i18n.markdownFormattingSupported"><v-icon>fab fa-markdown</v-icon></a>
+                                  <a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" :target="($root.target('_blank')" :title="i18n.markdownFormattingSupported"><v-icon>fab fa-markdown</v-icon></a>
                                 </div>
                                 <div class="mb-3">
                                   <v-form v-model="editForm.valid" @submit.prevent>
@@ -1658,7 +1658,7 @@
                           </div>
                           <div class="d-flex flex-column" style="width: 100%;">
                             <div class="d-flex flex-column flex-sm-row align-sm-center align-self-start text-body-2 mb-1 ml-3">
-                              <a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" target="_blank" :title="i18n.markdownFormattingSupported"><v-icon>fab fa-markdown</v-icon></a>
+                              <a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" :target="$root.target('_blank')" :title="i18n.markdownFormattingSupported"><v-icon>fab fa-markdown</v-icon></a>
                             </div>
                             <div class="mx-2">
                               <v-form ref="comments" v-model="associatedForms['comments'].valid" @submit.prevent>
@@ -1717,9 +1717,9 @@
                           </div>
                           <v-form ref="attachments" v-model="associatedForms['attachments'].valid" @submit.prevent>
                             <v-file-input id="attachments-file" show-size v-model="attachment" persistent-hint :hint="getAttachmentHelp()" :rules="[rules.fileSizeLimit, rules.fileNotEmpty]"/>
-                            <v-textarea id="attachments-description" rows="2"
-                            :value="associatedForms['attachments'].description" @change="val => associatedForms['attachments'].description = val"
-                            :placeholder="i18n.artifactDescription" persistent-hint :hint="i18n.artifactDescriptionHelp"/>
+                            <v-textarea id="attachments-description" rows="2" :value="associatedForms['attachments'].description" 
+                              @change="val => associatedForms['attachments'].description = val"
+                              :placeholder="i18n.artifactDescription" persistent-hint :hint="i18n.artifactDescriptionHelp"/>
                             <v-select id="attachments-tlp" v-if="!isPresetCustomEnabled('tlp')" v-model="associatedForms['attachments'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
                             <v-combobox id="attachments-tlp" v-if="isPresetCustomEnabled('tlp')" v-model="associatedForms['attachments'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
                             <v-select id="attachments-tags" v-if="!isPresetCustomEnabled('tags')" v-model="associatedForms['attachments'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
@@ -1770,7 +1770,7 @@
                       <tr>
                         <td :colspan="4" class="case">
                           <v-container fluid class="py-1">
-                            <a target="soc-download" :href="`/api/case/artifactstream?id=${props.item.id}`" class="no-underline">
+                            <a :target="$root.target('soc-download')" :href="`/api/case/artifactstream?id=${props.item.id}`" class="no-underline">
                               <v-icon>fa-download</v-icon>
                               {{ props.item.value }}
                               ({{ props.item.streamLength | formatCount }} 
@@ -2001,7 +2001,7 @@
                       <tr>
                         <td :colspan="5" class="case">
                           <v-container fluid class="my-2" v-if="props.item.artifactType == 'file'">
-                            <a target="soc-download" :href="`/api/case/artifactstream?id=${props.item.id}`" class="no-underline">
+                            <a :target="$root.target('soc-download')" :href="`/api/case/artifactstream?id=${props.item.id}`" class="no-underline">
                               <v-icon>fa-download</v-icon>
                               {{ props.item.value }}
                               ({{ props.item.streamLength | formatCount }} 
@@ -2961,7 +2961,7 @@
                                 <span :class="colorNodeStatus(item.raidStatus) + '--text'" class="filter value">
                                   <span v-if="item.raidStatus">
                                     {{ i18n.featureRequiresAppliance }}
-                                    <a target="so-help" :href="$root.parameters.docsUrl + 'grid.html'" style="text-decoration: none; cursor: 'pointer'"  :title="i18n.clickForMoreInformation">
+                                    <a :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'grid.html'" style="text-decoration: none; cursor: 'pointer'"  :title="i18n.clickForMoreInformation">
                                       <v-icon color="info" class="mb-2">fa-circle-question</v-icon>
                                     </a>
                                   </span>
@@ -2970,7 +2970,7 @@
                               </div>
                               <p/>
                               <div class="text-justify">
-                                <a target="influxdb" :href="item.dashboardLink" class="no-underline">
+                                <a :target="$root.target('influxdb')" :href="item.dashboardLink" class="no-underline">
                                   <v-btn icon :title="i18n.nodeDashboard">
                                     <v-icon>fa-chart-line</v-icon>
                                   </v-btn>
@@ -3019,7 +3019,7 @@
                             <v-card-text>
                               <span v-if="!item.imageFront">
                                 {{ i18n.nodeImageUnavailable }}
-                                <a target="so-help" :href="$root.parameters.docsUrl + 'grid.html'" style="text-decoration: none; cursor: 'pointer'"  :title="i18n.clickForMoreInformation">
+                                <a :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'grid.html'" style="text-decoration: none; cursor: 'pointer'"  :title="i18n.clickForMoreInformation">
                                   <v-icon color="info" class="mb-2">fa-circle-question</v-icon>
                                 </a>
                               </span>
@@ -3232,7 +3232,7 @@
                 <v-card-text>
                   <div class="text-subtitle-1 mb-4">
                     {{ getSettingDescription(selected) }}
-                    <a v-if="selected.helpLink" target="so-help" :href="$root.parameters.docsUrl + selected.helpLink" style="text-decoration: none; cursor: 'pointer'" :title="i18n.settingHelp">
+                    <a v-if="selected.helpLink" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + selected.helpLink" style="text-decoration: none; cursor: 'pointer'" :title="i18n.settingHelp">
                       <v-icon color="info" class="mb-2">fa-circle-question</v-icon>
                     </a>
                   </div>

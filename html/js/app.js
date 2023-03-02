@@ -116,6 +116,12 @@ $(document).ready(function() {
         }
         return "/";
       },
+      target(def) {
+        if (localStorage['settings.flags.testing'] === 'true') { 
+          return "_self";
+        }
+        return def;
+      },
       formatActionContent(content, event, field, value, uriEncode = true) {
         if (!content) return null;
 
