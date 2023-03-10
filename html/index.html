@@ -3492,16 +3492,16 @@
             </v-container>
             <v-card-actions>
               <v-spacer></v-spacer>
-              <v-btn @click.stop="hide()" v-text="i18n.cancel"></v-btn>
-              <v-btn @click.stop="accept(selected)" v-if="isUnaccepted(selected)">
+              <v-btn id="gridmember-cancel"  @click.stop="hide()" v-text="i18n.cancel"></v-btn>
+              <v-btn id="gridmember-accept"  @click.stop="accept(selected)" v-if="isUnaccepted(selected)">
                 {{ i18n.accept }}
                 <v-icon right>fa-check</v-icon>
               </v-btn>
-              <v-btn @click.stop="reject(selected)" v-if="isUnaccepted(selected)">
+              <v-btn id="gridmember-reject" @click.stop="reject(selected)" v-if="isUnaccepted(selected)">
                 {{ i18n.reject }}
                 <v-icon right>fa-xmark</v-icon>
               </v-btn>
-              <v-btn @click.stop="remove(selected)">
+              <v-btn id="gridmember-remove"  @click.stop="remove(selected)">
                 {{ i18n.delete }}
                 <v-icon right>fa-trash</v-icon>
               </v-btn>
