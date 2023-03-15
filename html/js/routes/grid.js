@@ -147,7 +147,9 @@ routes.push({ path: '/grid', name: 'grid', component: {
     },
     hideTestConfirm() {
       this.gridMemberTestConfirmDialog = false;
+      const tmpId = this.selectedId;
       this.selectedId = null;
+      return tmpId;
     },
     canTest(node) {
       if (node['keywords'] && node['keywords'].indexOf("Sensor") != -1) {
@@ -156,14 +158,14 @@ routes.push({ path: '/grid', name: 'grid', component: {
       return false;
     },
     async gridMemberTest() {
+      const nodeId = this.hideTestConfirm();
       this.$root.startLoading();
       try {
-        await this.$root.papi.post('gridmembers/' + this.selectedId + "/test");
+        await this.$root.papi.post('gridmembers/' + nodeId + "/test");
         this.$root.showTip(this.i18n.gridMemberTestSuccess);
       } catch (error) {
           this.$root.showError(error);
       }
-      this.hideTestConfirm();
       this.$root.stopLoading();
     },
     formatNode(node) {
