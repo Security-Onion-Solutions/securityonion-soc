@@ -81,3 +81,35 @@ test('formatNode_MissingContainers', () => {
 
 	expect(node.containers).toStrictEqual([]);
 });
+
+test('testConfirmDialog', () => {
+	expect(comp.gridMemberTestConfirmDialog).toBe(false);
+	expect(comp.selectedId).toBe(null);
+
+	comp.showTestConfirm('t2');
+	expect(comp.gridMemberTestConfirmDialog).toBe(true);
+	expect(comp.selectedId).toBe('t2');
+
+	comp.hideTestConfirm();
+	expect(comp.gridMemberTestConfirmDialog).toBe(false);
+	expect(comp.selectedId).toBe(null);
+});
+
+test('canTest', () => {
+	const node = {};
+	expect(comp.canTest(node)).toBe(false);
+
+	node['keywords'] = "Foo Bar";
+	expect(comp.canTest(node)).toBe(false);
+
+	node['keywords'] = "Foo Sensor Bar";
+	expect(comp.canTest(node)).toBe(true);
+});
+
+test('gridMemberTest', async () => {
+	resetPapi();
+	const mock = mockPapi("post");
+	comp.selectedId = '123';
+	await comp.gridMemberTest();
+	expect(mock).toHaveBeenCalledWith('gridmembers/123/test');
+});
