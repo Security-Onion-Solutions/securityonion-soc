@@ -59,7 +59,7 @@ func (gridMembersHandler *GridMembersHandler) post(ctx context.Context, writer h
 	}
 
 	op := gridMembersHandler.GetPathParameter(request.URL.Path, 3)
-	if op != "add" && op != "reject" && op != "delete" {
+	if op != "add" && op != "reject" && op != "delete" && op != "test" {
 		err = errors.New("Invalid operation")
 	}
 

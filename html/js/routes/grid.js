@@ -36,6 +36,8 @@ routes.push({ path: '/grid', name: 'grid', component: {
     footerProps: { 'items-per-page-options': [10,25,50,100,250,1000] },
     gridEps: 0,
     metricsEnabled: false,
+    selectedId: null,
+    gridMemberTestConfirmDialog: false,
   }},
   created() { 
     Vue.filter('colorNodeStatus', this.colorNodeStatus);
@@ -138,6 +140,33 @@ routes.push({ path: '/grid', name: 'grid', component: {
     },
     updateStatus(status) {
       this.gridEps = status.grid.eps;
+    },
+    showTestConfirm(id) {
+      this.selectedId = id;
+      this.gridMemberTestConfirmDialog = true;
+    },
+    hideTestConfirm() {
+      this.gridMemberTestConfirmDialog = false;
+      const tmpId = this.selectedId;
+      this.selectedId = null;
+      return tmpId;
+    },
+    canTest(node) {
+      if (node['keywords'] && node['keywords'].indexOf("Sensor") != -1) {
+          return true;
+      }
+      return false;
+    },
+    async gridMemberTest() {
+      const nodeId = this.hideTestConfirm();
+      this.$root.startLoading();
+      try {
+        await this.$root.papi.post('gridmembers/' + nodeId + "/test");
+        this.$root.showTip(this.i18n.gridMemberTestSuccess);
+      } catch (error) {
+          this.$root.showError(error);
+      }
+      this.$root.stopLoading();
     },
     formatNode(node) {
       node['keywords'] = this.$root.localizeMessage(node["role"] + '-keywords');
