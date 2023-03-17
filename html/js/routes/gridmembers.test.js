@@ -58,11 +58,11 @@ test('accept', async () => {
   const node = {id: '123', status: "unaccepted"};
   const mock = mockPapi("post");
   const loadmock = mockPapi("get");
-  getApp().showTip = jest.fn();
+  getApp().showInfo = jest.fn();
   await comp.accept(node);
   expect(mock).toHaveBeenCalledWith('gridmembers/123/add');
   expect(loadmock).toHaveBeenCalledWith('gridmembers/');
-  expect(getApp().showTip).toHaveBeenCalledWith(comp.i18n.gridMemberAcceptSuccess);
+  expect(getApp().showInfo).toHaveBeenCalledWith(comp.i18n.gridMemberAcceptSuccess);
 });
 
 test('reject', async () => {
