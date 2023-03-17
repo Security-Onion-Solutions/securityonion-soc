@@ -300,6 +300,7 @@ const i18n = {
       gridMemberReviewTitle: 'Review Grid Member',
       gridMembersAccepted: 'Accepted Members',
       gridMembersAcceptedHelp: 'Accepted members are trusted grid members',
+      gridMemberAcceptSuccess: 'The grid member has been accepted and is now being configured. This can take several minutes to complete. Once finished, the new node will appear in the SOC Grid.',
       gridMembersDenied: 'Denied Members',
       gridMembersDeniedHelp: 'Denied nodes have been automatically rejected by the system, due to conflicting or missing information',
       gridMembersHelp: 'A distributed grid is made of up member nodes. Member nodes will request to join the grid and remain in a pending state until an administrator has accepted the node. If a pending member node is not yet listed as pending, then it\'s possible that the wrong manager host was provided during setup or there could be a connectivity problem.',
