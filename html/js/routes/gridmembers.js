@@ -93,6 +93,7 @@ routes.push({ path: '/gridmembers', name: 'gridmembers', component: {
       try {
         await this.$root.papi.post('gridmembers/' + node.id + "/add");
         await this.loadData();
+        this.$root.showTip(this.i18n.gridMemberAcceptSuccess);
       } catch (error) {
         this.$root.showError(error);
       }
