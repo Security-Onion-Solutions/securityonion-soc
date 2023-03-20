@@ -2867,7 +2867,7 @@
               <template v-slot:item="props">
                 <tr color="error">
                   <td>
-                    <v-btn id="expandNode" icon small @click="expand(props.item)">
+                    <v-btn :id="'expandNode_' + props.item.id" icon small @click="expand(props.item)">
                       <v-icon v-if="isExpanded(props.item)" :alt="i18n.expand" :title="i18n.nodeExpandHelp">fa-angle-down</v-icon>
                       <v-icon v-if="!isExpanded(props.item)" :alt="i18n.expand" :title="i18n.nodeExpandHelp">fa-angle-right</v-icon>
                     </v-btn>
@@ -2975,7 +2975,7 @@
                                     <v-icon>fa-chart-line</v-icon>
                                   </v-btn>
                                 </a>
-                                <v-btn v-if="canTest(item)" icon :title="i18n.nodeTest" @click="showTestConfirm(item.id)">
+                                <v-btn v-if="canTest(item)" id="test-minion" icon :title="i18n.nodeTest" @click="showTestConfirm(item.id)">
                                   <v-icon>fa-file-import</v-icon>
                                 </v-btn>
                               </div>
