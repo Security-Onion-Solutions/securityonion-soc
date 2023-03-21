@@ -2888,7 +2888,7 @@
                   <td class="d-none d-lg-table-cell">{{ props.item.updateTime | formatTimestamp }}</td>
                   <td class="d-none d-lg-table-cell">{{ props.item.epochTime | formatTimestamp }}</td>
                   <td class="d-none d-lg-table-cell">{{ props.item.uptimeSeconds | formatDuration }}</td>
-                  <td class="d-none d-lg-table-cell"><v-chip class="nodeStatus" @click="expand(props.item)" :color="props.item.status | colorNodeStatus">{{ $root.localizeMessage(props.item.status) }}</v-chip></td>
+                  <td class="d-none d-lg-table-cell"><v-chip :id="'nodeStatus_' + props.item.id" class="nodeStatus" @click="expand(props.item)" :color="props.item.status | colorNodeStatus">{{ $root.localizeMessage(props.item.status) }}</v-chip></td>
                 </tr>
               </template>
               <template v-slot:expanded-item="{ item }">
