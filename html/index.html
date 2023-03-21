@@ -2913,10 +2913,6 @@
                                 <span class="filter value">{{ item.address }}</span>
                               </div>
                               <div class="text-no-wrap">
-                                <span class="filter label">{{ i18n.description }}:</span>
-                                <span class="filter value">{{ item.description }}</span>
-                              </div>
-                              <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.version }}:</span>
                                 <span class="filter value">{{ item.version }}</span>
                               </div>
@@ -2967,6 +2963,10 @@
                                   </span>
                                   <span v-else v-text="$root.l$root.localizeMessage(item.raidStatus)"/>
                                 </span>
+                              </div>
+                              <div class="text-no-wrap">
+                                <span class="filter label">{{ i18n.description }}:</span>
+                                <span class="filter value text-wrap">{{ item.description }}</span>
                               </div>
                               <p/>
                               <div class="text-justify">
