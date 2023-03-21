@@ -3,6 +3,7 @@ config.json
 sensoroni.log
 sensoroni
 jobs/
+logs/
 nsm/
 .vscode/
 .DS_Store
