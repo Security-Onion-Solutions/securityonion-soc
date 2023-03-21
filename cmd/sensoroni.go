@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/apex/log"
-	"github.com/apex/log/handlers/logfmt"
+	"github.com/apex/log/handlers/json"
 	"github.com/apex/log/handlers/text"
 	"github.com/security-onion-solutions/securityonion-soc/agent"
 	agentModules "github.com/security-onion-solutions/securityonion-soc/agent/modules"
@@ -34,7 +34,7 @@ var (
 func InitLogging(logFilename string, logLevel string) (*os.File, error) {
 	logFile, err := os.OpenFile(logFilename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err == nil {
-		log.SetHandler(logfmt.New(logFile))
+		log.SetHandler(json.New(logFile))
 	} else {
 		log.WithError(err).WithField("logfile", logFilename).Error("Failed to create log file, using console instead")
 		log.SetHandler(text.New(os.Stdout))
