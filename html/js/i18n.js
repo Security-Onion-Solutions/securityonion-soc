@@ -552,6 +552,8 @@ const i18n = {
       'so-receiver-keywords': 'Receiver',
       'so-search': 'Search',
       'so-search-keywords': 'Elastic, Elasticsearch, Ingest, Search',
+      'so-searchnode': 'Search',
+      'so-searchnode-keywords': 'Elastic, Elasticsearch, Ingest, Search',
       'so-sensor': 'Forward',
       'so-sensor-keywords': 'Forward, Sensor, Sensoroni, Stenographer',
       'so-standalone': 'Standalone',
