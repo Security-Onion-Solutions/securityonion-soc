@@ -2975,7 +2975,7 @@
                                     <v-icon>fa-chart-line</v-icon>
                                   </v-btn>
                                 </a>
-                                <v-btn v-if="canTest(item)" id="test-minion" icon :title="i18n.nodeTest" @click="showTestConfirm(item.id + '_' + item.role.replace('so-', ''))">
+                                <v-btn v-if="canTest(item)" id="test-minion" icon :title="i18n.nodeTest" @click="showTestConfirm(item.id + '_' + item.role)">
                                   <v-icon>fa-file-import</v-icon>
                                 </v-btn>
                               </div>
