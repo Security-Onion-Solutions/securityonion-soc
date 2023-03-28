@@ -158,7 +158,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
       return false;
     },
     async gridMemberTest() {
-      const nodeId = this.hideTestConfirm();
+      const nodeId = this.hideTestConfirm().replace('_so-', '_');
       this.$root.startLoading();
       try {
         await this.$root.papi.post('gridmembers/' + nodeId + "/test");

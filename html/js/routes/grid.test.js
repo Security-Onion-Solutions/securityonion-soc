@@ -109,7 +109,7 @@ test('canTest', () => {
 test('gridMemberTest', async () => {
 	resetPapi();
 	const mock = mockPapi("post");
-	comp.selectedId = '123';
+	comp.selectedId = 'fwd01_so-sensor';
 	await comp.gridMemberTest();
-	expect(mock).toHaveBeenCalledWith('gridmembers/123/test');
+	expect(mock).toHaveBeenCalledWith('gridmembers/fwd01_sensor/test');
 });
