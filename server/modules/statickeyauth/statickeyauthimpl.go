@@ -20,6 +20,7 @@ import (
 
 type StaticKeyAuthImpl struct {
 	apiKey           string
+	skipCidrCheck    bool
 	anonymousNetwork *net.IPNet
 	server           *server.Server
 }
@@ -33,7 +34,13 @@ func NewStaticKeyAuthImpl(srv *server.Server) *StaticKeyAuthImpl {
 func (auth *StaticKeyAuthImpl) Init(apiKey string, anonymousCidr string) error {
 	var err error
 	auth.apiKey = apiKey
-	_, auth.anonymousNetwork, err = net.ParseCIDR(anonymousCidr)
+	if anonymousCidr == "*" {
+		auth.skipCidrCheck = true
+		log.Warn("Bypassing all anonymous CIDR traffic checks. This is only intended for development use.")
+	} else {
+		auth.skipCidrCheck = false
+		_, auth.anonymousNetwork, err = net.ParseCIDR(anonymousCidr)
+	}
 	return err
 }
 
@@ -75,6 +82,10 @@ func (auth *StaticKeyAuthImpl) validateAuthorization(ctx context.Context, key st
 	}
 
 	// API Key was not provided, check for anon network access
+	if auth.skipCidrCheck {
+		return true
+	}
+
 	idx := strings.LastIndex(ipStr, ":")
 	if idx > 0 {
 		ipStr = ipStr[0:idx]
