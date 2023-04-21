@@ -2032,7 +2032,7 @@
                           <v-container fluid class="pt-2 pb-0" v-if="props.item.artifactType != 'file'">
                             <div>
                               <div class="font-weight-bold">{{i18n.artifactValue}}: </div>
-                              <div :id="`evidence-${props.index}-value`" class="case detail-field" :inner-html.prop="props.item.value | formatMarkdown"></div>
+                              <div :id="`evidence-${props.index}-value`" class="case detail-field">{{ props.item.value }}</div>
                             </div>
                           </v-container>
                           <v-container fluid class="pt-2 pb-0">
