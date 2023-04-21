@@ -45,10 +45,11 @@ routes.push({ path: '/gridmembers', name: 'gridmembers', component: {
         this.members = [];
         if (response && response.data && response.data.length > 0) {
           this.members = response.data;
-          this.accepted = this.members.filter(node => node.status == GridMemberAccepted).sort();
-          this.unaccepted = this.members.filter(node => node.status == GridMemberUnaccepted).sort();
-          this.rejected = this.members.filter(node => node.status == GridMemberRejected).sort();
-          this.denied = this.members.filter(node => node.status == GridMemberDenied).sort();
+          compFn = (a, b) => { return a.id != null ? a.id.localeCompare(b.id) : 0 };
+          this.accepted = this.members.filter(node => node.status == GridMemberAccepted).sort(compFn);
+          this.unaccepted = this.members.filter(node => node.status == GridMemberUnaccepted).sort(compFn);
+          this.rejected = this.members.filter(node => node.status == GridMemberRejected).sort(compFn);
+          this.denied = this.members.filter(node => node.status == GridMemberDenied).sort(compFn);
         }
       } catch (error) {
         this.$root.showError(error);

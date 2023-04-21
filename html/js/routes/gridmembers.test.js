@@ -41,17 +41,21 @@ test('colorNodeStatus', () => {
 
 test('loadData', async () => {
   data = [];
+  data.push({id:'C', status:'accepted'});
   data.push({id:'a', status:'accepted'});
+  data.push({id:'Z', status:'accepted'});
   data.push({id:'u', status:'unaccepted'});
   data.push({id:'r', status:'rejected'});
-  data.push({id:'d', status:'denied'});
+  data.push({id:'D', status:'denied'});
   const loadmock = mockPapi("get", { data: data });
   await comp.loadData();
   expect(loadmock).toHaveBeenCalledWith('gridmembers/');
-  expect(comp.accepted[0]).toBe(data[0]);
-  expect(comp.unaccepted[0]).toBe(data[1]);
-  expect(comp.rejected[0]).toBe(data[2]);
-  expect(comp.denied[0]).toBe(data[3]);
+  expect(comp.accepted[0]).toBe(data[1]);
+  expect(comp.accepted[1]).toBe(data[0]);
+  expect(comp.accepted[2]).toBe(data[2]);
+  expect(comp.unaccepted[0]).toBe(data[3]);
+  expect(comp.rejected[0]).toBe(data[4]);
+  expect(comp.denied[0]).toBe(data[5]);
 });
 
 test('accept', async () => {
