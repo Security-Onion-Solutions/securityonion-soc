@@ -7,17 +7,22 @@
 package syntax
 
 import (
+	"errors"
 	"strings"
 )
 
 func Validate(value string, syntax string) error {
 	var err error
 
-	switch strings.ToLower(syntax) {
-	case "yaml", "yml":
-		err = ValidateYaml(value)
-	case "json", "suricata":
-		err = ValidateJson(value)
+	if strings.Contains(value, "{#") || strings.Contains(value, "{{") || strings.Contains(value, "{%") {
+		err = errors.New("ERROR_JINJA_NOT_SUPPORTED")
+	} else {
+		switch strings.ToLower(syntax) {
+		case "yaml", "yml":
+			err = ValidateYaml(value)
+		case "json", "suricata":
+			err = ValidateJson(value)
+		}
 	}
 
 	return err
