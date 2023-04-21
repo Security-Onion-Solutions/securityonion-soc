@@ -247,9 +247,9 @@ func (caseHandler *CaseHandler) copyArtifactStream(ctx context.Context, writer h
     var stream *model.ArtifactStream
     stream, err = caseHandler.server.Casestore.GetArtifactStream(ctx, artifact.StreamId)
     if err == nil {
-      writer.Header().Set("Content-Type", artifact.MimeType)
+      writer.Header().Set("Content-Type", "application/octet-stream")
       writer.Header().Set("Content-Length", strconv.FormatInt(int64(artifact.StreamLen), 10))
-      writer.Header().Set("Content-Disposition", "inline; filename=\""+artifact.Value+"\"")
+      writer.Header().Set("Content-Disposition", "attachment; filename=\""+artifact.Value+"\"")
       writer.Header().Set("Content-Transfer-Encoding", "binary")
       written, err := io.Copy(writer, stream.Read())
       if err != nil {
