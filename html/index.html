@@ -2032,7 +2032,7 @@
                           <v-container fluid class="pt-2 pb-0" v-if="props.item.artifactType != 'file'">
                             <div>
                               <div class="font-weight-bold">{{i18n.artifactValue}}: </div>
-                              <div :id="`evidence-${props.index}-value`" class="case detail-field" :inner-html.prop="props.item.value | formatMarkdown"></div>
+                              <div :id="`evidence-${props.index}-value`" class="case detail-field">{{ props.item.value }}</div>
                             </div>
                           </v-container>
                           <v-container fluid class="pt-2 pb-0">
@@ -2873,21 +2873,21 @@
                     </v-btn>
                   </td>
                   <td>
-                    <v-icon v-if="props.item.status == 'fault'" :color="props.item.status | colorNodeStatus">{{ props.item.status | iconNodeStatus }}</v-icon>
+                    <v-icon v-if="props.item.status == 'fault'" :id="'nodeFaultIcon_' + props.item.id" :color="props.item.status | colorNodeStatus">{{ props.item.status | iconNodeStatus }}</v-icon>
                   </td>
-                  <td v-text="props.item.id"></td>
-                  <td v-text="$root.localizeMessage(props.item.role)" class="d-none d-md-table-cell"></td>
-                  <td v-text="props.item.address" class="d-none d-lg-table-cell"></td>
-                  <td v-text="props.item.description" class="d-none d-lg-table-cell"></td>
-                  <td v-text="props.item.version" class="d-none d-lg-table-cell"></td>
-                  <td v-text="props.item.model" class="d-none d-lg-table-cell"></td>
+                  <td :id="'nodeId_' + props.item.id" v-text="props.item.id"></td>
+                  <td :id="'nodeRole_' + props.item.id" v-text="$root.localizeMessage(props.item.role)" class="d-none d-md-table-cell"></td>
+                  <td :id="'nodeAddress_' + props.item.id" v-text="props.item.address" class="d-none d-lg-table-cell"></td>
+                  <td :id="'nodeDescription_' + props.item.id" v-text="props.item.description" class="d-none d-lg-table-cell"></td>
+                  <td :id="'nodeVersion_' + props.item.id" v-text="props.item.version" class="d-none d-lg-table-cell"></td>
+                  <td :id="'nodeModel_' + props.item.id" v-text="props.item.model" class="d-none d-lg-table-cell"></td>
                   <td v-if="metricsEnabled" class="d-none d-lg-table-cell">
-                    <span v-if="props.item.metricsEnabled">{{ props.item.productionEps | formatCount }} / {{ props.item.consumptionEps | formatCount }}</span>
-                    <span v-if="!props.item.metricsEnabled">{{ i18n.na }}</span>
+                    <span v-if="props.item.metricsEnabled" :id="'nodeEps_' + props.item.id">{{ props.item.productionEps | formatCount }} / {{ props.item.consumptionEps | formatCount }}</span>
+                    <span v-if="!props.item.metricsEnabled" :id="'nodeEps_' + props.item.id">{{ i18n.na }}</span>
                   </td>
-                  <td class="d-none d-lg-table-cell">{{ props.item.updateTime | formatTimestamp }}</td>
-                  <td class="d-none d-lg-table-cell">{{ props.item.epochTime | formatTimestamp }}</td>
-                  <td class="d-none d-lg-table-cell">{{ props.item.uptimeSeconds | formatDuration }}</td>
+                  <td :id="'nodeUpdateTime_' + props.item.id" class="d-none d-lg-table-cell">{{ props.item.updateTime | formatTimestamp }}</td>
+                  <td :id="'nodeEpochTime_' + props.item.id" class="d-none d-lg-table-cell">{{ props.item.epochTime | formatTimestamp }}</td>
+                  <td :id="'nodeUptimeSeconds_' + props.item.id" class="d-none d-lg-table-cell">{{ props.item.uptimeSeconds | formatDuration }}</td>
                   <td class="d-none d-lg-table-cell"><v-chip :id="'nodeStatus_' + props.item.id" class="nodeStatus" @click="expand(props.item)" :color="props.item.status | colorNodeStatus">{{ $root.localizeMessage(props.item.status) }}</v-chip></td>
                 </tr>
               </template>

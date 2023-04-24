@@ -18,17 +18,21 @@ import (
 )
 
 func TestValidateAuthorization(tester *testing.T) {
-	validateAuthorization(tester, "abc", "1.1.1.1", true)
-	validateAuthorization(tester, "a", "1.1.1.1", false)
-	validateAuthorization(tester, "", "1.1.1.1", false)
-	validateAuthorization(tester, "", "172.17.1.1", false)
-	validateAuthorization(tester, "", "172.17.0.1", true)
-	validateAuthorization(tester, "abc", "172.17.0.1", true)
+	validateAuthorization(tester, "172.17.0.0/24", "abc", "1.1.1.1", true)
+	validateAuthorization(tester, "172.17.0.0/24", "a", "1.1.1.1", false)
+	validateAuthorization(tester, "172.17.0.0/24", "", "1.1.1.1", false)
+	validateAuthorization(tester, "172.17.0.0/24", "", "172.17.1.1", false)
+	validateAuthorization(tester, "172.17.0.0/24", "", "172.17.0.1", true)
+	validateAuthorization(tester, "172.17.0.0/24", "abc", "172.17.0.1", true)
+
+	validateAuthorization(tester, "*", "", "1.1.1.1", true)
+	validateAuthorization(tester, "*", "abc", "1.1.1.1", true)
+	validateAuthorization(tester, "*", "abcd", "1.1.1.1", false)
 }
 
-func validateAuthorization(tester *testing.T, key string, ip string, expected bool) {
+func validateAuthorization(tester *testing.T, cidr string, key string, ip string, expected bool) {
 	ai := NewStaticKeyAuthImpl(server.NewFakeAuthorizedServer(nil))
-	ai.Init("abc", "172.17.0.0/24")
+	ai.Init("abc", cidr)
 	actual := ai.validateAuthorization(context.Background(), key, ip)
 	assert.Equal(tester, expected, actual)
 }
