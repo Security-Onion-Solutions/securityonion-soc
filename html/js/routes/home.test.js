@@ -6,44 +6,44 @@ let home = getComponent('home');
 test('loadChanges', async () => {
   // save original functions
   const createApi = home.$root.createApi;
-  const showError = home.$root.showError;
+  const showErrorMock = mockShowError();
+  const data = 'MOTD';
 
-  // mock functions
-  // since we're testing the rainy day path, throw an error on the first call
+  // mock functions for sunny day path
+  const mockGoodGetter = jest.fn().mockReturnValue({data: data});
   home.$root.createApi = jest.fn().mockReturnValue({
-    get: () => { throw new Error() },
-  })
-
-  // count how many times this function is called
-  let callCount = 0;
-  home.$root.showError = () => {
-    callCount++;
-  };
+    get: mockGoodGetter,
+  });
 
   // test
   await home.loadChanges();
 
   // verify
-  expect(home.motd).toBe('');
-  expect(callCount).toBe(1);
+  expect(showErrorMock).toHaveBeenCalledTimes(0);
+  expect(home.$root.createApi).toHaveBeenCalledTimes(1);
+  expect(mockGoodGetter).toHaveBeenCalledTimes(1);
+  expect(mockGoodGetter).toHaveBeenCalledWith(expect.stringMatching(/motd.md\?v=\d+/));
+  expect(home.motd).toBe(data);
 
   // reset
-  callCount = 0;
+  home.motd = '';
 
-  // mock functions for second, sunny day path
-  const data = 'MOTD';
+  // mock functions for rainy day path
+  const mockBadGetter = jest.fn().mockImplementation(() => { throw new Error() });
   home.$root.createApi = jest.fn().mockReturnValue({
-    get: jest.fn().mockReturnValue({ data: data }),
-  })
+    get: mockBadGetter,
+  });
 
   // test
   await home.loadChanges();
 
   // verify
-  expect(home.motd).toBe(data);
-  expect(callCount).toBe(0);
+  expect(showErrorMock).toHaveBeenCalledTimes(1);
+  expect(home.$root.createApi).toHaveBeenCalledTimes(1);
+  expect(mockBadGetter).toHaveBeenCalledTimes(1);
+  expect(mockBadGetter).toHaveBeenCalledWith(expect.stringMatching(/motd.md\?v=\d+/));
+  expect(home.motd).toBe('');
 
   // restore original functions
   home.$root.createApi = createApi;
-  home.$root.showError = showError;
 });
