@@ -377,10 +377,7 @@ func (store *Saltstore) recursivelyParseSettings(
 				}
 
 				if str != "" {
-					if newValue != "" {
-						newValue = newValue + "\n"
-					}
-					newValue = newValue + str
+					newValue = newValue + str + "\n"
 				}
 			}
 		default:
@@ -614,6 +611,7 @@ func (store *Saltstore) updateSetting(mapped map[string]interface{}, sections []
 			if currentValue == nil && setting.DefaultAvailable {
 				currentValue = store.alignBestGuess(setting.Default)
 			}
+			value = strings.TrimSpace(value)
 			mapped[name], err = store.alignType(currentValue, value)
 		}
 	}
@@ -858,17 +856,16 @@ func (store *Saltstore) alignBestGuess(newValue string) interface{} {
 		return output
 	}
 
-	newValueTrimmed := strings.TrimSpace(newValue)
-	if strings.HasPrefix(newValueTrimmed, "{") && strings.HasSuffix(newValueTrimmed, "}") {
+	if strings.HasPrefix(newValue, "{") && strings.HasSuffix(newValue, "}") {
 		tmp := make(map[string]interface{})
-		err := json.LoadJson([]byte(newValueTrimmed), &tmp)
+		err := json.LoadJson([]byte(newValue), &tmp)
 		if err == nil {
 			return tmp
 		}
 	}
-	if strings.HasPrefix(newValueTrimmed, "[") && strings.HasSuffix(newValueTrimmed, "]") {
+	if strings.HasPrefix(newValue, "[") && strings.HasSuffix(newValue, "]") {
 		tmp := make([]interface{}, 0, 0)
-		err := json.LoadJson([]byte(newValueTrimmed), &tmp)
+		err := json.LoadJson([]byte(newValue), &tmp)
 		if err == nil {
 			return tmp
 		}
