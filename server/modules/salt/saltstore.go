@@ -377,10 +377,7 @@ func (store *Saltstore) recursivelyParseSettings(
 				}
 
 				if str != "" {
-					if newValue != "" {
-						newValue = newValue + "\n"
-					}
-					newValue = newValue + str
+					newValue = newValue + str + "\n"
 				}
 			}
 		default:
