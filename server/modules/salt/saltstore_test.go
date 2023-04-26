@@ -465,7 +465,7 @@ func TestUpdateSetting_UpdateGlobal(tester *testing.T) {
 	// Update setting
 	setting := model.NewSetting("myapp.str")
 	setting.NodeId = ""
-	setting.Value = "new value"
+	setting.Value = "new value\n" // ensure value is trimmed of whitespace
 	err := salt.UpdateSetting(context.Background(), setting, false)
 	assert.NoError(tester, err)
 
