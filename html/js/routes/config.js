@@ -379,11 +379,18 @@ routes.push({ path: '/config', name: 'config', component: {
       }
 
       if (setting) {
+        this.form.value = this.form.value.trim();
         if (setting.regex) {
-          const re = new RegExp(setting.regex);
-          if (!re.test(this.form.value)) {
-            this.$root.showError(setting.regexFailureMessage ? setting.regexFailureMessage : this.i18n.settingValidationFailed);
-            return;
+          var test_values = [this.form.value];
+          if (setting.multiline) {
+            test_values = this.form.value.split("\n");
+          }
+          for (var idx = 0; idx < test_values.length; idx++) {
+            const re = new RegExp(setting.regex);
+            if (!re.test(test_values[idx])) {
+              this.$root.showError(setting.regexFailureMessage ? setting.regexFailureMessage : this.i18n.settingValidationFailed);
+              return;
+            }
           }
         }
         this.$root.startLoading();

@@ -104,7 +104,7 @@ global.mockPapi = function(method, mockedResponse, error) {
 }
 
 global.mockShowError = function(logError = false) {
-  const mock = jest.fn().mockImplementation(err => { if (logError) console.log(err.stack) });
+  const mock = jest.fn().mockImplementation(err => { if (logError) console.log(err.stack ? err.stack : err) });
   app.showError = mock;
   return mock;
 }
