@@ -406,6 +406,50 @@ test('saveRegexFailure', async () => {
   expect(mock).toHaveBeenCalledTimes(0);
 });
 
+test('saveRegexFailureMultiline', async () => {
+  comp.settings = [{
+    id: 'test.id',
+    value: '123',
+    multiline: true,
+    regex: '^([0-9]){3}$',
+    regexFailureMessage: 'do better',
+  }];
+
+  comp.form.value = "test-value\nanother-value\n";
+  comp.form.key = "test.id";
+  const showErrorMock = mockShowError();
+  const mock = mockPapi("post");
+  await comp.save(comp.settings[0], null);
+
+  expect(showErrorMock).toHaveBeenCalledWith('do better');
+  expect(comp.settings[0].value).toBe("123")
+  expect(comp.cancelDialog).toBe(false);
+  expect(comp.form.key).toBe('test.id');
+  expect(mock).toHaveBeenCalledTimes(0);
+});
+
+test('saveRegexValidMultiline', async () => {
+  comp.settings = [{
+    id: 'test.id',
+    value: '123',
+    multiline: true,
+    regex: '^([0-9]){3}$',
+    regexFailureMessage: 'do better',
+  }];
+
+  comp.form.value = "123\n456\n";
+  comp.form.key = "test.id";
+  const showErrorMock = mockShowError(true);
+  const mock = mockPapi("put");
+  await comp.save(comp.settings[0], null);
+
+  expect(showErrorMock).toHaveBeenCalledTimes(0);
+  expect(comp.settings[0].value).toBe("123\n456")
+  expect(comp.cancelDialog).toBe(false);
+  expect(comp.form.key).toBe(null);
+  expect(mock).toHaveBeenCalledWith('config/', {"id": "test.id", "nodeId": null, "value": "123\n456"});
+});
+
 test('edit', () => {
   // Global edit, nothing pending
   setupSettings();
