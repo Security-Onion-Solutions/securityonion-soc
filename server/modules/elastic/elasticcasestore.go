@@ -868,13 +868,19 @@ func (store *ElasticCasestore) DeleteArtifactStream(ctx context.Context, id stri
 }
 
 func (store *ElasticCasestore) ExtractCommonObservables(ctx context.Context, event *model.RelatedEvent) error {
+	existingArtifacts, _ := store.GetArtifacts(ctx, event.CaseId, "evidence", "")
+	existingValueMap := make(map[string]bool)
+	for _, artifact := range existingArtifacts {
+		existingValueMap[artifact.Value] = true
+	}
+
 	for key, value := range event.Fields {
 		valueStr := fmt.Sprintf("%v", value)
 		if len(valueStr) == 0 {
 			continue
 		}
 		for _, obs := range store.commonObservables {
-			if key == obs {
+			if key == obs && existingValueMap[valueStr] != true {
 				artifact := model.NewArtifact()
 				artifact.CaseId = event.CaseId
 				artifact.Value = valueStr
