@@ -876,11 +876,11 @@ func (store *ElasticCasestore) ExtractCommonObservables(ctx context.Context, eve
 
 	for key, value := range event.Fields {
 		valueStr := fmt.Sprintf("%v", value)
-		if len(valueStr) == 0 {
+		if len(valueStr) == 0 || existingValueMap[valueStr] == true {
 			continue
 		}
 		for _, obs := range store.commonObservables {
-			if key == obs && existingValueMap[valueStr] != true {
+			if key == obs {
 				artifact := model.NewArtifact()
 				artifact.CaseId = event.CaseId
 				artifact.Value = valueStr
