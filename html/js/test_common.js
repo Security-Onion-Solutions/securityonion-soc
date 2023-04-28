@@ -123,6 +123,6 @@ global.JobStatusDeleted = 3;
 ////////////////////////////////////
 // Import external dependencies
 ////////////////////////////////////
-global.moment = require('./external/moment-2.29.3.min.js');
-global.marked = require('./external/marked-4.1.0.min.js');
-global.DOMPurify = require('./external/purify-2.4.0.min.js');
+global.moment = require('./external/moment-2.29.4.min.js');
+global.marked = require('./external/marked-4.3.0.min.js');
+global.DOMPurify = require('./external/purify-3.0.2.min.js');
