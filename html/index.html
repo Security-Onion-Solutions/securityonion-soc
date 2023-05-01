@@ -80,7 +80,7 @@
             <v-list-item-action>
               <v-icon>fa-network-wired</v-icon>
             </v-list-item-action>
-            <v-list-item-content> 
+            <v-list-item-content>
               <v-list-item-title v-text="i18n.grid"></v-list-item-title>
             </v-list-item-content>
             <v-list-item-icon v-if="isGridUnhealthy()">
@@ -270,13 +270,13 @@
         </span>
         <v-spacer></v-spacer>
         <span class="text-no-wrap d-none d-md-flex">
-          &copy; {{ new Date().getFullYear() }} 
+          &copy; {{ new Date().getFullYear() }}
           <a class="footer mx-1" :target="$root.target('sos')" href="https://securityonionsolutions.com/">
             Security Onion Solutions, LLC
           </a>
         </span>
         <span class="text-no-wrap d-md-none">
-          &copy; {{ new Date().getFullYear() }} 
+          &copy; {{ new Date().getFullYear() }}
           <a class="footer mx-1" :target="$root.target('sos')" href="https://securityonionsolutions.com/">
             SOS
           </a>
@@ -328,9 +328,9 @@
                   <v-switch v-if="isCategory('alerts') || isCategory('cases')" id="enable-advanced" :disabled="loading()" v-model="advanced" dense hide-details class="my-0" :label="i18n.advanced"></v-switch>
                   <v-switch v-if="isAdvanced()" id="auto-hunt" :disabled="loading()" v-model="autohunt" dense hide-details class="my-0" :label="i18n.autohunt"></v-switch>
                   <v-switch v-for="toggle in filterToggles" :key="toggle.name"
-                    :id="'filterToggle-' + toggle.name" 
-                    :disabled="loading()" 
-                    v-model="toggle['enabled']" 
+                    :id="'filterToggle-' + toggle.name"
+                    :disabled="loading()"
+                    v-model="toggle['enabled']"
                     dense hide-details class="my-0"
                     @click="filterToggled($event, toggle)"
                     :label="$root.localizeMessage(toggle.name)" @click="notifyInputsChanged()"></v-switch>
@@ -401,7 +401,7 @@
             </v-textarea>
           </v-col>
           <v-col cols="12" md="5" class="d-flex flex-nowrap align-center">
-            <v-text-field :disabled="loading()" v-if="relativeTimeEnabled" id="huntrelativetimevalue" @change="notifyInputsChanged" class="mx-2" 
+            <v-text-field :disabled="loading()" v-if="relativeTimeEnabled" id="huntrelativetimevalue" @change="notifyInputsChanged" class="mx-2"
                 v-model="relativeTimeValue" :hint="i18n.relativeTimeHelp" persistent-hint="true" type="number">
               <template v-slot:prepend>
                 <v-btn v-if="relativeTimeEnabled" icon x-small @click="showAbsoluteTime" id="show-absolute-time">
@@ -416,8 +416,8 @@
                   v-model="relativeTimeUnit" :items="relativeTimeUnits"></v-select>
               </template>
             </v-text-field>
-            <v-text-field :disabled="loading()" v-if="!relativeTimeEnabled" id="huntdaterange" @change="notifyInputsChanged" class="mx-2" 
-              v-model="dateRange" :hint="i18n.timePickerHelp" persistent-hint="true" 
+            <v-text-field :disabled="loading()" v-if="!relativeTimeEnabled" id="huntdaterange" @change="notifyInputsChanged" class="mx-2"
+              v-model="dateRange" :hint="i18n.timePickerHelp" persistent-hint="true"
               prepend-inner-icon="fa-angle-down" @click:prepend-inner="showDateRangePicker">
               <template v-slot:prepend>
                 <v-btn v-if="!relativeTimeEnabled" icon x-small @click="showRelativeTime" id="show-relative-time">
@@ -527,9 +527,9 @@
                         <bar-chart v-if="group.chart_type == 'bar'" :id="'group-' + groupIdx" :chartdata="group.chart_data" :options="group.chart_options"/>
                         <sankey-chart v-if="group.chart_type == 'sankey'" :id="'group-' + groupIdx" :chartdata="group.chart_data" :options="group.chart_options"/>
                       </div>
-                      <v-data-table v-if="!group.chart_type" :id="'group-' + groupIdx" class="elevation-1" 
-                        :search="groupByFilter" dense 
-                        :footer-props="groupByFooters" :sort-by.sync="group.sortBy" :sort-desc.sync="group.sortDesc" 
+                      <v-data-table v-if="!group.chart_type" :id="'group-' + groupIdx" class="elevation-1"
+                        :search="groupByFilter" dense
+                        :footer-props="groupByFooters" :sort-by.sync="group.sortBy" :sort-desc.sync="group.sortDesc"
                         @update:sort-by="updateGroupBySort" @update:sort-desc="updateGroupBySort"
                         :items-per-page.sync="groupByItemsPerPage" must-sort :headers="group.headers" :items="group.data" :custom-sort="sortEvents">
                         <template v-if="!group.maximized" v-for="(header, headerIdx) in group.headers" v-slot:["header." + header.value]="{ props }">
@@ -582,7 +582,7 @@
                             </td>
                           </tr>
                         </template>
-          
+
                       </v-data-table>
                     </v-col>
                   </v-row>
@@ -609,7 +609,7 @@
           <v-expand-transition>
             <v-row v-if="isExpandedSection('hunt-events')">
               <v-col cols="12">
-                <v-data-table :search="eventFilter" :sort-by.sync="sortBy" item-key="soc_id" :expanded.sync="expanded" :sort-desc.sync="sortDesc" :footer-props="footerProps" 
+                <v-data-table :search="eventFilter" :sort-by.sync="sortBy" item-key="soc_id" :expanded.sync="expanded" :sort-desc.sync="sortDesc" :footer-props="footerProps"
                   :items-per-page.sync="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" show-expand :page.sync="eventPage" :custom-sort="sortEvents">
                   <template v-slot:top v-if="isAdvanced()">
                     <v-container fluid>
@@ -623,7 +623,7 @@
                         </v-col>
                       </v-row>
                     </v-container>
-                  </template>        
+                  </template>
                   <template v-slot:item="{ item, index }">
                     <tr>
                       <td>
@@ -921,10 +921,10 @@
                         </v-col>
                         <v-col v-else cols="9" class="pa-1">{{ i18n.all }}</v-col>
                       </v-row>
-                    </v-container>            
+                    </v-container>
                   </v-card-text>
                 </v-card>
-              </v-tab-item>            
+              </v-tab-item>
 
               <v-tab-item value="terms">
                 <v-card outlined class="my-4">
@@ -1064,8 +1064,8 @@
                     <v-row>
                       <v-col xs12>
                         <v-text-field id="email-input" v-model="form.email" :placeholder="i18n.email" autofocus="true" :rules="[rules.required]"></v-text-field>
-                        <v-text-field id="password-input" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" 
-                          @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" 
+                        <v-text-field id="password-input" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'"
+                          @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'"
                           :rules="[rules.required, rules.maxpasslen, rules.minpasslen, rules.badpasschs]"></v-text-field>
                         <v-select id="roles-select" v-model="form.role" :items="roles" :label="i18n.role" :rules="[rules.required]"></v-select>
                         <v-text-field id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName"></v-text-field>
@@ -1095,7 +1095,7 @@
                 </v-card-actions>
               </v-card>
             </v-dialog>
-            <v-data-table :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps" 
+            <v-data-table :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps"
               :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="users" :expanded.sync="expanded" :show-expand="$root.isUserAdmin()">
               <template v-slot:item="props">
                 <tr>
@@ -1148,8 +1148,8 @@
                             <v-card-title>{{ i18n.access }}</v-card-title>
                             <v-card-text>
                               <v-form v-model="form.valid">
-                                <v-text-field id="password-input" v-model="form.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" 
-                                  @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" 
+                                <v-text-field id="password-input" v-model="form.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'"
+                                  @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'"
                                   :rules="[rules.required, rules.maxpasslen, rules.minpasslen, rules.badpasschs]"></v-text-field>
                               </v-form>
                               <v-btn id="update-password-button" :disabled="!form.valid" @click="updatePassword(item)" v-text="i18n.passwordReset" class="mr-2 mb-2"></v-btn>
@@ -1184,7 +1184,7 @@
                 <v-icon>fa-plus</v-icon>
               </v-btn>
             </v-toolbar>
-            <v-data-table :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps" :items-per-page.sync="itemsPerPage" 
+            <v-data-table :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps" :items-per-page.sync="itemsPerPage"
               must-sort :headers="headers" :items="jobs">
               <template v-slot:item="props">
                 <tr>
@@ -1282,35 +1282,35 @@
                     <v-row>
                       <v-col>
                         <div>
-                          <span class="filter label">{{ i18n.job }}:</span> 
+                          <span class="filter label">{{ i18n.job }}:</span>
                           <span v-if="job.filter" class="filter value">{{ job.id }}</span>
                         </div>
                         <div>
-                          <span class="filter label">{{ i18n.owner }}:</span> 
+                          <span class="filter label">{{ i18n.owner }}:</span>
                           <span v-if="job.filter" class="filter value">{{ job.owner }}</span>
                         </div>
                         <div>
-                          <span class="filter label">{{ i18n.sensorId }}:</span> 
+                          <span class="filter label">{{ i18n.sensorId }}:</span>
                           <span v-if="job.filter" class="filter value">{{ job.nodeId }}</span>
                         </div>
                         <div>
-                          <span class="filter label">{{ i18n.importId }}:</span> 
+                          <span class="filter label">{{ i18n.importId }}:</span>
                           <span v-if="job.filter" class="filter value">{{ job.filter.importId }}</span>
                         </div>
                         <div>
-                          <span class="filter label">{{ i18n.srcIp }}:</span> 
+                          <span class="filter label">{{ i18n.srcIp }}:</span>
                           <span v-if="job.filter" class="filter value">{{ job.filter.srcIp }}</span>
                         </div>
                         <div>
-                          <span class="filter label">{{ i18n.srcPort }}:</span> 
+                          <span class="filter label">{{ i18n.srcPort }}:</span>
                           <span v-if="job.filter" class="filter value">{{ job.filter.srcPort }}</span>
                         </div>
                         <div>
-                          <span class="filter label">{{ i18n.dstIp }}:</span> 
+                          <span class="filter label">{{ i18n.dstIp }}:</span>
                           <span v-if="job.filter" class="filter value">{{ job.filter.dstIp }}</span>
                         </div>
                         <div>
-                          <span class="filter label">{{ i18n.dstPort }}:</span> 
+                          <span class="filter label">{{ i18n.dstPort }}:</span>
                           <span v-if="job.filter" class="filter value">{{ job.filter.dstPort }}</span>
                         </div>
                         <div>
@@ -1379,8 +1379,8 @@
                 <v-icon>fa-download</v-icon>
               </v-btn>
             </v-toolbar>
-            <v-data-table ref="packetTable" :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :items-per-page.sync="itemsPerPage" 
-              :search="search" :footer-props="footerProps" must-sort :headers="headers" :hide-default-header="!isOptionEnabled('packets')" 
+            <v-data-table ref="packetTable" :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :items-per-page.sync="itemsPerPage"
+              :search="search" :footer-props="footerProps" must-sort :headers="headers" :hide-default-header="!isOptionEnabled('packets')"
               :items="packets" item-key="number" :loading="packetsLoading" :expanded="expanded">
               <template v-slot:item="props">
                 <tr @click="expandRow(props.item)" v-if="isOptionEnabled('packets')">
@@ -1425,34 +1425,34 @@
           </v-col>
         </v-row>
         <v-menu v-model="quickActionVisible" :position-x="quickActionX" :position-y="quickActionY" absolute>
-          <v-list id="job-common-action" color="secondary">                                                                                
+          <v-list id="job-common-action" color="secondary">
               <v-list-item id="actionCopyValue" dense @click="$root.copyToClipboard(quickActionValue)">
-                <v-list-item-icon>                   
+                <v-list-item-icon>
                   <v-icon color="white">fa-copy</v-icon>
-                </v-list-item-icon>                                                                                 
-                <v-list-item-title class="white--text">                                                             
-                  {{ i18n.copyToClipboard }}                                  
-                </v-list-item-title>                                                                                         
-              </v-list-item>                                                                                                                        
-          </v-list>                                                     
-          <v-list id="job-quick-action" color="secondary">                                        
-              <template v-slot:activator>                                                                        
-                <v-list-item-icon>                                                                                 
-                  <v-icon color="white">fa-external-link-alt</v-icon>                                              
-                </v-list-item-icon>                                                                                                    
-                <v-list-item-title class="white--text">                                                                                
-                  {{ i18n.quickActions }}                                           
-                </v-list-item-title>                                                                                      
-              </template>                                                                                                 
+                </v-list-item-icon>
+                <v-list-item-title class="white--text">
+                  {{ i18n.copyToClipboard }}
+                </v-list-item-title>
+              </v-list-item>
+          </v-list>
+          <v-list id="job-quick-action" color="secondary">
+              <template v-slot:activator>
+                <v-list-item-icon>
+                  <v-icon color="white">fa-external-link-alt</v-icon>
+                </v-list-item-icon>
+                <v-list-item-title class="white--text">
+                  {{ i18n.quickActions }}
+                </v-list-item-title>
+              </template>
               <v-list-item dense v-for="action in actions" class="custom-quick-action-button" v-if="action.enabled" :key="action.link" :href="action.background ? '' : action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="$root.target(action.target)" @click="$root.performAction($event, action)">
                 <v-list-item-icon>
                   <v-icon :alt="action.name" color="white">{{ action.icon }}</v-icon>
-                </v-list-item-icon>                                                     
-                <v-list-item-title class="white--text">                                      
-                  {{ $root.localizeMessage(action.name) }}                                     
-                </v-list-item-title>                                                           
-              </v-list-item>                                                    
-          </v-list>                                                                           
+                </v-list-item-icon>
+                <v-list-item-title class="white--text">
+                  {{ $root.localizeMessage(action.name) }}
+                </v-list-item-title>
+              </v-list-item>
+          </v-list>
         </v-menu>
       </v-container>
     </script>
@@ -1460,7 +1460,7 @@
     <script type="text/x-template" id="page-case">
       <v-container fluid>
         <div class="mx-sm-12 mx-lg-6 mt-2 mb-6 mb-md-1">
-          <div tabindex="0" class="case detail-field clicktoedit d-flex align-start pa-2" v-if="!isEdit('case-title')" 
+          <div tabindex="0" class="case detail-field clicktoedit d-flex align-start pa-2" v-if="!isEdit('case-title')"
             @click="startEdit('case-title-input', caseObj.title, 'case-title', 'title', modifyCase)" @keypress.space.prevent="startEdit('case-title-input', caseObj.title, 'case-title', 'title', modifyCase)">
             <h2 id="case-title" class="rounded">{{ caseObj.title }}</h2>
           </div>
@@ -1533,7 +1533,7 @@
                   <v-icon left>fa-history</v-icon>
                   <div class="d-none d-lg-block">{{ i18n.history }}</div>
                 </v-tab>
-  
+
                 <v-tab-item value="comments">
                   <v-row>
                     <v-col>
@@ -1546,7 +1546,7 @@
                         </v-btn>
                       </v-toolbar>
                     </v-col>
-                  </v-row>  
+                  </v-row>
                   <div id="comment-list">
                     <div v-for="(comment, index) in associations.comments" class="mb-8" v-if="shouldRenderAssociationRecord('comments', comment, index)">
                       <div class="d-flex flex-column align-start my-4">
@@ -1583,7 +1583,7 @@
                                     <div :id="`comment-hours-${index}`">
                                       <v-icon class="mr-2">fa-clock</v-icon>{{ comment.hours | formatHours }} {{ i18n.hours }}
                                     </div>
-                                  </div>                                
+                                  </div>
                                 </div>
                                 <div v-else class="d-flex flex-column" style="width: 100%;">
                                   <div class="mb-3">
@@ -1623,7 +1623,7 @@
                                   {{ i18n.edited }}
                                 </div>
                                 <div class="ml-1 d-flex mt-1 mt-sm-0">
-                                  <v-btn text small icon color="primary" v-if="!isEdit(`comment-${index}`)" @click="startEdit('comment-desc-input', comment.description, `comment-${index}`, 'description', modifyAssociation, ['comments', comment], true)" 
+                                  <v-btn text small icon color="primary" v-if="!isEdit(`comment-${index}`)" @click="startEdit('comment-desc-input', comment.description, `comment-${index}`, 'description', modifyAssociation, ['comments', comment], true)"
                                     @keypress.space.prevent="startEdit('comment-desc-input', comment.description, `comment-${index}`, 'description', modifyAssociation, ['comments', comment], true)">
                                     <v-icon style="font-size: 14px !important;">fa-edit</v-icon>
                                   </v-btn>
@@ -1632,7 +1632,7 @@
                               </div>
                             </div>
                           </div>
-                        </v-col> 
+                        </v-col>
                       </div>
                       <div v-if="shouldRenderShowAll('comments', index)" class="d-flex-block justify-center my-4 show-all">
                         <div class="d-flex justify-center">
@@ -1684,7 +1684,7 @@
                           </v-btn>
                         </div>
                       </div>
-                    </v-col> 
+                    </v-col>
                   </div>
                 </v-tab-item>
 
@@ -1700,7 +1700,7 @@
                         </v-btn>
                       </v-toolbar>
                     </v-col>
-                  </v-row>                    
+                  </v-row>
                   <v-row v-if="isAdding('attachments')">
                     <v-col>
                       <div class="ml-1 ml-md-3 py-3 px-4 contrast-bg rounded rounded-md" style="width: 100%;">
@@ -1716,8 +1716,9 @@
                             <h3 class="text--primary">{{ i18n.attachmentAdd }}</h3>
                           </div>
                           <v-form ref="attachments" v-model="associatedForms['attachments'].valid" @submit.prevent>
-                            <v-file-input id="attachments-file" show-size v-model="attachment" persistent-hint :hint="getAttachmentHelp()" :rules="[rules.fileSizeLimit, rules.fileNotEmpty]"/>
-                            <v-textarea id="attachments-description" rows="2" :value="associatedForms['attachments'].description" 
+                            <v-file-input id="attachments-file" show-size v-model="attachment" persistent-hint :hint="getAttachmentHelp()" :rules="[rules.fileSizeLimit, rules.fileNotEmpty]" @change="associatedForms['attachments'].protected = false"/>
+                            <v-checkbox v-model="associatedForms['attachments'].protected" id="attachments-protect" :label="i18n.artifactProtected" persistent-hint :hint="i18n.artifactProtectedHint" />
+                            <v-textarea id="attachments-description" rows="2" :value="associatedForms['attachments'].description"
                               @change="val => associatedForms['attachments'].description = val"
                               :placeholder="i18n.artifactDescription" persistent-hint :hint="i18n.artifactDescriptionHelp"/>
                             <v-select id="attachments-tlp" v-if="!isPresetCustomEnabled('tlp')" v-model="associatedForms['attachments'].tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
@@ -1731,7 +1732,7 @@
                               <template #selection="{ item }">
                                 <v-chip color="primary">{{item}}</v-chip>
                               </template>
-                            </v-combobox>                              
+                            </v-combobox>
                           </v-form>
                         </div>
                         </div>
@@ -1748,9 +1749,9 @@
                       </div>
                       </div>
                     </v-col>
-                  </v-row>   
+                  </v-row>
                   <v-text-field v-model="associatedTable['attachments'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
-                  <v-data-table ref="attachmentsTable" :sort-by.sync="associatedTable['attachments'].sortBy" :sort-desc.sync="associatedTable['attachments'].sortDesc" :items-per-page.sync="associatedTable['attachments'].itemsPerPage" 
+                  <v-data-table ref="attachmentsTable" :sort-by.sync="associatedTable['attachments'].sortBy" :sort-desc.sync="associatedTable['attachments'].sortDesc" :items-per-page.sync="associatedTable['attachments'].itemsPerPage"
                     :search="associatedTable['attachments'].search" :footer-props="associatedTable['attachments'].footerProps" must-sort :headers="associatedTable['attachments'].headers"
                     :items="associations['attachments']" item-key="id" :loading="associatedTable['attachments'].loading" :expanded="associatedTable['attachments'].expanded" class="case-table">
                     <template v-slot:item="props">
@@ -1760,7 +1761,7 @@
                             <v-icon v-if="isExpanded('attachments', props.item)" :alt="i18n.expand" :title="i18n.expandHelp">fa-angle-down</v-icon>
                             <v-icon v-if="!isExpanded('attachments', props.item)" :alt="i18n.expand" :title="i18n.expandHelp">fa-angle-right</v-icon>
                           </v-btn>
-                        </td>                          
+                        </td>
                         <td class="associated">{{ props.item.createTime | formatDateTime }}</td>
                         <td class="associated">{{ props.item.updateTime | formatDateTime }}</td>
                         <td class="associated">{{ props.item.value }}</td>
@@ -1773,7 +1774,7 @@
                             <a :target="$root.target('soc-download')" :href="`/api/case/artifactstream?id=${props.item.id}`" class="no-underline">
                               <v-icon>fa-download</v-icon>
                               {{ props.item.value }}
-                              ({{ props.item.streamLength | formatCount }} 
+                              ({{ props.item.streamLength | formatCount }}
                               {{ i18n.bytes }})
                             </a>
                             <div class="mt-4">
@@ -1870,6 +1871,13 @@
                               </template>
                             </v-combobox>
                           </v-container>
+                          <v-container fluid class="py-2">
+                            <div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${props.index}-protected-input`, props.item.protected, `attachments-${props.index}-protected`, 'protected', modifyAssociation, ['attachments', props.item])">
+                              <div class="font-weight-bold">{{i18n.artifactProtected}}: </div>
+                              <div :id="`attachments-${props.index}-protected`" class="case detail-field" v-if="!isEdit(`attachments-${props.index}-protected`)">{{ props.item.protected ? i18n.yes : i18n.no }}</div>
+                            </div>
+                            <v-checkbox :id="`attachments-${props.index}-protected-input`" v-if="isEdit(`attachments-${props.index}-protected`)" v-model="editForm.val" v-on:change="stopEdit(true)" persistent-hint :hint="i18n.artifactProtectedHint"/>
+                          </v-container>
 
                           <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
                             <v-spacer/>
@@ -1905,7 +1913,7 @@
                   </v-data-table>
                   <div class="text-xs-center pt-2 d-none">
                       <v-btn v-text="i18n.loadMore" @click="loadAssociation('attachments')"></v-btn>
-                  </div>               
+                  </div>
                 </v-tab-item>
 
                 <v-tab-item value="evidence">
@@ -1920,7 +1928,7 @@
                         </v-btn>
                       </v-toolbar>
                     </v-col>
-                  </v-row>                    
+                  </v-row>
                   <v-row v-if="isAdding('evidence')">
                     <v-col>
                       <div class="ml-1 ml-md-3 py-3 px-4 contrast-bg rounded rounded-md" style="width: 100%;">
@@ -1954,7 +1962,7 @@
                               <template #selection="{ item }">
                                 <v-chip color="primary">{{item}}</v-chip>
                               </template>
-                            </v-combobox>                              
+                            </v-combobox>
                           </v-form>
                         </div>
                         </div>
@@ -1971,9 +1979,9 @@
                       </div>
                       </div>
                     </v-col>
-                  </v-row>  
+                  </v-row>
                   <v-text-field v-model="associatedTable['evidence'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
-                  <v-data-table ref="evidenceTable" :sort-by.sync="associatedTable['evidence'].sortBy" :sort-desc.sync="associatedTable['evidence'].sortDesc" :items-per-page.sync="associatedTable['evidence'].itemsPerPage" 
+                  <v-data-table ref="evidenceTable" :sort-by.sync="associatedTable['evidence'].sortBy" :sort-desc.sync="associatedTable['evidence'].sortDesc" :items-per-page.sync="associatedTable['evidence'].itemsPerPage"
                     :search="associatedTable['evidence'].search" :footer-props="associatedTable['evidence'].footerProps" must-sort :headers="associatedTable['evidence'].headers"
                     :items="associations['evidence']" item-key="id" :loading="associatedTable['evidence'].loading" :expanded="associatedTable['evidence'].expanded" class="case-table">
                     <template v-slot:item="props">
@@ -1989,8 +1997,8 @@
                           <v-btn :id="`evidence-${props.index}-analyze`" icon small @click="analyze(props.item)" :disabled="analyzeInProgress(props.item)">
                             <v-icon v-if="analyzeInProgress(props.item)" :alt="i18n.analyzeInProgress" :title="i18n.analyzeHelp">fa-clock</v-icon>
                             <v-icon v-if="!analyzeInProgress(props.item)" :alt="i18n.analyze" :title="i18n.analyzeHelp">fa-bolt</v-icon>
-                          </v-btn>                          
-                        </td>                        
+                          </v-btn>
+                        </td>
                         <td class="associated">{{ props.item.createTime | formatDateTime }}</td>
                         <td class="associated">{{ props.item.updateTime | formatDateTime }}</td>
                         <td class="associated">{{ props.item.artifactType }}</td>
@@ -2004,7 +2012,7 @@
                             <a :target="$root.target('soc-download')" :href="`/api/case/artifactstream?id=${props.item.id}`" class="no-underline">
                               <v-icon>fa-download</v-icon>
                               {{ props.item.value }}
-                              ({{ props.item.streamLength | formatCount }} 
+                              ({{ props.item.streamLength | formatCount }}
                               {{ i18n.bytes }})
                             </a>
                             <div class="mt-4">
@@ -2121,10 +2129,10 @@
                                   <v-expansion-panel-header disable-icon-rotate>
                                     <v-row>
                                       <v-col cols="12" md="4">
-                                        {{ i18n.job }}: {{ job.id }} 
+                                        {{ i18n.job }}: {{ job.id }}
                                       </v-col>
                                       <v-col cols="12" md="4">
-                                        {{ job.createTime | formatDateTime }} 
+                                        {{ job.createTime | formatDateTime }}
                                       </v-col>
                                       <v-col cols="12" md="4">
                                         {{ i18n.analyzers }}: {{ getAnalyzersInJob(job) }}
@@ -2183,7 +2191,7 @@
                                       </div>
                                       <v-spacer/>
                                     </div>
-                                    
+
                                   </v-expansion-panel-content>
                                 </v-expansion-panel>
                               </v-expansion-panels>
@@ -2224,7 +2232,7 @@
                   </v-data-table>
                   <div class="text-xs-center pt-2 d-none">
                       <v-btn v-text="i18n.loadMore" @click="loadAssociation('evidence')"></v-btn>
-                  </div>                
+                  </div>
                 </v-tab-item>
 
                 <v-tab-item value="events">
@@ -2236,9 +2244,9 @@
                         </v-btn>
                       </v-toolbar>
                     </v-col>
-                  </v-row>                   
+                  </v-row>
                   <v-text-field v-model="associatedTable['events'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
-                  <v-data-table ref="eventsTable" :sort-by.sync="associatedTable['events'].sortBy" :sort-desc.sync="associatedTable['events'].sortDesc" :items-per-page.sync="associatedTable['events'].itemsPerPage" 
+                  <v-data-table ref="eventsTable" :sort-by.sync="associatedTable['events'].sortBy" :sort-desc.sync="associatedTable['events'].sortDesc" :items-per-page.sync="associatedTable['events'].itemsPerPage"
                     :search="associatedTable['events'].search" :footer-props="associatedTable['events'].footerProps" must-sort :headers="associatedTable['events'].headers"
                     :items="associations['events']" item-key="id" :loading="associatedTable['events'].loading" :expanded="associatedTable['events'].expanded" class="case-table">
                     <template v-slot:item="props">
@@ -2255,7 +2263,7 @@
                         <td class="associated">{{ props.item.fields["soc_timestamp"] | formatTimestamp }}</td>
                         <td class="associated">{{ getEventId(props.item) }}</td>
                         <td class="associated">{{ props.item.fields['event.category'] }}</td>
-                        <td class="associated">{{ props.item.fields['event.module'] }}</td>                        
+                        <td class="associated">{{ props.item.fields['event.module'] }}</td>
                         <td class="associated">{{ props.item.fields['event.dataset'] }}</td>
                       </tr>
                     </template>
@@ -2310,7 +2318,7 @@
                       <v-btn v-text="i18n.loadMore" @click="loadAssociation('events')"></v-btn>
                   </div>
                 </v-tab-item>
-  
+
                 <v-tab-item value="history">
                   <v-row>
                     <v-col>
@@ -2320,9 +2328,9 @@
                         </v-btn>
                       </v-toolbar>
                     </v-col>
-                  </v-row>                    
+                  </v-row>
                   <v-text-field v-model="associatedTable['history'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
-                  <v-data-table ref="historyTable" :sort-by.sync="associatedTable['history'].sortBy" :sort-desc.sync="associatedTable['history'].sortDesc" :items-per-page.sync="associatedTable['history'].itemsPerPage" 
+                  <v-data-table ref="historyTable" :sort-by.sync="associatedTable['history'].sortBy" :sort-desc.sync="associatedTable['history'].sortDesc" :items-per-page.sync="associatedTable['history'].itemsPerPage"
                     :search="associatedTable['history'].search" :footer-props="associatedTable['history'].footerProps" must-sort :headers="associatedTable['history'].headers"
                     :items="associations['history']" item-key="id" :loading="associatedTable['history'].loading" :expanded="associatedTable['history'].expanded" class="case-table">
                     <template v-slot:item="props">
@@ -2339,7 +2347,7 @@
                               {{ $root.getAvatar(props.item.owner) }}
                             </div>
                           </v-avatar>
-                          {{ props.item.owner }} 
+                          {{ props.item.owner }}
                         </td>
                         <td class="associated">{{ props.item.updateTime | formatDateTime }}</td>
                         <td class="associated">
@@ -2420,7 +2428,7 @@
                               <v-row no-gutters class="py-1 case tabular-row">
                                 <v-col cols="4"><span class="case tabular-label">{{ i18n.caseSeverity }}:</span></v-col>
                                 <v-col cols="8"><span class="case">{{ props.item.severity }}</span></v-col>
-                              </v-row>                                
+                              </v-row>
                             </div>
                             <div>
                               <v-row no-gutters class="py-1 case tabular-row">
@@ -2513,6 +2521,12 @@
                                 <v-col cols="8"><span class="case">{{ props.item.tags }}</span></v-col>
                               </v-row>
                             </div>
+                            <div>
+                              <v-row no-gutters class="py-1 case tabular-row">
+                                <v-col cols="4"><span class="case tabular-label">{{ i18n.artifactProtected }}:</span></v-col>
+                                <v-col cols="8"><span class="case">{{ props.item.protected }}</span></v-col>
+                              </v-row>
+                            </div>
                           </div>
                           <div v-if="props.item.kind == i18n.evidence">
                             <div>
@@ -2595,7 +2609,7 @@
                       <v-btn v-text="i18n.loadMore" @click="loadAssociation('history')"></v-btn>
                   </div>
                 </v-tab-item>
-  
+
               <v-tabs>
             </v-row>
           </v-col>
@@ -2850,7 +2864,7 @@
         </v-row>
         <v-row>
           <v-col>
-            <v-data-table :search="gridFilter" :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" 
+            <v-data-table :search="gridFilter" :sort-by.sync="sortBy" :sort-desc.sync="sortDesc"
               :expanded.sync="expanded" :footer-props="footerProps" show-expand
               :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="nodes">
               <template v-slot:top>
@@ -2862,7 +2876,7 @@
                       <v-text-field v-model="gridFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
                     </v-col>
                   </v-row>
-                </v-container>        
+                </v-container>
               </template>
               <template v-slot:item="props">
                 <tr color="error">
@@ -3125,7 +3139,7 @@
                     </v-form>
                   </v-card-text>
                 </v-card>
-                
+
                 <v-card outlined class="my-4" v-if="totpForm.qr && totpForm.secret">
                   <v-alert type="error" border="bottom" colored-border text dense>
                     {{ i18n.securityInstructionsTotp }}
@@ -3236,7 +3250,7 @@
                 <v-icon v-if="isSettingModified(item)" class="ml-1" color="primary" :title="i18n.settingIsModified">fa-pencil</v-icon>
                 <v-icon v-if="isSettingModifiedPerNode(item)" class="ml-1" color="warning" :title="i18n.settingHasNodeValues">fa-circle-nodes</v-icon>
               </template>
-            </v-treeview>          
+            </v-treeview>
           </v-col>
           <v-divider vertical />
           <v-col cols="12" lg="8">
@@ -3305,7 +3319,7 @@
                           <v-textarea v-else outlined :id="'node-value-input-' + item[0]" :label="item[0]" v-model="form.value" class="editing config-editor" />
                         </div>
                         <div v-else>
-                          <v-text-field v-if="form.key != item[0]" :id="'node-value-output-' + item[0]" outlined :label="item[0]" @focus="edit(selected, item[0])" :value="item[1]" readonly :disabled="selected.readonly" :type="selected.sensitive ? 'password' : 'text'" /> 
+                          <v-text-field v-if="form.key != item[0]" :id="'node-value-output-' + item[0]" outlined :label="item[0]" @focus="edit(selected, item[0])" :value="item[1]" readonly :disabled="selected.readonly" :type="selected.sensitive ? 'password' : 'text'" />
                           <v-text-field v-else outlined :label="item[0]" :id="'node-value-input-' + item[0]" v-model="form.value" class="editing"  @keydown.enter.prevent="save(selected, item[0])" />
                         </div>
                       </v-col>
@@ -3364,7 +3378,7 @@
                     <v-btn :title="i18n.gridMemberShow" class="review" :id="'review-pending-button-' + node.id">
                       {{ i18n.review }}
                       <v-icon right>fa-binoculars</v-icon>
-                    </v-btn>                    
+                    </v-btn>
                   </v-list-item-action>
                 </v-list-item>
               </v-list-item-group>
@@ -3387,7 +3401,7 @@
                     <v-btn :title="i18n.gridMemberShow" class="review" :id="'review-denied-button-' + node.id">
                       {{ i18n.review }}
                       <v-icon right>fa-binoculars</v-icon>
-                    </v-btn>                    
+                    </v-btn>
                   </v-list-item-action>
                 </v-list-item>
               </v-list-item-group>
@@ -3410,7 +3424,7 @@
                     <v-btn :title="i18n.gridMemberShow" class="review" :id="'review-rejected-button-' + node.id">
                       {{ i18n.review }}
                       <v-icon right>fa-binoculars</v-icon>
-                    </v-btn>                    
+                    </v-btn>
                   </v-list-item-action>
                 </v-list-item>
               </v-list-item-group>
@@ -3435,7 +3449,7 @@
                     <v-btn :title="i18n.gridMemberShow" class="review" :id="'review-accepted-button-' + node.id">
                       {{ i18n.review }}
                       <v-icon right>fa-binoculars</v-icon>
-                    </v-btn>                    
+                    </v-btn>
                   </v-list-item-action>
                 </v-list-item>
               </v-list-item-group>

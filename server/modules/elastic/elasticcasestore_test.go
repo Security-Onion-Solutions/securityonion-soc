@@ -1186,6 +1186,7 @@ func TestCreateArtifact(tester *testing.T) {
 	artifact.GroupType = "myGroupType"
 	artifact.ArtifactType = "myArtifactType"
 	artifact.Value = "Value"
+	artifact.Protected = true
 	newEvent, err := store.CreateArtifact(ctx, artifact)
 	assert.NoError(tester, err)
 	assert.NotNil(tester, newEvent)
