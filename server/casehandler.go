@@ -7,9 +7,12 @@
 package server
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -150,11 +153,12 @@ func (caseHandler *CaseHandler) create(ctx context.Context, writer http.Response
 func (caseHandler *CaseHandler) update(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
 	var err error
 	var obj interface{}
-	statusCode := http.StatusBadRequest
+
 	subpath := caseHandler.GetPathParameter(request.URL.Path, 2)
 	switch subpath {
 	case "comments":
 		inputComment := model.NewComment()
+
 		err = json.NewDecoder(request.Body).Decode(&inputComment)
 		if err == nil {
 			obj, err = caseHandler.server.Casestore.UpdateComment(ctx, inputComment)
@@ -162,23 +166,25 @@ func (caseHandler *CaseHandler) update(ctx context.Context, writer http.Response
 	case "tasks":
 	case "artifacts":
 		inputArtifact := model.NewArtifact()
+
 		err = json.NewDecoder(request.Body).Decode(&inputArtifact)
 		if err == nil {
 			obj, err = caseHandler.server.Casestore.UpdateArtifact(ctx, inputArtifact)
 		}
 	default:
 		inputCase := model.NewCase()
+
 		err = json.NewDecoder(request.Body).Decode(&inputCase)
 		if err == nil {
 			obj, err = caseHandler.server.Casestore.Update(ctx, inputCase)
 		}
 	}
 
-	if err == nil {
-		statusCode = http.StatusOK
-	} else {
+	statusCode := http.StatusOK
+	if err != nil {
 		statusCode = http.StatusBadRequest
 	}
+
 	return statusCode, obj, err
 }
 
@@ -245,11 +251,40 @@ func (caseHandler *CaseHandler) copyArtifactStream(ctx context.Context, writer h
 		var stream *model.ArtifactStream
 		stream, err = caseHandler.server.Casestore.GetArtifactStream(ctx, artifact.StreamId)
 		if err == nil {
+			contentLength := int64(artifact.StreamLen)
+			filename := artifact.Value
+			content := stream.Read()
+
+			if artifact.Protected {
+				buf := bytes.NewBuffer([]byte{})
+				zipw := zip.NewWriter(buf)
+
+				filew, err := zipw.Create(filename)
+				if err != nil {
+					return err
+				}
+
+				_, err = io.Copy(filew, content)
+				if err != nil {
+					return err
+				}
+
+				err = zipw.Close()
+				if err != nil {
+					return err
+				}
+
+				content = buf
+				contentLength = int64(buf.Len())
+				filename += ".zip"
+			}
+
 			writer.Header().Set("Content-Type", "application/octet-stream")
-			writer.Header().Set("Content-Length", strconv.FormatInt(int64(artifact.StreamLen), 10))
-			writer.Header().Set("Content-Disposition", "attachment; filename=\""+artifact.Value+"\"")
+			writer.Header().Set("Content-Length", strconv.FormatInt(contentLength, 10))
+			writer.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 			writer.Header().Set("Content-Transfer-Encoding", "binary")
-			written, err := io.Copy(writer, stream.Read())
+
+			written, err := io.Copy(writer, content)
 			if err != nil {
 				log.WithError(err).WithFields(log.Fields{
 					"name":       artifact.Value,
@@ -260,6 +295,7 @@ func (caseHandler *CaseHandler) copyArtifactStream(ctx context.Context, writer h
 					"name":       artifact.Value,
 					"size":       written,
 					"artifactId": artifactId,
+					"protected":  artifact.Protected,
 				}).Info("Copied artifact stream to response")
 			}
 		}

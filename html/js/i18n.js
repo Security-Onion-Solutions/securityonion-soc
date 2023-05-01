@@ -51,7 +51,7 @@ const i18n = {
       alerts: 'Alerts',
       all: 'All',
       analyze: 'Analyze',
-      analyzers: 'Analyzers Processed', 
+      analyzers: 'Analyzers Processed',
       analyzeHelp: 'Enqueues a new analyze job for this observable',
       analyzeJobEnqueued: 'A new analyze job has been enqueued; results will be available within the observable details, after the analysis completes.',
       analyzeJobs: 'Analyzer Results',
@@ -78,7 +78,7 @@ const i18n = {
       analyzer_timeout: 'Remote host timed out',
       analyzer_urlhaus_invalid_url: 'Invalid URL',
       analyzer_urlhaus_malware_download: 'Malware download',
-      
+
       artifactBulk: 'Bulk Add',
       artifactBulkHelp: 'Enable this checkbox to have a separate observable added for each line of the provided value above',
       artifactDescription: 'Description',
@@ -88,6 +88,8 @@ const i18n = {
       artifactGroupType: 'Group Type',
       artifactGroupId: 'Group ID',
       artifactDescription: 'Description',
+      artifactProtected: 'Protected',
+      artifactProtectedHint: 'Protected attachments are automatically zipped prior to downloading. This helps prevent analysts from accidentally executing the potentially infected attachment.',
       artifactType: 'Type',
       artifactTypeHelp: 'Select a type for classification purposes (Note: choose "file" type to upload a file)',
       artifactValue: 'Value (hash, filename, etc.)',
@@ -262,7 +264,7 @@ const i18n = {
       featureRequiresAppliance: 'Feature Unavailable',
       features: 'Features',
       fetchLimit: 'Fetch Limit',
-      
+
       'field_case.createTime': 'Create Date',
       'field_case.severity': 'Severity',
       'field_case.status': 'Status',
@@ -539,7 +541,7 @@ const i18n = {
       'so-helix': 'Helix',
       'so-helix-keywords': 'Helix, Sensor, Sensoroni, Stenographer',
       'so-idh': 'Intrusion Detection Honeypot',
-      'so-idh-keywords': 'IDH, Intrusion, Detection, Honeypot',      
+      'so-idh-keywords': 'IDH, Intrusion, Detection, Honeypot',
       'so-import': 'Import',
       'so-import-keywords': 'Import, Manager, Master, Soc, Web',
       'so-managersearch': 'ManagerSearch',
