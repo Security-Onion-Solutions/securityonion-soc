@@ -20,6 +20,8 @@ jest test --config jest.config.js
 echo "Downloading GO dependencies..."
 go get ./...
 
+go mod tidy
+
 echo "Running GO unit tests..."
 go test ./...
 
