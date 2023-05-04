@@ -19,7 +19,7 @@ routes.push({ path: '/', name: 'home', component: {
   methods: {
     async loadChanges() {
       try {
-        const response = await this.$root.papi.get('motd.md?v=' + Date.now());
+        const response = await this.$root.createApi().get('motd.md?v=' + Date.now());
         if (response.data) {
           this.motd = response.data;
         }

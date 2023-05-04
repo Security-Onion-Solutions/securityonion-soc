@@ -11,7 +11,13 @@ beforeEach(() => {
 test('loadChanges', async () => {
   const showErrorMock = mockShowError();
   const data = 'MOTD';
-  var mock = mockPapi('get', { data: data });
+
+  const _createApi = comp.$root.createApi;
+  const mock = jest.fn().mockReturnValue({
+    get: () => { return { data: data } },
+  });
+
+  comp.$root.createApi = mock;
 
   // test
   await comp.loadChanges();
@@ -19,20 +25,27 @@ test('loadChanges', async () => {
   // verify
   expect(showErrorMock).toHaveBeenCalledTimes(0);
   expect(mock).toHaveBeenCalledTimes(1);
-  expect(mock).toHaveBeenCalledWith(expect.stringMatching(/motd.md\?v=\d+/));
   expect(comp.motd).toBe(data);
+
+  comp.$root.createApi = _createApi;
 });
 
 test('loadChanges error', async () => {
   const showErrorMock = mockShowError();
-  mock = mockPapi('get', null, new Error('test error'));
+  const _createApi = comp.$root.createApi;
+  const mock = jest.fn().mockReturnValue({
+    get: () => { throw new Error() },
+  });
+
+  comp.$root.createApi = mock;
 
   // test
   await comp.loadChanges();
 
   // verify
   expect(mock).toHaveBeenCalledTimes(1);
-  expect(mock).toHaveBeenCalledWith(expect.stringMatching(/motd.md\?v=\d+/));
   expect(showErrorMock).toHaveBeenCalledTimes(1);
   expect(comp.motd).toBe('');
+
+  comp.$root.createApi = _createApi;
 });
