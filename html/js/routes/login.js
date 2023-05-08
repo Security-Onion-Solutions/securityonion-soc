@@ -24,9 +24,16 @@ routes.push({ path: '*', name: 'login', component: {
     },
     authLoginUrl: null,
     banner: "",
+    throttled: false,
+    countdown: 0,
   }},
   created() {
-    if (!this.$root.getAuthFlowId()) {
+    const throttled = this.$root.getSearchParam("thr");
+    if (throttled) {
+      this.throttled = true;
+      this.countdown = parseInt(throttled);
+      setTimeout(this.countdownRelogin, 1000);
+    } else if (!this.$root.getAuthFlowId()) {
       this.$root.showLogin();
     } else {
       this.showLoginForm = true;
@@ -37,13 +44,27 @@ routes.push({ path: '*', name: 'login', component: {
   watch: {
   },
   methods: {
+    countdownRelogin() {
+      this.countdown--;
+      if (this.countdown <= 0) {
+        this.$root.showLogin();
+      } else {
+        setTimeout(this.countdownRelogin, 1000);
+      }
+    },
     async loadData() {
       try {
-        var response = await axios.create().get('/login/banner.md?v=' + Date.now());
+        var response = await this.$root.createApi().get('/login/banner.md?v=' + Date.now());
         if (response.data) {
           this.banner = marked.parse(response.data);
         }
+
         response = await this.$root.authApi.get('login/flows?id=' + this.$root.getAuthFlowId());
+        if (!response.data.ui || !response.data.ui.nodes) {
+          this.$root.showLogin();
+          return;
+        }
+
         this.form.csrfToken = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'csrf_token').attributes.value;
         this.form.method = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'method').attributes.value;
         this.$nextTick(function () {

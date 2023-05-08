@@ -45,9 +45,10 @@
     </v-app>
     
     <script type="text/x-template" id="page-login">
-      <v-card v-if="showLoginForm" class="mt-12 mx-auto" max-width="600">
+      <v-card class="mt-12 mx-auto" max-width="600">
         <v-card-title class="lighten-4 py-4 title" v-text="i18n.loginTitle"></v-card-title>
-        <v-form id="loginForm" v-model="form.valid" method="post" :action="authLoginUrl">
+
+        <v-form v-if="showLoginForm" id="loginForm" v-model="form.valid" method="post" :action="authLoginUrl">
           <v-container grid-list-sm class="pa-4">
             <v-row>
               <v-col class="mx-auto px-12">
@@ -73,6 +74,18 @@
             <v-btn type="submit" :disabled="!form.valid" text color="primary" v-text="i18n.login"></v-btn>
           </v-card-actions>
         </v-form>
+
+        <v-container v-if="throttled && !showLoginForm" grid-list-sm class="pa-4">
+          <v-row>
+            <v-col class="mx-auto px-12">
+              <div id="banner" class="mb-4">{{ i18n.throttledLogin }}</div>
+              <div class="text-center">
+                <div v-if="countdown > 0" id="countdown" class="display-1">{{ countdown }}</div>
+                <v-btn v-if="countdown == 0" id="relogin" text color="primary" class="text-lg-center" v-text="i18n.login" @click="this.$root.showLogin()"></v-btn>
+              </div>
+            </v-col>
+          </v-row>
+        </v-container>
       </v-card>
     </script>
 

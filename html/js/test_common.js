@@ -103,6 +103,33 @@ global.mockPapi = function(method, mockedResponse, error) {
   return mock
 }
 
+global.resetAuthApi = function() {
+  app.authApi = { 
+                defaults: { 
+                  headers: {
+                    common: {}
+                  }
+                }
+              };
+  return global;
+}
+
+global.mockAuthApi = function(method = "get", mockedResponse, error) {
+  mock = app.authApi[method];
+  if (!mock) {
+    mock = jest.fn();
+    app.authApi[method] = mock;
+  }
+  if (error) {
+    mock.mockImplementation(() => {
+      throw error;
+    });
+  } else {
+    mock.mockReturnValueOnce(mockedResponse);
+  }
+  return mock
+}
+
 global.mockShowError = function(logError = false) {
   const mock = jest.fn().mockImplementation(err => { if (logError) console.log(err.stack ? err.stack : err) });
   app.showError = mock;

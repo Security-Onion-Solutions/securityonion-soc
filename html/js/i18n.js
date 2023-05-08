@@ -576,6 +576,7 @@ const i18n = {
       standardMetrics: 'Basic Metrics',
       status: 'Status',
       summary: 'Summary',
+      throttledLogin: 'Excessive login requests detected. Login requests can resume momentarily.',
       time: 'Time',
       timePickerHelp: 'Choose the timespan to search, or click the calendar icon to switch to relative time',
       timePickerFormat: 'YYYY/MM/DD hh:mm:ss A',
