@@ -31,7 +31,14 @@ routes.push({ path: '*', name: 'login', component: {
     const throttled = this.$root.getSearchParam("thr");
     if (throttled) {
       this.throttled = true;
-      this.countdown = parseInt(throttled);
+      try {
+        this.countdown = parseInt(throttled);
+        if (!this.countdown) {
+          this.countdown = 30;
+        }
+      } catch (error) {
+        this.countdown = 30;
+      }
       setTimeout(this.countdownRelogin, 1000);
     } else if (!this.$root.getAuthFlowId()) {
       this.$root.showLogin();

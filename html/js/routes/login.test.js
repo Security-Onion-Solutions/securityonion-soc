@@ -24,6 +24,28 @@ test('shouldSubmitTotp', () => {
   expect(getElementByIdMock).toHaveBeenCalledWith('loginForm');
 });
 
+test('shouldDetectThrottling_BadParam', () => {
+  const _setTimeout = global.setTimeout;
+  const setTimeoutMock = jest.fn();
+  global.setTimeout = setTimeoutMock;
+
+  const _getSearchParam = comp.$root.getSearchParam;
+  const mock = jest.fn().mockReturnValue("abc");
+  comp.$root.getSearchParam = mock;
+
+  expect(comp.throttled).toBe(false);
+  comp.created();
+  
+  expect(mock).toHaveBeenCalledTimes(1);
+  expect(mock).toHaveBeenCalledWith("thr");
+  expect(comp.throttled).toBe(true);
+  expect(comp.countdown).toBe(30);
+  expect(setTimeoutMock).toHaveBeenCalledTimes(1);
+  expect(setTimeoutMock).toHaveBeenCalledWith(comp.countdownRelogin, 1000);
+  comp.$root.getSearchParam = _getSearchParam;
+  global.setTimeout = _setTimeout;
+});
+
 test('shouldDetectThrottling', () => {
   const _setTimeout = global.setTimeout;
   const setTimeoutMock = jest.fn();
