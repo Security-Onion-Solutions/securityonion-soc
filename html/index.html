@@ -244,6 +244,12 @@
               <v-icon>fa-life-ring</v-icon>
             </a>
           </div>
+          <div class="mt-2 no-underline">
+            {{ i18n.huntForError }}
+            <router-link :to="{ name: 'hunt', query: {q: i18n.huntForErrorQuery, t: moment().subtract(1, 'hours').format(i18n.timePickerFormat) + ' - ' + moment().format(i18n.timePickerFormat) }}" class="text-decoration-none error-hunt">
+              <v-icon :title="i18n.huntForError">fa-crosshairs</v-icon>
+            </router-link>
+          </div>
         </v-snackbar>
         <v-snackbar id="warning" top centered rounded close :timeout="warningTimeout" v-model="warning" color="warning">
           <template v-slot:action="{ attrs }">
