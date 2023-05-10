@@ -333,6 +333,8 @@ const i18n = {
       hunt: 'Hunt',
       huntForEvent: 'Hunt for this event',
       huntForFieldValue: 'Hunt for this field\'s value',
+      huntForError: 'The Hunt interface may contain additional log messages to further diagnose the issue.',
+      huntForErrorQuery: 'event.module:"soc" | groupby event.dataset log.level event.action',
       huntForEvidence: 'Hunt for this observable value',
       huntHelp: 'Start a new hunt based on the current filters',
       id: 'ID',
