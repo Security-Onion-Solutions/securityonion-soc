@@ -3011,8 +3011,9 @@
                                   <thead>
                                     <tr>
                                       <th class="text-right" v-text="i18n.container"/>
+                                      <th class="text-center" v-text="i18n.hunt"/>
                                       <th class="text-left" v-text="i18n.status"/>
-                                      <th class="text-right" v-text="i18n.details" class="d-none d-lg-table-cell"/>
+                                      <th class="text-left" v-text="i18n.details" class="d-none d-lg-table-cell"/>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -3020,10 +3021,15 @@
                                       <td class="text-right">
                                         {{ container.Name }}
                                       </td>
-                                      <td :class="colorContainerStatus(container.Status) + '--text text-right'">
+                                      <td class="text-center">
+                                        <router-link :to="{ name: 'hunt', query: {q: `tags:&quot;${container.Name}&quot; | groupby log.level`, t: moment().subtract(1, 'hours').format(i18n.timePickerFormat) + ' - ' + moment().format(i18n.timePickerFormat) }}" :class="'text-decoration-none hunt-logs-' + container.Name">
+                                          <v-icon :title="i18n.huntForError">fa-crosshairs</v-icon>
+                                        </router-link>
+                                      </td>
+                                      <td :class="colorContainerStatus(container.Status) + '--text text-left'">
                                         {{ $root.localizeMessage(container.Status) }}
                                       </td>
-                                      <td class="text-right cyan--text" class="d-none d-lg-table-cell">
+                                      <td class="text-left cyan--text" class="d-none d-lg-table-cell">
                                         {{ container.Details }}
                                       </td>
                                     </tr>
