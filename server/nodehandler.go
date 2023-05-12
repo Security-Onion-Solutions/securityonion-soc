@@ -39,12 +39,12 @@ func (nodeHandler *NodeHandler) HandleNow(ctx context.Context, writer http.Respo
 func (nodeHandler *NodeHandler) post(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
 	var job *model.Job
 	node := model.NewNode("")
-	err := nodeHandler.ReadJson(request, node)
+	err := ReadJson(request, node)
 	if err == nil {
 		node, err = nodeHandler.server.Datastore.UpdateNode(ctx, node)
 		if err == nil {
 			nodeHandler.server.Metrics.UpdateNodeMetrics(ctx, node)
-			nodeHandler.Host.Broadcast("node", "nodes", node)
+			nodeHandler.server.Host.Broadcast("node", "nodes", node)
 			job = nodeHandler.server.Datastore.GetNextJob(ctx, node.Id)
 		}
 	}

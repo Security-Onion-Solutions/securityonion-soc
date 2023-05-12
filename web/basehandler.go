@@ -23,6 +23,15 @@ import (
 
 const GENERIC_ERROR_MESSAGE = "The request could not be processed. Contact a server admin for assistance with reviewing error details in SOC logs."
 
+type ContextKey string
+
+const (
+	ContextKeyRequestId    ContextKey = "ContextKeyRequestId"
+	ContextKeyRequestorId  ContextKey = "ContextKeyRequestorId"
+	ContextKeyRequestor    ContextKey = "ContextKeyRequestor"
+	ContextKeyRequestStart ContextKey = "ContextKeyRequestStart" // time.Time
+)
+
 type HandlerImpl interface {
 	HandleNow(ctx context.Context, responseWriter http.ResponseWriter, request *http.Request) (int, interface{}, error)
 }
@@ -69,7 +78,7 @@ func (handler *BaseHandler) Handle(responseWriter http.ResponseWriter, request *
 
 			statusCode, obj, err = handler.Impl.HandleNow(context, responseWriter, request.WithContext(context))
 			if err == nil && obj != nil {
-				contentLength, err = handler.WriteJson(responseWriter, request, statusCode, obj)
+				contentLength, err = WriteJson(responseWriter, request, statusCode, obj)
 			}
 		}
 	}
@@ -90,13 +99,13 @@ func (handler *BaseHandler) Handle(responseWriter http.ResponseWriter, request *
 		}
 		responseWriter.WriteHeader(statusCode)
 
-		bytes := []byte(handler.convertErrorToSafeString(err))
+		bytes := []byte(ConvertErrorToSafeString(err))
 		contentLength = len(bytes)
 		responseWriter.Write(bytes)
 	}
 	log.WithFields(log.Fields{
 		"remoteAddr":    request.RemoteAddr,
-		"sourceIp":      handler.Host.GetSourceIp(request),
+		"sourceIp":      GetSourceIp(request),
 		"path":          request.URL.Path,
 		"query":         request.URL.Query(),
 		"impl":          reflect.TypeOf(handler.Impl),
@@ -109,7 +118,7 @@ func (handler *BaseHandler) Handle(responseWriter http.ResponseWriter, request *
 	}).Info("Handled request")
 }
 
-func (handler *BaseHandler) convertErrorToSafeString(err error) string {
+func ConvertErrorToSafeString(err error) string {
 	msg := err.Error()
 	if !strings.HasPrefix(msg, "ERROR_") {
 		msg = GENERIC_ERROR_MESSAGE
@@ -117,7 +126,7 @@ func (handler *BaseHandler) convertErrorToSafeString(err error) string {
 	return msg
 }
 
-func (handler *BaseHandler) WriteJson(responseWriter http.ResponseWriter, request *http.Request, statusCode int, obj interface{}) (int, error) {
+func WriteJson(responseWriter http.ResponseWriter, request *http.Request, statusCode int, obj interface{}) (int, error) {
 	jsonBytes, err := json.Marshal(obj)
 	length := 0
 	if err == nil {
@@ -139,10 +148,6 @@ func (handler *BaseHandler) WriteJson(responseWriter http.ResponseWriter, reques
 		log.WithError(err).Error("Unable to serialize object")
 	}
 	return length, err
-}
-
-func (handler *BaseHandler) ReadJson(request *http.Request, obj interface{}) error {
-	return json.NewDecoder(request.Body).Decode(obj)
 }
 
 func (handler *BaseHandler) GetPathParameter(path string, paramIndex int) string {

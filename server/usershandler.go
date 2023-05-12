@@ -64,7 +64,7 @@ func (usersHandler *UsersHandler) post(ctx context.Context, writer http.Response
 	id := usersHandler.GetPathParameter(request.URL.Path, 2)
 	if id == "" {
 		user := model.NewUser()
-		err = usersHandler.ReadJson(request, user)
+		err = ReadJson(request, user)
 		if err == nil {
 			err = usersHandler.server.AdminUserstore.AddUser(ctx, user)
 		}
@@ -144,13 +144,13 @@ func (usersHandler *UsersHandler) put(ctx context.Context, writer http.ResponseW
 			err = usersHandler.server.AdminUserstore.DisableUser(ctx, id)
 		case "password":
 			user := model.NewUser()
-			err = usersHandler.ReadJson(request, user)
+			err = ReadJson(request, user)
 			if err == nil {
 				err = usersHandler.server.AdminUserstore.ResetPassword(ctx, id, user.Password)
 			}
 		case "":
 			user := model.NewUser()
-			err = usersHandler.ReadJson(request, user)
+			err = ReadJson(request, user)
 			if err == nil {
 				user.Id = id
 				err = usersHandler.server.AdminUserstore.UpdateProfile(ctx, user)

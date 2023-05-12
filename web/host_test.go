@@ -74,13 +74,12 @@ func TestManageConnections(tester *testing.T) {
 }
 
 func TestGetSourceIp(tester *testing.T) {
-	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil, "")
 	request, _ := http.NewRequest("GET", "", nil)
 
 	expected := "1.1.1.1"
 	request.Header.Set("X-real-IP", expected)
 
-	assert.Equal(tester, expected, host.GetSourceIp(request))
+	assert.Equal(tester, expected, GetSourceIp(request))
 }
 
 type DummyPreprocessor struct {

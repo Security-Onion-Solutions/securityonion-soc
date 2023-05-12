@@ -59,11 +59,11 @@ func (jobHandler *JobHandler) get(ctx context.Context, writer http.ResponseWrite
 func (jobHandler *JobHandler) post(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
 	statusCode := http.StatusBadRequest
 	job := jobHandler.server.Datastore.CreateJob(ctx)
-	err := jobHandler.ReadJson(request, job)
+	err := ReadJson(request, job)
 	if err == nil {
 		err = jobHandler.server.Datastore.AddJob(ctx, job)
 		if err == nil {
-			jobHandler.Host.Broadcast("job", "jobs", job)
+			jobHandler.server.Host.Broadcast("job", "jobs", job)
 			statusCode = http.StatusCreated
 		}
 	}
@@ -73,11 +73,11 @@ func (jobHandler *JobHandler) post(ctx context.Context, writer http.ResponseWrit
 func (jobHandler *JobHandler) put(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
 	statusCode := http.StatusBadRequest
 	job := model.NewJob()
-	err := jobHandler.ReadJson(request, job)
+	err := ReadJson(request, job)
 	if err == nil {
 		err = jobHandler.server.Datastore.UpdateJob(ctx, job)
 		if err == nil {
-			jobHandler.Host.Broadcast("job", "jobs", job)
+			jobHandler.server.Host.Broadcast("job", "jobs", job)
 			statusCode = http.StatusOK
 		} else {
 			statusCode = http.StatusNotFound

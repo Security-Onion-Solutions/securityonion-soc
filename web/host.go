@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/apex/log"
+	"github.com/go-chi/chi"
 	"github.com/gorilla/websocket"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
@@ -64,7 +65,7 @@ func NewHost(address string, htmlDir string, timeoutMs int, version string, srvK
 	return host
 }
 
-func (host *Host) GetSourceIp(request *http.Request) string {
+func GetSourceIp(request *http.Request) string {
 	ip := request.RemoteAddr
 	val := request.Header.Get("x-real-ip")
 	if len(val) > 0 {
@@ -77,6 +78,10 @@ func (host *Host) Register(route string, handler HostHandler) {
 	http.HandleFunc(route, handler.Handle)
 }
 
+func (host *Host) RegisterRouter(route string, r *chi.Mux) {
+	http.Handle(route, r)
+}
+
 func (host *Host) Stop() {
 	if host.running {
 		if err := host.httpServer.Shutdown(context.Background()); err != nil {
@@ -87,6 +92,7 @@ func (host *Host) Stop() {
 
 func (host *Host) Start() {
 	log.Info("Host starting")
+
 	host.running = true
 	host.connections = make([]*Connection, 0)
 	http.Handle("/", http.FileServer(http.Dir(host.htmlDir)))

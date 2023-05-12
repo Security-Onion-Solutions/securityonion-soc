@@ -57,10 +57,8 @@ func TestGetPathParameter(tester *testing.T) {
 }
 
 func TestConvertErrorToSafeString(tester *testing.T) {
-	handler := NewTestHandler()
-
-	assert.Equal(tester, "ERROR_FOO", handler.convertErrorToSafeString(errors.New("ERROR_FOO")))
-	assert.Equal(tester, GENERIC_ERROR_MESSAGE, handler.convertErrorToSafeString(errors.New("ERROR2_FOO")))
+	assert.Equal(tester, "ERROR_FOO", ConvertErrorToSafeString(errors.New("ERROR_FOO")))
+	assert.Equal(tester, GENERIC_ERROR_MESSAGE, ConvertErrorToSafeString(errors.New("ERROR2_FOO")))
 }
 
 func TestValidateRequest(tester *testing.T) {

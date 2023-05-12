@@ -19,286 +19,469 @@ import (
 	"strings"
 
 	"github.com/apex/log"
+	"github.com/go-chi/chi"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type CaseHandler struct {
-	web.BaseHandler
 	server *Server
 }
 
-func NewCaseHandler(srv *Server) *CaseHandler {
-	handler := &CaseHandler{}
-	handler.Host = srv.Host
-	handler.server = srv
-	handler.Impl = handler
+func RegisterCaseHandler(srv *Server, prefix string, r *chi.Mux) *CaseHandler {
+	handler := &CaseHandler{
+		server: srv,
+	}
+
+	r.Route(prefix, func(r chi.Router) {
+		r.Use(Middleware(srv.Host))
+
+		// create
+		r.Post("/", handler.createCase)
+		r.Post("/events", handler.createEvent)
+		r.Post("/comments", handler.createComment)
+		r.Post("/tasks", handler.createArtifact)
+		r.Post("/artifacts", handler.createArtifact)
+
+		// report
+		r.Get("/", handler.getCase)
+		r.Get("/{id}", handler.getCase)
+		r.Get("/comments", handler.getComment)
+		r.Get("/comments/{id}", handler.getComment)
+		r.Get("/events", handler.getEvent)
+		r.Get("/events/{id}", handler.getEvent)
+		r.Get("/tasks", handler.getTask)
+		r.Get("/tasks/{id}", handler.getTask)
+		r.Get("/artifactstream", handler.getTask)
+		r.Get("/artifactstream/{id}", handler.getTask)
+		r.Get("/artifacts/{groupType}/{groupID}", handler.getArtifact)
+		r.Get("/artifacts/{groupType}/{groupID}/{id}", handler.getArtifact)
+
+		// update
+		r.Put("/", handler.updateCase)
+		r.Put("/comments", handler.updateComment)
+		r.Put("/tasks", handler.updateArtifact)
+		r.Put("/artifacts", handler.updateArtifact)
+
+		// delete
+		r.Delete("/comments", handler.deleteComment)
+		r.Delete("/comments/{id}", handler.deleteComment)
+		r.Delete("/events", handler.deleteEvent)
+		r.Delete("/events/{id}", handler.deleteEvent)
+		r.Delete("/tasks", handler.deleteArtifact)
+		r.Delete("/tasks/{id}", handler.deleteArtifact)
+		r.Delete("/artifacts", handler.deleteArtifact)
+		r.Delete("/artifacts/{id}", handler.deleteArtifact)
+	})
+
+	srv.Host.RegisterRouter(prefix, r)
+
 	return handler
 }
 
-func (caseHandler *CaseHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	if caseHandler.server.Casestore == nil {
-		return http.StatusMethodNotAllowed, nil, errors.New("ERROR_CASE_MODULE_NOT_ENABLED")
-	}
+func (h *CaseHandler) createCase(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	inputCase := model.NewCase()
 
-	if caseHandler.server.Casestore != nil {
-		switch request.Method {
-		case http.MethodPost:
-			return caseHandler.create(ctx, writer, request)
-		case http.MethodPut:
-			return caseHandler.update(ctx, writer, request)
-		case http.MethodGet:
-			return caseHandler.get(ctx, writer, request)
-		case http.MethodDelete:
-			return caseHandler.delete(ctx, writer, request)
-		}
-	}
-	return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
-}
-
-func (caseHandler *CaseHandler) create(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	var err error
-	var obj interface{}
-	statusCode := http.StatusBadRequest
-	subpath := caseHandler.GetPathParameter(request.URL.Path, 2)
-	switch subpath {
-	case "events":
-		inputEvent := model.NewRelatedEvent()
-		err = json.NewDecoder(request.Body).Decode(&inputEvent)
-		if err == nil {
-			obj, err = caseHandler.server.Casestore.CreateRelatedEvent(ctx, inputEvent)
-		}
-	case "comments":
-		inputComment := model.NewComment()
-		err = json.NewDecoder(request.Body).Decode(&inputComment)
-		if err == nil {
-			obj, err = caseHandler.server.Casestore.CreateComment(ctx, inputComment)
-		}
-	case "tasks":
-	case "artifacts":
-		inputArtifact := model.NewArtifact()
-		if contentType, ok := request.Header["Content-Type"]; !ok || !strings.Contains(contentType[0], "multipart") {
-			// Fallback to plain JSON
-			log.WithField("contentType", contentType).Debug("Multipart content type not found")
-			err = json.NewDecoder(request.Body).Decode(&inputArtifact)
-		} else {
-			err = request.ParseMultipartForm(int64(caseHandler.server.Config.MaxUploadSizeBytes))
-			if err == nil {
-				jsonData := request.FormValue("json")
-				err = json.NewDecoder(strings.NewReader(jsonData)).Decode(&inputArtifact)
-				if err == nil {
-					log.Debug("Successfully parsed multipart form")
-
-					// Try pulling an attachment file
-					file, handler, err := request.FormFile("attachment")
-					if err == nil && file != nil {
-						log.Debug("Found attachment")
-						defer file.Close()
-
-						if len(inputArtifact.Value) > 0 {
-							err = errors.New("Attachment artifacts must be provided without a value")
-						} else {
-							inputArtifact.Value = handler.Filename
-							inputArtifact.ArtifactType = "file"
-
-							artifactStream := model.NewArtifactStream()
-							inputArtifact.StreamLen, inputArtifact.MimeType, inputArtifact.Md5, inputArtifact.Sha1, inputArtifact.Sha256, err = artifactStream.Write(file)
-							if err == nil {
-								if inputArtifact.StreamLen != int(handler.Size) {
-									log.WithFields(log.Fields{
-										"requestId": ctx.Value(web.ContextKeyRequestId),
-										"mimeType":  inputArtifact.MimeType,
-										"formLen":   handler.Size,
-										"copyLen":   inputArtifact.StreamLen,
-									}).Warn("Mismatch of stream size detected")
-								} else {
-									log.WithFields(log.Fields{
-										"requestId":   ctx.Value(web.ContextKeyRequestId),
-										"formFileLen": handler.Size,
-										"streamLen":   inputArtifact.StreamLen,
-										"mimeType":    inputArtifact.MimeType,
-									}).Info("Successfully copied attachment bytes into new artifact stream object")
-								}
-
-								var artifactStreamId string
-								artifactStreamId, err = caseHandler.server.Casestore.CreateArtifactStream(ctx, artifactStream)
-								if err == nil {
-									inputArtifact.StreamId = artifactStreamId
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-
-		if err == nil {
-			obj, err = caseHandler.server.Casestore.CreateArtifact(ctx, inputArtifact)
-		}
-	default:
-		inputCase := model.NewCase()
-		err = json.NewDecoder(request.Body).Decode(&inputCase)
-		if err == nil {
-			obj, err = caseHandler.server.Casestore.Create(ctx, inputCase)
-		}
-	}
-	if err == nil {
-		statusCode = http.StatusOK
-	} else {
-		statusCode = http.StatusBadRequest
-	}
-	return statusCode, obj, err
-}
-
-func (caseHandler *CaseHandler) update(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	var err error
-	var obj interface{}
-
-	subpath := caseHandler.GetPathParameter(request.URL.Path, 2)
-	switch subpath {
-	case "comments":
-		inputComment := model.NewComment()
-
-		err = json.NewDecoder(request.Body).Decode(&inputComment)
-		if err == nil {
-			obj, err = caseHandler.server.Casestore.UpdateComment(ctx, inputComment)
-		}
-	case "tasks":
-	case "artifacts":
-		inputArtifact := model.NewArtifact()
-
-		err = json.NewDecoder(request.Body).Decode(&inputArtifact)
-		if err == nil {
-			obj, err = caseHandler.server.Casestore.UpdateArtifact(ctx, inputArtifact)
-		}
-	default:
-		inputCase := model.NewCase()
-
-		err = json.NewDecoder(request.Body).Decode(&inputCase)
-		if err == nil {
-			obj, err = caseHandler.server.Casestore.Update(ctx, inputCase)
-		}
-	}
-
-	statusCode := http.StatusOK
+	err := json.NewDecoder(r.Body).Decode(&inputCase)
 	if err != nil {
-		statusCode = http.StatusBadRequest
+		Respond(w, r, http.StatusBadRequest, err)
+		return
 	}
 
-	return statusCode, obj, err
+	obj, err := h.server.Casestore.Create(ctx, inputCase)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	Respond(w, r, http.StatusOK, obj)
 }
 
-func (caseHandler *CaseHandler) delete(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	var err error
-	var obj interface{}
-	statusCode := http.StatusBadRequest
-	id := request.URL.Query().Get("id")
-	subpath := caseHandler.GetPathParameter(request.URL.Path, 2)
-	switch subpath {
-	case "comments":
-		err = caseHandler.server.Casestore.DeleteComment(ctx, id)
-	case "events":
-		err = caseHandler.server.Casestore.DeleteRelatedEvent(ctx, id)
-	case "tasks":
-	case "artifacts":
-		err = caseHandler.server.Casestore.DeleteArtifact(ctx, id)
-	default:
-		err = errors.New("Delete not supported")
+func (h *CaseHandler) createEvent(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	inputEvent := model.NewRelatedEvent()
+
+	err := ReadJson(r, &inputEvent)
+	if err != nil {
+		Respond(w, r, http.StatusBadRequest, err)
+		return
 	}
 
-	if err == nil {
-		statusCode = http.StatusOK
-	} else {
-		statusCode = http.StatusBadRequest
+	obj, err := h.server.Casestore.CreateRelatedEvent(ctx, inputEvent)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
 	}
-	return statusCode, obj, err
+
+	Respond(w, r, http.StatusOK, obj)
 }
 
-func (caseHandler *CaseHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	statusCode := http.StatusBadRequest
-	id := request.URL.Query().Get("id")
-	var err error
-	var obj interface{}
-	subpath := caseHandler.GetPathParameter(request.URL.Path, 2)
-	switch subpath {
-	case "events":
-		obj, err = caseHandler.server.Casestore.GetRelatedEvents(ctx, id)
-	case "comments":
-		obj, err = caseHandler.server.Casestore.GetComments(ctx, id)
-	case "tasks":
-	case "artifactstream":
-		err = caseHandler.copyArtifactStream(ctx, writer, id)
-	case "artifacts":
-		groupType := caseHandler.GetPathParameter(request.URL.Path, 3)
-		groupId := caseHandler.GetPathParameter(request.URL.Path, 4)
-		obj, err = caseHandler.server.Casestore.GetArtifacts(ctx, id, groupType, groupId)
-	case "history":
-		obj, err = caseHandler.server.Casestore.GetCaseHistory(ctx, id)
-	default:
-		obj, err = caseHandler.server.Casestore.GetCase(ctx, id)
+func (h *CaseHandler) createComment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	inputComment := model.NewComment()
+
+	err := ReadJson(r, &inputComment)
+	if err != nil {
+		Respond(w, r, http.StatusBadRequest, err)
+		return
 	}
-	if err == nil {
-		statusCode = http.StatusOK
+
+	obj, err := h.server.Casestore.CreateComment(ctx, inputComment)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	Respond(w, r, http.StatusOK, obj)
+}
+
+func (h *CaseHandler) createArtifact(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	inputArtifact := model.NewArtifact()
+
+	contentType, ok := r.Header["Content-Type"]
+	if !ok || !strings.Contains(contentType[0], "multipart") {
+		// Fallback to plain JSON
+		log.WithField("contentType", contentType).Debug("Multipart content type not found")
+		err := json.NewDecoder(r.Body).Decode(&inputArtifact)
+		if err != nil {
+			Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
 	} else {
-		statusCode = http.StatusNotFound
+		err := r.ParseMultipartForm(int64(h.server.Config.MaxUploadSizeBytes))
+		if err != nil {
+			Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		jsonData := r.FormValue("json")
+		err = json.Unmarshal([]byte(jsonData), &inputArtifact)
+		if err != nil {
+			Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		log.Debug("Successfully parsed multipart form")
+
+		// Try pulling an attachment file
+		file, handler, err := r.FormFile("attachment")
+		if err != nil {
+			Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		if file == nil {
+			Respond(w, r, http.StatusBadRequest, errors.New("Attachment file not found"))
+			return
+		}
+
+		log.Debug("Found attachment")
+		defer file.Close()
+
+		if len(inputArtifact.Value) > 0 {
+			Respond(w, r, http.StatusBadRequest, errors.New("Attachment artifacts must be provided without a value"))
+			return
+		}
+
+		inputArtifact.Value = handler.Filename
+		inputArtifact.ArtifactType = "file"
+
+		artifactStream := model.NewArtifactStream()
+		inputArtifact.StreamLen, inputArtifact.MimeType, inputArtifact.Md5, inputArtifact.Sha1, inputArtifact.Sha256, err = artifactStream.Write(file)
+		if err != nil {
+			Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
+
+		if inputArtifact.StreamLen != int(handler.Size) {
+			log.WithFields(log.Fields{
+				"requestId": ctx.Value(web.ContextKeyRequestId),
+				"mimeType":  inputArtifact.MimeType,
+				"formLen":   handler.Size,
+				"copyLen":   inputArtifact.StreamLen,
+			}).Warn("Mismatch of stream size detected")
+		} else {
+			log.WithFields(log.Fields{
+				"requestId":   ctx.Value(web.ContextKeyRequestId),
+				"formFileLen": handler.Size,
+				"streamLen":   inputArtifact.StreamLen,
+				"mimeType":    inputArtifact.MimeType,
+			}).Info("Successfully copied attachment bytes into new artifact stream object")
+		}
+
+		var artifactStreamId string
+		artifactStreamId, err = h.server.Casestore.CreateArtifactStream(ctx, artifactStream)
+		if err != nil {
+			Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
+
+		inputArtifact.StreamId = artifactStreamId
 	}
-	return statusCode, obj, err
+
+	obj, err := h.server.Casestore.CreateArtifact(ctx, inputArtifact)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	Respond(w, r, http.StatusOK, obj)
+}
+
+func (h *CaseHandler) updateCase(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	inputCase := model.NewCase()
+
+	err := json.NewDecoder(r.Body).Decode(&inputCase)
+	if err != nil {
+		Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	obj, err := h.server.Casestore.Update(ctx, inputCase)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	Respond(w, r, http.StatusOK, obj)
+}
+
+func (h *CaseHandler) updateComment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	inputComment := model.NewComment()
+
+	err := json.NewDecoder(r.Body).Decode(&inputComment)
+	if err != nil {
+		Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	obj, err := h.server.Casestore.UpdateComment(ctx, inputComment)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	Respond(w, r, http.StatusOK, obj)
+}
+
+func (h *CaseHandler) updateArtifact(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	inputArtifact := model.NewArtifact()
+
+	err := json.NewDecoder(r.Body).Decode(&inputArtifact)
+	if err != nil {
+		Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	obj, err := h.server.Casestore.UpdateArtifact(ctx, inputArtifact)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	Respond(w, r, http.StatusOK, obj)
+}
+
+func (h *CaseHandler) deleteComment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		id = r.URL.Query().Get("id")
+	}
+
+	err := h.server.Casestore.DeleteComment(ctx, id)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	Respond(w, r, http.StatusOK, nil)
+}
+
+func (h *CaseHandler) deleteEvent(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		id = r.URL.Query().Get("id")
+	}
+
+	err := h.server.Casestore.DeleteRelatedEvent(ctx, id)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	Respond(w, r, http.StatusOK, nil)
+}
+
+func (h *CaseHandler) deleteArtifact(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		id = r.URL.Query().Get("id")
+	}
+
+	err := h.server.Casestore.DeleteArtifact(ctx, id)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	Respond(w, r, http.StatusOK, nil)
+}
+
+func (h *CaseHandler) getCase(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		id = r.URL.Query().Get("id")
+	}
+
+	obj, err := h.server.Casestore.GetCase(ctx, id)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	Respond(w, r, http.StatusOK, obj)
+}
+
+func (h *CaseHandler) getComment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		id = r.URL.Query().Get("id")
+	}
+
+	obj, err := h.server.Casestore.GetComments(ctx, id)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	Respond(w, r, http.StatusOK, obj)
+}
+
+func (h *CaseHandler) getEvent(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		id = r.URL.Query().Get("id")
+	}
+
+	obj, err := h.server.Casestore.GetRelatedEvents(ctx, id)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	Respond(w, r, http.StatusOK, obj)
+}
+
+func (h *CaseHandler) getTask(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		id = r.URL.Query().Get("id")
+	}
+
+	err := h.copyArtifactStream(ctx, w, id)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+	}
+}
+
+func (h *CaseHandler) getArtifact(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	groupType := chi.URLParam(r, "groupType")
+	groupId := chi.URLParam(r, "groupID")
+
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		id = r.URL.Query().Get("id")
+	}
+
+	obj, err := h.server.Casestore.GetArtifacts(ctx, id, groupType, groupId)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+	}
+
+	Respond(w, r, http.StatusOK, obj)
 }
 
 func (caseHandler *CaseHandler) copyArtifactStream(ctx context.Context, writer http.ResponseWriter, artifactId string) error {
 	artifact, err := caseHandler.server.Casestore.GetArtifact(ctx, artifactId)
-	if err == nil {
-		var stream *model.ArtifactStream
-		stream, err = caseHandler.server.Casestore.GetArtifactStream(ctx, artifact.StreamId)
-		if err == nil {
-			contentLength := int64(artifact.StreamLen)
-			filename := artifact.Value
-			content := stream.Read()
-
-			if artifact.Protected {
-				buf := bytes.NewBuffer([]byte{})
-				zipw := zip.NewWriter(buf)
-
-				filew, err := zipw.Create(filename)
-				if err != nil {
-					return err
-				}
-
-				_, err = io.Copy(filew, content)
-				if err != nil {
-					return err
-				}
-
-				err = zipw.Close()
-				if err != nil {
-					return err
-				}
-
-				content = buf
-				contentLength = int64(buf.Len())
-				filename += ".zip"
-			}
-
-			writer.Header().Set("Content-Type", "application/octet-stream")
-			writer.Header().Set("Content-Length", strconv.FormatInt(contentLength, 10))
-			writer.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
-			writer.Header().Set("Content-Transfer-Encoding", "binary")
-
-			written, err := io.Copy(writer, content)
-			if err != nil {
-				log.WithError(err).WithFields(log.Fields{
-					"name":       artifact.Value,
-					"artifactId": artifactId,
-				}).Error("Failed to copy artifact stream")
-			} else {
-				log.WithFields(log.Fields{
-					"name":       artifact.Value,
-					"size":       written,
-					"artifactId": artifactId,
-					"protected":  artifact.Protected,
-				}).Info("Copied artifact stream to response")
-			}
-		}
+	if err != nil {
+		return err
 	}
-	return err
+
+	stream, err := caseHandler.server.Casestore.GetArtifactStream(ctx, artifact.StreamId)
+	if err != nil {
+		return err
+	}
+
+	contentLength := int64(artifact.StreamLen)
+	filename := artifact.Value
+	content := stream.Read()
+
+	if artifact.Protected {
+		buf := bytes.NewBuffer([]byte{})
+		zipw := zip.NewWriter(buf)
+
+		filew, err := zipw.Create(filename)
+		if err != nil {
+			return err
+		}
+
+		_, err = io.Copy(filew, content)
+		if err != nil {
+			return err
+		}
+
+		err = zipw.Close()
+		if err != nil {
+			return err
+		}
+
+		content = buf
+		contentLength = int64(buf.Len())
+		filename += ".zip"
+	}
+
+	writer.Header().Set("Content-Type", "application/octet-stream")
+	writer.Header().Set("Content-Length", strconv.FormatInt(contentLength, 10))
+	writer.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	writer.Header().Set("Content-Transfer-Encoding", "binary")
+
+	written, err := io.Copy(writer, content)
+	if err != nil {
+		log.WithError(err).WithFields(log.Fields{
+			"name":       artifact.Value,
+			"artifactId": artifactId,
+		}).Error("Failed to copy artifact stream")
+
+		return err
+	}
+
+	log.WithFields(log.Fields{
+		"name":       artifact.Value,
+		"size":       written,
+		"artifactId": artifactId,
+		"protected":  artifact.Protected,
+	}).Info("Copied artifact stream to response")
+
+	return nil
 }

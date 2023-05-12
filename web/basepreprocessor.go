@@ -13,12 +13,6 @@ import (
 	"github.com/google/uuid"
 )
 
-type ContextKey string
-
-const ContextKeyRequestId = ContextKey("ContextKeyRequestId")
-const ContextKeyRequestorId = ContextKey("ContextKeyRequestorId")
-const ContextKeyRequestor = ContextKey("ContextKeyRequestor")
-
 type BasePreprocessor struct {
 }
 

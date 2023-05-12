@@ -31,7 +31,7 @@ func NewWebSocketHandler(host *Host) *WebSocketHandler {
 func (webSocketHandler *WebSocketHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
 	upgrader := websocket.Upgrader{}
 	connection, err := upgrader.Upgrade(writer, request, nil)
-	ip := webSocketHandler.Host.GetSourceIp(request)
+	ip := GetSourceIp(request)
 	if err != nil {
 		log.WithError(err).WithFields(log.Fields{
 			"remoteAddr": request.RemoteAddr,
@@ -58,6 +58,7 @@ func (webSocketHandler *WebSocketHandler) HandleNow(ctx context.Context, writer 
 		"sourceIp":   ip,
 		"path":       request.URL.Path,
 	}).Info("WebSocket connected")
+
 	conn := webSocketHandler.Host.AddConnection(user, connection, ip)
 
 	defer connection.Close()

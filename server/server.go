@@ -18,6 +18,8 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+
+	"github.com/go-chi/chi"
 )
 
 const AGENT_ID = "agent"
@@ -67,7 +69,9 @@ func (server *Server) Start() {
 	} else {
 		log.Info("Starting server")
 
-		server.Host.Register("/api/case/", NewCaseHandler(server))
+		r := chi.NewRouter()
+
+		RegisterCaseHandler(server, "/api/case/", r)
 		server.Host.Register("/api/events/", NewEventHandler(server))
 		server.Host.Register("/api/info", NewInfoHandler(server))
 		server.Host.Register("/api/job/", NewJobHandler(server))
