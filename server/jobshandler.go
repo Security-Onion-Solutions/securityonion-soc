@@ -9,8 +9,9 @@ package server
 import (
 	"net/http"
 
-	"github.com/go-chi/chi"
 	"github.com/security-onion-solutions/securityonion-soc/json"
+
+	"github.com/go-chi/chi"
 )
 
 type JobsHandler struct {

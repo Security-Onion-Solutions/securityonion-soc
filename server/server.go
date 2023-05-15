@@ -12,12 +12,13 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+
+	"github.com/apex/log"
 )
 
 const AGENT_ID = "agent"
@@ -76,7 +77,7 @@ func (server *Server) Start() {
 		RegisterQueryRoutes(server, "/api/query/")
 		RegisterNodeRoutes(server, "/api/node/")
 		RegisterGridRoutes(server, "/api/grid/")
-		server.Host.Register("/api/stream", NewStreamHandler(server))
+		RegisterStreamRoutes(server, "/api/stream/")
 		server.Host.Register("/api/users/", NewUsersHandler(server))
 		server.Host.Register("/api/config/", NewConfigHandler(server))
 		server.Host.Register("/api/gridmembers/", NewGridMembersHandler(server))

@@ -7,8 +7,8 @@
 package server
 
 import (
-	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"regexp"
@@ -16,84 +16,119 @@ import (
 	"strings"
 
 	"github.com/apex/log"
-	"github.com/security-onion-solutions/securityonion-soc/web"
+	"github.com/go-chi/chi"
 )
 
+var extensionVerifier = regexp.MustCompile(`^[a-zA-Z0-9]+$`)
+
 type StreamHandler struct {
-	web.BaseHandler
 	server *Server
 }
 
-func NewStreamHandler(srv *Server) *StreamHandler {
-	handler := &StreamHandler{}
-	handler.Host = srv.Host
-	handler.server = srv
-	handler.Impl = handler
-	return handler
+func RegisterStreamRoutes(srv *Server, prefix string) {
+	h := &StreamHandler{
+		server: srv,
+	}
+
+	r := chi.NewMux()
+
+	r.Route(prefix, func(r chi.Router) {
+		r.Use(Middleware(srv.Host))
+
+		r.Get("/", h.getStream)
+		r.Get("/{jobId}", h.getStream)
+
+		r.Post("/", h.postStream)
+		r.Post("/{jobId}", h.postStream)
+	})
+
+	srv.Host.RegisterRouter(prefix, r)
 }
 
-func (streamHandler *StreamHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	switch request.Method {
-	case http.MethodGet:
-		return streamHandler.get(ctx, writer, request)
-	case http.MethodPost:
-		return streamHandler.post(ctx, writer, request)
-	}
-	return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
-}
+func (h *StreamHandler) getStream(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 
-func (streamHandler *StreamHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	statusCode := http.StatusBadRequest
-	jobId, err := strconv.ParseInt(request.URL.Query().Get("jobId"), 10, 32)
-	if err != nil {
-		return statusCode, nil, err
+	id := chi.URLParam(r, "jobId")
+	if id == "" {
+		id = r.URL.Query().Get("jobId")
 	}
-	unwrap, err := strconv.ParseBool(request.URL.Query().Get("unwrap"))
+
+	jobId, err := strconv.ParseInt(id, 10, 32)
 	if err != nil {
-		return statusCode, nil, err
+		Respond(w, r, http.StatusBadRequest, err)
+		return
 	}
-	reader, filename, length, err := streamHandler.server.Datastore.GetPacketStream(ctx, int(jobId), unwrap)
-	extension := request.URL.Query().Get("ext")
+
+	unwrap, err := strconv.ParseBool(r.URL.Query().Get("unwrap"))
+	if err != nil {
+		Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	reader, filename, length, err := h.server.Datastore.GetPacketStream(ctx, int(jobId), unwrap)
+	if err != nil {
+		Respond(w, r, http.StatusNotFound, err)
+		return
+	}
+
+	defer reader.Close()
+
+	extension := r.URL.Query().Get("ext")
 	if len(extension) > 0 {
-		safe, _ := regexp.MatchString(`^[a-zA-Z0-9-_]+$`, extension)
+		safe := extensionVerifier.MatchString(extension)
 		if !safe {
-			return http.StatusBadRequest, nil, errors.New("Invalid extension")
+			Respond(w, r, http.StatusBadRequest, errors.New("Invalid extension"))
+			return
 		}
+
 		extension = "." + extension
 		if !strings.HasSuffix(filename, extension) {
 			filename = strings.TrimSuffix(filename, ".bin") + extension
 		}
 	}
 
-	if err == nil {
-		defer reader.Close()
-		statusCode = http.StatusOK
-		writer.Header().Set("Content-Type", "vnd.tcpdump.pcap")
-		writer.Header().Set("Content-Length", strconv.FormatInt(length, 10))
-		writer.Header().Set("Content-Disposition", "inline; filename=\""+filename+"\"")
-		writer.Header().Set("Content-Transfer-Encoding", "binary")
-		written, err := io.Copy(writer, reader)
-		if err != nil {
-			log.WithError(err).WithFields(log.Fields{
-				"name": filename,
-			}).Error("Failed to copy stream")
-		}
-		log.WithFields(log.Fields{
+	w.Header().Set("Content-Type", "vnd.tcpdump.pcap")
+	w.Header().Set("Content-Length", strconv.FormatInt(length, 10))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, filename))
+	w.Header().Set("Content-Transfer-Encoding", "binary")
+
+	written, err := io.Copy(w, reader)
+	if err != nil {
+		log.WithError(err).WithFields(log.Fields{
 			"name": filename,
-			"size": written,
-		}).Info("Copied stream to response")
-	} else {
-		statusCode = http.StatusNotFound
+		}).Error("Failed to copy stream")
+		Respond(nil, r, http.StatusInternalServerError, err)
+
+		return
 	}
-	return statusCode, nil, err
+
+	log.WithFields(log.Fields{
+		"name": filename,
+		"size": written,
+	}).Info("Copied stream to response")
+
+	Respond(nil, r, http.StatusOK, nil)
 }
 
-func (streamHandler *StreamHandler) post(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	statusCode := http.StatusBadRequest
-	jobId, err := strconv.ParseInt(request.URL.Query().Get("jobId"), 10, 32)
-	err = streamHandler.server.Datastore.SavePacketStream(ctx, int(jobId), request.Body)
-	if err == nil {
-		statusCode = http.StatusOK
+func (h *StreamHandler) postStream(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id := chi.URLParam(r, "jobId")
+	if id == "" {
+		id = r.URL.Query().Get("jobId")
 	}
-	return statusCode, nil, err
+
+	jobId, err := strconv.ParseInt(id, 10, 32)
+	if err != nil {
+		Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	err = h.server.Datastore.SavePacketStream(ctx, int(jobId), r.Body)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	Respond(w, r, http.StatusOK, nil)
 }

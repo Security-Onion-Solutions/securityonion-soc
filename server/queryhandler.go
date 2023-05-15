@@ -11,8 +11,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/go-chi/chi"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+
+	"github.com/go-chi/chi"
 )
 
 type QueryHandler struct {
