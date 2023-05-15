@@ -7,96 +7,113 @@
 package server
 
 import (
-	"context"
 	"errors"
 	"net/http"
-	"regexp"
 	"strconv"
 
+	"github.com/go-chi/chi"
 	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type QueryHandler struct {
-	web.BaseHandler
 	server *Server
 }
 
-func NewQueryHandler(srv *Server) *QueryHandler {
-	handler := &QueryHandler{}
-	handler.Host = srv.Host
-	handler.server = srv
-	handler.Impl = handler
-	return handler
-}
-
-func (queryHandler *QueryHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	switch request.Method {
-	case http.MethodGet:
-		return queryHandler.get(ctx, writer, request)
-	}
-	return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
-}
-
-func (queryHandler *QueryHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	operation := queryHandler.GetPathParameter(request.URL.Path, 2)
-	safe, _ := regexp.MatchString(`^[a-z]+$`, operation)
-	if !safe {
-		return http.StatusBadRequest, nil, errors.New("Invalid query operation")
+func RegisterQueryRoutes(srv *Server, prefix string) {
+	h := &QueryHandler{
+		server: srv,
 	}
 
-	err := request.ParseForm()
+	r := chi.NewMux()
+
+	r.Route(prefix, func(r chi.Router) {
+		r.Use(Middleware(srv.Host))
+
+		r.Get("/{operation}", h.getQuery)
+	})
+
+	srv.Host.RegisterRouter(prefix, r)
+}
+
+func (h *QueryHandler) getQuery(w http.ResponseWriter, r *http.Request) {
+	operation := chi.URLParam(r, "operation")
+
+	err := r.ParseForm()
 	if err != nil {
-		return http.StatusBadRequest, nil, errors.New("Invalid query operation inputs")
+		Respond(w, r, http.StatusBadRequest, errors.New("Invalid query operation inputs"))
+		return
 	}
 
-	queryStr := request.Form.Get("query")
+	queryStr := r.Form.Get("query")
 	query := model.NewQuery()
+
 	err = query.Parse(queryStr)
 	if err != nil {
-		return http.StatusBadRequest, nil, errors.New("Invalid query input")
+		Respond(w, r, http.StatusBadRequest, errors.New("Invalid query input"))
+		return
 	}
 
 	var alteredQuery string
+
 	switch operation {
 	case "filtered":
-		field := request.Form.Get("field")
-		scalar := request.Form.Get("scalar") == "true"
-		mode := request.Form.Get("mode")
-		value := request.Form.Get("value")
-		condense := request.Form.Get("condense") == "true"
+		field := r.Form.Get("field")
+		scalar := r.Form.Get("scalar") == "true"
+		mode := r.Form.Get("mode")
+		value := r.Form.Get("value")
+		condense := r.Form.Get("condense") == "true"
+
 		if len(value) > 0 {
 			alteredQuery, err = query.Filter(field, value, scalar, mode, condense)
+			if err != nil {
+				Respond(w, r, http.StatusBadRequest, errors.New("Invalid query after filter applied"))
+				return
+			}
 		} else {
-			values := request.Form["value[]"]
+			values := r.Form["value[]"]
 			for _, value := range values {
 				alteredQuery, err = query.Filter(field, value, scalar, mode, condense)
+				if err != nil {
+					Respond(w, r, http.StatusBadRequest, errors.New("Invalid query after filter applied"))
+					return
+				}
+
 				queryStr = query.String()
 				query = model.NewQuery()
+
 				err = query.Parse(queryStr)
 				if err != nil {
-					return http.StatusBadRequest, nil, errors.New("Invalid query after filter applied")
+					Respond(w, r, http.StatusBadRequest, errors.New("Unable to parse query"))
+					return
 				}
 			}
 		}
 	case "grouped":
-		field := request.Form.Get("field")
-		groupStr := request.Form.Get("group")
+		field := r.Form.Get("field")
+		groupStr := r.Form.Get("group")
+
 		groupIdx, err := strconv.ParseInt(groupStr, 10, 32)
 		if err != nil {
 			groupIdx = 0
 		}
+
 		alteredQuery, err = query.Group(int(groupIdx), field)
+		if err != nil {
+			Respond(w, r, http.StatusBadRequest, errors.New("Invalid query after group applied"))
+			return
+		}
 	case "sorted":
-		field := request.Form.Get("field")
+		field := r.Form.Get("field")
+
 		alteredQuery, err = query.Sort(field)
+		if err != nil {
+			Respond(w, r, http.StatusBadRequest, errors.New("Invalid query after sort applied"))
+			return
+		}
 	default:
-		return http.StatusBadRequest, nil, errors.New("Unsupported query operation")
+		Respond(w, r, http.StatusBadRequest, errors.New("Unsupported query operation"))
+		return
 	}
 
-	if err != nil {
-		return http.StatusBadRequest, nil, err
-	}
-
-	return http.StatusOK, alteredQuery, nil
+	Respond(w, r, http.StatusOK, alteredQuery)
 }
