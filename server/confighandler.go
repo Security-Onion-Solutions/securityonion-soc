@@ -28,7 +28,7 @@ func RegisterConfigRoutes(srv *Server, prefix string) {
 	r := chi.NewMux()
 
 	r.Route(prefix, func(r chi.Router) {
-		r.Use(Middleware(srv.Host))
+		r.Use(Middleware(srv.Host), h.configEnabled)
 
 		r.Get("/", h.getConfig)
 
@@ -43,6 +43,17 @@ func RegisterConfigRoutes(srv *Server, prefix string) {
 	})
 
 	srv.Host.RegisterRouter(prefix, r)
+}
+
+func (h *ConfigHandler) configEnabled(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if h.server.Configstore == nil {
+			Respond(w, r, http.StatusMethodNotAllowed, errors.New("Config module not enabled"))
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (h *ConfigHandler) getConfig(w http.ResponseWriter, r *http.Request) {

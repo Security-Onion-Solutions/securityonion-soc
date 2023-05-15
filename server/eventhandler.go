@@ -8,6 +8,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -27,13 +28,24 @@ func RegisterEventRoutes(srv *Server, prefix string) {
 	r := chi.NewMux()
 
 	r.Route(prefix, func(r chi.Router) {
-		r.Use(Middleware(srv.Host))
+		r.Use(Middleware(srv.Host), h.eventsEnabled)
 
 		r.Get("/", h.getEvent)
 		r.Post("/ack", h.postAck)
 	})
 
 	srv.Host.RegisterRouter(prefix, r)
+}
+
+func (h *EventHandler) eventsEnabled(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if h.server.Eventstore == nil {
+			Respond(w, r, http.StatusMethodNotAllowed, errors.New("Method not supported"))
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (h *EventHandler) getEvent(w http.ResponseWriter, r *http.Request) {

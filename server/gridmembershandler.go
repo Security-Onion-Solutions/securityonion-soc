@@ -27,7 +27,7 @@ func RegisterGridMemberRoutes(srv *Server, prefix string) {
 	r := chi.NewMux()
 
 	r.Route(prefix, func(r chi.Router) {
-		r.Use(Middleware(srv.Host))
+		r.Use(Middleware(srv.Host), h.gridMembersEnabled)
 
 		r.Get("/", h.getGridMembers)
 
@@ -35,6 +35,17 @@ func RegisterGridMemberRoutes(srv *Server, prefix string) {
 	})
 
 	srv.Host.RegisterRouter(prefix, r)
+}
+
+func (h *GridMembersHandler) gridMembersEnabled(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if h.server.GridMembersstore == nil {
+			Respond(w, r, http.StatusMethodNotAllowed, errors.New("GridMembers module not enabled"))
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (h *GridMembersHandler) getGridMembers(w http.ResponseWriter, r *http.Request) {

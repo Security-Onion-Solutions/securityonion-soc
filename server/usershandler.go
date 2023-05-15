@@ -32,7 +32,7 @@ func RegisterUsersRoutes(srv *Server, prefix string) {
 	r := chi.NewMux()
 
 	r.Route(prefix, func(r chi.Router) {
-		r.Use(Middleware(srv.Host))
+		r.Use(Middleware(srv.Host), h.usersEnabled)
 
 		r.Get("/", h.getUsers)
 
@@ -49,6 +49,22 @@ func RegisterUsersRoutes(srv *Server, prefix string) {
 	})
 
 	srv.Host.RegisterRouter(prefix, r)
+}
+
+func (h *UsersHandler) usersEnabled(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if h.server.Userstore == nil {
+			if h.server.Config.DeveloperEnabled {
+				Respond(w, r, http.StatusOK, nil)
+				return
+			}
+
+			Respond(w, r, http.StatusMethodNotAllowed, errors.New("Users module not enabled"))
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (h *UsersHandler) getUsers(w http.ResponseWriter, r *http.Request) {

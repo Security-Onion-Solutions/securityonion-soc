@@ -37,7 +37,7 @@ func RegisterCaseRoutes(srv *Server, prefix string) {
 	r := chi.NewMux()
 
 	r.Route(prefix, func(r chi.Router) {
-		r.Use(Middleware(srv.Host))
+		r.Use(Middleware(srv.Host), h.caseEnabled)
 
 		r.Post("/", h.createCase)
 		r.Post("/events", h.createEvent)
@@ -74,6 +74,17 @@ func RegisterCaseRoutes(srv *Server, prefix string) {
 	})
 
 	srv.Host.RegisterRouter(prefix, r)
+}
+
+func (h *CaseHandler) caseEnabled(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if h.server.Casestore == nil {
+			Respond(w, r, http.StatusMethodNotAllowed, errors.New("ERROR_CASE_MODULE_NOT_ENABLED"))
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (h *CaseHandler) createCase(w http.ResponseWriter, r *http.Request) {
