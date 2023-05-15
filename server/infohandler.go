@@ -11,10 +11,11 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/go-chi/chi"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+
+	"github.com/go-chi/chi"
 )
 
 type InfoHandler struct {

@@ -18,10 +18,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/apex/log"
-	"github.com/go-chi/chi"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+
+	"github.com/apex/log"
+	"github.com/go-chi/chi"
 )
 
 type CaseHandler struct {
@@ -38,14 +39,12 @@ func RegisterCaseRoutes(srv *Server, prefix string) {
 	r.Route(prefix, func(r chi.Router) {
 		r.Use(Middleware(srv.Host))
 
-		// create
 		r.Post("/", h.createCase)
 		r.Post("/events", h.createEvent)
 		r.Post("/comments", h.createComment)
 		r.Post("/tasks", h.createArtifact)
 		r.Post("/artifacts", h.createArtifact)
 
-		// report
 		r.Get("/", h.getCase)
 		r.Get("/{id}", h.getCase)
 		r.Get("/comments", h.getComment)
@@ -59,13 +58,11 @@ func RegisterCaseRoutes(srv *Server, prefix string) {
 		r.Get("/artifacts/{groupType}/{groupID}", h.getArtifact)
 		r.Get("/artifacts/{groupType}/{groupID}/{id}", h.getArtifact)
 
-		// update
 		r.Put("/", h.updateCase)
 		r.Put("/comments", h.updateComment)
 		r.Put("/tasks", h.updateArtifact)
 		r.Put("/artifacts", h.updateArtifact)
 
-		// delete
 		r.Delete("/comments", h.deleteComment)
 		r.Delete("/comments/{id}", h.deleteComment)
 		r.Delete("/events", h.deleteEvent)

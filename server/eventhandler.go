@@ -10,8 +10,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/go-chi/chi"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+
+	"github.com/go-chi/chi"
 )
 
 type EventHandler struct {
