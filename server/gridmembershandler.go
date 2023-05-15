@@ -7,68 +7,68 @@
 package server
 
 import (
-	"context"
 	"errors"
 	"net/http"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/web"
+
+	"github.com/go-chi/chi"
 )
 
 type GridMembersHandler struct {
-	web.BaseHandler
 	server *Server
 }
 
-func NewGridMembersHandler(srv *Server) *GridMembersHandler {
-	handler := &GridMembersHandler{}
-	handler.Host = srv.Host
-	handler.server = srv
-	handler.Impl = handler
-	return handler
-}
-
-func (gridMembersHandler *GridMembersHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	if gridMembersHandler.server.GridMembersstore == nil {
-		return http.StatusMethodNotAllowed, nil, errors.New("GridMembers module not enabled")
+func RegisterGridMemberRoutes(srv *Server, prefix string) {
+	h := &GridMembersHandler{
+		server: srv,
 	}
 
-	switch request.Method {
-	case http.MethodGet:
-		return gridMembersHandler.get(ctx, writer, request)
-	case http.MethodPost:
-		return gridMembersHandler.post(ctx, writer, request)
-	}
-	return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
+	r := chi.NewMux()
+
+	r.Route(prefix, func(r chi.Router) {
+		r.Use(Middleware(srv.Host))
+
+		r.Get("/", h.getGridMembers)
+
+		r.Post("/{id}/{operation}", h.postManageMembers)
+	})
+
+	srv.Host.RegisterRouter(prefix, r)
 }
 
-func (gridMembersHandler *GridMembersHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	members, err := gridMembersHandler.server.GridMembersstore.GetMembers(ctx)
+func (h *GridMembersHandler) getGridMembers(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	members, err := h.server.GridMembersstore.GetMembers(ctx)
 	if err != nil {
-		return http.StatusBadRequest, nil, err
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
 	}
-	return http.StatusOK, members, nil
+
+	Respond(w, r, http.StatusOK, members)
 }
 
-func (gridMembersHandler *GridMembersHandler) post(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	var err error
+func (h *GridMembersHandler) postManageMembers(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 
-	id := gridMembersHandler.GetPathParameter(request.URL.Path, 2)
+	id := chi.URLParam(r, "id")
 	if !model.IsValidMinionId(id) {
-		err = errors.New("Invalid minion ID")
+		Respond(w, r, http.StatusBadRequest, errors.New("Invalid minion ID"))
+		return
 	}
 
-	op := gridMembersHandler.GetPathParameter(request.URL.Path, 3)
+	op := chi.URLParam(r, "operation")
 	if op != "add" && op != "reject" && op != "delete" && op != "test" {
-		err = errors.New("Invalid operation")
+		Respond(w, r, http.StatusBadRequest, errors.New("Invalid operation"))
+		return
 	}
 
-	if err == nil {
-		err = gridMembersHandler.server.GridMembersstore.ManageMember(ctx, op, id)
-	}
-
+	err := h.server.GridMembersstore.ManageMember(ctx, op, id)
 	if err != nil {
-		return http.StatusBadRequest, nil, err
+		Respond(w, r, http.StatusBadRequest, err)
+		return
 	}
-	return http.StatusOK, nil, nil
+
+	Respond(w, r, http.StatusOK, nil)
 }
