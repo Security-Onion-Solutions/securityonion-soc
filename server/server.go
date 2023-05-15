@@ -71,7 +71,7 @@ func (server *Server) Start() {
 		RegisterEventRoutes(server, "/api/events/")
 		RegisterInfoRoutes(server, "/api/info/")
 		RegisterJobRoutes(server, "/api/job/")
-		server.Host.Register("/api/jobs/", NewJobsHandler(server))
+		RegisterJobsRoutes(server, "/api/jobs/")
 		server.Host.Register("/api/packets", NewPacketHandler(server))
 		server.Host.Register("/api/query/", NewQueryHandler(server))
 		server.Host.Register("/api/node", NewNodeHandler(server))

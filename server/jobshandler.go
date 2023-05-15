@@ -7,44 +7,48 @@
 package server
 
 import (
-	"context"
-	"errors"
 	"net/http"
 
+	"github.com/go-chi/chi"
 	"github.com/security-onion-solutions/securityonion-soc/json"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type JobsHandler struct {
-	web.BaseHandler
 	server *Server
 }
 
-func NewJobsHandler(srv *Server) *JobsHandler {
-	handler := &JobsHandler{}
-	handler.Host = srv.Host
-	handler.server = srv
-	handler.Impl = handler
-	return handler
-}
-
-func (jobsHandler *JobsHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	switch request.Method {
-	case http.MethodGet:
-		return jobsHandler.get(ctx, writer, request)
+func RegisterJobsRoutes(srv *Server, prefix string) {
+	h := &JobsHandler{
+		server: srv,
 	}
-	return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
+
+	r := chi.NewMux()
+
+	r.Route(prefix, func(r chi.Router) {
+		r.Use(Middleware(srv.Host))
+
+		r.Get("/", h.getJobs)
+	})
+
+	srv.Host.RegisterRouter(prefix, r)
 }
 
-func (jobsHandler *JobsHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	kind := request.URL.Query().Get("kind")
-	paramsStr := request.URL.Query().Get("parameters")
-	var params map[string]interface{}
+func (h *JobsHandler) getJobs(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	kind := r.URL.Query().Get("kind")
+	paramsStr := r.URL.Query().Get("parameters")
+
+	params := map[string]interface{}{}
 	if paramsStr != "" {
 		err := json.LoadJson([]byte(paramsStr), &params)
 		if err != nil {
-			return http.StatusBadRequest, nil, err
+			Respond(w, r, http.StatusBadRequest, err)
+			return
 		}
 	}
-	return http.StatusOK, jobsHandler.server.Datastore.GetJobs(ctx, kind, params), nil
+
+	jobs := h.server.Datastore.GetJobs(ctx, kind, params)
+
+	Respond(w, r, http.StatusOK, jobs)
 }
