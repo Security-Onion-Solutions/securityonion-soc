@@ -7,161 +7,232 @@
 package server
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"regexp"
+	"strings"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/web"
+
+	"github.com/go-chi/chi"
 )
 
+var idVerifier = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
+var roleVerifier = regexp.MustCompile(`^[A-Za-z0-9-_]+$`)
+
 type UsersHandler struct {
-	web.BaseHandler
 	server *Server
 }
 
-func NewUsersHandler(srv *Server) *UsersHandler {
-	handler := &UsersHandler{}
-	handler.Host = srv.Host
-	handler.server = srv
-	handler.Impl = handler
-	return handler
-}
-
-func (usersHandler *UsersHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	if usersHandler.server.Userstore == nil {
-		if usersHandler.server.Config.DeveloperEnabled {
-			return http.StatusOK, nil, nil
-		}
-		return http.StatusMethodNotAllowed, nil, errors.New("Users module not enabled")
+func RegisterUsersRoutes(srv *Server, prefix string) {
+	h := &UsersHandler{
+		server: srv,
 	}
 
-	switch request.Method {
-	case http.MethodGet:
-		return usersHandler.get(ctx, writer, request)
-	case http.MethodPost:
-		return usersHandler.post(ctx, writer, request)
-	case http.MethodPut:
-		return usersHandler.put(ctx, writer, request)
-	case http.MethodDelete:
-		return usersHandler.delete(ctx, writer, request)
-	}
-	return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
+	r := chi.NewMux()
+
+	r.Route(prefix, func(r chi.Router) {
+		r.Use(Middleware(srv.Host))
+
+		r.Get("/", h.getUsers)
+
+		r.Post("/", h.postUser)
+		r.Post("/{id}/role/{role}", h.postAddRole)
+
+		r.Put("/sync", h.putSync)
+		r.Put("/{id}", h.putUser)
+		r.Put("/{id}/password", h.putPassword)
+		r.Put("/{id}/{toggle}", h.putToggleUser)
+
+		r.Delete("/{id}", h.deleteUser)
+		r.Delete("/{id}/role/{role}", h.deleteUserRole)
+	})
+
+	srv.Host.RegisterRouter(prefix, r)
 }
 
-func (usersHandler *UsersHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	users, err := usersHandler.server.Userstore.GetUsers(ctx)
+func (h *UsersHandler) getUsers(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	users, err := h.server.Userstore.GetUsers(ctx)
 	if err != nil {
-		return http.StatusBadRequest, nil, err
+		Respond(w, r, http.StatusBadRequest, err)
+		return
 	}
-	return http.StatusOK, users, nil
+
+	Respond(w, r, http.StatusOK, users)
 }
 
-func (usersHandler *UsersHandler) post(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	var err error
+func (h *UsersHandler) postUser(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 
-	id := usersHandler.GetPathParameter(request.URL.Path, 2)
-	if id == "" {
-		user := model.NewUser()
-		err = ReadJson(request, user)
-		if err == nil {
-			err = usersHandler.server.AdminUserstore.AddUser(ctx, user)
-		}
-	} else {
-		safe, _ := regexp.MatchString(`^[A-Za-z0-9-]+$`, id)
-		if !safe {
-			return http.StatusBadRequest, nil, errors.New("Invalid id")
-		}
+	user := model.NewUser()
 
-		object := usersHandler.GetPathParameter(request.URL.Path, 3)
-		switch object {
-		case "role":
-			role := usersHandler.GetPathParameter(request.URL.Path, 4)
-			safe, _ := regexp.MatchString(`^[A-Za-z0-9-_]+$`, role)
-			if !safe {
-				err = errors.New("Invalid role")
-			} else {
-				err = usersHandler.server.AdminUserstore.AddRole(ctx, id, role)
-			}
-		default:
-			err = errors.New("Invalid object specified for deletion")
-		}
-	}
-
+	err := ReadJson(r, user)
 	if err != nil {
-		return http.StatusBadRequest, nil, err
+		Respond(w, r, http.StatusBadRequest, err)
+		return
 	}
-	return http.StatusOK, nil, nil
+
+	err = h.server.AdminUserstore.AddUser(ctx, user)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	Respond(w, r, http.StatusOK, user)
 }
 
-func (usersHandler *UsersHandler) delete(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	id := usersHandler.GetPathParameter(request.URL.Path, 2)
-	safe, _ := regexp.MatchString(`^[A-Za-z0-9-]+$`, id)
+func (h *UsersHandler) postAddRole(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id := chi.URLParam(r, "id")
+	role := chi.URLParam(r, "role")
+
+	safe := idVerifier.MatchString(id)
 	if !safe {
-		return http.StatusBadRequest, nil, errors.New("Invalid id")
+		Respond(w, r, http.StatusBadRequest, errors.New("Invalid id"))
+		return
 	}
 
-	object := usersHandler.GetPathParameter(request.URL.Path, 3)
+	safe = roleVerifier.MatchString(role)
+	if !safe {
+		Respond(w, r, http.StatusBadRequest, errors.New("Invalid role"))
+		return
+	}
+
+	err := h.server.AdminUserstore.AddRole(ctx, id, role)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	Respond(w, r, http.StatusOK, nil)
+}
+
+func (h *UsersHandler) putUser(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id := chi.URLParam(r, "id")
+
+	user := model.NewUser()
+	err := ReadJson(r, user)
+	if err != nil {
+		Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	user.Id = id
+
+	err = h.server.AdminUserstore.UpdateProfile(ctx, user)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	Respond(w, r, http.StatusOK, user)
+}
+
+func (h *UsersHandler) putSync(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	err := h.server.AdminUserstore.SyncUsers(ctx)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	Respond(w, r, http.StatusOK, nil)
+}
+
+func (h *UsersHandler) putPassword(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id := chi.URLParam(r, "id")
+
+	user := model.NewUser()
+
+	err := ReadJson(r, user)
+	if err != nil {
+		Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	err = h.server.AdminUserstore.ResetPassword(ctx, id, user.Password)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	Respond(w, r, http.StatusOK, nil)
+}
+
+func (h *UsersHandler) putToggleUser(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
-	switch object {
-	case "role":
-		role := usersHandler.GetPathParameter(request.URL.Path, 4)
-		safe, _ := regexp.MatchString(`^[A-Za-z0-9-_]+$`, role)
-		if !safe {
-			err = errors.New("Invalid role")
-		} else {
-			err = usersHandler.server.AdminUserstore.DeleteRole(ctx, id, role)
-		}
-	case "":
-		err = usersHandler.server.AdminUserstore.DeleteUser(ctx, id)
+	id := chi.URLParam(r, "id")
+
+	toggle := chi.URLParam(r, "toggle")
+	switch strings.ToLower(toggle) {
+	case "disable":
+		err = h.server.AdminUserstore.DisableUser(ctx, id)
+	case "enable":
+		err = h.server.AdminUserstore.EnableUser(ctx, id)
 	default:
-		err = errors.New("Invalid object specified for deletion")
+		err = errors.New("Invalid action")
 	}
 
 	if err != nil {
-		return http.StatusBadRequest, nil, err
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
 	}
-	return http.StatusOK, nil, nil
+
+	Respond(w, r, http.StatusOK, nil)
 }
 
-func (usersHandler *UsersHandler) put(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	var err error
-	id := usersHandler.GetPathParameter(request.URL.Path, 2)
-	safe, _ := regexp.MatchString(`^[A-Za-z0-9-]+$`, id)
+func (h *UsersHandler) deleteUser(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id := chi.URLParam(r, "id")
+	safe := idVerifier.MatchString(id)
 	if !safe {
-		return http.StatusBadRequest, nil, errors.New("Invalid id")
+		Respond(w, r, http.StatusBadRequest, errors.New("Invalid id"))
+		return
 	}
 
-	if id == "sync" {
-		err = usersHandler.server.AdminUserstore.SyncUsers(ctx)
-	} else {
-		object := usersHandler.GetPathParameter(request.URL.Path, 3)
-		switch object {
-		case "enable":
-			err = usersHandler.server.AdminUserstore.EnableUser(ctx, id)
-		case "disable":
-			err = usersHandler.server.AdminUserstore.DisableUser(ctx, id)
-		case "password":
-			user := model.NewUser()
-			err = ReadJson(request, user)
-			if err == nil {
-				err = usersHandler.server.AdminUserstore.ResetPassword(ctx, id, user.Password)
-			}
-		case "":
-			user := model.NewUser()
-			err = ReadJson(request, user)
-			if err == nil {
-				user.Id = id
-				err = usersHandler.server.AdminUserstore.UpdateProfile(ctx, user)
-			}
-		default:
-			err = errors.New("Invalid object specified for deletion")
-		}
-	}
-
+	err := h.server.AdminUserstore.DeleteUser(ctx, id)
 	if err != nil {
-		return http.StatusBadRequest, nil, err
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
 	}
-	return http.StatusOK, nil, nil
+
+	Respond(w, r, http.StatusOK, nil)
+}
+
+func (h *UsersHandler) deleteUserRole(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id := chi.URLParam(r, "id")
+	role := chi.URLParam(r, "role")
+
+	safe := idVerifier.MatchString(id)
+	if !safe {
+		Respond(w, r, http.StatusBadRequest, errors.New("Invalid id"))
+		return
+	}
+
+	safe = roleVerifier.MatchString(role)
+	if !safe {
+		Respond(w, r, http.StatusBadRequest, errors.New("Invalid role"))
+		return
+	}
+
+	err := h.server.AdminUserstore.DeleteRole(ctx, id, role)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	Respond(w, r, http.StatusOK, nil)
 }
