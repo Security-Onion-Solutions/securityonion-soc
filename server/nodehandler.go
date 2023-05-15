@@ -7,46 +7,52 @@
 package server
 
 import (
-	"context"
-	"errors"
 	"net/http"
 
+	"github.com/go-chi/chi"
 	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type NodeHandler struct {
-	web.BaseHandler
 	server *Server
 }
 
-func NewNodeHandler(srv *Server) *NodeHandler {
-	handler := &NodeHandler{}
-	handler.Host = srv.Host
-	handler.server = srv
-	handler.Impl = handler
-	return handler
-}
-
-func (nodeHandler *NodeHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	switch request.Method {
-	case http.MethodPost:
-		return nodeHandler.post(ctx, writer, request)
+func RegisterNodeRoutes(srv *Server, prefix string) {
+	h := &NodeHandler{
+		server: srv,
 	}
-	return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
+
+	r := chi.NewMux()
+
+	r.Route(prefix, func(r chi.Router) {
+		r.Use(Middleware(srv.Host))
+
+		r.Post("/", h.postNode)
+	})
+
+	srv.Host.RegisterRouter(prefix, r)
 }
 
-func (nodeHandler *NodeHandler) post(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	var job *model.Job
+func (h *NodeHandler) postNode(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	node := model.NewNode("")
-	err := ReadJson(request, node)
-	if err == nil {
-		node, err = nodeHandler.server.Datastore.UpdateNode(ctx, node)
-		if err == nil {
-			nodeHandler.server.Metrics.UpdateNodeMetrics(ctx, node)
-			nodeHandler.server.Host.Broadcast("node", "nodes", node)
-			job = nodeHandler.server.Datastore.GetNextJob(ctx, node.Id)
-		}
+
+	err := ReadJson(r, node)
+	if err != nil {
+		Respond(w, r, http.StatusBadRequest, err)
+		return
 	}
-	return http.StatusOK, job, err
+
+	node, err = h.server.Datastore.UpdateNode(ctx, node)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	h.server.Metrics.UpdateNodeMetrics(ctx, node)
+	h.server.Host.Broadcast("node", "nodes", node)
+	job := h.server.Datastore.GetNextJob(ctx, node.Id)
+
+	Respond(w, r, http.StatusOK, job)
 }
