@@ -7,62 +7,70 @@
 package server
 
 import (
-	"context"
-	"errors"
 	"net/http"
 	"strconv"
 
-	"github.com/security-onion-solutions/securityonion-soc/web"
+	"github.com/go-chi/chi"
 )
 
 type PacketHandler struct {
-	web.BaseHandler
 	server *Server
 }
 
-func NewPacketHandler(srv *Server) *PacketHandler {
-	handler := &PacketHandler{}
-	handler.Host = srv.Host
-	handler.server = srv
-	handler.Impl = handler
-	return handler
-}
-
-func (packetHandler *PacketHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	switch request.Method {
-	case http.MethodGet:
-		return packetHandler.get(ctx, writer, request)
+func RegisterPacketRoutes(srv *Server, prefix string) {
+	h := &PacketHandler{
+		server: srv,
 	}
-	return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
+
+	r := chi.NewMux()
+
+	r.Route(prefix, func(r chi.Router) {
+		r.Use(Middleware(srv.Host))
+
+		r.Get("/", h.getPackets)
+		r.Get("/{jobId}", h.getPackets)
+	})
+
+	srv.Host.RegisterRouter(prefix, r)
 }
 
-func (packetHandler *PacketHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	statusCode := http.StatusBadRequest
-	jobId, err := strconv.ParseInt(request.URL.Query().Get("jobId"), 10, 32)
+func (h *PacketHandler) getPackets(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id := chi.URLParam(r, "jobId")
+	if id == "" {
+		id = r.URL.Query().Get("jobId")
+	}
+
+	jobId, err := strconv.ParseInt(id, 10, 32)
 	if err != nil {
-		return statusCode, nil, err
+		Respond(w, r, http.StatusBadRequest, err)
 	}
-	unwrap, err := strconv.ParseBool(request.URL.Query().Get("unwrap"))
+
+	unwrap, err := strconv.ParseBool(r.URL.Query().Get("unwrap"))
 	if err != nil {
 		unwrap = false
 	}
-	offset, err := strconv.ParseInt(request.URL.Query().Get("offset"), 10, 32)
+
+	offset, err := strconv.ParseInt(r.URL.Query().Get("offset"), 10, 32)
 	if offset <= 0 || err != nil {
 		offset = 0
 	}
-	count := packetHandler.server.Config.MaxPacketCount
-	count64, err := strconv.ParseInt(request.URL.Query().Get("count"), 10, 32)
+
+	count := h.server.Config.MaxPacketCount
+	count64, err := strconv.ParseInt(r.URL.Query().Get("count"), 10, 32)
 	if err == nil {
 		tmpCount := int(count64)
 		if tmpCount > 0 && tmpCount < count {
 			count = tmpCount
 		}
 	}
-	packets, err := packetHandler.server.Datastore.GetPackets(ctx, int(jobId), int(offset), count, unwrap)
-	if err == nil {
-		statusCode = http.StatusOK
-	} else {
-		statusCode = http.StatusNotFound
+
+	packets, err := h.server.Datastore.GetPackets(ctx, int(jobId), int(offset), count, unwrap)
+	if err != nil {
+		Respond(w, r, http.StatusNotFound, err)
+		return
 	}
-	return statusCode, packets, err
+
+	Respond(w, r, http.StatusOK, packets)
 }

@@ -72,7 +72,7 @@ func (server *Server) Start() {
 		RegisterInfoRoutes(server, "/api/info/")
 		RegisterJobRoutes(server, "/api/job/")
 		RegisterJobsRoutes(server, "/api/jobs/")
-		server.Host.Register("/api/packets", NewPacketHandler(server))
+		RegisterPacketRoutes(server, "/api/packets/")
 		server.Host.Register("/api/query/", NewQueryHandler(server))
 		server.Host.Register("/api/node", NewNodeHandler(server))
 		server.Host.Register("/api/grid", NewGridHandler(server))
