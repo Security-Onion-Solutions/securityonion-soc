@@ -28,55 +28,55 @@ type CaseHandler struct {
 	server *Server
 }
 
-func RegisterCaseHandler(srv *Server, prefix string, r *chi.Mux) *CaseHandler {
-	handler := &CaseHandler{
+func RegisterCaseRoutes(srv *Server, prefix string) {
+	h := &CaseHandler{
 		server: srv,
 	}
+
+	r := chi.NewMux()
 
 	r.Route(prefix, func(r chi.Router) {
 		r.Use(Middleware(srv.Host))
 
 		// create
-		r.Post("/", handler.createCase)
-		r.Post("/events", handler.createEvent)
-		r.Post("/comments", handler.createComment)
-		r.Post("/tasks", handler.createArtifact)
-		r.Post("/artifacts", handler.createArtifact)
+		r.Post("/", h.createCase)
+		r.Post("/events", h.createEvent)
+		r.Post("/comments", h.createComment)
+		r.Post("/tasks", h.createArtifact)
+		r.Post("/artifacts", h.createArtifact)
 
 		// report
-		r.Get("/", handler.getCase)
-		r.Get("/{id}", handler.getCase)
-		r.Get("/comments", handler.getComment)
-		r.Get("/comments/{id}", handler.getComment)
-		r.Get("/events", handler.getEvent)
-		r.Get("/events/{id}", handler.getEvent)
-		r.Get("/tasks", handler.getTask)
-		r.Get("/tasks/{id}", handler.getTask)
-		r.Get("/artifactstream", handler.getTask)
-		r.Get("/artifactstream/{id}", handler.getTask)
-		r.Get("/artifacts/{groupType}/{groupID}", handler.getArtifact)
-		r.Get("/artifacts/{groupType}/{groupID}/{id}", handler.getArtifact)
+		r.Get("/", h.getCase)
+		r.Get("/{id}", h.getCase)
+		r.Get("/comments", h.getComment)
+		r.Get("/comments/{id}", h.getComment)
+		r.Get("/events", h.getEvent)
+		r.Get("/events/{id}", h.getEvent)
+		r.Get("/tasks", h.getTask)
+		r.Get("/tasks/{id}", h.getTask)
+		r.Get("/artifactstream", h.getTask)
+		r.Get("/artifactstream/{id}", h.getTask)
+		r.Get("/artifacts/{groupType}/{groupID}", h.getArtifact)
+		r.Get("/artifacts/{groupType}/{groupID}/{id}", h.getArtifact)
 
 		// update
-		r.Put("/", handler.updateCase)
-		r.Put("/comments", handler.updateComment)
-		r.Put("/tasks", handler.updateArtifact)
-		r.Put("/artifacts", handler.updateArtifact)
+		r.Put("/", h.updateCase)
+		r.Put("/comments", h.updateComment)
+		r.Put("/tasks", h.updateArtifact)
+		r.Put("/artifacts", h.updateArtifact)
 
 		// delete
-		r.Delete("/comments", handler.deleteComment)
-		r.Delete("/comments/{id}", handler.deleteComment)
-		r.Delete("/events", handler.deleteEvent)
-		r.Delete("/events/{id}", handler.deleteEvent)
-		r.Delete("/tasks", handler.deleteArtifact)
-		r.Delete("/tasks/{id}", handler.deleteArtifact)
-		r.Delete("/artifacts", handler.deleteArtifact)
-		r.Delete("/artifacts/{id}", handler.deleteArtifact)
+		r.Delete("/comments", h.deleteComment)
+		r.Delete("/comments/{id}", h.deleteComment)
+		r.Delete("/events", h.deleteEvent)
+		r.Delete("/events/{id}", h.deleteEvent)
+		r.Delete("/tasks", h.deleteArtifact)
+		r.Delete("/tasks/{id}", h.deleteArtifact)
+		r.Delete("/artifacts", h.deleteArtifact)
+		r.Delete("/artifacts/{id}", h.deleteArtifact)
 	})
 
 	srv.Host.RegisterRouter(prefix, r)
-
-	return handler
 }
 
 func (h *CaseHandler) createCase(w http.ResponseWriter, r *http.Request) {

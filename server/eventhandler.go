@@ -7,81 +7,80 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 
+	"github.com/go-chi/chi"
 	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type EventHandler struct {
-	web.BaseHandler
 	server *Server
 }
 
-func NewEventHandler(srv *Server) *EventHandler {
-	handler := &EventHandler{}
-	handler.Host = srv.Host
-	handler.server = srv
-	handler.Impl = handler
-	return handler
-}
-
-func (eventHandler *EventHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	if eventHandler.server.Eventstore != nil {
-		switch request.Method {
-		case http.MethodGet:
-			return eventHandler.get(ctx, writer, request)
-		case http.MethodPost:
-			obj := eventHandler.GetPathParameter(request.URL.Path, 2)
-			if obj == "ack" {
-				return eventHandler.ack(ctx, writer, request)
-			}
-		}
+func RegisterEventRoutes(srv *Server, prefix string) {
+	h := &EventHandler{
+		server: srv,
 	}
-	return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
+
+	r := chi.NewMux()
+
+	r.Route(prefix, func(r chi.Router) {
+		r.Use(Middleware(srv.Host))
+
+		r.Get("/", h.getEvent)
+		r.Post("/ack", h.postAck)
+	})
+
+	srv.Host.RegisterRouter(prefix, r)
 }
 
-func (eventHandler *EventHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	var results *model.EventSearchResults
-	statusCode := http.StatusBadRequest
+func (h *EventHandler) getEvent(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 
-	err := request.ParseForm()
-	if err == nil {
-		criteria := model.NewEventSearchCriteria()
-		err = criteria.Populate(request.Form.Get("query"),
-			request.Form.Get("range"),
-			request.Form.Get("format"),
-			request.Form.Get("zone"),
-			request.Form.Get("metricLimit"),
-			request.Form.Get("eventLimit"))
-		if err == nil {
-			results, err = eventHandler.server.Eventstore.Search(ctx, criteria)
-			if err == nil {
-				statusCode = http.StatusOK
-			} else {
-				statusCode = http.StatusInternalServerError
-			}
-		}
+	err := r.ParseForm()
+	if err != nil {
+		Respond(w, r, http.StatusBadRequest, err)
+		return
 	}
-	return statusCode, results, err
+
+	criteria := model.NewEventSearchCriteria()
+	err = criteria.Populate(r.Form.Get("query"),
+		r.Form.Get("range"),
+		r.Form.Get("format"),
+		r.Form.Get("zone"),
+		r.Form.Get("metricLimit"),
+		r.Form.Get("eventLimit"))
+	if err != nil {
+		Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	results, err := h.server.Eventstore.Search(ctx, criteria)
+	if err != nil {
+		Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	Respond(w, r, http.StatusOK, results)
 }
 
-func (eventHandler *EventHandler) ack(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	var results *model.EventUpdateResults
-	statusCode := http.StatusBadRequest
+func (h *EventHandler) postAck(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 
 	ackCriteria := model.NewEventAckCriteria()
-	err := json.NewDecoder(request.Body).Decode(&ackCriteria)
-	if err == nil {
-		results, err = eventHandler.server.Eventstore.Acknowledge(ctx, ackCriteria)
-		if err == nil {
-			statusCode = http.StatusOK
-		} else {
-			statusCode = http.StatusBadRequest
-		}
+
+	err := json.NewDecoder(r.Body).Decode(&ackCriteria)
+	if err != nil {
+		Respond(w, r, http.StatusBadRequest, err)
+		return
 	}
-	return statusCode, results, err
+
+	results, err := h.server.Eventstore.Acknowledge(ctx, ackCriteria)
+	if err != nil {
+		Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	Respond(w, r, http.StatusOK, results)
 }
