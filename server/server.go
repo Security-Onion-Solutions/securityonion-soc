@@ -79,7 +79,7 @@ func (server *Server) Start() {
 		RegisterGridRoutes(server, "/api/grid/")
 		RegisterStreamRoutes(server, "/api/stream/")
 		RegisterUsersRoutes(server, "/api/users/")
-		server.Host.Register("/api/config/", NewConfigHandler(server))
+		RegisterConfigRoutes(server, "/api/config/")
 		server.Host.Register("/api/gridmembers/", NewGridMembersHandler(server))
 		server.Host.Register("/api/roles/", NewRolesHandler(server))
 
