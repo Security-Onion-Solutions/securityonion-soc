@@ -75,7 +75,7 @@ func (server *Server) Start() {
 		RegisterPacketRoutes(server, "/api/packets/")
 		RegisterQueryRoutes(server, "/api/query/")
 		RegisterNodeRoutes(server, "/api/node/")
-		server.Host.Register("/api/grid", NewGridHandler(server))
+		RegisterGridRoutes(server, "/api/grid/")
 		server.Host.Register("/api/stream", NewStreamHandler(server))
 		server.Host.Register("/api/users/", NewUsersHandler(server))
 		server.Host.Register("/api/config/", NewConfigHandler(server))

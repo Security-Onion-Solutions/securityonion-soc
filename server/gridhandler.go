@@ -7,34 +7,35 @@
 package server
 
 import (
-	"context"
-	"errors"
 	"net/http"
 
-	"github.com/security-onion-solutions/securityonion-soc/web"
+	"github.com/go-chi/chi"
 )
 
 type GridHandler struct {
-	web.BaseHandler
 	server *Server
 }
 
-func NewGridHandler(srv *Server) *GridHandler {
-	handler := &GridHandler{}
-	handler.Host = srv.Host
-	handler.server = srv
-	handler.Impl = handler
-	return handler
-}
-
-func (gridHandler *GridHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	switch request.Method {
-	case http.MethodGet:
-		return gridHandler.get(ctx, writer, request)
+func RegisterGridRoutes(srv *Server, prefix string) {
+	h := &GridHandler{
+		server: srv,
 	}
-	return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
+
+	r := chi.NewMux()
+
+	r.Route(prefix, func(r chi.Router) {
+		r.Use(Middleware(srv.Host))
+
+		r.Get("/", h.getNodes)
+	})
+
+	srv.Host.RegisterRouter(prefix, r)
 }
 
-func (gridHandler *GridHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	return http.StatusOK, gridHandler.server.Datastore.GetNodes(ctx), nil
+func (h *GridHandler) getNodes(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	nodes := h.server.Datastore.GetNodes(ctx)
+
+	Respond(w, r, http.StatusOK, nodes)
 }
