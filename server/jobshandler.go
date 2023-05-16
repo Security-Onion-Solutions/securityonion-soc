@@ -18,20 +18,14 @@ type JobsHandler struct {
 	server *Server
 }
 
-func RegisterJobsRoutes(srv *Server, prefix string) {
+func RegisterJobsRoutes(srv *Server, r chi.Router, prefix string) {
 	h := &JobsHandler{
 		server: srv,
 	}
 
-	r := chi.NewMux()
-
 	r.Route(prefix, func(r chi.Router) {
-		r.Use(Middleware(srv.Host))
-
 		r.Get("/", h.getJobs)
 	})
-
-	srv.Host.RegisterRouter(prefix, r)
 }
 
 func (h *JobsHandler) getJobs(w http.ResponseWriter, r *http.Request) {

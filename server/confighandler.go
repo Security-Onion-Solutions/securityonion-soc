@@ -20,15 +20,13 @@ type ConfigHandler struct {
 	server *Server
 }
 
-func RegisterConfigRoutes(srv *Server, prefix string) {
+func RegisterConfigRoutes(srv *Server, r chi.Router, prefix string) {
 	h := &ConfigHandler{
 		server: srv,
 	}
 
-	r := chi.NewMux()
-
 	r.Route(prefix, func(r chi.Router) {
-		r.Use(Middleware(srv.Host), h.configEnabled)
+		r.Use(h.configEnabled)
 
 		r.Get("/", h.getConfig)
 
@@ -41,8 +39,6 @@ func RegisterConfigRoutes(srv *Server, prefix string) {
 		r.Delete("/{id}", h.deleteConfig)
 		r.Delete("/{id}/{minion}", h.deleteConfig)
 	})
-
-	srv.Host.RegisterRouter(prefix, r)
 }
 
 func (h *ConfigHandler) configEnabled(next http.Handler) http.Handler {
@@ -130,6 +126,7 @@ func (h *ConfigHandler) deleteConfig(w http.ResponseWriter, r *http.Request) {
 	err = h.server.Configstore.UpdateSetting(ctx, setting, true)
 	if err != nil {
 		Respond(w, r, http.StatusInternalServerError, err)
+		return
 	}
 
 	Respond(w, r, http.StatusOK, nil)

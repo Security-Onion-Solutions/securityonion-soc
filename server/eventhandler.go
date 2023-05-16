@@ -20,21 +20,17 @@ type EventHandler struct {
 	server *Server
 }
 
-func RegisterEventRoutes(srv *Server, prefix string) {
+func RegisterEventRoutes(srv *Server, r chi.Router, prefix string) {
 	h := &EventHandler{
 		server: srv,
 	}
 
-	r := chi.NewMux()
-
 	r.Route(prefix, func(r chi.Router) {
-		r.Use(Middleware(srv.Host), h.eventsEnabled)
+		r.Use(h.eventsEnabled)
 
 		r.Get("/", h.getEvent)
 		r.Post("/ack", h.postAck)
 	})
-
-	srv.Host.RegisterRouter(prefix, r)
 }
 
 func (h *EventHandler) eventsEnabled(next http.Handler) http.Handler {

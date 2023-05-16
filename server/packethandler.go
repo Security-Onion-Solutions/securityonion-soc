@@ -17,21 +17,15 @@ type PacketHandler struct {
 	server *Server
 }
 
-func RegisterPacketRoutes(srv *Server, prefix string) {
+func RegisterPacketRoutes(srv *Server, r chi.Router, prefix string) {
 	h := &PacketHandler{
 		server: srv,
 	}
 
-	r := chi.NewMux()
-
 	r.Route(prefix, func(r chi.Router) {
-		r.Use(Middleware(srv.Host))
-
 		r.Get("/", h.getPackets)
 		r.Get("/{jobId}", h.getPackets)
 	})
-
-	srv.Host.RegisterRouter(prefix, r)
 }
 
 func (h *PacketHandler) getPackets(w http.ResponseWriter, r *http.Request) {
@@ -45,6 +39,7 @@ func (h *PacketHandler) getPackets(w http.ResponseWriter, r *http.Request) {
 	jobId, err := strconv.ParseInt(id, 10, 32)
 	if err != nil {
 		Respond(w, r, http.StatusBadRequest, err)
+		return
 	}
 
 	unwrap, err := strconv.ParseBool(r.URL.Query().Get("unwrap"))

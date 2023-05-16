@@ -20,20 +20,14 @@ type QueryHandler struct {
 	server *Server
 }
 
-func RegisterQueryRoutes(srv *Server, prefix string) {
+func RegisterQueryRoutes(srv *Server, r chi.Router, prefix string) {
 	h := &QueryHandler{
 		server: srv,
 	}
 
-	r := chi.NewMux()
-
 	r.Route(prefix, func(r chi.Router) {
-		r.Use(Middleware(srv.Host))
-
 		r.Get("/{operation}", h.getQuery)
 	})
-
-	srv.Host.RegisterRouter(prefix, r)
 }
 
 func (h *QueryHandler) getQuery(w http.ResponseWriter, r *http.Request) {

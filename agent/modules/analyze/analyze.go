@@ -11,7 +11,6 @@ import (
 	"errors"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"sort"
@@ -85,7 +84,7 @@ func (analyze *Analyze) IsRunning() bool {
 	return false
 }
 
-func (analyze *Analyze) createAnalyzer(entry fs.FileInfo) *model.Analyzer {
+func (analyze *Analyze) createAnalyzer(entry fs.DirEntry) *model.Analyzer {
 	if !strings.HasPrefix(entry.Name(), ".") && !strings.HasPrefix(entry.Name(), "__") && entry.IsDir() {
 		name := entry.Name()
 		log.WithFields(log.Fields{
@@ -97,7 +96,7 @@ func (analyze *Analyze) createAnalyzer(entry fs.FileInfo) *model.Analyzer {
 }
 
 func (analyze *Analyze) refreshAnalyzers() error {
-	entries, err := ioutil.ReadDir(analyze.analyzersPath)
+	entries, err := os.ReadDir(analyze.analyzersPath)
 	if err != nil {
 		log.WithError(err).WithField("analyzersPath", analyze.analyzersPath).Error("Failed to read analyzers directory")
 	} else {

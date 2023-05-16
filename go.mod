@@ -19,6 +19,8 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
+require github.com/tj/assert v0.0.3
+
 require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect

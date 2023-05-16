@@ -17,20 +17,16 @@ type RolesHandler struct {
 	server *Server
 }
 
-func RegisterRolesRoutes(srv *Server, prefix string) {
+func RegisterRolesRoutes(srv *Server, r chi.Router, prefix string) {
 	h := &RolesHandler{
 		server: srv,
 	}
 
-	r := chi.NewMux()
-
 	r.Route(prefix, func(r chi.Router) {
-		r.Use(Middleware(srv.Host), rolesEnabled(srv))
+		r.Use(rolesEnabled(srv))
 
 		r.Get("/", h.getRoles)
 	})
-
-	srv.Host.RegisterRouter(prefix, r)
 }
 
 func rolesEnabled(server *Server) func(next http.Handler) http.Handler {

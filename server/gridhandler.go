@@ -16,20 +16,14 @@ type GridHandler struct {
 	server *Server
 }
 
-func RegisterGridRoutes(srv *Server, prefix string) {
+func RegisterGridRoutes(srv *Server, r chi.Router, prefix string) {
 	h := &GridHandler{
 		server: srv,
 	}
 
-	r := chi.NewMux()
-
 	r.Route(prefix, func(r chi.Router) {
-		r.Use(Middleware(srv.Host))
-
 		r.Get("/", h.getNodes)
 	})
-
-	srv.Host.RegisterRouter(prefix, r)
 }
 
 func (h *GridHandler) getNodes(w http.ResponseWriter, r *http.Request) {

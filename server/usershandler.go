@@ -24,15 +24,13 @@ type UsersHandler struct {
 	server *Server
 }
 
-func RegisterUsersRoutes(srv *Server, prefix string) {
+func RegisterUsersRoutes(srv *Server, r chi.Router, prefix string) {
 	h := &UsersHandler{
 		server: srv,
 	}
 
-	r := chi.NewMux()
-
 	r.Route(prefix, func(r chi.Router) {
-		r.Use(Middleware(srv.Host), h.usersEnabled)
+		r.Use(h.usersEnabled)
 
 		r.Get("/", h.getUsers)
 
@@ -47,8 +45,6 @@ func RegisterUsersRoutes(srv *Server, prefix string) {
 		r.Delete("/{id}", h.deleteUser)
 		r.Delete("/{id}/role/{role}", h.deleteUserRole)
 	})
-
-	srv.Host.RegisterRouter(prefix, r)
 }
 
 func (h *UsersHandler) usersEnabled(next http.Handler) http.Handler {

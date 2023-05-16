@@ -29,15 +29,13 @@ type CaseHandler struct {
 	server *Server
 }
 
-func RegisterCaseRoutes(srv *Server, prefix string) {
+func RegisterCaseRoutes(srv *Server, r chi.Router, prefix string) {
 	h := &CaseHandler{
 		server: srv,
 	}
 
-	r := chi.NewMux()
-
 	r.Route(prefix, func(r chi.Router) {
-		r.Use(Middleware(srv.Host), h.caseEnabled)
+		r.Use(h.caseEnabled)
 
 		r.Post("/", h.createCase)
 		r.Post("/events", h.createEvent)
@@ -45,8 +43,6 @@ func RegisterCaseRoutes(srv *Server, prefix string) {
 		r.Post("/tasks", h.createArtifact)
 		r.Post("/artifacts", h.createArtifact)
 
-		r.Get("/", h.getCase)
-		r.Get("/{id}", h.getCase)
 		r.Get("/comments", h.getComment)
 		r.Get("/comments/{id}", h.getComment)
 		r.Get("/events", h.getEvent)
@@ -55,8 +51,12 @@ func RegisterCaseRoutes(srv *Server, prefix string) {
 		r.Get("/tasks/{id}", h.getTask)
 		r.Get("/artifactstream", h.getTask)
 		r.Get("/artifactstream/{id}", h.getTask)
+		r.Get("/artifacts/{groupType}", h.getArtifact)
 		r.Get("/artifacts/{groupType}/{groupID}", h.getArtifact)
 		r.Get("/artifacts/{groupType}/{groupID}/{id}", h.getArtifact)
+		r.Get("/history", h.getHistory)
+		r.Get("/", h.getCase)
+		r.Get("/{id}", h.getCase)
 
 		r.Put("/", h.updateCase)
 		r.Put("/comments", h.updateComment)
@@ -72,8 +72,6 @@ func RegisterCaseRoutes(srv *Server, prefix string) {
 		r.Delete("/artifacts", h.deleteArtifact)
 		r.Delete("/artifacts/{id}", h.deleteArtifact)
 	})
-
-	srv.Host.RegisterRouter(prefix, r)
 }
 
 func (h *CaseHandler) caseEnabled(next http.Handler) http.Handler {
@@ -407,8 +405,11 @@ func (h *CaseHandler) getTask(w http.ResponseWriter, r *http.Request) {
 
 	err := h.copyArtifactStream(ctx, w, id)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		Respond(w, r, http.StatusNotFound, err)
+		return
 	}
+
+	Respond(nil, r, http.StatusOK, nil)
 }
 
 func (h *CaseHandler) getArtifact(w http.ResponseWriter, r *http.Request) {
@@ -425,6 +426,21 @@ func (h *CaseHandler) getArtifact(w http.ResponseWriter, r *http.Request) {
 	obj, err := h.server.Casestore.GetArtifacts(ctx, id, groupType, groupId)
 	if err != nil {
 		Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	Respond(w, r, http.StatusOK, obj)
+}
+
+func (h *CaseHandler) getHistory(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id := r.URL.Query().Get("id")
+
+	obj, err := h.server.Casestore.GetCaseHistory(ctx, id)
+	if err != nil {
+		Respond(w, r, http.StatusNotFound, err)
+		return
 	}
 
 	Respond(w, r, http.StatusOK, obj)

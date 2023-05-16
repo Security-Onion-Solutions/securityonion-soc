@@ -25,24 +25,18 @@ type StreamHandler struct {
 	server *Server
 }
 
-func RegisterStreamRoutes(srv *Server, prefix string) {
+func RegisterStreamRoutes(srv *Server, r chi.Router, prefix string) {
 	h := &StreamHandler{
 		server: srv,
 	}
 
-	r := chi.NewMux()
-
 	r.Route(prefix, func(r chi.Router) {
-		r.Use(Middleware(srv.Host))
-
 		r.Get("/", h.getStream)
 		r.Get("/{jobId}", h.getStream)
 
 		r.Post("/", h.postStream)
 		r.Post("/{jobId}", h.postStream)
 	})
-
-	srv.Host.RegisterRouter(prefix, r)
 }
 
 func (h *StreamHandler) getStream(w http.ResponseWriter, r *http.Request) {

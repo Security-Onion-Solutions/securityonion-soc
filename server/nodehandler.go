@@ -18,20 +18,14 @@ type NodeHandler struct {
 	server *Server
 }
 
-func RegisterNodeRoutes(srv *Server, prefix string) {
+func RegisterNodeRoutes(srv *Server, r chi.Router, prefix string) {
 	h := &NodeHandler{
 		server: srv,
 	}
 
-	r := chi.NewMux()
-
 	r.Route(prefix, func(r chi.Router) {
-		r.Use(Middleware(srv.Host))
-
 		r.Post("/", h.postNode)
 	})
-
-	srv.Host.RegisterRouter(prefix, r)
 }
 
 func (h *NodeHandler) postNode(w http.ResponseWriter, r *http.Request) {

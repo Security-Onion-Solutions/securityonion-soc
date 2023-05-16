@@ -7,7 +7,7 @@
 package elastic
 
 import (
-	"io/ioutil"
+	"os"
 	"testing"
 	"time"
 
@@ -122,7 +122,7 @@ func TestConvertToElasticRequestGroupBySortByCriteria(tester *testing.T) {
 }
 
 func TestConvertFromElasticResultsSuccess(tester *testing.T) {
-	esData, err := ioutil.ReadFile("converter_response.json")
+	esData, err := os.ReadFile("converter_response.json")
 	assert.Nil(tester, err)
 
 	results := model.NewEventSearchResults()
@@ -142,7 +142,7 @@ func TestConvertFromElasticResultsSuccess(tester *testing.T) {
 }
 
 func TestConvertFromElasticResultsFailure(tester *testing.T) {
-	esData, err := ioutil.ReadFile("converter_response_failure.json")
+	esData, err := os.ReadFile("converter_response_failure.json")
 	assert.Nil(tester, err)
 
 	results := model.NewEventSearchResults()

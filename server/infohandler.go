@@ -23,26 +23,18 @@ type InfoHandler struct {
 	timezones []string
 }
 
-func RegisterInfoRoutes(srv *Server, prefix string) {
+func RegisterInfoRoutes(srv *Server, r chi.Router, prefix string) {
 	h := &InfoHandler{
 		server:    srv,
 		timezones: srv.GetTimezones(),
 	}
 
-	r := chi.NewMux()
-
 	r.Route(prefix, func(r chi.Router) {
-		r.Use(Middleware(srv.Host))
-
 		r.Get("/", h.getInfo)
 	})
-
-	srv.Host.RegisterRouter(prefix, r)
 }
 
 func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
-	var info *model.Info
-
 	user, ok := r.Context().Value(web.ContextKeyRequestor).(*model.User)
 	if !ok {
 		err := errors.New("Unable to determine logged in user from context")
@@ -54,11 +46,10 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 	srvToken, err := model.GenerateSrvToken(h.server.Config.SrvKeyBytes, user.Id, h.server.Config.SrvExpSeconds)
 	if err != nil {
 		Respond(w, r, http.StatusInternalServerError, err)
-
 		return
 	}
 
-	info = &model.Info{
+	info := &model.Info{
 		Version:        h.server.Host.Version,
 		License:        "Elastic License 2.0 (ELv2)",
 		LicenseKey:     licensing.GetLicenseKey(),

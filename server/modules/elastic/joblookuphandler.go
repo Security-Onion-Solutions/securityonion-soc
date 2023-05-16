@@ -7,64 +7,60 @@
 package elastic
 
 import (
-	"context"
-	"errors"
 	"net/http"
 	"strconv"
 
+	"github.com/go-chi/chi"
 	"github.com/security-onion-solutions/securityonion-soc/server"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type JobLookupHandler struct {
-	web.BaseHandler
 	server *server.Server
 	store  *ElasticEventstore
 }
 
-func NewJobLookupHandler(srv *server.Server, store *ElasticEventstore) *JobLookupHandler {
-	handler := &JobLookupHandler{}
-	handler.Host = srv.Host
-	handler.server = srv
-	handler.BaseHandler.Impl = handler
-	handler.store = store
-	return handler
-}
-
-func (handler *JobLookupHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	switch request.Method {
-	case http.MethodGet:
-		return handler.get(ctx, writer, request)
+func RegisterJobLookupRoutes(srv *server.Server, store *ElasticEventstore, r chi.Router, prefix string) {
+	h := &JobLookupHandler{
+		server: srv,
+		store:  store,
 	}
-	return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
+
+	r.Route(prefix, func(r chi.Router) {
+		r.Use(server.Middleware(srv.Host))
+
+		r.Get("/", h.getJobLookup)
+	})
 }
 
-func (handler *JobLookupHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	statusCode := http.StatusBadRequest
+func (h *JobLookupHandler) getJobLookup(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 
-	timestampStr := request.URL.Query().Get("time") // Elastic doc timestamp
+	timestampStr := r.URL.Query().Get("time") // Elastic doc timestamp
 
 	idField := "_id"
-	idValue := request.URL.Query().Get("esid") // Elastic doc ID
+	idValue := r.URL.Query().Get("esid") // Elastic doc ID
 	if len(idValue) == 0 {
-		idValue = request.URL.Query().Get("ncid") // Network community ID
+		idValue = r.URL.Query().Get("ncid") // Network community ID
 		idField = "network.community_id"
 	}
 
-	job := handler.server.Datastore.CreateJob(ctx)
-	err := handler.store.PopulateJobFromDocQuery(ctx, idField, idValue, timestampStr, job)
-	if err == nil {
-		err = handler.server.Datastore.AddPivotJob(ctx, job)
-		if err == nil {
-			handler.Host.Broadcast("job", "jobs", job)
-			statusCode = http.StatusOK
-			redirectUrl := handler.server.Config.BaseUrl + "#/job/" + strconv.Itoa(job.Id)
-			http.Redirect(writer, request, redirectUrl, http.StatusFound)
-		}
-	} else {
-		statusCode = http.StatusNotFound
-		http.Error(writer, "Elasticsearch document was not found", http.StatusNotFound)
-		err = nil
+	job := h.server.Datastore.CreateJob(ctx)
+	err := h.store.PopulateJobFromDocQuery(ctx, idField, idValue, timestampStr, job)
+	if err != nil {
+		server.Respond(w, r, http.StatusNotFound, err)
+		return
 	}
-	return statusCode, nil, err
+
+	err = h.server.Datastore.AddPivotJob(ctx, job)
+	if err != nil {
+		server.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	h.server.Host.Broadcast("job", "jobs", job)
+
+	redirectUrl := h.server.Config.BaseUrl + "#/job/" + strconv.Itoa(job.Id)
+	http.Redirect(w, r, redirectUrl, http.StatusFound)
+
+	server.Respond(nil, r, http.StatusOK, nil)
 }

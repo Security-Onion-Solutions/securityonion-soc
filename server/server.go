@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/go-chi/chi"
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -68,20 +69,26 @@ func (server *Server) Start() {
 	} else {
 		log.Info("Starting server")
 
-		RegisterCaseRoutes(server, "/api/case/")
-		RegisterEventRoutes(server, "/api/events/")
-		RegisterInfoRoutes(server, "/api/info/")
-		RegisterJobRoutes(server, "/api/job/")
-		RegisterJobsRoutes(server, "/api/jobs/")
-		RegisterPacketRoutes(server, "/api/packets/")
-		RegisterQueryRoutes(server, "/api/query/")
-		RegisterNodeRoutes(server, "/api/node/")
-		RegisterGridRoutes(server, "/api/grid/")
-		RegisterStreamRoutes(server, "/api/stream/")
-		RegisterUsersRoutes(server, "/api/users/")
-		RegisterConfigRoutes(server, "/api/config/")
-		RegisterGridMemberRoutes(server, "/api/gridmembers/")
-		RegisterRolesRoutes(server, "/api/roles/")
+		r := chi.NewMux()
+
+		r.Use(Middleware(server.Host))
+
+		RegisterCaseRoutes(server, r, "/api/case")
+		RegisterEventRoutes(server, r, "/api/events")
+		RegisterInfoRoutes(server, r, "/api/info")
+		RegisterJobRoutes(server, r, "/api/job")
+		RegisterJobsRoutes(server, r, "/api/jobs")
+		RegisterPacketRoutes(server, r, "/api/packets")
+		RegisterQueryRoutes(server, r, "/api/query")
+		RegisterNodeRoutes(server, r, "/api/node")
+		RegisterGridRoutes(server, r, "/api/grid")
+		RegisterStreamRoutes(server, r, "/api/stream")
+		RegisterUsersRoutes(server, r, "/api/users")
+		RegisterConfigRoutes(server, r, "/api/config")
+		RegisterGridMemberRoutes(server, r, "/api/gridmembers")
+		RegisterRolesRoutes(server, r, "/api/roles")
+
+		server.Host.RegisterRouter("/api/", r)
 
 		server.Host.Start()
 	}

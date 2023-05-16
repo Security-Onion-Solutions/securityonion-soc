@@ -19,22 +19,18 @@ type GridMembersHandler struct {
 	server *Server
 }
 
-func RegisterGridMemberRoutes(srv *Server, prefix string) {
+func RegisterGridMemberRoutes(srv *Server, r chi.Router, prefix string) {
 	h := &GridMembersHandler{
 		server: srv,
 	}
 
-	r := chi.NewMux()
-
 	r.Route(prefix, func(r chi.Router) {
-		r.Use(Middleware(srv.Host), h.gridMembersEnabled)
+		r.Use(h.gridMembersEnabled)
 
 		r.Get("/", h.getGridMembers)
 
 		r.Post("/{id}/{operation}", h.postManageMembers)
 	})
-
-	srv.Host.RegisterRouter(prefix, r)
 }
 
 func (h *GridMembersHandler) gridMembersEnabled(next http.Handler) http.Handler {

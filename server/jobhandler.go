@@ -19,16 +19,12 @@ type JobHandler struct {
 	server *Server
 }
 
-func RegisterJobRoutes(srv *Server, prefix string) {
+func RegisterJobRoutes(srv *Server, r chi.Router, prefix string) {
 	h := &JobHandler{
 		server: srv,
 	}
 
-	r := chi.NewMux()
-
 	r.Route(prefix, func(r chi.Router) {
-		r.Use(Middleware(srv.Host))
-
 		r.Get("/", h.getJob)
 		r.Get("/{jobId}", h.getJob)
 
@@ -38,8 +34,6 @@ func RegisterJobRoutes(srv *Server, prefix string) {
 
 		r.Delete("/{jobId}", h.deleteJob)
 	})
-
-	srv.Host.RegisterRouter(prefix, r)
 }
 
 func (h *JobHandler) getJob(w http.ResponseWriter, r *http.Request) {
@@ -95,7 +89,9 @@ func (h *JobHandler) putJob(w http.ResponseWriter, r *http.Request) {
 	err := ReadJson(r, job)
 	if err != nil {
 		Respond(w, r, http.StatusBadRequest, err)
+		return
 	}
+
 	err = h.server.Datastore.UpdateJob(ctx, job)
 	if err != nil {
 		Respond(w, r, http.StatusNotFound, err)
