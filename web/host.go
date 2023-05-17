@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,6 +22,17 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
+)
+
+const GENERIC_ERROR_MESSAGE = "The request could not be processed. Contact a server admin for assistance with reviewing error details in SOC logs."
+
+type ContextKey string
+
+const (
+	ContextKeyRequestId    ContextKey = "ContextKeyRequestId"    // string
+	ContextKeyRequestorId  ContextKey = "ContextKeyRequestorId"  // string
+	ContextKeyRequestor    ContextKey = "ContextKeyRequestor"    // *model.User
+	ContextKeyRequestStart ContextKey = "ContextKeyRequestStart" // time.Time
 )
 
 type HostHandler interface {
@@ -254,4 +266,12 @@ func (host *Host) Preprocess(ctx context.Context, req *http.Request) (context.Co
 		}
 	}
 	return ctx, statusCode, err
+}
+
+func ConvertErrorToSafeString(err error) string {
+	msg := err.Error()
+	if !strings.HasPrefix(msg, "ERROR_") {
+		msg = GENERIC_ERROR_MESSAGE
+	}
+	return msg
 }

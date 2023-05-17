@@ -405,7 +405,7 @@ func (h *CaseHandler) getTask(w http.ResponseWriter, r *http.Request) {
 
 	err := h.copyArtifactStream(ctx, w, id)
 	if err != nil {
-		Respond(w, r, http.StatusNotFound, err)
+		Respond(w, r, http.StatusNotFound, nil)
 		return
 	}
 
