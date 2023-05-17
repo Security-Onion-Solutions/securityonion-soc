@@ -33,12 +33,12 @@ func NewWebSocketHandler(host *Host) *WebSocketHandler {
 	return handler
 }
 
-func RegisterWebSocketRoutes(host *Host, prefix string, r chi.Router) {
+func RegisterWebSocketRoutes(host *Host, r chi.Router) {
 	handler := &WebSocketHandler{
 		Host: host,
 	}
 
-	r.Route(prefix, func(r chi.Router) {
+	r.Group(func(r chi.Router) {
 		r.Use(middleware(host))
 
 		r.Get("/ws", handler.Handle)
@@ -72,9 +72,24 @@ func middleware(host *Host) func(http.Handler) http.Handler {
 func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	ip := GetSourceIp(r)
+
+	var user *model.User
+	var ok bool
+	user, ok = ctx.Value(ContextKeyRequestor).(*model.User)
+	if !ok {
+		log.WithFields(log.Fields{
+			"remoteAddr": r.RemoteAddr,
+			"sourceIp":   ip,
+			"path":       r.URL.Path,
+		}).Warn("User does not exist in context")
+		RespondWS(w, r, http.StatusBadRequest, errors.New("User does not exist in context; unable to complete websocket"))
+
+		return
+	}
+
 	upgrader := websocket.Upgrader{}
 	connection, err := upgrader.Upgrade(w, r, nil)
-	ip := GetSourceIp(r)
 	if err != nil {
 		log.WithError(err).WithFields(log.Fields{
 			"remoteAddr": r.RemoteAddr,
@@ -82,20 +97,6 @@ func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.
 			"path":       r.URL.Path,
 		}).Warn("Failed to upgrade websocket")
 		RespondWS(w, r, http.StatusBadRequest, err)
-
-		return
-	}
-
-	var user *model.User
-	var ok bool
-	user, ok = ctx.Value(ContextKeyRequestor).(*model.User)
-	if !ok {
-		log.WithError(err).WithFields(log.Fields{
-			"remoteAddr": r.RemoteAddr,
-			"sourceIp":   ip,
-			"path":       r.URL.Path,
-		}).Warn("User does not exist in context")
-		RespondWS(w, r, http.StatusBadRequest, errors.New("User does not exist in context; unable to complete websocket"))
 
 		return
 	}

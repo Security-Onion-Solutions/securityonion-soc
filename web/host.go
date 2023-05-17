@@ -96,7 +96,11 @@ func (host *Host) Start() {
 	host.running = true
 	host.connections = make([]*Connection, 0)
 	http.Handle("/", http.FileServer(http.Dir(host.htmlDir)))
-	host.Register("/ws", NewWebSocketHandler(host))
+
+	r := chi.NewMux()
+	RegisterWebSocketRoutes(host, r)
+	host.RegisterRouter("/ws", r)
+
 	host.httpServer = &http.Server{Addr: host.bindAddress}
 	go host.manageConnections(60000 * time.Millisecond)
 	err := host.httpServer.ListenAndServe()
