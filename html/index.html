@@ -858,7 +858,7 @@
                     <span class="mr-2">
                       {{ i18n.licenseKey }}
                     </span>
-                    <router-link v-if="$root.isUserAdmin()" :to="{ name: 'config', query: {s: 'soc.licenseKey'}}" style="text-decoration: none; cursor: 'pointer'">
+                    <router-link v-if="$root.isUserAdmin()" :to="{ name: 'config', query: {s: 'soc.config.licenseKey'}}" style="text-decoration: none; cursor: 'pointer'">
                       <v-btn icon>
                         <v-icon class="mx-2" :title="i18n.view">fa-pencil</v-icon>
                       </v-btn>
