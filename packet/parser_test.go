@@ -7,7 +7,6 @@
 package packet
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -27,7 +26,7 @@ func TestOverrideType(tester *testing.T) {
 
 func TestUnwrapPcap(tester *testing.T) {
 	filename := "parser_resource.pcap"
-	tmpFile, err := ioutil.TempFile("", "unwrap-test")
+	tmpFile, err := os.CreateTemp("", "unwrap-test")
 	assert.Nil(tester, err, "Unable to execute test due to bad temp file")
 	unwrappedFilename := tmpFile.Name()
 	os.Remove(unwrappedFilename)       // Don't need the actual file right now, delete it. We only need a filename.

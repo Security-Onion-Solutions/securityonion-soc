@@ -7,7 +7,6 @@
 package analyze
 
 import (
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"testing"
@@ -26,7 +25,7 @@ func init_tmp(tester *testing.T) {
 	cleanup_tmp()
 	os.MkdirAll(TMP_DIR, 0777)
 
-	entries, err := ioutil.ReadDir(TMP_DIR)
+	entries, err := os.ReadDir(TMP_DIR)
 	assert.NoError(tester, err)
 	assert.Equal(tester, 0, len(entries))
 }
@@ -55,7 +54,7 @@ func TestCreateAnalyzer(tester *testing.T) {
 	assert.Error(tester, err, "Unable to invoke JobMgr.AddJobProcessor due to nil agent")
 	assert.Equal(tester, 1, len(sq.analyzers))
 
-	entries, err := ioutil.ReadDir(TMP_DIR)
+	entries, err := os.ReadDir(TMP_DIR)
 	assert.NoError(tester, err)
 	assert.Equal(tester, 2, len(entries))
 }

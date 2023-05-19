@@ -9,6 +9,7 @@ package elastic
 import (
 	"errors"
 
+	"github.com/go-chi/chi"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -93,9 +94,14 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
 }
 
 func (elastic *Elastic) Start() error {
-	handler := NewJobLookupHandler(elastic.server, elastic.store)
-	elastic.server.Host.Register("/joblookup", handler)
-	elastic.server.Host.Register("/securityonion/joblookup", handler) // deprecated
+	r := chi.NewMux()
+	dep := chi.NewMux()
+
+	RegisterJobLookupRoutes(elastic.server, elastic.store, r, "/joblookup")
+	RegisterJobLookupRoutes(elastic.server, elastic.store, dep, "/securityonion/joblookup") // deprecated
+
+	elastic.server.Host.RegisterRouter("/joblookup", r)
+	elastic.server.Host.RegisterRouter("/securityonion/joblookup", dep) // deprecated
 	return nil
 }
 

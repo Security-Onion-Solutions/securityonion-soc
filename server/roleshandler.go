@@ -7,39 +7,46 @@
 package server
 
 import (
-	"context"
 	"errors"
 	"net/http"
 
+	"github.com/go-chi/chi"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type RolesHandler struct {
-	web.BaseHandler
 	server *Server
 }
 
-func NewRolesHandler(srv *Server) *RolesHandler {
-	handler := &RolesHandler{}
-	handler.Host = srv.Host
-	handler.server = srv
-	handler.Impl = handler
-	return handler
-}
-
-func (rolesHandler *RolesHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	if rolesHandler.server.Rolestore == nil {
-		return http.StatusMethodNotAllowed, nil, errors.New("Roles module not enabled")
+func RegisterRolesRoutes(srv *Server, r chi.Router, prefix string) {
+	h := &RolesHandler{
+		server: srv,
 	}
 
-	switch request.Method {
-	case http.MethodGet:
-		return rolesHandler.get(ctx, writer, request)
-	}
-	return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
+	r.Route(prefix, func(r chi.Router) {
+		r.Use(rolesEnabled(srv))
+
+		r.Get("/", h.getRoles)
+	})
 }
 
-func (rolesHandler *RolesHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	roles := rolesHandler.server.Rolestore.GetRoles(ctx)
-	return http.StatusOK, roles, nil
+func rolesEnabled(server *Server) func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if server.Rolestore == nil {
+				web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Roles module not enabled"))
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func (h *RolesHandler) getRoles(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	roles := h.server.Rolestore.GetRoles(ctx)
+
+	web.Respond(w, r, http.StatusOK, roles)
 }
