@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/security-onion-solutions/securityonion-soc/web"
+
 	"github.com/apex/log"
 	"github.com/go-chi/chi"
 )
@@ -49,19 +51,19 @@ func (h *StreamHandler) getStream(w http.ResponseWriter, r *http.Request) {
 
 	jobId, err := strconv.ParseInt(id, 10, 32)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	unwrap, err := strconv.ParseBool(r.URL.Query().Get("unwrap"))
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	reader, filename, length, err := h.server.Datastore.GetPacketStream(ctx, int(jobId), unwrap)
 	if err != nil {
-		Respond(w, r, http.StatusNotFound, err)
+		web.Respond(w, r, http.StatusNotFound, err)
 		return
 	}
 
@@ -71,7 +73,7 @@ func (h *StreamHandler) getStream(w http.ResponseWriter, r *http.Request) {
 	if len(extension) > 0 {
 		safe := extensionVerifier.MatchString(extension)
 		if !safe {
-			Respond(w, r, http.StatusBadRequest, errors.New("Invalid extension"))
+			web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid extension"))
 			return
 		}
 
@@ -91,7 +93,7 @@ func (h *StreamHandler) getStream(w http.ResponseWriter, r *http.Request) {
 		log.WithError(err).WithFields(log.Fields{
 			"name": filename,
 		}).Error("Failed to copy stream")
-		Respond(nil, r, http.StatusInternalServerError, err)
+		web.Respond(nil, r, http.StatusInternalServerError, err)
 
 		return
 	}
@@ -101,7 +103,7 @@ func (h *StreamHandler) getStream(w http.ResponseWriter, r *http.Request) {
 		"size": written,
 	}).Info("Copied stream to response")
 
-	Respond(nil, r, http.StatusOK, nil)
+	web.Respond(nil, r, http.StatusOK, nil)
 }
 
 func (h *StreamHandler) postStream(w http.ResponseWriter, r *http.Request) {
@@ -114,15 +116,15 @@ func (h *StreamHandler) postStream(w http.ResponseWriter, r *http.Request) {
 
 	jobId, err := strconv.ParseInt(id, 10, 32)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	err = h.server.Datastore.SavePacketStream(ctx, int(jobId), r.Body)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, nil)
+	web.Respond(w, r, http.StatusOK, nil)
 }

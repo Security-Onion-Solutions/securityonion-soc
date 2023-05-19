@@ -11,6 +11,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type RolesHandler struct {
@@ -33,7 +34,7 @@ func rolesEnabled(server *Server) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if server.Rolestore == nil {
-				Respond(w, r, http.StatusMethodNotAllowed, errors.New("Roles module not enabled"))
+				web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Roles module not enabled"))
 				return
 			}
 
@@ -47,5 +48,5 @@ func (h *RolesHandler) getRoles(w http.ResponseWriter, r *http.Request) {
 
 	roles := h.server.Rolestore.GetRoles(ctx)
 
-	Respond(w, r, http.StatusOK, roles)
+	web.Respond(w, r, http.StatusOK, roles)
 }

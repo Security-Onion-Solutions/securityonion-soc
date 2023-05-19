@@ -11,6 +11,7 @@ import (
 	"net/http"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/go-chi/chi"
 )
@@ -36,7 +37,7 @@ func RegisterGridMemberRoutes(srv *Server, r chi.Router, prefix string) {
 func (h *GridMembersHandler) gridMembersEnabled(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if h.server.GridMembersstore == nil {
-			Respond(w, r, http.StatusMethodNotAllowed, errors.New("GridMembers module not enabled"))
+			web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("GridMembers module not enabled"))
 			return
 		}
 
@@ -49,11 +50,11 @@ func (h *GridMembersHandler) getGridMembers(w http.ResponseWriter, r *http.Reque
 
 	members, err := h.server.GridMembersstore.GetMembers(ctx)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, members)
+	web.Respond(w, r, http.StatusOK, members)
 }
 
 func (h *GridMembersHandler) postManageMembers(w http.ResponseWriter, r *http.Request) {
@@ -61,21 +62,21 @@ func (h *GridMembersHandler) postManageMembers(w http.ResponseWriter, r *http.Re
 
 	id := chi.URLParam(r, "id")
 	if !model.IsValidMinionId(id) {
-		Respond(w, r, http.StatusBadRequest, errors.New("Invalid minion ID"))
+		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid minion ID"))
 		return
 	}
 
 	op := chi.URLParam(r, "operation")
 	if op != "add" && op != "reject" && op != "delete" && op != "test" {
-		Respond(w, r, http.StatusBadRequest, errors.New("Invalid operation"))
+		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid operation"))
 		return
 	}
 
 	err := h.server.GridMembersstore.ManageMember(ctx, op, id)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, nil)
+	web.Respond(w, r, http.StatusOK, nil)
 }

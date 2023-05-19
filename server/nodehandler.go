@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/go-chi/chi"
 )
@@ -33,15 +34,15 @@ func (h *NodeHandler) postNode(w http.ResponseWriter, r *http.Request) {
 
 	node := model.NewNode("")
 
-	err := ReadJson(r, node)
+	err := web.ReadJson(r, node)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	node, err = h.server.Datastore.UpdateNode(ctx, node)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -49,5 +50,5 @@ func (h *NodeHandler) postNode(w http.ResponseWriter, r *http.Request) {
 	h.server.Host.Broadcast("node", "nodes", node)
 	job := h.server.Datastore.GetNextJob(ctx, node.Id)
 
-	Respond(w, r, http.StatusOK, job)
+	web.Respond(w, r, http.StatusOK, job)
 }

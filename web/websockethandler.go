@@ -7,13 +7,9 @@
 package web
 
 import (
-	"context"
-	jsonpkg "encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"runtime"
-	"time"
 
 	"github.com/apex/log"
 	"github.com/go-chi/chi"
@@ -39,34 +35,10 @@ func RegisterWebSocketRoutes(host *Host, r chi.Router) {
 	}
 
 	r.Group(func(r chi.Router) {
-		r.Use(middleware(host))
+		r.Use(Middleware(host, true))
 
 		r.Get("/ws", handler.Handle)
 	})
-}
-
-func middleware(host *Host) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Version", host.Version)
-
-			ctx := r.Context()
-			ctx = context.WithValue(ctx, ContextKeyRequestStart, time.Now())
-
-			ctx, statusCode, err := host.Preprocess(ctx, r)
-			if err != nil {
-				r = r.WithContext(ctx)
-				RespondWS(w, r, statusCode, err)
-				return
-			}
-
-			r = r.WithContext(ctx)
-
-			// no validateRequest for WS
-
-			next.ServeHTTP(w, r)
-		})
-	}
 }
 
 func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.Request) {
@@ -83,7 +55,7 @@ func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.
 			"sourceIp":   ip,
 			"path":       r.URL.Path,
 		}).Warn("User does not exist in context")
-		RespondWS(w, r, http.StatusBadRequest, errors.New("User does not exist in context; unable to complete websocket"))
+		Respond(w, r, http.StatusBadRequest, errors.New("User does not exist in context; unable to complete websocket"))
 
 		return
 	}
@@ -96,7 +68,7 @@ func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.
 			"sourceIp":   ip,
 			"path":       r.URL.Path,
 		}).Warn("Failed to upgrade websocket")
-		RespondWS(w, r, http.StatusBadRequest, err)
+		Respond(w, r, http.StatusBadRequest, err)
 
 		return
 	}
@@ -134,86 +106,13 @@ func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.
 	}).Info("WebSocket disconnected")
 	webSocketHandler.Host.RemoveConnection(connection)
 
-	RespondWS(nil, r, http.StatusOK, nil)
+	Respond(nil, r, http.StatusOK, nil)
 }
 
 func (webSocketHandler *WebSocketHandler) handleMessage(msg *WebSocketMessage, conn *Connection) {
 	if msg.Kind == "Ping" {
 		conn.UpdatePingTime()
 	}
-}
-
-func RespondWS(w http.ResponseWriter, r *http.Request, statusCode int, obj any) {
-	var contentLength int
-
-	ctx := r.Context()
-	start := ctx.Value(ContextKeyRequestStart).(time.Time)
-	elapsed := time.Since(start).Milliseconds()
-
-	err, isErr := obj.(error)
-	if isErr {
-		log.WithError(err).WithFields(log.Fields{
-			"requestId": ctx.Value(ContextKeyRequestId),
-			"requestor": ctx.Value(ContextKeyRequestor),
-		}).Warn("Request did not complete successfully")
-
-		var unauthorizedError *model.Unauthorized
-		if errors.As(err, &unauthorizedError) {
-			statusCode = http.StatusUnauthorized
-		} else if statusCode < http.StatusBadRequest {
-			statusCode = http.StatusInternalServerError
-		}
-
-		bytes := []byte(ConvertErrorToSafeString(err))
-		contentLength = len(bytes)
-
-		if w != nil {
-			w.WriteHeader(statusCode)
-			_, _ = w.Write(bytes)
-		}
-	} else if obj != nil {
-		switch data := obj.(type) {
-		case []byte:
-			contentLength = len(data)
-			if w != nil {
-				_, _ = w.Write(data)
-			}
-		default:
-			bytes, err := jsonpkg.Marshal(obj)
-			if err != nil {
-				RespondWS(w, r, http.StatusInternalServerError, err)
-				return
-			}
-
-			contentLength = len(bytes)
-
-			if w != nil {
-				w.WriteHeader(statusCode)
-				_, _ = w.Write(bytes)
-			}
-		}
-	}
-
-	fnc, file, line := getCallerDetails(0)
-
-	impl := "unknown"
-	if line != -1 {
-		impl = fmt.Sprintf("%s:%d:%s", file, line, fnc)
-	}
-
-	log.WithFields(log.Fields{
-		"remoteAddr":    r.RemoteAddr,
-		"sourceIp":      GetSourceIp(r),
-		"path":          r.URL.Path,
-		"query":         r.URL.Query(),
-		"impl":          impl,
-		"statusCode":    statusCode,
-		"contentLength": contentLength,
-		"method":        r.Method,
-		"elapsedMs":     elapsed,
-		"requestId":     ctx.Value(ContextKeyRequestId),
-		"requestor":     ctx.Value(ContextKeyRequestor),
-	}).Info("Handled request")
 }
 
 func getCallerDetails(skip int) (funcName string, file string, line int) {

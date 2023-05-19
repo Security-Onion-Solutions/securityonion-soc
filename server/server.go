@@ -71,7 +71,7 @@ func (server *Server) Start() {
 
 		r := chi.NewMux()
 
-		r.Use(Middleware(server.Host))
+		r.Use(web.Middleware(server.Host, false))
 
 		RegisterCaseRoutes(server, r, "/api/case")
 		RegisterEventRoutes(server, r, "/api/events")

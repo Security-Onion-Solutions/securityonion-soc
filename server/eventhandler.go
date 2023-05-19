@@ -12,6 +12,7 @@ import (
 	"net/http"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/go-chi/chi"
 )
@@ -36,7 +37,7 @@ func RegisterEventRoutes(srv *Server, r chi.Router, prefix string) {
 func (h *EventHandler) eventsEnabled(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if h.server.Eventstore == nil {
-			Respond(w, r, http.StatusMethodNotAllowed, errors.New("Method not supported"))
+			web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Method not supported"))
 			return
 		}
 
@@ -49,7 +50,7 @@ func (h *EventHandler) getEvent(w http.ResponseWriter, r *http.Request) {
 
 	err := r.ParseForm()
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
@@ -61,17 +62,17 @@ func (h *EventHandler) getEvent(w http.ResponseWriter, r *http.Request) {
 		r.Form.Get("metricLimit"),
 		r.Form.Get("eventLimit"))
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	results, err := h.server.Eventstore.Search(ctx, criteria)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, results)
+	web.Respond(w, r, http.StatusOK, results)
 }
 
 func (h *EventHandler) postAck(w http.ResponseWriter, r *http.Request) {
@@ -81,15 +82,15 @@ func (h *EventHandler) postAck(w http.ResponseWriter, r *http.Request) {
 
 	err := json.NewDecoder(r.Body).Decode(&ackCriteria)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	results, err := h.server.Eventstore.Acknowledge(ctx, ackCriteria)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, results)
+	web.Respond(w, r, http.StatusOK, results)
 }

@@ -12,6 +12,7 @@ import (
 	"net/http"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/go-chi/chi"
 )
@@ -44,7 +45,7 @@ func RegisterConfigRoutes(srv *Server, r chi.Router, prefix string) {
 func (h *ConfigHandler) configEnabled(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if h.server.Configstore == nil {
-			Respond(w, r, http.StatusMethodNotAllowed, errors.New("Config module not enabled"))
+			web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Config module not enabled"))
 			return
 		}
 
@@ -57,11 +58,11 @@ func (h *ConfigHandler) getConfig(w http.ResponseWriter, r *http.Request) {
 
 	settings, err := h.server.Configstore.GetSettings(ctx)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, settings)
+	web.Respond(w, r, http.StatusOK, settings)
 }
 
 func (h *ConfigHandler) putSetting(w http.ResponseWriter, r *http.Request) {
@@ -70,22 +71,22 @@ func (h *ConfigHandler) putSetting(w http.ResponseWriter, r *http.Request) {
 
 	err := json.NewDecoder(r.Body).Decode(&setting)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	if !model.IsValidSettingId(setting.Id) || (setting.NodeId != "" && !model.IsValidMinionId(setting.NodeId)) {
-		Respond(w, r, http.StatusBadRequest, errors.New("Invalid setting"))
+		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid setting"))
 		return
 	}
 
 	err = h.server.Configstore.UpdateSetting(ctx, &setting, false)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, nil)
+	web.Respond(w, r, http.StatusOK, nil)
 }
 
 func (h *ConfigHandler) putSync(w http.ResponseWriter, r *http.Request) {
@@ -93,11 +94,11 @@ func (h *ConfigHandler) putSync(w http.ResponseWriter, r *http.Request) {
 
 	err := h.server.Configstore.SyncSettings(ctx)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, nil)
+	web.Respond(w, r, http.StatusOK, nil)
 }
 
 func (h *ConfigHandler) deleteConfig(w http.ResponseWriter, r *http.Request) {
@@ -119,15 +120,15 @@ func (h *ConfigHandler) deleteConfig(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	if !model.IsValidSettingId(setting.Id) || (setting.NodeId != "" && !model.IsValidMinionId(setting.NodeId)) {
-		Respond(w, r, http.StatusBadRequest, errors.New("Invalid setting"))
+		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid setting"))
 		return
 	}
 
 	err = h.server.Configstore.UpdateSetting(ctx, setting, true)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, nil)
+	web.Respond(w, r, http.StatusOK, nil)
 }

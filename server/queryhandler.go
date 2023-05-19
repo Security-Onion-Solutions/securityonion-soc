@@ -12,6 +12,7 @@ import (
 	"strconv"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/go-chi/chi"
 )
@@ -35,7 +36,7 @@ func (h *QueryHandler) getQuery(w http.ResponseWriter, r *http.Request) {
 
 	err := r.ParseForm()
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, errors.New("Invalid query operation inputs"))
+		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid query operation inputs"))
 		return
 	}
 
@@ -44,7 +45,7 @@ func (h *QueryHandler) getQuery(w http.ResponseWriter, r *http.Request) {
 
 	err = query.Parse(queryStr)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, errors.New("Invalid query input"))
+		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid query input"))
 		return
 	}
 
@@ -61,7 +62,7 @@ func (h *QueryHandler) getQuery(w http.ResponseWriter, r *http.Request) {
 		if len(value) > 0 {
 			alteredQuery, err = query.Filter(field, value, scalar, mode, condense)
 			if err != nil {
-				Respond(w, r, http.StatusBadRequest, errors.New("Invalid query after filter applied"))
+				web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid query after filter applied"))
 				return
 			}
 		} else {
@@ -69,7 +70,7 @@ func (h *QueryHandler) getQuery(w http.ResponseWriter, r *http.Request) {
 			for _, value := range values {
 				alteredQuery, err = query.Filter(field, value, scalar, mode, condense)
 				if err != nil {
-					Respond(w, r, http.StatusBadRequest, errors.New("Invalid query after filter applied"))
+					web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid query after filter applied"))
 					return
 				}
 
@@ -78,7 +79,7 @@ func (h *QueryHandler) getQuery(w http.ResponseWriter, r *http.Request) {
 
 				err = query.Parse(queryStr)
 				if err != nil {
-					Respond(w, r, http.StatusBadRequest, errors.New("Unable to parse query"))
+					web.Respond(w, r, http.StatusBadRequest, errors.New("Unable to parse query"))
 					return
 				}
 			}
@@ -94,7 +95,7 @@ func (h *QueryHandler) getQuery(w http.ResponseWriter, r *http.Request) {
 
 		alteredQuery, err = query.Group(int(groupIdx), field)
 		if err != nil {
-			Respond(w, r, http.StatusBadRequest, errors.New("Invalid query after group applied"))
+			web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid query after group applied"))
 			return
 		}
 	case "sorted":
@@ -102,13 +103,13 @@ func (h *QueryHandler) getQuery(w http.ResponseWriter, r *http.Request) {
 
 		alteredQuery, err = query.Sort(field)
 		if err != nil {
-			Respond(w, r, http.StatusBadRequest, errors.New("Invalid query after sort applied"))
+			web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid query after sort applied"))
 			return
 		}
 	default:
-		Respond(w, r, http.StatusBadRequest, errors.New("Unsupported query operation"))
+		web.Respond(w, r, http.StatusBadRequest, errors.New("Unsupported query operation"))
 		return
 	}
 
-	Respond(w, r, http.StatusOK, alteredQuery)
+	web.Respond(w, r, http.StatusOK, alteredQuery)
 }

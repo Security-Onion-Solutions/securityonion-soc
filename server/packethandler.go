@@ -11,6 +11,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type PacketHandler struct {
@@ -38,7 +39,7 @@ func (h *PacketHandler) getPackets(w http.ResponseWriter, r *http.Request) {
 
 	jobId, err := strconv.ParseInt(id, 10, 32)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
@@ -63,9 +64,9 @@ func (h *PacketHandler) getPackets(w http.ResponseWriter, r *http.Request) {
 
 	packets, err := h.server.Datastore.GetPackets(ctx, int(jobId), int(offset), count, unwrap)
 	if err != nil {
-		Respond(w, r, http.StatusNotFound, err)
+		web.Respond(w, r, http.StatusNotFound, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, packets)
+	web.Respond(w, r, http.StatusOK, packets)
 }

@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type GridHandler struct {
@@ -31,5 +32,5 @@ func (h *GridHandler) getNodes(w http.ResponseWriter, r *http.Request) {
 
 	nodes := h.server.Datastore.GetNodes(ctx)
 
-	Respond(w, r, http.StatusOK, nodes)
+	web.Respond(w, r, http.StatusOK, nodes)
 }

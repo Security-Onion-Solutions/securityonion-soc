@@ -11,6 +11,7 @@ import (
 	"strconv"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/go-chi/chi"
 )
@@ -46,17 +47,17 @@ func (h *JobHandler) getJob(w http.ResponseWriter, r *http.Request) {
 
 	jobId, err := strconv.ParseInt(rawId, 10, 32)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	job := h.server.Datastore.GetJob(ctx, int(jobId))
 	if job == nil {
-		Respond(w, r, http.StatusNotFound, nil)
+		web.Respond(w, r, http.StatusNotFound, nil)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, job)
+	web.Respond(w, r, http.StatusOK, job)
 }
 
 func (h *JobHandler) postJob(w http.ResponseWriter, r *http.Request) {
@@ -64,21 +65,21 @@ func (h *JobHandler) postJob(w http.ResponseWriter, r *http.Request) {
 
 	job := h.server.Datastore.CreateJob(ctx)
 
-	err := ReadJson(r, job)
+	err := web.ReadJson(r, job)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	err = h.server.Datastore.AddJob(ctx, job)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	h.server.Host.Broadcast("job", "jobs", job)
 
-	Respond(w, r, http.StatusCreated, job)
+	web.Respond(w, r, http.StatusCreated, job)
 }
 
 func (h *JobHandler) putJob(w http.ResponseWriter, r *http.Request) {
@@ -86,21 +87,21 @@ func (h *JobHandler) putJob(w http.ResponseWriter, r *http.Request) {
 
 	job := model.NewJob()
 
-	err := ReadJson(r, job)
+	err := web.ReadJson(r, job)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	err = h.server.Datastore.UpdateJob(ctx, job)
 	if err != nil {
-		Respond(w, r, http.StatusNotFound, err)
+		web.Respond(w, r, http.StatusNotFound, err)
 		return
 	}
 
 	h.server.Host.Broadcast("job", "jobs", job)
 
-	Respond(w, r, http.StatusOK, job)
+	web.Respond(w, r, http.StatusOK, job)
 }
 
 func (h *JobHandler) deleteJob(w http.ResponseWriter, r *http.Request) {
@@ -110,17 +111,17 @@ func (h *JobHandler) deleteJob(w http.ResponseWriter, r *http.Request) {
 
 	jobId, err := strconv.Atoi(id)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	job, err := h.server.Datastore.DeleteJob(ctx, int(jobId))
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
 	h.server.Host.Broadcast("job", "jobs", job)
 
-	Respond(w, r, http.StatusOK, nil)
+	web.Respond(w, r, http.StatusOK, nil)
 }

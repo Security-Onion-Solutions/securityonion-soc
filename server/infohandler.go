@@ -38,14 +38,14 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(web.ContextKeyRequestor).(*model.User)
 	if !ok {
 		err := errors.New("Unable to determine logged in user from context")
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 
 		return
 	}
 
 	srvToken, err := model.GenerateSrvToken(h.server.Config.SrvKeyBytes, user.Id, h.server.Config.SrvExpSeconds)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -62,5 +62,5 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 		SrvToken:       srvToken,
 	}
 
-	Respond(w, r, http.StatusOK, info)
+	web.Respond(w, r, http.StatusOK, info)
 }

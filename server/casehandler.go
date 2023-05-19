@@ -77,7 +77,7 @@ func RegisterCaseRoutes(srv *Server, r chi.Router, prefix string) {
 func (h *CaseHandler) caseEnabled(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if h.server.Casestore == nil {
-			Respond(w, r, http.StatusMethodNotAllowed, errors.New("ERROR_CASE_MODULE_NOT_ENABLED"))
+			web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("ERROR_CASE_MODULE_NOT_ENABLED"))
 			return
 		}
 
@@ -91,55 +91,55 @@ func (h *CaseHandler) createCase(w http.ResponseWriter, r *http.Request) {
 
 	err := json.NewDecoder(r.Body).Decode(&inputCase)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	obj, err := h.server.Casestore.Create(ctx, inputCase)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, obj)
+	web.Respond(w, r, http.StatusOK, obj)
 }
 
 func (h *CaseHandler) createEvent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	inputEvent := model.NewRelatedEvent()
 
-	err := ReadJson(r, &inputEvent)
+	err := web.ReadJson(r, &inputEvent)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	obj, err := h.server.Casestore.CreateRelatedEvent(ctx, inputEvent)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, obj)
+	web.Respond(w, r, http.StatusOK, obj)
 }
 
 func (h *CaseHandler) createComment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	inputComment := model.NewComment()
 
-	err := ReadJson(r, &inputComment)
+	err := web.ReadJson(r, &inputComment)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	obj, err := h.server.Casestore.CreateComment(ctx, inputComment)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, obj)
+	web.Respond(w, r, http.StatusOK, obj)
 }
 
 func (h *CaseHandler) createArtifact(w http.ResponseWriter, r *http.Request) {
@@ -152,20 +152,20 @@ func (h *CaseHandler) createArtifact(w http.ResponseWriter, r *http.Request) {
 		log.WithField("contentType", contentType).Debug("Multipart content type not found")
 		err := json.NewDecoder(r.Body).Decode(&inputArtifact)
 		if err != nil {
-			Respond(w, r, http.StatusBadRequest, err)
+			web.Respond(w, r, http.StatusBadRequest, err)
 			return
 		}
 	} else {
 		err := r.ParseMultipartForm(int64(h.server.Config.MaxUploadSizeBytes))
 		if err != nil {
-			Respond(w, r, http.StatusBadRequest, err)
+			web.Respond(w, r, http.StatusBadRequest, err)
 			return
 		}
 
 		jsonData := r.FormValue("json")
 		err = json.Unmarshal([]byte(jsonData), &inputArtifact)
 		if err != nil {
-			Respond(w, r, http.StatusBadRequest, err)
+			web.Respond(w, r, http.StatusBadRequest, err)
 			return
 		}
 
@@ -174,12 +174,12 @@ func (h *CaseHandler) createArtifact(w http.ResponseWriter, r *http.Request) {
 		// Try pulling an attachment file
 		file, handler, err := r.FormFile("attachment")
 		if err != nil {
-			Respond(w, r, http.StatusBadRequest, err)
+			web.Respond(w, r, http.StatusBadRequest, err)
 			return
 		}
 
 		if file == nil {
-			Respond(w, r, http.StatusBadRequest, errors.New("Attachment file not found"))
+			web.Respond(w, r, http.StatusBadRequest, errors.New("Attachment file not found"))
 			return
 		}
 
@@ -187,7 +187,7 @@ func (h *CaseHandler) createArtifact(w http.ResponseWriter, r *http.Request) {
 		defer file.Close()
 
 		if len(inputArtifact.Value) > 0 {
-			Respond(w, r, http.StatusBadRequest, errors.New("Attachment artifacts must be provided without a value"))
+			web.Respond(w, r, http.StatusBadRequest, errors.New("Attachment artifacts must be provided without a value"))
 			return
 		}
 
@@ -197,7 +197,7 @@ func (h *CaseHandler) createArtifact(w http.ResponseWriter, r *http.Request) {
 		artifactStream := model.NewArtifactStream()
 		inputArtifact.StreamLen, inputArtifact.MimeType, inputArtifact.Md5, inputArtifact.Sha1, inputArtifact.Sha256, err = artifactStream.Write(file)
 		if err != nil {
-			Respond(w, r, http.StatusInternalServerError, err)
+			web.Respond(w, r, http.StatusInternalServerError, err)
 			return
 		}
 
@@ -220,7 +220,7 @@ func (h *CaseHandler) createArtifact(w http.ResponseWriter, r *http.Request) {
 		var artifactStreamId string
 		artifactStreamId, err = h.server.Casestore.CreateArtifactStream(ctx, artifactStream)
 		if err != nil {
-			Respond(w, r, http.StatusInternalServerError, err)
+			web.Respond(w, r, http.StatusInternalServerError, err)
 			return
 		}
 
@@ -229,11 +229,11 @@ func (h *CaseHandler) createArtifact(w http.ResponseWriter, r *http.Request) {
 
 	obj, err := h.server.Casestore.CreateArtifact(ctx, inputArtifact)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, obj)
+	web.Respond(w, r, http.StatusOK, obj)
 }
 
 func (h *CaseHandler) updateCase(w http.ResponseWriter, r *http.Request) {
@@ -242,17 +242,17 @@ func (h *CaseHandler) updateCase(w http.ResponseWriter, r *http.Request) {
 
 	err := json.NewDecoder(r.Body).Decode(&inputCase)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	obj, err := h.server.Casestore.Update(ctx, inputCase)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, obj)
+	web.Respond(w, r, http.StatusOK, obj)
 }
 
 func (h *CaseHandler) updateComment(w http.ResponseWriter, r *http.Request) {
@@ -261,17 +261,17 @@ func (h *CaseHandler) updateComment(w http.ResponseWriter, r *http.Request) {
 
 	err := json.NewDecoder(r.Body).Decode(&inputComment)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	obj, err := h.server.Casestore.UpdateComment(ctx, inputComment)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, obj)
+	web.Respond(w, r, http.StatusOK, obj)
 }
 
 func (h *CaseHandler) updateArtifact(w http.ResponseWriter, r *http.Request) {
@@ -280,17 +280,17 @@ func (h *CaseHandler) updateArtifact(w http.ResponseWriter, r *http.Request) {
 
 	err := json.NewDecoder(r.Body).Decode(&inputArtifact)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	obj, err := h.server.Casestore.UpdateArtifact(ctx, inputArtifact)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, obj)
+	web.Respond(w, r, http.StatusOK, obj)
 }
 
 func (h *CaseHandler) deleteComment(w http.ResponseWriter, r *http.Request) {
@@ -303,11 +303,11 @@ func (h *CaseHandler) deleteComment(w http.ResponseWriter, r *http.Request) {
 
 	err := h.server.Casestore.DeleteComment(ctx, id)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, nil)
+	web.Respond(w, r, http.StatusOK, nil)
 }
 
 func (h *CaseHandler) deleteEvent(w http.ResponseWriter, r *http.Request) {
@@ -320,11 +320,11 @@ func (h *CaseHandler) deleteEvent(w http.ResponseWriter, r *http.Request) {
 
 	err := h.server.Casestore.DeleteRelatedEvent(ctx, id)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, nil)
+	web.Respond(w, r, http.StatusOK, nil)
 }
 
 func (h *CaseHandler) deleteArtifact(w http.ResponseWriter, r *http.Request) {
@@ -337,11 +337,11 @@ func (h *CaseHandler) deleteArtifact(w http.ResponseWriter, r *http.Request) {
 
 	err := h.server.Casestore.DeleteArtifact(ctx, id)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, nil)
+	web.Respond(w, r, http.StatusOK, nil)
 }
 
 func (h *CaseHandler) getCase(w http.ResponseWriter, r *http.Request) {
@@ -354,11 +354,11 @@ func (h *CaseHandler) getCase(w http.ResponseWriter, r *http.Request) {
 
 	obj, err := h.server.Casestore.GetCase(ctx, id)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, obj)
+	web.Respond(w, r, http.StatusOK, obj)
 }
 
 func (h *CaseHandler) getComment(w http.ResponseWriter, r *http.Request) {
@@ -371,11 +371,11 @@ func (h *CaseHandler) getComment(w http.ResponseWriter, r *http.Request) {
 
 	obj, err := h.server.Casestore.GetComments(ctx, id)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, obj)
+	web.Respond(w, r, http.StatusOK, obj)
 }
 
 func (h *CaseHandler) getEvent(w http.ResponseWriter, r *http.Request) {
@@ -388,11 +388,11 @@ func (h *CaseHandler) getEvent(w http.ResponseWriter, r *http.Request) {
 
 	obj, err := h.server.Casestore.GetRelatedEvents(ctx, id)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, obj)
+	web.Respond(w, r, http.StatusOK, obj)
 }
 
 func (h *CaseHandler) getTask(w http.ResponseWriter, r *http.Request) {
@@ -405,11 +405,11 @@ func (h *CaseHandler) getTask(w http.ResponseWriter, r *http.Request) {
 
 	err := h.copyArtifactStream(ctx, w, id)
 	if err != nil {
-		Respond(w, r, http.StatusNotFound, nil)
+		web.Respond(w, r, http.StatusNotFound, nil)
 		return
 	}
 
-	Respond(nil, r, http.StatusOK, nil)
+	web.Respond(nil, r, http.StatusOK, nil)
 }
 
 func (h *CaseHandler) getArtifact(w http.ResponseWriter, r *http.Request) {
@@ -425,11 +425,11 @@ func (h *CaseHandler) getArtifact(w http.ResponseWriter, r *http.Request) {
 
 	obj, err := h.server.Casestore.GetArtifacts(ctx, id, groupType, groupId)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, obj)
+	web.Respond(w, r, http.StatusOK, obj)
 }
 
 func (h *CaseHandler) getHistory(w http.ResponseWriter, r *http.Request) {
@@ -439,11 +439,11 @@ func (h *CaseHandler) getHistory(w http.ResponseWriter, r *http.Request) {
 
 	obj, err := h.server.Casestore.GetCaseHistory(ctx, id)
 	if err != nil {
-		Respond(w, r, http.StatusNotFound, err)
+		web.Respond(w, r, http.StatusNotFound, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, obj)
+	web.Respond(w, r, http.StatusOK, obj)
 }
 
 func (caseHandler *CaseHandler) copyArtifactStream(ctx context.Context, writer http.ResponseWriter, artifactId string) error {

@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/go-chi/chi"
 )
@@ -51,11 +52,11 @@ func (h *UsersHandler) usersEnabled(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if h.server.Userstore == nil {
 			if h.server.Config.DeveloperEnabled {
-				Respond(w, r, http.StatusOK, nil)
+				web.Respond(w, r, http.StatusOK, nil)
 				return
 			}
 
-			Respond(w, r, http.StatusMethodNotAllowed, errors.New("Users module not enabled"))
+			web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Users module not enabled"))
 			return
 		}
 
@@ -68,11 +69,11 @@ func (h *UsersHandler) getUsers(w http.ResponseWriter, r *http.Request) {
 
 	users, err := h.server.Userstore.GetUsers(ctx)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, users)
+	web.Respond(w, r, http.StatusOK, users)
 }
 
 func (h *UsersHandler) postUser(w http.ResponseWriter, r *http.Request) {
@@ -80,19 +81,19 @@ func (h *UsersHandler) postUser(w http.ResponseWriter, r *http.Request) {
 
 	user := model.NewUser()
 
-	err := ReadJson(r, user)
+	err := web.ReadJson(r, user)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	err = h.server.AdminUserstore.AddUser(ctx, user)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, user)
+	web.Respond(w, r, http.StatusOK, user)
 }
 
 func (h *UsersHandler) postAddRole(w http.ResponseWriter, r *http.Request) {
@@ -103,23 +104,23 @@ func (h *UsersHandler) postAddRole(w http.ResponseWriter, r *http.Request) {
 
 	safe := idVerifier.MatchString(id)
 	if !safe {
-		Respond(w, r, http.StatusBadRequest, errors.New("Invalid id"))
+		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid id"))
 		return
 	}
 
 	safe = roleVerifier.MatchString(role)
 	if !safe {
-		Respond(w, r, http.StatusBadRequest, errors.New("Invalid role"))
+		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid role"))
 		return
 	}
 
 	err := h.server.AdminUserstore.AddRole(ctx, id, role)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, nil)
+	web.Respond(w, r, http.StatusOK, nil)
 }
 
 func (h *UsersHandler) putUser(w http.ResponseWriter, r *http.Request) {
@@ -128,9 +129,9 @@ func (h *UsersHandler) putUser(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	user := model.NewUser()
-	err := ReadJson(r, user)
+	err := web.ReadJson(r, user)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
@@ -138,11 +139,11 @@ func (h *UsersHandler) putUser(w http.ResponseWriter, r *http.Request) {
 
 	err = h.server.AdminUserstore.UpdateProfile(ctx, user)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, user)
+	web.Respond(w, r, http.StatusOK, user)
 }
 
 func (h *UsersHandler) putSync(w http.ResponseWriter, r *http.Request) {
@@ -150,11 +151,11 @@ func (h *UsersHandler) putSync(w http.ResponseWriter, r *http.Request) {
 
 	err := h.server.AdminUserstore.SyncUsers(ctx)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, nil)
+	web.Respond(w, r, http.StatusOK, nil)
 }
 
 func (h *UsersHandler) putPassword(w http.ResponseWriter, r *http.Request) {
@@ -164,19 +165,19 @@ func (h *UsersHandler) putPassword(w http.ResponseWriter, r *http.Request) {
 
 	user := model.NewUser()
 
-	err := ReadJson(r, user)
+	err := web.ReadJson(r, user)
 	if err != nil {
-		Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	err = h.server.AdminUserstore.ResetPassword(ctx, id, user.Password)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, nil)
+	web.Respond(w, r, http.StatusOK, nil)
 }
 
 func (h *UsersHandler) putToggleUser(w http.ResponseWriter, r *http.Request) {
@@ -196,11 +197,11 @@ func (h *UsersHandler) putToggleUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, nil)
+	web.Respond(w, r, http.StatusOK, nil)
 }
 
 func (h *UsersHandler) deleteUser(w http.ResponseWriter, r *http.Request) {
@@ -209,17 +210,17 @@ func (h *UsersHandler) deleteUser(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	safe := idVerifier.MatchString(id)
 	if !safe {
-		Respond(w, r, http.StatusBadRequest, errors.New("Invalid id"))
+		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid id"))
 		return
 	}
 
 	err := h.server.AdminUserstore.DeleteUser(ctx, id)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, nil)
+	web.Respond(w, r, http.StatusOK, nil)
 }
 
 func (h *UsersHandler) deleteUserRole(w http.ResponseWriter, r *http.Request) {
@@ -230,21 +231,21 @@ func (h *UsersHandler) deleteUserRole(w http.ResponseWriter, r *http.Request) {
 
 	safe := idVerifier.MatchString(id)
 	if !safe {
-		Respond(w, r, http.StatusBadRequest, errors.New("Invalid id"))
+		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid id"))
 		return
 	}
 
 	safe = roleVerifier.MatchString(role)
 	if !safe {
-		Respond(w, r, http.StatusBadRequest, errors.New("Invalid role"))
+		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid role"))
 		return
 	}
 
 	err := h.server.AdminUserstore.DeleteRole(ctx, id, role)
 	if err != nil {
-		Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	Respond(w, r, http.StatusOK, nil)
+	web.Respond(w, r, http.StatusOK, nil)
 }

@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/security-onion-solutions/securityonion-soc/json"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/go-chi/chi"
 )
@@ -38,12 +39,12 @@ func (h *JobsHandler) getJobs(w http.ResponseWriter, r *http.Request) {
 	if paramsStr != "" {
 		err := json.LoadJson([]byte(paramsStr), &params)
 		if err != nil {
-			Respond(w, r, http.StatusBadRequest, err)
+			web.Respond(w, r, http.StatusBadRequest, err)
 			return
 		}
 	}
 
 	jobs := h.server.Datastore.GetJobs(ctx, kind, params)
 
-	Respond(w, r, http.StatusOK, jobs)
+	web.Respond(w, r, http.StatusOK, jobs)
 }

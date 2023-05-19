@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 type JobLookupHandler struct {
@@ -26,7 +27,7 @@ func RegisterJobLookupRoutes(srv *server.Server, store *ElasticEventstore, r chi
 	}
 
 	r.Route(prefix, func(r chi.Router) {
-		r.Use(server.Middleware(srv.Host))
+		r.Use(web.Middleware(srv.Host, false))
 
 		r.Get("/", h.getJobLookup)
 	})
@@ -47,13 +48,13 @@ func (h *JobLookupHandler) getJobLookup(w http.ResponseWriter, r *http.Request) 
 	job := h.server.Datastore.CreateJob(ctx)
 	err := h.store.PopulateJobFromDocQuery(ctx, idField, idValue, timestampStr, job)
 	if err != nil {
-		server.Respond(w, r, http.StatusNotFound, err)
+		web.Respond(w, r, http.StatusNotFound, err)
 		return
 	}
 
 	err = h.server.Datastore.AddPivotJob(ctx, job)
 	if err != nil {
-		server.Respond(w, r, http.StatusInternalServerError, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -62,5 +63,5 @@ func (h *JobLookupHandler) getJobLookup(w http.ResponseWriter, r *http.Request) 
 	redirectUrl := h.server.Config.BaseUrl + "#/job/" + strconv.Itoa(job.Id)
 	http.Redirect(w, r, redirectUrl, http.StatusFound)
 
-	server.Respond(nil, r, http.StatusOK, nil)
+	web.Respond(nil, r, http.StatusOK, nil)
 }
