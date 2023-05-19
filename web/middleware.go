@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"runtime"
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -141,4 +142,34 @@ func Respond(w http.ResponseWriter, r *http.Request, statusCode int, obj any) {
 		"requestId":     ctx.Value(ContextKeyRequestId),
 		"requestor":     ctx.Value(ContextKeyRequestor),
 	}).Info("Handled request")
+}
+
+func getCallerDetails(skip int) (funcName string, file string, line int) {
+	// yes, runtime.Callers and runtime.Caller treat their `skip` parameters
+	// differently and so have different offsets in this function to account for
+	// it
+
+	pc := make([]uintptr, 4+skip) // more than enough room
+
+	// skip = 3
+	// 0 => runtime.Callers
+	// 1 => getCallingFuncName
+	// 2 => the function being called (i.e. Respond)
+	// 3 => the calling function (i.e. the handler)
+	count := runtime.Callers(3+skip, pc)
+
+	if count == 0 {
+		return "", "", -1
+	}
+
+	frames := runtime.CallersFrames(pc[:count])
+	f, _ := frames.Next()
+
+	// skip = 2
+	// 0 => getCallerDetails
+	// 1 => Respond
+	// 2 => the caller we're interested in
+	_, file, line, _ = runtime.Caller(2 + skip)
+
+	return f.Function, file, line
 }
