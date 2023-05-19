@@ -520,7 +520,10 @@ func (query *Query) Filter(field string, value string, scalar bool, mode string,
 	err = searchSegment.AddFilter(field, value, scalar, include, condense)
 
 	if mode == FILTER_DRILLDOWN {
-		query.RemoveSegment(SegmentKind_GroupBy)
+		seg := query.RemoveSegment(SegmentKind_GroupBy)
+		for seg != nil {
+			seg = query.RemoveSegment(SegmentKind_GroupBy)
+		}
 	}
 
 	return query.String(), err
