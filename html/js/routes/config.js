@@ -33,17 +33,7 @@ routes.push({ path: '/config', name: 'config', component: {
     nextStopId: null,
   }},
   mounted() {
-    if (this.$route.query.f) {
-      this.search = this.$route.query.f;
-    }
-    if (this.$route.query.e == "1") {
-      this.autoExpand = true;
-    }
-    if (this.$route.query.s) {
-      this.autoSelect = this.$route.query.s;
-      this.autoExpand = true;
-      this.search = this.$route.query.s;
-    }
+    this.processRouteParameters();
     this.loadData();
   },
   watch: {
@@ -55,7 +45,25 @@ routes.push({ path: '/config', name: 'config', component: {
       return this.findActiveSetting();
     },
   },
+  beforeRouteUpdate(to, from, next) {
+    next();
+    this.processRouteParameters();
+    this.refreshTree();
+  },
   methods: {
+    processRouteParameters() {
+      if (this.$route.query.f) {
+        this.search = this.$route.query.f;
+      }
+      if (this.$route.query.e == "1") {
+        this.autoExpand = true;
+      }
+      if (this.$route.query.s) {
+        this.autoSelect = this.$route.query.s;
+        this.autoExpand = true;
+        this.search = this.$route.query.s;
+      }
+    },
     findActiveSetting() {
       if (this.active.length > 0) {
         const id = this.active[0];
@@ -294,7 +302,7 @@ routes.push({ path: '/config', name: 'config', component: {
           // Only set after next tick to avoid UI glitch. This has an unfortunate
           // flicker effect as the modal appears, but it avoids a more serious problem
           //  of having the wrong setting selected after dismissing the modal popup.
-          this.active = this.activeBackup; 
+          this.active = this.activeBackup;
         });
         return false;
       }
@@ -434,7 +442,7 @@ routes.push({ path: '/config', name: 'config', component: {
       } catch (error) {
          this.$root.showError(error);
       }
-      this.$root.stopLoading();      
+      this.$root.stopLoading();
     },
     edit(setting, nodeId) {
       if (nodeId) {
