@@ -3268,7 +3268,65 @@
           <v-divider vertical />
           <v-col cols="12" lg="8">
             <v-fade-transition mode="out-in" duration="100">
-              <v-alert v-if="!selected" v-text="i18n.settingSelect" type="info" />
+              <div v-if="!selected" id="config-quick-links">
+                <v-alert v-text="i18n.settingSelect" type="info" />
+                <div>
+                  <p class="font-weight-bold">{{i18n.configQLGridTitle}}</p>
+                  <ul>
+                    <li>
+                      <router-link :to="{ name: 'config', query: {s: 'ntp.config'}}">{{i18n.configQLNTP}}</router-link>
+                    </li>
+                    <li>
+                      {{i18n.configQLFirewallHeader}}
+                      <ul>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'firewall.hostgroups.analyst'}}">{{i18n.configQLFirewallWebInterface}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'firewall.hostgroups.elastic_agent_endpoint'}}">{{i18n.configQLFirewallElastic}}</router-link>
+                        </li>
+                      </ul>
+                    </li>
+                    <li>
+                      <router-link :to="{name: 'config', query: {s: 'idstools.config.ruleset'}}">{{i18n.configQLNIDSRuleset}}</router-link>
+                    </li>
+                    <li>
+                      <router-link :to="{name: 'config', query: {s: 'idstools.config.oinkcode'}}">{{i18n.configQLNIDSOinkCode}}</router-link>
+                    </li>
+                  </ul>
+                  <br/>
+                  <p class="font-weight-bold">{{i18n.configQLAnalystTitle}}</p>
+                  <ul>
+                    <li>
+                      {{i18n.configQLSuricataHeader}}
+                      <ul>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'suricata.config.vars.address-groups.HOME_NET'}}">{{i18n.configQLHomeNet}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'idstools.sids'}}">{{i18n.configQLSIDS}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'suricata.thresholding.sids__yaml'}}">{{i18n.configQLSIDSThresholding}}</router-link>
+                      </ul>
+                    </li>
+                    <li>
+                      {{i18n.configQLBPFHeader}}
+                      <ul>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'bpf.pcap'}}">{{i18n.configQLPCAP}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'bpf.suricata'}}">{{i18n.configQLSuricata}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'bpf.zeek'}}">{{i18n.configQLZeek}}</router-link>
+                        </li>
+                      </ul>
+                    </li>
+                  </ul>
+                </div>
+              </div>
               <v-card v-else :key="selected.id" class="pt-6 mx-auto config-setting" flat>
                 <v-card-text>
                   <div class="text-subtitle-1 mb-4">
