@@ -156,6 +156,7 @@ func TestFilter(tester *testing.T) {
 	validateFilter(tester, "a: 1", "a", "2", true, FILTER_INCLUDE, false, "a: 1 AND a:2")
 	validateFilter(tester, "NOT a:1", "a", "2", true, FILTER_EXCLUDE, false, "NOT a:1 AND NOT a:2")
 	validateFilter(tester, "a:1 OR b:1", "c", "3", true, FILTER_INCLUDE, true, "(a:1 OR b:1) AND c:3")
+	validateFilter(tester, "* | groupby a | groupby b | groupby c", "b", "d", true, FILTER_DRILLDOWN, false, "* AND b:d")
 }
 
 func TestIsScalar(tester *testing.T) {
