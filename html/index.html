@@ -3270,7 +3270,7 @@
             <v-fade-transition mode="out-in" duration="100">
               <div v-if="!selected" id="config-quick-links">
                 <v-alert v-text="i18n.settingSelect" type="info" />
-                <div id="config-quick-links-container">
+                <div>
                   <p class="font-weight-bold">{{i18n.configQLGridTitle}}</p>
                   <ul>
                     <li>
@@ -3326,7 +3326,6 @@
                     </li>
                   </ul>
                 </div>
-                <div></div>
               </div>
               <v-card v-else :key="selected.id" class="pt-6 mx-auto config-setting" flat>
                 <v-card-text>

@@ -435,15 +435,3 @@ td {
 #licenseDetails {
   max-width: 40em;
 }
-
-#config-quick-links {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-#config-quick-links-container {
-  max-width: 50%;
-  align-self: center;
-}
