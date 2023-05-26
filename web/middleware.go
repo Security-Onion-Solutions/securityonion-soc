@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"runtime"
 	"time"
 
@@ -78,6 +79,8 @@ func Respond(w http.ResponseWriter, r *http.Request, statusCode int, obj any) {
 	start := ctx.Value(ContextKeyRequestStart).(time.Time)
 	elapsed := time.Since(start).Milliseconds()
 
+	rvObj := reflect.ValueOf(obj)
+
 	err, isErr := obj.(error)
 	if isErr {
 		log.WithError(err).WithFields(log.Fields{
@@ -99,7 +102,7 @@ func Respond(w http.ResponseWriter, r *http.Request, statusCode int, obj any) {
 			w.WriteHeader(statusCode)
 			_, _ = w.Write(bytes)
 		}
-	} else if obj != nil {
+	} else if rvObj != (reflect.Value{}) && !rvObj.IsNil() {
 		switch data := obj.(type) {
 		case []byte:
 			contentLength = len(data)

@@ -659,6 +659,7 @@ const i18n = {
       unprovisioned: 'Unprovisioned',
       unwrapHelp: 'Unwrap packets from encapsulation (Ex: VXLAN)',
       update: 'Update',
+      upload: 'Upload',
       updateProfile: 'Update Profile',
       updateSettings: 'Settings',
       updateSuccessful: 'Update successful',
