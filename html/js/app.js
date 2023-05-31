@@ -117,7 +117,7 @@ $(document).ready(function() {
         return "/";
       },
       target(def) {
-        if (localStorage['settings.flags.testing'] === 'true') { 
+        if (localStorage['settings.flags.testing'] === 'true') {
           return "_self";
         }
         return def;
@@ -266,10 +266,10 @@ $(document).ready(function() {
           destUri = this.getCookie("AUTH_REDIRECT");
           if (destUri) {
             this.deleteCookie("AUTH_REDIRECT");
-            if (destUri != "/" && 
-                !destUri.includes(".?v=") && 
-                !destUri.endsWith(".ico") && 
-                !destUri.endsWith(".js") && 
+            if (destUri != "/" &&
+                !destUri.includes(".?v=") &&
+                !destUri.endsWith(".ico") &&
+                !destUri.endsWith(".js") &&
                 !destUri.endsWith(".css") &&
                 !destUri.endsWith(".png") &&
                 !destUri.endsWith(".svg") &&
@@ -344,6 +344,16 @@ $(document).ready(function() {
                 this.casesEnabled = this.parameters.casesEnabled;
 
                 this.subscribe("status", this.updateStatus);
+                this.subscribe('import', (url) => {
+                  if (url) {
+                    const fragLoc = url.indexOf('/#/');
+                    if (fragLoc > 0) {
+                      url = url.substring(fragLoc);
+                    }
+                    const content = 'A recent import has completed. <a href="${url}">View Results</a>';
+                    this.showInfo(url);
+                  }
+                });
               }
             } catch (error) {
               if (!background) {
@@ -397,10 +407,10 @@ $(document).ready(function() {
         const colorSchemeString = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
           ? '-dark'
           : '';
-    
+
         const svgFavicon = document.querySelector('.so-favicon[type="image/svg+xml"]'),
               pngFavicon = document.querySelector('.so-favicon[type="image/png"]');
-    
+
         if (pngFavicon && svgFavicon) {
           const ext = ".svg";
           var iconIndex = svgFavicon.href.lastIndexOf("/");
@@ -409,8 +419,8 @@ $(document).ready(function() {
           if (tagIndex > extIndex) tagIndex = -1;
           const baseText = svgFavicon.href.substring(0, tagIndex !== -1 ? tagIndex : extIndex);
           const queryParam = svgFavicon.href.substring(extIndex + ext.length);
-          
-          const attention = this.isAttentionNeeded() ? '-attention' : '' 
+
+          const attention = this.isAttentionNeeded() ? '-attention' : ''
           pngFavicon.href = `${baseText}${colorSchemeString}${attention}.png${queryParam}`;
           svgFavicon.href = `${baseText}${colorSchemeString}${attention}.svg${queryParam}`;
         }
@@ -451,7 +461,7 @@ $(document).ready(function() {
         if (value == LICENSE_STATUS_INVALID) return "error";
         if (value == LICENSE_STATUS_PENDING) return "warning";
         return "info";
-      },  
+      },
       makeHeader(label, value) {
         return { text: label, value: value };
       },
@@ -635,7 +645,7 @@ $(document).ready(function() {
           this.connected = false;
           this.reconnecting = false;
           this.openWebsocket();
-          window.setInterval(this.openWebsocket, this.wsConnectionTimeout);    
+          window.setInterval(this.openWebsocket, this.wsConnectionTimeout);
         }
       },
       openWebsocket() {
@@ -760,7 +770,7 @@ $(document).ready(function() {
       },
       initializeCharts() {
         if (this.chartsInitialized) return;
-        this.registerChart(VueChartJs.Bar, 'bar-chart'); 
+        this.registerChart(VueChartJs.Bar, 'bar-chart');
         this.registerChart(VueChartJs.Line, 'line-chart');
         this.registerChart(VueChartJs.Pie, 'pie-chart');
 
@@ -768,7 +778,7 @@ $(document).ready(function() {
         const Sankey = VueChartJs.generateChart('sankey-chart', 'sankey', Chart.controllers['sankey']);
         this.registerChart(Sankey, 'sankey-chart');
 
-        this.chartsInitialized = true; 
+        this.chartsInitialized = true;
       },
       getColor(colorName, percent = 0) {
         percent = this.$root.$vuetify && this.$root.$vuetify.theme.dark ? percent * -1 : percent;
@@ -779,19 +789,19 @@ $(document).ready(function() {
         var R = parseInt(color.substring(1,3),16);
         var G = parseInt(color.substring(3,5),16);
         var B = parseInt(color.substring(5,7),16);
-    
+
         R = parseInt(R * (100 + percent) / 100);
         G = parseInt(G * (100 + percent) / 100);
         B = parseInt(B * (100 + percent) / 100);
-    
-        R = (R<255)?R:255;  
-        G = (G<255)?G:255;  
-        B = (B<255)?B:255;  
-    
+
+        R = (R<255)?R:255;
+        G = (G<255)?G:255;
+        B = (B<255)?B:255;
+
         var RR = ((R.toString(16).length==1)?"0"+R.toString(16):R.toString(16));
         var GG = ((G.toString(16).length==1)?"0"+G.toString(16):G.toString(16));
         var BB = ((B.toString(16).length==1)?"0"+B.toString(16):B.toString(16));
-        
+
         return "#"+RR+GG+BB;
       },
       truncate(value, max) {
@@ -910,10 +920,10 @@ $(document).ready(function() {
         this.maximizedTarget.style.height = this.maximizedOrigHeight;
         this.maximizedTarget = null;
         this.maximizedCancelFn = null;
-        document.removeEventListener('keydown', this.unmaximizeEscapeListener); 
+        document.removeEventListener('keydown', this.unmaximizeEscapeListener);
       },
       unmaximizeEscapeListener(event) {
-        if (event.code == "Escape") { 
+        if (event.code == "Escape") {
           this.unmaximize(true);
         }
         event.cancel();

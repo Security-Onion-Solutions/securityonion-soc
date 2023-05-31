@@ -1061,7 +1061,7 @@ func (store *Saltstore) SendFile(ctx context.Context, node string, from string, 
 	return err
 }
 
-func (store *Saltstore) Import(ctx context.Context, node string, file string, importer string) error {
+func (store *Saltstore) Import(ctx context.Context, node string, file string, importer string) (*string, error) {
 	// TODO: Auth Check
 
 	args := map[string]string{
@@ -1074,9 +1074,10 @@ func (store *Saltstore) Import(ctx context.Context, node string, file string, im
 	output, err := store.execCommand(ctx, args)
 	if err == nil && output == "false" {
 		err = errors.New("ERROR_SALT_IMPORT")
+		return nil, err
 	}
 
-	return err
+	return &output, nil
 }
 
 func (store *Saltstore) lookupEmailFromId(ctx context.Context, id string) string {

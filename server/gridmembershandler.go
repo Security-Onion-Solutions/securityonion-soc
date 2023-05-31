@@ -179,23 +179,29 @@ func (h *GridMembersHandler) postImport(w http.ResponseWriter, r *http.Request) 
 	out.Close()
 	outClosed = true
 
-	err = h.server.GridMembersstore.SendFile(ctx, id, targetFile, baseTargetDir, true)
-	if err != nil {
-		needsCleanup = true
-		web.Respond(w, r, http.StatusInternalServerError, err)
+	web.Respond(w, r, http.StatusAccepted, nil)
 
-		return
-	}
+	go func() {
+		err = h.server.GridMembersstore.SendFile(ctx, id, targetFile, baseTargetDir, true)
+		if err != nil {
+			needsCleanup = true
+			web.Respond(nil, r, http.StatusInternalServerError, err)
 
-	targetFile = filepath.Join(baseTargetDir, header.Filename)
+			return
+		}
 
-	err = h.server.GridMembersstore.Import(ctx, id, targetFile, ext)
-	if err != nil {
-		web.Respond(w, r, http.StatusInternalServerError, err)
-		return
-	}
+		targetFile = filepath.Join(baseTargetDir, header.Filename)
 
-	web.Respond(w, r, http.StatusOK, nil)
+		dashboardURL, err := h.server.GridMembersstore.Import(ctx, id, targetFile, ext)
+		if err != nil {
+			web.Respond(nil, r, http.StatusInternalServerError, err)
+			return
+		}
+
+		if dashboardURL != nil && *dashboardURL != "" {
+			h.server.Host.Broadcast("import", "jobs", dashboardURL)
+		}
+	}()
 }
 
 func (h *GridMembersHandler) postManageMembers(w http.ResponseWriter, r *http.Request) {
