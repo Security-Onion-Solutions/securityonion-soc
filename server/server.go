@@ -12,12 +12,14 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/apex/log"
+	"github.com/go-chi/chi"
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+
+	"github.com/apex/log"
 )
 
 const AGENT_ID = "agent"
@@ -67,20 +69,26 @@ func (server *Server) Start() {
 	} else {
 		log.Info("Starting server")
 
-		server.Host.Register("/api/case/", NewCaseHandler(server))
-		server.Host.Register("/api/events/", NewEventHandler(server))
-		server.Host.Register("/api/info", NewInfoHandler(server))
-		server.Host.Register("/api/job/", NewJobHandler(server))
-		server.Host.Register("/api/jobs/", NewJobsHandler(server))
-		server.Host.Register("/api/packets", NewPacketHandler(server))
-		server.Host.Register("/api/query/", NewQueryHandler(server))
-		server.Host.Register("/api/node", NewNodeHandler(server))
-		server.Host.Register("/api/grid", NewGridHandler(server))
-		server.Host.Register("/api/stream", NewStreamHandler(server))
-		server.Host.Register("/api/users/", NewUsersHandler(server))
-		server.Host.Register("/api/config/", NewConfigHandler(server))
-		server.Host.Register("/api/gridmembers/", NewGridMembersHandler(server))
-		server.Host.Register("/api/roles/", NewRolesHandler(server))
+		r := chi.NewMux()
+
+		r.Use(web.Middleware(server.Host, false))
+
+		RegisterCaseRoutes(server, r, "/api/case")
+		RegisterEventRoutes(server, r, "/api/events")
+		RegisterInfoRoutes(server, r, "/api/info")
+		RegisterJobRoutes(server, r, "/api/job")
+		RegisterJobsRoutes(server, r, "/api/jobs")
+		RegisterPacketRoutes(server, r, "/api/packets")
+		RegisterQueryRoutes(server, r, "/api/query")
+		RegisterNodeRoutes(server, r, "/api/node")
+		RegisterGridRoutes(server, r, "/api/grid")
+		RegisterStreamRoutes(server, r, "/api/stream")
+		RegisterUsersRoutes(server, r, "/api/users")
+		RegisterConfigRoutes(server, r, "/api/config")
+		RegisterGridMemberRoutes(server, r, "/api/gridmembers")
+		RegisterRolesRoutes(server, r, "/api/roles")
+
+		server.Host.RegisterRouter("/api/", r)
 
 		server.Host.Start()
 	}

@@ -8,7 +8,7 @@ package elastic
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"regexp"
 	"testing"
 
@@ -18,7 +18,7 @@ import (
 func TestFieldMapping(tester *testing.T) {
 	store := &ElasticEventstore{}
 
-	json, err := ioutil.ReadFile("fieldcaps_response.json")
+	json, err := os.ReadFile("fieldcaps_response.json")
 	assert.Nil(tester, err)
 	store.cacheFieldsFromJson(string(json))
 
@@ -50,7 +50,7 @@ func TestFieldMapping(tester *testing.T) {
 func TestFieldMappingCollisions(tester *testing.T) {
 	store := &ElasticEventstore{}
 
-	json, err := ioutil.ReadFile("fieldcaps_response.json")
+	json, err := os.ReadFile("fieldcaps_response.json")
 	assert.Nil(tester, err)
 	store.cacheFieldsFromJson(string(json))
 
@@ -78,7 +78,7 @@ func TestFieldMappingCollisions(tester *testing.T) {
 func TestFieldMappingCache(tester *testing.T) {
 	store := &ElasticEventstore{}
 
-	json, err := ioutil.ReadFile("fieldcaps_response.json")
+	json, err := os.ReadFile("fieldcaps_response.json")
 	assert.Nil(tester, err)
 	store.cacheFieldsFromJson(string(json))
 

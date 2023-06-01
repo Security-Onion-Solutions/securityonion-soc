@@ -909,6 +909,9 @@ func TestCreateRelatedEvent(tester *testing.T) {
 	eventSearchResults.Events = append(eventSearchResults.Events, elasticEvent)
 	fakeEventStore.SearchResults = append(fakeEventStore.SearchResults, eventSearchResults)
 
+	// Add search results to mimic no existing artifacts for this case
+	fakeEventStore.SearchResults = append(fakeEventStore.SearchResults, model.NewEventSearchResults())
+
 	// Prepare a duplicate search result with the same case as before, for the createArtifact call,
 	// which also looks up the case.
 	caseSearchResults_createArtifact := fakeEventStore.SearchResults[0]
@@ -1183,6 +1186,7 @@ func TestCreateArtifact(tester *testing.T) {
 	artifact.GroupType = "myGroupType"
 	artifact.ArtifactType = "myArtifactType"
 	artifact.Value = "Value"
+	artifact.Protected = true
 	newEvent, err := store.CreateArtifact(ctx, artifact)
 	assert.NoError(tester, err)
 	assert.NotNil(tester, newEvent)
@@ -1462,41 +1466,76 @@ func TestUpdateArtifact(tester *testing.T) {
 	assert.Equal(tester, 123, newArtifact.StreamLen)
 }
 
-func TestExtractCommonObservables(t *testing.T) {
+func TestExtractCommonObservables_NothingToExtract(t *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
 	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, []string{"my IP addr"})
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+
+	// Construct a simple related event to add to the case
 	event := model.NewRelatedEvent()
 	event.CaseId = "testID"
 
-	// Test with no observable
+	// Test with no results faked from elastic
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+
+	// Add the related event. There should be no error, and no panics since no observables
+	// were attempted to be created
 	assert.NoError(t, store.ExtractCommonObservables(ctx, event))
+}
+
+func TestExtractCommonObservables_SkipEmptyObservableValue(t *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, []string{"my IP addr"})
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+
+	// Construct a simple related event to add to the case
+	event := model.NewRelatedEvent()
+	event.CaseId = "testID"
+
+	// Test with no results faked from elastic
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
 
 	// Test with empty observable field. If it actually tried to save an observable,
 	// it would have panic'd since there is no Eventstore configured.
 	event.Fields["my IP addr"] = ""
 	assert.NoError(t, store.ExtractCommonObservables(ctx, event))
+}
 
-	// Test with observable
+func TestExtractCommonObservables(t *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, []string{"my IP addr"})
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+
+	// Construct a simple related event to add to the case
+	event := model.NewRelatedEvent()
+	event.CaseId = "testID"
+
+	// Fake that no results were returned when looking for existing observables
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
 
-	// Do we need this query for anything?
-	//_ = `_index:"myIndex" AND so_kind:"case" AND _id:"myCaseId"`
-
+	// Fake a case event being searched and returned
 	casePayload := make(map[string]interface{})
 	casePayload["so_kind"] = "case"
 	caseEvent := &model.EventRecord{
 		Payload: casePayload,
 	}
+	caseEvents := model.NewEventSearchResults()
+	fakeEventStore.SearchResults = append(fakeEventStore.SearchResults, caseEvents)
+	caseEvents.Events = append(caseEvents.Events, caseEvent)
+
+	// Fake a successful document insert for the artifact (observable)
+	fakeEventStore.IndexResults[0].Success = true
+	fakeEventStore.IndexResults[0].DocumentId = "myCaseId"
+
+	// Fake a successful search result of the newly "inserted" artifact
 	eventPayload := make(map[string]interface{})
 	eventPayload["so_kind"] = "artifact"
 	elasticEvent := &model.EventRecord{
 		Payload: eventPayload,
 	}
-	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, caseEvent)
-	fakeEventStore.IndexResults[0].Success = true
-	fakeEventStore.IndexResults[0].DocumentId = "myCaseId"
 	eventSearchResults := model.NewEventSearchResults()
 	eventSearchResults.Events = append(eventSearchResults.Events, elasticEvent)
 	fakeEventStore.SearchResults = append(fakeEventStore.SearchResults, eventSearchResults)
@@ -1510,4 +1549,31 @@ func TestExtractCommonObservables(t *testing.T) {
 	assert.Equal(t, "evidence", artifact.GroupType)
 	assert.Equal(t, "127.0.0.1", artifact.Value)
 	assert.Equal(t, "ip", artifact.ArtifactType)
+}
+
+func TestExtractCommonObservables_SkipWhenExists(t *testing.T) {
+	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, []string{"my IP addr"})
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+
+	// Construct a simple related event to add to the case
+	event := model.NewRelatedEvent()
+	event.CaseId = "testID"
+
+	// Test with observable
+	fakeEventStore := server.NewFakeEventstore()
+	store.server.Eventstore = fakeEventStore
+
+	// Fake that an existing observable is already in this case with the same 127.0.0.1 value
+	eventPayload := make(map[string]interface{})
+	eventPayload["so_kind"] = "artifact"
+	eventPayload["so_artifact.value"] = "127.0.0.1"
+	elasticEvent := &model.EventRecord{
+		Payload: eventPayload,
+	}
+	fakeEventStore.SearchResults[0].Events = append(fakeEventStore.SearchResults[0].Events, elasticEvent)
+
+	event.Fields["my IP addr"] = "127.0.0.1"
+	assert.NoError(t, store.ExtractCommonObservables(ctx, event))
+	assert.Len(t, fakeEventStore.InputDocuments, 0)
 }

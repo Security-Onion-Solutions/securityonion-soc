@@ -267,37 +267,37 @@ func TestGetSettings(tester *testing.T) {
 	count++
 
 	assert.Equal(tester, "myapp.lists.list_bool", settings[count].Id)
-	assert.Equal(tester, "true\nfalse", settings[count].Value)
+	assert.Equal(tester, "true\nfalse\n", settings[count].Value)
 	assert.Equal(tester, "", settings[count].NodeId)
 	count++
 
 	assert.Equal(tester, "myapp.lists.list_float", settings[count].Id)
-	assert.Equal(tester, "1.24\n2.2", settings[count].Value)
+	assert.Equal(tester, "1.24\n2.2\n", settings[count].Value)
 	assert.Equal(tester, "", settings[count].NodeId)
 	count++
 
 	assert.Equal(tester, "myapp.lists.list_int", settings[count].Id)
-	assert.Equal(tester, "3\n24", settings[count].Value)
+	assert.Equal(tester, "3\n24\n", settings[count].Value)
 	assert.Equal(tester, "", settings[count].NodeId)
 	count++
 
 	assert.Equal(tester, "myapp.lists.list_list_str", settings[count].Id)
-	assert.Equal(tester, "[\"item1\",\"item2\"]\n[\"item3\",\"item4\"]", settings[count].Value)
+	assert.Equal(tester, "[\"item1\",\"item2\"]\n[\"item3\",\"item4\"]\n", settings[count].Value)
 	assert.Equal(tester, "", settings[count].NodeId)
 	count++
 
 	assert.Equal(tester, "myapp.lists.list_map_str", settings[count].Id)
-	assert.Equal(tester, "{\"key1\":\"value1\",\"key2\":\"value2\"}\n{\"key1\":\"value3\",\"key2\":\"value4\"}", settings[count].Value)
+	assert.Equal(tester, "{\"key1\":\"value1\",\"key2\":\"value2\"}\n{\"key1\":\"value3\",\"key2\":\"value4\"}\n", settings[count].Value)
 	assert.Equal(tester, "", settings[count].NodeId)
 	count++
 
 	assert.Equal(tester, "myapp.lists.list_str", settings[count].Id)
-	assert.Equal(tester, "foo\nbar", settings[count].Value)
+	assert.Equal(tester, "foo\nbar\n", settings[count].Value)
 	assert.Equal(tester, "", settings[count].NodeId)
 	count++
 
 	assert.Equal(tester, "myapp.my_def", settings[count].Id)
-	assert.Equal(tester, "item1\nitem2", settings[count].Value)
+	assert.Equal(tester, "item1\nitem2\n", settings[count].Value)
 	assert.Equal(tester, "", settings[count].NodeId)
 	count++
 
@@ -359,7 +359,7 @@ func TestUpdateSetting_OverrideDefault(tester *testing.T) {
 	assert.NoError(tester, get_err)
 
 	new_setting := findSetting(settings, "myapp.my_def", "")
-	assert.Equal(tester, "new setting", new_setting.Value)
+	assert.Equal(tester, "new setting\n", new_setting.Value)
 }
 
 func TestUpdateSetting_AddGlobal(tester *testing.T) {
@@ -465,7 +465,7 @@ func TestUpdateSetting_UpdateGlobal(tester *testing.T) {
 	// Update setting
 	setting := model.NewSetting("myapp.str")
 	setting.NodeId = ""
-	setting.Value = "new value"
+	setting.Value = "new value\n" // ensure value is trimmed of whitespace
 	err := salt.UpdateSetting(context.Background(), setting, false)
 	assert.NoError(tester, err)
 
@@ -584,7 +584,7 @@ func TestUpdateSetting_AlignIntListType(tester *testing.T) {
 	settings, get_err := salt.GetSettings(context.Background())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.lists.list_int", "")
-	assert.Equal(tester, "44\n2\n1", updated_setting.Value)
+	assert.Equal(tester, "44\n2\n1\n", updated_setting.Value)
 }
 
 func TestUpdateSetting_FailToAlignIntListType(tester *testing.T) {
@@ -617,7 +617,7 @@ func TestUpdateSetting_AlignEmptyListIntType(tester *testing.T) {
 	settings, get_err := salt.GetSettings(context.Background())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.empty_lists.list_int", "")
-	assert.Equal(tester, "123\n456\n23", updated_setting.Value)
+	assert.Equal(tester, "123\n456\n23\n", updated_setting.Value)
 
 	// Now try to put the wrong type in it
 	setting = model.NewSetting("myapp.empty_lists.list_int")
@@ -655,7 +655,7 @@ func TestUpdateSetting_ForceListIntType(tester *testing.T) {
 	settings, get_err := salt.GetSettings(context.Background())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.int_list_nodefault", "")
-	assert.Equal(tester, "44\n55", updated_setting.Value)
+	assert.Equal(tester, "44\n55\n", updated_setting.Value)
 }
 
 ///// FLOAT TYPE
@@ -700,7 +700,7 @@ func TestUpdateSetting_AlignFloatListType(tester *testing.T) {
 	settings, get_err := salt.GetSettings(context.Background())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.lists.list_float", "")
-	assert.Equal(tester, "44.3\n2.1\n1.2", updated_setting.Value)
+	assert.Equal(tester, "44.3\n2.1\n1.2\n", updated_setting.Value)
 }
 
 func TestUpdateSetting_FailToAlignFloatListType(tester *testing.T) {
@@ -733,7 +733,7 @@ func TestUpdateSetting_AlignEmptyListFloatType(tester *testing.T) {
 	settings, get_err := salt.GetSettings(context.Background())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.empty_lists.list_float", "")
-	assert.Equal(tester, "1.23\n4.56\n2.3", updated_setting.Value)
+	assert.Equal(tester, "1.23\n4.56\n2.3\n", updated_setting.Value)
 
 	// Now try to put the wrong type in it
 	setting = model.NewSetting("myapp.empty_lists.list_float")
@@ -784,7 +784,7 @@ func TestUpdateSetting_AlignBoolListType(tester *testing.T) {
 	settings, get_err := salt.GetSettings(context.Background())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.lists.list_bool", "")
-	assert.Equal(tester, "true\nfalse\ntrue", updated_setting.Value)
+	assert.Equal(tester, "true\nfalse\ntrue\n", updated_setting.Value)
 }
 
 func TestUpdateSetting_FailToAlignBoolListType(tester *testing.T) {
@@ -817,7 +817,7 @@ func TestUpdateSetting_AlignEmptyListBoolType(tester *testing.T) {
 	settings, get_err := salt.GetSettings(context.Background())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.empty_lists.list_bool", "")
-	assert.Equal(tester, "true\ntrue\nfalse", updated_setting.Value)
+	assert.Equal(tester, "true\ntrue\nfalse\n", updated_setting.Value)
 
 	// Now try to put the wrong type in it
 	setting = model.NewSetting("myapp.empty_lists.list_bool")
@@ -833,7 +833,7 @@ func TestUpdateSetting_AlignListListType(tester *testing.T) {
 	salt := NewTestSalt()
 
 	// Update setting
-	expected := "[\"item1\",\"item2\"]\n[\"item3\",\"item3\"]\n[\"item5\",\"item6\"]"
+	expected := "[\"item1\",\"item2\"]\n[\"item3\",\"item3\"]\n[\"item5\",\"item6\"]\n"
 	setting := model.NewSetting("myapp.lists.list_list_str")
 	setting.Value = expected
 	err := salt.UpdateSetting(context.Background(), setting, false)
@@ -867,7 +867,7 @@ func TestUpdateSetting_AlignEmptyListListType(tester *testing.T) {
 	assert.NoError(tester, err)
 
 	// Ensure we can update it with more bools
-	expected := "[\"item1\",\"item2\"]\n[\"item3\",\"item3\"]\n[\"item5\",\"item6\"]"
+	expected := "[\"item1\",\"item2\"]\n[\"item3\",\"item3\"]\n[\"item5\",\"item6\"]\n"
 	setting = model.NewSetting("myapp.empty_lists.list_list_str")
 	setting.Value = expected
 	err = salt.UpdateSetting(context.Background(), setting, false)
@@ -892,7 +892,7 @@ func TestUpdateSetting_AlignMapListType(tester *testing.T) {
 	salt := NewTestSalt()
 
 	// Update setting
-	expected := "{\"key1\":\"value1\",\"key2\":\"value2\"}\n{\"key1\":\"value3\",\"key2\":\"value4\"}\n{\"key1\":\"value5\",\"key2\":\"value6\"}"
+	expected := "{\"key1\":\"value1\",\"key2\":\"value2\"}\n{\"key1\":\"value3\",\"key2\":\"value4\"}\n{\"key1\":\"value5\",\"key2\":\"value6\"}\n"
 	setting := model.NewSetting("myapp.lists.list_map_str")
 	setting.Value = expected
 	err := salt.UpdateSetting(context.Background(), setting, false)
@@ -926,7 +926,7 @@ func TestUpdateSetting_AlignEmptyListMapType(tester *testing.T) {
 	assert.NoError(tester, err)
 
 	// Ensure we can update it with more bools
-	expected := "{\"key1\":\"value1\",\"key2\":\"value2\"}\n{\"key1\":\"value3\",\"key2\":\"value4\"}"
+	expected := "{\"key1\":\"value1\",\"key2\":\"value2\"}\n{\"key1\":\"value3\",\"key2\":\"value4\"}\n"
 	setting = model.NewSetting("myapp.empty_lists.list_map_str")
 	setting.Value = expected
 	err = salt.UpdateSetting(context.Background(), setting, false)
@@ -975,7 +975,7 @@ func TestUpdateSetting_AlignNonStringListType(tester *testing.T) {
 	settings, get_err := salt.GetSettings(context.Background())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.lists.list_str", "")
-	assert.Equal(tester, "123\n456", updated_setting.Value)
+	assert.Equal(tester, "123\n456\n", updated_setting.Value)
 }
 
 func TestRelPathFromId(tester *testing.T) {

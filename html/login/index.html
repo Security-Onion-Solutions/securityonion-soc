@@ -45,13 +45,14 @@
     </v-app>
     
     <script type="text/x-template" id="page-login">
-      <v-card v-if="showLoginForm" class="mt-12 mx-auto" max-width="600">
+      <v-card class="mt-12 mx-auto" max-width="600">
         <v-card-title class="lighten-4 py-4 title" v-text="i18n.loginTitle"></v-card-title>
-        <v-form id="loginForm" v-model="form.valid" method="post" :action="authLoginUrl">
+
+        <v-form v-if="showLoginForm" id="loginForm" v-model="form.valid" method="post" :action="authLoginUrl">
           <v-container grid-list-sm class="pa-4">
             <v-row>
               <v-col class="mx-auto px-12">
-                <div id="banner" v-html="banner"></div>
+                <div id="banner" class="markdown-body" :inner-html.prop="banner | formatMarkdown"></div>
               </v-col>
             </v-row>
             <v-row>
@@ -73,16 +74,29 @@
             <v-btn type="submit" :disabled="!form.valid" text color="primary" v-text="i18n.login"></v-btn>
           </v-card-actions>
         </v-form>
+
+        <v-container v-if="throttled && !showLoginForm" grid-list-sm class="pa-4">
+          <v-row>
+            <v-col class="mx-auto px-12">
+              <div id="banner" class="mb-4">{{ i18n.throttledLogin }}</div>
+              <div class="text-center">
+                <div v-if="countdown > 0" id="countdown" class="display-1">{{ countdown }}</div>
+                <v-btn v-if="countdown == 0" id="relogin" text color="primary" class="text-lg-center" v-text="i18n.login" @click="this.$root.showLogin()"></v-btn>
+              </div>
+            </v-col>
+          </v-row>
+        </v-container>
       </v-card>
     </script>
 
-    <script src="js/external/jquery-3.6.1.min.js"></script>
-    <script src="js/external/vue-2.7.10.min.js"></script>
+    <script src="js/external/jquery-3.6.4.min.js"></script>
+    <script src="js/external/vue-2.7.14.min.js"></script>
     <script src="js/external/vue-router-3.5.2.min.js"></script>
-    <script src="js/external/vuetify-v2.6.10.min.js"></script>
-    <script src="js/external/axios-0.27.2.min.js"></script>
-    <script src="js/external/moment-2.29.3.min.js"></script>
-    <script src="js/external/marked-4.1.0.min.js"></script>
+    <script src="js/external/vuetify-v2.6.15.min.js"></script>
+    <script src="js/external/axios-1.4.0.min.js"></script>
+    <script src="js/external/moment-2.29.4.min.js"></script>
+    <script src="js/external/marked-4.3.0.min.js"></script>
+    <script src="js/external/purify-3.0.2.min.js"></script>
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>

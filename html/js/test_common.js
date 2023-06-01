@@ -103,8 +103,35 @@ global.mockPapi = function(method, mockedResponse, error) {
   return mock
 }
 
+global.resetAuthApi = function() {
+  app.authApi = { 
+                defaults: { 
+                  headers: {
+                    common: {}
+                  }
+                }
+              };
+  return global;
+}
+
+global.mockAuthApi = function(method = "get", mockedResponse, error) {
+  mock = app.authApi[method];
+  if (!mock) {
+    mock = jest.fn();
+    app.authApi[method] = mock;
+  }
+  if (error) {
+    mock.mockImplementation(() => {
+      throw error;
+    });
+  } else {
+    mock.mockReturnValueOnce(mockedResponse);
+  }
+  return mock
+}
+
 global.mockShowError = function(logError = false) {
-  const mock = jest.fn().mockImplementation(err => { if (logError) console.log(err.stack) });
+  const mock = jest.fn().mockImplementation(err => { if (logError) console.log(err.stack ? err.stack : err) });
   app.showError = mock;
   return mock;
 }
@@ -123,6 +150,6 @@ global.JobStatusDeleted = 3;
 ////////////////////////////////////
 // Import external dependencies
 ////////////////////////////////////
-global.moment = require('./external/moment-2.29.3.min.js');
-global.marked = require('./external/marked-4.1.0.min.js');
-global.DOMPurify = require('./external/purify-2.4.0.min.js');
+global.moment = require('./external/moment-2.29.4.min.js');
+global.marked = require('./external/marked-4.3.0.min.js');
+global.DOMPurify = require('./external/purify-3.0.2.min.js');

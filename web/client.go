@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
@@ -46,7 +45,7 @@ func NewClient(url string, verifyCert bool) *Client {
 
 func (client *Client) MockStringResponse(body string, statusCode int, mockError error) {
 	mockResp := &http.Response{
-		Body:          ioutil.NopCloser(bytes.NewBufferString(body)),
+		Body:          io.NopCloser(bytes.NewBufferString(body)),
 		StatusCode:    statusCode,
 		ContentLength: int64(len(body)),
 		Header:        make(http.Header, 0),
@@ -73,7 +72,7 @@ func (client *Client) SendObject(method string, path string, obj interface{}, re
 		if err == nil {
 			defer resp.Body.Close()
 			if resp.StatusCode < 200 || resp.StatusCode > 299 {
-				bytes, _ := ioutil.ReadAll(resp.Body)
+				bytes, _ := io.ReadAll(resp.Body)
 				body := string(bytes)
 				log.WithFields(log.Fields{
 					"body": body,

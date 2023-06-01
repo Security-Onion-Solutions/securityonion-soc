@@ -7,93 +7,128 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+
+	"github.com/go-chi/chi"
 )
 
 type ConfigHandler struct {
-	web.BaseHandler
 	server *Server
 }
 
-func NewConfigHandler(srv *Server) *ConfigHandler {
-	handler := &ConfigHandler{}
-	handler.Host = srv.Host
-	handler.server = srv
-	handler.Impl = handler
-	return handler
-}
-
-func (configHandler *ConfigHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	if configHandler.server.Configstore == nil {
-		return http.StatusMethodNotAllowed, nil, errors.New("Config module not enabled")
+func RegisterConfigRoutes(srv *Server, r chi.Router, prefix string) {
+	h := &ConfigHandler{
+		server: srv,
 	}
 
-	switch request.Method {
-	case http.MethodGet:
-		return configHandler.get(ctx, writer, request)
-	case http.MethodPost:
-		return configHandler.put(ctx, writer, request)
-	case http.MethodPut:
-		return configHandler.put(ctx, writer, request)
-	case http.MethodDelete:
-		return configHandler.delete(ctx, writer, request)
-	}
-	return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
+	r.Route(prefix, func(r chi.Router) {
+		r.Use(h.configEnabled)
+
+		r.Get("/", h.getConfig)
+
+		r.Put("/", h.putSetting)
+		r.Post("/", h.putSetting)
+		r.Put("/sync", h.putSync)
+		r.Post("/sync", h.putSync)
+
+		r.Delete("/", h.deleteConfig)
+		r.Delete("/{id}", h.deleteConfig)
+		r.Delete("/{id}/{minion}", h.deleteConfig)
+	})
 }
 
-func (configHandler *ConfigHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	settings, err := configHandler.server.Configstore.GetSettings(ctx)
-	if err != nil {
-		return http.StatusBadRequest, nil, err
-	}
-	return http.StatusOK, settings, nil
-}
-
-func (configHandler *ConfigHandler) put(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	var err error
-	op := configHandler.GetPathParameter(request.URL.Path, 2)
-	if op == "sync" {
-		err = configHandler.server.Configstore.SyncSettings(ctx)
-	} else {
-		setting := model.Setting{}
-		err = json.NewDecoder(request.Body).Decode(&setting)
-		if err == nil {
-			if !model.IsValidSettingId(setting.Id) || (setting.NodeId != "" && !model.IsValidMinionId(setting.NodeId)) {
-				err = errors.New("Invalid setting")
-			} else {
-				remove := false
-				err = configHandler.server.Configstore.UpdateSetting(ctx, &setting, remove)
-			}
+func (h *ConfigHandler) configEnabled(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if h.server.Configstore == nil {
+			web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Config module not enabled"))
+			return
 		}
-	}
 
-	if err != nil {
-		return http.StatusBadRequest, nil, err
-	}
-	return http.StatusOK, nil, nil
+		next.ServeHTTP(w, r)
+	})
 }
 
-func (configHandler *ConfigHandler) delete(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	id := request.URL.Query().Get("id")
-	minion := request.URL.Query().Get("minion")
+func (h *ConfigHandler) getConfig(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	settings, err := h.server.Configstore.GetSettings(ctx)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, settings)
+}
+
+func (h *ConfigHandler) putSetting(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	setting := model.Setting{}
+
+	err := json.NewDecoder(r.Body).Decode(&setting)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	if !model.IsValidSettingId(setting.Id) || (setting.NodeId != "" && !model.IsValidMinionId(setting.NodeId)) {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid setting"))
+		return
+	}
+
+	err = h.server.Configstore.UpdateSetting(ctx, &setting, false)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, nil)
+}
+
+func (h *ConfigHandler) putSync(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	err := h.server.Configstore.SyncSettings(ctx)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, nil)
+}
+
+func (h *ConfigHandler) deleteConfig(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id := chi.URLParam(r, "id")
+	minion := chi.URLParam(r, "minion")
+
+	if id == "" {
+		id = r.URL.Query().Get("id")
+	}
+
+	if minion == "" {
+		minion = r.URL.Query().Get("minion")
+	}
+
 	setting := model.NewSetting(id)
 	setting.NodeId = minion
 
 	var err error
 	if !model.IsValidSettingId(setting.Id) || (setting.NodeId != "" && !model.IsValidMinionId(setting.NodeId)) {
-		err = errors.New("Invalid setting")
-	} else {
-		remove := true
-		err = configHandler.server.Configstore.UpdateSetting(ctx, setting, remove)
+		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid setting"))
+		return
 	}
+
+	err = h.server.Configstore.UpdateSetting(ctx, setting, true)
 	if err != nil {
-		return http.StatusBadRequest, nil, err
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
 	}
-	return http.StatusOK, nil, nil
+
+	web.Respond(w, r, http.StatusOK, nil)
 }

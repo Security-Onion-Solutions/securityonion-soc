@@ -7,104 +7,121 @@
 package server
 
 import (
-	"context"
-	"errors"
 	"net/http"
-	"regexp"
 	"strconv"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+
+	"github.com/go-chi/chi"
 )
 
 type JobHandler struct {
-	web.BaseHandler
 	server *Server
 }
 
-func NewJobHandler(srv *Server) *JobHandler {
-	handler := &JobHandler{}
-	handler.Host = srv.Host
-	handler.server = srv
-	handler.Impl = handler
-	return handler
-}
-
-func (jobHandler *JobHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	switch request.Method {
-	case http.MethodGet:
-		return jobHandler.get(ctx, writer, request)
-	case http.MethodPost:
-		return jobHandler.post(ctx, writer, request)
-	case http.MethodPut:
-		return jobHandler.put(ctx, writer, request)
-	case http.MethodDelete:
-		return jobHandler.delete(ctx, writer, request)
+func RegisterJobRoutes(srv *Server, r chi.Router, prefix string) {
+	h := &JobHandler{
+		server: srv,
 	}
-	return http.StatusMethodNotAllowed, nil, errors.New("Method not supported")
+
+	r.Route(prefix, func(r chi.Router) {
+		r.Get("/", h.getJob)
+		r.Get("/{jobId}", h.getJob)
+
+		r.Post("/", h.postJob)
+
+		r.Put("/", h.putJob)
+
+		r.Delete("/{jobId}", h.deleteJob)
+	})
 }
 
-func (jobHandler *JobHandler) get(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	statusCode := http.StatusBadRequest
-	jobId, err := strconv.ParseInt(request.URL.Query().Get("jobId"), 10, 32)
-	job := jobHandler.server.Datastore.GetJob(ctx, int(jobId))
-	if job != nil {
-		statusCode = http.StatusOK
-	} else {
-		statusCode = http.StatusNotFound
+func (h *JobHandler) getJob(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	rawId := chi.URLParam(r, "jobId")
+	if rawId == "" {
+		rawId = r.URL.Query().Get("jobId")
 	}
-	return statusCode, job, err
-}
 
-func (jobHandler *JobHandler) post(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	statusCode := http.StatusBadRequest
-	job := jobHandler.server.Datastore.CreateJob(ctx)
-	err := jobHandler.ReadJson(request, job)
-	if err == nil {
-		err = jobHandler.server.Datastore.AddJob(ctx, job)
-		if err == nil {
-			jobHandler.Host.Broadcast("job", "jobs", job)
-			statusCode = http.StatusCreated
-		}
+	jobId, err := strconv.ParseInt(rawId, 10, 32)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
 	}
-	return statusCode, job, err
+
+	job := h.server.Datastore.GetJob(ctx, int(jobId))
+	if job == nil {
+		web.Respond(w, r, http.StatusNotFound, nil)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, job)
 }
 
-func (jobHandler *JobHandler) put(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	statusCode := http.StatusBadRequest
+func (h *JobHandler) postJob(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	job := h.server.Datastore.CreateJob(ctx)
+
+	err := web.ReadJson(r, job)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	err = h.server.Datastore.AddJob(ctx, job)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	h.server.Host.Broadcast("job", "jobs", job)
+
+	web.Respond(w, r, http.StatusCreated, job)
+}
+
+func (h *JobHandler) putJob(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	job := model.NewJob()
-	err := jobHandler.ReadJson(request, job)
-	if err == nil {
-		err = jobHandler.server.Datastore.UpdateJob(ctx, job)
-		if err == nil {
-			jobHandler.Host.Broadcast("job", "jobs", job)
-			statusCode = http.StatusOK
-		} else {
-			statusCode = http.StatusNotFound
-		}
-	} else {
-		statusCode = http.StatusBadRequest
+
+	err := web.ReadJson(r, job)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
 	}
-	return statusCode, job, err
+
+	err = h.server.Datastore.UpdateJob(ctx, job)
+	if err != nil {
+		web.Respond(w, r, http.StatusNotFound, err)
+		return
+	}
+
+	h.server.Host.Broadcast("job", "jobs", job)
+
+	web.Respond(w, r, http.StatusOK, job)
 }
 
-func (jobHandler *JobHandler) delete(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	id := jobHandler.GetPathParameter(request.URL.Path, 2)
-	safe, _ := regexp.MatchString(`^[0-9-]+$`, id)
-	if !safe {
-		return http.StatusBadRequest, nil, errors.New("Invalid id")
-	}
-	statusCode := http.StatusBadRequest
+func (h *JobHandler) deleteJob(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id := chi.URLParam(r, "jobId")
 
 	jobId, err := strconv.Atoi(id)
-	if err == nil {
-		var job *model.Job
-		job, err = jobHandler.server.Datastore.DeleteJob(ctx, int(jobId))
-		if err == nil {
-			jobHandler.Host.Broadcast("job", "jobs", job)
-			statusCode = http.StatusOK
-		}
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
 	}
 
-	return statusCode, nil, err
+	job, err := h.server.Datastore.DeleteJob(ctx, int(jobId))
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	h.server.Host.Broadcast("job", "jobs", job)
+
+	web.Respond(w, r, http.StatusOK, nil)
 }

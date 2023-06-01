@@ -160,7 +160,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
   }},
   computed: {
   },
-  created() {   
+  created() {
   },
   async mounted() {
     this.$root.loadParameters('case', this.initCase);
@@ -173,7 +173,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
   },
   beforeDestroy() {
     this.$root.setSubtitle("");
-  },  
+  },
   destroyed() {
     this.$root.unsubscribe("case", this.updateCase);
     this.$root.unsubscribe("job", this.updateJob);
@@ -286,7 +286,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       // Vuetify Data Tables has a flaw in that it cannot resolve object properties
       // for the purpose of filtering, when the property name contains a dot (.)
       // character. So our obj.fields["event.module"] won't work with filtering.
-      // To resolve this, we have to duplicate the field name into one with an 
+      // To resolve this, we have to duplicate the field name into one with an
       // underscore instead of a dot. Fortunately these three event fields are
       // small so it's not going cost much overhead.
       if (obj && obj.fields) {
@@ -325,7 +325,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     },
     shouldRenderAssociationRecord(association, obj, index) {
       var render = true;
-      if (!this.associatedTable[association].showAll && this.renderAbbreviatedCount) {      
+      if (!this.associatedTable[association].showAll && this.renderAbbreviatedCount) {
         const count = this.associations[association] ? this.associations[association].length : 0;
         const lowerCutoff = Math.floor(this.renderAbbreviatedCount / 2);
         if (count - this.renderAbbreviatedCount > lowerCutoff) {
@@ -359,7 +359,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       if (association == "evidence") {
         this.loadAnalyzeJobs(row.id);
       }
-    },    
+    },
     withDefault(value, deflt) {
       if (value == null || value == undefined || value == "") {
         value = deflt;
@@ -442,7 +442,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       await this.$root.populateUserDetails(caseObj, "userId", "owner", this.i18n.unknown);
       await this.$root.populateUserDetails(caseObj, "assigneeId", "assignee", this.i18n.unassigned);
       this.addMRUCaseObj(caseObj);
-      this.$root.setSubtitle(this.i18n.case + " - " + caseObj.title); 
+      this.$root.setSubtitle(this.i18n.case + " - " + caseObj.title);
       this.caseObj = caseObj;
     },
 
@@ -457,7 +457,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           val = parseInt(val, 10);
         }
       }
-      
+
       if (form[this.editForm.field] == val) return false;
 
       form[this.editForm.field] = val;
@@ -552,7 +552,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           let data = JSON.stringify(form);
           response = await this.$root.papi.post('case/' + this.mapAssociatedPath(association), data, config);
         }
-        
+
         if (response && response.data) {
           await this.$root.populateUserDetails(response.data, "userId", "owner");
           this.associations[association].push(response.data);
@@ -562,7 +562,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       } catch (error) {
         this.$root.showError(error);
       }
-      // always clear file, even if failure. Otherwise there's a risk that the file could be sent on 
+      // always clear file, even if failure. Otherwise there's a risk that the file could be sent on
       // all subsequent artifacts.
       this.attachment = null;
       this.$root.stopLoading();
@@ -680,10 +680,11 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     },
     resetFormDefaults(form, ref) {
       switch (ref) {
-        case "attachments": 
+        case "attachments":
           form.tlp = this.getTlp();
+          form.protected = false;
           break;
-        case "evidence": 
+        case "evidence":
           form.tlp = this.getTlp();
           form.bulk = false;
           form.artifactType = this.getDefaultPreset('artifactType');
@@ -693,7 +694,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
             this.$refs[ref].reset();
           }
           break;
-      }      
+      }
     },
     resetForm(ref) {
       const form = { valid: false };
@@ -748,7 +749,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     switchToTab(association) {
       this.activeTab = association;
     },
-     
+
     updateCase(caseObj) {
       // No-op until we can detect if the user has made any changes to the form. We don't
       // want to wipe out a long description they might be working on typing.
@@ -904,7 +905,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
 
             if (!found) {
               existingResults.push(job);
-              existingResults.sort((a, b) => { 
+              existingResults.sort((a, b) => {
                 if (a.id < b.id) {
                   return -1;
                 } else if (a.id > b.id) {
@@ -942,25 +943,25 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       if (analyzer.data) {
         switch (analyzer.data.status) {
           case "info":
-            decoration.color = "info"; 
+            decoration.color = "info";
             decoration.icon = "fa-circle-info";
             decoration.severity = 10;
             decoration.help = "analyzer_result_info";
             break;
           case "ok":
-            decoration.color = "success"; 
+            decoration.color = "success";
             decoration.icon = "fa-circle-check";
             decoration.severity = 0;
             decoration.help = "analyzer_result_ok";
             break;
           case "caution":
-            decoration.color = "warning"; 
+            decoration.color = "warning";
             decoration.icon = "fa-circle-exclamation";
             decoration.severity = 80;
             decoration.help = "analyzer_result_caution";
             break;
           case "threat":
-            decoration.color = "error"; 
+            decoration.color = "error";
             decoration.icon = "fa-triangle-exclamation";
             decoration.severity = 100;
             decoration.help = "analyzer_result_threat";

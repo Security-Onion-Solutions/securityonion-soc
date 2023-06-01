@@ -8,6 +8,7 @@ package web
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -74,13 +75,17 @@ func TestManageConnections(tester *testing.T) {
 }
 
 func TestGetSourceIp(tester *testing.T) {
-	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil, "")
 	request, _ := http.NewRequest("GET", "", nil)
 
 	expected := "1.1.1.1"
 	request.Header.Set("X-real-IP", expected)
 
-	assert.Equal(tester, expected, host.GetSourceIp(request))
+	assert.Equal(tester, expected, GetSourceIp(request))
+}
+
+func TestConvertErrorToSafeString(tester *testing.T) {
+	assert.Equal(tester, "ERROR_FOO", ConvertErrorToSafeString(errors.New("ERROR_FOO")))
+	assert.Equal(tester, GENERIC_ERROR_MESSAGE, ConvertErrorToSafeString(errors.New("ERROR2_FOO")))
 }
 
 type DummyPreprocessor struct {

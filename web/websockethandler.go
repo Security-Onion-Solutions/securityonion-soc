@@ -7,57 +7,77 @@
 package web
 
 import (
-	"context"
 	"errors"
 	"net/http"
 
 	"github.com/apex/log"
+	"github.com/go-chi/chi"
 	"github.com/gorilla/websocket"
 	"github.com/security-onion-solutions/securityonion-soc/json"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type WebSocketHandler struct {
-	BaseHandler
+	Host *Host
 }
 
 func NewWebSocketHandler(host *Host) *WebSocketHandler {
 	handler := &WebSocketHandler{}
 	handler.Host = host
-	handler.Impl = handler
+
 	return handler
 }
 
-func (webSocketHandler *WebSocketHandler) HandleNow(ctx context.Context, writer http.ResponseWriter, request *http.Request) (int, interface{}, error) {
-	upgrader := websocket.Upgrader{}
-	connection, err := upgrader.Upgrade(writer, request, nil)
-	ip := webSocketHandler.Host.GetSourceIp(request)
-	if err != nil {
-		log.WithError(err).WithFields(log.Fields{
-			"remoteAddr": request.RemoteAddr,
-			"sourceIp":   ip,
-			"path":       request.URL.Path,
-		}).Warn("Failed to upgrade websocket")
-		return http.StatusBadRequest, nil, errors.New("Unable to upgrade request to websocket")
+func RegisterWebSocketRoutes(host *Host, r chi.Router) {
+	handler := &WebSocketHandler{
+		Host: host,
 	}
+
+	r.Group(func(r chi.Router) {
+		r.Use(Middleware(host, true))
+
+		r.Get("/ws", handler.Handle)
+	})
+}
+
+func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	ip := GetSourceIp(r)
 
 	var user *model.User
 	var ok bool
 	user, ok = ctx.Value(ContextKeyRequestor).(*model.User)
 	if !ok {
-		log.WithError(err).WithFields(log.Fields{
-			"remoteAddr": request.RemoteAddr,
+		log.WithFields(log.Fields{
+			"remoteAddr": r.RemoteAddr,
 			"sourceIp":   ip,
-			"path":       request.URL.Path,
+			"path":       r.URL.Path,
 		}).Warn("User does not exist in context")
-		return http.StatusBadRequest, nil, errors.New("User does not exist in context; unable to complete websocket")
+		Respond(w, r, http.StatusBadRequest, errors.New("User does not exist in context; unable to complete websocket"))
+
+		return
+	}
+
+	upgrader := websocket.Upgrader{}
+	connection, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.WithError(err).WithFields(log.Fields{
+			"remoteAddr": r.RemoteAddr,
+			"sourceIp":   ip,
+			"path":       r.URL.Path,
+		}).Warn("Failed to upgrade websocket")
+		Respond(w, r, http.StatusBadRequest, err)
+
+		return
 	}
 
 	log.WithFields(log.Fields{
-		"remoteAddr": request.RemoteAddr,
+		"remoteAddr": r.RemoteAddr,
 		"sourceIp":   ip,
-		"path":       request.URL.Path,
+		"path":       r.URL.Path,
 	}).Info("WebSocket connected")
+
 	conn := webSocketHandler.Host.AddConnection(user, connection, ip)
 
 	defer connection.Close()
@@ -67,9 +87,9 @@ func (webSocketHandler *WebSocketHandler) HandleNow(ctx context.Context, writer 
 			break
 		}
 		log.WithFields(log.Fields{
-			"remoteAddr": request.RemoteAddr,
+			"remoteAddr": r.RemoteAddr,
 			"sourceIp":   ip,
-			"path":       request.URL.Path,
+			"path":       r.URL.Path,
 			"msg":        string(messageBytes),
 			"type":       messageType,
 		}).Info("WebSocket message received")
@@ -79,12 +99,13 @@ func (webSocketHandler *WebSocketHandler) HandleNow(ctx context.Context, writer 
 		webSocketHandler.handleMessage(msg, conn)
 	}
 	log.WithFields(log.Fields{
-		"remoteAddr": request.RemoteAddr,
+		"remoteAddr": r.RemoteAddr,
 		"sourceIp":   ip,
-		"path":       request.URL.Path,
+		"path":       r.URL.Path,
 	}).Info("WebSocket disconnected")
 	webSocketHandler.Host.RemoveConnection(connection)
-	return http.StatusOK, nil, nil
+
+	Respond(nil, r, http.StatusOK, nil)
 }
 
 func (webSocketHandler *WebSocketHandler) handleMessage(msg *WebSocketMessage, conn *Connection) {

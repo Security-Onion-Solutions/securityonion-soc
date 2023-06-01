@@ -307,15 +307,15 @@ td {
   padding: 8px;
 }
 
-.markdown-body h1, 
-.markdown-body h2, 
+.markdown-body h1,
+.markdown-body h2,
 .markdown-body h3,
-.markdown-body h4, 
-.markdown-body h5, 
+.markdown-body h4,
+.markdown-body h5,
 .markdown-body h6 {
   margin: 8px 0 8px 0;
 }
- 
+
 .theme--dark.v-application .markdown-body td,
 .theme--dark.v-application  .markdown-body th {
   border: 1px solid hsla(0,0%,100%,.1);
