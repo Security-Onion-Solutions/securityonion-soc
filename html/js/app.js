@@ -345,13 +345,15 @@ $(document).ready(function() {
 
                 this.subscribe("status", this.updateStatus);
                 this.subscribe('import', (url) => {
-                  if (url) {
-                    const fragLoc = url.indexOf('/#/');
-                    if (fragLoc > 0) {
-                      url = url.substring(fragLoc);
+                  if (url === 'no-changes') {
+                    this.showInfo(this.i18n.gridMemberImportFailure);
+                  } else if (url) {
+                    const u = new URL(url);
+                    if (u.host.toUpperCase() == window.location.host.toUpperCase()) {
+                      url = u.hash;
                     }
-                    const content = 'A recent import has completed. <a href="${url}">View Results</a>';
-                    this.showInfo(url);
+                    const content = `${this.i18n.gridMemberImportSuccess}<a href="${url}">${this.i18n.viewResults}</a>`;
+                    this.showInfo(content);
                   }
                 });
               }

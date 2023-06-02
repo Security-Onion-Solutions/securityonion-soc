@@ -168,7 +168,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
       return false;
     },
     canUpload(node) {
-      return !!node['keywords'] && node['keywords'].indexOf("Sensor") != -1
+      return !!node['keywords'] && (node['keywords'].indexOf("Sensor") != -1 || node['keywords'].indexOf("Manager") != -1);
     },
     async gridMemberTest() {
       const nodeId = this.hideTestConfirm().replace('_so-', '_');
@@ -194,13 +194,22 @@ routes.push({ path: '/grid', name: 'grid', component: {
     },
     async gridMemberUpload() {
       this.hideUploadConfirm();
-      console.log('Upload!', this.uploadForm, this.selectedNode);
 
       const data = new FormData();
       data.append("attachment", this.uploadForm.attachment);
       headers = { 'Content-Type': 'multipart/form-data; boundary=' + data._boundary }
       config = { 'headers': headers };
-      response = await this.$root.papi.post('gridmembers/' + this.selectedNode + '/import', data, config);
+
+      try {
+        await this.$root.papi.post('gridmembers/' + this.selectedNode + '/import', data, config);
+        this.$root.showTip(this.i18n.gridMemberUploadSuccess);
+      } catch (error) {
+        if (error.response.status === 409) {
+          this.$root.showError(this.i18n.gridMemberUploadConflict);
+        } else {
+          this.$root.showError(this.i18n.gridMemberUploadFailure);
+        }
+      }
     },
     formatNode(node) {
       node['keywords'] = this.$root.localizeMessage(node["role"] + '-keywords');

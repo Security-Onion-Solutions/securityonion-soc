@@ -131,7 +131,7 @@ func (h *GridMembersHandler) postImport(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	baseTargetDir := "/nsm/uploads/"
+	baseTargetDir := "/nsm/soc/uploads/"
 	targetDir := filepath.Join(baseTargetDir, "processing", id)
 
 	err = os.MkdirAll(targetDir, 0755)
@@ -140,11 +140,18 @@ func (h *GridMembersHandler) postImport(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	targetFile := filepath.Join(targetDir, header.Filename)
+	filename := strings.ReplaceAll(header.Filename, " ", "_")
+
+	targetFile := filepath.Join(targetDir, filename)
 
 	out, err := os.OpenFile(targetFile, os.O_CREATE|os.O_WRONLY, 0444)
 	if err != nil {
-		web.Respond(w, r, http.StatusInternalServerError, err)
+		_, check := os.Stat(targetFile)
+		if check == nil {
+			web.Respond(w, r, http.StatusConflict, err)
+		} else {
+			web.Respond(w, r, http.StatusInternalServerError, err)
+		}
 		return
 	}
 
@@ -190,7 +197,7 @@ func (h *GridMembersHandler) postImport(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
-		targetFile = filepath.Join(baseTargetDir, header.Filename)
+		targetFile = filepath.Join(baseTargetDir, filename)
 
 		dashboardURL, err := h.server.GridMembersstore.Import(ctx, id, targetFile, ext)
 		if err != nil {
@@ -200,6 +207,8 @@ func (h *GridMembersHandler) postImport(w http.ResponseWriter, r *http.Request) 
 
 		if dashboardURL != nil && *dashboardURL != "" {
 			h.server.Host.Broadcast("import", "jobs", dashboardURL)
+		} else {
+			h.server.Host.Broadcast("import", "jobs", "no-changes")
 		}
 	}()
 }

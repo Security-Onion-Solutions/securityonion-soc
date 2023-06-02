@@ -259,7 +259,7 @@
           </template>
           {{ warningMessage }}
         </v-snackbar>
-        <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" v-text="infoMessage"></v-alert>
+        <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" v-html="infoMessage"></v-alert>
         <v-snackbar id="tip" top centered rounded close :timeout="tipTimeout" v-model="tip" color="info">
           <template v-slot:action="{ attrs }">
             <v-btn icon small v-bind="attrs" @click="tip = false">
@@ -3082,7 +3082,7 @@
         </v-dialog>
         <v-dialog v-model="gridMemberUploadConfirmDialog" persistent max-width="480">
           <v-card>
-            <v-card-title class="text-h5" v-text="'Upload PCAP/EVTX'" />
+            <v-card-title class="text-h5" v-text="i18n.gridMemberUploadTitle" />
             <v-card-text>
               <v-form ref="gridUpload" v-model="uploadForm.valid" @submit.prevent>
                 <v-file-input id="evidence-value" v-model="uploadForm.attachment" show-size accept=".pcap,.evtx" :rules="[rules.fileSizeLimit, rules.fileNotEmpty, rules.fileRequired]"/>
