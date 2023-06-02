@@ -9,6 +9,7 @@ package server
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -19,6 +20,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/go-chi/chi"
+	"github.com/samber/lo"
 )
 
 type GridMembersHandler struct {
@@ -112,24 +114,28 @@ func (h *GridMembersHandler) postImport(w http.ResponseWriter, r *http.Request) 
 	switch ext {
 	case ".pcap":
 		// wikipedia lists both endiannesses as correct
-		if !bytes.Equal(magicBytes[:4], []byte{0xd4, 0xc3, 0xb2, 0xa1}) &&
+		if !canUploadPcap(id) {
+			err = fmt.Errorf("this node (%s) does not support importing PCAP files", id)
+		} else if !bytes.Equal(magicBytes[:4], []byte{0xd4, 0xc3, 0xb2, 0xa1}) &&
 			!bytes.Equal(magicBytes[:4], []byte{0xa1, 0xb2, 0xc3, 0xd4}) {
 			err = errors.New("PCAP file missing magic bytes")
 		}
 	case ".evtx":
-		if !bytes.Equal(magicBytes, []byte{0x45, 0x6c, 0x66, 0x46, 0x69, 0x6C, 0x65}) {
+		if !canUploadEvtx(id) {
+			err = fmt.Errorf("this node (%s) does not support importing EVTX files", id)
+		} else if !bytes.Equal(magicBytes, []byte{0x45, 0x6c, 0x66, 0x46, 0x69, 0x6C, 0x65}) {
 			err = errors.New("EVTX file missing magic bytes")
 		}
 	default:
 		err = errors.New("Invalid extension")
 	}
 
-	ext = ext[1:]
-
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
+
+	ext = ext[1:]
 
 	baseTargetDir := "/nsm/soc/uploads/"
 	targetDir := filepath.Join(baseTargetDir, "processing", id)
@@ -235,4 +241,49 @@ func (h *GridMembersHandler) postManageMembers(w http.ResponseWriter, r *http.Re
 	}
 
 	web.Respond(w, r, http.StatusOK, nil)
+}
+
+var roleKeywords = map[string][]string{ // role => capabilities
+	"eval":          {"elastic", "elasticsearch", "fleet", "forward", "ingest", "manager", "master", "search", "sensor", "sensoroni", "soc", "stenographer", "web"},
+	"fleet":         {"fleet"},
+	"heavynode":     {"elastic", "elasticsearch", "forward", "ingest", "search", "sensor", "sensoroni", "stenographer"},
+	"helix":         {"helix", "sensor", "sensoroni", "stenographer"},
+	"idh":           {"idh", "intrusion", "detection", "honeypot"},
+	"import":        {"import", "manager", "master", "soc", "web"},
+	"managersearch": {"elastic", "elasticsearch", "ingest", "manager", "master", "search", "soc", "web"},
+	"manager":       {"manager", "master", "soc"},
+	"node":          {"elastic", "elasticsearch", "ingest", "search"},
+	"receiver":      {"receiver"},
+	"search":        {"elastic", "elasticsearch", "ingest", "search"},
+	"searchnode":    {"elastic", "elasticsearch", "ingest", "search"},
+	"sensor":        {"forward", "sensor", "sensoroni", "stenographer"},
+	"standalone":    {"elastic", "elasticsearch", "fleet", "forward", "ingest", "manager", "master", "search", "sensor", "sensoroni", "soc", "stenographer", "web"},
+}
+
+func canUploadPcap(node string) bool {
+	parts := strings.Split(node, "_")
+	if len(parts) < 2 {
+		return false
+	}
+
+	keywords, ok := roleKeywords[parts[1]]
+	if !ok {
+		return false
+	}
+
+	return lo.Contains(keywords, "sensor") || lo.Contains(keywords, "import")
+}
+
+func canUploadEvtx(node string) bool {
+	parts := strings.Split(node, "_")
+	if len(parts) < 2 {
+		return false
+	}
+
+	keywords, ok := roleKeywords[parts[1]]
+	if !ok {
+		return false
+	}
+
+	return lo.Contains(keywords, "manager")
 }
