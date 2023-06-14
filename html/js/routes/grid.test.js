@@ -32,7 +32,7 @@ function testUpdateMetricsEnabled(node1MetricsEnabled, node2MetricsEnabled, expe
 
 	expect(comp.metricsEnabled).toBe(expectedMetricsEnabled);
 
-  const epsColumn = comp.headers.find(function(item) { 
+  const epsColumn = comp.headers.find(function(item) {
     return item.text == comp.i18n.eps;
   });
 
@@ -104,6 +104,26 @@ test('canTest', () => {
 
 	node['keywords'] = "Foo Sensor Bar";
 	expect(comp.canTest(node)).toBe(true);
+});
+
+test('canUpload', () => {
+	const node = {};
+
+	const table = [
+		{ keywords: "", canUploadPCAP: false, canUploadEvtx: false },
+		{ keywords: "Foo Bar", canUploadPCAP: false, canUploadEvtx: false },
+		{ keywords: "Foo Sensor Bar", canUploadPCAP: true, canUploadEvtx: false },
+		{ keywords: "Foo Import Bar", canUploadPCAP: true, canUploadEvtx: false },
+		{ keywords: "Foo Manager Bar", canUploadPCAP: false, canUploadEvtx: true },
+		{ keywords: "Foo Sensor Manager Bar", canUploadPCAP: true, canUploadEvtx: true },
+	];
+
+	table.forEach((t) => {
+		node['keywords'] = t.keywords;
+		expect(comp.canUploadPCAP(node)).toBe(t.canUploadPCAP);
+		expect(comp.canUploadEvtx(node)).toBe(t.canUploadEvtx);
+		expect(comp.canUpload(node)).toBe(t.canUploadPCAP || t.canUploadEvtx);
+	});
 });
 
 test('gridMemberTest', async () => {
