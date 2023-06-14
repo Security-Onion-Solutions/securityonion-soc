@@ -52,7 +52,7 @@ func TestCopyToUser(tester *testing.T) {
 	assert.Equal(tester, kratosUser.Traits.Note, user.Note)
 	assert.Equal(tester, kratosUser.Addresses[0].Value, user.Email)
 	assert.Equal(tester, "locked", user.Status)
-	assert.Equal(tester, "enabled", user.MfaStatus)
+	assert.Equal(tester, "enabled", user.TotpStatus)
 	assert.Equal(tester, false, user.PasswordChanged)
 
 	kratosUser.Credentials = make(map[string]*KratosCredential)
@@ -63,7 +63,7 @@ func TestCopyToUser(tester *testing.T) {
 	}
 	user = model.NewUser()
 	kratosUser.copyToUser(user)
-	assert.Equal(tester, "disabled", user.MfaStatus)
+	assert.Equal(tester, "disabled", user.TotpStatus)
 	assert.Equal(tester, true, user.PasswordChanged)
 }
 

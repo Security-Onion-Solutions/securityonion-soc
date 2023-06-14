@@ -46,7 +46,6 @@ test('shouldNotExtractWebauthnData', () => {
 test('shouldExtractWebauthnData', () => {
   const identifier = {attributes: {name: 'identifier', value: 'some_identifier'}};
   const passwordMethod = {attributes: {name: 'method', value: 'password'}};
-  const webauthnMethod = {attributes: {name: 'method', value: 'webauthn'}};
   const webauthnTrigger = {attributes: {name: 'webauthn_register_trigger', onclick: 'some_event'}};
   const webauthnDisplayName = {attributes: {name: 'webauthn_register_displayname', value: 'some_name'}};
   const webauthnRegister = {attributes: {name: 'webauthn_register', value: 'some_key'}};

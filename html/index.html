@@ -1118,8 +1118,8 @@
                   <td v-text="props.item.note" class="d-none d-lg-table-cell"></td>
                   <td v-text="$root.formatStringArray(props.item.roles)" class="d-none d-lg-table-cell"></td>
                   <td>
-                    <v-icon v-if="props.item.mfaStatus == 'enabled' && props.item.status != 'locked'" color="success" :title="i18n.totpEnabled">fa-user-shield</v-icon>
-                    <v-icon v-if="props.item.mfaStatus != 'enabled' && props.item.status != 'locked'" :title="i18n.loginEnabled">fa-user</v-icon>
+                    <v-icon v-if="props.item.totpStatus == 'enabled' && props.item.status != 'locked'" color="success" :title="i18n.totpEnabled">fa-user-shield</v-icon>
+                    <v-icon v-if="props.item.totpStatus != 'enabled' && props.item.status != 'locked'" :title="i18n.loginEnabled">fa-user</v-icon>
                     <v-icon v-if="props.item.status == 'locked'" color="grey" :title="i18n.loginDisabled">fa-user-slash</v-icon>
                     <v-icon v-if="!props.item.passwordChanged" color="warning" class="px-1" :title="i18n.passwordNeedsChanged">fa-exclamation-triangle</v-icon>
                   </td>

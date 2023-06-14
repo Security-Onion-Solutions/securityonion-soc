@@ -96,9 +96,9 @@ func (kratosUser *KratosUser) copyToUser(user *model.User) {
 			user.PasswordChanged = password.UpdateDate.Sub(password.CreateDate) > time.Second
 		}
 		if kratosUser.Credentials["totp"] != nil {
-			user.MfaStatus = "enabled"
+			user.TotpStatus = "enabled"
 		} else {
-			user.MfaStatus = "disabled"
+			user.TotpStatus = "disabled"
 		}
 	}
 }

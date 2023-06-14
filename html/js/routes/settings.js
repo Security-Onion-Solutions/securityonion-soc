@@ -125,7 +125,7 @@ routes.push({ path: '/settings', name: 'settings', component: {
       this.unlink_totp_available = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'totp_unlink') != null;
     },
     extractWebauthnData(response) {
-      if (response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'method' && item.attributes.value == 'webauthn')) {
+      if (response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'webauthn_register_trigger')) {
         this.webauthnForm.onclick = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'webauthn_register_trigger').attributes.onclick;
         this.webauthnForm.name = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'webauthn_register_displayname').attributes.value;
         this.webauthnForm.key = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'webauthn_register').attributes.value;
