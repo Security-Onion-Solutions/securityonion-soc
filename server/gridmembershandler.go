@@ -88,7 +88,12 @@ func (h *GridMembersHandler) postImport(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	err = r.ParseMultipartForm(int64(h.server.Config.MaxUploadSizeBytes))
+	uploadLimit := int64(h.server.Config.ClientParams.GridParams.MaxUploadSize)
+	if uploadLimit == 0 {
+		uploadLimit = 25 * 1024 * 1024 // 25 MiB
+	}
+
+	err = r.ParseMultipartForm(uploadLimit)
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
 		return

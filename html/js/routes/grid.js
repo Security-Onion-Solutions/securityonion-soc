@@ -41,7 +41,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
     gridMemberTestConfirmDialog: false,
     gridMemberUploadConfirmDialog: false,
     uploadForm: { valid: true, attachment: null },
-    maxUploadSizeBytes: 100 * 1024 * 1024,
+    maxUploadSizeBytes: 25 * 1024 * 1024,
     rules: {
       fileSizeLimit: value => (value == null || value.size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
       fileNotEmpty: value => (value == null || value.size > 0) || this.$root.i18n.fileEmpty,
@@ -70,6 +70,10 @@ routes.push({ path: '/grid', name: 'grid', component: {
   },
   methods: {
     initGrid(params) {
+      if (params.maxUploadSize) {
+        this.maxUploadSizeBytes = params.maxUploadSize;
+      }
+
       this.loadData();
     },
     async loadData() {
