@@ -15,9 +15,9 @@ routes.push({ path: '/settings', name: 'settings', component: {
     showSettingsForm: false,
     showPassword: false,
     usingDefaults: false,
+    csrfToken: null,
     profileForm: {
       valid: false,
-      csrfToken: null,
       email: null,
       firstName: null,
       lastName: null,
@@ -26,13 +26,20 @@ routes.push({ path: '/settings', name: 'settings', component: {
     passwordForm: {
       valid: false,
       password: null,
-      csrfToken: null,
     },
     totpForm: {
       valid: false,
       code: null,
       secret: null,
       qr: null,
+    },
+    webauthnForm: {
+      valid: false,
+      onclick: null,
+      name: null,
+      key: null,
+      script: null,
+      existingKeys: [],
     },
     rules: {
       required: value => !!value || this.$root.i18n.required,
@@ -71,9 +78,7 @@ routes.push({ path: '/settings', name: 'settings', component: {
     async loadData() {
       try {
         const response = await this.$root.authApi.get('settings/flows?id=' + this.$root.getAuthFlowId());
-        this.passwordForm.csrfToken = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'csrf_token').attributes.value;
-        this.profileForm.csrfToken = this.passwordForm.csrfToken;
-        this.totpForm.csrfToken = this.passwordForm.csrfToken;
+        this.csrfToken = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'csrf_token').attributes.value;
         if (response.data.identity && response.data.identity.traits && response.data.identity.traits.email) {
           this.profileForm.email = response.data.identity.traits.email;
           this.profileForm.firstName = response.data.identity.traits.firstName;
@@ -81,6 +86,7 @@ routes.push({ path: '/settings', name: 'settings', component: {
           this.profileForm.note = response.data.identity.traits.note;
         }
         this.extractTotpData(response);
+        this.extractWebauthnData(response);
 
         var errorsMessage = null;
         if (response.data.ui.messages && response.data.ui.messages.length > 0) {
@@ -118,5 +124,29 @@ routes.push({ path: '/settings', name: 'settings', component: {
       }
       this.unlink_totp_available = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'totp_unlink') != null;
     },
+    extractWebauthnData(response) {
+      if (response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'method' && item.attributes.value == 'webauthn')) {
+        this.webauthnForm.onclick = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'webauthn_register_trigger').attributes.onclick;
+        this.webauthnForm.name = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'webauthn_register_displayname').attributes.value;
+        this.webauthnForm.key = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'webauthn_register').attributes.value;
+        this.webauthnForm.script = response.data.ui.nodes.find(item => item.attributes && item.attributes.id == 'webauthn_script').attributes;
+        this.webauthnForm.existingKeys = response.data.ui.nodes.filter(item => item.attributes && item.attributes.name == 'webauthn_remove').map(key => {
+          return {value: key.attributes.value, id: key.meta.label.id, name: key.meta.label.context.display_name, date: key.meta.label.context.added_at};
+        });
+
+        const script = document.createElement('script');
+        script.setAttribute('type', this.webauthnForm.script.type);
+        script.setAttribute('id', this.webauthnForm.script.id);
+        script.setAttribute('crossorigin', this.webauthnForm.script.crossorigin);
+        script.setAttribute('referrerpolicy', this.webauthnForm.script.referrerpolicy);
+        script.setAttribute('integrity', this.webauthnForm.script.integrity);
+        script.setAttribute('nonce', this.webauthnForm.script.nonce);
+        script.setAttribute('src', this.webauthnForm.script.src); 
+        document.body.appendChild(script);
+      }
+    },
+    runWebauthn() {
+      eval(this.webauthnForm.onclick);
+    }
   }
 }});
