@@ -74,12 +74,25 @@ func (h *GridMembersHandler) postImport(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	err := r.ParseMultipartForm(int64(h.server.Config.MaxUploadSizeBytes))
+	members, err := h.server.GridMembersstore.GetMembers(ctx)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	_, gmExists := lo.Find(members, func(m *model.GridMember) bool {
+		return strings.EqualFold(m.Id, id)
+	})
+	if !gmExists {
+		web.Respond(w, r, http.StatusNotFound, errors.New("grid member not found"))
+		return
+	}
+
+	err = r.ParseMultipartForm(int64(h.server.Config.MaxUploadSizeBytes))
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
-	defer r.MultipartForm.RemoveAll() //nolint:errcheck // ignore error, salt will cleanup
 
 	file, header, err := r.FormFile("attachment")
 	if err != nil {
