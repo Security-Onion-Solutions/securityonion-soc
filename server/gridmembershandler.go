@@ -153,7 +153,7 @@ func (h *GridMembersHandler) postImport(w http.ResponseWriter, r *http.Request) 
 	baseTargetDir := "/nsm/soc/uploads/"
 	targetDir := filepath.Join(baseTargetDir, "processing", id)
 
-	err = os.MkdirAll(targetDir, 0755)
+	err = os.MkdirAll(targetDir, 0775)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
