@@ -52,7 +52,7 @@ test('shouldExtractWebauthnData', () => {
   const scriptObj = {id: 'webauthn_script', type: 'some_type', crossorigin: 'some_origin', referrerpolicy: 'some_policy', integrity: 'some_integrity', nonce: 'some_nonce', src: 'some_src'};
   const webauthnScript = {attributes: scriptObj};
   const webauthnRemove = {attributes: {name: 'webauthn_remove', value: 'some_key'}, meta: {label: {id: 'some_id', context: {display_name: 'some_name', added_at: 'some_date'}}}};
-  const nodes = [identifier, passwordMethod, webauthnMethod, webauthnTrigger, webauthnRegister, webauthnScript, webauthnDisplayName, webauthnRemove];
+  const nodes = [identifier, passwordMethod, webauthnTrigger, webauthnRegister, webauthnScript, webauthnDisplayName, webauthnRemove];
   const response = {data: {ui: {nodes: nodes}}};
 
   var savedChild = null;
