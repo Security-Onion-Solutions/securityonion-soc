@@ -3303,7 +3303,12 @@
                   <p class="font-weight-bold">{{i18n.configQLGridTitle}}</p>
                   <ul>
                     <li>
-                      <router-link :to="{ name: 'config', query: {s: 'ntp.config.servers'}}">{{i18n.configQLNTP}}</router-link>
+                      {{i18n.configQLNTPHeader}}
+                      <ul>
+                        <li>
+                          <router-link :to="{ name: 'config', query: {s: 'ntp.config.servers'}}">{{i18n.configQLNTP}}</router-link>
+                        </li>
+                      </ul>
                     </li>
                     <li>
                       {{i18n.configQLFirewallHeader}}
@@ -3314,13 +3319,33 @@
                         <li>
                           <router-link :to="{name: 'config', query: {s: 'firewall.hostgroups.elastic_agent_endpoint'}}">{{i18n.configQLFirewallElastic}}</router-link>
                         </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'firewall.hostgroups.fleet'}}">{{i18n.configQLFirewallFleet}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'firewall.hostgroups.idh'}}">{{i18n.configQLFirewallIDH}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'firewall.hostgroups.receiver'}}">{{i18n.configQLFirewallReceiver}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'firewall.hostgroups.searchnode'}}">{{i18n.configQLFirewallSearch}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'firewall.hostgroups.sensor'}}">{{i18n.configQLFirewallSensor}}</router-link>
+                        </li>
                       </ul>
                     </li>
                     <li>
-                      <router-link :to="{name: 'config', query: {s: 'idstools.config.ruleset'}}">{{i18n.configQLNIDSRuleset}}</router-link>
-                    </li>
-                    <li>
-                      <router-link :to="{name: 'config', query: {s: 'idstools.config.oinkcode'}}">{{i18n.configQLNIDSOinkCode}}</router-link>
+                      {{i18n.configQLNIDSHeader}}
+                      <ul>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'idstools.config.ruleset'}}">{{i18n.configQLNIDSRuleset}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'idstools.config.oinkcode'}}">{{i18n.configQLNIDSOinkCode}}</router-link>
+                        </li>
+                      </ul>
                     </li>
                   </ul>
                   <br/>
@@ -3333,10 +3358,24 @@
                           <router-link :to="{name: 'config', query: {s: 'suricata.config.vars.address-groups.HOME_NET'}}">{{i18n.configQLHomeNet}}</router-link>
                         </li>
                         <li>
+                          <router-link :to="{name: 'config', query: {s: 'suricata.config.af-packet.threads'}}">{{i18n.configQLSuricataThreads}}</router-link>
+                        </li>
+                        <li>
                           <router-link :to="{name: 'config', query: {s: 'idstools.sids'}}">{{i18n.configQLSIDS}}</router-link>
                         </li>
                         <li>
                           <router-link :to="{name: 'config', query: {s: 'suricata.thresholding.sids__yaml'}}">{{i18n.configQLSIDSThresholding}}</router-link>
+                      </ul>
+                    </li>
+                    <li>
+                      {{i18n.configQLZeekHeader}}
+                      <ul>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'zeek.config.networks.HOME_NET'}}">{{i18n.configQLZeekHomeNet}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'zeek.config.node.lb_procs'}}">{{i18n.configQLZeekThreads}}</router-link>
+                        </li>
                       </ul>
                     </li>
                     <li>
@@ -3350,6 +3389,23 @@
                         </li>
                         <li>
                           <router-link :to="{name: 'config', query: {s: 'bpf.zeek'}}">{{i18n.configQLZeek}}</router-link>
+                        </li>
+                      </ul>
+                    </li>
+                    <li>
+                      {{i18n.configQLSOCHeader}}
+                      <ul>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'soc.config.actions'}}">{{i18n.configQLSOCActions}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'soc.config.server.client.alerts.queries'}}">{{i18n.configQLSOCAlerts}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'soc.config.server.client.dashboards.queries'}}">{{i18n.configQLSOCDashboards}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'soc.config.server.client.hunt.queries'}}">{{i18n.configQLSOCHunt}}</router-link>
                         </li>
                       </ul>
                     </li>
