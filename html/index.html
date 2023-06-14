@@ -3085,7 +3085,7 @@
             <v-card-title class="text-h5" v-text="pickUploadDialogTitle()" />
             <v-card-text>
               <v-form ref="gridUpload" v-model="uploadForm.valid" @submit.prevent>
-                <v-file-input id="evidence-value" v-model="uploadForm.attachment" show-size :accept="pickUploadDialogAccept()" :rules="[rules.fileSizeLimit, rules.fileNotEmpty, rules.fileRequired]"/>
+                <v-file-input id="import-value" v-model="uploadForm.attachment" show-size :accept="pickUploadDialogAccept()" :rules="[rules.fileSizeLimit, rules.fileNotEmpty, rules.fileRequired]"/>
               </v-form>
             </v-card-text>
             <v-card-actions>
