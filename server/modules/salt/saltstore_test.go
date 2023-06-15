@@ -1185,3 +1185,25 @@ func TestForceType(tester *testing.T) {
 		}
 	}
 }
+
+func TestSendFile(t *testing.T) {
+	defer Cleanup()
+	salt := NewTestSaltPipe("true.resp")
+	err := salt.SendFile(context.Background(), "manager_standalone", "/nsm/soc/uploads/processing/manager_standalone", "/nsm/soc/uploads/", true)
+	assert.NoError(t, err)
+
+	request := ReadReqPipe()
+	assert.JSONEq(t, `{"command":"send-file","node":"manager_standalone","from":"/nsm/soc/uploads/processing/manager_standalone","to":"/nsm/soc/uploads/","cleanup":"true"}`, request)
+}
+
+func TestImportFile(t *testing.T) {
+	defer Cleanup()
+	salt := NewTestSaltPipe("url.resp")
+	path, err := salt.Import(context.Background(), "manager_standalone", "/nsm/soc/uploads/file.pcap", "pcap")
+	assert.NoError(t, err)
+	assert.NotNil(t, path)
+	assert.Contains(t, *path, `#/dashboards`)
+
+	request := ReadReqPipe()
+	assert.JSONEq(t, `{"command":"import-file","node":"manager_standalone","file":"/nsm/soc/uploads/file.pcap","importer":"pcap"}`, request)
+}
