@@ -668,7 +668,7 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 			}
 
 			if len(zeekFileQuery) > 0 {
-				query = fmt.Sprintf(`{"query":{"bool":{"must":[{"query_string":{"query":"event.module:zeek AND event.dataset:file AND %s","analyze_wildcard":true}}%s]}}}`,
+				query = fmt.Sprintf(`{"query":{"bool":{"must":[{"query_string":{"query":"event.dataset:zeek.file AND %s","analyze_wildcard":true}}%s]}}}`,
 					zeekFileQuery, rangeFilter)
 				json, err = store.luceneSearch(ctx, query)
 				log.WithFields(log.Fields{
