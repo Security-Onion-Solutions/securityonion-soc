@@ -346,13 +346,13 @@ $(document).ready(function() {
                 this.subscribe("status", this.updateStatus);
                 this.subscribe('import', (url) => {
                   if (url === 'no-changes') {
-                    this.showInfo(this.i18n.gridMemberImportFailure);
+                    this.showInfo(this.i18n.gridMemberImportNoChanges);
                   } else if (url) {
                     const u = new URL(url);
                     if (u.host.toUpperCase() == window.location.host.toUpperCase()) {
                       url = u.hash;
                     }
-                    const content = `${this.i18n.gridMemberImportSuccess}<a href="${url}">${this.i18n.viewResults}</a>`;
+                    const content = `${this.i18n.gridMemberImportSuccess}<a id="view-results" href="${url}">${this.i18n.viewResults}</a>`;
                     this.showInfo(content);
                   }
                 });

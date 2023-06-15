@@ -137,7 +137,8 @@ func (h *GridMembersHandler) postImport(w http.ResponseWriter, r *http.Request) 
 		} else if !bytes.Equal(magicBytes[:4], []byte{0xd4, 0xc3, 0xb2, 0xa1}) &&
 			!bytes.Equal(magicBytes[:4], []byte{0xa1, 0xb2, 0xc3, 0xd4}) &&
 			!bytes.Equal(magicBytes[:4], []byte{0xa1, 0xb2, 0x3c, 0x4d}) &&
-			!bytes.Equal(magicBytes[:4], []byte{0x4d, 0x3c, 0xb2, 0xa1}) {
+			!bytes.Equal(magicBytes[:4], []byte{0x4d, 0x3c, 0xb2, 0xa1}) &&
+			!bytes.Equal(magicBytes[:4], []byte{0xc3, 0xd4, 0xa1, 0xb2}) {
 			err = errors.New("PCAP file missing magic bytes")
 		}
 	case ".evtx":
