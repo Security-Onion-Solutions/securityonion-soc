@@ -106,24 +106,83 @@ test('canTest', () => {
 	expect(comp.canTest(node)).toBe(true);
 });
 
+test('testUploadDialog', () => {
+	expect(comp.gridMemberUploadConfirmDialog).toBe(false);
+	expect(comp.selectedNode).toBe(null);
+
+	const node = { keywords: 'Sensor Manager'};
+
+	comp.showUploadConfirm(node);
+	expect(comp.gridMemberUploadConfirmDialog).toBe(true);
+	expect(comp.selectedNode).toBe(node);
+
+	comp.hideUploadConfirm();
+	expect(comp.gridMemberUploadConfirmDialog).toBe(false);
+	expect(comp.selectedNode).toBe(null);
+});
+
 test('canUpload', () => {
 	const node = {};
 
 	const table = [
-		{ keywords: "", canUploadPCAP: false, canUploadEvtx: false },
-		{ keywords: "Foo Bar", canUploadPCAP: false, canUploadEvtx: false },
-		{ keywords: "Foo Sensor Bar", canUploadPCAP: true, canUploadEvtx: false },
-		{ keywords: "Foo Import Bar", canUploadPCAP: true, canUploadEvtx: false },
-		{ keywords: "Foo Manager Bar", canUploadPCAP: false, canUploadEvtx: true },
-		{ keywords: "Foo Sensor Manager Bar", canUploadPCAP: true, canUploadEvtx: true },
+		{ keywords: "", canUploadPCAP: false, canUploadEvtx: false, accept: '' },
+		{ keywords: "Foo Bar", canUploadPCAP: false, canUploadEvtx: false, accept: '' },
+		{ keywords: "Foo Sensor Bar", canUploadPCAP: true, canUploadEvtx: false, accept: '.pcap' },
+		{ keywords: "Foo Import Bar", canUploadPCAP: true, canUploadEvtx: false, accept: '.pcap' },
+		{ keywords: "Foo Manager Bar", canUploadPCAP: false, canUploadEvtx: true, accept: '.evtx' },
+		{ keywords: "Foo Sensor Manager Bar", canUploadPCAP: true, canUploadEvtx: true, accept: '.pcap,.evtx' },
 	];
+
+	expect(comp.selectedNode).toBe(null);
+	expect(comp.pickUploadDialogAccept()).toBe('*.*');
 
 	table.forEach((t) => {
 		node['keywords'] = t.keywords;
+
 		expect(comp.canUploadPCAP(node)).toBe(t.canUploadPCAP);
 		expect(comp.canUploadEvtx(node)).toBe(t.canUploadEvtx);
 		expect(comp.canUpload(node)).toBe(t.canUploadPCAP || t.canUploadEvtx);
+
+		comp.selectedNode = node;
+		expect(comp.pickUploadDialogAccept()).toBe(t.accept);
+
+		if (t.canUploadPCAP || t.canUploadEvtx) {
+			const title = comp.pickUploadDialogTitle();
+			if (t.canUploadPCAP) {
+				expect(title).toMatch('PCAP');
+			} else {
+				expect(title).not.toMatch('PCAP');
+			}
+
+			if (t.canUploadEvtx) {
+				expect(title).toMatch('EVTX');
+			} else {
+				expect(title).not.toMatch('EVTX');
+			}
+		}
 	});
+});
+
+test('canConfigureMaxUploadSize', () => {
+	const skip = comp.loadData;
+
+	comp.loadData = () => {};
+
+	let params = {};
+	const orig = comp.maxUploadSizeBytes;
+
+	comp.initGrid(params);
+	expect(comp.maxUploadSizeBytes).toBe(orig);
+
+	params = { maxUploadSize: 0 };
+	comp.initGrid(params);
+	expect(comp.maxUploadSizeBytes).toBe(orig);
+
+	params = { maxUploadSize: 100 * 1024 * 1024 };
+	comp.initGrid(params);
+	expect(comp.maxUploadSizeBytes).toBe(params.maxUploadSize);
+
+	comp.loadData = skip;
 });
 
 test('gridMemberTest', async () => {

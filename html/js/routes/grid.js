@@ -195,7 +195,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
       this.selectedNode = node;
       this.uploadForm = { valid: true, attachment: null };
       this.gridMemberUploadConfirmDialog = true;
-      if (this.$refs.gridUpload) {
+      if (this.$refs && this.$refs.gridUpload) {
         this.$refs.gridUpload.reset();
       }
     },
@@ -237,6 +237,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
     },
     hideUploadConfirm() {
       this.gridMemberUploadConfirmDialog = false;
+      this.selectedNode = null;
     },
     async gridMemberUpload() {
       this.hideUploadConfirm();
