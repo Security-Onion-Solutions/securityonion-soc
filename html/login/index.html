@@ -59,7 +59,7 @@
               <v-form v-if="!webauthnForm.continue" id="loginForm" v-model="form.valid" method="post" :action="authLoginUrl">
                 <v-card-subtitle v-text="i18n.passwordLoginMethod"></v-card-subtitle>
                 <v-card-text>
-                  <v-text-field v-if="form.method == 'password'" name="identifier" v-model="form.email" :placeholder="i18n.email" :hint="i18n.emailHelp" autofocus="true" :rules="[rules.required]"></v-text-field>
+                  <v-text-field v-if="form.method == 'password'" id="password_identifier" name="identifier" v-model="form.email" :placeholder="i18n.email" :hint="i18n.emailHelp" autofocus="true" :rules="[rules.required]"></v-text-field>
                   <v-text-field v-if="form.method == 'password'"  name="password" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required]"></v-text-field>
                   <div v-if="form.method == 'totp'">
                     <div class="mb-4">{{ i18n.totpCodeHelp }}</div>
@@ -71,20 +71,20 @@
                 </v-card-text>
                 <v-card-actions>
                   <v-spacer></v-spacer>      
-                  <v-btn type="submit" :disabled="!form.valid" text color="primary" v-text="i18n.login"></v-btn>
+                  <v-btn id="password_submit" type="submit" :disabled="!form.valid" text color="primary" v-text="i18n.login"></v-btn>
                 </v-card-actions>
               </v-form>
 
               <v-form v-if="webauthnForm.enabled && !webauthnForm.continue" id="loginWebAuthnForm" v-model="webauthnForm.valid" method="post" :action="authLoginUrl">
                 <v-card-subtitle v-text="i18n.webauthnLoginMethod"></v-card-subtitle>
                 <v-card-text>
-                  <v-text-field name="identifier" v-model="webauthnForm.email" :placeholder="i18n.email" :hint="i18n.emailHelp" :rules="[rules.required]"></v-text-field>
+                  <v-text-field id="webauthn_identifier" name="identifier" v-model="webauthnForm.email" :placeholder="i18n.email" :hint="i18n.emailHelp" :rules="[rules.required]"></v-text-field>
                   <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
                   <v-text-field name="method" value="webauthn" class="d-none"></v-text-field>
                 </v-card-text>
                 <v-card-actions>
                   <v-spacer></v-spacer>      
-                  <v-btn type="submit" :disabled="!webauthnForm.valid" text color="primary" v-text="i18n.login"></v-btn>
+                  <v-btn id="webauthn_submit" type="submit" :disabled="!webauthnForm.valid" text color="primary" v-text="i18n.login"></v-btn>
                 </v-card-actions>
               </v-form>
 
