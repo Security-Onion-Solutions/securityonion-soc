@@ -315,9 +315,7 @@ func canUploadEvtx(node string) bool {
 func sanitize(filename string) string {
 	return string(lo.Map([]rune(filename), func(r rune, _ int) rune {
 		switch {
-		case strings.ContainsRune(`._-`, r):
-		case unicode.IsLetter(r):
-		case unicode.IsDigit(r):
+		case strings.ContainsRune(`._-`, r), unicode.IsLetter(r), unicode.IsDigit(r):
 			return r
 		}
 

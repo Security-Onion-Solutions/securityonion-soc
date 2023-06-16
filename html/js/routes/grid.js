@@ -240,8 +240,6 @@ routes.push({ path: '/grid', name: 'grid', component: {
       this.selectedNode = null;
     },
     async gridMemberUpload() {
-      this.hideUploadConfirm();
-
       const data = new FormData();
       data.append("attachment", this.uploadForm.attachment);
       headers = { 'Content-Type': 'multipart/form-data; boundary=' + data._boundary }
@@ -259,6 +257,8 @@ routes.push({ path: '/grid', name: 'grid', component: {
           this.$root.showError(this.i18n.gridMemberUploadFailure);
         }
       }
+
+      this.hideUploadConfirm();
     },
     formatNode(node) {
       node['keywords'] = this.$root.localizeMessage(node["role"] + '-keywords');
