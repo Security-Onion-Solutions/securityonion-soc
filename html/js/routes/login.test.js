@@ -122,3 +122,74 @@ test('shouldHandleUnexpectedLoginResponse', async () => {
   comp.$root.createApi = _createApi;
   comp.$root.showLogin = _showLogin;
 });
+
+test('shouldNotExtractWebauthnData', () => {
+  const identifier = {attributes: {name: 'identifier', value: 'some_identifier'}};
+  const passwordMethod = {attributes: {name: 'method', value: 'password'}};
+  const nodes = [identifier, passwordMethod];
+  const response = {data: {ui: {nodes: nodes}}};
+
+  expect(comp.webauthnForm.enabled).toBe(false);
+
+  comp.extractWebauthnData(response);
+
+  expect(comp.webauthnForm.enabled).toBe(false);
+});
+
+test('shouldExtractWebauthnDataWithoutTrigger', () => {
+  const identifier = {attributes: {name: 'identifier', value: 'some_identifier'}};
+  const passwordMethod = {attributes: {name: 'method', value: 'password'}};
+  const webauthnMethod = {attributes: {name: 'method', value: 'webauthn'}};
+  const nodes = [identifier, passwordMethod, webauthnMethod];
+  const response = {data: {ui: {nodes: nodes}}};
+
+  expect(comp.webauthnForm.enabled).toBe(false);
+
+  comp.extractWebauthnData(response);
+
+  expect(comp.webauthnForm.enabled).toBe(true);
+  expect(comp.webauthnForm.continue).toBe(false);
+});
+
+test('shouldExtractWebauthnData', () => {
+  const identifier = {attributes: {name: 'identifier', value: 'some_identifier'}};
+  const passwordMethod = {attributes: {name: 'method', value: 'password'}};
+  const webauthnMethod = {attributes: {name: 'method', value: 'webauthn'}};
+  const webauthnTrigger = {attributes: {name: 'webauthn_login_trigger', onclick: 'some_event'}};
+  const webauthnLogin = {attributes: {name: 'webauthn_login', value: 'some_key'}};
+  const scriptObj = {id: 'webauthn_script', type: 'some_type', crossorigin: 'some_origin', referrerpolicy: 'some_policy', integrity: 'some_integrity', nonce: 'some_nonce', src: 'some_src'};
+  const webauthnScript = {attributes: scriptObj};
+  const nodes = [identifier, passwordMethod, webauthnMethod, webauthnTrigger, webauthnLogin, webauthnScript];
+  const response = {data: {ui: {nodes: nodes}}};
+
+  expect(comp.webauthnForm.enabled).toBe(false);
+  expect(comp.webauthnForm.continue).toBe(false);
+
+  var savedChild = null;
+  const appendChildMock = jest.fn().mockImplementationOnce(child => savedChild = child);
+  document.body.appendChild = appendChildMock;
+
+  comp.extractWebauthnData(response);
+
+  expect(comp.webauthnForm.enabled).toBe(true);
+  expect(comp.webauthnForm.continue).toBe(true);
+  expect(comp.webauthnForm.onclick).toBe('some_event');
+  expect(comp.webauthnForm.key).toBe('some_key');
+  expect(comp.webauthnForm.email).toBe('some_identifier');
+  expect(comp.webauthnForm.script).toEqual(scriptObj);
+  expect(appendChildMock).toHaveBeenCalledTimes(1);
+  expect(savedChild).not.toBeNull();
+  expect(savedChild.getAttribute('type')).toBe('some_type');
+  expect(savedChild.getAttribute('id')).toBe('webauthn_script');
+  expect(savedChild.getAttribute('crossorigin')).toBe('some_origin');
+  expect(savedChild.getAttribute('referrerpolicy')).toBe('some_policy');
+  expect(savedChild.getAttribute('integrity')).toBe('some_integrity');
+  expect(savedChild.getAttribute('nonce')).toBe('some_nonce');
+  expect(savedChild.getAttribute('src')).toBe('some_src');
+});
+
+test('shouldRunWebauthn', () => {
+  comp.webauthnForm.onclick = 'this.foo = 123';
+  comp.runWebauthn();
+  expect(comp.foo).toBe(123);
+});
