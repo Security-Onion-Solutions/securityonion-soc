@@ -37,14 +37,24 @@ routes.push({ path: '/grid', name: 'grid', component: {
     gridEps: 0,
     metricsEnabled: false,
     selectedId: null,
+    selectedNode: null,
     gridMemberTestConfirmDialog: false,
+    gridMemberUploadConfirmDialog: false,
+    uploadForm: { valid: true, attachment: null },
+    maxUploadSizeBytes: 25 * 1024 * 1024,
+    rules: {
+      fileSizeLimit: value => (value == null || value.size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
+      fileNotEmpty: value => (value == null || value.size > 0) || this.$root.i18n.fileEmpty,
+      fileRequired: value => (value != null) || this.$root.i18n.required,
+    },
+    attachment: null,
   }},
-  created() { 
+  created() {
     Vue.filter('colorNodeStatus', this.colorNodeStatus);
     Vue.filter('iconNodeStatus', this.iconNodeStatus);
   },
   beforeDestroy() {
-  },  
+  },
   destroyed() {
     this.$root.unsubscribe("node", this.updateNode);
     this.$root.unsubscribe("status", this.updateStatus);
@@ -60,6 +70,10 @@ routes.push({ path: '/grid', name: 'grid', component: {
   },
   methods: {
     initGrid(params) {
+      if (params.maxUploadSize) {
+        this.maxUploadSizeBytes = params.maxUploadSize;
+      }
+
       this.loadData();
     },
     async loadData() {
@@ -84,8 +98,8 @@ routes.push({ path: '/grid', name: 'grid', component: {
       this.metricsEnabled = !this.nodes.every(function(node) { return !node.metricsEnabled; });
 
       const route = this;
-      const epsColumn = this.headers.find(function(item) { 
-        return item.text == route.i18n.eps 
+      const epsColumn = this.headers.find(function(item) {
+        return item.text == route.i18n.eps
       });
       if (epsColumn) {
         if (!this.metricsEnabled) {
@@ -157,6 +171,15 @@ routes.push({ path: '/grid', name: 'grid', component: {
       }
       return false;
     },
+    canUpload(node) {
+      return this.canUploadPCAP(node) || this.canUploadEvtx(node);
+    },
+    canUploadPCAP(node) {
+      return !!node['keywords'] && (node['keywords'].indexOf("Sensor") != -1 || node['keywords'].indexOf("Import") != -1);
+    },
+    canUploadEvtx(node) {
+      return !!node['keywords'] && node['keywords'].indexOf("Manager") != -1;
+    },
     async gridMemberTest() {
       const nodeId = this.hideTestConfirm().replace('_so-', '_');
       this.$root.startLoading();
@@ -168,6 +191,75 @@ routes.push({ path: '/grid', name: 'grid', component: {
       }
       this.$root.stopLoading();
     },
+    showUploadConfirm(node) {
+      this.selectedNode = node;
+      this.uploadForm = { valid: true, attachment: null };
+      this.gridMemberUploadConfirmDialog = true;
+      if (this.$refs && this.$refs.gridUpload) {
+        this.$refs.gridUpload.reset();
+      }
+    },
+    pickUploadDialogTitle() {
+      if (!this.selectedNode) {
+        return '';
+      }
+
+      // One or both of these should always be true. If neither are true, we
+      // shouldn't be showing the upload dialog.
+      const pcap = this.canUploadPCAP(this.selectedNode);
+      const evtx = this.canUploadEvtx(this.selectedNode);
+
+      if (pcap && evtx) {
+        return this.i18n.gridMemberUploadTitleBoth;
+      } else if (pcap) {
+        return this.i18n.gridMemberUploadTitlePcap;
+      } else {
+        return this.i18n.gridMemberUploadTitleEvtx;
+      }
+    },
+    pickUploadDialogAccept() {
+      if (!this.selectedNode) {
+        // in case of bug, don't hinder user
+        return '*.*';
+      }
+
+      let accept = [];
+
+      if (this.canUploadPCAP(this.selectedNode)) {
+        accept.push('.pcap');
+      }
+
+      if (this.canUploadEvtx(this.selectedNode)) {
+        accept.push('.evtx');
+      }
+
+      return accept.join(',');
+    },
+    hideUploadConfirm() {
+      this.gridMemberUploadConfirmDialog = false;
+      this.selectedNode = null;
+    },
+    async gridMemberUpload() {
+      const data = new FormData();
+      data.append("attachment", this.uploadForm.attachment);
+      headers = { 'Content-Type': 'multipart/form-data; boundary=' + data._boundary }
+      config = { 'headers': headers };
+
+      let nodeName = this.selectedNode.id + '_' + this.selectedNode.role.replace('so-', '');
+
+      try {
+        await this.$root.papi.post(`gridmembers/${nodeName}/import`, data, config);
+        this.$root.showTip(this.i18n.gridMemberUploadSuccess);
+      } catch (error) {
+        if (error.response.status === 409) {
+          this.$root.showError(this.i18n.gridMemberUploadConflict);
+        } else {
+          this.$root.showError(this.i18n.gridMemberUploadFailure);
+        }
+      }
+
+      this.hideUploadConfirm();
+    },
     formatNode(node) {
       node['keywords'] = this.$root.localizeMessage(node["role"] + '-keywords');
       node['dashboardLink'] = this.$root.getMetricsUrl() + "?vars%5BRole%5D=" + node.role.substring(3) + "&vars%5BHost%5D=" + node.id;
@@ -177,7 +269,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
           node.statusCode = details.status_code;
           if (details.containers) {
             node.containers = details.containers.sort((a, b) => {
-              return a.Name > b.Name ? 1 : -1 
+              return a.Name > b.Name ? 1 : -1
             });
           } else {
             node.containers = [];

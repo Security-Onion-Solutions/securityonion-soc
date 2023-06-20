@@ -435,3 +435,7 @@ td {
 #licenseDetails {
   max-width: 40em;
 }
+
+.v-alert.info a {
+  color: white;
+}

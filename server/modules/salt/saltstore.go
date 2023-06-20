@@ -1042,6 +1042,44 @@ func (store *Saltstore) ManageMember(ctx context.Context, operation string, id s
 	return err
 }
 
+func (store *Saltstore) SendFile(ctx context.Context, node string, from string, to string, cleanup bool) error {
+	// TODO: Auth Check
+
+	args := map[string]string{
+		"command": "send-file",
+		"node":    node,
+		"from":    from,
+		"to":      to,
+		"cleanup": strconv.FormatBool(cleanup),
+	}
+
+	output, err := store.execCommand(ctx, args)
+	if err == nil && output == "false" {
+		err = errors.New("ERROR_SALT_SEND_FILE")
+	}
+
+	return err
+}
+
+func (store *Saltstore) Import(ctx context.Context, node string, file string, importer string) (*string, error) {
+	// TODO: Auth Check
+
+	args := map[string]string{
+		"command":  "import-file",
+		"node":     node,
+		"file":     file,
+		"importer": importer,
+	}
+
+	output, err := store.execCommand(ctx, args)
+	if err == nil && output == "false" {
+		err = errors.New("ERROR_SALT_IMPORT")
+		return nil, err
+	}
+
+	return &output, nil
+}
+
 func (store *Saltstore) lookupEmailFromId(ctx context.Context, id string) string {
 	user, _ := store.server.Userstore.GetUserById(ctx, id)
 	if user != nil && user.Id == id {

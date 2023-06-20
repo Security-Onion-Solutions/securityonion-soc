@@ -259,7 +259,7 @@
           </template>
           {{ warningMessage }}
         </v-snackbar>
-        <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" v-text="infoMessage"></v-alert>
+        <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" v-html="infoMessage"></v-alert>
         <v-snackbar id="tip" top centered rounded close :timeout="tipTimeout" v-model="tip" color="info">
           <template v-slot:action="{ attrs }">
             <v-btn icon small v-bind="attrs" @click="tip = false">
@@ -2999,6 +2999,9 @@
                                 <v-btn v-if="canTest(item)" id="test-minion" icon :title="i18n.nodeTest" @click="showTestConfirm(item.id + '_' + item.role)">
                                   <v-icon>fa-file-import</v-icon>
                                 </v-btn>
+                                <v-btn v-if="canUpload(item)" id="import-minion" icon :title="'Upload PCAP/EVTX'" @click="showUploadConfirm(item)">
+                                  <v-icon>fa-upload</v-icon>
+                                </v-btn>
                               </div>
                             </v-card-text>
                           </v-card>
@@ -3074,6 +3077,21 @@
               <v-spacer></v-spacer>
               <v-btn text id="grid-test-proceed-button" @click="gridMemberTest" v-text="i18n.yes" />
               <v-btn text id="grid-test-cancel-button" @click="hideTestConfirm" v-text="i18n.no" />
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+        <v-dialog v-model="gridMemberUploadConfirmDialog" persistent max-width="480">
+          <v-card>
+            <v-card-title class="text-h5" v-text="pickUploadDialogTitle()" />
+            <v-card-text>
+              <v-form ref="gridUpload" v-model="uploadForm.valid" @submit.prevent>
+                <v-file-input id="import-value" v-model="uploadForm.attachment" show-size :accept="pickUploadDialogAccept()" :rules="[rules.fileSizeLimit, rules.fileNotEmpty, rules.fileRequired]"/>
+              </v-form>
+            </v-card-text>
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn text id="grid-upload-proceed-button" @click="gridMemberUpload" v-text="i18n.upload" />
+              <v-btn text id="grid-upload-cancel-button" @click="hideUploadConfirm" v-text="i18n.cancel" />
             </v-card-actions>
           </v-card>
         </v-dialog>
