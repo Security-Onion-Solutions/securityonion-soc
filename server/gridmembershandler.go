@@ -160,7 +160,7 @@ func (h *GridMembersHandler) postImport(w http.ResponseWriter, r *http.Request) 
 
 	ext = ext[1:]
 
-	baseTargetDir := "/nsm/soc/uploads/"
+	baseTargetDir := h.server.Config.ImportUploadDir // "/opt/sensoroni/uploads/"
 	targetDir := filepath.Join(baseTargetDir, "processing", id)
 
 	err = os.MkdirAll(targetDir, 0775)
@@ -219,6 +219,10 @@ func (h *GridMembersHandler) postImport(w http.ResponseWriter, r *http.Request) 
 	web.Respond(w, r, http.StatusAccepted, nil)
 
 	go func() {
+		if !strings.HasSuffix(baseTargetDir, "/") {
+			baseTargetDir += "/"
+		}
+
 		err = h.server.GridMembersstore.SendFile(ctx, id, targetFile, baseTargetDir, true)
 		if err != nil {
 			needsCleanup = true
