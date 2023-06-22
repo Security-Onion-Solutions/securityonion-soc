@@ -355,7 +355,8 @@ const i18n = {
       gridMemberUploadConflict: 'A file with that name is currently being imported. Please wait for the current import to complete before trying again.',
       gridMemberUploadFailure: 'Something went wrong while uploading the file. The file was not imported.',
       gridMemberImportNoChanges: 'A recent import made no changes.',
-      gridMemberImportSuccess: 'A recent import has completed. ',
+      // note: must replace <[url]> with a link to the results page
+      gridMemberImportSuccess: 'A recent import has completed, and the <a id="view-results" href="<[url]>results</a> will be available in hunt momentarily.',
       groupedBy: 'Group:',
       groupByRemove: 'Remove this entire group',
       groupByRemoveField: 'Remove this column from the group',
