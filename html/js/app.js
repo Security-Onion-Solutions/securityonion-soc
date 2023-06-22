@@ -352,7 +352,7 @@ $(document).ready(function() {
                     if (u.host.toUpperCase() == window.location.host.toUpperCase()) {
                       url = u.hash;
                     }
-                    const content = `${this.i18n.gridMemberImportSuccess}<a id="view-results" href="${url}">${this.i18n.viewResults}</a>`;
+                    const content = this.i18n.gridMemberImportSuccess.replace('<[url]>', url);
                     this.showInfo(content);
                   }
                 });
