@@ -327,6 +327,9 @@ const huntComponent = {
           }
           q = q + filter.filter;
         } else if (filter.exclusive) {
+          if (q.length > 0) {
+            q = q + " AND ";
+          }
           q = q + "NOT " + filter.filter;
         }
       }
