@@ -77,7 +77,7 @@ const huntComponent = {
     eventLimitOptions: [10,25,50,100,200,500,1000,2000,5000],
     eventLimit: 100,
     eventData: [],
-    eventFilter: '',  
+    eventFilter: '',
     eventHeaders: [],
     eventPage: 1,
     sortBy: 'soc_timestamp',
@@ -223,7 +223,7 @@ const huntComponent = {
       }
 
       if (this.$route.query.t) {
-        // This page was either refreshed, or opened from an existing hunt hyperlink, 
+        // This page was either refreshed, or opened from an existing hunt hyperlink,
         // so switch to absolute time since the URL has the absolute time defined.
         this.relativeTimeEnabled = false;
         this.dateRange = this.$route.query.t;
@@ -234,7 +234,7 @@ const huntComponent = {
       this.$root.stopLoading();
 
       if (!this.parseUrlParameters()) return;
-      
+
       if (this.$route.query.q || (this.shouldAutohunt() && this.query)) {
         this.hunt(true);
       }
@@ -276,9 +276,9 @@ const huntComponent = {
       this.huntPending = false;
       var route = this;
       var onSuccess = function() {};
-      var onFail = function() { 
+      var onFail = function() {
         // When navigating to the same URL, simply refresh data
-        route.loadData(); 
+        route.loadData();
       };
       if (this.relativeTimeEnabled) {
         this.dateRange = '';
@@ -321,19 +321,21 @@ const huntComponent = {
       for (var i = 0; i < this.filterToggles.length; i++) {
         filter = this.filterToggles[i];
 
-        if (q.length > 0) {
-          q = q + " AND ";
-        }
-
         if (filter.enabled) {
+          if (q.length > 0) {
+            q = q + " AND ";
+          }
           q = q + filter.filter;
         } else if (filter.exclusive) {
+          if (q.length > 0) {
+            q = q + " AND ";
+          }
           q = q + "NOT " + filter.filter;
         }
       }
 
       if (q.length > 0) {
-        const response = await this.$root.papi.get('query/filtered', { params: { 
+        const response = await this.$root.papi.get('query/filtered', { params: {
           query: this.query,
           field: "",
           value: q,
@@ -375,8 +377,23 @@ const huntComponent = {
         this.groupQuery(this.$route.query.groupByField, this.$route.query.groupByGroup);
         reRoute = true;
       }
+      for (const q in this.$route.query) {
+        this.filterToggles.forEach(toggle => {
+          if (toggle.name === q) {
+            const orig = toggle.enabled;
+            let enabled = this.$route.query[q];
+            if (typeof enabled === 'string') {
+              enabled = enabled.toLowerCase() === 'true';
+            }
+            toggle.enabled = enabled;
+            if (orig !== toggle.enabled) {
+              reRoute = true;
+            }
+          }
+        });
+      }
       if (reRoute) return false;
-      return true;      
+      return true;
     },
     async loadData() {
       if (!this.parseUrlParameters()) return;
@@ -388,13 +405,13 @@ const huntComponent = {
         // This must occur before the following await, so that Vue flushes the old groupby DOM renders
         this.groupBys.splice(0);
 
-        const response = await this.$root.papi.get('events/', { params: { 
+        const response = await this.$root.papi.get('events/', { params: {
           query: await this.getQuery(),
-          range: this.dateRange, 
-          format: this.i18n.timePickerSample, 
-          zone: this.zone, 
-          metricLimit: this.groupByLimit, 
-          eventLimit: this.eventLimit 
+          range: this.dateRange,
+          format: this.i18n.timePickerSample,
+          zone: this.zone,
+          metricLimit: this.groupByLimit,
+          eventLimit: this.eventLimit
         }});
 
         this.eventPage = 1;
@@ -417,7 +434,7 @@ const huntComponent = {
         this.addMRUQuery(this.query);
 
         var subtitle = this.isAdvanced() ? this.query : this.queryName;
-        this.$root.setSubtitle(this.i18n[this.category] + " - " + subtitle);       
+        this.$root.setSubtitle(this.i18n[this.category] + " - " + subtitle);
       } catch (error) {
         this.$root.showError(error);
       }
@@ -430,7 +447,7 @@ const huntComponent = {
         if (valueType == "boolean" || valueType == "number" || valueType == "bigint") {
           scalar = true;
         }
-        const response = await this.$root.papi.get('query/filtered', { params: { 
+        const response = await this.$root.papi.get('query/filtered', { params: {
           query: this.query,
           field: filterMode == FILTER_EXACT ? "" : field,
           value: value,
@@ -447,7 +464,7 @@ const huntComponent = {
     },
     async groupQuery(field, group, notify = true) {
       try {
-        const response = await this.$root.papi.get('query/grouped', { params: { 
+        const response = await this.$root.papi.get('query/grouped', { params: {
           query: this.query,
           field: field,
           group: group,
@@ -526,9 +543,9 @@ const huntComponent = {
           const response = await this.$root.papi.post('events/ack', {
             searchFilter: await this.getQuery(),
             eventFilter: docEvent,
-            dateRange: this.dateRange, 
-            dateRangeFormat: this.i18n.timePickerSample, 
-            timezone: this.zone, 
+            dateRange: this.dateRange,
+            dateRangeFormat: this.i18n.timePickerSample,
+            timezone: this.zone,
             escalate: escalate,
             acknowledge: acknowledge,
           });
@@ -555,7 +572,7 @@ const huntComponent = {
         }
       } catch (error) {
         this.$root.showError(error);
-      }      
+      }
       this.$root.stopLoading();
     },
     removeDataItemFromView(data, item) {
@@ -573,7 +590,7 @@ const huntComponent = {
           break;
         }
       }
-    },    
+    },
     getFilterToggle(name) {
       for (var i = 0; i < this.filterToggles.length; i++) {
         var filter = this.filterToggles[i];
@@ -604,7 +621,7 @@ const huntComponent = {
           if (toggle) {
             toggle.enabled = false;
           }
-        });        
+        });
       }
     },
     formatSafeString(item) {
@@ -679,7 +696,7 @@ const huntComponent = {
                   options.push(item.substring(1));
                 } else if (index > 0 && item.trim().length > 0) {
                   if (item.split("\"").length % 2 == 1) {
-                    // Will currently skip quoted items with spaces. 
+                    // Will currently skip quoted items with spaces.
                     fields.push(item);
                   }
                 }
@@ -691,7 +708,7 @@ const huntComponent = {
               segment.split(" ").forEach(function(item, index) {
                 if (index > 0 && item.trim().length > 0) {
                   if (item.split("\"").length % 2 == 1) {
-                    // Will currently skip quoted items with spaces. 
+                    // Will currently skip quoted items with spaces.
                     route.querySortBys.push(item);
                   }
                 }
@@ -755,7 +772,7 @@ const huntComponent = {
       this.query = newQuery.trim();
       if (!this.notifyInputsChanged()) {
         this.obtainQueryDetails();
-      }        
+      }
     },
     removeSortBy(sortBy) {
       var segments = this.query.split("|");
@@ -775,7 +792,7 @@ const huntComponent = {
       this.query = newQuery.trim();
       if (!this.notifyInputsChanged()) {
         this.obtainQueryDetails();
-      }        
+      }
     },
     buildCurrentRoute() {
       return { path: this.category, query: { q: this.query, t: this.dateRange, z: this.zone, el: this.eventLimit, gl: this.groupByLimit }};
@@ -857,9 +874,9 @@ const huntComponent = {
       this.escalationMenuY = domEvent.clientY;
       this.escalationItem = event;
       this.escalationGroupIdx = groupIdx;
-      this.$nextTick(() => { 
-        this.escalationMenuVisible = true; 
-      });      
+      this.$nextTick(() => {
+        this.escalationMenuVisible = true;
+      });
     },
     toggleQuickAction(domEvent, event, field, value) {
       if (!domEvent || this.quickActionVisible || this.escalationMenuVisible) {
@@ -910,8 +927,8 @@ const huntComponent = {
         this.quickActionValue = value;
         this.quickActionX = domEvent.native && domEvent.native.clientX ? domEvent.native.clientX : domEvent.clientX;
         this.quickActionY = domEvent.native && domEvent.native.clientY ? domEvent.native.clientY : domEvent.clientY;
-        this.$nextTick(() => { 
-          this.quickActionVisible = true; 
+        this.$nextTick(() => {
+          this.quickActionVisible = true;
         });
       }
     },
@@ -1021,13 +1038,13 @@ const huntComponent = {
 
           // Group objects have the following attributes:
           // title:         Chart title
-          // fields:        Array of field names in the group, starting with an empty string (for the action 
+          // fields:        Array of field names in the group, starting with an empty string (for the action
           //                buttons column, and then the 'count', followed by the actual field names.
-          // data:          The rows of tabular data in the format: 
+          // data:          The rows of tabular data in the format:
           //                { count: <count>, keys: [fieldValue0, fieldValue1, fieldValueN] }
-          // headers:       Array of header objects for the table view, in the format: 
+          // headers:       Array of header objects for the table view, in the format:
           //                { text: 'Human Friendly', value: 'field_name0' }
-          // chart_metrics: Alternative data format for chart rendering, in the 
+          // chart_metrics: Alternative data format for chart rendering, in the
           //                format: { value: <count>, keys: ["fieldValue0, fieldValue1, fieldValueN"] }
           //                Note that the keys array is always of length one, containing the concatenated
           //                 string of field values.
@@ -1073,7 +1090,7 @@ const huntComponent = {
               const newRoute = route.buildNonMaximizedRoute(group, groupIdx);
               route.$router.push(newRoute, function() {}, function() {});
             };
-            this.$nextTick(() => { 
+            this.$nextTick(() => {
               route.$root.maximizeById("group-" + groupIdx, unmaximizeFn);
             });
           }
@@ -1299,7 +1316,7 @@ const huntComponent = {
         if (pieces.length == 2) {
           return moment(pieces[1], this.i18n.timePickerFormat);
         }
-      } 
+      }
       return moment();
     },
     getStartDate() {
@@ -1308,7 +1325,7 @@ const huntComponent = {
         if (pieces.length == 2) {
           return moment(pieces[0], this.i18n.timePickerFormat);
         }
-      } 
+      }
       var unit = "hour";
       switch (this.relativeTimeUnit) {
         case RELATIVE_TIME_SECONDS: unit = "seconds"; break;
@@ -1338,7 +1355,7 @@ const huntComponent = {
       if (route.dateRange == '') {
         route.dateRange = $('#huntdaterange')[0].value;
       }
-      $('#huntdaterange').on('hide.daterangepicker', function(ev, picker) { 
+      $('#huntdaterange').on('hide.daterangepicker', function(ev, picker) {
         route.hideDateRangePicker();
       });
     },
@@ -1497,7 +1514,7 @@ const huntComponent = {
         } else if (value > 0.02) {
           color = 'lightskyblue';
         } else if (value > 0.01) {
-          color = 'royalblue'; 
+          color = 'royalblue';
         }
       }
       return color;
@@ -1544,7 +1561,7 @@ const huntComponent = {
       if (value == "medium_false") return "amber darken-1";
       if (value == "high_false") return "red darken-1";
       if (value == "critical_false") return "red darken-4";
-      return "secondary";      
+      return "secondary";
     },
     lookupAlertSeverityScore(sev) {
       if (sev.toLowerCase) {

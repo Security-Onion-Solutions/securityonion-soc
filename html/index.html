@@ -246,7 +246,7 @@
           </div>
           <div class="mt-2 no-underline">
             {{ i18n.huntForError }}
-            <router-link :to="{ name: 'hunt', query: {q: i18n.huntForErrorQuery, t: moment().subtract(1, 'hours').format(i18n.timePickerFormat) + ' - ' + moment().format(i18n.timePickerFormat) }}" class="text-decoration-none error-hunt">
+            <router-link :to="{ name: 'hunt', query: {q: i18n.huntForErrorQuery, t: moment().subtract(1, 'hours').format(i18n.timePickerFormat) + ' - ' + moment().format(i18n.timePickerFormat), socExcludeToggle: false }}" class="text-decoration-none error-hunt">
               <v-icon :title="i18n.huntForError">fa-crosshairs</v-icon>
             </router-link>
           </div>
@@ -3161,7 +3161,7 @@
                   <v-card-title>{{ i18n.password }}</v-card-title>
                   <v-card-subtitle v-text="i18n.passwordInstructions"></v-card-subtitle>
                   <v-card-text>
-                    <v-form v-model="passwordForm.valid" method="post" :action="authSettingsUrl">                      
+                    <v-form v-model="passwordForm.valid" method="post" :action="authSettingsUrl">
                       <v-text-field name="password" v-model="passwordForm.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.minpasslen, rules.maxpasslen, rules.badpasschs]"></v-text-field>
                       <v-text-field :placeholder="i18n.passwordConfirm" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.maxpasslen, rules.matches, rules.badpasschs]"></v-text-field>
                       <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
