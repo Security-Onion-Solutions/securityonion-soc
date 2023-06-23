@@ -356,7 +356,7 @@ const i18n = {
       gridMemberUploadFailure: 'Something went wrong while uploading the file. The file was not imported.',
       gridMemberImportNoChanges: 'A recent import made no changes.',
       // note: must replace <[url]> with a link to the results page
-      gridMemberImportSuccess: 'A recent import has completed, and the <a id="view-results" href="<[url]>">results</a> will be available in hunt momentarily.',
+      gridMemberImportSuccess: 'A recent import has completed and the <a id="view-results" href="<[url]>">results</a> will be available in Dashboards momentarily.',
       groupedBy: 'Group:',
       groupByRemove: 'Remove this entire group',
       groupByRemoveField: 'Remove this column from the group',
