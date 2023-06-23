@@ -610,7 +610,7 @@ const i18n = {
       showSankeyChart: 'Show Sankey diagram',
       showTable: 'Show table',
       socUrl: 'SOC Url',
-      socExcludeToggle: 'Exclude Onion logs',
+      socExcludeToggle: 'Exclude SOC logs',
       sortedBy: 'Sort:',
       sortInclude: "Sort By",
       sortIncludeHelp: "Add as a sort-by field",
