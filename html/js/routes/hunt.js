@@ -321,11 +321,10 @@ const huntComponent = {
       for (var i = 0; i < this.filterToggles.length; i++) {
         filter = this.filterToggles[i];
 
-        if (q.length > 0) {
-          q = q + " AND ";
-        }
-
         if (filter.enabled) {
+          if (q.length > 0) {
+            q = q + " AND ";
+          }
           q = q + filter.filter;
         } else if (filter.exclusive) {
           q = q + "NOT " + filter.filter;
