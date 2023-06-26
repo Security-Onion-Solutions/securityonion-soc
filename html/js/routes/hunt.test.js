@@ -751,3 +751,17 @@ test('query string filterToggles', () => {
   expect(comp.filterToggles[0].enabled).toBe(true);
   expect(comp.filterToggles[1].enabled).toBe(false);
 });
+
+test('buildGroupByRoute', () => {
+  comp.query = "*"; // no groupBy clause results in hard coded response of 1
+  let r = comp.buildGroupByRoute('x');
+  expect(r.query.groupByGroup).toBe(1);
+
+  comp.query = `* | groupby "log.level"`;
+  r = comp.buildGroupByRoute('x');
+  expect(r.query.groupByGroup).toBe(0);
+
+  comp.query = `* | groupby "log.level" |GrOuPbY "field.groupBy" |   GROUPBY "@version"`;
+  r = comp.buildGroupByRoute('x');
+  expect(r.query.groupByGroup).toBe(2);
+});

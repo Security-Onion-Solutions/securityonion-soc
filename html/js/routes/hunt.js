@@ -807,7 +807,14 @@ const huntComponent = {
     buildGroupByRoute(field) {
       route = this.buildCurrentRoute()
       route.query.groupByField = field;
-      route.query.groupByGroup = this.groupBys.length - 1;
+
+      const groups = (this.query || '').replaceAll(/\s/g, '').match(/\|groupby/gi);
+      if (groups) {
+        route.query.groupByGroup = groups.length - 1;
+      } else {
+        route.query.groupByGroup = 1;
+      }
+
       return route;
     },
     buildGroupByNewRoute(field) {
