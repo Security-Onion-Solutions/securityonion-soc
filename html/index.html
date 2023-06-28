@@ -2862,8 +2862,18 @@
     <script type="text/x-template" id="page-grid">
       <v-container fluid>
         <v-row>
-          <v-col cols="9">
+          <v-col cols="4">
             <h2 v-text="i18n.grid"></h2>
+          </v-col>
+          <v-col cols="5">
+            <v-expansion-panels>
+              <v-expansion-panel>
+                <v-expansion-panel-header id="gridOptionsHeader">{{i18n.options}}</v-expansion-panel-header>
+                <v-expansion-panel-content>
+                  <v-select id="gridTimezone" @change="saveTimezone" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint prepend-icon="fa-user-clock"></v-select>
+                </v-expansion-panel-content>
+              </v-expansion-panel>
+            </v-expansion-panels>
           </v-col>
           <v-col cols="3" align="end">
             <h4 v-if="metricsEnabled">{{ i18n.gridEps }} {{ gridEps | formatCount }}</h4>
@@ -2906,8 +2916,8 @@
                     <span v-if="props.item.metricsEnabled" :id="'nodeEps_' + props.item.id">{{ props.item.productionEps | formatCount }} / {{ props.item.consumptionEps | formatCount }}</span>
                     <span v-if="!props.item.metricsEnabled" :id="'nodeEps_' + props.item.id">{{ i18n.na }}</span>
                   </td>
-                  <td :id="'nodeUpdateTime_' + props.item.id" class="d-none d-lg-table-cell">{{ props.item.updateTime | formatTimestamp }}</td>
-                  <td :id="'nodeEpochTime_' + props.item.id" class="d-none d-lg-table-cell">{{ props.item.epochTime | formatTimestamp }}</td>
+                  <td :id="'nodeUpdateTime_' + props.item.id" class="d-none d-lg-table-cell">{{ props.item.updateTime | toTZ }}</td>
+                  <td :id="'nodeEpochTime_' + props.item.id" class="d-none d-lg-table-cell">{{ props.item.epochTime | toTZ }}</td>
                   <td :id="'nodeUptimeSeconds_' + props.item.id" class="d-none d-lg-table-cell">{{ props.item.uptimeSeconds | formatDuration }}</td>
                   <td class="d-none d-lg-table-cell"><v-chip :id="'nodeStatus_' + props.item.id" class="nodeStatus" @click="expand(props.item)" :color="props.item.status | colorNodeStatus">{{ $root.localizeMessage(props.item.status) }}</v-chip></td>
                 </tr>
@@ -2947,11 +2957,11 @@
                               </div>
                               <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.dateDataEpoch }}:</span>
-                                <span class="filter value">{{ item.epochTime | formatTimestamp }}</span>
+                                <span class="filter value">{{ item.epochTime | toTZ }}</span>
                               </div>
                               <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.dateUpdated }}:</span>
-                                <span class="filter value">{{ item.updateTime | formatTimestamp }}</span>
+                                <span class="filter value">{{ item.updateTime | toTZ }}</span>
                               </div>
                               <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.uptime }}:</span>
