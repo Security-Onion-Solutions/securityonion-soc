@@ -48,10 +48,12 @@ routes.push({ path: '/grid', name: 'grid', component: {
       fileRequired: value => (value != null) || this.$root.i18n.required,
     },
     attachment: null,
+    zone: '',
   }},
   created() {
     Vue.filter('colorNodeStatus', this.colorNodeStatus);
     Vue.filter('iconNodeStatus', this.iconNodeStatus);
+    Vue.filter('toTZ', this.toTZ);
   },
   beforeDestroy() {
   },
@@ -73,6 +75,8 @@ routes.push({ path: '/grid', name: 'grid', component: {
       if (params.maxUploadSize) {
         this.maxUploadSizeBytes = params.maxUploadSize;
       }
+
+      this.zone = moment.tz.guess();
 
       this.loadData();
     },
@@ -125,6 +129,8 @@ routes.push({ path: '/grid', name: 'grid', component: {
       localStorage['settings.grid.itemsPerPage'] = this.itemsPerPage;
     },
     loadLocalSettings() {
+      if (localStorage['timezone']) this.zone = localStorage['timezone'];
+
       if (localStorage['settings.grid.sortBy']) {
         this.sortBy = localStorage['settings.grid.sortBy'];
         this.sortDesc = localStorage['settings.grid.sortDesc'] == "true";
@@ -297,5 +303,13 @@ routes.push({ path: '/grid', name: 'grid', component: {
     colorContainerStatus(status) {
       return status == "running" ? "green" : "error";
     },
+    saveTimezone() {
+      localStorage['timezone'] = this.zone;
+    },
+    toTZ(data) {
+      // expecting date in format YYYY-MM-DDTHH:mm:ss.SSSSSSSSS-HH:mm
+      const zoned = moment.utc(data, 'YYYY-MM-DDTHH:mm:ss.SSSSSSSSSZ').tz(this.zone);
+      return zoned.format(this.i18n.timestampFormat);
+    }
   }
 }});
