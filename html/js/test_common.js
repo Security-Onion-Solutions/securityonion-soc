@@ -19,8 +19,8 @@ var app = null;
 global.Vue = function(obj) {
   app = this;
   app.$root = this;
-  app.$vuetify = { 
-    theme: { 
+  app.$vuetify = {
+    theme: {
       dark: false,
       currentTheme: {}
     }
@@ -77,8 +77,8 @@ global.getComponent = function(name) {
 // Mock API calls
 ////////////////////////////////////
 global.resetPapi = function() {
-  app.papi = { 
-                defaults: { 
+  app.papi = {
+                defaults: {
                   headers: {
                     common: {}
                   }
@@ -104,8 +104,8 @@ global.mockPapi = function(method, mockedResponse, error) {
 }
 
 global.resetAuthApi = function() {
-  app.authApi = { 
-                defaults: { 
+  app.authApi = {
+                defaults: {
                   headers: {
                     common: {}
                   }
@@ -153,3 +153,8 @@ global.JobStatusDeleted = 3;
 global.moment = require('./external/moment-2.29.4.min.js');
 global.marked = require('./external/marked-4.3.0.min.js');
 global.DOMPurify = require('./external/purify-3.0.2.min.js');
+
+// polyfill for out of date packages we can't import
+moment.tz = {
+	guess: () => 'Etc/UTC',
+}
