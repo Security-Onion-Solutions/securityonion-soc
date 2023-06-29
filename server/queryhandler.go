@@ -59,7 +59,17 @@ func (h *QueryHandler) getQuery(w http.ResponseWriter, r *http.Request) {
 		value := r.Form.Get("value")
 		condense := r.Form.Get("condense") == "true"
 
-		if len(value) > 0 {
+		if value == "*Missing" {
+			exists := "_exists_"
+			if mode == model.FILTER_DRILLDOWN {
+				exists = "NOT _exists_"
+			}
+			alteredQuery, err = query.Filter(exists, field, scalar, mode, condense)
+			if err != nil {
+				web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid query after filter applied"))
+				return
+			}
+		} else if len(value) > 0 {
 			alteredQuery, err = query.Filter(field, value, scalar, mode, condense)
 			if err != nil {
 				web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid query after filter applied"))
