@@ -540,6 +540,10 @@ const huntComponent = {
           }
         }
         if (isAlert) {
+          for (let prop in docEvent) {
+            docEvent[prop] = this.subMissing(docEvent[prop]);
+          }
+
           const response = await this.$root.papi.post('events/ack', {
             searchFilter: await this.getQuery(),
             eventFilter: docEvent,
@@ -799,9 +803,11 @@ const huntComponent = {
     },
     buildFilterRoute(filterField, filterValue, filterMode) {
       route = this.buildCurrentRoute()
+
       route.query.filterField = filterField;
-      route.query.filterValue = filterValue;
+      route.query.filterValue = this.subMissing(filterValue);
       route.query.filterMode = filterMode;
+
       return route;
     },
     buildGroupByRoute(field) {
@@ -1667,6 +1673,13 @@ const huntComponent = {
     },
     isExpandedSection(item) {
       return (this.collapsedSections.indexOf(item) == -1);
+    },
+    subMissing(value) {
+      if (value === this.i18n.__missing__) {
+        return '__missing__';
+      }
+
+      return value;
     }
   }
 };

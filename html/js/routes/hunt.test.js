@@ -765,3 +765,14 @@ test('buildGroupByRoute', () => {
   r = comp.buildGroupByRoute('x');
   expect(r.query.groupByGroup).toBe(2);
 });
+
+test('subMissing', () => {
+  expect(comp.subMissing("")).toBe("");
+  expect(comp.subMissing("foo")).toBe("foo");
+  expect(comp.subMissing("Missing")).toBe("Missing");
+  expect(comp.subMissing(comp.i18n.__missing__)).toBe("__missing__");
+  expect(comp.subMissing(comp.i18n.__missing__ + " foo")).toBe(comp.i18n.__missing__ + " foo");
+  expect(comp.subMissing(null)).toBe(null)
+  expect(comp.subMissing(undefined)).toBe(undefined)
+  expect(comp.subMissing(10)).toBe(10)
+});
