@@ -15,7 +15,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/apex/log"
@@ -28,14 +27,12 @@ import (
 )
 
 type Saltstore struct {
-	server        *server.Server
-	client        *web.Client
-	timeoutMs     int
-	saltstackDir  string
-	saltPipeReq   string
-	saltPipeResp  string
-	saltPipeMutex sync.Mutex
-	bypassErrors  bool
+	server       *server.Server
+	client       *web.Client
+	timeoutMs    int
+	saltstackDir string
+	queueDir     string
+	bypassErrors bool
 }
 
 func NewSaltstore(server *server.Server) *Saltstore {
@@ -44,124 +41,70 @@ func NewSaltstore(server *server.Server) *Saltstore {
 	}
 }
 
-func (store *Saltstore) Init(timeoutMs int, saltstackDir string, saltPipeReq string, saltPipeResp string,
-	bypassErrors bool) error {
+func (store *Saltstore) Init(timeoutMs int, saltstackDir string, queueDir string, bypassErrors bool) error {
 	store.timeoutMs = timeoutMs
 	store.saltstackDir = strings.TrimSuffix(saltstackDir, "/")
-	store.saltPipeReq = saltPipeReq
-	store.saltPipeResp = saltPipeResp
+	store.queueDir = queueDir
 	store.bypassErrors = bypassErrors
 	return nil
 }
 
 func (store *Saltstore) execCommand(ctx context.Context, args map[string]string) (string, error) {
-	// Obtain exclusive lock to avoid interleaved responses
-	store.saltPipeMutex.Lock()
-	defer store.saltPipeMutex.Unlock()
+	reqId := ctx.Value(web.ContextKeyRequestId).(string)
+	cmd := args["command"]
+	id := reqId + "_" + cmd
+	args["command_id"] = id
 
+	filename := filepath.Join(store.queueDir, id)
 	log.WithFields(log.Fields{
-		"saltPipeReq": store.saltPipeReq,
-	}).Debug("Opening salt pipe")
+		"filename": filename,
+	}).Info("Executing command via salt relay")
 
-	pipe, err := os.OpenFile(store.saltPipeReq, os.O_WRONLY|os.O_APPEND, 0660)
+	err := json.WriteJsonFile(filename, args)
 	if err != nil {
 		log.WithFields(log.Fields{
-			"saltPipeReq": store.saltPipeReq,
-		}).WithError(err).Error("Unable to open salt pipe")
+			"filename": filename,
+		}).WithError(err).Error("Unable to write to file")
+
 		return "", err
 	}
 
-	var nanoseconds int64
-	nanoseconds = int64(store.timeoutMs) * 1000 * 1000
-
+	responseFilename := filename + ".response"
 	log.WithFields(log.Fields{
-		"saltPipeReq": store.saltPipeReq,
-		"timeoutNs":   nanoseconds,
-	}).Info("Executing command via salt pipe")
+		"responseFilename": responseFilename,
+		"timeoutMs":        store.timeoutMs,
+	}).Info("Waiting for response")
 
-	// Write command to pipe
-	var wrote int
-
-	var request_bytes []byte
-	request_bytes, err = json.WriteJson(args)
-	if err != nil {
-		log.WithFields(log.Fields{}).WithError(err).Error("Unable to convert command args to JSON")
-		return "", err
-	}
-	request := string(request_bytes)
-	pipe.SetDeadline(time.Now().Add(time.Duration(nanoseconds)))
-	wrote, err = pipe.WriteString(request)
-	if err != nil || wrote != len(request) {
-		log.WithFields(log.Fields{
-			"saltPipeReq": store.saltPipeReq,
-			"wrote":       wrote,
-			"length":      len(request),
-		}).WithError(err).Error("Unable to write to salt pipe")
-
-		return "", err
-	}
-
-	err = pipe.Close()
-	if err != nil {
-		log.WithFields(log.Fields{
-			"saltPipeReq": store.saltPipeReq,
-		}).WithError(err).Error("Unable to close pipe after writing request")
-		return "", err
-	}
-
-	log.WithFields(log.Fields{
-		"saltPipeResp": store.saltPipeResp,
-		"length":       len(request),
-	}).Info("Reading response via salt pipe")
-
-	// Read up to 1MB response from pipe
-	totalRead := 0
-	bytes := make([]byte, 1024*1024)
-
-	pipe, err = os.OpenFile(store.saltPipeResp, os.O_RDONLY, 0660)
-	if err != nil {
-		log.WithFields(log.Fields{
-			"saltPipeResp": store.saltPipeResp,
-			"length":       len(request),
-		}).WithError(err).Error("Unable to open salt pipe for read")
-		return "", err
-	}
-	pipe.SetDeadline(time.Now().Add(time.Duration(nanoseconds)))
-	for {
-		read, err := pipe.Read(bytes[totalRead:])
-		if err != nil {
-			log.WithFields(log.Fields{
-				"saltPipeResp": store.saltPipeResp,
-				"length":       len(request),
-			}).WithError(err).Debug("Unable to read response")
+	var response string
+	expiration := time.Duration(store.timeoutMs) * time.Millisecond
+	for timeoutTime := time.Now().Add(expiration); time.Now().Before(timeoutTime); {
+		if _, err = os.Stat(responseFilename); err == nil {
+			var data []byte
+			data, err = os.ReadFile(responseFilename)
+			if err != nil {
+				log.WithFields(log.Fields{
+					"filename": responseFilename,
+				}).WithError(err).Error("Failed to read file")
+			} else {
+				response = strings.TrimSpace(string(data))
+				os.Remove(responseFilename)
+				break
+			}
 		}
 
-		if read > 0 {
-			totalRead += read
-			log.WithFields(log.Fields{
-				"saltPipeResp": store.saltPipeResp,
-				"length":       len(request),
-				"read":         read,
-				"totalRead":    totalRead,
-			}).Debug("Appending more read bytes to response")
-		} else if read == 0 || bytes[totalRead+read] == 0 || err != nil {
-			break
+		// Assume very short timeouts are used for testing, where the response is already mocked
+		if store.timeoutMs > 10 {
+			time.Sleep(1000 * time.Millisecond)
 		}
-
 	}
-	pipe.Close()
 
-	response := string(bytes[0:totalRead])
-	response = strings.TrimSpace(response)
-	if response == request {
+	if response == "" {
 		return "", errors.New("ERROR_SALT_RELAY_DOWN")
 	}
 
 	log.WithFields(log.Fields{
-		"saltPipeResp": store.saltPipeResp,
-		"length":       len(request),
-		"bytesRead":    len(response),
-		"response":     response,
+		"filename": responseFilename,
+		"response": response,
 	}).Debug("Finished reading response")
 
 	return response, err
@@ -1077,7 +1020,7 @@ func (store *Saltstore) Import(ctx context.Context, node string, file string, im
 		return nil, err
 	}
 
-	return &output, nil
+	return &output, err
 }
 
 func (store *Saltstore) lookupEmailFromId(ctx context.Context, id string) string {

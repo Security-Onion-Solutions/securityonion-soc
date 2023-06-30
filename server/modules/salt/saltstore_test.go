@@ -11,55 +11,67 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
 )
 
 const TMP_SALTSTACK_PATH = "/tmp/gotest-soc-saltstore"
-const TMP_REQUEST_PIPE = "/tmp/gotest-soc-salt-req.pipe"
+const TMP_QUEUE_DIR = "/tmp/gotest-soc-salt-relay-queue"
+const TMP_REQUEST_FILE = "req"
 const TEST_SETTINGS_COUNT = 24
 
 func Cleanup() {
 	exec.Command("rm", "-fr", TMP_SALTSTACK_PATH).Run()
-	exec.Command("rm", "-fr", TMP_REQUEST_PIPE).Run()
+	exec.Command("rm", "-fr", TMP_QUEUE_DIR).Run()
 }
 
 func NewTestSalt() *Saltstore {
 	Cleanup()
 	exec.Command("mkdir", "-p", TMP_SALTSTACK_PATH).Run()
+	exec.Command("mkdir", "-p", TMP_QUEUE_DIR).Run()
 	exec.Command("cp", "-fr", "./test_resources/saltstack", TMP_SALTSTACK_PATH).Run()
 
 	srv := server.NewFakeAuthorizedServer(nil)
 	salt := NewSaltstore(srv)
-	salt.Init(123, TMP_SALTSTACK_PATH+"/saltstack", "test_pipe_req", "test_pipe_resp", false)
+	salt.Init(123, TMP_SALTSTACK_PATH+"/saltstack", TMP_QUEUE_DIR, false)
 	return salt
 }
 
-func NewTestSaltPipe(respPipe string) *Saltstore {
+func NewTestSaltRelayQueue(tester *testing.T, id string, mockedResponse string) *Saltstore {
 	Cleanup()
-	exec.Command("touch", TMP_REQUEST_PIPE).Run()
-
+	exec.Command("mkdir", "-p", TMP_SALTSTACK_PATH).Run()
+	exec.Command("mkdir", "-p", TMP_QUEUE_DIR).Run()
 	srv := server.NewFakeAuthorizedServer(nil)
 	salt := NewSaltstore(srv)
-	salt.Init(123, TMP_SALTSTACK_PATH+"/saltstack", TMP_REQUEST_PIPE, "./test_resources/pipe/"+respPipe, false)
+	salt.Init(10, TMP_SALTSTACK_PATH+"/saltstack", TMP_QUEUE_DIR, false)
+
+	filename := filepath.Join(TMP_QUEUE_DIR, id+".response")
+	responseData, err := os.ReadFile("test_resources/queue/" + mockedResponse)
+	assert.NoError(tester, err)
+	err = os.WriteFile(filename, responseData, 0600)
+	assert.NoError(tester, err)
 	return salt
 }
 
-func ReadReqPipe() string {
-	contents, _ := os.ReadFile(TMP_REQUEST_PIPE)
+func ReadRequest(tester *testing.T, filename string) string {
+	path := filepath.Join(TMP_QUEUE_DIR, filename)
+	contents, err := os.ReadFile(path)
+	assert.NoError(tester, err)
+	os.Remove(path)
 	return string(contents)
 }
 
 func TestSaltstoreInit(tester *testing.T) {
 	salt := NewSaltstore(nil)
-	salt.Init(123, "saltstack/path", "salt/control/pipe.req", "salt/control/pipe.resp", false)
+	salt.Init(123, "saltstack/path", "salt/control", false)
 	assert.Equal(tester, 123, salt.timeoutMs)
 	assert.Equal(tester, "saltstack/path", salt.saltstackDir)
-	assert.Equal(tester, "salt/control/pipe.req", salt.saltPipeReq)
-	assert.Equal(tester, "salt/control/pipe.resp", salt.saltPipeResp)
+	assert.Equal(tester, "salt/control", salt.queueDir)
 }
 
 func TestGetMembersFromJson(tester *testing.T) {
@@ -90,40 +102,45 @@ func TestGetMembersFromJson(tester *testing.T) {
 	assert.Equal(tester, "fingerprint", members[0].Fingerprint)
 }
 
-func TestGetMembers_BadPipePath(tester *testing.T) {
+func ctx() context.Context {
+	return context.WithValue(context.Background(), web.ContextKeyRequestId, "ctx")
+}
+
+func TestGetMembers_BadQueueDir(tester *testing.T) {
 	srv := server.NewFakeAuthorizedServer(nil)
 	salt := NewSaltstore(srv)
-	_, err := salt.GetMembers(context.Background())
-	assert.EqualError(tester, err, "open : no such file or directory")
+	salt.Init(123, TMP_SALTSTACK_PATH+"/saltstack", "/invalid/path", false)
+	_, err := salt.GetMembers(ctx())
+	assert.ErrorContains(tester, err, "no such file or directory")
 }
 
 func TestGetMembersUnauthorized(tester *testing.T) {
 	srv := server.NewFakeUnauthorizedServer()
 	salt := NewSaltstore(srv)
-	_, err := salt.GetMembers(context.Background())
+	_, err := salt.GetMembers(ctx())
 	assert.ErrorContains(tester, err, "Subject 'fake-subject' is not authorized to perform operation 'read' on target 'grid'")
 }
 
 func TestGetMembers(tester *testing.T) {
 	defer Cleanup()
-	salt := NewTestSaltPipe("list_minions.resp")
-	members, err := salt.GetMembers(context.Background())
+	salt := NewTestSaltRelayQueue(tester, "ctx_list-minions", "list_minions.resp")
+	members, err := salt.GetMembers(ctx())
 	assert.NoError(tester, err)
 	assert.Equal(tester, 15, len(members))
 
-	request := ReadReqPipe()
-	assert.Equal(tester, "{\"command\":\"list-minions\"}", request)
+	request := ReadRequest(tester, "ctx_list-minions")
+	assert.Equal(tester, `{"command":"list-minions","command_id":"ctx_list-minions"}`, request)
 }
 
 func TestGetMembers_Failure(tester *testing.T) {
 	defer Cleanup()
-	salt := NewTestSaltPipe("false.resp")
-	members, err := salt.GetMembers(context.Background())
+	salt := NewTestSaltRelayQueue(tester, "ctx_list-minions", "false.resp")
+	members, err := salt.GetMembers(ctx())
 	assert.EqualError(tester, err, "ERROR_SALT_MANAGE_MEMBER")
 	assert.Equal(tester, 0, len(members))
 
-	request := ReadReqPipe()
-	assert.Equal(tester, "{\"command\":\"list-minions\"}", request)
+	request := ReadRequest(tester, "ctx_list-minions")
+	assert.Equal(tester, `{"command":"list-minions","command_id":"ctx_list-minions"}`, request)
 }
 
 func TestManageMemberUnauthorized(tester *testing.T) {
@@ -131,49 +148,50 @@ func TestManageMemberUnauthorized(tester *testing.T) {
 	salt := NewSaltstore(srv)
 
 	for _, op := range []string{"add", "reject", "delete"} {
-		err := salt.ManageMember(context.Background(), op, "foo")
+		err := salt.ManageMember(ctx(), op, "foo")
 		assert.ErrorContains(tester, err, "Subject 'fake-subject' is not authorized to perform operation 'write' on target 'grid'")
 	}
 }
 
-func TestManageMember_BadPipePath(tester *testing.T) {
+func TestManageMember_BadQueuePath(tester *testing.T) {
 	srv := server.NewFakeAuthorizedServer(nil)
 	salt := NewSaltstore(srv)
+	salt.Init(123, TMP_SALTSTACK_PATH+"/saltstack", "invalid/path", false)
 
 	for _, op := range []string{"add", "reject", "delete"} {
-		err := salt.ManageMember(context.Background(), op, "foo")
-		assert.EqualError(tester, err, "open : no such file or directory")
+		err := salt.ManageMember(ctx(), op, "foo")
+		assert.ErrorContains(tester, err, "no such file or directory")
 	}
 }
 
 func TestManageMember(tester *testing.T) {
 	for _, op := range []string{"add", "reject", "delete"} {
 		defer Cleanup()
-		salt := NewTestSaltPipe("true.resp")
-		err := salt.ManageMember(context.Background(), op, "foo")
+		salt := NewTestSaltRelayQueue(tester, "ctx_manage-minion", "true.resp")
+		err := salt.ManageMember(ctx(), op, "foo")
 		assert.NoError(tester, err)
 
-		request := ReadReqPipe()
-		assert.Equal(tester, `{"command":"manage-minion","id":"foo","operation":"`+op+`"}`, request)
+		request := ReadRequest(tester, "ctx_manage-minion")
+		assert.Equal(tester, `{"command":"manage-minion","command_id":"ctx_manage-minion","id":"foo","operation":"`+op+`"}`, request)
 	}
 }
 
 func TestManageMember_Failure(tester *testing.T) {
 	for _, op := range []string{"add", "reject", "delete"} {
 		defer Cleanup()
-		salt := NewTestSaltPipe("false.resp")
-		err := salt.ManageMember(context.Background(), op, "foo")
+		salt := NewTestSaltRelayQueue(tester, "ctx_manage-minion", "false.resp")
+		err := salt.ManageMember(ctx(), op, "foo")
 		assert.EqualError(tester, err, "ERROR_SALT_MANAGE_MEMBER")
 
-		request := ReadReqPipe()
-		assert.Equal(tester, `{"command":"manage-minion","id":"foo","operation":"`+op+`"}`, request)
+		request := ReadRequest(tester, "ctx_manage-minion")
+		assert.Equal(tester, `{"command":"manage-minion","command_id":"ctx_manage-minion","id":"foo","operation":"`+op+`"}`, request)
 	}
 }
 
 func TestGetSettings_BadSaltstackPath(tester *testing.T) {
 	srv := server.NewFakeAuthorizedServer(nil)
 	salt := NewSaltstore(srv)
-	_, err := salt.GetSettings(context.Background())
+	_, err := salt.GetSettings(ctx())
 	assert.EqualError(tester, err, "lstat /default: no such file or directory")
 }
 
@@ -181,7 +199,7 @@ func TestGetSettings(tester *testing.T) {
 	defer Cleanup()
 
 	salt := NewTestSalt()
-	settings, err := salt.GetSettings(context.Background())
+	settings, err := salt.GetSettings(ctx())
 	assert.NoError(tester, err)
 
 	count := 0
@@ -323,7 +341,7 @@ func TestUpdateSetting_Readonly(tester *testing.T) {
 	defer Cleanup()
 	salt := NewTestSalt()
 	setting := model.NewSetting("myapp.ro")
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.EqualError(tester, err, "Unable to modify or remove a readonly setting")
 }
 
@@ -331,7 +349,7 @@ func TestUpdateSetting_MissingSettingFile(tester *testing.T) {
 	srv := server.NewFakeAuthorizedServer(nil)
 	salt := NewSaltstore(srv)
 	setting := model.NewSetting("some.setting")
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.EqualError(tester, err, "lstat /default: no such file or directory")
 }
 
@@ -351,11 +369,11 @@ func TestUpdateSetting_OverrideDefault(tester *testing.T) {
 	// Add new setting
 	setting := model.NewSetting("myapp.my_def")
 	setting.Value = "new setting"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
 	// Ensure there's an additional setting listed
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 
 	new_setting := findSetting(settings, "myapp.my_def", "")
@@ -369,11 +387,11 @@ func TestUpdateSetting_AddGlobal(tester *testing.T) {
 	// Add new setting
 	setting := model.NewSetting("myapp.setting")
 	setting.Value = "new setting"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
 	// Ensure there's an additional setting listed
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	assert.Equal(tester, TEST_SETTINGS_COUNT+1, len(settings))
 
@@ -392,11 +410,11 @@ func TestUpdateSetting_AddToNode(tester *testing.T) {
 	setting := model.NewSetting("myapp.setting")
 	setting.Value = "new setting"
 	setting.NodeId = "normal_import"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
 	// Ensure there's an additional setting listed
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	assert.Equal(tester, TEST_SETTINGS_COUNT+1, len(settings))
 
@@ -415,10 +433,10 @@ func TestUpdateSetting_DeleteGlobal(tester *testing.T) {
 	// Delete setting
 	setting := model.NewSetting("myapp.str")
 	setting.NodeId = ""
-	err := salt.UpdateSetting(context.Background(), setting, true)
+	err := salt.UpdateSetting(ctx(), setting, true)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	assert.Equal(tester, TEST_SETTINGS_COUNT-1, len(settings))
 	delete_setting := findSetting(settings, "myapp.str", "")
@@ -432,10 +450,10 @@ func TestUpdateSetting_DeleteFromNode(tester *testing.T) {
 	// Delete setting
 	setting := model.NewSetting("myapp.foo")
 	setting.NodeId = "normal_import"
-	err := salt.UpdateSetting(context.Background(), setting, true)
+	err := salt.UpdateSetting(ctx(), setting, true)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	assert.Equal(tester, TEST_SETTINGS_COUNT-1, len(settings))
 	delete_setting := findSetting(settings, "myapp.foo", "normal_import")
@@ -448,10 +466,10 @@ func TestUpdateSetting_DeleteAdvanced(tester *testing.T) {
 
 	// Delete setting
 	setting := model.NewSetting("myapp.advanced")
-	err := salt.UpdateSetting(context.Background(), setting, true)
+	err := salt.UpdateSetting(ctx(), setting, true)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	assert.Equal(tester, TEST_SETTINGS_COUNT, len(settings))
 	deleted_setting := findSetting(settings, "myapp.advanced", "")
@@ -466,10 +484,10 @@ func TestUpdateSetting_UpdateGlobal(tester *testing.T) {
 	setting := model.NewSetting("myapp.str")
 	setting.NodeId = ""
 	setting.Value = "new value\n" // ensure value is trimmed of whitespace
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	assert.Equal(tester, TEST_SETTINGS_COUNT, len(settings))
 	updated_setting := findSetting(settings, "myapp.str", "")
@@ -485,10 +503,10 @@ func TestUpdateSetting_UpdateForNode(tester *testing.T) {
 	setting := model.NewSetting("myapp.foo")
 	setting.NodeId = "normal_import"
 	setting.Value = "new value"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.foo", "normal_import")
 	assert.Equal(tester, "new value", updated_setting.Value)
@@ -502,10 +520,10 @@ func TestUpdateSetting_UpdateAdvanced(tester *testing.T) {
 	// Update setting
 	setting := model.NewSetting("myapp.advanced")
 	setting.Value = "something: new"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.advanced", "")
 	assert.Equal(tester, "something: new", updated_setting.Value)
@@ -520,10 +538,10 @@ func TestUpdateSetting_UpdateFile(tester *testing.T) {
 	setting := model.NewSetting("myapp.foo__txt")
 	setting.File = true
 	setting.Value = "something"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.foo__txt", "")
 	assert.Equal(tester, "anything", updated_setting.Default)
@@ -538,7 +556,7 @@ func TestUpdateSetting_UpdateAdvancedFailToParse(tester *testing.T) {
 	setting := model.NewSetting("myapp.advanced")
 	setting.Value = "new advanced"
 	setting.Syntax = "yaml"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.EqualError(tester, err, "ERROR_MALFORMED_YAML -> yaml: unmarshal errors:\n  line 1: cannot unmarshal !!str `new adv...`")
 }
 
@@ -551,10 +569,10 @@ func TestUpdateSetting_AlignIntType(tester *testing.T) {
 	// Update setting
 	setting := model.NewSetting("myapp.int")
 	setting.Value = "44"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.int", "")
 	assert.Equal(tester, "44", updated_setting.Value)
@@ -567,7 +585,7 @@ func TestUpdateSetting_FailToAlignIntType(tester *testing.T) {
 	// Update setting
 	setting := model.NewSetting("myapp.int")
 	setting.Value = "not an int"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.EqualError(tester, err, "strconv.ParseInt: parsing \"not an int\": invalid syntax")
 }
 
@@ -578,10 +596,10 @@ func TestUpdateSetting_AlignIntListType(tester *testing.T) {
 	// Update setting
 	setting := model.NewSetting("myapp.lists.list_int")
 	setting.Value = "44\n2\n1"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.lists.list_int", "")
 	assert.Equal(tester, "44\n2\n1\n", updated_setting.Value)
@@ -594,7 +612,7 @@ func TestUpdateSetting_FailToAlignIntListType(tester *testing.T) {
 	// Update setting
 	setting := model.NewSetting("myapp.lists.list_int")
 	setting.Value = "1\n2\ninvalid"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.EqualError(tester, err, `strconv.ParseInt: parsing "invalid": invalid syntax`)
 }
 
@@ -605,16 +623,16 @@ func TestUpdateSetting_AlignEmptyListIntType(tester *testing.T) {
 	// Prime the empty list setting with int
 	setting := model.NewSetting("myapp.empty_lists.list_int")
 	setting.Value = "123\n456"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
 	// Ensure we can update it with more ints
 	setting = model.NewSetting("myapp.empty_lists.list_int")
 	setting.Value = "123\n456\n23"
-	err = salt.UpdateSetting(context.Background(), setting, false)
+	err = salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.empty_lists.list_int", "")
 	assert.Equal(tester, "123\n456\n23\n", updated_setting.Value)
@@ -622,7 +640,7 @@ func TestUpdateSetting_AlignEmptyListIntType(tester *testing.T) {
 	// Now try to put the wrong type in it
 	setting = model.NewSetting("myapp.empty_lists.list_int")
 	setting.Value = "cannot set string on int list"
-	err = salt.UpdateSetting(context.Background(), setting, false)
+	err = salt.UpdateSetting(ctx(), setting, false)
 	assert.EqualError(tester, err, `strconv.ParseInt: parsing "cannot set string on int list": invalid syntax`)
 }
 
@@ -633,10 +651,10 @@ func TestUpdateSetting_ForceIntType(tester *testing.T) {
 	// Update setting
 	setting := model.NewSetting("myapp.int_nodefault")
 	setting.Value = "44"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.int_nodefault", "")
 	assert.Equal(tester, "44", updated_setting.Value)
@@ -649,10 +667,10 @@ func TestUpdateSetting_ForceListIntType(tester *testing.T) {
 	// Update setting
 	setting := model.NewSetting("myapp.int_list_nodefault")
 	setting.Value = "44\n55"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.int_list_nodefault", "")
 	assert.Equal(tester, "44\n55\n", updated_setting.Value)
@@ -667,10 +685,10 @@ func TestUpdateSetting_AlignFloatType(tester *testing.T) {
 	// Update setting
 	setting := model.NewSetting("myapp.float")
 	setting.Value = "44.2"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.float", "")
 	assert.Equal(tester, "44.2", updated_setting.Value)
@@ -683,7 +701,7 @@ func TestUpdateSetting_FailToAlignFloatType(tester *testing.T) {
 	// Update setting
 	setting := model.NewSetting("myapp.float")
 	setting.Value = "not a float"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.EqualError(tester, err, "strconv.ParseFloat: parsing \"not a float\": invalid syntax")
 }
 
@@ -694,10 +712,10 @@ func TestUpdateSetting_AlignFloatListType(tester *testing.T) {
 	// Update setting
 	setting := model.NewSetting("myapp.lists.list_float")
 	setting.Value = "44.3\n2.1\n1.2"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.lists.list_float", "")
 	assert.Equal(tester, "44.3\n2.1\n1.2\n", updated_setting.Value)
@@ -710,7 +728,7 @@ func TestUpdateSetting_FailToAlignFloatListType(tester *testing.T) {
 	// Update setting
 	setting := model.NewSetting("myapp.lists.list_float")
 	setting.Value = "1.2\nnope"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.EqualError(tester, err, `strconv.ParseFloat: parsing "nope": invalid syntax`)
 }
 
@@ -721,16 +739,16 @@ func TestUpdateSetting_AlignEmptyListFloatType(tester *testing.T) {
 	// Prime the empty list setting with float
 	setting := model.NewSetting("myapp.empty_lists.list_float")
 	setting.Value = "1.23\n4.56"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
 	// Ensure we can update it with more floats
 	setting = model.NewSetting("myapp.empty_lists.list_float")
 	setting.Value = "1.23\n4.56\n2.3"
-	err = salt.UpdateSetting(context.Background(), setting, false)
+	err = salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.empty_lists.list_float", "")
 	assert.Equal(tester, "1.23\n4.56\n2.3\n", updated_setting.Value)
@@ -738,7 +756,7 @@ func TestUpdateSetting_AlignEmptyListFloatType(tester *testing.T) {
 	// Now try to put the wrong type in it
 	setting = model.NewSetting("myapp.empty_lists.list_float")
 	setting.Value = "cannot set string on float list"
-	err = salt.UpdateSetting(context.Background(), setting, false)
+	err = salt.UpdateSetting(ctx(), setting, false)
 	assert.EqualError(tester, err, `strconv.ParseFloat: parsing "cannot set string on float list": invalid syntax`)
 }
 
@@ -751,10 +769,10 @@ func TestUpdateSetting_AlignBoolType(tester *testing.T) {
 	// Update setting
 	setting := model.NewSetting("myapp.bool")
 	setting.Value = "false"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.bool", "")
 	assert.Equal(tester, "false", updated_setting.Value)
@@ -767,7 +785,7 @@ func TestUpdateSetting_FailToAlignBoolType(tester *testing.T) {
 	// Update setting
 	setting := model.NewSetting("myapp.bool")
 	setting.Value = "not a bool"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.EqualError(tester, err, "strconv.ParseBool: parsing \"not a bool\": invalid syntax")
 }
 
@@ -778,10 +796,10 @@ func TestUpdateSetting_AlignBoolListType(tester *testing.T) {
 	// Update setting
 	setting := model.NewSetting("myapp.lists.list_bool")
 	setting.Value = "true\nfalse\ntrue"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.lists.list_bool", "")
 	assert.Equal(tester, "true\nfalse\ntrue\n", updated_setting.Value)
@@ -794,7 +812,7 @@ func TestUpdateSetting_FailToAlignBoolListType(tester *testing.T) {
 	// Update setting
 	setting := model.NewSetting("myapp.lists.list_bool")
 	setting.Value = "true\nfalse\nhi"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.EqualError(tester, err, `strconv.ParseBool: parsing "hi": invalid syntax`)
 }
 
@@ -805,16 +823,16 @@ func TestUpdateSetting_AlignEmptyListBoolType(tester *testing.T) {
 	// Prime the empty list setting with bools
 	setting := model.NewSetting("myapp.empty_lists.list_bool")
 	setting.Value = "true\nfalse"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
 	// Ensure we can update it with more bools
 	setting = model.NewSetting("myapp.empty_lists.list_bool")
 	setting.Value = "true\ntrue\nfalse"
-	err = salt.UpdateSetting(context.Background(), setting, false)
+	err = salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.empty_lists.list_bool", "")
 	assert.Equal(tester, "true\ntrue\nfalse\n", updated_setting.Value)
@@ -822,7 +840,7 @@ func TestUpdateSetting_AlignEmptyListBoolType(tester *testing.T) {
 	// Now try to put the wrong type in it
 	setting = model.NewSetting("myapp.empty_lists.list_bool")
 	setting.Value = "cannot set string on bool list"
-	err = salt.UpdateSetting(context.Background(), setting, false)
+	err = salt.UpdateSetting(ctx(), setting, false)
 	assert.EqualError(tester, err, `strconv.ParseBool: parsing "cannot set string on bool list": invalid syntax`)
 }
 
@@ -836,10 +854,10 @@ func TestUpdateSetting_AlignListListType(tester *testing.T) {
 	expected := "[\"item1\",\"item2\"]\n[\"item3\",\"item3\"]\n[\"item5\",\"item6\"]\n"
 	setting := model.NewSetting("myapp.lists.list_list_str")
 	setting.Value = expected
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.lists.list_list_str", "")
 	assert.Equal(tester, expected, updated_setting.Value)
@@ -852,7 +870,7 @@ func TestUpdateSetting_FailToAlignListListType(tester *testing.T) {
 	// Update setting (can't change list of lists to list of bools)
 	setting := model.NewSetting("myapp.lists.list_list_str")
 	setting.Value = "true\nfalse"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.EqualError(tester, err, `json: cannot unmarshal bool into Go value of type []interface {}`)
 }
 
@@ -863,17 +881,17 @@ func TestUpdateSetting_AlignEmptyListListType(tester *testing.T) {
 	// Prime the empty list setting with list of strings
 	setting := model.NewSetting("myapp.empty_lists.list_list_str")
 	setting.Value = "[\"item1\",\"item2\"]\n[\"item3\",\"item3\"]"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
 	// Ensure we can update it with more bools
 	expected := "[\"item1\",\"item2\"]\n[\"item3\",\"item3\"]\n[\"item5\",\"item6\"]\n"
 	setting = model.NewSetting("myapp.empty_lists.list_list_str")
 	setting.Value = expected
-	err = salt.UpdateSetting(context.Background(), setting, false)
+	err = salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.empty_lists.list_list_str", "")
 	assert.Equal(tester, expected, updated_setting.Value)
@@ -881,7 +899,7 @@ func TestUpdateSetting_AlignEmptyListListType(tester *testing.T) {
 	// Now try to put the wrong type in it
 	setting = model.NewSetting("myapp.empty_lists.list_list_str")
 	setting.Value = "cannot set list of strings\non list of lists"
-	err = salt.UpdateSetting(context.Background(), setting, false)
+	err = salt.UpdateSetting(ctx(), setting, false)
 	assert.EqualError(tester, err, `invalid character 'c' looking for beginning of value`)
 }
 
@@ -895,10 +913,10 @@ func TestUpdateSetting_AlignMapListType(tester *testing.T) {
 	expected := "{\"key1\":\"value1\",\"key2\":\"value2\"}\n{\"key1\":\"value3\",\"key2\":\"value4\"}\n{\"key1\":\"value5\",\"key2\":\"value6\"}\n"
 	setting := model.NewSetting("myapp.lists.list_map_str")
 	setting.Value = expected
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.lists.list_map_str", "")
 	assert.Equal(tester, expected, updated_setting.Value)
@@ -911,7 +929,7 @@ func TestUpdateSetting_FailToAlignMapListType(tester *testing.T) {
 	// Update setting (can't change list of maps to list of bools)
 	setting := model.NewSetting("myapp.lists.list_map_str")
 	setting.Value = "true\nfalse"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.EqualError(tester, err, `json: cannot unmarshal bool into Go value of type map[string]interface {}`)
 }
 
@@ -922,17 +940,17 @@ func TestUpdateSetting_AlignEmptyListMapType(tester *testing.T) {
 	// Prime the empty list setting with list of maps
 	setting := model.NewSetting("myapp.empty_lists.list_map_str")
 	setting.Value = "{\"key1\":\"value1\",\"key2\":\"value2\"}"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
 	// Ensure we can update it with more bools
 	expected := "{\"key1\":\"value1\",\"key2\":\"value2\"}\n{\"key1\":\"value3\",\"key2\":\"value4\"}\n"
 	setting = model.NewSetting("myapp.empty_lists.list_map_str")
 	setting.Value = expected
-	err = salt.UpdateSetting(context.Background(), setting, false)
+	err = salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.empty_lists.list_map_str", "")
 	assert.Equal(tester, expected, updated_setting.Value)
@@ -940,7 +958,7 @@ func TestUpdateSetting_AlignEmptyListMapType(tester *testing.T) {
 	// Now try to put the wrong type in it
 	setting = model.NewSetting("myapp.empty_lists.list_map_str")
 	setting.Value = "cannot set list of strings\non list of maps"
-	err = salt.UpdateSetting(context.Background(), setting, false)
+	err = salt.UpdateSetting(ctx(), setting, false)
 	assert.EqualError(tester, err, `invalid character 'c' looking for beginning of value`)
 }
 
@@ -953,10 +971,10 @@ func TestUpdateSetting_AlignNonStringType(tester *testing.T) {
 	// Update setting
 	setting := model.NewSetting("myapp.str")
 	setting.Value = "123"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.str", "")
 	assert.Equal(tester, "123", updated_setting.Value)
@@ -969,10 +987,10 @@ func TestUpdateSetting_AlignNonStringListType(tester *testing.T) {
 	// Update setting
 	setting := model.NewSetting("myapp.lists.list_str")
 	setting.Value = "123\n456"
-	err := salt.UpdateSetting(context.Background(), setting, false)
+	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(context.Background())
+	settings, get_err := salt.GetSettings(ctx())
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.lists.list_str", "")
 	assert.Equal(tester, "123\n456\n", updated_setting.Value)
@@ -1029,7 +1047,7 @@ func TestUpdateSettingWithAnnotation(tester *testing.T) {
 
 func TestManageUser_AddUser(tester *testing.T) {
 	defer Cleanup()
-	salt := NewTestSaltPipe("true.resp")
+	salt := NewTestSaltRelayQueue(tester, "ctx_manage-user", "true.resp")
 	roles := make([]string, 0, 0)
 	roles = append(roles, "analyst")
 	user := &model.User{
@@ -1040,46 +1058,46 @@ func TestManageUser_AddUser(tester *testing.T) {
 		Note:      "My Note",
 		Roles:     roles,
 	}
-	err := salt.AddUser(context.Background(), user)
+	err := salt.AddUser(ctx(), user)
 	assert.NoError(tester, err)
 
-	request := ReadReqPipe()
-	assert.Equal(tester, `{"command":"manage-user","email":"user1@somewhere.invalid","firstName":"My First","lastName":"My Last","note":"My Note","operation":"add","password":"dontlook!","role":"analyst"}`, request)
+	request := ReadRequest(tester, "ctx_manage-user")
+	assert.Equal(tester, `{"command":"manage-user","command_id":"ctx_manage-user","email":"user1@somewhere.invalid","firstName":"My First","lastName":"My Last","note":"My Note","operation":"add","password":"dontlook!","role":"analyst"}`, request)
 }
 
 func TestManageUser_EnableUser(tester *testing.T) {
 	defer Cleanup()
-	salt := NewTestSaltPipe("true.resp")
-	err := salt.EnableUser(context.Background(), "user-id-1")
+	salt := NewTestSaltRelayQueue(tester, "ctx_manage-user", "true.resp")
+	err := salt.EnableUser(ctx(), "user-id-1")
 	assert.NoError(tester, err)
 
-	request := ReadReqPipe()
-	assert.Equal(tester, `{"command":"manage-user","email":"user1@somewhere.invalid","operation":"enable"}`, request)
+	request := ReadRequest(tester, "ctx_manage-user")
+	assert.Equal(tester, `{"command":"manage-user","command_id":"ctx_manage-user","email":"user1@somewhere.invalid","operation":"enable"}`, request)
 }
 
 func TestManageUser_DisableUser(tester *testing.T) {
 	defer Cleanup()
-	salt := NewTestSaltPipe("true.resp")
-	err := salt.DisableUser(context.Background(), "user-id-1")
+	salt := NewTestSaltRelayQueue(tester, "ctx_manage-user", "true.resp")
+	err := salt.DisableUser(ctx(), "user-id-1")
 	assert.NoError(tester, err)
 
-	request := ReadReqPipe()
-	assert.Equal(tester, `{"command":"manage-user","email":"user1@somewhere.invalid","operation":"disable"}`, request)
+	request := ReadRequest(tester, "ctx_manage-user")
+	assert.Equal(tester, `{"command":"manage-user","command_id":"ctx_manage-user","email":"user1@somewhere.invalid","operation":"disable"}`, request)
 }
 
 func TestManageUser_DeleteUser(tester *testing.T) {
 	defer Cleanup()
-	salt := NewTestSaltPipe("true.resp")
-	err := salt.DeleteUser(context.Background(), "user-id-1")
+	salt := NewTestSaltRelayQueue(tester, "ctx_manage-user", "true.resp")
+	err := salt.DeleteUser(ctx(), "user-id-1")
 	assert.NoError(tester, err)
 
-	request := ReadReqPipe()
-	assert.Equal(tester, `{"command":"manage-user","email":"user1@somewhere.invalid","operation":"delete"}`, request)
+	request := ReadRequest(tester, "ctx_manage-user")
+	assert.Equal(tester, `{"command":"manage-user","command_id":"ctx_manage-user","email":"user1@somewhere.invalid","operation":"delete"}`, request)
 }
 
 func TestManageUser_UpdateProfile(tester *testing.T) {
 	defer Cleanup()
-	salt := NewTestSaltPipe("true.resp")
+	salt := NewTestSaltRelayQueue(tester, "ctx_manage-user", "true.resp")
 	roles := make([]string, 0, 0)
 	roles = append(roles, "analyst")
 	user := &model.User{
@@ -1088,61 +1106,61 @@ func TestManageUser_UpdateProfile(tester *testing.T) {
 		LastName:  "My Last",
 		Note:      "My Note",
 	}
-	err := salt.UpdateProfile(context.Background(), user)
+	err := salt.UpdateProfile(ctx(), user)
 	assert.NoError(tester, err)
 
-	request := ReadReqPipe()
-	assert.Equal(tester, `{"command":"manage-user","email":"user1@somewhere.invalid","firstName":"My First","lastName":"My Last","note":"My Note","operation":"profile"}`, request)
+	request := ReadRequest(tester, "ctx_manage-user")
+	assert.Equal(tester, `{"command":"manage-user","command_id":"ctx_manage-user","email":"user1@somewhere.invalid","firstName":"My First","lastName":"My Last","note":"My Note","operation":"profile"}`, request)
 }
 
 func TestManageUser_UpdatePassword(tester *testing.T) {
 	defer Cleanup()
-	salt := NewTestSaltPipe("true.resp")
-	err := salt.ResetPassword(context.Background(), "user-id-1", "newone#")
+	salt := NewTestSaltRelayQueue(tester, "ctx_manage-user", "true.resp")
+	err := salt.ResetPassword(ctx(), "user-id-1", "newone#")
 	assert.NoError(tester, err)
 
-	request := ReadReqPipe()
-	assert.Equal(tester, `{"command":"manage-user","email":"user1@somewhere.invalid","operation":"password","password":"newone#"}`, request)
+	request := ReadRequest(tester, "ctx_manage-user")
+	assert.Equal(tester, `{"command":"manage-user","command_id":"ctx_manage-user","email":"user1@somewhere.invalid","operation":"password","password":"newone#"}`, request)
 }
 
 func TestManageUser_AddRole(tester *testing.T) {
 	defer Cleanup()
-	salt := NewTestSaltPipe("true.resp")
-	err := salt.AddRole(context.Background(), "user-id-1", "broker")
+	salt := NewTestSaltRelayQueue(tester, "ctx_manage-user", "true.resp")
+	err := salt.AddRole(ctx(), "user-id-1", "broker")
 	assert.NoError(tester, err)
 
-	request := ReadReqPipe()
-	assert.Equal(tester, `{"command":"manage-user","email":"user1@somewhere.invalid","operation":"addrole","role":"broker"}`, request)
+	request := ReadRequest(tester, "ctx_manage-user")
+	assert.Equal(tester, `{"command":"manage-user","command_id":"ctx_manage-user","email":"user1@somewhere.invalid","operation":"addrole","role":"broker"}`, request)
 }
 
 func TestManageUser_DeleteRole(tester *testing.T) {
 	defer Cleanup()
-	salt := NewTestSaltPipe("true.resp")
-	err := salt.DeleteRole(context.Background(), "user-id-1", "broker")
+	salt := NewTestSaltRelayQueue(tester, "ctx_manage-user", "true.resp")
+	err := salt.DeleteRole(ctx(), "user-id-1", "broker")
 	assert.NoError(tester, err)
 
-	request := ReadReqPipe()
-	assert.Equal(tester, `{"command":"manage-user","email":"user1@somewhere.invalid","operation":"delrole","role":"broker"}`, request)
+	request := ReadRequest(tester, "ctx_manage-user")
+	assert.Equal(tester, `{"command":"manage-user","command_id":"ctx_manage-user","email":"user1@somewhere.invalid","operation":"delrole","role":"broker"}`, request)
 }
 
 func TestSyncUsers(tester *testing.T) {
 	defer Cleanup()
-	salt := NewTestSaltPipe("true.resp")
-	err := salt.SyncUsers(context.Background())
+	salt := NewTestSaltRelayQueue(tester, "ctx_manage-user", "true.resp")
+	err := salt.SyncUsers(ctx())
 	assert.NoError(tester, err)
 
-	request := ReadReqPipe()
-	assert.Equal(tester, `{"command":"manage-user","operation":"sync"}`, request)
+	request := ReadRequest(tester, "ctx_manage-user")
+	assert.Equal(tester, `{"command":"manage-user","command_id":"ctx_manage-user","operation":"sync"}`, request)
 }
 
 func TestSyncSettings(tester *testing.T) {
 	defer Cleanup()
-	salt := NewTestSaltPipe("true.resp")
-	err := salt.SyncSettings(context.Background())
+	salt := NewTestSaltRelayQueue(tester, "ctx_manage-salt", "true.resp")
+	err := salt.SyncSettings(ctx())
 	assert.NoError(tester, err)
 
-	request := ReadReqPipe()
-	assert.Equal(tester, `{"command":"manage-salt","operation":"highstate"}`, request)
+	request := ReadRequest(tester, "ctx_manage-salt")
+	assert.Equal(tester, `{"command":"manage-salt","command_id":"ctx_manage-salt","operation":"highstate"}`, request)
 }
 
 func TestForceType(tester *testing.T) {
@@ -1188,22 +1206,22 @@ func TestForceType(tester *testing.T) {
 
 func TestSendFile(t *testing.T) {
 	defer Cleanup()
-	salt := NewTestSaltPipe("true.resp")
-	err := salt.SendFile(context.Background(), "manager_standalone", "/nsm/soc/uploads/processing/manager_standalone", "/nsm/soc/uploads/", true)
+	salt := NewTestSaltRelayQueue(t, "ctx_send-file", "true.resp")
+	err := salt.SendFile(ctx(), "manager_standalone", "/nsm/soc/uploads/processing/manager_standalone", "/nsm/soc/uploads/", true)
 	assert.NoError(t, err)
 
-	request := ReadReqPipe()
-	assert.JSONEq(t, `{"command":"send-file","node":"manager_standalone","from":"/nsm/soc/uploads/processing/manager_standalone","to":"/nsm/soc/uploads/","cleanup":"true"}`, request)
+	request := ReadRequest(t, "ctx_send-file")
+	assert.JSONEq(t, `{"command":"send-file","command_id":"ctx_send-file","node":"manager_standalone","from":"/nsm/soc/uploads/processing/manager_standalone","to":"/nsm/soc/uploads/","cleanup":"true"}`, request)
 }
 
 func TestImportFile(t *testing.T) {
 	defer Cleanup()
-	salt := NewTestSaltPipe("url.resp")
-	path, err := salt.Import(context.Background(), "manager_standalone", "/nsm/soc/uploads/file.pcap", "pcap")
+	salt := NewTestSaltRelayQueue(t, "ctx_import-file", "url.resp")
+	path, err := salt.Import(ctx(), "manager_standalone", "/nsm/soc/uploads/file.pcap", "pcap")
 	assert.NoError(t, err)
 	assert.NotNil(t, path)
 	assert.Contains(t, *path, `#/dashboards`)
 
-	request := ReadReqPipe()
-	assert.JSONEq(t, `{"command":"import-file","node":"manager_standalone","file":"/nsm/soc/uploads/file.pcap","importer":"pcap"}`, request)
+	request := ReadRequest(t, "ctx_import-file")
+	assert.JSONEq(t, `{"command":"import-file","command_id":"ctx_import-file","node":"manager_standalone","file":"/nsm/soc/uploads/file.pcap","importer":"pcap"}`, request)
 }
