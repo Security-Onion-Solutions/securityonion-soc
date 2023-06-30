@@ -7,7 +7,7 @@
 const i18n = {
   translations: {
     "en-US": {
-      __missing__: '*Missing',
+      __missing__: '*Missing', // This should be sufficiently unique to avoid collisions with actual values
       accept: 'Accept',
       accepted: 'Accepted',
       acceptingMinionsTakesTime: 'Accepting new minions can take 1-2 minutes to complete.',

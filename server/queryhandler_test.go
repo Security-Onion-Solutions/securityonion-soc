@@ -22,17 +22,17 @@ func TestFilterMissing(t *testing.T) {
 	}{
 		{
 			Name:          "Include",
-			Path:          "/api/query/filtered?query=*+%7C+groupby+unit.type*&field=unit.type&value=*Missing&scalar=false&mode=INCLUDE",
-			ExpectedQuery: `"* AND _exists_:\"unit.type\" | groupby unit.type*"`,
-		},
-		{
-			Name:          "Exclude",
-			Path:          "/api/query/filtered?query=*+%7C+groupby+unit.type*&field=unit.type&value=*Missing&scalar=false&mode=EXCLUDE",
+			Path:          "/api/query/filtered?query=*+%7C+groupby+unit.type*&field=unit.type&value=__missing__&scalar=false&mode=INCLUDE",
 			ExpectedQuery: `"* AND NOT _exists_:\"unit.type\" | groupby unit.type*"`,
 		},
 		{
+			Name:          "Exclude",
+			Path:          "/api/query/filtered?query=*+%7C+groupby+unit.type*&field=unit.type&value=__missing__&scalar=false&mode=EXCLUDE",
+			ExpectedQuery: `"* AND _exists_:\"unit.type\" | groupby unit.type*"`,
+		},
+		{
 			Name:          "Drilldown",
-			Path:          "/api/query/filtered?query=*+%7C+groupby+unit.type*&field=unit.type&value=*Missing&scalar=false&mode=DRILLDOWN",
+			Path:          "/api/query/filtered?query=*+%7C+groupby+unit.type*&field=unit.type&value=__missing__&scalar=false&mode=DRILLDOWN",
 			ExpectedQuery: `"* AND NOT _exists_:\"unit.type\""`,
 		},
 	}
