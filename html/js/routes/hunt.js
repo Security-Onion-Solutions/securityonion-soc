@@ -229,7 +229,6 @@ const huntComponent = {
         this.dateRange = this.$route.query.t;
       }
 
-      setTimeout(this.setupDateRangePicker, 10);
       this.setupCharts();
       this.$root.stopLoading();
 
@@ -354,7 +353,19 @@ const huntComponent = {
       if (this.$route.query.q) {
         this.query = this.$route.query.q;
       }
+
+      if (this.$route.query.rt) {
+        this.relativeTimeEnabled = true;
+        this.relativeTimeValue = parseInt(this.$route.query.rt);
+      }
+      if (this.$route.query.rtu) {
+        this.relativeTimeEnabled = true;
+        this.setRelativeTimeUnits(this.$route.query.rtu);
+      }
       if (this.$route.query.t) {
+        this.relativeTimeEnabled = false;
+        setTimeout(this.setupDateRangePicker, 10);
+
         this.dateRange = this.$route.query.t;
       }
       if (this.$route.query.z) {
@@ -799,6 +810,9 @@ const huntComponent = {
       }
     },
     buildCurrentRoute() {
+      if (this.relativeTimeEnabled) {
+        return { path: this.category, query: { q: this.query, rt: this.relativeTimeValue, rtu: this.getRelativeTimeUnits(), z: this.zone, el: this.eventLimit, gl: this.groupByLimit }};
+      }
       return { path: this.category, query: { q: this.query, t: this.dateRange, z: this.zone, el: this.eventLimit, gl: this.groupByLimit }};
     },
     buildFilterRoute(filterField, filterValue, filterMode) {
@@ -1680,6 +1694,30 @@ const huntComponent = {
       }
 
       return value;
+    },
+    getRelativeTimeUnits() {
+      let text = 'hours';
+
+      this.relativeTimeUnits.forEach((unit) => {
+        if (unit.value == this.relativeTimeUnit) {
+          text = unit.text;
+          return false;
+        }
+      });
+
+      return text;
+    },
+    setRelativeTimeUnits(m) {
+      let value = 30;
+
+      this.relativeTimeUnits.forEach((unit) => {
+        if (unit.text.toLowerCase() == m.toLowerCase()) {
+          value = unit.value;
+          return false;
+        }
+      });
+
+      this.relativeTimeUnit = value;
     }
   }
 };
