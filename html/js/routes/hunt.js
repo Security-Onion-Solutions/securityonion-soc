@@ -377,6 +377,21 @@ const huntComponent = {
       if (this.$route.query.gl) {
         this.groupByLimit = parseInt(this.$route.query.gl);
       }
+      if (this.$route.query.ar) {
+        let found = false;
+        this.autoRefreshIntervals.forEach(inter => {
+          if (inter.value === parseInt(this.$route.query.ar)) {
+            found = true;
+            return false;
+          }
+        });
+
+        this.autoRefreshInterval = found ? parseInt(this.$route.query.ar) : 0;
+        this.autoRefreshEnabled = found;
+      } else {
+        this.autoRefreshEnabled = false;
+        this.autoRefreshInterval = 0;
+      }
 
       // Check for special params that force a re-route
       var reRoute = false;
@@ -810,10 +825,20 @@ const huntComponent = {
       }
     },
     buildCurrentRoute() {
+      let queryObj = { q: this.query, z: this.zone, el: this.eventLimit, gl: this.groupByLimit };
+
       if (this.relativeTimeEnabled) {
-        return { path: this.category, query: { q: this.query, rt: this.relativeTimeValue, rtu: this.getRelativeTimeUnits(), z: this.zone, el: this.eventLimit, gl: this.groupByLimit }};
+        queryObj.rt = this.relativeTimeValue;
+        queryObj.rtu = this.getRelativeTimeUnits();
+      } else {
+        queryObj.t = this.dateRange;
       }
-      return { path: this.category, query: { q: this.query, t: this.dateRange, z: this.zone, el: this.eventLimit, gl: this.groupByLimit }};
+
+      if (this.autoRefreshInterval > 0) {
+        queryObj.ar = this.autoRefreshInterval;
+      }
+
+      return { path: this.category, query: queryObj };
     },
     buildFilterRoute(filterField, filterValue, filterMode) {
       route = this.buildCurrentRoute()
