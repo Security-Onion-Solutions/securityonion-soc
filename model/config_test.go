@@ -34,7 +34,7 @@ func TestIsValidSettingId(tester *testing.T) {
 	assert.True(tester, IsValidSettingId("Foo-bar_car"))
 	assert.True(tester, IsValidSettingId("Foo.bar_car"))
 	assert.True(tester, IsValidSettingId("Foo.bar.:car:"))
-	assert.True(tester, IsValidSettingId("Foo/bar.:car:"))
+	assert.True(tester, IsValidSettingId("Foo/bar*"))
 	assert.False(tester, IsValidSettingId(""))
 	assert.False(tester, IsValidSettingId("Foo bar"))
 	assert.False(tester, IsValidSettingId(" "))
