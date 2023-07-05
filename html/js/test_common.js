@@ -35,6 +35,7 @@ global.Vue.delete = function(data, i) {
 global.Vue.set = function(array, idx, value) {
   array[idx] = value;
 };
+global.Vue.filter = () => { };
 global.Vuetify = function(obj) {};
 global.VueRouter = function(obj) {};
 

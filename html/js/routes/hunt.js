@@ -229,7 +229,6 @@ const huntComponent = {
         this.dateRange = this.$route.query.t;
       }
 
-      setTimeout(this.setupDateRangePicker, 10);
       this.setupCharts();
       this.$root.stopLoading();
 
@@ -354,7 +353,19 @@ const huntComponent = {
       if (this.$route.query.q) {
         this.query = this.$route.query.q;
       }
+
+      if (this.$route.query.rt) {
+        this.relativeTimeEnabled = true;
+        this.relativeTimeValue = parseInt(this.$route.query.rt);
+      }
+      if (this.$route.query.rtu) {
+        this.relativeTimeEnabled = true;
+        this.setRelativeTimeUnits(this.$route.query.rtu);
+      }
       if (this.$route.query.t) {
+        this.relativeTimeEnabled = false;
+        setTimeout(this.setupDateRangePicker, 10);
+
         this.dateRange = this.$route.query.t;
       }
       if (this.$route.query.z) {
@@ -365,6 +376,21 @@ const huntComponent = {
       }
       if (this.$route.query.gl) {
         this.groupByLimit = parseInt(this.$route.query.gl);
+      }
+      if (this.$route.query.ar) {
+        let found = false;
+        this.autoRefreshIntervals.forEach(inter => {
+          if (inter.value === parseInt(this.$route.query.ar)) {
+            found = true;
+            return false;
+          }
+        });
+
+        this.autoRefreshInterval = found ? parseInt(this.$route.query.ar) : 0;
+        this.autoRefreshEnabled = found;
+      } else {
+        this.autoRefreshEnabled = false;
+        this.autoRefreshInterval = 0;
       }
 
       // Check for special params that force a re-route
@@ -799,7 +825,20 @@ const huntComponent = {
       }
     },
     buildCurrentRoute() {
-      return { path: this.category, query: { q: this.query, t: this.dateRange, z: this.zone, el: this.eventLimit, gl: this.groupByLimit }};
+      let queryObj = { q: this.query, z: this.zone, el: this.eventLimit, gl: this.groupByLimit };
+
+      if (this.relativeTimeEnabled) {
+        queryObj.rt = this.relativeTimeValue;
+        queryObj.rtu = this.getRelativeTimeUnits();
+      } else {
+        queryObj.t = this.dateRange;
+      }
+
+      if (this.autoRefreshInterval > 0) {
+        queryObj.ar = this.autoRefreshInterval;
+      }
+
+      return { path: this.category, query: queryObj };
     },
     buildFilterRoute(filterField, filterValue, filterMode) {
       route = this.buildCurrentRoute()
@@ -1680,6 +1719,30 @@ const huntComponent = {
       }
 
       return value;
+    },
+    getRelativeTimeUnits() {
+      let text = 'hours';
+
+      this.relativeTimeUnits.forEach((unit) => {
+        if (unit.value == this.relativeTimeUnit) {
+          text = unit.text;
+          return false;
+        }
+      });
+
+      return text;
+    },
+    setRelativeTimeUnits(m) {
+      let value = 30;
+
+      this.relativeTimeUnits.forEach((unit) => {
+        if (unit.text.toLowerCase() == m.toLowerCase()) {
+          value = unit.value;
+          return false;
+        }
+      });
+
+      this.relativeTimeUnit = value;
     }
   }
 };
