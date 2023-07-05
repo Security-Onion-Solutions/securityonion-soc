@@ -246,7 +246,7 @@
           </div>
           <div class="mt-2 no-underline">
             {{ i18n.huntForError }}
-            <router-link :to="{ name: 'hunt', query: {q: i18n.huntForErrorQuery, t: moment().subtract(1, 'hours').format(i18n.timePickerFormat) + ' - ' + moment().format(i18n.timePickerFormat), socExcludeToggle: false }}" class="text-decoration-none error-hunt">
+            <router-link :to="{ name: 'hunt', query: {q: i18n.huntForErrorQuery, rt: 5, rtu: 'minutes', socExcludeToggle: false }}" class="text-decoration-none error-hunt">
               <v-icon :title="i18n.huntForError">fa-crosshairs</v-icon>
             </router-link>
           </div>
