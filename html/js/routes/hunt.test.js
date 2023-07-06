@@ -12,6 +12,8 @@ let comp;
 beforeEach(() => {
   comp = getComponent("hunt");
   resetPapi();
+  comp.$root.initializeCharts = () => { };
+  comp.created();
 });
 
 test('localizeValue', () => {
@@ -764,4 +766,90 @@ test('buildGroupByRoute', () => {
   comp.query = `* | groupby "log.level" |GrOuPbY "field.groupBy" |   GROUPBY "@version"`;
   r = comp.buildGroupByRoute('x');
   expect(r.query.groupByGroup).toBe(2);
+});
+
+test('subMissing', () => {
+  expect(comp.subMissing("")).toBe("");
+  expect(comp.subMissing("foo")).toBe("foo");
+  expect(comp.subMissing("Missing")).toBe("Missing");
+  expect(comp.subMissing(comp.i18n.__missing__)).toBe("__missing__");
+  expect(comp.subMissing(comp.i18n.__missing__ + " foo")).toBe(comp.i18n.__missing__ + " foo");
+  expect(comp.subMissing(null)).toBe(null)
+  expect(comp.subMissing(undefined)).toBe(undefined)
+  expect(comp.subMissing(10)).toBe(10)
+});
+
+test('getRelativeTimeUnits', () => {
+  comp.relativeTimeUnit = 10;
+  expect(comp.getRelativeTimeUnits()).toBe(comp.i18n.seconds);
+
+  comp.relativeTimeUnit = 20;
+  expect(comp.getRelativeTimeUnits()).toBe(comp.i18n.minutes);
+
+  comp.relativeTimeUnit = 30;
+  expect(comp.getRelativeTimeUnits()).toBe(comp.i18n.hours);
+
+  comp.relativeTimeUnit = 40;
+  expect(comp.getRelativeTimeUnits()).toBe(comp.i18n.days);
+
+  comp.relativeTimeUnit = 50;
+  expect(comp.getRelativeTimeUnits()).toBe(comp.i18n.weeks);
+
+  comp.relativeTimeUnit = 60;
+  expect(comp.getRelativeTimeUnits()).toBe(comp.i18n.months);
+
+  comp.relativeTimeUnit = -1;
+  expect(comp.getRelativeTimeUnits()).toBe(comp.i18n.hours);
+});
+
+test('setRelativeTimeUnits', () => {
+  for (let i = 0; i < comp.relativeTimeUnits.length; i++) {
+    comp.setRelativeTimeUnits(comp.relativeTimeUnits[i].text);
+    expect(comp.relativeTimeUnit).toBe(comp.relativeTimeUnits[i].value);
+  }
+
+  comp.setRelativeTimeUnits("foo");
+  expect(comp.relativeTimeUnit).toBe(30);
+});
+
+test('relative query string', () => {
+  comp.$route = { path: "hunt", query: { rt: 24, rtu: 'hours' } };
+  comp.parseUrlParameters();
+
+  expect(comp.relativeTimeEnabled).toBe(true);
+  expect(comp.relativeTimeUnit).toBe(30);
+  expect(comp.relativeTimeValue).toBe(24);
+
+  comp.$route = { path: "hunt", query: { rt: 10 } };
+  comp.parseUrlParameters();
+
+  expect(comp.relativeTimeEnabled).toBe(true);
+  expect(comp.relativeTimeUnit).toBe(30);
+  expect(comp.relativeTimeValue).toBe(10);
+
+  comp.$route = { path: "hunt", query: { rt: 24, rtu: 'hours', t: '2021/07/03 01:01:57 PM - 2023/07/03 01:01:57 PM' } };
+  comp.parseUrlParameters();
+
+  expect(comp.relativeTimeEnabled).toBe(false);
+  expect(comp.dateRange).toBe('2021/07/03 01:01:57 PM - 2023/07/03 01:01:57 PM');
+});
+
+test('autoRefresh query string', () => {
+  comp.$route = { path: "hunt", query: { ar: 30 } };
+  comp.parseUrlParameters();
+
+  expect(comp.autoRefreshEnabled).toBe(true);
+  expect(comp.autoRefreshInterval).toBe(30);
+
+  comp.$route = { path: "hunt", query: { ar: 1 } };
+  comp.parseUrlParameters();
+
+  expect(comp.autoRefreshEnabled).toBe(false);
+  expect(comp.autoRefreshInterval).toBe(0);
+
+  comp.$route = { path: "hunt", query: {} };
+  comp.parseUrlParameters();
+
+  expect(comp.autoRefreshEnabled).toBe(false);
+  expect(comp.autoRefreshInterval).toBe(0);
 });

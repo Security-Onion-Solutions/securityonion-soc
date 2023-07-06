@@ -7,7 +7,7 @@
 const i18n = {
   translations: {
     "en-US": {
-      __missing__: '*Missing',
+      __missing__: '*Missing', // This should be sufficiently unique to avoid collisions with actual values
       accept: 'Accept',
       accepted: 'Accepted',
       acceptingMinionsTakesTime: 'Accepting new minions can take 1-2 minutes to complete.',
@@ -244,7 +244,7 @@ const i18n = {
       details: 'Details',
       disconnected: 'Disconnected from manager',
       downloads: 'Downloads',
-      downloadsFirewallTip: 'When installing the Elastic Agent onto remote systems, be sure to allow network access through the firewall.',
+      downloadsFirewallTip: 'When installing the Elastic Agent onto remote systems, be sure to <a href="/#/config?s=firewall.hostgroups.elastic_agent_endpoint">allow network access through the firewall</a>.',
       downloadsInfo: 'These <a href="/docs/elastic-agent.html">Elastic Agent</a> installers are customized for this specific <a href="/docs/elastic-fleet.html">Elastic Fleet</a> installation. These files are not signed. If you need signed non-customized Elastic Agent installers, you can get them from <a href="https://www.elastic.co/downloads/elastic-agent">elastic.co</a>.',
       downloadsElasticAgent: 'Elastic Agent Installers',
       downloadPackets: 'Download the packets as a PCAP file',
