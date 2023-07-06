@@ -92,17 +92,21 @@ func TestListAvailableFeatures(tester *testing.T) {
 
 	Init(EXPIRED_KEY)
 	manager.status = LICENSE_STATUS_ACTIVE
-	assert.Len(tester, ListAvailableFeatures(), 1)
-	assert.Equal(tester, ListAvailableFeatures()[0], FEAT_TIMETRACKING)
+	assert.Len(tester, ListAvailableFeatures(), 3)
+	assert.Equal(tester, ListAvailableFeatures()[0], FEAT_FIPS)
+	assert.Equal(tester, ListAvailableFeatures()[1], FEAT_STIG)
+	assert.Equal(tester, ListAvailableFeatures()[2], FEAT_TIMETRACKING)
 }
 
 func TestListEnabledFeatures(tester *testing.T) {
 	Init("")
-	assert.Len(tester, ListEnabledFeatures(), 1)
+	assert.Len(tester, ListEnabledFeatures(), 3)
 
 	Init(EXPIRED_KEY)
-	assert.Len(tester, ListEnabledFeatures(), 1)
-	assert.Equal(tester, ListEnabledFeatures()[0], FEAT_TIMETRACKING)
+	assert.Len(tester, ListEnabledFeatures(), 3)
+	assert.Equal(tester, ListEnabledFeatures()[0], FEAT_FIPS)
+	assert.Equal(tester, ListEnabledFeatures()[1], FEAT_STIG)
+	assert.Equal(tester, ListEnabledFeatures()[2], FEAT_TIMETRACKING)
 
 	Init(EXPIRED_KEY)
 	manager.licenseKey.Features = append(manager.licenseKey.Features, "foo")
@@ -119,14 +123,14 @@ func TestGetLicenseKey(tester *testing.T) {
 	assert.Equal(tester, key.Nodes, 1)
 	assert.Equal(tester, key.SocUrl, "https://somewhere.invalid")
 	assert.Equal(tester, key.DataUrl, "https://another.place")
-	assert.Len(tester, key.Features, 1)
+	assert.Len(tester, key.Features, 3)
 
 	// Modify the returned object and make sure it doesn't affect the orig object
 	key.Users = 100
 	key.Features = append(key.Features, "foo")
 	assert.Equal(tester, GetLicenseKey().Users, 1)
-	assert.Len(tester, key.Features, 2)
-	assert.Len(tester, GetLicenseKey().Features, 1)
+	assert.Len(tester, key.Features, 4)
+	assert.Len(tester, GetLicenseKey().Features, 3)
 }
 
 func TestGetStatus(tester *testing.T) {
@@ -204,4 +208,14 @@ func TestValidateDataUrl(tester *testing.T) {
 	assert.True(tester, ValidateDataUrl("foo"))
 	assert.False(tester, ValidateDataUrl(""))
 	assert.False(tester, ValidateDataUrl("bar"))
+}
+
+func TestPillarMonitor(tester *testing.T) {
+	Init("")
+	manager.running = false
+	manager.pillarFilename = "/tmp/does/not/exist"
+
+	assert.Equal(tester, manager.status, LICENSE_STATUS_UNPROVISIONED)
+	startPillarMonitor()
+	assert.Equal(tester, manager.status, LICENSE_STATUS_INVALID)
 }
