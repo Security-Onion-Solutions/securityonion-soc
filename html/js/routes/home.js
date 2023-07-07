@@ -23,6 +23,7 @@ routes.push({ path: '/', name: 'home', component: {
         if (response.data) {
           this.motd = response.data;
         }
+        localStorage.removeItem('flowID');
       } catch (error) {
         this.$root.showError(error);
       }

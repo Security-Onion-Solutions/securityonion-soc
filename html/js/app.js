@@ -370,7 +370,15 @@ $(document).ready(function() {
         }
       },
       getAuthFlowId() {
-        return this.getSearchParam('flow');
+        let flow = this.getSearchParam('flow');
+
+        if (flow) {
+          localStorage.setItem('flowID', flow);
+        } else {
+          flow = localStorage.getItem('flowID');
+        }
+
+        return flow;
       },
       getRedirectPage() {
         return this.getSearchParam('r');
