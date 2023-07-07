@@ -53,7 +53,7 @@ routes.push({ path: '*', name: 'login', component: {
       this.$root.showLogin();
     } else {
       this.showLoginForm = true;
-      this.authLoginUrl = this.$root.authUrl + 'login' + location.search;
+      this.authLoginUrl = this.$root.authUrl + 'login?flow=' + this.$root.getAuthFlowId();
       this.loadData()
     }
   },
@@ -71,13 +71,31 @@ routes.push({ path: '*', name: 'login', component: {
     async loadData() {
       try {
         var response = await this.$root.createApi().get('/login/banner.md?v=' + Date.now());
-        if (response.data) {
+        if (response?.data) {
           this.banner = marked.parse(response.data);
         }
 
+        const errID = this.$root.getSearchParam('id')
+        if (errID) {
+          this.$root.authApi.get('/errors?id=' + errID).then(response => {
+            let parts = [];
+            if (response.data.error.status) {
+              parts.push(response.data.error.status);
+            }
+            if (response.data.error.reason) {
+              parts.push(response.data.error.reason);
+            }
+
+            this.$root.showError(parts.join(': '));
+          });
+        }
+
         response = await this.$root.authApi.get('login/flows?id=' + this.$root.getAuthFlowId());
-        if (!response.data.ui || !response.data.ui.nodes) {
+        if (!response?.data?.ui || !response?.data?.ui?.nodes) {
+          // throw out current flowID and start over
+          localStorage.removeItem('flowID');
           this.$root.showLogin();
+
           return;
         }
 
@@ -88,7 +106,7 @@ routes.push({ path: '*', name: 'login', component: {
 
         this.extractWebauthnData(response);
         this.$nextTick(function () {
-          // Wait for next Vue tick to set focus, since at the time of this function call (or even mounted() hook), this element won't be 
+          // Wait for next Vue tick to set focus, since at the time of this function call (or even mounted() hook), this element won't be
           // loaded, due to v-if's that have yet to process.
           if (this.form.method == "totp") {
             const ele = document.getElementById("totp--0");
@@ -105,6 +123,7 @@ routes.push({ path: '*', name: 'login', component: {
         }
       } catch (error) {
         if (error.response && error.response.status == 410) {
+          localStorage.removeItem('flowID');
           document.location = "/login";
         } else {
           this.$root.showError(error);
@@ -126,7 +145,7 @@ routes.push({ path: '*', name: 'login', component: {
         this.webauthnForm.script = response.data.ui.nodes.find(item => item.attributes && item.attributes.id == 'webauthn_script').attributes;
         this.webauthnForm.email = response.data.ui.nodes.find(
           item => item.attributes && item.attributes.name == 'identifier'
-          ).attributes.value;
+        ).attributes.value;
 
         const script = document.createElement('script');
         script.setAttribute('type', this.webauthnForm.script.type);
@@ -135,7 +154,7 @@ routes.push({ path: '*', name: 'login', component: {
         script.setAttribute('referrerpolicy', this.webauthnForm.script.referrerpolicy);
         script.setAttribute('integrity', this.webauthnForm.script.integrity);
         script.setAttribute('nonce', this.webauthnForm.script.nonce);
-        script.setAttribute('src', this.webauthnForm.script.src); 
+        script.setAttribute('src', this.webauthnForm.script.src);
         document.body.appendChild(script);
       }
     },
