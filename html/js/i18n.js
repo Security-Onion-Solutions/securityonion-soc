@@ -722,6 +722,9 @@ const i18n = {
       ERROR_QUERY_FAILED_ELASTICSEARCH: 'The search query encountered a failure within the Elasticsearch cluster. Check SOC logs for details.',
       ERROR_SALT_MANAGE_MEMBER: 'Unable to manage minion; ensure that salt is running on the manager node and check salt logs.',
       ERROR_SALT_RELAY_DOWN: 'Timed out waiting for result. This does not necessarily indicate that the command has failed, as a timeout is often caused by a salt high-state running on the manager. Refresh the browser after a couple of minutes to see if the operation succeeded. If not, try the operation again. If the timeout persists, there may be a problem within the cluster.',
+      ERROR_SALT_SEND_FILE: 'Unable to send file to minion; ensure that salt is running on the manager node and check salt logs.',
+      ERROR_SALT_IMPORT: 'Unable to import file on minion; ensure that salt is running on the manager node and check salt logs.',
+      ERROR_SALT_STATE: 'Unable to sync settings. Ensure that salt is running on the manager node and check salt logs.',
     },
   },
 
