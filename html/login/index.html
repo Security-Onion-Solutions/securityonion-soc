@@ -43,7 +43,7 @@
         <v-spacer></v-spacer>
       </v-footer>
     </v-app>
-    
+
     <script type="text/x-template" id="page-login">
       <v-card class="mt-12 mx-auto" max-width="600">
         <v-card-title class="lighten-4 py-4 title" v-text="i18n.loginTitle"></v-card-title>
@@ -70,7 +70,7 @@
                   <v-text-field name="method" v-model="form.method" class="d-none"></v-text-field>
                 </v-card-text>
                 <v-card-actions>
-                  <v-spacer></v-spacer>      
+                  <v-spacer></v-spacer>
                   <v-btn id="password_submit" type="submit" :disabled="!form.valid" text color="primary" v-text="i18n.login"></v-btn>
                 </v-card-actions>
               </v-form>
@@ -83,7 +83,7 @@
                   <v-text-field name="method" value="webauthn" class="d-none"></v-text-field>
                 </v-card-text>
                 <v-card-actions>
-                  <v-spacer></v-spacer>      
+                  <v-spacer></v-spacer>
                   <v-btn id="webauthn_submit" type="submit" :disabled="!webauthnForm.valid" text color="primary" v-text="i18n.login"></v-btn>
                 </v-card-actions>
               </v-form>
@@ -97,7 +97,7 @@
                   <v-text-field name="method" value="webauthn" class="d-none"></v-text-field>
                 </v-card-text>
                 <v-card-actions>
-                  <v-spacer></v-spacer>      
+                  <v-spacer></v-spacer>
                   <v-btn type="button" name="webauthn_login_trigger" text color="primary" v-text="i18n.login" @click="runWebauthn()"></v-btn>
                 </v-card-actions>
               </v-form>
