@@ -79,10 +79,10 @@ routes.push({ path: '*', name: 'login', component: {
         if (errID) {
           this.$root.authApi.get('/errors?id=' + errID).then(response => {
             let parts = [];
-            if (response.data.error.status) {
+            if (response?.data?.error?.status) {
               parts.push(response.data.error.status);
             }
-            if (response.data.error.reason) {
+            if (response?.data?.error?.reason) {
               parts.push(response.data.error.reason);
             }
 
@@ -91,7 +91,7 @@ routes.push({ path: '*', name: 'login', component: {
         }
 
         response = await this.$root.authApi.get('login/flows?id=' + this.$root.getAuthFlowId());
-        if (!response?.data?.ui || !response?.data?.ui?.nodes) {
+        if (!response?.data?.ui?.nodes) {
           // throw out current flowID and start over
           localStorage.removeItem('flowID');
           this.$root.showLogin();
