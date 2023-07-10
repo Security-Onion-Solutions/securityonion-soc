@@ -70,28 +70,33 @@ routes.push({ path: '*', name: 'login', component: {
     },
     async loadData() {
       try {
-        var response = await this.$root.createApi().get('/login/banner.md?v=' + Date.now());
-        if (response?.data) {
-          this.banner = marked.parse(response.data);
+        const motd = await this.$root.createApi().get('/login/banner.md?v=' + Date.now());
+        if (motd.data) {
+          this.banner = marked.parse(motd.data);
         }
 
         const errID = this.$root.getSearchParam('id')
         if (errID) {
           this.$root.authApi.get('/errors?id=' + errID).then(response => {
+            if (!response || !response.data) return;
             let parts = [];
-            if (response?.data?.error?.status) {
-              parts.push(response.data.error.status);
+
+            const err = response.data.error;
+            if (!err) return;
+
+            if (err.status) {
+              parts.push(err.status);
             }
-            if (response?.data?.error?.reason) {
-              parts.push(response.data.error.reason);
+            if (err.reason) {
+              parts.push(err.reason);
             }
 
             this.$root.showError(parts.join(': '));
           });
         }
 
-        response = await this.$root.authApi.get('login/flows?id=' + this.$root.getAuthFlowId());
-        if (!response?.data?.ui?.nodes) {
+        const flow = await this.$root.authApi.get('login/flows?id=' + this.$root.getAuthFlowId());
+        if (!flow.data.ui || !flow.data.ui.nodes) {
           // throw out current flowID and start over
           localStorage.removeItem('flowID');
           this.$root.showLogin();
@@ -99,12 +104,12 @@ routes.push({ path: '*', name: 'login', component: {
           return;
         }
 
-        this.csrfToken = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'csrf_token').attributes.value;
+        this.csrfToken = flow.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'csrf_token').attributes.value;
 
         // method could be password or totp depending on which phase of login we're in. May be ignored if webauthn is in progress.
-        this.form.method = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'method' && item.attributes.value == 'password') ? 'password' : 'totp';
+        this.form.method = flow.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'method' && item.attributes.value == 'password') ? 'password' : 'totp';
 
-        this.extractWebauthnData(response);
+        this.extractWebauthnData(flow);
         this.$nextTick(function () {
           // Wait for next Vue tick to set focus, since at the time of this function call (or even mounted() hook), this element won't be
           // loaded, due to v-if's that have yet to process.
@@ -115,8 +120,8 @@ routes.push({ path: '*', name: 'login', component: {
             }
           }
         });
-        if (response.data.ui.messages) {
-          const error = response.data.ui.messages.find(item => item.type == "error");
+        if (flow.data.ui.messages) {
+          const error = flow.data.ui.messages.find(item => item.type == "error");
           if (error && error.text) {
             this.$root.showWarning(this.i18n.loginInvalid);
           }
