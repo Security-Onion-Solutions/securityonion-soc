@@ -82,7 +82,7 @@ func (client *Client) SendObject(method string, path string, obj interface{}, re
 				err = json.NewDecoder(resp.Body).Decode(returnedObj)
 				if err == nil {
 					objectAvailable = true
-				} else if err == io.ErrUnexpectedEOF {
+				} else if err == io.EOF {
 					// No object returned
 					err = nil
 				}
