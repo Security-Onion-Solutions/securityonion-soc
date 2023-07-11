@@ -102,6 +102,10 @@ const huntComponent = {
     filterRouteExclude: "",
     filterRouteExact: "",
     filterRouteDrilldown: "",
+    filterRouteLessThan: "",
+    filterRouteLessThanEqual: "",
+    filterRouteGreaterThan: "",
+    filterRouteGreaterThanEqual: "",
     groupByRoute: "",
     groupByNewRoute: "",
     quickActionVisible: false,
@@ -110,6 +114,7 @@ const huntComponent = {
     quickActionEvent: null,
     quickActionField: "",
     quickActionValue: "",
+    quickActionIsNumeric: false,
     escalationMenuVisible: false,
     escalationMenuX: 0,
     escalationMenuY: 0,
@@ -119,6 +124,16 @@ const huntComponent = {
     aggregationActionsEnabled: false,
     actions: [],
     safeStringMaxLength: Number.MAX_SAFE_INTEGER,
+    huntBetweenDialog: false,
+    huntBetweenStart: '',
+    huntBetweenStartEquals: false,
+    huntBetweenEnd: '',
+    huntBetweenEndEquals: false,
+    betweenError: '',
+    equalityOperators: [
+      { text: '<', value: false },
+      { text: '≤', value: true }
+    ],
   }},
   created() {
     this.$root.initializeCharts();
@@ -396,7 +411,7 @@ const huntComponent = {
       // Check for special params that force a re-route
       var reRoute = false;
       if (this.$route.query.filterValue) {
-        this.filterQuery(this.$route.query.filterField, this.$route.query.filterValue, this.$route.query.filterMode);
+        this.filterQuery(this.$route.query.filterField, this.$route.query.filterValue, this.$route.query.filterMode, undefined, this.$route.query.scalar === 'true');
         reRoute = true;
       }
       if (this.$route.query.groupByField) {
@@ -466,10 +481,9 @@ const huntComponent = {
       }
       this.$root.stopLoading();
     },
-    async filterQuery(field, value, filterMode, notify = true) {
+    async filterQuery(field, value, filterMode, notify = true, scalar = false) {
       try {
         const valueType = typeof value;
-        var scalar = false;
         if (valueType == "boolean" || valueType == "number" || valueType == "bigint") {
           scalar = true;
         }
@@ -840,12 +854,16 @@ const huntComponent = {
 
       return { path: this.category, query: queryObj };
     },
-    buildFilterRoute(filterField, filterValue, filterMode) {
+    buildFilterRoute(filterField, filterValue, filterMode, scalar) {
       route = this.buildCurrentRoute()
 
       route.query.filterField = filterField;
       route.query.filterValue = this.subMissing(filterValue);
       route.query.filterMode = filterMode;
+
+      if (arguments.length > 3) {
+        route.query.scalar = scalar ? 'true' : 'false';
+      }
 
       return route;
     },
@@ -937,6 +955,12 @@ const huntComponent = {
         return;
       }
 
+      this.quickActionIsNumeric = this.isNumeric(value);
+      this.huntBetweenStart = '';
+      this.huntBetweenEnd = '';
+      this.huntBetweenStartEquals = false;
+      this.huntBetweenEndEquals = false;
+
       if (value != null && this.canQuery(field)) {
         this.filterRouteInclude = this.buildFilterRoute(field, value, FILTER_INCLUDE);
         this.filterRouteExclude = this.buildFilterRoute(field, value, FILTER_EXCLUDE);
@@ -944,6 +968,15 @@ const huntComponent = {
         this.filterRouteDrilldown = this.buildFilterRoute(field, value, FILTER_DRILLDOWN);
         this.groupByRoute = this.buildGroupByRoute(field);
         this.groupByNewRoute = this.buildGroupByNewRoute(field);
+
+        this.quickActionIsNumeric = this.isNumeric(value)
+        if (this.quickActionIsNumeric) {
+          this.filterRouteLessThan = this.buildFilterRoute(field, "<" + value, FILTER_INCLUDE, true);
+          this.filterRouteLessThanEqual = this.buildFilterRoute(field, "<=" + value, FILTER_INCLUDE, true);
+          this.filterRouteGreaterThan = this.buildFilterRoute(field, ">" + value, FILTER_INCLUDE, true);
+          this.filterRouteGreaterThanEqual = this.buildFilterRoute(field, ">=" + value, FILTER_INCLUDE, true);
+        }
+
         var route = this;
         this.actions.forEach(function(action, index) {
           action.enabled = true;
@@ -1743,7 +1776,52 @@ const huntComponent = {
       });
 
       this.relativeTimeUnit = value;
-    }
+    },
+    isNumeric(str) {
+      return !isNaN(str) && !isNaN(parseFloat(str));
+    },
+    showHuntBetweenDialog() {
+      this.huntBetweenDialog = true;
+      this.quickActionIsNumeric = false;
+    },
+    cancelHuntBetweenDialog() {
+      this.huntBetweenDialog = false;
+    },
+    huntBetween() {
+      this.betweenError = '';
+      const start = parseFloat(this.huntBetweenStart);
+      const end = parseFloat(this.huntBetweenEnd);
+
+      if (isNaN(start) || isNaN(end)) {
+        this.betweenError = 'Start and End values must be numeric.';
+        return;
+      }
+
+      if (start > end) {
+        this.betweenError = 'Start value must come before End value.';
+        return;
+      }
+
+      let range = '';
+
+      if (this.huntBetweenStartEquals) {
+        range += '[';
+      } else {
+        range += '{';
+      }
+
+      range += start + ' TO ' + end;
+
+      if (this.huntBetweenEndEquals) {
+        range += ']';
+      } else {
+        range += '}';
+      }
+
+      this.$router.push(this.buildFilterRoute(this.quickActionField, range, FILTER_INCLUDE, true));
+
+      this.huntBetweenDialog = false;
+    },
   }
 };
 
