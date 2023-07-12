@@ -102,6 +102,10 @@ const huntComponent = {
     filterRouteExclude: "",
     filterRouteExact: "",
     filterRouteDrilldown: "",
+    filterRouteLessThan: "",
+    filterRouteLessThanEqual: "",
+    filterRouteGreaterThan: "",
+    filterRouteGreaterThanEqual: "",
     groupByRoute: "",
     groupByNewRoute: "",
     quickActionVisible: false,
@@ -110,6 +114,7 @@ const huntComponent = {
     quickActionEvent: null,
     quickActionField: "",
     quickActionValue: "",
+    quickActionIsNumeric: false,
     escalationMenuVisible: false,
     escalationMenuX: 0,
     escalationMenuY: 0,
@@ -119,6 +124,16 @@ const huntComponent = {
     aggregationActionsEnabled: false,
     actions: [],
     safeStringMaxLength: Number.MAX_SAFE_INTEGER,
+    betweenDialogVisible: false,
+    betweenStart: '',
+    betweenStartEquals: false,
+    betweenEnd: '',
+    betweenEndEquals: false,
+    betweenError: '',
+    equalityOperators: [
+      { text: '<', value: false },
+      { text: '≤', value: true }
+    ],
   }},
   created() {
     this.$root.initializeCharts();
@@ -396,7 +411,7 @@ const huntComponent = {
       // Check for special params that force a re-route
       var reRoute = false;
       if (this.$route.query.filterValue) {
-        this.filterQuery(this.$route.query.filterField, this.$route.query.filterValue, this.$route.query.filterMode);
+        this.filterQuery(this.$route.query.filterField, this.$route.query.filterValue, this.$route.query.filterMode, undefined, this.$route.query.scalar === 'true');
         reRoute = true;
       }
       if (this.$route.query.groupByField) {
@@ -466,10 +481,9 @@ const huntComponent = {
       }
       this.$root.stopLoading();
     },
-    async filterQuery(field, value, filterMode, notify = true) {
+    async filterQuery(field, value, filterMode, notify = true, scalar = false) {
       try {
         const valueType = typeof value;
-        var scalar = false;
         if (valueType == "boolean" || valueType == "number" || valueType == "bigint") {
           scalar = true;
         }
@@ -840,12 +854,16 @@ const huntComponent = {
 
       return { path: this.category, query: queryObj };
     },
-    buildFilterRoute(filterField, filterValue, filterMode) {
+    buildFilterRoute(filterField, filterValue, filterMode, scalar) {
       route = this.buildCurrentRoute()
 
       route.query.filterField = filterField;
       route.query.filterValue = this.subMissing(filterValue);
       route.query.filterMode = filterMode;
+
+      if (arguments.length > 3) {
+        route.query.scalar = scalar ? 'true' : 'false';
+      }
 
       return route;
     },
@@ -937,6 +955,20 @@ const huntComponent = {
         return;
       }
 
+      this.quickActionIsNumeric = this.isNumeric(value);
+      if (this.quickActionIsNumeric) {
+        this.filterRouteLessThan = this.buildFilterRoute(field, "<" + value, FILTER_INCLUDE, true);
+        this.filterRouteLessThanEqual = this.buildFilterRoute(field, "<=" + value, FILTER_INCLUDE, true);
+        this.filterRouteGreaterThan = this.buildFilterRoute(field, ">" + value, FILTER_INCLUDE, true);
+        this.filterRouteGreaterThanEqual = this.buildFilterRoute(field, ">=" + value, FILTER_INCLUDE, true);
+        this.betweenStart = '';
+        this.betweenEnd = '';
+        this.betweenStartEquals = false;
+        this.betweenEndEquals = false;
+      }
+
+
+
       if (value != null && this.canQuery(field)) {
         this.filterRouteInclude = this.buildFilterRoute(field, value, FILTER_INCLUDE);
         this.filterRouteExclude = this.buildFilterRoute(field, value, FILTER_EXCLUDE);
@@ -944,6 +976,7 @@ const huntComponent = {
         this.filterRouteDrilldown = this.buildFilterRoute(field, value, FILTER_DRILLDOWN);
         this.groupByRoute = this.buildGroupByRoute(field);
         this.groupByNewRoute = this.buildGroupByNewRoute(field);
+
         var route = this;
         this.actions.forEach(function(action, index) {
           action.enabled = true;
@@ -1743,7 +1776,54 @@ const huntComponent = {
       });
 
       this.relativeTimeUnit = value;
-    }
+    },
+    isNumeric(str) {
+      return !isNaN(str) && !isNaN(parseFloat(str));
+    },
+    showBetweenDialog() {
+      this.betweenDialogVisible = true;
+      this.quickActionIsNumeric = false;
+    },
+    cancelBetweenDialog() {
+      this.betweenDialogVisible = false;
+      this.quickActionIsNumeric = false;
+    },
+    huntBetween() {
+      this.betweenError = '';
+      const start = parseFloat(this.betweenStart);
+      const end = parseFloat(this.betweenEnd);
+
+      if (isNaN(start) || isNaN(end)) {
+        this.betweenError = this.i18n.startEndNumericErr;
+        return;
+      }
+
+      if (start > end) {
+        this.betweenError = this.i18n.startEndOrderErr;
+        return;
+      }
+
+      let range = '';
+
+      if (this.betweenStartEquals) {
+        range += '[';
+      } else {
+        range += '{';
+      }
+
+      range += start + ' TO ' + end;
+
+      if (this.betweenEndEquals) {
+        range += ']';
+      } else {
+        range += '}';
+      }
+
+      this.betweenDialogVisible = false;
+      this.quickActionIsNumeric = false;
+
+      this.$router.push(this.buildFilterRoute(this.quickActionField, range, FILTER_INCLUDE, true));
+    },
   }
 };
 
