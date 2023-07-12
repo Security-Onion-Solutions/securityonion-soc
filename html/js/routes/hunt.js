@@ -124,11 +124,11 @@ const huntComponent = {
     aggregationActionsEnabled: false,
     actions: [],
     safeStringMaxLength: Number.MAX_SAFE_INTEGER,
-    huntBetweenDialog: false,
-    huntBetweenStart: '',
-    huntBetweenStartEquals: false,
-    huntBetweenEnd: '',
-    huntBetweenEndEquals: false,
+    showBetweenDialog: false,
+    betweenStart: '',
+    betweenStartEquals: false,
+    betweenEnd: '',
+    betweenEndEquals: false,
     betweenError: '',
     equalityOperators: [
       { text: '<', value: false },
@@ -956,10 +956,18 @@ const huntComponent = {
       }
 
       this.quickActionIsNumeric = this.isNumeric(value);
-      this.huntBetweenStart = '';
-      this.huntBetweenEnd = '';
-      this.huntBetweenStartEquals = false;
-      this.huntBetweenEndEquals = false;
+      if (this.quickActionIsNumeric) {
+        this.filterRouteLessThan = this.buildFilterRoute(field, "<" + value, FILTER_INCLUDE, true);
+        this.filterRouteLessThanEqual = this.buildFilterRoute(field, "<=" + value, FILTER_INCLUDE, true);
+        this.filterRouteGreaterThan = this.buildFilterRoute(field, ">" + value, FILTER_INCLUDE, true);
+        this.filterRouteGreaterThanEqual = this.buildFilterRoute(field, ">=" + value, FILTER_INCLUDE, true);
+        this.betweenStart = '';
+        this.betweenEnd = '';
+        this.betweenStartEquals = false;
+        this.betweenEndEquals = false;
+      }
+
+
 
       if (value != null && this.canQuery(field)) {
         this.filterRouteInclude = this.buildFilterRoute(field, value, FILTER_INCLUDE);
@@ -968,14 +976,6 @@ const huntComponent = {
         this.filterRouteDrilldown = this.buildFilterRoute(field, value, FILTER_DRILLDOWN);
         this.groupByRoute = this.buildGroupByRoute(field);
         this.groupByNewRoute = this.buildGroupByNewRoute(field);
-
-        this.quickActionIsNumeric = this.isNumeric(value)
-        if (this.quickActionIsNumeric) {
-          this.filterRouteLessThan = this.buildFilterRoute(field, "<" + value, FILTER_INCLUDE, true);
-          this.filterRouteLessThanEqual = this.buildFilterRoute(field, "<=" + value, FILTER_INCLUDE, true);
-          this.filterRouteGreaterThan = this.buildFilterRoute(field, ">" + value, FILTER_INCLUDE, true);
-          this.filterRouteGreaterThanEqual = this.buildFilterRoute(field, ">=" + value, FILTER_INCLUDE, true);
-        }
 
         var route = this;
         this.actions.forEach(function(action, index) {
@@ -1780,31 +1780,32 @@ const huntComponent = {
     isNumeric(str) {
       return !isNaN(str) && !isNaN(parseFloat(str));
     },
-    showHuntBetweenDialog() {
-      this.huntBetweenDialog = true;
+    showBetweenDialog() {
+      this.showBetweenDialog = true;
       this.quickActionIsNumeric = false;
     },
-    cancelHuntBetweenDialog() {
-      this.huntBetweenDialog = false;
+    cancelBetweenDialog() {
+      this.showBetweenDialog = false;
+      this.quickActionIsNumeric = false;
     },
     huntBetween() {
       this.betweenError = '';
-      const start = parseFloat(this.huntBetweenStart);
-      const end = parseFloat(this.huntBetweenEnd);
+      const start = parseFloat(this.betweenStart);
+      const end = parseFloat(this.betweenEnd);
 
       if (isNaN(start) || isNaN(end)) {
-        this.betweenError = 'Start and End values must be numeric.';
+        this.betweenError = this.i18n.startEndNumericErr;
         return;
       }
 
       if (start > end) {
-        this.betweenError = 'Start value must come before End value.';
+        this.betweenError = this.i18n.startEndOrderErr;
         return;
       }
 
       let range = '';
 
-      if (this.huntBetweenStartEquals) {
+      if (this.betweenStartEquals) {
         range += '[';
       } else {
         range += '{';
@@ -1812,15 +1813,16 @@ const huntComponent = {
 
       range += start + ' TO ' + end;
 
-      if (this.huntBetweenEndEquals) {
+      if (this.betweenEndEquals) {
         range += ']';
       } else {
         range += '}';
       }
 
-      this.$router.push(this.buildFilterRoute(this.quickActionField, range, FILTER_INCLUDE, true));
+      this.showBetweenDialog = false;
+      this.quickActionIsNumeric = false;
 
-      this.huntBetweenDialog = false;
+      this.$router.push(this.buildFilterRoute(this.quickActionField, range, FILTER_INCLUDE, true));
     },
   }
 };

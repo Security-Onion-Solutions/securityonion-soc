@@ -743,13 +743,13 @@
                 {{ i18n.groupNew }}
               </v-list-item-title>
             </v-list-item>
-            <v-list-group dense @click.stop class="flex-group" v-if="quickActionIsNumeric">
+            <v-list-group dense @click.stop class="flex-group" v-if="quickActionVisible && quickActionIsNumeric">
               <template v-slot:activator>
                 <v-list-item-icon>
                   <v-icon :alt="i18n.groupNumeric" color="white">fa-calculator</v-icon>
                 </v-list-item-icon>
                 <v-list-item-content>
-                  <v-list-item-title>Numeric Ops</v-list-item-title>
+                  <v-list-item-title>{{ i18n.numericOps }}</v-list-item-title>
                 </v-list-item-content>
               </template>
               <v-list-item dense id="filterLessThan" class="half-width" :to="filterRouteLessThan">
@@ -773,9 +773,9 @@
                   &ge;
                 </v-list-item-title>
               </v-list-item>
-              <v-list-item dense id="filterBetween" @click="showHuntBetweenDialog()">
+              <v-list-item dense id="filterBetween" @click="showBetweenDialog()">
                 <v-list-item-title class="white--text text-center">
-                  Between
+                  {{ i18n.betweenOp }}
                 </v-list-item-title>
               </v-list-item>
             </v-list-group>
@@ -865,25 +865,25 @@
           </v-list>
         </v-menu>
 
-        <v-dialog v-model="huntBetweenDialog" persistent max-width="800">
+        <v-dialog v-model="showBetweenDialog" persistent max-width="800">
           <v-card>
-            <v-card-title class="text-h5" v-text="'Between'" />
+            <v-card-title class="text-h5" v-text="i18n.betweenOp" />
             <v-card-text>
               <div class="between-body">
               <v-responsive class="inline" max-width="120px">
-                <v-text-field v-model="huntBetweenStart" label="Start" />
+                <v-text-field v-model="betweenStart" label="Start" />
               </v-responsive>
               <v-responsive class="inline" max-width="50px">
-                <v-select v-model="huntBetweenStartEquals" :items="equalityOperators"></v-select>
+                <v-select v-model="betweenStartEquals" :items="equalityOperators"></v-select>
               </v-responsive>
               <v-responsive class="inline text-center" max-width="290px">
                 {{ quickActionField }}
               </v-responsive>
               <v-responsive class="inline" max-width="50px">
-                <v-select v-model="huntBetweenEndEquals" :items="equalityOperators"></v-select>
+                <v-select v-model="betweenEndEquals" :items="equalityOperators"></v-select>
               </v-responsive>
               <v-responsive class="inline" max-width="120px">
-                <v-text-field v-model="huntBetweenEnd" label="End" />
+                <v-text-field v-model="betweenEnd" label="End" />
               </v-responsive>
             </div>
             <div v-if="betweenError" class="red--text">
@@ -893,7 +893,7 @@
             <v-card-actions>
               <v-spacer></v-spacer>
               <v-btn text id="hunt-between-proceed-button" @click="huntBetween()" v-text="i18n.accept" />
-              <v-btn text id="hunt-between-cancel-button" @click="cancelHuntBetweenDialog()" v-text="i18n.cancel" />
+              <v-btn text id="hunt-between-cancel-button" @click="cancelBetweenDialog()" v-text="i18n.cancel" />
             </v-card-actions>
           </v-card>
         </v-dialog>
