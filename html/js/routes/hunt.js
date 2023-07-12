@@ -124,7 +124,7 @@ const huntComponent = {
     aggregationActionsEnabled: false,
     actions: [],
     safeStringMaxLength: Number.MAX_SAFE_INTEGER,
-    showBetweenDialog: false,
+    betweenDialogVisible: false,
     betweenStart: '',
     betweenStartEquals: false,
     betweenEnd: '',
@@ -1780,12 +1780,12 @@ const huntComponent = {
     isNumeric(str) {
       return !isNaN(str) && !isNaN(parseFloat(str));
     },
-    ShowBetweenDialog() {
-      this.showBetweenDialog = true;
+    showBetweenDialog() {
+      this.betweenDialogVisible = true;
       this.quickActionIsNumeric = false;
     },
     cancelBetweenDialog() {
-      this.showBetweenDialog = false;
+      this.betweenDialogVisible = false;
       this.quickActionIsNumeric = false;
     },
     huntBetween() {
@@ -1819,7 +1819,7 @@ const huntComponent = {
         range += '}';
       }
 
-      this.showBetweenDialog = false;
+      this.betweenDialogVisible = false;
       this.quickActionIsNumeric = false;
 
       this.$router.push(this.buildFilterRoute(this.quickActionField, range, FILTER_INCLUDE, true));

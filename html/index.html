@@ -773,7 +773,7 @@
                   &ge;
                 </v-list-item-title>
               </v-list-item>
-              <v-list-item dense id="filterBetween" @click="ShowBetweenDialog()">
+              <v-list-item dense id="filterBetween" @click="showBetweenDialog()">
                 <v-list-item-title class="white--text text-center">
                   {{ i18n.betweenOp }}
                 </v-list-item-title>
@@ -865,7 +865,7 @@
           </v-list>
         </v-menu>
 
-        <v-dialog v-model="showBetweenDialog" persistent max-width="800">
+        <v-dialog v-model="betweenDialogVisible" persistent max-width="800">
           <v-card>
             <v-card-title class="text-h5" v-text="i18n.betweenOp" />
             <v-card-text>

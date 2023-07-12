@@ -853,3 +853,36 @@ test('autoRefresh query string', () => {
   expect(comp.autoRefreshEnabled).toBe(false);
   expect(comp.autoRefreshInterval).toBe(0);
 });
+
+test('isNumeric', () => {
+  let table = [
+    { value: '', expected: false },
+    { value: 'foo', expected: false },
+    { value: '1', expected: true },
+    { value: '1.9', expected: true },
+    { value: '3.1.4', expected: false },
+    { value: '6,8', expected: false },
+    { value: '-32', expected: true },
+    { value: '-0.7', expected: true },
+    { value: '-1.2.3', expected: false },
+    { value: '1-1', expected: false },
+    { value: '6.4-5', expected: false },
+    { value: '--0', expected: false },
+    { value: NaN, expected: false },
+  ];
+
+  for (let i = 0; i < table.length; i++) {
+    expect(comp.isNumeric(table[i].value)).toBe(table[i].expected);
+  }
+});
+
+test('buildFilterRoute', () => {
+  let route = comp.buildFilterRoute('@version', '1', 'INCLUDE');
+  expect(route.query).toEqual(expect.not.objectContaining({scalar: expect.anything()}));
+
+  route = comp.buildFilterRoute('@version', '1', 'INCLUDE', false);
+  expect(route.query).toEqual(expect.objectContaining({scalar: expect.anything()}));
+
+  route = comp.buildFilterRoute('@version', '1', 'INCLUDE', true);
+  expect(route.query).toEqual(expect.objectContaining({scalar: expect.anything()}));
+});
