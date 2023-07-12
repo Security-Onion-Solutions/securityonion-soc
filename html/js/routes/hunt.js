@@ -1780,7 +1780,7 @@ const huntComponent = {
     isNumeric(str) {
       return !isNaN(str) && !isNaN(parseFloat(str));
     },
-    showBetweenDialog() {
+    ShowBetweenDialog() {
       this.showBetweenDialog = true;
       this.quickActionIsNumeric = false;
     },

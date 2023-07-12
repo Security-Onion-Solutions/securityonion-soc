@@ -773,7 +773,7 @@
                   &ge;
                 </v-list-item-title>
               </v-list-item>
-              <v-list-item dense id="filterBetween" @click="showBetweenDialog()">
+              <v-list-item dense id="filterBetween" @click="ShowBetweenDialog()">
                 <v-list-item-title class="white--text text-center">
                   {{ i18n.betweenOp }}
                 </v-list-item-title>
@@ -871,19 +871,19 @@
             <v-card-text>
               <div class="between-body">
               <v-responsive class="inline" max-width="120px">
-                <v-text-field v-model="betweenStart" label="Start" />
+                <v-text-field v-model="betweenStart" id="betweenStart" label="Start" />
               </v-responsive>
               <v-responsive class="inline" max-width="50px">
-                <v-select v-model="betweenStartEquals" :items="equalityOperators"></v-select>
+                <v-select v-model="betweenStartEquals" id="betweenStartEquals" :items="equalityOperators"></v-select>
               </v-responsive>
               <v-responsive class="inline text-center" max-width="290px">
                 {{ quickActionField }}
               </v-responsive>
               <v-responsive class="inline" max-width="50px">
-                <v-select v-model="betweenEndEquals" :items="equalityOperators"></v-select>
+                <v-select v-model="betweenEndEquals" id="betweenEndEquals" :items="equalityOperators"></v-select>
               </v-responsive>
               <v-responsive class="inline" max-width="120px">
-                <v-text-field v-model="betweenEnd" label="End" />
+                <v-text-field v-model="betweenEnd" id="betweenEnd" label="End" />
               </v-responsive>
             </div>
             <div v-if="betweenError" class="red--text">
