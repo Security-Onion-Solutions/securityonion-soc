@@ -886,3 +886,27 @@ test('buildFilterRoute', () => {
   route = comp.buildFilterRoute('@version', '1', 'INCLUDE', true);
   expect(route.query).toEqual(expect.objectContaining({scalar: expect.anything()}));
 });
+
+test('huntBetween', () => {
+  let table = [
+    { inputs: [1, false, false, 10], expErr: '', expQuery: {"el": 100, "filterField": "", "filterMode": "INCLUDE", "filterValue": "{1 TO 10}", "gl": 10, "q": "", "rt": 24, "rtu": "hours", "scalar": "true", "z": "" }},
+    { inputs: [1, true, false, 10], expErr: '', expQuery: { "el": 100, "filterField": "", "filterMode": "INCLUDE", "filterValue": "[1 TO 10}", "gl": 10, "q": "", "rt": 24, "rtu": "hours", "scalar": "true", "z": "" }},
+    { inputs: [1, false, true, 10], expErr: '', expQuery: {"el": 100, "filterField": "", "filterMode": "INCLUDE", "filterValue": "{1 TO 10]", "gl": 10, "q": "", "rt": 24, "rtu": "hours", "scalar": "true", "z": "" }},
+    { inputs: [1, true, true, 10], expErr: '', expQuery: { "el": 100, "filterField": "", "filterMode": "INCLUDE", "filterValue": "[1 TO 10]", "gl": 10, "q": "", "rt": 24, "rtu": "hours", "scalar": "true", "z": "" } },
+    { inputs: [1, false, false, 0], expErr: comp.i18n.startEndOrderErr },
+    { inputs: ['x', true, true, 'y'], expErr: comp.i18n.startEndNumericErr },
+  ];
+
+  for (let i = 0; i < table.length; i++) {
+    [comp.betweenStart, comp.betweenStartEquals, comp.betweenEndEquals, comp.betweenEnd] = table[i].inputs;
+    comp.$router = [];
+
+    comp.huntBetween();
+
+    expect(comp.betweenError).toBe(table[i].expErr);
+
+    if (table[i].expQuery || comp.$router.length !== 0) {
+      expect(comp.$router[0].query).toEqual(table[i].expQuery);
+    }
+  }
+});
