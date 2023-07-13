@@ -241,7 +241,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     },
     loadAssociations() {
       this.reloadAssociation("comments");
-      this.reloadAssociation("tasks");
+      // this.reloadAssociation("tasks"); currently unavailable
       this.reloadAssociation("attachments");
       this.reloadAssociation("evidence");
       this.reloadAssociation("events");
