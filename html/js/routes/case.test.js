@@ -127,7 +127,7 @@ test('loadAssociations', () => {
   comp.loadAssociations();
   
   expect(comp.loadAssociation).toHaveBeenCalledWith('comments');
-  expect(comp.loadAssociation).toHaveBeenCalledWith('tasks');
+  expect(comp.loadAssociation).toHaveBeenCalledWith('attachments');
   expect(comp.loadAssociation).toHaveBeenCalledWith('evidence');
   expect(comp.loadAssociation).toHaveBeenCalledWith('events');
   expect(comp.loadAssociation).toHaveBeenCalledWith('history');
