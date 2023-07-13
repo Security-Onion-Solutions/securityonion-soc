@@ -743,6 +743,42 @@
                 {{ i18n.groupNew }}
               </v-list-item-title>
             </v-list-item>
+            <v-list-group dense @click.stop class="flex-group" v-if="quickActionVisible && quickActionIsNumeric">
+              <template v-slot:activator>
+                <v-list-item-icon>
+                  <v-icon :alt="i18n.groupNumeric" color="white">fa-calculator</v-icon>
+                </v-list-item-icon>
+                <v-list-item-content>
+                  <v-list-item-title>{{ i18n.numericOps }}</v-list-item-title>
+                </v-list-item-content>
+              </template>
+              <v-list-item dense id="filterLessThan" class="half-width" :to="filterRouteLessThan">
+                <v-list-item-title class="white--text">
+                  &lt;
+                </v-list-item-title>
+              </v-list-item>
+              <v-list-item dense id="filterLessThanEqual" class="half-width" :to="filterRouteLessThanEqual">
+                <v-list-item-title class="white--text">
+                  &le;
+                </v-list-item-title>
+              </v-list-item>
+              <div class="flex-break"></div> <!-- line break -->
+              <v-list-item dense id="filterGreaterThan" class="half-width" :to="filterRouteGreaterThan">
+                <v-list-item-title class="white--text">
+                  &gt;
+                </v-list-item-title>
+              </v-list-item>
+              <v-list-item dense id="filterGreaterThanEqual" class="half-width" :to="filterRouteGreaterThanEqual">
+                <v-list-item-title class="white--text">
+                  &ge;
+                </v-list-item-title>
+              </v-list-item>
+              <v-list-item dense id="filterBetween" @click="showBetweenDialog()">
+                <v-list-item-title class="white--text text-center">
+                  {{ i18n.betweenOp }}
+                </v-list-item-title>
+              </v-list-item>
+            </v-list-group>
             <v-list-group dense @click.stop>
               <template v-slot:activator>
                 <v-list-item-icon>
@@ -829,6 +865,38 @@
           </v-list>
         </v-menu>
 
+        <v-dialog v-model="betweenDialogVisible" persistent max-width="800">
+          <v-card>
+            <v-card-title class="text-h5" v-text="i18n.betweenOp" />
+            <v-card-text>
+              <div class="between-body">
+              <v-responsive class="inline" max-width="120px">
+                <v-text-field v-model="betweenStart" id="betweenStart" label="Start" />
+              </v-responsive>
+              <v-responsive class="inline" max-width="50px">
+                <v-select v-model="betweenStartEquals" id="betweenStartEquals" :items="equalityOperators"></v-select>
+              </v-responsive>
+              <v-responsive class="inline text-center" max-width="290px">
+                {{ quickActionField }}
+              </v-responsive>
+              <v-responsive class="inline" max-width="50px">
+                <v-select v-model="betweenEndEquals" id="betweenEndEquals" :items="equalityOperators"></v-select>
+              </v-responsive>
+              <v-responsive class="inline" max-width="120px">
+                <v-text-field v-model="betweenEnd" id="betweenEnd" label="End" />
+              </v-responsive>
+            </div>
+            <div v-if="betweenError" class="red--text">
+              {{ betweenError }}
+            </div>
+            </v-card-text>
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn text id="hunt-between-proceed-button" @click="huntBetween()" v-text="i18n.accept" />
+              <v-btn text id="hunt-between-cancel-button" @click="cancelBetweenDialog()" v-text="i18n.cancel" />
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
       </v-container>
     </script>
 
