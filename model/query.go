@@ -211,6 +211,12 @@ func (segment *SearchSegment) AddFilter(field string, value string, scalar bool,
 		field = field[3:]
 	}
 
+	if value == "__missing__" {
+		value = field
+		field = "_exists_"
+		inclusive = !inclusive
+	}
+
 	if condense {
 		// Combine existing terms into a single grouped term
 		condensed, _ := NewQueryTerm(segment.String())

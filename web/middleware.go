@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"runtime"
 	"time"
 
@@ -71,7 +72,7 @@ func ReadJson(request *http.Request, obj interface{}) error {
 // Respond is a helper that bookends the middleware process by logging the
 // response. `obj` can be any type, but if it matches the error interface, it
 // will be logged and the statusCode adjusted accordingly.
-func Respond(w http.ResponseWriter, r *http.Request, statusCode int, obj any) {
+func Respond(w http.ResponseWriter, r *http.Request, statusCode int, obj interface{}) {
 	var contentLength int
 
 	ctx := r.Context()
@@ -99,7 +100,7 @@ func Respond(w http.ResponseWriter, r *http.Request, statusCode int, obj any) {
 			w.WriteHeader(statusCode)
 			_, _ = w.Write(bytes)
 		}
-	} else if obj != nil {
+	} else if !isNil(obj) {
 		switch data := obj.(type) {
 		case []byte:
 			contentLength = len(data)
@@ -120,6 +121,10 @@ func Respond(w http.ResponseWriter, r *http.Request, statusCode int, obj any) {
 				_, _ = w.Write(bytes)
 			}
 		}
+	} else {
+		if w != nil {
+			w.WriteHeader(statusCode)
+		}
 	}
 
 	fnc, file, line := getCallerDetails(0)
@@ -132,12 +137,12 @@ func Respond(w http.ResponseWriter, r *http.Request, statusCode int, obj any) {
 	log.WithFields(log.Fields{
 		"remoteAddr":    r.RemoteAddr,
 		"sourceIp":      GetSourceIp(r),
-		"path":          r.URL.Path,
-		"query":         r.URL.Query(),
+		"requestPath":   r.URL.Path,
+		"requestQuery":  r.URL.Query(),
 		"impl":          impl,
 		"statusCode":    statusCode,
 		"contentLength": contentLength,
-		"method":        r.Method,
+		"requestMethod": r.Method,
 		"elapsedMs":     elapsed,
 		"requestId":     ctx.Value(ContextKeyRequestId),
 		"requestor":     ctx.Value(ContextKeyRequestor),
@@ -172,4 +177,15 @@ func getCallerDetails(skip int) (funcName string, file string, line int) {
 	_, file, line, _ = runtime.Caller(2 + skip)
 
 	return f.Function, file, line
+}
+
+func isNil(i interface{}) bool {
+	if i == nil {
+		return true
+	}
+	switch reflect.TypeOf(i).Kind() {
+	case reflect.Ptr, reflect.Map, reflect.Array, reflect.Chan, reflect.Slice:
+		return reflect.ValueOf(i).IsNil()
+	}
+	return false
 }

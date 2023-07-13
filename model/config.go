@@ -43,5 +43,5 @@ func IsValidMinionId(id string) bool {
 }
 
 func IsValidSettingId(id string) bool {
-	return regexp.MustCompile(`^[a-zA-Z0-9:_.-]+$`).MatchString(id)
+	return regexp.MustCompile(`^[a-zA-Z0-9\*\/:_.-]+$`).MatchString(id)
 }

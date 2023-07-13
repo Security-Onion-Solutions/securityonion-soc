@@ -15,7 +15,7 @@
     <link rel="mask-icon" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
     <link rel="alternate icon" class="so-favicon" type="image/png" href="images/favicon/onion.png?v=VERSION_PLACEHOLDER">
     <link rel="icon" class="so-favicon" type="image/svg+xml" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
-    <link rel="stylesheet" href="css/external/vuetify-v2.6.10.min.css">
+    <link rel="stylesheet" href="css/external/vuetify-v2.7.0.min.css">
     <link rel="stylesheet" href="css/external/all-6.2.0.min.css">
     <link rel="stylesheet" href="css/external/daterangepicker-3.14.1.css">
     <link rel="stylesheet" href="css/app.css?v=VERSION_PLACEHOLDER">
@@ -246,7 +246,7 @@
           </div>
           <div class="mt-2 no-underline">
             {{ i18n.huntForError }}
-            <router-link :to="{ name: 'hunt', query: {q: i18n.huntForErrorQuery, t: moment().subtract(1, 'hours').format(i18n.timePickerFormat) + ' - ' + moment().format(i18n.timePickerFormat) }}" class="text-decoration-none error-hunt">
+            <router-link :to="{ name: 'hunt', query: {q: i18n.huntForErrorQuery, rt: 5, rtu: 'minutes', socExcludeToggle: false }}" class="text-decoration-none error-hunt">
               <v-icon :title="i18n.huntForError">fa-crosshairs</v-icon>
             </router-link>
           </div>
@@ -259,7 +259,7 @@
           </template>
           {{ warningMessage }}
         </v-snackbar>
-        <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" v-text="infoMessage"></v-alert>
+        <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" v-html="infoMessage"></v-alert>
         <v-snackbar id="tip" top centered rounded close :timeout="tipTimeout" v-model="tip" color="info">
           <template v-slot:action="{ attrs }">
             <v-btn icon small v-bind="attrs" @click="tip = false">
@@ -1118,8 +1118,8 @@
                   <td v-text="props.item.note" class="d-none d-lg-table-cell"></td>
                   <td v-text="$root.formatStringArray(props.item.roles)" class="d-none d-lg-table-cell"></td>
                   <td>
-                    <v-icon v-if="props.item.mfaStatus == 'enabled' && props.item.status != 'locked'" color="success" :title="i18n.totpEnabled">fa-user-shield</v-icon>
-                    <v-icon v-if="props.item.mfaStatus != 'enabled' && props.item.status != 'locked'" :title="i18n.loginEnabled">fa-user</v-icon>
+                    <v-icon v-if="props.item.totpStatus == 'enabled' && props.item.status != 'locked'" color="success" :title="i18n.totpEnabled">fa-user-shield</v-icon>
+                    <v-icon v-if="props.item.totpStatus != 'enabled' && props.item.status != 'locked'" :title="i18n.loginEnabled">fa-user</v-icon>
                     <v-icon v-if="props.item.status == 'locked'" color="grey" :title="i18n.loginDisabled">fa-user-slash</v-icon>
                     <v-icon v-if="!props.item.passwordChanged" color="warning" class="px-1" :title="i18n.passwordNeedsChanged">fa-exclamation-triangle</v-icon>
                   </td>
@@ -2862,8 +2862,18 @@
     <script type="text/x-template" id="page-grid">
       <v-container fluid>
         <v-row>
-          <v-col cols="9">
+          <v-col cols="4">
             <h2 v-text="i18n.grid"></h2>
+          </v-col>
+          <v-col cols="5">
+            <v-expansion-panels>
+              <v-expansion-panel>
+                <v-expansion-panel-header id="gridOptionsHeader">{{i18n.options}}</v-expansion-panel-header>
+                <v-expansion-panel-content>
+                  <v-select id="gridTimezone" @change="saveTimezone" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint prepend-icon="fa-user-clock"></v-select>
+                </v-expansion-panel-content>
+              </v-expansion-panel>
+            </v-expansion-panels>
           </v-col>
           <v-col cols="3" align="end">
             <h4 v-if="metricsEnabled">{{ i18n.gridEps }} {{ gridEps | formatCount }}</h4>
@@ -2906,8 +2916,8 @@
                     <span v-if="props.item.metricsEnabled" :id="'nodeEps_' + props.item.id">{{ props.item.productionEps | formatCount }} / {{ props.item.consumptionEps | formatCount }}</span>
                     <span v-if="!props.item.metricsEnabled" :id="'nodeEps_' + props.item.id">{{ i18n.na }}</span>
                   </td>
-                  <td :id="'nodeUpdateTime_' + props.item.id" class="d-none d-lg-table-cell">{{ props.item.updateTime | formatTimestamp }}</td>
-                  <td :id="'nodeEpochTime_' + props.item.id" class="d-none d-lg-table-cell">{{ props.item.epochTime | formatTimestamp }}</td>
+                  <td :id="'nodeUpdateTime_' + props.item.id" class="d-none d-lg-table-cell">{{ props.item.updateTime | toTZ }}</td>
+                  <td :id="'nodeEpochTime_' + props.item.id" class="d-none d-lg-table-cell">{{ props.item.epochTime | toTZ }}</td>
                   <td :id="'nodeUptimeSeconds_' + props.item.id" class="d-none d-lg-table-cell">{{ props.item.uptimeSeconds | formatDuration }}</td>
                   <td class="d-none d-lg-table-cell"><v-chip :id="'nodeStatus_' + props.item.id" class="nodeStatus" @click="expand(props.item)" :color="props.item.status | colorNodeStatus">{{ $root.localizeMessage(props.item.status) }}</v-chip></td>
                 </tr>
@@ -2947,11 +2957,11 @@
                               </div>
                               <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.dateDataEpoch }}:</span>
-                                <span class="filter value">{{ item.epochTime | formatTimestamp }}</span>
+                                <span class="filter value">{{ item.epochTime | toTZ }}</span>
                               </div>
                               <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.dateUpdated }}:</span>
-                                <span class="filter value">{{ item.updateTime | formatTimestamp }}</span>
+                                <span class="filter value">{{ item.updateTime | toTZ }}</span>
                               </div>
                               <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.uptime }}:</span>
@@ -2998,6 +3008,9 @@
                                 </a>
                                 <v-btn v-if="canTest(item)" id="test-minion" icon :title="i18n.nodeTest" @click="showTestConfirm(item.id + '_' + item.role)">
                                   <v-icon>fa-file-import</v-icon>
+                                </v-btn>
+                                <v-btn v-if="canUpload(item)" id="import-minion" icon :title="'Upload PCAP/EVTX'" @click="showUploadConfirm(item)">
+                                  <v-icon>fa-upload</v-icon>
                                 </v-btn>
                               </div>
                             </v-card-text>
@@ -3077,6 +3090,21 @@
             </v-card-actions>
           </v-card>
         </v-dialog>
+        <v-dialog v-model="gridMemberUploadConfirmDialog" persistent max-width="480">
+          <v-card>
+            <v-card-title class="text-h5" v-text="pickUploadDialogTitle()" />
+            <v-card-text>
+              <v-form ref="gridUpload" v-model="uploadForm.valid" @submit.prevent>
+                <v-file-input id="import-value" v-model="uploadForm.attachment" show-size :accept="pickUploadDialogAccept()" :rules="[rules.fileSizeLimit, rules.fileNotEmpty, rules.fileRequired]"/>
+              </v-form>
+            </v-card-text>
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn text id="grid-upload-proceed-button" @click="gridMemberUpload" v-text="i18n.upload" />
+              <v-btn text id="grid-upload-cancel-button" @click="hideUploadConfirm" v-text="i18n.cancel" />
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
       </v-container>
     </script>
 
@@ -3127,7 +3155,7 @@
                       <v-text-field name="traits.firstName" v-model="profileForm.firstName" :placeholder="i18n.firstName" type="text":rules="[rules.maxlen]"></v-text-field>
                       <v-text-field name="traits.lastName" v-model="profileForm.lastName" :placeholder="i18n.lastName" type="text" type="text":rules="[rules.maxlen]"></v-text-field>
                       <v-text-field name="traits.note" v-model="profileForm.note" :placeholder="i18n.note" type="text" type="text":rules="[rules.maxlen]"></v-text-field>
-                      <v-text-field name="csrf_token" v-model="profileForm.csrfToken" class="d-none"></v-text-field>
+                      <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
                       <v-text-field name="method" value="profile" class="d-none"></v-text-field>
                       <v-btn id="settingsProfileChangeSubmit" type="submit" color="primary" :disabled="!profileForm.valid" v-text="i18n.save"></v-btn>
                     </v-form>
@@ -3141,14 +3169,14 @@
                 </v-alert>
                 <v-card outlined class="my-4">
                   <v-card-title>{{ i18n.password }}</v-card-title>
+                  <v-card-subtitle v-text="i18n.passwordInstructions"></v-card-subtitle>
                   <v-card-text>
                     <v-form v-model="passwordForm.valid" method="post" :action="authSettingsUrl">
-                      <div class="mb-4" v-text="i18n.passwordInstructions"></div>
                       <v-text-field name="password" v-model="passwordForm.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.minpasslen, rules.maxpasslen, rules.badpasschs]"></v-text-field>
                       <v-text-field :placeholder="i18n.passwordConfirm" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.maxpasslen, rules.matches, rules.badpasschs]"></v-text-field>
-                      <v-text-field name="csrf_token" v-model="passwordForm.csrfToken" class="d-none"></v-text-field>
+                      <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
                       <v-text-field name="method" value="password" class="d-none"></v-text-field>
-                      <v-btn  id="settingsPasswordChangeSubmit" type="submit" color="primary" :disabled="!passwordForm.valid" v-text="i18n.save"></v-btn>
+                      <v-btn id="settingsPasswordChangeSubmit" type="submit" color="primary" :disabled="!passwordForm.valid" v-text="i18n.save"></v-btn>
                     </v-form>
                   </v-card-text>
                 </v-card>
@@ -3158,9 +3186,9 @@
                     {{ i18n.securityInstructionsTotp }}
                   </v-alert>
                   <v-card-title>{{ i18n.totp }}</v-card-title>
+                  <v-card-subtitle v-text="i18n.totpQrInstructions"></v-card-subtitle>
                   <v-card-text>
                     <v-form v-model="totpForm.valid" method="post" :action="authSettingsUrl">
-                      <div class="mb-4" v-text="i18n.totpQrInstructions"></div>
                       <v-img id="totp-qr" class="my-4" width="320" :src="totpForm.qr"></v-img>
                       <div id="totp-secret" v-text="i18n.totpSecretInstructions"></div>
                       <div class="my-4 mx-4">
@@ -3168,7 +3196,7 @@
                         <v-icon class="ml-1" @click="$root.copyToClipboard(totpForm.secret)" :title="i18n.copyToClipboard">fa-copy</v-icon>
                       </div>
                       <v-text-field name="totp_code" autocomplete="off" v-model="totpForm.code" :placeholder="i18n.totpCodeHelp" type="text" :rules="[rules.required, rules.mintotplen, rules.maxtotplen]"></v-text-field>
-                      <v-text-field name="csrf_token" v-model="totpForm.csrfToken" class="d-none"></v-text-field>
+                      <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
                       <v-text-field name="method" value="totp" class="d-none"></v-text-field>
                       <v-btn id="settingsTotpActivateSubmit" type="submit" color="primary" :disabled="!totpForm.valid" v-text="i18n.totpActivate"></v-btn>
                     </v-form>
@@ -3180,12 +3208,41 @@
                   <v-card-text>
                     <v-form method="post" :action="authSettingsUrl">
                       <div class="mb-4" v-text="i18n.totpUnlinkInstructions"></div>
-                      <v-text-field name="csrf_token" v-model="totpForm.csrfToken" class="d-none"></v-text-field>
+                      <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
                       <v-text-field name="totp_unlink" value="true" class="d-none"></v-text-field>
                       <v-btn id="settingsTotpDeactivateSubmit" type="submit" color="primary" v-text="i18n.totpDeactivate"></v-btn>
                     </v-form>
                   </v-card-text>
                 </v-card>
+
+                <v-card outlined class="my-4" v-if="webauthnForm.script">
+                  <v-card-title>{{ i18n.webauthn }}</v-card-title>
+                  <v-card-subtitle v-text="i18n.webauthnInstructions"></v-card-subtitle>
+                  <v-card-text>
+                    <v-form v-model="webauthnForm.valid" method="post" :action="authSettingsUrl">
+                      <v-text-field name="webauthn_register_displayname" autocomplete="off" v-model="webauthnForm.name" :placeholder="i18n.webauthnNameHelp" type="text" :rules="[rules.required]"></v-text-field>
+                      <v-text-field name="webauthn_register" v-model="webauthnForm.key" class="d-none"></v-text-field>
+                      <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
+                      <v-btn class="mb-4" name="webauthn_register_trigger" id="settingsWebauthnActivate" type="button" color="primary" v-text="i18n.webauthnAddKey" :disabled="!webauthnForm.valid" @click="runWebauthn()"></v-btn>
+                    </v-form>
+                  </v-card-text>
+
+                  <div v-if="webauthnForm.existingKeys">
+                    <v-card-subtitle v-text="i18n.webauthnExistingKeys"></v-card-subtitle>
+                    <v-card-text>
+                      <v-form v-for="key in webauthnForm.existingKeys" method="post" :action="authSettingsUrl">
+                        <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
+                        <div :id="'settingsWebauthnExistingKey_' + key.id" class="ml-2">
+                          {{ key.name }}
+                          <v-btn name="webauthn_remove" icon :value="key.value" :id="'settingsWebauthnDelete_' + key.id" type="submit" color="primary" >
+                            <v-icon>fa-trash</v-icon>
+                          </v-btn>
+                        </div>
+                      </v-form>
+                    </v-card-text>
+                  </div>
+                </v-card>
+
               </v-tab-item>
 
             <v-tabs>
@@ -3274,7 +3331,12 @@
                   <p class="font-weight-bold">{{i18n.configQLGridTitle}}</p>
                   <ul>
                     <li>
-                      <router-link :to="{ name: 'config', query: {s: 'ntp.config'}}">{{i18n.configQLNTP}}</router-link>
+                      {{i18n.configQLNTPHeader}}
+                      <ul>
+                        <li>
+                          <router-link :to="{ name: 'config', query: {s: 'ntp.config.servers'}}">{{i18n.configQLNTP}}</router-link>
+                        </li>
+                      </ul>
                     </li>
                     <li>
                       {{i18n.configQLFirewallHeader}}
@@ -3285,13 +3347,33 @@
                         <li>
                           <router-link :to="{name: 'config', query: {s: 'firewall.hostgroups.elastic_agent_endpoint'}}">{{i18n.configQLFirewallElastic}}</router-link>
                         </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'firewall.hostgroups.fleet'}}">{{i18n.configQLFirewallFleet}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'firewall.hostgroups.idh'}}">{{i18n.configQLFirewallIDH}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'firewall.hostgroups.receiver'}}">{{i18n.configQLFirewallReceiver}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'firewall.hostgroups.searchnode'}}">{{i18n.configQLFirewallSearch}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'firewall.hostgroups.sensor'}}">{{i18n.configQLFirewallSensor}}</router-link>
+                        </li>
                       </ul>
                     </li>
                     <li>
-                      <router-link :to="{name: 'config', query: {s: 'idstools.config.ruleset'}}">{{i18n.configQLNIDSRuleset}}</router-link>
-                    </li>
-                    <li>
-                      <router-link :to="{name: 'config', query: {s: 'idstools.config.oinkcode'}}">{{i18n.configQLNIDSOinkCode}}</router-link>
+                      {{i18n.configQLNIDSHeader}}
+                      <ul>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'idstools.config.ruleset'}}">{{i18n.configQLNIDSRuleset}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'idstools.config.oinkcode'}}">{{i18n.configQLNIDSOinkCode}}</router-link>
+                        </li>
+                      </ul>
                     </li>
                   </ul>
                   <br/>
@@ -3304,10 +3386,24 @@
                           <router-link :to="{name: 'config', query: {s: 'suricata.config.vars.address-groups.HOME_NET'}}">{{i18n.configQLHomeNet}}</router-link>
                         </li>
                         <li>
+                          <router-link :to="{name: 'config', query: {s: 'suricata.config.af-packet.threads'}}">{{i18n.configQLSuricataThreads}}</router-link>
+                        </li>
+                        <li>
                           <router-link :to="{name: 'config', query: {s: 'idstools.sids'}}">{{i18n.configQLSIDS}}</router-link>
                         </li>
                         <li>
                           <router-link :to="{name: 'config', query: {s: 'suricata.thresholding.sids__yaml'}}">{{i18n.configQLSIDSThresholding}}</router-link>
+                      </ul>
+                    </li>
+                    <li>
+                      {{i18n.configQLZeekHeader}}
+                      <ul>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'zeek.config.networks.HOME_NET'}}">{{i18n.configQLZeekHomeNet}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'zeek.config.node.lb_procs'}}">{{i18n.configQLZeekThreads}}</router-link>
+                        </li>
                       </ul>
                     </li>
                     <li>
@@ -3321,6 +3417,23 @@
                         </li>
                         <li>
                           <router-link :to="{name: 'config', query: {s: 'bpf.zeek'}}">{{i18n.configQLZeek}}</router-link>
+                        </li>
+                      </ul>
+                    </li>
+                    <li>
+                      {{i18n.configQLSOCHeader}}
+                      <ul>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'soc.config.actions'}}">{{i18n.configQLSOCActions}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'soc.config.server.client.alerts.queries'}}">{{i18n.configQLSOCAlerts}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'soc.config.server.client.dashboards.queries'}}">{{i18n.configQLSOCDashboards}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'soc.config.server.client.hunt.queries'}}">{{i18n.configQLSOCHunt}}</router-link>
                         </li>
                       </ul>
                     </li>
@@ -3613,7 +3726,7 @@
     <script src="js/external/jquery-3.6.4.min.js"></script>
     <script src="js/external/vue-2.7.14.min.js"></script>
     <script src="js/external/vue-router-3.5.2.min.js"></script>
-    <script src="js/external/vuetify-v2.6.15.min.js"></script>
+    <script src="js/external/vuetify-v2.7.0.min.js"></script>
     <script src="js/external/axios-1.4.0.min.js"></script>
     <script src="js/external/moment-2.29.4.min.js"></script>
     <script src="js/external/moment-timezone-with-data-0.5.43.min.js"></script>

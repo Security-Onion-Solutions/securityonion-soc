@@ -10,13 +10,22 @@ routes.push({ path: '*', name: 'login', component: {
     i18n: this.$root.i18n,
     showLoginForm: false,
     showPassword: false,
+    csrfToken: null,
     form: {
       valid: false,
       email: null,
       password: null,
       totpCode: null,
-      csrfToken: null,
       method: null,
+    },
+    webauthnForm: {
+      enabled: false,
+      continue: false,
+      valid: false,
+      onclick: null,
+      key: null,
+      script: null,
+      email: null,
     },
     totpCodeLength: 6,
     rules: {
@@ -44,7 +53,7 @@ routes.push({ path: '*', name: 'login', component: {
       this.$root.showLogin();
     } else {
       this.showLoginForm = true;
-      this.authLoginUrl = this.$root.authUrl + 'login' + location.search;
+      this.authLoginUrl = this.$root.authUrl + 'login?flow=' + this.$root.getAuthFlowId();
       this.loadData()
     }
   },
@@ -61,21 +70,48 @@ routes.push({ path: '*', name: 'login', component: {
     },
     async loadData() {
       try {
-        var response = await this.$root.createApi().get('/login/banner.md?v=' + Date.now());
-        if (response.data) {
-          this.banner = marked.parse(response.data);
+        const motd = await this.$root.createApi().get('/login/banner.md?v=' + Date.now());
+        if (motd.data) {
+          this.banner = marked.parse(motd.data);
         }
 
-        response = await this.$root.authApi.get('login/flows?id=' + this.$root.getAuthFlowId());
-        if (!response.data.ui || !response.data.ui.nodes) {
+        const errID = this.$root.getSearchParam('id')
+        if (errID) {
+          this.$root.authApi.get('/errors?id=' + errID).then(response => {
+            if (!response || !response.data) return;
+            let parts = [];
+
+            const err = response.data.error;
+            if (!err) return;
+
+            if (err.status) {
+              parts.push(err.status);
+            }
+            if (err.reason) {
+              parts.push(err.reason);
+            }
+
+            this.$root.showError(parts.join(': '));
+          });
+        }
+
+        const flow = await this.$root.authApi.get('login/flows?id=' + this.$root.getAuthFlowId());
+        if (!flow.data.ui || !flow.data.ui.nodes) {
+          // throw out current flowID and start over
+          localStorage.removeItem('flowID');
           this.$root.showLogin();
+
           return;
         }
 
-        this.form.csrfToken = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'csrf_token').attributes.value;
-        this.form.method = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'method').attributes.value;
+        this.csrfToken = flow.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'csrf_token').attributes.value;
+
+        // method could be password or totp depending on which phase of login we're in. May be ignored if webauthn is in progress.
+        this.form.method = flow.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'method' && item.attributes.value == 'password') ? 'password' : 'totp';
+
+        this.extractWebauthnData(flow);
         this.$nextTick(function () {
-          // Wait for next Vue tick to set focus, since at the time of this function call (or even mounted() hook), this element won't be 
+          // Wait for next Vue tick to set focus, since at the time of this function call (or even mounted() hook), this element won't be
           // loaded, due to v-if's that have yet to process.
           if (this.form.method == "totp") {
             const ele = document.getElementById("totp--0");
@@ -84,14 +120,15 @@ routes.push({ path: '*', name: 'login', component: {
             }
           }
         });
-        if (response.data.ui.messages) {
-          const error = response.data.ui.messages.find(item => item.type == "error");
+        if (flow.data.ui.messages) {
+          const error = flow.data.ui.messages.find(item => item.type == "error");
           if (error && error.text) {
             this.$root.showWarning(this.i18n.loginInvalid);
           }
         }
       } catch (error) {
-        if (error.response.status == 410) {
+        if (error.response && error.response.status == 410) {
+          localStorage.removeItem('flowID');
           document.location = "/login";
         } else {
           this.$root.showError(error);
@@ -102,6 +139,32 @@ routes.push({ path: '*', name: 'login', component: {
       this.form.totpCode = code;
       document.getElementById("totp_code").value = code;
       document.getElementById("loginForm").submit();
+    },
+    extractWebauthnData(response) {
+      this.webauthnForm.enabled = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'method' && item.attributes.value == 'webauthn') != null;
+      const trigger = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'webauthn_login_trigger')
+      if (trigger) {
+        this.webauthnForm.continue = true;
+        this.webauthnForm.onclick = trigger.attributes.onclick;
+        this.webauthnForm.key = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'webauthn_login').attributes.value;
+        this.webauthnForm.script = response.data.ui.nodes.find(item => item.attributes && item.attributes.id == 'webauthn_script').attributes;
+        this.webauthnForm.email = response.data.ui.nodes.find(
+          item => item.attributes && item.attributes.name == 'identifier'
+        ).attributes.value;
+
+        const script = document.createElement('script');
+        script.setAttribute('type', this.webauthnForm.script.type);
+        script.setAttribute('id', this.webauthnForm.script.id);
+        script.setAttribute('crossorigin', this.webauthnForm.script.crossorigin);
+        script.setAttribute('referrerpolicy', this.webauthnForm.script.referrerpolicy);
+        script.setAttribute('integrity', this.webauthnForm.script.integrity);
+        script.setAttribute('nonce', this.webauthnForm.script.nonce);
+        script.setAttribute('src', this.webauthnForm.script.src);
+        document.body.appendChild(script);
+      }
+    },
+    runWebauthn() {
+      eval(this.webauthnForm.onclick);
     }
   },
 }});

@@ -181,4 +181,5 @@ func (params *CaseParameters) Verify() error {
 }
 
 type GridParameters struct {
+	MaxUploadSize uint64 `json:"maxUploadSize,omitempty"`
 }

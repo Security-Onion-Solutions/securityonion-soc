@@ -28,6 +28,7 @@ type ServerConfig struct {
 	BaseUrl                 string                 `json:"baseUrl"`
 	DeveloperEnabled        bool                   `json:"developerEnabled"`
 	HtmlDir                 string                 `json:"htmlDir"`
+	ImportUploadDir         string                 `json:"importUploadDir"`
 	MaxPacketCount          int                    `json:"maxPacketCount"`
 	Modules                 module.ModuleConfigMap `json:"modules"`
 	ModuleFailuresIgnored   bool                   `json:"moduleFailuresIgnored"`

@@ -16,7 +16,7 @@
     <link rel="mask-icon" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
     <link rel="alternate icon" class="so-favicon" type="image/png" href="images/favicon/onion.png?v=VERSION_PLACEHOLDER">
     <link rel="icon" class="so-favicon" type="image/svg+xml" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
-    <link rel="stylesheet" href="css/external/vuetify-v2.6.10.min.css">
+    <link rel="stylesheet" href="css/external/vuetify-v2.7.0.min.css">
     <link rel="stylesheet" href="css/external/all-6.2.0.min.css">
     <link rel="stylesheet" href="css/app.css?v=VERSION_PLACEHOLDER">
     <title>Security Onion</title>
@@ -43,37 +43,67 @@
         <v-spacer></v-spacer>
       </v-footer>
     </v-app>
-    
+
     <script type="text/x-template" id="page-login">
       <v-card class="mt-12 mx-auto" max-width="600">
         <v-card-title class="lighten-4 py-4 title" v-text="i18n.loginTitle"></v-card-title>
 
-        <v-form v-if="showLoginForm" id="loginForm" v-model="form.valid" method="post" :action="authLoginUrl">
-          <v-container grid-list-sm class="pa-4">
-            <v-row>
-              <v-col class="mx-auto px-12">
-                <div id="banner" class="markdown-body" :inner-html.prop="banner | formatMarkdown"></div>
-              </v-col>
-            </v-row>
-            <v-row>
-              <v-col xs12>
-                <v-text-field v-if="form.method == 'password'" name="identifier" v-model="form.email" :placeholder="i18n.email" :hint="i18n.emailHelp" autofocus="true" :rules="[rules.required]"></v-text-field>
-                <v-text-field v-if="form.method == 'password'"  name="password" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required]"></v-text-field>
-                <div v-if="form.method == 'totp'">
-                  <div class="mb-4">{{ i18n.totpCodeHelp }}</div>
-                  <v-otp-input id="totp" autocomplete="off" v-model="form.totpCode" :length="totpCodeLength" @finish="submitTotp"></v-otp-input>
-                  <v-text-field name="totp_code" id="totp_code" v-model="form.totpCode" class="d-none"></v-text-field>
-                </div>
-                <v-text-field name="csrf_token" v-model="form.csrfToken" class="d-none"></v-text-field>
-                <v-text-field name="method" v-model="form.method" class="d-none"></v-text-field>
-              </v-col>
-            </v-row>
-          </v-container>
-          <v-card-actions>
-            <v-spacer></v-spacer>
-            <v-btn type="submit" :disabled="!form.valid" text color="primary" v-text="i18n.login"></v-btn>
-          </v-card-actions>
-        </v-form>
+        <v-container v-if="showLoginForm" grid-list-sm class="pa-4">
+          <v-row>
+            <v-col class="mx-auto px-12">
+              <div id="banner" class="markdown-body" :inner-html.prop="banner | formatMarkdown"></div>
+            </v-col>
+          </v-row>
+          <v-row>
+            <v-col xs12>
+              <v-form v-if="!webauthnForm.continue" id="loginForm" v-model="form.valid" method="post" :action="authLoginUrl">
+                <v-card-subtitle v-text="i18n.passwordLoginMethod"></v-card-subtitle>
+                <v-card-text>
+                  <v-text-field v-if="form.method == 'password'" id="password_identifier" name="identifier" v-model="form.email" :placeholder="i18n.email" :hint="i18n.emailHelp" autofocus="true" :rules="[rules.required]"></v-text-field>
+                  <v-text-field v-if="form.method == 'password'"  name="password" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required]"></v-text-field>
+                  <div v-if="form.method == 'totp'">
+                    <div class="mb-4">{{ i18n.totpCodeHelp }}</div>
+                    <v-otp-input id="totp" autocomplete="off" v-model="form.totpCode" :length="totpCodeLength" @finish="submitTotp"></v-otp-input>
+                    <v-text-field name="totp_code" id="totp_code" v-model="form.totpCode" class="d-none"></v-text-field>
+                  </div>
+                  <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
+                  <v-text-field name="method" v-model="form.method" class="d-none"></v-text-field>
+                </v-card-text>
+                <v-card-actions>
+                  <v-spacer></v-spacer>
+                  <v-btn id="password_submit" type="submit" :disabled="!form.valid" text color="primary" v-text="i18n.login"></v-btn>
+                </v-card-actions>
+              </v-form>
+
+              <v-form v-if="webauthnForm.enabled && !webauthnForm.continue" id="loginWebAuthnForm" v-model="webauthnForm.valid" method="post" :action="authLoginUrl">
+                <v-card-subtitle v-text="i18n.webauthnLoginMethod"></v-card-subtitle>
+                <v-card-text>
+                  <v-text-field id="webauthn_identifier" name="identifier" v-model="webauthnForm.email" :placeholder="i18n.email" :hint="i18n.emailHelp" :rules="[rules.required]"></v-text-field>
+                  <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
+                  <v-text-field name="method" value="webauthn" class="d-none"></v-text-field>
+                </v-card-text>
+                <v-card-actions>
+                  <v-spacer></v-spacer>
+                  <v-btn id="webauthn_submit" type="submit" :disabled="!webauthnForm.valid" text color="primary" v-text="i18n.login"></v-btn>
+                </v-card-actions>
+              </v-form>
+
+              <v-form v-if="webauthnForm.continue" id="continueWebAuthnForm" method="post" :action="authLoginUrl">
+                <v-card-subtitle v-text="i18n.webauthnContinueHelp"></v-card-subtitle>
+                <v-card-text>
+                  <v-text-field name="identifier" v-model="webauthnForm.email"  class="d-none"></v-text-field>
+                  <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
+                  <v-text-field name="webauthn_login" v-model="webauthnForm.key" class="d-none"></v-text-field>
+                  <v-text-field name="method" value="webauthn" class="d-none"></v-text-field>
+                </v-card-text>
+                <v-card-actions>
+                  <v-spacer></v-spacer>
+                  <v-btn type="button" name="webauthn_login_trigger" text color="primary" v-text="i18n.login" @click="runWebauthn()"></v-btn>
+                </v-card-actions>
+              </v-form>
+            </v-col>
+          </v-row>
+        </v-container>
 
         <v-container v-if="throttled && !showLoginForm" grid-list-sm class="pa-4">
           <v-row>
@@ -92,7 +122,7 @@
     <script src="js/external/jquery-3.6.4.min.js"></script>
     <script src="js/external/vue-2.7.14.min.js"></script>
     <script src="js/external/vue-router-3.5.2.min.js"></script>
-    <script src="js/external/vuetify-v2.6.15.min.js"></script>
+    <script src="js/external/vuetify-v2.7.0.min.js"></script>
     <script src="js/external/axios-1.4.0.min.js"></script>
     <script src="js/external/moment-2.29.4.min.js"></script>
     <script src="js/external/marked-4.3.0.min.js"></script>

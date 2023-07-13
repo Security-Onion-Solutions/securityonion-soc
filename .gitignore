@@ -13,3 +13,5 @@ __pycache__
 .pytest_cache
 .coverage
 *.pyc
+
+__debug_bin

@@ -12,6 +12,8 @@ let comp;
 beforeEach(() => {
   comp = getComponent("hunt");
   resetPapi();
+  comp.$root.initializeCharts = () => { };
+  comp.created();
 });
 
 test('localizeValue', () => {
@@ -130,7 +132,7 @@ test('saveTimezone', () => {
 });
 
 test('removeFilter', () => {
-  comp.query = "abc def | groupby foo bar*"; 
+  comp.query = "abc def | groupby foo bar*";
   comp.removeFilter('def')
   expect(comp.query).toBe("abc  | groupby foo bar*");
 
@@ -143,41 +145,41 @@ test('removeFilter', () => {
 });
 
 test('removeGroupBy', () => {
-  comp.query = "abc | groupby foo bar*"; 
+  comp.query = "abc | groupby foo bar*";
   comp.queryGroupBys = [['foo','bar*']];
   comp.removeGroupBy(0, 0)
   expect(comp.query).toBe("abc | groupby bar*");
 
-  comp.query = "abc | groupby foo bar*"; 
+  comp.query = "abc | groupby foo bar*";
   comp.queryGroupBys = [['foo','bar*']];
   comp.removeGroupBy(0, 1)
   expect(comp.query).toBe("abc | groupby foo");
 
-  comp.query = "abc | groupby bar*"; 
+  comp.query = "abc | groupby bar*";
   comp.queryGroupBys = [['bar*']];
   comp.removeGroupBy(0, 0)
   expect(comp.query).toBe("abc");
 
   // no-op
-  comp.query = "abc"; 
+  comp.query = "abc";
   comp.queryGroupBys = [];
   comp.removeGroupBy(0, 0)
   expect(comp.query).toBe("abc");
 
-  comp.query = "abc | groupby foo bar* | groupby a b"; 
+  comp.query = "abc | groupby foo bar* | groupby a b";
   comp.queryGroupBys = [['foo','bar*'],['a','b']];
   comp.removeGroupBy(1, 1)
   expect(comp.query).toBe("abc | groupby foo bar* | groupby a");
 
   // Remove entire group
-  comp.query = "abc | groupby foo bar* | groupby a b"; 
+  comp.query = "abc | groupby foo bar* | groupby a b";
   comp.queryGroupBys = [['foo','bar*'],['a','b']];
   comp.removeGroupBy(1, -1)
   expect(comp.query).toBe("abc | groupby foo bar*");
 });
 
 test('removeSortBy', () => {
-  comp.query = "abc | sortby foo bar^"; 
+  comp.query = "abc | sortby foo bar^";
   comp.removeSortBy('foo')
   expect(comp.query).toBe("abc | sortby bar^");
 
@@ -188,7 +190,7 @@ test('removeSortBy', () => {
   comp.removeSortBy('bar^')
   expect(comp.query).toBe("abc");
 
-  comp.query = "abc | sortby foo bar^ | groupby xyz"; 
+  comp.query = "abc | sortby foo bar^ | groupby xyz";
   comp.removeSortBy('foo')
   expect(comp.query).toBe("abc | sortby bar^ | groupby xyz");
 
@@ -319,7 +321,7 @@ test('lookupSocIds', () => {
   comp.lookupSocIds(record);
   expect(record['assigneeId']).toBe('12345678-1234-5678-0123-123456789012');
 
-  var record = { 'so_case.assigneeId': '12345678-1234-5678-0123-123456789012'}; 
+  var record = { 'so_case.assigneeId': '12345678-1234-5678-0123-123456789012'};
   comp.lookupSocIds(record);
   expect(record['so_case.assigneeId']).toBe('test@test.invalid');
 
@@ -331,13 +333,13 @@ test('lookupSocIds', () => {
 test('getQuery', async () => {
   comp.query = "a:1 OR b:2";
   comp.queryBaseFilter = "c:3";
-  comp.filterToggles = [{enabled: true, filter: "e:4"},{enabled: false, filter: "f:5", exclusive: true}];
+  comp.filterToggles = [{ enabled: true, filter: "e:4" }, { enabled: false, filter: "f:5", exclusive: true }];
   mock = mockPapi("get", {'data':'(a:1 OR b:2) AND c:3 AND e:4 AND NOT f:5'});
 
   const newQuery = await comp.getQuery();
   const params = { params: { query: 'a:1 OR b:2', field: '', value: 'c:3 AND e:4 AND NOT f:5', scalar: true, mode: 'INCLUDE', condense: true } };
   expect(mock).toHaveBeenCalledWith('query/filtered', params);
-  expect(newQuery).toBe("(a:1 OR b:2) AND c:3 AND e:4 AND NOT f:5")
+  expect(newQuery).toBe("(a:1 OR b:2) AND c:3 AND e:4 AND NOT f:5");
 });
 
 test('buildGroupByNew', () => {
@@ -402,7 +404,7 @@ test('populateGroupByTables', () => {
   // Now include action column
   comp.aggregationActionsEnabled = true;
   result = comp.populateGroupByTables(metrics);
-  expect(comp.groupBys[0].headers).toStrictEqual([{text: '', value: ''}, {text: 'Count', value:'count'}, {text: 'foo', value: 'foo'}, {text: 'bar', value: 'bar'}]);  
+  expect(comp.groupBys[0].headers).toStrictEqual([{text: '', value: ''}, {text: 'Count', value:'count'}, {text: 'foo', value: 'foo'}, {text: 'bar', value: 'bar'}]);
   expect(comp.groupBys[1].headers).toStrictEqual([{text: '', value: ''}, {text: 'Count', value:'count'}, {text: 'car', value: 'car'}]);
 });
 
@@ -485,12 +487,12 @@ test('setupPieChart', () => {
   var data = {};
   comp.setupPieChart(options, data, 'some title');
   expect(options).toStrictEqual({
-      responsive: true, 
-      maintainAspectRatio: false, 
+      responsive: true,
+      maintainAspectRatio: false,
       plugins: {
-        legend: { 
-          display: true, 
-          position: 'left', 
+        legend: {
+          display: true,
+          position: 'left',
         },
         title: {
           display: true,
@@ -526,11 +528,11 @@ test('setupSankeyChart', () => {
   var data = {};
   comp.setupSankeyChart(options, data, 'some title');
   expect(options).toStrictEqual({
-      responsive: true, 
-      maintainAspectRatio: false, 
+      responsive: true,
+      maintainAspectRatio: false,
       plugins: {
-        legend: { 
-          display: false, 
+        legend: {
+          display: false,
         },
         title: {
           display: true,
@@ -732,4 +734,122 @@ test('obtainQueryDetails_queryGroupedFilterPipe', () => {
   expect(comp.queryGroupBys).toStrictEqual([["z"]]);
   expect(comp.queryGroupByOptions).toStrictEqual([[]]);
   expect(comp.querySortBys).toStrictEqual([]);
+});
+
+test('query string filterToggles', () => {
+  comp.$route = { path: "hunt", query: { socExcludeToggle: false } };
+  comp.filterToggles = [{
+    "enabled": true,
+    "filter": "NOT _index:\"*:so-case*\"",
+    "name": "caseExcludeToggle"
+  },
+  {
+    "enabled": true,
+    "filter": "NOT event.module:\"soc\"",
+    "name": "socExcludeToggle"
+  }];
+  comp.parseUrlParameters();
+
+  expect(comp.filterToggles[0].enabled).toBe(true);
+  expect(comp.filterToggles[1].enabled).toBe(false);
+});
+
+test('buildGroupByRoute', () => {
+  comp.query = "*"; // no groupBy clause results in hard coded response of 1
+  let r = comp.buildGroupByRoute('x');
+  expect(r.query.groupByGroup).toBe(1);
+
+  comp.query = `* | groupby "log.level"`;
+  r = comp.buildGroupByRoute('x');
+  expect(r.query.groupByGroup).toBe(0);
+
+  comp.query = `* | groupby "log.level" |GrOuPbY "field.groupBy" |   GROUPBY "@version"`;
+  r = comp.buildGroupByRoute('x');
+  expect(r.query.groupByGroup).toBe(2);
+});
+
+test('subMissing', () => {
+  expect(comp.subMissing("")).toBe("");
+  expect(comp.subMissing("foo")).toBe("foo");
+  expect(comp.subMissing("Missing")).toBe("Missing");
+  expect(comp.subMissing(comp.i18n.__missing__)).toBe("__missing__");
+  expect(comp.subMissing(comp.i18n.__missing__ + " foo")).toBe(comp.i18n.__missing__ + " foo");
+  expect(comp.subMissing(null)).toBe(null)
+  expect(comp.subMissing(undefined)).toBe(undefined)
+  expect(comp.subMissing(10)).toBe(10)
+});
+
+test('getRelativeTimeUnits', () => {
+  comp.relativeTimeUnit = 10;
+  expect(comp.getRelativeTimeUnits()).toBe(comp.i18n.seconds);
+
+  comp.relativeTimeUnit = 20;
+  expect(comp.getRelativeTimeUnits()).toBe(comp.i18n.minutes);
+
+  comp.relativeTimeUnit = 30;
+  expect(comp.getRelativeTimeUnits()).toBe(comp.i18n.hours);
+
+  comp.relativeTimeUnit = 40;
+  expect(comp.getRelativeTimeUnits()).toBe(comp.i18n.days);
+
+  comp.relativeTimeUnit = 50;
+  expect(comp.getRelativeTimeUnits()).toBe(comp.i18n.weeks);
+
+  comp.relativeTimeUnit = 60;
+  expect(comp.getRelativeTimeUnits()).toBe(comp.i18n.months);
+
+  comp.relativeTimeUnit = -1;
+  expect(comp.getRelativeTimeUnits()).toBe(comp.i18n.hours);
+});
+
+test('setRelativeTimeUnits', () => {
+  for (let i = 0; i < comp.relativeTimeUnits.length; i++) {
+    comp.setRelativeTimeUnits(comp.relativeTimeUnits[i].text);
+    expect(comp.relativeTimeUnit).toBe(comp.relativeTimeUnits[i].value);
+  }
+
+  comp.setRelativeTimeUnits("foo");
+  expect(comp.relativeTimeUnit).toBe(30);
+});
+
+test('relative query string', () => {
+  comp.$route = { path: "hunt", query: { rt: 24, rtu: 'hours' } };
+  comp.parseUrlParameters();
+
+  expect(comp.relativeTimeEnabled).toBe(true);
+  expect(comp.relativeTimeUnit).toBe(30);
+  expect(comp.relativeTimeValue).toBe(24);
+
+  comp.$route = { path: "hunt", query: { rt: 10 } };
+  comp.parseUrlParameters();
+
+  expect(comp.relativeTimeEnabled).toBe(true);
+  expect(comp.relativeTimeUnit).toBe(30);
+  expect(comp.relativeTimeValue).toBe(10);
+
+  comp.$route = { path: "hunt", query: { rt: 24, rtu: 'hours', t: '2021/07/03 01:01:57 PM - 2023/07/03 01:01:57 PM' } };
+  comp.parseUrlParameters();
+
+  expect(comp.relativeTimeEnabled).toBe(false);
+  expect(comp.dateRange).toBe('2021/07/03 01:01:57 PM - 2023/07/03 01:01:57 PM');
+});
+
+test('autoRefresh query string', () => {
+  comp.$route = { path: "hunt", query: { ar: 30 } };
+  comp.parseUrlParameters();
+
+  expect(comp.autoRefreshEnabled).toBe(true);
+  expect(comp.autoRefreshInterval).toBe(30);
+
+  comp.$route = { path: "hunt", query: { ar: 1 } };
+  comp.parseUrlParameters();
+
+  expect(comp.autoRefreshEnabled).toBe(false);
+  expect(comp.autoRefreshInterval).toBe(0);
+
+  comp.$route = { path: "hunt", query: {} };
+  comp.parseUrlParameters();
+
+  expect(comp.autoRefreshEnabled).toBe(false);
+  expect(comp.autoRefreshInterval).toBe(0);
 });

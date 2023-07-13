@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"net/http"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -94,4 +97,38 @@ func TestUpdateDataEpoch(t *testing.T) {
 
 	// verify
 	assert.Equal(t, jm.node.EpochTime, panicProc.GetDataEpoch())
+}
+
+type ClientAuthMock struct{}
+
+func (cam *ClientAuthMock) Authorize(*http.Request) error {
+	return nil
+}
+
+func TestNoJobReady(t *testing.T) {
+	// prep test object
+	client := &web.Client{
+		Auth: &ClientAuthMock{},
+	}
+
+	res := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader("")),
+	}
+
+	client.MockResponse(res, nil)
+
+	jm := &JobManager{
+		agent: &Agent{
+			Client: client,
+		},
+		node: &model.Node{},
+	}
+
+	// test
+	job, err := jm.PollPendingJobs()
+
+	// verify
+	assert.NoError(t, err)
+	assert.Nil(t, job)
 }

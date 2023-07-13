@@ -15,4 +15,6 @@ import (
 type GridMembersstore interface {
 	GetMembers(ctx context.Context) ([]*model.GridMember, error)
 	ManageMember(ctx context.Context, operation string, id string) error
+	SendFile(ctx context.Context, node string, from string, to string, cleanup bool) error
+	Import(ctx context.Context, node string, file string, importer string) (*string, error)
 }
