@@ -27,6 +27,7 @@ routes.push({ path: '*', name: 'login', component: {
       script: null,
       email: null,
     },
+    oidc: [],
     totpCodeLength: 6,
     rules: {
       required: value => !!value || this.$root.i18n.required,
@@ -110,6 +111,7 @@ routes.push({ path: '*', name: 'login', component: {
         this.form.method = flow.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'method' && item.attributes.value == 'password') ? 'password' : 'totp';
 
         this.extractWebauthnData(flow);
+        this.extractOidcData(flow);
         this.$nextTick(function () {
           // Wait for next Vue tick to set focus, since at the time of this function call (or even mounted() hook), this element won't be
           // loaded, due to v-if's that have yet to process.
@@ -165,6 +167,9 @@ routes.push({ path: '*', name: 'login', component: {
     },
     runWebauthn() {
       eval(this.webauthnForm.onclick);
-    }
+    },
+    extractOidcData(response) {
+      this.oidc = response.data.ui.nodes.filter(item => item.group == "oidc" && item.type == "input" ).map(item => item.attributes.value);
+    },
   },
 }});

@@ -56,6 +56,18 @@
           </v-row>
           <v-row>
             <v-col xs12>
+              <div v-if="!webauthnForm.continue && oidc.length > 0" class="mb-4">
+                <v-form v-for="provider in oidc" method="post" :action="authLoginUrl">
+                  <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
+                  <v-text-field name="provider" :value="provider" class="d-none"></v-text-field>
+                  <v-btn :id="'oidc_submit_' + provider" type="submit">
+                    <v-icon left v-if="provider.toLowerCase() == 'microsoft'">fa-brands fa-microsoft</v-icon>
+                    <v-icon left  v-else-if="provider.toLowerCase() == 'google'">fa-brands fa-google</v-icon>
+                    <v-icon left  v-else>fa-arrow-right-to-bracket</v-icon>
+                    {{ i18n.loginOidc + ' ' + provider }}
+                  </v-btn>
+                </v-form>
+              </div>
               <v-form v-if="!webauthnForm.continue" id="loginForm" v-model="form.valid" method="post" :action="authLoginUrl">
                 <v-card-subtitle v-text="i18n.passwordLoginMethod"></v-card-subtitle>
                 <v-card-text>
