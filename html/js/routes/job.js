@@ -50,7 +50,7 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
   },
   beforeDestroy() {
     this.$root.setSubtitle("");
-  },  
+  },
   destroyed() {
     this.$root.unsubscribe("job", this.updateJob);
   },
@@ -64,9 +64,9 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     'itemsPerPage': 'saveLocalSettings',
   },
   methods: {
-    initActions(params) {                                                     
+    initActions(params) {
       this.params = params;
-      this.actions = params["actions"];                           
+      this.actions = params["actions"];
     },
     jobClickHandler() {
       if (window.getSelection().toString() != '') {
@@ -75,12 +75,12 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       }
     },
     toggleQuickAction(domEvent, event, field, value) {
-      if (!domEvent || this.quickActionVisible) {        
-        this.quickActionVisible = false;                
-        return;                                        
+      if (!domEvent || this.quickActionVisible) {
+        this.quickActionVisible = false;
+        return;
       }
-                                                            
-      if (value) {      
+
+      if (value) {
         var route = this;
         this.actions.forEach(function(action, index) {
           if (action.fields) {
@@ -88,32 +88,32 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
             for (var x = 0; x < action.fields.length; x++) {
               if (action.fields[x] == field) {
                 action.enabled = true;
-                break;                          
-              } 
-            } 
-          }                                             
-                                                              
+                break;
+              }
+            }
+          }
+
           var link = route.$root.findEligibleActionLinkForEvent(action, event);
-          if (link) {                                 
-            action.enabled = true;                        
+          if (link) {
+            action.enabled = true;
             action.linkFormatted = route.$root.formatActionContent(link, event, field, value, true);
             action.bodyFormatted = route.$root.formatActionContent(action.body, event, field, value, action.encodeBody);
             action.backgroundSuccessLinkFormatted = route.$root.formatActionContent(action.backgroundSuccessLink, event, field, value, true);
             action.backgroundFailureLinkFormatted = route.$root.formatActionContent(action.backgroundFailureLink, event, field, value, true);
-      
-          } else {   
+
+          } else {
             action.enabled = false;
-          }          
-        });                                                     
+          }
+        });
         this.quickActionEvent = event;
         this.quickActionField = field;
         this.quickActionValue = value;
         this.quickActionX = domEvent.clientX;
         this.quickActionY = domEvent.clientY;
-        this.$nextTick(() => {    
+        this.$nextTick(() => {
           this.quickActionVisible = true;
-        });     
-      }                 
+        });
+      }
     },
     getPacketColumnSpan() {
         return this.isOptionEnabled('packets') ? this.headers.length : 1;
@@ -225,12 +225,16 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       this.loadLocalSettings();
 
       try {
+        this.$root.subscribe("job", this.updateJob);
+
         const response = await this.$root.papi.get('job/', { params: {
             jobId: this.$route.params.jobId
-        }});
+          }
+        });
+
         this.job = response.data;
         this.$root.populateUserDetails(this.job, "userId", "owner");
-        this.$root.setSubtitle(this.i18n.jobs + " - " + this.job.id); 
+        this.$root.setSubtitle(this.i18n.jobs + " - " + this.job.id);
         this.loadPackets(this.isOptionEnabled('unwrap'));
       } catch (error) {
         if (error.response != undefined && error.response.status == 404) {
@@ -239,8 +243,8 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
           this.$root.showError(error);
         }
       }
+
       this.$root.stopLoading();
-      this.$root.subscribe("job", this.updateJob);
     },
     saveLocalSettings() {
       if (!this.packetsLoading) {
@@ -269,6 +273,7 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       if (this.job.status != job.status) {
         this.loadPackets(this.isOptionEnabled('unwrap'));
       }
+
       this.job = job;
     },
     colorType(type) {
