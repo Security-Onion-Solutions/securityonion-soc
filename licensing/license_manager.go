@@ -43,8 +43,6 @@ const FEAT_TIMETRACKING = "timetracking"
 const FEAT_FIPS = "fips"
 const FEAT_STIG = "stig"
 
-const DEFAULT_PILLAR_FILENAME = "/opt/so/saltstack/local/pillar/soc/license.sls"
-
 const PUBLIC_KEY = `
 -----BEGIN PUBLIC KEY-----
 MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEA4w/cDz7rv6QotLWR7mn9
@@ -59,6 +57,9 @@ rdA93ynlX+ihg6jL0iS4uFEV9YveqajjOyi3DYyUFCjFAgMBAAE=
 -----END PUBLIC KEY-----
 `
 
+var runMode = true
+var pillarFilename = "/opt/so/saltstack/local/pillar/soc/license.sls"
+
 type licenseManager struct {
 	status          string
 	available       []string
@@ -68,7 +69,6 @@ type licenseManager struct {
 	pillarTimer     *time.Timer
 	running         bool
 	licenseKey      *LicenseKey
-	pillarFilename  string
 }
 
 type LicenseKey struct {
@@ -94,9 +94,8 @@ var manager *licenseManager
 
 func newLicenseManager() *licenseManager {
 	return &licenseManager{
-		available:      make([]string, 0, 0),
-		limits:         make(map[string]bool),
-		pillarFilename: DEFAULT_PILLAR_FILENAME,
+		available: make([]string, 0, 0),
+		limits:    make(map[string]bool),
 	}
 }
 
@@ -194,6 +193,7 @@ func Init(key string) {
 }
 
 func Test(feat string, users int, nodes int, socUrl string, dataUrl string) {
+	runMode = false
 	available := make([]string, 0, 0)
 	available = append(available, feat)
 	licenseKey := &LicenseKey{}
@@ -223,13 +223,13 @@ func createManager(status string, available []string, licenseKey *LicenseKey, st
 	manager.status = status
 	manager.available = available
 	manager.licenseKey = licenseKey
+	manager.running = runMode
 
 	if (status == LICENSE_STATUS_ACTIVE || status == LICENSE_STATUS_PENDING) && startMonitors {
-		manager.running = true
 		go startExpirationMonitor()
 		go startEffectiveMonitor()
-		go startPillarMonitor()
 	}
+	go startPillarMonitor()
 
 	log.WithFields(log.Fields{
 		"status":     manager.status,
@@ -322,9 +322,9 @@ func startPillarMonitor() {
 	} else {
 		contents += "features: []\n"
 	}
-	err := os.WriteFile(manager.pillarFilename, []byte(contents), 0644)
+	err := os.WriteFile(pillarFilename, []byte(contents), 0644)
 	if err != nil {
-		log.WithError(err).WithField("filename", manager.pillarFilename).Error("Failed to update features")
+		log.WithError(err).WithField("filename", pillarFilename).Error("Failed to update features")
 		manager.status = LICENSE_STATUS_INVALID
 	}
 

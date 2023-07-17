@@ -23,7 +23,22 @@ import (
 
 const EXPIRED_KEY = ` H4sIAIvZnGMAA22QR4+bUBSF9/kVFlvPBExz2ZlqijHVNo6yeMaPYsOjPWMgyn8PMyNFihTpLm75zjnS/UXAOIYRzjpIbAiaohfv1Ef5FLX5rAvxRsC+yhqAsxJ9MfR/GASKDwcftnhmZhFELZy9z6yDP1MO7izw5JlmzWz3IAWirx2sSZHdJj4GD/hOUYtpzr9UHy7KtP3rYsBhusYQ4GcDW2Lz4+cb8WxhM7WLKbe8wa+uLaOgySd1inHVbkiyLQv4SmEDv2eoA/mU90bcAAb/UgCVeIK+VzmI4ES0WYI+oyYm8VBxAEZUFbKlp2ugz6t9n15kiX0uligc+es1jf3A7HldUAoctnhtxZ6f7R3+Rc5tOdqqcM5J/F0UyZJh4raOdcNTa6EEyoq+CXR0PloieilIUFlTgwa748r0chJZj2TdmAq3owZi3iFFk4vzx9mUGV41U1N3yLA/GEnCN+tdLa3uAR1zwn6MEh+EmDxefX9VulSjqi6F08hfcQLfYGNXnWxMFpwkKY3h6bJp8bs2z/zRfvCZEu7z3VDh8HRzoOMPa/51S8ho6LrBw7KZgu3qkq7KVGeHu+1Q9LZXkzJDJwaLnnwKpJAbnfkQstcyAlq0ho++q5YLDw11nES0xj+3NmfgvLhYC7rXKFGO927oPHg7oql6MNvDqxMWYxPuBkg/K+Uum/bxnGT90mwjrvZD4+yJmly1Llo+rsGZdZugo307jKf/FbdR950Vr1BHnRrlZMwsACQml/XKq8J5iV5HxgF7sub6Xueyvk7Gfo2Km1AuVZYsWNOv0FEtB4H1WJW/ayfh1S0ZZiB+f/sDb9bxLiEDAAA= 	`
 
+func teardown() {
+	if manager != nil {
+		manager.running = false
+	}
+	os.Remove(pillarFilename)
+}
+
+func setup() func() {
+	pillarFilename = "/tmp/soc_test_pillar_monitor.sls"
+	runMode = false
+	return teardown
+}
+
 func TestInit_Missing(tester *testing.T) {
+	defer setup()()
+
 	// None
 	Init("")
 	assert.Equal(tester, LICENSE_STATUS_UNPROVISIONED, GetStatus())
@@ -42,6 +57,8 @@ func TestInit_Missing(tester *testing.T) {
 }
 
 func TestExpirationMonitor(tester *testing.T) {
+	defer setup()()
+
 	Init("")
 	assert.Equal(tester, LICENSE_STATUS_UNPROVISIONED, GetStatus())
 	manager.licenseKey.Expiration = time.Now().Add(time.Second * 1)
@@ -50,6 +67,8 @@ func TestExpirationMonitor(tester *testing.T) {
 }
 
 func TestEffectiveMonitor_Unprovisioned(tester *testing.T) {
+	defer setup()()
+
 	Init("")
 	assert.Equal(tester, LICENSE_STATUS_UNPROVISIONED, GetStatus())
 	manager.licenseKey.Effective = time.Now().Add(time.Second * 1)
@@ -58,6 +77,8 @@ func TestEffectiveMonitor_Unprovisioned(tester *testing.T) {
 }
 
 func TestEffectiveMonitor_Pending(tester *testing.T) {
+	defer setup()()
+
 	Init("")
 	manager.status = LICENSE_STATUS_PENDING
 	manager.licenseKey.Effective = time.Now().Add(time.Second * 1)
@@ -66,6 +87,8 @@ func TestEffectiveMonitor_Pending(tester *testing.T) {
 }
 
 func TestEffectiveMonitor_Exceeded(tester *testing.T) {
+	defer setup()()
+
 	Init("")
 	manager.status = LICENSE_STATUS_PENDING
 	manager.limits["foo"] = true
@@ -75,6 +98,8 @@ func TestEffectiveMonitor_Exceeded(tester *testing.T) {
 }
 
 func TestIsEnabled(tester *testing.T) {
+	defer setup()()
+
 	Init("")
 	assert.False(tester, IsEnabled("something"))
 
@@ -88,6 +113,8 @@ func TestIsEnabled(tester *testing.T) {
 }
 
 func TestListAvailableFeatures(tester *testing.T) {
+	defer setup()()
+
 	Init("")
 	assert.Len(tester, ListAvailableFeatures(), 0)
 
@@ -100,6 +127,8 @@ func TestListAvailableFeatures(tester *testing.T) {
 }
 
 func TestListEnabledFeatures(tester *testing.T) {
+	defer setup()()
+
 	Init("")
 	assert.Len(tester, ListEnabledFeatures(), 3)
 
@@ -118,6 +147,8 @@ func TestListEnabledFeatures(tester *testing.T) {
 }
 
 func TestGetLicenseKey(tester *testing.T) {
+	defer setup()()
+
 	Init(EXPIRED_KEY)
 	key := GetLicenseKey()
 	assert.Equal(tester, key.Users, 1)
@@ -135,6 +166,8 @@ func TestGetLicenseKey(tester *testing.T) {
 }
 
 func TestGetStatus(tester *testing.T) {
+	defer setup()()
+
 	Init("")
 	assert.Equal(tester, LICENSE_STATUS_UNPROVISIONED, GetStatus())
 
@@ -143,6 +176,8 @@ func TestGetStatus(tester *testing.T) {
 }
 
 func TestGetId(tester *testing.T) {
+	defer setup()()
+
 	Init("")
 	assert.Equal(tester, "", GetId())
 
@@ -151,6 +186,8 @@ func TestGetId(tester *testing.T) {
 }
 
 func TestGetLicensee(tester *testing.T) {
+	defer setup()()
+
 	Init("")
 	assert.Equal(tester, "", GetLicensee())
 
@@ -159,6 +196,8 @@ func TestGetLicensee(tester *testing.T) {
 }
 
 func TestGetExpiration(tester *testing.T) {
+	defer setup()()
+
 	Init("")
 	assert.Equal(tester, time.Time{}, GetExpiration())
 
@@ -168,6 +207,8 @@ func TestGetExpiration(tester *testing.T) {
 }
 
 func TestGetName(tester *testing.T) {
+	defer setup()()
+
 	Init("")
 	assert.Equal(tester, "", GetName())
 
@@ -176,6 +217,8 @@ func TestGetName(tester *testing.T) {
 }
 
 func TestValidateUserCount(tester *testing.T) {
+	defer setup()()
+
 	Init("")
 	manager.licenseKey.Users = 2
 	assert.True(tester, ValidateUserCount(0))
@@ -185,6 +228,8 @@ func TestValidateUserCount(tester *testing.T) {
 }
 
 func TestValidateNodeCount(tester *testing.T) {
+	defer setup()()
+
 	Init("")
 	manager.licenseKey.Nodes = 2
 	assert.True(tester, ValidateNodeCount(0))
@@ -194,6 +239,8 @@ func TestValidateNodeCount(tester *testing.T) {
 }
 
 func TestValidateSocUrl(tester *testing.T) {
+	defer setup()()
+
 	Init("")
 	manager.licenseKey.SocUrl = "foo"
 	assert.True(tester, ValidateSocUrl("Foo"))
@@ -203,6 +250,8 @@ func TestValidateSocUrl(tester *testing.T) {
 }
 
 func TestValidateDataUrl(tester *testing.T) {
+	defer setup()()
+
 	Init("")
 	manager.licenseKey.DataUrl = "foo"
 	assert.True(tester, ValidateDataUrl("Foo"))
@@ -212,14 +261,13 @@ func TestValidateDataUrl(tester *testing.T) {
 }
 
 func TestPillarMonitor(tester *testing.T) {
+	defer setup()()
+
 	Test("stig", 0, 0, "", "")
 
-	manager.pillarFilename = "/tmp/soc_test_pillar_monitor.sls"
-
-	os.Remove(manager.pillarFilename)
 	startPillarMonitor()
 	assert.Equal(tester, manager.status, LICENSE_STATUS_ACTIVE)
-	contents, _ := os.ReadFile(manager.pillarFilename)
+	contents, _ := os.ReadFile(pillarFilename)
 
 	expected := `
 # Copyright Jason Ertel (github.com/jertel).
@@ -243,9 +291,11 @@ features:
 }
 
 func TestPillarMonitor_Fail(tester *testing.T) {
-	Init("")
+	defer setup()()
 
-	manager.pillarFilename = "/tmp/does/not/exist"
+	pillarFilename = "/tmp/does/not/exist"
+
+	Init("")
 
 	assert.Equal(tester, manager.status, LICENSE_STATUS_UNPROVISIONED)
 	startPillarMonitor()
