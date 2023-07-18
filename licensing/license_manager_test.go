@@ -24,15 +24,11 @@ import (
 const EXPIRED_KEY = ` H4sIAIvZnGMAA22QR4+bUBSF9/kVFlvPBExz2ZlqijHVNo6yeMaPYsOjPWMgyn8PMyNFihTpLm75zjnS/UXAOIYRzjpIbAiaohfv1Ef5FLX5rAvxRsC+yhqAsxJ9MfR/GASKDwcftnhmZhFELZy9z6yDP1MO7izw5JlmzWz3IAWirx2sSZHdJj4GD/hOUYtpzr9UHy7KtP3rYsBhusYQ4GcDW2Lz4+cb8WxhM7WLKbe8wa+uLaOgySd1inHVbkiyLQv4SmEDv2eoA/mU90bcAAb/UgCVeIK+VzmI4ES0WYI+oyYm8VBxAEZUFbKlp2ugz6t9n15kiX0uligc+es1jf3A7HldUAoctnhtxZ6f7R3+Rc5tOdqqcM5J/F0UyZJh4raOdcNTa6EEyoq+CXR0PloieilIUFlTgwa748r0chJZj2TdmAq3owZi3iFFk4vzx9mUGV41U1N3yLA/GEnCN+tdLa3uAR1zwn6MEh+EmDxefX9VulSjqi6F08hfcQLfYGNXnWxMFpwkKY3h6bJp8bs2z/zRfvCZEu7z3VDh8HRzoOMPa/51S8ho6LrBw7KZgu3qkq7KVGeHu+1Q9LZXkzJDJwaLnnwKpJAbnfkQstcyAlq0ho++q5YLDw11nES0xj+3NmfgvLhYC7rXKFGO927oPHg7oql6MNvDqxMWYxPuBkg/K+Uum/bxnGT90mwjrvZD4+yJmly1Llo+rsGZdZugo307jKf/FbdR950Vr1BHnRrlZMwsACQml/XKq8J5iV5HxgF7sub6Xueyvk7Gfo2Km1AuVZYsWNOv0FEtB4H1WJW/ayfh1S0ZZiB+f/sDb9bxLiEDAAA= 	`
 
 func teardown() {
-	if manager != nil {
-		manager.running = false
-	}
 	os.Remove(pillarFilename)
 }
 
 func setup() func() {
 	pillarFilename = "/tmp/soc_test_pillar_monitor.sls"
-	runMode = false
 	return teardown
 }
 
@@ -260,12 +256,18 @@ func TestValidateDataUrl(tester *testing.T) {
 	assert.False(tester, ValidateDataUrl("bar"))
 }
 
+func awaitPillarMonitor() {
+	for pillarMonitorCount == 0 {
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
 func TestPillarMonitor(tester *testing.T) {
 	defer setup()()
 
 	Test("stig", 0, 0, "", "")
 
-	startPillarMonitor()
+	awaitPillarMonitor()
 	assert.Equal(tester, manager.status, LICENSE_STATUS_ACTIVE)
 	contents, _ := os.ReadFile(pillarFilename)
 
@@ -298,6 +300,6 @@ func TestPillarMonitor_Fail(tester *testing.T) {
 	Init("")
 
 	assert.Equal(tester, manager.status, LICENSE_STATUS_UNPROVISIONED)
-	startPillarMonitor()
+	awaitPillarMonitor()
 	assert.Equal(tester, manager.status, LICENSE_STATUS_INVALID)
 }

@@ -57,8 +57,10 @@ rdA93ynlX+ihg6jL0iS4uFEV9YveqajjOyi3DYyUFCjFAgMBAAE=
 -----END PUBLIC KEY-----
 `
 
-var runMode = true
-var pillarFilename = "/opt/so/saltstack/local/pillar/soc/license.sls"
+const LICENSE_PILLAR_FILENAME = "/opt/so/saltstack/local/pillar/soc/license.sls"
+
+var pillarFilename = LICENSE_PILLAR_FILENAME
+var pillarMonitorCount = 0
 
 type licenseManager struct {
 	status          string
@@ -67,7 +69,6 @@ type licenseManager struct {
 	expirationTimer *time.Timer
 	effectiveTimer  *time.Timer
 	pillarTimer     *time.Timer
-	running         bool
 	licenseKey      *LicenseKey
 }
 
@@ -193,7 +194,7 @@ func Init(key string) {
 }
 
 func Test(feat string, users int, nodes int, socUrl string, dataUrl string) {
-	runMode = false
+	pillarFilename = "/tmp/soc_test_pillar_monitor.sls"
 	available := make([]string, 0, 0)
 	available = append(available, feat)
 	licenseKey := &LicenseKey{}
@@ -223,12 +224,12 @@ func createManager(status string, available []string, licenseKey *LicenseKey, st
 	manager.status = status
 	manager.available = available
 	manager.licenseKey = licenseKey
-	manager.running = runMode
 
 	if (status == LICENSE_STATUS_ACTIVE || status == LICENSE_STATUS_PENDING) && startMonitors {
 		go startExpirationMonitor()
 		go startEffectiveMonitor()
 	}
+	pillarMonitorCount = 0
 	go startPillarMonitor()
 
 	log.WithFields(log.Fields{
@@ -327,19 +328,30 @@ func startPillarMonitor() {
 		log.WithError(err).WithField("filename", pillarFilename).Error("Failed to update features")
 		manager.status = LICENSE_STATUS_INVALID
 	}
+	pillarMonitorCount = pillarMonitorCount + 1
 
-	if manager.running {
+	if Usable() {
 		duration := time.Duration(rand.Intn(3600000)+1) * time.Millisecond
 		manager.pillarTimer = time.NewTimer(duration)
 		<-manager.pillarTimer.C
 
 		go startPillarMonitor()
+	} else {
+		log.WithField("pillarFilename", pillarFilename).Info("Exiting pillar monitor")
+		go func() {
+			// Leave enough time for rest of unit tests to finish
+			time.Sleep(5 * time.Minute)
+			stopMonitor()
+		}()
 	}
+}
+
+func Usable() bool {
+	return pillarFilename == LICENSE_PILLAR_FILENAME
 }
 
 func stopMonitor() {
 	if manager != nil {
-		manager.running = false
 		if manager.expirationTimer != nil {
 			manager.expirationTimer.Stop()
 		}
@@ -347,6 +359,7 @@ func stopMonitor() {
 			manager.effectiveTimer.Stop()
 		}
 		if manager.pillarTimer != nil {
+			pillarFilename = ""
 			manager.pillarTimer.Stop()
 		}
 
