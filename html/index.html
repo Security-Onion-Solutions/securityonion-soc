@@ -584,7 +584,7 @@
                                <div v-else class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()"></div>
                             </td>
                             <td v-for="field in group.headers.slice(getGroupByFieldStartIndex())" :key="field.value">
-                              <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction($event, item, field.value, item[field.value])"></div>
+                              <div class="quick-action-trigger d-inline-block" @click="toggleQuickAction($event, item, field.value, item[field.value])">{{ item[field.value] }} <span v-if="$root.pickHostname(item[field.value])">- {{ $root.pickHostname(item[field.value]) }}</span></div>
                             </td>
                           </tr>
                         </template>
@@ -653,7 +653,7 @@
                       </td>
                       <td v-for="field in eventHeaders" :key="field.value">
                         <div class="quick-action-trigger d-inline-block" @click="toggleQuickAction($event, item, field.value, item[field.value])">
-                          <span v-if="field.value != 'soc_timestamp'" v-text="item[field.value]"/>
+                          <span v-if="field.value != 'soc_timestamp'">{{ item[field.value] }}<span v-if="$root.pickHostname(item[field.value])"><br/>- {{ $root.pickHostname(item[field.value]) }}</span></span>
                           <span v-if="field.value == 'soc_timestamp'" v-text="$root.formatLocalTimestamp(item[field.value], zone)"/>
                         </div>
                       </td>
@@ -674,7 +674,7 @@
                                 <div class="d-inline-block expansion" v-text="item.key"></div>
                               </td>
                               <td class="expansion">
-                                <div class="quick-action-trigger d-inline-block expansion hardwrap" v-text="item.value" @click="toggleQuickAction($event, expanded[0], item.key, item.value)"></div>
+                                <div class="quick-action-trigger d-inline-block expansion hardwrap" @click="toggleQuickAction($event, expanded[0], item.key, item.value)">{{item.value}} <span v-if="$root.pickHostname(item.value)">- {{ $root.pickHostname(item.value) }}</span></div>
                               </td>
                             </tr>
                           </template>

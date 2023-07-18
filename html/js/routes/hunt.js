@@ -1076,16 +1076,19 @@ const huntComponent = {
     constructGroupByRows(fields, data) {
       const records = [];
       const route = this;
+      let batch = [];
       data.forEach(function(row, index) {
         var record = {
           count: row.value,
         };
         fields.forEach(function(field, index) {
           record[field] = route.localizeValue(row.keys[index]);
+          batch.push(record[field]);
         });
         route.lookupSocIds(record);
         records.push(record);
       });
+      this.$root.batchLookup(batch, this);
       return records;
     },
     constructChartMetrics(data) {
@@ -1197,6 +1200,8 @@ const huntComponent = {
       var eventDataset;
       var route = this;
       if (events != null && events.length > 0) {
+        let batch = [];
+
         events.forEach(function(event, index) {
           var record = event.payload;
           record.soc_id = event.id;
@@ -1206,6 +1211,10 @@ const huntComponent = {
           record.soc_source = event.source;
           route.lookupSocIds(record);
           records.push(record);
+
+          for (const key in record) {
+            batch.push(record[key]);
+          }
 
           var currentModule = record["event.module"];
           var currentDataset = record["event.dataset"];
@@ -1219,6 +1228,9 @@ const huntComponent = {
             inconsistentEvents = true;
           }
         });
+
+        route.$root.batchLookup(batch, route);
+
         for (const key in records[0]) {
           fields.push(key);
         }
