@@ -477,3 +477,11 @@ td {
 .inline {
   display: inline-block;
 }
+
+.resolved-host {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.theme--light .resolved-host {
+  color: rgba(0, 0, 0, 0.5);
+}
