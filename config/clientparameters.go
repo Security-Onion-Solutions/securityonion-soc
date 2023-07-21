@@ -16,23 +16,24 @@ const DEFAULT_CHART_LABEL_OTHER_LIMIT = 10
 const DEFAULT_CHART_LABEL_FIELD_SEPARATOR = ", "
 
 type ClientParameters struct {
-	HuntingParams      HuntingParameters `json:"hunt"`
-	AlertingParams     HuntingParameters `json:"alerts"`
-	CasesParams        HuntingParameters `json:"cases"`
-	CaseParams         CaseParameters    `json:"case"`
-	DashboardsParams   HuntingParameters `json:"dashboards"`
-	JobParams          HuntingParameters `json:"job"`
-	DocsUrl            string            `json:"docsUrl"`
-	CheatsheetUrl      string            `json:"cheatsheetUrl"`
-	ReleaseNotesUrl    string            `json:"releaseNotesUrl"`
-	GridParams         GridParameters    `json:"grid"`
-	WebSocketTimeoutMs int               `json:"webSocketTimeoutMs"`
-	TipTimeoutMs       int               `json:"tipTimeoutMs"`
-	ApiTimeoutMs       int               `json:"apiTimeoutMs"`
-	CacheExpirationMs  int               `json:"cacheExpirationMs"`
-	InactiveTools      []string          `json:"inactiveTools"`
-	Tools              []ClientTool      `json:"tools"`
-	CasesEnabled       bool              `json:"casesEnabled"`
+	HuntingParams       HuntingParameters `json:"hunt"`
+	AlertingParams      HuntingParameters `json:"alerts"`
+	CasesParams         HuntingParameters `json:"cases"`
+	CaseParams          CaseParameters    `json:"case"`
+	DashboardsParams    HuntingParameters `json:"dashboards"`
+	JobParams           HuntingParameters `json:"job"`
+	DocsUrl             string            `json:"docsUrl"`
+	CheatsheetUrl       string            `json:"cheatsheetUrl"`
+	ReleaseNotesUrl     string            `json:"releaseNotesUrl"`
+	GridParams          GridParameters    `json:"grid"`
+	WebSocketTimeoutMs  int               `json:"webSocketTimeoutMs"`
+	TipTimeoutMs        int               `json:"tipTimeoutMs"`
+	ApiTimeoutMs        int               `json:"apiTimeoutMs"`
+	CacheExpirationMs   int               `json:"cacheExpirationMs"`
+	InactiveTools       []string          `json:"inactiveTools"`
+	Tools               []ClientTool      `json:"tools"`
+	CasesEnabled        bool              `json:"casesEnabled"`
+	EnableReverseLookup bool              `json:"enableReverseLookup"`
 }
 
 func (config *ClientParameters) Verify() error {

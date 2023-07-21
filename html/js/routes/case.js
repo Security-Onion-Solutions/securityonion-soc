@@ -262,6 +262,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           count: route.associatedTable[association].count,
         }});
         if (response && response.data) {
+          let batch = [];
           for (var idx = 0; idx < response.data.length; idx++) {
             const obj = response.data[idx];
 
@@ -276,7 +277,13 @@ routes.push({ path: '/case/:id', name: 'case', component: {
             obj.operation = this.$root.localizeMessage(obj.operation);
             this.associations[association].push(obj);
             this.duplicateEventFields(obj);
+
+            if (obj.artifactType === 'ip') {
+              batch.push(obj.value);
+            }
           }
+
+          this.$root.batchLookup(batch, this);
         }
       } catch (error) {
         this.$root.showError(error);

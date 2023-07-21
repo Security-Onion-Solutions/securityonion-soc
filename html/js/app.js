@@ -101,6 +101,8 @@ $(document).ready(function() {
       maximizedCancelFn: null,
       licenseKey: null,
       licenseStatus: null,
+      enableReverseLookup: false,
+      ip2host: {},
     },
     watch: {
       '$vuetify.theme.dark': 'saveLocalSettings',
@@ -308,6 +310,7 @@ $(document).ready(function() {
                 this.elasticVersion = response.data.elasticVersion;
                 this.wazuhVersion = response.data.wazuhVersion;
                 this.timezones = response.data.timezones;
+                this.enableReverseLookup = response.data.parameters.enableReverseLookup;
 
                 this.user = await this.getUserById(response.data.userId);
                 if (this.user) {
@@ -937,6 +940,65 @@ $(document).ready(function() {
           this.unmaximize(true);
         }
         event.cancel();
+      },
+      batchLookup(ips, comp) {
+        if (!this.enableReverseLookup) {
+          return;
+        }
+
+        ips = ips.filter(ip => (this.isIPv4(ip) || this.isIPv6(ip)) && !this.ip2host[ip]);
+        if (ips.length) {
+          ips.forEach(ip => this.ip2host[ip] = []);
+          const route = this;
+          this.papi.put('util/reverse-lookup', ips).then(response => {
+            for (let entry in response.data) {
+              let existing = this.ip2host[entry];
+              if (!existing) {
+                existing = [];
+              }
+
+              if (response.data && response.data[entry] && response.data[entry].length) {
+                let arr = this.ip2host[entry];
+                if (!arr || !arr.length) {
+                  arr = [];
+                }
+
+                arr.push(...response.data[entry]);
+                this.ip2host[entry] = arr;
+              }
+            }
+            comp.$forceUpdate();
+          });
+        }
+      },
+      isIPv4(str) {
+        if (typeof str === 'string') {
+          return !!str.match(/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/);
+        }
+
+        return false;
+      },
+      isIPv6(str) {
+        if (typeof str === 'string') {
+          return !!str.match(/^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$/i);
+        }
+
+        return false;
+      },
+      pickHostname(ip) {
+        if (!this.enableReverseLookup) {
+          return '';
+        }
+
+        const arr = this.ip2host[ip];
+        if (arr && arr.length) {
+          const names = this.ip2host[ip].filter(host => host != ip);
+          if (names.length) {
+            return names[0];
+          }
+        }
+
+        return '';
       },
     },
     created() {
