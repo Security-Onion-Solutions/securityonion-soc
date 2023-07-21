@@ -1020,6 +1020,11 @@ const huntComponent = {
     filterVisibleFields(eventModule, eventDataset, fields) {
       if (this.eventFields) {
         var filteredFields = null;
+        if (eventDataset) {
+          if(eventDataset.indexOf('.') !== -1) {
+            eventDataset = eventDataset.substring(eventDataset.indexOf('.') + 1);
+          }
+        }
         if (eventModule && eventDataset) {
           filteredFields = this.eventFields[":" + eventModule + ":" + eventDataset];
         }
