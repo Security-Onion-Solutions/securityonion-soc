@@ -101,6 +101,7 @@ $(document).ready(function() {
       maximizedCancelFn: null,
       licenseKey: null,
       licenseStatus: null,
+      enableReverseLookup: false,
       ip2host: {},
     },
     watch: {
@@ -309,6 +310,7 @@ $(document).ready(function() {
                 this.elasticVersion = response.data.elasticVersion;
                 this.wazuhVersion = response.data.wazuhVersion;
                 this.timezones = response.data.timezones;
+                this.enableReverseLookup = response.data.parameters.enableReverseLookup;
 
                 this.user = await this.getUserById(response.data.userId);
                 if (this.user) {
@@ -940,6 +942,10 @@ $(document).ready(function() {
         event.cancel();
       },
       batchLookup(ips, comp) {
+        if (!this.enableReverseLookup) {
+          return;
+        }
+
         ips = ips.filter(ip => (this.isIPv4(ip) || this.isIPv6(ip)) && !this.ip2host[ip]);
         if (ips.length) {
           ips.forEach(ip => this.ip2host[ip] = []);
@@ -980,6 +986,10 @@ $(document).ready(function() {
         return false;
       },
       pickHostname(ip) {
+        if (!this.enableReverseLookup) {
+          return '';
+        }
+
         const arr = this.ip2host[ip];
         if (arr && arr.length) {
           const names = this.ip2host[ip].filter(host => host != ip);

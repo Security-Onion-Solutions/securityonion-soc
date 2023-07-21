@@ -25,11 +25,11 @@ func RegisterUtilRoutes(srv *Server, r chi.Router, prefix string) {
 	}
 
 	r.Route(prefix, func(r chi.Router) {
-		r.Put("/reverse-lookup", h.getReverseLookup)
+		r.Put("/reverse-lookup", h.putReverseLookup)
 	})
 }
 
-func (h *UtilHandler) getReverseLookup(w http.ResponseWriter, r *http.Request) {
+func (h *UtilHandler) putReverseLookup(w http.ResponseWriter, r *http.Request) {
 	var body []string
 	results := map[string][]string{}
 
@@ -49,61 +49,53 @@ func (h *UtilHandler) getReverseLookup(w http.ResponseWriter, r *http.Request) {
 		ips = append(ips, ip)
 	}
 
-	if true { // Todo: Remove this if and it's else
-		var resolver *net.Resolver
+	var resolver *net.Resolver
 
-		if h.server.Config.Dns != "" {
-			dnsServer := h.server.Config.Dns
+	if h.server.Config.Dns != "" {
+		dnsServer := h.server.Config.Dns
 
-			_, _, err = net.SplitHostPort(dnsServer)
-			if err != nil && err.Error() == "missing port in address" {
-				dnsServer = net.JoinHostPort(dnsServer, "53")
-				err = nil
-			}
-
-			if err == nil {
-				resolver = &net.Resolver{
-					PreferGo: true,
-					Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-						d := net.Dialer{
-							Timeout: time.Millisecond * time.Duration(3000),
-						}
-						return d.DialContext(ctx, network, dnsServer)
-					},
-				}
-			}
+		_, _, err = net.SplitHostPort(dnsServer)
+		if err != nil && err.Error() == "missing port in address" {
+			dnsServer = net.JoinHostPort(dnsServer, "53")
+			err = nil
 		}
 
-		if resolver == nil {
-			resolver = net.DefaultResolver
-		}
-
-		mapLock := sync.Mutex{}
-		lop.ForEach(ips, func(ip string, _ int) {
-			addrs, err := resolver.LookupAddr(context.Background(), ip)
-			if err != nil && !strings.Contains(err.Error(), "Name or service not known") {
-				log.WithField("ip", ip).WithError(err).Warn("Failed to lookup address")
-			}
-			if addrs == nil {
-				addrs = []string{}
-			}
-
-			mapLock.Lock()
-			results[ip] = addrs
-			mapLock.Unlock()
-		})
-
-		// every entry gets something, even if it's just the original IP
-		for k, v := range results {
-			if len(v) == 0 {
-				results[k] = []string{k}
+		if err == nil {
+			resolver = &net.Resolver{
+				PreferGo: true,
+				Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+					d := net.Dialer{
+						Timeout: time.Millisecond * time.Duration(3000),
+					}
+					return d.DialContext(ctx, network, dnsServer)
+				},
 			}
 		}
-	} else {
-		for _, ip := range ips {
-			if _, ok := results[ip]; !ok {
-				results[ip] = []string{"DEBUG"}
-			}
+	}
+
+	if resolver == nil {
+		resolver = net.DefaultResolver
+	}
+
+	mapLock := sync.Mutex{}
+	lop.ForEach(ips, func(ip string, _ int) {
+		addrs, err := resolver.LookupAddr(context.Background(), ip)
+		if err != nil && !strings.Contains(err.Error(), "Name or service not known") {
+			log.WithField("ip", ip).WithError(err).Warn("Failed to lookup address")
+		}
+		if addrs == nil {
+			addrs = []string{}
+		}
+
+		mapLock.Lock()
+		results[ip] = addrs
+		mapLock.Unlock()
+	})
+
+	// every entry gets something, even if it's just the original IP
+	for k, v := range results {
+		if len(v) == 0 {
+			results[k] = []string{k}
 		}
 	}
 
