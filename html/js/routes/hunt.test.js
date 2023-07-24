@@ -910,3 +910,17 @@ test('huntBetween', () => {
     }
   }
 });
+
+test('filterVisibleFields', () => {
+  comp.eventFields = {
+    ':module:dataset': 'a',
+    '::dataset': 'b',
+    ':module:': 'c',
+    'default': 'default',
+  };
+
+  expect(comp.filterVisibleFields('module', 'module.dataset', [])).toEqual('a');
+  expect(comp.filterVisibleFields('', 'module.dataset', [])).toEqual('b');
+  expect(comp.filterVisibleFields('module', 'otherData', [])).toEqual('c');
+  expect(comp.filterVisibleFields('A', 'B', [])).toEqual('default');
+});
