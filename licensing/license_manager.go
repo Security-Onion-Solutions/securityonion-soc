@@ -39,9 +39,10 @@ const LICENSE_STATUS_INVALID = "invalid"
 const LICENSE_STATUS_PENDING = "pending"
 const LICENSE_STATUS_UNPROVISIONED = "unprovisioned"
 
-const FEAT_TIMETRACKING = "timetracking"
 const FEAT_FIPS = "fips"
+const FEAT_OIDC = "oidc"
 const FEAT_STIG = "stig"
+const FEAT_TIMETRACKING = "timetracking"
 
 const PUBLIC_KEY = `
 -----BEGIN PUBLIC KEY-----
@@ -163,6 +164,7 @@ func verify(key string) (*LicenseKey, error) {
 func Init(key string) {
 	available := make([]string, 0, 0)
 	available = append(available, FEAT_FIPS)
+	available = append(available, FEAT_OIDC)
 	available = append(available, FEAT_STIG)
 	available = append(available, FEAT_TIMETRACKING)
 
