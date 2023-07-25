@@ -931,8 +931,8 @@
                   <div class="selected-case-description">{{ selectedOpenCase.payload["so_case.description"] }}</div>
                 </div>
                 <div v-if="selectedOpenCase && selectedOpenCase === 'New Case'">
-                  <v-text-field v-model="newCaseTitle" :rules="[rules.required]" :placeholder="i18n.caseTitle" persistent-hint :hint="i18n.caseTitleHelp"/>
-                  <v-text-field v-model="newCaseDescription" :placeholder="i18n.caseDescription" persistent-hint :hint="i18n.caseDescriptionHelp"/>
+                  <v-text-field v-model="newCaseTitle" id="evidence-title" :rules="[rules.required]" :placeholder="i18n.caseTitle" persistent-hint :hint="i18n.caseTitleHelp"/>
+                  <v-text-field v-model="newCaseDescription" id="evidence-description" :placeholder="i18n.caseDescription" persistent-hint :hint="i18n.caseDescriptionHelp"/>
                 </div>
               </v-form>
             </v-card-text>
