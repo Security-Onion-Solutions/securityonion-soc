@@ -830,7 +830,7 @@
                   {{ i18n.quickActions }}
                 </v-list-item-title>
               </template>
-              <v-list-item dense v-for="action in actions" class="custom-quick-action-button" v-if="action.enabled" :key="action.link" :href="action.background ? '' : action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="$root.target(action.target)" @click="$root.performAction($event, action)">
+              <v-list-item dense v-for="action in actions" class="custom-quick-action-button" v-if="action.enabled" :key="action.link" :href="action.background ? '' : action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="$root.target(action.target)" @click="performAction($event, action) || $root.performAction($event, action)">
                 <v-list-item-icon>
                   <v-icon :alt="action.name" color="white">{{ action.icon }}</v-icon>
                 </v-list-item-icon>
@@ -894,6 +894,52 @@
               <v-spacer></v-spacer>
               <v-btn text id="hunt-between-proceed-button" @click="huntBetween()" v-text="i18n.accept" />
               <v-btn text id="hunt-between-cancel-button" @click="cancelBetweenDialog()" v-text="i18n.cancel" />
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+
+        <v-dialog v-model="addToCaseDialogVisible" persistent max-width="800">
+          <v-card>
+            <v-card-title class="text-h5" v-text="i18n.actionAddToCase" />
+            <v-card-text>
+              <v-form ref="evidence" id="addToCaseForm" v-model="observableForm.valid" @submit.prevent>
+                <div class="gray-box">
+                  <v-select id="evidence-type" v-if="!isPresetCustomEnabled('artifactType')" v-model="observableForm.artifactType" :items="selectList('artifactType')" persistent-hint :hint="i18n.artifactTypeHelp"/>
+                  <v-combobox id="evidence-type" v-if="isPresetCustomEnabled('artifactType')" v-model="observableForm.artifactType" :items="selectList('artifactType')" persistent-hint :hint="i18n.artifactTypeHelp"/>
+                  <v-file-input id="evidence-value" v-if="observableForm.artifactType == 'file'" show-size v-model="observableAttachment" persistent-hint :hint="getAttachmentHelp()" :rules="[rules.fileSizeLimit, rules.fileNotEmpty, rules.fileRequired]"/>
+                  <v-textarea id="evidence-value" v-if="observableForm.artifactType != 'file'" rows="2" :value="observableForm.value" @change="val => observableForm.value = val" :rules="[rules.required]" :placeholder="i18n.artifactValue" persistent-hint :hint="i18n.artifactValueHelp"/>
+                  <v-checkbox id="evidence-bulk" v-if="observableForm.artifactType != 'file'" v-model="observableForm.bulk" persistent-hint :hint="i18n.artifactBulkHelp"/>
+                  <v-textarea id="evidence-description" rows="2" :value="observableForm.description" @change="val => observableForm.description = val" :placeholder="i18n.artifactDescription" persistent-hint :hint="i18n.artifactDescriptionHelp"/>
+                  <v-checkbox id="evidence-ioc" v-model="observableForm.ioc" persistent-hint :hint="i18n.artifactIocHelp"/>
+                  <v-select id="evidence-tlp" v-if="!isPresetCustomEnabled('tlp')" v-model="observableForm.tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
+                  <v-combobox id="evidence-tlp" v-if="isPresetCustomEnabled('tlp')" v-model="observableForm.tlp" :items="selectList('tlp')" persistent-hint :hint="i18n.caseTlpHelp"/>
+                  <v-select id="evidence-tags" v-if="!isPresetCustomEnabled('tags')" v-model="observableForm.tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
+                    <template #selection="{ item }">
+                      <v-chip color="primary">{{item}}</v-chip>
+                    </template>
+                  </v-select>
+                  <v-combobox id="evidence-tags" v-if="isPresetCustomEnabled('tags')" v-model="observableForm.tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
+                    <template #selection="{ item }">
+                      <v-chip color="primary">{{item}}</v-chip>
+                    </template>
+                  </v-combobox>
+                </div>
+                <br/>
+                <v-select id="case-select" v-if="addToCaseDialogVisible" v-model="selectedOpenCase" :items="openCases" :label="i18n.openCases"></v-select>
+                <div v-if="selectedOpenCase && selectedOpenCase != 'New Case'">
+                  <div class="font-weight-bold">{{ i18n.artifactDescription }}:</div>
+                  <div class="selected-case-description">{{ selectedOpenCase.payload["so_case.description"] }}</div>
+                </div>
+                <div v-if="selectedOpenCase && selectedOpenCase === 'New Case'">
+                  <v-text-field v-model="newCaseTitle" :rules="[rules.required]" :placeholder="i18n.caseTitle" persistent-hint :hint="i18n.caseTitleHelp"/>
+                  <v-text-field v-model="newCaseDescription" :placeholder="i18n.caseDescription" persistent-hint :hint="i18n.caseDescriptionHelp"/>
+                </div>
+              </v-form>
+            </v-card-text>
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn text id="add-to-case-proceed-button" @click="addToCase()" v-text="i18n.accept" />
+              <v-btn text id="add-to-case-cancel-button" @click="cancelAddToCaseDialog()" v-text="i18n.cancel" />
             </v-card-actions>
           </v-card>
         </v-dialog>
