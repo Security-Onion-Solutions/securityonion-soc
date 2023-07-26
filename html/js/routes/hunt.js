@@ -135,28 +135,8 @@ const huntComponent = {
       { text: '≤', value: true }
     ],
     addToCaseDialogVisible: false,
-    openCases: [],
-    selectedOpenCase: null,
-    observableForm: {
-      valid: true,
-      artifactType: '',
-      value: '',
-      description: '',
-      bulk: false,
-      tlp: '',
-      tags: [],
-      ioc: false,
-    },
-    presets: [],
-    rules: {
-      required: value => (value && value.length > 0) || this.$root.i18n.required,
-      fileSizeLimit: value => (value == null || value.size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
-      fileNotEmpty: value => (value == null || value.size > 0) || this.$root.i18n.fileEmpty,
-      fileRequired: value => (value != null) || this.$root.i18n.required,
-    },
-    observableAttachment: null,
-    newCaseTitle: '',
-    newCaseDescription: '',
+    mruCases: [],
+    selectedMruCase: null,
   }},
   created() {
     this.$root.initializeCharts();
@@ -268,7 +248,6 @@ const huntComponent = {
       }
 
       this.setupCharts();
-      this.presets = this.$root.parameters.case["presets"];
       this.$root.stopLoading();
 
       if (!this.parseUrlParameters()) return;
@@ -1889,52 +1868,23 @@ const huntComponent = {
         this.$refs['evidence'].resetValidation()
       }
 
-      this.openCases = [
+      this.mruCases = [
         {
           text: this.i18n.createNewCase,
           value: 'New Case',
         }
       ];
-      this.selectedOpenCase = 'New Case';
+      this.selectedMruCase = 'New Case';
 
-      const cases = await this.getOpenCases();
-      for (let i = 0; i < cases.length; i++) {
-        this.openCases.push({
-          text: cases[i].payload["so_case.title"],
-          value: cases[i],
-        });
-      }
-
-      this.observableForm.artifactType = this.getDefaultPreset('artifactType');
-      this.observableForm.value = this.quickActionValue + '';
-      this.observableForm.tlp = this.getDefaultPreset('tlp');
-    },
-    async getOpenCases() {
-      try {
-        const now = moment().format(this.i18n.timePickerFormat);
-        const then = moment(0).format(this.i18n.timePickerFormat);
-
-        let query = this.$root.parameters.cases.queries.find(q => q.name === 'Open Cases');
-        if (query) {
-          query = `(${query.query}) AND _index:"*:so-case" AND so_kind:case`;
-        } else {
-          query = '(NOT so_case.status:closed AND NOT so_case.category:template) AND _index:"*:so-case" AND so_kind:case'
+      const rawMRU = localStorage.getItem('settings.case.mruCases');
+      if (rawMRU) {
+        const cases = JSON.parse(rawMRU);
+        for (let i = 0; i < cases.length; i++) {
+          this.mruCases.push({
+            text: cases[i].title,
+            value: cases[i],
+          });
         }
-
-        const response = await this.$root.papi.get('events/', {
-          params: {
-            query: query,
-            range: `${then} - ${now}`,
-            zone: this.zone,
-            format: this.i18n.timePickerSample,
-            metricLimit: this.groupByLimit,
-            eventLimit: this.eventLimit,
-          }
-        });
-
-        return response.data.events;
-      } catch (error) {
-        this.$root.showError(error);
       }
     },
     cancelAddToCaseDialog() {
@@ -1954,118 +1904,22 @@ const huntComponent = {
         ioc: false,
       };
     },
-    async addToCase() {
+    addToCase() {
       if (this.$refs && this.$refs['evidence'] && !this.$refs['evidence'].validate()) return;
 
       this.addToCaseDialogVisible = false;
 
-      this.observableForm.groupType = 'evidence';
-      if (this.selectedOpenCase !== 'New Case') {
-        this.observableForm.caseId = this.selectedOpenCase.id;
+      let url = window.location.origin + '/#/case/';
+
+      if (this.selectedMruCase !== 'New Case') {
+        url += this.selectedMruCase.id;
+      } else {
+        url += 'create';
       }
 
-      this.observableForm.id = '';
-      if (this.observableForm.value) {
-        this.observableForm.value = this.observableForm.value.trim();
-      }
+      url += '?type=evidence&value=' + encodeURIComponent(this.quickActionValue);
 
-      if (this.selectedOpenCase === 'New Case') {
-        let c = await this.createNewCase();
-        this.observableForm.caseId = c.id;
-      }
-
-      this.addToExistingCase();
-    },
-    async createNewCase() {
-      let payload = {
-        title: this.newCaseTitle,
-        description: this.newCaseDescription,
-      };
-
-      if (!payload.description) payload.description = this.i18n.caseDefaultDescription;
-
-      let response = await this.$root.papi.post('case', payload);
-      return response.data;
-    },
-    async addToExistingCase() {
-      try {
-        let response = null;
-        if (this.attachment && this.observableForm.artifactType === 'file') {
-          const data = new FormData();
-          data.append("json", JSON.stringify(this.observableForm));
-          data.append("attachment", this.attachment);
-
-          const headers = { 'Content-Type': 'multipart/form-data; boundary=' + data._boundary }
-          let config = { 'headers': headers };
-
-          response = await this.$root.papi.post('case/artifacts', data, config);
-        } else if (this.observableForm.artifactType != 'file' && this.observableForm.bulk) {
-          let added = 0;
-          const combined = this.observableForm.value;
-
-          const values = combined.split("\n")
-          for (var i = 0; i < values.length; i++) {
-            const val = values[i];
-            if (val.trim().length > 0) {
-              this.observableForm.value = val.trim();
-
-              let data = JSON.stringify(this.observableForm);
-              response = await this.$root.papi.post('case/artifacts', data);
-
-              if (response && response.data) {
-                added++;
-              }
-
-              response = null;
-            }
-          }
-
-          if (added > 0) {
-            this.resetForm();
-            this.$root.showTip(this.i18n.saveSuccess);
-          }
-        } else {
-          let data = JSON.stringify(this.observableForm);
-          response = await this.$root.papi.post('case/artifacts', data);
-        }
-
-        if (response && response.data) {
-          this.resetForm();
-          this.$root.showTip(this.i18n.saveSuccess);
-        }
-      } catch (error) {
-        this.$root.showError(error);
-      }
-    },
-    isPresetCustomEnabled(kind) {
-      if (this.presets && this.presets[kind]) {
-        return this.presets[kind].customEnabled == true;
-      }
-      return false;
-    },
-    selectList(field, value) {
-      const presets = this.getPresets(field);
-      return this.isPresetCustomEnabled(field) && value
-        ? presets.concat(value)
-        : presets
-    },
-    getPresets(kind) {
-      if (this.presets && this.presets[kind]) {
-        return this.presets[kind].labels;
-      }
-      return [];
-    },
-    getAttachmentHelp() {
-      return this.i18n.attachmentHelp.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes));
-    },
-    getDefaultPreset(preset) {
-      if (this.presets) {
-        const presets = this.presets[preset];
-        if (presets && presets.labels && presets.labels.length > 0) {
-          return presets.labels[0];
-        }
-      }
-      return "";
+      window.open(url, '_blank');
     }
   }
 };

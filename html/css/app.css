@@ -485,14 +485,3 @@ td {
 .theme--light .resolved-host {
   color: rgba(0, 0, 0, 0.5);
 }
-
-.gray-box {
-  background-color: rgb(53, 53, 53);
-  padding-left: 12px;
-  padding-right: 12px;
-  border-radius: 4px;
-}
-
-.theme--light .gray-box {
-  background-color: rgb(244, 244, 244) !important;
-}
