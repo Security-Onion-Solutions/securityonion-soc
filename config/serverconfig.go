@@ -27,6 +27,7 @@ type ServerConfig struct {
 	BindAddress             string                 `json:"bindAddress"`
 	BaseUrl                 string                 `json:"baseUrl"`
 	DeveloperEnabled        bool                   `json:"developerEnabled"`
+	Dns                     string                 `json:"dns"`
 	HtmlDir                 string                 `json:"htmlDir"`
 	ImportUploadDir         string                 `json:"importUploadDir"`
 	MaxPacketCount          int                    `json:"maxPacketCount"`

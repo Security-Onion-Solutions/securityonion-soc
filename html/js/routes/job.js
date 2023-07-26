@@ -210,7 +210,14 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
           unwrap: unwrap
         }});
         if (response.data) {
+          let batch = [];
+          for (let i = 0; i < response.data.length; i++) {
+            const pkt = response.data[i];
+            batch.push(pkt.dstIp);
+            batch.push(pkt.srcIp);
+          }
           this.packets = this.packets.concat(response.data);
+          this.$root.batchLookup(batch, this);
         }
       } catch (error) {
         if (error.response != undefined && error.response.status == 404) {
@@ -233,6 +240,7 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
         });
 
         this.job = response.data;
+        this.$root.batchLookup([this.job?.filter?.srcIp, this.job?.filter?.dstIp], this)
         this.$root.populateUserDetails(this.job, "userId", "owner");
         this.$root.setSubtitle(this.i18n.jobs + " - " + this.job.id);
         this.loadPackets(this.isOptionEnabled('unwrap'));
