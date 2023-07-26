@@ -1187,10 +1187,11 @@
                   <td v-text="$root.formatStringArray(props.item.roles)" class="d-none d-lg-table-cell"></td>
                   <td>
                     <div v-if="$root.isUserAdmin() || $root.isMyUser(props.item)">
-                      <v-icon v-if="props.item.totpStatus == 'enabled' && props.item.status != 'locked'" color="success" :title="i18n.totpEnabled">fa-user-shield</v-icon>
-                      <v-icon v-if="props.item.totpStatus != 'enabled' && props.item.status != 'locked'" :title="i18n.loginEnabled">fa-user</v-icon>
+                      <v-icon v-if="props.item.oidcStatus == 'enabled'" color="success" class="px-1" :title="i18n.oidcLinked">fa-link</v-icon>
+                      <v-icon v-if="props.item.totpStatus == 'enabled'" color="success" :title="i18n.totpActive">fa-user-shield</v-icon>
+                      <v-icon v-if="props.item.webauthnStatus == 'enabled'" color="success" class="px-1" :title="i18n.webauthnActive">fa-fingerprint</v-icon>
                       <v-icon v-if="props.item.status == 'locked'" color="grey" :title="i18n.loginDisabled">fa-user-slash</v-icon>
-                      <v-icon v-if="!props.item.passwordChanged" color="warning" class="px-1" :title="i18n.passwordNeedsChanged">fa-exclamation-triangle</v-icon>
+                      <v-icon v-if="!props.item.passwordChanged && props.item.oidcStatus != 'enabled'" color="warning" class="px-1" :title="i18n.passwordNeedsChanged">fa-exclamation-triangle</v-icon>
                     </div>
                   </td>
                 </tr>
@@ -1229,6 +1230,10 @@
                                   @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'"
                                   :rules="[rules.required, rules.maxpasslen, rules.minpasslen, rules.badpasschs]"></v-text-field>
                               </v-form>
+                              <v-alert v-if="item.oidcStatus == 'enabled'" class="mt-2" type="warning" icon="fa-shield-halved" text dense>
+                                {{ i18n.oidcResetPasswordHelp }}
+                              </v-alert>
+              
                               <v-btn id="update-password-button" :disabled="!form.valid" @click="updatePassword(item)" v-text="i18n.passwordReset" class="mr-2 mb-2"></v-btn>
                               <v-btn id="toggle-locked-button" v-text="item.status == 'locked' ? i18n.unlock : i18n.lock" @click.stop="toggleStatus(item)" class="mr-2 mb-2"/>
                               <v-btn id="delete-user-button" v-text="i18n.delete" color="error" @click.stop="showDeleteConfirm(item)" class="mb-2"/>
@@ -3237,7 +3242,21 @@
                 <v-alert class="mt-2" type="warning" icon="fa-shield-halved" text dense>
                   {{ i18n.securityInstructions }}
                 </v-alert>
-                <v-card outlined class="my-4">
+                <v-card v-if="oidcEnabled" outlined class="my-4">
+                  <v-card-title>{{ i18n.oidc }}</v-card-title>
+                  <v-card-subtitle v-text="i18n.oidcInstructions"></v-card-subtitle>
+                  <v-card-text>
+                    <v-form method="post" :action="authSettingsUrl">
+                      <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
+                      <div v-for="oidc in oidcProviders">
+                        <v-btn v-if="oidc.op == 'link'" :name="oidc.op" :value="oidc.id" :id="'settingsOidcLink_' + oidc.id" type="submit" color="primary" v-text="i18n.oidcLink + ' ' + oidc.id"/>
+                        <v-btn v-if="oidc.op == 'unlink'" :name="oidc.op" :value="oidc.id" :id="'settingsOidcUnlink_' + oidc.id" type="submit" color="primary" v-text="i18n.oidcUnlink + ' ' + oidc.id"/>
+                      </div>
+                    </v-form>
+                  </v-card-text>
+                </v-card>
+
+                <v-card v-if="passwordEnabled" outlined class="my-4">
                   <v-card-title>{{ i18n.password }}</v-card-title>
                   <v-card-subtitle v-text="i18n.passwordInstructions"></v-card-subtitle>
                   <v-card-text>
@@ -3251,7 +3270,7 @@
                   </v-card-text>
                 </v-card>
 
-                <v-card outlined class="my-4" v-if="totpForm.qr && totpForm.secret">
+                <v-card v-if="passwordEnabled && passwordSet" outlined class="my-4" v-if="totpForm.qr && totpForm.secret">
                   <v-alert type="error" border="bottom" colored-border text dense>
                     {{ i18n.securityInstructionsTotp }}
                   </v-alert>
@@ -3273,7 +3292,7 @@
                   </v-card-text>
                 </v-card>
 
-                <v-card outlined class="my-4" v-if="unlink_totp_available">
+                <v-card v-if="unlink_totp_available" outlined class="my-4">
                   <v-card-title>{{ i18n.totp }}</v-card-title>
                   <v-card-text>
                     <v-form method="post" :action="authSettingsUrl">
@@ -3285,7 +3304,7 @@
                   </v-card-text>
                 </v-card>
 
-                <v-card outlined class="my-4" v-if="webauthnForm.script">
+                <v-card v-if="webauthnForm.script" outlined class="my-4">
                   <v-card-title>{{ i18n.webauthn }}</v-card-title>
                   <v-card-subtitle v-text="i18n.webauthnInstructions"></v-card-subtitle>
                   <v-card-text>
@@ -3297,7 +3316,7 @@
                     </v-form>
                   </v-card-text>
 
-                  <div v-if="webauthnForm.existingKeys">
+                  <div v-if="webauthnForm.existingKeys.length">
                     <v-card-subtitle v-text="i18n.webauthnExistingKeys"></v-card-subtitle>
                     <v-card-text>
                       <v-form v-for="key in webauthnForm.existingKeys" method="post" :action="authSettingsUrl">

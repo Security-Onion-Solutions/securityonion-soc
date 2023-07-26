@@ -41,6 +41,9 @@ routes.push({ path: '/settings', name: 'settings', component: {
       script: null,
       existingKeys: [],
     },
+    passwordEnabled: false,
+    oidcEnabled: false,
+    oidcProviders: [],
     rules: {
       required: value => !!value || this.$root.i18n.required,
       matches: value => (!!value && value == this.passwordForm.password) || this.$root.i18n.passwordMustMatch,
@@ -85,8 +88,10 @@ routes.push({ path: '/settings', name: 'settings', component: {
           this.profileForm.lastName = response.data.identity.traits.lastName;
           this.profileForm.note = response.data.identity.traits.note;
         }
+        this.extractPasswordData(response);
         this.extractTotpData(response);
         this.extractWebauthnData(response);
+        this.extractOidcData(response);
 
         var errorsMessage = null;
         if (response.data.ui.messages && response.data.ui.messages.length > 0) {
@@ -147,6 +152,17 @@ routes.push({ path: '/settings', name: 'settings', component: {
     },
     runWebauthn() {
       eval(this.webauthnForm.onclick);
+    },
+    extractPasswordData(response) {
+      if (response.data.ui.nodes.find(item => item.group == "password")) {
+        this.passwordEnabled = true;
+      }
+    },
+    extractOidcData(response) {
+      response.data.ui.nodes.filter(item => item.group == "oidc").forEach((oidc) => {
+        this.oidcEnabled = true;
+        this.oidcProviders.push({op: oidc.attributes.name, id: oidc.attributes.value});
+      });
     }
   }
 }});

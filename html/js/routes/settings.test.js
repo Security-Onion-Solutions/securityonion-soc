@@ -82,3 +82,33 @@ test('shouldRunWebauthn', () => {
   comp.runWebauthn();
   expect(comp.foo).toBe(123);
 });
+
+test('shouldExtractPasswordData', () => {
+  const identifier = {attributes: {name: 'identifier', value: 'some_identifier'}};
+  const passwordMethod = {group: 'password', attributes: {name: 'method', value: 'password'}};
+  const nodes = [identifier, passwordMethod];
+  const response = {data: {ui: {nodes: nodes}}};
+
+  expect(comp.passwordEnabled).toBe(false);
+
+  comp.extractPasswordData(response);
+
+  expect(comp.passwordEnabled).toBe(true);
+});
+
+test('shouldExtractOidcData', () => {
+  const identifier = {attributes: {name: 'identifier', value: 'some_identifier'}};
+  const oidcMethod = {group: 'oidc', type: 'input', attributes: {name: 'link', value: 'SSO'}};
+  const nodes = [identifier, oidcMethod];
+  const response = {data: {ui: {nodes: nodes}}};
+
+  expect(comp.oidcProviders.length).toBe(0);
+  expect(comp.oidcEnabled).toBe(false);
+
+  comp.extractOidcData(response);
+
+  expect(comp.oidcEnabled).toBe(true);
+  expect(comp.oidcProviders.length).toBe(1);
+  expect(comp.oidcProviders[0].id).toBe('SSO');
+  expect(comp.oidcProviders[0].op).toBe('link');
+});

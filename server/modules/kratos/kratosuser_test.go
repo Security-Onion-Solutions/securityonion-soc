@@ -43,6 +43,8 @@ func TestCopyToUser(tester *testing.T) {
 	kratosUser := NewKratosUser("myEmail", "myFirst", "myLast", "note", "inactive")
 	kratosUser.Credentials = make(map[string]*KratosCredential)
 	kratosUser.Credentials["totp"] = &KratosCredential{Type: "totp"}
+	kratosUser.Credentials["webauthn"] = &KratosCredential{Type: "webauthn"}
+	kratosUser.Credentials["oidc"] = &KratosCredential{Type: "oidc"}
 	kratosUser.Credentials["password"] = &KratosCredential{Type: "password"}
 	user := model.NewUser()
 	kratosUser.copyToUser(user)
@@ -53,6 +55,8 @@ func TestCopyToUser(tester *testing.T) {
 	assert.Equal(tester, kratosUser.Addresses[0].Value, user.Email)
 	assert.Equal(tester, "locked", user.Status)
 	assert.Equal(tester, "enabled", user.TotpStatus)
+	assert.Equal(tester, "enabled", user.OidcStatus)
+	assert.Equal(tester, "enabled", user.WebauthnStatus)
 	assert.Equal(tester, false, user.PasswordChanged)
 
 	kratosUser.Credentials = make(map[string]*KratosCredential)
