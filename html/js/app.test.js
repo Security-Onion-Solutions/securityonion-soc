@@ -113,6 +113,16 @@ test('isUserAdmin', async () => {
   expect(app.isUserAdmin()).toBe(true);
 });
 
+test('isMyUser', () => {
+  app.user = null;
+  expect(app.isMyUser()).toBe(false);
+  var user = {id:'123',email:'hi@there.net',roles:['nope', 'peon']};
+  expect(app.isMyUser(user)).toBe(false);
+  app.user = user;
+  expect(app.isMyUser(user)).toBe(true);
+  expect(app.isMyUser()).toBe(false);
+});
+
 test('loadServerSettings', async () => {
   const fakeInfo = {
     srvToken: 'xyz',
