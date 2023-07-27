@@ -1010,3 +1010,76 @@ test('createNewCase', async () => {
     description: comp.i18n.caseDefaultDescription,
   });
 });
+
+test('performAction', () => {
+  const mock = jest.fn();
+  comp.testFunc = mock;
+
+  let action = { jsCall: 'nonExistentFunc' };
+
+  let result = comp.performAction(undefined, action);
+
+  expect(mock).toHaveBeenCalledTimes(0);
+  expect(result).toBe(false);
+
+  action.jsCall = 'testFunc';
+
+  result = comp.performAction(undefined, action);
+
+  expect(mock).toHaveBeenCalledTimes(1);
+  expect(mock).toHaveBeenCalledWith(action);
+  expect(result).toBe(true);
+
+  delete comp.testFunc;
+});
+
+test('openAddToCaseDialog', () => {
+  localStorage['settings.case.mruCases'] = `[{ "id": "1", "title": "Case 1" }, { "id": "2", "title": "Case 2" }]`;
+  comp.$refs = {
+    evidence: {
+      resetValidation: jest.fn(),
+    }
+  };
+  comp.openAddToCaseDialog();
+
+  expect(comp.addToCaseDialogVisible).toBe(true);
+  expect(comp.mruCases).toEqual([{ value: 'New Case', text: comp.i18n.createNewCase }, { value: { id: "1", title: 'Case 1' }, text: 'Case 1' }, { value: { id: "2", title: 'Case 2' }, text: 'Case 2' }]);
+  expect(comp.selectedMruCase).toBe('New Case');
+  expect(comp.$refs.evidence.resetValidation).toHaveBeenCalledTimes(1);
+});
+
+test('addToCase', () => {
+  const origOpen = window.open;
+  window.open = jest.fn();
+  comp.$refs = {
+    evidence: {
+      validate: jest.fn(),
+    }
+  };
+  comp.$refs.evidence.validate.mockReturnValue(true);
+
+  comp.quickActionValue = 'test';
+  comp.selectedMruCase = 'New Case';
+
+  comp.addToCase(false);
+
+  expect(window.open).toHaveBeenCalledTimes(1);
+  expect(window.open).toHaveBeenCalledWith('http://localhost/#/case/create?type=evidence&value=test', '_self');
+  expect(comp.addToCaseDialogVisible).toBe(false);
+
+  comp.addToCase(true)
+
+  expect(window.open).toHaveBeenCalledTimes(2);
+  expect(window.open).toHaveBeenCalledWith('http://localhost/#/case/create?type=evidence&value=test', '_blank');
+  expect(comp.addToCaseDialogVisible).toBe(false);
+
+  comp.selectedMruCase = { id: '1', title: 'Case 1' };
+
+  comp.addToCase(true);
+
+  expect(window.open).toHaveBeenCalledTimes(3);
+  expect(window.open).toHaveBeenCalledWith('http://localhost/#/case/1?type=evidence&value=test', 'Case%201');
+  expect(comp.addToCaseDialogVisible).toBe(false);
+
+  window.open = origOpen;
+});

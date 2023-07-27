@@ -1860,7 +1860,6 @@ const huntComponent = {
     async openAddToCaseDialog() {
       // this function is meant to be called by performAction($event, action)
       this.addToCaseDialogVisible = true;
-      this.resetForm();
 
       if (this.$refs && this.$refs['evidence']) {
         this.$refs['evidence'].resetValidation()
@@ -1886,23 +1885,9 @@ const huntComponent = {
       }
     },
     cancelAddToCaseDialog() {
-      this.resetForm();
-
       this.addToCaseDialogVisible = false;
     },
-    resetForm() {
-      this.observableForm = {
-        valid: true,
-        artifactType: '',
-        value: '',
-        description: '',
-        bulk: false,
-        tlp: '',
-        tags: [],
-        ioc: false,
-      };
-    },
-    addToCase() {
+    addToCase(newTab) {
       if (this.$refs && this.$refs['evidence'] && !this.$refs['evidence'].validate()) return;
 
       this.addToCaseDialogVisible = false;
@@ -1917,7 +1902,16 @@ const huntComponent = {
 
       url += '?type=evidence&value=' + encodeURIComponent(this.quickActionValue);
 
-      window.open(url, '_blank');
+      let target = '_self';
+      if (newTab) {
+        if (this.selectedMruCase === 'New Case') {
+          target = '_blank';
+        } else {
+          target = encodeURIComponent(this.selectedMruCase.title);
+        }
+      }
+
+      window.open(url, target);
     }
   }
 };

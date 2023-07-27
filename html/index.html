@@ -906,7 +906,8 @@
             </v-card-text>
             <v-card-actions>
               <v-spacer></v-spacer>
-              <v-btn text id="add-to-case-proceed-button" @click="addToCase()" v-text="i18n.accept" />
+              <v-btn text id="add-to-case-proceed-button" @click="addToCase(false)" v-text="i18n.add" />
+              <v-btn text id="add-to-case-proceed-new-tab-button" @click="addToCase(true)" v-text="i18n.addInNewTab" />
               <v-btn text id="add-to-case-cancel-button" @click="cancelAddToCaseDialog()" v-text="i18n.cancel" />
             </v-card-actions>
           </v-card>

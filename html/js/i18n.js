@@ -41,6 +41,7 @@ const i18n = {
       add: 'Add',
       addAttachmentHelp: 'Add a new attachment to this case',
       addCommentHelp: 'Add a new comment to this case',
+      addInNewTab: 'Add in New Tab',
       addObservableHelp: 'Add a new observable to this case',
       addObservable: 'Add as new observable...',
       addSuccessful: 'Added successfully!',

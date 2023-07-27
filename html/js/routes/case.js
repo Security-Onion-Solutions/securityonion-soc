@@ -165,6 +165,11 @@ routes.push({ path: '/case/:id', name: 'case', component: {
   mounted() {
     this.$root.loadParameters('case', this.initCase);
     this.$root.subscribe("job", this.updateJob);
+    this.$watch(
+      () => this.$route.params,
+      (to, prev) => {
+        this.loadUrlParameters();
+      });
   },
   beforeDestroy() {
     this.$root.setSubtitle("");
@@ -205,7 +210,11 @@ routes.push({ path: '/case/:id', name: 'case', component: {
 
       if (this.activeTab === 'evidence' && this.$route.query.value) {
         this.enableAdding('evidence');
-        this.associatedForms['evidence'].value = this.$route.query.value;
+        this.$nextTick(() => {
+          this.associatedForms['evidence'].value = this.$route.query.value;
+          this.$refs['evidence'].validate();
+        });
+        window.name = encodeURIComponent(this.caseObj.title);
       }
     },
     getAttachmentHelp() {
