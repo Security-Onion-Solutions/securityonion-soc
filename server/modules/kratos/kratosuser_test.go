@@ -44,7 +44,9 @@ func TestCopyToUser(tester *testing.T) {
 	kratosUser.Credentials = make(map[string]*KratosCredential)
 	kratosUser.Credentials["totp"] = &KratosCredential{Type: "totp"}
 	kratosUser.Credentials["webauthn"] = &KratosCredential{Type: "webauthn"}
-	kratosUser.Credentials["oidc"] = &KratosCredential{Type: "oidc"}
+	oidcIds := make([]string, 1, 1)
+	oidcIds[0] = "test"
+	kratosUser.Credentials["oidc"] = &KratosCredential{Type: "oidc", Identifiers: oidcIds}
 	kratosUser.Credentials["password"] = &KratosCredential{Type: "password"}
 	user := model.NewUser()
 	kratosUser.copyToUser(user)

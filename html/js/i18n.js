@@ -470,7 +470,7 @@ const i18n = {
       oidcLinked: 'OIDC Linked',
       oidcInstructions: 'Users can link to or unlink from the OIDC providers listed below. Be aware that unlinking from all OIDC providers without having a local password set may result in being unable to access this user account. If prompted to login again to verify your identity, choose a login method which is already verified. For example, if you are linking to a new OIDC provider, you cannot use that OIDC provider to confirm your identity.',
       oidcLink: 'Link with ',
-      oidcResetPasswordHelp: 'Resetting this user password will also unlink them from all configured OIDC providers. Consider resetting their password in the provider administrator interface instead.',
+      oidcResetPasswordHelp: 'Administering authentication settings for OIDC users should normally be conducted in the external provider administration interface. Proceeding may cause the user to be disconnected from the OIDC provider.',
       oidcUnlink: 'Unlink from ',
       ok: 'OK',
       offline: 'Offline',

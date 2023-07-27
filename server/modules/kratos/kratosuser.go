@@ -100,7 +100,7 @@ func (kratosUser *KratosUser) copyToUser(user *model.User) {
 		} else {
 			user.TotpStatus = "disabled"
 		}
-		if kratosUser.Credentials["oidc"] != nil {
+		if kratosUser.Credentials["oidc"] != nil && len(kratosUser.Credentials["oidc"].Identifiers) > 0 {
 			user.OidcStatus = "enabled"
 		} else {
 			user.OidcStatus = "disabled"
