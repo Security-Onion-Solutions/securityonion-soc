@@ -178,10 +178,8 @@ routes.push({ path: '/case/:id', name: 'case', component: {
   },
   methods: {
     async initCase(params) {
-      if (this.$route.params.id == 'create') {
+      if (this.$route.params.id === 'create') {
         await this.createCase();
-      } else {
-        await this.loadData();
       }
 
       this.params = params;
@@ -193,6 +191,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       }
       this.analyzerNodeId = params["analyzerNodeId"];
       this.loadLocalSettings();
+      await this.loadData();
       this.resetForm('attachments');
       this.resetForm('evidence');
       this.resetForm('comments');
