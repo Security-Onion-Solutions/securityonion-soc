@@ -1860,8 +1860,6 @@ const huntComponent = {
     async openAddToCaseDialog() {
       // this function is meant to be called by performAction($event, action)
       this.addToCaseDialogVisible = true;
-      this.newCaseTitle = '';
-      this.newCaseDescription = '';
       this.resetForm();
 
       if (this.$refs && this.$refs['evidence']) {
