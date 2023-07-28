@@ -1187,9 +1187,9 @@
                   <td v-text="$root.formatStringArray(props.item.roles)" class="d-none d-lg-table-cell"></td>
                   <td>
                     <div v-if="$root.isUserAdmin() || $root.isMyUser(props.item)">
-                      <v-icon v-if="props.item.oidcStatus == 'enabled'" color="success" class="px-1" :title="i18n.oidcLinked">fa-link</v-icon>
-                      <v-icon v-if="props.item.totpStatus == 'enabled'" color="success" :title="i18n.totpActive">fa-user-shield</v-icon>
-                      <v-icon v-if="props.item.webauthnStatus == 'unused-due-to-always-showing-enabled'" color="success" class="px-1" :title="i18n.webauthnActive">fa-fingerprint</v-icon>
+                      <v-icon v-if="props.item.oidcStatus == 'enabled'" color="info" class="px-1" :title="i18n.oidcLinked">fa-link</v-icon>
+                      <v-icon v-if="props.item.totpStatus == 'enabled'" color="info" :title="i18n.totpActive">fa-user-shield</v-icon>
+                      <v-icon v-if="props.item.webauthnStatus == 'unused-due-to-always-showing-enabled'" color="info" class="px-1" :title="i18n.webauthnActive">fa-fingerprint</v-icon>
                       <v-icon v-if="props.item.status == 'locked'" color="grey" :title="i18n.loginDisabled">fa-user-slash</v-icon>
                       <v-icon v-if="!props.item.passwordChanged && props.item.oidcStatus != 'enabled'" color="warning" class="px-1" :title="i18n.passwordNeedsChanged">fa-exclamation-triangle</v-icon>
                     </div>
