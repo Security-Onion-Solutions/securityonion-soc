@@ -1078,7 +1078,7 @@ test('addToCase', () => {
   comp.addToCase(true);
 
   expect(window.open).toHaveBeenCalledTimes(3);
-  expect(window.open).toHaveBeenCalledWith('http://localhost/#/case/1?type=evidence&value=test', 'Case%201');
+  expect(window.open).toHaveBeenCalledWith('http://localhost/#/case/1?type=evidence&value=test', '1');
   expect(comp.addToCaseDialogVisible).toBe(false);
 
   window.open = origOpen;

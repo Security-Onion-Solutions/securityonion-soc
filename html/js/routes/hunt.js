@@ -1907,7 +1907,7 @@ const huntComponent = {
         if (this.selectedMruCase === 'New Case') {
           target = '_blank';
         } else {
-          target = encodeURIComponent(this.selectedMruCase.title);
+          target = encodeURIComponent(this.selectedMruCase.id);
         }
       }
 

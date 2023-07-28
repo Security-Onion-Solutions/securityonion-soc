@@ -214,7 +214,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           this.associatedForms['evidence'].value = this.$route.query.value;
           this.$refs['evidence'].validate();
         });
-        window.name = encodeURIComponent(this.caseObj.title);
+        window.name = encodeURIComponent(this.caseObj.id);
       }
     },
     getAttachmentHelp() {
