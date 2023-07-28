@@ -1260,7 +1260,7 @@ const huntComponent = {
       group.chart_type = "bar";
       group.chart_options = {};
       group.chart_data = {};
-      this.setupBarChart(group.chart_options, group.chart_data, group.title);
+      this.setupBarChart(group.chart_options, group.chart_data, group.title, groupIdx);
       this.applyLegendOption(group, groupIdx);
       this.populateChart(group.chart_data, group.chart_metrics);
       Vue.set(this.groupBys, groupIdx, group);
@@ -1473,11 +1473,11 @@ const huntComponent = {
       this.setupTimelineChart(this.timelineChartOptions, this.timelineChartData, this.i18n.chartTitleTimeline);
       this.setupBarChart(this.bottomChartOptions, this.bottomChartData, this.i18n.chartTitleBottom);
     },
-    setupBarChart(options, data, title) {
+    setupBarChart(options, data, title, groupIdx) {
       var fontColor = this.$root.getColor("#888888", -40);
       var dataColor = this.$root.getColor("primary");
       var gridColor = this.$root.getColor("#888888", 65);
-      options.onClick = this.handleChartClick;
+      options.onClick = this.handleChartClick(groupIdx);
       options.responsive = true;
       options.maintainAspectRatio = false;
       options.plugins = {
@@ -1621,18 +1621,23 @@ const huntComponent = {
       }
       return color;
     },
-    async handleChartClick(e, activeElement, chart) {
-      if (activeElement.length > 0) {
-        var clickedValue = chart.data.labels[activeElement[0].index] + "";
-        if (clickedValue && clickedValue.length > 0) {
-          if (this.canQuery(clickedValue)) {
-            var chartGroupByField = this.groupBys[0].fields[0];
-            this.toggleQuickAction(e, {}, chartGroupByField, clickedValue);
-          }
-        }
-        return true;
+    handleChartClick(groupIdx) {
+      if (!groupIdx) {
+        groupIdx = 0;
       }
-      return false;
+      return (e, activeElement, chart) => {
+        if (activeElement.length > 0) {
+          var clickedValue = chart.data.labels[activeElement[0].index] + "";
+          if (clickedValue && clickedValue.length > 0) {
+            if (this.canQuery(clickedValue)) {
+              var chartGroupByField = this.groupBys[groupIdx].fields[0];
+              this.toggleQuickAction(e, {}, chartGroupByField, clickedValue);
+            }
+          }
+          return true;
+        }
+        return false;
+      };
     },
     groupByLimitChanged() {
       if (this.groupByItemsPerPage > this.groupByLimit) {

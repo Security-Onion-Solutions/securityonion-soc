@@ -924,3 +924,22 @@ test('filterVisibleFields', () => {
   expect(comp.filterVisibleFields('module', 'otherData', [])).toEqual('c');
   expect(comp.filterVisibleFields('A', 'B', [])).toEqual('default');
 });
+
+test('handleChartClick', () => {
+  const orig = comp.toggleQuickAction;
+  comp.toggleQuickAction = jest.fn();
+
+  let metrics = { "groupby_2|MyField": [] };
+  let groupIdx = 2;
+  comp.queryGroupByOptions = [[], [], ["bar"]]
+
+
+  const result = comp.populateGroupByTable(metrics, groupIdx);
+  comp.groupBys[2].chart_options.onClick(null, [{ index: 0 }], { data: {labels: ['value']} });
+
+  expect(result).toBe(true);
+  expect(comp.toggleQuickAction).toHaveBeenCalledTimes(1);
+  expect(comp.toggleQuickAction).toHaveBeenCalledWith(null, {}, 'MyField', 'value');
+
+  comp.toggleQuickAction = orig;
+});
