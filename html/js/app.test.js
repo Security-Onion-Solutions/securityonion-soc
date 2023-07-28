@@ -246,7 +246,7 @@ test('setFavicon', () => {
   png_icon.href = "https://somehost.com/so.png";
 
   var mock = jest.fn();
-  mock.mockImplementation((path) => { 
+  mock.mockImplementation((path) => {
     if (path.indexOf("png") != -1) {
       return png_icon;
     }
@@ -343,4 +343,67 @@ test('colorLicenseStatus', () => {
   expect(app.colorLicenseStatus("expired")).toBe('warning');
   expect(app.colorLicenseStatus("invalid")).toBe('error');
   expect(app.colorLicenseStatus("pending")).toBe('warning');
+});
+
+test('isIPv4', () => {
+  expect(app.isIPv4('')).toBe(false);
+  expect(app.isIPv4(null)).toBe(false);
+  expect(app.isIPv4('foo')).toBe(false);
+  expect(app.isIPv4(10)).toBe(false);
+  expect(app.isIPv4('1.2.3')).toBe(false);
+  expect(app.isIPv4('1.2.3.4.5')).toBe(false);
+  expect(app.isIPv4('256.256.256.256')).toBe(false);
+  expect(app.isIPv4('¹.¹.¹.¹')).toBe(false);
+  expect(app.isIPv4('١.١.١.١')).toBe(false);
+  expect(app.isIPv4('𝟣.𝟣.𝟣.𝟣')).toBe(false); // punycode
+  expect(app.isIPv4('①.①.①.①')).toBe(false);
+  expect(app.isIPv4('1:2:3:4:5:6:7:8')).toBe(false);
+  expect(app.isIPv4('1::')).toBe(false);
+
+  expect(app.isIPv4('0.0.0.0')).toBe(true);
+  expect(app.isIPv4('127.0.0.1')).toBe(true);
+  expect(app.isIPv4('255.255.255.255')).toBe(true);
+});
+
+test('isIPv6', () => {
+  expect(app.isIPv6('')).toBe(false);
+  expect(app.isIPv6(null)).toBe(false);
+  expect(app.isIPv6('foo')).toBe(false);
+  expect(app.isIPv6(10)).toBe(false);
+  expect(app.isIPv6('1.2.3')).toBe(false);
+  expect(app.isIPv6('1.2.3.4.5')).toBe(false);
+  expect(app.isIPv6('256.256.256.256')).toBe(false);
+  expect(app.isIPv6('¹.¹.¹.¹')).toBe(false);
+  expect(app.isIPv6('١.١.١.١')).toBe(false);
+  expect(app.isIPv6('𝟣.𝟣.𝟣.𝟣')).toBe(false); // punycode
+  expect(app.isIPv6('①.①.①.①')).toBe(false);
+  expect(app.isIPv6('0.0.0.0')).toBe(false);
+  expect(app.isIPv6('127.0.0.1')).toBe(false);
+  expect(app.isIPv6('255.255.255.255')).toBe(false);
+
+  expect(app.isIPv6('1:2:3:4:5:6:7:8')).toBe(true);
+  expect(app.isIPv6('1::')).toBe(true);
+  expect(app.isIPv6('1:2:3:4:5:6:7::')).toBe(true);
+  expect(app.isIPv6('1::8')).toBe(true);
+  expect(app.isIPv6('1:2:3:4:5:6::8')).toBe(true);
+  expect(app.isIPv6('1:2:3:4:5:6::8')).toBe(true);
+  expect(app.isIPv6('1::7:8')).toBe(true);
+  expect(app.isIPv6('1:2:3:4:5::7:8')).toBe(true);
+  expect(app.isIPv6('1:2:3:4:5::8')).toBe(true);
+  expect(app.isIPv6('1::6:7:8')).toBe(true);
+  expect(app.isIPv6('1:2:3:4::6:7:8')).toBe(true);
+  expect(app.isIPv6('1:2:3:4::8')).toBe(true);
+  expect(app.isIPv6('1::5:6:7:8')).toBe(true);
+  expect(app.isIPv6('1:2:3::5:6:7:8')).toBe(true);
+  expect(app.isIPv6('1:2:3::8')).toBe(true);
+  expect(app.isIPv6('1::4:5:6:7:8')).toBe(true);
+  expect(app.isIPv6('1:2::4:5:6:7:8')).toBe(true);
+  expect(app.isIPv6('1:2::8')).toBe(true);
+  expect(app.isIPv6('1::3:4:5:6:7:8')).toBe(true);
+  expect(app.isIPv6('1::3:4:5:6:7:8')).toBe(true);
+  expect(app.isIPv6('1::8')).toBe(true);
+  expect(app.isIPv6('::2:3:4:5:6:7:8')).toBe(true);
+  expect(app.isIPv6('::2:3:4:5:6:7:8')).toBe(true);
+  expect(app.isIPv6('::8')).toBe(true);
+  expect(app.isIPv6('::')).toBe(true);
 });

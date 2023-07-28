@@ -584,7 +584,7 @@
                                <div v-else class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()"></div>
                             </td>
                             <td v-for="field in group.headers.slice(getGroupByFieldStartIndex())" :key="field.value">
-                              <div class="quick-action-trigger d-inline-block" v-text="item[field.value]" @click="toggleQuickAction($event, item, field.value, item[field.value])"></div>
+                              <div class="quick-action-trigger d-inline-block" @click="toggleQuickAction($event, item, field.value, item[field.value])">{{ item[field.value] }}<span class="resolved-host" v-if="$root.pickHostname(item[field.value])"> - {{ $root.pickHostname(item[field.value]) }}</span></div>
                             </td>
                           </tr>
                         </template>
@@ -653,7 +653,7 @@
                       </td>
                       <td v-for="field in eventHeaders" :key="field.value">
                         <div class="quick-action-trigger d-inline-block" @click="toggleQuickAction($event, item, field.value, item[field.value])">
-                          <span v-if="field.value != 'soc_timestamp'" v-text="item[field.value]"/>
+                          <span v-if="field.value != 'soc_timestamp'">{{ item[field.value] }}<span class="resolved-host" v-if="$root.pickHostname(item[field.value])"><br/>- {{ $root.pickHostname(item[field.value]) }}</span></span>
                           <span v-if="field.value == 'soc_timestamp'" v-text="$root.formatLocalTimestamp(item[field.value], zone)"/>
                         </div>
                       </td>
@@ -674,7 +674,7 @@
                                 <div class="d-inline-block expansion" v-text="item.key"></div>
                               </td>
                               <td class="expansion">
-                                <div class="quick-action-trigger d-inline-block expansion hardwrap" v-text="item.value" @click="toggleQuickAction($event, expanded[0], item.key, item.value)"></div>
+                                <div class="quick-action-trigger d-inline-block expansion hardwrap" @click="toggleQuickAction($event, expanded[0], item.key, item.value)">{{item.value}}<span class="resolved-host" v-if="$root.pickHostname(item.value)"> - {{ $root.pickHostname(item.value) }}</span></div>
                               </td>
                             </tr>
                           </template>
@@ -743,6 +743,42 @@
                 {{ i18n.groupNew }}
               </v-list-item-title>
             </v-list-item>
+            <v-list-group dense @click.stop class="flex-group" v-if="quickActionVisible && quickActionIsNumeric">
+              <template v-slot:activator>
+                <v-list-item-icon>
+                  <v-icon :alt="i18n.groupNumeric" color="white">fa-calculator</v-icon>
+                </v-list-item-icon>
+                <v-list-item-content>
+                  <v-list-item-title class="white--text">{{ i18n.numericOps }}</v-list-item-title>
+                </v-list-item-content>
+              </template>
+              <v-list-item dense id="filterLessThan" class="half-width" :to="filterRouteLessThan">
+                <v-list-item-title class="white--text">
+                  &lt;
+                </v-list-item-title>
+              </v-list-item>
+              <v-list-item dense id="filterLessThanEqual" class="half-width" :to="filterRouteLessThanEqual">
+                <v-list-item-title class="white--text">
+                  &le;
+                </v-list-item-title>
+              </v-list-item>
+              <div class="flex-break"></div> <!-- line break -->
+              <v-list-item dense id="filterGreaterThan" class="half-width" :to="filterRouteGreaterThan">
+                <v-list-item-title class="white--text">
+                  &gt;
+                </v-list-item-title>
+              </v-list-item>
+              <v-list-item dense id="filterGreaterThanEqual" class="half-width" :to="filterRouteGreaterThanEqual">
+                <v-list-item-title class="white--text">
+                  &ge;
+                </v-list-item-title>
+              </v-list-item>
+              <v-list-item dense id="filterBetween" @click="showBetweenDialog()">
+                <v-list-item-title class="white--text text-center">
+                  {{ i18n.betweenOp }}
+                </v-list-item-title>
+              </v-list-item>
+            </v-list-group>
             <v-list-group dense @click.stop>
               <template v-slot:activator>
                 <v-list-item-icon>
@@ -829,6 +865,38 @@
           </v-list>
         </v-menu>
 
+        <v-dialog v-model="betweenDialogVisible" persistent max-width="800">
+          <v-card>
+            <v-card-title class="text-h5" v-text="i18n.betweenOp" />
+            <v-card-text>
+              <div class="between-body">
+              <v-responsive class="inline" max-width="120px">
+                <v-text-field v-model="betweenStart" id="betweenStart" label="Start" />
+              </v-responsive>
+              <v-responsive class="inline" max-width="50px">
+                <v-select v-model="betweenStartEquals" id="betweenStartEquals" :items="equalityOperators"></v-select>
+              </v-responsive>
+              <v-responsive class="inline text-center" max-width="290px">
+                {{ quickActionField }}
+              </v-responsive>
+              <v-responsive class="inline" max-width="50px">
+                <v-select v-model="betweenEndEquals" id="betweenEndEquals" :items="equalityOperators"></v-select>
+              </v-responsive>
+              <v-responsive class="inline" max-width="120px">
+                <v-text-field v-model="betweenEnd" id="betweenEnd" label="End" />
+              </v-responsive>
+            </div>
+            <div v-if="betweenError" class="red--text">
+              {{ betweenError }}
+            </div>
+            </v-card-text>
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn text id="hunt-between-proceed-button" @click="huntBetween()" v-text="i18n.accept" />
+              <v-btn text id="hunt-between-cancel-button" @click="cancelBetweenDialog()" v-text="i18n.cancel" />
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
       </v-container>
     </script>
 
@@ -1275,13 +1343,13 @@
                     <v-avatar>
                       <v-icon>fa-file-export</v-icon>
                     </v-avatar>
-                    <span id="jobDetailsSrc">{{ job.filter.srcIp }}:{{ job.filter.srcPort }}</span>
+                    <span id="jobDetailsSrc">{{ job.filter.srcIp }}:{{ job.filter.srcPort }}<span class="resolved-host" v-if="$root.pickHostname(job.filter.srcIp)"> - {{ $root.pickHostname(job.filter.srcIp) }}</span></span>
                   </v-chip>
                   <v-chip v-if="job.filter">
                     <v-avatar>
                       <v-icon>fa-file-import</v-icon>
                     </v-avatar>
-                    <span id="jobDetailsDst">{{ job.filter.dstIp }}:{{ job.filter.dstPort }}</span>
+                    <span id="jobDetailsDst">{{ job.filter.dstIp }}:{{ job.filter.dstPort }}<span class="resolved-host" v-if="$root.pickHostname(job.filter.dstIp)"> - {{ $root.pickHostname(job.filter.dstIp) }}</span></span>
                   </v-chip>
                 </v-expansion-panel-header>
                 <v-expansion-panel-content>
@@ -1306,7 +1374,7 @@
                         </div>
                         <div>
                           <span class="filter label">{{ i18n.srcIp }}:</span>
-                          <span v-if="job.filter" class="filter value">{{ job.filter.srcIp }}</span>
+                          <span v-if="job.filter" class="filter value">{{ job.filter.srcIp }}<span class="resolved-host" v-if="$root.pickHostname(job.filter.srcIp)"> - {{ $root.pickHostname(job.filter.srcIp) }}</span></span>
                         </div>
                         <div>
                           <span class="filter label">{{ i18n.srcPort }}:</span>
@@ -1314,7 +1382,7 @@
                         </div>
                         <div>
                           <span class="filter label">{{ i18n.dstIp }}:</span>
-                          <span v-if="job.filter" class="filter value">{{ job.filter.dstIp }}</span>
+                          <span v-if="job.filter" class="filter value">{{ job.filter.dstIp }}<span class="resolved-host" v-if="$root.pickHostname(job.filter.dstIp)"> - {{ $root.pickHostname(job.filter.dstIp) }}</span></span>
                         </div>
                         <div>
                           <span class="filter label">{{ i18n.dstPort }}:</span>
@@ -1394,9 +1462,9 @@
                   <td v-text="props.item.number"></td>
                   <td>{{ props.item.timestamp | formatTimestamp }}</td>
                   <td><v-chip :color="props.item.type | colorType">{{ props.item.type }}</v-chip></td>
-                  <td>{{ props.item.srcIp }}</td>
+                  <td>{{ props.item.srcIp }}<span class="resolved-host" v-if="$root.pickHostname(props.item.srcIp)"> - {{ $root.pickHostname(props.item.srcIp) }}</span></td>
                   <td>{{ props.item.srcPort }}</td>
-                  <td>{{ props.item.dstIp }}</td>
+                  <td>{{ props.item.dstIp }}<span class="resolved-host" v-if="$root.pickHostname(props.item.dstIp)"> - {{ $root.pickHostname(props.item.dstIp) }}</span></td>
                   <td>{{ props.item.dstPort }}</td>
                   <td><v-chip v-for="flag in props.item.flags" :color="flag | colorFlag" :key="flag">{{ flag }}</v-chip></td>
                   <td>{{ props.item.length }}</td>
@@ -2009,7 +2077,7 @@
                         <td class="associated">{{ props.item.createTime | formatDateTime }}</td>
                         <td class="associated">{{ props.item.updateTime | formatDateTime }}</td>
                         <td class="associated">{{ props.item.artifactType }}</td>
-                        <td class="associated">{{ props.item.value }}</td>
+                        <td class="associated">{{ props.item.value }}<span class="resolved-host" v-if="props.item.artifactType === 'ip' && $root.pickHostname(props.item.value)"><br/>- {{ $root.pickHostname(props.item.value) }}</span></td>
                       </tr>
                     </template>
                     <template v-slot:expanded-item="props">
@@ -2557,7 +2625,7 @@
                             <div>
                               <v-row no-gutters class="py-1 case tabular-row">
                                 <v-col cols="4"><span class="case tabular-label">{{ i18n.value }}:</span></v-col>
-                                <v-col cols="8"><span class="case">{{ props.item.value }}</span></v-col>
+                                <v-col cols="8"><span class="case">{{ props.item.value }}<span class="resolved-host" v-if="props.item.artifactType === 'ip' && $root.pickHostname(props.item.value)"> - {{ $root.pickHostname(props.item.value) }}</span></span></v-col>
                               </v-row>
                             </div>
                             <div>
