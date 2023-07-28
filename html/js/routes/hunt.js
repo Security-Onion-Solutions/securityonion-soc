@@ -134,6 +134,9 @@ const huntComponent = {
       { text: '<', value: false },
       { text: '≤', value: true }
     ],
+    addToCaseDialogVisible: false,
+    mruCases: [],
+    selectedMruCase: null,
   }},
   created() {
     this.$root.initializeCharts();
@@ -995,7 +998,7 @@ const huntComponent = {
             }
           }
 
-          if (action.enabled) {
+          if (action.enabled && !action.jsCall) {
             var link = route.$root.findEligibleActionLinkForEvent(action, event);
             if (link) {
               action.linkFormatted = route.$root.formatActionContent(link, event, field, value, true);
@@ -1846,6 +1849,70 @@ const huntComponent = {
 
       this.$router.push(this.buildFilterRoute(this.quickActionField, range, FILTER_INCLUDE, true));
     },
+    performAction($event, action) {
+      if (action && action.jsCall && this[action.jsCall]) {
+        this[action.jsCall](action);
+        return true;
+      }
+
+      return false;
+    },
+    async openAddToCaseDialog() {
+      // this function is meant to be called by performAction($event, action)
+      this.addToCaseDialogVisible = true;
+
+      if (this.$refs && this.$refs['evidence']) {
+        this.$refs['evidence'].resetValidation()
+      }
+
+      this.mruCases = [
+        {
+          text: this.i18n.createNewCase,
+          value: 'New Case',
+        }
+      ];
+      this.selectedMruCase = 'New Case';
+
+      const rawMRU = localStorage.getItem('settings.case.mruCases');
+      if (rawMRU) {
+        const cases = JSON.parse(rawMRU);
+        for (let i = 0; i < cases.length; i++) {
+          this.mruCases.push({
+            text: cases[i].title,
+            value: cases[i],
+          });
+        }
+      }
+    },
+    cancelAddToCaseDialog() {
+      this.addToCaseDialogVisible = false;
+    },
+    addToCase(newTab) {
+      if (this.$refs && this.$refs['evidence'] && !this.$refs['evidence'].validate()) return;
+
+      this.addToCaseDialogVisible = false;
+
+      let url = window.location.origin + '/#/case/';
+
+      if (this.selectedMruCase !== 'New Case') {
+        url += this.selectedMruCase.id;
+      } else {
+        url += 'create';
+      }
+
+      url += '?type=evidence&value=' + encodeURIComponent(this.quickActionValue);
+
+      let target = '_self';
+      if (newTab) {
+        if (this.selectedMruCase === 'New Case') {
+          target = '_blank';
+        } else {
+          target = encodeURIComponent(this.selectedMruCase.id);
+        }
+      }
+
+      window.open(url, target);
+    }
   }
 };
 
