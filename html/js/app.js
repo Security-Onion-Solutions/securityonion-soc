@@ -711,7 +711,7 @@ $(document).ready(function() {
         if (response) {
           const redirectCookie = this.getCookie('AUTH_REDIRECT');
           if ((response.headers && response.headers['content-type'] == "text/html") ||
-              (response.status == 401) ||
+              (response.status == 401 && !response.request.responseURL.indexOf('/api/')) ||
               (redirectCookie != null && redirectCookie.length > 0)) {
             this.deleteCookie('AUTH_REDIRECT');
             this.showLogin();
