@@ -736,6 +736,16 @@ test('obtainQueryDetails_queryGroupedFilterPipe', () => {
   expect(comp.querySortBys).toStrictEqual([]);
 });
 
+test('obtainQueryDetails_trickyEscapeSequence', () => {
+  comp.query = `process.working_directory:"C:\\\\Windows\\\\system32\\\\" | groupby host.name`;
+  comp.obtainQueryDetails();
+  expect(comp.queryName).toBe("Custom");
+  expect(comp.queryFilters).toStrictEqual([`process.working_directory:"C:\\\\Windows\\\\system32\\\\"`]);
+  expect(comp.queryGroupBys).toStrictEqual([["host.name"]]);
+  expect(comp.queryGroupByOptions).toStrictEqual([[]]);
+  expect(comp.querySortBys).toStrictEqual([]);
+});
+
 test('query string filterToggles', () => {
   comp.$route = { path: "hunt", query: { socExcludeToggle: false } };
   comp.filterToggles = [{

@@ -697,7 +697,7 @@ const huntComponent = {
             break;
           } else if (this.query[i] == "\"" && !escaping) {
             insideQuote = !insideQuote;
-          } else if (this.query[i] == "\\") {
+          } else if (this.query[i] == "\\" && !escaping) {
             escaping = true;
           } else {
             escaping = false;
