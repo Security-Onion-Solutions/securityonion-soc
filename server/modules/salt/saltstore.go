@@ -833,7 +833,10 @@ func (store *Saltstore) forceType(newValue string, forcedType string) (interface
 	case "[]float":
 		return store.alignFloat64List(newValue)
 	case "[]string":
-		return strings.Split(newValue, "\n"), nil
+		if len(newValue) > 0 {
+			return strings.Split(newValue, "\n"), nil
+		}
+		return make([]string, 0, 0), nil
 	case "[][]":
 		return store.alignListList(newValue)
 	case "[]{}":
