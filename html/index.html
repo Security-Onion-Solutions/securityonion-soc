@@ -3069,13 +3069,13 @@
                               <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.nodeStatusRaid }}</span>
                                 <span :class="colorNodeStatus(item.raidStatus) + '--text'" class="filter value">
-                                  <span v-if="item.raidStatus">
+                                  <span v-if="!item.raidStatus || item.raidStatus == NodeStatusUnknown">
                                     {{ i18n.featureRequiresAppliance }}
                                     <a :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'grid.html'" style="text-decoration: none; cursor: 'pointer'"  :title="i18n.clickForMoreInformation">
                                       <v-icon color="info" class="mb-2">fa-circle-question</v-icon>
                                     </a>
                                   </span>
-                                  <span v-else v-text="$root.l$root.localizeMessage(item.raidStatus)"/>
+                                  <span v-else v-text="$root.localizeMessage(item.raidStatus)"/>
                                 </span>
                               </div>
                               <div class="text-no-wrap">
