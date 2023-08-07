@@ -996,6 +996,41 @@ func TestUpdateSetting_AlignNonStringListType(tester *testing.T) {
 	assert.Equal(tester, "123\n456\n", updated_setting.Value)
 }
 
+func TestUpdateSetting_AlignBlankStringListType(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSalt()
+
+	// default should be an empty list
+	settings, get_err := salt.GetSettings(ctx())
+	assert.NoError(tester, get_err)
+	updated_setting := findSetting(settings, "myapp.empty_lists.list_str", "")
+	assert.Equal(tester, "", updated_setting.Value)
+
+	// Update empty setting with non-blank value
+	setting := model.NewSetting("myapp.empty_lists.list_str")
+	setting.Value = "foo"
+	err := salt.UpdateSetting(ctx(), setting, false)
+	assert.NoError(tester, err)
+
+	// should now contain non-blank value
+	settings, get_err = salt.GetSettings(ctx())
+	assert.NoError(tester, get_err)
+	updated_setting = findSetting(settings, "myapp.empty_lists.list_str", "")
+	assert.Equal(tester, "foo\n", updated_setting.Value)
+
+	// Update empty setting with empty lines value
+	setting = model.NewSetting("myapp.empty_lists.list_str")
+	setting.Value = "\n"
+	err = salt.UpdateSetting(ctx(), setting, false)
+	assert.NoError(tester, err)
+
+	// should be an empty list again
+	settings, get_err = salt.GetSettings(ctx())
+	assert.NoError(tester, get_err)
+	updated_setting = findSetting(settings, "myapp.empty_lists.list_str", "")
+	assert.Equal(tester, "", updated_setting.Value)
+}
+
 func TestRelPathFromId(tester *testing.T) {
 	defer Cleanup()
 	salt := NewTestSalt()
@@ -1185,7 +1220,7 @@ func TestForceType(tester *testing.T) {
 		{value: "true\nfalse", forcedType: "[]bool", expected: []bool{true, false}, errorString: ""},
 		{value: "blah", forcedType: "[]bool", expected: []bool{}, errorString: "invalid syntax"},
 		{value: "hello", forcedType: "string", expected: "hello", errorString: ""},
-		{value: "hello", forcedType: "[]string", expected: []string{"hello"}, errorString: ""},
+		{value: "", forcedType: "[]string", expected: []string{}, errorString: ""},
 		{value: "hello\nthere", forcedType: "[]string", expected: []string{"hello", "there"}, errorString: ""},
 		{value: "blah", forcedType: "[]string", expected: []string{"blah"}, errorString: ""},
 		{value: "[\"hello\"]", forcedType: "[][]", expected: [][]interface{}([][]interface{}{[]interface{}{"hello"}}), errorString: ""},

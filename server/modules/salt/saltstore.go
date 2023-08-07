@@ -833,7 +833,10 @@ func (store *Saltstore) forceType(newValue string, forcedType string) (interface
 	case "[]float":
 		return store.alignFloat64List(newValue)
 	case "[]string":
-		return strings.Split(newValue, "\n"), nil
+		if len(newValue) > 0 {
+			return strings.Split(newValue, "\n"), nil
+		}
+		return make([]string, 0, 0), nil
 	case "[][]":
 		return store.alignListList(newValue)
 	case "[]{}":
@@ -986,7 +989,11 @@ func (store *Saltstore) ManageMember(ctx context.Context, operation string, id s
 }
 
 func (store *Saltstore) SendFile(ctx context.Context, node string, from string, to string, cleanup bool) error {
-	// TODO: Auth Check
+	// TODO: re-evaluate necessary permissions when this feature is used for more
+	// than importing pcap/evtx.
+	if err := store.server.CheckAuthorized(ctx, "write", "events"); err != nil {
+		return err
+	}
 
 	args := map[string]string{
 		"command": "send-file",
@@ -1005,7 +1012,9 @@ func (store *Saltstore) SendFile(ctx context.Context, node string, from string, 
 }
 
 func (store *Saltstore) Import(ctx context.Context, node string, file string, importer string) (*string, error) {
-	// TODO: Auth Check
+	if err := store.server.CheckAuthorized(ctx, "write", "events"); err != nil {
+		return nil, err
+	}
 
 	args := map[string]string{
 		"command":  "import-file",

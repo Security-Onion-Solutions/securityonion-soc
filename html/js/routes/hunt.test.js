@@ -736,6 +736,16 @@ test('obtainQueryDetails_queryGroupedFilterPipe', () => {
   expect(comp.querySortBys).toStrictEqual([]);
 });
 
+test('obtainQueryDetails_trickyEscapeSequence', () => {
+  comp.query = `process.working_directory:"C:\\\\Windows\\\\system32\\\\" | groupby host.name`;
+  comp.obtainQueryDetails();
+  expect(comp.queryName).toBe("Custom");
+  expect(comp.queryFilters).toStrictEqual([`process.working_directory:"C:\\\\Windows\\\\system32\\\\"`]);
+  expect(comp.queryGroupBys).toStrictEqual([["host.name"]]);
+  expect(comp.queryGroupByOptions).toStrictEqual([[]]);
+  expect(comp.querySortBys).toStrictEqual([]);
+});
+
 test('query string filterToggles', () => {
   comp.$route = { path: "hunt", query: { socExcludeToggle: false } };
   comp.filterToggles = [{
@@ -923,4 +933,96 @@ test('filterVisibleFields', () => {
   expect(comp.filterVisibleFields('', 'module.dataset', [])).toEqual('b');
   expect(comp.filterVisibleFields('module', 'otherData', [])).toEqual('c');
   expect(comp.filterVisibleFields('A', 'B', [])).toEqual('default');
+});
+
+test('handleChartClick', () => {
+  const orig = comp.toggleQuickAction;
+  comp.toggleQuickAction = jest.fn();
+
+  let metrics = { "groupby_2|MyField": [] };
+  let groupIdx = 2;
+  comp.queryGroupByOptions = [[], [], ["bar"]]
+
+
+  const result = comp.populateGroupByTable(metrics, groupIdx);
+  comp.groupBys[2].chart_options.onClick(null, [{ index: 0 }], { data: {labels: ['value']} });
+
+  expect(result).toBe(true);
+  expect(comp.toggleQuickAction).toHaveBeenCalledTimes(1);
+  expect(comp.toggleQuickAction).toHaveBeenCalledWith(null, {}, 'MyField', 'value');
+
+  comp.toggleQuickAction = orig;
+});
+
+test('performAction', () => {
+  const mock = jest.fn();
+  comp.testFunc = mock;
+
+  let action = { jsCall: 'nonExistentFunc' };
+
+  let result = comp.performAction(undefined, action);
+
+  expect(mock).toHaveBeenCalledTimes(0);
+  expect(result).toBe(false);
+
+  action.jsCall = 'testFunc';
+
+  result = comp.performAction(undefined, action);
+
+  expect(mock).toHaveBeenCalledTimes(1);
+  expect(mock).toHaveBeenCalledWith(action);
+  expect(result).toBe(true);
+
+  delete comp.testFunc;
+});
+
+test('openAddToCaseDialog', () => {
+  localStorage['settings.case.mruCases'] = `[{ "id": "1", "title": "Case 1" }, { "id": "2", "title": "Case 2" }]`;
+  comp.$refs = {
+    evidence: {
+      resetValidation: jest.fn(),
+    }
+  };
+  comp.openAddToCaseDialog();
+
+  expect(comp.addToCaseDialogVisible).toBe(true);
+  expect(comp.mruCases).toEqual([{ value: 'New Case', text: comp.i18n.createNewCase }, { value: { id: "1", title: 'Case 1' }, text: 'Case 1' }, { value: { id: "2", title: 'Case 2' }, text: 'Case 2' }]);
+  expect(comp.selectedMruCase).toBe('New Case');
+  expect(comp.$refs.evidence.resetValidation).toHaveBeenCalledTimes(1);
+});
+
+test('addToCase', () => {
+  const origOpen = window.open;
+  window.open = jest.fn();
+  comp.$refs = {
+    evidence: {
+      validate: jest.fn(),
+    }
+  };
+  comp.$refs.evidence.validate.mockReturnValue(true);
+
+  comp.quickActionValue = 'test';
+  comp.selectedMruCase = 'New Case';
+
+  comp.addToCase(false);
+
+  expect(window.open).toHaveBeenCalledTimes(1);
+  expect(window.open).toHaveBeenCalledWith('http://localhost/#/case/create?type=evidence&value=test', '_self');
+  expect(comp.addToCaseDialogVisible).toBe(false);
+
+  comp.addToCase(true)
+
+  expect(window.open).toHaveBeenCalledTimes(2);
+  expect(window.open).toHaveBeenCalledWith('http://localhost/#/case/create?type=evidence&value=test', '_blank');
+  expect(comp.addToCaseDialogVisible).toBe(false);
+
+  comp.selectedMruCase = { id: '1', title: 'Case 1' };
+
+  comp.addToCase(true);
+
+  expect(window.open).toHaveBeenCalledTimes(3);
+  expect(window.open).toHaveBeenCalledWith('http://localhost/#/case/1?type=evidence&value=test', '1');
+  expect(comp.addToCaseDialogVisible).toBe(false);
+
+  window.open = origOpen;
 });
