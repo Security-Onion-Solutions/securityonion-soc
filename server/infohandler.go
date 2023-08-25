@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -59,6 +60,50 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 		UserId:         user.Id,
 		Timezones:      h.timezones,
 		SrvToken:       srvToken,
+	}
+
+	info.Parameters.DetectionsParams.Queries = []*config.HuntingQuery{
+		{
+			Name:  "All",
+			Query: "_id:*",
+		},
+	}
+
+	info.Parameters.DetectionsParams.ViewEnabled = true
+	info.Parameters.DetectionsParams.CreateLink = "/detection/create"
+	info.Parameters.DetectionsParams.EventFetchLimit = 500
+	info.Parameters.DetectionsParams.EventItemsPerPage = 50
+	info.Parameters.DetectionsParams.GroupFetchLimit = 50
+	info.Parameters.DetectionsParams.MostRecentlyUsedLimit = 5
+	info.Parameters.DetectionsParams.QueryBaseFilter = "_index:\"*:so-case\" AND so_kind:detection"
+	info.Parameters.DetectionsParams.EventFields = map[string][]string{
+		"default": {
+			"soc_timestamp",
+			"so_detection.publicId",
+			"so_detection.title",
+			"so_detection.severity",
+			"so_detection.isEnabled",
+			"so_detection.engine",
+		},
+	}
+
+	info.Parameters.PlaybooksParams.ViewEnabled = true
+	info.Parameters.PlaybooksParams.CreateLink = "/playbook/create"
+	info.Parameters.PlaybooksParams.EventFetchLimit = 500
+	info.Parameters.PlaybooksParams.EventItemsPerPage = 50
+	info.Parameters.PlaybooksParams.GroupFetchLimit = 50
+	info.Parameters.PlaybooksParams.MostRecentlyUsedLimit = 5
+	info.Parameters.PlaybooksParams.QueryBaseFilter = "_index:\"*:so-case\" AND so_kind:playbook"
+	info.Parameters.PlaybooksParams.Queries = []*config.HuntingQuery{
+		{Query: "*"},
+	}
+	info.Parameters.PlaybooksParams.EventFields = map[string][]string{
+		"default": {
+			"soc_timestamp",
+			"so_playbook.title",
+			"so_playbook.publicId",
+			"so_playbook.mechanism",
+		},
 	}
 
 	web.Respond(w, r, http.StatusOK, info)
