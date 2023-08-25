@@ -260,10 +260,15 @@ const huntComponent = {
       }
     },
     applyQuerySubstitutions(queries) {
-      queries.forEach(query => {
-        query.query = query.query.replace(/\{myId\}/g, this.$root.user.id);
-      });
-      return queries;
+      if (Array.isArray(queries)) {
+        queries.forEach(query => {
+          query.query = query.query.replace(/\{myId\}/g, this.$root.user.id);
+        });
+
+        return queries;
+      } else {
+        return [];
+      }
     },
     notifyInputsChanged(replaceHistory = false) {
       var hunted = false;
@@ -338,19 +343,21 @@ const huntComponent = {
         q = this.queryBaseFilter;
       }
 
-      for (var i = 0; i < this.filterToggles.length; i++) {
-        filter = this.filterToggles[i];
+      if (Array.isArray(this.filterToggles)) {
+        for (var i = 0; i < this.filterToggles.length; i++) {
+          filter = this.filterToggles[i];
 
-        if (filter.enabled) {
-          if (q.length > 0) {
-            q = q + " AND ";
+          if (filter.enabled) {
+            if (q.length > 0) {
+              q = q + " AND ";
+            }
+            q = q + filter.filter;
+          } else if (filter.exclusive) {
+            if (q.length > 0) {
+              q = q + " AND ";
+            }
+            q = q + "NOT " + filter.filter;
           }
-          q = q + filter.filter;
-        } else if (filter.exclusive) {
-          if (q.length > 0) {
-            q = q + " AND ";
-          }
-          q = q + "NOT " + filter.filter;
         }
       }
 
@@ -424,20 +431,22 @@ const huntComponent = {
         this.groupQuery(this.$route.query.groupByField, this.$route.query.groupByGroup);
         reRoute = true;
       }
-      for (const q in this.$route.query) {
-        this.filterToggles.forEach(toggle => {
-          if (toggle.name === q) {
-            const orig = toggle.enabled;
-            let enabled = this.$route.query[q];
-            if (typeof enabled === 'string') {
-              enabled = enabled.toLowerCase() === 'true';
+      if (Array.isArray(this.filterToggles)) {
+        for (const q in this.$route.query) {
+          this.filterToggles.forEach(toggle => {
+            if (toggle.name === q) {
+              const orig = toggle.enabled;
+              let enabled = this.$route.query[q];
+              if (typeof enabled === 'string') {
+                enabled = enabled.toLowerCase() === 'true';
+              }
+              toggle.enabled = enabled;
+              if (orig !== toggle.enabled) {
+                reRoute = true;
+              }
             }
-            toggle.enabled = enabled;
-            if (orig !== toggle.enabled) {
-              reRoute = true;
-            }
-          }
-        });
+          });
+        }
       }
       if (reRoute) return false;
       return true;
@@ -454,14 +463,74 @@ const huntComponent = {
         // This must occur before the following await, so that Vue flushes the old groupby DOM renders
         this.groupBys.splice(0);
 
-        const response = await this.$root.papi.get('events/', { params: {
-          query: await this.getQuery(),
-          range: this.dateRange,
-          format: this.i18n.timePickerSample,
-          zone: this.zone,
-          metricLimit: this.groupByLimit,
-          eventLimit: this.eventLimit
-        }});
+        let response;
+        if (this.category === 'playbooks') {
+          response = {
+            data: {
+              "metrics": {
+                "timeline": null,
+              },
+              "elapsedMs": 668,
+	            "errors": [],
+	            "criteria": {
+		            "query": "(_id:*) AND _index:\"*:so-case\" AND so_kind:detection",
+		            "dateRange": "",
+		            "metricLimit": 0,
+		            "eventLimit": 50,
+                "BeginTime": "2021-08-23T15:41:39-06:00",
+                "EndTime": "2023-08-23T15:41:39-06:00",
+                "CreateTime": "2023-08-23T15:41:39.446264196-06:00",
+                "ParsedQuery": {
+                  "Segments": [
+                    {}
+                  ]
+                },
+                "SortFields": null
+              },
+              "events": [
+                {
+                  "source": "manager:so-case",
+                  "Time": "2023-08-23T14:48:17.140438075-06:00",
+                  "timestamp": "2023-08-23T14:48:17.140Z",
+                  "id": "RDmUHooB-8rNCo4d3nIc",
+                  "type": "",
+                  "score": 3.287682,
+                  "payload": {
+                    "@timestamp": "2023-08-23T14:48:17.140438075-06:00",
+                    "so_playbook.onionId": "75332a3c-b029-46a0-9392-509ff90737a8",
+                    "so_playbook.publicId": "4020131e-223a-421e-8ebe-8a211a5ac4d6",
+                    "so_playbook.title": "Find the baddies",
+                    "so_playbook.severity": "high",
+                    "so_playbook.description": "A long description that spans multiple lines. A long description that spans multiple lines. A long description that spans multiple lines. A long description that spans multiple lines. A long description that spans multiple lines. A long description that spans multiple lines.",
+                    "so_playbook.mechanism": "suricata",
+                    "so_playbook.tags": ["one", "two", "three"],
+                    "so_playbook.relatedPlaybooks": [],
+                    "so_playbook.contributors": ["Jim Bob"],
+                    "so_playbook.userEditable": true,
+                    "so_playbook.createTime": "2023-08-22T12:49:47.302819008-06:00",
+                    "so_playbook.kind": "playbook",
+                    "so_playbook.userId": "83656890-2acd-4c0b-8ab9-7c73e71ddaf3",
+                    "so_kind": "playbook"
+                  }
+                }
+              ],
+              createTime: moment().subtract(2, 'seconds').toISOString(),
+              completeTime: moment().toISOString(),
+            }
+          };
+          response.data.totalEvents = response.data.events.length;
+        } else {
+          response = await this.$root.papi.get('events/', {
+            params: {
+              query: await this.getQuery(),
+              range: this.dateRange,
+              format: this.i18n.timePickerSample,
+              zone: this.zone,
+              metricLimit: this.groupByLimit,
+              eventLimit: this.eventLimit
+            }
+          });
+        }
 
         this.eventPage = 1;
         this.groupByPage = 1;
@@ -2037,7 +2106,62 @@ const huntComponent = {
       }
 
       window.open(url, target);
-    }
+    },
+    async CreateDetection() {
+      const response = await this.$root.papi.post('/detection', {
+        publicId: 'ABCDEF',
+        title: 'First!',
+        severity: 'low',
+        author: 'Corey Ogburn',
+        description: 'first try',
+        content: 'rule goes here',
+        isEnabled: true,
+        isReporting: true,
+        Engine: 'suricata'
+      });
+
+      console.log('CREATE', response);
+      this.onionID = response.data.id;
+      console.log('onionID', this.onionID);
+    },
+    async GetDetection() {
+      if (this.onionID) {
+        const response = await this.$root.papi.get('/detection/' + this.onionID);
+
+        console.log('GET', response);
+      } else {
+        console.log('No onionID');
+      }
+    },
+    async UpdateDetection() {
+      if (this.onionID) {
+        const response = await this.$root.papi.put('/detection', {
+          id: this.onionID,
+          publicId: 'ABCDEF',
+          title: 'Second!',
+          severity: 'low',
+          author: 'Corey Ogburn',
+          description: 'first try',
+          content: 'rule goes here',
+          isEnabled: true,
+          isReporting: true,
+          Engine: 'suricata'
+        });
+
+        console.log('UPDATE', response);
+      } else {
+        console.log('No onionID');
+      }
+    },
+    async DeleteDetection() {
+      if (this.onionID) {
+        const response = await this.$root.papi.delete('/detection/' + this.onionID);
+
+        console.log('DELETE', response);
+      } else {
+        console.log('No onionID');
+      }
+    },
   }
 };
 
@@ -2051,3 +2175,9 @@ routes.push({ path: '/cases', name: 'cases', component: casesComponent});
 
 const dashboardsComponent = Object.assign({}, huntComponent);
 routes.push({ path: '/dashboards', name: 'dashboards', component: dashboardsComponent});
+
+const detectionsComponent = Object.assign({}, huntComponent);
+routes.push({ path: '/detections', name: 'detections', component: detectionsComponent });
+
+const playbooksComponent = Object.assign({}, huntComponent);
+routes.push({ path: '/playbooks', name: 'playbooks', component: playbooksComponent });

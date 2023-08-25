@@ -68,6 +68,22 @@
               <v-list-item-title v-text="i18n.cases"></v-list-item-title>
             </v-list-item-content>
           </v-list-item>
+          <v-list-item @click="" to="/detections">
+            <v-list-item-action>
+              <v-icon>fa-magnifying-glass</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>
+              <v-list-item-title v-text="i18n.detections"></v-list-item-title>
+            </v-list-item-content>
+          </v-list-item>
+          <v-list-item @click="" to="/playbooks">
+            <v-list-item-action>
+              <v-icon>fa-book-bookmark</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>
+              <v-list-item-title v-text="i18n.playbooks"></v-list-item-title>
+            </v-list-item-content>
+          </v-list-item>
           <v-list-item @click="" to="/jobs">
             <v-list-item-action>
               <v-icon>fa-stream</v-icon>
@@ -667,7 +683,13 @@
                           :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
                           <v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate">fa-exclamation-triangle</v-icon>
                         </v-btn>
-                        <router-link :to="{ name: 'case', params: {id: item.soc_id}}" style="text-decoration: none; cursor: 'pointer'" v-if="viewEnabled">
+                        <router-link :to="{ name: 'case', params: {id: item.soc_id}}" style="text-decoration: none; cursor: 'pointer'" v-if="viewEnabled && category === 'cases'">
+                          <v-icon class="mr-2" :title="i18n.view">fa-binoculars</v-icon>
+                        </router-link>
+                        <router-link :to="{ name: 'detection', params: {id: item.soc_id}}" style="text-decoration: none; cursor: 'pointer'" v-if="viewEnabled && category === 'detections'">
+                          <v-icon class="mr-2" :title="i18n.view">fa-binoculars</v-icon>
+                        </router-link>
+                        <router-link :to="{ name: 'playbook', params: {id: item.soc_id}}" style="text-decoration: none; cursor: 'pointer'" v-if="viewEnabled && category === 'playbooks'">
                           <v-icon class="mr-2" :title="i18n.view">fa-binoculars</v-icon>
                         </router-link>
                       </td>
@@ -935,6 +957,331 @@
             </v-card-actions>
           </v-card>
         </v-dialog>
+      </v-container>
+    </script>
+
+    <script type="text/x-template" id="page-detection">
+      <v-container fluid v-if="detect">
+        <div class="mx-sm-12 mx-lg-6 mt-2 mb-6 mb-md-1">
+          <!-- Title -->
+          <h2 id="detection-title" @click="startEdit('detection-title', 'title')" v-if="!isEdit('detection-title')">{{ detect.title }}</h2>
+          <v-text-field id="detection-title-edit" v-else hide-details="auto" outlined v-model="detect.title" :rules="[rules.required]" persistent-hint :hint="'Detection Title'" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"></v-text-field>
+        </div>
+
+        <div class="row mx-sm-8 mx-md-12 mx-lg-4 flex-column flex-md-row">
+          <div class="main col-md-9 order-md-1 col-12 order-2">
+            <v-tabs grow v-model="activeTab">
+              <v-tab id="detection_summaryTab" href="#summary">
+                <v-icon left>fa-clipboard</v-icon>
+                <div class="d-none d-lg-block">Summary</div>
+              </v-tab>
+              <v-tab id="detection_detailsTab" href="#details">
+                <v-icon left>fa-circle-info</v-icon>
+                <div class="d-none d-lg-block">Details</div>
+              </v-tab>
+              <v-tab id="detection_notesTab" href="#notes">
+                <v-icon left>fa-pencil</v-icon>
+                <div class="d-none d-lg-block">Notes</div>
+              </v-tab>
+              <v-tab id="detection_signatureTab" href="#signature">
+                <v-icon left>fa-signature</v-icon>
+                <div class="d-none d-lg-block">Signature</div>
+              </v-tab>
+              <v-tab id="detection_playbookTab" href="#playbook">
+                <v-icon left>fa-book-bookmark</v-icon>
+                <div class="d-none d-lg-block">Investigative Playbook</div>
+              </v-tab>
+              <v-tab id="detection_tuningTab" href="#tuning">
+                <v-icon left>fa-wrench</v-icon>
+                <div class="d-none d-lg-block">Tuning</div>
+              </v-tab>
+              <v-tab id="detection_historyTab" href="#history">
+                <v-icon left>fa-history</v-icon>
+                <div class="d-none d-lg-block">History</div>
+              </v-tab>
+
+              <v-tab-item value="summary">
+                <div class="col pt-5" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
+                  <div>
+                    <!-- Description -->
+                    <span class="font-weight-bold">Description:</span><br/>
+                    <span id="detection-description" @click="startEdit('detection-description', 'description')" v-if="!isEdit('detection-description')">{{ detect.description }}</span>
+                    <v-textarea id="detection-description-edit" v-else hide-details="auto" outlined v-model="detect.description" :rules="[rules.required]" persistent-hint :hint="'Detection Description'" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)" auto-grow rows="5"></v-textarea>
+                  </div>
+                  <!-- Engine -->
+                  <v-select id="detection-engine-edit" v-model="detect.engine" :items="engineOptions" persistent-hint :hint="'Engine'" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
+                  <!-- Enabled -->
+                  <v-checkbox id="detection-enabled-edit" v-model="detect.isEnabled" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)" label="Enabled"/>
+                  <!-- Reporting -->
+                  <v-checkbox id="detection-reporting-edit" v-model="detect.isReporting" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)" label="Reporting"/>
+                </div>
+              </v-tab-item>
+              <v-tab-item value="details">
+                <div class="col pt-0" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
+                  <!-- PublicID -->
+                  <v-text-field id="detection-publicId-edit" v-model="detect.publicId" :rules="[rules.required]" persistent-hint :hint="'Public ID'" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)">
+                    <template v-slot:append v-if="!detect.publicId">
+                      <v-btn id="gen-public-id" text small color="primary" @click="generatePublicID()">Generate</v-btn>
+                    </template>
+                  </v-text-field>
+                  <!-- Author -->
+                  <v-text-field id="detection-author-edit" v-model="detect.author" :rules="[rules.required]" persistent-hint :hint="'Author'" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"></v-text-field>
+                  <!-- Severity -->
+                  <v-select id="detection-severity-edit" v-model="detect.severity" :items="severityOptions" persistent-hint :hint="'Severity'" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
+                </div>
+                <div class="d-flex align-center align-self-end text-body-2 mt-2">
+                  <div class="d-inline-flex justify-end">
+                    <v-btn id="detection-cancel" text small color="primary" class="align-self-end" @click="cancelDetection()">
+                      {{ i18n.cancel }}
+                    </v-btn>
+                    <v-btn id="detection-create" text small color="primary" class="align-self-end" @click="saveDetection(true)" v-if="isNew()">
+                      {{ i18n.create }}
+                    </v-btn>
+                    <v-btn id="detection-update" text small color="primary" class="align-self-end" @click="saveDetection(false)" v-else>
+                      {{i18n.update}}
+                    </v-btn>
+                  </div>
+                </div>
+              </v-tab-item>
+              <v-tab-item value="notes">
+                <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
+                  <!-- Notes -->
+                  <v-textarea class="config-editor" outlined v-model="detect.note" auto-grow rows="15" />
+                </div>
+              </v-tab-item>
+              <v-tab-item value="signature">
+                <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
+                  <!-- Signature -->
+                  <v-textarea class="config-editor" outlined v-model="detect.content" auto-grow rows="15" />
+                </div>
+              </v-tab-item>
+              <v-tab-item value="playbook">
+                <div class="col pa-2" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
+                  <div class="col ma-2">
+                    <div class="row my-2">
+                      <span class="font-weight-bold">Title:&nbsp;</span>
+                      <a :href="'#/playbook/' + associatedPlaybook.onionId" style="text-decoration: none; cursor: 'pointer'">
+                        {{associatedPlaybook.title}}
+                      </router-link>
+                    </div>
+                    <div class="row my-2">
+                      <span class="font-weight-bold">Description:&nbsp;</span>{{associatedPlaybook.description}}
+                    </div>
+                    <div class="row my-2">
+                      <span class="font-weight-bold">Severity:&nbsp;</span>{{associatedPlaybook.severity}}
+                    </div>
+                  </div>
+                </div>
+              </v-tab-item>
+              <v-tab-item value="tuning">
+                Coming Soon!
+              </v-tab-item>
+              <v-tab-item value="history">
+                Coming Soon!
+              </v-tab-item>
+            </v-tabs>
+          </div>
+          <div class="col-md-3 order-md-2 col-12 order-1">
+            <v-expansion-panels focusable multiple v-model="panel">
+              <v-expansion-panel v-if="!isNew()">
+                <v-expansion-panel-header id="detection-related-playbooks">
+                  <h3>Cases</h3>
+                </v-expansion-panel-header>
+                <v-expansion-panel-content>
+                  Related Cases:
+                  <ul>
+                    <li>123</li>
+                    <li>456</li>
+                    <li>ABC</li>
+                    <li>XYZ</li>
+                  </ul>
+                </v-expansion-panel-content>
+              </v-expansion-panel>
+              <v-expansion-panel v-if="!isNew()">
+                <v-expansion-panel-header id="detection-related-playbooks">
+                  <h3>Alerts</h3>
+                </v-expansion-panel-header>
+                <v-expansion-panel-content>
+                  Recent Alerts:
+                  <ul>
+                    <li>123</li>
+                    <li>456</li>
+                    <li>ABC</li>
+                    <li>XYZ</li>
+                  </ul>
+                </v-expansion-panel-content>
+              </v-expansion-panel>
+            </v-expansion-panels>
+          </div>
+        </div>
+      </v-container>
+    </script>
+
+    <script type="text/x-template" id="page-playbook">
+      <v-container fluid v-if="playbook">
+        <div class="mx-sm-12 mx-lg-6 mt-2 mb-6 mb-md-1">
+          <!-- Title -->
+          <h2 id="playbook-title" @click="startEdit('playbook-title', 'title')" v-if="!isEdit('playbook-title')">{{ playbook.title }}</h2>
+          <v-text-field id="playbook-title-edit" v-else hide-details="auto" outlined v-model="playbook.title" :rules="[rules.required]" persistent-hint :hint="'Playbook Title'" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"></v-text-field>
+        </div>
+
+        <div class="row mb-6 mb-md-1 mt-2 mx-lg-6 mx-sm-12">
+          <!-- Description -->
+          <span id="playbook-description" @click="startEdit('playbook-description', 'description')" v-if="!isEdit('playbook-description')">{{ playbook.description }}</span>
+          <v-textarea id="playbook-description-edit" v-else hide-details="auto" outlined v-model="playbook.description" :rules="[rules.required]" persistent-hint :hint="'Playbook Description'" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)" auto-grow rows="5"></v-textarea>
+        </div>
+
+        <div class="row mx-sm-8 mx-md-12 mx-lg-4 flex-column flex-md-row">
+          <div class="main col-md-9 order-md-1 col-12 order-2">
+            <v-tabs grow v-model="activeTab">
+              <v-tab id="playbook_notesTab" href="#notes">
+                <v-icon left>fa-comments</v-icon>
+                <div class="d-none d-lg-block">Observational Notes</div>
+              </v-tab>
+              <v-tab id="playbook_questionsTab" href="#questions">
+                <v-icon left>fa-circle-question</v-icon>
+                <div class="d-none d-lg-block">Investigative Questions</div>
+              </v-tab>
+              <v-tab id="playbook_casesTab" href="#cases">
+                <v-icon left>fa-briefcase</v-icon>
+                <div class="d-none d-lg-block">Cases</div>
+              </v-tab>
+              <v-tab id="playbook_historyTab" href="#history">
+                <v-icon left>fa-history</v-icon>
+                <div class="d-none d-lg-block">{{ i18n.history }}</div>
+              </v-tab>
+
+              <v-tab-item value="notes">
+                <div class="col pt-0" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
+                  <!-- PublicID -->
+                  <v-text-field id="playbook-publicId-edit" v-model="playbook.publicId" :rules="[rules.required]" persistent-hint :hint="'Public ID'" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)">
+                    <template v-slot:append v-if="!playbook.publicId">
+                      <v-btn id="gen-public-id" text small color="primary" @click="generatePublicID()">Generate</v-btn>
+                    </template>
+                  </v-text-field>
+                  <!-- Contributors -->
+                  <v-combobox id="playbook-contributors" v-model="playbook.contributors" persistent-hint :hint="'Contributors'" multiple>
+                    <template #selection="{ item }">
+                      <v-chip color="primary">{{item}}</v-chip>
+                    </template>
+                  </v-combobox>
+
+                  <!-- Severity -->
+                  <v-select id="playbook-severity-edit" v-model="playbook.severity" :items="severityOptions" persistent-hint :hint="'Severity'" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
+
+                  <!-- Mechanism -->
+                  <v-select id="playbook-engine-edit" v-model="playbook.mechanism" :items="engineOptions" persistent-hint :hint="'Mechanism'" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
+
+                  <!-- Tags -->
+                  <v-combobox id="playbook-tags" v-model="playbook.tags" :items="tags" persistent-hint :hint="i18n.caseTagsHelp" multiple>
+                    <template #selection="{ item }">
+                      <v-chip color="primary">{{item}}</v-chip>
+                    </template>
+                  </v-combobox>
+
+                  <!-- IsCommunity -->
+                  <div class="my-3">
+                    <span class="font-weight-bold">Community Playbook:</span> {{ playbook.userEditable ? 'No' : 'Yes' }}
+                  </div>
+                  <div class="row">
+                    <div class="col">
+                      <!-- Content -->
+                      <span class="font-weight-bold">Note:</span>
+                      <v-textarea class="config-editor" outlined v-model="playbook.note" auto-grow rows="5" />
+                    </div>
+                  </div>
+                </div>
+                <div class="d-flex align-center align-self-end text-body-2 mt-2">
+                  <div class="d-inline-flex justify-end">
+                    <v-btn id="playbook-cancel" text small color="primary" class="align-self-end" @click="cancelPlaybook()">
+                      {{ i18n.cancel }}
+                    </v-btn>
+                    <v-btn id="playbook-create" text small color="primary" class="align-self-end" @click="savePlaybook(true)" v-if="isNew()">
+                      {{ i18n.create }}
+                    </v-btn>
+                    <v-btn id="playbook-update" text small color="primary" class="align-self-end" @click="savePlaybook(false)" v-else>
+                      {{ i18n.update }}
+                    </v-btn>
+                  </div>
+                </div>
+              </v-tab-item>
+
+              <v-tab-item value="questions">
+                <div class="col pt-0" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
+                  <h2>Add Investigative Question</h2>
+                  <v-text-field id="playbook-question-add" v-model="addQuestion" persistent-hint :hint="'The investigative question written in plain language for human consumption, in the form of a question'"></v-text-field>
+                  <v-text-field id="playbook-context-add" v-model="addContext" persistent-hint :hint="'Provide optional context'"></v-text-field>
+                  <v-combobox id="playbook-datasources-add" v-model="addDataSources" persistent-hint :hint="'The data sources that can be used to answer the question'" multiple>
+                    <template #selection="{ item }">
+                      <v-chip color="primary">{{item}}</v-chip>
+                    </template>
+                  </v-combobox>
+
+                  <v-btn id="playbook-add-question" color="primary" class="mt-2" @click="appendQuestion()">
+                    Add
+                  </v-btn>
+                </div>
+
+                <v-text-field v-model="search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line></v-text-field>
+                <div v-for="q in playbook.questions" class="col px-5 py-2" style="background-color: rgb(40, 40, 40); border-radius: 4px;">
+                  <div class="font-italic my-2">{{q.question}}</div>
+                  <div class="my-2"><span class="font-weight-bold">Context:</span> {{ q.context }}</div>
+                  <div class="my-2"><span class="font-weight-bold">Data Sources:</span> {{ q.dataSources.join(', ') }}</div>
+                  <div class="my-2">
+                    <div><span class="font-weight-bold">Query:</span> {{ q.query }}</div>
+                    <v-data-table v-if="q.query" :headers="questionHeaders" :items="q.results">
+                      <template v-slot:item="result">
+                        <tr>
+                          <td v-text="result.item.payload['@timestamp']"></td>
+                          <td v-text="result.item.payload['@version']"></td>
+                          <td v-text="result.item.payload['message']"></td>
+                        </tr>
+                      </template>
+                    </v-data-table>
+                  </div>
+                </div>
+              </v-tab-item>
+              <v-tab-item value="cases">
+                Coming Soon!
+              </v-tab-item>
+              <v-tab-item value="history">
+                Coming Soon!
+              </v-tab-item>
+            </v-tabs>
+          </div>
+          <div class="col-md-3 order-md-2 col-12 order-1">
+            <v-expansion-panels focusable multiple v-model="panel">
+              <v-expansion-panel v-if="!isNew()">
+                <v-expansion-panel-header id="playbook-related-playbooks">
+                  <h3>Playbooks</h3>
+                </v-expansion-panel-header>
+                <v-expansion-panel-content>
+                  Related Playbooks:
+                  <ul>
+                    <li>123</li>
+                    <li>456</li>
+                    <li>ABC</li>
+                    <li>XYZ</li>
+                  </ul>
+                </v-expansion-panel-content>
+              </v-expansion-panel>
+              <v-expansion-panel v-if="!isNew()">
+                <v-expansion-panel-header id="detection-related-playbooks">
+                  <h3>Alerts</h3>
+                </v-expansion-panel-header>
+                <v-expansion-panel-content>
+                  Recent Alerts:
+                  <ul>
+                    <li>123</li>
+                    <li>456</li>
+                    <li>ABC</li>
+                    <li>XYZ</li>
+                  </ul>
+                </v-expansion-panel-content>
+              </v-expansion-panel>
+            </v-expansion-panels>
+          </div>
+        </div>
       </v-container>
     </script>
 
@@ -4119,6 +4466,8 @@
     <script src="js/routes/gridmembers.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/terms.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/users.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/detection.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/playbook.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/custom.js?v=VERSION_PLACEHOLDER"></script>
   </body>
 </html>

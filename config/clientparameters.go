@@ -22,6 +22,8 @@ type ClientParameters struct {
 	CaseParams          CaseParameters    `json:"case"`
 	DashboardsParams    HuntingParameters `json:"dashboards"`
 	JobParams           HuntingParameters `json:"job"`
+	DetectionsParams    HuntingParameters `json:"detections"`
+	PlaybooksParams     HuntingParameters `json:"playbooks"`
 	DocsUrl             string            `json:"docsUrl"`
 	CheatsheetUrl       string            `json:"cheatsheetUrl"`
 	ReleaseNotesUrl     string            `json:"releaseNotesUrl"`
