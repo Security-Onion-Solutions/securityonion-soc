@@ -21,18 +21,20 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/json"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/salt/options"
 	"github.com/security-onion-solutions/securityonion-soc/syntax"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"gopkg.in/yaml.v3"
 )
 
 type Saltstore struct {
-	server       *server.Server
-	client       *web.Client
-	timeoutMs    int
-	saltstackDir string
-	queueDir     string
-	bypassErrors bool
+	server             *server.Server
+	client             *web.Client
+	timeoutMs          int
+	longRelayTimeoutMs int
+	saltstackDir       string
+	queueDir           string
+	bypassErrors       bool
 }
 
 func NewSaltstore(server *server.Server) *Saltstore {
@@ -41,8 +43,9 @@ func NewSaltstore(server *server.Server) *Saltstore {
 	}
 }
 
-func (store *Saltstore) Init(timeoutMs int, saltstackDir string, queueDir string, bypassErrors bool) error {
+func (store *Saltstore) Init(timeoutMs int, longRelayTimeoutMs int, saltstackDir string, queueDir string, bypassErrors bool) error {
 	store.timeoutMs = timeoutMs
+	store.longRelayTimeoutMs = longRelayTimeoutMs
 	store.saltstackDir = strings.TrimSuffix(saltstackDir, "/")
 	store.queueDir = queueDir
 	store.bypassErrors = bypassErrors
@@ -75,8 +78,15 @@ func (store *Saltstore) execCommand(ctx context.Context, args map[string]string)
 		"timeoutMs":        store.timeoutMs,
 	}).Info("Waiting for response")
 
+	timeoutMs := store.timeoutMs
+	optTimeoutMs := options.GetTimeoutMs(ctx)
+
+	if optTimeoutMs > timeoutMs {
+		timeoutMs = optTimeoutMs
+	}
+
 	var response string
-	expiration := time.Duration(store.timeoutMs) * time.Millisecond
+	expiration := time.Duration(timeoutMs) * time.Millisecond
 	for timeoutTime := time.Now().Add(expiration); time.Now().Before(timeoutTime); {
 		if _, err = os.Stat(responseFilename); err == nil {
 			var data []byte
@@ -1003,7 +1013,9 @@ func (store *Saltstore) SendFile(ctx context.Context, node string, from string, 
 		"cleanup": strconv.FormatBool(cleanup),
 	}
 
-	output, err := store.execCommand(ctx, args)
+	ctxTimeout := options.WithTimeoutMs(ctx, store.longRelayTimeoutMs)
+
+	output, err := store.execCommand(ctxTimeout, args)
 	if err == nil && output == "false" {
 		err = errors.New("ERROR_SALT_SEND_FILE")
 	}
@@ -1023,7 +1035,9 @@ func (store *Saltstore) Import(ctx context.Context, node string, file string, im
 		"importer": importer,
 	}
 
-	output, err := store.execCommand(ctx, args)
+	ctxTimeout := options.WithTimeoutMs(ctx, store.longRelayTimeoutMs)
+
+	output, err := store.execCommand(ctxTimeout, args)
 	if err == nil && output == "false" {
 		err = errors.New("ERROR_SALT_IMPORT")
 		return nil, err
