@@ -28,12 +28,13 @@ import (
 )
 
 type Saltstore struct {
-	server       *server.Server
-	client       *web.Client
-	timeoutMs    int
-	saltstackDir string
-	queueDir     string
-	bypassErrors bool
+	server             *server.Server
+	client             *web.Client
+	timeoutMs          int
+	longRelayTimeoutMs int
+	saltstackDir       string
+	queueDir           string
+	bypassErrors       bool
 }
 
 func NewSaltstore(server *server.Server) *Saltstore {
@@ -42,8 +43,9 @@ func NewSaltstore(server *server.Server) *Saltstore {
 	}
 }
 
-func (store *Saltstore) Init(timeoutMs int, saltstackDir string, queueDir string, bypassErrors bool) error {
+func (store *Saltstore) Init(timeoutMs int, longRelayTimeoutMs int, saltstackDir string, queueDir string, bypassErrors bool) error {
 	store.timeoutMs = timeoutMs
+	store.longRelayTimeoutMs = longRelayTimeoutMs
 	store.saltstackDir = strings.TrimSuffix(saltstackDir, "/")
 	store.queueDir = queueDir
 	store.bypassErrors = bypassErrors
@@ -1011,7 +1013,9 @@ func (store *Saltstore) SendFile(ctx context.Context, node string, from string, 
 		"cleanup": strconv.FormatBool(cleanup),
 	}
 
-	output, err := store.execCommand(ctx, args)
+	ctxTimeout := options.WithTimeoutMs(ctx, store.longRelayTimeoutMs)
+
+	output, err := store.execCommand(ctxTimeout, args)
 	if err == nil && output == "false" {
 		err = errors.New("ERROR_SALT_SEND_FILE")
 	}
@@ -1031,7 +1035,9 @@ func (store *Saltstore) Import(ctx context.Context, node string, file string, im
 		"importer": importer,
 	}
 
-	output, err := store.execCommand(ctx, args)
+	ctxTimeout := options.WithTimeoutMs(ctx, store.longRelayTimeoutMs)
+
+	output, err := store.execCommand(ctxTimeout, args)
 	if err == nil && output == "false" {
 		err = errors.New("ERROR_SALT_IMPORT")
 		return nil, err

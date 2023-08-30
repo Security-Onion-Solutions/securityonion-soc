@@ -19,7 +19,6 @@ import (
 	"unicode"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/server/modules/salt/options"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/go-chi/chi"
@@ -219,9 +218,7 @@ func (h *GridMembersHandler) postImport(w http.ResponseWriter, r *http.Request) 
 			baseTargetDir += "/"
 		}
 
-		ctxTimeout := options.WithTimeoutMs(ctx, 120000)
-
-		err = h.server.GridMembersstore.SendFile(ctxTimeout, id, targetFile, baseTargetDir, true)
+		err = h.server.GridMembersstore.SendFile(ctx, id, targetFile, baseTargetDir, true)
 		if err != nil {
 			needsCleanup = true
 			web.Respond(nil, r, http.StatusInternalServerError, err)
@@ -231,7 +228,7 @@ func (h *GridMembersHandler) postImport(w http.ResponseWriter, r *http.Request) 
 
 		targetFile = filepath.Join(baseTargetDir, filename)
 
-		dashboardURL, err := h.server.GridMembersstore.Import(ctxTimeout, id, targetFile, ext)
+		dashboardURL, err := h.server.GridMembersstore.Import(ctx, id, targetFile, ext)
 		if err != nil {
 			web.Respond(nil, r, http.StatusInternalServerError, err)
 			return
