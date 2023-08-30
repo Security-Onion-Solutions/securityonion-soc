@@ -21,6 +21,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/json"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/salt/options"
 	"github.com/security-onion-solutions/securityonion-soc/syntax"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"gopkg.in/yaml.v3"
@@ -75,8 +76,15 @@ func (store *Saltstore) execCommand(ctx context.Context, args map[string]string)
 		"timeoutMs":        store.timeoutMs,
 	}).Info("Waiting for response")
 
+	timeoutMs := store.timeoutMs
+	optTimeoutMs := options.GetTimeoutMs(ctx)
+
+	if optTimeoutMs > timeoutMs {
+		timeoutMs = optTimeoutMs
+	}
+
 	var response string
-	expiration := time.Duration(store.timeoutMs) * time.Millisecond
+	expiration := time.Duration(timeoutMs) * time.Millisecond
 	for timeoutTime := time.Now().Add(expiration); time.Now().Before(timeoutTime); {
 		if _, err = os.Stat(responseFilename); err == nil {
 			var data []byte
