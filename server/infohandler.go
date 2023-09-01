@@ -62,48 +62,70 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 		SrvToken:       srvToken,
 	}
 
-	info.Parameters.DetectionsParams.Queries = []*config.HuntingQuery{
-		{
-			Name:  "All",
-			Query: "_id:*",
-		},
+	{
+		detections := &info.Parameters.DetectionsParams
+
+		detections.ViewEnabled = true
+		detections.CreateLink = "/detection/create"
+		detections.EventFetchLimit = 500
+		detections.EventItemsPerPage = 50
+		detections.GroupFetchLimit = 50
+		detections.MostRecentlyUsedLimit = 5
+		detections.SafeStringMaxLength = 100
+		detections.QueryBaseFilter = "_index:\"*:so-case\" AND so_kind:detection"
+		detections.EventFields = map[string][]string{
+			"default": {
+				"so_detection.title",
+				"so_detection.isEnabled",
+				"so_detection.engine",
+				"@timestamp",
+			},
+		}
+		detections.Queries = []*config.HuntingQuery{
+			{
+				Name:  "All",
+				Query: "_id:*",
+			},
+		}
 	}
 
-	info.Parameters.DetectionsParams.ViewEnabled = true
-	info.Parameters.DetectionsParams.CreateLink = "/detection/create"
-	info.Parameters.DetectionsParams.EventFetchLimit = 500
-	info.Parameters.DetectionsParams.EventItemsPerPage = 50
-	info.Parameters.DetectionsParams.GroupFetchLimit = 50
-	info.Parameters.DetectionsParams.MostRecentlyUsedLimit = 5
-	info.Parameters.DetectionsParams.QueryBaseFilter = "_index:\"*:so-case\" AND so_kind:detection"
-	info.Parameters.DetectionsParams.EventFields = map[string][]string{
-		"default": {
-			"soc_timestamp",
-			"so_detection.publicId",
-			"so_detection.title",
-			"so_detection.severity",
-			"so_detection.isEnabled",
-			"so_detection.engine",
-		},
+	{
+		detection := &info.Parameters.DetectionParams
+
+		detection.Presets = map[string]config.PresetParameters{
+			"severity": {
+				CustomEnabled: false,
+				Labels:        []string{"low", "medium", "high"},
+			},
+			"engine": {
+				CustomEnabled: false,
+				Labels:        []string{"suricata", "yara", "elastalert"},
+			},
+		}
 	}
 
-	info.Parameters.PlaybooksParams.ViewEnabled = true
-	info.Parameters.PlaybooksParams.CreateLink = "/playbook/create"
-	info.Parameters.PlaybooksParams.EventFetchLimit = 500
-	info.Parameters.PlaybooksParams.EventItemsPerPage = 50
-	info.Parameters.PlaybooksParams.GroupFetchLimit = 50
-	info.Parameters.PlaybooksParams.MostRecentlyUsedLimit = 5
-	info.Parameters.PlaybooksParams.QueryBaseFilter = "_index:\"*:so-case\" AND so_kind:playbook"
-	info.Parameters.PlaybooksParams.Queries = []*config.HuntingQuery{
-		{Query: "*"},
-	}
-	info.Parameters.PlaybooksParams.EventFields = map[string][]string{
-		"default": {
-			"soc_timestamp",
-			"so_playbook.title",
-			"so_playbook.publicId",
-			"so_playbook.mechanism",
-		},
+	{
+		playbooks := &info.Parameters.PlaybooksParams
+
+		playbooks.ViewEnabled = true
+		playbooks.CreateLink = "/playbook/create"
+		playbooks.EventFetchLimit = 500
+		playbooks.EventItemsPerPage = 50
+		playbooks.GroupFetchLimit = 50
+		playbooks.MostRecentlyUsedLimit = 5
+		playbooks.QueryBaseFilter = "_index:\"*:so-case\" AND so_kind:playbook"
+		playbooks.SafeStringMaxLength = 100
+		playbooks.Queries = []*config.HuntingQuery{
+			{Query: "*"},
+		}
+		playbooks.EventFields = map[string][]string{
+			"default": {
+				"soc_timestamp",
+				"so_playbook.title",
+				"so_playbook.publicId",
+				"so_playbook.mechanism",
+			},
+		}
 	}
 
 	web.Respond(w, r, http.StatusOK, info)

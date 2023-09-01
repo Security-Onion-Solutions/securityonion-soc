@@ -162,6 +162,10 @@ func (store *HttpCasestore) UpdateDetection(ctx context.Context, detect *model.D
 	return nil, errors.New("Unsupported operation by this module")
 }
 
-func (store *HttpCasestore) DeleteDetection(ctx context.Context, detectID string) error {
-	return errors.New("Unsupported operation by this module")
+func (store *HttpCasestore) UpdateDetectionField(context.Context, string, string, any) (*model.Detection, bool, error) {
+	return nil, false, errors.New("Unsupported operation by this module")
+}
+
+func (store *HttpCasestore) DeleteDetection(ctx context.Context, detectID string) (*model.Detection, error) {
+	return nil, errors.New("Unsupported operation by this module")
 }

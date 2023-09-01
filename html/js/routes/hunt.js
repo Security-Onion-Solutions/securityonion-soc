@@ -2162,6 +2162,9 @@ const huntComponent = {
         console.log('No onionID');
       }
     },
+    print(x) {
+      console.log(x);
+    }
   }
 };
 
