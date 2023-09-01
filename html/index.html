@@ -76,14 +76,14 @@
               <v-list-item-title v-text="i18n.detections"></v-list-item-title>
             </v-list-item-content>
           </v-list-item>
-          <v-list-item @click="" to="/playbooks">
+          <!-- <v-list-item @click="" to="/playbooks">
             <v-list-item-action>
               <v-icon>fa-book-bookmark</v-icon>
             </v-list-item-action>
             <v-list-item-content>
               <v-list-item-title v-text="i18n.playbooks"></v-list-item-title>
             </v-list-item-content>
-          </v-list-item>
+          </v-list-item> -->
           <v-list-item @click="" to="/jobs">
             <v-list-item-action>
               <v-icon>fa-stream</v-icon>
@@ -970,7 +970,50 @@
 
         <div class="row mx-sm-8 mx-md-12 mx-lg-4 flex-column flex-md-row">
           <div class="main col-md-9 order-md-1 col-12 order-2">
-            <v-tabs grow v-model="activeTab">
+            <!-- Edit View -->
+            <div v-if="isNew()">
+              <v-form ref="detection" v-model="editForm.valid">
+                <div class="col pt-5" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
+                  <!-- Description -->
+                  <v-textarea id="detection-description-create" hide-details="auto" outlined v-model="detect.description" :rules="[rules.required]" persistent-hint :hint="'Detection Description'" auto-grow rows="5"></v-textarea>
+
+                  <!-- PublicID -->
+                  <v-text-field id="detection-publicId-create" class="mt-0" v-model="detect.publicId" :rules="[rules.required]" persistent-hint :hint="'Public ID'">
+                    <template v-slot:append v-if="!detect.publicId">
+                      <v-btn id="gen-public-id-create" text small color="primary" @click="generatePublicID()">Generate</v-btn>
+                    </template>
+                  </v-text-field>
+
+                  <!-- Author -->
+                  <v-text-field id="detection-author-create" v-model="detect.author" :rules="[rules.required]" persistent-hint :hint="i18n.author"></v-text-field>
+
+                  <!-- Severity -->
+                  <v-select id="detection-severity-create" v-model="detect.severity" :items="getPresets('severity')" persistent-hint :hint="i18n.detectionSeverity"/>
+
+                  <!-- Engine -->
+                  <v-select id="detection-engine-create" v-model="detect.engine" :items="getPresets('engine')" persistent-hint :hint="i18n.engine" :rules="[rules.required]"/>
+
+                  <!-- Reporting -->
+                  <v-checkbox id="detection-reporting-create" class="mt-5" v-model="detect.isReporting" :label="i18n.reporting"/>
+
+                  <!-- Signature -->
+                  <div class="font-weight-bold mb-1">{{ i18n.signature }}:</div>
+                  <v-textarea class="config-editor" outlined v-model="detect.content" auto-grow rows="10" :rules="[rules.required]" />
+                </div>
+                <div class="d-flex align-center align-self-end text-body-2 mt-2">
+                  <div class="d-inline-flex justify-end">
+                    <v-btn id="detection-create-cancel" text small color="primary" class="align-self-end" @click="cancelDetection()">
+                      {{ i18n.cancel }}
+                    </v-btn>
+                    <v-btn id="detection-create-create" text small color="primary" class="align-self-end" @click="saveDetection(true)">
+                      {{ i18n.create }}
+                    </v-btn>
+                  </div>
+                </div>
+              </v-form>
+            </div>
+
+            <v-tabs grow v-model="activeTab" v-else>
               <v-tab id="detection_summaryTab" href="#summary">
                 <v-icon left>fa-clipboard</v-icon>
                 <div class="d-none d-lg-block">Summary</div>
@@ -987,10 +1030,10 @@
                 <v-icon left>fa-signature</v-icon>
                 <div class="d-none d-lg-block">Signature</div>
               </v-tab>
-              <v-tab id="detection_playbookTab" href="#playbook">
+              <!-- <v-tab id="detection_playbookTab" href="#playbook">
                 <v-icon left>fa-book-bookmark</v-icon>
                 <div class="d-none d-lg-block">Investigative Playbook</div>
-              </v-tab>
+              </v-tab> -->
               <v-tab id="detection_tuningTab" href="#tuning">
                 <v-icon left>fa-wrench</v-icon>
                 <div class="d-none d-lg-block">Tuning</div>
@@ -1009,11 +1052,18 @@
                     <v-textarea id="detection-description-edit" v-else hide-details="auto" outlined v-model="detect.description" :rules="[rules.required]" persistent-hint :hint="'Detection Description'" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)" auto-grow rows="5"></v-textarea>
                   </div>
                   <!-- Engine -->
-                  <v-select id="detection-engine-edit" v-model="detect.engine" :items="engineOptions" persistent-hint :hint="'Engine'" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
+                  <v-select id="detection-engine-edit" v-model="detect.engine" :items="getPresets('engine')" persistent-hint :hint="'Engine'" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
                   <!-- Enabled -->
                   <v-checkbox id="detection-enabled-edit" v-model="detect.isEnabled" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)" label="Enabled"/>
                   <!-- Reporting -->
                   <v-checkbox id="detection-reporting-edit" v-model="detect.isReporting" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)" label="Reporting"/>
+                </div>
+                <div class="d-flex justify-end text-body-2 mt-2">
+                  <div class="d-inline-flex justify-end">
+                    <v-btn v-if="!isNew()" id="detection-duplicate" text small color="primary" class="align-self-end" @click="duplicateDetection()">
+                      {{i18n.duplicate}}
+                    </v-btn>
+                  </div>
                 </div>
               </v-tab-item>
               <v-tab-item value="details">
@@ -1027,26 +1077,33 @@
                   <!-- Author -->
                   <v-text-field id="detection-author-edit" v-model="detect.author" :rules="[rules.required]" persistent-hint :hint="'Author'" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"></v-text-field>
                   <!-- Severity -->
-                  <v-select id="detection-severity-edit" v-model="detect.severity" :items="severityOptions" persistent-hint :hint="'Severity'" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
+                  <v-select id="detection-severity-edit" v-model="detect.severity" :items="getPresets('severity')" persistent-hint :hint="'Severity'" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
+                </div>
+                <!-- <div class="d-flex align-center align-self-end text-body-2 mt-2">
+                  <div class="d-inline-flex justify-end">
+                    <v-btn id="detection-cancel" text small color="primary" class="align-self-end" @click="cancelDetection()">
+                      {{ i18n.cancel }}
+                    </v-btn>
+                    <v-btn id="detection-update" text small color="primary" class="align-self-end" @click="saveDetection(false)">
+                      {{i18n.update}}
+                    </v-btn>
+                  </div>
+                </div> -->
+              </v-tab-item>
+              <v-tab-item value="notes">
+                <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
+                  <!-- Notes -->
+                  <v-textarea class="config-editor" outlined v-model="detect.note" auto-grow rows="15" />
                 </div>
                 <div class="d-flex align-center align-self-end text-body-2 mt-2">
                   <div class="d-inline-flex justify-end">
                     <v-btn id="detection-cancel" text small color="primary" class="align-self-end" @click="cancelDetection()">
                       {{ i18n.cancel }}
                     </v-btn>
-                    <v-btn id="detection-create" text small color="primary" class="align-self-end" @click="saveDetection(true)" v-if="isNew()">
-                      {{ i18n.create }}
-                    </v-btn>
-                    <v-btn id="detection-update" text small color="primary" class="align-self-end" @click="saveDetection(false)" v-else>
+                    <v-btn id="detection-update" text small color="primary" class="align-self-end" @click="saveDetection(false)">
                       {{i18n.update}}
                     </v-btn>
                   </div>
-                </div>
-              </v-tab-item>
-              <v-tab-item value="notes">
-                <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
-                  <!-- Notes -->
-                  <v-textarea class="config-editor" outlined v-model="detect.note" auto-grow rows="15" />
                 </div>
               </v-tab-item>
               <v-tab-item value="signature">
@@ -1054,8 +1111,18 @@
                   <!-- Signature -->
                   <v-textarea class="config-editor" outlined v-model="detect.content" auto-grow rows="15" />
                 </div>
+                <div class="d-flex align-center align-self-end text-body-2 mt-2">
+                  <div class="d-inline-flex justify-end">
+                    <v-btn id="detection-cancel" text small color="primary" class="align-self-end" @click="cancelDetection()">
+                      {{ i18n.cancel }}
+                    </v-btn>
+                    <v-btn id="detection-update" text small color="primary" class="align-self-end" @click="saveDetection(false)">
+                      {{i18n.update}}
+                    </v-btn>
+                  </div>
+                </div>
               </v-tab-item>
-              <v-tab-item value="playbook">
+              <!-- <v-tab-item value="playbook">
                 <div class="col pa-2" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
                   <div class="col ma-2">
                     <div class="row my-2">
@@ -1072,12 +1139,16 @@
                     </div>
                   </div>
                 </div>
-              </v-tab-item>
+              </v-tab-item> -->
               <v-tab-item value="tuning">
-                Coming Soon!
+                <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
+                  Coming Soon!
+                </div>
               </v-tab-item>
               <v-tab-item value="history">
-                Coming Soon!
+                <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
+                  Coming Soon!
+                </div>
               </v-tab-item>
             </v-tabs>
           </div>
@@ -1706,7 +1777,6 @@
         </v-row>
       </v-container>
     </script>
-
 
     <script type="text/x-template" id="page-job">
       <v-container fluid @click="jobClickHandler()">
@@ -3319,7 +3389,6 @@
       </v-container>
     </script>
 
-
     <script type="text/x-template" id="page-grid">
       <v-container fluid>
         <v-row>
@@ -4462,7 +4531,7 @@
     <script src="js/routes/terms.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/users.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/detection.js?v=VERSION_PLACEHOLDER"></script>
-    <script src="js/routes/playbook.js?v=VERSION_PLACEHOLDER"></script>
+    <!-- <script src="js/routes/playbook.js?v=VERSION_PLACEHOLDER"></script> -->
     <script src="js/custom.js?v=VERSION_PLACEHOLDER"></script>
   </body>
 </html>

@@ -77,6 +77,8 @@ type Detection struct {
 	Content     string     `json:"content"`
 	IsEnabled   bool       `json:"isEnabled"`
 	IsReporting bool       `json:"isReporting"`
+	IsCommunity bool       `json:"isCommunity"`
+	Note        string     `json:"note"`
 	Engine      EngineName `json:"engine"`
 }
 
@@ -87,5 +89,25 @@ func (detect *Detection) Validate() error {
 		return ErrUnsupportedEngine
 	}
 
+	return nil
+}
+
+func SyncDetections(detections []*Detection) error {
+	byEngine := map[EngineName][]*Detection{}
+	for _, detect := range detections {
+		byEngine[detect.Engine] = append(byEngine[detect.Engine], detect)
+	}
+
+	if len(byEngine[EngineNameSuricata]) > 0 {
+		err := syncSuricata(byEngine[EngineNameSuricata])
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func syncSuricata(detections []*Detection) error {
 	return nil
 }

@@ -8,12 +8,14 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
   template: '#page-detection',
   data() { return {
 		i18n: this.$root.i18n,
+		presets: {},
 		params: {},
 		detect: null,
 		origDetect: null,
 		curEditTarget: null, // string containing element ID, null if not editing
 		origValue: null,
 		editField: null,
+		editForm: { valid: true },
 		rules: {
       required: value => (value && value.length > 0) || this.$root.i18n.required,
       number: value => (! isNaN(+value) && Number.isInteger(parseFloat(value))) || this.$root.i18n.required,
@@ -24,35 +26,25 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
       fileNotEmpty: value => (value == null || value.size > 0) || this.$root.i18n.fileEmpty,
       fileRequired: value => (value != null) || this.$root.i18n.required,
 		},
-		severityOptions: ['low', 'medium', 'high'],
-		engineOptions: ['suricata', 'yara', 'elastalert'],
 		panel: [0, 1, 2],
 		activeTab: '',
-		associatedPlaybook: {
-			onionId: 'y5IYKIoB9-Z7uL2kmy_o',
-			publicId: "4020131e-223a-421e-8ebe-8a211a5ac4d6",
-			title: "Find the baddies",
-			severity: "high",
-			description: "A long description that spans multiple lines. A long description that spans multiple lines. A long description that spans multiple lines. A long description that spans multiple lines. A long description that spans multiple lines. A long description that spans multiple lines.",
-			mechanism: "suricata",
-			tags: ["one", "two", "three"],
-			relatedPlaybooks: [],
-			contributors: ["Corey Ogburn"],
-			userEditable: true,
-			createTime: "2023-08-22T12:49:47.302819008-06:00",
-			userId: "83656890-2acd-4c0b-8ab9-7c73e71ddaf3",
-		},
   }},
   created() {
   },
   watch: {
 	},
 	mounted() {
+		this.$watch(
+      () => this.$route.params,
+      (to, prev) => {
+				this.loadData();
+    	});
 		this.$root.loadParameters('detection', this.initDetection);
 	},
   methods: {
 		async initDetection(params) {
 			this.params = params;
+			this.presets = params['presets'];
 			if (this.$route.params.id === 'create') {
 				this.detect = this.newDetection();
 			} else {
@@ -69,11 +61,11 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		newDetection() {
 			let author = [this.$root.user.firstName, this.$root.user.lastName].filter(x => x).join(' ');
 			return {
-				title: 'Detection title not yet provided - click here to update this title',
-				description: 'Detection description not yet provided - click here to update this description',
+				title: this.i18n.detectionDefaultTitle,
+				description: this.i18n.detectionDefaultDescription,
 				author: author,
 				publicId: '',
-				severity: 'low',
+				severity: this.getDefaultPreset('severity'),
 				content: '',
 				isEnabled: false,
 				isReporting: false,
@@ -86,7 +78,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			try {
 					const response = await this.$root.papi.get('detection/' + encodeURIComponent(this.$route.params.id));
 				this.detect = response.data;
-				this.detect.note = 'This is a note.';
       } catch (error) {
         if (error.response != undefined && error.response.status == 404) {
           this.$root.showError(this.i18n.notFound);
@@ -97,6 +88,27 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
       this.$root.stopLoading();
 		},
+		getDefaultPreset(preset) {
+      if (this.presets) {
+        const presets = this.presets[preset];
+        if (presets && presets.labels && presets.labels.length > 0) {
+          return presets.labels[0];
+        }
+      }
+      return "";
+    },
+    getPresets(kind) {
+      if (this.presets && this.presets[kind]) {
+        return this.presets[kind].labels;
+      }
+      return [];
+    },
+    isPresetCustomEnabled(kind) {
+      if (this.presets && this.presets[kind]) {
+        return this.presets[kind].customEnabled == true;
+      }
+      return false;
+    },
 		isNew() {
 			return this.$route.params.id === 'create';
 		},
@@ -143,12 +155,23 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.editField = null;
 		},
 		saveDetection(createNew) {
+			if (this.curEditTarget !== null) this.stopEdit(true);
+
+			this.$refs['detection'].validate();
+			if (!this.editForm.valid) return;
+
 			if (createNew) {
 				this.$root.papi.post('/detection', this.detect);
 			} else {
 				this.$root.papi.put('/detection', this.detect);
 			}
 			this.origDetect = Object.assign({}, this.detect);
+
+			this.$root.showTip(this.i18n.saveSuccess);
+		},
+		async duplicateDetection() {
+			const response = await this.$root.papi.post('/detection/' + encodeURIComponent(this.$route.params.id) + '/duplicate');
+			this.$router.push({name: 'detection', params: {id: response.data.id}});
 		},
 		print(x) {
 			console.log(x);

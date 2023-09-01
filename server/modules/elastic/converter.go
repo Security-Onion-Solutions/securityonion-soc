@@ -227,7 +227,7 @@ func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSear
 		sortBySegment := segment.(*model.SortBySegment)
 		fields := sortBySegment.RawFields()
 		if len(fields) > 0 {
-			sorting := make([]map[string]map[string]string, 0, 0)
+			sorting := []map[string]map[string]string{}
 			for _, field := range fields {
 				newSort := make(map[string]map[string]string)
 				order := "desc"
@@ -260,7 +260,7 @@ func parseAggregation(name string, aggObj interface{}, keys []interface{}, resul
 	if buckets != nil {
 		metrics := results.Metrics[name]
 		if metrics == nil {
-			metrics = make([]*model.EventMetric, 0, 0)
+			metrics = []*model.EventMetric{}
 		}
 		for _, bucketObj := range buckets.([]interface{}) {
 			bucket := bucketObj.(map[string]interface{})
@@ -293,9 +293,9 @@ func parseAggregation(name string, aggObj interface{}, keys []interface{}, resul
 func flattenKeyValue(store *ElasticEventstore, fieldMap map[string]interface{}, prefix string, value map[string]interface{}) {
 	for key, value := range value {
 		flattenedKey := prefix + key
-		switch value.(type) {
+		switch v := value.(type) {
 		case map[string]interface{}:
-			flattenKeyValue(store, fieldMap, flattenedKey+".", value.(map[string]interface{}))
+			flattenKeyValue(store, fieldMap, flattenedKey+".", v)
 		default:
 			fieldMap[store.unmapElasticField(flattenedKey)] = value
 		}
@@ -650,81 +650,40 @@ func convertElasticEventToDetection(event *model.EventRecord, schemaPrefix strin
 			if value, ok := event.Payload[schemaPrefix+"detection.userId"]; ok {
 				obj.UserId = value.(string)
 			}
-			if value, ok := event.Payload[schemaPrefix+"detection.isReporting"]; ok {
-				obj.IsReporting = value.(bool)
-			}
-			if value, ok := event.Payload[schemaPrefix+"detection.description"]; ok {
-				obj.Description = value.(string)
-			}
-			if value, ok := event.Payload[schemaPrefix+"detection.isEnabled"]; ok {
-				obj.IsEnabled = value.(bool)
-			}
-			if value, ok := event.Payload[schemaPrefix+"detection.engine"]; ok {
-				obj.Engine = value.(string)
-			}
 			if value, ok := event.Payload[schemaPrefix+"detection.publicId"]; ok {
 				obj.PublicID = value.(string)
-			}
-			if value, ok := event.Payload[schemaPrefix+"detection.severity"]; ok {
-				obj.Severity = model.Severity(value.(string))
-			}
-			if value, ok := event.Payload[schemaPrefix+"detection.content"]; ok {
-				obj.Content = value.(string)
-			}
-			if value, ok := event.Payload[schemaPrefix+"detection.author"]; ok {
-				obj.Author = value.(string)
 			}
 			if value, ok := event.Payload[schemaPrefix+"detection.title"]; ok {
 				obj.Title = value.(string)
 			}
-			// if value, ok := event.Payload[schemaPrefix+"artifact.caseId"]; ok {
-			// 	obj.CaseId = value.(string)
-			// }
-			// if value, ok := event.Payload[schemaPrefix+"artifact.groupType"]; ok {
-			// 	obj.GroupType = value.(string)
-			// }
-			// if value, ok := event.Payload[schemaPrefix+"artifact.groupId"]; ok {
-			// 	obj.GroupId = value.(string)
-			// }
-			// if value, ok := event.Payload[schemaPrefix+"artifact.description"]; ok {
-			// 	obj.Description = value.(string)
-			// }
-			// if value, ok := event.Payload[schemaPrefix+"artifact.artifactType"]; ok {
-			// 	obj.ArtifactType = value.(string)
-			// }
-			// if value, ok := event.Payload[schemaPrefix+"artifact.streamLength"]; ok {
-			// 	obj.StreamLen = int(value.(float64))
-			// }
-			// if value, ok := event.Payload[schemaPrefix+"artifact.streamId"]; ok {
-			// 	obj.StreamId = value.(string)
-			// }
-			// if value, ok := event.Payload[schemaPrefix+"artifact.mimeType"]; ok {
-			// 	obj.MimeType = value.(string)
-			// }
-			// if value, ok := event.Payload[schemaPrefix+"artifact.value"]; ok {
-			// 	obj.Value = value.(string)
-			// }
-			// if value, ok := event.Payload[schemaPrefix+"artifact.tlp"]; ok {
-			// 	obj.Tlp = value.(string)
-			// }
-			// if value, ok := event.Payload[schemaPrefix+"artifact.tags"]; ok && value != nil {
-			// 	obj.Tags = convertToStringArray(value.([]interface{}))
-			// }
-			// if value, ok := event.Payload[schemaPrefix+"artifact.ioc"]; ok {
-			// 	obj.Ioc = value.(bool)
-			// }
-			// if value, ok := event.Payload[schemaPrefix+"artifact.md5"]; ok {
-			// 	obj.Md5 = value.(string)
-			// }
-			// if value, ok := event.Payload[schemaPrefix+"artifact.sha1"]; ok {
-			// 	obj.Sha1 = value.(string)
-			// }
-			// if value, ok := event.Payload[schemaPrefix+"artifact.sha256"]; ok {
-			// 	obj.Sha256 = value.(string)
-			// }
-			// if value, ok := event.Payload[schemaPrefix+"artifact.protected"]; ok {
-			// 	obj.Protected = value.(bool)
-			// }
+			if value, ok := event.Payload[schemaPrefix+"detection.severity"]; ok {
+				obj.Severity = model.Severity(value.(string))
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.author"]; ok {
+				obj.Author = value.(string)
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.description"]; ok {
+				obj.Description = value.(string)
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.content"]; ok {
+				obj.Content = value.(string)
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.isEnabled"]; ok {
+				obj.IsEnabled = value.(bool)
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.isReporting"]; ok {
+				obj.IsReporting = value.(bool)
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.isCommunity"]; ok {
+				obj.IsCommunity = value.(bool)
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.note"]; ok {
+				obj.Note = value.(string)
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.engine"]; ok {
+				obj.Engine = value.(string)
+			}
+
 			obj.CreateTime = parseTime(event.Payload, schemaPrefix+"detection.createTime")
 		}
 	}

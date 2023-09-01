@@ -16,26 +16,27 @@ const DEFAULT_CHART_LABEL_OTHER_LIMIT = 10
 const DEFAULT_CHART_LABEL_FIELD_SEPARATOR = ", "
 
 type ClientParameters struct {
-	HuntingParams       HuntingParameters `json:"hunt"`
-	AlertingParams      HuntingParameters `json:"alerts"`
-	CasesParams         HuntingParameters `json:"cases"`
-	CaseParams          CaseParameters    `json:"case"`
-	DashboardsParams    HuntingParameters `json:"dashboards"`
-	JobParams           HuntingParameters `json:"job"`
-	DetectionsParams    HuntingParameters `json:"detections"`
-	PlaybooksParams     HuntingParameters `json:"playbooks"`
-	DocsUrl             string            `json:"docsUrl"`
-	CheatsheetUrl       string            `json:"cheatsheetUrl"`
-	ReleaseNotesUrl     string            `json:"releaseNotesUrl"`
-	GridParams          GridParameters    `json:"grid"`
-	WebSocketTimeoutMs  int               `json:"webSocketTimeoutMs"`
-	TipTimeoutMs        int               `json:"tipTimeoutMs"`
-	ApiTimeoutMs        int               `json:"apiTimeoutMs"`
-	CacheExpirationMs   int               `json:"cacheExpirationMs"`
-	InactiveTools       []string          `json:"inactiveTools"`
-	Tools               []ClientTool      `json:"tools"`
-	CasesEnabled        bool              `json:"casesEnabled"`
-	EnableReverseLookup bool              `json:"enableReverseLookup"`
+	HuntingParams       HuntingParameters   `json:"hunt"`
+	AlertingParams      HuntingParameters   `json:"alerts"`
+	CasesParams         HuntingParameters   `json:"cases"`
+	CaseParams          CaseParameters      `json:"case"`
+	DashboardsParams    HuntingParameters   `json:"dashboards"`
+	JobParams           HuntingParameters   `json:"job"`
+	DetectionsParams    HuntingParameters   `json:"detections"`
+	DetectionParams     DetectionParameters `json:"detection"`
+	PlaybooksParams     HuntingParameters   `json:"playbooks"`
+	DocsUrl             string              `json:"docsUrl"`
+	CheatsheetUrl       string              `json:"cheatsheetUrl"`
+	ReleaseNotesUrl     string              `json:"releaseNotesUrl"`
+	GridParams          GridParameters      `json:"grid"`
+	WebSocketTimeoutMs  int                 `json:"webSocketTimeoutMs"`
+	TipTimeoutMs        int                 `json:"tipTimeoutMs"`
+	ApiTimeoutMs        int                 `json:"apiTimeoutMs"`
+	CacheExpirationMs   int                 `json:"cacheExpirationMs"`
+	InactiveTools       []string            `json:"inactiveTools"`
+	Tools               []ClientTool        `json:"tools"`
+	CasesEnabled        bool                `json:"casesEnabled"`
+	EnableReverseLookup bool                `json:"enableReverseLookup"`
 }
 
 func (config *ClientParameters) Verify() error {
@@ -187,4 +188,16 @@ func (params *CaseParameters) Verify() error {
 type GridParameters struct {
 	MaxUploadSize  uint64 `json:"maxUploadSize,omitempty"`
 	StaleMetricsMs uint64 `json:"staleMetricsMs,omitempty"`
+}
+
+type DetectionParameters struct {
+	HuntingParameters
+	Presets map[string]PresetParameters `json:"presets"`
+}
+
+func (params *DetectionParameters) Verify() error {
+	err := params.HuntingParameters.Verify()
+
+	return err
+
 }

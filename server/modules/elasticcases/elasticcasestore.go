@@ -157,6 +157,10 @@ func (store *ElasticCasestore) UpdateDetection(ctx context.Context, detect *mode
 	return nil, errors.New("Unsupported operation by this module")
 }
 
-func (store *ElasticCasestore) DeleteDetection(ctx context.Context, detectID string) error {
-	return errors.New("Unsupported operation by this module")
+func (store *ElasticCasestore) UpdateDetectionField(context.Context, string, string, any) (*model.Detection, bool, error) {
+	return nil, false, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) DeleteDetection(ctx context.Context, detectID string) (*model.Detection, error) {
+	return nil, errors.New("Unsupported operation by this module")
 }

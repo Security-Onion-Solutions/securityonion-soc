@@ -42,5 +42,6 @@ type Casestore interface {
 	CreateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error)
 	GetDetection(ctx context.Context, detectId string) (*model.Detection, error)
 	UpdateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error)
-	DeleteDetection(ctx context.Context, detectID string) error
+	UpdateDetectionField(ctx context.Context, id string, field string, value any) (*model.Detection, bool, error)
+	DeleteDetection(ctx context.Context, detectID string) (*model.Detection, error)
 }
