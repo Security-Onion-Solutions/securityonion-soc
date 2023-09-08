@@ -580,8 +580,8 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 
 	query := fmt.Sprintf(`
     {
-      "query" : { 
-        "bool": { 
+      "query" : {
+        "bool": {
           "must": [
             { "match" : { "%s" : "%s" }}%s
           ]

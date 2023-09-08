@@ -1063,6 +1063,9 @@
                     <v-btn v-if="!isNew()" id="detection-duplicate" text small color="primary" class="align-self-end" @click="duplicateDetection()">
                       {{i18n.duplicate}}
                     </v-btn>
+                    <v-btn v-if="!isNew()" id="detection-delete" text small color="error" class="align-self-end" @click="deleteDetection()">
+                      {{i18n.delete}}
+                    </v-btn>
                   </div>
                 </div>
               </v-tab-item>
@@ -1071,7 +1074,7 @@
                   <!-- PublicID -->
                   <v-text-field id="detection-publicId-edit" v-model="detect.publicId" :rules="[rules.required]" persistent-hint :hint="'Public ID'" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)">
                     <template v-slot:append v-if="!detect.publicId">
-                      <v-btn id="gen-public-id" text small color="primary" @click="generatePublicID()">Generate</v-btn>
+                      <v-btn id="gen-public-id" text small color="primary" @click="generatePublicID()">{{i18n.generate}}</v-btn>
                     </template>
                   </v-text-field>
                   <!-- Author -->
@@ -1079,7 +1082,7 @@
                   <!-- Severity -->
                   <v-select id="detection-severity-edit" v-model="detect.severity" :items="getPresets('severity')" persistent-hint :hint="'Severity'" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
                 </div>
-                <!-- <div class="d-flex align-center align-self-end text-body-2 mt-2">
+                <div class="d-flex align-center align-self-end justify-end text-body-2 mt-2">
                   <div class="d-inline-flex justify-end">
                     <v-btn id="detection-cancel" text small color="primary" class="align-self-end" @click="cancelDetection()">
                       {{ i18n.cancel }}
@@ -1088,14 +1091,14 @@
                       {{i18n.update}}
                     </v-btn>
                   </div>
-                </div> -->
+                </div>
               </v-tab-item>
               <v-tab-item value="notes">
                 <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
                   <!-- Notes -->
                   <v-textarea class="config-editor" outlined v-model="detect.note" auto-grow rows="15" />
                 </div>
-                <div class="d-flex align-center align-self-end text-body-2 mt-2">
+                <div class="d-flex align-center align-self-end justify-end text-body-2 mt-2">
                   <div class="d-inline-flex justify-end">
                     <v-btn id="detection-cancel" text small color="primary" class="align-self-end" @click="cancelDetection()">
                       {{ i18n.cancel }}
@@ -1111,7 +1114,7 @@
                   <!-- Signature -->
                   <v-textarea class="config-editor" outlined v-model="detect.content" auto-grow rows="15" />
                 </div>
-                <div class="d-flex align-center align-self-end text-body-2 mt-2">
+                <div class="d-flex align-center align-self-end justify-end text-body-2 mt-2">
                   <div class="d-inline-flex justify-end">
                     <v-btn id="detection-cancel" text small color="primary" class="align-self-end" @click="cancelDetection()">
                       {{ i18n.cancel }}

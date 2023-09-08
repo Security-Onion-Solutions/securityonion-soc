@@ -7,15 +7,22 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 
+	"github.com/samber/lo"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/syntax"
+	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/go-chi/chi"
 )
+
+var sidExtracter = regexp.MustCompile(`\bsid: ?['"]?(.*?)['"]?;`)
 
 type DetectionHandler struct {
 	server *Server
@@ -76,9 +83,14 @@ func (h *DetectionHandler) postDetection(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	err = model.SyncDetections([]*model.Detection{detect})
+	errMap, err := SyncDetections(ctx, h.server.Configstore, []*model.Detection{detect})
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	if len(errMap) != 0 {
+		web.Respond(w, r, http.StatusInternalServerError, errMap)
 		return
 	}
 
@@ -131,9 +143,14 @@ func (h *DetectionHandler) putDetection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	err = model.SyncDetections([]*model.Detection{detect})
+	errMap, err := SyncDetections(ctx, h.server.Configstore, []*model.Detection{detect})
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	if len(errMap) != 0 {
+		web.Respond(w, r, http.StatusInternalServerError, errMap)
 		return
 	}
 
@@ -151,13 +168,13 @@ func (h *DetectionHandler) deleteDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	err = model.SyncDetections([]*model.Detection{old})
+	errMap, err := SyncDetections(ctx, h.server.Configstore, []*model.Detection{old})
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	web.Respond(w, r, http.StatusOK, nil)
+	web.Respond(w, r, http.StatusOK, errMap)
 }
 
 func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Request) {
@@ -202,11 +219,181 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	err = model.SyncDetections(modified)
-	if err != nil {
-		web.Respond(w, r, http.StatusInternalServerError, err)
-		return
+	if len(modified) != 0 {
+		addErrMap, err := SyncDetections(ctx, h.server.Configstore, modified)
+		if err != nil {
+			web.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
+
+		// merge error maps
+		for k, v := range addErrMap {
+			origK, hasK := errMap[k]
+			if hasK {
+				errMap[k] = fmt.Sprintf("%s; %s", origK, v)
+			} else {
+				errMap[k] = v
+			}
+		}
 	}
 
 	web.Respond(w, r, http.StatusOK, errMap)
+}
+
+func SyncDetections(ctx context.Context, cfgStore Configstore, detections []*model.Detection) (errMap map[string]string, err error) {
+	defer func() {
+		if len(errMap) == 0 {
+			errMap = nil
+		}
+	}()
+
+	byEngine := map[model.EngineName][]*model.Detection{}
+	for _, detect := range detections {
+		byEngine[detect.Engine] = append(byEngine[detect.Engine], detect)
+	}
+
+	if len(byEngine[model.EngineNameSuricata]) > 0 {
+		errMap, err = syncSuricata(ctx, cfgStore, byEngine[model.EngineNameSuricata])
+		if err != nil {
+			return errMap, err
+		}
+	}
+
+	return errMap, nil
+}
+
+func syncSuricata(ctx context.Context, cfgStore Configstore, detections []*model.Detection) (map[string]string, error) {
+	allSettings, err := cfgStore.GetSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	local := settingByID(allSettings, "idstools.rules.local__rules")
+	if local == nil {
+		return nil, fmt.Errorf("unable to find local rules setting")
+	}
+
+	enabled := settingByID(allSettings, "idstools.sids.enabled")
+	if enabled == nil {
+		return nil, fmt.Errorf("unable to find enabled setting")
+	}
+
+	localLines := strings.Split(local.Value, "\n")
+	enabledLines := strings.Split(enabled.Value, "\n")
+
+	localIndex := indexRules(localLines)
+	enabledIndex := indexSIDs(enabledLines)
+
+	errMap := map[string]string{} // map[sid]error
+
+	for _, detect := range detections {
+		parsedRule, err := syntax.ParseSuricataRule(detect.Content)
+		if err != nil {
+			errMap[detect.PublicID] = fmt.Sprintf("unable to parse rule; reason=%s", err.Error())
+			continue
+		}
+
+		opt, ok := parsedRule.GetOption("sid")
+		if !ok || opt == nil {
+			errMap[detect.PublicID] = fmt.Sprintf("rule does not contain a SID; rule=%s", detect.Content)
+			continue
+		}
+
+		sid := *opt
+		_, isFlowbits := parsedRule.GetOption("flowbits")
+
+		_ = isFlowbits
+
+		lineNum, inLocal := localIndex[sid]
+		if !inLocal {
+			localLines = append(localLines, detect.Content)
+			lineNum = len(localLines) - 1
+			localIndex[sid] = lineNum
+		} else {
+			localLines[lineNum] = detect.Content
+		}
+
+		lineNum, inEnabled := enabledIndex[sid]
+		if !inEnabled {
+			line := detect.PublicID
+			if !detect.IsEnabled {
+				line = "# " + line
+			}
+
+			enabledLines = append(enabledLines, line)
+			lineNum = len(enabledLines) - 1
+			enabledIndex[sid] = lineNum
+		} else {
+			line := detect.PublicID
+			if !detect.IsEnabled {
+				line = "# " + line
+			}
+
+			enabledLines[lineNum] = line
+		}
+	}
+
+	local.Value = strings.Join(localLines, "\n")
+	enabled.Value = strings.Join(enabledLines, "\n")
+
+	err = cfgStore.UpdateSetting(ctx, local, false)
+	if err != nil {
+		return errMap, err
+	}
+
+	err = cfgStore.UpdateSetting(ctx, enabled, false)
+	if err != nil {
+		return errMap, err
+	}
+
+	return errMap, nil
+}
+
+func settingByID(all []*model.Setting, id string) *model.Setting {
+	found, ok := lo.Find(all, func(s *model.Setting) bool {
+		return s.Id == id
+	})
+	if !ok {
+		return nil
+	}
+
+	return found
+}
+
+func extractSID(rule string) *string {
+	sids := sidExtracter.FindStringSubmatch(rule)
+	if len(sids) != 2 { // 0: Full Match, 1: Capture Group
+		return nil
+	}
+
+	return util.Ptr(strings.TrimSpace(sids[1]))
+}
+
+func indexRules(lines []string) map[string]int {
+	index := map[string]int{}
+
+	for i, line := range lines {
+		sid := extractSID(line)
+		if sid == nil {
+			continue
+		}
+
+		index[*sid] = i
+	}
+
+	return index
+}
+
+func indexSIDs(lines []string) map[string]int {
+	index := map[string]int{}
+
+	for i, line := range lines {
+		line = strings.TrimSpace(strings.TrimLeft(line, "# \t"))
+
+		if line != "" {
+			index[line] = i
+		}
+	}
+
+	return index
 }

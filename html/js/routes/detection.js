@@ -157,8 +157,22 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		saveDetection(createNew) {
 			if (this.curEditTarget !== null) this.stopEdit(true);
 
-			this.$refs['detection'].validate();
-			if (!this.editForm.valid) return;
+			if (this.isNew()) {
+				this.$refs['detection'].validate();
+				if (!this.editForm.valid) return;
+			}
+
+			switch (this.detect.engine) {
+				case 'yara':
+					this.validateYara();
+					break;
+				case 'sigma':
+					this.validateSigma();
+					break;
+				case 'suricata':
+					this.validateSuricata();
+					break;
+			}
 
 			if (createNew) {
 				this.$root.papi.post('/detection', this.detect);
@@ -172,6 +186,34 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		async duplicateDetection() {
 			const response = await this.$root.papi.post('/detection/' + encodeURIComponent(this.$route.params.id) + '/duplicate');
 			this.$router.push({name: 'detection', params: {id: response.data.id}});
+		},
+		async deleteDetection() {
+			await this.$root.papi.delete('/detection/' + encodeURIComponent(this.$route.params.id));
+			this.$router.push({ name: 'detections' });
+		},
+		validateYara() { },
+		validateSigma() {},
+		validateSuricata() {
+			const sidExtract = /\bsid: ?['"]?(.*?)['"]?;/
+			const results = sidExtract.exec(this.detect.content);
+
+			if (!results || results.length < 2) {
+				// sid not present in rule
+				this.$root.showError(this.i18n.sidMissingErr);
+				return;
+			} else if (results && results.length > 2) {
+				// multiple sids present in rule
+				this.$root.showError(this.i18n.sidMultipleErr);
+				return;
+			}
+
+			const sid = results[1];
+
+			if (this.detect.publicId !== sid) {
+				// sid doesn't match metadata
+				this.$root.showError(this.i18n.sidMismatchErr);
+				return;
+			}
 		},
 		print(x) {
 			console.log(x);
