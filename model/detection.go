@@ -91,23 +91,3 @@ func (detect *Detection) Validate() error {
 
 	return nil
 }
-
-func SyncDetections(detections []*Detection) error {
-	byEngine := map[EngineName][]*Detection{}
-	for _, detect := range detections {
-		byEngine[detect.Engine] = append(byEngine[detect.Engine], detect)
-	}
-
-	if len(byEngine[EngineNameSuricata]) > 0 {
-		err := syncSuricata(byEngine[EngineNameSuricata])
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func syncSuricata(detections []*Detection) error {
-	return nil
-}
