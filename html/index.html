@@ -2987,7 +2987,7 @@
                     </v-btn>
                   </td>
                   <td>
-                    <v-icon v-if="props.item.status == 'fault'" :id="'nodeFaultIcon_' + props.item.id" :color="props.item.status | colorNodeStatus">{{ props.item.status | iconNodeStatus }}</v-icon>
+                    <v-icon v-if="props.item.status == 'fault'" :id="'nodeFaultIcon_' + props.item.id" :color="colorNodeStatus(props.item.status, props.item.nonCriticalNode)">{{ props.item.status | iconNodeStatus }}</v-icon>
                   </td>
                   <td :id="'nodeId_' + props.item.id" v-text="props.item.id"></td>
                   <td :id="'nodeRole_' + props.item.id" v-text="$root.localizeMessage(props.item.role)" class="d-none d-md-table-cell"></td>
@@ -2996,13 +2996,13 @@
                   <td :id="'nodeVersion_' + props.item.id" v-text="props.item.version" class="d-none d-lg-table-cell"></td>
                   <td :id="'nodeModel_' + props.item.id" v-text="props.item.model" class="d-none d-lg-table-cell"></td>
                   <td v-if="metricsEnabled" class="d-none d-lg-table-cell">
-                    <span v-if="props.item.metricsEnabled" :id="'nodeEps_' + props.item.id">{{ props.item.productionEps | formatCount }} / {{ props.item.consumptionEps | formatCount }}</span>
+                    <span v-if="props.item.metricsEnabled" :id="'nodeEps_' + props.item.id">{{ props.item.consumptionEps | formatCount }}</span>
                     <span v-if="!props.item.metricsEnabled" :id="'nodeEps_' + props.item.id">{{ i18n.na }}</span>
                   </td>
                   <td :id="'nodeUpdateTime_' + props.item.id" class="d-none d-lg-table-cell">{{ props.item.updateTime | toTZ }}</td>
                   <td :id="'nodeEpochTime_' + props.item.id" class="d-none d-lg-table-cell">{{ props.item.epochTime | toTZ }}</td>
                   <td :id="'nodeUptimeSeconds_' + props.item.id" class="d-none d-lg-table-cell">{{ props.item.uptimeSeconds | formatDuration }}</td>
-                  <td class="d-none d-lg-table-cell"><v-chip :id="'nodeStatus_' + props.item.id" class="nodeStatus" @click="expand(props.item)" :color="props.item.status | colorNodeStatus">{{ $root.localizeMessage(props.item.status) }}</v-chip></td>
+                  <td class="d-none d-lg-table-cell"><v-chip :id="'nodeStatus_' + props.item.id" class="nodeStatus" @click="expand(props.item)" :color="colorNodeStatus(props.item.status, props.item.nonCriticalNode)">{{ $root.localizeMessage(props.item.status) }}</v-chip></td>
                 </tr>
               </template>
               <template v-slot:expanded-item="{ item }">
@@ -3051,20 +3051,22 @@
                                 <span class="filter value">{{ item.uptimeSeconds | formatDuration }}</span>
                               </div>
                               <div v-if="item.metricsEnabled" class="text-no-wrap">
-                                <span class="filter label">{{ i18n.epsProduction }}</span>
-                                <span class="filter value">{{ item.productionEps | formatCount }}</span>
-                              </div>
-                              <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.epsConsumption }}</span>
                                 <span class="filter value">{{ item.consumptionEps | formatCount }}</span>
                               </div>
                               <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.nodeStatusProcess }}</span>
-                                <span :class="colorNodeStatus(item.processStatus) + '--text'" class="filter value">{{ $root.localizeMessage(item.processStatus) }}</span>
+                                <span :class="colorNodeStatus(item.processStatus) + '--text'" class="filter value">
+                                  {{ $root.localizeMessage(item.processStatus) }}
+                                  <span v-if="item.nonCriticalNode">({{i18n.nonCriticalNode}})</span>
+                                </span>
                               </div>
                               <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.nodeStatusConnection }}</span>
-                                <span :class="colorNodeStatus(item.connectionStatus) + '--text'" class="filter value">{{ $root.localizeMessage(item.connectionStatus) }}</span>
+                                <span :class="colorNodeStatus(item.connectionStatus, item.nonCriticalNode) + '--text'" class="filter value">
+                                  {{ $root.localizeMessage(item.connectionStatus) }}
+                                  <span v-if="item.nonCriticalNode">({{i18n.nonCriticalNode}})</span>
+                                </span>
                               </div>
                               <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.nodeStatusRaid }}</span>

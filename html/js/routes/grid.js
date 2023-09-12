@@ -284,10 +284,10 @@ routes.push({ path: '/grid', name: 'grid', component: {
       }
       return node;
     },
-    colorNodeStatus(status) {
+    colorNodeStatus(status, nonCritical) {
       var color = "warning";
       switch (status) {
-        case NodeStatusFault: color = "error"; break;
+        case NodeStatusFault: color = nonCritical ? "warning" : "error"; break;
         case NodeStatusOk: color = "success"; break;
       }
       return color;
