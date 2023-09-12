@@ -22,11 +22,11 @@ routes.push({ path: '/grid', name: 'grid', component: {
       { text: this.$root.i18n.description, value: 'description', align: ' d-none d-lg-table-cell' },
       { text: this.$root.i18n.version, value: 'version', align: ' d-none d-lg-table-cell' },
       { text: this.$root.i18n.model, value: 'model', align: ' d-none d-lg-table-cell' },
-      { text: this.$root.i18n.eps, value: 'productionEps', align: ' d-none d-lg-table-cell' },
+      { text: this.$root.i18n.eps, value: 'consumptionEps', align: ' d-none d-lg-table-cell' },
       { text: this.$root.i18n.dateUpdated, value: 'updateTime', align: ' d-none d-lg-table-cell' },
       { text: this.$root.i18n.dateDataEpoch, value: 'epochTime', align: ' d-none d-lg-table-cell' },
       { text: this.$root.i18n.uptime, value: 'uptimeSeconds', align: ' d-none d-lg-table-cell' },
-      { text: this.$root.i18n.status, value: 'status', align: ' d-none d-lg-table-cell' },
+      { text: this.$root.i18n.status, value: 'status' },
       { text: '', value: 'keywords', align: ' d-none' },
     ],
     expanded: [],
@@ -109,7 +109,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
         if (!this.metricsEnabled) {
           epsColumn.align = ' d-none';
         } else {
-          epsColumn.align = '';
+          epsColumn.align = ' d-none d-lg-table-cell';
         }
       }
     },

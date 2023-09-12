@@ -3002,7 +3002,7 @@
                   <td :id="'nodeUpdateTime_' + props.item.id" class="d-none d-lg-table-cell">{{ props.item.updateTime | toTZ }}</td>
                   <td :id="'nodeEpochTime_' + props.item.id" class="d-none d-lg-table-cell">{{ props.item.epochTime | toTZ }}</td>
                   <td :id="'nodeUptimeSeconds_' + props.item.id" class="d-none d-lg-table-cell">{{ props.item.uptimeSeconds | formatDuration }}</td>
-                  <td class="d-none d-lg-table-cell"><v-chip :id="'nodeStatus_' + props.item.id" class="nodeStatus" @click="expand(props.item)" :color="colorNodeStatus(props.item.status, props.item.nonCriticalNode)">{{ $root.localizeMessage(props.item.status) }}</v-chip></td>
+                  <td><v-chip :id="'nodeStatus_' + props.item.id" class="nodeStatus" @click="expand(props.item)" :color="colorNodeStatus(props.item.status, props.item.nonCriticalNode)">{{ $root.localizeMessage(props.item.status) }}</v-chip></td>
                 </tr>
               </template>
               <template v-slot:expanded-item="{ item }">
