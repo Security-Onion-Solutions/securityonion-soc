@@ -39,7 +39,7 @@ function testUpdateMetricsEnabled(node1MetricsEnabled, node2MetricsEnabled, expe
   if (!expectedMetricsEnabled) {
 		expect(epsColumn.align).toBe(' d-none');
 	} else {
-		expect(epsColumn.align).toBe('');
+		expect(epsColumn.align).toBe(' d-none d-lg-table-cell');
 	}
 }
 
