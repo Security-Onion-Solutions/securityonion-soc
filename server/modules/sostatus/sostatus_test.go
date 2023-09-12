@@ -32,7 +32,7 @@ func TestSoStatusInit(tester *testing.T) {
 	}
 }
 
-func TestRefreshGrid(tester *testing.T) {
+func TestRefreshGrid_LicensedNodes(tester *testing.T) {
 	status, _ := NewTestStatus()
 
 	// 0 = unlimited nodes
@@ -44,4 +44,13 @@ func TestRefreshGrid(tester *testing.T) {
 	licensing.Test("foo", 0, 1, "", "")
 	status.refreshGrid(context.Background())
 	assert.Equal(tester, licensing.LICENSE_STATUS_EXCEEDED, licensing.GetStatus())
+}
+
+func TestRefreshGrid(tester *testing.T) {
+	status, _ := NewTestStatus()
+
+	status.refreshGrid(context.Background())
+	assert.Equal(tester, 2, status.currentStatus.Grid.UnhealthyNodeCount)
+	assert.Equal(tester, 2, status.currentStatus.Grid.TotalNodeCount)
+	assert.Equal(tester, 12, status.currentStatus.Grid.Eps)
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 )
 
+const NodeRoleDesktop = "so-desktop"
 const NodeStatusUnknown = "unknown"
 const NodeStatusOk = "ok"
 const NodeStatusFault = "fault"
@@ -36,6 +37,7 @@ type Node struct {
 	ConsumptionEps   int       `json:"consumptionEps"`
 	FailedEvents     int       `json:"failedEvents"`
 	MetricsEnabled   bool      `json:"metricsEnabled"`
+	NonCriticalNode	 bool	   `json:"nonCriticalNode"`
 }
 
 func NewNode(id string) *Node {
@@ -85,6 +87,7 @@ func (node *Node) updateStatusComponent(currentState string, newState string) st
 }
 
 func (node *Node) UpdateOverallStatus(enhancedStatusEnabled bool) bool {
+	node.NonCriticalNode = node.Role == NodeRoleDesktop
 	newStatus := NodeStatusUnknown
 	newStatus = node.updateStatusComponent(newStatus, node.ConnectionStatus)
 	if enhancedStatusEnabled {
