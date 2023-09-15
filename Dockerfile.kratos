@@ -7,7 +7,7 @@
 FROM ghcr.io/security-onion-solutions/golang:alpine AS builder
 
 ARG OWNER=ory
-ARG VERSION=v0.13.0
+ARG VERSION=v1.0.0
 
 RUN addgroup -S ory; \
     adduser -S ory -G ory -D -H -s /bin/nologin
