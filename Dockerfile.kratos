@@ -60,6 +60,4 @@ USER kratos
 EXPOSE 4433
 EXPOSE 4434
 
-VOLUME ["/kratos-conf", "/kratos-data", "/kratos-log"]
-
 ENTRYPOINT ["/start-kratos.sh"]

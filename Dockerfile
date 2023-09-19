@@ -80,6 +80,4 @@ ENV WAZUH_VERSION=$WAZUH_VERSION
 
 USER socore
 EXPOSE 9822/tcp
-VOLUME /opt/sensoroni/jobs
-VOLUME /opt/sensoroni/logs
 ENTRYPOINT ["/opt/sensoroni/sensoroni"]
