@@ -162,16 +162,22 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				if (!this.editForm.valid) return;
 			}
 
+			let err;
 			switch (this.detect.engine) {
 				case 'yara':
-					this.validateYara();
+					err = this.validateYara();
 					break;
 				case 'sigma':
-					this.validateSigma();
+					err = this.validateSigma();
 					break;
 				case 'suricata':
-					this.validateSuricata();
+					err = this.validateSuricata();
 					break;
+			}
+
+			if (err) {
+				this.$root.showError(err);
+				return;
 			}
 
 			if (createNew) {
@@ -191,29 +197,36 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			await this.$root.papi.delete('/detection/' + encodeURIComponent(this.$route.params.id));
 			this.$router.push({ name: 'detections' });
 		},
-		validateYara() { },
-		validateSigma() {},
+		validateYara() {
+			return null;
+		},
+		validateSigma() {
+			return null;
+		},
 		validateSuricata() {
 			const sidExtract = /\bsid: ?['"]?(.*?)['"]?;/
 			const results = sidExtract.exec(this.detect.content);
 
 			if (!results || results.length < 2) {
 				// sid not present in rule
-				this.$root.showError(this.i18n.sidMissingErr);
-				return;
+				return this.i18n.sidMissingErr;
 			} else if (results && results.length > 2) {
 				// multiple sids present in rule
-				this.$root.showError(this.i18n.sidMultipleErr);
-				return;
+				return this.i18n.sidMultipleErr;
 			}
 
 			const sid = results[1];
 
 			if (this.detect.publicId !== sid) {
 				// sid doesn't match metadata
-				this.$root.showError(this.i18n.sidMismatchErr);
-				return;
+				return this.i18n.sidMismatchErr;
 			}
+
+			// normalize quotes
+			this.detect.content = this.detect.content.replaceAll('”', '"');
+			this.detect.content = this.detect.content.replaceAll('“', '"');
+
+			return null;
 		},
 		print(x) {
 			console.log(x);
