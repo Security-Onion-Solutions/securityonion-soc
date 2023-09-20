@@ -24,6 +24,8 @@ import (
 
 var sidExtracter = regexp.MustCompile(`\bsid: ?['"]?(.*?)['"]?;`)
 
+const suricataModifyFromTo = `"flowbits" "noalert; flowbits"`
+
 type DetectionHandler struct {
 	server *Server
 }
@@ -278,11 +280,18 @@ func syncSuricata(ctx context.Context, cfgStore Configstore, detections []*model
 		return nil, fmt.Errorf("unable to find enabled setting")
 	}
 
+	modify := settingByID(allSettings, "idstools.sids.modify")
+	if modify == nil {
+		return nil, fmt.Errorf("unable to find modify setting")
+	}
+
 	localLines := strings.Split(local.Value, "\n")
 	enabledLines := strings.Split(enabled.Value, "\n")
+	modifyLines := strings.Split(modify.Value, "\n")
 
-	localIndex := indexRules(localLines)
-	enabledIndex := indexSIDs(enabledLines)
+	localIndex := indexLocal(localLines)
+	enabledIndex := indexEnabled(enabledLines)
+	modifyIndex := indexModified(modifyLines)
 
 	errMap := map[string]string{} // map[sid]error
 
@@ -302,8 +311,6 @@ func syncSuricata(ctx context.Context, cfgStore Configstore, detections []*model
 		sid := *opt
 		_, isFlowbits := parsedRule.GetOption("flowbits")
 
-		_ = isFlowbits
-
 		lineNum, inLocal := localIndex[sid]
 		if !inLocal {
 			localLines = append(localLines, detect.Content)
@@ -316,7 +323,7 @@ func syncSuricata(ctx context.Context, cfgStore Configstore, detections []*model
 		lineNum, inEnabled := enabledIndex[sid]
 		if !inEnabled {
 			line := detect.PublicID
-			if !detect.IsEnabled {
+			if !detect.IsEnabled && !isFlowbits {
 				line = "# " + line
 			}
 
@@ -325,16 +332,32 @@ func syncSuricata(ctx context.Context, cfgStore Configstore, detections []*model
 			enabledIndex[sid] = lineNum
 		} else {
 			line := detect.PublicID
-			if !detect.IsEnabled {
+			if !detect.IsEnabled && !isFlowbits {
 				line = "# " + line
 			}
 
 			enabledLines[lineNum] = line
 		}
+
+		if isFlowbits {
+			lineNum, inModify := modifyIndex[sid]
+			if !inModify && !detect.IsEnabled {
+				// not in the modify file, but should be
+				line := fmt.Sprintf("%s %s", detect.PublicID, suricataModifyFromTo)
+				modifyLines = append(modifyLines, line)
+				lineNum = len(modifyLines) - 1
+				modifyIndex[sid] = lineNum
+			} else if inModify && detect.IsEnabled {
+				// in modify, but shouldn't be
+				modifyLines = append(modifyLines[:lineNum], modifyLines[lineNum+1:]...)
+				delete(modifyIndex, sid)
+			}
+		}
 	}
 
 	local.Value = strings.Join(localLines, "\n")
 	enabled.Value = strings.Join(enabledLines, "\n")
+	modify.Value = strings.Join(modifyLines, "\n")
 
 	err = cfgStore.UpdateSetting(ctx, local, false)
 	if err != nil {
@@ -342,6 +365,11 @@ func syncSuricata(ctx context.Context, cfgStore Configstore, detections []*model
 	}
 
 	err = cfgStore.UpdateSetting(ctx, enabled, false)
+	if err != nil {
+		return errMap, err
+	}
+
+	err = cfgStore.UpdateSetting(ctx, modify, false)
 	if err != nil {
 		return errMap, err
 	}
@@ -369,7 +397,7 @@ func extractSID(rule string) *string {
 	return util.Ptr(strings.TrimSpace(sids[1]))
 }
 
-func indexRules(lines []string) map[string]int {
+func indexLocal(lines []string) map[string]int {
 	index := map[string]int{}
 
 	for i, line := range lines {
@@ -384,14 +412,28 @@ func indexRules(lines []string) map[string]int {
 	return index
 }
 
-func indexSIDs(lines []string) map[string]int {
+func indexEnabled(lines []string) map[string]int {
 	index := map[string]int{}
 
 	for i, line := range lines {
 		line = strings.TrimSpace(strings.TrimLeft(line, "# \t"))
-
 		if line != "" {
 			index[line] = i
+		}
+	}
+
+	return index
+}
+
+func indexModified(lines []string) map[string]int {
+	index := map[string]int{}
+
+	for i, line := range lines {
+		line = strings.TrimSpace(strings.TrimLeft(line, " \t"))
+		parts := strings.SplitN(line, " ", 2)
+
+		if strings.Contains(line, suricataModifyFromTo) {
+			index[parts[0]] = i
 		}
 	}
 
