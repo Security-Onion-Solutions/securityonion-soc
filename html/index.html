@@ -970,15 +970,15 @@
 
         <div class="row mx-sm-8 mx-md-12 mx-lg-4 flex-column flex-md-row">
           <div class="main col-md-9 order-md-1 col-12 order-2">
-            <!-- Edit View -->
             <div v-if="isNew()">
+              <!-- Create View -->
               <v-form ref="detection" v-model="editForm.valid">
                 <div class="col pt-5" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
                   <!-- Description -->
                   <v-textarea id="detection-description-create" hide-details="auto" outlined v-model="detect.description" :rules="[rules.required]" persistent-hint :hint="'Detection Description'" auto-grow rows="5"></v-textarea>
 
                   <!-- PublicID -->
-                  <v-text-field id="detection-publicId-create" class="mt-0" v-model="detect.publicId" :rules="[rules.required]" persistent-hint :hint="'Public ID'">
+                  <v-text-field id="detection-publicId-create" class="mt-0" v-model="detect.publicId" :rules="[rules.required, rules.minLength(5)]" persistent-hint :hint="'Public ID'">
                     <template v-slot:append v-if="!detect.publicId">
                       <v-btn id="gen-public-id-create" text small color="primary" @click="generatePublicID()">Generate</v-btn>
                     </template>
@@ -1072,7 +1072,7 @@
               <v-tab-item value="details">
                 <div class="col pt-0" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
                   <!-- PublicID -->
-                  <v-text-field id="detection-publicId-edit" v-model="detect.publicId" :rules="[rules.required]" persistent-hint :hint="'Public ID'" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)">
+                  <v-text-field id="detection-publicId-edit" v-model="detect.publicId" :rules="[rules.required, rules.minLength(5)]" persistent-hint :hint="'Public ID'" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)">
                     <template v-slot:append v-if="!detect.publicId">
                       <v-btn id="gen-public-id" text small color="primary" @click="generatePublicID()">{{i18n.generate}}</v-btn>
                     </template>
