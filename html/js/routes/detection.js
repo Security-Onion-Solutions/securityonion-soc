@@ -17,14 +17,15 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		editField: null,
 		editForm: { valid: true },
 		rules: {
-      required: value => (value && value.length > 0) || this.$root.i18n.required,
-      number: value => (! isNaN(+value) && Number.isInteger(parseFloat(value))) || this.$root.i18n.required,
-      hours: value => (!value || /^\d{1,4}(\.\d{1,4})?$/.test(value)) || this.$root.i18n.invalidHours,
-      shortLengthLimit: value => (value.length < 100) || this.$root.i18n.required,
-      longLengthLimit: value => (encodeURI(value).split(/%..|./).length - 1 < 10000000) || this.$root.i18n.required,
-      fileSizeLimit: value => (value == null || value.size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
-      fileNotEmpty: value => (value == null || value.size > 0) || this.$root.i18n.fileEmpty,
-      fileRequired: value => (value != null) || this.$root.i18n.required,
+			required: value => (value && value.length > 0) || this.$root.i18n.required,
+			number: value => (! isNaN(+value) && Number.isInteger(parseFloat(value))) || this.$root.i18n.required,
+			hours: value => (!value || /^\d{1,4}(\.\d{1,4})?$/.test(value)) || this.$root.i18n.invalidHours,
+			minLength: limit => value => (value && value.length >= limit) || this.$root.i18n.ruleMinLen,
+			shortLengthLimit: value => (value.length < 100) || this.$root.i18n.required,
+			longLengthLimit: value => (encodeURI(value).split(/%..|./).length - 1 < 10000000) || this.$root.i18n.required,
+			fileSizeLimit: value => (value == null || value.size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
+			fileNotEmpty: value => (value == null || value.size > 0) || this.$root.i18n.fileEmpty,
+			fileRequired: value => (value != null) || this.$root.i18n.required,
 		},
 		panel: [0, 1, 2],
 		activeTab: '',
@@ -154,7 +155,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.origValue = null;
 			this.editField = null;
 		},
-		saveDetection(createNew) {
+		async saveDetection(createNew) {
 			if (this.curEditTarget !== null) this.stopEdit(true);
 
 			if (this.isNew()) {
@@ -180,14 +181,22 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				return;
 			}
 
-			if (createNew) {
-				this.$root.papi.post('/detection', this.detect);
-			} else {
-				this.$root.papi.put('/detection', this.detect);
-			}
-			this.origDetect = Object.assign({}, this.detect);
+			try {
+				let response;
+				if (createNew) {
+					response = await this.$root.papi.post('/detection', this.detect);
+				} else {
+					response = await this.$root.papi.put('/detection', this.detect);
+				}
 
-			this.$root.showTip(this.i18n.saveSuccess);
+				this.origDetect = Object.assign({}, this.detect);
+
+				this.$root.showTip(this.i18n.saveSuccess);
+
+				this.$router.push({name: 'detection', params: {id: response.data.id}});
+			} catch (error) {
+				this.$root.showError(error);
+			}
 		},
 		async duplicateDetection() {
 			const response = await this.$root.papi.post('/detection/' + encodeURIComponent(this.$route.params.id) + '/duplicate');

@@ -22,7 +22,7 @@ import (
 	"github.com/go-chi/chi"
 )
 
-var sidExtracter = regexp.MustCompile(`\bsid: ?['"]?(.*?)['"]?;`)
+var sidExtracter = regexp.MustCompile(`(?i)\bsid: ?['"]?(.*?)['"]?;`)
 
 const suricataModifyFromTo = `"flowbits" "noalert; flowbits"`
 
@@ -280,6 +280,11 @@ func syncSuricata(ctx context.Context, cfgStore Configstore, detections []*model
 		return nil, fmt.Errorf("unable to find enabled setting")
 	}
 
+	disabled := settingByID(allSettings, "idstools.sids.disabled")
+	if disabled == nil {
+		return nil, fmt.Errorf("unable to find disabled setting")
+	}
+
 	modify := settingByID(allSettings, "idstools.sids.modify")
 	if modify == nil {
 		return nil, fmt.Errorf("unable to find modify setting")
@@ -287,11 +292,13 @@ func syncSuricata(ctx context.Context, cfgStore Configstore, detections []*model
 
 	localLines := strings.Split(local.Value, "\n")
 	enabledLines := strings.Split(enabled.Value, "\n")
+	disabledLines := strings.Split(disabled.Value, "\n")
 	modifyLines := strings.Split(modify.Value, "\n")
 
 	localIndex := indexLocal(localLines)
 	enabledIndex := indexEnabled(enabledLines)
-	modifyIndex := indexModified(modifyLines)
+	disabledIndex := indexEnabled(disabledLines)
+	modifyIndex := indexModify(modifyLines)
 
 	errMap := map[string]string{} // map[sid]error
 
@@ -339,6 +346,27 @@ func syncSuricata(ctx context.Context, cfgStore Configstore, detections []*model
 			enabledLines[lineNum] = line
 		}
 
+		if !isFlowbits {
+			lineNum, inDisabled := disabledIndex[sid]
+			if !inDisabled {
+				line := detect.PublicID
+				if detect.IsEnabled {
+					line = "# " + line
+				}
+
+				disabledLines = append(disabledLines, line)
+				lineNum = len(disabledLines) - 1
+				disabledIndex[sid] = lineNum
+			} else {
+				line := detect.PublicID
+				if detect.IsEnabled {
+					line = "# " + line
+				}
+
+				disabledLines[lineNum] = line
+			}
+		}
+
 		if isFlowbits {
 			lineNum, inModify := modifyIndex[sid]
 			if !inModify && !detect.IsEnabled {
@@ -357,6 +385,7 @@ func syncSuricata(ctx context.Context, cfgStore Configstore, detections []*model
 
 	local.Value = strings.Join(localLines, "\n")
 	enabled.Value = strings.Join(enabledLines, "\n")
+	disabled.Value = strings.Join(disabledLines, "\n")
 	modify.Value = strings.Join(modifyLines, "\n")
 
 	err = cfgStore.UpdateSetting(ctx, local, false)
@@ -365,6 +394,11 @@ func syncSuricata(ctx context.Context, cfgStore Configstore, detections []*model
 	}
 
 	err = cfgStore.UpdateSetting(ctx, enabled, false)
+	if err != nil {
+		return errMap, err
+	}
+
+	err = cfgStore.UpdateSetting(ctx, disabled, false)
 	if err != nil {
 		return errMap, err
 	}
@@ -389,12 +423,12 @@ func settingByID(all []*model.Setting, id string) *model.Setting {
 }
 
 func extractSID(rule string) *string {
-	sids := sidExtracter.FindStringSubmatch(rule)
-	if len(sids) != 2 { // 0: Full Match, 1: Capture Group
+	sids := sidExtracter.FindAllStringSubmatch(rule, 2)
+	if len(sids) != 1 { // 1 match = 1 sid
 		return nil
 	}
 
-	return util.Ptr(strings.TrimSpace(sids[1]))
+	return util.Ptr(strings.TrimSpace(sids[0][1]))
 }
 
 func indexLocal(lines []string) map[string]int {
@@ -425,14 +459,14 @@ func indexEnabled(lines []string) map[string]int {
 	return index
 }
 
-func indexModified(lines []string) map[string]int {
+func indexModify(lines []string) map[string]int {
 	index := map[string]int{}
 
 	for i, line := range lines {
-		line = strings.TrimSpace(strings.TrimLeft(line, " \t"))
-		parts := strings.SplitN(line, " ", 2)
+		line = strings.TrimSpace(strings.TrimLeft(line, "# \t"))
 
-		if strings.Contains(line, suricataModifyFromTo) {
+		if strings.HasSuffix(line, suricataModifyFromTo) {
+			parts := strings.SplitN(line, " ", 2)
 			index[parts[0]] = i
 		}
 	}
