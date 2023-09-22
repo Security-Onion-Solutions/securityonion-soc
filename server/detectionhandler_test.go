@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -161,4 +162,54 @@ func TestIndexModify(t *testing.T) {
 	assert.NotContains(t, output, "90000")
 	assert.NotContains(t, output, "30000")
 	assert.NotContains(t, output, "e4bd794a-8156-4fcc-b6a9-9fb2c9ecadc5")
+}
+
+func TestSyncSuricata(t *testing.T) {
+	emptySettings := []*model.Setting{
+		{Id: "idstools.rules.local__rules"},
+		{Id: "idstools.rules.enabled"},
+		{Id: "idstools.rules.disabled"},
+		{Id: "idstools.rules.modify"},
+	}
+	table := []struct {
+		Name string
+		InitialSettings []*model.Setting
+		Detections []*model.Detection // Content (Valid Rule), PublicID, IsEnabled
+		ExpectedSettings map[string]string
+		ExpectedErr error
+		ExpectedErrMap map[string]string
+	}{
+		{
+			Name: "Simple Add",
+			InitialSettings: emptySettings,
+			Detections: []*model.Detection{
+				{},
+			},
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, test := range table {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			mCfgStore := NewMemConfigStore(test.InitialSettings)
+
+			errMap, err := syncSuricata(ctx, mCfgStore, test.Detections)
+
+			assert.Equal(t, test.ExpectedErr, err)
+			assert.Equal(t, test.ExpectedErrMap, errMap)
+
+			set, err := mCfgStore.GetSettings(ctx)
+			assert.NoError(t, err)
+
+			for id, expectedValue := range test.ExpectedSettings {
+				setting := settingByID(set, id)
+				assert.NotNil(t, setting)
+				assert.Equal(t, expectedValue, setting.Value)
+			}
+		})
+	}
 }
