@@ -17,13 +17,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/json"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/salt/options"
 	"github.com/security-onion-solutions/securityonion-soc/syntax"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+
+	"github.com/apex/log"
 	"gopkg.in/yaml.v3"
 )
 
