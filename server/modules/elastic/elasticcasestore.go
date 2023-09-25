@@ -13,7 +13,6 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/apex/log"
@@ -270,50 +269,6 @@ func (store *ElasticCasestore) validateArtifactStream(artifactstream *model.Arti
 	}
 	if err == nil && len(artifactstream.Operation) > 0 {
 		err = errors.New("Field 'Operation' must not be specified")
-	}
-	return err
-}
-
-func (store *ElasticCasestore) validateDetection(detect *model.Detection) error {
-	var err error
-
-	if err == nil && detect.Id != "" {
-		err = store.validateId(detect.Id, "onionId")
-	}
-
-	if err == nil && detect.PublicID != "" {
-		err = store.validateId(detect.PublicID, "publicId")
-	}
-
-	if err == nil && detect.Title != "" {
-		err = store.validateString(detect.Title, SHORT_STRING_MAX, "title")
-	}
-
-	if err == nil && detect.Severity != "" {
-		err = store.validateString(string(detect.Severity), SHORT_STRING_MAX, "severity")
-	}
-
-	if err == nil && detect.Author != "" {
-		err = store.validateString(detect.Author, SHORT_STRING_MAX, "author")
-	}
-
-	if err == nil && detect.Description != "" {
-		err = store.validateString(detect.Description, LONG_STRING_MAX, "description")
-	}
-
-	if err == nil && detect.Content != "" {
-		err = store.validateString(detect.Content, LONG_STRING_MAX, "content")
-	}
-
-	if err == nil && detect.Note != "" {
-		err = store.validateString(detect.Note, LONG_STRING_MAX, "note")
-	}
-
-	if err == nil {
-		_, okEngine := model.EnginesByName[detect.Engine]
-		if !okEngine {
-			err = errors.New("invalid engine")
-		}
 	}
 	return err
 }
@@ -944,122 +899,4 @@ func (store *ElasticCasestore) ExtractCommonObservables(ctx context.Context, eve
 		}
 	}
 	return nil
-}
-
-func (store *ElasticCasestore) CreateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error) {
-	var err error
-
-	err = store.validateDetection(detect)
-	if err != nil {
-		return nil, err
-	}
-
-	if detect.Id != "" {
-		return nil, errors.New("Unexpected ID found in new comment")
-	}
-
-	now := time.Now()
-	detect.CreateTime = &now
-	var results *model.EventIndexResults
-	results, err = store.save(ctx, detect, "detection", store.prepareForSave(ctx, &detect.Auditable))
-	if err == nil {
-		// Read object back to get new modify date, etc
-		detect, err = store.GetDetection(ctx, results.DocumentId)
-	}
-
-	return detect, err
-}
-
-func (store *ElasticCasestore) GetDetection(ctx context.Context, detectId string) (detect *model.Detection, err error) {
-	err = store.validateId(detectId, "detectId")
-	if err != nil {
-		return nil, err
-	}
-
-	obj, err := store.get(ctx, detectId, "detection")
-	if err == nil && obj != nil {
-		detect = obj.(*model.Detection)
-	}
-
-	return detect, err
-}
-
-func (store *ElasticCasestore) UpdateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error) {
-	err := store.validateDetection(detect)
-	if err != nil {
-		return nil, err
-	}
-
-	if detect.Id == "" {
-		err = errors.New("Missing detection onion ID")
-		return nil, err
-	}
-
-	var old *model.Detection
-	old, err = store.GetDetection(ctx, detect.Id)
-	if err != nil {
-		return nil, err
-	}
-
-	var results *model.EventIndexResults
-
-	// Preserve read-only fields
-	detect.CreateTime = old.CreateTime
-
-	results, err = store.save(ctx, detect, "detection", store.prepareForSave(ctx, &detect.Auditable))
-	if err != nil {
-		return nil, err
-	}
-	// Read object back to get new modify date, etc
-	return store.GetDetection(ctx, results.DocumentId)
-}
-
-func (store *ElasticCasestore) UpdateDetectionField(ctx context.Context, id string, field string, value any) (*model.Detection, bool, error) {
-	var modified bool
-
-	detect, err := store.GetDetection(ctx, id)
-	if err != nil {
-		return nil, false, err
-	}
-
-	switch strings.ToLower(field) {
-	case "isenabled":
-		bVal, ok := value.(bool)
-		if !ok {
-			return nil, false, fmt.Errorf("invalid value for field isEnabled (expected bool): %[1]v (%[1]T)", value)
-		}
-
-		if detect.IsEnabled != bVal {
-			detect.IsEnabled = bVal
-			modified = true
-		}
-	}
-
-	err = store.validateDetection(detect)
-	if err != nil {
-		return nil, false, err
-	}
-
-	if modified {
-		var results *model.EventIndexResults
-
-		results, err = store.save(ctx, detect, "detection", store.prepareForSave(ctx, &detect.Auditable))
-		if err == nil {
-			// Read object back to get new modify date, etc
-			detect, err = store.GetDetection(ctx, results.DocumentId)
-		}
-	}
-
-	return detect, modified, err
-}
-
-func (store *ElasticCasestore) DeleteDetection(ctx context.Context, onionID string) (*model.Detection, error) {
-	detect, err := store.GetDetection(ctx, onionID)
-	if err != nil {
-		return nil, err
-	}
-
-	err = store.delete(ctx, detect, "detection", store.prepareForSave(ctx, &detect.Auditable))
-
-	return detect, err
 }

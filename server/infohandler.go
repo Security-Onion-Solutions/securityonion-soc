@@ -72,7 +72,7 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 		detections.GroupFetchLimit = 50
 		detections.MostRecentlyUsedLimit = 5
 		detections.SafeStringMaxLength = 100
-		detections.QueryBaseFilter = "_index:\"*:so-case\" AND so_kind:detection"
+		detections.QueryBaseFilter = "_index:\"*:so-detection\" AND so_kind:detection"
 		detections.EventFields = map[string][]string{
 			"default": {
 				"so_detection.title",
@@ -113,7 +113,7 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 		playbooks.EventItemsPerPage = 50
 		playbooks.GroupFetchLimit = 50
 		playbooks.MostRecentlyUsedLimit = 5
-		playbooks.QueryBaseFilter = "_index:\"*:so-case\" AND so_kind:playbook"
+		playbooks.QueryBaseFilter = "_index:\"*:so-detection\" AND so_kind:playbook"
 		playbooks.SafeStringMaxLength = 100
 		playbooks.Queries = []*config.HuntingQuery{
 			{Query: "*"},
