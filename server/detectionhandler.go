@@ -10,21 +10,13 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strings"
 
-	"github.com/samber/lo"
 	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/syntax"
-	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/go-chi/chi"
 )
-
-var sidExtracter = regexp.MustCompile(`(?i)\bsid: ?['"]?(.*?)['"]?;`)
-
-const suricataModifyFromTo = `"flowbits" "noalert; flowbits"`
 
 type DetectionHandler struct {
 	server *Server
@@ -54,7 +46,7 @@ func (h *DetectionHandler) getDetection(w http.ResponseWriter, r *http.Request) 
 
 	detectId := chi.URLParam(r, "id")
 
-	detect, err := h.server.Casestore.GetDetection(ctx, detectId)
+	detect, err := h.server.Detectionstore.GetDetection(ctx, detectId)
 	if err != nil {
 		if err.Error() == "Object not found" {
 			web.Respond(w, r, http.StatusNotFound, nil)
@@ -79,13 +71,13 @@ func (h *DetectionHandler) postDetection(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	detect, err = h.server.Casestore.CreateDetection(ctx, detect)
+	detect, err = h.server.Detectionstore.CreateDetection(ctx, detect)
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
-	errMap, err := SyncDetections(ctx, h.server.Configstore, []*model.Detection{detect})
+	errMap, err := SyncDetections(ctx, h.server, []*model.Detection{detect})
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
@@ -104,7 +96,7 @@ func (h *DetectionHandler) duplicateDetection(w http.ResponseWriter, r *http.Req
 
 	detectId := chi.URLParam(r, "id")
 
-	detect, err := h.server.Casestore.GetDetection(ctx, detectId)
+	detect, err := h.server.Detectionstore.GetDetection(ctx, detectId)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
@@ -119,7 +111,7 @@ func (h *DetectionHandler) duplicateDetection(w http.ResponseWriter, r *http.Req
 	detect.IsReporting = false
 	detect.IsCommunity = false
 
-	detect, err = h.server.Casestore.CreateDetection(ctx, detect)
+	detect, err = h.server.Detectionstore.CreateDetection(ctx, detect)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
@@ -139,13 +131,13 @@ func (h *DetectionHandler) putDetection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	detect, err = h.server.Casestore.UpdateDetection(ctx, detect)
+	detect, err = h.server.Detectionstore.UpdateDetection(ctx, detect)
 	if err != nil {
 		web.Respond(w, r, http.StatusNotFound, err)
 		return
 	}
 
-	errMap, err := SyncDetections(ctx, h.server.Configstore, []*model.Detection{detect})
+	errMap, err := SyncDetections(ctx, h.server, []*model.Detection{detect})
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
@@ -164,13 +156,13 @@ func (h *DetectionHandler) deleteDetection(w http.ResponseWriter, r *http.Reques
 
 	id := chi.URLParam(r, "id")
 
-	old, err := h.server.Casestore.DeleteDetection(ctx, id)
+	old, err := h.server.Detectionstore.DeleteDetection(ctx, id)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	errMap, err := SyncDetections(ctx, h.server.Configstore, []*model.Detection{old})
+	errMap, err := SyncDetections(ctx, h.server, []*model.Detection{old})
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
@@ -210,7 +202,7 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 	modified := []*model.Detection{}
 
 	for id := range IDs {
-		det, mod, err := h.server.Casestore.UpdateDetectionField(ctx, id, "IsEnabled", enabled)
+		det, mod, err := h.server.Detectionstore.UpdateDetectionField(ctx, id, "IsEnabled", enabled)
 		if err != nil {
 			errMap[id] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
 			continue
@@ -222,7 +214,7 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 	}
 
 	if len(modified) != 0 {
-		addErrMap, err := SyncDetections(ctx, h.server.Configstore, modified)
+		addErrMap, err := SyncDetections(ctx, h.server, modified)
 		if err != nil {
 			web.Respond(w, r, http.StatusInternalServerError, err)
 			return
@@ -242,7 +234,7 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 	web.Respond(w, r, http.StatusOK, errMap)
 }
 
-func SyncDetections(ctx context.Context, cfgStore Configstore, detections []*model.Detection) (errMap map[string]string, err error) {
+func SyncDetections(ctx context.Context, srv *Server, detections []*model.Detection) (errMap map[string]string, err error) {
 	defer func() {
 		if len(errMap) == 0 {
 			errMap = nil
@@ -254,222 +246,17 @@ func SyncDetections(ctx context.Context, cfgStore Configstore, detections []*mod
 		byEngine[detect.Engine] = append(byEngine[detect.Engine], detect)
 	}
 
-	if len(byEngine[model.EngineNameSuricata]) > 0 {
-		errMap, err = syncSuricata(ctx, cfgStore, byEngine[model.EngineNameSuricata])
-		if err != nil {
-			return errMap, err
+	for name, engine := range srv.DetectionEngines {
+		if len(byEngine[name]) != 0 {
+			eMap, err := engine.SyncDetections(ctx, byEngine[name])
+			for sid, e := range eMap {
+				errMap[sid] = e
+			}
+			if err != nil {
+				return errMap, err
+			}
 		}
 	}
 
 	return errMap, nil
-}
-
-func syncSuricata(ctx context.Context, cfgStore Configstore, detections []*model.Detection) (map[string]string, error) {
-	allSettings, err := cfgStore.GetSettings(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	local := settingByID(allSettings, "idstools.rules.local__rules")
-	if local == nil {
-		return nil, fmt.Errorf("unable to find local rules setting")
-	}
-
-	enabled := settingByID(allSettings, "idstools.sids.enabled")
-	if enabled == nil {
-		return nil, fmt.Errorf("unable to find enabled setting")
-	}
-
-	disabled := settingByID(allSettings, "idstools.sids.disabled")
-	if disabled == nil {
-		return nil, fmt.Errorf("unable to find disabled setting")
-	}
-
-	modify := settingByID(allSettings, "idstools.sids.modify")
-	if modify == nil {
-		return nil, fmt.Errorf("unable to find modify setting")
-	}
-
-	localLines := strings.Split(local.Value, "\n")
-	enabledLines := strings.Split(enabled.Value, "\n")
-	disabledLines := strings.Split(disabled.Value, "\n")
-	modifyLines := strings.Split(modify.Value, "\n")
-
-	localIndex := indexLocal(localLines)
-	enabledIndex := indexEnabled(enabledLines)
-	disabledIndex := indexEnabled(disabledLines)
-	modifyIndex := indexModify(modifyLines)
-
-	errMap := map[string]string{} // map[sid]error
-
-	for _, detect := range detections {
-		parsedRule, err := syntax.ParseSuricataRule(detect.Content)
-		if err != nil {
-			errMap[detect.PublicID] = fmt.Sprintf("unable to parse rule; reason=%s", err.Error())
-			continue
-		}
-
-		opt, ok := parsedRule.GetOption("sid")
-		if !ok || opt == nil {
-			errMap[detect.PublicID] = fmt.Sprintf("rule does not contain a SID; rule=%s", detect.Content)
-			continue
-		}
-
-		sid := *opt
-		_, isFlowbits := parsedRule.GetOption("flowbits")
-
-		lineNum, inLocal := localIndex[sid]
-		if !inLocal {
-			localLines = append(localLines, detect.Content)
-			lineNum = len(localLines) - 1
-			localIndex[sid] = lineNum
-		} else {
-			localLines[lineNum] = detect.Content
-		}
-
-		lineNum, inEnabled := enabledIndex[sid]
-		if !inEnabled {
-			line := detect.PublicID
-			if !detect.IsEnabled && !isFlowbits {
-				line = "# " + line
-			}
-
-			enabledLines = append(enabledLines, line)
-			lineNum = len(enabledLines) - 1
-			enabledIndex[sid] = lineNum
-		} else {
-			line := detect.PublicID
-			if !detect.IsEnabled && !isFlowbits {
-				line = "# " + line
-			}
-
-			enabledLines[lineNum] = line
-		}
-
-		if !isFlowbits {
-			lineNum, inDisabled := disabledIndex[sid]
-			if !inDisabled {
-				line := detect.PublicID
-				if detect.IsEnabled {
-					line = "# " + line
-				}
-
-				disabledLines = append(disabledLines, line)
-				lineNum = len(disabledLines) - 1
-				disabledIndex[sid] = lineNum
-			} else {
-				line := detect.PublicID
-				if detect.IsEnabled {
-					line = "# " + line
-				}
-
-				disabledLines[lineNum] = line
-			}
-		}
-
-		if isFlowbits {
-			lineNum, inModify := modifyIndex[sid]
-			if !inModify && !detect.IsEnabled {
-				// not in the modify file, but should be
-				line := fmt.Sprintf("%s %s", detect.PublicID, suricataModifyFromTo)
-				modifyLines = append(modifyLines, line)
-				lineNum = len(modifyLines) - 1
-				modifyIndex[sid] = lineNum
-			} else if inModify && detect.IsEnabled {
-				// in modify, but shouldn't be
-				modifyLines = append(modifyLines[:lineNum], modifyLines[lineNum+1:]...)
-				delete(modifyIndex, sid)
-			}
-		}
-	}
-
-	local.Value = strings.Join(localLines, "\n")
-	enabled.Value = strings.Join(enabledLines, "\n")
-	disabled.Value = strings.Join(disabledLines, "\n")
-	modify.Value = strings.Join(modifyLines, "\n")
-
-	err = cfgStore.UpdateSetting(ctx, local, false)
-	if err != nil {
-		return errMap, err
-	}
-
-	err = cfgStore.UpdateSetting(ctx, enabled, false)
-	if err != nil {
-		return errMap, err
-	}
-
-	err = cfgStore.UpdateSetting(ctx, disabled, false)
-	if err != nil {
-		return errMap, err
-	}
-
-	err = cfgStore.UpdateSetting(ctx, modify, false)
-	if err != nil {
-		return errMap, err
-	}
-
-	return errMap, nil
-}
-
-func settingByID(all []*model.Setting, id string) *model.Setting {
-	found, ok := lo.Find(all, func(s *model.Setting) bool {
-		return s.Id == id
-	})
-	if !ok {
-		return nil
-	}
-
-	return found
-}
-
-func extractSID(rule string) *string {
-	sids := sidExtracter.FindAllStringSubmatch(rule, 2)
-	if len(sids) != 1 { // 1 match = 1 sid
-		return nil
-	}
-
-	return util.Ptr(strings.TrimSpace(sids[0][1]))
-}
-
-func indexLocal(lines []string) map[string]int {
-	index := map[string]int{}
-
-	for i, line := range lines {
-		sid := extractSID(line)
-		if sid == nil {
-			continue
-		}
-
-		index[*sid] = i
-	}
-
-	return index
-}
-
-func indexEnabled(lines []string) map[string]int {
-	index := map[string]int{}
-
-	for i, line := range lines {
-		line = strings.TrimSpace(strings.TrimLeft(line, "# \t"))
-		if line != "" {
-			index[line] = i
-		}
-	}
-
-	return index
-}
-
-func indexModify(lines []string) map[string]int {
-	index := map[string]int{}
-
-	for i, line := range lines {
-		line = strings.TrimSpace(strings.TrimLeft(line, "# \t"))
-
-		if strings.HasSuffix(line, suricataModifyFromTo) {
-			parts := strings.SplitN(line, " ", 2)
-			index[parts[0]] = i
-		}
-	}
-
-	return index
 }

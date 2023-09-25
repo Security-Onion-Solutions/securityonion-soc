@@ -1,14 +1,34 @@
-package server
+package suricata
 
 import (
 	"context"
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/util"
-
 	"github.com/stretchr/testify/assert"
 )
+
+func TestSuricataModule(t *testing.T) {
+	srv := &server.Server{
+		DetectionEngines: map[model.EngineName]server.DetectionEngine{},
+	}
+	mod := NewSuricataEngine(srv)
+
+	assert.Implements(t, (*module.Module)(nil), mod)
+	assert.Implements(t, (*server.DetectionEngine)(nil), mod)
+
+	err := mod.Start()
+	assert.Nil(t, err)
+
+	err = mod.Stop()
+	assert.Nil(t, err)
+
+	assert.Equal(t, 1, len(srv.DetectionEngines))
+	assert.Same(t, mod, srv.DetectionEngines[model.EngineNameSuricata])
+}
 
 func TestSettingByID(t *testing.T) {
 	allSettings := []*model.Setting{
@@ -167,23 +187,94 @@ func TestIndexModify(t *testing.T) {
 func TestSyncSuricata(t *testing.T) {
 	emptySettings := []*model.Setting{
 		{Id: "idstools.rules.local__rules"},
-		{Id: "idstools.rules.enabled"},
-		{Id: "idstools.rules.disabled"},
-		{Id: "idstools.rules.modify"},
+		{Id: "idstools.sids.enabled"},
+		{Id: "idstools.sids.disabled"},
+		{Id: "idstools.sids.modify"},
 	}
 	table := []struct {
-		Name string
-		InitialSettings []*model.Setting
-		Detections []*model.Detection // Content (Valid Rule), PublicID, IsEnabled
+		Name             string
+		InitialSettings  []*model.Setting
+		Detections       []*model.Detection // Content (Valid Rule), PublicID, IsEnabled
 		ExpectedSettings map[string]string
-		ExpectedErr error
-		ExpectedErrMap map[string]string
+		ExpectedErr      error
+		ExpectedErrMap   map[string]string
 	}{
 		{
-			Name: "Simple Add",
+			Name:            "Enable New Simple Rule",
 			InitialSettings: emptySettings,
 			Detections: []*model.Detection{
-				{},
+				{
+					PublicID:  "10000",
+					Content:   `alert http any any -> any any (msg:"GPL ATTACK_RESPONSE id check returned root"; content:"uid=0|28|root|29|"; classtype:bad-unknown; sid:10000; rev:7; metadata:created_at 2010_09_23, updated_at 2010_09_23;)`,
+					IsEnabled: true,
+				},
+			},
+			ExpectedSettings: map[string]string{
+				"idstools.rules.local__rules": "\n" + `alert http any any -> any any (msg:"GPL ATTACK_RESPONSE id check returned root"; content:"uid=0|28|root|29|"; classtype:bad-unknown; sid:10000; rev:7; metadata:created_at 2010_09_23, updated_at 2010_09_23;)`,
+				"idstools.sids.enabled":       "\n10000",
+				"idstools.sids.disabled":      "\n# 10000",
+				"idstools.sids.modify":        "",
+			},
+		},
+		{
+			Name: "Disable Existing Simple Rule",
+			InitialSettings: []*model.Setting{
+				{Id: "idstools.rules.local__rules", Value: `alert http any any -> any any (msg:"GPL ATTACK_RESPONSE id check returned root"; content:"uid=0|28|root|29|"; classtype:bad-unknown; sid:10000; rev:7; metadata:created_at 2010_09_23, updated_at 2010_09_23;)`},
+				{Id: "idstools.sids.enabled", Value: "10000"},
+				{Id: "idstools.sids.disabled", Value: "# 10000"},
+				{Id: "idstools.sids.modify"},
+			},
+			Detections: []*model.Detection{
+				{
+					PublicID:  "10000",
+					Content:   `alert http any any -> any any (msg:"GPL ATTACK_RESPONSE id check returned root"; content:"uid=0|28|root|29|"; classtype:bad-unknown; sid:10000; rev:7; metadata:created_at 2010_09_23, updated_at 2010_09_23;)`,
+					IsEnabled: false,
+				},
+			},
+			ExpectedSettings: map[string]string{
+				"idstools.rules.local__rules": `alert http any any -> any any (msg:"GPL ATTACK_RESPONSE id check returned root"; content:"uid=0|28|root|29|"; classtype:bad-unknown; sid:10000; rev:7; metadata:created_at 2010_09_23, updated_at 2010_09_23;)`,
+				"idstools.sids.enabled":       "# 10000",
+				"idstools.sids.disabled":      "10000",
+				"idstools.sids.modify":        "",
+			},
+		},
+		{
+			Name:            "Enable New Flowbits Rule",
+			InitialSettings: emptySettings,
+			Detections: []*model.Detection{
+				{
+					PublicID:  "10000",
+					Content:   `alert http any any -> any any ( msg:"RULE A"; flow: established,to_server; http.method; content:"POST"; http.content_type; content:"x-www-form-urlencoded"; flowbits: set, test; sid:10000;)`,
+					IsEnabled: true,
+				},
+			},
+			ExpectedSettings: map[string]string{
+				"idstools.rules.local__rules": "\n" + `alert http any any -> any any ( msg:"RULE A"; flow: established,to_server; http.method; content:"POST"; http.content_type; content:"x-www-form-urlencoded"; flowbits: set, test; sid:10000;)`,
+				"idstools.sids.enabled":       "\n10000",
+				"idstools.sids.disabled":      "\n# 10000",
+				"idstools.sids.modify":        "",
+			},
+		},
+		{
+			Name: "Disable Existing Flowbits Rule",
+			InitialSettings: []*model.Setting{
+				{Id: "idstools.rules.local__rules", Value: `alert http any any -> any any ( msg:"RULE A"; flow: established,to_server; http.method; content:"POST"; http.content_type; content:"x-www-form-urlencoded"; flowbits: set, test; sid:10000;)`},
+				{Id: "idstools.sids.enabled", Value: "10000"},
+				{Id: "idstools.sids.disabled", Value: "# 10000"},
+				{Id: "idstools.sids.modify", Value: ""},
+			},
+			Detections: []*model.Detection{
+				{
+					PublicID:  "10000",
+					Content:   `alert http any any -> any any ( msg:"RULE A"; flow: established,to_server; http.method; content:"POST"; http.content_type; content:"x-www-form-urlencoded"; flowbits: set, test; sid:10000;)`,
+					IsEnabled: false,
+				},
+			},
+			ExpectedSettings: map[string]string{
+				"idstools.rules.local__rules": `alert http any any -> any any ( msg:"RULE A"; flow: established,to_server; http.method; content:"POST"; http.content_type; content:"x-www-form-urlencoded"; flowbits: set, test; sid:10000;)`,
+				"idstools.sids.enabled":       "10000",
+				"idstools.sids.disabled":      "# 10000",
+				"idstools.sids.modify":        "\n" + `10000 "flowbits" "noalert; flowbits"`,
 			},
 		},
 	}
@@ -195,9 +286,14 @@ func TestSyncSuricata(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			t.Parallel()
 
-			mCfgStore := NewMemConfigStore(test.InitialSettings)
+			mCfgStore := server.NewMemConfigStore(test.InitialSettings)
+			mod := NewSuricataEngine(&server.Server{
+				Configstore:      mCfgStore,
+				DetectionEngines: map[model.EngineName]server.DetectionEngine{},
+			})
+			mod.srv.DetectionEngines[model.EngineNameSuricata] = mod
 
-			errMap, err := syncSuricata(ctx, mCfgStore, test.Detections)
+			errMap, err := mod.SyncDetections(ctx, test.Detections)
 
 			assert.Equal(t, test.ExpectedErr, err)
 			assert.Equal(t, test.ExpectedErrMap, errMap)

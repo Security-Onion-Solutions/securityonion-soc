@@ -33,6 +33,7 @@ type Server struct {
 	Rolestore        Rolestore
 	Eventstore       Eventstore
 	Casestore        Casestore
+	Detectionstore   Detectionstore
 	Configstore      Configstore
 	GridMembersstore GridMembersstore
 	Metrics          Metrics
@@ -40,13 +41,15 @@ type Server struct {
 	Authorizer       rbac.Authorizer
 	Agent            *model.User
 	Context          context.Context
+	DetectionEngines map[model.EngineName]DetectionEngine
 }
 
 func NewServer(cfg *config.ServerConfig, version string) *Server {
 	server := &Server{
-		Config:      cfg,
-		Host:        web.NewHost(cfg.BindAddress, cfg.HtmlDir, cfg.IdleConnectionTimeoutMs, version, cfg.SrvKeyBytes, AGENT_ID),
-		stoppedChan: make(chan bool, 1),
+		Config:           cfg,
+		Host:             web.NewHost(cfg.BindAddress, cfg.HtmlDir, cfg.IdleConnectionTimeoutMs, version, cfg.SrvKeyBytes, AGENT_ID),
+		stoppedChan:      make(chan bool, 1),
+		DetectionEngines: map[model.EngineName]DetectionEngine{},
 	}
 	server.initContext()
 
