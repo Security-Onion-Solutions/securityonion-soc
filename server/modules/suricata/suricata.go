@@ -49,7 +49,12 @@ func (s *SuricataEngine) IsRunning() bool {
 }
 
 func (s *SuricataEngine) ValidateRule(rule string) (string, error) {
-	return rule, nil
+	parsed, err := ParseSuricataRule(rule)
+	if err != nil {
+		return rule, err
+	}
+
+	return parsed.String(), nil
 }
 
 func (s *SuricataEngine) SyncDetections(ctx context.Context, detections []*model.Detection) (errMap map[string]string, err error) {

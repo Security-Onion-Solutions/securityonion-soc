@@ -11,6 +11,24 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const (
+	SimpleRuleSID    = "10000"
+	SimpleRule       = `alert http any any -> any any (msg:"GPL ATTACK_RESPONSE id check returned root"; content:"uid=0|28|root|29|"; classtype:bad-unknown; sid:10000; rev:7; metadata:created_at 2010_09_23, updated_at 2010_09_23;)`
+	FlowbitsRuleASID = "50000"
+	FlowbitsRuleA    = `alert http any any -> any any ( msg:"RULE A"; flow: established,to_server; http.method; content:"POST"; http.content_type; content:"x-www-form-urlencoded"; flowbits: set, test; sid:50000;)`
+	FlowbitsRuleBSID = "60000"
+	FlowbitsRuleB    = `alert http any any -> any any (msg:"RULE B"; flowbits: isset, test; flow: established,to_client; content:"uid=0"; sid:60000;)`
+)
+
+func emptySettings() []*model.Setting {
+	return []*model.Setting{
+		{Id: "idstools.rules.local__rules"},
+		{Id: "idstools.sids.enabled"},
+		{Id: "idstools.sids.disabled"},
+		{Id: "idstools.sids.modify"},
+	}
+}
+
 func TestSuricataModule(t *testing.T) {
 	srv := &server.Server{
 		DetectionEngines: map[model.EngineName]server.DetectionEngine{},
@@ -20,7 +38,10 @@ func TestSuricataModule(t *testing.T) {
 	assert.Implements(t, (*module.Module)(nil), mod)
 	assert.Implements(t, (*server.DetectionEngine)(nil), mod)
 
-	err := mod.Start()
+	err := mod.Init(nil)
+	assert.Nil(t, err)
+
+	err = mod.Start()
 	assert.Nil(t, err)
 
 	err = mod.Stop()
@@ -85,7 +106,7 @@ func TestExtractSID(t *testing.T) {
 		{Name: "Single-Quoted Empty SID", Input: "sid:'';", Output: util.Ptr("")},
 		{Name: "Double-Quoted Empty SID", Input: `sid: "";`, Output: util.Ptr("")},
 		{Name: "Multiple SIDs", Input: "sid: 10000; sid: 10001;", Output: nil},
-		{Name: "Sample Rule", Input: `alert http any any -> any any (msg:"RULE B"; flowbits: isset, test; flow: established,to_client; content:"uid=0"; sid:60000;)`, Output: util.Ptr("60000")},
+		{Name: "Sample Rule", Input: SimpleRule, Output: util.Ptr(SimpleRuleSID)},
 	}
 
 	for _, test := range table {
@@ -184,13 +205,66 @@ func TestIndexModify(t *testing.T) {
 	assert.NotContains(t, output, "e4bd794a-8156-4fcc-b6a9-9fb2c9ecadc5")
 }
 
-func TestSyncSuricata(t *testing.T) {
-	emptySettings := []*model.Setting{
-		{Id: "idstools.rules.local__rules"},
-		{Id: "idstools.sids.enabled"},
-		{Id: "idstools.sids.disabled"},
-		{Id: "idstools.sids.modify"},
+func TestValidate(t *testing.T) {
+	table := []struct {
+		Name        string
+		Input       string
+		ExpectedErr *string
+	}{
+		{
+			Name:  "Valid Rule",
+			Input: SimpleRule,
+		},
+		{
+			Name:  "Valid Rule with Flowbits",
+			Input: FlowbitsRuleA,
+		},
+		{
+			Name:  "Valid Rule with Escaped Quotes",
+			Input: `alert http any any -> any any (msg:"This rule has \"escaped quotes\"";)`,
+		},
+		{
+			Name:        "Invalid Direction",
+			Input:       `alert http any any <-> any any (msg:"This rule has an invalid direction";)`,
+			ExpectedErr: util.Ptr("invalid direction, must be '<>' or '->', got <->"),
+		},
+		{
+			Name:        "Unexpected Suffix",
+			Input:       SimpleRule + "x",
+			ExpectedErr: util.Ptr("invalid rule, expected end of rule, got 1 more bytes"),
+		},
+		{
+			Name:        "Unexpected End of Rule",
+			Input:       "x",
+			ExpectedErr: util.Ptr("invalid rule, unexpected end of rule"),
+		},
 	}
+
+	for _, test := range table {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			mod := NewSuricataEngine(&server.Server{})
+
+			_, err := mod.ValidateRule(test.Input)
+			if test.ExpectedErr == nil {
+				assert.NoError(t, err)
+
+				// this rule seems valid, attempt to parse, serialize, re-parse
+				parsed, err := ParseSuricataRule(test.Input)
+				assert.NoError(t, err)
+
+				_, err = ParseSuricataRule(parsed.String())
+				assert.NoError(t, err)
+			} else {
+				assert.Equal(t, *test.ExpectedErr, err.Error())
+			}
+		})
+	}
+}
+
+func TestSyncSuricata(t *testing.T) {
 	table := []struct {
 		Name             string
 		InitialSettings  []*model.Setting
@@ -201,80 +275,186 @@ func TestSyncSuricata(t *testing.T) {
 	}{
 		{
 			Name:            "Enable New Simple Rule",
-			InitialSettings: emptySettings,
+			InitialSettings: emptySettings(),
 			Detections: []*model.Detection{
 				{
-					PublicID:  "10000",
-					Content:   `alert http any any -> any any (msg:"GPL ATTACK_RESPONSE id check returned root"; content:"uid=0|28|root|29|"; classtype:bad-unknown; sid:10000; rev:7; metadata:created_at 2010_09_23, updated_at 2010_09_23;)`,
+					PublicID:  SimpleRuleSID,
+					Content:   SimpleRule,
 					IsEnabled: true,
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules": "\n" + `alert http any any -> any any (msg:"GPL ATTACK_RESPONSE id check returned root"; content:"uid=0|28|root|29|"; classtype:bad-unknown; sid:10000; rev:7; metadata:created_at 2010_09_23, updated_at 2010_09_23;)`,
-				"idstools.sids.enabled":       "\n10000",
-				"idstools.sids.disabled":      "\n# 10000",
+				"idstools.rules.local__rules": "\n" + SimpleRule,
+				"idstools.sids.enabled":       "\n" + SimpleRuleSID,
+				"idstools.sids.disabled":      "\n# " + SimpleRuleSID,
+				"idstools.sids.modify":        "",
+			},
+		},
+		{
+			Name:            "Disable New Simple Rule",
+			InitialSettings: emptySettings(),
+			Detections: []*model.Detection{
+				{
+					PublicID:  SimpleRuleSID,
+					Content:   SimpleRule,
+					IsEnabled: false,
+				},
+			},
+			ExpectedSettings: map[string]string{
+				"idstools.rules.local__rules": "\n" + SimpleRule,
+				"idstools.sids.enabled":       "\n# " + SimpleRuleSID,
+				"idstools.sids.disabled":      "\n" + SimpleRuleSID,
+				"idstools.sids.modify":        "",
+			},
+		},
+		{
+			Name: "Enable Existing Simple Rule",
+			InitialSettings: []*model.Setting{
+				{Id: "idstools.rules.local__rules", Value: SimpleRule},
+				{Id: "idstools.sids.enabled", Value: "# " + SimpleRuleSID},
+				{Id: "idstools.sids.disabled", Value: SimpleRuleSID},
+				{Id: "idstools.sids.modify"},
+			},
+			Detections: []*model.Detection{
+				{
+					PublicID:  SimpleRuleSID,
+					Content:   SimpleRule,
+					IsEnabled: true,
+				},
+			},
+			ExpectedSettings: map[string]string{
+				"idstools.rules.local__rules": SimpleRule,
+				"idstools.sids.enabled":       SimpleRuleSID,
+				"idstools.sids.disabled":      "# " + SimpleRuleSID,
 				"idstools.sids.modify":        "",
 			},
 		},
 		{
 			Name: "Disable Existing Simple Rule",
 			InitialSettings: []*model.Setting{
-				{Id: "idstools.rules.local__rules", Value: `alert http any any -> any any (msg:"GPL ATTACK_RESPONSE id check returned root"; content:"uid=0|28|root|29|"; classtype:bad-unknown; sid:10000; rev:7; metadata:created_at 2010_09_23, updated_at 2010_09_23;)`},
-				{Id: "idstools.sids.enabled", Value: "10000"},
-				{Id: "idstools.sids.disabled", Value: "# 10000"},
+				{Id: "idstools.rules.local__rules", Value: SimpleRule},
+				{Id: "idstools.sids.enabled", Value: SimpleRuleSID},
+				{Id: "idstools.sids.disabled", Value: "# " + SimpleRuleSID},
 				{Id: "idstools.sids.modify"},
 			},
 			Detections: []*model.Detection{
 				{
-					PublicID:  "10000",
-					Content:   `alert http any any -> any any (msg:"GPL ATTACK_RESPONSE id check returned root"; content:"uid=0|28|root|29|"; classtype:bad-unknown; sid:10000; rev:7; metadata:created_at 2010_09_23, updated_at 2010_09_23;)`,
+					PublicID:  SimpleRuleSID,
+					Content:   SimpleRule,
 					IsEnabled: false,
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules": `alert http any any -> any any (msg:"GPL ATTACK_RESPONSE id check returned root"; content:"uid=0|28|root|29|"; classtype:bad-unknown; sid:10000; rev:7; metadata:created_at 2010_09_23, updated_at 2010_09_23;)`,
-				"idstools.sids.enabled":       "# 10000",
-				"idstools.sids.disabled":      "10000",
+				"idstools.rules.local__rules": SimpleRule,
+				"idstools.sids.enabled":       "# " + SimpleRuleSID,
+				"idstools.sids.disabled":      SimpleRuleSID,
 				"idstools.sids.modify":        "",
 			},
 		},
 		{
 			Name:            "Enable New Flowbits Rule",
-			InitialSettings: emptySettings,
+			InitialSettings: emptySettings(),
 			Detections: []*model.Detection{
 				{
-					PublicID:  "10000",
-					Content:   `alert http any any -> any any ( msg:"RULE A"; flow: established,to_server; http.method; content:"POST"; http.content_type; content:"x-www-form-urlencoded"; flowbits: set, test; sid:10000;)`,
+					PublicID:  FlowbitsRuleASID,
+					Content:   FlowbitsRuleA,
 					IsEnabled: true,
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules": "\n" + `alert http any any -> any any ( msg:"RULE A"; flow: established,to_server; http.method; content:"POST"; http.content_type; content:"x-www-form-urlencoded"; flowbits: set, test; sid:10000;)`,
-				"idstools.sids.enabled":       "\n10000",
-				"idstools.sids.disabled":      "\n# 10000",
+				"idstools.rules.local__rules": "\n" + FlowbitsRuleA,
+				"idstools.sids.enabled":       "\n" + FlowbitsRuleASID,
+				"idstools.sids.disabled":      "",
+				"idstools.sids.modify":        "",
+			},
+		},
+		{
+			Name:            "Disable New Flowbits Rule",
+			InitialSettings: emptySettings(),
+			Detections: []*model.Detection{
+				{
+					PublicID:  FlowbitsRuleASID,
+					Content:   FlowbitsRuleA,
+					IsEnabled: false,
+				},
+			},
+			ExpectedSettings: map[string]string{
+				"idstools.rules.local__rules": "\n" + FlowbitsRuleA,
+				"idstools.sids.enabled":       "\n" + FlowbitsRuleASID,
+				"idstools.sids.disabled":      "",
+				"idstools.sids.modify":        "\n" + FlowbitsRuleASID + ` "flowbits" "noalert; flowbits"`,
+			},
+		},
+		{
+			Name: "Enable Existing Flowbits Rule",
+			InitialSettings: []*model.Setting{
+				{Id: "idstools.rules.local__rules", Value: FlowbitsRuleB},
+				{Id: "idstools.sids.enabled", Value: FlowbitsRuleBSID},
+				{Id: "idstools.sids.disabled", Value: ""},
+				{Id: "idstools.sids.modify", Value: FlowbitsRuleBSID + ` "flowbits" "noalert; flowbits"`},
+			},
+			Detections: []*model.Detection{
+				{
+					PublicID:  FlowbitsRuleBSID,
+					Content:   FlowbitsRuleB,
+					IsEnabled: true,
+				},
+			},
+			ExpectedSettings: map[string]string{
+				"idstools.rules.local__rules": FlowbitsRuleB,
+				"idstools.sids.enabled":       FlowbitsRuleBSID,
+				"idstools.sids.disabled":      "",
 				"idstools.sids.modify":        "",
 			},
 		},
 		{
 			Name: "Disable Existing Flowbits Rule",
 			InitialSettings: []*model.Setting{
-				{Id: "idstools.rules.local__rules", Value: `alert http any any -> any any ( msg:"RULE A"; flow: established,to_server; http.method; content:"POST"; http.content_type; content:"x-www-form-urlencoded"; flowbits: set, test; sid:10000;)`},
-				{Id: "idstools.sids.enabled", Value: "10000"},
-				{Id: "idstools.sids.disabled", Value: "# 10000"},
+				{Id: "idstools.rules.local__rules", Value: FlowbitsRuleB},
+				{Id: "idstools.sids.enabled", Value: FlowbitsRuleBSID},
+				{Id: "idstools.sids.disabled", Value: "# " + FlowbitsRuleBSID},
 				{Id: "idstools.sids.modify", Value: ""},
 			},
 			Detections: []*model.Detection{
 				{
-					PublicID:  "10000",
-					Content:   `alert http any any -> any any ( msg:"RULE A"; flow: established,to_server; http.method; content:"POST"; http.content_type; content:"x-www-form-urlencoded"; flowbits: set, test; sid:10000;)`,
+					PublicID:  FlowbitsRuleBSID,
+					Content:   FlowbitsRuleB,
 					IsEnabled: false,
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules": `alert http any any -> any any ( msg:"RULE A"; flow: established,to_server; http.method; content:"POST"; http.content_type; content:"x-www-form-urlencoded"; flowbits: set, test; sid:10000;)`,
-				"idstools.sids.enabled":       "10000",
-				"idstools.sids.disabled":      "# 10000",
-				"idstools.sids.modify":        "\n" + `10000 "flowbits" "noalert; flowbits"`,
+				"idstools.rules.local__rules": FlowbitsRuleB,
+				"idstools.sids.enabled":       FlowbitsRuleBSID,
+				"idstools.sids.disabled":      "# " + FlowbitsRuleBSID,
+				"idstools.sids.modify":        "\n" + FlowbitsRuleBSID + ` "flowbits" "noalert; flowbits"`,
+			},
+		},
+		{
+			Name:            "Completely Invalid Rule",
+			InitialSettings: emptySettings(),
+			Detections: []*model.Detection{
+				{
+					PublicID:  "0",
+					Content:   "x",
+					IsEnabled: true,
+				},
+			},
+			ExpectedErrMap: map[string]string{
+				"0": "unable to parse rule; reason=invalid rule, unexpected end of rule",
+			},
+		},
+		{
+			Name:            "Rule Missing SID",
+			InitialSettings: emptySettings(),
+			Detections: []*model.Detection{
+				{
+					PublicID:  "0",
+					Content:   `alert http any any -> any any (msg:"This rule doesn't have a SID";)`, // missing closing paren
+					IsEnabled: true,
+				},
+			},
+			ExpectedErrMap: map[string]string{
+				"0": `rule does not contain a SID; rule=alert http any any -> any any (msg:"This rule doesn't have a SID";)`,
 			},
 		},
 	}
@@ -299,12 +479,12 @@ func TestSyncSuricata(t *testing.T) {
 			assert.Equal(t, test.ExpectedErrMap, errMap)
 
 			set, err := mCfgStore.GetSettings(ctx)
-			assert.NoError(t, err)
+			assert.NoError(t, err, "GetSettings should not return an error")
 
 			for id, expectedValue := range test.ExpectedSettings {
 				setting := settingByID(set, id)
-				assert.NotNil(t, setting)
-				assert.Equal(t, expectedValue, setting.Value)
+				assert.NotNil(t, setting, "Setting %s", id)
+				assert.Equal(t, expectedValue, setting.Value, "Setting %s", id)
 			}
 		})
 	}

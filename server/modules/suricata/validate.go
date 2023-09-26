@@ -129,6 +129,11 @@ func ParseSuricataRule(rule string) (*SuricataRule, error) {
 		}
 	}
 
+	if curState != stateOptions || len(strings.TrimSpace(buf.String())) != 0 {
+		// We're unexpectedly done parsing the rule.
+		return nil, fmt.Errorf("invalid rule, unexpected end of rule")
+	}
+
 	return out, nil
 }
 
