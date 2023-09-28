@@ -493,18 +493,18 @@ func (caseHandler *CaseHandler) copyArtifactStream(ctx context.Context, writer h
 	written, err := io.Copy(writer, content)
 	if err != nil {
 		log.WithError(err).WithFields(log.Fields{
-			"name":       artifact.Value,
-			"artifactId": artifactId,
+			"artifactName": artifact.Value,
+			"artifactId":   artifactId,
 		}).Error("Failed to copy artifact stream")
 
 		return err
 	}
 
 	log.WithFields(log.Fields{
-		"name":       artifact.Value,
-		"size":       written,
-		"artifactId": artifactId,
-		"protected":  artifact.Protected,
+		"artifactName":      artifact.Value,
+		"artifactSize":      written,
+		"artifactId":        artifactId,
+		"artifactProtected": artifact.Protected,
 	}).Info("Copied artifact stream to response")
 
 	return nil

@@ -160,15 +160,15 @@ func (host *Host) Broadcast(kind string, reqPermission string, obj interface{}) 
 	for _, connection := range host.connections {
 		if err := host.Authorizer.CheckUserOperationAuthorized(connection.user, "read", reqPermission); err == nil {
 			log.WithFields(log.Fields{
-				"kind": kind,
+				"messageKind": kind,
 				// "remoteAddr": connection.websocket.RemoteAddr().String(),
 				"sourceIp": connection.ip,
 			}).Debug("Broadcasting message to WebSocket connection")
 			connection.websocket.WriteJSON(msg)
 		} else {
 			log.WithFields(log.Fields{
-				"kind":     kind,
-				"sourceIp": connection.ip,
+				"messageKind": kind,
+				"sourceIp":    connection.ip,
 			}).Debug("Skipping broadcast due to insufficient authorization")
 		}
 	}
@@ -189,8 +189,8 @@ func (host *Host) pruneConnections() {
 	}
 
 	log.WithFields(log.Fields{
-		"before": len(host.connections),
-		"after":  len(activeConnections),
+		"beforeCount": len(host.connections),
+		"afterCount":  len(activeConnections),
 	}).Debug("Prune connections complete")
 
 	host.connections = activeConnections
@@ -205,8 +205,8 @@ func (host *Host) manageConnections(sleepDuration time.Duration) {
 
 func (host *Host) AddPreprocessor(preprocessor Preprocessor) error {
 	log.WithFields(log.Fields{
-		"priority": preprocessor.PreprocessPriority(),
-		"type":     reflect.TypeOf(preprocessor).String(),
+		"processorPriority": preprocessor.PreprocessPriority(),
+		"processorType":     reflect.TypeOf(preprocessor).String(),
 	}).Info("Adding new preprocessor")
 
 	unsortedMap := make(map[int]Preprocessor)
@@ -231,8 +231,8 @@ func (host *Host) AddPreprocessor(preprocessor Preprocessor) error {
 	for _, priority := range priorities {
 		preprocessor := unsortedMap[priority]
 		log.WithFields(log.Fields{
-			"priority": preprocessor.PreprocessPriority(),
-			"type":     reflect.TypeOf(preprocessor).String(),
+			"processorPriority": preprocessor.PreprocessPriority(),
+			"processorType":     reflect.TypeOf(preprocessor).String(),
 		}).Debug("Prioritized preprocessor")
 		sortedList = append(sortedList, preprocessor)
 	}
@@ -257,8 +257,8 @@ func (host *Host) Preprocess(ctx context.Context, req *http.Request) (context.Co
 
 	for _, preprocessor := range host.preprocessors {
 		log.WithFields(log.Fields{
-			"priority": preprocessor.PreprocessPriority(),
-			"type":     reflect.TypeOf(preprocessor).String(),
+			"priority":      preprocessor.PreprocessPriority(),
+			"processorType": reflect.TypeOf(preprocessor).String(),
 		}).Debug("Preprocessing request")
 		ctx, statusCode, err = preprocessor.Preprocess(ctx, req)
 		if err != nil {

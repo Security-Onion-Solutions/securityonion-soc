@@ -91,7 +91,7 @@ func (h *StreamHandler) getStream(w http.ResponseWriter, r *http.Request) {
 	written, err := io.Copy(w, reader)
 	if err != nil {
 		log.WithError(err).WithFields(log.Fields{
-			"name": filename,
+			"streamFilename": filename,
 		}).Error("Failed to copy stream")
 		web.Respond(nil, r, http.StatusInternalServerError, err)
 
@@ -99,8 +99,8 @@ func (h *StreamHandler) getStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.WithFields(log.Fields{
-		"name": filename,
-		"size": written,
+		"streamFilename": filename,
+		"streamSize":     written,
 	}).Info("Copied stream to response")
 
 	web.Respond(nil, r, http.StatusOK, nil)

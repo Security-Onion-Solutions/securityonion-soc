@@ -547,16 +547,16 @@ func (store *Saltstore) updateSetting(mapped map[string]interface{}, sections []
 	var err error
 	if len(sections) == 1 {
 		log.WithFields(log.Fields{
-			"name":             name,
-			"length":           len(value),
+			"settingName":      name,
+			"settingLength":    len(value),
 			"alreadyExists":    mapped[name] != nil,
 			"defaultAvailable": setting.DefaultAvailable,
 		}).Debug("Updating setting value")
 
 		if setting.ForcedType != "" {
 			log.WithFields(log.Fields{
-				"name":       name,
-				"forcedType": setting.ForcedType,
+				"settingName": name,
+				"forcedType":  setting.ForcedType,
 			}).Info("Forcing setting type")
 			mapped[name], err = store.forceType(value, setting.ForcedType)
 		} else {
@@ -591,13 +591,13 @@ func (store *Saltstore) deleteSetting(mapped map[string]interface{}, sections []
 			empty, err = store.deleteSetting(child.(map[string]interface{}), sections[1:])
 			if empty && err == nil {
 				log.WithFields(log.Fields{
-					"name": name,
+					"settingName": name,
 				}).Debug("Deleting empty parent")
 				delete(mapped, name)
 			}
 		default:
 			log.WithFields(log.Fields{
-				"name": name,
+				"settingName": name,
 			}).Debug("Deleting setting from parent")
 			delete(mapped, name)
 		}
