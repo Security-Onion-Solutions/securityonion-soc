@@ -495,8 +495,8 @@ func (datastore *FileDatastoreImpl) GetPacketStream(ctx context.Context, jobId i
 					info, err := file.Stat()
 					length = info.Size()
 					log.WithFields(log.Fields{
-						"size": length,
-						"name": info.Name(),
+						"streamSize":     length,
+						"streamFilename": info.Name(),
 					}).Info("Streaming file")
 					if err != nil {
 						log.WithError(err).WithField("jobId", job.Id).Error("Failed to open file stats")
