@@ -2,10 +2,16 @@ package suricata
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/apex/log"
 	"github.com/samber/lo"
@@ -20,7 +26,12 @@ var sidExtracter = regexp.MustCompile(`(?i)\bsid: ?['"]?(.*?)['"]?;`)
 const modifyFromTo = `"flowbits" "noalert; flowbits"`
 
 type SuricataEngine struct {
-	srv *server.Server
+	srv                                  *server.Server
+	communityRulesFile                   string
+	rulesFingerprintFile                 string
+	communityRulesImportFrequencySeconds int
+	isRunning                            bool
+	thread                               *sync.WaitGroup
 }
 
 func NewSuricataEngine(srv *server.Server) *SuricataEngine {
@@ -33,21 +44,107 @@ func (s *SuricataEngine) PrerequisiteModules() []string {
 	return nil
 }
 
-func (s *SuricataEngine) Init(config module.ModuleConfig) error {
+func (s *SuricataEngine) Init(config module.ModuleConfig) (err error) {
+	s.communityRulesFile = module.GetStringDefault(config, "communityRulesFile", "/nsm/rules/suricata/emerging-all.rules")
+	s.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", "/opt/so/conf/soc/emerging-all.fingerprint")
+	s.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", 5)
+
 	return nil
 }
 
 func (s *SuricataEngine) Start() error {
 	s.srv.DetectionEngines[model.EngineNameSuricata] = s
+	s.thread = &sync.WaitGroup{}
+	s.thread.Add(1)
+	s.isRunning = true
+
+	go s.watchCommunityRules()
+
 	return nil
 }
 
 func (s *SuricataEngine) Stop() error {
+	s.isRunning = false
+	s.thread.Wait()
+
 	return nil
 }
 
 func (s *SuricataEngine) IsRunning() bool {
-	return false
+	return s.isRunning
+}
+
+func (s *SuricataEngine) watchCommunityRules() {
+	defer func() {
+		s.thread.Done()
+		s.isRunning = false
+	}()
+
+	for s.isRunning {
+		time.Sleep(time.Second * time.Duration(s.communityRulesImportFrequencySeconds))
+		if !s.isRunning {
+			break
+		}
+
+		rules, hash, err := readAndHash(s.communityRulesFile)
+		if err != nil {
+			log.WithError(err).Error("unable to read community rules file")
+			continue
+		}
+
+		haveFP := true
+
+		fingerprint, err := os.ReadFile(s.rulesFingerprintFile)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				haveFP = false
+			} else {
+				log.WithError(err).Error("unable to read rules fingerprint file")
+				continue
+			}
+		}
+
+		if haveFP && strings.EqualFold(string(fingerprint), hash) {
+			// if we have a fingerprint and the hashes are equal, there's nothing to do
+			continue
+		}
+
+		commDetections, err := s.parseRules(rules)
+		if err != nil {
+			log.WithError(err).Error("unable to parse community rules")
+			continue
+		}
+
+		errMap, err := s.syncCommunityDetections(context.Background(), commDetections)
+		if err != nil {
+			log.WithError(err).Error("unable to sync community detections")
+			continue
+		}
+
+		if len(errMap) > 0 {
+			log.WithFields(log.Fields{
+				"errors": errMap,
+			}).Error("unable to sync all community detections")
+		}
+	}
+}
+
+func readAndHash(path string) (content string, sha256Hash string, err error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", "", err
+	}
+	defer f.Close()
+
+	hasher := sha256.New()
+	data := io.TeeReader(f, hasher)
+
+	raw, err := io.ReadAll(data)
+	if err != nil {
+		return "", "", err
+	}
+
+	return string(raw), hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
 func (s *SuricataEngine) ValidateRule(rule string) (string, error) {
@@ -59,7 +156,7 @@ func (s *SuricataEngine) ValidateRule(rule string) (string, error) {
 	return parsed.String(), nil
 }
 
-func (s *SuricataEngine) ParseRules(content string) ([]*model.Detection, error) {
+func (s *SuricataEngine) parseRules(content string) ([]*model.Detection, error) {
 	// expecting one rule per line
 	lines := strings.Split(content, "\n")
 	dets := []*model.Detection{}
@@ -297,7 +394,7 @@ func (s *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*
 	return errMap, nil
 }
 
-func (s *SuricataEngine) SyncCommunityDetections(ctx context.Context, detections []*model.Detection) (errMap map[string]string, err error) {
+func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections []*model.Detection) (errMap map[string]string, err error) {
 	defer func() {
 		if len(errMap) == 0 {
 			errMap = nil
