@@ -9,6 +9,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -38,6 +39,7 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Delete("/{id}", h.deleteDetection)
 
 		r.Post("/bulk/{newStatus}", h.bulkUpdateDetection)
+		r.Post("/sync/{engine}", h.syncCommunityDetections)
 	})
 }
 
@@ -77,7 +79,7 @@ func (h *DetectionHandler) postDetection(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	errMap, err := SyncDetections(ctx, h.server, []*model.Detection{detect})
+	errMap, err := SyncLocalDetections(ctx, h.server, []*model.Detection{detect})
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
@@ -137,7 +139,7 @@ func (h *DetectionHandler) putDetection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	errMap, err := SyncDetections(ctx, h.server, []*model.Detection{detect})
+	errMap, err := SyncLocalDetections(ctx, h.server, []*model.Detection{detect})
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
@@ -162,7 +164,7 @@ func (h *DetectionHandler) deleteDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	errMap, err := SyncDetections(ctx, h.server, []*model.Detection{old})
+	errMap, err := SyncLocalDetections(ctx, h.server, []*model.Detection{old})
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
@@ -214,7 +216,7 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 	}
 
 	if len(modified) != 0 {
-		addErrMap, err := SyncDetections(ctx, h.server, modified)
+		addErrMap, err := SyncLocalDetections(ctx, h.server, modified)
 		if err != nil {
 			web.Respond(w, r, http.StatusInternalServerError, err)
 			return
@@ -234,7 +236,51 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 	web.Respond(w, r, http.StatusOK, errMap)
 }
 
-func SyncDetections(ctx context.Context, srv *Server, detections []*model.Detection) (errMap map[string]string, err error) {
+func (h *DetectionHandler) syncCommunityDetections(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	engineParam := chi.URLParam(r, "engine")
+
+	engine, ok := h.server.DetectionEngines[model.EngineName(engineParam)]
+	if !ok {
+		web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("invalid engine"))
+		return
+	}
+
+	err := r.ParseMultipartForm(int64(h.server.Config.MaxUploadSizeBytes))
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	content, err := io.ReadAll(file)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	detections, err := engine.ParseRules(string(content))
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	errMap, err := engine.SyncCommunityDetections(ctx, detections)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, errMap)
+}
+
+func SyncLocalDetections(ctx context.Context, srv *Server, detections []*model.Detection) (errMap map[string]string, err error) {
 	defer func() {
 		if len(errMap) == 0 {
 			errMap = nil
@@ -248,7 +294,7 @@ func SyncDetections(ctx context.Context, srv *Server, detections []*model.Detect
 
 	for name, engine := range srv.DetectionEngines {
 		if len(byEngine[name]) != 0 {
-			eMap, err := engine.SyncDetections(ctx, byEngine[name])
+			eMap, err := engine.SyncLocalDetections(ctx, byEngine[name])
 			for sid, e := range eMap {
 				errMap[sid] = e
 			}

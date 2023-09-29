@@ -3,7 +3,9 @@ package suricata
 import (
 	"fmt"
 	"strings"
+	"unicode"
 
+	"github.com/samber/lo"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 )
 
@@ -19,6 +21,11 @@ type SuricataRule struct {
 type RuleOption struct {
 	Name  string
 	Value *string
+}
+
+type MetaData struct {
+	Key string
+	Value string
 }
 
 type state int
@@ -49,19 +56,19 @@ func ParseSuricataRule(rule string) (*SuricataRule, error) {
 
 		switch curState {
 		case stateAction:
-			if ch == ' ' {
+			if ch == ' ' && buf.Len() != 0 {
 				out.Action = strings.TrimSpace(buf.String())
 				buf.Reset()
 				curState = stateProtocol
-			} else {
+			} else if !unicode.IsSpace(ch) {
 				buf.WriteRune(ch)
 			}
 		case stateProtocol:
-			if ch == ' ' {
+			if ch == ' ' && buf.Len() != 0 {
 				out.Protocol = strings.TrimSpace(buf.String())
 				buf.Reset()
 				curState = stateSource
-			} else {
+			} else if !unicode.IsSpace(ch) {
 				buf.WriteRune(ch)
 			}
 		case stateSource:
@@ -113,7 +120,7 @@ func ParseSuricataRule(rule string) (*SuricataRule, error) {
 				}
 
 				out.Options = append(out.Options, opt)
-			} else if ch == '"' { // TODO: current test rule has angled quotes, needs fixing
+			} else if ch == '"' {
 				buf.WriteRune(ch)
 				if isEscaping {
 					isEscaping = false
@@ -124,6 +131,7 @@ func ParseSuricataRule(rule string) (*SuricataRule, error) {
 				isEscaping = true
 				buf.WriteRune(ch)
 			} else {
+				isEscaping = false
 				buf.WriteRune(ch)
 			}
 		}
@@ -139,7 +147,7 @@ func ParseSuricataRule(rule string) (*SuricataRule, error) {
 
 func (rule *SuricataRule) GetOption(key string) (value *string, ok bool) {
 	for _, opt := range rule.Options {
-		if opt.Name == key {
+		if strings.EqualFold(opt.Name, key) {
 			return opt.Value, true
 		}
 	}
@@ -147,10 +155,38 @@ func (rule *SuricataRule) GetOption(key string) (value *string, ok bool) {
 	return nil, false
 }
 
+func (rule *SuricataRule) ParseMetaData() []*MetaData {
+	mdOpt, ok := rule.GetOption("metadata")
+	if !ok || mdOpt == nil {
+		return nil
+	}
+
+	md := []*MetaData{}
+
+	parts := strings.Split(*mdOpt, ",")
+	for _, part := range parts {
+		part = strings.TrimSuffix(strings.TrimSpace(part), ",")
+		kv := strings.SplitN(part, " ", 2)
+		if len(kv) == 1 {
+			kv = append(kv, "")
+		}
+
+		md = append(md, &MetaData{Key: strings.TrimSpace(kv[0]), Value: strings.TrimSpace(kv[1])})
+	}
+
+	return md
+}
+
 func (rule *SuricataRule) String() string {
 	opts := make([]string, 0, len(rule.Options))
+	md := rule.ParseMetaData()
 	for _, opt := range rule.Options {
-		if opt.Value == nil {
+		if opt.Name == "metadata" && len(md) != 0 {
+			value := strings.Join(lo.Map(md, func(m *MetaData, _ int) string {
+				return fmt.Sprintf("%s %s", m.Key, m.Value)
+			}), ", ")
+			opts = append(opts, fmt.Sprintf("%s:%s;", opt.Name, value))
+		} else if opt.Value == nil {
 			opts = append(opts, fmt.Sprintf("%s;", opt.Name))
 		} else {
 			opts = append(opts, fmt.Sprintf("%s:%s;", opt.Name, *opt.Value))

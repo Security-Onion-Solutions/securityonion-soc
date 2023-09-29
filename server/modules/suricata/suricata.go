@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
+	"github.com/apex/log"
 	"github.com/samber/lo"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
@@ -57,7 +59,92 @@ func (s *SuricataEngine) ValidateRule(rule string) (string, error) {
 	return parsed.String(), nil
 }
 
-func (s *SuricataEngine) SyncDetections(ctx context.Context, detections []*model.Detection) (errMap map[string]string, err error) {
+func (s *SuricataEngine) ParseRules(content string) ([]*model.Detection, error) {
+	// expecting one rule per line
+	lines := strings.Split(content, "\n")
+	dets := []*model.Detection{}
+
+	for i, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			// empty or commented line, ignore
+			continue
+		}
+
+		line, err := s.ValidateRule(line)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse line %d: %w", i+1, err)
+		}
+
+		parsed, err := ParseSuricataRule(line)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse line %d: %w", i+1, err)
+		}
+
+		// extract details
+		sidOpt, ok := parsed.GetOption("sid")
+		if !ok || sidOpt == nil || len(*sidOpt) == 0 {
+			return nil, fmt.Errorf("unable to parse line %d: rule does not contain a SID", i+1)
+		}
+
+		sid, err := strconv.Unquote(*sidOpt)
+		if err != nil {
+			sid = *sidOpt
+		}
+
+		msg := sid
+
+		msgOpt, ok := parsed.GetOption("msg")
+		if ok && msgOpt != nil && len(*msgOpt) != 0 {
+			msg = *msgOpt
+		}
+
+		msg = strings.ReplaceAll(msg, `\;`, `;`)
+
+		title, err := strconv.Unquote(msg)
+		if err != nil {
+			title = msg
+		}
+
+		title = strings.ReplaceAll(title, `\"`, `"`)
+		title = strings.ReplaceAll(title, `\\`, `\`)
+
+		severity := model.SeverityUnknown // TODO: Default severity?
+
+		md := parsed.ParseMetaData()
+		if md != nil {
+			sigsev, ok := lo.Find(md, func(m *MetaData) bool {
+				return strings.EqualFold(m.Key, "signature_severity")
+			})
+			if ok {
+				switch strings.ToUpper(sigsev.Value) {
+				case "INFORMATIONAL":
+					severity = model.SeverityInformational
+				case "MINOR":
+					severity = model.SeverityMinor
+				case "MAJOR":
+					severity = model.SeverityMajor
+				case "CRITICAL":
+					severity = model.SeverityCritical
+				}
+			}
+		}
+
+		dets = append(dets, &model.Detection{
+			PublicID:    sid,
+			Title:       title,
+			Severity:    severity,
+			Content:     line,
+			IsEnabled:   true, // is this true?
+			IsCommunity: true,
+			Engine:      model.EngineNameSuricata,
+		})
+	}
+
+	return dets, nil
+}
+
+func (s *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*model.Detection) (errMap map[string]string, err error) {
 	defer func() {
 		if len(errMap) == 0 {
 			errMap = nil
@@ -206,6 +293,71 @@ func (s *SuricataEngine) SyncDetections(ctx context.Context, detections []*model
 	if err != nil {
 		return errMap, err
 	}
+
+	return errMap, nil
+}
+
+func (s *SuricataEngine) SyncCommunityDetections(ctx context.Context, detections []*model.Detection) (errMap map[string]string, err error) {
+	defer func() {
+		if len(errMap) == 0 {
+			errMap = nil
+		}
+	}()
+	errMap = map[string]string{}
+
+	results := struct {
+		Added   int
+		Updated int
+		Removed int
+	}{}
+
+	commSIDs, err := s.srv.Detectionstore.GetAllCommunitySIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	toDelete := map[string]struct{}{}
+	for sid := range commSIDs {
+		toDelete[sid] = struct{}{}
+	}
+
+	for _, detect := range detections {
+		id, exists := commSIDs[detect.PublicID]
+		if exists {
+			detect.Id = id
+
+			_, err = s.srv.Detectionstore.UpdateDetection(ctx, detect)
+			if err != nil {
+				errMap[detect.PublicID] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
+			} else {
+				results.Updated++
+				delete(toDelete, detect.PublicID)
+			}
+		} else {
+			_, err = s.srv.Detectionstore.CreateDetection(ctx, detect)
+			if err != nil {
+				errMap[detect.PublicID] = fmt.Sprintf("unable to create detection; reason=%s", err.Error())
+			} else {
+				results.Added++
+			}
+		}
+	}
+
+	for sid := range toDelete {
+		_, err = s.srv.Detectionstore.DeleteDetection(ctx, sid)
+		if err != nil {
+			errMap[sid] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
+		} else {
+			results.Removed++
+		}
+	}
+
+	log.WithFields(log.Fields{
+		"added":   results.Added,
+		"updated": results.Updated,
+		"removed": results.Removed,
+		"errors":  errMap,
+	}).Info("Suricata community detections synced")
 
 	return errMap, nil
 }

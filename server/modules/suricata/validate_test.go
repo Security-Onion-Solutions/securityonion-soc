@@ -114,7 +114,7 @@ func TestSuricataRule(t *testing.T) {
 	assert.NotNil(t, opt)
 	assert.Equal(t, `"9"`, *opt)
 
-	opt, ok = rule.GetOption("noalert")
+	opt, ok = rule.GetOption("NoAlErT")
 	assert.True(t, ok)
 	assert.Nil(t, opt)
 

@@ -115,29 +115,29 @@ func (store *ElasticDetectionstore) save(ctx context.Context, obj interface{}, k
 	var results *model.EventIndexResults
 	var err error
 
-	if err = store.server.CheckAuthorized(ctx, "write", "cases"); err == nil {
-		document := convertObjectToDocumentMap(kind, obj, store.schemaPrefix)
-		document[store.schemaPrefix+"kind"] = kind
+	// if err = store.server.CheckAuthorized(ctx, "write", "cases"); err == nil {
+	document := convertObjectToDocumentMap(kind, obj, store.schemaPrefix)
+	document[store.schemaPrefix+"kind"] = kind
 
-		results, err = store.server.Eventstore.Index(ctx, store.index, document, id)
-		if err == nil {
-			document[store.schemaPrefix+AUDIT_DOC_ID] = results.DocumentId
+	results, err = store.server.Eventstore.Index(ctx, store.index, document, id)
+	if err == nil {
+		document[store.schemaPrefix+AUDIT_DOC_ID] = results.DocumentId
 
-			if id == "" {
-				document[store.schemaPrefix+"operation"] = "create"
-			} else {
-				document[store.schemaPrefix+"operation"] = "update"
-			}
+		if id == "" {
+			document[store.schemaPrefix+"operation"] = "create"
+		} else {
+			document[store.schemaPrefix+"operation"] = "update"
+		}
 
-			_, err = store.server.Eventstore.Index(ctx, store.auditIndex, document, "")
-			if err != nil {
-				log.WithFields(log.Fields{
-					"documentId": results.DocumentId,
-					"kind":       kind,
-				}).WithError(err).Error("Object indexed successfully however audit record failed to index")
-			}
+		_, err = store.server.Eventstore.Index(ctx, store.auditIndex, document, "")
+		if err != nil {
+			log.WithFields(log.Fields{
+				"documentId": results.DocumentId,
+				"kind":       kind,
+			}).WithError(err).Error("Object indexed successfully however audit record failed to index")
 		}
 	}
+	// }
 
 	return results, err
 }
@@ -145,23 +145,23 @@ func (store *ElasticDetectionstore) save(ctx context.Context, obj interface{}, k
 func (store *ElasticDetectionstore) delete(ctx context.Context, obj interface{}, kind string, id string) error {
 	var err error
 
-	if err = store.server.CheckAuthorized(ctx, "write", "cases"); err == nil {
-		err = store.server.Eventstore.Delete(ctx, store.index, id)
-		if err == nil {
-			document := convertObjectToDocumentMap(kind, obj, store.schemaPrefix)
-			document[store.schemaPrefix+AUDIT_DOC_ID] = id
-			document[store.schemaPrefix+"kind"] = kind
-			document[store.schemaPrefix+"operation"] = "delete"
+	// if err = store.server.CheckAuthorized(ctx, "write", "cases"); err == nil {
+	err = store.server.Eventstore.Delete(ctx, store.index, id)
+	if err == nil {
+		document := convertObjectToDocumentMap(kind, obj, store.schemaPrefix)
+		document[store.schemaPrefix+AUDIT_DOC_ID] = id
+		document[store.schemaPrefix+"kind"] = kind
+		document[store.schemaPrefix+"operation"] = "delete"
 
-			_, err = store.server.Eventstore.Index(ctx, store.auditIndex, document, "")
-			if err != nil {
-				log.WithFields(log.Fields{
-					"documentId": id,
-					"kind":       kind,
-				}).WithError(err).Error("Object deleted successfully however audit record failed to index")
-			}
+		_, err = store.server.Eventstore.Index(ctx, store.auditIndex, document, "")
+		if err != nil {
+			log.WithFields(log.Fields{
+				"documentId": id,
+				"kind":       kind,
+			}).WithError(err).Error("Object deleted successfully however audit record failed to index")
 		}
 	}
+	// }
 
 	return err
 }
@@ -185,42 +185,42 @@ func (store *ElasticDetectionstore) getAll(ctx context.Context, query string, ma
 	var err error
 	var objects []interface{}
 
-	if err = store.server.CheckAuthorized(ctx, "read", "cases"); err == nil {
-		criteria := model.NewEventSearchCriteria()
-		format := "2006-01-02 3:04:05 PM"
+	// if err = store.server.CheckAuthorized(ctx, "read", "cases"); err == nil {
+	criteria := model.NewEventSearchCriteria()
+	format := "2006-01-02 3:04:05 PM"
 
-		var zeroTime time.Time
+	var zeroTime time.Time
 
-		zeroTimeStr := zeroTime.Format(format)
-		now := time.Now()
-		endTime := now.Format(format)
-		zone := now.Location().String()
+	zeroTimeStr := zeroTime.Format(format)
+	now := time.Now()
+	endTime := now.Format(format)
+	zone := now.Location().String()
 
-		err = criteria.Populate(query,
-			zeroTimeStr+" - "+endTime, // timeframe range
-			format,                    // timeframe format
-			zone,                      // timezone
-			"0",                       // no metrics
-			strconv.Itoa(max))
+	err = criteria.Populate(query,
+		zeroTimeStr+" - "+endTime, // timeframe range
+		format,                    // timeframe format
+		zone,                      // timezone
+		"0",                       // no metrics
+		strconv.Itoa(max))
 
+	if err == nil {
+		var results *model.EventSearchResults
+
+		results, err = store.server.Eventstore.Search(ctx, criteria)
 		if err == nil {
-			var results *model.EventSearchResults
+			for _, event := range results.Events {
+				var obj interface{}
 
-			results, err = store.server.Eventstore.Search(ctx, criteria)
-			if err == nil {
-				for _, event := range results.Events {
-					var obj interface{}
-
-					obj, err = convertElasticEventToObject(event, store.schemaPrefix)
-					if err == nil {
-						objects = append(objects, obj)
-					} else {
-						log.WithField("event", event).WithError(err).Error("Unable to convert case object")
-					}
+				obj, err = convertElasticEventToObject(event, store.schemaPrefix)
+				if err == nil {
+					objects = append(objects, obj)
+				} else {
+					log.WithField("event", event).WithError(err).Error("Unable to convert case object")
 				}
 			}
 		}
 	}
+	// }
 
 	return objects, err
 }
@@ -357,4 +357,20 @@ func (store *ElasticDetectionstore) DeleteDetection(ctx context.Context, onionID
 	err = store.delete(ctx, detect, "detection", store.prepareForSave(ctx, &detect.Auditable))
 
 	return detect, err
+}
+
+func (store *ElasticDetectionstore) GetAllCommunitySIDs(ctx context.Context) (map[string]string, error) {
+	// TODO: 10000? Is that enough?
+	all, err := store.getAll(ctx, fmt.Sprintf(`_index:"%s" AND %skind:"%s"`, store.index, store.schemaPrefix, "detection"), 10000)
+	if err != nil {
+		return nil, err
+	}
+
+	sids := map[string]string{}
+	for _, det := range all {
+		detection := det.(*model.Detection)
+		sids[detection.PublicID] = detection.Id
+	}
+
+	return sids, nil
 }

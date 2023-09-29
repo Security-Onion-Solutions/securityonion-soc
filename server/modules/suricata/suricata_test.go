@@ -2,6 +2,7 @@ package suricata
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -39,13 +40,13 @@ func TestSuricataModule(t *testing.T) {
 	assert.Implements(t, (*server.DetectionEngine)(nil), mod)
 
 	err := mod.Init(nil)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	err = mod.Start()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	err = mod.Stop()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	assert.Equal(t, 1, len(srv.DetectionEngines))
 	assert.Same(t, mod, srv.DetectionEngines[model.EngineNameSuricata])
@@ -264,6 +265,66 @@ func TestValidate(t *testing.T) {
 	}
 }
 
+func TestParse(t *testing.T) {
+	table := []struct {
+		Name               string
+		Lines              []string
+		ExpectedDetections []*model.Detection
+		ExpectedError      *string
+	}{
+		{
+			Name: "Sunny Day Path w/ Edge Cases",
+			Lines: []string{
+				"# Comment",
+				SimpleRule,
+				"",
+				` alert  http any any  <>   any any (metadata:signature_severity   Informational; sid: "20000"; msg:"a \"tricky\"\;\\ msg";)`,
+				" # " + FlowbitsRuleA,
+			},
+			ExpectedDetections: []*model.Detection{
+				{
+					PublicID:    SimpleRuleSID,
+					Title:       `GPL ATTACK_RESPONSE id check returned root`,
+					Severity:    model.SeverityUnknown,
+					Content:     SimpleRule,
+					IsEnabled:   true,
+					IsCommunity: true,
+					Engine:      model.EngineNameSuricata,
+				},
+				{
+					PublicID:    "20000",
+					Title:       `a "tricky";\ msg`,
+					Severity:    model.SeverityInformational,
+					Content:     `alert http any any <> any any (metadata:signature_severity Informational; sid:"20000"; msg:"a \"tricky\"\;\\ msg";)`,
+					IsEnabled:   true,
+					IsCommunity: true,
+					Engine:      model.EngineNameSuricata,
+				},
+			},
+		},
+	}
+
+	mod := NewSuricataEngine(&server.Server{})
+
+	for _, test := range table {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			data := strings.Join(test.Lines, "\n")
+
+			detections, err := mod.ParseRules(data)
+			if test.ExpectedError == nil {
+				assert.NoError(t, err)
+				assert.Equal(t, test.ExpectedDetections, detections)
+			} else {
+				assert.Equal(t, *test.ExpectedError, err.Error())
+				assert.Empty(t, detections)
+			}
+		})
+	}
+}
+
 func TestSyncSuricata(t *testing.T) {
 	table := []struct {
 		Name             string
@@ -473,7 +534,7 @@ func TestSyncSuricata(t *testing.T) {
 			})
 			mod.srv.DetectionEngines[model.EngineNameSuricata] = mod
 
-			errMap, err := mod.SyncDetections(ctx, test.Detections)
+			errMap, err := mod.SyncLocalDetections(ctx, test.Detections)
 
 			assert.Equal(t, test.ExpectedErr, err)
 			assert.Equal(t, test.ExpectedErrMap, errMap)
