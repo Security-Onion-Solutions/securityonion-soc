@@ -9,7 +9,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 
@@ -39,7 +38,6 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Delete("/{id}", h.deleteDetection)
 
 		r.Post("/bulk/{newStatus}", h.bulkUpdateDetection)
-		r.Post("/sync/{engine}", h.syncCommunityDetections)
 	})
 }
 
@@ -231,50 +229,6 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 				errMap[k] = v
 			}
 		}
-	}
-
-	web.Respond(w, r, http.StatusOK, errMap)
-}
-
-func (h *DetectionHandler) syncCommunityDetections(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	engineParam := chi.URLParam(r, "engine")
-
-	engine, ok := h.server.DetectionEngines[model.EngineName(engineParam)]
-	if !ok {
-		web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("invalid engine"))
-		return
-	}
-
-	err := r.ParseMultipartForm(int64(h.server.Config.MaxUploadSizeBytes))
-	if err != nil {
-		web.Respond(w, r, http.StatusBadRequest, err)
-		return
-	}
-
-	file, _, err := r.FormFile("file")
-	if err != nil {
-		web.Respond(w, r, http.StatusBadRequest, err)
-		return
-	}
-
-	content, err := io.ReadAll(file)
-	if err != nil {
-		web.Respond(w, r, http.StatusBadRequest, err)
-		return
-	}
-
-	detections, err := engine.ParseRules(string(content))
-	if err != nil {
-		web.Respond(w, r, http.StatusBadRequest, err)
-		return
-	}
-
-	errMap, err := engine.SyncCommunityDetections(ctx, detections)
-	if err != nil {
-		web.Respond(w, r, http.StatusInternalServerError, err)
-		return
 	}
 
 	web.Respond(w, r, http.StatusOK, errMap)
