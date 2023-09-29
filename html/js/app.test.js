@@ -432,5 +432,6 @@ test('checkForUnauthorized', () => {
   testCheckForUnauthorized('/api/', {status: 401}, null, false);
   testCheckForUnauthorized('/foo/', {}, '/blah', true);
   testCheckForUnauthorized('/foo/', {}, null, false);
-  testCheckForUnauthorized('/login/', {}, '/blah', false);
+  testCheckForUnauthorized('/login/banner.md', {}, '/blah', false);
+  testCheckForUnauthorized('/auth/self-service/login/browser', {}, '/blah', true);
 });
