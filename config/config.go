@@ -44,5 +44,8 @@ func LoadConfig(filename string, version string, buildTime time.Time) (*Config, 
 			err = cfg.Server.Verify()
 		}
 	}
+
+	cfg.Server.Modules["suricataengine"] = map[string]interface{}{} // TODO: remove when put in config file
+
 	return cfg, err
 }

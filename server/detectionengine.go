@@ -8,5 +8,7 @@ import (
 
 type DetectionEngine interface {
 	ValidateRule(rule string) (string, error)
-	SyncDetections(ctx context.Context, detections []*model.Detection) (errMap map[string]string, err error)
+	ParseRules(content string) ([]*model.Detection, error)
+	SyncLocalDetections(ctx context.Context, detections []*model.Detection) (errMap map[string]string, err error)
+	SyncCommunityDetections(ctx context.Context, detections []*model.Detection) (errMap map[string]string, err error)
 }

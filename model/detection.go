@@ -23,9 +23,11 @@ const (
 	SigLangYara     SigLanguage = "yara"
 	SigLangZeek     SigLanguage = "zeek"
 
-	SeverityLow    Severity = "low"
-	SeverityMedium Severity = "medium"
-	SeverityHigh   Severity = "high"
+	SeverityUnknown       Severity = "unknown"
+	SeverityInformational Severity = "informational"
+	SeverityMinor         Severity = "minor"
+	SeverityMajor         Severity = "major"
+	SeverityCritical      Severity = "critical"
 
 	IDTypeUUID IDType = "uuid"
 	IDTypeSID  IDType = "sid"

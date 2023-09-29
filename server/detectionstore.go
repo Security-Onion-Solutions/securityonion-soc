@@ -18,4 +18,5 @@ type Detectionstore interface {
 	UpdateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error)
 	UpdateDetectionField(ctx context.Context, id string, field string, value any) (*model.Detection, bool, error)
 	DeleteDetection(ctx context.Context, detectID string) (*model.Detection, error)
+	GetAllCommunitySIDs(ctx context.Context) (map[string]string, error) // map[detection.PublicId]detection.Id
 }
