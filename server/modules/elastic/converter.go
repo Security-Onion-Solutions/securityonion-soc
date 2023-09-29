@@ -367,8 +367,14 @@ func convertFromElasticResults(store *ElasticEventstore, esJson string, results 
 		for _, failureGeneric := range failures {
 			failure := failureGeneric.(map[string]interface{})
 			reason := failure["reason"].(map[string]interface{})
-			reasonType := reason["type"].(string)
-			reasonDetails := reason["reason"].(string)
+			reasonType := ""
+			if reason["type"] != nil {
+				reasonType = reason["type"].(string)
+			}
+			reasonDetails := "N/A"
+			if reason["reason"] != nil {
+				reasonDetails = reason["reason"].(string)
+			}
 			log.WithFields(log.Fields{
 				"type":   reasonType,
 				"reason": reasonDetails,
