@@ -50,9 +50,9 @@ func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.
 	user, ok = ctx.Value(ContextKeyRequestor).(*model.User)
 	if !ok {
 		log.WithFields(log.Fields{
-			"remoteAddr": r.RemoteAddr,
-			"sourceIp":   ip,
-			"path":       r.URL.Path,
+			"messageRemoteAddr": r.RemoteAddr,
+			"messageSourceIp":   ip,
+			"messagePath":       r.URL.Path,
 		}).Warn("User does not exist in context")
 		Respond(w, r, http.StatusBadRequest, errors.New("User does not exist in context; unable to complete websocket"))
 
@@ -63,9 +63,9 @@ func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.
 	connection, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.WithError(err).WithFields(log.Fields{
-			"remoteAddr": r.RemoteAddr,
-			"sourceIp":   ip,
-			"path":       r.URL.Path,
+			"messageRemoteAddr": r.RemoteAddr,
+			"messageSourceIp":   ip,
+			"messagePath":       r.URL.Path,
 		}).Warn("Failed to upgrade websocket")
 		Respond(w, r, http.StatusBadRequest, err)
 
@@ -73,9 +73,9 @@ func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.
 	}
 
 	log.WithFields(log.Fields{
-		"remoteAddr": r.RemoteAddr,
-		"sourceIp":   ip,
-		"path":       r.URL.Path,
+		"messageRemoteAddr": r.RemoteAddr,
+		"messageSourceIp":   ip,
+		"messagePath":       r.URL.Path,
 	}).Info("WebSocket connected")
 
 	conn := webSocketHandler.Host.AddConnection(user, connection, ip)
@@ -87,11 +87,11 @@ func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.
 			break
 		}
 		log.WithFields(log.Fields{
-			"remoteAddr": r.RemoteAddr,
-			"sourceIp":   ip,
-			"path":       r.URL.Path,
-			"msg":        string(messageBytes),
-			"type":       messageType,
+			"messageRemoteAddr": r.RemoteAddr,
+			"messageSourceIp":   ip,
+			"messagePath":       r.URL.Path,
+			"messageContent":    string(messageBytes),
+			"messageType":       messageType,
 		}).Info("WebSocket message received")
 
 		msg := &WebSocketMessage{}
@@ -99,9 +99,9 @@ func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.
 		webSocketHandler.handleMessage(msg, conn)
 	}
 	log.WithFields(log.Fields{
-		"remoteAddr": r.RemoteAddr,
-		"sourceIp":   ip,
-		"path":       r.URL.Path,
+		"messageRemoteAddr": r.RemoteAddr,
+		"messageSourceIp":   ip,
+		"messagePath":       r.URL.Path,
 	}).Info("WebSocket disconnected")
 	webSocketHandler.Host.RemoveConnection(connection)
 

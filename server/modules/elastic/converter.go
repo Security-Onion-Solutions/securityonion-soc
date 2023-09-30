@@ -376,8 +376,8 @@ func convertFromElasticResults(store *ElasticEventstore, esJson string, results 
 				reasonDetails = reason["reason"].(string)
 			}
 			log.WithFields(log.Fields{
-				"type":   reasonType,
-				"reason": reasonDetails,
+				"reasonType": reasonType,
+				"reason":     reasonDetails,
 			}).Warn("Shard failure")
 			err = errors.New("ERROR_QUERY_FAILED_ELASTICSEARCH")
 		}
