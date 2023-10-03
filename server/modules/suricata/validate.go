@@ -24,7 +24,7 @@ type RuleOption struct {
 }
 
 type MetaData struct {
-	Key string
+	Key   string
 	Value string
 }
 
@@ -101,7 +101,7 @@ func ParseSuricataRule(rule string) (*SuricataRule, error) {
 				buf.WriteRune(ch)
 			}
 		case stateOptions:
-			if ch == ')' && !inQuotes && !isEscaping {
+			if ch == ')' && !inQuotes && !isEscaping && len(strings.TrimSpace(buf.String())) == 0 {
 				if r.Len() != 0 {
 					// end of options, but not end of rule?
 					return nil, fmt.Errorf("invalid rule, expected end of rule, got %d more bytes", r.Len())
@@ -125,7 +125,18 @@ func ParseSuricataRule(rule string) (*SuricataRule, error) {
 				if isEscaping {
 					isEscaping = false
 				} else {
-					inQuotes = !inQuotes
+					if strings.Contains(buf.String(), "pcre:") {
+						// is the current option a regular expression?
+						// if so, only end the quotes if the next character is a semicolon
+						next, _, _ := r.ReadRune()
+						r.UnreadRune()
+
+						if next == ';' {
+							inQuotes = false
+						}
+					} else {
+						inQuotes = !inQuotes
+					}
 				}
 			} else if ch == '\\' {
 				isEscaping = true

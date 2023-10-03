@@ -155,7 +155,7 @@ func TestIndexEnabled(t *testing.T) {
 		"#  24adee9b-6010-46ed-9c4a-9cb7a9c972a1",
 	}
 
-	output := indexEnabled(lines)
+	output := indexEnabled(lines, false)
 
 	assert.Equal(t, 7, len(output))
 	assert.Contains(t, output, "10000")
@@ -172,6 +172,20 @@ func TestIndexEnabled(t *testing.T) {
 	assert.Equal(t, output["not a number"], 6)
 	assert.Contains(t, output, "24adee9b-6010-46ed-9c4a-9cb7a9c972a1")
 	assert.Equal(t, output["24adee9b-6010-46ed-9c4a-9cb7a9c972a1"], 7)
+
+	output = indexEnabled(lines, true)
+	assert.Equal(t, 4, len(output))
+	assert.Contains(t, output, "10000")
+	assert.Equal(t, output["10000"], 0)
+	assert.NotContains(t, output, "20000")
+	assert.Contains(t, output, "30000")
+	assert.Equal(t, output["30000"], 3)
+	assert.NotContains(t, output, "40000")
+	assert.Contains(t, output, "50000")
+	assert.Equal(t, output["50000"], 5)
+	assert.Contains(t, output, "not a number")
+	assert.Equal(t, output["not a number"], 6)
+	assert.NotContains(t, output, "24adee9b-6010-46ed-9c4a-9cb7a9c972a1")
 }
 
 func TestIndexModify(t *testing.T) {
@@ -238,6 +252,14 @@ func TestValidate(t *testing.T) {
 			Name:        "Unexpected End of Rule",
 			Input:       "x",
 			ExpectedErr: util.Ptr("invalid rule, unexpected end of rule"),
+		},
+		{
+			Name:  "Parentheses in Unquoted Option",
+			Input: `alert http $HOME_NET any -> $EXTERNAL_NET any (msg:"ET ADWARE_PUP WinSoftware.com Spyware User-Agent (WinSoftware)"; flow:to_server,established; http.user_agent; content:"WinSoftware"; nocase; depth:11; reference:url,research.sunbelt-software.com/threatdisplay.aspx?name=WinSoftware%20Corporation%2c%20Inc.%20(v)&threatid=90037; reference:url,doc.emergingthreats.net/2003527; classtype:pup-activity; sid:2003527; rev:12; metadata:attack_target Client_Endpoint, created_at 2010_07_30, deployment Perimeter, former_category ADWARE_PUP, signature_severity Minor, tag Spyware_User_Agent, updated_at 2020_10_13;)`,
+		},
+		{
+			Name:  "Unescaped Double Quote in PCRE Option",
+			Input: `alert http $EXTERNAL_NET any -> $HOME_NET any (msg:"ET PHISHING Common Unhidebody Function Observed in Phishing Landing"; flow:established,to_client; file.data; content:"function unhideBody()"; nocase; fast_pattern; content:"var bodyElems = document.getElementsByTagName(|22|body|22|)|3b|"; nocase; content:"bodyElems[0].style.visibility =|20 22|visible|22 3b|"; nocase; distance:0; content:"onload=|22|unhideBody()|22|"; content:"method="; nocase; pcre:"/^["']?post/Ri"; classtype:social-engineering; sid:2029732; rev:2; metadata:affected_product Web_Browsers, attack_target Client_Endpoint, created_at 2020_03_24, deployment Perimeter, signature_severity Minor, tag Phishing, updated_at 2020_03_24;)`,
 		},
 	}
 

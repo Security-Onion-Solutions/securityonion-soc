@@ -63,7 +63,11 @@ func (server *Server) initContext() {
 	server.Agent = model.NewUser()
 	server.Agent.Id = AGENT_ID
 	server.Agent.Email = server.Agent.Id
-	server.Context = context.WithValue(context.Background(), web.ContextKeyRequestor, server.Agent)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestor, server.Agent)
+	ctx = context.WithValue(ctx, web.ContextKeyRequestorId, AGENT_ID)
+
+	server.Context = ctx
 }
 
 func (server *Server) Start() {

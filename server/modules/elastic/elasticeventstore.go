@@ -176,21 +176,28 @@ func (store *ElasticEventstore) unmapElasticField(field string) string {
 func (store *ElasticEventstore) Search(ctx context.Context, criteria *model.EventSearchCriteria) (*model.EventSearchResults, error) {
 	var err error
 	results := model.NewEventSearchResults()
-	if err = store.server.CheckAuthorized(ctx, "read", "events"); err == nil {
-		store.refreshCache(ctx)
+	verb, noun := criteria.DeterminePermissions("read", "events")
 
-		var query string
-		query, err = convertToElasticRequest(store, criteria)
+	err = store.server.CheckAuthorized(ctx, verb, noun)
+	if err != nil {
+		return nil, err
+	}
+
+	store.refreshCache(ctx)
+
+	var query string
+	query, err = convertToElasticRequest(store, criteria)
+	if err == nil {
+		var response string
+		response, err = store.luceneSearch(ctx, query)
 		if err == nil {
-			var response string
-			response, err = store.luceneSearch(ctx, query)
-			if err == nil {
-				err = convertFromElasticResults(store, response, results)
-				results.Criteria = criteria
-			}
+			err = convertFromElasticResults(store, response, results)
+			results.Criteria = criteria
 		}
 	}
+
 	results.Complete()
+
 	return results, err
 }
 
@@ -335,7 +342,9 @@ func (store *ElasticEventstore) indexSearch(ctx context.Context, query string, i
 		"query":     store.truncate(query),
 		"requestId": ctx.Value(web.ContextKeyRequestId),
 	}).Info("Searching Elasticsearch")
+
 	var json string
+
 	res, err := store.esClient.Search(
 		store.esClient.Search.WithContext(ctx),
 		store.esClient.Search.WithIndex(indexes...),
