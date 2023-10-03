@@ -257,8 +257,8 @@ func (host *Host) Preprocess(ctx context.Context, req *http.Request) (context.Co
 
 	for _, preprocessor := range host.preprocessors {
 		log.WithFields(log.Fields{
-			"priority":      preprocessor.PreprocessPriority(),
-			"processorType": reflect.TypeOf(preprocessor).String(),
+			"processorPriority": preprocessor.PreprocessPriority(),
+			"processorType":     reflect.TypeOf(preprocessor).String(),
 		}).Debug("Preprocessing request")
 		ctx, statusCode, err = preprocessor.Preprocess(ctx, req)
 		if err != nil {
