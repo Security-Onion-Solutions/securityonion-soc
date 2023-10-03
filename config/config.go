@@ -48,7 +48,7 @@ func LoadConfig(filename string, version string, buildTime time.Time) (*Config, 
 	// TODO: remove when put in config file
 	cfg.Server.Modules["suricataengine"] = map[string]interface{}{
 		"communityRulesFile":                   "/nsm/rules/suricata/emerging-all.rules",
-		"rulesFingerprintFile":                 "/opt/so/conf/soc/emerging-all.fingerprint",
+		"rulesFingerprintFile":                 "/tmp/socdev/so/conf/soc/emerging-all.fingerprint", // "/opt/so/conf/soc/emerging-all.fingerprint",
 		"communityRulesImportFrequencySeconds": float64(5),
 	}
 

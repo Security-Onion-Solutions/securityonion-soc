@@ -80,11 +80,15 @@ func (s *SuricataEngine) watchCommunityRules() {
 		s.isRunning = false
 	}()
 
+	ctx := s.srv.Context
+
 	for s.isRunning {
 		time.Sleep(time.Second * time.Duration(s.communityRulesImportFrequencySeconds))
 		if !s.isRunning {
 			break
 		}
+
+		start := time.Now()
 
 		rules, hash, err := readAndHash(s.communityRulesFile)
 		if err != nil {
@@ -92,19 +96,13 @@ func (s *SuricataEngine) watchCommunityRules() {
 			continue
 		}
 
-		haveFP := true
-
-		fingerprint, err := os.ReadFile(s.rulesFingerprintFile)
+		fingerprint, haveFP, err := readFingerprint(s.rulesFingerprintFile)
 		if err != nil {
-			if !os.IsNotExist(err) {
-				haveFP = false
-			} else {
-				log.WithError(err).Error("unable to read rules fingerprint file")
-				continue
-			}
+			log.WithError(err).Error("unable to read rules fingerprint file")
+			continue
 		}
 
-		if haveFP && strings.EqualFold(string(fingerprint), hash) {
+		if haveFP && strings.EqualFold(*fingerprint, hash) {
 			// if we have a fingerprint and the hashes are equal, there's nothing to do
 			continue
 		}
@@ -115,7 +113,7 @@ func (s *SuricataEngine) watchCommunityRules() {
 			continue
 		}
 
-		errMap, err := s.syncCommunityDetections(context.Background(), commDetections)
+		errMap, err := s.syncCommunityDetections(ctx, commDetections)
 		if err != nil {
 			log.WithError(err).Error("unable to sync community detections")
 			continue
@@ -125,7 +123,18 @@ func (s *SuricataEngine) watchCommunityRules() {
 			log.WithFields(log.Fields{
 				"errors": errMap,
 			}).Error("unable to sync all community detections")
+		} else {
+			err = os.WriteFile(s.rulesFingerprintFile, []byte(hash), 0644)
+			if err != nil {
+				log.WithError(err).WithField("path", s.rulesFingerprintFile).Error("unable to write rules fingerprint file")
+			}
 		}
+
+		dur := time.Since(start)
+
+		log.WithFields(log.Fields{
+			"durationSeconds": dur.Seconds(),
+		}).Info("Suricata community rules synced")
 	}
 }
 
@@ -145,6 +154,26 @@ func readAndHash(path string) (content string, sha256Hash string, err error) {
 	}
 
 	return string(raw), hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+func readFingerprint(path string) (fingerprint *string, ok bool, err error) {
+	_, err = os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+
+		return nil, false, err
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, false, err
+	}
+
+	fingerprint = util.Ptr(strings.TrimSpace(string(raw)))
+
+	return fingerprint, true, nil
 }
 
 func (s *SuricataEngine) ValidateRule(rule string) (string, error) {
@@ -279,8 +308,8 @@ func (s *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*
 	modifyLines := strings.Split(modify.Value, "\n")
 
 	localIndex := indexLocal(localLines)
-	enabledIndex := indexEnabled(enabledLines)
-	disabledIndex := indexEnabled(disabledLines)
+	enabledIndex := indexEnabled(enabledLines, false)
+	disabledIndex := indexEnabled(disabledLines, false)
 	modifyIndex := indexModify(modifyLines)
 
 	errMap = map[string]string{} // map[sid]error
@@ -408,6 +437,19 @@ func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 		Removed int
 	}{}
 
+	allSettings, err := s.srv.Configstore.GetSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	disabled := settingByID(allSettings, "idstools.sids.disabled")
+	if disabled == nil {
+		return nil, fmt.Errorf("unable to find disabled setting")
+	}
+
+	disabledLines := strings.Split(disabled.Value, "\n")
+	disabledIndex := indexEnabled(disabledLines, true)
+
 	commSIDs, err := s.srv.Detectionstore.GetAllCommunitySIDs(ctx)
 	if err != nil {
 		return nil, err
@@ -419,6 +461,9 @@ func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 	}
 
 	for _, detect := range detections {
+		_, disabled := disabledIndex[detect.PublicID]
+		detect.IsEnabled = !disabled
+
 		id, exists := commSIDs[detect.PublicID]
 		if exists {
 			detect.Id = id
@@ -454,7 +499,7 @@ func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 		"updated": results.Updated,
 		"removed": results.Removed,
 		"errors":  errMap,
-	}).Info("Suricata community detections synced")
+	}).Info("suricata community diff")
 
 	return errMap, nil
 }
@@ -494,11 +539,16 @@ func indexLocal(lines []string) map[string]int {
 	return index
 }
 
-func indexEnabled(lines []string) map[string]int {
+func indexEnabled(lines []string, ignoreComments bool) map[string]int {
 	index := map[string]int{}
 
 	for i, line := range lines {
-		line = strings.TrimSpace(strings.TrimLeft(line, "# \t"))
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "#") && ignoreComments {
+			continue
+		}
+
+		line = strings.TrimLeft(line, "# \t")
 		if line != "" {
 			index[line] = i
 		}

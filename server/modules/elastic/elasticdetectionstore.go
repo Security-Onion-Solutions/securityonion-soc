@@ -78,7 +78,7 @@ func (store *ElasticDetectionstore) validateDetection(detect *model.Detection) e
 	}
 
 	if err == nil && detect.Title != "" {
-		err = store.validateString(detect.Title, SHORT_STRING_MAX, "title")
+		err = store.validateString(detect.Title, LONG_STRING_MAX, "title")
 	}
 
 	if err == nil && detect.Severity != "" {
