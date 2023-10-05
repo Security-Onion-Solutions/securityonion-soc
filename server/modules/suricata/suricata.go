@@ -25,6 +25,8 @@ var sidExtracter = regexp.MustCompile(`(?i)\bsid: ?['"]?(.*?)['"]?;`)
 
 const modifyFromTo = `"flowbits" "noalert; flowbits"`
 
+var errModuleStopped = fmt.Errorf("module has stopped running")
+
 type SuricataEngine struct {
 	srv                                  *server.Server
 	communityRulesFile                   string
@@ -115,6 +117,11 @@ func (s *SuricataEngine) watchCommunityRules() {
 
 		errMap, err := s.syncCommunityDetections(ctx, commDetections)
 		if err != nil {
+			if err == errModuleStopped {
+				log.Info("incomplete sync of suricata community detections due to module stopping")
+				return
+			}
+
 			log.WithError(err).Error("unable to sync community detections")
 			continue
 		}
@@ -134,7 +141,7 @@ func (s *SuricataEngine) watchCommunityRules() {
 
 		log.WithFields(log.Fields{
 			"durationSeconds": dur.Seconds(),
-		}).Info("Suricata community rules synced")
+		}).Info("suricata community rules synced")
 	}
 }
 
@@ -447,8 +454,16 @@ func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 		return nil, fmt.Errorf("unable to find disabled setting")
 	}
 
+	modify := settingByID(allSettings, "idstools.sids.modify")
+	if modify == nil {
+		return nil, fmt.Errorf("unable to find modify setting")
+	}
+
 	disabledLines := strings.Split(disabled.Value, "\n")
+	modifyLines := strings.Split(modify.Value, "\n")
+
 	disabledIndex := indexEnabled(disabledLines, true)
+	modifyIndex := indexModify(modifyLines)
 
 	commSIDs, err := s.srv.Detectionstore.GetAllCommunitySIDs(ctx)
 	if err != nil {
@@ -461,8 +476,13 @@ func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 	}
 
 	for _, detect := range detections {
+		if !s.isRunning {
+			return errMap, errModuleStopped
+		}
+
 		_, disabled := disabledIndex[detect.PublicID]
-		detect.IsEnabled = !disabled
+		_, modified := modifyIndex[detect.PublicID]
+		detect.IsEnabled = !(disabled || modified)
 
 		id, exists := commSIDs[detect.PublicID]
 		if exists {
@@ -486,9 +506,9 @@ func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 	}
 
 	for sid := range toDelete {
-		_, err = s.srv.Detectionstore.DeleteDetection(ctx, sid)
+		_, err = s.srv.Detectionstore.DeleteDetection(ctx, commSIDs[sid])
 		if err != nil {
-			errMap[sid] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
+			errMap[sid] = fmt.Sprintf("unable to delete detection; reason=%s", err.Error())
 		} else {
 			results.Removed++
 		}

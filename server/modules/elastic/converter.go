@@ -196,6 +196,10 @@ func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSear
 	esMap["size"] = criteria.EventLimit
 	esMap["query"] = makeQuery(store, criteria.ParsedQuery, criteria.BeginTime, criteria.EndTime)
 
+	if len(criteria.SearchAfter) != 0 {
+		esMap["search_after"] = criteria.SearchAfter
+	}
+
 	aggregations := make(map[string]interface{})
 
 	if criteria.MetricLimit > 0 {
@@ -244,6 +248,13 @@ func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSear
 			}
 			esMap["sort"] = sorting
 		}
+	} else {
+		sort := map[string]string{}
+		for _, field := range criteria.SortFields {
+			sort[field.Field] = field.Order
+		}
+
+		esMap["sort"] = sort
 	}
 
 	bytes, err := json.WriteJson(esMap)
@@ -342,6 +353,9 @@ func convertFromElasticResults(store *ElasticEventstore, esJson string, results 
 			event.Score = esRecord["_score"].(float64)
 		}
 		event.Payload = flatten(store, esRecord["_source"].(map[string]interface{}))
+		if esRecord["sort"] != nil {
+			event.Sort = esRecord["sort"].([]interface{})
+		}
 
 		if event.Payload["@timestamp"] != nil {
 			event.Time, _ = time.Parse(time.RFC3339, event.Payload["@timestamp"].(string))

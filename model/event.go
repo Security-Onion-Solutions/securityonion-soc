@@ -66,6 +66,7 @@ type EventSearchCriteria struct {
 	CreateTime  time.Time
 	ParsedQuery *Query
 	SortFields  []*SortCriteria
+	SearchAfter []interface{}
 }
 
 func (criteria *EventSearchCriteria) initSearchCriteria() {
@@ -166,6 +167,7 @@ type EventRecord struct {
 	Type      string                 `json:"type"`
 	Score     float64                `json:"score"`
 	Payload   map[string]interface{} `json:"payload"`
+	Sort      []interface{}          `json:"sort"`
 }
 
 type EventUpdateCriteria struct {

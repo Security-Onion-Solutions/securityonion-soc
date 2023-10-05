@@ -196,30 +196,65 @@ func (store *ElasticDetectionstore) getAll(ctx context.Context, query string, ma
 	endTime := now.Format(format)
 	zone := now.Location().String()
 
-	err = criteria.Populate(query,
-		zeroTimeStr+" - "+endTime, // timeframe range
-		format,                    // timeframe format
-		zone,                      // timezone
-		"0",                       // no metrics
-		strconv.Itoa(max))
+	unlimited := false
+	if max == -1 {
+		max = 10000
+		unlimited = true
+	}
 
-	if err == nil {
+	sort := []interface{}{}
+
+	for {
+		err = criteria.Populate(query,
+			zeroTimeStr+" - "+endTime, // timeframe range
+			format,                    // timeframe format
+			zone,                      // timezone
+			"0",                       // no metrics
+			strconv.Itoa(max))
+
+		if err != nil {
+			return nil, err
+		}
+
+		if unlimited {
+			// need a deterministic sort order for paging
+			criteria.SortFields = []*model.SortCriteria{
+				{
+					Field: "@timestamp",
+					Order: "desc",
+				},
+			}
+
+			if len(sort) != 0 {
+				criteria.SearchAfter = sort
+			}
+		}
+
 		var results *model.EventSearchResults
 
 		results, err = store.server.Eventstore.Search(ctx, criteria)
-		if err == nil {
-			for _, event := range results.Events {
-				var obj interface{}
+		if err != nil {
+			return nil, err
+		}
 
-				obj, err = convertElasticEventToObject(event, store.schemaPrefix)
-				if err == nil {
-					objects = append(objects, obj)
-				} else {
-					log.WithField("event", event).WithError(err).Error("Unable to convert case object")
-				}
+		for _, event := range results.Events {
+			var obj interface{}
+
+			obj, err = convertElasticEventToObject(event, store.schemaPrefix)
+			if err == nil {
+				objects = append(objects, obj)
+			} else {
+				log.WithField("event", event).WithError(err).Error("Unable to convert case object")
 			}
 		}
+
+		if !unlimited || len(results.Events) == 0 {
+			break
+		}
+
+		sort = results.Events[len(results.Events)-1].Sort
 	}
+
 	// }
 
 	return objects, err
@@ -360,8 +395,7 @@ func (store *ElasticDetectionstore) DeleteDetection(ctx context.Context, onionID
 }
 
 func (store *ElasticDetectionstore) GetAllCommunitySIDs(ctx context.Context) (map[string]string, error) {
-	// TODO: 10000? Is that enough?
-	all, err := store.getAll(ctx, fmt.Sprintf(`_index:"%s" AND %skind:"%s"`, store.index, store.schemaPrefix, "detection"), 10000)
+	all, err := store.getAll(ctx, fmt.Sprintf(`_index:"%s" AND %skind:"%s"`, store.index, store.schemaPrefix, "detection"), -1)
 	if err != nil {
 		return nil, err
 	}
