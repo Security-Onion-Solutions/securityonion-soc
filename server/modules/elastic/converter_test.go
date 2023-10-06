@@ -295,6 +295,15 @@ func TestConvertFromElasticIndexResults(tester *testing.T) {
 	assert.NoError(tester, err)
 }
 
+func TestConvertFromElasticResults_Failure(tester *testing.T) {
+	store := NewTestStore()
+	results := model.NewEventSearchResults()
+	json := `{"took" : 11,"timed_out" : false,"_shards" : {"total" : 28,"successful" : 16,"skipped" : 0,"failed" : 12,"failures" : [{"shard" : 0,"index" : "manager:.ds-logs-elastic_agent-default-2023.09.29-000002","node" : null,"reason" : {"type" : "no_shard_available_action_exception","reason" : "no"}},{"shard" : 0,"index" : "manager:.ds-logs-elastic_agent.filebeat-default-2023.09.29-000002","node" : null,"reason" : {"type" : null,"reason" : null}},{"shard" : 0,"index" : "manager:.ds-logs-elastic_agent.fleet_server-default-2023.09.29-000002","node" : null,"reason" : {"type" : "no_shard_available_action_exception","reason" : null}}]}, "hits":{"hits":[],"total":{"value": 0}}}`
+
+	err := convertFromElasticResults(store, json, results)
+	assert.Error(tester, err, "ERROR_QUERY_FAILED_ELASTICSEARCH")
+}
+
 func TestConvertElasticEventToCaseNil(tester *testing.T) {
 	caseObj, err := convertElasticEventToCase(nil, DEFAULT_CASE_SCHEMA_PREFIX)
 	assert.NoError(tester, err)
