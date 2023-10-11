@@ -374,7 +374,9 @@ func (store *ElasticEventstore) indexDocument(ctx context.Context, index string,
 	res, err := store.esClient.Index(store.transformIndex(index),
 		strings.NewReader(document),
 		store.esClient.Index.WithRefresh("true"),
-		store.esClient.Index.WithDocumentID(id))
+		store.esClient.Index.WithDocumentID(id),
+		store.esClient.Index.WithContext(ctx),
+	)
 
 	if err != nil {
 		log.WithError(err).Error("Unable to index document into Elasticsearch")
@@ -397,7 +399,7 @@ func (store *ElasticEventstore) deleteDocument(ctx context.Context, index string
 		"requestId": ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Deleting document from Elasticsearch")
 
-	res, err := store.esClient.Delete(store.transformIndex(index), id)
+	res, err := store.esClient.Delete(store.transformIndex(index), id, store.esClient.Delete.WithContext(ctx))
 
 	if err != nil {
 		log.WithFields(log.Fields{

@@ -369,7 +369,7 @@ func convertFromElasticResults(store *ElasticEventstore, esJson string, results 
 	aggs := esResults["aggregations"]
 	if aggs != nil {
 		for name, aggObj := range aggs.(map[string]interface{}) {
-			keys := make([]interface{}, 0, 0)
+			keys := make([]interface{}, 0)
 			parseAggregation(name, aggObj, keys, results)
 		}
 	}

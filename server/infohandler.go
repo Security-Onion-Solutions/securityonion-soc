@@ -95,7 +95,7 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 		detection.Presets = map[string]config.PresetParameters{
 			"severity": {
 				CustomEnabled: false,
-				Labels:        []string{"low", "medium", "high"},
+				Labels:        []string{"unknown", "informational", "minor", "major", "critical"},
 			},
 			"engine": {
 				CustomEnabled: false,

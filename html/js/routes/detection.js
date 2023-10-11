@@ -29,6 +29,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		panel: [0, 1, 2],
 		activeTab: '',
+		sidExtract: /\bsid: ?['"]?(.*?)['"]?;/,
   }},
   created() {
   },
@@ -99,11 +100,33 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
       return "";
     },
     getPresets(kind) {
-      if (this.presets && this.presets[kind]) {
-        return this.presets[kind].labels;
+			if (this.presets && this.presets[kind]) {
+				switch (kind) {
+					case 'severity':
+					case 'engine':
+						return this.capitalizeOptions(this.presets[kind].labels);
+					default:
+						return this.presets[kind].labels;
+				}
       }
       return [];
-    },
+		},
+		capitalizeOptions(opts) {
+			return opts.map(opt => {
+				const cap = opt.charAt(0).toUpperCase() + opt.slice(1).toLowerCase();
+				return {
+					text: cap,
+					value: opt,
+				}
+			})
+		},
+		requestRules(rules) {
+			if (this.detect.isCommunity) {
+				return [];
+			}
+
+			return rules;
+		},
     isPresetCustomEnabled(kind) {
       if (this.presets && this.presets[kind]) {
         return this.presets[kind].customEnabled == true;
@@ -123,6 +146,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		async startEdit(target, field) {
 			if (this.curEditTarget === target) return;
 			if (this.curEditTarget !== null) await this.stopEdit(false);
+			if (this.detect.isCommunity) return;
 
 			this.curEditTarget = target;
 			this.origValue = this.detect[field];
@@ -136,8 +160,19 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				}
 			});
 		},
-		generatePublicID() {
-			this.detect.publicId = crypto.randomUUID();
+		extractPublicID() {
+			let pid = '';
+			switch (this.detect.engine) {
+				case 'suricata':
+					try {
+						pid = this.extractSuricataPublicID();
+					} catch (e) {
+						// nothing, clear publicId
+					}
+					break;
+			}
+
+			this.detect.publicId = pid;
 		},
 		isEdit(target) {
 			return this.curEditTarget === target;
@@ -213,22 +248,15 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			return null;
 		},
 		validateSuricata() {
-			const sidExtract = /\bsid: ?['"]?(.*?)['"]?;/
-			const results = sidExtract.exec(this.detect.content);
+			try {
+				const sid = this.extractSuricataPublicID();
 
-			if (!results || results.length < 2) {
-				// sid not present in rule
-				return this.i18n.sidMissingErr;
-			} else if (results && results.length > 2) {
-				// multiple sids present in rule
-				return this.i18n.sidMultipleErr;
-			}
-
-			const sid = results[1];
-
-			if (this.detect.publicId !== sid) {
-				// sid doesn't match metadata
-				return this.i18n.sidMismatchErr;
+				if (this.detect.publicId !== sid) {
+					// sid doesn't match metadata
+					return this.i18n.sidMismatchErr;
+				}
+			} catch (e) {
+				return e;
 			}
 
 			// normalize quotes
@@ -236,6 +264,19 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.detect.content = this.detect.content.replaceAll('“', '"');
 
 			return null;
+		},
+		extractSuricataPublicID() {
+			const results = this.sidExtract.exec(this.detect.content);
+
+			if (!results || results.length < 2) {
+				// sid not present in rule
+				throw this.i18n.sidMissingErr;
+			} else if (results && results.length > 2) {
+				// multiple sids present in rule
+				throw this.i18n.sidMultipleErr;
+			}
+
+			return results[1];
 		},
 		print(x) {
 			console.log(x);
