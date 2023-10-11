@@ -830,7 +830,7 @@
                   {{ i18n.quickActions }}
                 </v-list-item-title>
               </template>
-              <v-list-item dense v-for="action in actions" class="custom-quick-action-button" v-if="action.enabled" :key="action.link" :href="action.background ? '' : action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="$root.target(action.target)" @click="$root.performAction($event, action)">
+              <v-list-item dense v-for="action in actions" class="custom-quick-action-button" v-if="action.enabled" :key="action.link" :href="action.background ? '' : action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="$root.target(action.target)" @click="performAction($event, action) || $root.performAction($event, action)">
                 <v-list-item-icon>
                   <v-icon :alt="action.name" color="white">{{ action.icon }}</v-icon>
                 </v-list-item-icon>
@@ -894,6 +894,21 @@
               <v-spacer></v-spacer>
               <v-btn text id="hunt-between-proceed-button" @click="huntBetween()" v-text="i18n.accept" />
               <v-btn text id="hunt-between-cancel-button" @click="cancelBetweenDialog()" v-text="i18n.cancel" />
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+
+        <v-dialog v-model="addToCaseDialogVisible" persistent max-width="800">
+          <v-card>
+            <v-card-title class="text-h5" v-text="i18n.actionAddToCase" />
+            <v-card-text>
+              <v-select id="case-select" v-if="addToCaseDialogVisible" v-model="selectedMruCase" :items="mruCases" :label="i18n.mruCases"></v-select>
+            </v-card-text>
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn text id="add-to-case-proceed-button" @click="addToCase(false)" v-text="i18n.add" />
+              <v-btn text id="add-to-case-proceed-new-tab-button" @click="addToCase(true)" v-text="i18n.addInNewTab" />
+              <v-btn text id="add-to-case-cancel-button" @click="cancelAddToCaseDialog()" v-text="i18n.cancel" />
             </v-card-actions>
           </v-card>
         </v-dialog>
@@ -2979,7 +2994,7 @@
                     </v-btn>
                   </td>
                   <td>
-                    <v-icon v-if="props.item.status == 'fault'" :id="'nodeFaultIcon_' + props.item.id" :color="props.item.status | colorNodeStatus">{{ props.item.status | iconNodeStatus }}</v-icon>
+                    <v-icon v-if="props.item.status == 'fault'" :id="'nodeFaultIcon_' + props.item.id" :color="colorNodeStatus(props.item.status, props.item.nonCriticalNode)">{{ props.item.status | iconNodeStatus }}</v-icon>
                   </td>
                   <td :id="'nodeId_' + props.item.id" v-text="props.item.id"></td>
                   <td :id="'nodeRole_' + props.item.id" v-text="$root.localizeMessage(props.item.role)" class="d-none d-md-table-cell"></td>
@@ -2988,13 +3003,13 @@
                   <td :id="'nodeVersion_' + props.item.id" v-text="props.item.version" class="d-none d-lg-table-cell"></td>
                   <td :id="'nodeModel_' + props.item.id" v-text="props.item.model" class="d-none d-lg-table-cell"></td>
                   <td v-if="metricsEnabled" class="d-none d-lg-table-cell">
-                    <span v-if="props.item.metricsEnabled" :id="'nodeEps_' + props.item.id">{{ props.item.productionEps | formatCount }} / {{ props.item.consumptionEps | formatCount }}</span>
+                    <span v-if="props.item.metricsEnabled" :id="'nodeEps_' + props.item.id">{{ props.item.consumptionEps | formatCount }}</span>
                     <span v-if="!props.item.metricsEnabled" :id="'nodeEps_' + props.item.id">{{ i18n.na }}</span>
                   </td>
                   <td :id="'nodeUpdateTime_' + props.item.id" class="d-none d-lg-table-cell">{{ props.item.updateTime | toTZ }}</td>
                   <td :id="'nodeEpochTime_' + props.item.id" class="d-none d-lg-table-cell">{{ props.item.epochTime | toTZ }}</td>
                   <td :id="'nodeUptimeSeconds_' + props.item.id" class="d-none d-lg-table-cell">{{ props.item.uptimeSeconds | formatDuration }}</td>
-                  <td class="d-none d-lg-table-cell"><v-chip :id="'nodeStatus_' + props.item.id" class="nodeStatus" @click="expand(props.item)" :color="props.item.status | colorNodeStatus">{{ $root.localizeMessage(props.item.status) }}</v-chip></td>
+                  <td><v-chip :id="'nodeStatus_' + props.item.id" class="nodeStatus" @click="expand(props.item)" :color="colorNodeStatus(props.item.status, props.item.nonCriticalNode)">{{ $root.localizeMessage(props.item.status) }}</v-chip></td>
                 </tr>
               </template>
               <template v-slot:expanded-item="{ item }">
@@ -3043,31 +3058,33 @@
                                 <span class="filter value">{{ item.uptimeSeconds | formatDuration }}</span>
                               </div>
                               <div v-if="item.metricsEnabled" class="text-no-wrap">
-                                <span class="filter label">{{ i18n.epsProduction }}</span>
-                                <span class="filter value">{{ item.productionEps | formatCount }}</span>
-                              </div>
-                              <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.epsConsumption }}</span>
                                 <span class="filter value">{{ item.consumptionEps | formatCount }}</span>
                               </div>
                               <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.nodeStatusProcess }}</span>
-                                <span :class="colorNodeStatus(item.processStatus) + '--text'" class="filter value">{{ $root.localizeMessage(item.processStatus) }}</span>
+                                <span :class="colorNodeStatus(item.processStatus) + '--text'" class="filter value">
+                                  {{ $root.localizeMessage(item.processStatus) }}
+                                  <span v-if="item.nonCriticalNode">({{i18n.nonCriticalNode}})</span>
+                                </span>
                               </div>
                               <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.nodeStatusConnection }}</span>
-                                <span :class="colorNodeStatus(item.connectionStatus) + '--text'" class="filter value">{{ $root.localizeMessage(item.connectionStatus) }}</span>
+                                <span :class="colorNodeStatus(item.connectionStatus, item.nonCriticalNode) + '--text'" class="filter value">
+                                  {{ $root.localizeMessage(item.connectionStatus) }}
+                                  <span v-if="item.nonCriticalNode">({{i18n.nonCriticalNode}})</span>
+                                </span>
                               </div>
                               <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.nodeStatusRaid }}</span>
                                 <span :class="colorNodeStatus(item.raidStatus) + '--text'" class="filter value">
-                                  <span v-if="item.raidStatus">
+                                  <span v-if="!item.raidStatus || item.raidStatus == NodeStatusUnknown">
                                     {{ i18n.featureRequiresAppliance }}
                                     <a :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'grid.html'" style="text-decoration: none; cursor: 'pointer'"  :title="i18n.clickForMoreInformation">
                                       <v-icon color="info" class="mb-2">fa-circle-question</v-icon>
                                     </a>
                                   </span>
-                                  <span v-else v-text="$root.l$root.localizeMessage(item.raidStatus)"/>
+                                  <span v-else v-text="$root.localizeMessage(item.raidStatus)"/>
                                 </span>
                               </div>
                               <div class="text-no-wrap">
@@ -3802,10 +3819,21 @@
                 {{ i18n.reject }}
                 <v-icon right>fa-xmark</v-icon>
               </v-btn>
-              <v-btn id="gridmember-remove"  @click.stop="remove(selected)">
+              <v-btn id="gridmember-remove"  @click.stop="confirmRemove()">
                 {{ i18n.delete }}
                 <v-icon right>fa-trash</v-icon>
               </v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+        <v-dialog v-model="confirmDeleteDialog" persistent max-width="575">
+          <v-card>
+            <v-card-title class="text-h5" v-text="i18n.gridMemberConfirmDelete" />
+            <v-card-text v-html="i18n.gridMemberConfirmDeleteHelp" />
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn text id="gridmember-confirm-delete-button" @click="remove(selected)" v-text="i18n.yes" />
+              <v-btn text id="gridmember-confirm-cancel-button" @click="cancelRemove()" v-text="i18n.no" />
             </v-card-actions>
           </v-card>
         </v-dialog>

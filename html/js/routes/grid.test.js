@@ -39,14 +39,16 @@ function testUpdateMetricsEnabled(node1MetricsEnabled, node2MetricsEnabled, expe
   if (!expectedMetricsEnabled) {
 		expect(epsColumn.align).toBe(' d-none');
 	} else {
-		expect(epsColumn.align).toBe('');
+		expect(epsColumn.align).toBe(' d-none d-lg-table-cell');
 	}
 }
 
 test('colorNodeStatus', () => {
-	expect(comp.colorNodeStatus("ok")).toBe("success");
+  expect(comp.colorNodeStatus("ok")).toBe("success");
   expect(comp.colorNodeStatus("fault")).toBe("error");
+  expect(comp.colorNodeStatus("fault", true)).toBe("warning");
   expect(comp.colorNodeStatus("unknown")).toBe("warning");
+  expect(comp.colorNodeStatus("unknown", true)).toBe("warning");
 });
 
 test('iconNodeStatus', () => {
