@@ -417,3 +417,31 @@ test('isIPv6', () => {
   expect(app.isIPv6('::8')).toBe(true);
   expect(app.isIPv6('::')).toBe(true);
 });
+
+function testCheckForUnauthorized(url, response, authRedirectCookie, unauthorized) {
+  app.showLogin = jest.fn();
+  app.getCookie = jest.fn(cookie => authRedirectCookie);
+  app.deleteCookie = jest.fn();
+
+  response.request = {responseURL: url};
+  var result = app.checkForUnauthorized(response);
+  if (unauthorized) {
+    expect(result).toBe(null);
+    expect(app.showLogin).toHaveBeenCalled();
+    expect(app.deleteCookie).toHaveBeenCalledWith('AUTH_REDIRECT');
+  } else {
+    expect(result).toBe(response);
+  }
+}
+
+test('checkForUnauthorized', () => {
+  testCheckForUnauthorized('/foo/', {headers: {'content-type': 'text/html'}}, null, true);
+  testCheckForUnauthorized('/foo/', {headers: {'content-type': 'application/json'}}, null, false);
+  testCheckForUnauthorized('/foo/', {status: 401}, null, true);
+  testCheckForUnauthorized('/foo/', {status: 200}, null, false);
+  testCheckForUnauthorized('/api/', {status: 401}, null, false);
+  testCheckForUnauthorized('/foo/', {}, '/blah', true);
+  testCheckForUnauthorized('/foo/', {}, null, false);
+  testCheckForUnauthorized('/login/banner.md', {}, '/blah', false);
+  testCheckForUnauthorized('/auth/self-service/login/browser', {}, '/blah', true);
+});
