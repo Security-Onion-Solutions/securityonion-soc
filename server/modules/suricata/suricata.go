@@ -127,6 +127,8 @@ func (s *SuricataEngine) watchCommunityRules() {
 		}
 
 		if len(errMap) > 0 {
+			// there were errors, don't save the fingerprint.
+			// idempotency means we might fix it if we try again later.
 			log.WithFields(log.Fields{
 				"errors": errMap,
 			}).Error("unable to sync all community detections")

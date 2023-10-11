@@ -965,7 +965,7 @@
         <div class="mx-sm-12 mx-lg-6 mt-2 mb-6 mb-md-1">
           <!-- Title -->
           <h2 id="detection-title" @click="startEdit('detection-title', 'title')" v-if="!isEdit('detection-title')">{{ detect.title }}</h2>
-          <v-text-field id="detection-title-edit" v-else hide-details="auto" outlined v-model="detect.title" :rules="[rules.required]" persistent-hint :hint="'Detection Title'" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"></v-text-field>
+          <v-text-field id="detection-title-edit" v-else hide-details="auto" outlined v-model="detect.title" :rules="[rules.required]" persistent-hint :hint="i18n.detectionTitle" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"></v-text-field>
         </div>
 
         <div class="row mx-sm-8 mx-md-12 mx-lg-4 flex-column flex-md-row">
@@ -975,10 +975,10 @@
               <v-form ref="detection" v-model="editForm.valid">
                 <div class="col pt-5" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
                   <!-- Description -->
-                  <v-textarea id="detection-description-create" hide-details="auto" outlined v-model="detect.description" :rules="[rules.required]" persistent-hint :hint="'Detection Description'" auto-grow rows="5"></v-textarea>
+                  <v-textarea id="detection-description-create" hide-details="auto" outlined v-model="detect.description" :rules="[rules.required]" persistent-hint :hint="i18n.detectionDescription" auto-grow rows="5"></v-textarea>
 
                   <!-- PublicID -->
-                  <v-text-field id="detection-publicId-create" class="mt-0" v-model="detect.publicId" :rules="[rules.required, rules.minLength(5)]" persistent-hint :hint="'Public ID'">
+                  <v-text-field id="detection-publicId-create" class="mt-0" v-model="detect.publicId" :rules="[rules.required, rules.minLength(5)]" persistent-hint :hint="i18n.publicID">
                     <template v-slot:append v-if="!detect.publicId">
                       <v-btn id="gen-public-id-create" text small color="primary" @click="generatePublicID()">Generate</v-btn>
                     </template>
@@ -1018,17 +1018,13 @@
                 <v-icon left>fa-clipboard</v-icon>
                 <div class="d-none d-lg-block">Summary</div>
               </v-tab>
-              <v-tab id="detection_detailsTab" href="#details">
-                <v-icon left>fa-circle-info</v-icon>
-                <div class="d-none d-lg-block">Details</div>
+              <v-tab id="detection_signatureTab" href="#signature">
+                <v-icon left>fa-signature</v-icon>
+                <div class="d-none d-lg-block">Signature</div>
               </v-tab>
               <v-tab id="detection_notesTab" href="#notes">
                 <v-icon left>fa-pencil</v-icon>
                 <div class="d-none d-lg-block">Notes</div>
-              </v-tab>
-              <v-tab id="detection_signatureTab" href="#signature">
-                <v-icon left>fa-signature</v-icon>
-                <div class="d-none d-lg-block">Signature</div>
               </v-tab>
               <!-- <v-tab id="detection_playbookTab" href="#playbook">
                 <v-icon left>fa-book-bookmark</v-icon>
@@ -1047,47 +1043,49 @@
                 <div class="col pt-5" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
                   <div>
                     <!-- Description -->
-                    <span class="font-weight-bold">Description:</span><br/>
+                    <span class="font-weight-bold">{{i18n.description}}:</span><br/>
                     <span id="detection-description" @click="startEdit('detection-description', 'description')" v-if="!isEdit('detection-description')">{{ detect.description }}</span>
-                    <v-textarea id="detection-description-edit" v-else hide-details="auto" outlined v-model="detect.description" :rules="[rules.required]" persistent-hint :hint="'Detection Description'" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)" auto-grow rows="5"></v-textarea>
+                    <v-textarea id="detection-description-edit" v-else hide-details="auto" outlined v-model="detect.description" :rules="requestRules([rules.required])" persistent-hint :hint="i18n.detectionDescription" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)" auto-grow rows="5"></v-textarea>
                   </div>
                   <!-- Engine -->
-                  <v-select id="detection-engine-edit" v-model="detect.engine" :items="getPresets('engine')" persistent-hint :hint="'Engine'" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
+                  <v-select id="detection-engine-edit" v-model="detect.engine" :readonly="detect.isCommunity" :items="getPresets('engine')" persistent-hint :hint="i18n.engine" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
+                  <!-- Author -->
+                  <v-text-field id="detection-author-edit" v-model="detect.author" :readonly="detect.isCommunity" :rules="requestRules([rules.required])" persistent-hint :hint="i18n.author" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"></v-text-field>
+                  <!-- Severity -->
+                  <v-select id="detection-severity-edit" class="text-capitalize" :readonly="detect.isCommunity" v-model="detect.severity" :items="getPresets('severity')" persistent-hint :hint="i18n.severity" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
                   <!-- Enabled -->
-                  <v-checkbox id="detection-enabled-edit" v-model="detect.isEnabled" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)" label="Enabled"/>
+                  <v-checkbox id="detection-enabled-edit" v-model="detect.isEnabled" @change="stopEdit(true)" :label="i18n.detectionEnabled"/>
                   <!-- Reporting -->
-                  <v-checkbox id="detection-reporting-edit" v-model="detect.isReporting" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)" label="Reporting"/>
+                  <v-checkbox id="detection-reporting-edit" v-model="detect.isReporting" @change="stopEdit(true)" :label="i18n.reporting"/>
                 </div>
                 <div class="d-flex justify-end text-body-2 mt-2">
                   <div class="d-inline-flex justify-end">
                     <v-btn v-if="!isNew()" id="detection-duplicate" text small color="primary" class="align-self-end" @click="duplicateDetection()">
                       {{i18n.duplicate}}
                     </v-btn>
-                    <v-btn v-if="!isNew()" id="detection-delete" text small color="error" class="align-self-end" @click="deleteDetection()">
+                    <v-btn v-if="!isNew() && !detect.isCommunity" id="detection-delete" text small color="error" class="align-self-end" @click="deleteDetection()">
                       {{i18n.delete}}
                     </v-btn>
                   </div>
                 </div>
               </v-tab-item>
-              <v-tab-item value="details">
-                <div class="col pt-0" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
+              <v-tab-item value="signature">
+                <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
                   <!-- PublicID -->
-                  <v-text-field id="detection-publicId-edit" v-model="detect.publicId" :rules="[rules.required, rules.minLength(5)]" persistent-hint :hint="'Public ID'" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)">
-                    <template v-slot:append v-if="!detect.publicId">
-                      <v-btn id="gen-public-id" text small color="primary" @click="generatePublicID()">{{i18n.generate}}</v-btn>
+                  <v-text-field id="detection-publicId-edit" v-model="detect.publicId" :readonly="detect.isCommunity" :rules="requestRules([rules.required, rules.minLength(5)])" persistent-hint :hint="i18n.publicID" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)">
+                    <template v-slot:append v-if="!detect.publicId && !detect.isCommunity">
+                      <v-btn id="gen-public-id" text small color="primary" @click="extractPublicID()">{{i18n.extract}}</v-btn>
                     </template>
                   </v-text-field>
-                  <!-- Author -->
-                  <v-text-field id="detection-author-edit" v-model="detect.author" :rules="[rules.required]" persistent-hint :hint="'Author'" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"></v-text-field>
-                  <!-- Severity -->
-                  <v-select id="detection-severity-edit" v-model="detect.severity" :items="getPresets('severity')" persistent-hint :hint="'Severity'" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
+                  <!-- Signature -->
+                  <v-textarea class="config-editor mt-2" :readonly="detect.isCommunity" outlined v-model="detect.content" auto-grow rows="15" />
                 </div>
                 <div class="d-flex align-center align-self-end justify-end text-body-2 mt-2">
                   <div class="d-inline-flex justify-end">
                     <v-btn id="detection-cancel" text small color="primary" class="align-self-end" @click="cancelDetection()">
                       {{ i18n.cancel }}
                     </v-btn>
-                    <v-btn id="detection-update" text small color="primary" class="align-self-end" @click="saveDetection(false)">
+                    <v-btn id="detection-update" v-if="!detect.isCommunity" text small color="primary" class="align-self-end" @click="saveDetection(false)">
                       {{i18n.update}}
                     </v-btn>
                   </div>
@@ -1097,22 +1095,6 @@
                 <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
                   <!-- Notes -->
                   <v-textarea class="config-editor" outlined v-model="detect.note" auto-grow rows="15" />
-                </div>
-                <div class="d-flex align-center align-self-end justify-end text-body-2 mt-2">
-                  <div class="d-inline-flex justify-end">
-                    <v-btn id="detection-cancel" text small color="primary" class="align-self-end" @click="cancelDetection()">
-                      {{ i18n.cancel }}
-                    </v-btn>
-                    <v-btn id="detection-update" text small color="primary" class="align-self-end" @click="saveDetection(false)">
-                      {{i18n.update}}
-                    </v-btn>
-                  </div>
-                </div>
-              </v-tab-item>
-              <v-tab-item value="signature">
-                <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
-                  <!-- Signature -->
-                  <v-textarea class="config-editor" outlined v-model="detect.content" auto-grow rows="15" />
                 </div>
                 <div class="d-flex align-center align-self-end justify-end text-body-2 mt-2">
                   <div class="d-inline-flex justify-end">
@@ -1196,13 +1178,13 @@
         <div class="mx-sm-12 mx-lg-6 mt-2 mb-6 mb-md-1">
           <!-- Title -->
           <h2 id="playbook-title" @click="startEdit('playbook-title', 'title')" v-if="!isEdit('playbook-title')">{{ playbook.title }}</h2>
-          <v-text-field id="playbook-title-edit" v-else hide-details="auto" outlined v-model="playbook.title" :rules="[rules.required]" persistent-hint :hint="'Playbook Title'" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"></v-text-field>
+          <v-text-field id="playbook-title-edit" v-else hide-details="auto" outlined v-model="playbook.title" :rules="[rules.required]" persistent-hint :hint="i18n.playbookTitle" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"></v-text-field>
         </div>
 
         <div class="row mb-6 mb-md-1 mt-2 mx-lg-6 mx-sm-12">
           <!-- Description -->
           <span id="playbook-description" @click="startEdit('playbook-description', 'description')" v-if="!isEdit('playbook-description')">{{ playbook.description }}</span>
-          <v-textarea id="playbook-description-edit" v-else hide-details="auto" outlined v-model="playbook.description" :rules="[rules.required]" persistent-hint :hint="'Playbook Description'" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)" auto-grow rows="5"></v-textarea>
+          <v-textarea id="playbook-description-edit" v-else hide-details="auto" outlined v-model="playbook.description" :rules="[rules.required]" persistent-hint :hint="i18n.playbookDescription" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)" auto-grow rows="5"></v-textarea>
         </div>
 
         <div class="row mx-sm-8 mx-md-12 mx-lg-4 flex-column flex-md-row">
@@ -1228,23 +1210,23 @@
               <v-tab-item value="notes">
                 <div class="col pt-0" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
                   <!-- PublicID -->
-                  <v-text-field id="playbook-publicId-edit" v-model="playbook.publicId" :rules="[rules.required]" persistent-hint :hint="'Public ID'" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)">
+                  <v-text-field id="playbook-publicId-edit" v-model="playbook.publicId" :rules="[rules.required]" persistent-hint :hint="i18n.publicID" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)">
                     <template v-slot:append v-if="!playbook.publicId">
                       <v-btn id="gen-public-id" text small color="primary" @click="generatePublicID()">Generate</v-btn>
                     </template>
                   </v-text-field>
                   <!-- Contributors -->
-                  <v-combobox id="playbook-contributors" v-model="playbook.contributors" persistent-hint :hint="'Contributors'" multiple>
+                  <v-combobox id="playbook-contributors" v-model="playbook.contributors" persistent-hint :hint="i18n.contributors" multiple>
                     <template #selection="{ item }">
                       <v-chip color="primary">{{item}}</v-chip>
                     </template>
                   </v-combobox>
 
                   <!-- Severity -->
-                  <v-select id="playbook-severity-edit" v-model="playbook.severity" :items="severityOptions" persistent-hint :hint="'Severity'" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
+                  <v-select id="playbook-severity-edit" v-model="playbook.severity" :items="severityOptions" persistent-hint :hint="i18n.severity" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
 
                   <!-- Mechanism -->
-                  <v-select id="playbook-engine-edit" v-model="playbook.mechanism" :items="engineOptions" persistent-hint :hint="'Mechanism'" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
+                  <v-select id="playbook-engine-edit" v-model="playbook.mechanism" :items="engineOptions" persistent-hint :hint="i18n.playbookMechanism" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
 
                   <!-- Tags -->
                   <v-combobox id="playbook-tags" v-model="playbook.tags" :items="tags" persistent-hint :hint="i18n.caseTagsHelp" multiple>
@@ -1283,9 +1265,9 @@
               <v-tab-item value="questions">
                 <div class="col pt-0" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
                   <h2>Add Investigative Question</h2>
-                  <v-text-field id="playbook-question-add" v-model="addQuestion" persistent-hint :hint="'The investigative question written in plain language for human consumption, in the form of a question'"></v-text-field>
-                  <v-text-field id="playbook-context-add" v-model="addContext" persistent-hint :hint="'Provide optional context'"></v-text-field>
-                  <v-combobox id="playbook-datasources-add" v-model="addDataSources" persistent-hint :hint="'The data sources that can be used to answer the question'" multiple>
+                  <v-text-field id="playbook-question-add" v-model="addQuestion" persistent-hint :hint="i18n.playbookQuestionHint"></v-text-field>
+                  <v-text-field id="playbook-context-add" v-model="addContext" persistent-hint :hint="i18n.playbookAddContext"></v-text-field>
+                  <v-combobox id="playbook-datasources-add" v-model="addDataSources" persistent-hint :hint="i18n.playbookDatasources" multiple>
                     <template #selection="{ item }">
                       <v-chip color="primary">{{item}}</v-chip>
                     </template>
@@ -3749,7 +3731,7 @@
                                 <v-btn v-if="canTest(item)" id="test-minion" icon :title="i18n.nodeTest" @click="showTestConfirm(item.id + '_' + item.role)">
                                   <v-icon>fa-file-import</v-icon>
                                 </v-btn>
-                                <v-btn v-if="canUpload(item)" id="import-minion" icon :title="i18n.uploadPcap" @click="showUploadConfirm(item)">
+                                <v-btn v-if="canUpload(item)" id="import-minion" icon :title="i18n.uploadPCAPEVTX" @click="showUploadConfirm(item)">
                                   <v-icon>fa-upload</v-icon>
                                 </v-btn>
                                 <v-btn id="restart-minion" icon :title="item.osNeedsRestart == 1 ? i18n.restartRequiredHelp : i18n.restartMinionHelp" @click="showRestartConfirm(item.id + '_' + item.role)">
