@@ -12,10 +12,12 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/go-chi/chi"
+	"github.com/pkg/errors"
 )
 
 type DetectionHandler struct {
@@ -68,6 +70,11 @@ func (h *DetectionHandler) postDetection(w http.ResponseWriter, r *http.Request)
 	err := web.ReadJson(r, detect)
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	if detect.IsCommunity {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("cannot create community detections using this endpoint"))
 		return
 	}
 
@@ -128,6 +135,26 @@ func (h *DetectionHandler) putDetection(w http.ResponseWriter, r *http.Request) 
 	err := web.ReadJson(r, detect)
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	old, err := h.server.Detectionstore.GetDetection(ctx, detect.Id)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	if old.IsCommunity {
+		// the only editable fields for community rules are IsEnabled, IsReporting, and Note
+		old.IsEnabled = detect.IsEnabled
+		old.IsReporting = detect.IsReporting
+		old.Note = detect.Note
+
+		detect = old
+
+		log.Infof("existing detection %s is a community rule, only updating IsEnabled, IsReporting, and Note", detect.Id)
+	} else if detect.IsCommunity {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("cannot update an existing non-community detection to make it a community detection"))
 		return
 	}
 

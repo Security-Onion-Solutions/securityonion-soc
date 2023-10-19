@@ -335,7 +335,6 @@ func (store *ElasticDetectionstore) UpdateDetection(ctx context.Context, detect 
 	detect.CreateTime = old.CreateTime
 
 	results, err = store.save(ctx, detect, "detection", store.prepareForSave(ctx, &detect.Auditable))
-
 	if err != nil {
 		return nil, err
 	}
@@ -394,16 +393,16 @@ func (store *ElasticDetectionstore) DeleteDetection(ctx context.Context, onionID
 	return detect, err
 }
 
-func (store *ElasticDetectionstore) GetAllCommunitySIDs(ctx context.Context) (map[string]string, error) {
+func (store *ElasticDetectionstore) GetAllCommunitySIDs(ctx context.Context) (map[string]*model.Detection, error) {
 	all, err := store.getAll(ctx, fmt.Sprintf(`_index:"%s" AND %skind:"%s"`, store.index, store.schemaPrefix, "detection"), -1)
 	if err != nil {
 		return nil, err
 	}
 
-	sids := map[string]string{}
+	sids := map[string]*model.Detection{}
 	for _, det := range all {
 		detection := det.(*model.Detection)
-		sids[detection.PublicID] = detection.Id
+		sids[detection.PublicID] = detection
 	}
 
 	return sids, nil

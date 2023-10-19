@@ -141,7 +141,7 @@ func (s *SuricataEngine) watchCommunityRules() {
 
 		dur := time.Since(start)
 
-		log.WithFields(log.Fields{
+ 		log.WithFields(log.Fields{
 			"durationSeconds": dur.Seconds(),
 		}).Info("suricata community rules synced")
 	}
@@ -441,9 +441,10 @@ func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 	errMap = map[string]string{}
 
 	results := struct {
-		Added   int
-		Updated int
-		Removed int
+		Added     int
+		Updated   int
+		Removed   int
+		Unchanged int
 	}{}
 
 	allSettings, err := s.srv.Configstore.GetSettings(ctx)
@@ -486,15 +487,20 @@ func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 		_, modified := modifyIndex[detect.PublicID]
 		detect.IsEnabled = !(disabled || modified)
 
-		id, exists := commSIDs[detect.PublicID]
+		orig, exists := commSIDs[detect.PublicID]
 		if exists {
-			detect.Id = id
+			if orig.Content != detect.Content {
+				detect.Id = orig.Id
 
-			_, err = s.srv.Detectionstore.UpdateDetection(ctx, detect)
-			if err != nil {
-				errMap[detect.PublicID] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
+				_, err = s.srv.Detectionstore.UpdateDetection(ctx, detect)
+				if err != nil {
+					errMap[detect.PublicID] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
+				} else {
+					results.Updated++
+					delete(toDelete, detect.PublicID)
+				}
 			} else {
-				results.Updated++
+				results.Unchanged++
 				delete(toDelete, detect.PublicID)
 			}
 		} else {
@@ -508,7 +514,7 @@ func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 	}
 
 	for sid := range toDelete {
-		_, err = s.srv.Detectionstore.DeleteDetection(ctx, commSIDs[sid])
+		_, err = s.srv.Detectionstore.DeleteDetection(ctx, commSIDs[sid].Id)
 		if err != nil {
 			errMap[sid] = fmt.Sprintf("unable to delete detection; reason=%s", err.Error())
 		} else {
@@ -517,10 +523,11 @@ func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 	}
 
 	log.WithFields(log.Fields{
-		"added":   results.Added,
-		"updated": results.Updated,
-		"removed": results.Removed,
-		"errors":  errMap,
+		"added":     results.Added,
+		"updated":   results.Updated,
+		"removed":   results.Removed,
+		"unchanged": results.Unchanged,
+		"errors":    errMap,
 	}).Info("suricata community diff")
 
 	return errMap, nil

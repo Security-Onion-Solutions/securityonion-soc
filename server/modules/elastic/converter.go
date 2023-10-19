@@ -103,7 +103,7 @@ func makeQuery(store *ElasticEventstore, parsedQuery *model.Query, beginTime tim
 
 	query := make(map[string]interface{})
 	query["query_string"] = queryDetails
-	must := make([]interface{}, 0, 0)
+	must := make([]interface{}, 0)
 	must = append(must, query)
 
 	if !endTime.IsZero() {
@@ -246,7 +246,10 @@ func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSear
 				newSort[field] = sortParams
 				sorting = append(sorting, newSort)
 			}
-			esMap["sort"] = sorting
+
+			if len(sorting) != 0 {
+				esMap["sort"] = sorting
+			}
 		}
 	} else {
 		sort := map[string]string{}
@@ -254,7 +257,9 @@ func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSear
 			sort[field.Field] = field.Order
 		}
 
-		esMap["sort"] = sort
+		if len(sort) != 0 {
+			esMap["sort"] = sort
+		}
 	}
 
 	bytes, err := json.WriteJson(esMap)
@@ -501,7 +506,7 @@ func convertElasticEventToCase(event *model.EventRecord, schemaPrefix string) (*
 }
 
 func convertToStringArray(input []interface{}) []string {
-	out := make([]string, len(input), len(input))
+	out := make([]string, len(input))
 	for idx, value := range input {
 		out[idx] = value.(string)
 	}

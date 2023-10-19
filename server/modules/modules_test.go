@@ -13,22 +13,23 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestBuildModuleMap(tester *testing.T) {
+func TestBuildModuleMap(t *testing.T) {
 	mm := BuildModuleMap(nil)
-	findModule(tester, mm, "elastic")
-	findModule(tester, mm, "elasticcases")
-	findModule(tester, mm, "filedatastore")
-	findModule(tester, mm, "salt")
-	findModule(tester, mm, "httpcase")
-	findModule(tester, mm, "kratos")
-	findModule(tester, mm, "influxdb")
-	findModule(tester, mm, "sostatus")
-	findModule(tester, mm, "statickeyauth")
-	findModule(tester, mm, "thehive")
-	findModule(tester, mm, "suricataengine")
+	findModule(t, mm, "elastic")
+	findModule(t, mm, "elasticcases")
+	findModule(t, mm, "filedatastore")
+	findModule(t, mm, "salt")
+	findModule(t, mm, "httpcase")
+	findModule(t, mm, "kratos")
+	findModule(t, mm, "influxdb")
+	findModule(t, mm, "sostatus")
+	findModule(t, mm, "statickeyauth")
+	findModule(t, mm, "thehive")
+	findModule(t, mm, "suricataengine")
+	findModule(t, mm, "elastalertengine")
 }
 
-func findModule(tester *testing.T, mm map[string]module.Module, module string) {
+func findModule(t *testing.T, mm map[string]module.Module, module string) {
 	_, ok := mm[module]
-	assert.True(tester, ok)
+	assert.True(t, ok)
 }

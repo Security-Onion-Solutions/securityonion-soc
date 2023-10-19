@@ -99,7 +99,7 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 			},
 			"engine": {
 				CustomEnabled: false,
-				Labels:        []string{"suricata", "yara", "elastalert"},
+				Labels:        []string{"suricata", "elastalert"},
 			},
 		}
 	}
