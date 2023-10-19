@@ -45,6 +45,8 @@ func TestSuricataModule(t *testing.T) {
 	err = mod.Start()
 	assert.NoError(t, err)
 
+	assert.True(t, mod.IsRunning())
+
 	err = mod.Stop()
 	assert.NoError(t, err)
 

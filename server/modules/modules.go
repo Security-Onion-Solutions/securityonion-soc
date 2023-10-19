@@ -9,6 +9,7 @@ package modules
 import (
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/elastalert"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/elastic"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/elasticcases"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/filedatastore"
@@ -37,6 +38,7 @@ func BuildModuleMap(srv *server.Server) map[string]module.Module {
 	moduleMap["staticrbac"] = staticrbac.NewStaticRbac(srv)
 	moduleMap["thehive"] = thehive.NewTheHive(srv)
 	moduleMap["suricataengine"] = suricata.NewSuricataEngine(srv)
+	moduleMap["elastalertengine"] = elastalert.NewElastAlertEngine(srv)
 
 	return moduleMap
 }

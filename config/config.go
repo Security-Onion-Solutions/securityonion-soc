@@ -52,5 +52,12 @@ func LoadConfig(filename string, version string, buildTime time.Time) (*Config, 
 		"communityRulesImportFrequencySeconds": float64(5),
 	}
 
+	cfg.Server.Modules["elastalertengine"] = map[string]interface{}{
+		"communityRulesImportFrequencySeconds": float64(600),
+		"sigmaRepo":                            "https://github.com/SigmaHQ/sigma",
+		"sigmaRepoRoot":                        "/tmp/socdev/so/rules/sigma",
+		"gitTimeout":                           float64(600),
+	}
+
 	return cfg, err
 }
