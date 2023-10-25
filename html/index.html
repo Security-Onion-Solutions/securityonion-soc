@@ -3261,8 +3261,9 @@
                 </v-alert>
                 <v-card v-if="oidcEnabled" outlined class="my-4">
                   <v-card-title>{{ i18n.oidc }}</v-card-title>
-                  <v-card-subtitle v-text="i18n.oidcInstructions"></v-card-subtitle>
-                  <v-card-text>
+                  <v-card-subtitle v-text="i18n.oidcHelp"></v-card-subtitle>
+                  <v-card-text v-if="passwordEnabled">
+                    <div class="mb-2" v-text="i18n.oidcLinkHelp"></div>
                     <v-form method="post" :action="authSettingsUrl">
                       <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
                       <div v-for="oidc in oidcProviders">
