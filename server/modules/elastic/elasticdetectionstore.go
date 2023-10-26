@@ -393,8 +393,13 @@ func (store *ElasticDetectionstore) DeleteDetection(ctx context.Context, onionID
 	return detect, err
 }
 
-func (store *ElasticDetectionstore) GetAllCommunitySIDs(ctx context.Context) (map[string]*model.Detection, error) {
-	all, err := store.getAll(ctx, fmt.Sprintf(`_index:"%s" AND %skind:"%s"`, store.index, store.schemaPrefix, "detection"), -1)
+func (store *ElasticDetectionstore) GetAllCommunitySIDs(ctx context.Context, engine *model.EngineName) (map[string]*model.Detection, error) {
+	query := fmt.Sprintf(`_index:"%s" AND %skind:"%s"`, store.index, store.schemaPrefix, "detection")
+	if engine != nil {
+		query += fmt.Sprintf(` AND %sdetection.engine:"%s"`, store.schemaPrefix, *engine)
+	}
+
+	all, err := store.getAll(ctx, query, -1)
 	if err != nil {
 		return nil, err
 	}

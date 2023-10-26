@@ -122,7 +122,7 @@ func (s *SuricataEngine) watchCommunityRules() {
 				return
 			}
 
-			log.WithError(err).Error("unable to sync community detections")
+			log.WithError(err).Error("unable to sync suricata community detections")
 			continue
 		}
 
@@ -141,7 +141,7 @@ func (s *SuricataEngine) watchCommunityRules() {
 
 		dur := time.Since(start)
 
- 		log.WithFields(log.Fields{
+		log.WithFields(log.Fields{
 			"durationSeconds": dur.Seconds(),
 		}).Info("suricata community rules synced")
 	}
@@ -256,9 +256,9 @@ func (s *SuricataEngine) parseRules(content string) ([]*model.Detection, error) 
 				case "INFORMATIONAL":
 					severity = model.SeverityInformational
 				case "MINOR":
-					severity = model.SeverityMinor
+					severity = model.SeverityLow
 				case "MAJOR":
-					severity = model.SeverityMajor
+					severity = model.SeverityHigh
 				case "CRITICAL":
 					severity = model.SeverityCritical
 				}
@@ -468,7 +468,7 @@ func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 	disabledIndex := indexEnabled(disabledLines, true)
 	modifyIndex := indexModify(modifyLines)
 
-	commSIDs, err := s.srv.Detectionstore.GetAllCommunitySIDs(ctx)
+	commSIDs, err := s.srv.Detectionstore.GetAllCommunitySIDs(ctx, util.Ptr(model.EngineNameSuricata))
 	if err != nil {
 		return nil, err
 	}

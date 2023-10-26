@@ -20,6 +20,7 @@ const (
 type SigmaLevel string
 
 const (
+	SigmaLevelUnknown       SigmaLevel = "unknown"
 	SigmaLevelInformational SigmaLevel = "informational"
 	SigmaLevelLow           SigmaLevel = "low"
 	SigmaLevelMedium        SigmaLevel = "medium"
@@ -39,6 +40,7 @@ const (
 
 type SigmaRule struct {
 	Title          string                 `yaml:"title"`
+	ID             *string                `yaml:"id"`
 	LogSource      LogSource              `yaml:"logsource"`
 	Detection      Detection              `yaml:"detection"`
 	Status         *SigmaStatus           `yaml:"status"`

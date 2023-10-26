@@ -25,8 +25,9 @@ const (
 
 	SeverityUnknown       Severity = "unknown"
 	SeverityInformational Severity = "informational"
-	SeverityMinor         Severity = "minor"
-	SeverityMajor         Severity = "major"
+	SeverityLow           Severity = "low"
+	SeverityMedium        Severity = "medium"
+	SeverityHigh          Severity = "high"
 	SeverityCritical      Severity = "critical"
 
 	IDTypeUUID IDType = "uuid"
