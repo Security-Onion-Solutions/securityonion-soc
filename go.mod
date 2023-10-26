@@ -20,20 +20,14 @@ require (
 )
 
 require (
-	github.com/go-git/go-git/v5 v5.9.0
+	github.com/google/go-github/v56 v56.0.0
 	github.com/pkg/errors v0.9.1
 	github.com/samber/lo v1.39.0
 	github.com/tj/assert v0.0.3
 )
 
 require (
-	dario.cat/mergo v1.0.0 // indirect
-	github.com/Microsoft/go-winio v0.6.1 // indirect
-	github.com/ProtonMail/go-crypto v0.0.0-20230828082145-3c4c8a2d2371 // indirect
-	github.com/acomagu/bufpipe v1.0.4 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
-	github.com/cloudflare/circl v1.3.3 // indirect
-	github.com/cyphar/filepath-securejoin v0.2.4 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/elastic/elastic-transport-go/v8 v8.3.0 // indirect
 	github.com/influxdata/line-protocol v0.0.0-20210922203350-b1ad95c89adf // indirect
@@ -46,15 +40,14 @@ require (
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/pjbgf/sha1cd v0.3.0 // indirect
+	github.com/google/go-querystring v1.1.0 // indirect
+	github.com/kr/pretty v0.3.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/sergi/go-diff v1.1.0 // indirect
-	github.com/skeema/knownhosts v1.2.0 // indirect
+	github.com/rogpeppe/go-internal v1.11.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	golang.org/x/exp v0.0.0-20231214170342-aacd6d4b4611 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	golang.org/x/exp v0.0.0-20220303212507-bbda1eaf7a17 // indirect
-	golang.org/x/mod v0.12.0 // indirect
-	golang.org/x/tools v0.13.0 // indirect
-	gopkg.in/warnings.v0 v0.1.2 // indirect
+	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
