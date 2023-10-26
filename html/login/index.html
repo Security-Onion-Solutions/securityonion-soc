@@ -56,18 +56,42 @@
           </v-row>
           <v-row>
             <v-col xs12>
-              <v-form v-if="!webauthnForm.continue" id="loginForm" v-model="form.valid" method="post" :action="authLoginUrl">
+              <div v-if="!webauthnForm.continue && oidc.length > 0" class="mb-4">
+                <v-form v-for="provider in oidc" method="post" :action="authLoginUrl">
+                  <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
+                  <v-text-field name="provider" :value="provider" class="d-none"></v-text-field>
+                  <v-btn :id="'oidc_submit_' + provider" type="submit">
+                    <v-icon left v-if="provider.toLowerCase() == 'microsoft'">fa-brands fa-microsoft</v-icon>
+                    <v-icon left  v-else-if="provider.toLowerCase() == 'google'">fa-brands fa-google</v-icon>
+                    <v-icon left  v-else-if="provider.toLowerCase() == 'github'">fa-brands fa-github</v-icon>
+                    <v-icon left  v-else>fa-arrow-right-to-bracket</v-icon>
+                    {{ i18n.loginOidc + ' ' + provider }}
+                  </v-btn>
+                </v-form>
+              </div>
+
+              <v-form v-if="!webauthnForm.continue && passwordEnabled" id="loginForm" v-model="form.valid" method="post" :action="authLoginUrl">
                 <v-card-subtitle v-text="i18n.passwordLoginMethod"></v-card-subtitle>
                 <v-card-text>
-                  <v-text-field v-if="form.method == 'password'" id="password_identifier" name="identifier" v-model="form.email" :placeholder="i18n.email" :hint="i18n.emailHelp" autofocus="true" :rules="[rules.required]"></v-text-field>
-                  <v-text-field v-if="form.method == 'password'"  name="password" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required]"></v-text-field>
-                  <div v-if="form.method == 'totp'">
-                    <div class="mb-4">{{ i18n.totpCodeHelp }}</div>
-                    <v-otp-input id="totp" autocomplete="off" v-model="form.totpCode" :length="totpCodeLength" @finish="submitTotp"></v-otp-input>
-                    <v-text-field name="totp_code" id="totp_code" v-model="form.totpCode" class="d-none"></v-text-field>
-                  </div>
+                  <v-text-field id="password_identifier" name="identifier" v-model="form.email" :placeholder="i18n.email" :hint="i18n.emailHelp" autofocus="true" :rules="[rules.required]"></v-text-field>
+                  <v-text-field name="password" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required]"></v-text-field>
                   <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
-                  <v-text-field name="method" v-model="form.method" class="d-none"></v-text-field>
+                  <v-text-field name="method" value="password" class="d-none"></v-text-field>
+                </v-card-text>
+                <v-card-actions>
+                  <v-spacer></v-spacer>
+                  <v-btn id="password_submit" type="submit" :disabled="!form.valid" text color="primary" v-text="i18n.login"></v-btn>
+                </v-card-actions>
+              </v-form>
+
+              <v-form v-if="!webauthnForm.continue && !passwordEnabled && totpEnabled" id="loginForm" v-model="form.valid" method="post" :action="authLoginUrl">
+                <v-card-subtitle v-text="i18n.totp"></v-card-subtitle>
+                <v-card-text>
+                  <div class="mb-4">{{ i18n.totpCodeHelp }}</div>
+                  <v-otp-input id="totp" autocomplete="off" v-model="form.totpCode" :length="totpCodeLength" @finish="submitTotp"></v-otp-input>
+                  <v-text-field name="totp_code" id="totp_code" v-model="form.totpCode" class="d-none"></v-text-field>
+                  <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
+                  <v-text-field name="method" value="totp" class="d-none"></v-text-field>
                 </v-card-text>
                 <v-card-actions>
                   <v-spacer></v-spacer>
