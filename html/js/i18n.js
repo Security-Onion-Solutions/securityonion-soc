@@ -510,6 +510,7 @@ const i18n = {
       users: 'Users',
       value: 'Value',
       version: 'Version',
+      versionEolHelp: 'The Security Onion 2.3 platform is nearing or has exceeded its End-of-Life (EOL). Upgrading to the latest Security Onion platform version is highly recommended.',
       view: 'View',
       viewCase: 'Case Details',
       weeks: 'weeks',

@@ -95,6 +95,13 @@ test('populateUserDetails', async () => {
   expect(obj.owner).toBe('hi@there.net');
 });
 
+test('eol_color', () => {
+  const dec23 = Date.parse("2023-12-20T01:01:59.000Z");
+  const may24 = Date.parse("2024-05-01T01:01:59.000Z");
+  expect(app.eol_color(dec23)).toBe("warning");
+  expect(app.eol_color(may24)).toBe("error");
+});
+
 test('loadServerSettings', async () => {
   const fakeInfo = {
     version: 'myVersion',

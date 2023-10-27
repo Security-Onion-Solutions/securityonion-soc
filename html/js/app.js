@@ -739,6 +739,13 @@ $(document).ready(function() {
         
         return "#"+RR+GG+BB;
       },
+      eol_color(nowDate) {
+        const eolDate = Date.parse("2024-04-06T00:00:00.000Z");
+        if (nowDate > eolDate) {
+          return "error";
+        } 
+        return "warning";
+      },
       truncate(value, max) {
         const ellipses = "...";
         if (value.length > max + ellipses.length) {
