@@ -61,11 +61,10 @@ func main() {
 			"buildTime": cfg.BuildTime,
 		}).Info("Version Information")
 
-		licensing.Init(cfg.LicenseKey)
-
 		moduleMgr := module.NewModuleManager()
 		var srv *server.Server
 		if cfg.Server != nil {
+			licensing.Init(cfg.LicenseKey)
 			srv = server.NewServer(cfg.Server, cfg.Version)
 			err = moduleMgr.LaunchModules(serverModules.BuildModuleMap(srv), cfg.Server.Modules, cfg.Server.ModuleFailuresIgnored)
 			if err == nil {
