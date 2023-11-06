@@ -347,7 +347,7 @@
               <v-expansion-panel>
                 <v-expansion-panel-header id="huntOptionsHeader">{{i18n.options}}</v-expansion-panel-header>
                 <v-expansion-panel-content>
-                  <v-switch v-if="isCategory('alerts') || isCategory('cases')" id="enable-advanced" :disabled="loading()" v-model="advanced" dense hide-details class="my-0" :label="i18n.advanced"></v-switch>
+                  <v-switch v-if="isCategory('alerts') || isCategory('cases') || isCategory('detections')" id="enable-advanced" :disabled="loading()" v-model="advanced" dense hide-details class="my-0" :label="i18n.advanced"></v-switch>
                   <v-switch v-if="isAdvanced()" id="auto-hunt" :disabled="loading()" v-model="autohunt" dense hide-details class="my-0" :label="i18n.autohunt"></v-switch>
                   <v-switch v-for="toggle in filterToggles" :key="toggle.name"
                     :id="'filterToggle-' + toggle.name"
@@ -466,7 +466,7 @@
             </span>
           </v-col>
         </v-row>
-        <v-col id="graphs" v-if="loaded && isAdvanced()">
+        <v-col id="graphs" v-if="loaded && isAdvanced() && !isCategory('detections')">
           <v-toolbar dense flat>
             <v-toolbar-title>{{ i18n.standardMetrics }}</v-toolbar-title>
             <v-spacer />
@@ -998,7 +998,7 @@
 
                   <!-- Signature -->
                   <div class="font-weight-bold mb-1">{{ i18n.signature }}:</div>
-                  <v-textarea class="config-editor" outlined v-model="detect.content" auto-grow rows="10" :rules="[rules.required]" />
+                  <v-textarea class="config-editor" outlined v-model="detect.content" rows="10" :rules="[rules.required]" />
                 </div>
                 <div class="d-flex align-center align-self-end text-body-2 mt-2">
                   <div class="d-inline-flex justify-end">
@@ -1670,7 +1670,7 @@
                               <v-alert v-if="item.oidcStatus == 'enabled'" class="mt-2" type="warning" icon="fa-shield-halved" text dense>
                                 {{ i18n.oidcResetPasswordHelp }}
                               </v-alert>
-              
+
                               <v-form v-model="form.valid">
                                 <v-text-field id="password-input" v-model="form.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'"
                                   @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'"
@@ -4505,6 +4505,7 @@
     <script src="js/external/purify-3.0.6.min.js"></script>
     <script src="js/external/chartjs-chart-sankey-0.12.0.min.js"></script>
     <script src="js/external/chartjs-adapter-moment-1.0.0.min.js"></script>
+    <script src="js/external/js-yaml.min.js"></script>
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>

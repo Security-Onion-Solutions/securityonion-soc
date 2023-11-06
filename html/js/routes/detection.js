@@ -170,6 +170,11 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 						// nothing, clear publicId
 					}
 					break;
+				case 'elastalert':
+					try {
+						pid = this.extractElastAlertPublicID();
+					} catch (e) {}
+					break;
 			}
 
 			this.detect.publicId = pid;
@@ -277,6 +282,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			}
 
 			return results[1];
+		},
+		extractElastAlertPublicID() {
+			const yaml = jsyaml.load(this.detect.content);
+			return yaml['id'];
 		},
 		print(x) {
 			console.log(x);

@@ -86,6 +86,26 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 				Name:  "All",
 				Query: "_id:*",
 			},
+			{
+				Name:  "Enabled",
+				Query: "so_detection.isEnabled:true",
+			},
+			{
+				Name:  "Suricata",
+				Query: "so_detection.engine:suricata",
+			},
+			{
+				Name:  "ElastAlert",
+				Query: "so_detection.engine:elastalert",
+			},
+			{
+				Name:  "Suricata Enabled",
+				Query: "so_detection.engine:suricata AND so_detection.isEnabled:true",
+			},
+			{
+				Name:  "ElastAlert Enabled",
+				Query: "so_detection.engine:elastalert AND so_detection.isEnabled:true",
+			},
 		}
 	}
 
@@ -95,7 +115,7 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 		detection.Presets = map[string]config.PresetParameters{
 			"severity": {
 				CustomEnabled: false,
-				Labels:        []string{"unknown", "informational", "minor", "major", "critical"},
+				Labels:        []string{"unknown", "informational", "low", "medium", "high", "critical"},
 			},
 			"engine": {
 				CustomEnabled: false,
