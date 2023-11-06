@@ -262,6 +262,7 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 }
 
 func SyncLocalDetections(ctx context.Context, srv *Server, detections []*model.Detection) (errMap map[string]string, err error) {
+	errMap = map[string]string{} // map[det.PublicID]error
 	defer func() {
 		if len(errMap) == 0 {
 			errMap = nil

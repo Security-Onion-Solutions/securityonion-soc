@@ -47,13 +47,12 @@ func LoadConfig(filename string, version string, buildTime time.Time) (*Config, 
 
 	// TODO: remove when put in config file
 	cfg.Server.Modules["suricataengine"] = map[string]interface{}{
-		"communityRulesFile":                   "/nsm/rules/suricata/emerging-all.rules",
-		"rulesFingerprintFile":                 "/tmp/socdev/so/conf/soc/emerging-all.fingerprint", // "/opt/so/conf/soc/emerging-all.fingerprint",
-		"communityRulesImportFrequencySeconds": float64(5),
+		"communityRulesFile":   "/nsm/rules/suricata/emerging-all.rules",
+		"rulesFingerprintFile": "/tmp/socdev/so/conf/soc/emerging-all.fingerprint", // "/opt/so/conf/soc/emerging-all.fingerprint",
 	}
 
 	cfg.Server.Modules["elastalertengine"] = map[string]interface{}{
-		"communityRulesImportFrequencySeconds": float64(5), // not a recommended value, I'm impatient
+		"communityRulesImportFrequencySeconds": float64(61), // not a recommended value, I'm impatient
 		"elastAlertRulesFolder":                "/tmp/socdev/so/rules/elastalert",
 		"rulesFingerprintFile":                 "/tmp/socdev/so/conf/soc/sigma.fingerprint",
 		"sigmaRulePackages":                    "all",

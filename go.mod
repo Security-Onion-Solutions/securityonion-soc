@@ -20,10 +20,8 @@ require (
 )
 
 require (
-	github.com/google/go-github/v56 v56.0.0
 	github.com/pkg/errors v0.9.1
 	github.com/samber/lo v1.39.0
-	github.com/tj/assert v0.0.3
 )
 
 require (

@@ -3,7 +3,7 @@ package elastalert
 import (
 	"testing"
 
-	"github.com/tj/assert"
+	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
 )
 

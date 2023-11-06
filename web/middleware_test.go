@@ -13,7 +13,7 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 
-	"github.com/tj/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 type TestHandler struct {

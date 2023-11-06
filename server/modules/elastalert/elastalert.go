@@ -23,19 +23,25 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
 	"github.com/apex/log"
-	"github.com/google/go-github/v56/github"
+	"gopkg.in/yaml.v3"
 )
 
 var errModuleStopped = fmt.Errorf("module has stopped running")
 
+var acceptedExtensions = map[string]bool{
+	".yml":  true,
+	".yaml": true,
+}
+
 type ElastAlertEngine struct {
 	srv                                  *server.Server
 	communityRulesImportFrequencySeconds int
-	sigmaRepo                            string
+	sigmaPackageDownloadTemplate         string
 	elastAlertRulesFolder                string
 	rulesFingerprintFile                 string
 	sigconverterUrl                      string
 	sigmaRulePackages                    []string
+	sigmaConversionTarget                string
 	isRunning                            bool
 	thread                               *sync.WaitGroup
 }
@@ -51,11 +57,14 @@ func (e *ElastAlertEngine) PrerequisiteModules() []string {
 }
 
 func (e *ElastAlertEngine) Init(config module.ModuleConfig) error {
+	e.thread = &sync.WaitGroup{}
+
 	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", 600)
-	e.sigmaRepo = module.GetStringDefault(config, "sigmaRepo", "https://github.com/SigmaHQ/sigma")
+	e.sigmaPackageDownloadTemplate = module.GetStringDefault(config, "sigmaPackageDownloadTemplate", "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip")
 	e.elastAlertRulesFolder = module.GetStringDefault(config, "elastAlertRulesFolder", "/opt/so/rules/elastalert")
 	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", "/opt/so/conf/soc/sigma.fingerprint")
 	e.sigconverterUrl = module.GetStringDefault(config, "sigconverterUrl", "http://manager:8000/sigma")
+	e.sigmaConversionTarget = module.GetStringDefault(config, "sigmaConversionTarget", "eql")
 
 	pkgs := module.GetStringDefault(config, "sigmaRulePackages", "core")
 	e.parseSigmaPackages(pkgs)
@@ -96,13 +105,13 @@ func (e *ElastAlertEngine) parseSigmaPackages(cfg string) {
 	set := map[string]struct{}{}
 
 	for _, pkg := range pkgs {
+		pkg = strings.TrimSpace(pkg)
 		switch pkg {
 		case "all":
 			set["all_rules"] = struct{}{}
-		case "emerging_threats_addon":
-			set["emerging_threats"] = struct{}{}
+		case "emerging_threats":
+			set["emerging_threats_addon"] = struct{}{}
 		default:
-			pkg = strings.TrimSpace(pkg)
 			if pkg != "" {
 				set[pkg] = struct{}{}
 			}
@@ -114,7 +123,7 @@ func (e *ElastAlertEngine) parseSigmaPackages(cfg string) {
 		delete(set, "core++")
 		delete(set, "core+")
 		delete(set, "core")
-		delete(set, "emerging_threats")
+		delete(set, "emerging_threats_addon")
 	}
 
 	_, ok = set["core++"]
@@ -135,10 +144,51 @@ func (e *ElastAlertEngine) parseSigmaPackages(cfg string) {
 }
 
 func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections []*model.Detection) (errMap map[string]string, err error) {
-	return nil, nil
+	errMap = map[string]string{} // map[publicID]error
+	defer func() {
+		if len(errMap) == 0 {
+			errMap = nil
+		}
+	}()
+
+	index, err := e.indexExistingRules()
+	if err != nil {
+		return nil, fmt.Errorf("unable to index existing rules: %w", err)
+	}
+
+	for _, det := range detections {
+		path := index[det.PublicID]
+		if path == "" {
+			path = filepath.Join(e.elastAlertRulesFolder, fmt.Sprintf("%s.yml", det.PublicID))
+		}
+
+		if det.IsEnabled {
+			eaRule, err := e.sigmaToElastAlert(ctx, det)
+			if err != nil {
+				errMap[det.PublicID] = fmt.Sprintf("unable to convert sigma to elastalert: %s", err)
+				continue
+			}
+
+			err = os.WriteFile(path, []byte(eaRule), 0644)
+			if err != nil {
+				errMap[det.PublicID] = fmt.Sprintf("unable to write enabled detection file: %s", err)
+				continue
+			}
+		} else {
+			// was enabled, no longer is enabled: Disable
+			err = os.Remove(path)
+			if err != nil && !os.IsNotExist(err) {
+				errMap[det.PublicID] = fmt.Sprintf("unable to remove disabled detection file: %s", err)
+				continue
+			}
+		}
+	}
+
+	return errMap, nil
 }
 
 func (e *ElastAlertEngine) startCommunityRuleImport() {
+	e.thread.Add(1)
 	defer func() {
 		e.thread.Done()
 		e.isRunning = false
@@ -241,11 +291,6 @@ func (e *ElastAlertEngine) parseRules(pkgZips map[string][]byte) (detections []*
 		}
 	}()
 
-	acceptedExtensions := map[string]bool{
-		".yml":  true,
-		".yaml": true,
-	}
-
 	for pkg, zipData := range pkgZips {
 		reader, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
 		if err != nil {
@@ -283,8 +328,6 @@ func (e *ElastAlertEngine) parseRules(pkgZips map[string][]byte) (detections []*
 
 			if rule.ID != nil {
 				id = *rule.ID
-			} else {
-				fmt.Println()
 			}
 
 			sev := model.SeverityUnknown
@@ -319,7 +362,7 @@ func (e *ElastAlertEngine) parseRules(pkgZips map[string][]byte) (detections []*
 }
 
 func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detections []*model.Detection) (errMap map[string]error, err error) {
-	index, err := e.indexExistingRules()
+	existing, err := e.indexExistingRules()
 	if err != nil {
 		return nil, err
 	}
@@ -329,9 +372,15 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 		return nil, err
 	}
 
+	index := map[string]string{}
 	toDelete := map[string]struct{}{} // map[publicID]struct{}
 	for _, det := range community {
 		toDelete[det.PublicID] = struct{}{}
+
+		path, ok := existing[det.PublicID]
+		if ok {
+			index[det.PublicID] = path
+		}
 	}
 
 	results := struct {
@@ -350,12 +399,10 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 			path = index[det.Title]
 		}
 
-		det.IsEnabled = path != ""
-
 		// 1. Save sigma Detection to ElasticSearch
 		oldDet, exists := community[det.PublicID]
 		if exists {
-			det.Id = oldDet.Id
+			det.IsEnabled, det.Id = oldDet.IsEnabled, oldDet.Id
 			if oldDet.Content != det.Content {
 				_, err = e.srv.Detectionstore.UpdateDetection(ctx, det)
 				if err != nil {
@@ -383,18 +430,27 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 		if det.IsEnabled {
 			// 2. if enabled, send data to docker container to get converted to query
 
-			rule, err := e.sigmaToElastAlert(ctx, det.Content) // get sigma from docker container
+			rule, err := e.sigmaToElastAlert(ctx, det) // get sigma from docker container
 			if err != nil {
 				errMap[det.PublicID] = fmt.Errorf("unable to convert sigma to elastalert: %s", err)
 				continue
 			}
 
-			_ = rule
 			// 3. put query in /opt/so/rules/sigma for salt to pick up
+			if path == "" {
+				path = filepath.Join(e.elastAlertRulesFolder, fmt.Sprintf("%s.yml", det.PublicID))
+			}
 
-			err = nil // os.WriteFile(path, []byte(rule), 0644)
+			err = os.WriteFile(path, []byte(rule), 0644)
 			if err != nil {
 				errMap[det.PublicID] = fmt.Errorf("unable to write enabled detection file: %s", err)
+				continue
+			}
+		} else if path != "" {
+			// detection is disabled but a file exists, remove it
+			err = os.Remove(path)
+			if err != nil {
+				errMap[det.PublicID] = fmt.Errorf("unable to remove disabled detection file: %s", err)
 				continue
 			}
 		}
@@ -429,49 +485,11 @@ func (e *ElastAlertEngine) downloadSigmaPackages(ctx context.Context) (zipData m
 		}
 	}()
 
-	gh := github.NewClient(nil)
-
-	release, _, err := gh.Repositories.GetLatestRelease(ctx, "SigmaHQ", "sigma")
-	if err != nil {
-		errMap["sigma"] = err
-		return nil, errMap
-	}
-
-	pkgs := map[string]string{} // map[pkgName]downloadUrl
-
-	// organize assets
-	for _, asset := range release.Assets {
-		name := strings.ToLower(asset.GetName())
-		if !strings.HasSuffix(name, ".zip") {
-			continue
-		}
-
-		link := asset.GetBrowserDownloadURL()
-
-		// Must be if/else-if so the order is correct.
-		// A switch statement might check "core" before "core++"
-		if strings.Contains(name, "all_rules") {
-			pkgs["all_rules"] = link
-		} else if strings.Contains(name, "core++") {
-			pkgs["core++"] = link
-		} else if strings.Contains(name, "core+") {
-			pkgs["core+"] = link
-		} else if strings.Contains(name, "core") {
-			pkgs["core"] = link
-		} else if strings.Contains(name, "emerging_threats") {
-			pkgs["emerging_threats"] = link
-		}
-	}
-
 	stats := map[string]int{} // map[pkgName]fileSize
 	zipData = map[string][]byte{}
 
 	for _, pkg := range e.sigmaRulePackages {
-		download, ok := pkgs[pkg]
-		if !ok {
-			log.WithField("package", pkg).Warn("unknown sigma package")
-			continue
-		}
+		download := fmt.Sprintf(e.sigmaPackageDownloadTemplate, pkg)
 
 		resp, err := http.Get(download)
 		if err != nil {
@@ -495,9 +513,11 @@ func (e *ElastAlertEngine) downloadSigmaPackages(ctx context.Context) (zipData m
 
 	log.WithField("downloadSizes", stats).Info("downloaded sigma packages")
 
-	return zipData, nil
+	return zipData, errMap
 }
 
+// indexExistingRules maps the publicID of a detection to the path of the rule file.
+// Note that it indexes ALL rules and not just community rules.
 func (e *ElastAlertEngine) indexExistingRules() (index map[string]string, err error) {
 	index = map[string]string{} // map[id | title]path
 
@@ -513,21 +533,12 @@ func (e *ElastAlertEngine) indexExistingRules() (index map[string]string, err er
 
 		filename := filepath.Join(e.elastAlertRulesFolder, rule.Name())
 
-		data, err := os.ReadFile(filename)
-		if err != nil {
-			return nil, fmt.Errorf("unable to read elastalert rule file %s: %w", filename, err)
+		ext := filepath.Ext(rule.Name())
+		if !acceptedExtensions[strings.ToLower(ext)] {
+			continue
 		}
 
-		rule, err := ParseElastAlertRule(data)
-		if err != nil {
-			return nil, fmt.Errorf("unable to parse elastalert rule file %s: %w", filename, err)
-		}
-
-		id := rule.Title
-
-		if rule.ID != nil {
-			id = *rule.ID
-		}
+		id := strings.TrimSuffix(rule.Name(), ext)
 
 		index[id] = filename
 	}
@@ -535,7 +546,7 @@ func (e *ElastAlertEngine) indexExistingRules() (index map[string]string, err er
 	return index, nil
 }
 
-func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, sigma string) (string, error) {
+func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Detection) (string, error) {
 	// wrapper for the payload
 	ruleWrapper := struct {
 		Rule     string   `json:"rule"`
@@ -543,9 +554,9 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, sigma string) 
 		Target   string   `json:"target"`
 		Format   string   `json:"format"`
 	}{
-		Rule:     base64.StdEncoding.EncodeToString([]byte(sigma)),
+		Rule:     base64.StdEncoding.EncodeToString([]byte(det.Content)),
 		Pipeline: []string{},
-		Target:   "eql",
+		Target:   e.sigmaConversionTarget,
 		Format:   "default",
 	}
 
@@ -570,14 +581,206 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, sigma string) 
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return "", fmt.Errorf("sigconverter returned non-200 status code: %d", resp.StatusCode)
-	}
-
-	elastRule, err := io.ReadAll(resp.Body)
+	rawRule, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
 
-	return string(elastRule), nil
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return "", fmt.Errorf("sigconverter returned non-200 status code: %d", resp.StatusCode)
+	}
+
+	rule := string(rawRule)
+
+	if strings.HasPrefix(rule, "Error:") {
+		rule = strings.TrimSpace(strings.TrimPrefix(rule, "Error:"))
+		return "", fmt.Errorf("sigconverter returned error: %s", rule)
+	}
+
+	elastRule, err := wrapRule(det, string(rawRule))
+	if err != nil {
+		return "", fmt.Errorf("unable to wrap rule: %w", err)
+	}
+
+	return elastRule, nil
+}
+
+type CustomWrapper struct {
+	PlayTitle     string   `yaml:"play_title"`
+	PlayID        string   `yaml:"play_id"`
+	EventModule   string   `yaml:"event.module"`
+	EventDataset  string   `yaml:"event.dataset"`
+	EventSeverity int      `yaml:"event.severity"`
+	RuleCategory  string   `yaml:"rule.category"`
+	SigmaLevel    string   `yaml:"sigma_level"`
+	Alert         []string `yaml:"alert"`
+
+	Index       string                   `yaml:"index"`
+	Name        string                   `yaml:"name"`
+	Realert     *TimeFrame               `yaml:"realert,omitempty"` // or 0
+	Type        string                   `yaml:"type"`
+	Filter      []map[string]interface{} `yaml:"filter"`
+	PlayUrl     string                   `yaml:"play_url"`
+	KibanaPivot string                   `yaml:"kibana_pivot"`
+	SocPivot    string                   `yaml:"soc_pivot"`
+}
+
+type TimeFrame struct {
+	Milliseconds *int    `yaml:"milliseconds,omitempty"`
+	Seconds      *int    `yaml:"seconds,omitempty"`
+	Minutes      *int    `yaml:"minutes,omitempty"`
+	Hours        *int    `yaml:"hours,omitempty"`
+	Days         *int    `yaml:"days,omitempty"`
+	Weeks        *int    `yaml:"weeks,omitempty"`
+	Schedule     *string `yaml:"schedule,omitempty"`
+}
+
+func (dur *TimeFrame) SetSeconds(s int) {
+	dur.Milliseconds = nil
+	dur.Minutes = nil
+	dur.Hours = nil
+	dur.Days = nil
+	dur.Weeks = nil
+	dur.Schedule = nil
+	dur.Seconds = util.Ptr(s)
+}
+
+func (dur *TimeFrame) SetMilliseconds(m int) {
+	dur.Seconds = nil
+	dur.Minutes = nil
+	dur.Hours = nil
+	dur.Days = nil
+	dur.Weeks = nil
+	dur.Schedule = nil
+	dur.Milliseconds = util.Ptr(m)
+}
+
+func (dur *TimeFrame) SetMinutes(m int) {
+	dur.Milliseconds = nil
+	dur.Seconds = nil
+	dur.Hours = nil
+	dur.Days = nil
+	dur.Weeks = nil
+	dur.Schedule = nil
+	dur.Minutes = util.Ptr(m)
+}
+
+func (dur *TimeFrame) SetHours(h int) {
+	dur.Milliseconds = nil
+	dur.Seconds = nil
+	dur.Minutes = nil
+	dur.Days = nil
+	dur.Weeks = nil
+	dur.Schedule = nil
+	dur.Hours = util.Ptr(h)
+}
+
+func (dur *TimeFrame) SetDays(d int) {
+	dur.Milliseconds = nil
+	dur.Seconds = nil
+	dur.Minutes = nil
+	dur.Hours = nil
+	dur.Weeks = nil
+	dur.Schedule = nil
+	dur.Days = util.Ptr(d)
+}
+
+func (dur *TimeFrame) SetWeeks(w int) {
+	dur.Milliseconds = nil
+	dur.Seconds = nil
+	dur.Minutes = nil
+	dur.Hours = nil
+	dur.Days = nil
+	dur.Schedule = nil
+	dur.Weeks = util.Ptr(w)
+}
+
+func (dur *TimeFrame) SetSchedule(w string) {
+	dur.Milliseconds = nil
+	dur.Seconds = nil
+	dur.Minutes = nil
+	dur.Hours = nil
+	dur.Days = nil
+	dur.Weeks = nil
+	dur.Schedule = util.Ptr(w)
+}
+
+func (dur TimeFrame) MarshalYAML() (interface{}, error) {
+	if dur.Milliseconds == nil &&
+		dur.Seconds == nil &&
+		dur.Minutes == nil &&
+		dur.Hours == nil &&
+		dur.Days == nil &&
+		dur.Weeks == nil &&
+		dur.Schedule == nil {
+		return 0, nil
+	}
+
+	type Alias TimeFrame
+
+	return struct {
+		Alias `yaml:",inline"`
+	}{(Alias)(dur)}, nil
+}
+
+func (dur *TimeFrame) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var zero int
+
+	err := unmarshal(&zero)
+	if err == nil {
+		return nil
+	}
+
+	type Alias *TimeFrame
+
+	dur = &TimeFrame{}
+
+	err = unmarshal(struct {
+		A Alias `yaml:",inline"`
+	}{(Alias)(dur)})
+
+	return err
+}
+
+func wrapRule(det *model.Detection, rule string) (string, error) {
+	severities := map[model.Severity]int{
+		model.SeverityUnknown:       0,
+		model.SeverityInformational: 1,
+		model.SeverityLow:           2,
+		model.SeverityMedium:        3,
+		model.SeverityHigh:          4,
+		model.SeverityCritical:      5,
+	}
+
+	sevNum := severities[det.Severity]
+
+	wrapper := &CustomWrapper{
+		PlayTitle:     det.Title,
+		PlayID:        det.Id,
+		EventModule:   "elastalert",
+		EventDataset:  "elastalert.alert",
+		EventSeverity: sevNum,
+		RuleCategory:  "TBD",
+		SigmaLevel:    string(det.Severity),
+		Alert:         []string{"modules.so.playbook-es.PlaybookESAlerter"},
+		Index:         ".ds-logs-*",
+		Name:          fmt.Sprintf("%s - %s", det.Title, det.Id),
+		Realert:       nil,
+		Type:          "any",
+		Filter: []map[string]interface{}{
+			{
+				"eql": rule,
+			},
+		},
+		PlayUrl:     "play_url",
+		KibanaPivot: "kibana_pivot",
+		SocPivot:    "soc_pivot",
+	}
+
+	rawYaml, err := yaml.Marshal(wrapper)
+	if err != nil {
+		return "", err
+	}
+
+	return string(rawYaml), nil
 }
