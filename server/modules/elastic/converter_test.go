@@ -439,7 +439,7 @@ func TestConvertElasticEventToArtifact(t *testing.T) {
 	event.Payload["so_artifact.md5"] = "myMd5"
 	event.Payload["so_artifact.sha1"] = "mySha1"
 	event.Payload["so_artifact.sha256"] = "mySha256"
-	tags := make([]interface{}, 2, 2)
+	tags := make([]interface{}, 2)
 	tags[0] = "tag1"
 	tags[1] = "tag2"
 	event.Payload["so_artifact.tags"] = tags

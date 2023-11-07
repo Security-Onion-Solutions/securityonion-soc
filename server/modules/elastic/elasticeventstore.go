@@ -453,7 +453,7 @@ func (store *ElasticEventstore) updateDocuments(ctx context.Context, client *ela
 func (store *ElasticEventstore) refreshCache(ctx context.Context) {
 	store.cacheLock.Lock()
 	defer store.cacheLock.Unlock()
-	if store.cacheTime.IsZero() || time.Now().Sub(store.cacheTime) > store.cacheMs {
+	if store.cacheTime.IsZero() || time.Since(store.cacheTime) > store.cacheMs {
 		err := store.refreshCacheFromFieldCaps(ctx)
 		if err == nil {
 			store.cacheTime = time.Now()

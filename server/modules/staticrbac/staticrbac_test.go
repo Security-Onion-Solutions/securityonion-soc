@@ -23,11 +23,11 @@ func TestInit(tester *testing.T) {
 	err := auth.Init(cfg)
 	assert.Error(tester, err)
 
-	array := make([]interface{}, 1, 1)
+	array := make([]interface{}, 1)
 	array[0] = "MyValue1"
 	cfg["roleFiles"] = array
 
-	array = make([]interface{}, 1, 1)
+	array = make([]interface{}, 1)
 	array[0] = "MyValue2"
 	cfg["userFiles"] = array
 	err = auth.Init(cfg)
