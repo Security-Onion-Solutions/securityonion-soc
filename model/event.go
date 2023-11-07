@@ -44,7 +44,7 @@ type EventSearchResults struct {
 
 func NewEventSearchResults() *EventSearchResults {
 	results := &EventSearchResults{
-		Events:  make([]*EventRecord, 0, 0),
+		Events:  make([]*EventRecord, 0),
 		Metrics: make(map[string]([]*EventMetric)),
 	}
 	results.initEventResults()

@@ -136,7 +136,7 @@ func (store *Saltstore) GetSettings(ctx context.Context) ([]*model.Setting, erro
 		return nil, err
 	}
 
-	settings := make([]*model.Setting, 0, 0)
+	settings := make([]*model.Setting, 0)
 
 	// Parse the default values first.
 	err = filepath.Walk(store.saltstackDir+"/default", func(path string, info os.FileInfo, err error) error {
@@ -418,7 +418,6 @@ func (store *Saltstore) recursivelyParseAnnotations(
 			}
 		default:
 			foundAnnotation = true
-			break
 		}
 	}
 	return settings, foundAnnotation
@@ -714,7 +713,7 @@ func (store *Saltstore) alignInt64List(newValue string) ([]int64, error) {
 	var newList []int64
 	if len(newValue) > 0 {
 		tmp := strings.Split(newValue, "\n")
-		newList = make([]int64, 0, 0)
+		newList = make([]int64, 0)
 		for _, str := range tmp {
 			i, err := strconv.ParseInt(str, 10, 64)
 			if err != nil {
@@ -730,7 +729,7 @@ func (store *Saltstore) alignBoolList(newValue string) ([]bool, error) {
 	var newList []bool
 	if len(newValue) > 0 {
 		tmp := strings.Split(newValue, "\n")
-		newList = make([]bool, 0, 0)
+		newList = make([]bool, 0)
 		for _, str := range tmp {
 			b, err := strconv.ParseBool(str)
 			if err != nil {
@@ -746,7 +745,7 @@ func (store *Saltstore) alignFloat64List(newValue string) ([]float64, error) {
 	var newList []float64
 	if len(newValue) > 0 {
 		tmp := strings.Split(newValue, "\n")
-		newList = make([]float64, 0, 0)
+		newList = make([]float64, 0)
 		for _, str := range tmp {
 			f, err := strconv.ParseFloat(str, 64)
 			if err != nil {
@@ -762,9 +761,9 @@ func (store *Saltstore) alignListList(newValue string) ([][]interface{}, error) 
 	var newList [][]interface{}
 	if len(newValue) > 0 {
 		tmp := strings.Split(newValue, "\n")
-		newList = make([][]interface{}, 0, 0)
+		newList = make([][]interface{}, 0)
 		for _, str := range tmp {
-			l := make([]interface{}, 0, 0)
+			l := make([]interface{}, 0)
 			err := json.LoadJson([]byte(str), &l)
 			if err != nil {
 				return nil, err
@@ -779,7 +778,7 @@ func (store *Saltstore) alignMapList(newValue string) ([]map[string]interface{},
 	var newList []map[string]interface{}
 	if len(newValue) > 0 {
 		tmp := strings.Split(newValue, "\n")
-		newList = make([]map[string]interface{}, 0, 0)
+		newList = make([]map[string]interface{}, 0)
 		for _, str := range tmp {
 			m := make(map[string]interface{})
 			err := json.LoadJson([]byte(str), &m)
@@ -818,7 +817,7 @@ func (store *Saltstore) alignBestGuess(newValue string) interface{} {
 		}
 	}
 	if strings.HasPrefix(newValue, "[") && strings.HasSuffix(newValue, "]") {
-		tmp := make([]interface{}, 0, 0)
+		tmp := make([]interface{}, 0)
 		err := json.LoadJson([]byte(newValue), &tmp)
 		if err == nil {
 			return tmp
@@ -941,7 +940,7 @@ func getMembersFromJson(err error, output []byte) ([]*model.GridMember, error) {
 		response := &ListResponse{}
 		err = json.LoadJson(output, response)
 		if err == nil {
-			members = make([]*model.GridMember, 0, 0)
+			members = make([]*model.GridMember, 0)
 			for id, fingerprint := range response.Accepted {
 				members = append(members, model.NewGridMember(id, model.GridMemberAccepted, fingerprint))
 			}
