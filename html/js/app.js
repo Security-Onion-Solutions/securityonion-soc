@@ -874,6 +874,9 @@ $(document).ready(function() {
       isUserAdmin(user = null) {
         return this.userHasRole("superuser", user);
       },
+      isMyUser(user) {
+        return user != null && this.user != null && user.id == this.user.id;
+      },
       userHasRole(role, user = null) {
         if (!user) {
           user = this.user;
