@@ -16,6 +16,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/json"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/util"
 )
 
 func stripSegmentOptions(keys []string) []string {
@@ -409,13 +410,13 @@ func parseTime(fieldmap map[string]interface{}, key string) *time.Time {
 	var t time.Time
 
 	if value, ok := fieldmap[key]; ok {
-		switch value.(type) {
+		switch v := value.(type) {
 		case time.Time:
-			t = value.(time.Time)
+			t = v
 		case *time.Time:
-			t = *(value.(*time.Time))
+			t = *v
 		case string:
-			t, _ = time.Parse(time.RFC3339, value.(string))
+			t, _ = time.Parse(time.RFC3339, v)
 		}
 	}
 
@@ -700,7 +701,10 @@ func convertElasticEventToDetection(event *model.EventRecord, schemaPrefix strin
 				obj.Note = value.(string)
 			}
 			if value, ok := event.Payload[schemaPrefix+"detection.engine"]; ok {
-				obj.Engine = value.(string)
+				obj.Engine = model.EngineName(value.(string))
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.overrides"]; ok && value != nil {
+				obj.Overrides = convertElasticEventToOverride(value.([]interface{}))
 			}
 
 			obj.CreateTime = parseTime(event.Payload, schemaPrefix+"detection.createTime")
@@ -708,6 +712,55 @@ func convertElasticEventToDetection(event *model.EventRecord, schemaPrefix strin
 	}
 
 	return obj, err
+}
+
+func convertElasticEventToOverride(overrides []interface{}) []*model.Override {
+	overs := make([]*model.Override, 0, len(overrides))
+	for _, inter := range overrides {
+		override := inter.(map[string]interface{})
+		over := &model.Override{}
+
+		if value, ok := override["type"]; ok {
+			over.Type = model.OverrideType(value.(string))
+		}
+		if value, ok := override["isEnabled"]; ok {
+			over.IsEnabled = value.(bool)
+		}
+		if value, ok := override["createdAt"]; ok {
+			over.CreatedAt, _ = time.Parse(time.RFC3339, value.(string))
+		}
+		if value, ok := override["updatedAt"]; ok {
+			over.UpdatedAt, _ = time.Parse(time.RFC3339, value.(string))
+		}
+		if value, ok := override["thresholdType"]; ok && value != nil {
+			over.ThresholdType = util.Ptr(value.(string))
+		}
+		if value, ok := override["regex"]; ok && value != nil {
+			over.Regex = util.Ptr(value.(string))
+		}
+		if value, ok := override["value"]; ok && value != nil {
+			over.Value = util.Ptr(value.(string))
+		}
+		if value, ok := override["ip"]; ok && value != nil {
+			over.IP = util.Ptr(value.(string))
+		}
+		if value, ok := override["track"]; ok && value != nil {
+			over.Track = util.Ptr(value.(string))
+		}
+		if value, ok := override["count"]; ok && value != nil {
+			over.Count = util.Ptr(int(value.(float64)))
+		}
+		if value, ok := override["seconds"]; ok && value != nil {
+			over.Seconds = util.Ptr(int(value.(float64)))
+		}
+		if value, ok := override["customFilter"]; ok && value != nil {
+			over.CustomFilter = util.Ptr(value.(string))
+		}
+
+		overs = append(overs, over)
+	}
+
+	return overs
 }
 
 func convertElasticEventToObject(event *model.EventRecord, schemaPrefix string) (interface{}, error) {
