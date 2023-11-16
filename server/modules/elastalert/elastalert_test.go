@@ -196,7 +196,8 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 		assert.Equal(t, http.MethodPost, r.Method)
 
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("<eql>"))
+		_, err := w.Write([]byte("<eql>"))
+		assert.NoError(t, err)
 
 		callCount++
 	}))
@@ -248,7 +249,8 @@ func TestSigmaToElastAlertError(t *testing.T) {
 		assert.Equal(t, http.MethodPost, r.Method)
 
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Error: " + msg))
+		_, err := w.Write([]byte("Error: " + msg))
+		assert.NoError(t, err)
 
 		callCount++
 	}))

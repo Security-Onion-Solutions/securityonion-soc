@@ -3,17 +3,36 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
+function debounce(fn, wait) {
+	let timer;
+	return (...args) => {
+		if(timer) {
+			clearTimeout(timer); // clear any pre-existing timer
+		}
+
+		const context = this; // get the current context
+		timer = setTimeout(()=>{
+			fn.apply(context, args); // call the function if time expires
+		}, wait);
+	}
+}
+
 routes.push({ path: '/detection/:id', name: 'detection', component: {
   template: '#page-detection',
   data() { return {
 		i18n: this.$root.i18n,
 		presets: {},
+		severityTranslations: {},
 		params: {},
 		detect: null,
 		origDetect: null,
 		curEditTarget: null, // string containing element ID, null if not editing
 		origValue: null,
 		editField: null,
+		curOverrideEditTarget: null,
+		origOverrideValue: null,
+		overrideEditField: null,
+		editOverride: null, // the override we're currently editing
 		editForm: { valid: true },
 		rules: {
 			required: value => (value && value.length > 0) || this.$root.i18n.required,
@@ -22,15 +41,38 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			minLength: limit => value => (value && value.length >= limit) || this.$root.i18n.ruleMinLen,
 			shortLengthLimit: value => (value.length < 100) || this.$root.i18n.required,
 			longLengthLimit: value => (encodeURI(value).split(/%..|./).length - 1 < 10000000) || this.$root.i18n.required,
+			cidrFormat: value => (!value || /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\/(3[0-2]|[12]\d|\d)$/.test(value)) || this.i18n.invalidCidr,
 			fileSizeLimit: value => (value == null || value.size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
 			fileNotEmpty: value => (value == null || value.size > 0) || this.$root.i18n.fileEmpty,
 			fileRequired: value => (value != null) || this.$root.i18n.required,
 		},
 		panel: [0, 1, 2],
 		activeTab: '',
-		sidExtract: /\bsid: ?['"]?(.*?)['"]?;/,
+		sidExtract: /\bsid: ?['"]?(.*?)['"]?;/, // option
+		severityExtract: /\bsignature_severity ['"]?(.*?)['"]?[,;]/, // metadata
+		authorExtract: /\bauthor: ?['"]?(.*?)['"]?;/, // option
+		authorMetaExtract: /\bauthor ['"]?(.*?)['"]?[,;]/, // metadata
+		sortBy: 'createdAt',
+		sortDesc: false,
+		expanded: [],
+		overrideHeaders: [
+			{ text: 'Enabled', value: 'isEnabled' },
+			{ text: 'Type', value: 'type' },
+			{ text: 'Track', value: 'track' },
+			{ text: 'Created', value: 'createdAt', format: true },
+			{ text: 'Updated', value: 'updatedAt', format: true },
+		],
+		zone: moment.tz.guess(),
+		newOverride: null,
+		thresholdTypes: [
+			{ value: 'threshold', text: 'Threshold' },
+			{ value: 'limit', text: 'Limit' },
+			{ value: 'both', text: 'Both' }
+		],
+		trackOptions: ['by_src', 'by_dst', 'by_both'],
   }},
-  created() {
+	created() {
+		this.onDetectionChange = debounce(this.onDetectionChange, 300);
   },
   watch: {
 	},
@@ -39,13 +81,15 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
       () => this.$route.params,
       (to, prev) => {
 				this.loadData();
-    	});
+			});
 		this.$root.loadParameters('detection', this.initDetection);
 	},
   methods: {
 		async initDetection(params) {
 			this.params = params;
 			this.presets = params['presets'];
+			this.severityTranslations = params['severityTranslations'];
+
 			if (this.$route.params.id === 'create') {
 				this.detect = this.newDetection();
 			} else {
@@ -77,8 +121,13 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.$root.startLoading();
 
 			try {
-					const response = await this.$root.papi.get('detection/' + encodeURIComponent(this.$route.params.id));
+				const response = await this.$root.papi.get('detection/' + encodeURIComponent(this.$route.params.id));
 				this.detect = response.data;
+				if (this.detect.overrides) {
+					for (let i = 0; i < this.detect.overrides.length; i++) {
+						this.detect.overrides[i].index = i;
+					}
+				}
       } catch (error) {
         if (error.response != undefined && error.response.status == 404) {
           this.$root.showError(this.i18n.notFound);
@@ -159,25 +208,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				}
 			});
 		},
-		extractPublicID() {
-			let pid = '';
-			switch (this.detect.engine) {
-				case 'suricata':
-					try {
-						pid = this.extractSuricataPublicID();
-					} catch (e) {
-						// nothing, clear publicId
-					}
-					break;
-				case 'elastalert':
-					try {
-						pid = this.extractElastAlertPublicID();
-					} catch (e) {}
-					break;
-			}
-
-			this.detect.publicId = pid;
-		},
 		isEdit(target) {
 			return this.curEditTarget === target;
 		},
@@ -186,8 +216,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				this.detect[this.editField] = this.origValue;
 			} else if (!this.isNew()) {
 				const response = await this.$root.papi.put('/detection', this.detect);
-
-        console.log('UPDATE', response);
 			}
 
 			this.curEditTarget = null;
@@ -198,7 +226,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			if (this.curEditTarget !== null) this.stopEdit(true);
 
 			if (this.isNew()) {
-				this.$refs['detection'].validate();
+				this.$refs.detection.validate();
 				if (!this.editForm.valid) return;
 			}
 
@@ -220,6 +248,12 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				return;
 			}
 
+			if (this.detect.overrides) {
+				for (let i = 0; i < this.detect.overrides.length; i++) {
+					this.detect.overrides[i] = this.cleanupOverride(this.detect.engine, this.detect.overrides[i]);
+				}
+			}
+
 			try {
 				let response;
 				if (createNew) {
@@ -232,7 +266,9 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 				this.$root.showTip(this.i18n.saveSuccess);
 
-				this.$router.push({name: 'detection', params: {id: response.data.id}});
+				if (createNew) {
+					this.$router.push({ name: 'detection', params: { id: response.data.id } });
+				}
 			} catch (error) {
 				this.$root.showError(error);
 			}
@@ -269,22 +305,285 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			return null;
 		},
-		extractSuricataPublicID() {
-			const results = this.sidExtract.exec(this.detect.content);
-
-			if (!results || results.length < 2) {
-				// sid not present in rule
-				throw this.i18n.sidMissingErr;
-			} else if (results && results.length > 2) {
-				// multiple sids present in rule
-				throw this.i18n.sidMultipleErr;
+		extractPublicID() {
+			let pid = this.detect.publicId;
+			switch (this.detect.engine) {
+				case 'suricata':
+					try {
+						pid = this.extractSuricataPublicID();
+					} catch {}
+					break;
+				case 'elastalert':
+					try {
+						const id = this.extractElastAlertPublicID();
+						if (id) pid = id;
+					} catch {}
+					break;
 			}
 
+			this.detect.publicId = pid;
+		},
+		extractSeverity() {
+			let sev = this.detect.severity;
+			switch (this.detect.engine) {
+				case 'suricata':
+					try {
+						sev = this.extractSuricataSeverity();
+					} catch {}
+					break;
+				case 'elastalert':
+					try {
+						const s = this.extractElastAlertSeverity();
+						if (s) sev = s;
+					} catch {}
+					break;
+			}
+
+			this.detect.severity = sev;
+		},
+		extractAuthor() {
+			let author = this.detect.author;
+			switch (this.detect.engine) {
+				case 'suricata':
+					try {
+						const a = this.extractSuricataAuthor();
+						if (a) author = a;
+					} catch {}
+					break;
+				case 'elastalert':
+					try {
+						const a = this.extractElastAlertAuthor();
+						if (a) author = a;
+					} catch {}
+					break;
+			}
+
+			this.detect.author = author;
+		},
+		extractSuricataPublicID() {
+			const results = this.sidExtract.exec(this.detect.content);
 			return results[1];
 		},
+		extractSuricataSeverity() {
+			const results = this.severityExtract.exec(this.detect.content);
+
+			let sev = (results[1] || '').toLowerCase();
+			if (this.severityTranslations[sev]) {
+				sev = this.severityTranslations[sev]
+			}
+
+			if (!this.presets['severity'].labels.includes(sev)) {
+				sev = this.getDefaultPreset('severity');
+			}
+
+			return sev;
+		},
+		extractSuricataAuthor() {
+			// do suricata rules even have a place for an author?
+
+			// first look for an option labeled author
+			const author = this.authorExtract.exec(this.detect.content);
+			if (author && author.length >= 2) return author[1];
+
+			// if no option, check metadata for a field labeled author
+			const authorMeta = this.authorMetaExtract.exec(this.detect.content);
+			if (authorMeta && authorMeta.length >= 2) return authorMeta[1];
+		},
 		extractElastAlertPublicID() {
-			const yaml = jsyaml.load(this.detect.content);
+			const yaml = jsyaml.load(this.detect.content, {schema: jsyaml.FAILSAFE_SCHEMA});
 			return yaml['id'];
+		},
+		extractElastAlertSeverity() {
+			const yaml = jsyaml.load(this.detect.content, {schema: jsyaml.FAILSAFE_SCHEMA});
+			const level = yaml['level'];
+
+			for (let lvl in this.presets['severity'].labels) {
+				if (this.presets['severity'].labels[lvl].toUpperCase() === level.toUpperCase()) {
+					return this.presets['severity'].labels[lvl];
+				}
+			}
+		},
+		extractElastAlertAuthor() {
+			const yaml = jsyaml.load(this.detect.content, {schema: jsyaml.FAILSAFE_SCHEMA});
+			return yaml['author'];
+		},
+		onDetectionChange() {
+			if (this.detect.engine) {
+				this.extractPublicID();
+				this.extractSeverity();
+				this.extractAuthor();
+			}
+		},
+		saveSetting(name, value, defaultValue = null) {
+      var item = 'settings.detection.' + name;
+      if (defaultValue == null || value != defaultValue) {
+        localStorage[item] = value;
+      } else {
+        localStorage.removeItem(item);
+      }
+    },
+    saveLocalSettings() {
+      this.saveSetting('sortDesc', this.sortDesc, true);
+      this.saveSetting('itemsPerPage', this.itemsPerPage, this.params['eventItemsPerPage']);
+      this.saveSetting('relativeTimeValue', this.relativeTimeValue, this.params['relativeTimeValue']);
+      this.saveSetting('relativeTimeUnit', this.relativeTimeUnit, this.params['relativeTimeUnit']);
+		},
+		sortOverrides(items, index, isDesc) {
+      const route = this;
+      if (index && index.length > 0) {
+        index = index[0];
+      }
+      if (isDesc && isDesc.length > 0) {
+        isDesc = isDesc[0];
+      }
+      items.sort((a, b) => {
+        if (index === "event.severity_label") {
+          return route.defaultSort(route.lookupAlertSeverityScore(a[index]), route.lookupAlertSeverityScore(b[index]), isDesc);
+        } else {
+          return route.defaultSort(a[index], b[index], isDesc);
+        }
+      });
+      return items
+		},
+		defaultSort(a, b, isDesc) {
+      if (!isDesc) {
+        return a < b ? -1 : 1;
+      }
+      return b < a ? -1 : 1;
+    },
+		expand(item) {
+      if (this.isExpanded(item)) {
+        this.expanded = [];
+      } else {
+        this.expanded = [item];
+			}
+		},
+		isExpanded(item) {
+      return (this.expanded.length > 0 && this.expanded[0] === item);
+		},
+		createNewOverride() {
+			this.newOverride = {
+				type: null,
+				isEnabled: false,
+				regex: null,
+				value: null,
+				track: null,
+				count: null,
+				seconds: null,
+				customFilter: null,
+			};
+		},
+		getOverrideTypes(engine) {
+			engine = engine || this.detect.engine;
+
+			switch (engine) {
+				case 'suricata':
+					return [
+						{ value: 'modify', text: 'Modify' },
+						{ value: 'suppress', text: 'Suppress' },
+						{ value: 'threshold', text: 'Threshold' }
+					];
+				case 'elastalert':
+					return [
+						{ value: 'custom filter', text: 'Custom Filter' }
+					];
+			}
+
+			return [];
+		},
+		cleanupOverride(engine, o) {
+			// ensures an override about to be saved
+			// only has the fields relevant to the engine
+			// and type selected
+			let out = {
+				type: o.type,
+				isEnabled: o.isEnabled,
+			};
+
+			if (engine === 'elastalert') {
+				out.customFilter = o.customFilter;
+			} else {
+				out.type = o.type
+
+				switch (o.type) {
+					case 'modify':
+						out.regex = o.regex;
+						out.value = o.value;
+						break;
+					case 'threshold':
+						out.thresholdType = o.thresholdType;
+						out.track = o.track;
+						out.count = parseInt(o.count);
+						out.seconds = parseInt(o.seconds);
+						break;
+					case 'suppress':
+						out.track = o.track;
+						out.ip = o.ip;
+						break;
+				}
+			}
+
+			return out;
+		},
+		createOverrideTypeChange() {
+			// reset the form, but we want the selected type to persist
+			const t = this.newOverride.type;
+			this.$refs.OverrideCreate.reset();
+			this.newOverride.type = t;
+		},
+		cancelNewOverride() {
+			this.$refs.OverrideCreate.reset();
+			this.newOverride = null;
+		},
+		addNewOverride() {
+			if (!this.newOverride) return;
+
+			if (!this.detect.overrides) {
+				this.detect.overrides = [];
+			}
+
+			this.detect.overrides.push(this.newOverride);
+
+			this.saveDetection(false);
+			this.newOverride = null;
+		},
+		async startOverrideEdit(target, override, field) {
+			if (this.curOverrideEditTarget === target) return;
+			if (this.curOverrideEditTarget !== null) await this.stopOverrideEdit(false);
+
+			this.curOverrideEditTarget = target;
+			this.origOverrideValue = override[field];
+			this.overrideEditField = field;
+			this.editOverride = override;
+
+			this.$nextTick(() => {
+				const el = document.getElementById(target + '-edit');
+				if (el) {
+					el.focus();
+					el.select();
+				}
+			});
+		},
+		isOverrideEdit(target) {
+			return this.curOverrideEditTarget === target;
+		},
+		async stopOverrideEdit(commit) {
+			if (commit && this.$refs[this.curOverrideEditTarget].hasError) return;
+
+			if (!commit) {
+				this.editOverride[this.overrideEditField] = this.origOverrideValue;
+			} else {
+				this.saveDetection(false);
+			}
+
+			this.curOverrideEditTarget = null;
+			this.origOverrideValue = null;
+			this.overrideEditField = null;
+			this.editOverride = null;
+		},
+		deleteOverride(item) {
+			this.detect.overrides = this.detect.overrides.filter(o => o !== item);
+			this.saveDetection(false);
 		},
 		print(x) {
 			console.log(x);

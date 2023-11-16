@@ -87,6 +87,10 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 				Query: "_id:*",
 			},
 			{
+				Name:  "Local Rules",
+				Query: "* AND so_detection.isCommunity:false",
+			},
+			{
 				Name:  "Enabled",
 				Query: "so_detection.isEnabled:true",
 			},
@@ -121,6 +125,12 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 				CustomEnabled: false,
 				Labels:        []string{"suricata", "elastalert"},
 			},
+		}
+
+		detection.SeverityTranslations = map[string]string{
+			// informational and critical already map correctly
+			"minor": "low",
+			"major": "high",
 		}
 	}
 

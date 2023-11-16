@@ -991,14 +991,14 @@
                   <v-select id="detection-severity-create" v-model="detect.severity" :items="getPresets('severity')" persistent-hint :hint="i18n.detectionSeverity"/>
 
                   <!-- Engine -->
-                  <v-select id="detection-engine-create" v-model="detect.engine" :items="getPresets('engine')" persistent-hint :hint="i18n.engine" :rules="[rules.required]"/>
+                  <v-select id="detection-engine-create" v-model="detect.engine" :items="getPresets('engine')" persistent-hint :hint="i18n.engine" :rules="[rules.required]" v-on:change="onDetectionChange"/>
 
                   <!-- Reporting -->
                   <v-checkbox id="detection-reporting-create" class="mt-5" v-model="detect.isReporting" :label="i18n.reporting"/>
 
                   <!-- Signature -->
                   <div class="font-weight-bold mb-1">{{ i18n.signature }}:</div>
-                  <v-textarea class="config-editor" outlined v-model="detect.content" rows="10" :rules="[rules.required]" />
+                  <v-textarea class="config-editor" outlined v-model="detect.content" rows="10" :rules="[rules.required]" @input="onDetectionChange()" />
                 </div>
                 <div class="d-flex align-center align-self-end text-body-2 mt-2">
                   <div class="d-inline-flex justify-end">
@@ -1127,7 +1127,192 @@
               </v-tab-item> -->
               <v-tab-item value="tuning">
                 <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
-                  Coming Soon!
+                  <v-col cols="12" style="padding-left: 0px; padding-right: 0px;">
+                    <v-toolbar class="elevation-0" fixed>
+                      <v-btn color="primary" id="add-override-button" style="text-decoration: none; cursor: 'pointer'" @click="createNewOverride()">
+                        <v-icon :title="i18n.create">fa-plus</v-icon>
+                      </v-btn>
+                    </v-toolbar>
+                    <div v-if="newOverride != null">
+                      <v-form ref="OverrideCreate">
+                        <v-select id="new-override-type" v-model="newOverride.type" :items="getOverrideTypes()" persistent-hint :hint="i18n.type" @change="createOverrideTypeChange()"></v-select>
+                        <!--
+                          1. Regex   - modify
+                          2. Value   - modify
+                          3. Type    - threshold
+                          3. Track   - suppress, threshold
+                          4. IP      - suppress
+                          5. Count   - threshold
+                          6. Seconds - threshold
+                          7. Custom Filter - engine:elastalert
+                        -->
+                        <!-- Suricata -->
+                        <div v-if="detect.engine === 'suricata'">
+                          <!-- regex -->
+                          <v-text-field v-if="newOverride.type === 'modify'" id="new-override-regex-edit" v-model="newOverride.regex" :rules="[rules.required]" persistent-hint :hint="i18n.regex"></v-text-field>
+                          <!-- value -->
+                          <v-text-field v-if="newOverride.type === 'modify'" id="new-override-value-edit" v-model="newOverride.value" :rules="[rules.required]" persistent-hint :hint="i18n.value"></v-text-field>
+                          <!-- (threshold) type -->
+                          <v-select v-if="newOverride.type === 'threshold'" id="new-override-threshold-type-edit" v-model="newOverride.thresholdType" :items="thresholdTypes" :rules="[rules.required]" persistent-hint :hint="i18n.thresholdType"></v-select>
+                          <!-- track -->
+                          <v-select v-if="['threshold', 'suppress'].includes(newOverride.type)" id="new-override-track-edit" v-model="newOverride.track" :items="trackOptions" :rules="[rules.required]" persistent-hint :hint="i18n.track"></v-select>
+                          <!-- ip -->
+                          <v-text-field v-if="newOverride.type === 'suppress'" id="new-override-ip-edit" v-model="newOverride.ip" :rules="[rules.required, rules.cidrFormat]" persistent-hint :hint="i18n.ipCidr"></v-text-field>
+                          <!-- count -->
+                          <v-text-field v-if="newOverride.type === 'threshold'" id="new-override-count-edit" v-model="newOverride.count" :rules="[rules.required, rules.number]" persistent-hint :hint="i18n.count"></v-text-field>
+                          <!-- seconds -->
+                          <v-text-field v-if="newOverride.type === 'threshold'" id="new-override-seconds-edit" v-model="newOverride.seconds" :rules="[rules.required, rules.number]" persistent-hint :hint="i18n.secondsLabel"></v-text-field>
+                        </div>
+                        <!-- ElastAlert -->
+                        <div v-if="detect.engine === 'elastalert'">
+                          <!-- custom filter -->
+                          <v-text-field id="new-override-custom-filter-edit" v-model="newOverride.customFilter" :rules="[rules.required]" persistent-hint :hint="i18n.customFilter"></v-text-field>
+                        </div>
+                        <div v-if="newOverride" class="d-flex justify-end text-body-2 mt-2">
+                          <div class="d-inline-flex">
+                            <v-btn id="detection-create-cancel" text small color="primary" class="align-self-end" @click="newOverride = null">
+                              {{ i18n.cancel }}
+                            </v-btn>
+                            <v-btn v-if="newOverride.type" id="detection-create-create" text small color="primary" class="align-self-end" @click="addNewOverride()">
+                              {{ i18n.create }}
+                            </v-btn>
+                          </div>
+                        </div>
+                      </v-form>
+                    </div>
+                  </v-col>
+                  <v-data-table :sort-by.sync="sortBy" :expanded.sync="expanded" :sort-desc.sync="sortDesc" must-sort :headers="overrideHeaders"
+                    :items="detect.overrides" :item-key="'index'" show-expand single-expand :custom-sort="sortOverrides" hide-default-footer="true">
+                    <template v-slot:item="{ item, index }">
+                      <tr>
+                        <td>
+                          <v-btn id="expandOverrideArrow" icon small @click="expand(item)">
+                            <v-icon v-if="isExpanded(item)" :alt="i18n.overrideExpand" :title="i18n.eventExpandHelp">fa-angle-down</v-icon>
+                            <v-icon v-if="!isExpanded(item)" :alt="i18n.overrideExpand" :title="i18n.eventExpandHelp">fa-angle-right</v-icon>
+                          </v-btn>
+                        </td>
+                        <td v-for="field in overrideHeaders" :key="field.value">
+                          <div class="d-inline-block">
+                            <span v-if="!field.format">{{ item[field.value] }}</span>
+                            <span v-else v-text="$root.formatLocalTimestamp(item[field.value], zone)"/>
+                          </div>
+                        </td>
+                      </tr>
+                    </template>
+                    <template v-slot:expanded-item="{ headers, item }">
+                      <tr>
+                        <td :colspan="headers.length" class="pa-4" v-if="detect.engine === 'suricata'">
+                          <!--
+                            1. Regex   - modify
+                            2. Value   - modify
+                            3. Type    - threshold
+                            3. Track   - suppress, threshold
+                            4. IP      - suppress
+                            5. Count   - threshold
+                            6. Seconds - threshold
+                            7. Custom Filter - engine:elastalert
+                          -->
+                          <!-- regex -->
+                          <div v-if="item.type === 'modify'">
+                            <div class="font-weight-bold mt-2">
+                              Regex:
+                            </div>
+                            <span id="override-regex" v-if="!isOverrideEdit('override-regex')" @click="startOverrideEdit('override-regex', item, 'regex')">
+                              {{item.regex}}
+                            </span>
+                            <v-text-field v-else id="override-regex-edit" ref="override-regex" hide-details="auto" outlined v-model="item.regex" :rules="[rules.required]"
+                              persistent-hint :hint="i18n.regex" v-on:keyup.enter="stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)"></v-text-field>
+                          </div>
+                          <!-- value -->
+                          <div v-if="item.type === 'modify'">
+                            <div class="font-weight-bold mt-2">
+                              Value:
+                            </div>
+                            <span id="override-value" v-if="!isOverrideEdit('override-value')" @click="startOverrideEdit('override-value', item, 'value')">
+                              {{item.value}}
+                            </span>
+                            <v-text-field v-else id="override-value-edit" ref="override-value" hide-details="auto" outlined v-model="item.value" :rules="[rules.required]"
+                              persistent-hint :hint="i18n.value" v-on:keyup.enter="stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)"></v-text-field>
+                          </div>
+                          <!-- type (threshold) -->
+                          <div v-if="item.type === 'threshold'">
+                            <div class="font-weight-bold mt-2">
+                              Type:
+                            </div>
+                            <span id="override-threshold-type" v-if="!isOverrideEdit('override-threshold-type')" @click="startOverrideEdit('override-threshold-type', item, 'thresholdType')">
+                              {{item.thresholdType}}
+                            </span>
+                            <v-select v-else id="override-threshold-type-edit" ref="override-threshold-type" v-model="item.thresholdType" :items="thresholdTypes" :rules="[rules.required]" persistent-hint :hint="i18n.type" @change="stopOverrideEdit(true)"></v-select>
+                          </div>
+                          <!-- track -->
+                          <div v-if="['suppress', 'threshold'].includes(item.type)">
+                            <div class="font-weight-bold mt-2">
+                              Track:
+                            </div>
+                            <span id="override-track" v-if="!isOverrideEdit('override-track')" @click="startOverrideEdit('override-track', item, 'track')">
+                              {{item.track}}
+                            </span>
+                            <v-select v-else id="override-track-edit" ref="override-track" v-model="item.track" :items="trackOptions" :rules="[rules.required]" persistent-hint :hint="i18n.type" @change="stopOverrideEdit(true)"></v-select>
+                          </div>
+                          <!-- ip -->
+                          <div v-if="item.type === 'suppress'">
+                            <div class="font-weight-bold mt-2">
+                              IP:
+                            </div>
+                            <span id="override-ip" v-if="!isOverrideEdit('override-ip')" @click="startOverrideEdit('override-ip', item, 'ip')">
+                              {{item.ip}}
+                            </span>
+                            <v-text-field v-else id="override-ip-edit" ref="override-ip" hide-details="auto" outlined v-model="item.ip" :rules="[rules.required, rules.ciderFormat]"
+                              persistent-hint :hint="i18n.cidr" v-on:keyup.enter="stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)"></v-text-field>
+                          </div>
+                          <!-- count -->
+                          <div v-if="item.type === 'threshold'">
+                            <div class="font-weight-bold mt-2">
+                              Count:
+                            </div>
+                            <span id="override-count" v-if="!isOverrideEdit('override-count')" @click="startOverrideEdit('override-count', item, 'count')">
+                              {{item.count}}
+                            </span>
+                            <v-text-field v-else id="override-count-edit" ref="override-count" hide-details="auto" outlined v-model="item.count" :rules="[rules.required, rules.number]"
+                              persistent-hint :hint="i18n.count" v-on:keyup.enter="stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)"></v-text-field>
+                          </div>
+                          <!-- seconds -->
+                          <div v-if="item.type === 'threshold'">
+                            <div class="font-weight-bold mt-2">
+                              Seconds:
+                            </div>
+                            <span id="override-seconds" v-if="!isOverrideEdit('override-seconds')" @click="startOverrideEdit('override-seconds', item, 'seconds')">
+                              {{item.seconds}}
+                            </span>
+                            <v-text-field v-else id="override-seconds-edit" ref="override-seconds" hide-details="auto" outlined v-model="item.seconds" :rules="[rules.required, rules.number]"
+                              persistent-hint :hint="i18n.secondsLabel" v-on:keyup.enter="stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)"></v-text-field>
+                          </div>
+                          <!-- <h2 id="detection-title" @click="startEdit('detection-title', 'title')" v-if="!isEdit('detection-title')">{{ detect.title }}</h2>
+                          <v-text-field id="detection-title-edit" v-else hide-details="auto" outlined v-model="detect.title" :rules="[rules.required]" persistent-hint :hint="i18n.detectionTitle" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"></v-text-field> -->
+                          <div class="d-flex justify-end text-body-2 mt-2">
+                            <div class="d-inline-flex">
+                              <v-btn id="override-edit-delete" text small color="red" @click="deleteOverride(item)">
+                                {{ i18n.delete }}
+                              </v-btn>
+                            </div>
+                          </div>
+                        </td>
+                        <td :colspan="headers.length" class="pa-4" v-else-if="detect.engine === 'elastalert'">
+                          <div>
+                            <div class="font-weight-bold">
+                              Custom Filter:
+                            </div>
+                            <span id="override-custom-filter" v-if="!isOverrideEdit('override-custom-filter')" @click="startOverrideEdit('override-custom-filter', item, 'customFilter')">
+                              {{item.customFilter}}
+                            </span>
+                            <v-text-field v-else id="override-custom-filter-edit" ref="override-custom-filter" hide-details="auto" outlined v-model="item.customFilter" :rules="[rules.required]"
+                              persistent-hint :hint="i18n.customFilter" v-on:keyup.enter="stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)"></v-text-field>
+                          </div>
+                        </td>
+                        <td :colspan="headers.length" class="pa-4" v-else-if="detect.engine === 'yara'"></td>
+                      </tr>
+                    </template>
+                  </v-data-table>
                 </div>
               </v-tab-item>
               <v-tab-item value="history">

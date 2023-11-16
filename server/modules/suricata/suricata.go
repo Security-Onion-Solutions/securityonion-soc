@@ -18,12 +18,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/apex/log"
-	"github.com/samber/lo"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/util"
+
+	"github.com/apex/log"
+	"github.com/samber/lo"
+	"gopkg.in/yaml.v3"
 )
 
 var sidExtracter = regexp.MustCompile(`(?i)\bsid: ?['"]?(.*?)['"]?;`)
@@ -316,6 +318,8 @@ func (s *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*
 		return nil, fmt.Errorf("unable to find modify setting")
 	}
 
+	threshold := settingByID(allSettings, "suricata.thresholding.sids__yaml")
+
 	localLines := strings.Split(local.Value, "\n")
 	enabledLines := strings.Split(enabled.Value, "\n")
 	disabledLines := strings.Split(disabled.Value, "\n")
@@ -325,6 +329,11 @@ func (s *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*
 	enabledIndex := indexEnabled(enabledLines, false)
 	disabledIndex := indexEnabled(disabledLines, false)
 	modifyIndex := indexModify(modifyLines)
+
+	thresholdIndex, err := indexThreshold(threshold.Value)
+	if err != nil {
+		return nil, err
+	}
 
 	errMap = map[string]string{} // map[sid]error
 
@@ -406,6 +415,34 @@ func (s *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*
 				modifyLines = append(modifyLines[:lineNum], modifyLines[lineNum+1:]...)
 				delete(modifyIndex, sid)
 			}
+		}
+
+		// tuning
+		delete(thresholdIndex, detect.PublicID)
+		detOverrides := lo.Filter(detect.Overrides, func(o *model.Override, _ int) bool {
+			return o.IsEnabled
+		})
+
+		if len(detOverrides) > 0 {
+			// the only place we care about genID, we don't get it from the user except
+			// through the content of the rule. Default to 1 if we can't find it.
+			genID := 1
+
+			gid, ok := parsedRule.GetOption("gid")
+			if ok && gid != nil {
+				id, err := strconv.Atoi(*gid)
+				if err != nil {
+					genID = id
+				}
+			}
+
+			for _, o := range detOverrides {
+				if o.Type == model.OverrideTypeSuppress || o.Type == model.OverrideTypeThreshold {
+					o.GenID = util.Ptr(genID)
+				}
+			}
+
+			thresholdIndex[detect.PublicID] = detOverrides
 		}
 	}
 
@@ -496,6 +533,7 @@ func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 		if exists {
 			if orig.Content != detect.Content {
 				detect.Id = orig.Id
+				detect.Overrides = orig.Overrides
 
 				_, err = s.srv.Detectionstore.UpdateDetection(ctx, detect)
 				if err != nil {
@@ -604,4 +642,15 @@ func indexModify(lines []string) map[string]int {
 	}
 
 	return index
+}
+
+func indexThreshold(content string) (map[string][]*model.Override, error) {
+	index := map[string][]*model.Override{}
+
+	err := yaml.Unmarshal([]byte(content), &index)
+	if err != nil {
+		return nil, err
+	}
+
+	return index, nil
 }

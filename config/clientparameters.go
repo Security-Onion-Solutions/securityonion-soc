@@ -192,7 +192,8 @@ type GridParameters struct {
 
 type DetectionParameters struct {
 	HuntingParameters
-	Presets map[string]PresetParameters `json:"presets"`
+	Presets              map[string]PresetParameters `json:"presets"`
+	SeverityTranslations map[string]string           `json:"severityTranslations"`
 }
 
 func (params *DetectionParameters) Verify() error {

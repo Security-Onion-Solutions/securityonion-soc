@@ -2107,61 +2107,6 @@ const huntComponent = {
 
       window.open(url, target);
     },
-    async CreateDetection() {
-      const response = await this.$root.papi.post('/detection', {
-        publicId: 'ABCDEF',
-        title: 'First!',
-        severity: 'low',
-        author: 'Corey Ogburn',
-        description: 'first try',
-        content: 'rule goes here',
-        isEnabled: true,
-        isReporting: true,
-        Engine: 'suricata'
-      });
-
-      console.log('CREATE', response);
-      this.onionID = response.data.id;
-      console.log('onionID', this.onionID);
-    },
-    async GetDetection() {
-      if (this.onionID) {
-        const response = await this.$root.papi.get('/detection/' + this.onionID);
-
-        console.log('GET', response);
-      } else {
-        console.log('No onionID');
-      }
-    },
-    async UpdateDetection() {
-      if (this.onionID) {
-        const response = await this.$root.papi.put('/detection', {
-          id: this.onionID,
-          publicId: 'ABCDEF',
-          title: 'Second!',
-          severity: 'low',
-          author: 'Corey Ogburn',
-          description: 'first try',
-          content: 'rule goes here',
-          isEnabled: true,
-          isReporting: true,
-          Engine: 'suricata'
-        });
-
-        console.log('UPDATE', response);
-      } else {
-        console.log('No onionID');
-      }
-    },
-    async DeleteDetection() {
-      if (this.onionID) {
-        const response = await this.$root.papi.delete('/detection/' + this.onionID);
-
-        console.log('DELETE', response);
-      } else {
-        console.log('No onionID');
-      }
-    },
     print(x) {
       console.log(x);
     }

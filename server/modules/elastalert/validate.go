@@ -47,7 +47,7 @@ type SigmaRule struct {
 	Title          string                 `yaml:"title"`
 	ID             *string                `yaml:"id"`
 	LogSource      LogSource              `yaml:"logsource"`
-	Detection      Detection              `yaml:"detection"`
+	Detection      SigmaDetection              `yaml:"detection"`
 	Status         *SigmaStatus           `yaml:"status"`
 	Description    *string                `yaml:"description"`
 	License        *string                `yaml:"license"`
@@ -69,7 +69,7 @@ type LogSource struct {
 	Definition *string `yaml:"definition"`
 }
 
-type Detection struct {
+type SigmaDetection struct {
 	Condition OneOrMore[string]      `yaml:"condition"`
 	Rest      map[string]interface{} `yaml:",inline"`
 }

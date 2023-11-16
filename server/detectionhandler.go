@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -78,6 +79,16 @@ func (h *DetectionHandler) postDetection(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	for _, over := range detect.Overrides {
+		if over.CreatedAt.IsZero() {
+			over.CreatedAt = time.Now()
+		}
+
+		if over.UpdatedAt.IsZero() {
+			over.UpdatedAt = time.Now()
+		}
+	}
+
 	detect, err = h.server.Detectionstore.CreateDetection(ctx, detect)
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
@@ -138,6 +149,16 @@ func (h *DetectionHandler) putDetection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	for _, over := range detect.Overrides {
+		if over.CreatedAt.IsZero() {
+			over.CreatedAt = time.Now()
+		}
+
+		if over.UpdatedAt.IsZero() {
+			over.UpdatedAt = time.Now()
+		}
+	}
+
 	old, err := h.server.Detectionstore.GetDetection(ctx, detect.Id)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -145,14 +166,15 @@ func (h *DetectionHandler) putDetection(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if old.IsCommunity {
-		// the only editable fields for community rules are IsEnabled, IsReporting, and Note
+		// the only editable fields for community rules are IsEnabled, IsReporting, Note, and Overrides
 		old.IsEnabled = detect.IsEnabled
 		old.IsReporting = detect.IsReporting
 		old.Note = detect.Note
+		old.Overrides = detect.Overrides
 
 		detect = old
 
-		log.Infof("existing detection %s is a community rule, only updating IsEnabled, IsReporting, and Note", detect.Id)
+		log.Infof("existing detection %s is a community rule, only updating IsEnabled, IsReporting, Note, and Overrides", detect.Id)
 	} else if detect.IsCommunity {
 		web.Respond(w, r, http.StatusBadRequest, errors.New("cannot update an existing non-community detection to make it a community detection"))
 		return
