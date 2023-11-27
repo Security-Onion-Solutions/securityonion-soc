@@ -123,11 +123,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			try {
 				const response = await this.$root.papi.get('detection/' + encodeURIComponent(this.$route.params.id));
 				this.detect = response.data;
-				if (this.detect.overrides) {
-					for (let i = 0; i < this.detect.overrides.length; i++) {
-						this.detect.overrides[i].index = i;
-					}
-				}
+				this.tagOverrides();
       } catch (error) {
         if (error.response != undefined && error.response.status == 404) {
           this.$root.showError(this.i18n.notFound);
@@ -214,13 +210,15 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		async stopEdit(commit) {
 			if (!commit) {
 				this.detect[this.editField] = this.origValue;
-			} else if (!this.isNew()) {
-				const response = await this.$root.papi.put('/detection', this.detect);
 			}
 
 			this.curEditTarget = null;
 			this.origValue = null;
 			this.editField = null;
+
+			if (commit && !this.isNew()) {
+				this.saveDetection(false);
+			}
 		},
 		async saveDetection(createNew) {
 			if (this.curEditTarget !== null) this.stopEdit(true);
@@ -256,21 +254,39 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			try {
 				let response;
+				this.$root.startLoading();
+
 				if (createNew) {
 					response = await this.$root.papi.post('/detection', this.detect);
 				} else {
 					response = await this.$root.papi.put('/detection', this.detect);
 				}
 
+				// get any expanded overrides before updating this.detect
+				let index = -1;
+				if (this.expanded && this.expanded.length) {
+					index = this.expanded[0].index;
+				}
+
+				this.detect = response.data;
+				this.tagOverrides();
 				this.origDetect = Object.assign({}, this.detect);
+
+				// reinstate expanded override
+				if (index != -1 && this.detect.overrides && this.detect.overrides.length > index) {
+					this.expand(this.detect.overrides[index]);
+				}
 
 				this.$root.showTip(this.i18n.saveSuccess);
 
 				if (createNew) {
 					this.$router.push({ name: 'detection', params: { id: response.data.id } });
 				}
+
 			} catch (error) {
 				this.$root.showError(error);
+			} finally {
+				this.$root.stopLoading();
 			}
 		},
 		async duplicateDetection() {
@@ -584,6 +600,28 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		deleteOverride(item) {
 			this.detect.overrides = this.detect.overrides.filter(o => o !== item);
 			this.saveDetection(false);
+		},
+		canAddOverride() {
+			if (this.detect.engine === 'elastalert') {
+				if (this.detect.overrides && this.detect.overrides.length > 0) {
+					for (let i = 0; i < this.detect.overrides.length; i++) {
+						if (this.detect.overrides[i].type === 'custom filter') {
+							// elastalert detections that already have a custom filter
+							// cannot have any other custom filter overrides
+							return false;
+						}
+					}
+				}
+			}
+
+			return true;
+		},
+		tagOverrides() {
+			if (this.detect.overrides) {
+				for (let i = 0; i < this.detect.overrides.length; i++) {
+					this.detect.overrides[i].index = i;
+				}
+			}
 		},
 		print(x) {
 			console.log(x);
