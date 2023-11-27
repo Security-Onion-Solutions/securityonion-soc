@@ -451,6 +451,13 @@ func (s *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*
 	disabled.Value = strings.Join(disabledLines, "\n")
 	modify.Value = strings.Join(modifyLines, "\n")
 
+	yamlThreshold, err := yaml.Marshal(thresholdIndex)
+	if err != nil {
+		return errMap, err
+	}
+
+	threshold.Value = string(yamlThreshold)
+
 	err = s.srv.Configstore.UpdateSetting(ctx, local, false)
 	if err != nil {
 		return errMap, err
@@ -467,6 +474,11 @@ func (s *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*
 	}
 
 	err = s.srv.Configstore.UpdateSetting(ctx, modify, false)
+	if err != nil {
+		return errMap, err
+	}
+
+	err = s.srv.Configstore.UpdateSetting(ctx, threshold, false)
 	if err != nil {
 		return errMap, err
 	}

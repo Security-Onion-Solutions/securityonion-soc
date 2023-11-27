@@ -287,6 +287,7 @@ const i18n = {
       email: 'Email Address',
       emailHelp: 'Specify a valid email address. Contact your administrator for new account creation.',
       emailRequired: 'An email address must be specified.',
+      enabled: 'Enabled',
       endTime: 'Filter End',
       endTimeHelp: 'Filter end time in RFC 3339 format (Ex: 2020-10-16 15:30:00.230-04:00). Unused for imported PCAPs.',
       engine: 'Engine',

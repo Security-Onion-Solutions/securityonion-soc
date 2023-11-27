@@ -602,7 +602,7 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 		return "", fmt.Errorf("sigconverter returned error: %s", rule)
 	}
 
-	elastRule, err := wrapRule(det, string(rawRule))
+	elastRule, err := wrapRule(det, rule)
 	if err != nil {
 		return "", fmt.Errorf("unable to wrap rule: %w", err)
 	}
@@ -758,6 +758,14 @@ func wrapRule(det *model.Detection, rule string) (string, error) {
 	}
 
 	sevNum := severities[det.Severity]
+
+	// apply the first (should only have 1) CustomFilter override if any
+	for _, o := range det.Overrides {
+		if o.Type == model.OverrideTypeCustomFilter && o.CustomFilter != nil {
+			rule = fmt.Sprintf("(%s) and %s", rule, *o.CustomFilter)
+			break
+		}
+	}
 
 	wrapper := &CustomWrapper{
 		PlayTitle:     det.Title,

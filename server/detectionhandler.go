@@ -149,6 +149,12 @@ func (h *DetectionHandler) putDetection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	err = detect.Validate()
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
 	for _, over := range detect.Overrides {
 		if over.CreatedAt.IsZero() {
 			over.CreatedAt = time.Now()
