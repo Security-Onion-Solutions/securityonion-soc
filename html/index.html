@@ -1155,7 +1155,7 @@
                           <!-- (threshold) type -->
                           <v-select v-if="newOverride.type === 'threshold'" id="new-override-threshold-type-edit" v-model="newOverride.thresholdType" :items="thresholdTypes" :rules="[rules.required]" persistent-hint :hint="i18n.thresholdType"></v-select>
                           <!-- track -->
-                          <v-select v-if="['threshold', 'suppress'].includes(newOverride.type)" id="new-override-track-edit" v-model="newOverride.track" :items="trackOptions" :rules="[rules.required]" persistent-hint :hint="i18n.track"></v-select>
+                          <v-select v-if="['threshold', 'suppress'].includes(newOverride.type)" id="new-override-track-edit" v-model="newOverride.track" :items="getTrackOptions(newOverride.type)" :rules="[rules.required]" persistent-hint :hint="i18n.track"></v-select>
                           <!-- ip -->
                           <v-text-field v-if="newOverride.type === 'suppress'" id="new-override-ip-edit" v-model="newOverride.ip" :rules="[rules.required, rules.cidrFormat]" persistent-hint :hint="i18n.ipCidr"></v-text-field>
                           <!-- count -->
@@ -1263,7 +1263,7 @@
                             <span id="override-track" v-if="!isOverrideEdit('override-track')" @click="startOverrideEdit('override-track', item, 'track')">
                               {{item.track}}
                             </span>
-                            <v-select v-else id="override-track-edit" ref="override-track" v-model="item.track" :items="trackOptions" :rules="[rules.required]" persistent-hint :hint="i18n.type" @change="stopOverrideEdit(true)"></v-select>
+                            <v-select v-else id="override-track-edit" ref="override-track" v-model="item.track" :items="getTrackOptions(item.type)" :rules="[rules.required]" persistent-hint :hint="i18n.type" @change="stopOverrideEdit(true)"></v-select>
                           </div>
                           <!-- ip -->
                           <div v-if="item.type === 'suppress'">

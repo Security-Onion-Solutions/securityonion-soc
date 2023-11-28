@@ -18,8 +18,8 @@ function debounce(fn, wait) {
 }
 
 routes.push({ path: '/detection/:id', name: 'detection', component: {
-  template: '#page-detection',
-  data() { return {
+	template: '#page-detection',
+	data() { return {
 		i18n: this.$root.i18n,
 		presets: {},
 		severityTranslations: {},
@@ -72,22 +72,21 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			{ value: 'limit', text: 'Limit' },
 			{ value: 'both', text: 'Both' }
 		],
-		trackOptions: ['by_src', 'by_dst', 'by_either'],
-  }},
+	}},
 	created() {
 		this.onDetectionChange = debounce(this.onDetectionChange, 300);
-  },
-  watch: {
+	},
+	watch: {
 	},
 	mounted() {
 		this.$watch(
-      () => this.$route.params,
-      (to, prev) => {
+			() => this.$route.params,
+			(to, prev) => {
 				this.loadData();
 			});
 		this.$root.loadParameters('detection', this.initDetection);
 	},
-  methods: {
+	methods: {
 		async initDetection(params) {
 			this.params = params;
 			this.presets = params['presets'];
@@ -127,26 +126,26 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				const response = await this.$root.papi.get('detection/' + encodeURIComponent(this.$route.params.id));
 				this.detect = response.data;
 				this.tagOverrides();
-      } catch (error) {
-        if (error.response != undefined && error.response.status == 404) {
-          this.$root.showError(this.i18n.notFound);
-        } else {
-          this.$root.showError(error);
-        }
+			} catch (error) {
+				if (error.response != undefined && error.response.status == 404) {
+					this.$root.showError(this.i18n.notFound);
+				} else {
+					this.$root.showError(error);
+				}
 			}
 
-      this.$root.stopLoading();
+			this.$root.stopLoading();
 		},
 		getDefaultPreset(preset) {
-      if (this.presets) {
-        const presets = this.presets[preset];
-        if (presets && presets.labels && presets.labels.length > 0) {
-          return presets.labels[0];
-        }
-      }
-      return "";
-    },
-    getPresets(kind) {
+			if (this.presets) {
+				const presets = this.presets[preset];
+				if (presets && presets.labels && presets.labels.length > 0) {
+					return presets.labels[0];
+				}
+			}
+			return "";
+		},
+		getPresets(kind) {
 			if (this.presets && this.presets[kind]) {
 				switch (kind) {
 					case 'severity':
@@ -155,8 +154,18 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					default:
 						return this.presets[kind].labels;
 				}
-      }
-      return [];
+			}
+			return [];
+		},
+		getTrackOptions(type) {
+			switch (type) {
+				case 'threshold':
+					return ['by_src', 'by_dst'];
+				case 'suppress':
+					return ['by_src', 'by_dst', 'by_either'];
+			}
+
+			return [];
 		},
 		capitalizeOptions(opts) {
 			return opts.map(opt => {
@@ -174,12 +183,12 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			return rules;
 		},
-    isPresetCustomEnabled(kind) {
-      if (this.presets && this.presets[kind]) {
-        return this.presets[kind].customEnabled == true;
-      }
-      return false;
-    },
+		isPresetCustomEnabled(kind) {
+			if (this.presets && this.presets[kind]) {
+				return this.presets[kind].customEnabled == true;
+			}
+			return false;
+		},
 		isNew() {
 			return this.$route.params.id === 'create';
 		},
@@ -434,51 +443,51 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			}
 		},
 		saveSetting(name, value, defaultValue = null) {
-      var item = 'settings.detection.' + name;
-      if (defaultValue == null || value != defaultValue) {
-        localStorage[item] = value;
-      } else {
-        localStorage.removeItem(item);
-      }
-    },
-    saveLocalSettings() {
-      this.saveSetting('sortDesc', this.sortDesc, true);
-      this.saveSetting('itemsPerPage', this.itemsPerPage, this.params['eventItemsPerPage']);
-      this.saveSetting('relativeTimeValue', this.relativeTimeValue, this.params['relativeTimeValue']);
-      this.saveSetting('relativeTimeUnit', this.relativeTimeUnit, this.params['relativeTimeUnit']);
+			var item = 'settings.detection.' + name;
+			if (defaultValue == null || value != defaultValue) {
+				localStorage[item] = value;
+			} else {
+				localStorage.removeItem(item);
+			}
+		},
+		saveLocalSettings() {
+			this.saveSetting('sortDesc', this.sortDesc, true);
+			this.saveSetting('itemsPerPage', this.itemsPerPage, this.params['eventItemsPerPage']);
+			this.saveSetting('relativeTimeValue', this.relativeTimeValue, this.params['relativeTimeValue']);
+			this.saveSetting('relativeTimeUnit', this.relativeTimeUnit, this.params['relativeTimeUnit']);
 		},
 		sortOverrides(items, index, isDesc) {
-      const route = this;
-      if (index && index.length > 0) {
-        index = index[0];
-      }
-      if (isDesc && isDesc.length > 0) {
-        isDesc = isDesc[0];
-      }
-      items.sort((a, b) => {
-        if (index === "event.severity_label") {
-          return route.defaultSort(route.lookupAlertSeverityScore(a[index]), route.lookupAlertSeverityScore(b[index]), isDesc);
-        } else {
-          return route.defaultSort(a[index], b[index], isDesc);
-        }
-      });
-      return items
+			const route = this;
+			if (index && index.length > 0) {
+				index = index[0];
+			}
+			if (isDesc && isDesc.length > 0) {
+				isDesc = isDesc[0];
+			}
+			items.sort((a, b) => {
+				if (index === "event.severity_label") {
+					return route.defaultSort(route.lookupAlertSeverityScore(a[index]), route.lookupAlertSeverityScore(b[index]), isDesc);
+				} else {
+					return route.defaultSort(a[index], b[index], isDesc);
+				}
+			});
+			return items
 		},
 		defaultSort(a, b, isDesc) {
-      if (!isDesc) {
-        return a < b ? -1 : 1;
-      }
-      return b < a ? -1 : 1;
-    },
+			if (!isDesc) {
+				return a < b ? -1 : 1;
+			}
+			return b < a ? -1 : 1;
+		},
 		expand(item) {
-      if (this.isExpanded(item)) {
-        this.expanded = [];
-      } else {
-        this.expanded = [item];
+			if (this.isExpanded(item)) {
+				this.expanded = [];
+			} else {
+				this.expanded = [item];
 			}
 		},
 		isExpanded(item) {
-      return (this.expanded.length > 0 && this.expanded[0] === item);
+			return (this.expanded.length > 0 && this.expanded[0] === item);
 		},
 		createNewOverride() {
 			this.newOverride = {
@@ -637,5 +646,5 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		print(x) {
 			console.log(x);
 		},
-  }
+	}
 }});
