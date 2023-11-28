@@ -155,20 +155,38 @@ func (h *DetectionHandler) putDetection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	for _, over := range detect.Overrides {
-		if over.CreatedAt.IsZero() {
-			over.CreatedAt = time.Now()
-		}
-
-		if over.UpdatedAt.IsZero() {
-			over.UpdatedAt = time.Now()
-		}
-	}
-
 	old, err := h.server.Detectionstore.GetDetection(ctx, detect.Id)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
+	}
+
+	now := time.Now()
+
+	for _, over := range detect.Overrides {
+		if over.CreatedAt.IsZero() {
+			over.CreatedAt = now
+		}
+
+		update := true
+		for i, oldOver := range old.Overrides {
+			if *over == *oldOver {
+				// Did the old detection contain an override with the EXACT same parameters?
+				// If so, we don't need to update the UpdatedAt field.
+				update = false
+
+				// A match was found, the old override can be removed from the list so it
+				// isn't compared to other overrides. i.e. removing it means it can only
+				// match one override in the new list.
+				old.Overrides = append(old.Overrides[:i], old.Overrides[i+1:]...)
+
+				break
+			}
+		}
+
+		if over.UpdatedAt.IsZero() || update {
+			over.UpdatedAt = now
+		}
 	}
 
 	if old.IsCommunity {
