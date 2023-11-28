@@ -1182,7 +1182,7 @@
                     </div>
                   </v-col>
                   <v-data-table :sort-by.sync="sortBy" :expanded.sync="expanded" :sort-desc.sync="sortDesc" must-sort :headers="overrideHeaders"
-                    :items="detect.overrides" item-value="index" show-expand single-expand :custom-sort="sortOverrides" hide-default-footer="true">
+                    :items="detect.overrides" item-key="index" show-expand single-expand :custom-sort="sortOverrides" hide-default-footer="true">
                     <template v-slot:item="{ item, index }">
                       <tr>
                         <td>
