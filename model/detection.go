@@ -111,17 +111,17 @@ type Override struct {
 
 type OverrideParameters struct {
 	// suricata
-	Regex         *string `json:"regex,omitempty" yaml:"regex,omitempty"`                 // modify
-	Value         *string `json:"value,omitempty" yaml:"value,omitempty"`                 // modify
-	GenID         *int    `json:"-" yaml:"genId,omitempty"`                               // suppress, threshold
-	ThresholdType *string `json:"thresholdType,omitempty" yaml:"thresholdType,omitempty"` // threshold
-	Track         *string `json:"track,omitempty" yaml:"track,omitempty"`                 // suppress, threshold
-	IP            *string `json:"ip,omitempty" yaml:"ip,omitempty"`                       // suppress
-	Count         *int    `json:"count,omitempty" yaml:"count,omitempty"`                 // threshold
-	Seconds       *int    `json:"seconds,omitempty" yaml:"seconds,omitempty"`             // threshold
+	Regex         *string `json:"regex,omitempty" yaml:"regex,omitempty"`        // modify
+	Value         *string `json:"value,omitempty" yaml:"value,omitempty"`        // modify
+	GenID         *int    `json:"-" yaml:"gen_id,omitempty"`                     // suppress, threshold
+	ThresholdType *string `json:"thresholdType,omitempty" yaml:"type,omitempty"` // threshold
+	Track         *string `json:"track,omitempty" yaml:"track,omitempty"`        // suppress, threshold
+	IP            *string `json:"ip,omitempty" yaml:"ip,omitempty"`              // suppress
+	Count         *int    `json:"count,omitempty" yaml:"count,omitempty"`        // threshold
+	Seconds       *int    `json:"seconds,omitempty" yaml:"seconds,omitempty"`    // threshold
 
 	// elastalert
-	CustomFilter *string `json:"customFilter,omitempty" yaml:"customFilter,omitempty"` // modify
+	CustomFilter *string `json:"customFilter,omitempty" yaml:"-"` // modify
 }
 
 func (o Override) MarshalYAML() (interface{}, error) {
@@ -194,13 +194,16 @@ func (o *Override) Validate(engine EngineName) error {
 				return errors.New("unnecessary fields in override")
 			}
 		case OverrideTypeSuppress:
-			if o.Value == nil || o.Track == nil || o.Count == nil || o.Seconds == nil {
+			if o.IP == nil || o.Track == nil {
 				return errors.New("missing required parameter(s)")
 			}
 
 			if o.Regex != nil ||
+				o.Value != nil ||
 				o.GenID != nil ||
 				o.ThresholdType != nil ||
+				o.Count != nil ||
+				o.Seconds != nil ||
 				o.CustomFilter != nil {
 				return errors.New("unnecessary fields in override")
 			}
