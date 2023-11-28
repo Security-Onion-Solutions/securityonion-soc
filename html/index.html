@@ -254,6 +254,9 @@
       <v-footer app>
         <span id="version" class="text-no-wrap">
           {{ i18n.version }}: {{ version }}
+          <a class="mx-2" target="so-help" :href="parameters.docsUrl + 'eol.html'">
+            <v-icon :color="$root.eol_color(new Date())":title="i18n.versionEolHelp">fa-exclamation-triangle</v-icon>
+          </a>
         </span>
         <v-spacer></v-spacer>
         <span class="text-no-wrap d-none d-md-flex">
@@ -2828,7 +2831,7 @@
     <script src="js/external/vue-2.7.14.min.js"></script>
     <script src="js/external/vue-router-3.5.2.min.js"></script>
     <script src="js/external/vuetify-v2.6.15.min.js"></script>
-    <script src="js/external/axios-1.4.0.min.js"></script>
+    <script src="js/external/axios-1.6.1.min.js"></script>
     <script src="js/external/moment-2.29.4.min.js"></script>
     <script src="js/external/moment-timezone-with-data-0.5.43.min.js"></script>
     <script src="js/external/chart-3.9.1.min.js"></script>
