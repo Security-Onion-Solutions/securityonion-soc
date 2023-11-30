@@ -95,6 +95,10 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 				Query: "so_detection.isEnabled:true",
 			},
 			{
+				Name:  "Disabled",
+				Query: "so_detection.isEnabled:false",
+			},
+			{
 				Name:  "Suricata",
 				Query: "so_detection.engine:suricata",
 			},
@@ -107,8 +111,16 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 				Query: "so_detection.engine:suricata AND so_detection.isEnabled:true",
 			},
 			{
+				Name:  "Suricata Disabled",
+				Query: "so_detection.engine:suricata AND so_detection.isEnabled:false",
+			},
+			{
 				Name:  "ElastAlert Enabled",
 				Query: "so_detection.engine:elastalert AND so_detection.isEnabled:true",
+			},
+			{
+				Name:  "ElastAlert Disabled",
+				Query: "so_detection.engine:elastalert AND so_detection.isEnabled:false",
 			},
 		}
 	}
