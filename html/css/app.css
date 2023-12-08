@@ -165,13 +165,15 @@ a#title, a#title:visited, a#title:active, a#title:hover {
 
 .filter.label {
   display: inline-block;
-  padding-right: 10px;
   width: 45%;
   text-align: right;
   white-space: nowrap;
+  vertical-align: top;
 }
 
 .filter.value {
+  display: inline-block;
+  width: 55%;
   text-align: left;
   font-weight: bold;
   white-space: nowrap;
