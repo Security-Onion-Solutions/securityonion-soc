@@ -7,6 +7,7 @@
 const NodeStatusUnknown = "unknown";
 const NodeStatusFault = "fault";
 const NodeStatusOk = "ok";
+const NodeStatusPending = "pending";
 
 routes.push({ path: '/grid', name: 'grid', component: {
   template: '#page-grid',
@@ -19,12 +20,23 @@ routes.push({ path: '/grid', name: 'grid', component: {
       { text: this.$root.i18n.id, value: 'id' },
       { text: this.$root.i18n.role, value: 'role', align: ' d-none d-md-table-cell' },
       { text: this.$root.i18n.address, value: 'address', align: ' d-none d-lg-table-cell' },
-      { text: this.$root.i18n.description, value: 'description', align: ' d-none d-lg-table-cell' },
       { text: this.$root.i18n.version, value: 'version', align: ' d-none d-lg-table-cell' },
       { text: this.$root.i18n.model, value: 'model', align: ' d-none d-lg-table-cell' },
       { text: this.$root.i18n.eps, value: 'consumptionEps', align: ' d-none d-lg-table-cell' },
+      { text: this.$root.i18n.memUsageAbbr, value: 'memUsedPct', align: ' d-none d-xl-table-cell' },
+      { text: this.$root.i18n.diskUsageRootAbbr, value: 'diskUsedRootPct', align: ' d-none d-xl-table-cell' },
+      { text: this.$root.i18n.diskUsageNsmAbbr, value: 'diskUsedNsmPct', align: ' d-none d-xl-table-cell' },
+      { text: this.$root.i18n.cpuUsageAbbr, value: 'cpuUsedPct', align: ' d-none d-xl-table-cell' },
+      { text: this.$root.i18n.trafficManInAbbr, value: 'trafficManInMbs', align: ' d-none d-xl-table-cell' },
+      { text: this.$root.i18n.trafficManOutAbbr, value: 'trafficManOutMbs', align: ' d-none d-xl-table-cell' },
+      { text: this.$root.i18n.trafficMonInAbbr, value: 'trafficMonInMbs', align: ' d-none d-xl-table-cell' },
+      { text: this.$root.i18n.trafficMonInDropsAbbr, value: 'trafficMonInDropsMbs', align: ' d-none d-xl-table-cell' },
+      { text: this.$root.i18n.captureLossAbbr, value: 'captureLossPct', align: ' d-none d-xl-table-cell' },
+      { text: this.$root.i18n.zeekLossAbbr, value: 'zeekLossPct', align: ' d-none d-xl-table-cell' },
+      { text: this.$root.i18n.suricataLossAbbr, value: 'suriLossPct', align: ' d-none d-xl-table-cell' },
+      { text: this.$root.i18n.stenoLossAbbr, value: 'stenoLossPct', align: ' d-none d-xl-table-cell' },
+      { text: this.$root.i18n.pcapRetentionAbbr, value: 'pcapDays', align: ' d-none d-xl-table-cell' },
       { text: this.$root.i18n.dateUpdated, value: 'updateTime', align: ' d-none d-lg-table-cell' },
-      { text: this.$root.i18n.dateDataEpoch, value: 'epochTime', align: ' d-none d-lg-table-cell' },
       { text: this.$root.i18n.uptime, value: 'uptimeSeconds', align: ' d-none d-lg-table-cell' },
       { text: this.$root.i18n.status, value: 'status' },
       { text: '', value: 'keywords', align: ' d-none' },
@@ -39,6 +51,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
     selectedId: null,
     selectedNode: null,
     gridMemberTestConfirmDialog: false,
+    gridMemberRestartConfirmDialog: false,
     gridMemberUploadConfirmDialog: false,
     uploadForm: { valid: true, attachment: null },
     maxUploadSizeBytes: 25 * 1024 * 1024,
@@ -49,6 +62,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
     },
     attachment: null,
     zone: '',
+    moreColumns: false,
   }},
   created() {
     Vue.filter('colorNodeStatus', this.colorNodeStatus);
@@ -69,6 +83,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
     'sortBy': 'saveLocalSettings',
     'sortDesc': 'saveLocalSettings',
     'itemsPerPage': 'saveLocalSettings',
+    'moreColumns': 'saveLocalSettings',
   },
   methods: {
     initGrid(params) {
@@ -98,20 +113,36 @@ routes.push({ path: '/grid', name: 'grid', component: {
       this.$root.subscribe("node", this.updateNode);
       this.$root.subscribe("status", this.updateStatus);
     },
+    updateColumnClass(text, wide, size) {
+      const column = this.headers.find(function(item) {
+        return item.text == text
+      });
+      if (column) {
+        if (!wide) {
+          column.align = ' d-none';
+        } else {
+          column.align = ' d-none ' + size;
+        }
+      }
+
+    },
     updateMetricsEnabled() {
       this.metricsEnabled = !this.nodes.every(function(node) { return !node.metricsEnabled; });
 
-      const route = this;
-      const epsColumn = this.headers.find(function(item) {
-        return item.text == route.i18n.eps
-      });
-      if (epsColumn) {
-        if (!this.metricsEnabled) {
-          epsColumn.align = ' d-none';
-        } else {
-          epsColumn.align = ' d-none d-lg-table-cell';
-        }
-      }
+      this.updateColumnClass(this.i18n.eps, this.metricsEnabled, 'd-lg-table-cell');
+      this.updateColumnClass(this.i18n.memUsageAbbr, this.metricsEnabled, 'd-xl-table-cell');
+      this.updateColumnClass(this.i18n.diskUsageRootAbbr, this.metricsEnabled, 'd-xl-table-cell');
+      this.updateColumnClass(this.i18n.diskUsageNsmAbbr, this.metricsEnabled, 'd-xl-table-cell');
+      this.updateColumnClass(this.i18n.cpuUsageAbbr, this.metricsEnabled, 'd-xl-table-cell');
+      this.updateColumnClass(this.i18n.trafficManInAbbr, this.metricsEnabled, 'd-xl-table-cell');
+      this.updateColumnClass(this.i18n.trafficManOutAbbr, this.metricsEnabled, 'd-xl-table-cell');
+      this.updateColumnClass(this.i18n.trafficMonInAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
+      this.updateColumnClass(this.i18n.trafficMonInDropsAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
+      this.updateColumnClass(this.i18n.captureLossAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
+      this.updateColumnClass(this.i18n.zeekLossAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
+      this.updateColumnClass(this.i18n.suricataLossAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
+      this.updateColumnClass(this.i18n.stenoLossAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
+      this.updateColumnClass(this.i18n.pcapRetentionAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
     },
     expand(item) {
       if (this.isExpanded(item)) {
@@ -124,12 +155,14 @@ routes.push({ path: '/grid', name: 'grid', component: {
       return (this.expanded.length > 0 && this.expanded[0] == item);
     },
     saveLocalSettings() {
+      localStorage['settings.grid.moreColumns'] = this.moreColumns;
       localStorage['settings.grid.sortBy'] = this.sortBy;
       localStorage['settings.grid.sortDesc'] = this.sortDesc;
       localStorage['settings.grid.itemsPerPage'] = this.itemsPerPage;
     },
     loadLocalSettings() {
       if (localStorage['timezone']) this.zone = localStorage['timezone'];
+      if (localStorage['settings.grid.moreColumns']) this.moreColumns = localStorage['settings.grid.moreColumns'] == "true";
 
       if (localStorage['settings.grid.sortBy']) {
         this.sortBy = localStorage['settings.grid.sortBy'];
@@ -266,6 +299,42 @@ routes.push({ path: '/grid', name: 'grid', component: {
 
       this.hideUploadConfirm();
     },
+    showRestartConfirm(id) {
+      this.selectedId = id;
+      this.gridMemberRestartConfirmDialog = true;
+    },
+    hideRestartConfirm() {
+      this.gridMemberRestartConfirmDialog = false;
+      const tmpId = this.selectedId;
+      this.selectedId = null;
+      return tmpId;
+    },
+    async gridMemberRestart() {
+      const nodeId = this.hideRestartConfirm().replace('_so-', '_');
+      this.$root.startLoading();
+      try {
+        await this.$root.papi.post('gridmembers/' + nodeId + "/restart");
+        this.$root.showTip(this.i18n.gridMemberRestartSuccess);
+      } catch (error) {
+          this.$root.showError(error);
+      }
+      this.$root.stopLoading();
+    },
+    hasQueuestore(item) {
+      return item && item.containers && item.containers.find(function(x) {
+        return x.Name == 'so-redis';
+      }) != null;
+    },
+    hasEventstore(item) {
+      return item && item.containers && item.containers.find(function(x) {
+        return x.Name == 'so-elasticsearch';
+      }) != null;
+    },
+    hasMetricstore(item) {
+      return item && item.containers && item.containers.find(function(x) {
+        return x.Name == 'so-influxdb';
+      }) != null;
+    },
     formatNode(node) {
       node['keywords'] = this.$root.localizeMessage(node["role"] + '-keywords');
       node['dashboardLink'] = this.$root.getMetricsUrl() + "?vars%5BRole%5D=" + node.role.substring(3) + "&vars%5BHost%5D=" + node.id;
@@ -289,6 +358,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
       switch (status) {
         case NodeStatusFault: color = nonCritical ? "warning" : "error"; break;
         case NodeStatusOk: color = "success"; break;
+        case NodeStatusPending: color = "warning"; break;
       }
       return color;
     },
@@ -297,11 +367,22 @@ routes.push({ path: '/grid', name: 'grid', component: {
       switch (status) {
         case NodeStatusFault: icon = "fa-triangle-exclamation"; break;
         case NodeStatusOk: icon = "fa-circle-check"; break;
+        case NodeStatusPending: icon = "fa-circle-exclamation"; break;
       }
       return icon;
     },
     colorContainerStatus(status) {
-      return status == "running" ? "green" : "error";
+      return status == "running" ? "success" : "error";
+    },
+    formatLinearColor(val, caution, warn, crit) {
+      if (val >= crit) {
+        return "error";
+      } else if (val >= warn) {
+        return "warning";
+      } else if (val >= caution) {
+        return "info";
+      }
+      return "success";
     },
     saveTimezone() {
       localStorage['timezone'] = this.zone;

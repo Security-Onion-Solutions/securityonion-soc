@@ -13,7 +13,7 @@ import (
 
 const DEFAULT_ORG = ""
 const DEFAULT_BUCKET = "telegraf"
-const DEFAULT_CACHE_EXPIRATION_MS = 60000
+const DEFAULT_CACHE_EXPIRATION_MS = 30000
 const DEFAULT_MAX_METRIC_AGE_SECONDS = 1200
 
 type InfluxDB struct {

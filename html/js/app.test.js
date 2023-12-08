@@ -55,6 +55,25 @@ test('formatHours', () => {
   expect(app.formatHours(10.14)).toBe("10.14");
 });
 
+test('formatDecimals', () => {
+  expect(app.formatDecimal1(null)).toBe("0.0");
+  expect(app.formatDecimal2(null)).toBe("0.00");
+  expect(app.formatDecimal1(undefined)).toBe("0.0");
+  expect(app.formatDecimal2(undefined)).toBe("0.00");
+  expect(app.formatDecimal1("")).toBe("0.0");
+  expect(app.formatDecimal2("")).toBe("0.00");
+  expect(app.formatDecimal1(0)).toBe("0.0");
+  expect(app.formatDecimal2(0)).toBe("0.00");
+  expect(app.formatDecimal1(10.1445)).toBe("10.1");
+  expect(app.formatDecimal2(10.1445)).toBe("10.14");
+});
+
+test('formatCount', () => {
+  expect(app.formatCount(null)).toBe("0");
+  expect(app.formatCount(123)).toBe("123");
+  expect(app.formatCount(1234)).toBe("1,234");
+});
+
 test('formatStringArray', () => {
   expect(app.formatStringArray(['hi','there','foo'])).toBe('hi, there, foo');
   expect(app.formatStringArray(['hi','there'])).toBe('hi, there');

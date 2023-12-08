@@ -508,10 +508,19 @@ $(document).ready(function() {
         }
       },
       formatHours(hours) {
-        if (!hours) {
-          hours = 0.0;
+        return this.formatDecimal2(hours);
+      },
+      formatDecimal1(num) {
+        return this.formatDecimalPlaces(num, 1);
+      },
+      formatDecimal2(num) {
+        return this.formatDecimalPlaces(num, 2);
+      },
+      formatDecimalPlaces(num, places) {
+        if (!num) {
+          num = 0.0;
         }
-        return hours.toFixed(2);
+        return num.toFixed(places);
       },
       formatCount(count) {
         return Number(count).toLocaleString();
@@ -1015,6 +1024,8 @@ $(document).ready(function() {
       Vue.filter('formatDateTime', this.formatDateTime);
       Vue.filter('formatDuration', this.formatDuration);
       Vue.filter('formatHours', this.formatHours);
+      Vue.filter('formatDecimal1', this.formatDecimal1);
+      Vue.filter('formatDecimal2', this.formatDecimal2);
       Vue.filter('formatCount', this.formatCount);
       Vue.filter('formatMarkdown', this.formatMarkdown);
       Vue.filter('formatTimestamp', this.formatTimestamp);

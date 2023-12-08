@@ -113,3 +113,27 @@ func TestGetFailedEvents(tester *testing.T) {
 	assert.Equal(tester, 2, metrics.getFailedEvents("zoo"))
 	assert.Equal(tester, 0, metrics.getFailedEvents("missing"))
 }
+
+func TestGetEventstoreStatus(tester *testing.T) {
+	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
+	metrics.lastEventstoreUpdateTime = time.Now()
+	metrics.eventstoreStatus["foo"] = "green"
+	metrics.eventstoreStatus["bar"] = "red"
+	metrics.eventstoreStatus["zoo"] = "yellow"
+
+	assert.Equal(tester, "ok", metrics.getEventstoreStatus("foo"))
+	assert.Equal(tester, "fault", metrics.getEventstoreStatus("bar"))
+	assert.Equal(tester, "pending", metrics.getEventstoreStatus("zoo"))
+	assert.Equal(tester, "unknown", metrics.getEventstoreStatus("missing"))
+}
+
+func TestGetOsNeedsRestart(tester *testing.T) {
+	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
+	metrics.lastOsUpdateTime = time.Now()
+	metrics.osNeedsRestart["foo"] = 0
+	metrics.osNeedsRestart["bar"] = 1
+
+	assert.Equal(tester, 0, metrics.getOsNeedsRestart("foo"))
+	assert.Equal(tester, 1, metrics.getOsNeedsRestart("bar"))
+	assert.Equal(tester, 0, metrics.getOsNeedsRestart("missing"))
+}
