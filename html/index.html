@@ -3129,7 +3129,7 @@
                                 </span>
                               </div>
 
-                              <div v-if="item.metricsEnabled" class="text-no-wrap">
+                              <div v-if="item.metricsEnabled && hasEventstore(item)" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.epsConsumption }}</span>
                                 <span class="filter value">{{ item.consumptionEps | formatCount }}</span>
                               </div>
