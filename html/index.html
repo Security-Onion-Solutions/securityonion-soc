@@ -3082,7 +3082,7 @@
                                 <span class="filter label">{{ i18n.dateOnline }}:</span>
                                 <span :id="'nodeCreateTime_' + item.id" class="filter value">{{ item.onlineTime | toTZ }}</span>
                               </div>
-                              <div class="text-no-wrap">
+                              <div v-if="canTest(item)" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.dateDataEpoch }}:</span>
                                 <span :id="'nodeDataEpochTime_' + item.id" class="filter value">{{ item.epochTime | toTZ }}</span>
                               </div>
