@@ -3228,7 +3228,7 @@
                                 <span class="filter value">
                                   <v-progress-linear :value="item.diskUsedNsmPct" height="15" :color="formatLinearColor(item.diskUsedNsmPct, 85, 90, 95)">
                                     <template v-slot:default="{ value }">
-                                      {{ item.diskUsedNsmPct | formatDecimal1 }}% {{ i18n.of }} {{ item.diskUsedNsmGB | formatDecimal1 }} {{ i18n.gigabytes }}
+                                      {{ item.diskUsedNsmPct | formatDecimal1 }}% {{ i18n.of }} {{ item.diskTotalNsmGB | formatDecimal1 }} {{ i18n.gigabytes }}
                                     </template>
                                   </v-progress-linear>
                                 </span>
