@@ -3060,83 +3060,83 @@
                             <v-card-text>
                               <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.id }}:</span>
-                                <span class="filter value">{{ item.id }}</span>
+                                <span id="node_id" class="filter value">{{ item.id }}</span>
                               </div>
                               <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.role }}:</span>
-                                <span class="filter value">{{ $root.localizeMessage(item.role) }}</span>
+                                <span id="node_role" class="filter value">{{ $root.localizeMessage(item.role) }}</span>
                               </div>
                               <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.address }}:</span>
-                                <span class="filter value">{{ item.address }}</span>
+                                <span id="node_address" class="filter value">{{ item.address }}</span>
                               </div>
                               <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.version }}:</span>
-                                <span class="filter value">{{ item.version }}</span>
+                                <span id="node_version" class="filter value">{{ item.version }}</span>
                               </div>
                               <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.model }}:</span>
-                                <span class="filter value">{{ item.model }}</span>
+                                <span id="node_model" class="filter value">{{ item.model }}</span>
                               </div>
                               <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.dateOnline }}:</span>
-                                <span :id="'nodeCreateTime_' + item.id" class="filter value">{{ item.onlineTime | toTZ }}</span>
+                                <span id="node_createTime" class="filter value">{{ item.onlineTime | toTZ }}</span>
                               </div>
                               <div v-if="canTest(item)" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.dateDataEpoch }}:</span>
-                                <span :id="'nodeDataEpochTime_' + item.id" class="filter value">{{ item.epochTime | toTZ }}</span>
+                                <span id="node_dataEpoch" class="filter value">{{ item.epochTime | toTZ }}</span>
                               </div>
                               <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.dateUpdated }}:</span>
-                                <span :id="'nodeUpdateTime_' + item.id" class="filter value">{{ item.updateTime | toTZ }}</span>
+                                <span id="node_updateTime" class="filter value">{{ item.updateTime | toTZ }}</span>
                               </div>
                               <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.uptime }}:</span>
-                                <span class="filter value">{{ item.uptimeSeconds | formatDuration }}</span>
+                                <span class="filter value" id="node_age">{{ item.uptimeSeconds | formatDuration }}</span>
                               </div>
                               <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.osUptime }}:</span>
-                                <span class="filter value">{{ item.osUptimeSeconds | formatDuration }}</span>
-                                <span v-if="item.osNeedsRestart" id="restart-required-note" class="warning--text">{{ i18n.restartRequired }}</span>
+                                <span class="filter value" id="node_uptime">{{ item.osUptimeSeconds | formatDuration }}</span>
+                                <span v-if="item.osNeedsRestart" id="node_restart-required-note" class="warning--text">{{ i18n.restartRequired }}</span>
                               </div>
                               <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.nodeStatusProcess }}</span>
-                                <span :class="colorNodeStatus(item.processStatus) + '--text'" class="filter value">
+                                <span id="node_processStatus" :class="colorNodeStatus(item.processStatus) + '--text'" class="filter value">
                                   {{ $root.localizeMessage(item.processStatus) }}
-                                  <span v-if="item.nonCriticalNode">({{i18n.nonCriticalNode}})</span>
+                                  <span v-if="item.nonCriticalNode" id="node_processStatusNonCritical">({{i18n.nonCriticalNode}})</span>
                                 </span>
                               </div>
                               <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.nodeStatusConnection }}</span>
-                                <span :class="colorNodeStatus(item.connectionStatus, item.nonCriticalNode) + '--text'" class="filter value">
+                                <span id="node_connectionStatus" :class="colorNodeStatus(item.connectionStatus, item.nonCriticalNode) + '--text'" class="filter value">
                                   {{ $root.localizeMessage(item.connectionStatus) }}
-                                  <span v-if="item.nonCriticalNode">({{i18n.nonCriticalNode}})</span>
+                                  <span v-if="item.nonCriticalNode" id="node_connectionStatusNonCritical">({{i18n.nonCriticalNode}})</span>
                                 </span>
                               </div>
                               <div v-if="item.metricsEnabled && hasEventstore(item)"  class="text-no-wrap">
                                 <span class="filter label">{{ i18n.eventstoreStatus }}:</span>
-                                <span :class="colorNodeStatus(item.eventstoreStatus) + '--text'" class="filter value">
+                                <span id="node_eventstoreStatus" :class="colorNodeStatus(item.eventstoreStatus) + '--text'" class="filter value">
                                   {{ $root.localizeMessage(item.eventstoreStatus) }}
                                 </span>
                               </div>
                               <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.nodeStatusRaid }}</span>
                                 <span :class="colorNodeStatus(item.raidStatus) + '--text'" class="filter value">
-                                  <span v-if="!item.raidStatus || item.raidStatus == NodeStatusUnknown">
+                                  <span v-if="!item.raidStatus || item.raidStatus == NodeStatusUnknown" id="node_raidStatus" >
                                     {{ i18n.featureRequiresAppliance }}
                                   </span>
-                                  <span v-else v-text="$root.localizeMessage(item.raidStatus)"/>
+                                  <span v-else id="node_raidStatus" v-text="$root.localizeMessage(item.raidStatus)"/>
                                 </span>
                               </div>
 
                               <div v-if="item.metricsEnabled && hasEventstore(item)" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.epsConsumption }}</span>
-                                <span class="filter value">{{ item.consumptionEps | formatCount }}</span>
+                                <span class="filter value" id="node_consumptionEps">{{ item.consumptionEps | formatCount }}</span>
                               </div>
                               <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.memUsage }}:</span>
                                 <span class="filter value">
-                                  <v-progress-linear :value="item.memoryUsedPct" height="15" :color="formatLinearColor(item.memoryUsedPct, 70, 80, 90)">
+                                  <v-progress-linear id="node_memory" :value="item.memoryUsedPct" height="15" :color="formatLinearColor(item.memoryUsedPct, 70, 80, 90)">
                                     <template v-slot:default="{ value }">
                                       <strong>{{ item.memoryUsedPct | formatDecimal1 }}% {{ i18n.of }} {{ item.memoryTotalGB | formatDecimal1 }} {{ i18n.gigabytes }}</strong>
                                     </template>
@@ -3146,7 +3146,7 @@
                               <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.swapUsage }}:</span>
                                 <span class="filter value">
-                                  <v-progress-linear :value="item.swapUsedPct" height="15" :color="formatLinearColor(item.swapUsedPct, 70, 80, 90)">
+                                  <v-progress-linear id="node_swap" :value="item.swapUsedPct" height="15" :color="formatLinearColor(item.swapUsedPct, 70, 80, 90)">
                                     <template v-slot:default="{ value }">
                                       {{ item.swapUsedPct | formatDecimal1 }}% {{ i18n.of }} {{ item.swapTotalGB | formatDecimal1 }} {{ i18n.gigabytes }}
                                     </template>
@@ -3156,7 +3156,7 @@
                               <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.cpuUsage }}:</span>
                                 <span class="filter value">
-                                  <v-progress-linear :value="item.cpuUsedPct" height="15" :color="formatLinearColor(item.cpuUsedPct, 85, 90, 95)">
+                                  <v-progress-linear id="node_cpu" :value="item.cpuUsedPct" height="15" :color="formatLinearColor(item.cpuUsedPct, 85, 90, 95)">
                                     <template v-slot:default="{ value }">
                                       {{ item.cpuUsedPct | formatDecimal1 }}%
                                     </template>
@@ -3166,7 +3166,7 @@
                               <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.ioWait }}:</span>
                                 <span class="filter value">
-                                  <v-progress-linear :value="item.ioWaitPct" height="15" :color="formatLinearColor(item.ioWaitPct, 2.5, 5, 10)">
+                                  <v-progress-linear id="node_ioWait" :value="item.ioWaitPct" height="15" :color="formatLinearColor(item.ioWaitPct, 2.5, 5, 10)">
                                     <template v-slot:default="{ value }">
                                       {{ item.ioWaitPct | formatDecimal1 }}%
                                     </template>
@@ -3176,7 +3176,7 @@
                               <div v-if="item.metricsEnabled && canTest(item)" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.captureLoss }}:</span>
                                 <span class="filter value">
-                                  <v-progress-linear :value="item.captureLossPct" height="15" :color="formatLinearColor(item.captureLossPct, 0.01, 0.5, 1.5)">
+                                  <v-progress-linear id="node_captureLoss" :value="item.captureLossPct" height="15" :color="formatLinearColor(item.captureLossPct, 0.01, 0.5, 1.5)">
                                     <template v-slot:default="{ value }">
                                       {{ item.captureLossPct | formatDecimal1 }}%
                                     </template>
@@ -3186,7 +3186,7 @@
                               <div v-if="item.metricsEnabled && canTest(item)" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.zeekLoss }}:</span>
                                 <span class="filter value">
-                                  <v-progress-linear :value="item.zeekLossPct" height="15" :color="formatLinearColor(item.zeekLossPct, 0.01, 0.5, 1.5)">
+                                  <v-progress-linear id="node_zeekLoss" :value="item.zeekLossPct" height="15" :color="formatLinearColor(item.zeekLossPct, 0.01, 0.5, 1.5)">
                                     <template v-slot:default="{ value }">
                                       {{ item.zeekLossPct | formatDecimal1 }}%
                                     </template>
@@ -3196,7 +3196,7 @@
                               <div v-if="item.metricsEnabled && canTest(item)" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.suricataLoss }}:</span>
                                 <span class="filter value">
-                                  <v-progress-linear :value="item.suriLossPct" height="15" :color="formatLinearColor(item.suriLossPct, 0.01, 0.5, 1.5)">
+                                  <v-progress-linear id="node_suricataLoss" :value="item.suriLossPct" height="15" :color="formatLinearColor(item.suriLossPct, 0.01, 0.5, 1.5)">
                                     <template v-slot:default="{ value }">
                                       {{ item.suriLossPct | formatDecimal1 }}%
                                     </template>
@@ -3206,7 +3206,7 @@
                               <div v-if="item.metricsEnabled && canTest(item)" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.stenoLoss }}:</span>
                                 <span class="filter value">
-                                  <v-progress-linear :value="item.stenoLossPct" height="15" :color="formatLinearColor(item.stenoLossPct, 0.01, 0.5, 1.5)">
+                                  <v-progress-linear id="node_stenoLoss" :value="item.stenoLossPct" height="15" :color="formatLinearColor(item.stenoLossPct, 0.01, 0.5, 1.5)">
                                     <template v-slot:default="{ value }">
                                       {{ item.stenoLossPct | formatDecimal1 }}%
                                     </template>
@@ -3216,7 +3216,7 @@
                               <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.diskUsageRoot }}:</span>
                                 <span class="filter value">
-                                  <v-progress-linear :value="item.diskUsedRootPct" height="15" :color="formatLinearColor(item.diskUsedRootPct, 85, 90, 95)">
+                                  <v-progress-linear id="node_diskRoot" :value="item.diskUsedRootPct" height="15" :color="formatLinearColor(item.diskUsedRootPct, 85, 90, 95)">
                                     <template v-slot:default="{ value }">
                                       {{ item.diskUsedRootPct | formatDecimal1 }}% {{ i18n.of }} {{ item.diskTotalRootGB | formatDecimal1 }} {{ i18n.gigabytes }}
                                     </template>
@@ -3226,7 +3226,7 @@
                               <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.diskUsageNsm }}:</span>
                                 <span class="filter value">
-                                  <v-progress-linear :value="item.diskUsedNsmPct" height="15" :color="formatLinearColor(item.diskUsedNsmPct, 85, 90, 95)">
+                                  <v-progress-linear id="node_diskNsm" :value="item.diskUsedNsmPct" height="15" :color="formatLinearColor(item.diskUsedNsmPct, 85, 90, 95)">
                                     <template v-slot:default="{ value }">
                                       {{ item.diskUsedNsmPct | formatDecimal1 }}% {{ i18n.of }} {{ item.diskTotalNsmGB | formatDecimal1 }} {{ i18n.gigabytes }}
                                     </template>
@@ -3235,48 +3235,48 @@
                               </div>
                               <div v-if="item.metricsEnabled && hasEventstore(item)" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.diskUsageElastic }}:</span>
-                                <span class="filter value">{{ item.diskUsedElasticGB | formatDecimal1 }} {{ i18n.gigabytes }}</span>
+                                <span class="filter value" id="node_diskElastic">{{ item.diskUsedElasticGB | formatDecimal1 }} {{ i18n.gigabytes }}</span>
                               </div>
                               <div v-if="item.metricsEnabled && hasMetricstore(item)" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.diskUsageInfluxDb }}:</span>
-                                <span class="filter value">{{ item.diskUsedInfluxDbGB | formatDecimal1 }} {{ i18n.gigabytes }}</span>
+                                <span class="filter value" id="node_diskInflux">{{ item.diskUsedInfluxDbGB | formatDecimal1 }} {{ i18n.gigabytes }}</span>
                               </div>
                               <div v-if="item.metricsEnabled && canTest(item)" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.pcapRetention }}:</span>
-                                <span class="filter value">{{ item.pcapDays | formatDecimal1 }} {{ i18n.days }}</span>
+                                <span class="filter value" id="node_pcapRetention">{{ item.pcapDays | formatDecimal1 }} {{ i18n.days }}</span>
                               </div>
                               <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.loadAverage }}:</span>
-                                <span class="filter value">{{ item.load1m | formatDecimal1 }}, {{ item.load5m | formatDecimal1 }}, {{ item.load15m | formatDecimal1 }}</span>
+                                <span class="filter value" id="node_load">{{ item.load1m | formatDecimal1 }}, {{ item.load5m | formatDecimal1 }}, {{ item.load15m | formatDecimal1 }}</span>
                               </div>
                               <div v-if="item.metricsEnabled && hasQueuestore(item)" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.redisQueueSize }}:</span>
-                                <span class="filter value">{{ item.redisQueueSize | formatCount }}</span>
+                                <span class="filter value" id="node_redisQueue">{{ item.redisQueueSize | formatCount }}</span>
                               </div>
                               <div v-if="item.metricsEnabled && canTest(item)" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.trafficMonIn }}:</span>
-                                <span class="filter value">{{ item.trafficMonInMbs | formatDecimal1 }} {{ i18n.mbps }}</span>
+                                <span class="filter value" id="node_trafficMonIn">{{ item.trafficMonInMbs | formatDecimal1 }} {{ i18n.mbps }}</span>
                               </div>
                               <div v-if="item.metricsEnabled && canTest(item)" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.trafficMonInDrops }}:</span>
-                                <span class="filter value">{{ item.trafficMonInDropsMbs | formatDecimal1 }} {{ i18n.mbps }}</span>
+                                <span class="filter value" id="node_trafficMonInDrops">{{ item.trafficMonInDropsMbs | formatDecimal1 }} {{ i18n.mbps }}</span>
                               </div>
                               <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.trafficManIn }}:</span>
-                                <span class="filter value">{{ item.trafficManInMbs | formatDecimal1 }} {{ i18n.mbps }}</span>
+                                <span class="filter value" id="node_trafficManIn">{{ item.trafficManInMbs | formatDecimal1 }} {{ i18n.mbps }}</span>
                               </div>
                               <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.trafficManOut }}:</span>
-                                <span class="filter value">{{ item.trafficManOutMbs | formatDecimal1 }} {{ i18n.mbps }}</span>
+                                <span class="filter value" id="node_trafficManOut">{{ item.trafficManOutMbs | formatDecimal1 }} {{ i18n.mbps }}</span>
                               </div>
 
                               <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.keywords }}:</span>
-                                <span class="filter value text-wrap">{{ item.keywords }}</span>
+                                <span class="filter value text-wrap" id="node_keywords">{{ item.keywords }}</span>
                               </div>
                               <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.description }}:</span>
-                                <span class="filter value text-wrap">{{ item.description }}</span>
+                                <span class="filter value text-wrap" id="node_desc">{{ item.description }}</span>
                               </div>
                               <p/>
                               <div class="text-justify">
