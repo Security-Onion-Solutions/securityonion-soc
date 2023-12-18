@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/apex/log"
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	lop "github.com/samber/lo/parallel"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 )

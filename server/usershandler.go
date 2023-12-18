@@ -15,7 +15,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 )
 
 var idVerifier = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
