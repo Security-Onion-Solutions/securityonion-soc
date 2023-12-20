@@ -9,17 +9,23 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"io"
+	"io/fs"
 	"net/http"
-	"net/http/httptest"
 	"sort"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
-	"gopkg.in/yaml.v3"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/elastalert/mock"
+	"github.com/security-onion-solutions/securityonion-soc/util"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
+	"gopkg.in/yaml.v3"
 )
 
 func TestElastAlertModule(t *testing.T) {
@@ -191,21 +197,20 @@ func TestTimeFrame(t *testing.T) {
 }
 
 func TestSigmaToElastAlertSunnyDay(t *testing.T) {
-	callCount := 0
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method)
+	ctrl := gomock.NewController(t)
 
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte("<eql>"))
-		assert.NoError(t, err)
-
-		callCount++
-	}))
-	defer srv.Close()
+	mio := mock.NewMockIOManager(ctrl)
+	body := "<eql>"
+	mio.EXPECT().MakeRequest(gomock.Any()).Times(1).Return(&http.Response{
+		StatusCode:    http.StatusOK,
+		Body:          io.NopCloser(strings.NewReader(body)),
+		ContentLength: int64(len(body)),
+	}, nil)
 
 	engine := ElastAlertEngine{
-		sigconverterUrl:       srv.URL,
+		sigconverterUrl:       "localhost:8000/convert",
 		sigmaConversionTarget: "eql",
+		IOManager:             mio,
 	}
 
 	det := &model.Detection{
@@ -225,7 +230,7 @@ play_id: 00000000-0000-0000-0000-000000000000
 event.module: elastalert
 event.dataset: elastalert.alert
 event.severity: 4
-rule.category: TBD
+rule.category: ""
 sigma_level: high
 alert:
     - modules.so.playbook-es.PlaybookESAlerter
@@ -239,26 +244,24 @@ kibana_pivot: kibana_pivot
 soc_pivot: soc_pivot
 `
 	assert.YAMLEq(t, expected, wrappedRule)
-	assert.Equal(t, 1, callCount)
 }
 
 func TestSigmaToElastAlertError(t *testing.T) {
-	callCount := 0
+	ctrl := gomock.NewController(t)
+
+	mio := mock.NewMockIOManager(ctrl)
 	msg := "something went wrong"
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method)
-
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte("Error: " + msg))
-		assert.NoError(t, err)
-
-		callCount++
-	}))
-	defer srv.Close()
+	body := "Error: " + msg
+	mio.EXPECT().MakeRequest(gomock.Any()).Times(1).Return(&http.Response{
+		StatusCode:    http.StatusOK,
+		Body:          io.NopCloser(strings.NewReader(body)),
+		ContentLength: int64(len(body)),
+	}, nil)
 
 	engine := ElastAlertEngine{
-		sigconverterUrl:       srv.URL,
+		sigconverterUrl:       "localhost:3000/convert",
 		sigmaConversionTarget: "eql",
+		IOManager:             mio,
 	}
 
 	det := &model.Detection{
@@ -271,7 +274,7 @@ func TestSigmaToElastAlertError(t *testing.T) {
 	}
 
 	wrappedRule, err := engine.sigmaToElastAlert(context.Background(), det)
-	assert.Equal(t, "", wrappedRule)
+	assert.Empty(t, wrappedRule)
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, msg)
 }
@@ -336,28 +339,31 @@ level: high
 func TestDownloadSigmaPackages(t *testing.T) {
 	t.Parallel()
 
-	callCount := 0
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		callCount++
+	ctrl := gomock.NewController(t)
 
-		if r.RequestURI == "/fake.zip" {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
+	mio := mock.NewMockIOManager(ctrl)
+	body := "data"
 
-		assert.Equal(t, http.MethodGet, r.Method)
+	for i := 0; i < 5; i++ {
+		// can't use mock's Times(x) because the first response's body
+		// closing will result in remaining requests getting 0 data
+		mio.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+			StatusCode:    http.StatusOK,
+			Body:          io.NopCloser(strings.NewReader(body)),
+			ContentLength: int64(len(body)),
+		}, nil)
+	}
 
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("data"))
-
-	}))
-	defer srv.Close()
+	mio.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+		StatusCode: http.StatusNotFound,
+	}, nil)
 
 	pkgs := []string{"core", "core+", "core++", "emerging_threats_addon", "all_rules", "fake"}
 
 	engine := ElastAlertEngine{
 		sigmaRulePackages:            pkgs,
-		sigmaPackageDownloadTemplate: srv.URL + "/%s.zip",
+		sigmaPackageDownloadTemplate: "localhost:3000/%s.zip",
+		IOManager:                    mio,
 	}
 
 	pkgZips, errMap := engine.downloadSigmaPackages(context.Background())
@@ -366,8 +372,208 @@ func TestDownloadSigmaPackages(t *testing.T) {
 	assert.Len(t, pkgZips, len(pkgs)-1)
 
 	for _, pkg := range pkgs[:len(pkgs)-1] {
-		assert.Equal(t, []byte("data"), pkgZips[pkg])
+		assert.Equal(t, []byte(body), pkgZips[pkg])
+	}
+}
+
+const (
+	SimpleRuleSID = "10000"
+	SimpleRule    = `title: Griffon Malware Attack Pattern
+	id: bcc6f179-11cd-4111-a9a6-0fab68515cf7
+	status: experimental
+	description: Detects process execution patterns related to Griffon malware as reported by Kaspersky
+	references:
+			- https://securelist.com/fin7-5-the-infamous-cybercrime-rig-fin7-continues-its-activities/90703/
+	author: Nasreddine Bencherchali (Nextron Systems)
+	date: 2023/03/09
+	tags:
+			- attack.execution
+			- detection.emerging_threats
+	logsource:
+			category: process_creation
+			product: windows
+	detection:
+			selection:
+					CommandLine|contains|all:
+							- '\local\temp\'
+							- '//b /e:jscript'
+							- '.txt'
+			condition: selection
+	falsepositives:
+			- Unlikely
+	level: critical`
+)
+
+type MockDirEntry struct {
+	name  string
+	isDir bool
+	typ   fs.FileMode
+}
+
+func (mde *MockDirEntry) Name() string {
+	return mde.name
+}
+
+func (mde *MockDirEntry) IsDir() bool {
+	return mde.isDir
+}
+
+func (mde *MockDirEntry) Type() fs.FileMode {
+	return mde.typ
+}
+
+func (mde *MockDirEntry) ModTime() time.Time {
+	return time.Now()
+}
+
+func (mde *MockDirEntry) Mode() fs.FileMode {
+	return mde.typ
+}
+
+func (mde *MockDirEntry) Size() int64 {
+	return 100
+}
+
+func (mde *MockDirEntry) Sys() any {
+	return nil
+}
+
+func (mde *MockDirEntry) Info() (fs.FileInfo, error) {
+	return mde, nil
+}
+
+func TestSyncElastAlert(t *testing.T) {
+	t.Parallel()
+
+	table := []struct {
+		Name           string
+		Detections     []*model.Detection
+		InitMock       func(*ElastAlertEngine, *mock.MockIOManager)
+		ExpectedErr    error
+		ExpectedErrMap map[string]string
+	}{
+		{
+			Name: "Enable New Simple Rule",
+			Detections: []*model.Detection{
+				{
+					PublicID:  SimpleRuleSID,
+					Content:   SimpleRule,
+					IsEnabled: true,
+					Title:     "TEST",
+					Auditable: model.Auditable{
+						Id: SimpleRuleSID,
+					},
+					Severity: model.SeverityMedium,
+				},
+			},
+			InitMock: func(mod *ElastAlertEngine, m *mock.MockIOManager) {
+				// IndexExistingRules
+				m.EXPECT().ReadDir(mod.elastAlertRulesFolder).Return([]fs.DirEntry{}, nil)
+				// sigmaToElastAlert
+				m.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader("[sigma rule]")),
+				}, nil)
+				// WriteFile when enabling
+				m.EXPECT().WriteFile("10000.yml", []byte("play_title: TEST\nplay_id: \"10000\"\nevent.module: elastalert\nevent.dataset: elastalert.alert\nevent.severity: 3\nrule.category: \"\"\nsigma_level: medium\nalert:\n    - modules.so.playbook-es.PlaybookESAlerter\nindex: .ds-logs-*\nname: TEST - 10000\ntype: any\nfilter:\n    - eql: '[sigma rule]'\nplay_url: play_url\nkibana_pivot: kibana_pivot\nsoc_pivot: soc_pivot\n"), fs.FileMode(0644)).Return(nil)
+			},
+		},
+		{
+			Name: "Disable Simple Rule",
+			Detections: []*model.Detection{
+				{
+					PublicID:  SimpleRuleSID,
+					IsEnabled: false,
+				},
+			},
+			InitMock: func(mod *ElastAlertEngine, m *mock.MockIOManager) {
+				// IndexExistingRules
+				filename := SimpleRuleSID + ".yml"
+				m.EXPECT().ReadDir(mod.elastAlertRulesFolder).Return([]fs.DirEntry{
+					&MockDirEntry{
+						name: filename,
+					},
+					&MockDirEntry{
+						name:  "ignored_dir",
+						isDir: true,
+					},
+					&MockDirEntry{
+						name: "ignored.txt",
+					},
+				}, nil)
+				// DeleteFile when disabling
+				m.EXPECT().DeleteFile(filename).Return(nil)
+			},
+		},
+		{
+			Name: "Enable Rule w/Override",
+			Detections: []*model.Detection{
+				{
+					PublicID:  SimpleRuleSID,
+					Content:   SimpleRule,
+					IsEnabled: true,
+					Title:     "TEST",
+					Auditable: model.Auditable{
+						Id: SimpleRuleSID,
+					},
+					Severity: model.SeverityMedium,
+					Overrides: []*model.Override{
+						{
+							Type:      model.OverrideTypeCustomFilter,
+							IsEnabled: false,
+							OverrideParameters: model.OverrideParameters{
+								CustomFilter: util.Ptr("FALSE"),
+							},
+						},
+						{
+							Type:      model.OverrideTypeCustomFilter,
+							IsEnabled: true,
+							OverrideParameters: model.OverrideParameters{
+								CustomFilter: util.Ptr("TRUE"),
+							},
+						},
+					},
+				},
+			},
+			InitMock: func(mod *ElastAlertEngine, m *mock.MockIOManager) {
+				// IndexExistingRules
+				m.EXPECT().ReadDir(mod.elastAlertRulesFolder).Return([]fs.DirEntry{}, nil)
+				// sigmaToElastAlert
+				m.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader("[sigma rule]")),
+				}, nil)
+				// WriteFile when enabling
+				m.EXPECT().WriteFile("10000.yml", []byte("play_title: TEST\nplay_id: \"10000\"\nevent.module: elastalert\nevent.dataset: elastalert.alert\nevent.severity: 3\nrule.category: \"\"\nsigma_level: medium\nalert:\n    - modules.so.playbook-es.PlaybookESAlerter\nindex: .ds-logs-*\nname: TEST - 10000\ntype: any\nfilter:\n    - eql: ([sigma rule]) and TRUE\nplay_url: play_url\nkibana_pivot: kibana_pivot\nsoc_pivot: soc_pivot\n"), fs.FileMode(0644)).Return(nil)
+			},
+		},
 	}
 
-	assert.Equal(t, len(pkgs), callCount)
+	ctx := context.Background()
+
+	for _, test := range table {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+			ctrl := gomock.NewController(t)
+
+			mockIO := mock.NewMockIOManager(ctrl)
+
+			mod := NewElastAlertEngine(&server.Server{
+				DetectionEngines: map[model.EngineName]server.DetectionEngine{},
+			})
+
+			mod.IOManager = mockIO
+			mod.srv.DetectionEngines[model.EngineNameElastAlert] = mod
+
+			if test.InitMock != nil {
+				test.InitMock(mod, mockIO)
+			}
+
+			errMap, err := mod.SyncLocalDetections(ctx, test.Detections)
+
+			assert.Equal(t, test.ExpectedErr, err)
+			assert.Equal(t, test.ExpectedErrMap, errMap)
+		})
+	}
 }
