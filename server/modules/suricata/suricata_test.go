@@ -32,6 +32,7 @@ func emptySettings() []*model.Setting {
 		{Id: "idstools.sids.enabled"},
 		{Id: "idstools.sids.disabled"},
 		{Id: "idstools.sids.modify"},
+		{Id: "suricata.thresholding.sids__yaml"},
 	}
 }
 
@@ -374,10 +375,11 @@ func TestSyncSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules": "\n" + SimpleRule,
-				"idstools.sids.enabled":       "\n" + SimpleRuleSID,
-				"idstools.sids.disabled":      "\n# " + SimpleRuleSID,
-				"idstools.sids.modify":        "",
+				"idstools.rules.local__rules":      "\n" + SimpleRule,
+				"idstools.sids.enabled":            "\n" + SimpleRuleSID,
+				"idstools.sids.disabled":           "\n# " + SimpleRuleSID,
+				"idstools.sids.modify":             "",
+				"suricata.thresholding.sids__yaml": "{}\n",
 			},
 		},
 		{
@@ -391,10 +393,11 @@ func TestSyncSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules": "\n" + SimpleRule,
-				"idstools.sids.enabled":       "\n# " + SimpleRuleSID,
-				"idstools.sids.disabled":      "\n" + SimpleRuleSID,
-				"idstools.sids.modify":        "",
+				"idstools.rules.local__rules":      "\n" + SimpleRule,
+				"idstools.sids.enabled":            "\n# " + SimpleRuleSID,
+				"idstools.sids.disabled":           "\n" + SimpleRuleSID,
+				"idstools.sids.modify":             "",
+				"suricata.thresholding.sids__yaml": "{}\n",
 			},
 		},
 		{
@@ -404,6 +407,7 @@ func TestSyncSuricata(t *testing.T) {
 				{Id: "idstools.sids.enabled", Value: "# " + SimpleRuleSID},
 				{Id: "idstools.sids.disabled", Value: SimpleRuleSID},
 				{Id: "idstools.sids.modify"},
+				{Id: "suricata.thresholding.sids__yaml"},
 			},
 			Detections: []*model.Detection{
 				{
@@ -413,10 +417,11 @@ func TestSyncSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules": SimpleRule,
-				"idstools.sids.enabled":       SimpleRuleSID,
-				"idstools.sids.disabled":      "# " + SimpleRuleSID,
-				"idstools.sids.modify":        "",
+				"idstools.rules.local__rules":      SimpleRule,
+				"idstools.sids.enabled":            SimpleRuleSID,
+				"idstools.sids.disabled":           "# " + SimpleRuleSID,
+				"idstools.sids.modify":             "",
+				"suricata.thresholding.sids__yaml": "{}\n",
 			},
 		},
 		{
@@ -426,6 +431,7 @@ func TestSyncSuricata(t *testing.T) {
 				{Id: "idstools.sids.enabled", Value: SimpleRuleSID},
 				{Id: "idstools.sids.disabled", Value: "# " + SimpleRuleSID},
 				{Id: "idstools.sids.modify"},
+				{Id: "suricata.thresholding.sids__yaml"},
 			},
 			Detections: []*model.Detection{
 				{
@@ -435,10 +441,11 @@ func TestSyncSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules": SimpleRule,
-				"idstools.sids.enabled":       "# " + SimpleRuleSID,
-				"idstools.sids.disabled":      SimpleRuleSID,
-				"idstools.sids.modify":        "",
+				"idstools.rules.local__rules":      SimpleRule,
+				"idstools.sids.enabled":            "# " + SimpleRuleSID,
+				"idstools.sids.disabled":           SimpleRuleSID,
+				"idstools.sids.modify":             "",
+				"suricata.thresholding.sids__yaml": "{}\n",
 			},
 		},
 		{
@@ -452,10 +459,11 @@ func TestSyncSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules": "\n" + FlowbitsRuleA,
-				"idstools.sids.enabled":       "\n" + FlowbitsRuleASID,
-				"idstools.sids.disabled":      "",
-				"idstools.sids.modify":        "",
+				"idstools.rules.local__rules":      "\n" + FlowbitsRuleA,
+				"idstools.sids.enabled":            "\n" + FlowbitsRuleASID,
+				"idstools.sids.disabled":           "",
+				"idstools.sids.modify":             "",
+				"suricata.thresholding.sids__yaml": "{}\n",
 			},
 		},
 		{
@@ -469,10 +477,11 @@ func TestSyncSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules": "\n" + FlowbitsRuleA,
-				"idstools.sids.enabled":       "\n" + FlowbitsRuleASID,
-				"idstools.sids.disabled":      "",
-				"idstools.sids.modify":        "\n" + FlowbitsRuleASID + ` "flowbits" "noalert; flowbits"`,
+				"idstools.rules.local__rules":      "\n" + FlowbitsRuleA,
+				"idstools.sids.enabled":            "\n" + FlowbitsRuleASID,
+				"idstools.sids.disabled":           "",
+				"idstools.sids.modify":             "\n" + FlowbitsRuleASID + ` "flowbits" "noalert; flowbits"`,
+				"suricata.thresholding.sids__yaml": "{}\n",
 			},
 		},
 		{
@@ -482,6 +491,7 @@ func TestSyncSuricata(t *testing.T) {
 				{Id: "idstools.sids.enabled", Value: FlowbitsRuleBSID},
 				{Id: "idstools.sids.disabled", Value: ""},
 				{Id: "idstools.sids.modify", Value: FlowbitsRuleBSID + ` "flowbits" "noalert; flowbits"`},
+				{Id: "suricata.thresholding.sids__yaml"},
 			},
 			Detections: []*model.Detection{
 				{
@@ -491,10 +501,11 @@ func TestSyncSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules": FlowbitsRuleB,
-				"idstools.sids.enabled":       FlowbitsRuleBSID,
-				"idstools.sids.disabled":      "",
-				"idstools.sids.modify":        "",
+				"idstools.rules.local__rules":      FlowbitsRuleB,
+				"idstools.sids.enabled":            FlowbitsRuleBSID,
+				"idstools.sids.disabled":           "",
+				"idstools.sids.modify":             "",
+				"suricata.thresholding.sids__yaml": "{}\n",
 			},
 		},
 		{
@@ -504,6 +515,7 @@ func TestSyncSuricata(t *testing.T) {
 				{Id: "idstools.sids.enabled", Value: FlowbitsRuleBSID},
 				{Id: "idstools.sids.disabled", Value: "# " + FlowbitsRuleBSID},
 				{Id: "idstools.sids.modify", Value: ""},
+				{Id: "suricata.thresholding.sids__yaml"},
 			},
 			Detections: []*model.Detection{
 				{
@@ -513,10 +525,11 @@ func TestSyncSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules": FlowbitsRuleB,
-				"idstools.sids.enabled":       FlowbitsRuleBSID,
-				"idstools.sids.disabled":      "# " + FlowbitsRuleBSID,
-				"idstools.sids.modify":        "\n" + FlowbitsRuleBSID + ` "flowbits" "noalert; flowbits"`,
+				"idstools.rules.local__rules":      FlowbitsRuleB,
+				"idstools.sids.enabled":            FlowbitsRuleBSID,
+				"idstools.sids.disabled":           "# " + FlowbitsRuleBSID,
+				"idstools.sids.modify":             "\n" + FlowbitsRuleBSID + ` "flowbits" "noalert; flowbits"`,
+				"suricata.thresholding.sids__yaml": "{}\n",
 			},
 		},
 		{
@@ -545,6 +558,92 @@ func TestSyncSuricata(t *testing.T) {
 			},
 			ExpectedErrMap: map[string]string{
 				"0": `rule does not contain a SID; rule=alert http any any -> any any (msg:"This rule doesn't have a SID";)`,
+			},
+		},
+		{
+			Name:            "Thresholding (Modify)",
+			InitialSettings: emptySettings(),
+			Detections: []*model.Detection{
+				{
+					PublicID:  SimpleRuleSID,
+					Content:   SimpleRule,
+					IsEnabled: true,
+					Overrides: []*model.Override{
+						{
+							Type:      model.OverrideTypeModify,
+							IsEnabled: true,
+							OverrideParameters: model.OverrideParameters{
+								Regex: util.Ptr("rev:7;"),
+								Value: util.Ptr("rev:8;"),
+							},
+						},
+					},
+				},
+			},
+			ExpectedSettings: map[string]string{
+				"idstools.rules.local__rules":      "\n" + SimpleRule,
+				"idstools.sids.enabled":            "\n" + SimpleRuleSID,
+				"idstools.sids.disabled":           "\n# " + SimpleRuleSID,
+				"idstools.sids.modify":             "",
+				"suricata.thresholding.sids__yaml": "\"10000\":\n    - modify:\n        regex: rev:7;\n        value: rev:8;\n",
+			},
+		},
+		{
+			Name:            "Thresholding (Suppress)",
+			InitialSettings: emptySettings(),
+			Detections: []*model.Detection{
+				{
+					PublicID:  SimpleRuleSID,
+					Content:   SimpleRule,
+					IsEnabled: true,
+					Overrides: []*model.Override{
+						{
+							Type:      model.OverrideTypeSuppress,
+							IsEnabled: true,
+							OverrideParameters: model.OverrideParameters{
+								Track: util.Ptr("by_src"),
+								IP:    util.Ptr("0.0.0.0"),
+							},
+						},
+					},
+				},
+			},
+			ExpectedSettings: map[string]string{
+				"idstools.rules.local__rules":      "\n" + SimpleRule,
+				"idstools.sids.enabled":            "\n" + SimpleRuleSID,
+				"idstools.sids.disabled":           "\n# " + SimpleRuleSID,
+				"idstools.sids.modify":             "",
+				"suricata.thresholding.sids__yaml": "\"10000\":\n    - suppress:\n        gen_id: 1\n        track: by_src\n        ip: 0.0.0.0\n",
+			},
+		},
+		{
+			Name:            "Thresholding (Threshold)",
+			InitialSettings: emptySettings(),
+			Detections: []*model.Detection{
+				{
+					PublicID:  SimpleRuleSID,
+					Content:   SimpleRule,
+					IsEnabled: true,
+					Overrides: []*model.Override{
+						{
+							Type:      model.OverrideTypeThreshold,
+							IsEnabled: true,
+							OverrideParameters: model.OverrideParameters{
+								ThresholdType: util.Ptr("limit"),
+								Track:         util.Ptr("by_src"),
+								Count:         util.Ptr(5),
+								Seconds:       util.Ptr(60),
+							},
+						},
+					},
+				},
+			},
+			ExpectedSettings: map[string]string{
+				"idstools.rules.local__rules":      "\n" + SimpleRule,
+				"idstools.sids.enabled":            "\n" + SimpleRuleSID,
+				"idstools.sids.disabled":           "\n# " + SimpleRuleSID,
+				"idstools.sids.modify":             "",
+				"suricata.thresholding.sids__yaml": "\"10000\":\n    - threshold:\n        gen_id: 1\n        type: limit\n        track: by_src\n        count: 5\n        seconds: 60\n",
 			},
 		},
 	}

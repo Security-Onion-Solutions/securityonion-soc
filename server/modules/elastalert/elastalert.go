@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -38,6 +39,14 @@ var acceptedExtensions = map[string]bool{
 	".yaml": true,
 }
 
+type IOManager interface {
+	ReadFile(path string) ([]byte, error)
+	WriteFile(path string, contents []byte, perm fs.FileMode) error
+	DeleteFile(path string) error
+	ReadDir(path string) ([]os.DirEntry, error)
+	MakeRequest(*http.Request) (*http.Response, error)
+}
+
 type ElastAlertEngine struct {
 	srv                                  *server.Server
 	communityRulesImportFrequencySeconds int
@@ -49,11 +58,13 @@ type ElastAlertEngine struct {
 	sigmaConversionTarget                string
 	isRunning                            bool
 	thread                               *sync.WaitGroup
+	IOManager
 }
 
 func NewElastAlertEngine(srv *server.Server) *ElastAlertEngine {
 	return &ElastAlertEngine{
-		srv: srv,
+		srv:       srv,
+		IOManager: &ResourceManager{},
 	}
 }
 
@@ -156,7 +167,7 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 		}
 	}()
 
-	index, err := e.indexExistingRules()
+	index, err := e.IndexExistingRules()
 	if err != nil {
 		return nil, fmt.Errorf("unable to index existing rules: %w", err)
 	}
@@ -174,14 +185,14 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 				continue
 			}
 
-			err = os.WriteFile(path, []byte(eaRule), 0644)
+			err = e.WriteFile(path, []byte(eaRule), 0644)
 			if err != nil {
 				errMap[det.PublicID] = fmt.Sprintf("unable to write enabled detection file: %s", err)
 				continue
 			}
 		} else {
 			// was enabled, no longer is enabled: Disable
-			err = os.Remove(path)
+			err = e.DeleteFile(path)
 			if err != nil && !os.IsNotExist(err) {
 				errMap[det.PublicID] = fmt.Sprintf("unable to remove disabled detection file: %s", err)
 				continue
@@ -221,7 +232,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			zipHashes[pkg] = base64.StdEncoding.EncodeToString(h[:])
 		}
 
-		raw, err := os.ReadFile(e.rulesFingerprintFile)
+		raw, err := e.ReadFile(e.rulesFingerprintFile)
 		if err != nil && !os.IsNotExist(err) {
 			log.WithError(err).WithField("path", e.rulesFingerprintFile).Error("unable to read rules fingerprint file")
 			continue
@@ -273,7 +284,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			if err != nil {
 				log.WithError(err).Error("unable to marshal rules fingerprints")
 			} else {
-				err = os.WriteFile(e.rulesFingerprintFile, fingerprints, 0644)
+				err = e.WriteFile(e.rulesFingerprintFile, fingerprints, 0644)
 				if err != nil {
 					log.WithError(err).WithField("path", e.rulesFingerprintFile).Error("unable to write rules fingerprint file")
 				}
@@ -367,7 +378,7 @@ func (e *ElastAlertEngine) parseRules(pkgZips map[string][]byte) (detections []*
 }
 
 func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detections []*model.Detection) (errMap map[string]error, err error) {
-	existing, err := e.indexExistingRules()
+	existing, err := e.IndexExistingRules()
 	if err != nil {
 		return nil, err
 	}
@@ -397,7 +408,6 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 
 	errMap = map[string]error{} // map[publicID]error
 
-	// detections = []*model.Detection{}
 	for _, det := range detections {
 		path, ok := index[det.PublicID]
 		if !ok {
@@ -448,14 +458,14 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 				path = filepath.Join(e.elastAlertRulesFolder, fmt.Sprintf("%s.yml", det.PublicID))
 			}
 
-			err = os.WriteFile(path, []byte(rule), 0644)
+			err = e.WriteFile(path, []byte(rule), 0644)
 			if err != nil {
 				errMap[det.PublicID] = fmt.Errorf("unable to write enabled detection file: %s", err)
 				continue
 			}
 		} else if path != "" {
 			// detection is disabled but a file exists, remove it
-			err = os.Remove(path)
+			err = e.DeleteFile(path)
 			if err != nil {
 				errMap[det.PublicID] = fmt.Errorf("unable to remove disabled detection file: %s", err)
 				continue
@@ -498,7 +508,13 @@ func (e *ElastAlertEngine) downloadSigmaPackages(ctx context.Context) (zipData m
 	for _, pkg := range e.sigmaRulePackages {
 		download := fmt.Sprintf(e.sigmaPackageDownloadTemplate, pkg)
 
-		resp, err := http.Get(download)
+		req, err := http.NewRequest(http.MethodGet, download, nil)
+		if err != nil {
+			errMap[pkg] = err
+			continue
+		}
+
+		resp, err := e.MakeRequest(req)
 		if err != nil {
 			errMap[pkg] = err
 			continue
@@ -523,12 +539,12 @@ func (e *ElastAlertEngine) downloadSigmaPackages(ctx context.Context) (zipData m
 	return zipData, errMap
 }
 
-// indexExistingRules maps the publicID of a detection to the path of the rule file.
+// IndexExistingRules maps the publicID of a detection to the path of the rule file.
 // Note that it indexes ALL rules and not just community rules.
-func (e *ElastAlertEngine) indexExistingRules() (index map[string]string, err error) {
+func (e *ElastAlertEngine) IndexExistingRules() (index map[string]string, err error) {
 	index = map[string]string{} // map[id | title]path
 
-	rules, err := os.ReadDir(e.elastAlertRulesFolder)
+	rules, err := e.ReadDir(e.elastAlertRulesFolder)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read elastalert rules directory: %w", err)
 	}
@@ -582,7 +598,7 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 	req.Header.Add("Content-Type", "application/json")
 
 	// send request
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := e.MakeRequest(req)
 	if err != nil {
 		return "", err
 	}
@@ -763,7 +779,7 @@ func wrapRule(det *model.Detection, rule string) (string, error) {
 
 	// apply the first (should only have 1) CustomFilter override if any
 	for _, o := range det.Overrides {
-		if o.Type == model.OverrideTypeCustomFilter && o.CustomFilter != nil {
+		if o.IsEnabled && o.Type == model.OverrideTypeCustomFilter && o.CustomFilter != nil {
 			rule = fmt.Sprintf("(%s) and %s", rule, *o.CustomFilter)
 			break
 		}
@@ -775,7 +791,7 @@ func wrapRule(det *model.Detection, rule string) (string, error) {
 		EventModule:   "elastalert",
 		EventDataset:  "elastalert.alert",
 		EventSeverity: sevNum,
-		RuleCategory:  "TBD",
+		RuleCategory:  "", // TODO: what should this be?
 		SigmaLevel:    string(det.Severity),
 		Alert:         []string{"modules.so.playbook-es.PlaybookESAlerter"},
 		Index:         ".ds-logs-*",
@@ -798,4 +814,29 @@ func wrapRule(det *model.Detection, rule string) (string, error) {
 	}
 
 	return string(rawYaml), nil
+}
+
+// go install go.uber.org/mock/mockgen@latest
+//go:generate mockgen -destination mock/mock_iomanager.go -package mock . IOManager
+
+type ResourceManager struct{}
+
+func (_ *ResourceManager) ReadFile(path string) ([]byte, error) {
+	return os.ReadFile(path)
+}
+
+func (_ *ResourceManager) WriteFile(path string, contents []byte, perm fs.FileMode) error {
+	return os.WriteFile(path, contents, perm)
+}
+
+func (_ *ResourceManager) DeleteFile(path string) error {
+	return os.Remove(path)
+}
+
+func (_ *ResourceManager) ReadDir(path string) ([]os.DirEntry, error) {
+	return os.ReadDir(path)
+}
+
+func (_ *ResourceManager) MakeRequest(req *http.Request) (*http.Response, error) {
+	return http.DefaultClient.Do(req)
 }

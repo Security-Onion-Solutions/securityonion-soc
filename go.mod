@@ -22,6 +22,7 @@ require (
 require (
 	github.com/pkg/errors v0.9.1
 	github.com/samber/lo v1.39.0
+	go.uber.org/mock v0.3.0
 )
 
 require (
