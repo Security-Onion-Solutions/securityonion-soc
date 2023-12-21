@@ -1101,9 +1101,9 @@
         <v-row>
           <v-col>
             <h3 class="my-2" v-text="i18n.downloadsElasticAgent" id="download-elasticagent"></h3>
-            <v-alert v-if="remoteAgentSupported" type="info" v-html="i18n.downloadsFirewallTip"></v-alert>
-            <v-alert v-else type="error" v-html="i18n.downloadsAgentUnavailable"></v-alert>
-            <ul>
+            <v-alert v-if="remoteAgentSupported" id="firewallTip" type="info" v-html="i18n.downloadsFirewallTip"></v-alert>
+            <v-alert v-else type="error" id="agentUnavailable" v-html="i18n.downloadsAgentUnavailable"></v-alert>
+            <ul id="installer-list">
               <li><a href="/packages/so-elastic-agent_windows_amd64" download="so-elastic-agent_windows_amd64.exe">Windows x86_64 Installer</a></li>
               <li><a href="/packages/so-elastic-agent_linux_amd64" download="so-elastic-agent_linux_amd64">Linux x86_64 Installer</a></li>
               <li><a href="/packages/so-elastic-agent_darwin_amd64" download="so-elastic-agent_darwin_amd64">macOS x86_64 Installer</a></li>
