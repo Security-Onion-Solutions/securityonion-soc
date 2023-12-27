@@ -412,11 +412,11 @@ func (datastore *FileDatastoreImpl) loadJobs() error {
 	if err == nil {
 		for _, file := range files {
 			job := model.NewJob()
-			err = json.LoadJsonFile(file, job)
-			if err == nil {
+			loadErr := json.LoadJsonFile(file, job)
+			if loadErr == nil {
 				datastore.addJob(job)
 			} else {
-				log.WithError(err).WithField("file", file).Error("Unable to load job file")
+				log.WithError(loadErr).WithField("file", file).Error("Unable to load job file")
 			}
 		}
 	}
