@@ -67,6 +67,7 @@ type Node struct {
 	Load15m              float64   `json:"load15m"`
 	DiskUsedElasticGB    float64   `json:"diskUsedElasticGB"`
 	DiskUsedInfluxDbGB   float64   `json:"diskUsedInfluxDbGB"`
+	HighstateAgeSeconds  int       `json:"highstateAgeSeconds"`
 }
 
 func NewNode(id string) *Node {
