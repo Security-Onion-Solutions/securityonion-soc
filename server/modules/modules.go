@@ -20,6 +20,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/sostatus"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/statickeyauth"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/staticrbac"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/strelka"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/suricata"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/thehive"
 )
@@ -39,6 +40,7 @@ func BuildModuleMap(srv *server.Server) map[string]module.Module {
 	moduleMap["thehive"] = thehive.NewTheHive(srv)
 	moduleMap["suricataengine"] = suricata.NewSuricataEngine(srv)
 	moduleMap["elastalertengine"] = elastalert.NewElastAlertEngine(srv)
+	moduleMap["strelkaengine"] = strelka.NewStrelkaEngine(srv)
 
 	return moduleMap
 }

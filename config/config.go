@@ -59,5 +59,9 @@ func LoadConfig(filename string, version string, buildTime time.Time) (*Config, 
 		"sigconverterUrl":                      "http://localhost:8000/sigma",
 	}
 
+	cfg.Server.Modules["strelkaengine"] = map[string]interface{}{
+		"yaraRulesFolder": "/tmp/socdev/so/conf/strelka/rules",
+	}
+
 	return cfg, err
 }
