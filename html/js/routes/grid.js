@@ -55,6 +55,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
     gridMemberUploadConfirmDialog: false,
     uploadForm: { valid: true, attachment: null },
     maxUploadSizeBytes: 25 * 1024 * 1024,
+    staleMetricsMs: 120000,
     rules: {
       fileSizeLimit: value => (value == null || value.size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
       fileNotEmpty: value => (value == null || value.size > 0) || this.$root.i18n.fileEmpty,
@@ -90,6 +91,9 @@ routes.push({ path: '/grid', name: 'grid', component: {
       if (params.maxUploadSize) {
         this.maxUploadSizeBytes = params.maxUploadSize;
       }
+      if (params.staleMetricsMs) {
+        this.staleMetricsMs = params.staleMetricsMs;
+      }
 
       this.zone = moment.tz.guess();
 
@@ -124,7 +128,12 @@ routes.push({ path: '/grid', name: 'grid', component: {
           column.align = ' d-none ' + size;
         }
       }
-
+    },
+    areMetricsCurrent(node) {
+      const lastUpdated = Date.parse(node["updateTime"]);
+      const now = Date.now();
+      const age = now - lastUpdated;
+      return age < this.staleMetricsMs;
     },
     updateMetricsEnabled() {
       this.metricsEnabled = !this.nodes.every(function(node) { return !node.metricsEnabled; });

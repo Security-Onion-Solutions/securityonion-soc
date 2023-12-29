@@ -70,6 +70,7 @@ type InfluxDBMetrics struct {
 	load15m                  map[string]float64
 	diskUsedElasticGB        map[string]float64
 	diskUsedInfluxDbGB       map[string]float64
+	highstateAgeSeconds      map[string]int
 }
 
 func NewInfluxDBMetrics(srv *server.Server) *InfluxDBMetrics {
@@ -325,6 +326,7 @@ func (metrics *InfluxDBMetrics) updateOsStatus() {
 		metrics.load15m = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("system", "load15", "", ""), identity)
 		metrics.diskUsedElasticGB = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("elasticsearch_indices", "store_size_in_bytes", "", ""), bytesToGB)
 		metrics.diskUsedInfluxDbGB = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("influxsize", "kbytes", "", ""), KBToGB)
+		metrics.highstateAgeSeconds = metrics.convertValuesToInt(metrics.fetchLatestValuesByHost("salt", "highstate_age_seconds", "", ""))
 
 		metrics.lastOsUpdateTime = now
 	}
@@ -487,6 +489,7 @@ func (metrics *InfluxDBMetrics) UpdateNodeMetrics(ctx context.Context, node *mod
 		node.Load15m = metrics.load15m[node.Id]
 		node.DiskUsedElasticGB = metrics.diskUsedElasticGB[node.Id]
 		node.DiskUsedInfluxDbGB = metrics.diskUsedInfluxDbGB[node.Id]
+		node.HighstateAgeSeconds = metrics.highstateAgeSeconds[node.Id]
 
 		enhancedStatusEnabled := (metrics.client != nil)
 		status = node.UpdateOverallStatus(enhancedStatusEnabled)

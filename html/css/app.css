@@ -65,6 +65,10 @@
   max-width: 300px;
 }
 
+.stale {
+  opacity: 0.3;
+}
+
 /* animations */
 .waggle {
   animation-name: waggle;
