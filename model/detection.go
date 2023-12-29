@@ -41,7 +41,7 @@ const (
 	IDTypeSID  IDType = "sid"
 
 	EngineNameSuricata   EngineName = "suricata"
-	EngineNameYara       EngineName = "yara"
+	EngineNameStrelka       EngineName = "strelka"
 	EngineNameElastAlert EngineName = "elastalert"
 
 	OverrideTypeSuppress     OverrideType = "suppress"
@@ -58,8 +58,8 @@ var (
 			ScanType:    ScanTypePackets,
 			SigLanguage: SigLangSuricata,
 		},
-		EngineNameYara: {
-			Name:        string(EngineNameYara),
+		EngineNameStrelka: {
+			Name:        string(EngineNameStrelka),
 			IDType:      IDTypeUUID,
 			ScanType:    ScanTypeFiles,
 			SigLanguage: SigLangYara,
