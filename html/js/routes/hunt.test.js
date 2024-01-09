@@ -716,14 +716,15 @@ test('obtainQueryDetails_queryOnly', () => {
   expect(comp.querySortBys).toStrictEqual([]);
 });
 
-test('obtainQueryDetails_queryGroupedOptionsSorted', () => {
-  comp.query = "foo: bar AND x:1 | groupby -opt1 z | groupby -optB r^ | sortby y"
+test('obtainQueryDetails_queryGroupedOptionsTableSorted', () => {
+  comp.query = "foo: bar AND x:1 | groupby -opt1 z | groupby -optB r^ | sortby y | table x y z"
   comp.obtainQueryDetails();
   expect(comp.queryName).toBe("Custom");
   expect(comp.queryFilters).toStrictEqual(["foo: bar", "x:1"]);
   expect(comp.queryGroupBys).toStrictEqual([["z"], ["r^"]]);
   expect(comp.queryGroupByOptions).toStrictEqual([["opt1"], ["optB"]]);
   expect(comp.querySortBys).toStrictEqual(["y"]);
+  expect(comp.queryTableFields).toStrictEqual(["x", "y", "z"]);
 });
 
 test('obtainQueryDetails_queryGroupedFilterPipe', () => {
@@ -1025,4 +1026,70 @@ test('addToCase', () => {
   expect(comp.addToCaseDialogVisible).toBe(false);
 
   window.open = origOpen;
+});
+
+test('populateEventHeaders', () => {
+  const defs = ["x", "y"];
+  comp.populateEventHeaders(defs);
+  expect(comp.eventHeaders).toStrictEqual([{"text":"x", "value":"x"},{"text":"y", "value": "y"}]);
+
+  comp.queryTableFields = ["b", "c"];
+  comp.populateEventHeaders(defs);
+  expect(comp.eventHeaders).toStrictEqual([{"text":"b", "value":"b"},{"text":"c", "value": "c"}]);
+});
+
+test('repopulateEventHeaders', () => {
+  comp.queryTableFields = ["b", "c"];
+  comp.query = 'foo: bar| table old';
+  expect(comp.$router.length).toBe(0);
+  expect(comp.disableRouteLoad).toBe(false);
+  comp.repopulateEventHeaders();
+  expect(comp.disableRouteLoad).toBe(true);
+  expect(comp.eventHeaders).toStrictEqual([{"text":"b", "value":"b"},{"text":"c", "value": "c"}]);
+  expect(comp.query).toBe('foo: bar | table b c');
+  expect(comp.$router.length).toBe(1);
+});
+
+test('toggleColumnHeader', () => {
+  expect(comp.eventHeaders).toStrictEqual([]);
+  comp.toggleColumnHeader('x');
+  expect(comp.eventHeaders).toStrictEqual([{value:'x', text:'x'}]);
+  comp.toggleColumnHeader('x');
+  expect(comp.eventHeaders).toStrictEqual([]);
+  comp.toggleColumnHeader('x');
+  expect(comp.eventHeaders).toStrictEqual([{value:'x', text:'x'}]);
+  comp.toggleColumnHeader('y');
+  expect(comp.eventHeaders).toStrictEqual([{value:'x', text:'x'},{value:'y', text:'y'}]);
+  comp.toggleColumnHeader('x');
+  expect(comp.eventHeaders).toStrictEqual([{value:'y', text:'y'}]);
+});
+
+test('moveColumnHeader', () => {
+  comp.moveColumnHeader('x', true);
+  expect(comp.queryTableFields).toStrictEqual([]);
+
+  comp.queryTableFields = ['x', 'y', 'z'];
+  comp.moveColumnHeader('x', true);
+  expect(comp.queryTableFields).toStrictEqual(['x', 'y', 'z']);
+
+  comp.moveColumnHeader('x', false);
+  expect(comp.queryTableFields).toStrictEqual(['y', 'x', 'z']);
+
+  comp.moveColumnHeader('x', false);
+  expect(comp.queryTableFields).toStrictEqual(['y', 'z', 'x']);
+
+  // double check that repopulateEventHeaders was invoked
+  expect(comp.eventHeaders).toStrictEqual([{"text":"y", "value":"y"},{"text":"z", "value":"z"},{"text":"x", "value": "x"}]);
+
+  comp.moveColumnHeader('x', false);
+  expect(comp.queryTableFields).toStrictEqual(['y', 'z', 'x']);
+
+  comp.moveColumnHeader('x', true);
+  expect(comp.queryTableFields).toStrictEqual(['y', 'x', 'z']);
+
+  comp.moveColumnHeader('x', true);
+  expect(comp.queryTableFields).toStrictEqual(['x', 'y', 'z']);
+
+  // double check that repopulateEventHeaders was invoked
+  expect(comp.eventHeaders).toStrictEqual([{"text":"x", "value":"x"},{"text":"y", "value":"y"},{"text":"z", "value": "z"}]);
 });
