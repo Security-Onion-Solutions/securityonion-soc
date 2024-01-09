@@ -40,6 +40,8 @@ const i18n = {
       active: 'Active',
       add: 'Add',
       addAttachmentHelp: 'Add a new attachment to this case',
+      addColumnHeader: 'Toggle Table Column',
+      addColumnHeaderHelp: 'Add or remove this field as a table column',
       addCommentHelp: 'Add a new comment to this case',
       addInNewTab: 'Add in New Tab',
       addObservableHelp: 'Add a new observable to this case',

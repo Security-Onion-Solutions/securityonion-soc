@@ -527,7 +527,7 @@
                           <v-icon>fa-expand</v-icon>
                         </router-link>
                         <v-btn icon class="mx-1" @click="removeGroupBy(groupIdx, -1)" :title="i18n.remove">
-                          <v-icon>fa-trash</v-icon>
+                          <v-icon class="tiny-icon">fa-circle-xmark</v-icon>
                         </v-btn>
                         <pie-chart v-if="group.chart_type == 'pie'" :id="'group-' + groupIdx" :chartdata="group.chart_data" :options="group.chart_options"/>
                         <bar-chart v-if="group.chart_type == 'bar'" :id="'group-' + groupIdx" :chartdata="group.chart_data" :options="group.chart_options"/>
@@ -554,7 +554,7 @@
                               <v-icon>fa-expand</v-icon>
                             </router-link>
                             <v-btn v-if="header.value != 'count' && header.value != ''" icon x-small @click.stop="removeGroupBy(groupIdx,headerIdx - getGroupByFieldStartIndex())" :title="i18n.remove">
-                              <v-icon>fa-trash</v-icon>
+                              <v-icon class="tiny-icon">fa-circle-xmark</v-icon>
                             </v-btn>
                           </span>
                         </template>
@@ -630,6 +630,26 @@
                       </v-row>
                     </v-container>
                   </template>
+                  <template v-for="(header, headerIdx) in eventHeaders" v-slot:["header." + header.value]="{ props }">
+                    <span :id="'col_' + header.value">
+                      <span v-if="header.value != ''" class="table-header-actions">
+                        <v-btn :id="'col_move_left_' + header.value" icon x-small @click.stop="moveColumnHeader(header.value, true)" :title="i18n.moveLeft">
+                          <v-icon class="tiny-icon">fa-caret-left</v-icon>
+                        </v-btn>
+                      </span>
+                      <span :id="'col_label_' + header.value">
+                        {{ header.text }}
+                      </span>
+                      <span v-if="header.value != ''" class="table-header-actions">
+                        <v-btn :id="'col_move_right_' + header.value" icon x-small @click.stop="moveColumnHeader(header.value, false)" :title="i18n.moveRight">
+                          <v-icon class="tiny-icon">fa-caret-right</v-icon>
+                        </v-btn>
+                        <v-btn :id="'col_del_' + header.value" icon x-small @click.stop="removeColumnHeader(header.value)" :title="i18n.remove">
+                          <v-icon class="tiny-icon">fa-circle-xmark</v-icon>
+                        </v-btn>
+                      </span>
+                    </span>
+                  </template>
                   <template v-slot:item="{ item, index }">
                     <tr>
                       <td>
@@ -667,8 +687,11 @@
                             <tr class="pt-3">
                               <td class="expansion">
                                 <div class="d-inline-block semi-transparent">
-                                  <v-btn :disabled="!canQuery(item.key)" icon x-small :to="buildGroupByRoute(item.key)">
+                                  <v-btn :id="'groupby_' + item.key" :disabled="!canQuery(item.key)" icon x-small :to="buildGroupByRoute(item.key)">
                                     <v-icon :alt="i18n.groupInclude" :title="i18n.groupIncludeHelp">fa-layer-group</v-icon>
+                                  </v-btn>
+                                  <v-btn :id="'col_toggle_' + item.key" icon x-small @click="toggleColumnHeader(item.key)">
+                                    <v-icon :alt="i18n.addColumnHeader" :color="isColumnHeader(item.key) ? 'info' : ''" :title="i18n.addColumnHeaderHelp">fa-table-columns</v-icon>
                                   </v-btn>
                                 </div>
                                 <div class="d-inline-block expansion" v-text="item.key"></div>
@@ -1723,9 +1746,9 @@
                                 <div class="ml-1 d-flex mt-1 mt-sm-0">
                                   <v-btn text small icon color="primary" v-if="!isEdit(`comment-${index}`)" @click="startEdit('comment-desc-input', comment.description, `comment-${index}`, 'description', modifyAssociation, ['comments', comment], true)"
                                     @keypress.space.prevent="startEdit('comment-desc-input', comment.description, `comment-${index}`, 'description', modifyAssociation, ['comments', comment], true)">
-                                    <v-icon style="font-size: 14px !important;">fa-edit</v-icon>
+                                    <v-icon class="tiny-icon">fa-edit</v-icon>
                                   </v-btn>
-                                  <v-btn text small color="red" @click="deleteAssociation('comments', comment)" icon><v-icon style="font-size: 14px !important;">fa-trash</v-icon></v-btn>
+                                  <v-btn text small color="red" @click="deleteAssociation('comments', comment)" icon><v-icon class="tiny-icon">fa-circle-xmark</v-icon></v-btn>
                                 </div>
                               </div>
                             </div>
@@ -1997,7 +2020,7 @@
                               {{ i18n.edited }}
                             </div>
                             <div class="ml-1 d-flex">
-                              <v-btn text small color="red" @click="deleteAssociation('attachments', props.item)" icon><v-icon style="font-size: 14px !important;">fa-trash</v-icon></v-btn>
+                              <v-btn text small color="red" @click="deleteAssociation('attachments', props.item)" icon><v-icon class="tiny-icon">fa-circle-xmark</v-icon></v-btn>
                             </div>
                           </div>
                         </td>
@@ -2285,7 +2308,7 @@
                                         {{ job.completeTime | formatDateTime }}
                                       </div>
                                       <div class="ml-1 d-flex">
-                                        <v-btn text small color="red" @click="deleteAnalyzeJob(job)" icon><v-icon style="font-size: 14px !important;">fa-trash</v-icon></v-btn>
+                                        <v-btn text small color="red" @click="deleteAnalyzeJob(job)" icon><v-icon class="tiny-icon">fa-circle-xmark</v-icon></v-btn>
                                       </div>
                                       <v-spacer/>
                                     </div>
@@ -2316,7 +2339,7 @@
                               {{ i18n.edited }}
                             </div>
                             <div class="ml-1 d-flex">
-                              <v-btn text small color="red" @click="deleteAssociation('evidence', props.item)" icon><v-icon style="font-size: 14px !important;">fa-trash</v-icon></v-btn>
+                              <v-btn text small color="red" @click="deleteAssociation('evidence', props.item)" icon><v-icon class="tiny-icon">fa-circle-xmark</v-icon></v-btn>
                             </div>
                           </div>
                         </td>
@@ -2400,7 +2423,7 @@
                               {{ props.item.createTime | formatDateTime }}
                             </div>
                             <div class="ml-1 d-flex">
-                              <v-btn text small color="red" @click="deleteAssociation('events', props.item)" icon><v-icon style="font-size: 14px !important;">fa-trash</v-icon></v-btn>
+                              <v-btn text small color="red" @click="deleteAssociation('events', props.item)" icon><v-icon class="tiny-icon">fa-circle-xmark</v-icon></v-btn>
                             </div>
                           </div>
                         </td>
@@ -2458,7 +2481,7 @@
                         </td>
                         <td class="associated">
                           <v-icon v-if="props.item.operation == i18n.create">fa-plus</v-icon>
-                          <v-icon v-if="props.item.operation == i18n.delete">fa-trash</v-icon>
+                          <v-icon v-if="props.item.operation == i18n.delete">fa-circle-xmark</v-icon>
                           <v-icon v-if="props.item.operation == i18n.update">fa-pencil-alt</v-icon>
                           <span class="rounded ml-2">{{ props.item.operation }}</span>
                         </td>
@@ -3097,8 +3120,12 @@
                               </div>
                               <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.osUptime }}:</span>
-                                <span class="filter value" id="node_uptime" :class="areMetricsCurrent(item) ? '' : 'stale'">{{ item.osUptimeSeconds | formatDuration }}</span>
-                                <span v-if="item.osNeedsRestart" id="node_restart-required-note" class="warning--text" :class="areMetricsCurrent(item) ? '' : 'stale'">{{ i18n.restartRequired }}</span>
+                                <span class="filter value" id="node_uptime" :class="areMetricsCurrent(item) ? '' : 'stale'">
+                                  {{ item.osUptimeSeconds | formatDuration }}
+                                  <span v-if="item.osNeedsRestart" id="node_restart-required-note" class="warning--text" :class="areMetricsCurrent(item) ? '' : 'stale'">
+                                    {{ i18n.restartRequired }}
+                                  </span>
+                                </span>
                               </div>
                               <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.lastHighstate }}:</span>
@@ -3552,7 +3579,7 @@
                         <div :id="'settingsWebauthnExistingKey_' + key.id" class="ml-2">
                           {{ key.name }}
                           <v-btn name="webauthn_remove" icon :value="key.value" :id="'settingsWebauthnDelete_' + key.id" type="submit" color="primary" >
-                            <v-icon>fa-trash</v-icon>
+                            <v-icon>fa-circle-xmark</v-icon>
                           </v-btn>
                         </div>
                       </v-form>
@@ -3806,7 +3833,7 @@
                       <v-col>
                         <div class="mb-n1 text-right">
                           <v-btn :id="'setting-node-reset-' + item[0]" icon @click="remove(selected, item[0])" :title="i18n.settingRemoveHelp" :disabled="isPendingSave(selected, item[0])" >
-                            <v-icon color="warning">fa-trash</v-icon>
+                            <v-icon color="warning">fa-circle-xmark</v-icon>
                           </v-btn>
                           <v-btn :id="'setting-node-save-' + item[0]" icon @click="save(selected, item[0])" :disabled="!isPendingSave(selected, item[0])" :title="i18n.settingSaveHelp">
                             <v-icon color="success">fa-check</v-icon>
@@ -4032,7 +4059,7 @@
               </v-btn>
               <v-btn id="gridmember-remove"  @click.stop="confirmRemove()">
                 {{ i18n.delete }}
-                <v-icon right>fa-trash</v-icon>
+                <v-icon right>fa-circle-xmark</v-icon>
               </v-btn>
             </v-card-actions>
           </v-card>
