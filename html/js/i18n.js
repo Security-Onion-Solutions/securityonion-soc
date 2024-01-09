@@ -476,6 +476,8 @@ const i18n = {
       months: 'months',
       moreColumns: 'Show additional, sensor-related columns',
       moreColumnsHelp: 'This option requires a wide screen and browser window.',
+      moveLeft: 'Move left',
+      moveRight: 'Move right',
       mruCases: 'Recently Viewed Cases',
       mruQuery: 'Recently Used',
       mruQueryHelp: 'This query is a user-defined query and is only available on this browser.',
