@@ -177,6 +177,8 @@ a#title, a#title:visited, a#title:active, a#title:hover {
   text-align: right;
   white-space: nowrap;
   vertical-align: top;
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
 
 .filter.value {
@@ -185,6 +187,8 @@ a#title, a#title:visited, a#title:active, a#title:hover {
   text-align: left;
   font-weight: bold;
   white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
 
 .case.summary {
