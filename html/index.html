@@ -379,7 +379,7 @@
           </v-col>
         </v-row>
         <v-row align="start">
-          <v-col cols="12" md="7">
+          <v-col cols="12" :md="isCategory('detections') ? 10 : 7">
             <v-textarea :clearable="isAdvanced()" :auto-grow="isAdvanced()" :readonly="!isAdvanced()" :disabled="loading()" @change="notifyInputsChanged" class="mx-2" v-model="$data[isAdvanced() ? 'query' : 'queryName']" :hint="isAdvanced() ? i18n.queryHelp : ''" rows="1" persistent-hint prepend-icon="fa-search" @keydown.enter.prevent="hunt" id="hunt-query-input">
               <template v-slot:prepend-inner>
                 <v-menu dense bottom three-line offset-y>
@@ -422,8 +422,8 @@
               </template>
             </v-textarea>
           </v-col>
-          <v-col cols="12" md="5" class="d-flex flex-nowrap align-center">
-            <v-text-field :disabled="loading()" v-if="relativeTimeEnabled" id="huntrelativetimevalue" @change="notifyInputsChanged" class="mx-2"
+          <v-col cols="12" :md="isCategory('detections') ? 2 : 5" class="d-flex flex-nowrap align-center">
+            <v-text-field :disabled="loading()" v-if="relativeTimeEnabled && !isCategory('detections')" id="huntrelativetimevalue" @change="notifyInputsChanged" class="mx-2"
                 v-model="relativeTimeValue" :hint="i18n.relativeTimeHelp" persistent-hint="true" type="number">
               <template v-slot:prepend>
                 <v-btn v-if="relativeTimeEnabled" icon x-small @click="showAbsoluteTime" id="show-absolute-time">
@@ -438,7 +438,7 @@
                   v-model="relativeTimeUnit" :items="relativeTimeUnits"></v-select>
               </template>
             </v-text-field>
-            <v-text-field :disabled="loading()" v-if="!relativeTimeEnabled" id="huntdaterange" @change="notifyInputsChanged" class="mx-2"
+            <v-text-field :disabled="loading()" v-if="!relativeTimeEnabled && !isCategory('detections')" id="huntdaterange" @change="notifyInputsChanged" class="mx-2"
               v-model="dateRange" :hint="i18n.timePickerHelp" persistent-hint="true"
               prepend-inner-icon="fa-angle-down" @click:prepend-inner="showDateRangePicker">
               <template v-slot:prepend>
@@ -447,7 +447,7 @@
                 </v-btn>
               </template>
             </v-text-field>
-            <v-btn id="hunt" :disabled="loading()" :color="huntPending ? 'light-green accent-4' : (autoRefreshInterval ? 'secondary' : 'primary')" @click.stop="hunt">
+            <v-btn id="hunt" :class="isCategory('detections') ? 'detection-hunt-btn' : ''" :disabled="loading()" :color="huntPending ? 'light-green accent-4' : (autoRefreshInterval ? 'secondary' : 'primary')" @click.stop="hunt">
               <span v-if="isCategory('hunt')" class="d-sm-none d-lg-inline pr-2" v-text="i18n.hunt"></span>
               <span v-if="!isCategory('hunt')" class="d-sm-none d-lg-inline pr-2" v-text="i18n.refresh"></span>
               <v-icon v-if="isCategory('hunt') && !autoRefreshInterval">fa-crosshairs</v-icon>
@@ -631,10 +631,10 @@
           <v-expand-transition>
             <v-row v-if="isExpandedSection('hunt-events')">
               <v-col cols="12">
-                <v-data-table :search="eventFilter" :sort-by.sync="sortBy" item-key="soc_id" :expanded.sync="expanded" :sort-desc.sync="sortDesc" :footer-props="footerProps"
-                  :items-per-page.sync="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" show-expand :page.sync="eventPage" :custom-sort="sortEvents">
-                  <template v-slot:top v-if="isAdvanced()">
-                    <v-container fluid>
+                <v-data-table ref="eventTable" :search="eventFilter" :sort-by.sync="sortBy" item-key="soc_id" :expanded.sync="expanded" :sort-desc.sync="sortDesc" :footer-props="footerProps"
+                  :items-per-page.sync="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" :page.sync="eventPage" show-select :custom-sort="sortEvents">
+                  <template v-slot:top>
+                    <v-container v-if="isAdvanced()" fluid>
                       <v-row>
                         <v-col cols="4"></v-col>
                         <v-col cols="2">
@@ -645,6 +645,36 @@
                         </v-col>
                       </v-row>
                     </v-container>
+                    <v-container v-if="isCategory('detections') && selectAllState !== false">
+                      <div>
+                          {{ i18n.selected }} {{ (selectAllState === true ? totalEvents : selectedCount).toLocaleString() }}
+                        <span class="ml-2" v-if="selectAllState === 'indeterminate' && isPageSelected() && totalEvents >= itemsPerPage">
+                          {{ i18n.selectAll.replaceAll('[[count]]', totalEvents.toLocaleString()) }}
+                          <v-btn @click="selectAllEvents(true, true)">
+                            {{ i18n.yes }}
+                          </v-btn>
+                        </span>
+                      </div>
+
+                      <span>
+                        {{ i18n.bulkAction }}
+                        <v-select class="bulk-actions" :disabled="loading()" v-model="selectedAction" :items="bulkActions"></v-select>
+                        <v-btn :disabled="selectAllState === false" @click="bulkAction()">{{ i18n.go }}</v-btn>
+                      </span>
+                    </v-container>
+
+                  </template>
+                  <template v-if="isMultiSelect()" v-slot:header.data-table-select="{ on, props }">
+                    <div class="multiselect-container">
+                      <v-simple-checkbox id="multiselect-checkbox"
+                        color="blue"
+                        v-bind="props"
+                        v-on="on"
+                        :indeterminate="selectAllState === 'indeterminate'"
+                        :value="selectAllState"
+                        @click="toggleSelectAll()"
+                      ></v-simple-checkbox>
+                    </div>
                   </template>
                   <template v-for="(header, headerIdx) in eventHeaders" v-slot:["header." + header.value]="{ props }">
                     <span :id="'col_' + header.value">
@@ -683,6 +713,8 @@
                           :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
                           <v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate">fa-exclamation-triangle</v-icon>
                         </v-btn>
+                        <v-checkbox class="detection-selection" @change="updateBulkSelector(item)" v-if="isMultiSelect()" v-model="item._isSelected">
+                        </v-checkbox>
                         <router-link :to="{ name: 'case', params: {id: item.soc_id}}" style="text-decoration: none; cursor: 'pointer'" v-if="viewEnabled && category === 'cases'">
                           <v-icon class="mr-2" :title="i18n.view">fa-binoculars</v-icon>
                         </router-link>

@@ -7,6 +7,7 @@ package elastic
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -15,6 +16,8 @@ import (
 	"time"
 
 	"github.com/apex/log"
+	"github.com/elastic/go-elasticsearch/v8"
+	"github.com/elastic/go-elasticsearch/v8/esapi"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -22,15 +25,17 @@ import (
 
 type ElasticDetectionstore struct {
 	server          *server.Server
+	esClient        *elasticsearch.Client
 	index           string
 	auditIndex      string
 	maxAssociations int
 	schemaPrefix    string
 }
 
-func NewElasticDetectionstore(srv *server.Server) *ElasticDetectionstore {
+func NewElasticDetectionstore(srv *server.Server, client *elasticsearch.Client) *ElasticDetectionstore {
 	return &ElasticDetectionstore{
-		server: srv,
+		server:   srv,
+		esClient: client,
 	}
 }
 
@@ -174,7 +179,7 @@ func (store *ElasticDetectionstore) delete(ctx context.Context, obj interface{},
 func (store *ElasticDetectionstore) get(ctx context.Context, id string, kind string) (interface{}, error) {
 	query := fmt.Sprintf(`_index:"%s" AND %skind:"%s" AND _id:"%s"`, store.index, store.schemaPrefix, kind, id)
 
-	objects, err := store.getAll(ctx, query, 1)
+	objects, err := store.Query(ctx, query, 1)
 	if err == nil {
 		if len(objects) > 0 {
 			return objects[0], err
@@ -186,7 +191,7 @@ func (store *ElasticDetectionstore) get(ctx context.Context, id string, kind str
 	return nil, err
 }
 
-func (store *ElasticDetectionstore) getAll(ctx context.Context, query string, max int) ([]interface{}, error) {
+func (store *ElasticDetectionstore) Query(ctx context.Context, query string, max int) ([]interface{}, error) {
 	var err error
 	var objects []interface{}
 
@@ -348,43 +353,65 @@ func (store *ElasticDetectionstore) UpdateDetection(ctx context.Context, detect 
 	return store.GetDetection(ctx, results.DocumentId)
 }
 
-func (store *ElasticDetectionstore) UpdateDetectionField(ctx context.Context, id string, field string, value any) (*model.Detection, bool, error) {
-	var modified bool
+func (store *ElasticDetectionstore) UpdateDetectionField(ctx context.Context, id string, fields map[string]interface{}) (*model.Detection, error) {
+	if len(fields) == 0 {
+		return nil, errors.New("no fields to update")
+	}
 
-	detect, err := store.GetDetection(ctx, id)
+	unQtemplate := `ctx._source.%s=%v`
+	Qtemplate := `ctx._source.%s='%v'`
+
+	lines := make([]string, 0, len(fields)+1)
+
+	for field, value := range fields {
+		switch strings.ToLower(field) {
+		case "isenabled":
+			newField := store.schemaPrefix + "detection.isEnabled"
+			lines = append(lines, fmt.Sprintf(unQtemplate, newField, value))
+		default:
+			return nil, fmt.Errorf("unsupported field: %s", field)
+		}
+	}
+
+	lines = append(lines, fmt.Sprintf(Qtemplate, store.schemaPrefix+"detection.userId", ctx.Value(web.ContextKeyRequestorId).(string)))
+
+	opts := []func(*esapi.UpdateRequest){
+		store.esClient.Update.WithContext(ctx),
+		store.esClient.Update.WithSource("true"),
+	}
+
+	script := strings.Join(lines, "; ")
+
+	res, err := store.esClient.Update("so-detection", id, strings.NewReader(fmt.Sprintf(`{"script": "%s"}`, script)), opts...)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
-	switch strings.ToLower(field) {
-	case "isenabled":
-		bVal, ok := value.(bool)
-		if !ok {
-			return nil, false, fmt.Errorf("invalid value for field isEnabled (expected bool): %[1]v (%[1]T)", value)
-		}
-
-		if detect.IsEnabled != bVal {
-			detect.IsEnabled = bVal
-			modified = true
-		}
+	if res.IsError() {
+		return nil, fmt.Errorf("update error: %s", res.String())
 	}
 
-	err = store.validateDetection(detect)
+	type DetectionExtractor struct {
+		Result string `json:"result"`
+		Get    struct {
+			Source struct {
+				Detection *model.Detection `json:"so_detection"`
+			} `json:"_source"`
+		} `json:"get"`
+	}
+
+	ex := DetectionExtractor{}
+
+	err = json.NewDecoder(res.Body).Decode(&ex)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
-	if modified {
-		var results *model.EventIndexResults
-
-		results, err = store.save(ctx, detect, "detection", store.prepareForSave(ctx, &detect.Auditable))
-		if err == nil {
-			// Read object back to get new modify date, etc
-			detect, err = store.GetDetection(ctx, results.DocumentId)
-		}
+	if ex.Result != "updated" {
+		log.Debug("problem")
 	}
 
-	return detect, modified, err
+	return ex.Get.Source.Detection, nil
 }
 
 func (store *ElasticDetectionstore) DeleteDetection(ctx context.Context, onionID string) (*model.Detection, error) {
@@ -404,7 +431,7 @@ func (store *ElasticDetectionstore) GetAllCommunitySIDs(ctx context.Context, eng
 		query += fmt.Sprintf(` AND %sdetection.engine:"%s"`, store.schemaPrefix, *engine)
 	}
 
-	all, err := store.getAll(ctx, query, -1)
+	all, err := store.Query(ctx, query, -1)
 	if err != nil {
 		return nil, err
 	}

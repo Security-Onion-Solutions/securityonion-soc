@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/apex/log"
@@ -258,8 +259,13 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	body := []string{}
-	err := web.ReadJson(r, body)
+	type BulkOp struct {
+		IDs   []string `json:"ids"`
+		Query *string  `json:"query"`
+	}
+
+	body := BulkOp{}
+	err := web.ReadJson(r, &body)
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
 		return
@@ -267,42 +273,94 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 
 	IDs := map[string]struct{}{}
 
-	for _, id := range body {
+	for _, id := range body.IDs {
 		IDs[id] = struct{}{}
 	}
 
-	errMap := map[string]string{} // map[id]error
-	modified := []*model.Detection{}
+	if body.Query != nil {
+		query := fmt.Sprintf(`(%s) AND _index:"*:so-detection" AND so_kind:detection`, *body.Query)
 
-	for id := range IDs {
-		det, mod, err := h.server.Detectionstore.UpdateDetectionField(ctx, id, "IsEnabled", enabled)
-		if err != nil {
-			errMap[id] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
-			continue
-		}
-
-		if mod {
-			modified = append(modified, det)
-		}
-	}
-
-	if len(modified) != 0 {
-		addErrMap, err := SyncLocalDetections(ctx, h.server, modified)
+		results, err := h.server.Detectionstore.Query(ctx, query, -1)
 		if err != nil {
 			web.Respond(w, r, http.StatusInternalServerError, err)
 			return
 		}
-
-		// merge error maps
-		for k, v := range addErrMap {
-			origK, hasK := errMap[k]
-			if hasK {
-				errMap[k] = fmt.Sprintf("%s; %s", origK, v)
-			} else {
-				errMap[k] = v
-			}
+		for _, d := range results {
+			det := d.(*model.Detection)
+			id := det.Id
+			IDs[id] = struct{}{}
 		}
 	}
+
+	log.WithField("count", len(IDs)).Info("bulk update ID count")
+
+	errMap := map[string]string{} // map[id]error
+	modified := make([]*model.Detection, 0, len(IDs))
+
+	start := time.Now()
+
+	c := make(chan string, 100)
+	mMod := &sync.Mutex{}
+	mErr := &sync.Mutex{}
+	wg := sync.WaitGroup{}
+
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+
+		go func() {
+			for id := range c {
+				mod, err := h.server.Detectionstore.UpdateDetectionField(ctx, id, map[string]interface{}{"IsEnabled": enabled})
+				if err != nil {
+					mErr.Lock()
+					errMap[id] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
+					mErr.Unlock()
+
+					continue
+				}
+
+				mMod.Lock()
+				modified = append(modified, mod)
+				mMod.Unlock()
+			}
+
+			wg.Done()
+		}()
+	}
+
+	for id := range IDs {
+		c <- id
+	}
+	close(c)
+
+	wg.Wait()
+
+	update := time.Since(start)
+	start = time.Now()
+
+	addErrMap, err := SyncLocalDetections(ctx, h.server, modified)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	sync := time.Since(start)
+
+	// merge error maps
+	for k, v := range addErrMap {
+		origK, hasK := errMap[k]
+		if hasK {
+			errMap[k] = fmt.Sprintf("%s; %s", origK, v)
+		} else {
+			errMap[k] = v
+		}
+	}
+
+	log.WithFields(log.Fields{
+		"updateTime":    update.Seconds(),
+		"syncTime":      sync.Seconds(),
+		"modifiedCount": len(modified),
+		"errorCount":    len(errMap),
+	}).Info("bulk update detection")
 
 	web.Respond(w, r, http.StatusOK, errMap)
 }
