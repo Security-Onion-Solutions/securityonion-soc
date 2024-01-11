@@ -140,6 +140,13 @@ const huntComponent = {
     mruCases: [],
     selectedMruCase: null,
     disableRouteLoad: false,
+    selectAllState: false,
+    selectedCount: 0,
+    selectedAction: 'enable',
+    bulkActions: [
+      { text: this.$root.i18n.enable, value: 'enable' },
+      { text: this.$root.i18n.disable, value: 'disable' },
+    ],
   }},
   created() {
     this.$root.initializeCharts();
@@ -1305,6 +1312,7 @@ const huntComponent = {
       if (events != null && events.length > 0) {
         let batch = [];
 
+        const multiSelect = this.isMultiSelect();
         events.forEach(function(event, index) {
           var record = event.payload;
           record.soc_id = event.id;
@@ -1313,6 +1321,11 @@ const huntComponent = {
           record.soc_timestamp = event.timestamp;
           record.soc_source = event.source;
           route.lookupSocIds(record);
+
+          if (multiSelect) {
+            record._isSelected = false;
+          }
+
           records.push(record);
 
           for (const key in record) {
@@ -1428,13 +1441,13 @@ const huntComponent = {
     removeColumnHeader(field) {
       this.populateQueryTableFields();
       this.queryTableFields = this.queryTableFields.filter(item => item != field);
-      
+
       // do not revert back to the predefined headers if this was the last column that was just removed. Otherwise
       // users would get frustrated if they're trying to remove all the columns to then add their own.
       this.repopulateEventHeaders(); // no defaults fields provided
     },
     isColumnHeader(field) {
-      return this.eventHeaders.find((item) => { 
+      return this.eventHeaders.find((item) => {
         if (item.value == field) {
           return true;
         }
@@ -1563,11 +1576,19 @@ const huntComponent = {
     isExpanded(item) {
       return (this.expanded.length > 0 && this.expanded[0] == item);
     },
+    isMultiSelect() {
+      return this.isCategory('detections');
+    },
     getExpandedData() {
       var records = []
       if (this.expanded.length > 0) {
         var data = this.expanded[0];
         for (key in data) {
+          if (key === '_isSelected') {
+            // Should we exclude all fields beginning with an underscore?
+            continue;
+          }
+
           var record = {};
           record.key = key;
           record.value = data[key];
@@ -2107,8 +2128,120 @@ const huntComponent = {
 
       window.open(url, target);
     },
-    print(x) {
-      console.log(x);
+    updateBulkSelector(item) {
+      if (item._isSelected) {
+        this.selectedCount = Math.min(this.selectedCount + 1, this.totalEvents);
+      } else {
+        this.selectedCount = Math.max(this.selectedCount - 1, 0);
+      }
+
+      switch (this.selectedCount) {
+        case 0:
+          this.selectAllState = false;
+          break;
+        case this.totalEvents:
+          this.selectAllState = true;
+          break;
+        default:
+          this.selectAllState = 'indeterminate';
+          break;
+      }
+    },
+    toggleSelectAll() {
+      switch (this.selectAllState) {
+        case 'indeterminate':
+          this.selectAllState = false;
+          this.selectAllEvents(false);
+          this.selectedCount = 0;
+          break;
+        case false:
+          this.selectAllState = 'indeterminate';
+          this.selectCurrentPage(true);
+          break;
+        case true:
+          this.selectAllState = false;
+          this.selectAllEvents(false);
+          break;
+      }
+    },
+    selectAllEvents(selection = true, ALL = false) {
+      for (let i = 0; i < this.eventData.length; i++) {
+        if (this.eventData[i]._isSelected !== selection) {
+          this.eventData[i]._isSelected = selection;
+          if (selection) {
+            this.selectedCount++;
+          } else {
+            this.selectedCount--;
+          }
+        }
+      }
+
+      this.selectedCount = Math.max(Math.min(this.selectedCount, this.totalEvents), 0);
+
+      if (ALL && selection) {
+        this.selectAllState = true;
+      }
+    },
+    selectCurrentPage(selection = true) {
+      this.$refs.eventTable._data.internalCurrentItems.forEach((item) => {
+        if (item._isSelected !== selection) {
+          item._isSelected = selection;
+          if (selection) {
+            this.selectedCount++;
+          } else {
+            this.selectedCount--;
+          }
+        }
+      });
+
+      this.selectedCount = Math.max(Math.min(this.selectedCount, this.totalEvents), 0);
+    },
+    isPageSelected() {
+      return this.$refs.eventTable._data.internalCurrentItems.every((item) => item._isSelected);
+    },
+    countSelected() {
+      let count = 0;
+      for (let i = 0; i < this.eventData.length; i++) {
+        if (this.eventData[i]._isSelected) {
+          count++;
+        }
+      }
+
+      this.selectedCount = count;
+    },
+    async bulkAction() {
+      this.$root.startLoading();
+
+      let payload = {};
+
+      switch (this.selectAllState) {
+        case true:
+          payload.query = this.query;
+          break;
+        case 'indeterminate':
+          let ids = [];
+          for (let i = 0; i < this.eventData.length; i++) {
+            if (this.eventData[i]._isSelected) {
+              ids.push(this.eventData[i].soc_id);
+            }
+          }
+
+          payload.ids = ids;
+          break;
+      }
+
+      try {
+        const response = await this.$root.papi.post('detection/bulk/' + this.selectedAction, payload);
+
+        this.selectAllState = false;
+        this.selectedCount = 0;
+
+        this.hunt(false);
+      } catch (e) {
+        this.$root.handleError(e);
+      }
+
+      this.$root.stopLoading();
     }
   }
 };

@@ -101,7 +101,7 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
 				detAuditIndex := module.GetStringDefault(cfg, "detectionAuditIndex", DEFAULT_DETECTION_AUDIT_INDEX)
 				maxDetAssociations := module.GetIntDefault(cfg, "maxDetectionAssociations", DEFAULT_DETECTION_ASSOCIATIONS_MAX)
 				schemaPrefix := module.GetStringDefault(cfg, "schemaPrefix", DEFAULT_DETECTION_SCHEMA_PREFIX)
-				detstore := NewElasticDetectionstore(elastic.server)
+				detstore := NewElasticDetectionstore(elastic.server, elastic.store.esClient)
 
 				err = detstore.Init(detIndex, detAuditIndex, maxDetAssociations, schemaPrefix)
 				if err == nil {

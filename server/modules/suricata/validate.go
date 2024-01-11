@@ -56,7 +56,6 @@ func ParseSuricataRule(rule string) (*SuricataRule, error) {
 	}
 
 	for r.Len() != 0 {
-		// TODO: Parse Source and Destination into Address and Ports
 		ch, _, _ := r.ReadRune()
 
 		switch curState {

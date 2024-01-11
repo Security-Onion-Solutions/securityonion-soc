@@ -412,7 +412,14 @@ func (s *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*
 				modifyIndex[sid] = lineNum
 			} else if inModify && detect.IsEnabled {
 				// in modify, but shouldn't be
-				modifyLines = append(modifyLines[:lineNum], modifyLines[lineNum+1:]...)
+				var after []string
+				before := modifyLines[:lineNum]
+
+				if lineNum+1 < len(modifyLines) {
+					after = modifyLines[lineNum+1:]
+				}
+
+				modifyLines = append(before, after...)
 				delete(modifyIndex, sid)
 			}
 		}

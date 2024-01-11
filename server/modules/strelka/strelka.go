@@ -90,7 +90,7 @@ func (e *StrelkaEngine) SyncLocalDetections(ctx context.Context, detections []*m
 
 func (e *StrelkaEngine) startCommunityRuleImport() {
 	for e.isRunning {
-		time.Sleep(time.Second * 10)
+		time.Sleep(time.Second * 600)
 		if !e.isRunning {
 			break
 		}
@@ -126,8 +126,6 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			if err != nil {
 				log.WithError(err).WithField("file", filename).Error("failed to parse yara rule file")
 				errors++
-
-				continue
 			}
 
 			rules = append(rules, parsed...)
