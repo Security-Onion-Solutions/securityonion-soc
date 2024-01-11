@@ -3129,7 +3129,14 @@
                               </div>
                               <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.lastHighstate }}:</span>
-                                <span class="filter value" id="node_last_highstate" :class="areMetricsCurrent(item) ? '' : 'stale'">{{ item.highstateAgeSeconds | formatDuration }} {{i18n.ago}}</span>
+                                <span class="filter value" id="node_last_highstate" :class="areMetricsCurrent(item) ? '' : 'stale'">
+                                  <span v-if="item.highstateAgeSeconds > UNREALISTIC_AGE">
+                                    {{ i18n.never }}
+                                  </span>
+                                  <span v-else>
+                                    {{ item.highstateAgeSeconds | formatDuration }} {{i18n.ago}}
+                                  </span>
+                                </span>
                               </div>
                               <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.nodeStatusProcess }}</span>
