@@ -527,10 +527,14 @@ const huntComponent = {
           };
           response.data.totalEvents = response.data.events.length;
         } else {
+          let range = this.dateRange;
+          if (this.isCategory('detections')) {
+            range = moment(0).format(this.i18n.timePickerFormat) + " - " + moment().format(this.i18n.timePickerFormat);
+          }
           response = await this.$root.papi.get('events/', {
             params: {
               query: await this.getQuery(),
-              range: this.dateRange,
+              range: range,
               format: this.i18n.timePickerSample,
               zone: this.zone,
               metricLimit: this.groupByLimit,
