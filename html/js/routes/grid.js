@@ -23,7 +23,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
       { text: this.$root.i18n.version, value: 'version', align: ' d-none d-lg-table-cell' },
       { text: this.$root.i18n.model, value: 'model', align: ' d-none d-lg-table-cell' },
       { text: this.$root.i18n.eps, value: 'consumptionEps', align: ' d-none d-lg-table-cell' },
-      { text: this.$root.i18n.memUsageAbbr, value: 'memUsedPct', align: ' d-none d-xl-table-cell' },
+      { text: this.$root.i18n.memUsageAbbr, value: 'memoryUsedPct', align: ' d-none d-xl-table-cell' },
       { text: this.$root.i18n.diskUsageRootAbbr, value: 'diskUsedRootPct', align: ' d-none d-xl-table-cell' },
       { text: this.$root.i18n.diskUsageNsmAbbr, value: 'diskUsedNsmPct', align: ' d-none d-xl-table-cell' },
       { text: this.$root.i18n.cpuUsageAbbr, value: 'cpuUsedPct', align: ' d-none d-xl-table-cell' },
