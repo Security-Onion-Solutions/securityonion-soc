@@ -8,11 +8,21 @@ routes.push({ path: '/downloads', name: 'downloads', component: {
   template: '#page-downloads',
   data() { return {
     i18n: this.$root.i18n,
+    remoteAgentSupported: true,
   }},
   created() {
+    this.$root.subscribe("node", this.updateNode);
+  },
+  destroyed() {
+    this.$root.unsubscribe("node", this.updateNode);
   },
   watch: {
   },
   methods: {
+    updateNode(node) {
+      if (['so-eval', 'so-import'].includes(node.role)) {
+        this.remoteAgentSupported = false;
+      }
+    },
   }
 }});

@@ -30,6 +30,8 @@ const huntComponent = {
     queryGroupBys: [],
     queryGroupByOptions: [],
     querySortBys: [],
+    queryTableFields: [],
+    queryTableOptions: [],
     eventFields: {},
     dateRange: '',
     relativeTimeEnabled: true,
@@ -137,6 +139,7 @@ const huntComponent = {
     addToCaseDialogVisible: false,
     mruCases: [],
     selectedMruCase: null,
+    disableRouteLoad: false,
   }},
   created() {
     this.$root.initializeCharts();
@@ -440,6 +443,8 @@ const huntComponent = {
       return true;
     },
     async loadData() {
+      if (this.disableRouteLoad) return;
+
       if (!this.parseUrlParameters()) return;
 
       this.$root.startLoading();
@@ -682,6 +687,8 @@ const huntComponent = {
       this.queryFilters = [];
       this.queryGroupBys = [];
       this.queryGroupByOptions = [];
+      this.queryTableFields = [];
+      this.queryTableOptions = [];
       this.querySortBys = [];
       var route = this;
       if (this.query) {
@@ -750,6 +757,23 @@ const huntComponent = {
               });
               route.queryGroupBys.push(fields);
               route.queryGroupByOptions.push(options);
+            }
+            if (segment.indexOf("table") == 0) {
+              var fields = [];
+              var options = [];
+              segment.split(" ").forEach(function(item, index) {
+                // Skip empty fields and segment options (they start with a hyphen)
+                if (item[0] == "-") {
+                  options.push(item.substring(1));
+                } else if (index > 0 && item.trim().length > 0) {
+                  if (item.split("\"").length % 2 == 1) {
+                    // Will currently skip quoted items with spaces.
+                    fields.push(item);
+                  }
+                }
+              });
+              route.queryTableFields = fields;
+              route.queryTableOptions = options;
             }
             if (segment.indexOf("sortby") == 0) {
               segment.split(" ").forEach(function(item, index) {
@@ -1054,15 +1078,17 @@ const huntComponent = {
     },
     constructHeaders(fields) {
       var headers = [];
-      var i18n = this.i18n;
-      fields.forEach(function(item, index) {
-        var i18nKey = "field_" + item;
-        var header = {
-          text: i18n[i18nKey] ? i18n[i18nKey] : item,
-          value: item,
-        };
-        headers.push(header);
-      });
+      if (fields && fields.length > 0) {
+        var i18n = this.i18n;
+        fields.forEach(function(item, index) {
+          var i18nKey = "field_" + item;
+          var header = {
+            text: i18n[i18nKey] ? i18n[i18nKey] : item,
+            value: item,
+          };
+          headers.push(header);
+        });
+      }
       return headers;
     },
     lookupSocId(data) {
@@ -1243,8 +1269,107 @@ const huntComponent = {
           fields.push(key);
         }
       }
-      this.eventHeaders = this.constructHeaders(this.filterVisibleFields(eventModule, eventDataset, fields));
+      this.populateEventHeaders(this.filterVisibleFields(eventModule, eventDataset, fields));
       this.eventData = records;
+    },
+    populateEventHeaders(defaultFields) {
+      var fields = defaultFields;
+      if (this.queryTableFields.length > 0) {
+        fields = this.queryTableFields;
+      }
+      this.eventHeaders = this.constructHeaders(fields);
+    },
+    repopulateEventHeaders() {
+      this.populateEventHeaders();
+
+      // This is a UI interaction so update the query and route to reflect the new table segment
+      var segments = this.query.split("|");
+      var newQuery = segments[0];
+      for (var i = 1; i < segments.length; i++) {
+        if (segments[i].trim().indexOf("table") == 0) {
+          continue;
+        }
+        newQuery = newQuery.trim() + " | " + segments[i].trim();
+      }
+      if (this.queryTableFields.length > 0) {
+        newQuery = newQuery + " | table " + this.queryTableFields.join(" ");
+      }
+
+      this.updateActiveQuery(newQuery);
+    },
+    updateActiveQuery(newQuery) {
+      var route = this.buildCurrentRoute();
+      route.query.q = newQuery;
+
+      this.disableRouteLoad = true;
+      this.$router.push(route);
+      this.query = newQuery;
+      const thisRoute = this;
+      setTimeout(function() { thisRoute.disableRouteLoad = false; }, 100);
+    },
+    toggleColumnHeader(field) {
+      if (!this.isColumnHeader(field)) {
+        this.addColumnHeader(field);
+      } else {
+        this.removeColumnHeader(field);
+      }
+    },
+    populateQueryTableFields() {
+      if (this.queryTableFields.length == 0) {
+        // Pre-populate with the default field headers already in eventHeaders (from populateEventTable)
+        for (const idx in this.eventHeaders) {
+          const field = this.eventHeaders[idx].value;
+          this.queryTableFields.push(field);
+        }
+      }
+    },
+    moveColumnHeader(field, left) {
+      this.populateQueryTableFields();
+      for (var idx = -1; idx < this.queryTableFields.length; idx++) {
+        const currentField = this.queryTableFields[idx];
+        if (field == currentField) {
+          break;
+        }
+      }
+
+      if (idx > -1) {
+        if (left) {
+          if (idx > 0) {
+            var tmpFields = this.queryTableFields.slice(0, idx - 1);
+            tmpFields.push(field);
+            tmpFields = tmpFields.concat(this.queryTableFields.slice(idx - 1, idx));
+            this.queryTableFields = tmpFields.concat(this.queryTableFields.slice(idx + 1));
+          }
+        } else {
+          if (idx < this.queryTableFields.length - 1) {
+            var tmpFields = this.queryTableFields.slice(0, idx);
+            tmpFields = tmpFields.concat(this.queryTableFields.slice(idx + 1, idx + 2));
+            tmpFields.push(field);
+            this.queryTableFields = tmpFields.concat(this.queryTableFields.slice(idx + 2));
+          }
+        }
+      }
+      this.repopulateEventHeaders(); // no defaults fields will be supplied since we know they aren't going to be used.
+    },
+    addColumnHeader(field) {
+      this.populateQueryTableFields();
+      this.queryTableFields.push(field);
+      this.repopulateEventHeaders(); // no defaults fields will be supplied since we know they aren't going to be used.
+    },
+    removeColumnHeader(field) {
+      this.populateQueryTableFields();
+      this.queryTableFields = this.queryTableFields.filter(item => item != field);
+      
+      // do not revert back to the predefined headers if this was the last column that was just removed. Otherwise
+      // users would get frustrated if they're trying to remove all the columns to then add their own.
+      this.repopulateEventHeaders(); // no defaults fields provided
+    },
+    isColumnHeader(field) {
+      return this.eventHeaders.find((item) => { 
+        if (item.value == field) {
+          return true;
+        }
+      }) != null;
     },
     displayTable(group, groupIdx) {
       group.chart_type = "";

@@ -10,56 +10,91 @@ require('./grid.js');
 const comp = getComponent("grid");
 
 test('updateStatus', () => {
-  const status = { grid: { eps: 12 }};
+	const status = { grid: { eps: 12 }};
 
-  expect(comp.gridEps).toBe(0);
-  comp.updateStatus(status);
-  expect(comp.gridEps).toBe(12);
+	expect(comp.gridEps).toBe(0);
+	comp.updateStatus(status);
+	expect(comp.gridEps).toBe(12);
 });
 
 test('updateMetricsEnabled', () => {
 	testUpdateMetricsEnabled(true, false, true);
 	testUpdateMetricsEnabled(false, false, false);
 	testUpdateMetricsEnabled(true, true, true);
+	testUpdateMetricsEnabled(true, false, true, true);
+	testUpdateMetricsEnabled(false, false, false, false);
+	testUpdateMetricsEnabled(true, true, true, true);
 });
 
-function testUpdateMetricsEnabled(node1MetricsEnabled, node2MetricsEnabled, expectedMetricsEnabled) {
+function testUpdateMetricsEnabled(node1MetricsEnabled, node2MetricsEnabled, expectedMetricsEnabled, moreColumnsEnabled) {
 	const node1 = { metricsEnabled: node1MetricsEnabled };
 	const node2 = { metricsEnabled: node2MetricsEnabled };
 	comp.nodes = [node1, node2];
+	comp.moreColumns = moreColumnsEnabled;
 
 	comp.updateMetricsEnabled();
 
 	expect(comp.metricsEnabled).toBe(expectedMetricsEnabled);
 
-  const epsColumn = comp.headers.find(function(item) {
-    return item.text == comp.i18n.eps;
-  });
-
-  if (!expectedMetricsEnabled) {
-		expect(epsColumn.align).toBe(' d-none');
-	} else {
-		expect(epsColumn.align).toBe(' d-none d-lg-table-cell');
+	const validateColumn = (label, size, moreCols) => {
+		const column = comp.headers.find(function(item) {
+			const trans = comp.i18n[label]
+			return item.text == trans;
+		});
+		if (!expectedMetricsEnabled || (moreCols && !moreColumnsEnabled)) {
+			expect(column.align).toBe(' d-none');
+		} else {
+			expect(column.align).toBe(' d-none d-' + size + '-table-cell');
+		}
 	}
+
+	validateColumn('eps', 'lg', false);
+	validateColumn('memUsageAbbr', 'xl', false);
+	validateColumn('diskUsageRootAbbr', 'xl', false);
+	validateColumn('diskUsageNsmAbbr', 'xl', false);
+	validateColumn('cpuUsageAbbr', 'xl', false);
+	validateColumn('trafficManInAbbr', 'xl', false);
+	validateColumn('trafficManOutAbbr', 'xl', false);
+	validateColumn('trafficMonInAbbr', 'xl', true);
+	validateColumn('trafficMonInDropsAbbr', 'xl', true);
+	validateColumn('captureLossAbbr', 'xl', true);
+	validateColumn('zeekLossAbbr', 'xl', true);
+	validateColumn('suricataLossAbbr', 'xl', true);
+	validateColumn('stenoLossAbbr', 'xl', true);
+	validateColumn('pcapRetentionAbbr', 'xl', true);
 }
 
 test('colorNodeStatus', () => {
-  expect(comp.colorNodeStatus("ok")).toBe("success");
-  expect(comp.colorNodeStatus("fault")).toBe("error");
-  expect(comp.colorNodeStatus("fault", true)).toBe("warning");
-  expect(comp.colorNodeStatus("unknown")).toBe("warning");
-  expect(comp.colorNodeStatus("unknown", true)).toBe("warning");
+	expect(comp.colorNodeStatus("ok")).toBe("success");
+	expect(comp.colorNodeStatus("fault")).toBe("error");
+	expect(comp.colorNodeStatus("fault", true)).toBe("warning");
+	expect(comp.colorNodeStatus("unknown")).toBe("warning");
+	expect(comp.colorNodeStatus("pending")).toBe("warning");
+	expect(comp.colorNodeStatus("pending", true)).toBe("warning");
+	expect(comp.colorNodeStatus("unknown", true)).toBe("warning");
+});
+
+test('formatLinearColor', () => {
+	expect(comp.formatLinearColor(0, 1, 2, 3)).toBe("success");
+	expect(comp.formatLinearColor(0.99, 1, 2, 3)).toBe("success");
+	expect(comp.formatLinearColor(1.0, 1, 2, 3)).toBe("info");
+	expect(comp.formatLinearColor(1.99, 1, 2, 3)).toBe("info");
+	expect(comp.formatLinearColor(2.0, 1, 2, 3)).toBe("warning");
+	expect(comp.formatLinearColor(2.99, 1, 2, 3)).toBe("warning");
+	expect(comp.formatLinearColor(3.0, 1, 2, 3)).toBe("error");
+	expect(comp.formatLinearColor(5, 1, 2, 3)).toBe("error");
 });
 
 test('iconNodeStatus', () => {
 	expect(comp.iconNodeStatus("fault")).toBe("fa-triangle-exclamation");
-  expect(comp.iconNodeStatus("ok")).toBe("fa-circle-check");
-  expect(comp.iconNodeStatus("other")).toBe("fa-circle-question");
+	expect(comp.iconNodeStatus("pending")).toBe("fa-circle-exclamation");
+	expect(comp.iconNodeStatus("ok")).toBe("fa-circle-check");
+	expect(comp.iconNodeStatus("other")).toBe("fa-circle-question");
 });
 
 test('colorContainerStatus', () => {
-	expect(comp.colorContainerStatus("running")).toBe("green");
-  expect(comp.colorContainerStatus("broken")).toBe("error");
+	expect(comp.colorContainerStatus("running")).toBe("success");
+	expect(comp.colorContainerStatus("broken")).toBe("error");
 });
 
 test('formatNode', () => {
@@ -106,6 +141,20 @@ test('canTest', () => {
 
 	node['keywords'] = "Foo Sensor Bar";
 	expect(comp.canTest(node)).toBe(true);
+});
+
+
+test('testRestartConfirmDialog', () => {
+	expect(comp.gridMemberRestartConfirmDialog).toBe(false);
+	expect(comp.selectedId).toBe(null);
+
+	comp.showRestartConfirm('t2');
+	expect(comp.gridMemberRestartConfirmDialog).toBe(true);
+	expect(comp.selectedId).toBe('t2');
+
+	comp.hideRestartConfirm();
+	expect(comp.gridMemberRestartConfirmDialog).toBe(false);
+	expect(comp.selectedId).toBe(null);
 });
 
 test('testUploadDialog', () => {
@@ -193,4 +242,36 @@ test('gridMemberTest', async () => {
 	comp.selectedId = 'fwd01_so-sensor';
 	await comp.gridMemberTest();
 	expect(mock).toHaveBeenCalledWith('gridmembers/fwd01_sensor/test');
+});
+
+test('gridMemberRestart', async () => {
+	resetPapi();
+	const mock = mockPapi("post");
+	comp.selectedId = 'fwd01_so-sensor';
+	await comp.gridMemberRestart();
+	expect(mock).toHaveBeenCalledWith('gridmembers/fwd01_sensor/restart');
+});
+
+test('hasEventstore', () => {
+	var item = {containers: [{Name: 'so-something'}, {Name: 'so-elasticsearch'}, {Name: 'so-another'}]};
+	expect(comp.hasEventstore(item)).toBe(true);
+
+	item = {containers: [{Name: 'so-something'}, {Name: 'so-nope'}, {Name: 'so-another'}]};
+	expect(comp.hasEventstore(item)).toBe(false);
+});
+
+test('hasMetricstore', () => {
+	var item = {containers: [{Name: 'so-something'}, {Name: 'so-influxdb'}, {Name: 'so-another'}]};
+	expect(comp.hasMetricstore(item)).toBe(true);
+
+	item = {containers: [{Name: 'so-something'}, {Name: 'so-nope'}, {Name: 'so-another'}]};
+	expect(comp.hasMetricstore(item)).toBe(false);
+});
+
+test('hasQueuestore', () => {
+	var item = {containers: [{Name: 'so-something'}, {Name: 'so-redis'}, {Name: 'so-another'}]};
+	expect(comp.hasQueuestore(item)).toBe(true);
+
+	item = {containers: [{Name: 'so-something'}, {Name: 'so-nope'}, {Name: 'so-another'}]};
+	expect(comp.hasQueuestore(item)).toBe(false);
 });

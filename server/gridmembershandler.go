@@ -21,7 +21,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/samber/lo"
 )
 
@@ -252,7 +252,7 @@ func (h *GridMembersHandler) postManageMembers(w http.ResponseWriter, r *http.Re
 	}
 
 	op := chi.URLParam(r, "operation")
-	if op != "add" && op != "reject" && op != "delete" && op != "test" {
+	if op != "add" && op != "reject" && op != "delete" && op != "test" && op != "restart" {
 		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid operation"))
 		return
 	}

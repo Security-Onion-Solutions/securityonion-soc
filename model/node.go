@@ -14,30 +14,60 @@ const NodeRoleDesktop = "so-desktop"
 const NodeStatusUnknown = "unknown"
 const NodeStatusOk = "ok"
 const NodeStatusFault = "fault"
+const NodeStatusPending = "pending"
 
 type Node struct {
-	Id               string    `json:"id"`
-	OnlineTime       time.Time `json:"onlineTime"`
-	UpdateTime       time.Time `json:"updateTime"`
-	EpochTime        time.Time `json:"epochTime"`
-	UptimeSeconds    int       `json:"uptimeSeconds"`
-	Description      string    `json:"description"`
-	Address          string    `json:"address"`
-	Role             string    `json:"role"`
-	Model            string    `json:"model"`
-	ImageFront       string    `json:"imageFront"`
-	ImageBack        string    `json:"imageBack"`
-	Status           string    `json:"status"`
-	Version          string    `json:"version"`
-	ConnectionStatus string    `json:"connectionStatus"`
-	RaidStatus       string    `json:"raidStatus"`
-	ProcessStatus    string    `json:"processStatus"`
-	ProcessJson      string    `json:"processJson"`
-	ProductionEps    int       `json:"productionEps"`
-	ConsumptionEps   int       `json:"consumptionEps"`
-	FailedEvents     int       `json:"failedEvents"`
-	MetricsEnabled   bool      `json:"metricsEnabled"`
-	NonCriticalNode	 bool	   `json:"nonCriticalNode"`
+	Id                   string    `json:"id"`
+	OnlineTime           time.Time `json:"onlineTime"`
+	UpdateTime           time.Time `json:"updateTime"`
+	EpochTime            time.Time `json:"epochTime"`
+	UptimeSeconds        int       `json:"uptimeSeconds"`
+	Description          string    `json:"description"`
+	Address              string    `json:"address"`
+	Role                 string    `json:"role"`
+	Model                string    `json:"model"`
+	ImageFront           string    `json:"imageFront"`
+	ImageBack            string    `json:"imageBack"`
+	Status               string    `json:"status"`
+	Version              string    `json:"version"`
+	ConnectionStatus     string    `json:"connectionStatus"`
+	RaidStatus           string    `json:"raidStatus"`
+	ProcessStatus        string    `json:"processStatus"`
+	ProcessJson          string    `json:"processJson"`
+	ProductionEps        int       `json:"productionEps"`
+	ConsumptionEps       int       `json:"consumptionEps"`
+	FailedEvents         int       `json:"failedEvents"`
+	EventstoreStatus     string    `json:"eventstoreStatus"`
+	OsNeedsRestart       int       `json:"osNeedsRestart"`
+	OsUptimeSeconds      int       `json:"osUptimeSeconds"`
+	MetricsEnabled       bool      `json:"metricsEnabled"`
+	NonCriticalNode      bool      `json:"nonCriticalNode"`
+	DiskTotalRootGB      float64   `json:"diskTotalRootGB"`
+	DiskUsedRootPct      float64   `json:"diskUsedRootPct"`
+	DiskTotalNsmGB       float64   `json:"diskTotalNsmGB"`
+	DiskUsedNsmPct       float64   `json:"diskUsedNsmPct"`
+	CpuUsedPct           float64   `json:"cpuUsedPct"`
+	MemoryTotalGB        float64   `json:"memoryTotalGB"`
+	MemoryUsedPct        float64   `json:"memoryUsedPct"`
+	SwapTotalGB          float64   `json:"swapTotalGB"`
+	SwapUsedPct          float64   `json:"swapUsedPct"`
+	PcapDays             float64   `json:"pcapDays"`
+	StenoLossPct         float64   `json:"stenoLossPct"`
+	SuriLossPct          float64   `json:"suriLossPct"`
+	ZeekLossPct          float64   `json:"zeekLossPct"`
+	CaptureLossPct       float64   `json:"captureLossPct"`
+	TrafficMonInMbs      float64   `json:"trafficMonInMbs"`
+	TrafficMonInDropsMbs float64   `json:"trafficMonInDropsMbs"`
+	TrafficManInMbs      float64   `json:"trafficManInMbs"`
+	TrafficManOutMbs     float64   `json:"trafficManOutMbs"`
+	RedisQueueSize       int       `json:"redisQueueSize"`
+	IoWaitPct            float64   `json:"ioWaitPct"`
+	Load1m               float64   `json:"load1m"`
+	Load5m               float64   `json:"load5m"`
+	Load15m              float64   `json:"load15m"`
+	DiskUsedElasticGB    float64   `json:"diskUsedElasticGB"`
+	DiskUsedInfluxDbGB   float64   `json:"diskUsedInfluxDbGB"`
+	HighstateAgeSeconds  int       `json:"highstateAgeSeconds"`
 }
 
 func NewNode(id string) *Node {
@@ -93,6 +123,11 @@ func (node *Node) UpdateOverallStatus(enhancedStatusEnabled bool) bool {
 	if enhancedStatusEnabled {
 		newStatus = node.updateStatusComponent(newStatus, node.RaidStatus)
 		newStatus = node.updateStatusComponent(newStatus, node.ProcessStatus)
+		newStatus = node.updateStatusComponent(newStatus, node.EventstoreStatus)
+
+		if node.OsNeedsRestart == 1 && newStatus != NodeStatusFault {
+			newStatus = NodeStatusPending
+		}
 	}
 
 	// Special case: If either process or connection status is unknown then show node in error state.

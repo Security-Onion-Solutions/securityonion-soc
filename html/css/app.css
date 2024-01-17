@@ -65,6 +65,14 @@
   max-width: 300px;
 }
 
+.tiny-icon {
+  font-size: 14px !important;
+}
+
+.stale {
+  opacity: 0.3;
+}
+
 /* animations */
 .waggle {
   animation-name: waggle;
@@ -165,16 +173,22 @@ a#title, a#title:visited, a#title:active, a#title:hover {
 
 .filter.label {
   display: inline-block;
-  padding-right: 10px;
   width: 45%;
   text-align: right;
   white-space: nowrap;
+  vertical-align: top;
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
 
 .filter.value {
+  display: inline-block;
+  width: 55%;
   text-align: left;
   font-weight: bold;
   white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
 
 .case.summary {
