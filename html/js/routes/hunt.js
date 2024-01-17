@@ -181,11 +181,16 @@ const huntComponent = {
   beforeDestroy() {
     this.$root.setSubtitle("");
     this.stopRefreshTimer();
+    this.$root.unsubscribe('detections:bulkUpdate', this.bulkUpdateReport);
   },
   mounted() {
     this.$root.startLoading();
     this.category = this.$route.path.replace("/", "");
     this.$root.loadParameters(this.category, this.initHunt);
+
+    if (this.isCategory('detections')) {
+      this.$root.subscribe('detections:bulkUpdate', this.bulkUpdateReport);
+    }
   },
   watch: {
     '$route': 'loadData',
@@ -322,6 +327,9 @@ const huntComponent = {
         this.$router.push(this.buildCurrentRoute(), onSuccess, onFail);
       }
       this.resetRefreshTimer();
+
+      this.selectAllState = false;
+      this.selectedCount = 0;
 
       if (document.activeElement) {
         // Release focus to avoid clicking away causing a second hunt
@@ -2214,8 +2222,6 @@ const huntComponent = {
       this.selectedCount = count;
     },
     async bulkAction() {
-      this.$root.startLoading();
-
       let payload = {};
 
       switch (this.selectAllState) {
@@ -2235,18 +2241,52 @@ const huntComponent = {
       }
 
       try {
-        const response = await this.$root.papi.post('detection/bulk/' + this.selectedAction, payload);
-
-        this.selectAllState = false;
-        this.selectedCount = 0;
-
-        this.hunt(false);
+        await this.$root.papi.post('detection/bulk/' + this.selectedAction, payload);
       } catch (e) {
         this.$root.handleError(e);
+      } finally {
+        this.selectAllState = false;
+        this.selectedCount = 0;
+        this.hunt(false);
       }
+    },
+    bulkUpdateReport(stats) {
+      if (stats.error > 0) {
+        let msg = this.i18n.bulkError;
+        msg += ' ' + stats.error.toLocaleString() + ' ' + (stats.error == 1 ? this.i18n.errorSingular : this.i18n.errorPlural) + '.';
 
-      this.$root.stopLoading();
-    }
+        this.$root.showError(msg);
+      } else {
+        let seconds = Math.floor(stats.time);
+        let hours = Math.floor(seconds / 3600);
+        seconds %= 3600;
+        let minutes = Math.floor(seconds / 60);
+        seconds = Math.floor(seconds % 60);
+
+        let t = '';
+
+        if (hours > 0) {
+          t += hours + 'h ';
+        }
+
+        if (minutes > 0 || t.length > 0) {
+          if (t.length > 0) {
+            minutes = `0${minutes}`;
+          }
+
+          t += minutes + 'm ';
+        }
+
+        t += seconds.toFixed(0) + 's';
+
+        let msg = this.i18n.bulkSuccess;
+        msg = msg.replaceAll('{modified}', stats.modified.toLocaleString());
+        msg = msg.replaceAll('{total}', stats.total.toLocaleString());
+        msg = msg.replaceAll('{time}', t);
+
+        this.$root.showInfo(msg);
+      }
+    },
   }
 };
 

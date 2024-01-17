@@ -6,10 +6,12 @@
 package elastic
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"regexp"
 	"strconv"
 	"strings"
@@ -21,6 +23,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+	"github.com/tidwall/gjson"
 )
 
 type ElasticDetectionstore struct {
@@ -30,12 +33,14 @@ type ElasticDetectionstore struct {
 	auditIndex      string
 	maxAssociations int
 	schemaPrefix    string
+	maxLogLength    int
 }
 
-func NewElasticDetectionstore(srv *server.Server, client *elasticsearch.Client) *ElasticDetectionstore {
+func NewElasticDetectionstore(srv *server.Server, client *elasticsearch.Client, maxLogLength int) *ElasticDetectionstore {
 	return &ElasticDetectionstore{
-		server:   srv,
-		esClient: client,
+		server:       srv,
+		esClient:     client,
+		maxLogLength: maxLogLength,
 	}
 }
 
@@ -391,27 +396,34 @@ func (store *ElasticDetectionstore) UpdateDetectionField(ctx context.Context, id
 		return nil, fmt.Errorf("update error: %s", res.String())
 	}
 
-	type DetectionExtractor struct {
-		Result string `json:"result"`
-		Get    struct {
-			Source struct {
-				Detection *model.Detection `json:"so_detection"`
-			} `json:"_source"`
-		} `json:"get"`
-	}
-
-	ex := DetectionExtractor{}
-
-	err = json.NewDecoder(res.Body).Decode(&ex)
+	raw, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	if ex.Result != "updated" {
-		log.Debug("problem")
+	det := &model.Detection{}
+
+	rawDet := gjson.Get(string(raw), "get._source.so_detection").Raw
+
+	err = json.Unmarshal([]byte(rawDet), det)
+	if err != nil {
+		return nil, err
 	}
 
-	return ex.Get.Source.Detection, nil
+	document := convertObjectToDocumentMap("detection", json.RawMessage(rawDet), store.schemaPrefix)
+	document[store.schemaPrefix+AUDIT_DOC_ID] = id
+	document[store.schemaPrefix+"kind"] = "detection"
+	document[store.schemaPrefix+"operation"] = "update"
+
+	err = store.audit(ctx, document, id)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"documentId": id,
+			"kind":       "detection",
+		}).WithError(err).Error("Detection updated successfully however audit record failed to index")
+	}
+
+	return det, nil
 }
 
 func (store *ElasticDetectionstore) DeleteDetection(ctx context.Context, onionID string) (*model.Detection, error) {
@@ -443,4 +455,90 @@ func (store *ElasticDetectionstore) GetAllCommunitySIDs(ctx context.Context, eng
 	}
 
 	return sids, nil
+}
+
+func (store *ElasticDetectionstore) audit(ctx context.Context, document map[string]interface{}, id string) error {
+	var err error
+
+	// TODO: Rethink permissions here
+	// if err = store.server.CheckAuthorized(ctx, "write", "events"); err == nil {
+	// store.refreshCache(ctx)
+
+	var request string
+	request, err = convertToElasticIndexRequest(nil, document)
+	if err == nil {
+		log.Debug("Sending index request to primary Elasticsearch client")
+		_, err = store.indexDocument(ctx, store.disableCrossClusterIndex(store.auditIndex), request, id)
+		if err != nil {
+			log.WithError(err).Error("Encountered error while indexing document into elasticsearch")
+		}
+	}
+	// }
+	return err
+}
+
+func (store *ElasticDetectionstore) indexDocument(ctx context.Context, index string, document string, id string) (string, error) {
+	log.WithFields(log.Fields{
+		"index":     index,
+		"id":        id,
+		"document":  store.truncate(document),
+		"requestId": ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Adding document to Elasticsearch")
+
+	res, err := store.esClient.Index(index,
+		strings.NewReader(document),
+		store.esClient.Index.WithRefresh("true"),
+		store.esClient.Index.WithDocumentID(id),
+		store.esClient.Index.WithContext(ctx),
+	)
+
+	if err != nil {
+		log.WithError(err).Error("Unable to index document into Elasticsearch")
+		return "", err
+	}
+	defer res.Body.Close()
+	json, err := store.readJsonFromResponse(res)
+
+	log.WithFields(log.Fields{
+		"response":  store.truncate(json),
+		"requestId": ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Index new document finished")
+	return json, err
+}
+
+func (store *ElasticDetectionstore) truncate(input string) string {
+	if len(input) > store.maxLogLength {
+		return input[:store.maxLogLength] + "..."
+	}
+	return input
+}
+
+func (store *ElasticDetectionstore) disableCrossClusterIndex(index string) string {
+	pieces := strings.SplitN(index, ":", 2)
+	if len(pieces) == 2 {
+		index = pieces[1]
+	}
+	return index
+}
+
+func (store *ElasticDetectionstore) readErrorFromJson(json string) error {
+	errorType := gjson.Get(json, "error.type").String()
+	errorReason := gjson.Get(json, "error.reason").String()
+	errorDetails := json
+	if len(json) > MAX_ERROR_LENGTH {
+		errorDetails = json[0:MAX_ERROR_LENGTH]
+	}
+	err := errors.New(errorType + ": " + errorReason + " -> " + errorDetails)
+	return err
+}
+
+func (store *ElasticDetectionstore) readJsonFromResponse(res *esapi.Response) (string, error) {
+	var err error
+	var b bytes.Buffer
+	b.ReadFrom(res.Body)
+	json := b.String()
+	if res.IsError() {
+		err = store.readErrorFromJson(json)
+	}
+	return json, err
 }
