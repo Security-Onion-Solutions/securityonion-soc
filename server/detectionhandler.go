@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/apex/log"
@@ -21,6 +20,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 )
+
+type BulkOp struct {
+	IDs       []string `json:"ids"`
+	Query     *string  `json:"query"`
+	NewStatus bool     `json:"-"`
+}
 
 type DetectionHandler struct {
 	server *Server
@@ -259,19 +264,55 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	type BulkOp struct {
-		IDs   []string `json:"ids"`
-		Query *string  `json:"query"`
-	}
-
-	body := BulkOp{}
-	err := web.ReadJson(r, &body)
+	body := &BulkOp{}
+	err := web.ReadJson(r, body)
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
+	body.NewStatus = enabled
+
+	// TODO: Check any permissions needing to be checked, we can't return a 4XX after this point
+
+	// new context that doesn't contain a timeout or deadline, but does include
+	// the user we're making requests to ES on behalf of.
+	noTimeOutCtx := context.WithValue(context.Background(), web.ContextKeyRequestor, ctx.Value(web.ContextKeyRequestor).(*model.User))
+	noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
+
+	go h.bulkUpdateDetectionAsync(noTimeOutCtx, body)
+
+	web.Respond(w, r, http.StatusAccepted, nil)
+}
+
+func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *BulkOp) {
+	var err error
+	var update, sync time.Duration
+	errMap := map[string]string{} // map[id]error
 	IDs := map[string]struct{}{}
+	modified := []*model.Detection{}
+
+	totalTimeStart := time.Now()
+
+	defer func() {
+		totalTime := time.Since(totalTimeStart)
+
+		log.WithFields(log.Fields{
+			"error":      len(errMap),
+			"total":      len(IDs),
+			"modified":   len(modified),
+			"updateTime": update.Seconds(),
+			"syncTime":   sync.Seconds(),
+			"totalTime":  totalTime.Seconds(),
+		}).Error("bulk update Detections finished")
+
+		h.server.Host.Broadcast("detections:bulkUpdate", "detection", map[string]interface{}{
+			"error":    len(errMap),
+			"total":    len(IDs),
+			"modified": len(modified),
+			"time":     totalTime.Seconds(),
+		})
+	}()
 
 	for _, id := range body.IDs {
 		IDs[id] = struct{}{}
@@ -280,9 +321,10 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 	if body.Query != nil {
 		query := fmt.Sprintf(`(%s) AND _index:"*:so-detection" AND so_kind:detection`, *body.Query)
 
-		results, err := h.server.Detectionstore.Query(ctx, query, -1)
+		var results []interface{}
+
+		results, err = h.server.Detectionstore.Query(ctx, query, -1)
 		if err != nil {
-			web.Respond(w, r, http.StatusInternalServerError, err)
 			return
 		}
 		for _, d := range results {
@@ -294,56 +336,30 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 
 	log.WithField("count", len(IDs)).Info("bulk update ID count")
 
-	errMap := map[string]string{} // map[id]error
-	modified := make([]*model.Detection, 0, len(IDs))
+	modified = make([]*model.Detection, 0, len(IDs))
 
 	start := time.Now()
 
-	c := make(chan string, 100)
-	mMod := &sync.Mutex{}
-	mErr := &sync.Mutex{}
-	wg := sync.WaitGroup{}
-
-	for i := 0; i < 2; i++ {
-		wg.Add(1)
-
-		go func() {
-			for id := range c {
-				mod, err := h.server.Detectionstore.UpdateDetectionField(ctx, id, map[string]interface{}{"IsEnabled": enabled})
-				if err != nil {
-					mErr.Lock()
-					errMap[id] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
-					mErr.Unlock()
-
-					continue
-				}
-
-				mMod.Lock()
-				modified = append(modified, mod)
-				mMod.Unlock()
-			}
-
-			wg.Done()
-		}()
-	}
-
 	for id := range IDs {
-		c <- id
+		mod, err := h.server.Detectionstore.UpdateDetectionField(ctx, id, map[string]interface{}{"IsEnabled": body.NewStatus})
+		if err != nil {
+			errMap[id] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
+
+			continue
+		}
+
+		modified = append(modified, mod)
 	}
-	close(c)
 
-	wg.Wait()
-
-	update := time.Since(start)
+	update = time.Since(start)
 	start = time.Now()
 
 	addErrMap, err := SyncLocalDetections(ctx, h.server, modified)
 	if err != nil {
-		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	sync := time.Since(start)
+	sync = time.Since(start)
 
 	// merge error maps
 	for k, v := range addErrMap {
@@ -356,13 +372,21 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 	}
 
 	log.WithFields(log.Fields{
-		"updateTime":    update.Seconds(),
-		"syncTime":      sync.Seconds(),
 		"modifiedCount": len(modified),
 		"errorCount":    len(errMap),
 	}).Info("bulk update detection")
 
-	web.Respond(w, r, http.StatusOK, errMap)
+	if len(errMap) != 0 {
+		fields := log.Fields{}
+		for k, v := range errMap {
+			fields[k] = v
+			if len(fields) == 10 {
+				break
+			}
+		}
+
+		log.WithFields(fields).Error("sample of bulk update detection errors")
+	}
 }
 
 func SyncLocalDetections(ctx context.Context, srv *Server, detections []*model.Detection) (errMap map[string]string, err error) {
