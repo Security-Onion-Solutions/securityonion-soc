@@ -569,7 +569,7 @@ const i18n = {
       reset: 'Reset',
       resetDefaults: 'Reset Defaults',
       resetDefaultsHint: 'Reset all local user SOC settings back to their original default values. This must be done on each browser or device that you have used with SOC.',
-      restartMinionHelp: 'Reboot this node.',
+      restartMinionHelp: 'Reboot this node',
       restartRequired: '(awaiting reboot)',
       restartRequiredHelp: 'This node is waiting to be rebooted, typically after a kernel update. Click to reboot.',
       results: 'Results',
