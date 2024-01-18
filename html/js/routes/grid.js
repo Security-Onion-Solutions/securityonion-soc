@@ -339,6 +339,9 @@ routes.push({ path: '/grid', name: 'grid', component: {
         return x.Name == 'so-elasticsearch';
       }) != null;
     },
+    hasEventstoreHealth(item) {
+      return ['so-manager', 'so-managersearch', 'so-eval', 'so-standalone', 'so-heavynode', 'so-import'].indexOf(item.role) != -1;
+    },
     hasMetricstore(item) {
       return item && item.containers && item.containers.find(function(x) {
         return x.Name == 'so-influxdb';
