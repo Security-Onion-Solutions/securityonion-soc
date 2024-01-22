@@ -687,8 +687,8 @@
                             <tr class="pt-3">
                               <td class="expansion">
                                 <div class="d-inline-block semi-transparent">
-                                  <v-btn :id="'groupby_' + item.key" :disabled="!canQuery(item.key)" icon x-small :to="buildGroupByRoute(item.key)">
-                                    <v-icon :alt="i18n.groupInclude" :title="i18n.groupIncludeHelp">fa-layer-group</v-icon>
+                                  <v-btn :id="'groupby_' + item.key" :disabled="!canQuery(item.key)" icon x-small :to="buildGroupByNewRoute(item.key)">
+                                    <v-icon :alt="i18n.groupNew" :title="i18n.groupNewHelp">fa-layer-group</v-icon>
                                   </v-btn>
                                   <v-btn :id="'col_toggle_' + item.key" icon x-small @click="toggleColumnHeader(item.key)">
                                     <v-icon :alt="i18n.addColumnHeader" :color="isColumnHeader(item.key) ? 'info' : ''" :title="i18n.addColumnHeaderHelp">fa-table-columns</v-icon>
