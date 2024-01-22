@@ -72,8 +72,8 @@ test('colorNodeStatus', () => {
 	expect(comp.colorNodeStatus("pending")).toBe("warning");
 	expect(comp.colorNodeStatus("pending", true)).toBe("warning");
 	expect(comp.colorNodeStatus("unknown", true)).toBe("warning");
-	expect(comp.colorNodeStatus("restart", false)).toBe("info");
-	expect(comp.colorNodeStatus("restart", true)).toBe("info");
+	expect(comp.colorNodeStatus("restart", false)).toBe("warning");
+	expect(comp.colorNodeStatus("restart", true)).toBe("warning");
 });
 
 test('formatLinearColor', () => {
