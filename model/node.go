@@ -15,6 +15,7 @@ const NodeStatusUnknown = "unknown"
 const NodeStatusOk = "ok"
 const NodeStatusFault = "fault"
 const NodeStatusPending = "pending"
+const NodeStatusRestart = "restart"
 
 type Node struct {
 	Id                   string    `json:"id"`
@@ -125,8 +126,8 @@ func (node *Node) UpdateOverallStatus(enhancedStatusEnabled bool) bool {
 		newStatus = node.updateStatusComponent(newStatus, node.ProcessStatus)
 		newStatus = node.updateStatusComponent(newStatus, node.EventstoreStatus)
 
-		if node.OsNeedsRestart == 1 && newStatus != NodeStatusFault {
-			newStatus = NodeStatusPending
+		if node.OsNeedsRestart == 1 && newStatus == NodeStatusOk {
+			newStatus = NodeStatusRestart
 		}
 	}
 

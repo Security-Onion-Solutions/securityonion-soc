@@ -3019,7 +3019,7 @@
                     </v-btn>
                   </td>
                   <td>
-                    <v-icon v-if="props.item.status == NodeStatusFault || props.item.status == NodeStatusPending" :id="'nodeFaultIcon_' + props.item.id" :color="colorNodeStatus(props.item.status, props.item.nonCriticalNode)">{{ props.item.status | iconNodeStatus }}</v-icon>
+                    <v-icon v-if="props.item.status != NodeStatusOk" :id="'nodeFaultIcon_' + props.item.id" :color="colorNodeStatus(props.item.status, props.item.nonCriticalNode)">{{ props.item.status | iconNodeStatus }}</v-icon>
                   </td>
                   <td :id="'nodeId_' + props.item.id" v-text="props.item.id"></td>
                   <td :id="'nodeRole_' + props.item.id" v-text="$root.localizeMessage(props.item.role)" class="d-none d-md-table-cell"></td>
@@ -3160,11 +3160,11 @@
                               </div>
                               <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.nodeStatusRaid }}</span>
-                                <span :class="areMetricsCurrent(item) ? colorNodeStatus(item.raidStatus) + '--text filter value' : 'filter value stale'">
-                                  <span v-if="!item.raidStatus || item.raidStatus == NodeStatusUnknown" id="node_raidStatus" >
+                                <span>
+                                  <span v-if="!item.raidStatus || item.raidStatus == NodeStatusUnknown" id="node_raidStatus" class="info--text filter value">
                                     {{ i18n.featureRequiresAppliance }}
                                   </span>
-                                  <span v-else id="node_raidStatus" v-text="$root.localizeMessage(item.raidStatus)"/>
+                                  <span v-else id="node_raidStatus" v-text="$root.localizeMessage(item.raidStatus)" :class="areMetricsCurrent(item) ? colorNodeStatus(item.raidStatus) + '--text filter value' : 'filter value stale'"/>
                                 </span>
                               </div>
 
@@ -3362,10 +3362,10 @@
                                           <v-icon :title="i18n.huntForError">fa-crosshairs</v-icon>
                                         </router-link>
                                       </td>
-                                      <td :class="colorContainerStatus(container.Status) + '--text text-left'" :class="areMetricsCurrent(item) ? '' : 'stale'">
+                                      <td :class="areMetricsCurrent(item) ? colorContainerStatus(container.Status) + '--text text-left' : 'stale text-left'">
                                         {{ $root.localizeMessage(container.Status) }}
                                       </td>
-                                      <td class="text-left cyan--text" class="d-none d-lg-table-cell" :class="areMetricsCurrent(item) ? '' : 'stale'">
+                                      <td :class="areMetricsCurrent(item) ? 'cyan--text text-left d-none d-lg-table-cell' : 'stale cyan-text-left text-left d-none d-lg-table-cell'">
                                         {{ container.Details }}
                                       </td>
                                     </tr>

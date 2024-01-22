@@ -72,6 +72,8 @@ test('colorNodeStatus', () => {
 	expect(comp.colorNodeStatus("pending")).toBe("warning");
 	expect(comp.colorNodeStatus("pending", true)).toBe("warning");
 	expect(comp.colorNodeStatus("unknown", true)).toBe("warning");
+	expect(comp.colorNodeStatus("restart", false)).toBe("info");
+	expect(comp.colorNodeStatus("restart", true)).toBe("info");
 });
 
 test('formatLinearColor', () => {
@@ -90,6 +92,7 @@ test('iconNodeStatus', () => {
 	expect(comp.iconNodeStatus("pending")).toBe("fa-circle-exclamation");
 	expect(comp.iconNodeStatus("ok")).toBe("fa-circle-check");
 	expect(comp.iconNodeStatus("other")).toBe("fa-circle-question");
+	expect(comp.iconNodeStatus("restart")).toBe("fa-circle-info");
 });
 
 test('colorContainerStatus', () => {
