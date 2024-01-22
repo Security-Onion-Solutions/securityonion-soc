@@ -8,6 +8,7 @@ const NodeStatusUnknown = "unknown";
 const NodeStatusFault = "fault";
 const NodeStatusOk = "ok";
 const NodeStatusPending = "pending";
+const NodeStatusRestart = "restart";
 
 routes.push({ path: '/grid', name: 'grid', component: {
   template: '#page-grid',
@@ -371,6 +372,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
         case NodeStatusFault: color = nonCritical ? "warning" : "error"; break;
         case NodeStatusOk: color = "success"; break;
         case NodeStatusPending: color = "warning"; break;
+        case NodeStatusRestart: color = "warning"; break;
       }
       return color;
     },
@@ -380,6 +382,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
         case NodeStatusFault: icon = "fa-triangle-exclamation"; break;
         case NodeStatusOk: icon = "fa-circle-check"; break;
         case NodeStatusPending: icon = "fa-circle-exclamation"; break;
+        case NodeStatusRestart: icon = "fa-circle-info"; break;
       }
       return icon;
     },

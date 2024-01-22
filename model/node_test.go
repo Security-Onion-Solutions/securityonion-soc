@@ -201,6 +201,6 @@ func TestUpdateNodeStatusMultipleNotUnknownFaultFirst(tester *testing.T) {
 
 func TestUpdateNodeStatusPending(tester *testing.T) {
 	testStatus(tester, true, NodeStatusOk, NodeStatusOk, NodeStatusOk, NodeStatusOk, NodeStatusPending, 0, NodeStatusPending)
-	testStatus(tester, true, NodeStatusOk, NodeStatusOk, NodeStatusOk, NodeStatusOk, NodeStatusOk, 1, NodeStatusPending)
+	testStatus(tester, true, NodeStatusOk, NodeStatusOk, NodeStatusOk, NodeStatusOk, NodeStatusOk, 1, NodeStatusRestart)
 	testStatus(tester, true, NodeStatusPending, NodeStatusFault, NodeStatusOk, NodeStatusOk, NodeStatusOk, 1, NodeStatusFault)
 }
