@@ -3365,7 +3365,7 @@
                                       <td :class="areMetricsCurrent(item) ? colorContainerStatus(container.Status) + '--text text-left' : 'stale text-left'">
                                         {{ $root.localizeMessage(container.Status) }}
                                       </td>
-                                      <td :class="areMetricsCurrent(item) ? 'cyan--text text-left d-none d-lg-table-cell' : 'stale cyan-text-left text-left d-none d-lg-table-cell'">
+                                      <td :class="areMetricsCurrent(item) ? 'info--text text-left d-none d-lg-table-cell' : 'stale info-text-left text-left d-none d-lg-table-cell'">
                                         {{ container.Details }}
                                       </td>
                                     </tr>
