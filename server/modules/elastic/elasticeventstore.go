@@ -497,8 +497,8 @@ func (store *ElasticEventstore) cacheFields(name gjson.Result, details gjson.Res
 		}
 
 		log.WithFields(log.Fields{
-			"name":         name,
-			"type":         fieldType,
+			"fieldName":    name,
+			"fieldType":    fieldType,
 			"aggregatable": fieldDef.aggregatable,
 			"searchable":   fieldDef.searchable,
 		}).Debug("Added field definition")

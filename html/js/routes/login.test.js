@@ -193,3 +193,43 @@ test('shouldRunWebauthn', () => {
   comp.runWebauthn();
   expect(comp.foo).toBe(123);
 });
+
+test('shouldExtractPasswordData', () => {
+  const identifier = {attributes: {name: 'identifier', value: 'some_identifier'}};
+  const passwordMethod = {group: 'password', attributes: {name: 'method', value: 'password'}};
+  const nodes = [identifier, passwordMethod];
+  const response = {data: {ui: {nodes: nodes}}};
+
+  expect(comp.passwordEnabled).toBe(false);
+
+  comp.extractPasswordData(response);
+
+  expect(comp.passwordEnabled).toBe(true);
+});
+
+test('shouldExtractTotpData', () => {
+  const identifier = {attributes: {name: 'identifier', value: 'some_identifier'}};
+  const totpMethod = {group: 'totp', attributes: {name: 'method', value: 'totp'}};
+  const nodes = [identifier, totpMethod];
+  const response = {data: {ui: {nodes: nodes}}};
+
+  expect(comp.totpEnabled).toBe(false);
+
+  comp.extractTotpData(response);
+
+  expect(comp.totpEnabled).toBe(true);
+});
+
+test('shouldExtractOidcData', () => {
+  const identifier = {attributes: {name: 'identifier', value: 'some_identifier'}};
+  const oidcMethod = {group: 'oidc', type: 'input', attributes: {value: 'SSO'}};
+  const nodes = [identifier, oidcMethod];
+  const response = {data: {ui: {nodes: nodes}}};
+
+  expect(comp.oidc.length).toBe(0);
+
+  comp.extractOidcData(response);
+
+  expect(comp.oidc.length).toBe(1);
+  expect(comp.oidc[0]).toBe('SSO');
+});

@@ -38,7 +38,7 @@ func NewTestSalt() *Saltstore {
 
 	srv := server.NewFakeAuthorizedServer(nil)
 	salt := NewSaltstore(srv)
-	salt.Init(123, TMP_SALTSTACK_PATH+"/saltstack", TMP_QUEUE_DIR, false)
+	salt.Init(123, 123, TMP_SALTSTACK_PATH+"/saltstack", TMP_QUEUE_DIR, false)
 	return salt
 }
 
@@ -48,7 +48,7 @@ func NewTestSaltRelayQueue(tester *testing.T, id string, mockedResponse string) 
 	exec.Command("mkdir", "-p", TMP_QUEUE_DIR).Run()
 	srv := server.NewFakeAuthorizedServer(nil)
 	salt := NewSaltstore(srv)
-	salt.Init(10, TMP_SALTSTACK_PATH+"/saltstack", TMP_QUEUE_DIR, false)
+	salt.Init(10, 10, TMP_SALTSTACK_PATH+"/saltstack", TMP_QUEUE_DIR, false)
 
 	filename := filepath.Join(TMP_QUEUE_DIR, id+".response")
 	responseData, err := os.ReadFile("test_resources/queue/" + mockedResponse)
@@ -68,7 +68,7 @@ func ReadRequest(tester *testing.T, filename string) string {
 
 func TestSaltstoreInit(tester *testing.T) {
 	salt := NewSaltstore(nil)
-	salt.Init(123, "saltstack/path", "salt/control", false)
+	salt.Init(123, 123, "saltstack/path", "salt/control", false)
 	assert.Equal(tester, 123, salt.timeoutMs)
 	assert.Equal(tester, "saltstack/path", salt.saltstackDir)
 	assert.Equal(tester, "salt/control", salt.queueDir)
@@ -109,7 +109,7 @@ func ctx() context.Context {
 func TestGetMembers_BadQueueDir(tester *testing.T) {
 	srv := server.NewFakeAuthorizedServer(nil)
 	salt := NewSaltstore(srv)
-	salt.Init(123, TMP_SALTSTACK_PATH+"/saltstack", "/invalid/path", false)
+	salt.Init(123, 123, TMP_SALTSTACK_PATH+"/saltstack", "/invalid/path", false)
 	_, err := salt.GetMembers(ctx())
 	assert.ErrorContains(tester, err, "no such file or directory")
 }
@@ -156,7 +156,7 @@ func TestManageMemberUnauthorized(tester *testing.T) {
 func TestManageMember_BadQueuePath(tester *testing.T) {
 	srv := server.NewFakeAuthorizedServer(nil)
 	salt := NewSaltstore(srv)
-	salt.Init(123, TMP_SALTSTACK_PATH+"/saltstack", "invalid/path", false)
+	salt.Init(123, 123, TMP_SALTSTACK_PATH+"/saltstack", "invalid/path", false)
 
 	for _, op := range []string{"add", "reject", "delete"} {
 		err := salt.ManageMember(ctx(), op, "foo")
@@ -996,6 +996,41 @@ func TestUpdateSetting_AlignNonStringListType(tester *testing.T) {
 	assert.Equal(tester, "123\n456\n", updated_setting.Value)
 }
 
+func TestUpdateSetting_AlignBlankStringListType(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSalt()
+
+	// default should be an empty list
+	settings, get_err := salt.GetSettings(ctx())
+	assert.NoError(tester, get_err)
+	updated_setting := findSetting(settings, "myapp.empty_lists.list_str", "")
+	assert.Equal(tester, "", updated_setting.Value)
+
+	// Update empty setting with non-blank value
+	setting := model.NewSetting("myapp.empty_lists.list_str")
+	setting.Value = "foo"
+	err := salt.UpdateSetting(ctx(), setting, false)
+	assert.NoError(tester, err)
+
+	// should now contain non-blank value
+	settings, get_err = salt.GetSettings(ctx())
+	assert.NoError(tester, get_err)
+	updated_setting = findSetting(settings, "myapp.empty_lists.list_str", "")
+	assert.Equal(tester, "foo\n", updated_setting.Value)
+
+	// Update empty setting with empty lines value
+	setting = model.NewSetting("myapp.empty_lists.list_str")
+	setting.Value = "\n"
+	err = salt.UpdateSetting(ctx(), setting, false)
+	assert.NoError(tester, err)
+
+	// should be an empty list again
+	settings, get_err = salt.GetSettings(ctx())
+	assert.NoError(tester, get_err)
+	updated_setting = findSetting(settings, "myapp.empty_lists.list_str", "")
+	assert.Equal(tester, "", updated_setting.Value)
+}
+
 func TestRelPathFromId(tester *testing.T) {
 	defer Cleanup()
 	salt := NewTestSalt()
@@ -1185,7 +1220,7 @@ func TestForceType(tester *testing.T) {
 		{value: "true\nfalse", forcedType: "[]bool", expected: []bool{true, false}, errorString: ""},
 		{value: "blah", forcedType: "[]bool", expected: []bool{}, errorString: "invalid syntax"},
 		{value: "hello", forcedType: "string", expected: "hello", errorString: ""},
-		{value: "hello", forcedType: "[]string", expected: []string{"hello"}, errorString: ""},
+		{value: "", forcedType: "[]string", expected: []string{}, errorString: ""},
 		{value: "hello\nthere", forcedType: "[]string", expected: []string{"hello", "there"}, errorString: ""},
 		{value: "blah", forcedType: "[]string", expected: []string{"blah"}, errorString: ""},
 		{value: "[\"hello\"]", forcedType: "[][]", expected: [][]interface{}([][]interface{}{[]interface{}{"hello"}}), errorString: ""},

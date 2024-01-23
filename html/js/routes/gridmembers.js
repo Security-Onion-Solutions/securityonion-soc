@@ -20,6 +20,7 @@ routes.push({ path: '/gridmembers', name: 'gridmembers', component: {
     accepted: [],
     selected: null,
     dialog: false,
+    confirmDeleteDialog: false,
     rules: {
       required: value => !!value || this.$root.i18n.required,
     },
@@ -66,8 +67,15 @@ routes.push({ path: '/gridmembers', name: 'gridmembers', component: {
     isUnaccepted(node) {
       return node.status == GridMemberUnaccepted;
     },
+    confirmRemove() {
+      this.confirmDeleteDialog = true;
+    },
+    cancelRemove() {
+      this.confirmDeleteDialog = false;
+    },
     async remove(node) {
       this.hide();
+      this.cancelRemove();
       this.$root.startLoading();
       try {
         await this.$root.papi.post('gridmembers/' + node.id + "/delete");

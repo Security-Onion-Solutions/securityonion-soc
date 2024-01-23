@@ -56,14 +56,19 @@ beforeEach(() => {
   resetPapi();
 });
 
-test('initParams', () => {
+test('initParams', async () => {
+  comp.$route.query = {};
   comp.mruCases.push({id:"123"});
   comp.saveLocalSettings()
   comp.mruCases = [];
-  comp.initCase({"foo":"bar", "mostRecentlyUsedLimit": 23});
+  const mock = jest.fn().mockReturnValue(Promise.resolve({ data: [] }));
+  comp.$root.papi['get'] = mock;
+
+  await comp.initCase({"foo":"bar", "mostRecentlyUsedLimit": 23});
   expect(comp.params.foo).toBe("bar");
   expect(comp.mruCaseLimit).toBe(23);
-  expect(comp.mruCases.length).toBe(1)
+  expect(comp.mruCases.length).toBe(2);
+  expect(mock).toHaveBeenCalledTimes(7);
 });
 
 test('addMRUCaseObj', () => {
@@ -125,7 +130,7 @@ test('loadAssociations', () => {
   comp.caseObj = {id: 'myCaseId'};
   comp.loadAssociation = jest.fn();
   comp.loadAssociations();
-  
+
   expect(comp.loadAssociation).toHaveBeenCalledWith('comments');
   expect(comp.loadAssociation).toHaveBeenCalledWith('attachments');
   expect(comp.loadAssociation).toHaveBeenCalledWith('evidence');
@@ -171,7 +176,7 @@ expectCaseDetails = () => {
 }
 
 test('createCase', async () => {
-  const params = { 
+  const params = {
     "description": comp.i18n.caseDefaultDescription,
     "title": comp.i18n.caseDefaultTitle,
   };
@@ -527,7 +532,7 @@ test('startEdit', async () => {
 
   await comp.startEdit('myFid', 'myVal', 'myRoId', 'myField', fn, ['foo'], true);
 
-  const expectedObj = { 
+  const expectedObj = {
     callback: fn,
     callbackArgs: ['foo'],
     field: 'myField',
@@ -536,7 +541,7 @@ test('startEdit', async () => {
     orig: 'myVal',
     roId: 'myRoId',
     val: 'myVal',
-    valid: true,    
+    valid: true,
   };
   expect(comp.editForm).toStrictEqual(expectedObj);
 })
@@ -585,7 +590,7 @@ test('selectList', () => {
       'customEnabled': false
     },
   }
-  
+
   const expectedList = [
     'presetSeverity1',
     'presetSeverity2'
@@ -604,7 +609,7 @@ test('selectList_CustomEnabledNoCustomVal', () => {
       'customEnabled': true
     },
   }
-  
+
   const expectedList = [
     'presetSeverity1',
     'presetSeverity2',
@@ -854,7 +859,7 @@ test('shouldLoadAndUpdateAnalyzeJobs', async () => {
 
   mock = mockPapi("get", { data: [job3, job1, job2]});
   const showErrorMock = mockShowError();
-  comp.associations['evidence'] = [ 
+  comp.associations['evidence'] = [
     { id: 'artifact1' },
     { id: 'artifact2' },
     ];

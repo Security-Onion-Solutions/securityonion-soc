@@ -716,14 +716,15 @@ test('obtainQueryDetails_queryOnly', () => {
   expect(comp.querySortBys).toStrictEqual([]);
 });
 
-test('obtainQueryDetails_queryGroupedOptionsSorted', () => {
-  comp.query = "foo: bar AND x:1 | groupby -opt1 z | groupby -optB r^ | sortby y"
+test('obtainQueryDetails_queryGroupedOptionsTableSorted', () => {
+  comp.query = "foo: bar AND x:1 | groupby -opt1 z | groupby -optB r^ | sortby y | table x y z"
   comp.obtainQueryDetails();
   expect(comp.queryName).toBe("Custom");
   expect(comp.queryFilters).toStrictEqual(["foo: bar", "x:1"]);
   expect(comp.queryGroupBys).toStrictEqual([["z"], ["r^"]]);
   expect(comp.queryGroupByOptions).toStrictEqual([["opt1"], ["optB"]]);
   expect(comp.querySortBys).toStrictEqual(["y"]);
+  expect(comp.queryTableFields).toStrictEqual(["x", "y", "z"]);
 });
 
 test('obtainQueryDetails_queryGroupedFilterPipe', () => {
@@ -732,6 +733,16 @@ test('obtainQueryDetails_queryGroupedFilterPipe', () => {
   expect(comp.queryName).toBe("Custom");
   expect(comp.queryFilters).toStrictEqual(["foo: bar", "x:\"with | this\""]);
   expect(comp.queryGroupBys).toStrictEqual([["z"]]);
+  expect(comp.queryGroupByOptions).toStrictEqual([[]]);
+  expect(comp.querySortBys).toStrictEqual([]);
+});
+
+test('obtainQueryDetails_trickyEscapeSequence', () => {
+  comp.query = `process.working_directory:"C:\\\\Windows\\\\system32\\\\" | groupby host.name`;
+  comp.obtainQueryDetails();
+  expect(comp.queryName).toBe("Custom");
+  expect(comp.queryFilters).toStrictEqual([`process.working_directory:"C:\\\\Windows\\\\system32\\\\"`]);
+  expect(comp.queryGroupBys).toStrictEqual([["host.name"]]);
   expect(comp.queryGroupByOptions).toStrictEqual([[]]);
   expect(comp.querySortBys).toStrictEqual([]);
 });
@@ -923,4 +934,162 @@ test('filterVisibleFields', () => {
   expect(comp.filterVisibleFields('', 'module.dataset', [])).toEqual('b');
   expect(comp.filterVisibleFields('module', 'otherData', [])).toEqual('c');
   expect(comp.filterVisibleFields('A', 'B', [])).toEqual('default');
+});
+
+test('handleChartClick', () => {
+  const orig = comp.toggleQuickAction;
+  comp.toggleQuickAction = jest.fn();
+
+  let metrics = { "groupby_2|MyField": [] };
+  let groupIdx = 2;
+  comp.queryGroupByOptions = [[], [], ["bar"]]
+
+
+  const result = comp.populateGroupByTable(metrics, groupIdx);
+  comp.groupBys[2].chart_options.onClick(null, [{ index: 0 }], { data: {labels: ['value']} });
+
+  expect(result).toBe(true);
+  expect(comp.toggleQuickAction).toHaveBeenCalledTimes(1);
+  expect(comp.toggleQuickAction).toHaveBeenCalledWith(null, {}, 'MyField', 'value');
+
+  comp.toggleQuickAction = orig;
+});
+
+test('performAction', () => {
+  const mock = jest.fn();
+  comp.testFunc = mock;
+
+  let action = { jsCall: 'nonExistentFunc' };
+
+  let result = comp.performAction(undefined, action);
+
+  expect(mock).toHaveBeenCalledTimes(0);
+  expect(result).toBe(false);
+
+  action.jsCall = 'testFunc';
+
+  result = comp.performAction(undefined, action);
+
+  expect(mock).toHaveBeenCalledTimes(1);
+  expect(mock).toHaveBeenCalledWith(action);
+  expect(result).toBe(true);
+
+  delete comp.testFunc;
+});
+
+test('openAddToCaseDialog', () => {
+  localStorage['settings.case.mruCases'] = `[{ "id": "1", "title": "Case 1" }, { "id": "2", "title": "Case 2" }]`;
+  comp.$refs = {
+    evidence: {
+      resetValidation: jest.fn(),
+    }
+  };
+  comp.openAddToCaseDialog();
+
+  expect(comp.addToCaseDialogVisible).toBe(true);
+  expect(comp.mruCases).toEqual([{ value: 'New Case', text: comp.i18n.createNewCase }, { value: { id: "1", title: 'Case 1' }, text: 'Case 1' }, { value: { id: "2", title: 'Case 2' }, text: 'Case 2' }]);
+  expect(comp.selectedMruCase).toBe('New Case');
+  expect(comp.$refs.evidence.resetValidation).toHaveBeenCalledTimes(1);
+});
+
+test('addToCase', () => {
+  const origOpen = window.open;
+  window.open = jest.fn();
+  comp.$refs = {
+    evidence: {
+      validate: jest.fn(),
+    }
+  };
+  comp.$refs.evidence.validate.mockReturnValue(true);
+
+  comp.quickActionValue = 'test';
+  comp.selectedMruCase = 'New Case';
+
+  comp.addToCase(false);
+
+  expect(window.open).toHaveBeenCalledTimes(1);
+  expect(window.open).toHaveBeenCalledWith('http://localhost/#/case/create?type=evidence&value=test', '_self');
+  expect(comp.addToCaseDialogVisible).toBe(false);
+
+  comp.addToCase(true)
+
+  expect(window.open).toHaveBeenCalledTimes(2);
+  expect(window.open).toHaveBeenCalledWith('http://localhost/#/case/create?type=evidence&value=test', '_blank');
+  expect(comp.addToCaseDialogVisible).toBe(false);
+
+  comp.selectedMruCase = { id: '1', title: 'Case 1' };
+
+  comp.addToCase(true);
+
+  expect(window.open).toHaveBeenCalledTimes(3);
+  expect(window.open).toHaveBeenCalledWith('http://localhost/#/case/1?type=evidence&value=test', '1');
+  expect(comp.addToCaseDialogVisible).toBe(false);
+
+  window.open = origOpen;
+});
+
+test('populateEventHeaders', () => {
+  const defs = ["x", "y"];
+  comp.populateEventHeaders(defs);
+  expect(comp.eventHeaders).toStrictEqual([{"text":"x", "value":"x"},{"text":"y", "value": "y"}]);
+
+  comp.queryTableFields = ["b", "c"];
+  comp.populateEventHeaders(defs);
+  expect(comp.eventHeaders).toStrictEqual([{"text":"b", "value":"b"},{"text":"c", "value": "c"}]);
+});
+
+test('repopulateEventHeaders', () => {
+  comp.queryTableFields = ["b", "c"];
+  comp.query = 'foo: bar| table old';
+  expect(comp.$router.length).toBe(0);
+  expect(comp.disableRouteLoad).toBe(false);
+  comp.repopulateEventHeaders();
+  expect(comp.disableRouteLoad).toBe(true);
+  expect(comp.eventHeaders).toStrictEqual([{"text":"b", "value":"b"},{"text":"c", "value": "c"}]);
+  expect(comp.query).toBe('foo: bar | table b c');
+  expect(comp.$router.length).toBe(1);
+});
+
+test('toggleColumnHeader', () => {
+  expect(comp.eventHeaders).toStrictEqual([]);
+  comp.toggleColumnHeader('x');
+  expect(comp.eventHeaders).toStrictEqual([{value:'x', text:'x'}]);
+  comp.toggleColumnHeader('x');
+  expect(comp.eventHeaders).toStrictEqual([]);
+  comp.toggleColumnHeader('x');
+  expect(comp.eventHeaders).toStrictEqual([{value:'x', text:'x'}]);
+  comp.toggleColumnHeader('y');
+  expect(comp.eventHeaders).toStrictEqual([{value:'x', text:'x'},{value:'y', text:'y'}]);
+  comp.toggleColumnHeader('x');
+  expect(comp.eventHeaders).toStrictEqual([{value:'y', text:'y'}]);
+});
+
+test('moveColumnHeader', () => {
+  comp.moveColumnHeader('x', true);
+  expect(comp.queryTableFields).toStrictEqual([]);
+
+  comp.queryTableFields = ['x', 'y', 'z'];
+  comp.moveColumnHeader('x', true);
+  expect(comp.queryTableFields).toStrictEqual(['x', 'y', 'z']);
+
+  comp.moveColumnHeader('x', false);
+  expect(comp.queryTableFields).toStrictEqual(['y', 'x', 'z']);
+
+  comp.moveColumnHeader('x', false);
+  expect(comp.queryTableFields).toStrictEqual(['y', 'z', 'x']);
+
+  // double check that repopulateEventHeaders was invoked
+  expect(comp.eventHeaders).toStrictEqual([{"text":"y", "value":"y"},{"text":"z", "value":"z"},{"text":"x", "value": "x"}]);
+
+  comp.moveColumnHeader('x', false);
+  expect(comp.queryTableFields).toStrictEqual(['y', 'z', 'x']);
+
+  comp.moveColumnHeader('x', true);
+  expect(comp.queryTableFields).toStrictEqual(['y', 'x', 'z']);
+
+  comp.moveColumnHeader('x', true);
+  expect(comp.queryTableFields).toStrictEqual(['x', 'y', 'z']);
+
+  // double check that repopulateEventHeaders was invoked
+  expect(comp.eventHeaders).toStrictEqual([{"text":"x", "value":"x"},{"text":"y", "value":"y"},{"text":"z", "value": "z"}]);
 });

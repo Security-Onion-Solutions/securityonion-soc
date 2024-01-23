@@ -55,6 +55,25 @@ test('formatHours', () => {
   expect(app.formatHours(10.14)).toBe("10.14");
 });
 
+test('formatDecimals', () => {
+  expect(app.formatDecimal1(null)).toBe("0.0");
+  expect(app.formatDecimal2(null)).toBe("0.00");
+  expect(app.formatDecimal1(undefined)).toBe("0.0");
+  expect(app.formatDecimal2(undefined)).toBe("0.00");
+  expect(app.formatDecimal1("")).toBe("0.0");
+  expect(app.formatDecimal2("")).toBe("0.00");
+  expect(app.formatDecimal1(0)).toBe("0.0");
+  expect(app.formatDecimal2(0)).toBe("0.00");
+  expect(app.formatDecimal1(10.1445)).toBe("10.1");
+  expect(app.formatDecimal2(10.1445)).toBe("10.14");
+});
+
+test('formatCount', () => {
+  expect(app.formatCount(null)).toBe("0");
+  expect(app.formatCount(123)).toBe("123");
+  expect(app.formatCount(1234)).toBe("1,234");
+});
+
 test('formatStringArray', () => {
   expect(app.formatStringArray(['hi','there','foo'])).toBe('hi, there, foo');
   expect(app.formatStringArray(['hi','there'])).toBe('hi, there');
@@ -111,6 +130,16 @@ test('isUserAdmin', async () => {
   user.roles.push("superuser");
   expect(app.isUserAdmin(user)).toBe(true);
   expect(app.isUserAdmin()).toBe(true);
+});
+
+test('isMyUser', () => {
+  app.user = null;
+  expect(app.isMyUser()).toBe(false);
+  var user = {id:'123',email:'hi@there.net',roles:['nope', 'peon']};
+  expect(app.isMyUser(user)).toBe(false);
+  app.user = user;
+  expect(app.isMyUser(user)).toBe(true);
+  expect(app.isMyUser()).toBe(false);
 });
 
 test('loadServerSettings', async () => {
@@ -246,7 +275,7 @@ test('setFavicon', () => {
   png_icon.href = "https://somehost.com/so.png";
 
   var mock = jest.fn();
-  mock.mockImplementation((path) => { 
+  mock.mockImplementation((path) => {
     if (path.indexOf("png") != -1) {
       return png_icon;
     }
@@ -343,4 +372,95 @@ test('colorLicenseStatus', () => {
   expect(app.colorLicenseStatus("expired")).toBe('warning');
   expect(app.colorLicenseStatus("invalid")).toBe('error');
   expect(app.colorLicenseStatus("pending")).toBe('warning');
+});
+
+test('isIPv4', () => {
+  expect(app.isIPv4('')).toBe(false);
+  expect(app.isIPv4(null)).toBe(false);
+  expect(app.isIPv4('foo')).toBe(false);
+  expect(app.isIPv4(10)).toBe(false);
+  expect(app.isIPv4('1.2.3')).toBe(false);
+  expect(app.isIPv4('1.2.3.4.5')).toBe(false);
+  expect(app.isIPv4('256.256.256.256')).toBe(false);
+  expect(app.isIPv4('¹.¹.¹.¹')).toBe(false);
+  expect(app.isIPv4('١.١.١.١')).toBe(false);
+  expect(app.isIPv4('𝟣.𝟣.𝟣.𝟣')).toBe(false); // punycode
+  expect(app.isIPv4('①.①.①.①')).toBe(false);
+  expect(app.isIPv4('1:2:3:4:5:6:7:8')).toBe(false);
+  expect(app.isIPv4('1::')).toBe(false);
+
+  expect(app.isIPv4('0.0.0.0')).toBe(true);
+  expect(app.isIPv4('127.0.0.1')).toBe(true);
+  expect(app.isIPv4('255.255.255.255')).toBe(true);
+});
+
+test('isIPv6', () => {
+  expect(app.isIPv6('')).toBe(false);
+  expect(app.isIPv6(null)).toBe(false);
+  expect(app.isIPv6('foo')).toBe(false);
+  expect(app.isIPv6(10)).toBe(false);
+  expect(app.isIPv6('1.2.3')).toBe(false);
+  expect(app.isIPv6('1.2.3.4.5')).toBe(false);
+  expect(app.isIPv6('256.256.256.256')).toBe(false);
+  expect(app.isIPv6('¹.¹.¹.¹')).toBe(false);
+  expect(app.isIPv6('١.١.١.١')).toBe(false);
+  expect(app.isIPv6('𝟣.𝟣.𝟣.𝟣')).toBe(false); // punycode
+  expect(app.isIPv6('①.①.①.①')).toBe(false);
+  expect(app.isIPv6('0.0.0.0')).toBe(false);
+  expect(app.isIPv6('127.0.0.1')).toBe(false);
+  expect(app.isIPv6('255.255.255.255')).toBe(false);
+
+  expect(app.isIPv6('1:2:3:4:5:6:7:8')).toBe(true);
+  expect(app.isIPv6('1::')).toBe(true);
+  expect(app.isIPv6('1:2:3:4:5:6:7::')).toBe(true);
+  expect(app.isIPv6('1::8')).toBe(true);
+  expect(app.isIPv6('1:2:3:4:5:6::8')).toBe(true);
+  expect(app.isIPv6('1:2:3:4:5:6::8')).toBe(true);
+  expect(app.isIPv6('1::7:8')).toBe(true);
+  expect(app.isIPv6('1:2:3:4:5::7:8')).toBe(true);
+  expect(app.isIPv6('1:2:3:4:5::8')).toBe(true);
+  expect(app.isIPv6('1::6:7:8')).toBe(true);
+  expect(app.isIPv6('1:2:3:4::6:7:8')).toBe(true);
+  expect(app.isIPv6('1:2:3:4::8')).toBe(true);
+  expect(app.isIPv6('1::5:6:7:8')).toBe(true);
+  expect(app.isIPv6('1:2:3::5:6:7:8')).toBe(true);
+  expect(app.isIPv6('1:2:3::8')).toBe(true);
+  expect(app.isIPv6('1::4:5:6:7:8')).toBe(true);
+  expect(app.isIPv6('1:2::4:5:6:7:8')).toBe(true);
+  expect(app.isIPv6('1:2::8')).toBe(true);
+  expect(app.isIPv6('1::3:4:5:6:7:8')).toBe(true);
+  expect(app.isIPv6('1::3:4:5:6:7:8')).toBe(true);
+  expect(app.isIPv6('1::8')).toBe(true);
+  expect(app.isIPv6('::2:3:4:5:6:7:8')).toBe(true);
+  expect(app.isIPv6('::2:3:4:5:6:7:8')).toBe(true);
+  expect(app.isIPv6('::8')).toBe(true);
+  expect(app.isIPv6('::')).toBe(true);
+});
+
+function testCheckForUnauthorized(url, response, authRedirectCookie, unauthorized) {
+  app.showLogin = jest.fn();
+  app.getCookie = jest.fn(cookie => authRedirectCookie);
+  app.deleteCookie = jest.fn();
+
+  response.request = {responseURL: url};
+  var result = app.checkForUnauthorized(response);
+  if (unauthorized) {
+    expect(result).toBe(null);
+    expect(app.showLogin).toHaveBeenCalled();
+    expect(app.deleteCookie).toHaveBeenCalledWith('AUTH_REDIRECT');
+  } else {
+    expect(result).toBe(response);
+  }
+}
+
+test('checkForUnauthorized', () => {
+  testCheckForUnauthorized('/foo/', {headers: {'content-type': 'text/html'}}, null, true);
+  testCheckForUnauthorized('/foo/', {headers: {'content-type': 'application/json'}}, null, false);
+  testCheckForUnauthorized('/foo/', {status: 401}, null, true);
+  testCheckForUnauthorized('/foo/', {status: 200}, null, false);
+  testCheckForUnauthorized('/api/', {status: 401}, null, false);
+  testCheckForUnauthorized('/foo/', {}, '/blah', true);
+  testCheckForUnauthorized('/foo/', {}, null, false);
+  testCheckForUnauthorized('/login/banner.md', {}, '/blah', false);
+  testCheckForUnauthorized('/auth/self-service/login/browser', {}, '/blah', true);
 });

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -97,6 +98,22 @@ func TestUpdateDataEpoch(t *testing.T) {
 
 	// verify
 	assert.Equal(t, jm.node.EpochTime, panicProc.GetDataEpoch())
+}
+
+func TestOnlineTime(t *testing.T) {
+	// prep test object
+	jm := &JobManager{
+		node: &model.Node{},
+	}
+
+	tmpFile, _ := os.CreateTemp("", "jobmanager_online_time.tmp")
+
+	// test
+	jm.updateOnlineTime(tmpFile.Name())
+	defer os.Remove(tmpFile.Name())
+
+	// verify
+	assert.GreaterOrEqual(t, jm.node.OnlineTime, time.Now().Add(time.Second*(-2)))
 }
 
 type ClientAuthMock struct{}

@@ -162,14 +162,14 @@ routes.push({ path: '/case/:id', name: 'case', component: {
   },
   created() {
   },
-  async mounted() {
+  mounted() {
     this.$root.loadParameters('case', this.initCase);
-    if (this.$route.params.id == 'create') {
-      await this.createCase();
-    } else {
-      await this.loadData();
-    }
     this.$root.subscribe("job", this.updateJob);
+    this.$watch(
+      () => this.$route.params,
+      (to, prev) => {
+        this.loadUrlParameters();
+      });
   },
   beforeDestroy() {
     this.$root.setSubtitle("");
@@ -182,7 +182,11 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     '$route': 'loadData',
   },
   methods: {
-    initCase(params) {
+    async initCase(params) {
+      if (this.$route.params.id === 'create') {
+        await this.createCase();
+      }
+
       this.params = params;
       this.mruCaseLimit = params["mostRecentlyUsedLimit"];
       this.renderAbbreviatedCount = params["renderAbbreviatedCount"];
@@ -192,9 +196,26 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       }
       this.analyzerNodeId = params["analyzerNodeId"];
       this.loadLocalSettings();
+      await this.loadData();
       this.resetForm('attachments');
       this.resetForm('evidence');
       this.resetForm('comments');
+
+      this.loadUrlParameters();
+    },
+    loadUrlParameters() {
+      if (this.$route.query.type) {
+        this.activeTab = this.$route.query.type;
+      }
+
+      if (this.activeTab === 'evidence' && this.$route.query.value) {
+        this.enableAdding('evidence');
+        this.$nextTick(() => {
+          this.associatedForms['evidence'].value = this.$route.query.value;
+          this.$refs['evidence'].validate();
+        });
+        window.name = encodeURIComponent(this.caseObj.id);
+      }
     },
     getAttachmentHelp() {
       return this.i18n.attachmentHelp.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes));
@@ -262,6 +283,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           count: route.associatedTable[association].count,
         }});
         if (response && response.data) {
+          let batch = [];
           for (var idx = 0; idx < response.data.length; idx++) {
             const obj = response.data[idx];
 
@@ -276,7 +298,13 @@ routes.push({ path: '/case/:id', name: 'case', component: {
             obj.operation = this.$root.localizeMessage(obj.operation);
             this.associations[association].push(obj);
             this.duplicateEventFields(obj);
+
+            if (obj.artifactType === 'ip') {
+              batch.push(obj.value);
+            }
           }
+
+          this.$root.batchLookup(batch, this);
         }
       } catch (error) {
         this.$root.showError(error);
@@ -408,7 +436,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           description: this.i18n.caseDefaultDescription,
         });
         if (response && response.data && response.data.id) {
-          this.$router.replace({ name: 'case', params: { id: response.data.id } });
+          this.$router.replace({ name: 'case', params: { id: response.data.id }, query: this.$route.query });
         } else {
           this.$root.showError(i18n.createFailed);
         }

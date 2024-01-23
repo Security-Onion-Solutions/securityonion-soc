@@ -9,8 +9,10 @@ package agent
 import (
 	"errors"
 	"io"
+	"os"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/apex/log"
@@ -44,6 +46,7 @@ func NewJobManager(agent *Agent) *JobManager {
 
 func (mgr *JobManager) Start() {
 	mgr.running = true
+	mgr.updateOnlineTime("/nsm/pcapout")
 	for mgr.running {
 		mgr.updateDataEpoch()
 		job, err := mgr.PollPendingJobs()
@@ -114,6 +117,16 @@ func (mgr *JobManager) CleanupJob(job *model.Job) {
 	for _, processor := range mgr.jobProcessors {
 		processor.CleanupJob(job)
 	}
+}
+
+func (mgr *JobManager) updateOnlineTime(src string) {
+	fi, err := os.Stat(src)
+	if err != nil {
+		return
+	}
+	stat := fi.Sys().(*syscall.Stat_t)
+	mgr.node.OnlineTime = time.Unix(int64(stat.Ctim.Sec), int64(stat.Ctim.Nsec))
+	log.WithField("onlineTime", mgr.node.OnlineTime).Info("Updated online time (node installation time)")
 }
 
 func (mgr *JobManager) updateDataEpoch() {

@@ -30,6 +30,8 @@ const huntComponent = {
     queryGroupBys: [],
     queryGroupByOptions: [],
     querySortBys: [],
+    queryTableFields: [],
+    queryTableOptions: [],
     eventFields: {},
     dateRange: '',
     relativeTimeEnabled: true,
@@ -134,6 +136,10 @@ const huntComponent = {
       { text: '<', value: false },
       { text: '≤', value: true }
     ],
+    addToCaseDialogVisible: false,
+    mruCases: [],
+    selectedMruCase: null,
+    disableRouteLoad: false,
   }},
   created() {
     this.$root.initializeCharts();
@@ -437,6 +443,8 @@ const huntComponent = {
       return true;
     },
     async loadData() {
+      if (this.disableRouteLoad) return;
+
       if (!this.parseUrlParameters()) return;
 
       this.$root.startLoading();
@@ -679,6 +687,8 @@ const huntComponent = {
       this.queryFilters = [];
       this.queryGroupBys = [];
       this.queryGroupByOptions = [];
+      this.queryTableFields = [];
+      this.queryTableOptions = [];
       this.querySortBys = [];
       var route = this;
       if (this.query) {
@@ -694,7 +704,7 @@ const huntComponent = {
             break;
           } else if (this.query[i] == "\"" && !escaping) {
             insideQuote = !insideQuote;
-          } else if (this.query[i] == "\\") {
+          } else if (this.query[i] == "\\" && !escaping) {
             escaping = true;
           } else {
             escaping = false;
@@ -747,6 +757,23 @@ const huntComponent = {
               });
               route.queryGroupBys.push(fields);
               route.queryGroupByOptions.push(options);
+            }
+            if (segment.indexOf("table") == 0) {
+              var fields = [];
+              var options = [];
+              segment.split(" ").forEach(function(item, index) {
+                // Skip empty fields and segment options (they start with a hyphen)
+                if (item[0] == "-") {
+                  options.push(item.substring(1));
+                } else if (index > 0 && item.trim().length > 0) {
+                  if (item.split("\"").length % 2 == 1) {
+                    // Will currently skip quoted items with spaces.
+                    fields.push(item);
+                  }
+                }
+              });
+              route.queryTableFields = fields;
+              route.queryTableOptions = options;
             }
             if (segment.indexOf("sortby") == 0) {
               segment.split(" ").forEach(function(item, index) {
@@ -995,7 +1022,7 @@ const huntComponent = {
             }
           }
 
-          if (action.enabled) {
+          if (action.enabled && !action.jsCall) {
             var link = route.$root.findEligibleActionLinkForEvent(action, event);
             if (link) {
               action.linkFormatted = route.$root.formatActionContent(link, event, field, value, true);
@@ -1051,15 +1078,17 @@ const huntComponent = {
     },
     constructHeaders(fields) {
       var headers = [];
-      var i18n = this.i18n;
-      fields.forEach(function(item, index) {
-        var i18nKey = "field_" + item;
-        var header = {
-          text: i18n[i18nKey] ? i18n[i18nKey] : item,
-          value: item,
-        };
-        headers.push(header);
-      });
+      if (fields && fields.length > 0) {
+        var i18n = this.i18n;
+        fields.forEach(function(item, index) {
+          var i18nKey = "field_" + item;
+          var header = {
+            text: i18n[i18nKey] ? i18n[i18nKey] : item,
+            value: item,
+          };
+          headers.push(header);
+        });
+      }
       return headers;
     },
     lookupSocId(data) {
@@ -1081,16 +1110,19 @@ const huntComponent = {
     constructGroupByRows(fields, data) {
       const records = [];
       const route = this;
+      let batch = [];
       data.forEach(function(row, index) {
         var record = {
           count: row.value,
         };
         fields.forEach(function(field, index) {
           record[field] = route.localizeValue(row.keys[index]);
+          batch.push(record[field]);
         });
         route.lookupSocIds(record);
         records.push(record);
       });
+      this.$root.batchLookup(batch, this);
       return records;
     },
     constructChartMetrics(data) {
@@ -1202,6 +1234,8 @@ const huntComponent = {
       var eventDataset;
       var route = this;
       if (events != null && events.length > 0) {
+        let batch = [];
+
         events.forEach(function(event, index) {
           var record = event.payload;
           record.soc_id = event.id;
@@ -1211,6 +1245,10 @@ const huntComponent = {
           record.soc_source = event.source;
           route.lookupSocIds(record);
           records.push(record);
+
+          for (const key in record) {
+            batch.push(record[key]);
+          }
 
           var currentModule = record["event.module"];
           var currentDataset = record["event.dataset"];
@@ -1224,12 +1262,114 @@ const huntComponent = {
             inconsistentEvents = true;
           }
         });
+
+        route.$root.batchLookup(batch, route);
+
         for (const key in records[0]) {
           fields.push(key);
         }
       }
-      this.eventHeaders = this.constructHeaders(this.filterVisibleFields(eventModule, eventDataset, fields));
+      this.populateEventHeaders(this.filterVisibleFields(eventModule, eventDataset, fields));
       this.eventData = records;
+    },
+    populateEventHeaders(defaultFields) {
+      var fields = defaultFields;
+      if (this.queryTableFields.length > 0) {
+        fields = this.queryTableFields;
+      }
+      this.eventHeaders = this.constructHeaders(fields);
+    },
+    repopulateEventHeaders() {
+      this.populateEventHeaders();
+
+      // This is a UI interaction so update the query and route to reflect the new table segment
+      var segments = this.query.split("|");
+      var newQuery = segments[0];
+      for (var i = 1; i < segments.length; i++) {
+        if (segments[i].trim().indexOf("table") == 0) {
+          continue;
+        }
+        newQuery = newQuery.trim() + " | " + segments[i].trim();
+      }
+      if (this.queryTableFields.length > 0) {
+        newQuery = newQuery + " | table " + this.queryTableFields.join(" ");
+      }
+
+      this.updateActiveQuery(newQuery);
+    },
+    updateActiveQuery(newQuery) {
+      var route = this.buildCurrentRoute();
+      route.query.q = newQuery;
+
+      this.disableRouteLoad = true;
+      this.$router.push(route);
+      this.query = newQuery;
+      const thisRoute = this;
+      setTimeout(function() { thisRoute.disableRouteLoad = false; }, 100);
+    },
+    toggleColumnHeader(field) {
+      if (!this.isColumnHeader(field)) {
+        this.addColumnHeader(field);
+      } else {
+        this.removeColumnHeader(field);
+      }
+    },
+    populateQueryTableFields() {
+      if (this.queryTableFields.length == 0) {
+        // Pre-populate with the default field headers already in eventHeaders (from populateEventTable)
+        for (const idx in this.eventHeaders) {
+          const field = this.eventHeaders[idx].value;
+          this.queryTableFields.push(field);
+        }
+      }
+    },
+    moveColumnHeader(field, left) {
+      this.populateQueryTableFields();
+      for (var idx = -1; idx < this.queryTableFields.length; idx++) {
+        const currentField = this.queryTableFields[idx];
+        if (field == currentField) {
+          break;
+        }
+      }
+
+      if (idx > -1) {
+        if (left) {
+          if (idx > 0) {
+            var tmpFields = this.queryTableFields.slice(0, idx - 1);
+            tmpFields.push(field);
+            tmpFields = tmpFields.concat(this.queryTableFields.slice(idx - 1, idx));
+            this.queryTableFields = tmpFields.concat(this.queryTableFields.slice(idx + 1));
+          }
+        } else {
+          if (idx < this.queryTableFields.length - 1) {
+            var tmpFields = this.queryTableFields.slice(0, idx);
+            tmpFields = tmpFields.concat(this.queryTableFields.slice(idx + 1, idx + 2));
+            tmpFields.push(field);
+            this.queryTableFields = tmpFields.concat(this.queryTableFields.slice(idx + 2));
+          }
+        }
+      }
+      this.repopulateEventHeaders(); // no defaults fields will be supplied since we know they aren't going to be used.
+    },
+    addColumnHeader(field) {
+      this.populateQueryTableFields();
+      this.queryTableFields.push(field);
+      this.repopulateEventHeaders(); // no defaults fields will be supplied since we know they aren't going to be used.
+    },
+    removeColumnHeader(field) {
+      this.populateQueryTableFields();
+      this.queryTableFields = this.queryTableFields.filter(item => item != field);
+      
+      // do not revert back to the predefined headers if this was the last column that was just removed. Otherwise
+      // users would get frustrated if they're trying to remove all the columns to then add their own.
+      this.repopulateEventHeaders(); // no defaults fields provided
+    },
+    isColumnHeader(field) {
+      return this.eventHeaders.find((item) => { 
+        if (item.value == field) {
+          return true;
+        }
+      }) != null;
     },
     displayTable(group, groupIdx) {
       group.chart_type = "";
@@ -1248,7 +1388,7 @@ const huntComponent = {
       group.chart_type = "bar";
       group.chart_options = {};
       group.chart_data = {};
-      this.setupBarChart(group.chart_options, group.chart_data, group.title);
+      this.setupBarChart(group.chart_options, group.chart_data, group.title, groupIdx);
       this.applyLegendOption(group, groupIdx);
       this.populateChart(group.chart_data, group.chart_metrics);
       Vue.set(this.groupBys, groupIdx, group);
@@ -1461,11 +1601,11 @@ const huntComponent = {
       this.setupTimelineChart(this.timelineChartOptions, this.timelineChartData, this.i18n.chartTitleTimeline);
       this.setupBarChart(this.bottomChartOptions, this.bottomChartData, this.i18n.chartTitleBottom);
     },
-    setupBarChart(options, data, title) {
+    setupBarChart(options, data, title, groupIdx) {
       var fontColor = this.$root.getColor("#888888", -40);
       var dataColor = this.$root.getColor("primary");
       var gridColor = this.$root.getColor("#888888", 65);
-      options.onClick = this.handleChartClick;
+      options.onClick = this.handleChartClick(groupIdx);
       options.responsive = true;
       options.maintainAspectRatio = false;
       options.plugins = {
@@ -1609,18 +1749,23 @@ const huntComponent = {
       }
       return color;
     },
-    async handleChartClick(e, activeElement, chart) {
-      if (activeElement.length > 0) {
-        var clickedValue = chart.data.labels[activeElement[0].index] + "";
-        if (clickedValue && clickedValue.length > 0) {
-          if (this.canQuery(clickedValue)) {
-            var chartGroupByField = this.groupBys[0].fields[0];
-            this.toggleQuickAction(e, {}, chartGroupByField, clickedValue);
-          }
-        }
-        return true;
+    handleChartClick(groupIdx) {
+      if (!groupIdx) {
+        groupIdx = 0;
       }
-      return false;
+      return (e, activeElement, chart) => {
+        if (activeElement.length > 0) {
+          var clickedValue = chart.data.labels[activeElement[0].index] + "";
+          if (clickedValue && clickedValue.length > 0) {
+            if (this.canQuery(clickedValue)) {
+              var chartGroupByField = this.groupBys[groupIdx].fields[0];
+              this.toggleQuickAction(e, {}, chartGroupByField, clickedValue);
+            }
+          }
+          return true;
+        }
+        return false;
+      };
     },
     groupByLimitChanged() {
       if (this.groupByItemsPerPage > this.groupByLimit) {
@@ -1829,6 +1974,70 @@ const huntComponent = {
 
       this.$router.push(this.buildFilterRoute(this.quickActionField, range, FILTER_INCLUDE, true));
     },
+    performAction($event, action) {
+      if (action && action.jsCall && this[action.jsCall]) {
+        this[action.jsCall](action);
+        return true;
+      }
+
+      return false;
+    },
+    async openAddToCaseDialog() {
+      // this function is meant to be called by performAction($event, action)
+      this.addToCaseDialogVisible = true;
+
+      if (this.$refs && this.$refs['evidence']) {
+        this.$refs['evidence'].resetValidation()
+      }
+
+      this.mruCases = [
+        {
+          text: this.i18n.createNewCase,
+          value: 'New Case',
+        }
+      ];
+      this.selectedMruCase = 'New Case';
+
+      const rawMRU = localStorage.getItem('settings.case.mruCases');
+      if (rawMRU) {
+        const cases = JSON.parse(rawMRU);
+        for (let i = 0; i < cases.length; i++) {
+          this.mruCases.push({
+            text: cases[i].title,
+            value: cases[i],
+          });
+        }
+      }
+    },
+    cancelAddToCaseDialog() {
+      this.addToCaseDialogVisible = false;
+    },
+    addToCase(newTab) {
+      if (this.$refs && this.$refs['evidence'] && !this.$refs['evidence'].validate()) return;
+
+      this.addToCaseDialogVisible = false;
+
+      let url = window.location.origin + '/#/case/';
+
+      if (this.selectedMruCase !== 'New Case') {
+        url += this.selectedMruCase.id;
+      } else {
+        url += 'create';
+      }
+
+      url += '?type=evidence&value=' + encodeURIComponent(this.quickActionValue);
+
+      let target = '_self';
+      if (newTab) {
+        if (this.selectedMruCase === 'New Case') {
+          target = '_blank';
+        } else {
+          target = encodeURIComponent(this.selectedMruCase.id);
+        }
+      }
+
+      window.open(url, target);
+    }
   }
 };
 

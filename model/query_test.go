@@ -97,6 +97,12 @@ func TestQueries(tester *testing.T) {
 
 	validateQuery(tester, "abcA|sortby", "ERROR_QUERY_INVALID__SORTBY_TERMS_MISSING")
 	validateQuery(tester, "abcA|sortby ", "ERROR_QUERY_INVALID__SORTBY_TERMS_MISSING")
+
+	validateQuery(tester, "abcA|table\njjj, lll", "abcA | table jjj lll")
+	validateQuery(tester, "abcA|\ntable\tjjj", "abcA | table jjj")
+
+	validateQuery(tester, "abcA|table", "ERROR_QUERY_INVALID__TABLE_TERMS_MISSING")
+	validateQuery(tester, "abcA|table ", "ERROR_QUERY_INVALID__TABLE_TERMS_MISSING")
 }
 
 func validateGroup(tester *testing.T, orig string, groupIdx int, group string, expected string) {
@@ -128,10 +134,26 @@ func validateSort(tester *testing.T, orig string, sort string, expected string) 
 	assert.Equal(tester, expected, actual)
 }
 
+func validateTable(tester *testing.T, orig string, table string, expected string) {
+	query := NewQuery()
+	query.Parse(orig)
+	actual, err := query.Table(table)
+	if err != nil {
+		actual = err.Error()
+	}
+	assert.Equal(tester, expected, actual)
+}
+
 func TestSort(tester *testing.T) {
 	validateSort(tester, "a", "b", `a | sortby "b"`)
 	validateSort(tester, "a|sortby b", "c", `a | sortby b "c"`)
 	validateSort(tester, "a|sortby b", "b", "a | sortby b")
+}
+
+func TestTable(tester *testing.T) {
+	validateTable(tester, "a", "b", `a | table "b"`)
+	validateTable(tester, "a|table b", "c", `a | table b "c"`)
+	validateTable(tester, "a|table b", "b", "a | table b")
 }
 
 func validateFilter(tester *testing.T, orig string, key string, value string, scalar bool, mode string, condense bool, expected string) {
