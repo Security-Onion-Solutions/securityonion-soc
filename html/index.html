@@ -1698,7 +1698,7 @@
                                 </div>
                               </div>
 
-                              <div v-if="$root.isLicensed(FEAT_TIMETRACKING)">
+                              <div v-if="$root.isLicensed(FEAT_TTR)">
                                 <div v-if="!isEdit(`comment-hours-${index}`)" class="case d-block comment-body mt-2">
                                   <div class="ml-2 mb-2 clicktoedit" @click="startEdit('comment-hours-input', comment.hours, `comment-hours-${index}`, 'hours', modifyAssociation, ['comments', comment], false)" @keypress.space.prevent="startEdit('comment-hours-input', comment.hours, `comment-hours-${index}`, 'hours', modifyAssociation, ['comments', comment], false)">
                                     <div :id="`comment-hours-${index}`">
@@ -1784,7 +1784,7 @@
                             <div class="mx-2">
                               <v-form ref="comments" v-model="associatedForms['comments'].valid" @submit.prevent>
                                 <v-textarea id="comment-input" solo flat hide-details="auto" rows="5" color="text--black" :value="associatedForms['comments'].description" @change="val => associatedForms['comments'].description = val" :rules="[rules.required]" class="mb-1" persistent-hint :hint="i18n.commentDescriptionHelp"/>
-                                <v-row v-if="$root.isLicensed(FEAT_TIMETRACKING)">
+                                <v-row v-if="$root.isLicensed(FEAT_TTR)">
                                   <v-col cols="4">
                                     <v-text-field id="comment-hours-input" solo flat color="text--black" :value="associatedForms['comments'].hours" @change="val => associatedForms['comments'].hours = val" class="mb-1" persistent-hint :hint="i18n.commentHoursHelp" :rules="[rules.hours]"/>
                                   </v-col>
@@ -2583,7 +2583,7 @@
                                 <v-col cols="8"><span class="case">{{ props.item.description }}</span></v-col>
                               </v-row>
                             </div>
-                            <div v-if="$root.isLicensed(FEAT_TIMETRACKING)">
+                            <div v-if="$root.isLicensed(FEAT_TTR)">
                               <v-row no-gutters class="py-1 case tabular-row">
                                 <v-col cols="4"><span class="case tabular-label">{{ i18n.commentHours }}:</span></v-col>
                                 <v-col cols="8"><span class="case">{{ props.item.hours }}</span></v-col>
@@ -2782,7 +2782,7 @@
                                 </div>
                               </v-col>
                             </v-row>
-                            <v-row v-if="$root.isLicensed(FEAT_TIMETRACKING)">
+                            <v-row v-if="$root.isLicensed(FEAT_TTR)">
                               <v-col cols="12">
                                 <div>
                                   <div class="font-weight-bold">{{ i18n.caseHours }}: </div>
