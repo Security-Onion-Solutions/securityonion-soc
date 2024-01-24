@@ -18,6 +18,7 @@ func TestBuildModuleMap(tester *testing.T) {
 	findModule(tester, mm, "importer")
 	findModule(tester, mm, "statickeyauth")
 	findModule(tester, mm, "stenoquery")
+	findModule(tester, mm, "suriquery")
 }
 
 func findModule(tester *testing.T, mm map[string]module.Module, module string) {
