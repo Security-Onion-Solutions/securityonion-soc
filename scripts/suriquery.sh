@@ -5,8 +5,8 @@
 # https://securityonion.net/license; you may not use this file except in compliance with the
 # Elastic License 2.0.
 
-PCAP_PATH=/nsm/pcap/*/
-PCAP_TMP=/nsm/pcaptmp
+PCAP_PATH=/nsm/suripcap/*/
+PCAP_TMP=/nsm/suripcaptmp
 
 
 if [ $# -le 3 ]; then
