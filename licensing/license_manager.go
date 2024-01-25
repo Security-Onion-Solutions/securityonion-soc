@@ -533,7 +533,6 @@ func ValidateSocUrl(url string) bool {
 		return true
 	}
 	ok := manager.licenseKey.SocUrl == "" || strings.EqualFold(manager.licenseKey.SocUrl, url)
-	log.WithFields(log.Fields{"lic_url": manager.licenseKey.SocUrl, "found_url": url}).Info("BLAH")
 	return checkExceeded("socUrl", ok)
 }
 
