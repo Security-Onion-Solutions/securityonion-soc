@@ -92,7 +92,7 @@ func (s *SuricataEngine) watchCommunityRules() {
 	ctx := s.srv.Context
 
 	for s.isRunning {
-		time.Sleep(time.Second * time.Duration(s.communityRulesImportFrequencySeconds))
+		time.Sleep(time.Duration(s.communityRulesImportFrequencySeconds) * time.Second)
 		if !s.isRunning {
 			break
 		}

@@ -60,7 +60,10 @@ func LoadConfig(filename string, version string, buildTime time.Time) (*Config, 
 	}
 
 	cfg.Server.Modules["strelkaengine"] = map[string]interface{}{
-		"yaraRulesFolder": "/tmp/socdev/so/conf/strelka/rules",
+		"yaraRulesFolder":             "/tmp/socdev/so/conf/strelka/rules",
+		"reposFolder":                 "/tmp/socdev/so/conf/strelka/repos",
+		"rulesRepos":                  []interface{}{"https://github.com/Security-Onion-Solutions/securityonion-yara"},
+		"compileYaraPythonScriptPath": "/tmp/socdev/so/conf/strelka/compile_yara.py",
 	}
 
 	return cfg, err

@@ -9,9 +9,12 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"io/fs"
 	"net/http"
+	"os/exec"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -198,19 +201,28 @@ func TestTimeFrame(t *testing.T) {
 
 func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 	ctrl := gomock.NewController(t)
-
 	mio := mock.NewMockIOManager(ctrl)
-	body := "<eql>"
-	mio.EXPECT().MakeRequest(gomock.Any()).Times(1).Return(&http.Response{
-		StatusCode:    http.StatusOK,
-		Body:          io.NopCloser(strings.NewReader(body)),
-		ContentLength: int64(len(body)),
-	}, nil)
+
+	mio.EXPECT().ExecCommand(gomock.Cond(func(x any) bool {
+		cmd := x.(*exec.Cmd)
+
+		if !strings.HasSuffix(cmd.Path, "sigma") {
+			return false
+		}
+
+		if !slices.Contains(cmd.Args, "convert") {
+			return false
+		}
+
+		if cmd.Stdin == nil {
+			return false
+		}
+
+		return true
+	})).Return([]byte("<eql>"), 0, time.Duration(0), nil)
 
 	engine := ElastAlertEngine{
-		sigconverterUrl:       "localhost:8000/convert",
-		sigmaConversionTarget: "eql",
-		IOManager:             mio,
+		IOManager: mio,
 	}
 
 	det := &model.Detection{
@@ -248,20 +260,28 @@ soc_pivot: soc_pivot
 
 func TestSigmaToElastAlertError(t *testing.T) {
 	ctrl := gomock.NewController(t)
-
 	mio := mock.NewMockIOManager(ctrl)
-	msg := "something went wrong"
-	body := "Error: " + msg
-	mio.EXPECT().MakeRequest(gomock.Any()).Times(1).Return(&http.Response{
-		StatusCode:    http.StatusOK,
-		Body:          io.NopCloser(strings.NewReader(body)),
-		ContentLength: int64(len(body)),
-	}, nil)
+
+	mio.EXPECT().ExecCommand(gomock.Cond(func(x any) bool {
+		cmd := x.(*exec.Cmd)
+
+		if !strings.HasSuffix(cmd.Path, "sigma") {
+			return false
+		}
+
+		if !slices.Contains(cmd.Args, "convert") {
+			return false
+		}
+
+		if cmd.Stdin == nil {
+			return false
+		}
+
+		return true
+	})).Return([]byte("Error: something went wrong"), 1, time.Duration(0), errors.New("non-zero return"))
 
 	engine := ElastAlertEngine{
-		sigconverterUrl:       "localhost:3000/convert",
-		sigmaConversionTarget: "eql",
-		IOManager:             mio,
+		IOManager: mio,
 	}
 
 	det := &model.Detection{
@@ -276,7 +296,7 @@ func TestSigmaToElastAlertError(t *testing.T) {
 	wrappedRule, err := engine.sigmaToElastAlert(context.Background(), det)
 	assert.Empty(t, wrappedRule)
 	assert.Error(t, err)
-	assert.ErrorContains(t, err, msg)
+	assert.ErrorContains(t, err, "problem with sigma cli")
 }
 
 func TestParseRules(t *testing.T) {
@@ -470,10 +490,7 @@ func TestSyncElastAlert(t *testing.T) {
 				// IndexExistingRules
 				m.EXPECT().ReadDir(mod.elastAlertRulesFolder).Return([]fs.DirEntry{}, nil)
 				// sigmaToElastAlert
-				m.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
-					StatusCode: http.StatusOK,
-					Body:       io.NopCloser(strings.NewReader("[sigma rule]")),
-				}, nil)
+				m.EXPECT().ExecCommand(gomock.Any()).Return([]byte("[sigma rule]"), 0, time.Duration(0), nil)
 				// WriteFile when enabling
 				m.EXPECT().WriteFile("10000.yml", []byte("play_title: TEST\nplay_id: \"10000\"\nevent.module: elastalert\nevent.dataset: elastalert.alert\nevent.severity: 3\nrule.category: \"\"\nsigma_level: medium\nalert:\n    - modules.so.playbook-es.PlaybookESAlerter\nindex: .ds-logs-*\nname: TEST - 10000\ntype: any\nfilter:\n    - eql: '[sigma rule]'\nplay_url: play_url\nkibana_pivot: kibana_pivot\nsoc_pivot: soc_pivot\n"), fs.FileMode(0644)).Return(nil)
 			},
@@ -539,10 +556,7 @@ func TestSyncElastAlert(t *testing.T) {
 				// IndexExistingRules
 				m.EXPECT().ReadDir(mod.elastAlertRulesFolder).Return([]fs.DirEntry{}, nil)
 				// sigmaToElastAlert
-				m.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
-					StatusCode: http.StatusOK,
-					Body:       io.NopCloser(strings.NewReader("[sigma rule]")),
-				}, nil)
+				m.EXPECT().ExecCommand(gomock.Any()).Return([]byte("[sigma rule]"), 0, time.Duration(0), nil)
 				// WriteFile when enabling
 				m.EXPECT().WriteFile("10000.yml", []byte("play_title: TEST\nplay_id: \"10000\"\nevent.module: elastalert\nevent.dataset: elastalert.alert\nevent.severity: 3\nrule.category: \"\"\nsigma_level: medium\nalert:\n    - modules.so.playbook-es.PlaybookESAlerter\nindex: .ds-logs-*\nname: TEST - 10000\ntype: any\nfilter:\n    - eql: ([sigma rule]) and TRUE\nplay_url: play_url\nkibana_pivot: kibana_pivot\nsoc_pivot: soc_pivot\n"), fs.FileMode(0644)).Return(nil)
 			},

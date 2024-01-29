@@ -145,7 +145,7 @@ func (criteria *EventSearchCriteria) DeterminePermissions(hintVerb string, hintN
 	kind = strings.ToLower(strings.TrimSpace(kind))
 
 	switch index {
-	case "so-detection":
+	case "so-detection", "*:so-detection":
 		return hintVerb, "detection"
 	}
 
