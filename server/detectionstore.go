@@ -21,3 +21,5 @@ type Detectionstore interface {
 	GetAllCommunitySIDs(ctx context.Context, engine *model.EngineName) (map[string]*model.Detection, error) // map[detection.PublicId]detection
 	Query(ctx context.Context, query string, max int) ([]interface{}, error)
 }
+
+//go:generate mockgen -destination mock/mock_detectionstore.go -package mock . Detectionstore

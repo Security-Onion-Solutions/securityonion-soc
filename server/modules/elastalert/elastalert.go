@@ -17,6 +17,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -45,6 +46,7 @@ type IOManager interface {
 	DeleteFile(path string) error
 	ReadDir(path string) ([]os.DirEntry, error)
 	MakeRequest(*http.Request) (*http.Response, error)
+	ExecCommand(cmd *exec.Cmd) ([]byte, int, time.Duration, error)
 }
 
 type ElastAlertEngine struct {
@@ -53,9 +55,7 @@ type ElastAlertEngine struct {
 	sigmaPackageDownloadTemplate         string
 	elastAlertRulesFolder                string
 	rulesFingerprintFile                 string
-	sigconverterUrl                      string
 	sigmaRulePackages                    []string
-	sigmaConversionTarget                string
 	isRunning                            bool
 	thread                               *sync.WaitGroup
 	IOManager
@@ -79,8 +79,6 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) error {
 	e.sigmaPackageDownloadTemplate = module.GetStringDefault(config, "sigmaPackageDownloadTemplate", "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip")
 	e.elastAlertRulesFolder = module.GetStringDefault(config, "elastAlertRulesFolder", "/opt/so/rules/elastalert")
 	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", "/opt/so/conf/soc/sigma.fingerprint")
-	e.sigconverterUrl = module.GetStringDefault(config, "sigconverterUrl", "http://manager:8000/sigma")
-	e.sigmaConversionTarget = module.GetStringDefault(config, "sigmaConversionTarget", "eql")
 
 	pkgs := module.GetStringDefault(config, "sigmaRulePackages", "core")
 	e.parseSigmaPackages(pkgs)
@@ -570,57 +568,35 @@ func (e *ElastAlertEngine) IndexExistingRules() (index map[string]string, err er
 }
 
 func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Detection) (string, error) {
-	// wrapper for the payload
-	ruleWrapper := struct {
-		Rule     string   `json:"rule"`
-		Pipeline []string `json:"pipeline"`
-		Target   string   `json:"target"`
-		Format   string   `json:"format"`
-	}{
-		Rule:     base64.StdEncoding.EncodeToString([]byte(det.Content)),
-		Pipeline: []string{},
-		Target:   e.sigmaConversionTarget,
-		Format:   "default",
-	}
+	args := []string{"convert", "-t", "eql", "-p", "windows-logsources", "-p", "ecs_windows", "/dev/stdin"}
 
-	payload, err := json.Marshal(ruleWrapper)
+	cmd := exec.CommandContext(ctx, "sigma", args...)
+	cmd.Stdin = strings.NewReader(det.Content)
+
+	raw, code, runtime, err := e.ExecCommand(cmd)
+
+	log.WithFields(log.Fields{
+		"code":     code,
+		"output":   string(raw),
+		"command":  cmd.String(),
+		"execTime": runtime.Seconds(),
+		"error":    err,
+	}).Info("executing sigma cli")
+
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("problem with sigma cli: %w", err)
 	}
 
-	// build request
-	req, err := http.NewRequest(http.MethodPost, e.sigconverterUrl, bytes.NewReader(payload))
-	if err != nil {
-		return "", err
+	query := string(raw)
+
+	firstLine := strings.Index(string(raw), "\n")
+	if firstLine != -1 {
+		query = query[firstLine+1:]
 	}
 
-	req = req.WithContext(ctx)
-	req.Header.Add("Content-Type", "application/json")
+	query = strings.TrimSpace(query)
 
-	// send request
-	resp, err := e.MakeRequest(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	rawRule, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return "", fmt.Errorf("sigconverter returned non-200 status code: %d", resp.StatusCode)
-	}
-
-	rule := string(rawRule)
-
-	if strings.HasPrefix(rule, "Error:") {
-		rule = strings.TrimSpace(strings.TrimPrefix(rule, "Error:"))
-		return "", fmt.Errorf("sigconverter returned error: %s", rule)
-	}
-
-	elastRule, err := wrapRule(det, rule)
+	elastRule, err := wrapRule(det, query)
 	if err != nil {
 		return "", fmt.Errorf("unable to wrap rule: %w", err)
 	}
@@ -839,4 +815,14 @@ func (_ *ResourceManager) ReadDir(path string) ([]os.DirEntry, error) {
 
 func (_ *ResourceManager) MakeRequest(req *http.Request) (*http.Response, error) {
 	return http.DefaultClient.Do(req)
+}
+
+func (_ *ResourceManager) ExecCommand(cmd *exec.Cmd) (output []byte, exitCode int, runtime time.Duration, err error) {
+	start := time.Now()
+	output, err = cmd.CombinedOutput()
+	runtime = time.Since(start)
+
+	exitCode = cmd.ProcessState.ExitCode()
+
+	return output, exitCode, runtime, err
 }
