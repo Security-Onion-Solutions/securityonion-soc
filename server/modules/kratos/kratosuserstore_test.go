@@ -10,7 +10,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/stretchr/testify/assert"
 )
@@ -24,14 +23,11 @@ func TestUserstoreInit(tester *testing.T) {
 func TestUnauthorized(tester *testing.T) {
 	userStore := NewKratosUserstore(server.NewFakeUnauthorizedServer())
 
-	_, err := userStore.GetUsers(context.Background())
-	ensureUnauthorized(tester, err)
+	users, err := userStore.GetUsers(context.Background())
+	assert.Nil(tester, err)
+	assert.Len(tester, users, 0)
 
-	_, err = userStore.GetUser(context.Background(), "some-id")
-	ensureUnauthorized(tester, err)
-}
-
-func ensureUnauthorized(tester *testing.T, err error) {
-	var authErr *model.Unauthorized
-	assert.ErrorAs(tester, err, &authErr)
+	user, err := userStore.GetUser(context.Background(), "some-id")
+	assert.Nil(tester, err)
+	assert.Nil(tester, user)
 }

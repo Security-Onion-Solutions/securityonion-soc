@@ -3222,7 +3222,7 @@
                                   </v-progress-linear>
                                 </span>
                               </div>
-                              <div v-if="item.metricsEnabled && canTest(item)" class="text-no-wrap">
+                              <div v-if="item.metricsEnabled && hasZeek(item)" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.zeekLoss }}:</span>
                                 <span :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'">
                                   <v-progress-linear id="node_zeekLoss" :value="item.zeekLossPct" height="15" :color="formatLinearColor(item.zeekLossPct, 0.01, 0.5, 1.5)">
@@ -3232,7 +3232,7 @@
                                   </v-progress-linear>
                                 </span>
                               </div>
-                              <div v-if="item.metricsEnabled && canTest(item)" class="text-no-wrap">
+                              <div v-if="item.metricsEnabled && hasSuri(item)" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.suricataLoss }}:</span>
                                 <span :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'">
                                   <v-progress-linear id="node_suricataLoss" :value="item.suriLossPct" height="15" :color="formatLinearColor(item.suriLossPct, 0.01, 0.5, 1.5)">
@@ -3242,7 +3242,7 @@
                                   </v-progress-linear>
                                 </span>
                               </div>
-                              <div v-if="item.metricsEnabled && canTest(item)" class="text-no-wrap">
+                              <div v-if="item.metricsEnabled && hasSteno(item)" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.stenoLoss }}:</span>
                                 <span :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'">
                                   <v-progress-linear id="node_stenoLoss" :value="item.stenoLossPct" height="15" :color="formatLinearColor(item.stenoLossPct, 0.01, 0.5, 1.5)">

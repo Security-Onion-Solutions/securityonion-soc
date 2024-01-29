@@ -74,7 +74,6 @@ $(document).ready(function() {
       settingsUrl: null,
       version: '0.0.0',
       elasticVersion: '0.0.0',
-      wazuhVersion: '0.0.0',
       papi: null,
       connectionTimeout: 300000,
       wsConnectionTimeout: 15000,
@@ -320,7 +319,6 @@ $(document).ready(function() {
                 }
                 this.parameters = response.data.parameters;
                 this.elasticVersion = response.data.elasticVersion;
-                this.wazuhVersion = response.data.wazuhVersion;
                 this.timezones = response.data.timezones;
                 this.enableReverseLookup = response.data.parameters.enableReverseLookup;
 
