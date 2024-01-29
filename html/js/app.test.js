@@ -157,7 +157,6 @@ test('loadServerSettings', async () => {
       casesEnabled: true
     },
     elasticVersion: 'myElasticVersion',
-    wazuhVersion: 'myWazuhVersion',
     timezones: ['UTC'],
     userId: 'myUserId'
   };
@@ -173,7 +172,6 @@ test('loadServerSettings', async () => {
   expect(app.version).toBe('myVersion');
   expect(app.license).toBe('myLicense');
   expect(app.elasticVersion).toBe('myElasticVersion');
-  expect(app.wazuhVersion).toBe('myWazuhVersion');
   expect(app.timezones[0]).toBe('UTC');
   expect(app.wsConnectionTimeout).toBe(456);
   expect(app.connectionTimeout).toBe(123);

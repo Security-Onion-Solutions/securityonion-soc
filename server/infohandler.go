@@ -56,7 +56,6 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 		LicenseStatus:  licensing.GetStatus(),
 		Parameters:     &h.server.Config.ClientParams,
 		ElasticVersion: os.Getenv("ELASTIC_VERSION"),
-		WazuhVersion:   os.Getenv("WAZUH_VERSION"),
 		UserId:         user.Id,
 		Timezones:      h.timezones,
 		SrvToken:       srvToken,
