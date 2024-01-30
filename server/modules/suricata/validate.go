@@ -142,7 +142,7 @@ func ParseSuricataRule(rule string) (*SuricataRule, error) {
 						inQuotes = !inQuotes
 					}
 				}
-			} else if ch == '\\' {
+			} else if ch == '\\' && !isEscaping {
 				isEscaping = true
 				buf.WriteRune(ch)
 			} else {
