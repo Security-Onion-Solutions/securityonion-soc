@@ -809,6 +809,8 @@ const i18n = {
       ERROR_QUERY_INVALID__SEARCH_TERMS_MISSING: 'The search query is missing search terms.',
       ERROR_QUERY_INVALID__SEGMENT_EMPTY: 'The search query has an incomplete segment (pipe) function.',
       ERROR_QUERY_INVALID__SEGMENT_UNSUPPORTED: 'The search query contains an unsupported segment (pipe) function.',
+      ERROR_QUERY_INVALID__SORTBY_TERMS_MISSING: 'The search query has a malformed sortby segment.',
+      ERROR_QUERY_INVALID__TABLE_TERMS_MISSING: 'The search query has a malformed table segment.',
       ERROR_QUERY_INVALID__TERM_MISSING: 'The search query is incomplete.',
       ERROR_QUERY_FAILED_ELASTICSEARCH: 'The search query encountered a failure within the Elasticsearch cluster. Check SOC logs for details.',
       ERROR_SALT_MANAGE_MEMBER: 'Unable to manage minion; ensure that salt is running on the manager node and check salt logs.',
