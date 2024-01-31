@@ -156,19 +156,31 @@ func (suri *SuriQuery) CreateQuery(job *model.Job) string {
 	query := ""
 
 	if len(job.Filter.SrcIp) > 0 {
-		query = fmt.Sprintf("%s and host %s", query, job.Filter.SrcIp)
+		if len(query) > 0 {
+			query = query + " and "
+		}
+		query = query + fmt.Sprintf("host %s", job.Filter.SrcIp)
 	}
 
 	if len(job.Filter.DstIp) > 0 {
-		query = fmt.Sprintf("%s and host %s", query, job.Filter.DstIp)
+		if len(query) > 0 {
+			query = query + " and "
+		}
+		query = query + fmt.Sprintf("host %s", job.Filter.DstIp)
 	}
 
 	if job.Filter.SrcPort > 0 {
-		query = fmt.Sprintf("%s and port %d", query, job.Filter.SrcPort)
+		if len(query) > 0 {
+			query = query + " and "
+		}
+		query = query + fmt.Sprintf("port %d", job.Filter.SrcPort)
 	}
 
 	if job.Filter.DstPort > 0 {
-		query = fmt.Sprintf("%s and port %d", query, job.Filter.DstPort)
+		if len(query) > 0 {
+			query = query + " and "
+		}
+		query = query + fmt.Sprintf("port %d", job.Filter.DstPort)
 	}
 
 	return query
