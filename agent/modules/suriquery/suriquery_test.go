@@ -46,7 +46,7 @@ func TestCreateQuery(tester *testing.T) {
 
 	job.Filter.SrcIp = "1.2.3.4"
 	query = sq.CreateQuery(job)
-	expectedQuery = expectedQuery + " and host " + job.Filter.SrcIp
+	expectedQuery = expectedQuery + "host " + job.Filter.SrcIp
 	assert.Equal(tester, expectedQuery, query)
 
 	job.Filter.DstIp = "1.2.1.2"

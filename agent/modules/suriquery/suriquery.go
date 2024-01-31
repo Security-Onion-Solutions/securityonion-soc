@@ -151,24 +151,31 @@ func (suri *SuriQuery) CleanupJob(job *model.Job) {
 	os.Remove(pcapOutputFilepath)
 }
 
+func add(query string, added string) string {
+	if len(query) > 0 {
+		query = query + " and "
+	}
+	return query + added
+}
+
 func (suri *SuriQuery) CreateQuery(job *model.Job) string {
 
 	query := ""
 
 	if len(job.Filter.SrcIp) > 0 {
-		query = fmt.Sprintf("%s and host %s", query, job.Filter.SrcIp)
+		query = add(query, fmt.Sprintf("host %s", job.Filter.SrcIp))
 	}
 
 	if len(job.Filter.DstIp) > 0 {
-		query = fmt.Sprintf("%s and host %s", query, job.Filter.DstIp)
+		query = add(query, fmt.Sprintf("host %s", job.Filter.DstIp))
 	}
 
 	if job.Filter.SrcPort > 0 {
-		query = fmt.Sprintf("%s and port %d", query, job.Filter.SrcPort)
+		query = add(query, fmt.Sprintf("port %d", job.Filter.SrcPort))
 	}
 
 	if job.Filter.DstPort > 0 {
-		query = fmt.Sprintf("%s and port %d", query, job.Filter.DstPort)
+		query = add(query, fmt.Sprintf("port %d", job.Filter.DstPort))
 	}
 
 	return query
