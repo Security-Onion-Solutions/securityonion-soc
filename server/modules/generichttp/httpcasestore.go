@@ -149,23 +149,3 @@ func (store *HttpCasestore) GetArtifactStream(ctx context.Context, id string) (*
 func (store *HttpCasestore) DeleteArtifactStream(ctx context.Context, id string) error {
 	return errors.New("Unsupported operation by this module")
 }
-
-func (store *HttpCasestore) CreateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error) {
-	return nil, errors.New("Unsupported operation by this module")
-}
-
-func (store *HttpCasestore) GetDetection(ctx context.Context, detectId string) (*model.Detection, error) {
-	return nil, errors.New("Unsupported operation by this module")
-}
-
-func (store *HttpCasestore) UpdateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error) {
-	return nil, errors.New("Unsupported operation by this module")
-}
-
-func (store *HttpCasestore) UpdateDetectionField(context.Context, string, string, any) (*model.Detection, bool, error) {
-	return nil, false, errors.New("Unsupported operation by this module")
-}
-
-func (store *HttpCasestore) DeleteDetection(ctx context.Context, detectID string) (*model.Detection, error) {
-	return nil, errors.New("Unsupported operation by this module")
-}

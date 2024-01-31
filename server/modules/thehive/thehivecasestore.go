@@ -141,23 +141,3 @@ func (store *TheHiveCasestore) GetArtifactStream(ctx context.Context, id string)
 func (store *TheHiveCasestore) DeleteArtifactStream(ctx context.Context, id string) error {
 	return errors.New("Unsupported operation by this module")
 }
-
-func (store *TheHiveCasestore) CreateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error) {
-	return nil, errors.New("Unsupported operation by this module")
-}
-
-func (store *TheHiveCasestore) GetDetection(ctx context.Context, detectId string) (*model.Detection, error) {
-	return nil, errors.New("Unsupported operation by this module")
-}
-
-func (store *TheHiveCasestore) UpdateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error) {
-	return nil, errors.New("Unsupported operation by this module")
-}
-
-func (store *TheHiveCasestore) UpdateDetectionField(context.Context, string, string, any) (*model.Detection, bool, error) {
-	return nil, false, errors.New("Unsupported operation by this module")
-}
-
-func (store *TheHiveCasestore) DeleteDetection(ctx context.Context, detectID string) (*model.Detection, error) {
-	return nil, errors.New("Unsupported operation by this module")
-}
