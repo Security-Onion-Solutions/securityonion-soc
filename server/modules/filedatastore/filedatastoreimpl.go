@@ -63,9 +63,7 @@ func (datastore *FileDatastoreImpl) Init(cfg module.ModuleConfig) error {
 }
 
 func (datastore *FileDatastoreImpl) CreateNode(ctx context.Context, id string) *model.Node {
-	var node *model.Node
-	node = model.NewNode(id)
-	return node
+	return model.NewNode(id)
 }
 
 func (datastore *FileDatastoreImpl) GetNodes(ctx context.Context) []*model.Node {

@@ -157,7 +157,6 @@ test('loadServerSettings', async () => {
       casesEnabled: true
     },
     elasticVersion: 'myElasticVersion',
-    wazuhVersion: 'myWazuhVersion',
     timezones: ['UTC'],
     userId: 'myUserId'
   };
@@ -173,7 +172,6 @@ test('loadServerSettings', async () => {
   expect(app.version).toBe('myVersion');
   expect(app.license).toBe('myLicense');
   expect(app.elasticVersion).toBe('myElasticVersion');
-  expect(app.wazuhVersion).toBe('myWazuhVersion');
   expect(app.timezones[0]).toBe('UTC');
   expect(app.wsConnectionTimeout).toBe(456);
   expect(app.connectionTimeout).toBe(123);
@@ -368,7 +366,7 @@ test('colorLicenseStatus', () => {
   expect(app.colorLicenseStatus('foo')).toBe('info');
   expect(app.colorLicenseStatus(null)).toBe('info');
   expect(app.colorLicenseStatus("active")).toBe('success');
-  expect(app.colorLicenseStatus("exceeded")).toBe('warning');
+  expect(app.colorLicenseStatus("exceeded")).toBe('error');
   expect(app.colorLicenseStatus("expired")).toBe('warning');
   expect(app.colorLicenseStatus("invalid")).toBe('error');
   expect(app.colorLicenseStatus("pending")).toBe('warning');

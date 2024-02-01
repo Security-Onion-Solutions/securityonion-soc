@@ -45,7 +45,7 @@ func (h *QueryHandler) getQuery(w http.ResponseWriter, r *http.Request) {
 
 	err = query.Parse(queryStr)
 	if err != nil {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid query input"))
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
@@ -62,7 +62,7 @@ func (h *QueryHandler) getQuery(w http.ResponseWriter, r *http.Request) {
 		if len(value) > 0 {
 			alteredQuery, err = query.Filter(field, value, scalar, mode, condense)
 			if err != nil {
-				web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid query after filter applied"))
+				web.Respond(w, r, http.StatusBadRequest, err)
 				return
 			}
 		} else {
@@ -70,7 +70,7 @@ func (h *QueryHandler) getQuery(w http.ResponseWriter, r *http.Request) {
 			for _, value := range values {
 				alteredQuery, err = query.Filter(field, value, scalar, mode, condense)
 				if err != nil {
-					web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid query after filter applied"))
+					web.Respond(w, r, http.StatusBadRequest, err)
 					return
 				}
 
@@ -79,7 +79,7 @@ func (h *QueryHandler) getQuery(w http.ResponseWriter, r *http.Request) {
 
 				err = query.Parse(queryStr)
 				if err != nil {
-					web.Respond(w, r, http.StatusBadRequest, errors.New("Unable to parse query"))
+					web.Respond(w, r, http.StatusBadRequest, err)
 					return
 				}
 			}
@@ -95,7 +95,7 @@ func (h *QueryHandler) getQuery(w http.ResponseWriter, r *http.Request) {
 
 		alteredQuery, err = query.Group(int(groupIdx), field)
 		if err != nil {
-			web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid query after group applied"))
+			web.Respond(w, r, http.StatusBadRequest, err)
 			return
 		}
 	case "sorted":
@@ -103,7 +103,7 @@ func (h *QueryHandler) getQuery(w http.ResponseWriter, r *http.Request) {
 
 		alteredQuery, err = query.Sort(field)
 		if err != nil {
-			web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid query after sort applied"))
+			web.Respond(w, r, http.StatusBadRequest, err)
 			return
 		}
 	default:

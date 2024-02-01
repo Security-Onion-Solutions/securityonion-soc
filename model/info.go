@@ -16,7 +16,6 @@ type Info struct {
 	License        string                   `json:"license"`
 	Parameters     *config.ClientParameters `json:"parameters"`
 	ElasticVersion string                   `json:"elasticVersion"`
-	WazuhVersion   string                   `json:"wazuhVersion"`
 	UserId         string                   `json:"userId"`
 	Timezones      []string                 `json:"timezones"`
 	SrvToken       string                   `json:"srvToken"`

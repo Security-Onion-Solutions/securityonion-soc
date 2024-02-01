@@ -173,7 +173,7 @@ a#title, a#title:visited, a#title:active, a#title:hover {
 
 .filter.label {
   display: inline-block;
-  width: 45%;
+  width: 44%;
   text-align: right;
   white-space: nowrap;
   vertical-align: top;
@@ -498,4 +498,38 @@ td {
 
 .theme--light .resolved-host {
   color: rgba(0, 0, 0, 0.5);
+}
+
+.multiselect-container {
+  width: 100%;
+  position: relative;
+  display: flex;
+  justify-content: flex-start;
+}
+
+#multiselect-checkbox {
+  display: inline-block;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.detection-selection {
+  display: inline-block;
+  vertical-align: sub;
+}
+
+.selection-counter {
+  margin-left: auto;
+  padding-right: 12px;
+}
+
+.bulk-actions {
+  display: inline-block;
+  max-width: 100px;
+  margin: 0 4px;
+}
+
+.detection-hunt-btn {
+  margin-top: 20px;
 }

@@ -38,11 +38,11 @@ func NewFakeEventstore() *FakeEventstore {
 	store.InputSearchCriterias = make([]*model.EventSearchCriteria, 0)
 	store.InputUpdateCriterias = make([]*model.EventUpdateCriteria, 0)
 	store.InputAckCriterias = make([]*model.EventAckCriteria, 0)
-	store.SearchResults = make([]*model.EventSearchResults, 0, 0)
+	store.SearchResults = make([]*model.EventSearchResults, 0)
 	store.SearchResults = append(store.SearchResults, model.NewEventSearchResults())
-	store.IndexResults = make([]*model.EventIndexResults, 0, 0)
+	store.IndexResults = make([]*model.EventIndexResults, 0)
 	store.IndexResults = append(store.IndexResults, model.NewEventIndexResults())
-	store.UpdateResults = make([]*model.EventUpdateResults, 0, 0)
+	store.UpdateResults = make([]*model.EventUpdateResults, 0)
 	store.UpdateResults = append(store.UpdateResults, model.NewEventUpdateResults())
 	return store
 }

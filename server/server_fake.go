@@ -170,7 +170,7 @@ func NewFakeServer(authorized bool, roleMap map[string][]string) *Server {
 		roleMap: roleMap,
 	}
 
-	users := make([]*model.User, 0, 0)
+	users := make([]*model.User, 0)
 	users = append(users, &model.User{
 		Id:    "user-id-1",
 		Email: "user1@somewhere.invalid",

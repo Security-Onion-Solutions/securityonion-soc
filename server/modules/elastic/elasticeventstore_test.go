@@ -120,7 +120,7 @@ func TestReadErrorFromJson(tester *testing.T) {
 
 func TestDisableCrossClusterIndexing(tester *testing.T) {
 	store := &ElasticEventstore{}
-	indexes := make([]string, 2, 2)
+	indexes := make([]string, 2)
 	indexes[0] = "*:so-*"
 	indexes[1] = "my-*"
 	newIndexes := store.disableCrossClusterIndexing(indexes)

@@ -15,6 +15,7 @@ const NodeStatusUnknown = "unknown"
 const NodeStatusOk = "ok"
 const NodeStatusFault = "fault"
 const NodeStatusPending = "pending"
+const NodeStatusRestart = "restart"
 
 type Node struct {
 	Id                   string    `json:"id"`
@@ -68,6 +69,8 @@ type Node struct {
 	DiskUsedElasticGB    float64   `json:"diskUsedElasticGB"`
 	DiskUsedInfluxDbGB   float64   `json:"diskUsedInfluxDbGB"`
 	HighstateAgeSeconds  int       `json:"highstateAgeSeconds"`
+	LksEnabled           int       `json:"lksEnabled"`
+	FpsEnabled           int       `json:"fpsEnabled"`
 }
 
 func NewNode(id string) *Node {
@@ -125,8 +128,8 @@ func (node *Node) UpdateOverallStatus(enhancedStatusEnabled bool) bool {
 		newStatus = node.updateStatusComponent(newStatus, node.ProcessStatus)
 		newStatus = node.updateStatusComponent(newStatus, node.EventstoreStatus)
 
-		if node.OsNeedsRestart == 1 && newStatus != NodeStatusFault {
-			newStatus = NodeStatusPending
+		if node.OsNeedsRestart == 1 && newStatus == NodeStatusOk {
+			newStatus = NodeStatusRestart
 		}
 	}
 

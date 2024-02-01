@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -56,10 +57,117 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 		LicenseStatus:  licensing.GetStatus(),
 		Parameters:     &h.server.Config.ClientParams,
 		ElasticVersion: os.Getenv("ELASTIC_VERSION"),
-		WazuhVersion:   os.Getenv("WAZUH_VERSION"),
 		UserId:         user.Id,
 		Timezones:      h.timezones,
 		SrvToken:       srvToken,
+	}
+
+	{
+		detections := &info.Parameters.DetectionsParams
+
+		detections.ViewEnabled = true
+		detections.CreateLink = "/detection/create"
+		detections.EventFetchLimit = 500
+		detections.EventItemsPerPage = 50
+		detections.GroupFetchLimit = 50
+		detections.MostRecentlyUsedLimit = 5
+		detections.SafeStringMaxLength = 100
+		detections.QueryBaseFilter = "_index:\"*:so-detection\" AND so_kind:detection"
+		detections.EventFields = map[string][]string{
+			"default": {
+				"so_detection.title",
+				"so_detection.isEnabled",
+				"so_detection.engine",
+				"@timestamp",
+			},
+		}
+		detections.Queries = []*config.HuntingQuery{
+			{
+				Name:  "All",
+				Query: "_id:*",
+			},
+			{
+				Name:  "Local Rules",
+				Query: "* AND so_detection.isCommunity:false",
+			},
+			{
+				Name:  "Enabled",
+				Query: "so_detection.isEnabled:true",
+			},
+			{
+				Name:  "Disabled",
+				Query: "so_detection.isEnabled:false",
+			},
+			{
+				Name:  "Suricata",
+				Query: "so_detection.engine:suricata",
+			},
+			{
+				Name:  "ElastAlert",
+				Query: "so_detection.engine:elastalert",
+			},
+			{
+				Name:  "Suricata Enabled",
+				Query: "so_detection.engine:suricata AND so_detection.isEnabled:true",
+			},
+			{
+				Name:  "Suricata Disabled",
+				Query: "so_detection.engine:suricata AND so_detection.isEnabled:false",
+			},
+			{
+				Name:  "ElastAlert Enabled",
+				Query: "so_detection.engine:elastalert AND so_detection.isEnabled:true",
+			},
+			{
+				Name:  "ElastAlert Disabled",
+				Query: "so_detection.engine:elastalert AND so_detection.isEnabled:false",
+			},
+		}
+	}
+
+	{
+		detection := &info.Parameters.DetectionParams
+
+		detection.Presets = map[string]config.PresetParameters{
+			"severity": {
+				CustomEnabled: false,
+				Labels:        []string{"unknown", "informational", "low", "medium", "high", "critical"},
+			},
+			"engine": {
+				CustomEnabled: false,
+				Labels:        []string{"suricata", "elastalert"},
+			},
+		}
+
+		detection.SeverityTranslations = map[string]string{
+			// informational and critical already map correctly
+			"minor": "low",
+			"major": "high",
+		}
+	}
+
+	{
+		playbooks := &info.Parameters.PlaybooksParams
+
+		playbooks.ViewEnabled = true
+		playbooks.CreateLink = "/playbook/create"
+		playbooks.EventFetchLimit = 500
+		playbooks.EventItemsPerPage = 50
+		playbooks.GroupFetchLimit = 50
+		playbooks.MostRecentlyUsedLimit = 5
+		playbooks.QueryBaseFilter = "_index:\"*:so-detection\" AND so_kind:playbook"
+		playbooks.SafeStringMaxLength = 100
+		playbooks.Queries = []*config.HuntingQuery{
+			{Query: "*"},
+		}
+		playbooks.EventFields = map[string][]string{
+			"default": {
+				"soc_timestamp",
+				"so_playbook.title",
+				"so_playbook.publicId",
+				"so_playbook.mechanism",
+			},
+		}
 	}
 
 	web.Respond(w, r, http.StatusOK, info)

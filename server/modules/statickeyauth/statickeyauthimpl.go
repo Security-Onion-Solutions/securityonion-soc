@@ -106,7 +106,7 @@ func (auth *StaticKeyAuthImpl) validateAuthorization(ctx context.Context, key st
 
 func (auth *StaticKeyAuthImpl) validateApiKey(key string) bool {
 	pieces := strings.Split(key, " ")
-	if pieces != nil && len(pieces) > 0 {
+	if len(pieces) > 0 {
 		key = pieces[len(pieces)-1]
 	}
 	return key == auth.apiKey

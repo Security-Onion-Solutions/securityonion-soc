@@ -8,6 +8,7 @@ const NodeStatusUnknown = "unknown";
 const NodeStatusFault = "fault";
 const NodeStatusOk = "ok";
 const NodeStatusPending = "pending";
+const NodeStatusRestart = "restart";
 
 routes.push({ path: '/grid', name: 'grid', component: {
   template: '#page-grid',
@@ -23,7 +24,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
       { text: this.$root.i18n.version, value: 'version', align: ' d-none d-lg-table-cell' },
       { text: this.$root.i18n.model, value: 'model', align: ' d-none d-lg-table-cell' },
       { text: this.$root.i18n.eps, value: 'consumptionEps', align: ' d-none d-lg-table-cell' },
-      { text: this.$root.i18n.memUsageAbbr, value: 'memUsedPct', align: ' d-none d-xl-table-cell' },
+      { text: this.$root.i18n.memUsageAbbr, value: 'memoryUsedPct', align: ' d-none d-xl-table-cell' },
       { text: this.$root.i18n.diskUsageRootAbbr, value: 'diskUsedRootPct', align: ' d-none d-xl-table-cell' },
       { text: this.$root.i18n.diskUsageNsmAbbr, value: 'diskUsedNsmPct', align: ' d-none d-xl-table-cell' },
       { text: this.$root.i18n.cpuUsageAbbr, value: 'cpuUsedPct', align: ' d-none d-xl-table-cell' },
@@ -329,23 +330,31 @@ routes.push({ path: '/grid', name: 'grid', component: {
       }
       this.$root.stopLoading();
     },
-    hasQueuestore(item) {
+    hasContainer(item, container) {
       return item && item.containers && item.containers.find(function(x) {
-        return x.Name == 'so-redis';
+        return x.Name == container;
       }) != null;
     },
+    hasQueuestore(item) {
+      return this.hasContainer(item, 'so-redis');
+    },
     hasEventstore(item) {
-      return item && item.containers && item.containers.find(function(x) {
-        return x.Name == 'so-elasticsearch';
-      }) != null;
+      return this.hasContainer(item, 'so-elasticsearch');
     },
     hasEventstoreHealth(item) {
       return ['so-manager', 'so-managersearch', 'so-eval', 'so-standalone', 'so-heavynode', 'so-import'].indexOf(item.role) != -1;
     },
     hasMetricstore(item) {
-      return item && item.containers && item.containers.find(function(x) {
-        return x.Name == 'so-influxdb';
-      }) != null;
+      return this.hasContainer(item, 'so-influxdb');
+    },
+    hasSteno(item) {
+      return this.hasContainer(item, 'so-steno');
+    },
+    hasSuri(item) {
+      return this.hasContainer(item, 'so-suricata');
+    },
+    hasZeek(item) {
+      return this.hasContainer(item, 'so-zeek');
     },
     formatNode(node) {
       node['keywords'] = this.$root.localizeMessage(node["role"] + '-keywords');
@@ -371,6 +380,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
         case NodeStatusFault: color = nonCritical ? "warning" : "error"; break;
         case NodeStatusOk: color = "success"; break;
         case NodeStatusPending: color = "warning"; break;
+        case NodeStatusRestart: color = "warning"; break;
       }
       return color;
     },
@@ -380,6 +390,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
         case NodeStatusFault: icon = "fa-triangle-exclamation"; break;
         case NodeStatusOk: icon = "fa-circle-check"; break;
         case NodeStatusPending: icon = "fa-circle-exclamation"; break;
+        case NodeStatusRestart: icon = "fa-circle-info"; break;
       }
       return icon;
     },
