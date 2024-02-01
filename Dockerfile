@@ -23,6 +23,7 @@ RUN npm install jest jest-environment-jsdom --global
 RUN ./build.sh "$VERSION"
 
 RUN pip3 install sigma-cli pysigma-backend-elasticsearch pysigma-pipeline-windows yara-python --break-system-packages
+RUN sed -i 's/#!\/usr\/bin\/python3/#!\/usr\/bin\/env python/g' /usr/bin/sigma
 
 FROM ghcr.io/security-onion-solutions/python:3-slim
 
@@ -48,7 +49,7 @@ COPY --from=builder /build/LICENSE .
 COPY --from=builder /build/README.md .
 COPY --from=builder /build/sensoroni.json .
 COPY --from=builder /build/gitdocs/_build/html ./html/docs
-COPY --from=builder /usr/lib/python3.11/site-packages /usr/lib/python3.11/site-packages
+COPY --from=builder /usr/lib/python3.11/site-packages /usr/local/lib/python3.9/site-packages
 COPY --from=builder /usr/bin/sigma /usr/bin/sigma
 RUN find html/js -name "*test*.js" -delete
 RUN chmod u+x scripts/*
