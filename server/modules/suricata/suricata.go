@@ -277,7 +277,6 @@ func (s *SuricataEngine) parseRules(content string) ([]*model.Detection, error) 
 			Title:       title,
 			Severity:    severity,
 			Content:     line,
-			IsEnabled:   true, // is this true?
 			IsCommunity: true,
 			Engine:      model.EngineNameSuricata,
 		})
