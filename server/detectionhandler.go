@@ -42,6 +42,8 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Post("/", h.postDetection)
 		r.Post("/{id}/duplicate", h.duplicateDetection)
 
+		r.Get("/{id}/history", h.getDetectionHistory)
+
 		r.Put("/", h.putDetection)
 
 		r.Delete("/{id}", h.deleteDetection)
@@ -113,6 +115,23 @@ func (h *DetectionHandler) postDetection(w http.ResponseWriter, r *http.Request)
 	}
 
 	web.Respond(w, r, http.StatusOK, detect)
+}
+
+func (h *DetectionHandler) getDetectionHistory(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		id = r.URL.Query().Get("id")
+	}
+
+	obj, err := h.server.Detectionstore.GetDetectionHistory(ctx, id)
+	if err != nil {
+		web.Respond(w, r, http.StatusNotFound, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, obj)
 }
 
 func (h *DetectionHandler) duplicateDetection(w http.ResponseWriter, r *http.Request) {

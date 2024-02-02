@@ -457,6 +457,13 @@ func (store *ElasticDetectionstore) GetAllCommunitySIDs(ctx context.Context, eng
 	return sids, nil
 }
 
+func (store *ElasticDetectionstore) GetDetectionHistory(ctx context.Context, detectID string) ([]interface{}, error) {
+	query := fmt.Sprintf(`_index:"%s" AND %s%s:"%s" | sortby @timestamp^`, store.auditIndex, store.schemaPrefix, AUDIT_DOC_ID, detectID)
+	history, err := store.Query(ctx, query, store.maxAssociations)
+
+	return history, err
+}
+
 func (store *ElasticDetectionstore) audit(ctx context.Context, document map[string]interface{}, id string) error {
 	var err error
 
