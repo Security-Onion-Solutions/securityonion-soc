@@ -1376,9 +1376,173 @@
                 </div>
               </v-tab-item>
               <v-tab-item value="history">
-                <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
-                  Coming Soon!
-                </div>
+                <v-row>
+                  <v-col>
+                    <v-toolbar class="elevation-0" fixed>
+                      <v-btn :title="i18n.refreshDetectionHistoryHelp" color="secondary" @click.stop="loadHistory()" id="refresh-history-button">
+                        <v-icon>fa-sync</v-icon>
+                      </v-btn>
+                    </v-toolbar>
+                  </v-col>
+                </v-row>
+                <!-- <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;"> -->
+                  <v-text-field v-model="historyTableOpts.search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
+                  <v-data-table ref="historyTable" :sort-by.sync="historyTableOpts.sortBy" :sort-desc.sync="historyTableOpts.sortDesc" :items-per-page.sync="historyTableOpts.itemsPerPage"
+                    :search="historyTableOpts.search" :footer-props="historyTableOpts.footerProps" must-sort :headers="historyTableOpts.headers"
+                    :items="history" item-key="id" :loading="historyTableOpts.loading" :expanded="historyTableOpts.expanded" class="history-table">
+                    <template v-slot:item="props">
+                      <tr>
+                        <td class="associated actions">
+                          <v-btn :id="`history-${props.index}-expand`" icon small @click="expandRow(props.item)">
+                            <v-icon v-if="isExpanded(props.item)" :alt="i18n.expand" :title="i18n.expandHelp">fa-angle-down</v-icon>
+                            <v-icon v-if="!isExpanded(props.item)" :alt="i18n.expand" :title="i18n.expandHelp">fa-angle-right</v-icon>
+                          </v-btn>
+                        </td>
+                        <td class="associated">
+                          <v-avatar color="primary" class="mr-2 white--text" size="28">
+                            <div class="font-weight-bold" :title="props.item.owner">
+                              {{ $root.getAvatar(props.item.owner) }}
+                            </div>
+                          </v-avatar>
+                          {{ props.item.owner }}
+                        </td>
+                        <td class="associated">{{ props.item.updateTime | formatDateTime }}</td>
+                        <td class="associated">
+                          <v-icon>fa-magnifying-glass</v-icon>
+                          <span class="rounded ml-2">{{ props.item.kind }}</span>
+                        </td>
+                        <td class="associated">
+                          <v-icon v-if="props.item.operation.toLowerCase() == i18n.create.toLowerCase()">fa-plus</v-icon>
+                          <v-icon v-if="props.item.operation.toLowerCase() == i18n.delete.toLowerCase()">fa-circle-xmark</v-icon>
+                          <v-icon v-if="props.item.operation.toLowerCase() == i18n.update.toLowerCase()">fa-pencil-alt</v-icon>
+                          <span class="rounded ml-2">{{ props.item.operation }}</span>
+                        </td>
+                      </tr>
+                    </template>
+                    <template v-slot:expanded-item="props">
+                      <tr>
+                        <td colspan="5" class="case">
+                          <div class="mt-2">
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.id }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.id }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.kind }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.kind }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.operation }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.operation }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.dateCreated }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.createTime | formatDateTime }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.dateModified }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.updateTime | formatDateTime }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.title }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.title }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.description }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.description }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.author }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.author }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.enabled }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.isEnabled ? 'True' : 'False' }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.community }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.isCommunity ? 'True' : 'False' }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.reporting }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.isReporting ? 'True' : 'False' }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.severity }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.severity }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.engine }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.engine }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.content }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.content }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.note }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.note }}</span></v-col>
+                            </v-row>
+                          </div>
+
+                          <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
+                            <v-spacer/>
+                            <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text">
+                              <div class="case avatar-font" :title="props.item.owner">
+                                {{ $root.getAvatar(props.item.owner) }}
+                              </div>
+                            </v-avatar>
+                            <div class="mr-1">
+                              {{ props.item.owner }}
+                            </div>
+                            <div class="mr-1 d-none d-sm-block">
+                              &bull;
+                            </div>
+                            <div>
+                              {{ props.item.updateTime | formatDateTime }}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    </template>
+                    <template v-slot:no-results>
+                      <v-alert :value="true" color="info" icon="fa-info">
+                        {{ i18n.noSearchResults }}
+                      </v-alert>
+                    </template>
+                  </v-data-table>
+                  <div class="text-xs-center pt-2 d-none">
+                      <v-btn v-text="i18n.loadMore" @click="loadHistory()"></v-btn>
+                  </div>
+                <!-- </div> -->
               </v-tab-item>
             </v-tabs>
           </div>
@@ -3096,7 +3260,7 @@
                   <v-row>
                     <v-col>
                       <v-toolbar class="elevation-0" fixed>
-                        <v-btn :title="i18n.refreshHistoryHelp" color="secondary" @click.stop="reloadAssociation('history', true)" id="refresh-history-button">
+                        <v-btn :title="i18n.refreshCaseHistoryHelp" color="secondary" @click.stop="reloadAssociation('history', true)" id="refresh-history-button">
                           <v-icon>fa-sync</v-icon>
                         </v-btn>
                       </v-toolbar>
