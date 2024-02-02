@@ -20,6 +20,7 @@ type Detectionstore interface {
 	DeleteDetection(ctx context.Context, detectID string) (*model.Detection, error)
 	GetAllCommunitySIDs(ctx context.Context, engine *model.EngineName) (map[string]*model.Detection, error) // map[detection.PublicId]detection
 	Query(ctx context.Context, query string, max int) ([]interface{}, error)
+	GetDetectionHistory(ctx context.Context, detectID string) ([]interface{}, error)
 }
 
 //go:generate mockgen -destination mock/mock_detectionstore.go -package mock . Detectionstore

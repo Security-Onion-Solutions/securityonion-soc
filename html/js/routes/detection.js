@@ -72,6 +72,24 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			{ value: 'limit', text: 'Limit' },
 			{ value: 'both', text: 'Both' }
 		],
+		historyTableOpts: {
+			sortBy: 'updateTime',
+			sortDesc: false,
+			search: '',
+			headers: [
+				{ text: this.$root.i18n.actions, width: '10.0em' },
+				{ text: this.$root.i18n.username, value: 'owner' },
+				{ text: this.$root.i18n.time, value: 'updateTime' },
+				{ text: this.$root.i18n.kind, value: 'kind' },
+				{ text: this.$root.i18n.operation, value: 'operation' },
+			],
+			itemsPerPage: 10,
+			footerProps: { 'items-per-page-options': [10,50,250,1000] },
+			count: 500,
+			expanded: [],
+			loading: false,
+		},
+		history: [],
 	}},
 	created() {
 		this.onDetectionChange = debounce(this.onDetectionChange, 300);
@@ -126,6 +144,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				const response = await this.$root.papi.get('detection/' + encodeURIComponent(this.$route.params.id));
 				this.detect = response.data;
 				this.tagOverrides();
+				this.loadAssociations();
 			} catch (error) {
 				if (error.response != undefined && error.response.status == 404) {
 					this.$root.showError(this.i18n.notFound);
@@ -135,6 +154,17 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			}
 
 			this.$root.stopLoading();
+		},
+		loadAssociations() {
+			this.loadHistory();
+		},
+		async loadHistory() {
+			const route = this;
+			const id = route.$route.params.id;
+			const response = await this.$root.papi.get(`detection/${id}/history`);
+			if (response && response.data) {
+				this.history = response.data;
+			}
 		},
 		getDefaultPreset(preset) {
 			if (this.presets) {
@@ -632,6 +662,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 						}
 					}
 				}
+			} else if (this.detect.engine === 'strelka') {
+				return false;
 			}
 
 			return true;
@@ -641,10 +673,29 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				for (let i = 0; i < this.detect.overrides.length; i++) {
 					this.detect.overrides[i].index = i;
 				}
+			} else {
+				this.detect.overrides = [];
 			}
 		},
-		print(x) {
-			console.log(x);
+		isExpanded(row) {
+			const expanded = this.historyTableOpts.expanded;
+			for (var i = 0; i < expanded.length; i++) {
+				if (expanded[i].id == row.id) {
+					return true;
+				}
+			}
+			return false;
 		},
+		async expandRow(row) {
+			const expanded = this.historyTableOpts.expanded;
+			for (var i = 0; i < expanded.length; i++) {
+				if (expanded[i].id == row.id) {
+					expanded.splice(i, 1);
+					return;
+				}
+			}
+
+			expanded.push(row);
+		}
 	}
 }});
