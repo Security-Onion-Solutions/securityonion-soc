@@ -48,6 +48,7 @@ func (md *Metadata) IsEmpty() bool {
 
 func (md *Metadata) Set(key, value string) {
 	key = strings.ToLower(key)
+
 	switch key {
 	case "id":
 		md.ID = util.Ptr(value)

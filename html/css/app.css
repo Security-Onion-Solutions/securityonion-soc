@@ -533,3 +533,64 @@ td {
 .detection-hunt-btn {
   margin-top: 20px;
 }
+
+.summary-backdrop {
+  background-color: rgb(53, 53, 53);
+  border-radius: 4px;
+}
+
+.summary-backdrop > div {
+  background-color: #2a2a2a;
+  border-radius: 4px;
+  padding: 16px;
+}
+
+.header {
+  font-size: 1.3em;
+  font-weight: bold;
+}
+
+.header:not(:first-child) {
+  margin-top: 16px;
+}
+
+.extracted-content {
+  background-color: #404040;
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.extracted-content > pre {
+  text-wrap: wrap;
+}
+
+.detect-reference {
+  font-size: small;
+  display: table;
+  width: 100%;
+}
+
+.detect-reference > div {
+  display: table-row;
+}
+
+.detect-reference > div > div {
+  display: table-cell;
+  padding: 0 4px;
+}
+
+.detect-reference .key {
+  font-weight: bold;
+  text-align: right;
+}
+
+.ops-header {
+  font-weight: bold;
+  margin-top: 16px;
+}
+
+.ops-value > .v-input--selection-controls {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  height: 24px !important;
+}

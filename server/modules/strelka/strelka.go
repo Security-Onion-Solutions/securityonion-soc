@@ -264,16 +264,16 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 					comRule, exists := communityDetections[det.PublicID]
 					if exists {
 						det.Id = comRule.Id
-						det.Note = comRule.Note
 						det.IsEnabled = comRule.IsEnabled
 					}
 
 					if rule.Meta.Author != nil {
-						det.Author = *rule.Meta.Author
+						det.Author = util.Unquote(*rule.Meta.Author)
+
 					}
 
 					if rule.Meta.Description != nil {
-						det.Description = *rule.Meta.Description
+						det.Description = util.Unquote(*rule.Meta.Description)
 					}
 
 					if exists {
