@@ -296,6 +296,8 @@ func TestValidate(t *testing.T) {
 }
 
 func TestParse(t *testing.T) {
+	ruleset := util.Ptr("ruleset")
+
 	table := []struct {
 		Name               string
 		Lines              []string
@@ -319,6 +321,8 @@ func TestParse(t *testing.T) {
 					Content:     SimpleRule,
 					IsCommunity: true,
 					Engine:      model.EngineNameSuricata,
+					Language:    model.SigLangSuricata,
+					Ruleset:     ruleset,
 				},
 				{
 					PublicID:    "20000",
@@ -327,6 +331,8 @@ func TestParse(t *testing.T) {
 					Content:     `alert http any any <> any any (metadata:signature_severity Informational; sid:"20000"; msg:"a \"tricky\"\;\\ msg";)`,
 					IsCommunity: true,
 					Engine:      model.EngineNameSuricata,
+					Language:    model.SigLangSuricata,
+					Ruleset:     ruleset,
 				},
 			},
 		},
@@ -341,7 +347,7 @@ func TestParse(t *testing.T) {
 
 			data := strings.Join(test.Lines, "\n")
 
-			detections, err := mod.parseRules(data)
+			detections, err := mod.parseRules(data, *ruleset)
 			if test.ExpectedError == nil {
 				assert.NoError(t, err)
 				assert.Equal(t, test.ExpectedDetections, detections)

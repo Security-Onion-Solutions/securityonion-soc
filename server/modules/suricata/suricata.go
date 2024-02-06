@@ -116,7 +116,15 @@ func (s *SuricataEngine) watchCommunityRules() {
 			continue
 		}
 
-		commDetections, err := s.parseRules(rules)
+		allSettings, err := s.srv.Configstore.GetSettings(ctx)
+		if err != nil {
+			log.WithError(err).Error("unable to get settings")
+			continue
+		}
+
+		ruleset := settingByID(allSettings, "idstools.config.ruleset")
+
+		commDetections, err := s.parseRules(rules, ruleset.Value)
 		if err != nil {
 			log.WithError(err).Error("unable to parse community rules")
 			continue
@@ -201,7 +209,7 @@ func (s *SuricataEngine) ValidateRule(rule string) (string, error) {
 	return parsed.String(), nil
 }
 
-func (s *SuricataEngine) parseRules(content string) ([]*model.Detection, error) {
+func (s *SuricataEngine) parseRules(content string, ruleset string) ([]*model.Detection, error) {
 	// expecting one rule per line
 	lines := strings.Split(content, "\n")
 	dets := []*model.Detection{}
@@ -279,6 +287,8 @@ func (s *SuricataEngine) parseRules(content string) ([]*model.Detection, error) 
 			Content:     line,
 			IsCommunity: true,
 			Engine:      model.EngineNameSuricata,
+			Language:    model.SigLangSuricata,
+			Ruleset:     util.Ptr(ruleset),
 		})
 	}
 

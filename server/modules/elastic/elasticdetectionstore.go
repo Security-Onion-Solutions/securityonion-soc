@@ -85,7 +85,7 @@ func (store *ElasticDetectionstore) validateDetection(detect *model.Detection) e
 	var err error
 
 	if err == nil && detect.Id != "" {
-		err = store.validateId(detect.Id, "onionId")
+		err = store.validateId(detect.Id, "Id")
 	}
 
 	if err == nil && detect.PublicID != "" {
@@ -112,14 +112,30 @@ func (store *ElasticDetectionstore) validateDetection(detect *model.Detection) e
 		err = store.validateString(detect.Content, LONG_STRING_MAX, "content")
 	}
 
-	if err == nil && detect.Note != "" {
-		err = store.validateString(detect.Note, LONG_STRING_MAX, "note")
+	if err == nil && detect.IsCommunity && detect.Ruleset == nil {
+		err = store.validateStringRequired(*detect.Ruleset, 0, SHORT_STRING_MAX, "ruleset")
+	}
+
+	if err == nil && len(detect.Tags) > 0 {
+		for _, tag := range detect.Tags {
+			err = store.validateString(tag, SHORT_STRING_MAX, "tag")
+			if err != nil {
+				break
+			}
+		}
 	}
 
 	if err == nil {
 		_, okEngine := model.EnginesByName[detect.Engine]
 		if !okEngine {
 			err = errors.New("invalid engine")
+		}
+	}
+
+	if err == nil {
+		_, okLang := model.SupportedLanguages[model.SigLanguage(detect.Language)]
+		if !okLang {
+			err = errors.New("invalid language")
 		}
 	}
 
