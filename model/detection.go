@@ -24,11 +24,9 @@ const (
 	ScanTypePacketsAndFiles ScanType = "files,packets"
 	ScanTypeElastic         ScanType = "elastic"
 
-	SigLangElastic  SigLanguage = "elastic"  // yaml
 	SigLangSigma    SigLanguage = "sigma"    // yaml
 	SigLangSuricata SigLanguage = "suricata" // action, header, options
-	SigLangYara     SigLanguage = "yara"
-	SigLangZeek     SigLanguage = "zeek"
+	SigLangYara     SigLanguage = "yara"     // meta, strings, condition
 
 	SeverityUnknown       Severity = "unknown"
 	SeverityInformational Severity = "informational"
@@ -41,7 +39,7 @@ const (
 	IDTypeSID  IDType = "sid"
 
 	EngineNameSuricata   EngineName = "suricata"
-	EngineNameStrelka       EngineName = "strelka"
+	EngineNameStrelka    EngineName = "strelka"
 	EngineNameElastAlert EngineName = "elastalert"
 
 	OverrideTypeSuppress     OverrideType = "suppress"
@@ -68,8 +66,14 @@ var (
 			Name:        string(EngineNameElastAlert),
 			IDType:      IDTypeUUID,
 			ScanType:    ScanTypeElastic,
-			SigLanguage: SigLangElastic,
+			SigLanguage: SigLangSigma,
 		},
+	}
+
+	SupportedLanguages = map[SigLanguage]struct{}{
+		SigLangSigma:    {},
+		SigLangSuricata: {},
+		SigLangYara:     {},
 	}
 
 	ErrUnsupportedEngine = errors.New("unsupported engine")
@@ -93,9 +97,11 @@ type Detection struct {
 	IsEnabled   bool        `json:"isEnabled"`
 	IsReporting bool        `json:"isReporting"`
 	IsCommunity bool        `json:"isCommunity"`
-	Note        string      `json:"note"`
 	Engine      EngineName  `json:"engine"`
+	Language    SigLanguage `json:"language"`
 	Overrides   []*Override `json:"overrides"` // Tuning
+	Tags        []string    `json:"tags"`
+	Ruleset     *string     `json:"ruleset"`
 }
 
 // Note: JSON tags are used when storing the object in ElasticSearch,

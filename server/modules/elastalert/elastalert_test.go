@@ -300,6 +300,8 @@ func TestSigmaToElastAlertError(t *testing.T) {
 }
 
 func TestParseRules(t *testing.T) {
+	t.Parallel()
+
 	data := `title: Always Alert
 id: 00000000-0000-0000-0000-00000000
 status: experimental
@@ -347,6 +349,8 @@ level: high
 		Content:     data,
 		IsCommunity: true,
 		Engine:      model.EngineNameElastAlert,
+		Language:    model.SigLangSigma,
+		Ruleset:     util.Ptr("all_rules"),
 	}
 
 	dets, errMap := engine.parseRules(pkgZips)

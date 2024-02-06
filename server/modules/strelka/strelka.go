@@ -252,6 +252,8 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 						sev = model.SeverityCritical
 					}
 
+					ruleset := filepath.Base(repo)
+
 					det := &model.Detection{
 						Engine:      model.EngineNameStrelka,
 						PublicID:    rule.GetID(),
@@ -259,6 +261,8 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 						Severity:    sev,
 						Content:     rule.String(),
 						IsCommunity: true,
+						Language:    model.SigLangYara,
+						Ruleset:     util.Ptr(ruleset),
 					}
 
 					comRule, exists := communityDetections[det.PublicID]
@@ -269,7 +273,6 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 					if rule.Meta.Author != nil {
 						det.Author = util.Unquote(*rule.Meta.Author)
-
 					}
 
 					if rule.Meta.Description != nil {
