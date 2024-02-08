@@ -168,11 +168,16 @@ func (suri *SuriQuery) getPcapCreateTime(filepath string) (time.Time, error) {
 func (suri *SuriQuery) findFilesInTimeRange(start time.Time, stop time.Time) []string {
 	eligibleFiles := make([]string, 0, 0)
 	err := filepath.Walk(suri.pcapInputPath, func(filepath string, fileinfo os.FileInfo, err error) error {
+		if fileinfo.IsDir() {
+			return nil
+		}
+
 		createTime, err := suri.getPcapCreateTime(filepath)
 		if err != nil {
 			log.WithField("pcapPath", filepath).WithError(err).Warn("PCAP file does not conform to expected format")
 			return nil
 		}
+
 		modTime := fileinfo.ModTime()
 		log.WithFields(log.Fields{
 			"pcapPath":   filepath,
