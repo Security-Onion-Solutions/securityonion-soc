@@ -7,7 +7,9 @@
 package packet
 
 import (
+	"bytes"
 	"encoding/base64"
+	"io"
 	"os"
 
 	"github.com/apex/log"
@@ -40,6 +42,94 @@ func ParsePcap(filename string, offset int, count int, unwrap bool) ([]*model.Pa
 		return len(packets) < count
 	})
 	return packets, nil
+}
+
+func ToStream(packets []gopacket.Packet) (io.ReadCloser, error) {
+	var snaplen uint32 = 65536
+	var full bytes.Buffer
+
+	writer := pcapgo.NewWriter(&full)
+	writer.WriteFileHeader(snaplen, layers.LinkTypeEthernet)
+
+	opts := gopacket.SerializeOptions{}
+
+	buf := gopacket.NewSerializeBuffer()
+	for _, packet := range packets {
+		buf.Clear()
+		err := gopacket.SerializePacket(buf, opts, packet)
+		if err != nil {
+			return nil, err
+		}
+		writer.WritePacket(packet.Metadata().CaptureInfo, buf.Bytes())
+	}
+	return io.NopCloser(bytes.NewReader(full.Bytes())), nil
+}
+
+func filterPacket(filter *model.Filter, packet gopacket.Packet) bool {
+	var srcIp, dstIp string
+	var srcPort, dstPort int
+
+	timestamp := packet.Metadata().Timestamp
+	layer := packet.Layer(layers.LayerTypeIPv6)
+	if layer != nil {
+		layer := layer.(*layers.IPv6)
+		srcIp = layer.SrcIP.String()
+		dstIp = layer.DstIP.String()
+	} else {
+		layer = packet.Layer(layers.LayerTypeIPv4)
+		if layer != nil {
+			layer := layer.(*layers.IPv4)
+			srcIp = layer.SrcIP.String()
+			dstIp = layer.DstIP.String()
+		}
+	}
+
+	layer = packet.Layer(layers.LayerTypeTCP)
+	if layer != nil {
+		layer := layer.(*layers.TCP)
+		srcPort = int(layer.SrcPort)
+		dstPort = int(layer.DstPort)
+	}
+
+	layer = packet.Layer(layers.LayerTypeUDP)
+	if layer != nil {
+		layer := layer.(*layers.UDP)
+		srcPort = int(layer.SrcPort)
+		dstPort = int(layer.DstPort)
+	}
+
+	include := (filter.BeginTime.IsZero() || timestamp.After(filter.BeginTime)) &&
+		(filter.EndTime.IsZero() || timestamp.Before(filter.EndTime)) &&
+		(filter.SrcIp == "" || srcIp == filter.SrcIp) &&
+		(filter.SrcPort == 0 || srcPort == filter.SrcPort) &&
+		(filter.DstIp == "" || dstIp == filter.DstIp) &&
+		(filter.DstPort == 0 || dstPort == filter.DstPort)
+
+	return include
+}
+
+func ParseRawPcap(filename string, count int, filter *model.Filter) ([]gopacket.Packet, error) {
+	packets := make([]gopacket.Packet, 0)
+	err := parsePcapFile(filename, func(index int, pcapPacket gopacket.Packet) bool {
+		if filterPacket(filter, pcapPacket) {
+			packets = append(packets, pcapPacket)
+		} else {
+			pcapPacket = unwrapVxlanPacket(pcapPacket, nil)
+			if filterPacket(filter, pcapPacket) {
+				packets = append(packets, pcapPacket)
+			}
+		}
+
+		return len(packets) < count
+	})
+
+	if len(packets) == count {
+		log.WithFields(log.Fields{
+			"packetCount": len(packets),
+		}).Warn("Exceeded packet capture limit for job; returned PCAP will be truncated")
+	}
+
+	return packets, err
 }
 
 func UnwrapPcap(filename string, unwrappedFilename string) bool {
