@@ -7,7 +7,6 @@
 package suriquery
 
 import (
-	"strconv"
 	"testing"
 	"time"
 
@@ -15,52 +14,82 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func initTest() *SuriQuery {
+	cfg := make(map[string]interface{})
+	cfg["pcapInputPath"] = "test_resources"
+	sq := NewSuriQuery(nil)
+	sq.Init(cfg)
+	return sq
+}
 func TestInitSuriQuery(tester *testing.T) {
 	cfg := make(map[string]interface{})
 	sq := NewSuriQuery(nil)
 	err := sq.Init(cfg)
 	assert.Error(tester, err)
-	assert.Equal(tester, DEFAULT_EXECUTABLE_PATH, sq.executablePath)
-	assert.Equal(tester, DEFAULT_PCAP_OUTPUT_PATH, sq.pcapOutputPath)
 	assert.Equal(tester, DEFAULT_PCAP_INPUT_PATH, sq.pcapInputPath)
-	assert.Equal(tester, DEFAULT_TIMEOUT_MS, sq.timeoutMs)
 	assert.Equal(tester, DEFAULT_EPOCH_REFRESH_MS, sq.epochRefreshMs)
 	assert.Equal(tester, DEFAULT_DATA_LAG_MS, sq.dataLagMs)
 }
 
 func TestDataLag(tester *testing.T) {
-	cfg := make(map[string]interface{})
-	sq := NewSuriQuery(nil)
-	sq.Init(cfg)
+	sq := initTest()
 	lagDate := sq.getDataLagDate()
 	assert.False(tester, lagDate.After(time.Now()), "expected data lag datetime to be before current datetime")
 }
 
-func TestCreateQuery(tester *testing.T) {
-	sq := NewSuriQuery(nil)
+func TestFindFilesExcludesMalformedNamesAndImpossibleStartTimes(tester *testing.T) {
+	sq := initTest()
 
-	job := model.NewJob()
-	expectedQuery := ""
-	query := sq.CreateQuery(job)
-	assert.Equal(tester, expectedQuery, query)
+	start, _ := time.Parse(time.RFC3339, "2024-02-05T00:00:00Z")
+	stop, _ := time.Parse(time.RFC3339, "2099-02-06T00:00:00Z")
+	files := sq.findFilesInTimeRange(start, stop)
+	assert.Len(tester, files, 1)
+	assert.Equal(tester, files[0], "test_resources/3/so-pcap.1575817346")
+}
 
-	job.Filter.SrcIp = "1.2.3.4"
-	query = sq.CreateQuery(job)
-	expectedQuery = expectedQuery + "host " + job.Filter.SrcIp
-	assert.Equal(tester, expectedQuery, query)
+func TestGetPcapCreateTime(tester *testing.T) {
+	sq := initTest()
 
-	job.Filter.DstIp = "1.2.1.2"
-	query = sq.CreateQuery(job)
-	expectedQuery = expectedQuery + " and host " + job.Filter.DstIp
-	assert.Equal(tester, expectedQuery, query)
+	_, err := sq.getPcapCreateTime("/some/path/nonconforming.file")
+	assert.ErrorContains(tester, err, "unsupported pcap file")
 
-	job.Filter.SrcPort = 123
-	query = sq.CreateQuery(job)
-	expectedQuery = expectedQuery + " and port " + strconv.Itoa(job.Filter.SrcPort)
-	assert.Equal(tester, expectedQuery, query)
+	_, err = sq.getPcapCreateTime("/some/path/so-pcap.file")
+	assert.ErrorContains(tester, err, "invalid syntax")
 
-	job.Filter.DstPort = 123
-	query = sq.CreateQuery(job)
-	expectedQuery = expectedQuery + " and port " + strconv.Itoa(job.Filter.DstPort)
-	assert.Equal(tester, expectedQuery, query)
+	expectedTime, _ := time.Parse(time.RFC3339, "2019-12-08T15:02:26Z")
+	var created time.Time
+	created, err = sq.getPcapCreateTime("/some/path/so-pcap.1575817346")
+	assert.Nil(tester, err)
+	assert.Equal(tester, expectedTime, created)
+}
+
+func TestGetDataEpoch(tester *testing.T) {
+	sq := initTest()
+
+	epoch := sq.GetDataEpoch()
+	expectedTime, _ := time.Parse(time.RFC3339, "2019-12-08T15:02:26Z")
+	assert.Equal(tester, expectedTime, epoch)
+}
+
+func TestStreamPacketsInPcaps(tester *testing.T) {
+	sq := initTest()
+
+	paths := []string{"test_resources/3/so-pcap.1575817346"}
+	filter := model.NewFilter()
+	startTime, _ := time.Parse(time.RFC3339, "2019-12-08T00:00:00Z")
+	filter.BeginTime = startTime
+	endTime, _ := time.Parse(time.RFC3339, "2019-12-08T23:59:59Z")
+	filter.EndTime = endTime
+	filter.SrcIp = "185.47.63.113"
+	filter.SrcPort = 19
+	filter.DstIp = "176.126.243.198"
+	filter.DstPort = 34515
+
+	reader, err := sq.streamPacketsInPcaps(paths, filter)
+	assert.Nil(tester, err)
+	pcap_length := 14122 // correlates to so-pcap test file
+	bytes := make([]byte, 32768)
+	count, err := reader.Read(bytes)
+	assert.Nil(tester, err)
+	assert.Equal(tester, pcap_length, count)
 }
