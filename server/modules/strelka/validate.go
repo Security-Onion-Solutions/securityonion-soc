@@ -71,7 +71,7 @@ func (md *Metadata) Set(key, value string) {
 }
 
 func (rule *YaraRule) GetID() string {
-	if rule.Meta.Rest["id"] != "" {
+	if rule.Meta.ID != nil {
 		return *rule.Meta.ID
 	}
 
