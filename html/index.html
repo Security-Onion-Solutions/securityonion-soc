@@ -1022,8 +1022,8 @@
                   <!-- Severity -->
                   <v-select id="detection-severity-create" v-model="detect.severity" :items="getPresets('severity')" persistent-hint :hint="i18n.detectionSeverity"/>
 
-                  <!-- Engine -->
-                  <v-select id="detection-engine-create" v-model="detect.engine" :items="getPresets('engine')" persistent-hint :hint="i18n.engine" :rules="[rules.required]" v-on:change="onDetectionChange"/>
+                  <!-- Language -->
+                  <v-select id="detection-language-create" v-model="detect.language" :items="getPresets('language')" persistent-hint :hint="i18n.language" :rules="[rules.required]" v-on:change="onDetectionChange"/>
 
                   <!-- Reporting -->
                   <v-checkbox id="detection-reporting-create" class="mt-5" v-model="detect.isReporting" :label="i18n.reporting"/>
@@ -1074,21 +1074,21 @@
               <v-tab-item value="summary">
                 <div class="col pt-5 summary-backdrop">
                   <div>
-                    <div class="header">Summary</div>
+                    <div class="header">{{i18n.summary}}</div>
                     <div v-if="detect.description">
                       {{detect.description}}
                     </div>
                     <div v-else>
                       {{detect.title}}
                     </div>
-                    <div class="header">References</div>
+                    <div class="header">{{i18n.references}}</div>
                     <div>
                       <div v-for="r in extractedReferences">
                         <a :href="r.value" v-if="r.type==='url'" target="_blank">{{r.value}}</a>
                         <span v-else>{{r.value}}</span>
                       </div>
                     </div>
-                    <div class="header">Signature</div>
+                    <div class="header">{{i18n.signature}}</div>
                     <div class="extracted-content">
                       <pre>{{extractedLogic}}</pre>
                     </div>
@@ -1567,45 +1567,27 @@
             <v-expansion-panels focusable multiple v-model="panel">
               <v-expansion-panel v-if="!isNew()">
                 <v-expansion-panel-header id="detection-related-playbooks">
-                  <h3>Operations</h3>
+                  <h3>{{ i18n.operations }}</h3>
                 </v-expansion-panel-header>
                 <v-expansion-panel-content>
                   <!-- <v-checkbox id="detection-enabled-edit" v-model="detect.isEnabled" @change="stopEdit(true)" :label="i18n.detectionEnabled"/> -->
                   <div class="ops-header">
-                    Enabled:
+                    {{ i18n.enabled }}:
                   </div>
                   <div class="ops-value">
                     <span @click="startEdit('detection-enabled', 'isEnabled')" v-if="!isEdit('detection-enabled')">
-                      {{detect.isEnabled ? 'True' : 'False'}}
+                      {{ detect.isEnabled ? 'True' : 'False' }}
                     </span>
                     <v-checkbox id="detection-enabled-edit" v-model="detect.isEnabled" v-else @change="stopEdit(true)" />
                   </div>
-                  <div class="ops-header">
-                    DetectionType:
-                  </div>
-                  <div class="ops-value">
-                    {{detect.engine}}
-                  </div>
-                  <div class="ops-header">
-                    Severity:
-                  </div>
-                  <div class="ops-value">
-                    {{detect.severity}}
-                  </div>
-                  <div class="ops-header" v-if="detect.isCommunity">
-                    Ruleset:
-                  </div>
-                  <div class="ops-value" v-if="detect.isCommunity">
-                    {{detect.ruleset}}
-                  </div>
                   <!-- <div class="ops-header">
-                    Related-Playbooks:
+                    Related Playbooks:
                   </div>
                   <div class="ops-value">
                     TODO
                   </div> -->
                   <div class="ops-header">
-                    Tags:
+                    {{ i18n.tags }}:
                   </div>
                   <div class="ops-value">
                     <div>
@@ -1617,17 +1599,34 @@
               </v-expansion-panel>
               <v-expansion-panel v-if="!isNew()">
                 <v-expansion-panel-header id="detection-related-playbooks">
-                  <h3>Details</h3>
+                  <h3>{{ i18n.details }}</h3>
                 </v-expansion-panel-header>
                 <v-expansion-panel-content>
-                  [detail stuff goes here]
+                  <div class="ops-header">
+                    {{ i18n.detectionType }}:
+                  </div>
+                  <div class="ops-value">
+                    {{ detect.engine }}
+                  </div>
+                  <div class="ops-header">
+                    {{ i18n.severity }}:
+                  </div>
+                  <div class="ops-value">
+                    {{ detect.severity }}
+                  </div>
+                  <div class="ops-header" v-if="detect.isCommunity">
+                    {{ i18n.ruleset }}:
+                  </div>
+                  <div class="ops-value" v-if="detect.isCommunity">
+                    {{ detect.ruleset }}
+                  </div>
                 </v-expansion-panel-content>
               </v-expansion-panel>
             </v-expansion-panels>
-            <div class="detect-reference">
+            <div class="detect-reference" v-if="!isNew()">
               <div>
                 <div class="key">
-                  Detection Id:
+                  {{i18n.detectionId}}:
                 </div>
                 <div class="value">
                   {{ detect.id }}
@@ -1635,7 +1634,7 @@
               </div>
               <div>
                 <div class="key">
-                  Author:
+                  {{ i18n.author }}:
                 </div>
                 <div class="value">
                   {{ detect.author }}
@@ -1643,7 +1642,7 @@
               </div>
               <div>
                 <div class="key">
-                  Created:
+                  {{ i18n.dateCreated }}:
                 </div>
                 <div class="value">
                   {{ detect.createTime | formatDateTime}}
@@ -1651,7 +1650,7 @@
               </div>
               <div>
                 <div class="key">
-                  Updated:
+                  {{ i18n.dateModified }}:
                 </div>
                 <div class="value">
                   {{ detect.updateTime | formatDateTime }}
