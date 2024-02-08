@@ -125,7 +125,7 @@ func ParseRawPcap(filename string, count int, filter *model.Filter) ([]gopacket.
 
 	if len(packets) == count {
 		log.WithFields(log.Fields{
-			"count": len(packets),
+			"packetCount": len(packets),
 		}).Warn("Exceeded packet capture limit for job; returned PCAP will be truncated")
 	}
 

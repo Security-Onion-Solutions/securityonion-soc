@@ -89,8 +89,8 @@ func (suri *SuriQuery) ProcessJob(job *model.Job, reader io.ReadCloser) (io.Read
 	var err error
 	if job.GetKind() != "pcap" {
 		log.WithFields(log.Fields{
-			"jobId": job.Id,
-			"kind":  job.GetKind(),
+			"jobId":   job.Id,
+			"jobKind": job.GetKind(),
 		}).Debug("Skipping suri processor due to unsupported job")
 		return reader, nil
 	}
@@ -132,7 +132,7 @@ func (suri *SuriQuery) streamPacketsInPcaps(paths []string, filter *model.Filter
 	for _, path := range paths {
 		packets, perr := packet.ParseRawPcap(path, suri.pcapMaxCount, filter)
 		if perr != nil {
-			log.WithError(perr).WithField("path", path).Error("Failed to parse PCAP file")
+			log.WithError(perr).WithField("pcapPath", path).Error("Failed to parse PCAP file")
 		}
 		if packets != nil && len(packets) > 0 {
 			allPackets = append(allPackets, packets...)
@@ -143,7 +143,7 @@ func (suri *SuriQuery) streamPacketsInPcaps(paths []string, filter *model.Filter
 		return a.Metadata().Timestamp.Compare(b.Metadata().Timestamp)
 	})
 
-	log.WithField("matched", len(allPackets)).Debug("Finished filtering eligible packets")
+	log.WithField("matchedCount", len(allPackets)).Debug("Finished filtering eligible packets")
 
 	return packet.ToStream(allPackets)
 }
@@ -170,7 +170,7 @@ func (suri *SuriQuery) findFilesInTimeRange(start time.Time, stop time.Time) []s
 	err := filepath.Walk(suri.pcapInputPath, func(filepath string, fileinfo os.FileInfo, err error) error {
 		createTime, err := suri.getPcapCreateTime(filepath)
 		if err != nil {
-			log.WithField("path", filepath).WithError(err).Warn("PCAP file does not conform to expected format")
+			log.WithField("pcapPath", filepath).WithError(err).Warn("PCAP file does not conform to expected format")
 			return nil
 		}
 		modTime := fileinfo.ModTime()
@@ -203,7 +203,7 @@ func (suri *SuriQuery) GetDataEpoch() time.Time {
 		suri.epochTimeTmp = now
 		err := filepath.Walk(suri.pcapInputPath, suri.updateEpochTimeTmp)
 		if err != nil {
-			log.WithError(err).WithField("pcapInputPath", suri.pcapInputPath)
+			log.WithError(err).WithField("pcapPath", suri.pcapInputPath)
 		} else {
 			suri.epochTime = suri.epochTimeTmp
 		}
@@ -214,7 +214,7 @@ func (suri *SuriQuery) GetDataEpoch() time.Time {
 
 func (suri *SuriQuery) updateEpochTimeTmp(path string, info os.FileInfo, err error) error {
 	if err != nil {
-		log.WithError(err).WithField("path", path).Error("Unable to access path while updating epoch")
+		log.WithError(err).WithField("pcapPath", path).Error("Unable to access path while updating epoch")
 		return err
 	}
 	if !info.IsDir() && info.Size() > 0 {
