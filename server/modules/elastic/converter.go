@@ -697,11 +697,22 @@ func convertElasticEventToDetection(event *model.EventRecord, schemaPrefix strin
 			if value, ok := event.Payload[schemaPrefix+"detection.isCommunity"]; ok {
 				obj.IsCommunity = value.(bool)
 			}
-			if value, ok := event.Payload[schemaPrefix+"detection.note"]; ok {
-				obj.Note = value.(string)
+			if value, ok := event.Payload[schemaPrefix+"detection.ruleset"]; ok {
+				obj.Ruleset = util.Ptr(value.(string))
 			}
 			if value, ok := event.Payload[schemaPrefix+"detection.engine"]; ok {
 				obj.Engine = model.EngineName(value.(string))
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.language"]; ok {
+				obj.Language = model.SigLanguage(value.(string))
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.tags"]; ok && value != nil {
+				arr := value.([]interface{})
+				obj.Tags = make([]string, 0, len(arr))
+
+				for _, tag := range arr {
+					obj.Tags = append(obj.Tags, tag.(string))
+				}
 			}
 			if value, ok := event.Payload[schemaPrefix+"detection.overrides"]; ok && value != nil {
 				obj.Overrides = convertElasticEventToOverride(value.([]interface{}))

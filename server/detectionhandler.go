@@ -218,7 +218,6 @@ func (h *DetectionHandler) putDetection(w http.ResponseWriter, r *http.Request) 
 		// the only editable fields for community rules are IsEnabled, IsReporting, Note, and Overrides
 		old.IsEnabled = detect.IsEnabled
 		old.IsReporting = detect.IsReporting
-		old.Note = detect.Note
 		old.Overrides = detect.Overrides
 
 		detect = old

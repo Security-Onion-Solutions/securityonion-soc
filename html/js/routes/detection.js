@@ -90,6 +90,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			loading: false,
 		},
 		history: [],
+		extractedReferences: [],
+		extractedLogic: '',
 	}},
 	created() {
 		this.onDetectionChange = debounce(this.onDetectionChange, 300);
@@ -156,7 +158,134 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.$root.stopLoading();
 		},
 		loadAssociations() {
+			this.extractReferences();
+			this.extractLogic();
 			this.loadHistory();
+		},
+		extractReferences() {
+			switch (this.detect.engine) {
+				case 'suricata':
+					this.extractSuricataReferences();
+					break;
+				case 'strelka':
+					this.extractStrelkaReferences();
+					break;
+				case 'elastalert':
+					this.extractElastAlertReferences();
+					break;
+			}
+		},
+		extractSuricataReferences() {
+			const refFinder = /reference:([^;]*),([^;]*);/ig;
+			const matches = [...this.detect.content.matchAll(refFinder)];
+
+			this.extractedReferences = [];
+			for (let i = 0; i < matches.length; i++) {
+				this.extractedReferences.push({ type: matches[i][1], value: matches[i][2] });
+			}
+		},
+		extractStrelkaReferences() {
+			const refFinder = /reference\d*\s*=\s*['"]([^'"]*)['"]/ig;
+			const matches = [...this.detect.content.matchAll(refFinder)];
+
+			this.extractedReferences = [];
+			for (let i = 0; i < matches.length; i++) {
+				this.extractedReferences.push({ type: "url", value: matches[i][1] });
+			}
+		},
+		extractElastAlertReferences() {
+			const yaml = jsyaml.load(this.detect.content, {schema: jsyaml.FAILSAFE_SCHEMA});
+			if (yaml['references']) {
+				this.extractedReferences = yaml['references'].map(r => {
+					return { type: "url", value: r };
+				});
+			}
+		},
+		extractLogic() {
+			switch (this.detect.engine) {
+				case 'suricata':
+					this.extractSuricataLogic();
+					break;
+				case 'strelka':
+					this.extractStrelkaLogic();
+					break;
+				case 'elastalert':
+					this.extractElastAlertLogic();
+					break;
+			}
+		},
+		extractSuricataLogic() {
+			const suricataParser = /^\w+\s+(.*?)\((.*)\)$/gi;
+			const matches = suricataParser.exec(this.detect.content.trim());
+
+			const head = matches[1];
+
+			let meta = matches[2].split(';').filter(opt => {
+				opt = opt.trim();
+				if (!opt) return false;
+
+				const key = opt.split(':', 2)[0].trim().toLowerCase();
+				return ['msg', 'reference', 'metadata', 'sid', 'rev'].indexOf(key) === -1;
+			}).map(opt => opt.trim());
+
+			this.extractedLogic = [head, ...meta].join('\n\n');
+		},
+		extractStrelkaLogic() {
+			// from strings to the end of the rule
+			let stringsStart = this.detect.content.indexOf('strings:');
+			let ruleStop = this.detect.content.lastIndexOf('}');
+
+			// back up to the beginning of the strings line
+			while (this.detect.content[stringsStart] !== '\n') {
+				stringsStart--;
+			}
+			stringsStart++;
+
+			// cut out the part we want
+			const dump = this.detect.content.substring(stringsStart, ruleStop);
+
+			// begin unindenting
+			let lines = dump.split('\n');
+
+			// check if the first line begins with whitespace
+			const ws = dump[0];
+			if (ws !== ' ' && ws !== '\t') {
+				// does not begin with whitespace, no indentation to remove
+				return dump
+			}
+
+			// find the line with the least whitespace, don't count blank lines
+			let min = 1000000;
+			for (let i = 0; i < lines.length; i++) {
+				if (lines[i].length === 0) continue;
+				let linemin = 0;
+				for (let j = 0; j < lines[i].length; j++) {
+					if (lines[i][j] === ws) {
+						linemin++;
+					} else {
+						break;
+					}
+				}
+
+				if (linemin < min) {
+					min = linemin;
+				}
+			}
+
+			if (min === 0) {
+				// the line with the least amount of whitespace is already 0
+				return dump;
+			}
+
+			// remove the minimum amount of whitespace from each line
+			this.extractedLogic = lines.map(l => l.length >= min ? l.substring(min) : l).join('\n');
+		},
+		extractElastAlertLogic() {
+			const yaml = jsyaml.load(this.detect.content, { schema: jsyaml.FAILSAFE_SCHEMA });
+			const logSource = yaml['logsource'];
+			const detection = yaml['detection'];
+
+			this.extractedLogic = jsyaml.dump({ logsource: logSource, detection: detection });
 		},
 		async loadHistory() {
 			const route = this;
@@ -232,7 +361,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		async startEdit(target, field) {
 			if (this.curEditTarget === target) return;
 			if (this.curEditTarget !== null) await this.stopEdit(false);
-			if (this.detect.isCommunity) return;
+			if (this.detect.isCommunity && field !== 'isEnabled') return;
 
 			this.curEditTarget = target;
 			this.origValue = this.detect[field];

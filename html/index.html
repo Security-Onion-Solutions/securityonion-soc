@@ -1047,23 +1047,23 @@
 
             <v-tabs grow v-model="activeTab" v-else>
               <v-tab id="detection_summaryTab" href="#summary">
-                <v-icon left>fa-clipboard</v-icon>
-                <div class="d-none d-lg-block">Summary</div>
-              </v-tab>
-              <v-tab id="detection_signatureTab" href="#signature">
-                <v-icon left>fa-signature</v-icon>
-                <div class="d-none d-lg-block">Signature</div>
+                <v-icon left>fa-comments</v-icon>
+                <div class="d-none d-lg-block">Overview</div>
               </v-tab>
               <v-tab id="detection_notesTab" href="#notes">
-                <v-icon left>fa-pencil</v-icon>
-                <div class="d-none d-lg-block">Notes</div>
+                <v-icon left>fa-paperclip</v-icon>
+                <div class="d-none d-lg-block">Operational Notes</div>
+              </v-tab>
+              <v-tab id="detection_signatureTab" href="#signature">
+                <v-icon left>fa-eye</v-icon>
+                <div class="d-none d-lg-block">Detection Source</div>
               </v-tab>
               <!-- <v-tab id="detection_playbookTab" href="#playbook">
                 <v-icon left>fa-book-bookmark</v-icon>
                 <div class="d-none d-lg-block">Investigative Playbook</div>
               </v-tab> -->
               <v-tab id="detection_tuningTab" href="#tuning">
-                <v-icon left>fa-wrench</v-icon>
+                <v-icon left>fa-link</v-icon>
                 <div class="d-none d-lg-block">Tuning</div>
               </v-tab>
               <v-tab id="detection_historyTab" href="#history">
@@ -1072,22 +1072,39 @@
               </v-tab>
 
               <v-tab-item value="summary">
-                <div class="col pt-5" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
+                <div class="col pt-5 summary-backdrop">
                   <div>
-                    <!-- Description -->
+                    <div class="header">Summary</div>
+                    <div v-if="detect.description">
+                      {{detect.description}}
+                    </div>
+                    <div v-else>
+                      {{detect.title}}
+                    </div>
+                    <div class="header">References</div>
+                    <div>
+                      <div v-for="r in extractedReferences">
+                        <a :href="r.value" v-if="r.type==='url'" target="_blank">{{r.value}}</a>
+                        <span v-else>{{r.value}}</span>
+                      </div>
+                    </div>
+                    <div class="header">Signature</div>
+                    <div class="extracted-content">
+                      <pre>{{extractedLogic}}</pre>
+                    </div>
+                  </div>
+                  <!-- <div>
                     <span class="font-weight-bold">{{i18n.description}}:</span><br/>
                     <span id="detection-description" @click="startEdit('detection-description', 'description')" v-if="!isEdit('detection-description')">{{ detect.description }}</span>
                     <v-textarea id="detection-description-edit" v-else hide-details="auto" outlined v-model="detect.description" :rules="requestRules([rules.required])" persistent-hint :hint="i18n.detectionDescription" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)" auto-grow rows="5"></v-textarea>
                   </div>
-                  <!-- Engine -->
                   <v-select id="detection-engine-edit" v-model="detect.engine" :readonly="detect.isCommunity" :items="getPresets('engine')" persistent-hint :hint="i18n.engine" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
-                  <!-- Author -->
                   <v-text-field id="detection-author-edit" v-model="detect.author" :readonly="detect.isCommunity" :rules="requestRules([rules.required])" persistent-hint :hint="i18n.author" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"></v-text-field>
-                  <!-- Severity -->
+
                   <v-select id="detection-severity-edit" class="text-capitalize" :readonly="detect.isCommunity" v-model="detect.severity" :items="getPresets('severity')" persistent-hint :hint="i18n.severity" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
-                  <!-- Enabled -->
+
                   <v-checkbox id="detection-enabled-edit" v-model="detect.isEnabled" @change="stopEdit(true)" :label="i18n.detectionEnabled"/>
-                  <!-- Reporting -->
+
                   <v-checkbox id="detection-reporting-edit" v-model="detect.isReporting" @change="stopEdit(true)" :label="i18n.reporting"/>
                 </div>
                 <div class="d-flex justify-end text-body-2 mt-2">
@@ -1097,6 +1114,22 @@
                     </v-btn>
                     <v-btn v-if="!isNew() && !detect.isCommunity" id="detection-delete" text small color="error" class="align-self-end" @click="deleteDetection()">
                       {{i18n.delete}}
+                    </v-btn>
+                  </div>
+                </div> -->
+              </v-tab-item>
+              <v-tab-item value="notes">
+                <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
+                  <!-- Notes -->
+                  <v-textarea class="config-editor" outlined v-model="detect.note" auto-grow rows="15" />
+                </div>
+                <div class="d-flex align-center align-self-end justify-end text-body-2 mt-2">
+                  <div class="d-inline-flex justify-end">
+                    <v-btn id="detection-cancel" text small color="primary" class="align-self-end" @click="cancelDetection()">
+                      {{ i18n.cancel }}
+                    </v-btn>
+                    <v-btn id="detection-update" text small color="primary" class="align-self-end" @click="saveDetection(false)">
+                      {{i18n.update}}
                     </v-btn>
                   </div>
                 </div>
@@ -1118,22 +1151,6 @@
                       {{ i18n.cancel }}
                     </v-btn>
                     <v-btn id="detection-update" v-if="!detect.isCommunity" text small color="primary" class="align-self-end" @click="saveDetection(false)">
-                      {{i18n.update}}
-                    </v-btn>
-                  </div>
-                </div>
-              </v-tab-item>
-              <v-tab-item value="notes">
-                <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
-                  <!-- Notes -->
-                  <v-textarea class="config-editor" outlined v-model="detect.note" auto-grow rows="15" />
-                </div>
-                <div class="d-flex align-center align-self-end justify-end text-body-2 mt-2">
-                  <div class="d-inline-flex justify-end">
-                    <v-btn id="detection-cancel" text small color="primary" class="align-self-end" @click="cancelDetection()">
-                      {{ i18n.cancel }}
-                    </v-btn>
-                    <v-btn id="detection-update" text small color="primary" class="align-self-end" @click="saveDetection(false)">
                       {{i18n.update}}
                     </v-btn>
                   </div>
@@ -1550,33 +1567,97 @@
             <v-expansion-panels focusable multiple v-model="panel">
               <v-expansion-panel v-if="!isNew()">
                 <v-expansion-panel-header id="detection-related-playbooks">
-                  <h3>Cases</h3>
+                  <h3>Operations</h3>
                 </v-expansion-panel-header>
                 <v-expansion-panel-content>
-                  Related Cases:
-                  <ul>
-                    <li>123</li>
-                    <li>456</li>
-                    <li>ABC</li>
-                    <li>XYZ</li>
-                  </ul>
+                  <!-- <v-checkbox id="detection-enabled-edit" v-model="detect.isEnabled" @change="stopEdit(true)" :label="i18n.detectionEnabled"/> -->
+                  <div class="ops-header">
+                    Enabled:
+                  </div>
+                  <div class="ops-value">
+                    <span @click="startEdit('detection-enabled', 'isEnabled')" v-if="!isEdit('detection-enabled')">
+                      {{detect.isEnabled ? 'True' : 'False'}}
+                    </span>
+                    <v-checkbox id="detection-enabled-edit" v-model="detect.isEnabled" v-else @change="stopEdit(true)" />
+                  </div>
+                  <div class="ops-header">
+                    DetectionType:
+                  </div>
+                  <div class="ops-value">
+                    {{detect.engine}}
+                  </div>
+                  <div class="ops-header">
+                    Severity:
+                  </div>
+                  <div class="ops-value">
+                    {{detect.severity}}
+                  </div>
+                  <div class="ops-header" v-if="detect.isCommunity">
+                    Ruleset:
+                  </div>
+                  <div class="ops-value" v-if="detect.isCommunity">
+                    {{detect.ruleset}}
+                  </div>
+                  <!-- <div class="ops-header">
+                    Related-Playbooks:
+                  </div>
+                  <div class="ops-value">
+                    TODO
+                  </div> -->
+                  <div class="ops-header">
+                    Tags:
+                  </div>
+                  <div class="ops-value">
+                    <div>
+                      <v-chip class="mx-1" v-for="tag in detect.tags" color="primary">{{ tag }}</v-chip>
+                      <span v-if="detect.tags === null || detect.tags.length === 0">None</span>
+                    </div>
+                  </div>
                 </v-expansion-panel-content>
               </v-expansion-panel>
               <v-expansion-panel v-if="!isNew()">
                 <v-expansion-panel-header id="detection-related-playbooks">
-                  <h3>Alerts</h3>
+                  <h3>Details</h3>
                 </v-expansion-panel-header>
                 <v-expansion-panel-content>
-                  Recent Alerts:
-                  <ul>
-                    <li>123</li>
-                    <li>456</li>
-                    <li>ABC</li>
-                    <li>XYZ</li>
-                  </ul>
+                  [detail stuff goes here]
                 </v-expansion-panel-content>
               </v-expansion-panel>
             </v-expansion-panels>
+            <div class="detect-reference">
+              <div>
+                <div class="key">
+                  Detection Id:
+                </div>
+                <div class="value">
+                  {{ detect.id }}
+                </div>
+              </div>
+              <div>
+                <div class="key">
+                  Author:
+                </div>
+                <div class="value">
+                  {{ detect.author }}
+                </div>
+              </div>
+              <div>
+                <div class="key">
+                  Created:
+                </div>
+                <div class="value">
+                  {{ detect.createTime | formatDateTime}}
+                </div>
+              </div>
+              <div>
+                <div class="key">
+                  Updated:
+                </div>
+                <div class="value">
+                  {{ detect.updateTime | formatDateTime }}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </v-container>
