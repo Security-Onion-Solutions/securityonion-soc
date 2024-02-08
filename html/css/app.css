@@ -562,12 +562,14 @@ td {
 
 .extracted-content > pre {
   text-wrap: wrap;
+  word-break: break-word;
 }
 
 .detect-reference {
   font-size: small;
   display: table;
   width: 100%;
+  margin-top: 12px;
 }
 
 .detect-reference > div {
@@ -593,4 +595,13 @@ td {
   margin-top: 0 !important;
   padding-top: 0 !important;
   height: 24px !important;
+}
+
+#ops-buttons {
+  margin-top: 12px;
+  display: grid;
+  grid-auto-flow: column;
+  justify-items: stretch;
+  grid-template-columns: 50% 50%;
+  grid-gap: 12px;
 }

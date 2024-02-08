@@ -89,6 +89,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			expanded: [],
 			loading: false,
 		},
+		detectionSummary: '',
 		history: [],
 		extractedReferences: [],
 		extractedLogic: '',
@@ -158,9 +159,32 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.$root.stopLoading();
 		},
 		loadAssociations() {
+			this.extractSummary();
 			this.extractReferences();
 			this.extractLogic();
 			this.loadHistory();
+		},
+		extractSummary() {
+			switch (this.detect.engine) {
+				case 'suricata':
+					const classTypeMatcher = /classtype:([^;]+);/i;
+					const match = this.detect.content.match(classTypeMatcher);
+
+					if (match) {
+						this.detectionSummary = match[1];
+					} else {
+						this.detectionSummary = this.detect.title;
+					}
+
+					break;
+				default:
+					if (this.detect.description) {
+						this.detectionSummary = this.detect.description;
+					} else {
+						this.detectionSummary = this.detect.title;
+					}
+					break;
+			}
 		},
 		extractReferences() {
 			switch (this.detect.engine) {
@@ -180,8 +204,14 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			const matches = [...this.detect.content.matchAll(refFinder)];
 
 			this.extractedReferences = [];
+			// ensure the value has a protocol
 			for (let i = 0; i < matches.length; i++) {
-				this.extractedReferences.push({ type: matches[i][1], value: matches[i][2] });
+				let url = matches[i][2];
+				if (!url.startsWith('http://') && !url.startsWith('https://')) {
+					url = 'http://' + url;
+				}
+
+				this.extractedReferences.push({ type: matches[i][1], text: matches[i][2], link: url });
 			}
 		},
 		extractStrelkaReferences() {
@@ -225,7 +255,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				if (!opt) return false;
 
 				const key = opt.split(':', 2)[0].trim().toLowerCase();
-				return ['msg', 'reference', 'metadata', 'sid', 'rev'].indexOf(key) === -1;
+				return ['msg', 'reference', 'metadata', 'sid', 'rev', 'classtype'].indexOf(key) === -1;
 			}).map(opt => opt.trim());
 
 			this.extractedLogic = [head, ...meta].join('\n\n');
