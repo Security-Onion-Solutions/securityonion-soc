@@ -206,12 +206,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.extractedReferences = [];
 			// ensure the value has a protocol
 			for (let i = 0; i < matches.length; i++) {
-				let url = matches[i][2];
-				if (!url.startsWith('http://') && !url.startsWith('https://')) {
-					url = 'http://' + url;
-				}
-
-				this.extractedReferences.push({ type: matches[i][1], text: matches[i][2], link: url });
+				this.extractedReferences.push({ type: matches[i][1], text: matches[i][2], link: this.fixProtocol(matches[i][2]) });
 			}
 		},
 		extractStrelkaReferences() {
@@ -220,16 +215,23 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			this.extractedReferences = [];
 			for (let i = 0; i < matches.length; i++) {
-				this.extractedReferences.push({ type: "url", value: matches[i][1] });
+				this.extractedReferences.push({ type: "url", text: matches[i][1], link: this.fixProtocol(matches[i][1]) });
 			}
 		},
 		extractElastAlertReferences() {
 			const yaml = jsyaml.load(this.detect.content, {schema: jsyaml.FAILSAFE_SCHEMA});
 			if (yaml['references']) {
 				this.extractedReferences = yaml['references'].map(r => {
-					return { type: "url", value: r };
+					return { type: "url", text: r, link: this.fixProtocol(r) };
 				});
 			}
+		},
+		fixProtocol(url) {
+			if (!url.startsWith('http://') && !url.startsWith('https://')) {
+				url = 'http://' + url;
+			}
+
+			return url;
 		},
 		extractLogic() {
 			switch (this.detect.engine) {
