@@ -605,3 +605,7 @@ td {
   grid-template-columns: 50% 50%;
   grid-gap: 12px;
 }
+
+.case-title {
+  text-transform: capitalize;
+}

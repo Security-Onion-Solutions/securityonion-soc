@@ -1076,7 +1076,7 @@
                   <div>
                     <div class="header">{{i18n.summary}}</div>
                     <div>
-                      {{ detectionSummary }}
+                      {{ extractedSummary }}
                     </div>
                     <div class="header">{{i18n.references}}</div>
                     <div>
@@ -1602,15 +1602,21 @@
                 </v-expansion-panel-header>
                 <v-expansion-panel-content>
                   <div class="ops-header">
-                    {{ i18n.type }}:
+                    {{ i18n.publicId }}:
                   </div>
                   <div class="ops-value">
+                    {{ detect.publicId }}
+                  </div>
+                  <div class="ops-header">
+                    {{ i18n.type }}:
+                  </div>
+                  <div class="ops-value case-title">
                     {{ detect.engine }}
                   </div>
                   <div class="ops-header">
                     {{ i18n.severity }}:
                   </div>
-                  <div class="ops-value">
+                  <div class="ops-value case-title">
                     {{ detect.severity }}
                   </div>
                   <div class="ops-header" v-if="detect.isCommunity">
@@ -1618,6 +1624,30 @@
                   </div>
                   <div class="ops-value" v-if="detect.isCommunity">
                     {{ detect.ruleset }}
+                  </div>
+                  <div class="ops-header">
+                    {{ i18n.license }}:
+                  </div>
+                  <div class="ops-value">
+                    {{ detect.license }}
+                  </div>
+                  <div class="ops-header" v-if="extractedCreated">
+                    {{ i18n.dateCreated }}:
+                  </div>
+                  <div class="ops-value" v-if="extractedCreated">
+                    {{ extractedCreated }}
+                  </div>
+                  <div class="ops-header" v-if="extractedUpdated">
+                    {{ i18n.dateModified }}:
+                  </div>
+                  <div class="ops-value"  v-if="extractedUpdated">
+                    {{ extractedUpdated }}
+                  </div>
+                  <div class="ops-header" v-if="extractedAuthor">
+                    {{ i18n.author }}:
+                  </div>
+                  <div class="ops-value"  v-if="extractedAuthor">
+                    {{ extractedAuthor }}
                   </div>
                   <!-- <div class="ops-header">
                     {{ i18n.tags }}:
@@ -1632,14 +1662,6 @@
               </v-expansion-panel>
             </v-expansion-panels>
             <div class="detect-reference" v-if="!isNew()">
-              <div>
-                <div class="key">
-                  {{ i18n.publicId }}:
-                </div>
-                <div class="value">
-                  {{ detect.publicId }}
-                </div>
-              </div>
               <div>
                 <div class="key">
                   {{i18n.socId}}:

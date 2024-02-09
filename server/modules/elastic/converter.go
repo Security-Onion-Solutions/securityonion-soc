@@ -706,6 +706,9 @@ func convertElasticEventToDetection(event *model.EventRecord, schemaPrefix strin
 			if value, ok := event.Payload[schemaPrefix+"detection.language"]; ok {
 				obj.Language = model.SigLanguage(value.(string))
 			}
+			if value, ok := event.Payload[schemaPrefix+"detection.license"]; ok {
+				obj.License = value.(string)
+			}
 			if value, ok := event.Payload[schemaPrefix+"detection.tags"]; ok && value != nil {
 				arr := value.([]interface{})
 				obj.Tags = make([]string, 0, len(arr))
