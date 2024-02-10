@@ -34,6 +34,11 @@ const modifyFromTo = `"flowbits" "noalert; flowbits"`
 
 var errModuleStopped = fmt.Errorf("module has stopped running")
 
+var licenseBySource = map[string]string{
+	"etopen": model.LicenseBSD,
+	"etpro":  model.LicenseCommercial,
+}
+
 type SuricataEngine struct {
 	srv                                  *server.Server
 	communityRulesFile                   string
@@ -289,6 +294,7 @@ func (s *SuricataEngine) parseRules(content string, ruleset string) ([]*model.De
 			Engine:      model.EngineNameSuricata,
 			Language:    model.SigLangSuricata,
 			Ruleset:     util.Ptr(ruleset),
+			License:     lookupLicense(ruleset),
 		})
 	}
 
@@ -681,4 +687,13 @@ func indexThreshold(content string) (map[string][]*model.Override, error) {
 	}
 
 	return index, nil
+}
+
+func lookupLicense(ruleset string) string {
+	license, ok := licenseBySource[strings.ToLower(ruleset)]
+	if !ok {
+		license = "Unknown"
+	}
+
+	return license
 }

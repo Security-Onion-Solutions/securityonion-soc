@@ -89,9 +89,13 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			expanded: [],
 			loading: false,
 		},
-		history: [],
+		extractedSummary: '',
 		extractedReferences: [],
 		extractedLogic: '',
+		history: [],
+		extractedCreated: '',
+		extractedUpdated: '',
+		extractedAuthor: '',
 	}},
 	created() {
 		this.onDetectionChange = debounce(this.onDetectionChange, 300);
@@ -158,11 +162,37 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.$root.stopLoading();
 		},
 		loadAssociations() {
+			this.extractSummary();
 			this.extractReferences();
 			this.extractLogic();
+			this.extractDetails();
 			this.loadHistory();
 		},
+		extractSummary() {
+			switch (this.detect.engine) {
+				case 'suricata':
+					const classTypeMatcher = /classtype:([^;]+);/i;
+					const match = this.detect.content.match(classTypeMatcher);
+
+					if (match) {
+						this.extractedSummary = match[1];
+					} else {
+						this.extractedSummary = this.detect.title;
+					}
+
+					break;
+				default:
+					if (this.detect.description) {
+						this.extractedSummary = this.detect.description;
+					} else {
+						this.extractedSummary = this.detect.title;
+					}
+					break;
+			}
+		},
 		extractReferences() {
+			this.extractedReferences = [];
+
 			switch (this.detect.engine) {
 				case 'suricata':
 					this.extractSuricataReferences();
@@ -180,8 +210,9 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			const matches = [...this.detect.content.matchAll(refFinder)];
 
 			this.extractedReferences = [];
+			// ensure the value has a protocol
 			for (let i = 0; i < matches.length; i++) {
-				this.extractedReferences.push({ type: matches[i][1], value: matches[i][2] });
+				this.extractedReferences.push({ type: matches[i][1], text: matches[i][2], link: this.fixProtocol(matches[i][2]) });
 			}
 		},
 		extractStrelkaReferences() {
@@ -190,18 +221,29 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			this.extractedReferences = [];
 			for (let i = 0; i < matches.length; i++) {
-				this.extractedReferences.push({ type: "url", value: matches[i][1] });
+				this.extractedReferences.push({ type: "url", text: matches[i][1], link: this.fixProtocol(matches[i][1]) });
 			}
 		},
 		extractElastAlertReferences() {
 			const yaml = jsyaml.load(this.detect.content, {schema: jsyaml.FAILSAFE_SCHEMA});
-			if (yaml['references']) {
-				this.extractedReferences = yaml['references'].map(r => {
-					return { type: "url", value: r };
-				});
+			if (!yaml['references']) {
+				return;
 			}
+
+			this.extractedReferences = yaml['references'].map(r => {
+				return { type: "url", text: r, link: this.fixProtocol(r) };
+			});
+		},
+		fixProtocol(url) {
+			if (!url.startsWith('http://') && !url.startsWith('https://')) {
+				url = 'http://' + url;
+			}
+
+			return url;
 		},
 		extractLogic() {
+			this.extractedLogic = '';
+
 			switch (this.detect.engine) {
 				case 'suricata':
 					this.extractSuricataLogic();
@@ -218,6 +260,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			const suricataParser = /^\w+\s+(.*?)\((.*)\)$/gi;
 			const matches = suricataParser.exec(this.detect.content.trim());
 
+			if (!matches) {
+				return;
+			}
+
 			const head = matches[1];
 
 			let meta = matches[2].split(';').filter(opt => {
@@ -225,7 +271,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				if (!opt) return false;
 
 				const key = opt.split(':', 2)[0].trim().toLowerCase();
-				return ['msg', 'reference', 'metadata', 'sid', 'rev'].indexOf(key) === -1;
+				return ['msg', 'reference', 'metadata', 'sid', 'rev', 'classtype'].indexOf(key) === -1;
 			}).map(opt => opt.trim());
 
 			this.extractedLogic = [head, ...meta].join('\n\n');
@@ -286,6 +332,78 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			const detection = yaml['detection'];
 
 			this.extractedLogic = jsyaml.dump({ logsource: logSource, detection: detection });
+		},
+		extractDetails() {
+			this.extractedAuthor = this.extractedCreated = this.extractedUpdated = '';
+
+			switch (this.detect.engine) {
+				case 'suricata':
+					this.extractSuricataDetails();
+					break;
+				case 'strelka':
+					this.extractStrelkaDetails();
+					break;
+				case 'elastalert':
+					this.extractElastAlertDetails();
+					break;
+			}
+		},
+		extractSuricataDetails() {
+			const metadataExtractor = /metadata:([^;]+);/i;
+			const match = this.detect.content.match(metadataExtractor);
+
+			if (!match) {
+				return;
+			}
+
+			const metadata = match[1].split(',').map(opt => opt.trim());
+			const ymd = /\d{4}[-_]\d{1,2}[-_]\d{1,2}/;
+			const leading0 = /^0/;
+
+			for (let i = 0; i < metadata.length; i++) {
+				let md = metadata[i];
+
+				if (md.indexOf('created_at') > -1) {
+					let date = md.match(ymd);
+					if (date) {
+						this.extractedCreated = date[0];
+					}
+				}
+
+				if (md.indexOf('updated_at') > -1) {
+					let date = md.match(ymd);
+					if (date) {
+						this.extractedUpdated = date[0];
+					}
+				}
+
+				if (md.indexOf('author') > -1) {
+					this.extractedAuthor = md.replace('author', '').trim();
+				}
+			}
+		},
+		extractStrelkaDetails() {
+			const authorExtractor = /^\s*author\s*=\s*"(.*)"/im;
+			const dateExtractor = /^\s*date\s*=\s*"(.*)"/im;
+
+			const authorMatch = authorExtractor.exec(this.detect.content);
+
+			if (authorMatch) {
+				this.extractedAuthor = authorMatch[1];
+			}
+
+			const dateMatch = dateExtractor.exec(this.detect.content);
+
+			if (dateMatch) {
+				this.extractedCreated = dateMatch[1];
+			}
+		},
+		extractElastAlertDetails() {
+			const yaml = jsyaml.load(this.detect.content, { schema: jsyaml.FAILSAFE_SCHEMA });
+
+			this.extractedAuthor = yaml['author'];
+			this.extractedCreated = yaml['date'];
+			this.extractedUpdated = yaml['modified'];
 		},
 		async loadHistory() {
 			const route = this;

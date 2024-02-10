@@ -1010,7 +1010,7 @@
                   <v-textarea id="detection-description-create" hide-details="auto" outlined v-model="detect.description" :rules="[rules.required]" persistent-hint :hint="i18n.detectionDescription" auto-grow rows="5"></v-textarea>
 
                   <!-- PublicID -->
-                  <v-text-field id="detection-publicId-create" class="mt-0" v-model="detect.publicId" :rules="[rules.required, rules.minLength(5)]" persistent-hint :hint="i18n.publicID">
+                  <v-text-field id="detection-publicId-create" class="mt-0" v-model="detect.publicId" :rules="[rules.required, rules.minLength(5)]" persistent-hint :hint="i18n.publicId">
                     <template v-slot:append v-if="!detect.publicId">
                       <v-btn id="gen-public-id-create" text small color="primary" @click="generatePublicID()">Generate</v-btn>
                     </template>
@@ -1075,20 +1075,20 @@
                 <div class="col pt-5 summary-backdrop">
                   <div>
                     <div class="header">{{i18n.summary}}</div>
-                    <div v-if="detect.description">
-                      {{detect.description}}
-                    </div>
-                    <div v-else>
-                      {{detect.title}}
+                    <div>
+                      {{ extractedSummary }}
                     </div>
                     <div class="header">{{i18n.references}}</div>
                     <div>
                       <div v-for="r in extractedReferences">
-                        <a :href="r.value" v-if="r.type==='url'" target="_blank">{{r.value}}</a>
-                        <span v-else>{{r.value}}</span>
+                        <a :href="r.link" v-if="r.type==='url'" target="_blank">{{r.text}}</a>
+                        <span v-else>{{r.text}}</span>
                       </div>
+                      <span v-if="extractedReferences === null || extractedReferences.length === 0">
+                        {{ i18n.none }}
+                      </span>
                     </div>
-                    <div class="header">{{i18n.signature}}</div>
+                    <div class="header">{{i18n.detectionLogic}}</div>
                     <div class="extracted-content">
                       <pre>{{extractedLogic}}</pre>
                     </div>
@@ -1137,7 +1137,7 @@
               <v-tab-item value="signature">
                 <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
                   <!-- PublicID -->
-                  <v-text-field id="detection-publicId-edit" v-model="detect.publicId" :readonly="detect.isCommunity" :rules="requestRules([rules.required, rules.minLength(5)])" persistent-hint :hint="i18n.publicID" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)">
+                  <v-text-field id="detection-publicId-edit" v-model="detect.publicId" :readonly="detect.isCommunity" :rules="requestRules([rules.required, rules.minLength(5)])" persistent-hint :hint="i18n.publicId" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)">
                     <template v-slot:append v-if="!detect.publicId && !detect.isCommunity">
                       <v-btn id="gen-public-id" text small color="primary" @click="extractPublicID()">{{i18n.extract}}</v-btn>
                     </template>
@@ -1572,11 +1572,11 @@
                 <v-expansion-panel-content>
                   <!-- <v-checkbox id="detection-enabled-edit" v-model="detect.isEnabled" @change="stopEdit(true)" :label="i18n.detectionEnabled"/> -->
                   <div class="ops-header">
-                    {{ i18n.enabled }}:
+                    {{ i18n.status }}:
                   </div>
                   <div class="ops-value">
                     <span @click="startEdit('detection-enabled', 'isEnabled')" v-if="!isEdit('detection-enabled')">
-                      {{ detect.isEnabled ? 'True' : 'False' }}
+                      {{ detect.isEnabled ? i18n.enabled : i18n.disabled }}
                     </span>
                     <v-checkbox id="detection-enabled-edit" v-model="detect.isEnabled" v-else @change="stopEdit(true)" />
                   </div>
@@ -1586,14 +1586,13 @@
                   <div class="ops-value">
                     TODO
                   </div> -->
-                  <div class="ops-header">
-                    {{ i18n.tags }}:
-                  </div>
-                  <div class="ops-value">
-                    <div>
-                      <v-chip class="mx-1" v-for="tag in detect.tags" color="primary">{{ tag }}</v-chip>
-                      <span v-if="detect.tags === null || detect.tags.length === 0">None</span>
-                    </div>
+                  <div id="ops-buttons">
+                    <v-btn id="detection-duplicate" color="primary" @click="duplicateDetection()">
+                      {{i18n.duplicate}}
+                    </v-btn>
+                    <v-btn :disabled="detect.isCommunity" id="detection-delete" color="error" @click="deleteDetection()">
+                      {{i18n.delete}}
+                    </v-btn>
                   </div>
                 </v-expansion-panel-content>
               </v-expansion-panel>
@@ -1603,15 +1602,21 @@
                 </v-expansion-panel-header>
                 <v-expansion-panel-content>
                   <div class="ops-header">
-                    {{ i18n.detectionType }}:
+                    {{ i18n.publicId }}:
                   </div>
                   <div class="ops-value">
+                    {{ detect.publicId }}
+                  </div>
+                  <div class="ops-header">
+                    {{ i18n.type }}:
+                  </div>
+                  <div class="ops-value case-title">
                     {{ detect.engine }}
                   </div>
                   <div class="ops-header">
                     {{ i18n.severity }}:
                   </div>
-                  <div class="ops-value">
+                  <div class="ops-value case-title">
                     {{ detect.severity }}
                   </div>
                   <div class="ops-header" v-if="detect.isCommunity">
@@ -1620,13 +1625,46 @@
                   <div class="ops-value" v-if="detect.isCommunity">
                     {{ detect.ruleset }}
                   </div>
+                  <div class="ops-header">
+                    {{ i18n.license }}:
+                  </div>
+                  <div class="ops-value">
+                    {{ detect.license }}
+                  </div>
+                  <div class="ops-header" v-if="extractedCreated">
+                    {{ i18n.dateCreated }}:
+                  </div>
+                  <div class="ops-value" v-if="extractedCreated">
+                    {{ extractedCreated }}
+                  </div>
+                  <div class="ops-header" v-if="extractedUpdated">
+                    {{ i18n.dateModified }}:
+                  </div>
+                  <div class="ops-value"  v-if="extractedUpdated">
+                    {{ extractedUpdated }}
+                  </div>
+                  <div class="ops-header" v-if="extractedAuthor">
+                    {{ i18n.author }}:
+                  </div>
+                  <div class="ops-value"  v-if="extractedAuthor">
+                    {{ extractedAuthor }}
+                  </div>
+                  <!-- <div class="ops-header">
+                    {{ i18n.tags }}:
+                  </div>
+                  <div class="ops-value">
+                    <div>
+                      <v-chip class="mx-1" v-for="tag in detect.tags" color="primary">{{ tag }}</v-chip>
+                      <span v-if="detect.tags === null || detect.tags.length === 0">None</span>
+                    </div>
+                  </div> -->
                 </v-expansion-panel-content>
               </v-expansion-panel>
             </v-expansion-panels>
             <div class="detect-reference" v-if="!isNew()">
               <div>
                 <div class="key">
-                  {{i18n.detectionId}}:
+                  {{i18n.socId}}:
                 </div>
                 <div class="value">
                   {{ detect.id }}
@@ -1637,7 +1675,12 @@
                   {{ i18n.author }}:
                 </div>
                 <div class="value">
-                  {{ detect.author }}
+                  <span v-if="detect.language !== 'suricata'">
+                    {{ detect.author }}
+                  </span>
+                  <span v-else>
+                    {{ detect.ruleset }}
+                  </span>
                 </div>
               </div>
               <div>
@@ -1699,7 +1742,7 @@
               <v-tab-item value="notes">
                 <div class="col pt-0" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
                   <!-- PublicID -->
-                  <v-text-field id="playbook-publicId-edit" v-model="playbook.publicId" :rules="[rules.required]" persistent-hint :hint="i18n.publicID" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)">
+                  <v-text-field id="playbook-publicId-edit" v-model="playbook.publicId" :rules="[rules.required]" persistent-hint :hint="i18n.publicId" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)">
                     <template v-slot:append v-if="!playbook.publicId">
                       <v-btn id="gen-public-id" text small color="primary" @click="generatePublicID()">Generate</v-btn>
                     </template>

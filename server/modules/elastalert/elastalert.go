@@ -370,6 +370,7 @@ func (e *ElastAlertEngine) parseRules(pkgZips map[string][]byte) (detections []*
 				Engine:      model.EngineNameElastAlert,
 				Language:    model.SigLangSigma,
 				Ruleset:     util.Ptr(pkg),
+				License:     model.LicenseDRL,
 			})
 		}
 	}
