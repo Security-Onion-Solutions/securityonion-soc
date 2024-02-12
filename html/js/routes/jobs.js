@@ -153,13 +153,16 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
         if (!sensorId) {
           this.$root.showError(this.i18n.sensorIdRequired);
         } else {
+          if (protocol) {
+            protocol = protocol.toLowerCase();
+          }
           const beginDate = moment(beginTime);
           const endDate = moment(endTime);
           const response = await this.$root.papi.post('job/', {
             nodeId: sensorId,
             filter: {
               importId: importId,
-              protocol: protocol.toLowerCase(),
+              protocol: protocol,
               srcIp: srcIp,
               srcPort: parseInt(srcPort),
               dstIp: dstIp,

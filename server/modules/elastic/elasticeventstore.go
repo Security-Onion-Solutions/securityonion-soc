@@ -788,13 +788,13 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 		}).Info("Obtained output parameters")
 	}
 
-	if len(filter.SrcIp) == 0 || len(filter.DstIp) == 0 || filter.SrcPort == 0 || filter.DstPort == 0 {
+	if len(filter.SrcIp) == 0 || len(filter.DstIp) == 0 || ((filter.SrcPort == 0 || filter.DstPort == 0) && filter.Protocol != model.PROTOCOL_ICMP) {
 		log.WithFields(log.Fields{
 			"query":     store.truncate(query),
 			"uid":       uid,
 			"requestId": ctx.Value(web.ContextKeyRequestId),
-		}).Warn("Unable to lookup PCAP due to missing TCP/UDP parameters")
-		return errors.New("No TCP/UDP record was found for retrieving PCAP")
+		}).Warn("Unable to lookup PCAP due to missing TCP/UDP/ICMP parameters")
+		return errors.New("No TCP/UDP/ICMP record was found for retrieving PCAP")
 	}
 
 	filter.BeginTime = timestamp.Add(time.Duration(-duration-int64(store.timeShiftMs)) * time.Millisecond)
