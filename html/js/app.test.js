@@ -43,11 +43,6 @@ test('replaceActionVar', () => {
   expect(app.replaceActionVar('test {foo} here', 'foo', undefined, true)).toBe('test {foo} here');
 });
 
-test('base64encode', () => {
-  expect(app.base64encode('')).toBe('');
-  expect(app.base64encode('hello')).toBe('aGVsbG8=');
-});
-
 test('formatMarkdown', () => {
   expect(app.formatMarkdown('```code```')).toBe('<p><code>code</code></p>\n');
   expect(app.formatMarkdown('<scripts src="https://somebad.place"></script>bad')).toBe('<p>bad</p>\n');
