@@ -34,6 +34,8 @@ const i18n = {
       actionHuntHelp: 'Hunt for this field',
       actionPcap: 'PCAP',
       actionPcapHelp: 'Show PCAP for this event',
+      actionProcessAncestors: 'Process ancestors',
+      actionProcessAncestorsHelp: 'Show all parent processes for this process',
       actionSuccess: 'Action completed: ',
       actionVirusTotal: 'VirusTotal',
       actionVirusTotalHelp: 'Analyze this field at virustotal.com',
