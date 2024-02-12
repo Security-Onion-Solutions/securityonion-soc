@@ -305,7 +305,7 @@ func TestParse(t *testing.T) {
 		ExpectedError      *string
 	}{
 		{
-			Name: "Sunny Day Path w/ Edge Cases",
+			Name: "Sunny Day Path with Edge Cases",
 			Lines: []string{
 				"# Comment",
 				SimpleRule,
@@ -323,6 +323,7 @@ func TestParse(t *testing.T) {
 					Engine:      model.EngineNameSuricata,
 					Language:    model.SigLangSuricata,
 					Ruleset:     ruleset,
+					License:     "Unknown",
 				},
 				{
 					PublicID:    "20000",
@@ -333,6 +334,7 @@ func TestParse(t *testing.T) {
 					Engine:      model.EngineNameSuricata,
 					Language:    model.SigLangSuricata,
 					Ruleset:     ruleset,
+					License:     "Unknown",
 				},
 			},
 		},
