@@ -154,6 +154,10 @@ func (steno *StenoQuery) CreateQuery(job *model.Job) string {
 
 	query := fmt.Sprintf("before %s and after %s", endTime, beginTime)
 
+	if len(job.Filter.Protocol) > 0 {
+		query = fmt.Sprintf("%s and %s", query, job.Filter.Protocol)
+	}
+
 	if len(job.Filter.SrcIp) > 0 {
 		query = fmt.Sprintf("%s and host %s", query, job.Filter.SrcIp)
 	}
@@ -162,12 +166,15 @@ func (steno *StenoQuery) CreateQuery(job *model.Job) string {
 		query = fmt.Sprintf("%s and host %s", query, job.Filter.DstIp)
 	}
 
-	if job.Filter.SrcPort > 0 {
-		query = fmt.Sprintf("%s and port %d", query, job.Filter.SrcPort)
-	}
+	// Some legacy jobs won't have the protocol provided
+	if job.Filter.Protocol != model.PROTOCOL_ICMP {
+		if job.Filter.SrcPort > 0 {
+			query = fmt.Sprintf("%s and port %d", query, job.Filter.SrcPort)
+		}
 
-	if job.Filter.DstPort > 0 {
-		query = fmt.Sprintf("%s and port %d", query, job.Filter.DstPort)
+		if job.Filter.DstPort > 0 {
+			query = fmt.Sprintf("%s and port %d", query, job.Filter.DstPort)
+		}
 	}
 
 	return query

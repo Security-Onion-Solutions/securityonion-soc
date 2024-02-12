@@ -31,6 +31,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       valid: false,
       sensorId: null,
       importId: null,
+      protocol: null,
       srcIp: null,
       srcPort: null,
       dstIp: null,
@@ -90,6 +91,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       }
       this.form.sensorId = localStorage['settings.jobs.addJobForm.sensorId'];
       this.form.importId = localStorage['settings.jobs.addJobForm.importId'];
+      this.form.protocol = localStorage['settings.jobs.addJobForm.protocol'];
       this.form.srcIp = localStorage['settings.jobs.addJobForm.srcIp'];
       this.form.srcPort = localStorage['settings.jobs.addJobForm.srcPort'];
       this.form.dstIp = localStorage['settings.jobs.addJobForm.dstIp'];
@@ -111,13 +113,14 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       }
     },
     submitAddJob(event) {
-      this.addJob(this.form.sensorId, this.form.importId, this.form.srcIp, this.form.srcPort, this.form.dstIp, this.form.dstPort, this.form.beginTime, this.form.endTime);
+      this.addJob(this.form.sensorId, this.form.importId, this.form.protocol, this.form.srcIp, this.form.srcPort, this.form.dstIp, this.form.dstPort, this.form.beginTime, this.form.endTime);
       this.dialog = false;
       this.saveAddJobForm();
     },
     saveAddJobForm() {
       if (this.form.sensorId) localStorage['settings.jobs.addJobForm.sensorId'] = this.form.sensorId;
       if (this.form.importId) localStorage['settings.jobs.addJobForm.importId'] = this.form.importId;
+      if (this.form.protocol) localStorage['settings.jobs.addJobForm.protocol'] = this.form.protocol;
       if (this.form.srcIp) localStorage['settings.jobs.addJobForm.srcIp'] = this.form.srcIp;
       if (this.form.srcPort) localStorage['settings.jobs.addJobForm.srcPort'] = this.form.srcPort;
       if (this.form.dstIp) localStorage['settings.jobs.addJobForm.dstIp'] = this.form.dstIp;
@@ -128,6 +131,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
     clearAddJobForm() {
       this.form.sensorId = null;
       this.form.importId = null;
+      this.form.protocol = null;
       this.form.srcIp = null;
       this.form.srcPort = null;
       this.form.dstIp = null;
@@ -136,6 +140,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       this.form.endTime = null;
       localStorage.removeItem('settings.jobs.addJobForm.sensorId');
       localStorage.removeItem('settings.jobs.addJobForm.importId');
+      localStorage.removeItem('settings.jobs.addJobForm.protocol');
       localStorage.removeItem('settings.jobs.addJobForm.srcIp');
       localStorage.removeItem('settings.jobs.addJobForm.srcPort');
       localStorage.removeItem('settings.jobs.addJobForm.dstIp');
@@ -143,7 +148,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       localStorage.removeItem('settings.jobs.addJobForm.beginTime');
       localStorage.removeItem('settings.jobs.addJobForm.endTime');
     },
-    async addJob(sensorId, importId, srcIp, srcPort, dstIp, dstPort, beginTime, endTime) {
+    async addJob(sensorId, importId, protocol, srcIp, srcPort, dstIp, dstPort, beginTime, endTime) {
       try {
         if (!sensorId) {
           this.$root.showError(this.i18n.sensorIdRequired);
@@ -154,6 +159,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
             nodeId: sensorId,
             filter: {
               importId: importId,
+              protocol: protocol.toLowerCase(),
               srcIp: srcIp,
               srcPort: parseInt(srcPort),
               dstIp: dstIp,

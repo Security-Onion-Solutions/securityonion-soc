@@ -43,6 +43,7 @@ func TestParseAndStream(tester *testing.T) {
 	filter.BeginTime = startTime
 	endTime, _ := time.Parse(time.RFC3339, "2019-12-08T23:59:59Z")
 	filter.EndTime = endTime
+	filter.Protocol = model.PROTOCOL_TCP
 	filter.SrcIp = "185.47.63.113"
 	filter.SrcPort = 19
 	filter.DstIp = "176.126.243.198"
@@ -62,10 +63,53 @@ func TestParseAndStream(tester *testing.T) {
 	assert.Equal(tester, pcap_length, count)
 }
 
+func TestParseWrongProtocol(tester *testing.T) {
+	path := "test_resources/so-pcap.1575817346"
+	filter := model.NewFilter()
+	startTime, _ := time.Parse(time.RFC3339, "2019-12-08T00:00:00Z")
+	filter.BeginTime = startTime
+	endTime, _ := time.Parse(time.RFC3339, "2019-12-08T23:59:59Z")
+	filter.EndTime = endTime
+	filter.Protocol = model.PROTOCOL_ICMP
+	filter.SrcIp = "185.47.63.113"
+	filter.DstIp = "176.126.243.198"
+
+	packets, perr := ParseRawPcap(path, 999, filter)
+	assert.Nil(tester, perr)
+	assert.Len(tester, packets, 0)
+}
+
 func TestParseAndStreamFail(tester *testing.T) {
 	path := "test_resources/so-pcap.nonexistent"
 	filter := model.NewFilter()
 
 	_, perr := ParseRawPcap(path, 999, filter)
 	assert.ErrorContains(tester, perr, "No such file")
+}
+
+func TestParseAndStreamIcmp(tester *testing.T) {
+	path := "test_resources/icmp.pcap"
+	filter := model.NewFilter()
+	startTime, _ := time.Parse(time.RFC3339, "2024-02-12T00:00:00Z")
+	filter.BeginTime = startTime
+	endTime, _ := time.Parse(time.RFC3339, "2024-02-12T23:59:59Z")
+	filter.EndTime = endTime
+	filter.Protocol = model.PROTOCOL_ICMP
+	filter.SrcIp = "90.151.225.16"
+	filter.SrcPort = 19
+	filter.DstIp = "192.168.10.128"
+	filter.DstPort = 34515
+
+	packets, perr := ParseRawPcap(path, 999, filter)
+	assert.Nil(tester, perr)
+	assert.Len(tester, packets, 2)
+
+	reader, err := ToStream(packets)
+
+	assert.Nil(tester, err)
+	pcap_length := 196 // correlates to two icmp packets in icmp.pcap
+	bytes := make([]byte, 32768)
+	count, err := reader.Read(bytes)
+	assert.Nil(tester, err)
+	assert.Equal(tester, pcap_length, count)
 }

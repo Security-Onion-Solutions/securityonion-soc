@@ -349,7 +349,7 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
         view += (code < 32 || code > 126) && code != 13 && code != 10 ? "." : input[idx];
       }
       return view;
-    }
+    }  
   }
 }});
 
