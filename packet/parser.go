@@ -65,6 +65,20 @@ func ToStream(packets []gopacket.Packet) (io.ReadCloser, error) {
 	return io.NopCloser(bytes.NewReader(full.Bytes())), nil
 }
 
+func getPacketProtocol(packet gopacket.Packet) string {
+	if packet.Layer(layers.LayerTypeTCP) != nil {
+		return model.PROTOCOL_TCP
+	}
+	if packet.Layer(layers.LayerTypeUDP) != nil {
+		return model.PROTOCOL_UDP
+	}
+	if packet.Layer(layers.LayerTypeICMPv4) != nil ||
+		packet.Layer(layers.LayerTypeICMPv6) != nil {
+		return model.PROTOCOL_ICMP
+	}
+	return ""
+}
+
 func filterPacket(filter *model.Filter, packet gopacket.Packet) bool {
 	var srcIp, dstIp string
 	var srcPort, dstPort int
@@ -100,10 +114,14 @@ func filterPacket(filter *model.Filter, packet gopacket.Packet) bool {
 
 	include := (filter.BeginTime.IsZero() || timestamp.After(filter.BeginTime)) &&
 		(filter.EndTime.IsZero() || timestamp.Before(filter.EndTime)) &&
+		(filter.Protocol == "" || filter.Protocol == getPacketProtocol(packet)) &&
 		(filter.SrcIp == "" || srcIp == filter.SrcIp) &&
-		(filter.SrcPort == 0 || srcPort == filter.SrcPort) &&
-		(filter.DstIp == "" || dstIp == filter.DstIp) &&
-		(filter.DstPort == 0 || dstPort == filter.DstPort)
+		(filter.DstIp == "" || dstIp == filter.DstIp)
+
+	if include && (filter.Protocol == "udp" || filter.Protocol == "tcp") {
+		include = (filter.SrcPort == 0 || srcPort == filter.SrcPort) &&
+			(filter.DstPort == 0 || dstPort == filter.DstPort)
+	}
 
 	return include
 }

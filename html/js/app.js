@@ -961,7 +961,9 @@ $(document).ready(function() {
         if (event.code == "Escape") {
           this.unmaximize(true);
         }
-        event.cancel();
+        if (typeof event.cancelable !== "boolean" || event.cancelable) {
+          event.preventDefault();
+        }
       },
       batchLookup(ips, comp) {
         if (!this.enableReverseLookup) {

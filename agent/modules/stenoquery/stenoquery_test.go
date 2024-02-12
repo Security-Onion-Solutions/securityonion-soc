@@ -46,6 +46,11 @@ func TestCreateQuery(tester *testing.T) {
 	query := sq.CreateQuery(job)
 	assert.Equal(tester, expectedQuery, query)
 
+	job.Filter.Protocol = model.PROTOCOL_TCP
+	query = sq.CreateQuery(job)
+	expectedQuery = expectedQuery + " and tcp"
+	assert.Equal(tester, expectedQuery, query)
+
 	job.Filter.SrcIp = "1.2.3.4"
 	query = sq.CreateQuery(job)
 	expectedQuery = expectedQuery + " and host " + job.Filter.SrcIp
@@ -65,4 +70,38 @@ func TestCreateQuery(tester *testing.T) {
 	query = sq.CreateQuery(job)
 	expectedQuery = expectedQuery + " and port " + strconv.Itoa(job.Filter.DstPort)
 	assert.Equal(tester, expectedQuery, query)
+}
+
+func TestCreateQueryIcmp(tester *testing.T) {
+	sq := NewStenoQuery(nil)
+
+	job := model.NewJob()
+	job.Filter.BeginTime, _ = time.Parse(time.RFC3339, "2006-01-02T15:05:05Z")
+	job.Filter.EndTime, _ = time.Parse(time.RFC3339, "2006-01-02T15:06:05Z")
+	expectedQuery := "before 2006-01-02T15:06:05Z and after 2006-01-02T15:05:05Z"
+	query := sq.CreateQuery(job)
+	assert.Equal(tester, expectedQuery, query)
+
+	job.Filter.Protocol = model.PROTOCOL_ICMP
+	query = sq.CreateQuery(job)
+	expectedQuery = expectedQuery + " and icmp"
+	assert.Equal(tester, expectedQuery, query)
+
+	job.Filter.SrcIp = "1.2.3.4"
+	query = sq.CreateQuery(job)
+	expectedQuery = expectedQuery + " and host " + job.Filter.SrcIp
+	assert.Equal(tester, expectedQuery, query)
+
+	job.Filter.DstIp = "1.2.1.2"
+	query = sq.CreateQuery(job)
+	expectedQuery = expectedQuery + " and host " + job.Filter.DstIp
+	assert.Equal(tester, expectedQuery, query)
+
+	job.Filter.SrcPort = 123
+	query = sq.CreateQuery(job)
+	assert.Equal(tester, expectedQuery, query) // port ignored for icmp
+
+	job.Filter.DstPort = 123
+	query = sq.CreateQuery(job)
+	assert.Equal(tester, expectedQuery, query) // port ignored for icmp
 }
