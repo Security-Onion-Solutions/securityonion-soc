@@ -36,6 +36,8 @@ const i18n = {
       actionPcapHelp: 'Show PCAP for this event',
       actionProcessAncestors: 'Process ancestors',
       actionProcessAncestorsHelp: 'Show all parent processes for this process',
+      actionSublime: 'Sublime Platform Email Review',
+      actionSublimeHelp: 'Review email in Sublime Platform',
       actionSuccess: 'Action completed: ',
       actionVirusTotal: 'VirusTotal',
       actionVirusTotalHelp: 'Analyze this field at virustotal.com',
