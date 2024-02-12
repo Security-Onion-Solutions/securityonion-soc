@@ -351,6 +351,7 @@ level: high
 		Engine:      model.EngineNameElastAlert,
 		Language:    model.SigLangSigma,
 		Ruleset:     util.Ptr("all_rules"),
+		License:     model.LicenseDRL,
 	}
 
 	dets, errMap := engine.parseRules(pkgZips)
