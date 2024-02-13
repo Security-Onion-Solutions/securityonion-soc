@@ -267,7 +267,6 @@ func (store *ElasticDetectionstore) Query(ctx context.Context, query string, max
 	if err = store.server.CheckAuthorized(ctx, "read", "detection"); err != nil {
 		return nil, err
 	}
-
 	criteria := model.NewEventSearchCriteria()
 	format := "2006-01-02 3:04:05 PM"
 
@@ -425,7 +424,7 @@ func (store *ElasticDetectionstore) UpdateDetectionField(ctx context.Context, id
 	if err := store.server.CheckAuthorized(ctx, "write", "detection"); err != nil {
 		return nil, err
 	}
-
+  
 	if len(fields) == 0 {
 		return nil, errors.New("no fields to update")
 	}
@@ -544,7 +543,7 @@ func (store *ElasticDetectionstore) audit(ctx context.Context, document map[stri
 			log.WithError(err).Error("Encountered error while indexing document into elasticsearch")
 		}
 	}
-
+  
 	return err
 }
 
@@ -552,7 +551,7 @@ func (store *ElasticDetectionstore) indexDocument(ctx context.Context, index str
 	if err := store.server.CheckAuthorized(ctx, "write", "detection"); err != nil {
 		return "", err
 	}
-
+  
 	log.WithFields(log.Fields{
 		"index":     index,
 		"id":        id,

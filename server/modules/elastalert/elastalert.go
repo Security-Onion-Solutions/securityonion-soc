@@ -433,7 +433,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 				results.Unchanged++
 			}
 		} else {
-			det.IsEnabled = true
+			det.IsEnabled = false
 
 			_, err = e.srv.Detectionstore.CreateDetection(ctx, det)
 			if err != nil {
@@ -571,7 +571,7 @@ func (e *ElastAlertEngine) IndexExistingRules() (index map[string]string, err er
 }
 
 func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Detection) (string, error) {
-	args := []string{"convert", "-t", "eql", "-p", "windows-logsources", "-p", "ecs_windows", "/dev/stdin"}
+	args := []string{"convert", "-t", "eql", "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "/dev/stdin"}
 
 	cmd := exec.CommandContext(ctx, "sigma", args...)
 	cmd.Stdin = strings.NewReader(det.Content)

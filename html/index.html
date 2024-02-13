@@ -4759,21 +4759,19 @@
                         </li>
                       </ul>
                     </li>
-                    <li>
-                      {{i18n.configQLNIDSHeader}}
-                      <ul>
-                        <li>
-                          <router-link :to="{name: 'config', query: {s: 'idstools.config.ruleset'}}">{{i18n.configQLNIDSRuleset}}</router-link>
-                        </li>
-                        <li>
-                          <router-link :to="{name: 'config', query: {s: 'idstools.config.oinkcode'}}">{{i18n.configQLNIDSOinkCode}}</router-link>
-                        </li>
-                      </ul>
-                    </li>
+
                   </ul>
                   <br/>
                   <p class="font-weight-bold">{{i18n.configQLAnalystTitle}}</p>
                   <ul>
+                    <li>
+                      {{i18n.configQLSigmaHeader}}
+                      <ul>
+                        <li>                               
+                          <router-link :to="{name: 'config', query: {s: 'soc.config.server.modules.elastalertengine.sigmaRulePackages'}}">{{i18n.configQLSigmaRuleset}}</router-link>
+                        </li>
+                      </ul>
+                    </li>
                     <li>
                       {{i18n.configQLSuricataHeader}}
                       <ul>
@@ -4784,12 +4782,12 @@
                           <router-link :to="{name: 'config', query: {s: 'suricata.config.af-packet.threads'}}">{{i18n.configQLSuricataThreads}}</router-link>
                         </li>
                         <li>
-                          <router-link :to="{name: 'config', query: {s: 'idstools.sids'}}">{{i18n.configQLSIDS}}</router-link>
+                          <router-link :to="{name: 'config', query: {s: 'idstools.config.ruleset'}}">{{i18n.configQLNIDSRuleset}}</router-link>
                         </li>
                         <li>
-                          <router-link :to="{name: 'config', query: {s: 'suricata.thresholding.sids__yaml'}}">{{i18n.configQLSIDSThresholding}}</router-link>
-                      </ul>
-                    </li>
+                          <router-link :to="{name: 'config', query: {s: 'idstools.config.oinkcode'}}">{{i18n.configQLNIDSOinkCode}}</router-link>
+                        </ul>
+                        </li>
                     <li>
                       {{i18n.configQLZeekHeader}}
                       <ul>
