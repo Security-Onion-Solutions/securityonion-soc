@@ -170,6 +170,7 @@ const i18n = {
       commentAdd: 'Add Comment',
       commentDescription: 'Comment',
       commentDescriptionHelp: 'Provide follow-up information to this case',
+      commentDescriptionDetectionHelp: 'Provide follow-up information to this detection',
       commentHours: 'Work Hours',
       commentHoursHelp: 'Hours spent working on this update (leave blank for 0 hours)',
       commentRequired: 'Comments cannot be empty.',

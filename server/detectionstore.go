@@ -21,6 +21,12 @@ type Detectionstore interface {
 	GetAllCommunitySIDs(ctx context.Context, engine *model.EngineName) (map[string]*model.Detection, error) // map[detection.PublicId]detection
 	Query(ctx context.Context, query string, max int) ([]interface{}, error)
 	GetDetectionHistory(ctx context.Context, detectID string) ([]interface{}, error)
+
+	CreateComment(ctx context.Context, newComment *model.DetectionComment) (*model.DetectionComment, error)
+	GetComment(ctx context.Context, commentId string) (*model.DetectionComment, error)
+	GetComments(ctx context.Context, detectionId string) ([]*model.DetectionComment, error)
+	UpdateComment(ctx context.Context, comment *model.DetectionComment) (*model.DetectionComment, error)
+	DeleteComment(ctx context.Context, id string) error
 }
 
 //go:generate mockgen -destination mock/mock_detectionstore.go -package mock . Detectionstore

@@ -1050,9 +1050,9 @@
                 <v-icon left>fa-comments</v-icon>
                 <div class="d-none d-lg-block">Overview</div>
               </v-tab>
-              <v-tab id="detection_notesTab" href="#notes">
+              <v-tab id="detection_commentsTab" href="#comments">
                 <v-icon left>fa-paperclip</v-icon>
-                <div class="d-none d-lg-block">Operational Notes</div>
+                <div class="d-none d-lg-block">Comments</div>
               </v-tab>
               <v-tab id="detection_signatureTab" href="#signature">
                 <v-icon left>fa-eye</v-icon>
@@ -1118,20 +1118,126 @@
                   </div>
                 </div> -->
               </v-tab-item>
-              <v-tab-item value="notes">
-                <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
-                  <!-- Notes -->
-                  <v-textarea class="config-editor" outlined v-model="detect.note" auto-grow rows="15" />
-                </div>
-                <div class="d-flex align-center align-self-end justify-end text-body-2 mt-2">
-                  <div class="d-inline-flex justify-end">
-                    <v-btn id="detection-cancel" text small color="primary" class="align-self-end" @click="cancelDetection()">
-                      {{ i18n.cancel }}
-                    </v-btn>
-                    <v-btn id="detection-update" text small color="primary" class="align-self-end" @click="saveDetection(false)">
-                      {{i18n.update}}
-                    </v-btn>
+              <v-tab-item value="comments">
+                <v-row>
+                  <v-col>
+                    <v-toolbar class="elevation-0" fixed>
+                      <v-btn :title="i18n.addCommentHelp" color="primary" @click.stop="prepareForInput('comment-input')" id="add-comment-button">
+                        <v-icon>fa-plus</v-icon>
+                      </v-btn>
+                      <v-btn class="mx-1" :title="i18n.refreshCommentsHelp" color="secondary" @click.stop="reloadAssociation(true)" id="refresh-comments-button">
+                        <v-icon>fa-sync</v-icon>
+                      </v-btn>
+                    </v-toolbar>
+                  </v-col>
+                </v-row>
+                <div id="comment-list">
+                  <div v-for="(comment, index) in comments" class="mb-8" v-if="shouldRenderComment(comment, index)">
+                    <div class="d-flex flex-column align-start my-4">
+                      <v-col class="d-flex flex-column align-start pt-2 pt-md-0">
+                        <div class="mt-1 mt-md-3 pt-1 pb-2 px-2 contrast-bg rounded rounded-md" style="width: 100%;">
+                          <div class="d-flex flex-column align-start">
+                            <div v-if="!isEdit(`comment-${index}`)" class="case d-block comment-body mt-2">
+                              <div class="mb-2">
+                                <div :id="`comment-${index}`" class="markdown-body" :inner-html.prop="comment.value | formatMarkdown"></div>
+                              </div>
+                            </div>
+                            <div v-else class="d-flex flex-column" style="width: 100%;">
+                              <div class="d-flex flex-column flex-sm-row align-sm-center align-self-start text-body-2 mb-1 ml-1">
+                                <a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" :target="$root.target('_blank')" :title="i18n.markdownFormattingSupported"><v-icon>fab fa-markdown</v-icon></a>
+                              </div>
+                              <div class="mb-3">
+                                <v-form v-model="editForm.valid" @submit.prevent>
+                                  <v-textarea id="comment-value-input" solo flat hide-details="auto" rows="5" dense color="text--black" v-model="editForm.val" class="mb-1" :rules="[rules.required]"/>
+                                </v-form>
+                                <div class="d-inline-flex justify-end">
+                                  <v-btn text small color="primary" class="align-self-end" @click="stopEdit()">
+                                    {{ i18n.cancel }}
+                                  </v-btn>
+                                  <v-btn :disabled="!editForm.valid" text small color="primary" class="align-self-end" @click="stopEdit(true)">
+                                    {{ i18n.update }}
+                                  </v-btn>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div class="d-flex flex-column flex-sm-row align-self-end text-body-2">
+                              <div class="d-inline-flex align-center mr-1">
+                                <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text">
+                                  <div class="case avatar-font" :title="comment.owner">
+                                    {{ $root.getAvatar(comment.owner) }}
+                                  </div>
+                                </v-avatar>
+                                <div >
+                                  {{ comment.owner }}
+                                </div>
+                              </div>
+                              <div class="mt-1 mr-1 d-none d-sm-block">
+                                &bull;
+                              </div>
+                              <div class="mt-1">
+                                {{ comment.createTime | formatDateTime }}
+                              </div>
+                              <div v-if="isEdited(comment)" :title="$root.formatDateTime(comment.updateTime)" class="mx-sm-2">
+                                {{ i18n.edited }}
+                              </div>
+                              <div class="ml-1 d-flex mt-1 mt-sm-0">
+                                <v-btn text small icon color="primary" v-if="!isEdit(`comment-${index}`)" @click="startCommentEdit(`comment-${index}`, 'comment-input', comment)"
+                                  @keypress.space.prevent="startCommentEdit(`comment-${index}`, 'comment-input', comment)">
+                                  <v-icon class="tiny-icon">fa-edit</v-icon>
+                                </v-btn>
+                                <v-btn text small color="red" @click="deleteComment(comment)" icon><v-icon class="tiny-icon">fa-circle-xmark</v-icon></v-btn>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </v-col>
+                    </div>
+                    <div v-if="shouldRenderShowAll(index)" class="d-flex-block justify-center my-4 show-all">
+                      <div class="d-flex justify-center">
+                        <div>{{ getUnrenderedCount('comments') }} {{ i18n.hidden }} {{ i18n.comments }}</div>
+                      </div>
+                      <div class="d-flex justify-center">
+                        <v-btn @click="renderAllComments()">{{ i18n.showAll }}</v-btn>
+                      </div>
+                    </div>
                   </div>
+                </div>
+                <div class="d-flex flex-column align-start my-4">
+                  <v-col id="new-comment" class="d-flex flex-column align-start pt-2 pt-md-0">
+                    <div class="mt-1 mt-md-3 pb-3 pt-1 contrast-bg rounded rounded-md" style="width: 100%;">
+                      <div class="d-flex flex-column align-start">
+                        <div class="d-inline-flex align-center mt-3 mx-2 mb-4">
+                          <v-avatar color="primary" size="28" class="mr-2 white--text">
+                            <div class="font-weight-bold" :title="$root.username">
+                            {{ $root.getAvatar($root.username) }}
+                            </div>
+                          </v-avatar>
+                          <h3 class="text--primary">{{ i18n.commentAdd }}</h3>
+                        </div>
+                        <div class="d-flex flex-column" style="width: 100%;">
+                          <div class="d-flex flex-column flex-sm-row align-sm-center align-self-start text-body-2 mb-1 ml-3">
+                            <a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" :target="$root.target('_blank')" :title="i18n.markdownFormattingSupported"><v-icon>fab fa-markdown</v-icon></a>
+                          </div>
+                          <div class="mx-2">
+                            <v-form ref="detection-comment" v-model="commentsForm.valid" @submit.prevent>
+                              <v-textarea id="comment-input" solo flat hide-details="auto" rows="5" color="text--black" :value="commentsForm.value" @change="val => commentsForm.value = val" :rules="[rules.required]" class="mb-1" persistent-hint :hint="i18n.commentDescriptionDetectionHelp"/>
+                            </v-form>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="d-flex align-center align-self-end text-body-2 mt-2">
+                      <div class="d-inline-flex justify-end">
+                        <v-btn text small color="primary" class="align-self-end" @click="resetForm()">
+                        {{ i18n.cancel }}
+                        </v-btn>
+                        <v-btn :disabled="!commentsForm.valid" text small color="primary" class="align-self-end" @click="addComment()">
+                        {{ origComment ? i18n.update : i18n.add }}
+                        </v-btn>
+                      </div>
+                    </div>
+                  </v-col>
                 </div>
               </v-tab-item>
               <v-tab-item value="signature">
