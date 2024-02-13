@@ -71,9 +71,10 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
 	intervals := module.GetIntDefault(cfg, "intervals", DEFAULT_INTERVALS)
 	maxLogLength := module.GetIntDefault(cfg, "maxLogLength", DEFAULT_MAX_LOG_LENGTH)
 	casesEnabled := module.GetBoolDefault(cfg, "casesEnabled", true)
+	lookupTunnelParent := module.GetBoolDefault(cfg, "lookupTunnelParent", true)
 	detectionsEnabled := module.GetBoolDefault(cfg, "detectionsEnabled", true)
 	err := elastic.store.Init(host, remoteHosts, username, password, verifyCert, timeShiftMs, defaultDurationMs,
-		esSearchOffsetMs, timeoutMs, cacheMs, index, asyncThreshold, intervals, maxLogLength)
+		esSearchOffsetMs, timeoutMs, cacheMs, index, asyncThreshold, intervals, maxLogLength, lookupTunnelParent)
 	if err == nil && elastic.server != nil {
 		elastic.server.Eventstore = elastic.store
 		if casesEnabled {

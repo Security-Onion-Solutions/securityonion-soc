@@ -10,6 +10,10 @@ import (
 	"time"
 )
 
+const PROTOCOL_ICMP = "icmp"
+const PROTOCOL_TCP = "tcp"
+const PROTOCOL_UDP = "udp"
+
 type Filter struct {
 	ImportId   string                 `json:"importId"`
 	BeginTime  time.Time              `json:"beginTime"`
@@ -18,6 +22,7 @@ type Filter struct {
 	SrcPort    int                    `json:"srcPort"`
 	DstIp      string                 `json:"dstIp"`
 	DstPort    int                    `json:"dstPort"`
+	Protocol   string                 `json:"protocol"`
 	Parameters map[string]interface{} `json:"parameters"`
 }
 

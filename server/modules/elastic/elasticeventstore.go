@@ -37,23 +37,24 @@ type FieldDefinition struct {
 }
 
 type ElasticEventstore struct {
-	server            *server.Server
-	hostUrls          []string
-	esClient          *elasticsearch.Client
-	esRemoteClients   []*elasticsearch.Client
-	esAllClients      []*elasticsearch.Client
-	timeShiftMs       int
-	defaultDurationMs int
-	esSearchOffsetMs  int
-	timeoutMs         time.Duration
-	index             string
-	cacheMs           time.Duration
-	cacheTime         time.Time
-	cacheLock         sync.Mutex
-	fieldDefs         map[string]*FieldDefinition
-	intervals         int
-	asyncThreshold    int
-	maxLogLength      int
+	server             *server.Server
+	hostUrls           []string
+	esClient           *elasticsearch.Client
+	esRemoteClients    []*elasticsearch.Client
+	esAllClients       []*elasticsearch.Client
+	timeShiftMs        int
+	defaultDurationMs  int
+	esSearchOffsetMs   int
+	timeoutMs          time.Duration
+	index              string
+	cacheMs            time.Duration
+	cacheTime          time.Time
+	cacheLock          sync.Mutex
+	fieldDefs          map[string]*FieldDefinition
+	intervals          int
+	asyncThreshold     int
+	maxLogLength       int
+	lookupTunnelParent bool
 }
 
 func NewElasticEventstore(srv *server.Server) *ElasticEventstore {
@@ -78,7 +79,8 @@ func (store *ElasticEventstore) Init(hostUrl string,
 	index string,
 	asyncThreshold int,
 	intervals int,
-	maxLogLength int) error {
+	maxLogLength int,
+	lookupTunnelParent bool) error {
 	store.timeShiftMs = timeShiftMs
 	store.defaultDurationMs = defaultDurationMs
 	store.esSearchOffsetMs = esSearchOffsetMs
@@ -88,6 +90,7 @@ func (store *ElasticEventstore) Init(hostUrl string,
 	store.cacheMs = time.Duration(cacheMs) * time.Millisecond
 	store.intervals = intervals
 	store.maxLogLength = maxLogLength
+	store.lookupTunnelParent = lookupTunnelParent
 
 	var err error
 	store.esClient, err = store.makeEsClient(hostUrl, user, pass, verifyCert)
@@ -575,7 +578,7 @@ func (store *ElasticEventstore) buildRangeFilter(timestampStr string) (string, t
   - Fetch record via provided Elasticsearch document query.
   - If the record has a tunnel_parent, search for a UID=tunnel_parent[0]
   - - If found, discard original record and replace with the new record
-  - If the record has source IP/port and destination IP/port, use it as the filter.
+  - If the record has source IP/port and destination IP/port, or protocol is icmp, use it as the filter.
   - Else if the record has a Zeek x509 "ID" search for the first Zeek record with this ID.
   - Else if the record has a Zeek file "FUID" search for the first Zeek record with this FUID.
   - Search for the Zeek record with a matching log.id.uid equal to the UID from the previously found record
@@ -622,42 +625,45 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 		rangeFilter, timestamp = store.buildRangeFilter(timestampStr)
 	}
 
-	// Check if user has pivoted to a PCAP that is encapsulated in a tunnel. The best we
-	// can do in this situation is respond with the tunnel PCAP data, which could be excessive.
-	tunnelParent := gjson.Get(json, "hits.hits.0._source.log.id.tunnel_parents").String()
-	if len(tunnelParent) > 0 {
-		log.Info("Document is inside of a tunnel; attempting to lookup tunnel connection log")
-		if tunnelParent[0] == '[' {
-			tunnelParent = gjson.Get(json, "hits.hits.0._source.log.id.tunnel_parents.0").String()
-		}
-		query := fmt.Sprintf(`
-      {
-        "query" : {
-          "bool": {
-            "must": [
-              { "match" : { "log.id.uid" : "%s" }}%s
-            ]
-          }
-        }
-      }`, tunnelParent, rangeFilter)
+	if store.lookupTunnelParent {
+		// Check if user has pivoted to a PCAP that is encapsulated in a tunnel. The best we
+		// can do in this situation is respond with the tunnel PCAP data, which could be excessive.
+		tunnelParent := gjson.Get(json, "hits.hits.0._source.log.id.tunnel_parents").String()
+		if len(tunnelParent) > 0 {
+			log.Info("Document is inside of a tunnel; attempting to lookup tunnel connection log")
+			if tunnelParent[0] == '[' {
+				tunnelParent = gjson.Get(json, "hits.hits.0._source.log.id.tunnel_parents.0").String()
+			}
+			query := fmt.Sprintf(`
+		{
+			"query" : { 
+			"bool": { 
+				"must": [
+				{ "match" : { "log.id.uid" : "%s" }}%s
+				]
+			}
+			}
+		}`, tunnelParent, rangeFilter)
 
-		json, err = store.luceneSearch(ctx, query)
-		log.WithFields(log.Fields{
-			"query":    store.truncate(query),
-			"response": store.truncate(json),
-		}).Debug("Elasticsearch tunnel search finished")
-		if err != nil {
-			log.WithField("query", store.truncate(query)).WithError(err).Error("Unable to lookup tunnel record")
-			return err
-		}
-		hits := gjson.Get(json, "hits.total.value").Int()
-		if hits == 0 {
-			log.WithField("query", store.truncate(query)).Error("Tunnel record was not found")
-			return errors.New("Unable to locate encapsulating tunnel record")
+			json, err = store.luceneSearch(ctx, query)
+			log.WithFields(log.Fields{
+				"query":    store.truncate(query),
+				"response": store.truncate(json),
+			}).Debug("Elasticsearch tunnel search finished")
+			if err != nil {
+				log.WithField("query", store.truncate(query)).WithError(err).Error("Unable to lookup tunnel record")
+				return err
+			}
+			hits := gjson.Get(json, "hits.total.value").Int()
+			if hits == 0 {
+				log.WithField("query", store.truncate(query)).Error("Tunnel record was not found")
+				return errors.New("Unable to locate encapsulating tunnel record")
+			}
 		}
 	}
 
 	filter.ImportId = gjson.Get(json, "hits.hits.0._source.import.id").String()
+	filter.Protocol = strings.ToLower(gjson.Get(json, "hits.hits.0._source.network.transport").String())
 	filter.SrcIp = gjson.Get(json, "hits.hits.0._source.source.ip").String()
 	filter.SrcPort = int(gjson.Get(json, "hits.hits.0._source.source.port").Int())
 	filter.DstIp = gjson.Get(json, "hits.hits.0._source.destination.ip").String()
@@ -669,7 +675,7 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 	duration := int64(store.defaultDurationMs)
 
 	// If source and destination IP/port details aren't available search ES again for a correlating Zeek record
-	if len(filter.SrcIp) == 0 || len(filter.DstIp) == 0 || filter.SrcPort == 0 || filter.DstPort == 0 {
+	if (len(filter.SrcIp) == 0 || len(filter.DstIp) == 0 || filter.SrcPort == 0 || filter.DstPort == 0) && filter.Protocol != model.PROTOCOL_ICMP {
 		if len(uid) == 0 || uid[0] != 'C' {
 			zeekFileQuery := ""
 			if len(x509id) > 0 && x509id[0] == 'F' {
@@ -757,12 +763,13 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 			matchTs, err = time.Parse(time.RFC3339, ts.String())
 			if err == nil {
 				idxStr := strconv.Itoa(idx)
+				protocol := strings.ToLower(gjson.Get(json, "hits.hits.0._source.network.transport").String())
 				srcIp := gjson.Get(json, "hits.hits."+idxStr+"._source.source.ip").String()
 				srcPort := int(gjson.Get(json, "hits.hits."+idxStr+"._source.source.port").Int())
 				dstIp := gjson.Get(json, "hits.hits."+idxStr+"._source.destination.ip").String()
 				dstPort := int(gjson.Get(json, "hits.hits."+idxStr+"._source.destination.port").Int())
 
-				if len(srcIp) > 0 && len(dstIp) > 0 && srcPort > 0 && dstPort > 0 {
+				if (len(srcIp) > 0 && len(dstIp) > 0 && srcPort > 0 && dstPort > 0) || (protocol == model.PROTOCOL_ICMP) {
 					delta := timestamp.Sub(matchTs)
 					deltaNs := delta.Nanoseconds()
 					if deltaNs < 0 {
@@ -772,6 +779,7 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 						closestDeltaNs = deltaNs
 
 						timestamp = matchTs
+						filter.Protocol = protocol
 						filter.SrcIp = srcIp
 						filter.SrcPort = srcPort
 						filter.DstIp = dstIp
@@ -791,13 +799,13 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 		}).Info("Obtained output parameters")
 	}
 
-	if len(filter.SrcIp) == 0 || len(filter.DstIp) == 0 || filter.SrcPort == 0 || filter.DstPort == 0 {
+	if len(filter.SrcIp) == 0 || len(filter.DstIp) == 0 || ((filter.SrcPort == 0 || filter.DstPort == 0) && filter.Protocol != model.PROTOCOL_ICMP) {
 		log.WithFields(log.Fields{
 			"query":     store.truncate(query),
 			"uid":       uid,
 			"requestId": ctx.Value(web.ContextKeyRequestId),
-		}).Warn("Unable to lookup PCAP due to missing TCP/UDP parameters")
-		return errors.New("No TCP/UDP record was found for retrieving PCAP")
+		}).Warn("Unable to lookup PCAP due to missing TCP/UDP/ICMP parameters")
+		return errors.New("No TCP/UDP/ICMP record was found for retrieving PCAP")
 	}
 
 	filter.BeginTime = timestamp.Add(time.Duration(-duration-int64(store.timeShiftMs)) * time.Millisecond)

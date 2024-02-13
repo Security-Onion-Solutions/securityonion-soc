@@ -47,9 +47,9 @@ const (
 	OverrideTypeModify       OverrideType = "modify"
 	OverrideTypeCustomFilter OverrideType = "customFilter"
 
-	LicenseDRL = "DRL"
+	LicenseDRL        = "DRL"
 	LicenseCommercial = "Commercial"
-	LicenseBSD = "BSD"
+	LicenseBSD        = "BSD"
 )
 
 var (
@@ -107,6 +107,12 @@ type Detection struct {
 	Tags        []string    `json:"tags"`
 	Ruleset     *string     `json:"ruleset"`
 	License     string      `json:"license"`
+}
+
+type DetectionComment struct {
+	Auditable
+	DetectionId string `json:"detectionId"`
+	Value       string `json:"value"`
 }
 
 // Note: JSON tags are used when storing the object in ElasticSearch,

@@ -19,83 +19,106 @@ function debounce(fn, wait) {
 
 routes.push({ path: '/detection/:id', name: 'detection', component: {
 	template: '#page-detection',
-	data() { return {
-		i18n: this.$root.i18n,
-		presets: {},
-		severityTranslations: {},
-		params: {},
-		detect: null,
-		origDetect: null,
-		curEditTarget: null, // string containing element ID, null if not editing
-		origValue: null,
-		editField: null,
-		curOverrideEditTarget: null,
-		origOverrideValue: null,
-		overrideEditField: null,
-		editOverride: null, // the override we're currently editing
-		editForm: { valid: true },
-		rules: {
-			required: value => (value && value.length > 0) || this.$root.i18n.required,
-			number: value => (! isNaN(+value) && Number.isInteger(parseFloat(value))) || this.$root.i18n.required,
-			hours: value => (!value || /^\d{1,4}(\.\d{1,4})?$/.test(value)) || this.$root.i18n.invalidHours,
-			minLength: limit => value => (value && value.length >= limit) || this.$root.i18n.ruleMinLen,
-			shortLengthLimit: value => (value.length < 100) || this.$root.i18n.required,
-			longLengthLimit: value => (encodeURI(value).split(/%..|./).length - 1 < 10000000) || this.$root.i18n.required,
-			fileSizeLimit: value => (value == null || value.size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
-			fileNotEmpty: value => (value == null || value.size > 0) || this.$root.i18n.fileEmpty,
-			fileRequired: value => (value != null) || this.$root.i18n.required,
-			cidrFormat: value => (!value ||
-				/^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\/(3[0-2]|[12]\d|\d)$/.test(value) || // IPv4 CIDR
-				/^((([0-9A-Fa-f]{1,4}:){7}([0-9A-Fa-f]{1,4}|:))|(([0-9A-Fa-f]{1,4}:){6}(:[0-9A-Fa-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){5}(((:[0-9A-Fa-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){4}(((:[0-9A-Fa-f]{1,4}){1,3})|((:[0-9A-Fa-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){3}(((:[0-9A-Fa-f]{1,4}){1,4})|((:[0-9A-Fa-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){2}(((:[0-9A-Fa-f]{1,4}){1,5})|((:[0-9A-Fa-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){1}(((:[0-9A-Fa-f]{1,4}){1,6})|((:[0-9A-Fa-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9A-Fa-f]{1,4}){1,7})|((:[0-9A-Fa-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(%.+)?\s*(\/([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8]))$/.test(value) // IPv6 CIDR
-			) || this.i18n.invalidCidr,
-		},
-		panel: [0, 1, 2],
-		activeTab: '',
-		sidExtract: /\bsid: ?['"]?(.*?)['"]?;/, // option
-		severityExtract: /\bsignature_severity ['"]?(.*?)['"]?[,;]/, // metadata
-		authorExtract: /\bauthor: ?['"]?(.*?)['"]?;/, // option
-		authorMetaExtract: /\bauthor ['"]?(.*?)['"]?[,;]/, // metadata
-		sortBy: 'createdAt',
-		sortDesc: false,
-		expanded: [],
-		overrideHeaders: [
-			{ text: 'Enabled', value: 'isEnabled' },
-			{ text: 'Type', value: 'type' },
-			{ text: 'Track', value: 'track' },
-			{ text: 'Created', value: 'createdAt', format: true },
-			{ text: 'Updated', value: 'updatedAt', format: true },
-		],
-		zone: moment.tz.guess(),
-		newOverride: null,
-		thresholdTypes: [
-			{ value: 'threshold', text: 'Threshold' },
-			{ value: 'limit', text: 'Limit' },
-			{ value: 'both', text: 'Both' }
-		],
-		historyTableOpts: {
-			sortBy: 'updateTime',
+	data() {
+		return {
+			i18n: this.$root.i18n,
+			presets: {},
+			severityTranslations: {},
+			params: {},
+			detect: null,
+			origDetect: null,
+			curEditTarget: null, // string containing element ID, null if not editing
+			origValue: null,
+			editField: null,
+			curOverrideEditTarget: null,
+			origOverrideValue: null,
+			overrideEditField: null,
+			editOverride: null, // the override we're currently editing
+			editForm: { valid: true },
+			commentsForm: { valid: true, value: '' },
+			rules: {
+				required: value => (value && value.length > 0) || this.$root.i18n.required,
+				number: value => (!isNaN(+value) && Number.isInteger(parseFloat(value))) || this.$root.i18n.required,
+				hours: value => (!value || /^\d{1,4}(\.\d{1,4})?$/.test(value)) || this.$root.i18n.invalidHours,
+				minLength: limit => value => (value && value.length >= limit) || this.$root.i18n.ruleMinLen,
+				shortLengthLimit: value => (value.length < 100) || this.$root.i18n.required,
+				longLengthLimit: value => (encodeURI(value).split(/%..|./).length - 1 < 10000000) || this.$root.i18n.required,
+				fileSizeLimit: value => (value == null || value.size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
+				fileNotEmpty: value => (value == null || value.size > 0) || this.$root.i18n.fileEmpty,
+				fileRequired: value => (value != null) || this.$root.i18n.required,
+				cidrFormat: value => (!value ||
+					/^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\/(3[0-2]|[12]\d|\d)$/.test(value) || // IPv4 CIDR
+					/^((([0-9A-Fa-f]{1,4}:){7}([0-9A-Fa-f]{1,4}|:))|(([0-9A-Fa-f]{1,4}:){6}(:[0-9A-Fa-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){5}(((:[0-9A-Fa-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){4}(((:[0-9A-Fa-f]{1,4}){1,3})|((:[0-9A-Fa-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){3}(((:[0-9A-Fa-f]{1,4}){1,4})|((:[0-9A-Fa-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){2}(((:[0-9A-Fa-f]{1,4}){1,5})|((:[0-9A-Fa-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){1}(((:[0-9A-Fa-f]{1,4}){1,6})|((:[0-9A-Fa-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9A-Fa-f]{1,4}){1,7})|((:[0-9A-Fa-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(%.+)?\s*(\/([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8]))$/.test(value) // IPv6 CIDR
+				) || this.i18n.invalidCidr,
+			},
+			panel: [0, 1, 2],
+			activeTab: '',
+			sidExtract: /\bsid: ?['"]?(.*?)['"]?;/, // option
+			severityExtract: /\bsignature_severity ['"]?(.*?)['"]?[,;]/, // metadata
+			authorExtract: /\bauthor: ?['"]?(.*?)['"]?;/, // option
+			authorMetaExtract: /\bauthor ['"]?(.*?)['"]?[,;]/, // metadata
+			sortBy: 'createdAt',
 			sortDesc: false,
-			search: '',
-			headers: [
-				{ text: this.$root.i18n.actions, width: '10.0em' },
-				{ text: this.$root.i18n.username, value: 'owner' },
-				{ text: this.$root.i18n.time, value: 'updateTime' },
-				{ text: this.$root.i18n.kind, value: 'kind' },
-				{ text: this.$root.i18n.operation, value: 'operation' },
-			],
-			itemsPerPage: 10,
-			footerProps: { 'items-per-page-options': [10,50,250,1000] },
-			count: 500,
 			expanded: [],
-			loading: false,
-		},
-		extractedSummary: '',
-		extractedReferences: [],
-		extractedLogic: '',
-		history: [],
-		extractedCreated: '',
-		extractedUpdated: '',
-		extractedAuthor: '',
+			overrideHeaders: [
+				{ text: 'Enabled', value: 'isEnabled' },
+				{ text: 'Type', value: 'type' },
+				{ text: 'Track', value: 'track' },
+				{ text: 'Created', value: 'createdAt', format: true },
+				{ text: 'Updated', value: 'updatedAt', format: true },
+			],
+			zone: moment.tz.guess(),
+			newOverride: null,
+			thresholdTypes: [
+				{ value: 'threshold', text: 'Threshold' },
+				{ value: 'limit', text: 'Limit' },
+				{ value: 'both', text: 'Both' }
+			],
+			historyTableOpts: {
+				sortBy: 'updateTime',
+				sortDesc: false,
+				search: '',
+				headers: [
+					{ text: this.$root.i18n.actions, width: '10.0em' },
+					{ text: this.$root.i18n.username, value: 'owner' },
+					{ text: this.$root.i18n.time, value: 'updateTime' },
+					{ text: this.$root.i18n.kind, value: 'kind' },
+					{ text: this.$root.i18n.operation, value: 'operation' },
+				],
+				itemsPerPage: 10,
+				footerProps: { 'items-per-page-options': [10, 50, 250, 1000] },
+				count: 500,
+				expanded: [],
+				loading: false,
+			},
+			extractedSummary: '',
+			extractedReferences: [],
+			extractedLogic: '',
+			history: [],
+			extractedCreated: '',
+			extractedUpdated: '',
+			extractedAuthor: '',
+			comments: [],
+			commentsTable: {
+				showAll: false,
+				sortBy: 'createTime',
+				sortDesc: false,
+				search: '',
+				headers: [
+					{ text: this.$root.i18n.username, value: 'owner' },
+					{ text: this.$root.i18n.dateCreated, value: 'createTime' },
+					{ text: this.$root.i18n.dateModified, value: 'updateTime' },
+					{ text: this.$root.i18n.commentDescription, value: 'description' },
+				],
+				itemsPerPage: 10,
+				footerProps: { 'items-per-page-options': [10, 50, 250, 1000] },
+				count: 500,
+				expanded: [],
+				loading: false,
+			},
+			renderAbbreviatedCount: 30,
+			curCommentEditTarget: null,
+			origComment: null,
 	}},
 	created() {
 		this.onDetectionChange = debounce(this.onDetectionChange, 300);
@@ -114,6 +137,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		async initDetection(params) {
 			this.params = params;
 			this.presets = params['presets'];
+			this.renderAbbreviatedCount = params["renderAbbreviatedCount"];
 			this.severityTranslations = params['severityTranslations'];
 
 			if (this.$route.params.id === 'create') {
@@ -167,6 +191,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.extractLogic();
 			this.extractDetails();
 			this.loadHistory();
+			this.loadComments();
 		},
 		extractSummary() {
 			switch (this.detect.engine) {
@@ -487,6 +512,22 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			this.$nextTick(() => {
 				const el = document.getElementById(target + '-edit');
+				if (el) {
+					el.focus();
+					el.select();
+				}
+			});
+		},
+		async startCommentEdit(target, focusId, comment) {
+			if (this.curCommentEditTarget === target) return;
+			if (this.curCommentEditTarget !== null) this.resetForm();
+
+			this.commentsForm.value = comment.value;
+			this.curCommentEditTarget = target;
+			this.origComment = comment;
+
+			this.$nextTick(() => {
+				const el = document.getElementById(focusId);
 				if (el) {
 					el.focus();
 					el.select();
@@ -943,6 +984,160 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			}
 
 			expanded.push(row);
-		}
+		},
+		prepareForInput(id) {
+			const el = document.getElementById(id)
+			el.scrollIntoView()
+			el.focus();
+		},
+		async reloadComments(showLoadingIndicator = false) {
+			if (showLoadingIndicator) this.$root.startLoading();
+			this.comments = [];
+			await this.loadComments();
+			if (showLoadingIndicator) this.$root.stopLoading();
+		},
+		async loadComments() {
+			try {
+				const response = await this.$root.papi.get(`detection/${this.detect.id}/comment`);
+				if (response && response.data) {
+					for (var idx = 0; idx < response.data.length; idx++) {
+						const obj = response.data[idx];
+
+						// Don't await the user details -- takes too long for the task scheduler to
+						// complete all these futures when looping across hundreds of records. Let
+						// the UI update as they finish, for a better user experience.
+						this.$root.populateUserDetails(obj, "userId", "owner");
+						if (obj.assigneeId) {
+							this.$root.populateUserDetails(obj, "assigneeId", "assignee");
+						}
+
+						obj.operation = this.$root.localizeMessage(obj.operation);
+
+						this.comments.push(obj);
+					}
+
+					this.resetForm();
+				}
+			} catch (error) {
+				this.$root.showError(error);
+			}
+		},
+		async addComment() {
+			if (this.$refs && this.$refs['detection-comment'] && !this.$refs['detection-comment'].validate()) {
+				return;
+			}
+
+			this.$root.startLoading();
+			try {
+				let isUpdate = false;
+				const form = this.commentsForm;
+				form.detectionId = this.detect.id;
+				form.id = '';
+				if (this.origComment) {
+					form.id = this.origComment.id;
+					isUpdate = true;
+				}
+				if (form.value) {
+					form.value = form.value.trim();
+				}
+
+				let data = JSON.stringify(form);
+				delete data.valid;
+
+				let response;
+				if (isUpdate) {
+					response = await this.$root.papi.put(`detection/comment/${form.id}`, data);
+				} else {
+					response = await this.$root.papi.post(`detection/${this.detect.id}/comment`, data);
+				}
+
+				if (response && response.data) {
+					if (isUpdate) {
+						this.reloadComments();
+					} else {
+						await this.$root.populateUserDetails(response.data, "userId", "owner");
+						this.comments.push(response.data);
+					}
+
+					this.resetForm();
+				}
+
+				this.$root.showTip(this.i18n.saveSuccess);
+			} catch (error) {
+				this.$root.showError(error);
+			}
+
+			this.$root.stopLoading();
+		},
+		resetForm() {
+			this.origComment = null;
+			if (this.$refs && this.$refs['detection-comment']) this.$refs['detection-comment'].reset();
+			this.commentsForm  = { valid: true, value: '' };
+		},
+		shouldRenderComment(obj, index) {
+			var render = true;
+			if (!this.commentsTable.showAll && this.renderAbbreviatedCount) {
+				const count = this.comments ? this.comments.length : 0;
+				const lowerCutoff = Math.floor(this.renderAbbreviatedCount / 2);
+				if (count - this.renderAbbreviatedCount > lowerCutoff) {
+					const upperCutoff = count - lowerCutoff;
+					if (index >= lowerCutoff && index < upperCutoff) {
+						render = false;
+					}
+				}
+			}
+
+			return render;
+		},
+		isEdited(obj) {
+			const createTime = Date.parse(obj.createTime);
+			const updateTime = Date.parse(obj.updateTime);
+			return Math.abs(updateTime - createTime) >= 1000;
+		},
+		shouldRenderShowAll(index) {
+			var render = false;
+			if (!this.commentsTable.showAll && this.renderAbbreviatedCount) {
+				const count = this.comments ? this.comments.length : 0;
+				const lowerCutoff = Math.floor(this.renderAbbreviatedCount / 2);
+				if (count - this.renderAbbreviatedCount > lowerCutoff) {
+					if (index == lowerCutoff-1) {
+						render = true;
+					}
+				}
+			}
+
+			return render;
+		},
+		getUnrenderedCount() {
+			var hiddenCount = 0;
+			if (!this.commentsTable.showAll && this.renderAbbreviatedCount) {
+				const count = this.comments ? this.comments.length : 0;
+				if (count > this.renderAbbreviatedCount) {
+					hiddenCount = count - this.renderAbbreviatedCount;
+				}
+			}
+
+			return hiddenCount;
+		},
+		renderAllComments() {
+			this.commentsTable.showAll = true;
+		},
+		async deleteComment(obj) {
+			const idx = this.comments.indexOf(obj);
+			if (idx > -1) {
+				this.$root.startLoading();
+				try {
+					await this.$root.papi.delete(`detection/comment/${obj.id}`);
+					this.comments.splice(idx, 1);
+				} catch (error) {
+					if (error.response != undefined && error.response.status == 404) {
+						this.$root.showError(this.i18n.notFound);
+					} else {
+						this.$root.showError(error);
+					}
+				}
+				this.$root.stopLoading();
+			}
+		},
 	}
 }});

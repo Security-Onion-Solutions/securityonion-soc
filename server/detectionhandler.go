@@ -42,6 +42,12 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Post("/", h.postDetection)
 		r.Post("/{id}/duplicate", h.duplicateDetection)
 
+		r.Post("/{id}/comment", h.createComment)
+		r.Get("/comment/{id}", h.getDetectionComment)
+		r.Put("/comment/{id}", h.updateComment)
+		r.Delete("/comment/{id}", h.deleteComment)
+		r.Get("/{id}/comment", h.getDetectionComments)
+
 		r.Get("/{id}/history", h.getDetectionHistory)
 
 		r.Put("/", h.putDetection)
@@ -433,4 +439,96 @@ func SyncLocalDetections(ctx context.Context, srv *Server, detections []*model.D
 	}
 
 	return errMap, nil
+}
+
+func (h *DetectionHandler) createComment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	detectId := chi.URLParam(r, "id")
+
+	body := &model.DetectionComment{}
+
+	err := web.ReadJson(r, &body)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	body.DetectionId = detectId
+
+	obj, err := h.server.Detectionstore.CreateComment(ctx, body)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, obj)
+}
+
+func (h *DetectionHandler) getDetectionComment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id := chi.URLParam(r, "id")
+
+	obj, err := h.server.Detectionstore.GetComment(ctx, id)
+	if err != nil {
+		web.Respond(w, r, http.StatusNotFound, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, obj)
+}
+
+func (h *DetectionHandler) updateComment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	commentId := chi.URLParam(r, "id")
+
+	body := &model.DetectionComment{}
+
+	err := web.ReadJson(r, &body)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	body.Id = commentId
+
+	obj, err := h.server.Detectionstore.UpdateComment(ctx, body)
+	if err != nil {
+		web.Respond(w, r, http.StatusNotFound, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, obj)
+}
+
+func (h *DetectionHandler) deleteComment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	commentId := chi.URLParam(r, "id")
+
+	err := h.server.Detectionstore.DeleteComment(ctx, commentId)
+	if err != nil {
+		web.Respond(w, r, http.StatusNotFound, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, nil)
+}
+
+func (h *DetectionHandler) getDetectionComments(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	detectId := chi.URLParam(r, "id")
+
+	obj, err := h.server.Detectionstore.GetComments(ctx, detectId)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			web.Respond(w, r, http.StatusNotFound, err)
+		} else {
+			web.Respond(w, r, http.StatusInternalServerError, err)
+		}
+
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, obj)
 }

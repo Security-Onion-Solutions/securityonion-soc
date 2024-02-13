@@ -197,6 +197,17 @@ $(document).ready(function() {
         }
         return content
       },
+      processAncestors(content) {
+        content = content.toString();
+        if (content.replace) {
+          try {
+            content = content.replace(/,/g, "\" OR process.entity_id:\"");
+          } catch (e) {
+            console.error("Failed to set process ancestors for content: " + e);
+          }
+        }
+        return content
+      },
       replaceActionVar(content, field, value, uriEncode) {
         if (value === undefined || value == null) return content;
 
@@ -211,6 +222,7 @@ $(document).ready(function() {
         content = content.replace("{" + field + "|base64}", encode(this.base64encode(value)));
         content = content.replace("{" + field + "|escape}", encode(this.escape(value)));
         content = content.replace("{" + field + "|escape|base64}", encode(this.base64encode(this.escape(value))));
+        content = content.replace("{" + field + "|processAncestors}", encode(this.processAncestors(value)));
         return content;
       },
       copyToClipboard(data, style) {
@@ -961,7 +973,9 @@ $(document).ready(function() {
         if (event.code == "Escape") {
           this.unmaximize(true);
         }
-        event.cancel();
+        if (typeof event.cancelable !== "boolean" || event.cancelable) {
+          event.preventDefault();
+        }
       },
       batchLookup(ips, comp) {
         if (!this.enableReverseLookup) {

@@ -543,6 +543,30 @@ func convertElasticEventToComment(event *model.EventRecord, schemaPrefix string)
 	return obj, err
 }
 
+func convertElasticEventToDetectionComment(event *model.EventRecord, schemaPrefix string) (*model.DetectionComment, error) {
+	var err error
+	var obj *model.DetectionComment
+
+	if event != nil {
+		obj = &model.DetectionComment{}
+		err = convertElasticEventToAuditable(event, &obj.Auditable, schemaPrefix)
+		if err == nil {
+			if value, ok := event.Payload[schemaPrefix+"detectioncomment.value"]; ok {
+				obj.Value = value.(string)
+			}
+			if value, ok := event.Payload[schemaPrefix+"detectioncomment.userId"]; ok {
+				obj.UserId = value.(string)
+			}
+			if value, ok := event.Payload[schemaPrefix+"detectioncomment.detectionId"]; ok {
+				obj.DetectionId = value.(string)
+			}
+			obj.CreateTime = parseTime(event.Payload, schemaPrefix+"detectioncomment.createTime")
+		}
+	}
+
+	return obj, err
+}
+
 func convertElasticEventToRelatedEvent(event *model.EventRecord, schemaPrefix string) (*model.RelatedEvent, error) {
 	var err error
 	var obj *model.RelatedEvent
@@ -787,6 +811,8 @@ func convertElasticEventToObject(event *model.EventRecord, schemaPrefix string) 
 			obj, err = convertElasticEventToCase(event, schemaPrefix)
 		case "comment":
 			obj, err = convertElasticEventToComment(event, schemaPrefix)
+		case "detectioncomment":
+			obj, err = convertElasticEventToDetectionComment(event, schemaPrefix)
 		case "related":
 			obj, err = convertElasticEventToRelatedEvent(event, schemaPrefix)
 		case "artifact":
