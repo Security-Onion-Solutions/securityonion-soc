@@ -433,7 +433,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 				results.Unchanged++
 			}
 		} else {
-			det.IsEnabled = true
+			det.IsEnabled = false
 
 			_, err = e.srv.Detectionstore.CreateDetection(ctx, det)
 			if err != nil {
