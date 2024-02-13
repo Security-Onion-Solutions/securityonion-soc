@@ -285,7 +285,7 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       this.job = job;
     },
     colorType(type) {
-      if (type.startsWith("ICMP")) return "error";
+      if (type.startsWith("ICMP")) return "warning";
       if (type.startsWith("DHCP")) return "warning";
       if (type.startsWith("ARP")) return "secondary";
       if (type.startsWith("DNS")) return "accent";
