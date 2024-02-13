@@ -199,6 +199,7 @@ const i18n = {
       configQLSOCActions: 'Edit entries on SOC Actions menu',
       configQLSOCAlerts: 'Edit queries for SOC Alerts',
       configQLSOCDashboards: 'Edit queries for SOC Dashboards',
+      configQLSOCDNS: 'Enable reverse DNS lookups when viewing IP addresses',
       configQLSOCHunt: 'Edit queries for SOC Hunt',
       configQLSuricata: 'Suricata',
       configQLSuricataThreads: 'Change number of Suricata workers (threads)',
