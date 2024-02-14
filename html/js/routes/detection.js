@@ -151,7 +151,11 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.loadUrlParameters();
 		},
 		loadUrlParameters() {
-
+			this.$nextTick(() => {
+				if (this.$route.query.tab) {
+					this.activeTab = this.$route.query.tab;
+				}
+			});
 		},
 		newDetection() {
 			let author = [this.$root.user.firstName, this.$root.user.lastName].filter(x => x).join(' ');

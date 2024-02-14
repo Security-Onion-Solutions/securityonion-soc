@@ -1048,15 +1048,15 @@
             <v-tabs grow v-model="activeTab" v-else>
               <v-tab id="detection_summaryTab" href="#summary">
                 <v-icon left>fa-comments</v-icon>
-                <div class="d-none d-lg-block">Overview</div>
+                <div class="d-none d-lg-block">{{ i18n.overview }}</div>
               </v-tab>
               <v-tab id="detection_commentsTab" href="#comments">
                 <v-icon left>fa-paperclip</v-icon>
-                <div class="d-none d-lg-block">Comments</div>
+                <div class="d-none d-lg-block">{{ i18n.comments }}</div>
               </v-tab>
-              <v-tab id="detection_signatureTab" href="#signature">
+              <v-tab id="detection_signatureTab" href="#source">
                 <v-icon left>fa-eye</v-icon>
-                <div class="d-none d-lg-block">Detection Source</div>
+                <div class="d-none d-lg-block">{{ i18n.detectionSource }}</div>
               </v-tab>
               <!-- <v-tab id="detection_playbookTab" href="#playbook">
                 <v-icon left>fa-book-bookmark</v-icon>
@@ -1064,11 +1064,11 @@
               </v-tab> -->
               <v-tab id="detection_tuningTab" href="#tuning">
                 <v-icon left>fa-link</v-icon>
-                <div class="d-none d-lg-block">Tuning</div>
+                <div class="d-none d-lg-block">{{ i18n.tuning }}</div>
               </v-tab>
               <v-tab id="detection_historyTab" href="#history">
                 <v-icon left>fa-history</v-icon>
-                <div class="d-none d-lg-block">History</div>
+                <div class="d-none d-lg-block">{{ i18n.history }}</div>
               </v-tab>
 
               <v-tab-item value="summary">
@@ -1240,7 +1240,7 @@
                   </v-col>
                 </div>
               </v-tab-item>
-              <v-tab-item value="signature">
+              <v-tab-item value="source">
                 <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
                   <!-- PublicID -->
                   <v-text-field id="detection-publicId-edit" v-model="detect.publicId" :readonly="detect.isCommunity" :rules="requestRules([rules.required, rules.minLength(5)])" persistent-hint :hint="i18n.publicId" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)">
@@ -4767,7 +4767,7 @@
                     <li>
                       {{i18n.configQLSigmaHeader}}
                       <ul>
-                        <li>                               
+                        <li>
                           <router-link :to="{name: 'config', query: {s: 'soc.config.server.modules.elastalertengine.sigmaRulePackages'}}">{{i18n.configQLSigmaRuleset}}</router-link>
                         </li>
                       </ul>
