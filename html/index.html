@@ -1253,7 +1253,10 @@
                 </div>
                 <div class="d-flex align-center align-self-end justify-end text-body-2 mt-2">
                   <div class="d-inline-flex justify-end">
-                    <v-btn id="detection-cancel" text small color="primary" class="align-self-end" @click="cancelDetection()">
+                    <v-btn v-if="detect.engine === 'elastalert'" id="detection-convert" text small color="primary" class="align-self-end" @click="convertDetection()">
+                      {{ i18n.convert }}
+                    </v-btn>
+                    <v-btn id="detection-cancel" v-if="!detect.isCommunity" text small color="primary" class="align-self-end" @click="cancelDetection()">
                       {{ i18n.cancel }}
                     </v-btn>
                     <v-btn id="detection-update" v-if="!detect.isCommunity" text small color="primary" class="align-self-end" @click="saveDetection(false)">
@@ -1668,6 +1671,27 @@
                 <!-- </div> -->
               </v-tab-item>
             </v-tabs>
+            <v-dialog v-model="showSigmaDialog" persistent width="800px">
+              <v-card>
+                <v-card-title class="lighten-4 py-4 title">{{ i18n.convertToElasticsearch }}</v-card-title>
+                <v-container>
+                  <div class="sigma-dialog-body">
+                    {{ convertedRule }}
+                  </div>
+                </v-container>
+                <div id="convert-button-container">
+                  <v-btn outlined color="primary" @click="cancelConvert()">
+                    {{ i18n.cancel }}
+                  </v-btn>
+                  <v-btn outlined color="primary" @click="copyConvertToClipboard()">
+                    {{ i18n.copyToClipboard }}
+                  </v-btn>
+                  <v-btn outlined color="primary" @click="runQueryInDiscover()">
+                    {{ i18n.viewInDiscover }}
+                  </v-btn>
+                </div>
+              </v-card>
+            </v-dialog>
           </div>
           <div class="col-md-3 order-md-2 col-12 order-1">
             <v-expansion-panels focusable multiple v-model="panel">
@@ -5142,6 +5166,7 @@
     <script src="js/external/chartjs-chart-sankey-0.12.0.min.js"></script>
     <script src="js/external/chartjs-adapter-moment-1.0.0.min.js"></script>
     <script src="js/external/js-yaml.min.js"></script>
+    <script src="js/external/lz-string.min.js"></script>
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>

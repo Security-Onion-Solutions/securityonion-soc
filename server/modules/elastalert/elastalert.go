@@ -114,6 +114,10 @@ func (e *ElastAlertEngine) ValidateRule(data string) (string, error) {
 	return string(data), nil
 }
 
+func (s *ElastAlertEngine) ConvertRule(ctx context.Context, detect *model.Detection) (string, error) {
+	return s.sigmaToElastAlert(ctx, detect)
+}
+
 func (e *ElastAlertEngine) parseSigmaPackages(cfg string) {
 	pkgs := strings.Split(strings.ToLower(cfg), "\n")
 	set := map[string]struct{}{}
@@ -183,7 +187,12 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 				continue
 			}
 
-			err = e.WriteFile(path, []byte(eaRule), 0644)
+			wrapped, err := wrapRule(det, eaRule)
+			if err != nil {
+				continue
+			}
+
+			err = e.WriteFile(path, []byte(wrapped), 0644)
 			if err != nil {
 				errMap[det.PublicID] = fmt.Sprintf("unable to write enabled detection file: %s", err)
 				continue
@@ -454,6 +463,11 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 				continue
 			}
 
+			rule, err = wrapRule(det, rule)
+			if err != nil {
+				continue
+			}
+
 			// 3. put query in /opt/so/rules/sigma for salt to pick up
 			if path == "" {
 				path = filepath.Join(e.elastAlertRulesFolder, fmt.Sprintf("%s.yml", det.PublicID))
@@ -599,12 +613,7 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 
 	query = strings.TrimSpace(query)
 
-	elastRule, err := wrapRule(det, query)
-	if err != nil {
-		return "", fmt.Errorf("unable to wrap rule: %w", err)
-	}
-
-	return elastRule, nil
+	return query, nil
 }
 
 type CustomWrapper struct {

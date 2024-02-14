@@ -234,7 +234,10 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 		Severity: model.SeverityHigh,
 	}
 
-	wrappedRule, err := engine.sigmaToElastAlert(context.Background(), det)
+	query, err := engine.sigmaToElastAlert(context.Background(), det)
+	assert.NoError(t, err)
+
+	wrappedRule, err := wrapRule(det, query)
 	assert.NoError(t, err)
 
 	expected := `play_title: Test Detection
@@ -293,8 +296,8 @@ func TestSigmaToElastAlertError(t *testing.T) {
 		Severity: model.SeverityHigh,
 	}
 
-	wrappedRule, err := engine.sigmaToElastAlert(context.Background(), det)
-	assert.Empty(t, wrappedRule)
+	query, err := engine.sigmaToElastAlert(context.Background(), det)
+	assert.Empty(t, query)
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "problem with sigma cli")
 }

@@ -49,6 +49,7 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Get("/{id}/comment", h.getDetectionComments)
 
 		r.Get("/{id}/history", h.getDetectionHistory)
+		r.Get("/{id}/convert", h.convertDetection)
 
 		r.Put("/", h.putDetection)
 
@@ -531,4 +532,35 @@ func (h *DetectionHandler) getDetectionComments(w http.ResponseWriter, r *http.R
 	}
 
 	web.Respond(w, r, http.StatusOK, obj)
+}
+
+func (h *DetectionHandler) convertDetection(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := chi.URLParam(r, "id")
+
+	detect, err := h.server.Detectionstore.GetDetection(ctx, id)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			web.Respond(w, r, http.StatusNotFound, err)
+		} else {
+			web.Respond(w, r, http.StatusInternalServerError, err)
+		}
+
+		return
+	}
+
+	if detect.Engine != model.EngineNameElastAlert {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("currently only ElastAlert detections support conversion"))
+		return
+	}
+
+	eaQuery, err := h.server.DetectionEngines[model.EngineNameElastAlert].ConvertRule(ctx, detect)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, map[string]string{
+		"query": eaQuery,
+	})
 }

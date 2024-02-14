@@ -8,6 +8,7 @@ package strelka
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io/fs"
 	"net/http"
 	"net/url"
@@ -99,6 +100,10 @@ func (e *StrelkaEngine) ValidateRule(data string) (string, error) {
 	}
 
 	return string(data), nil
+}
+
+func (s *StrelkaEngine) ConvertRule(ctx context.Context, detect *model.Detection) (string, error) {
+	return "", fmt.Errorf("not implemented")
 }
 
 func (e *StrelkaEngine) SyncLocalDetections(ctx context.Context, _ []*model.Detection) (errMap map[string]string, err error) {

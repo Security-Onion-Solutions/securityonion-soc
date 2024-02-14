@@ -609,3 +609,20 @@ td {
 .case-title {
   text-transform: capitalize;
 }
+
+.sigma-dialog-body {
+  background-color: #404040;
+  margin: 12px;
+  padding: 12px;
+}
+
+#convert-button-container {
+  display: flex;
+  flex-direction: row;
+  justify-content: end;
+  padding: 24px;
+}
+
+#convert-button-container > * {
+  margin-left: 12px;
+}

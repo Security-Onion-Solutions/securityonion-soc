@@ -88,6 +88,10 @@ func (s *SuricataEngine) IsRunning() bool {
 	return s.isRunning
 }
 
+func (s *SuricataEngine) ConvertRule(ctx context.Context, detect *model.Detection) (string, error) {
+	return "", fmt.Errorf("not implemented")
+}
+
 func (s *SuricataEngine) watchCommunityRules() {
 	defer func() {
 		s.thread.Done()
