@@ -80,7 +80,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) error {
 	e.elastAlertRulesFolder = module.GetStringDefault(config, "elastAlertRulesFolder", "/opt/so/rules/elastalert")
 	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", "/opt/so/conf/soc/sigma.fingerprint")
 
-	pkgs := module.GetStringDefault(config, "sigmaRulePackages", "core")
+	pkgs := module.GetStringArrayDefault(config, "sigmaRulePackages", []string{"core"})
 	e.parseSigmaPackages(pkgs)
 
 	return nil
@@ -118,18 +118,17 @@ func (s *ElastAlertEngine) ConvertRule(ctx context.Context, detect *model.Detect
 	return s.sigmaToElastAlert(ctx, detect)
 }
 
-func (e *ElastAlertEngine) parseSigmaPackages(cfg string) {
-	pkgs := strings.Split(strings.ToLower(cfg), "\n")
+func (e *ElastAlertEngine) parseSigmaPackages(pkgs []string) {
 	set := map[string]struct{}{}
 
 	for _, pkg := range pkgs {
-		pkg = strings.TrimSpace(pkg)
+		pkg = strings.ToLower(strings.TrimSpace(pkg))
 		switch pkg {
 		case "all":
 			set["all_rules"] = struct{}{}
 		case "emerging_threats":
 			set["emerging_threats_addon"] = struct{}{}
-		default:
+		case "core++", "core+", "core", "emerging_threats_addon", "all_rules":
 			if pkg != "" {
 				set[pkg] = struct{}{}
 			}

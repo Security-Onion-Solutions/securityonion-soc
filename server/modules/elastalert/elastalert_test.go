@@ -60,37 +60,37 @@ func TestParseSigmaPackages(t *testing.T) {
 
 	table := []struct {
 		Name     string
-		Input    string
+		Input    []string
 		Expected []string
 	}{
 		{
 			Name:     "Simple Sunny Day Path",
-			Input:    "core",
+			Input:    []string{"core"},
 			Expected: []string{"core"},
 		},
 		{
 			Name:     "Multiple Packages",
-			Input:    "core+\nemerging_threats",
+			Input:    []string{"core+", "emerging_threats"},
 			Expected: []string{"core+", "emerging_threats_addon"},
 		},
 		{
 			Name:     "Rename (all => all_rules)",
-			Input:    "all",
+			Input:    []string{"all"},
 			Expected: []string{"all_rules"},
 		},
 		{
 			Name:     "Rename (emerging_threats_addon => emerging_threats)",
-			Input:    "emerging_threats",
+			Input:    []string{"emerging_threats"},
 			Expected: []string{"emerging_threats_addon"},
 		},
 		{
 			Name:     "Normalize",
-			Input:    "CoRe++\n",
+			Input:    []string{"CoRe++"},
 			Expected: []string{"core++"},
 		},
 		{
 			Name:     "Account For Nesting Packages",
-			Input:    "core\ncore+\ncore++\nall_rules\nemerging_threats",
+			Input:    []string{"core", "core+", "core++", "all_rules", "emerging_threats"},
 			Expected: []string{"all_rules"},
 		},
 	}
