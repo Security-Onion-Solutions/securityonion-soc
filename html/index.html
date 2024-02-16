@@ -1047,15 +1047,15 @@
 
             <v-tabs grow v-model="activeTab" v-else>
               <v-tab id="detection_summaryTab" href="#summary">
-                <v-icon left>fa-comments</v-icon>
+                <v-icon left>fa-circle-nodes</v-icon>
                 <div class="d-none d-lg-block">{{ i18n.overview }}</div>
               </v-tab>
               <v-tab id="detection_commentsTab" href="#comments">
                 <v-icon left>fa-paperclip</v-icon>
-                <div class="d-none d-lg-block">{{ i18n.comments }}</div>
+                <div class="d-none d-lg-block">{{ i18n.detectionComments }}</div>
               </v-tab>
               <v-tab id="detection_signatureTab" href="#source">
-                <v-icon left>fa-eye</v-icon>
+                <v-icon left>fa-code</v-icon>
                 <div class="d-none d-lg-block">{{ i18n.detectionSource }}</div>
               </v-tab>
               <!-- <v-tab id="detection_playbookTab" href="#playbook">
@@ -1063,7 +1063,7 @@
                 <div class="d-none d-lg-block">Investigative Playbook</div>
               </v-tab> -->
               <v-tab id="detection_tuningTab" href="#tuning">
-                <v-icon left>fa-link</v-icon>
+                <v-icon left>fa-wrench</v-icon>
                 <div class="d-none d-lg-block">{{ i18n.tuning }}</div>
               </v-tab>
               <v-tab id="detection_historyTab" href="#history">
@@ -1213,7 +1213,7 @@
                             {{ $root.getAvatar($root.username) }}
                             </div>
                           </v-avatar>
-                          <h3 class="text--primary">{{ i18n.commentAdd }}</h3>
+                          <h3 class="text--primary">{{ i18n.commentAddDetection }}</h3>
                         </div>
                         <div class="d-flex flex-column" style="width: 100%;">
                           <div class="d-flex flex-column flex-sm-row align-sm-center align-self-start text-body-2 mb-1 ml-3">
@@ -1741,7 +1741,7 @@
                     {{ i18n.type }}:
                   </div>
                   <div class="ops-value case-title">
-                    {{ detect.engine }}
+                    {{ detect.language }}
                   </div>
                   <div class="ops-header">
                     {{ i18n.severity }}:
