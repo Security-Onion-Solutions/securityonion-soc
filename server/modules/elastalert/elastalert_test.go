@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os/exec"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -336,6 +337,24 @@ level: high
 	_, err = bad.Write([]byte("bad data"))
 	assert.NoError(t, err)
 
+	denied, err := writer.Create("rules/deny.yml")
+	assert.NoError(t, err)
+
+	_, err = denied.Write([]byte("deny"))
+	assert.NoError(t, err)
+
+	allowThenDeny, err := writer.Create("rules/eventually_deny.yml")
+	assert.NoError(t, err)
+
+	_, err = allowThenDeny.Write([]byte("00000000-0000-0000-0000-00000000 deny"))
+	assert.NoError(t, err)
+
+	matchesNeither, err := writer.Create("rules/not_allowed.yml")
+	assert.NoError(t, err)
+
+	_, err = matchesNeither.Write([]byte("123"))
+	assert.NoError(t, err)
+
 	err = writer.Close()
 	assert.NoError(t, err)
 
@@ -344,6 +363,8 @@ level: high
 	}
 
 	engine := ElastAlertEngine{}
+	engine.allowRegex = regexp.MustCompile("00000000-0000-0000-0000-00000000")
+	engine.denyRegex = regexp.MustCompile("deny")
 
 	expected := &model.Detection{
 		PublicID:    "00000000-0000-0000-0000-00000000",

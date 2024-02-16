@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -58,6 +59,8 @@ type ElastAlertEngine struct {
 	sigmaRulePackages                    []string
 	isRunning                            bool
 	thread                               *sync.WaitGroup
+	allowRegex                           *regexp.Regexp
+	denyRegex                            *regexp.Regexp
 	IOManager
 }
 
@@ -82,6 +85,25 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) error {
 
 	pkgs := module.GetStringArrayDefault(config, "sigmaRulePackages", []string{"core"})
 	e.parseSigmaPackages(pkgs)
+
+	allow := module.GetStringDefault(config, "allowRegex", "")
+	deny := module.GetStringDefault(config, "denyRegex", "")
+
+	if allow != "" {
+		var err error
+		e.allowRegex, err = regexp.Compile(allow)
+		if err != nil {
+			return fmt.Errorf("unable to compile ElastAlert's allowRegex: %w", err)
+		}
+	}
+
+	if deny != "" {
+		var err error
+		e.denyRegex, err = regexp.Compile(deny)
+		if err != nil {
+			return fmt.Errorf("unable to compile ElastAlert's denyRegex: %w", err)
+		}
+	}
 
 	return nil
 }
@@ -335,6 +357,7 @@ func (e *ElastAlertEngine) parseRules(pkgZips map[string][]byte) (detections []*
 			if err != nil {
 				f.Close()
 				errMap[file.Name] = err
+
 				continue
 			}
 
@@ -343,6 +366,16 @@ func (e *ElastAlertEngine) parseRules(pkgZips map[string][]byte) (detections []*
 			rule, err := ParseElastAlertRule(data)
 			if err != nil {
 				errMap[file.Name] = err
+				continue
+			}
+
+			if e.denyRegex != nil && e.denyRegex.MatchString(string(data)) {
+				log.WithField("file", file.Name).Info("content matched ElastAlert's denyRegex")
+				continue
+			}
+
+			if e.allowRegex != nil && !e.allowRegex.MatchString(string(data)) {
+				log.WithField("file", file.Name).Info("content didn't match ElastAlert's allowRegex")
 				continue
 			}
 

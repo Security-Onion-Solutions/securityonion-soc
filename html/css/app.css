@@ -568,8 +568,8 @@ td {
 .detect-reference {
   font-size: small;
   display: table;
-  width: 100%;
   margin-top: 12px;
+  margin-left: 12px;
 }
 
 .detect-reference > div {

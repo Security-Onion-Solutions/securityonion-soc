@@ -8,6 +8,7 @@ package strelka
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -48,6 +50,8 @@ type StrelkaEngine struct {
 	reposFolder                          string
 	rulesRepos                           []string
 	compileYaraPythonScriptPath          string
+	allowRegex                           *regexp.Regexp
+	denyRegex                            *regexp.Regexp
 	IOManager
 }
 
@@ -70,6 +74,25 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) error {
 	e.reposFolder = module.GetStringDefault(config, "reposFolder", "/opt/so/conf/strelka/repos")
 	e.rulesRepos = module.GetStringArrayDefault(config, "rulesRepos", []string{"github.com/Security-Onion-Solutions/securityonion-yara"})
 	e.compileYaraPythonScriptPath = module.GetStringDefault(config, "compileYaraPythonScriptPath", "/opt/so/conf/strelka/compile_yara.py")
+
+	allow := module.GetStringDefault(config, "allowRegex", "")
+	deny := module.GetStringDefault(config, "denyRegex", "")
+
+	if allow != "" {
+		var err error
+		e.allowRegex, err = regexp.Compile(allow)
+		if err != nil {
+			return fmt.Errorf("unable to compile Strelka's allowRegex: %w", err)
+		}
+	}
+
+	if deny != "" {
+		var err error
+		e.denyRegex, err = regexp.Compile(deny)
+		if err != nil {
+			return fmt.Errorf("unable to compile Strelka's denyRegex: %w", err)
+		}
+	}
 
 	return nil
 }
@@ -94,7 +117,7 @@ func (e *StrelkaEngine) IsRunning() bool {
 }
 
 func (e *StrelkaEngine) ValidateRule(data string) (string, error) {
-	_, err := ParseYaraRules([]byte(data))
+	_, err := e.parseYaraRules([]byte(data), false)
 	if err != nil {
 		return "", err
 	}
@@ -230,7 +253,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 					return nil
 				}
 
-				parsed, err := ParseYaraRules(raw)
+				parsed, err := e.parseYaraRules(raw, true)
 				if err != nil {
 					log.WithError(err).WithField("file", path).Error("failed to parse yara rule file")
 					return nil
@@ -319,6 +342,203 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			"time":   time.Since(start).Seconds(),
 		}).Info("synced community detections")
 	}
+}
+
+func (e *StrelkaEngine) parseYaraRules(data []byte, filter bool) ([]*YaraRule, error) {
+	rules := []*YaraRule{}
+	rule := &YaraRule{}
+
+	state := parseStateImportsID
+
+	raw := string(data)
+	buffer := bytes.NewBuffer([]byte{})
+	last := ' '
+	curCommentType := ' ' // either '/' or '*' if in a comment, ' ' if not in comment
+	curHeader := ""       // meta, strings, condition, or empty if not yet in a section
+	curQuotes := ' '      // either ' or " if in a string, ' ' if not in a string
+
+	for i, r := range raw {
+		rule.Src += string(r)
+
+		if r == '\r' {
+			continue
+		}
+
+		if (curCommentType == '*' && last == '*' && r == '/') ||
+			(curCommentType == '/' && r == '\n') {
+			curCommentType = ' '
+
+			if last == '*' {
+				last = r
+				continue
+			}
+		}
+
+		if last == '/' && curQuotes == ' ' && curCommentType == ' ' {
+			if r == '/' {
+				curCommentType = '/'
+				if buffer.Len() != 0 {
+					buffer.Truncate(buffer.Len() - 1)
+				}
+			} else if r == '*' {
+				curCommentType = '*'
+				if buffer.Len() != 0 {
+					buffer.Truncate(buffer.Len() - 1)
+				}
+			}
+		}
+
+		if curCommentType != ' ' {
+			// in a comment, skip everything
+			last = r
+			continue
+		}
+
+	reevaluateState:
+		switch state {
+		case parseStateImportsID:
+			switch r {
+			case '\n':
+				// is this an import?
+				buf := buffer.String() // expected: `import "foo"`
+				if strings.HasPrefix(buf, "import ") {
+					buf = strings.TrimSpace(strings.TrimPrefix(buf, "import "))
+					buf = strings.Trim(buf, `"`)
+
+					rule.Imports = append(rule.Imports, buf)
+
+					buffer.Reset()
+				}
+			case '{':
+				buf := strings.TrimSpace(buffer.String()) // expected: `rule foo {` or `rule foo\n{`
+				buf = strings.TrimSpace(strings.TrimPrefix(buf, "rule"))
+
+				if strings.Contains(buf, ":") {
+					// gets rid of inheritance?
+					// rule This : That {...} becomes "This"
+					parts := strings.SplitN(buf, ":", 2)
+					buf = strings.TrimSpace(parts[0])
+				}
+
+				if buf != "" {
+					rule.Identifier = buf
+				} else {
+					return nil, errors.New(fmt.Sprintf("expected rule identifier at %d", i))
+				}
+
+				buffer.Reset()
+
+				state = parseStateWatchForHeader
+			default:
+				buffer.WriteRune(r)
+			}
+		case parseStateWatchForHeader:
+			buf := strings.TrimSpace(buffer.String())
+			if r == '\n' && len(buf) != 0 && buf[len(buf)-1] == ':' {
+				curHeader = strings.ToLower(strings.TrimSpace(strings.TrimSuffix(buf, ":")))
+				buffer.Reset()
+
+				if curHeader != "meta" &&
+					curHeader != "strings" &&
+					curHeader != "condition" {
+					return nil, errors.New(fmt.Sprintf("unexpected header at %d: %s", i, curHeader))
+				}
+
+				state = parseStateInSection
+			} else {
+				buffer.WriteRune(r)
+			}
+		case parseStateInSection:
+			if r == '\n' {
+				buf := strings.TrimSpace(buffer.String())
+				if len(buf) != 0 && buf[len(buf)-1] == ':' && !strings.HasPrefix(buf, "for ") {
+					// found a header, new section
+					state = parseStateWatchForHeader
+					goto reevaluateState
+				} else {
+					if buf != "" {
+						switch curHeader {
+						case "meta":
+							parts := strings.SplitN(buf, "=", 2)
+							if len(parts) != 2 {
+								return nil, errors.New(fmt.Sprintf("invalid meta line at %d: %s", i, buf))
+							}
+
+							key := strings.TrimSpace(parts[0])
+							value := strings.TrimSpace(parts[1])
+
+							rule.Meta.Set(key, value)
+						case "strings":
+							rule.Strings = append(rule.Strings, buf)
+						case "condition":
+							rule.Condition = strings.TrimSpace(rule.Condition + " " + buf)
+						}
+					}
+
+					buffer.Reset()
+				}
+			} else if r == '}' && len(strings.TrimSpace(buffer.String())) == 0 && curQuotes != '}' {
+				// end of rule
+				rule.Src = strings.TrimSpace(rule.Src)
+				keep := true
+
+				if filter && e.denyRegex != nil && e.denyRegex.MatchString(rule.Src) {
+					log.WithField("id", rule.Identifier).Info("content matched Strelka's denyRegex")
+					keep = false
+				}
+
+				if filter && e.allowRegex != nil && !e.allowRegex.MatchString(rule.Src) {
+					log.WithField("id", rule.Identifier).Info("content didn't match Strelka's allowRegex")
+					keep = false
+				}
+
+				if keep {
+					rules = append(rules, rule)
+				}
+
+				imports := []string{}
+				buffer.Reset()
+
+				state = parseStateImportsID
+				curHeader = ""
+				curQuotes = ' '
+				rule = &YaraRule{}
+
+				if len(imports) > 0 {
+					rule.Imports = append([]string{}, imports...)
+				}
+			} else {
+				buffer.WriteRune(r)
+				if (r == '\'' || r == '"' || r == '{') && last != '\\' && curQuotes == ' ' {
+					// starting a string
+					if r == '{' {
+						curQuotes = '}'
+					} else {
+						curQuotes = r
+					}
+				} else if curQuotes != ' ' && r == curQuotes && last != '\\' {
+					// ending a string
+					curQuotes = ' '
+				}
+			}
+		}
+
+		if r == '\\' && last == '\\' && curQuotes != ' ' {
+			// this is an escaped slash in the middle of a string,
+			// so we need to remove the previous slash so it's not
+			// mistaken for an escape character in case this is the
+			// last character in the string
+			last = ' '
+		} else {
+			last = r
+		}
+	}
+
+	if state != parseStateImportsID || len(strings.TrimSpace(buffer.String())) != 0 {
+		return nil, errors.New("unexpected end of rule")
+	}
+
+	return rules, nil
 }
 
 func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]string, err error) {

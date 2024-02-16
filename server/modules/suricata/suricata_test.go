@@ -7,6 +7,7 @@ package suricata
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -308,10 +309,12 @@ func TestParse(t *testing.T) {
 			Name: "Sunny Day Path with Edge Cases",
 			Lines: []string{
 				"# Comment",
-				SimpleRule,
+				SimpleRule, // allowRegex has the SID, should allow
 				"",
-				` alert  http any any  <>   any any (metadata:signature_severity   Informational; sid: "20000"; msg:"a \"tricky\"\;\\ msg";)`,
+				` alert  http any any  <>   any any (metadata:signature_severity   Informational; sid: "20000"; msg:"a \"tricky\"\;\\ msg";)`, // allowRegex has the SID, should allow
 				" # " + FlowbitsRuleA,
+				FlowbitsRuleB, // denyRegex will prevent this from being parsed
+				"alert http any any -> any any (msg:\"This rule doesn't have a SID\";)", // doesn't match either regex, will be left out
 			},
 			ExpectedDetections: []*model.Detection{
 				{
@@ -341,6 +344,8 @@ func TestParse(t *testing.T) {
 	}
 
 	mod := NewSuricataEngine(&server.Server{})
+	mod.allowRegex = regexp.MustCompile("[12]0000")
+	mod.denyRegex = regexp.MustCompile("flowbits")
 
 	for _, test := range table {
 		test := test
