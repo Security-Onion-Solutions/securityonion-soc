@@ -52,6 +52,7 @@ type StrelkaEngine struct {
 	compileYaraPythonScriptPath          string
 	allowRegex                           *regexp.Regexp
 	denyRegex                            *regexp.Regexp
+	compileRules                         bool
 	IOManager
 }
 
@@ -74,6 +75,7 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) error {
 	e.reposFolder = module.GetStringDefault(config, "reposFolder", "/opt/so/conf/strelka/repos")
 	e.rulesRepos = module.GetStringArrayDefault(config, "rulesRepos", []string{"github.com/Security-Onion-Solutions/securityonion-yara"})
 	e.compileYaraPythonScriptPath = module.GetStringDefault(config, "compileYaraPythonScriptPath", "/opt/so/conf/strelka/compile_yara.py")
+	e.compileRules = module.GetBoolDefault(config, "compileRules", true)
 
 	allow := module.GetStringDefault(config, "allowRegex", "")
 	deny := module.GetStringDefault(config, "denyRegex", "")
@@ -575,21 +577,23 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]s
 		return nil, err
 	}
 
-	// compile yara rules
-	cmd := exec.CommandContext(ctx, "python3", e.compileYaraPythonScriptPath, e.yaraRulesFolder)
+	if e.compileRules {
+		// compile yara rules
+		cmd := exec.CommandContext(ctx, "python3", e.compileYaraPythonScriptPath, e.yaraRulesFolder)
 
-	raw, code, dur, err := e.ExecCommand(cmd)
+		raw, code, dur, err := e.ExecCommand(cmd)
 
-	log.WithFields(log.Fields{
-		"command":  cmd.String(),
-		"output":   string(raw),
-		"code":     code,
-		"execTime": dur.Seconds(),
-		"error":    err,
-	}).Info("yara compilation results")
+		log.WithFields(log.Fields{
+			"command":  cmd.String(),
+			"output":   string(raw),
+			"code":     code,
+			"execTime": dur.Seconds(),
+			"error":    err,
+		}).Info("yara compilation results")
 
-	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return nil, nil
