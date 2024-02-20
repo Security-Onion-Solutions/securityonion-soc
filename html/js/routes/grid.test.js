@@ -72,6 +72,8 @@ test('colorNodeStatus', () => {
 	expect(comp.colorNodeStatus("pending")).toBe("warning");
 	expect(comp.colorNodeStatus("pending", true)).toBe("warning");
 	expect(comp.colorNodeStatus("unknown", true)).toBe("warning");
+	expect(comp.colorNodeStatus("restart", false)).toBe("warning");
+	expect(comp.colorNodeStatus("restart", true)).toBe("warning");
 });
 
 test('formatLinearColor', () => {
@@ -90,6 +92,7 @@ test('iconNodeStatus', () => {
 	expect(comp.iconNodeStatus("pending")).toBe("fa-circle-exclamation");
 	expect(comp.iconNodeStatus("ok")).toBe("fa-circle-check");
 	expect(comp.iconNodeStatus("other")).toBe("fa-circle-question");
+	expect(comp.iconNodeStatus("restart")).toBe("fa-circle-info");
 });
 
 test('colorContainerStatus', () => {
@@ -271,6 +274,30 @@ test('hasMetricstore', () => {
 test('hasQueuestore', () => {
 	var item = {containers: [{Name: 'so-something'}, {Name: 'so-redis'}, {Name: 'so-another'}]};
 	expect(comp.hasQueuestore(item)).toBe(true);
+
+	item = {containers: [{Name: 'so-something'}, {Name: 'so-nope'}, {Name: 'so-another'}]};
+	expect(comp.hasQueuestore(item)).toBe(false);
+});
+
+test('hasSteno', () => {
+	var item = {containers: [{Name: 'so-something'}, {Name: 'so-steno'}, {Name: 'so-another'}]};
+	expect(comp.hasSteno(item)).toBe(true);
+
+	item = {containers: [{Name: 'so-something'}, {Name: 'so-nope'}, {Name: 'so-another'}]};
+	expect(comp.hasQueuestore(item)).toBe(false);
+});
+
+test('hasSuri', () => {
+	var item = {containers: [{Name: 'so-something'}, {Name: 'so-suricata'}, {Name: 'so-another'}]};
+	expect(comp.hasSuri(item)).toBe(true);
+
+	item = {containers: [{Name: 'so-something'}, {Name: 'so-nope'}, {Name: 'so-another'}]};
+	expect(comp.hasQueuestore(item)).toBe(false);
+});
+
+test('hasZeek', () => {
+	var item = {containers: [{Name: 'so-something'}, {Name: 'so-zeek'}, {Name: 'so-another'}]};
+	expect(comp.hasZeek(item)).toBe(true);
 
 	item = {containers: [{Name: 'so-something'}, {Name: 'so-nope'}, {Name: 'so-another'}]};
 	expect(comp.hasQueuestore(item)).toBe(false);

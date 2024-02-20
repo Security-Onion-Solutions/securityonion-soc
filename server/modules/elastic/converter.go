@@ -511,7 +511,7 @@ func convertElasticEventToComment(event *model.EventRecord, schemaPrefix string)
 			if value, ok := event.Payload[schemaPrefix+"comment.caseId"]; ok {
 				obj.CaseId = value.(string)
 			}
-			if licensing.IsEnabled(licensing.FEAT_TIMETRACKING) {
+			if licensing.IsEnabled(licensing.FEAT_TTR) {
 				if value, ok := event.Payload[schemaPrefix+"comment.hours"]; ok {
 					obj.Hours = value.(float64)
 				}

@@ -30,7 +30,9 @@ ARG VERSION=0.0.0
 ARG ELASTIC_VERSION=0.0.0
 ARG WAZUH_VERSION=0.0.0
 
-RUN apt update -y && apt install -y bash tzdata ca-certificates wget curl tcpdump unzip && update-ca-certificates
+RUN apt update -y 
+RUN apt install -y bash tzdata ca-certificates wget curl tcpdump unzip tshark
+RUN update-ca-certificates
 RUN addgroup --gid "$GID" socore
 RUN adduser --disabled-password --uid "$UID" --ingroup socore --gecos '' socore
 RUN mkdir -p /opt/sensoroni/jobs && chown socore:socore /opt/sensoroni/jobs

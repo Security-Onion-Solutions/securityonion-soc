@@ -173,7 +173,7 @@ a#title, a#title:visited, a#title:active, a#title:hover {
 
 .filter.label {
   display: inline-block;
-  width: 45%;
+  width: 40%;
   text-align: right;
   white-space: nowrap;
   vertical-align: top;

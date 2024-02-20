@@ -508,7 +508,7 @@ func TestConvertElasticEventToComment(tester *testing.T) {
 	myTime := time.Now()
 	myCreateTime := myTime.Add(time.Hour * -1)
 
-	licensing.Test(licensing.FEAT_TIMETRACKING, 0, 0, "", "")
+	licensing.Test(licensing.FEAT_TTR, 0, 0, "", "")
 
 	event := &model.EventRecord{}
 	event.Payload = make(map[string]interface{})
