@@ -350,6 +350,17 @@ func (store *ElasticDetectionstore) prepareForSave(ctx context.Context, obj *mod
 	return id
 }
 
+func (store *ElasticDetectionstore) DoesTemplateExist(ctx context.Context, tmpl string) (bool, error) {
+	response, err := store.esClient.Indices.GetIndexTemplate(
+		store.esClient.Indices.GetIndexTemplate.WithName(tmpl),
+	)
+	if err != nil {
+		return false, err
+	}
+
+	return response.StatusCode == 200, nil
+}
+
 func (store *ElasticDetectionstore) CreateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error) {
 	err := store.validateDetection(detect)
 	if err != nil {
@@ -424,7 +435,7 @@ func (store *ElasticDetectionstore) UpdateDetectionField(ctx context.Context, id
 	if err := store.server.CheckAuthorized(ctx, "write", "detection"); err != nil {
 		return nil, err
 	}
-  
+
 	if len(fields) == 0 {
 		return nil, errors.New("no fields to update")
 	}
@@ -543,7 +554,7 @@ func (store *ElasticDetectionstore) audit(ctx context.Context, document map[stri
 			log.WithError(err).Error("Encountered error while indexing document into elasticsearch")
 		}
 	}
-  
+
 	return err
 }
 
@@ -551,7 +562,7 @@ func (store *ElasticDetectionstore) indexDocument(ctx context.Context, index str
 	if err := store.server.CheckAuthorized(ctx, "write", "detection"); err != nil {
 		return "", err
 	}
-  
+
 	log.WithFields(log.Fields{
 		"index":     index,
 		"id":        id,

@@ -144,6 +144,17 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 		start := time.Now()
 
+		exists, err := e.srv.Detectionstore.DoesTemplateExist(e.srv.Context, "so-detection")
+		if err != nil {
+			log.WithError(err).Error("unable to check for detection index template")
+			continue
+		}
+
+		if !exists {
+			log.Warn("detection index template does not exist, skipping import")
+			continue
+		}
+
 		// read existing repos
 		entries, err := os.ReadDir(e.reposFolder)
 		if err != nil {

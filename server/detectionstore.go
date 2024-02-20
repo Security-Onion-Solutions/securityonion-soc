@@ -27,6 +27,8 @@ type Detectionstore interface {
 	GetComments(ctx context.Context, detectionId string) ([]*model.DetectionComment, error)
 	UpdateComment(ctx context.Context, comment *model.DetectionComment) (*model.DetectionComment, error)
 	DeleteComment(ctx context.Context, id string) error
+
+	DoesTemplateExist(ctx context.Context, tmpl string) (bool, error)
 }
 
 //go:generate mockgen -destination mock/mock_detectionstore.go -package mock . Detectionstore
