@@ -179,21 +179,28 @@ func (store *ElasticEventstore) unmapElasticField(field string) string {
 func (store *ElasticEventstore) Search(ctx context.Context, criteria *model.EventSearchCriteria) (*model.EventSearchResults, error) {
 	var err error
 	results := model.NewEventSearchResults()
-	if err = store.server.CheckAuthorized(ctx, "read", "events"); err == nil {
-		store.refreshCache(ctx)
+	verb, noun := criteria.DeterminePermissions("read", "events")
 
-		var query string
-		query, err = convertToElasticRequest(store, criteria)
+	err = store.server.CheckAuthorized(ctx, verb, noun)
+	if err != nil {
+		return nil, err
+	}
+
+	store.refreshCache(ctx)
+
+	var query string
+	query, err = convertToElasticRequest(store, criteria)
+	if err == nil {
+		var response string
+		response, err = store.luceneSearch(ctx, query)
 		if err == nil {
-			var response string
-			response, err = store.luceneSearch(ctx, query)
-			if err == nil {
-				err = convertFromElasticResults(store, response, results)
-				results.Criteria = criteria
-			}
+			err = convertFromElasticResults(store, response, results)
+			results.Criteria = criteria
 		}
 	}
+
 	results.Complete()
+
 	return results, err
 }
 
@@ -338,7 +345,9 @@ func (store *ElasticEventstore) indexSearch(ctx context.Context, query string, i
 		"query":     store.truncate(query),
 		"requestId": ctx.Value(web.ContextKeyRequestId),
 	}).Info("Searching Elasticsearch")
+
 	var json string
+
 	res, err := store.esClient.Search(
 		store.esClient.Search.WithContext(ctx),
 		store.esClient.Search.WithIndex(indexes...),
@@ -368,7 +377,9 @@ func (store *ElasticEventstore) indexDocument(ctx context.Context, index string,
 	res, err := store.esClient.Index(store.transformIndex(index),
 		strings.NewReader(document),
 		store.esClient.Index.WithRefresh("true"),
-		store.esClient.Index.WithDocumentID(id))
+		store.esClient.Index.WithDocumentID(id),
+		store.esClient.Index.WithContext(ctx),
+	)
 
 	if err != nil {
 		log.WithError(err).Error("Unable to index document into Elasticsearch")
@@ -391,7 +402,7 @@ func (store *ElasticEventstore) deleteDocument(ctx context.Context, index string
 		"requestId": ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Deleting document from Elasticsearch")
 
-	res, err := store.esClient.Delete(store.transformIndex(index), id)
+	res, err := store.esClient.Delete(store.transformIndex(index), id, store.esClient.Delete.WithContext(ctx))
 
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -442,7 +453,7 @@ func (store *ElasticEventstore) updateDocuments(ctx context.Context, client *ela
 func (store *ElasticEventstore) refreshCache(ctx context.Context) {
 	store.cacheLock.Lock()
 	defer store.cacheLock.Unlock()
-	if store.cacheTime.IsZero() || time.Now().Sub(store.cacheTime) > store.cacheMs {
+	if store.cacheTime.IsZero() || time.Since(store.cacheTime) > store.cacheMs {
 		err := store.refreshCacheFromFieldCaps(ctx)
 		if err == nil {
 			store.cacheTime = time.Now()
@@ -580,8 +591,8 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 
 	query := fmt.Sprintf(`
     {
-      "query" : { 
-        "bool": { 
+      "query" : {
+        "bool": {
           "must": [
             { "match" : { "%s" : "%s" }}%s
           ]

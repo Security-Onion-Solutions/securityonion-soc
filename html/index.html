@@ -68,6 +68,22 @@
               <v-list-item-title v-text="i18n.cases"></v-list-item-title>
             </v-list-item-content>
           </v-list-item>
+          <v-list-item @click="" to="/detections">
+            <v-list-item-action>
+              <v-icon>fa-magnifying-glass</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>
+              <v-list-item-title v-text="i18n.detections"></v-list-item-title>
+            </v-list-item-content>
+          </v-list-item>
+          <!-- <v-list-item @click="" to="/playbooks">
+            <v-list-item-action>
+              <v-icon>fa-book-bookmark</v-icon>
+            </v-list-item-action>
+            <v-list-item-content>
+              <v-list-item-title v-text="i18n.playbooks"></v-list-item-title>
+            </v-list-item-content>
+          </v-list-item> -->
           <v-list-item @click="" to="/jobs">
             <v-list-item-action>
               <v-icon>fa-stream</v-icon>
@@ -331,7 +347,7 @@
               <v-expansion-panel>
                 <v-expansion-panel-header id="huntOptionsHeader">{{i18n.options}}</v-expansion-panel-header>
                 <v-expansion-panel-content>
-                  <v-switch v-if="isCategory('alerts') || isCategory('cases')" id="enable-advanced" :disabled="loading()" v-model="advanced" dense hide-details class="my-0" :label="i18n.advanced"></v-switch>
+                  <v-switch v-if="isCategory('alerts') || isCategory('cases') || isCategory('detections')" id="enable-advanced" :disabled="loading()" v-model="advanced" dense hide-details class="my-0" :label="i18n.advanced"></v-switch>
                   <v-switch v-if="isAdvanced()" id="auto-hunt" :disabled="loading()" v-model="autohunt" dense hide-details class="my-0" :label="i18n.autohunt"></v-switch>
                   <v-switch v-for="toggle in filterToggles" :key="toggle.name"
                     :id="'filterToggle-' + toggle.name"
@@ -363,7 +379,7 @@
           </v-col>
         </v-row>
         <v-row align="start">
-          <v-col cols="12" md="7">
+          <v-col cols="12" :md="isCategory('detections') ? 10 : 7">
             <v-textarea :clearable="isAdvanced()" :auto-grow="isAdvanced()" :readonly="!isAdvanced()" :disabled="loading()" @change="notifyInputsChanged" class="mx-2" v-model="$data[isAdvanced() ? 'query' : 'queryName']" :hint="isAdvanced() ? i18n.queryHelp : ''" rows="1" persistent-hint prepend-icon="fa-search" @keydown.enter.prevent="hunt" id="hunt-query-input">
               <template v-slot:prepend-inner>
                 <v-menu dense bottom three-line offset-y>
@@ -406,8 +422,8 @@
               </template>
             </v-textarea>
           </v-col>
-          <v-col cols="12" md="5" class="d-flex flex-nowrap align-center">
-            <v-text-field :disabled="loading()" v-if="relativeTimeEnabled" id="huntrelativetimevalue" @change="notifyInputsChanged" class="mx-2"
+          <v-col cols="12" :md="isCategory('detections') ? 2 : 5" class="d-flex flex-nowrap align-center">
+            <v-text-field :disabled="loading()" v-if="relativeTimeEnabled && !isCategory('detections')" id="huntrelativetimevalue" @change="notifyInputsChanged" class="mx-2"
                 v-model="relativeTimeValue" :hint="i18n.relativeTimeHelp" persistent-hint="true" type="number">
               <template v-slot:prepend>
                 <v-btn v-if="relativeTimeEnabled" icon x-small @click="showAbsoluteTime" id="show-absolute-time">
@@ -422,7 +438,7 @@
                   v-model="relativeTimeUnit" :items="relativeTimeUnits"></v-select>
               </template>
             </v-text-field>
-            <v-text-field :disabled="loading()" v-if="!relativeTimeEnabled" id="huntdaterange" @change="notifyInputsChanged" class="mx-2"
+            <v-text-field :disabled="loading()" v-if="!relativeTimeEnabled && !isCategory('detections')" id="huntdaterange" @change="notifyInputsChanged" class="mx-2"
               v-model="dateRange" :hint="i18n.timePickerHelp" persistent-hint="true"
               prepend-inner-icon="fa-angle-down" @click:prepend-inner="showDateRangePicker">
               <template v-slot:prepend>
@@ -431,7 +447,7 @@
                 </v-btn>
               </template>
             </v-text-field>
-            <v-btn id="hunt" :disabled="loading()" :color="huntPending ? 'light-green accent-4' : (autoRefreshInterval ? 'secondary' : 'primary')" @click.stop="hunt">
+            <v-btn id="hunt" :class="isCategory('detections') ? 'detection-hunt-btn' : ''" :disabled="loading()" :color="huntPending ? 'light-green accent-4' : (autoRefreshInterval ? 'secondary' : 'primary')" @click.stop="hunt">
               <span v-if="isCategory('hunt')" class="d-sm-none d-lg-inline pr-2" v-text="i18n.hunt"></span>
               <span v-if="!isCategory('hunt')" class="d-sm-none d-lg-inline pr-2" v-text="i18n.refresh"></span>
               <v-icon v-if="isCategory('hunt') && !autoRefreshInterval">fa-crosshairs</v-icon>
@@ -450,7 +466,7 @@
             </span>
           </v-col>
         </v-row>
-        <v-col id="graphs" v-if="loaded && isAdvanced()">
+        <v-col id="graphs" v-if="loaded && isAdvanced() && !isCategory('detections')">
           <v-toolbar dense flat>
             <v-toolbar-title>{{ i18n.standardMetrics }}</v-toolbar-title>
             <v-spacer />
@@ -615,10 +631,10 @@
           <v-expand-transition>
             <v-row v-if="isExpandedSection('hunt-events')">
               <v-col cols="12">
-                <v-data-table :search="eventFilter" :sort-by.sync="sortBy" item-key="soc_id" :expanded.sync="expanded" :sort-desc.sync="sortDesc" :footer-props="footerProps"
-                  :items-per-page.sync="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" show-expand :page.sync="eventPage" :custom-sort="sortEvents">
-                  <template v-slot:top v-if="isAdvanced()">
-                    <v-container fluid>
+                <v-data-table ref="eventTable" :search="eventFilter" :sort-by.sync="sortBy" item-key="soc_id" :expanded.sync="expanded" :sort-desc.sync="sortDesc" :footer-props="footerProps"
+                  :items-per-page.sync="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" :page.sync="eventPage" show-select :custom-sort="sortEvents">
+                  <template v-slot:top>
+                    <v-container v-if="isAdvanced()" fluid>
                       <v-row>
                         <v-col cols="4"></v-col>
                         <v-col cols="2">
@@ -629,6 +645,36 @@
                         </v-col>
                       </v-row>
                     </v-container>
+                    <v-container v-if="isCategory('detections') && selectAllState !== false">
+                      <div>
+                          {{ i18n.selected }} {{ (selectAllState === true ? totalEvents : selectedCount).toLocaleString() }}
+                        <span class="ml-2" v-if="selectAllState === 'indeterminate' && isPageSelected() && totalEvents >= itemsPerPage">
+                          {{ i18n.selectAll.replaceAll('[[count]]', totalEvents.toLocaleString()) }}
+                          <v-btn @click="selectAllEvents(true, true)">
+                            {{ i18n.yes }}
+                          </v-btn>
+                        </span>
+                      </div>
+
+                      <span>
+                        {{ i18n.bulkAction }}
+                        <v-select class="bulk-actions" :disabled="loading()" v-model="selectedAction" :items="bulkActions"></v-select>
+                        <v-btn :disabled="selectAllState === false" @click="bulkAction()">{{ i18n.go }}</v-btn>
+                      </span>
+                    </v-container>
+
+                  </template>
+                  <template v-slot:header.data-table-select="{ on, props }">
+                    <div v-if="isMultiSelect()" class="multiselect-container">
+                      <v-simple-checkbox id="multiselect-checkbox"
+                        color="blue"
+                        v-bind="props"
+                        v-on="on"
+                        :indeterminate="selectAllState === 'indeterminate'"
+                        :value="selectAllState"
+                        @click="toggleSelectAll()"
+                      ></v-simple-checkbox>
+                    </div>
                   </template>
                   <template v-for="(header, headerIdx) in eventHeaders" v-slot:["header." + header.value]="{ props }">
                     <span :id="'col_' + header.value">
@@ -667,7 +713,15 @@
                           :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
                           <v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate">fa-exclamation-triangle</v-icon>
                         </v-btn>
-                        <router-link :to="{ name: 'case', params: {id: item.soc_id}}" style="text-decoration: none; cursor: 'pointer'" v-if="viewEnabled">
+                        <v-checkbox class="detection-selection" @change="updateBulkSelector(item)" v-if="isMultiSelect()" v-model="item._isSelected">
+                        </v-checkbox>
+                        <router-link :to="{ name: 'case', params: {id: item.soc_id}}" style="text-decoration: none; cursor: 'pointer'" v-if="viewEnabled && category === 'cases'">
+                          <v-icon class="mr-2" :title="i18n.view">fa-binoculars</v-icon>
+                        </router-link>
+                        <router-link :to="{ name: 'detection', params: {id: item.soc_id}}" style="text-decoration: none; cursor: 'pointer'" v-if="viewEnabled && category === 'detections'">
+                          <v-icon class="mr-2" :title="i18n.view">fa-binoculars</v-icon>
+                        </router-link>
+                        <router-link :to="{ name: 'playbook', params: {id: item.soc_id}}" style="text-decoration: none; cursor: 'pointer'" v-if="viewEnabled && category === 'playbooks'">
                           <v-icon class="mr-2" :title="i18n.view">fa-binoculars</v-icon>
                         </router-link>
                       </td>
@@ -935,6 +989,1017 @@
             </v-card-actions>
           </v-card>
         </v-dialog>
+      </v-container>
+    </script>
+
+    <script type="text/x-template" id="page-detection">
+      <v-container fluid v-if="detect">
+        <div class="mx-sm-12 mx-lg-6 mt-2 mb-6 mb-md-1">
+          <!-- Title -->
+          <h2 id="detection-title" @click="startEdit('detection-title', 'title')" v-if="!isEdit('detection-title')">{{ detect.title }}</h2>
+          <v-text-field id="detection-title-edit" v-else hide-details="auto" outlined v-model="detect.title" :rules="[rules.required]" persistent-hint :hint="i18n.detectionTitle" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"></v-text-field>
+        </div>
+
+        <div class="row mx-sm-8 mx-md-12 mx-lg-4 flex-column flex-md-row">
+          <div class="main col-md-9 order-md-1 col-12 order-2">
+            <div v-if="isNew()">
+              <!-- Create View -->
+              <v-form ref="detection" v-model="editForm.valid">
+                <div class="col pt-5" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
+                  <!-- Description -->
+                  <v-textarea id="detection-description-create" hide-details="auto" outlined v-model="detect.description" :rules="[rules.required]" persistent-hint :hint="i18n.detectionDescription" auto-grow rows="5"></v-textarea>
+
+                  <!-- PublicID -->
+                  <v-text-field id="detection-publicId-create" class="mt-0" v-model="detect.publicId" :rules="[rules.required, rules.minLength(5)]" persistent-hint :hint="i18n.publicId">
+                    <template v-slot:append v-if="!detect.publicId">
+                      <v-btn id="gen-public-id-create" text small color="primary" @click="generatePublicID()">Generate</v-btn>
+                    </template>
+                  </v-text-field>
+
+                  <!-- Author -->
+                  <v-text-field id="detection-author-create" v-model="detect.author" :rules="[rules.required]" persistent-hint :hint="i18n.author"></v-text-field>
+
+                  <!-- Severity -->
+                  <v-select id="detection-severity-create" v-model="detect.severity" :items="getPresets('severity')" persistent-hint :hint="i18n.detectionSeverity"/>
+
+                  <!-- Language -->
+                  <v-select id="detection-language-create" v-model="detect.language" :items="getPresets('language')" persistent-hint :hint="i18n.language" :rules="[rules.required]" v-on:change="onDetectionChange"/>
+
+                  <!-- Reporting -->
+                  <v-checkbox id="detection-reporting-create" class="mt-5" v-model="detect.isReporting" :label="i18n.reporting"/>
+
+                  <!-- Signature -->
+                  <div class="font-weight-bold mb-1">{{ i18n.signature }}:</div>
+                  <v-textarea class="config-editor" outlined v-model="detect.content" rows="10" :rules="[rules.required]" @input="onDetectionChange()" />
+                </div>
+                <div class="d-flex align-center align-self-end text-body-2 mt-2">
+                  <div class="d-inline-flex justify-end">
+                    <v-btn id="detection-create-cancel" text small color="primary" class="align-self-end" @click="cancelDetection()">
+                      {{ i18n.cancel }}
+                    </v-btn>
+                    <v-btn id="detection-create-create" text small color="primary" class="align-self-end" @click="saveDetection(true)">
+                      {{ i18n.create }}
+                    </v-btn>
+                  </div>
+                </div>
+              </v-form>
+            </div>
+
+            <v-tabs grow v-model="activeTab" v-else>
+              <v-tab id="detection_summaryTab" href="#summary">
+                <v-icon left>fa-circle-nodes</v-icon>
+                <div class="d-none d-lg-block">{{ i18n.overview }}</div>
+              </v-tab>
+              <v-tab id="detection_commentsTab" href="#comments">
+                <v-icon left>fa-paperclip</v-icon>
+                <div class="d-none d-lg-block">{{ i18n.detectionComments }}</div>
+              </v-tab>
+              <v-tab id="detection_signatureTab" href="#source">
+                <v-icon left>fa-code</v-icon>
+                <div class="d-none d-lg-block">{{ i18n.detectionSource }}</div>
+              </v-tab>
+              <!-- <v-tab id="detection_playbookTab" href="#playbook">
+                <v-icon left>fa-book-bookmark</v-icon>
+                <div class="d-none d-lg-block">Investigative Playbook</div>
+              </v-tab> -->
+              <v-tab id="detection_tuningTab" href="#tuning">
+                <v-icon left>fa-wrench</v-icon>
+                <div class="d-none d-lg-block">{{ i18n.tuning }}</div>
+              </v-tab>
+              <v-tab id="detection_historyTab" href="#history">
+                <v-icon left>fa-history</v-icon>
+                <div class="d-none d-lg-block">{{ i18n.history }}</div>
+              </v-tab>
+
+              <v-tab-item value="summary">
+                <div class="col pt-5 summary-backdrop">
+                  <div>
+                    <div class="header">{{i18n.summary}}</div>
+                    <div>
+                      {{ extractedSummary }}
+                    </div>
+                    <div class="header">{{i18n.references}}</div>
+                    <div>
+                      <div v-for="r in extractedReferences">
+                        <a :href="r.link" v-if="r.type==='url'" target="_blank">{{r.text}}</a>
+                        <span v-else>{{r.text}}</span>
+                      </div>
+                      <span v-if="extractedReferences === null || extractedReferences.length === 0">
+                        {{ i18n.none }}
+                      </span>
+                    </div>
+                    <div class="header">{{i18n.detectionLogic}}</div>
+                    <div class="extracted-content">
+                      <pre>{{extractedLogic}}</pre>
+                    </div>
+                  </div>
+                  <!-- <div>
+                    <span class="font-weight-bold">{{i18n.description}}:</span><br/>
+                    <span id="detection-description" @click="startEdit('detection-description', 'description')" v-if="!isEdit('detection-description')">{{ detect.description }}</span>
+                    <v-textarea id="detection-description-edit" v-else hide-details="auto" outlined v-model="detect.description" :rules="requestRules([rules.required])" persistent-hint :hint="i18n.detectionDescription" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)" auto-grow rows="5"></v-textarea>
+                  </div>
+                  <v-select id="detection-engine-edit" v-model="detect.engine" :readonly="detect.isCommunity" :items="getPresets('engine')" persistent-hint :hint="i18n.engine" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
+                  <v-text-field id="detection-author-edit" v-model="detect.author" :readonly="detect.isCommunity" :rules="requestRules([rules.required])" persistent-hint :hint="i18n.author" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"></v-text-field>
+
+                  <v-select id="detection-severity-edit" class="text-capitalize" :readonly="detect.isCommunity" v-model="detect.severity" :items="getPresets('severity')" persistent-hint :hint="i18n.severity" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
+
+                  <v-checkbox id="detection-enabled-edit" v-model="detect.isEnabled" @change="stopEdit(true)" :label="i18n.detectionEnabled"/>
+
+                  <v-checkbox id="detection-reporting-edit" v-model="detect.isReporting" @change="stopEdit(true)" :label="i18n.reporting"/>
+                </div>
+                <div class="d-flex justify-end text-body-2 mt-2">
+                  <div class="d-inline-flex justify-end">
+                    <v-btn v-if="!isNew()" id="detection-duplicate" text small color="primary" class="align-self-end" @click="duplicateDetection()">
+                      {{i18n.duplicate}}
+                    </v-btn>
+                    <v-btn v-if="!isNew() && !detect.isCommunity" id="detection-delete" text small color="error" class="align-self-end" @click="deleteDetection()">
+                      {{i18n.delete}}
+                    </v-btn>
+                  </div>
+                </div> -->
+              </v-tab-item>
+              <v-tab-item value="comments">
+                <v-row>
+                  <v-col>
+                    <v-toolbar class="elevation-0" fixed>
+                      <v-btn :title="i18n.addCommentHelp" color="primary" @click.stop="prepareForInput('comment-input')" id="add-comment-button">
+                        <v-icon>fa-plus</v-icon>
+                      </v-btn>
+                      <v-btn class="mx-1" :title="i18n.refreshCommentsHelp" color="secondary" @click.stop="reloadAssociation(true)" id="refresh-comments-button">
+                        <v-icon>fa-sync</v-icon>
+                      </v-btn>
+                    </v-toolbar>
+                  </v-col>
+                </v-row>
+                <div id="comment-list">
+                  <div v-for="(comment, index) in comments" class="mb-8" v-if="shouldRenderComment(comment, index)">
+                    <div class="d-flex flex-column align-start my-4">
+                      <v-col class="d-flex flex-column align-start pt-2 pt-md-0">
+                        <div class="mt-1 mt-md-3 pt-1 pb-2 px-2 contrast-bg rounded rounded-md" style="width: 100%;">
+                          <div class="d-flex flex-column align-start">
+                            <div v-if="!isEdit(`comment-${index}`)" class="case d-block comment-body mt-2">
+                              <div class="mb-2">
+                                <div :id="`comment-${index}`" class="markdown-body" :inner-html.prop="comment.value | formatMarkdown"></div>
+                              </div>
+                            </div>
+                            <div v-else class="d-flex flex-column" style="width: 100%;">
+                              <div class="d-flex flex-column flex-sm-row align-sm-center align-self-start text-body-2 mb-1 ml-1">
+                                <a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" :target="$root.target('_blank')" :title="i18n.markdownFormattingSupported"><v-icon>fab fa-markdown</v-icon></a>
+                              </div>
+                              <div class="mb-3">
+                                <v-form v-model="editForm.valid" @submit.prevent>
+                                  <v-textarea id="comment-value-input" solo flat hide-details="auto" rows="5" dense color="text--black" v-model="editForm.val" class="mb-1" :rules="[rules.required]"/>
+                                </v-form>
+                                <div class="d-inline-flex justify-end">
+                                  <v-btn text small color="primary" class="align-self-end" @click="stopEdit()">
+                                    {{ i18n.cancel }}
+                                  </v-btn>
+                                  <v-btn :disabled="!editForm.valid" text small color="primary" class="align-self-end" @click="stopEdit(true)">
+                                    {{ i18n.update }}
+                                  </v-btn>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div class="d-flex flex-column flex-sm-row align-self-end text-body-2">
+                              <div class="d-inline-flex align-center mr-1">
+                                <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text">
+                                  <div class="case avatar-font" :title="comment.owner">
+                                    {{ $root.getAvatar(comment.owner) }}
+                                  </div>
+                                </v-avatar>
+                                <div >
+                                  {{ comment.owner }}
+                                </div>
+                              </div>
+                              <div class="mt-1 mr-1 d-none d-sm-block">
+                                &bull;
+                              </div>
+                              <div class="mt-1">
+                                {{ comment.createTime | formatDateTime }}
+                              </div>
+                              <div v-if="isEdited(comment)" :title="$root.formatDateTime(comment.updateTime)" class="mx-sm-2">
+                                {{ i18n.edited }}
+                              </div>
+                              <div class="ml-1 d-flex mt-1 mt-sm-0">
+                                <v-btn text small icon color="primary" v-if="!isEdit(`comment-${index}`)" @click="startCommentEdit(`comment-${index}`, 'comment-input', comment)"
+                                  @keypress.space.prevent="startCommentEdit(`comment-${index}`, 'comment-input', comment)">
+                                  <v-icon class="tiny-icon">fa-edit</v-icon>
+                                </v-btn>
+                                <v-btn text small color="red" @click="deleteComment(comment)" icon><v-icon class="tiny-icon">fa-circle-xmark</v-icon></v-btn>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </v-col>
+                    </div>
+                    <div v-if="shouldRenderShowAll(index)" class="d-flex-block justify-center my-4 show-all">
+                      <div class="d-flex justify-center">
+                        <div>{{ getUnrenderedCount('comments') }} {{ i18n.hidden }} {{ i18n.comments }}</div>
+                      </div>
+                      <div class="d-flex justify-center">
+                        <v-btn @click="renderAllComments()">{{ i18n.showAll }}</v-btn>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="d-flex flex-column align-start my-4">
+                  <v-col id="new-comment" class="d-flex flex-column align-start pt-2 pt-md-0">
+                    <div class="mt-1 mt-md-3 pb-3 pt-1 contrast-bg rounded rounded-md" style="width: 100%;">
+                      <div class="d-flex flex-column align-start">
+                        <div class="d-inline-flex align-center mt-3 mx-2 mb-4">
+                          <v-avatar color="primary" size="28" class="mr-2 white--text">
+                            <div class="font-weight-bold" :title="$root.username">
+                            {{ $root.getAvatar($root.username) }}
+                            </div>
+                          </v-avatar>
+                          <h3 class="text--primary">{{ i18n.commentAddDetection }}</h3>
+                        </div>
+                        <div class="d-flex flex-column" style="width: 100%;">
+                          <div class="d-flex flex-column flex-sm-row align-sm-center align-self-start text-body-2 mb-1 ml-3">
+                            <a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" :target="$root.target('_blank')" :title="i18n.markdownFormattingSupported"><v-icon>fab fa-markdown</v-icon></a>
+                          </div>
+                          <div class="mx-2">
+                            <v-form ref="detection-comment" v-model="commentsForm.valid" @submit.prevent>
+                              <v-textarea id="comment-input" solo flat hide-details="auto" rows="5" color="text--black" :value="commentsForm.value" @change="val => commentsForm.value = val" :rules="[rules.required]" class="mb-1" persistent-hint :hint="i18n.commentDescriptionDetectionHelp"/>
+                            </v-form>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="d-flex align-center align-self-end text-body-2 mt-2">
+                      <div class="d-inline-flex justify-end">
+                        <v-btn text small color="primary" class="align-self-end" @click="resetForm()">
+                        {{ i18n.cancel }}
+                        </v-btn>
+                        <v-btn :disabled="!commentsForm.valid" text small color="primary" class="align-self-end" @click="addComment()">
+                        {{ origComment ? i18n.update : i18n.add }}
+                        </v-btn>
+                      </div>
+                    </div>
+                  </v-col>
+                </div>
+              </v-tab-item>
+              <v-tab-item value="source">
+                <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
+                  <!-- PublicID -->
+                  <v-text-field id="detection-publicId-edit" v-model="detect.publicId" :readonly="detect.isCommunity" :rules="requestRules([rules.required, rules.minLength(5)])" persistent-hint :hint="i18n.publicId" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)">
+                    <template v-slot:append v-if="!detect.publicId && !detect.isCommunity">
+                      <v-btn id="gen-public-id" text small color="primary" @click="extractPublicID()">{{i18n.extract}}</v-btn>
+                    </template>
+                  </v-text-field>
+                  <!-- Signature -->
+                  <v-textarea class="config-editor mt-2" :readonly="detect.isCommunity" outlined v-model="detect.content" auto-grow rows="15" />
+                </div>
+                <div class="d-flex align-center align-self-end justify-end text-body-2 mt-2">
+                  <div class="d-inline-flex justify-end">
+                    <v-btn v-if="detect.engine === 'elastalert'" id="detection-convert" text small color="primary" class="align-self-end" @click="convertDetection()">
+                      {{ i18n.convert }}
+                    </v-btn>
+                    <v-btn id="detection-cancel" v-if="!detect.isCommunity" text small color="primary" class="align-self-end" @click="cancelDetection()">
+                      {{ i18n.cancel }}
+                    </v-btn>
+                    <v-btn id="detection-update" v-if="!detect.isCommunity" text small color="primary" class="align-self-end" @click="saveDetection(false)">
+                      {{i18n.update}}
+                    </v-btn>
+                  </div>
+                </div>
+              </v-tab-item>
+              <!-- <v-tab-item value="playbook">
+                <div class="col pa-2" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
+                  <div class="col ma-2">
+                    <div class="row my-2">
+                      <span class="font-weight-bold">Title:&nbsp;</span>
+                      <a :href="'#/playbook/' + associatedPlaybook.onionId" style="text-decoration: none; cursor: 'pointer'">
+                        {{associatedPlaybook.title}}
+                      </router-link>
+                    </div>
+                    <div class="row my-2">
+                      <span class="font-weight-bold">Description:&nbsp;</span>{{associatedPlaybook.description}}
+                    </div>
+                    <div class="row my-2">
+                      <span class="font-weight-bold">Severity:&nbsp;</span>{{associatedPlaybook.severity}}
+                    </div>
+                  </div>
+                </div>
+              </v-tab-item> -->
+              <v-tab-item value="tuning">
+                <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
+                  <v-col v-if="canAddOverride()" cols="12" style="padding-left: 0px; padding-right: 0px;">
+                    <v-toolbar class="elevation-0" fixed>
+                      <v-btn color="primary" id="add-override-button" style="text-decoration: none; cursor: 'pointer'" @click="createNewOverride()">
+                        <v-icon :title="i18n.create">fa-plus</v-icon>
+                      </v-btn>
+                    </v-toolbar>
+                    <div v-if="newOverride != null">
+                      <v-form ref="OverrideCreate">
+                        <v-select id="new-override-type" v-model="newOverride.type" :items="getOverrideTypes()" persistent-hint :hint="i18n.type" @change="createOverrideTypeChange()"></v-select>
+                        <!--
+                          1. Regex   - modify
+                          2. Value   - modify
+                          3. Type    - threshold
+                          3. Track   - suppress, threshold
+                          4. IP      - suppress
+                          5. Count   - threshold
+                          6. Seconds - threshold
+                          7. Custom Filter - engine:elastalert
+                        -->
+                        <!-- Suricata -->
+                        <div v-if="detect.engine === 'suricata'">
+                          <!-- regex -->
+                          <v-text-field v-if="newOverride.type === 'modify'" id="new-override-regex-edit" v-model="newOverride.regex" :rules="[rules.required]" persistent-hint :hint="i18n.regex"></v-text-field>
+                          <!-- value -->
+                          <v-text-field v-if="newOverride.type === 'modify'" id="new-override-value-edit" v-model="newOverride.value" :rules="[rules.required]" persistent-hint :hint="i18n.value"></v-text-field>
+                          <!-- (threshold) type -->
+                          <v-select v-if="newOverride.type === 'threshold'" id="new-override-threshold-type-edit" v-model="newOverride.thresholdType" :items="thresholdTypes" :rules="[rules.required]" persistent-hint :hint="i18n.thresholdType"></v-select>
+                          <!-- track -->
+                          <v-select v-if="['threshold', 'suppress'].includes(newOverride.type)" id="new-override-track-edit" v-model="newOverride.track" :items="getTrackOptions(newOverride.type)" :rules="[rules.required]" persistent-hint :hint="i18n.track"></v-select>
+                          <!-- ip -->
+                          <v-text-field v-if="newOverride.type === 'suppress'" id="new-override-ip-edit" v-model="newOverride.ip" :rules="[rules.required, rules.cidrFormat]" persistent-hint :hint="i18n.ipCidr"></v-text-field>
+                          <!-- count -->
+                          <v-text-field v-if="newOverride.type === 'threshold'" id="new-override-count-edit" v-model="newOverride.count" :rules="[rules.required, rules.number]" persistent-hint :hint="i18n.count"></v-text-field>
+                          <!-- seconds -->
+                          <v-text-field v-if="newOverride.type === 'threshold'" id="new-override-seconds-edit" v-model="newOverride.seconds" :rules="[rules.required, rules.number]" persistent-hint :hint="i18n.secondsLabel"></v-text-field>
+                        </div>
+                        <!-- ElastAlert -->
+                        <div v-if="detect.engine === 'elastalert'">
+                          <!-- custom filter -->
+                          <v-text-field id="new-override-custom-filter-edit" v-model="newOverride.customFilter" :rules="[rules.required]" persistent-hint :hint="i18n.customFilter"></v-text-field>
+                        </div>
+                        <div v-if="newOverride" class="d-flex justify-end text-body-2 mt-2">
+                          <div class="d-inline-flex">
+                            <v-btn id="detection-create-cancel" text small color="primary" class="align-self-end" @click="newOverride = null">
+                              {{ i18n.cancel }}
+                            </v-btn>
+                            <v-btn v-if="newOverride.type" id="detection-create-create" text small color="primary" class="align-self-end" @click="addNewOverride()">
+                              {{ i18n.create }}
+                            </v-btn>
+                          </div>
+                        </div>
+                      </v-form>
+                    </div>
+                  </v-col>
+                  <v-data-table :sort-by.sync="sortBy" :expanded.sync="expanded" :sort-desc.sync="sortDesc" must-sort :headers="overrideHeaders"
+                    :items="detect.overrides" item-key="index" show-expand single-expand :custom-sort="sortOverrides" hide-default-footer="true">
+                    <template v-slot:item="{ item, index }">
+                      <tr>
+                        <td>
+                          <v-btn id="expandOverrideArrow" icon small @click="expand(item)">
+                            <v-icon v-if="isExpanded(item)" :alt="i18n.overrideExpand" :title="i18n.eventExpandHelp">fa-angle-down</v-icon>
+                            <v-icon v-if="!isExpanded(item)" :alt="i18n.overrideExpand" :title="i18n.eventExpandHelp">fa-angle-right</v-icon>
+                          </v-btn>
+                        </td>
+                        <td v-for="field in overrideHeaders" :key="field.value">
+                          <div class="d-inline-block">
+                            <span v-if="!field.format">{{ item[field.value] }}</span>
+                            <span v-else v-text="$root.formatLocalTimestamp(item[field.value], zone)"/>
+                          </div>
+                        </td>
+                      </tr>
+                    </template>
+                    <template v-slot:expanded-item="{ headers, item }">
+                      <tr>
+                        <td :colspan="headers.length" class="pa-4" v-if="detect.engine === 'suricata'">
+                          <!--
+                            1. Regex   - modify
+                            2. Value   - modify
+                            3. Type    - threshold
+                            3. Track   - suppress, threshold
+                            4. IP      - suppress
+                            5. Count   - threshold
+                            6. Seconds - threshold
+                            7. Custom Filter - engine:elastalert
+                          -->
+                          <!-- isEnabled -->
+                          <div>
+                            <div class="font-weight-bold mt-4">
+                              {{i18n.enabled}}:
+                            </div>
+                            <span id="override-enabled" v-if="!isOverrideEdit('override-enabled')" @click="startOverrideEdit('override-enabled', item, 'isEnabled')">
+                              {{item.isEnabled}}
+                            </span>
+                            <v-checkbox v-else id="override-enabled-edit" ref="override-enabled" hide-details="auto" outlined v-model="item.isEnabled"
+                              persistent-hint :hint="i18n.enabled" v-on:change="stopOverrideEdit(true)"></v-checkbox>
+                          </div>
+                          <!-- regex -->
+                          <div v-if="item.type === 'modify'">
+                            <div class="font-weight-bold mt-4">
+                              Regex:
+                            </div>
+                            <span id="override-regex" v-if="!isOverrideEdit('override-regex')" @click="startOverrideEdit('override-regex', item, 'regex')">
+                              {{item.regex}}
+                            </span>
+                            <v-text-field v-else id="override-regex-edit" ref="override-regex" hide-details="auto" outlined v-model="item.regex" :rules="[rules.required]"
+                              persistent-hint :hint="i18n.regex" v-on:keyup.enter="stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)"></v-text-field>
+                          </div>
+                          <!-- value -->
+                          <div v-if="item.type === 'modify'">
+                            <div class="font-weight-bold mt-4">
+                              Value:
+                            </div>
+                            <span id="override-value" v-if="!isOverrideEdit('override-value')" @click="startOverrideEdit('override-value', item, 'value')">
+                              {{item.value}}
+                            </span>
+                            <v-text-field v-else id="override-value-edit" ref="override-value" hide-details="auto" outlined v-model="item.value" :rules="[rules.required]"
+                              persistent-hint :hint="i18n.value" v-on:keyup.enter="stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)"></v-text-field>
+                          </div>
+                          <!-- type (threshold) -->
+                          <div v-if="item.type === 'threshold'">
+                            <div class="font-weight-bold mt-4">
+                              Type:
+                            </div>
+                            <span id="override-threshold-type" v-if="!isOverrideEdit('override-threshold-type')" @click="startOverrideEdit('override-threshold-type', item, 'thresholdType')">
+                              {{item.thresholdType}}
+                            </span>
+                            <v-select v-else id="override-threshold-type-edit" ref="override-threshold-type" v-model="item.thresholdType" :items="thresholdTypes" :rules="[rules.required]" persistent-hint :hint="i18n.type" @change="stopOverrideEdit(true)"></v-select>
+                          </div>
+                          <!-- track -->
+                          <div v-if="['suppress', 'threshold'].includes(item.type)">
+                            <div class="font-weight-bold mt-4">
+                              Track:
+                            </div>
+                            <span id="override-track" v-if="!isOverrideEdit('override-track')" @click="startOverrideEdit('override-track', item, 'track')">
+                              {{item.track}}
+                            </span>
+                            <v-select v-else id="override-track-edit" ref="override-track" v-model="item.track" :items="getTrackOptions(item.type)" :rules="[rules.required]" persistent-hint :hint="i18n.type" @change="stopOverrideEdit(true)"></v-select>
+                          </div>
+                          <!-- ip -->
+                          <div v-if="item.type === 'suppress'">
+                            <div class="font-weight-bold mt-4">
+                              IP:
+                            </div>
+                            <span id="override-ip" v-if="!isOverrideEdit('override-ip')" @click="startOverrideEdit('override-ip', item, 'ip')">
+                              {{item.ip}}
+                            </span>
+                            <v-text-field v-else id="override-ip-edit" ref="override-ip" hide-details="auto" outlined v-model="item.ip" :rules="[rules.required, rules.ciderFormat]"
+                              persistent-hint :hint="i18n.cidr" v-on:keyup.enter="stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)"></v-text-field>
+                          </div>
+                          <!-- count -->
+                          <div v-if="item.type === 'threshold'">
+                            <div class="font-weight-bold mt-4">
+                              Count:
+                            </div>
+                            <span id="override-count" v-if="!isOverrideEdit('override-count')" @click="startOverrideEdit('override-count', item, 'count')">
+                              {{item.count}}
+                            </span>
+                            <v-text-field v-else id="override-count-edit" ref="override-count" hide-details="auto" outlined v-model="item.count" :rules="[rules.required, rules.number]"
+                              persistent-hint :hint="i18n.count" v-on:keyup.enter="stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)"></v-text-field>
+                          </div>
+                          <!-- seconds -->
+                          <div v-if="item.type === 'threshold'">
+                            <div class="font-weight-bold mt-4">
+                              Seconds:
+                            </div>
+                            <span id="override-seconds" v-if="!isOverrideEdit('override-seconds')" @click="startOverrideEdit('override-seconds', item, 'seconds')">
+                              {{item.seconds}}
+                            </span>
+                            <v-text-field v-else id="override-seconds-edit" ref="override-seconds" hide-details="auto" outlined v-model="item.seconds" :rules="[rules.required, rules.number]"
+                              persistent-hint :hint="i18n.secondsLabel" v-on:keyup.enter="stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)"></v-text-field>
+                          </div>
+                          <div class="d-flex justify-end text-body-2 mt-4">
+                            <div class="d-inline-flex">
+                              <v-btn id="override-edit-delete" text small color="red" @click="deleteOverride(item)">
+                                {{ i18n.delete }}
+                              </v-btn>
+                            </div>
+                          </div>
+                        </td>
+                        <td :colspan="headers.length" class="pa-4" v-else-if="detect.engine === 'elastalert'">
+                          <!-- isEnabled -->
+                          <div>
+                            <div class="font-weight-bold mt-2">
+                              {{i18n.enabled}}:
+                            </div>
+                            <span id="override-enabled" v-if="!isOverrideEdit('override-enabled')" @click="startOverrideEdit('override-enabled', item, 'isEnabled')">
+                              {{item.isEnabled}}
+                            </span>
+                            <v-checkbox v-else id="override-enabled-edit" ref="override-enabled" hide-details="auto" outlined v-model="item.isEnabled"
+                              persistent-hint :hint="i18n.enabled" @change="stopOverrideEdit(true, $event)"></v-checkbox>
+                          </div>
+                          <!-- custom filter -->
+                          <div>
+                            <div class="font-weight-bold mt-2">
+                              Custom Filter:
+                            </div>
+                            <span id="override-custom-filter" v-if="!isOverrideEdit('override-custom-filter')" @click="startOverrideEdit('override-custom-filter', item, 'customFilter')">
+                              {{item.customFilter}}
+                            </span>
+                            <v-text-field v-else id="override-custom-filter-edit" ref="override-custom-filter" hide-details="auto" outlined v-model="item.customFilter" :rules="[rules.required]"
+                              persistent-hint :hint="i18n.customFilter" v-on:keyup.enter="stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)"></v-text-field>
+                          </div>
+                          <div class="d-flex justify-end text-body-2 mt-2">
+                            <div class="d-inline-flex">
+                              <v-btn id="override-edit-delete" text small color="red" @click="deleteOverride(item)">
+                                {{ i18n.delete }}
+                              </v-btn>
+                            </div>
+                          </div>
+                        </td>
+                        <td :colspan="headers.length" class="pa-4" v-else-if="detect.engine === 'yara'"></td>
+                      </tr>
+                    </template>
+                  </v-data-table>
+                </div>
+              </v-tab-item>
+              <v-tab-item value="history">
+                <v-row>
+                  <v-col>
+                    <v-toolbar class="elevation-0" fixed>
+                      <v-btn :title="i18n.refreshDetectionHistoryHelp" color="secondary" @click.stop="loadHistory()" id="refresh-history-button">
+                        <v-icon>fa-sync</v-icon>
+                      </v-btn>
+                    </v-toolbar>
+                  </v-col>
+                </v-row>
+                <!-- <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;"> -->
+                  <v-text-field v-model="historyTableOpts.search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
+                  <v-data-table ref="historyTable" :sort-by.sync="historyTableOpts.sortBy" :sort-desc.sync="historyTableOpts.sortDesc" :items-per-page.sync="historyTableOpts.itemsPerPage"
+                    :search="historyTableOpts.search" :footer-props="historyTableOpts.footerProps" must-sort :headers="historyTableOpts.headers"
+                    :items="history" item-key="id" :loading="historyTableOpts.loading" :expanded="historyTableOpts.expanded" class="history-table">
+                    <template v-slot:item="props">
+                      <tr>
+                        <td class="associated actions">
+                          <v-btn :id="`history-${props.index}-expand`" icon small @click="expandRow(props.item)">
+                            <v-icon v-if="isExpanded(props.item)" :alt="i18n.expand" :title="i18n.expandHelp">fa-angle-down</v-icon>
+                            <v-icon v-if="!isExpanded(props.item)" :alt="i18n.expand" :title="i18n.expandHelp">fa-angle-right</v-icon>
+                          </v-btn>
+                        </td>
+                        <td class="associated">
+                          <v-avatar color="primary" class="mr-2 white--text" size="28">
+                            <div class="font-weight-bold" :title="props.item.owner">
+                              {{ $root.getAvatar(props.item.owner) }}
+                            </div>
+                          </v-avatar>
+                          {{ props.item.owner }}
+                        </td>
+                        <td class="associated">{{ props.item.updateTime | formatDateTime }}</td>
+                        <td class="associated">
+                          <v-icon>fa-magnifying-glass</v-icon>
+                          <span class="rounded ml-2">{{ props.item.kind }}</span>
+                        </td>
+                        <td class="associated">
+                          <v-icon v-if="props.item.operation.toLowerCase() == i18n.create.toLowerCase()">fa-plus</v-icon>
+                          <v-icon v-if="props.item.operation.toLowerCase() == i18n.delete.toLowerCase()">fa-circle-xmark</v-icon>
+                          <v-icon v-if="props.item.operation.toLowerCase() == i18n.update.toLowerCase()">fa-pencil-alt</v-icon>
+                          <span class="rounded ml-2">{{ props.item.operation }}</span>
+                        </td>
+                      </tr>
+                    </template>
+                    <template v-slot:expanded-item="props">
+                      <tr>
+                        <td colspan="5" class="case">
+                          <div class="mt-2">
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.id }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.id }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.kind }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.kind }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.operation }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.operation }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.dateCreated }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.createTime | formatDateTime }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.dateModified }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.updateTime | formatDateTime }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.title }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.title }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.description }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.description }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.author }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.author }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.enabled }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.isEnabled ? 'True' : 'False' }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.community }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.isCommunity ? 'True' : 'False' }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.reporting }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.isReporting ? 'True' : 'False' }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.severity }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.severity }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.engine }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.engine }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.content }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.content }}</span></v-col>
+                            </v-row>
+                          </div>
+                          <div>
+                            <v-row no-gutters class="py-1 case tabular-row">
+                              <v-col cols="4"><span class="case tabular-label">{{ i18n.note }}:</span></v-col>
+                              <v-col cols="8"><span class="case">{{ props.item.note }}</span></v-col>
+                            </v-row>
+                          </div>
+
+                          <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
+                            <v-spacer/>
+                            <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text">
+                              <div class="case avatar-font" :title="props.item.owner">
+                                {{ $root.getAvatar(props.item.owner) }}
+                              </div>
+                            </v-avatar>
+                            <div class="mr-1">
+                              {{ props.item.owner }}
+                            </div>
+                            <div class="mr-1 d-none d-sm-block">
+                              &bull;
+                            </div>
+                            <div>
+                              {{ props.item.updateTime | formatDateTime }}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    </template>
+                    <template v-slot:no-results>
+                      <v-alert :value="true" color="info" icon="fa-info">
+                        {{ i18n.noSearchResults }}
+                      </v-alert>
+                    </template>
+                  </v-data-table>
+                  <div class="text-xs-center pt-2 d-none">
+                      <v-btn v-text="i18n.loadMore" @click="loadHistory()"></v-btn>
+                  </div>
+                <!-- </div> -->
+              </v-tab-item>
+            </v-tabs>
+            <v-dialog v-model="showSigmaDialog" persistent width="800px">
+              <v-card>
+                <v-card-title class="lighten-4 py-4 title">{{ i18n.convertToElasticsearch }}</v-card-title>
+                <v-container>
+                  <div class="sigma-dialog-body">
+                    {{ convertedRule }}
+                  </div>
+                </v-container>
+                <div id="convert-button-container">
+                  <v-btn outlined color="primary" @click="cancelConvert()">
+                    {{ i18n.cancel }}
+                  </v-btn>
+                  <v-btn outlined color="primary" @click="copyConvertToClipboard()">
+                    {{ i18n.copyToClipboard }}
+                  </v-btn>
+                  <v-btn outlined color="primary" @click="runQueryInDiscover()">
+                    {{ i18n.viewInDiscover }}
+                  </v-btn>
+                </div>
+              </v-card>
+            </v-dialog>
+          </div>
+          <div class="col-md-3 order-md-2 col-12 order-1">
+            <v-expansion-panels focusable multiple v-model="panel">
+              <v-expansion-panel v-if="!isNew()">
+                <v-expansion-panel-header id="detection-related-playbooks">
+                  <h3>{{ i18n.operations }}</h3>
+                </v-expansion-panel-header>
+                <v-expansion-panel-content>
+                  <!-- <v-checkbox id="detection-enabled-edit" v-model="detect.isEnabled" @change="stopEdit(true)" :label="i18n.detectionEnabled"/> -->
+                  <div class="ops-header">
+                    {{ i18n.status }}:
+                  </div>
+                  <div class="ops-value">
+                    <span @click="startEdit('detection-enabled', 'isEnabled')" v-if="!isEdit('detection-enabled')">
+                      {{ detect.isEnabled ? i18n.enabled : i18n.disabled }}
+                    </span>
+                    <v-checkbox id="detection-enabled-edit" v-model="detect.isEnabled" v-else @change="stopEdit(true)" />
+                  </div>
+                  <!-- <div class="ops-header">
+                    Related Playbooks:
+                  </div>
+                  <div class="ops-value">
+                    TODO
+                  </div> -->
+                  <div id="ops-buttons">
+                    <v-btn id="detection-duplicate" color="primary" @click="duplicateDetection()">
+                      {{i18n.duplicate}}
+                    </v-btn>
+                    <v-btn :disabled="detect.isCommunity" id="detection-delete" color="error" @click="deleteDetection()">
+                      {{i18n.delete}}
+                    </v-btn>
+                  </div>
+                </v-expansion-panel-content>
+              </v-expansion-panel>
+              <v-expansion-panel v-if="!isNew()">
+                <v-expansion-panel-header id="detection-related-playbooks">
+                  <h3>{{ i18n.details }}</h3>
+                </v-expansion-panel-header>
+                <v-expansion-panel-content>
+                  <div class="ops-header">
+                    {{ i18n.publicId }}:
+                  </div>
+                  <div class="ops-value">
+                    {{ detect.publicId }}
+                  </div>
+                  <div class="ops-header">
+                    {{ i18n.type }}:
+                  </div>
+                  <div class="ops-value case-title">
+                    {{ detect.language }}
+                  </div>
+                  <div class="ops-header">
+                    {{ i18n.severity }}:
+                  </div>
+                  <div class="ops-value case-title">
+                    {{ detect.severity }}
+                  </div>
+                  <div class="ops-header" v-if="detect.isCommunity">
+                    {{ i18n.ruleset }}:
+                  </div>
+                  <div class="ops-value" v-if="detect.isCommunity">
+                    {{ detect.ruleset }}
+                  </div>
+                  <div class="ops-header">
+                    {{ i18n.license }}:
+                  </div>
+                  <div class="ops-value">
+                    {{ detect.license }}
+                  </div>
+                  <div class="ops-header" v-if="extractedCreated">
+                    {{ i18n.dateCreated }}:
+                  </div>
+                  <div class="ops-value" v-if="extractedCreated">
+                    {{ extractedCreated }}
+                  </div>
+                  <div class="ops-header" v-if="extractedUpdated">
+                    {{ i18n.dateModified }}:
+                  </div>
+                  <div class="ops-value"  v-if="extractedUpdated">
+                    {{ extractedUpdated }}
+                  </div>
+                  <div class="ops-header" v-if="extractedAuthor">
+                    {{ i18n.author }}:
+                  </div>
+                  <div class="ops-value"  v-if="extractedAuthor">
+                    {{ extractedAuthor }}
+                  </div>
+                  <!-- <div class="ops-header">
+                    {{ i18n.tags }}:
+                  </div>
+                  <div class="ops-value">
+                    <div>
+                      <v-chip class="mx-1" v-for="tag in detect.tags" color="primary">{{ tag }}</v-chip>
+                      <span v-if="detect.tags === null || detect.tags.length === 0">None</span>
+                    </div>
+                  </div> -->
+                </v-expansion-panel-content>
+              </v-expansion-panel>
+            </v-expansion-panels>
+            <div class="detect-reference" v-if="!isNew()">
+              <div>
+                <div class="key">
+                  {{i18n.socId}}:
+                </div>
+                <div class="value">
+                  {{ detect.id }}
+                </div>
+              </div>
+              <div>
+                <div class="key">
+                  {{ i18n.author }}:
+                </div>
+                <div class="value">
+                  <span v-if="detect.language !== 'suricata'">
+                    {{ detect.author }}
+                  </span>
+                  <span v-else>
+                    {{ detect.ruleset }}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <div class="key">
+                  {{ i18n.dateCreated }}:
+                </div>
+                <div class="value">
+                  {{ detect.createTime | formatDateTime}}
+                </div>
+              </div>
+              <div>
+                <div class="key">
+                  {{ i18n.dateModified }}:
+                </div>
+                <div class="value">
+                  {{ detect.updateTime | formatDateTime }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </v-container>
+    </script>
+
+    <script type="text/x-template" id="page-playbook">
+      <v-container fluid v-if="playbook">
+        <div class="mx-sm-12 mx-lg-6 mt-2 mb-6 mb-md-1">
+          <!-- Title -->
+          <h2 id="playbook-title" @click="startEdit('playbook-title', 'title')" v-if="!isEdit('playbook-title')">{{ playbook.title }}</h2>
+          <v-text-field id="playbook-title-edit" v-else hide-details="auto" outlined v-model="playbook.title" :rules="[rules.required]" persistent-hint :hint="i18n.playbookTitle" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"></v-text-field>
+        </div>
+
+        <div class="row mb-6 mb-md-1 mt-2 mx-lg-6 mx-sm-12">
+          <!-- Description -->
+          <span id="playbook-description" @click="startEdit('playbook-description', 'description')" v-if="!isEdit('playbook-description')">{{ playbook.description }}</span>
+          <v-textarea id="playbook-description-edit" v-else hide-details="auto" outlined v-model="playbook.description" :rules="[rules.required]" persistent-hint :hint="i18n.playbookDescription" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)" auto-grow rows="5"></v-textarea>
+        </div>
+
+        <div class="row mx-sm-8 mx-md-12 mx-lg-4 flex-column flex-md-row">
+          <div class="main col-md-9 order-md-1 col-12 order-2">
+            <v-tabs grow v-model="activeTab">
+              <v-tab id="playbook_notesTab" href="#notes">
+                <v-icon left>fa-comments</v-icon>
+                <div class="d-none d-lg-block">Observational Notes</div>
+              </v-tab>
+              <v-tab id="playbook_questionsTab" href="#questions">
+                <v-icon left>fa-circle-question</v-icon>
+                <div class="d-none d-lg-block">Investigative Questions</div>
+              </v-tab>
+              <v-tab id="playbook_casesTab" href="#cases">
+                <v-icon left>fa-briefcase</v-icon>
+                <div class="d-none d-lg-block">Cases</div>
+              </v-tab>
+              <v-tab id="playbook_historyTab" href="#history">
+                <v-icon left>fa-history</v-icon>
+                <div class="d-none d-lg-block">{{ i18n.history }}</div>
+              </v-tab>
+
+              <v-tab-item value="notes">
+                <div class="col pt-0" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
+                  <!-- PublicID -->
+                  <v-text-field id="playbook-publicId-edit" v-model="playbook.publicId" :rules="[rules.required]" persistent-hint :hint="i18n.publicId" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)">
+                    <template v-slot:append v-if="!playbook.publicId">
+                      <v-btn id="gen-public-id" text small color="primary" @click="generatePublicID()">Generate</v-btn>
+                    </template>
+                  </v-text-field>
+                  <!-- Contributors -->
+                  <v-combobox id="playbook-contributors" v-model="playbook.contributors" persistent-hint :hint="i18n.contributors" multiple>
+                    <template #selection="{ item }">
+                      <v-chip color="primary">{{item}}</v-chip>
+                    </template>
+                  </v-combobox>
+
+                  <!-- Severity -->
+                  <v-select id="playbook-severity-edit" v-model="playbook.severity" :items="severityOptions" persistent-hint :hint="i18n.severity" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
+
+                  <!-- Mechanism -->
+                  <v-select id="playbook-engine-edit" v-model="playbook.mechanism" :items="engineOptions" persistent-hint :hint="i18n.playbookMechanism" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
+
+                  <!-- Tags -->
+                  <v-combobox id="playbook-tags" v-model="playbook.tags" :items="tags" persistent-hint :hint="i18n.caseTagsHelp" multiple>
+                    <template #selection="{ item }">
+                      <v-chip color="primary">{{item}}</v-chip>
+                    </template>
+                  </v-combobox>
+
+                  <!-- IsCommunity -->
+                  <div class="my-3">
+                    <span class="font-weight-bold">Community Playbook:</span> {{ playbook.userEditable ? 'No' : 'Yes' }}
+                  </div>
+                  <div class="row">
+                    <div class="col">
+                      <!-- Content -->
+                      <span class="font-weight-bold">Note:</span>
+                      <v-textarea class="config-editor" outlined v-model="playbook.note" auto-grow rows="5" />
+                    </div>
+                  </div>
+                </div>
+                <div class="d-flex align-center align-self-end text-body-2 mt-2">
+                  <div class="d-inline-flex justify-end">
+                    <v-btn id="playbook-cancel" text small color="primary" class="align-self-end" @click="cancelPlaybook()">
+                      {{ i18n.cancel }}
+                    </v-btn>
+                    <v-btn id="playbook-create" text small color="primary" class="align-self-end" @click="savePlaybook(true)" v-if="isNew()">
+                      {{ i18n.create }}
+                    </v-btn>
+                    <v-btn id="playbook-update" text small color="primary" class="align-self-end" @click="savePlaybook(false)" v-else>
+                      {{ i18n.update }}
+                    </v-btn>
+                  </div>
+                </div>
+              </v-tab-item>
+
+              <v-tab-item value="questions">
+                <div class="col pt-0" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
+                  <h2>Add Investigative Question</h2>
+                  <v-text-field id="playbook-question-add" v-model="addQuestion" persistent-hint :hint="i18n.playbookQuestionHint"></v-text-field>
+                  <v-text-field id="playbook-context-add" v-model="addContext" persistent-hint :hint="i18n.playbookAddContext"></v-text-field>
+                  <v-combobox id="playbook-datasources-add" v-model="addDataSources" persistent-hint :hint="i18n.playbookDatasources" multiple>
+                    <template #selection="{ item }">
+                      <v-chip color="primary">{{item}}</v-chip>
+                    </template>
+                  </v-combobox>
+
+                  <v-btn id="playbook-add-question" color="primary" class="mt-2" @click="appendQuestion()">
+                    Add
+                  </v-btn>
+                </div>
+
+                <v-text-field v-model="search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line></v-text-field>
+                <div v-for="q in playbook.questions" class="col px-5 py-2" style="background-color: rgb(40, 40, 40); border-radius: 4px;">
+                  <div class="font-italic my-2">{{q.question}}</div>
+                  <div class="my-2"><span class="font-weight-bold">Context:</span> {{ q.context }}</div>
+                  <div class="my-2"><span class="font-weight-bold">Data Sources:</span> {{ q.dataSources.join(', ') }}</div>
+                  <div class="my-2">
+                    <div><span class="font-weight-bold">Query:</span> {{ q.query }}</div>
+                    <v-data-table v-if="q.query" :headers="questionHeaders" :items="q.results">
+                      <template v-slot:item="result">
+                        <tr>
+                          <td v-text="result.item.payload['@timestamp']"></td>
+                          <td v-text="result.item.payload['@version']"></td>
+                          <td v-text="result.item.payload['message']"></td>
+                        </tr>
+                      </template>
+                    </v-data-table>
+                  </div>
+                </div>
+              </v-tab-item>
+              <v-tab-item value="cases">
+                Coming Soon!
+              </v-tab-item>
+              <v-tab-item value="history">
+                Coming Soon!
+              </v-tab-item>
+            </v-tabs>
+          </div>
+          <div class="col-md-3 order-md-2 col-12 order-1">
+            <v-expansion-panels focusable multiple v-model="panel">
+              <v-expansion-panel v-if="!isNew()">
+                <v-expansion-panel-header id="playbook-related-playbooks">
+                  <h3>Playbooks</h3>
+                </v-expansion-panel-header>
+                <v-expansion-panel-content>
+                  Related Playbooks:
+                  <ul>
+                    <li>123</li>
+                    <li>456</li>
+                    <li>ABC</li>
+                    <li>XYZ</li>
+                  </ul>
+                </v-expansion-panel-content>
+              </v-expansion-panel>
+              <v-expansion-panel v-if="!isNew()">
+                <v-expansion-panel-header id="detection-related-playbooks">
+                  <h3>Alerts</h3>
+                </v-expansion-panel-header>
+                <v-expansion-panel-content>
+                  Recent Alerts:
+                  <ul>
+                    <li>123</li>
+                    <li>456</li>
+                    <li>ABC</li>
+                    <li>XYZ</li>
+                  </ul>
+                </v-expansion-panel-content>
+              </v-expansion-panel>
+            </v-expansion-panels>
+          </div>
+        </div>
       </v-container>
     </script>
 
@@ -1267,7 +2332,7 @@
                               <v-alert v-if="item.oidcStatus == 'enabled'" class="mt-2" type="warning" icon="fa-shield-halved" text dense>
                                 {{ i18n.oidcResetPasswordHelp }}
                               </v-alert>
-              
+
                               <v-form v-model="form.valid">
                                 <v-text-field id="password-input" v-model="form.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'"
                                   @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'"
@@ -1360,7 +2425,6 @@
         </v-row>
       </v-container>
     </script>
-
 
     <script type="text/x-template" id="page-job">
       <v-container fluid @click="jobClickHandler()">
@@ -2449,7 +3513,7 @@
                   <v-row>
                     <v-col>
                       <v-toolbar class="elevation-0" fixed>
-                        <v-btn :title="i18n.refreshHistoryHelp" color="secondary" @click.stop="reloadAssociation('history', true)" id="refresh-history-button">
+                        <v-btn :title="i18n.refreshCaseHistoryHelp" color="secondary" @click.stop="reloadAssociation('history', true)" id="refresh-history-button">
                           <v-icon>fa-sync</v-icon>
                         </v-btn>
                       </v-toolbar>
@@ -2977,7 +4041,6 @@
       </v-container>
     </script>
 
-
     <script type="text/x-template" id="page-grid">
       <v-container fluid>
         <v-row>
@@ -3330,7 +4393,7 @@
                                 <v-btn v-if="canTest(item)" id="test-minion" icon :title="i18n.nodeTest" @click="showTestConfirm(item.id + '_' + item.role)">
                                   <v-icon>fa-file-import</v-icon>
                                 </v-btn>
-                                <v-btn v-if="canUpload(item)" id="import-minion" icon :title="i18n.uploadPcap" @click="showUploadConfirm(item)">
+                                <v-btn v-if="canUpload(item)" id="import-minion" icon :title="i18n.uploadPCAPEVTX" @click="showUploadConfirm(item)">
                                   <v-icon>fa-upload</v-icon>
                                 </v-btn>
                                 <v-btn id="restart-minion" icon :title="item.osNeedsRestart == 1 ? i18n.restartRequiredHelp : i18n.restartMinionHelp" @click="showRestartConfirm(item.id + '_' + item.role)">
@@ -3720,21 +4783,19 @@
                         </li>
                       </ul>
                     </li>
-                    <li>
-                      {{i18n.configQLNIDSHeader}}
-                      <ul>
-                        <li>
-                          <router-link :to="{name: 'config', query: {s: 'idstools.config.ruleset'}}">{{i18n.configQLNIDSRuleset}}</router-link>
-                        </li>
-                        <li>
-                          <router-link :to="{name: 'config', query: {s: 'idstools.config.oinkcode'}}">{{i18n.configQLNIDSOinkCode}}</router-link>
-                        </li>
-                      </ul>
-                    </li>
+
                   </ul>
                   <br/>
                   <p class="font-weight-bold">{{i18n.configQLAnalystTitle}}</p>
                   <ul>
+                    <li>
+                      {{i18n.configQLSigmaHeader}}
+                      <ul>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'soc.config.server.modules.elastalertengine.sigmaRulePackages'}}">{{i18n.configQLSigmaRuleset}}</router-link>
+                        </li>
+                      </ul>
+                    </li>
                     <li>
                       {{i18n.configQLSuricataHeader}}
                       <ul>
@@ -3745,12 +4806,12 @@
                           <router-link :to="{name: 'config', query: {s: 'suricata.config.af-packet.threads'}}">{{i18n.configQLSuricataThreads}}</router-link>
                         </li>
                         <li>
-                          <router-link :to="{name: 'config', query: {s: 'idstools.sids'}}">{{i18n.configQLSIDS}}</router-link>
+                          <router-link :to="{name: 'config', query: {s: 'idstools.config.ruleset'}}">{{i18n.configQLNIDSRuleset}}</router-link>
                         </li>
                         <li>
-                          <router-link :to="{name: 'config', query: {s: 'suricata.thresholding.sids__yaml'}}">{{i18n.configQLSIDSThresholding}}</router-link>
-                      </ul>
-                    </li>
+                          <router-link :to="{name: 'config', query: {s: 'idstools.config.oinkcode'}}">{{i18n.configQLNIDSOinkCode}}</router-link>
+                        </ul>
+                        </li>
                     <li>
                       {{i18n.configQLZeekHeader}}
                       <ul>
@@ -4107,6 +5168,8 @@
     <script src="js/external/purify-3.0.6.min.js"></script>
     <script src="js/external/chartjs-chart-sankey-0.12.0.min.js"></script>
     <script src="js/external/chartjs-adapter-moment-1.0.0.min.js"></script>
+    <script src="js/external/js-yaml.min.js"></script>
+    <script src="js/external/lz-string.min.js"></script>
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>
@@ -4122,6 +5185,8 @@
     <script src="js/routes/gridmembers.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/terms.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/users.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/detection.js?v=VERSION_PLACEHOLDER"></script>
+    <!-- <script src="js/routes/playbook.js?v=VERSION_PLACEHOLDER"></script> -->
     <script src="js/custom.js?v=VERSION_PLACEHOLDER"></script>
   </body>
 </html>

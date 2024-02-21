@@ -7,12 +7,16 @@
 package model
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/apex/log"
 )
+
+var indexExtractor = regexp.MustCompile(`_index:[ \t]?"([^ \t]+)"`)
+var kindExtractor = regexp.MustCompile(`so_kind:[ \t]?"([^ \t]+)"`)
 
 type EventResults struct {
 	CreateTime   time.Time `json:"createTime"`
@@ -40,7 +44,7 @@ type EventSearchResults struct {
 
 func NewEventSearchResults() *EventSearchResults {
 	results := &EventSearchResults{
-		Events:  make([]*EventRecord, 0, 0),
+		Events:  make([]*EventRecord, 0),
 		Metrics: make(map[string]([]*EventMetric)),
 	}
 	results.initEventResults()
@@ -62,6 +66,7 @@ type EventSearchCriteria struct {
 	CreateTime  time.Time
 	ParsedQuery *Query
 	SortFields  []*SortCriteria
+	SearchAfter []interface{}
 }
 
 func (criteria *EventSearchCriteria) initSearchCriteria() {
@@ -115,6 +120,40 @@ func (criteria *EventSearchCriteria) Populate(query string, dateRange string, da
 	return err
 }
 
+func (criteria *EventSearchCriteria) DeterminePermissions(hintVerb string, hintNoun string) (verb string, noun string) {
+	var index, kind string
+
+	for _, seg := range criteria.ParsedQuery.Segments {
+		segStr := seg.String()
+
+		indexMatches := indexExtractor.FindStringSubmatch(segStr)
+		if len(indexMatches) != 0 {
+			index = indexMatches[1]
+		}
+
+		kindMatches := kindExtractor.FindStringSubmatch(segStr)
+		if len(kindMatches) != 0 {
+			kind = kindMatches[1]
+		}
+
+		if index != "" && kind != "" {
+			break
+		}
+	}
+
+	index = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(index), "*:"))
+	kind = strings.ToLower(strings.TrimSpace(kind))
+
+	switch index {
+	case "so-detection", "*:so-detection":
+		return hintVerb, "detection"
+	}
+
+	_ = kind
+
+	return hintVerb, hintNoun
+}
+
 type EventMetric struct {
 	Keys  []interface{} `json:"keys"`
 	Value int           `json:"value"`
@@ -128,6 +167,7 @@ type EventRecord struct {
 	Type      string                 `json:"type"`
 	Score     float64                `json:"score"`
 	Payload   map[string]interface{} `json:"payload"`
+	Sort      []interface{}          `json:"sort"`
 }
 
 type EventUpdateCriteria struct {

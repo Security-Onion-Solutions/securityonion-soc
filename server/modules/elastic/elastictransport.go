@@ -14,6 +14,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
@@ -42,16 +43,20 @@ func NewElasticTransport(user string, pass string, timeoutMs time.Duration, veri
 
 func (transport *ElasticTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if user, ok := req.Context().Value(web.ContextKeyRequestor).(*model.User); ok {
-		log.WithFields(log.Fields{
-			"username":       user.Email,
-			"searchUsername": user.SearchUsername,
-			"requestId":      req.Context().Value(web.ContextKeyRequestId),
-		}).Debug("Executing Elastic request on behalf of user")
-		username := user.Email
-		if user.SearchUsername != "" {
-			username = user.SearchUsername
+		if user.Id != server.AGENT_ID {
+			log.WithFields(log.Fields{
+				"username":       user.Email,
+				"searchUsername": user.SearchUsername,
+				"requestId":      req.Context().Value(web.ContextKeyRequestId),
+			}).Debug("Executing Elastic request on behalf of user")
+			username := user.Email
+			if user.SearchUsername != "" {
+				username = user.SearchUsername
+			}
+			req.Header.Set("es-security-runas-user", username)
+		} else {
+			log.Info("Executing Elastic request without es-security-runas-user")
 		}
-		req.Header.Set("es-security-runas-user", username)
 	} else {
 		log.Warn("User not found in context")
 	}
