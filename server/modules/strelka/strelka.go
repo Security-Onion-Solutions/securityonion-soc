@@ -136,6 +136,8 @@ func (e *StrelkaEngine) SyncLocalDetections(ctx context.Context, _ []*model.Dete
 }
 
 func (e *StrelkaEngine) startCommunityRuleImport() {
+	templateFound := false
+
 	for e.isRunning {
 		time.Sleep(time.Duration(e.communityRulesImportFrequencySeconds) * time.Second)
 		if !e.isRunning {
@@ -144,15 +146,19 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 		start := time.Now()
 
-		exists, err := e.srv.Detectionstore.DoesTemplateExist(e.srv.Context, "so-detection")
-		if err != nil {
-			log.WithError(err).Error("unable to check for detection index template")
-			continue
-		}
+		if !templateFound {
+			exists, err := e.srv.Detectionstore.DoesTemplateExist(e.srv.Context, "so-detection")
+			if err != nil {
+				log.WithError(err).Error("unable to check for detection index template")
+				continue
+			}
 
-		if !exists {
-			log.Warn("detection index template does not exist, skipping import")
-			continue
+			if !exists {
+				log.Warn("detection index template does not exist, skipping import")
+				continue
+			}
+
+			templateFound = true
 		}
 
 		// read existing repos

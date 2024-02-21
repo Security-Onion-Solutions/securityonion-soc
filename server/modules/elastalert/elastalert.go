@@ -239,6 +239,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 	}()
 
 	ctx := e.srv.Context
+	templateFound := false
 
 	for e.isRunning {
 		time.Sleep(time.Duration(e.communityRulesImportFrequencySeconds) * time.Second)
@@ -248,15 +249,19 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 
 		start := time.Now()
 
-		exists, err := e.srv.Detectionstore.DoesTemplateExist(ctx, "so-detection")
-		if err != nil {
-			log.WithError(err).Error("unable to check for detection index template")
-			continue
-		}
+		if !templateFound {
+			exists, err := e.srv.Detectionstore.DoesTemplateExist(ctx, "so-detection")
+			if err != nil {
+				log.WithError(err).Error("unable to check for detection index template")
+				continue
+			}
 
-		if !exists {
-			log.Warn("detection index template does not exist, skipping import")
-			continue
+			if !exists {
+				log.Warn("detection index template does not exist, skipping import")
+				continue
+			}
+
+			templateFound = true
 		}
 
 		zips, errMap := e.downloadSigmaPackages(ctx)

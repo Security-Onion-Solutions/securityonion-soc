@@ -121,6 +121,8 @@ func (s *SuricataEngine) watchCommunityRules() {
 
 	ctx := s.srv.Context
 
+	templateFound := false
+
 	for s.isRunning {
 		time.Sleep(time.Duration(s.communityRulesImportFrequencySeconds) * time.Second)
 		if !s.isRunning {
@@ -129,15 +131,19 @@ func (s *SuricataEngine) watchCommunityRules() {
 
 		start := time.Now()
 
-		exists, err := s.srv.Detectionstore.DoesTemplateExist(ctx, "so-detection")
-		if err != nil {
-			log.WithError(err).Error("unable to check for detection index template")
-			continue
-		}
+		if !templateFound {
+			exists, err := s.srv.Detectionstore.DoesTemplateExist(ctx, "so-detection")
+			if err != nil {
+				log.WithError(err).Error("unable to check for detection index template")
+				continue
+			}
 
-		if !exists {
-			log.Warn("detection index template does not exist, skipping import")
-			continue
+			if !exists {
+				log.Warn("detection index template does not exist, skipping import")
+				continue
+			}
+
+			templateFound = true
 		}
 
 		rules, hash, err := readAndHash(s.communityRulesFile)
