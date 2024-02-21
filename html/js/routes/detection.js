@@ -119,6 +119,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			renderAbbreviatedCount: 30,
 			curCommentEditTarget: null,
 			origComment: null,
+			showSigmaDialog: false,
+			convertedRule: '',
 	}},
 	created() {
 		this.onDetectionChange = debounce(this.onDetectionChange, 300);
@@ -1143,5 +1145,37 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				this.$root.stopLoading();
 			}
 		},
+		async convertDetection() {
+			this.$root.startLoading();
+			try {
+				const response = await this.$root.papi.get('detection/' + encodeURIComponent(this.detect.id) + '/convert');
+				if (response && response.data) {
+					this.convertedRule = response.data.query;
+					this.showSigmaDialog = true;
+				}
+			} catch (error) {
+				this.$root.showError(error);
+			} finally {
+				this.$root.stopLoading();
+			}
+		},
+		cancelConvert() {
+			this.convertedRule = '';
+			this.showSigmaDialog = false;
+		},
+		copyConvertToClipboard() {
+			this.$root.copyToClipboard(this.convertedRule);
+		},
+		runQueryInDiscover() {
+			let query = `GET /so-*/_eql/search
+{
+	"query": """
+	${this.convertedRule}
+	"""
+}`;
+			const compress = LZString.compressToEncodedURIComponent(query);
+			const url = `/kibana/app/dev_tools#/console?load_from=data:text/plain,${compress}`;
+			window.open(url, '_blank');
+		}
 	}
 }});

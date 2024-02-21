@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -58,6 +59,8 @@ type ElastAlertEngine struct {
 	sigmaRulePackages                    []string
 	isRunning                            bool
 	thread                               *sync.WaitGroup
+	allowRegex                           *regexp.Regexp
+	denyRegex                            *regexp.Regexp
 	IOManager
 }
 
@@ -80,8 +83,27 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) error {
 	e.elastAlertRulesFolder = module.GetStringDefault(config, "elastAlertRulesFolder", "/opt/so/rules/elastalert")
 	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", "/opt/so/conf/soc/sigma.fingerprint")
 
-	pkgs := module.GetStringDefault(config, "sigmaRulePackages", "core")
+	pkgs := module.GetStringArrayDefault(config, "sigmaRulePackages", []string{"core"})
 	e.parseSigmaPackages(pkgs)
+
+	allow := module.GetStringDefault(config, "allowRegex", "")
+	deny := module.GetStringDefault(config, "denyRegex", "")
+
+	if allow != "" {
+		var err error
+		e.allowRegex, err = regexp.Compile(allow)
+		if err != nil {
+			return fmt.Errorf("unable to compile ElastAlert's allowRegex: %w", err)
+		}
+	}
+
+	if deny != "" {
+		var err error
+		e.denyRegex, err = regexp.Compile(deny)
+		if err != nil {
+			return fmt.Errorf("unable to compile ElastAlert's denyRegex: %w", err)
+		}
+	}
 
 	return nil
 }
@@ -114,18 +136,21 @@ func (e *ElastAlertEngine) ValidateRule(data string) (string, error) {
 	return string(data), nil
 }
 
-func (e *ElastAlertEngine) parseSigmaPackages(cfg string) {
-	pkgs := strings.Split(strings.ToLower(cfg), "\n")
+func (s *ElastAlertEngine) ConvertRule(ctx context.Context, detect *model.Detection) (string, error) {
+	return s.sigmaToElastAlert(ctx, detect)
+}
+
+func (e *ElastAlertEngine) parseSigmaPackages(pkgs []string) {
 	set := map[string]struct{}{}
 
 	for _, pkg := range pkgs {
-		pkg = strings.TrimSpace(pkg)
+		pkg = strings.ToLower(strings.TrimSpace(pkg))
 		switch pkg {
 		case "all":
 			set["all_rules"] = struct{}{}
 		case "emerging_threats":
 			set["emerging_threats_addon"] = struct{}{}
-		default:
+		case "core++", "core+", "core", "emerging_threats_addon", "all_rules":
 			if pkg != "" {
 				set[pkg] = struct{}{}
 			}
@@ -183,7 +208,12 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 				continue
 			}
 
-			err = e.WriteFile(path, []byte(eaRule), 0644)
+			wrapped, err := wrapRule(det, eaRule)
+			if err != nil {
+				continue
+			}
+
+			err = e.WriteFile(path, []byte(wrapped), 0644)
 			if err != nil {
 				errMap[det.PublicID] = fmt.Sprintf("unable to write enabled detection file: %s", err)
 				continue
@@ -209,6 +239,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 	}()
 
 	ctx := e.srv.Context
+	templateFound := false
 
 	for e.isRunning {
 		time.Sleep(time.Duration(e.communityRulesImportFrequencySeconds) * time.Second)
@@ -217,6 +248,21 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 		}
 
 		start := time.Now()
+
+		if !templateFound {
+			exists, err := e.srv.Detectionstore.DoesTemplateExist(ctx, "so-detection")
+			if err != nil {
+				log.WithError(err).Error("unable to check for detection index template")
+				continue
+			}
+
+			if !exists {
+				log.Warn("detection index template does not exist, skipping import")
+				continue
+			}
+
+			templateFound = true
+		}
 
 		zips, errMap := e.downloadSigmaPackages(ctx)
 		if len(errMap) != 0 {
@@ -327,6 +373,7 @@ func (e *ElastAlertEngine) parseRules(pkgZips map[string][]byte) (detections []*
 			if err != nil {
 				f.Close()
 				errMap[file.Name] = err
+
 				continue
 			}
 
@@ -335,6 +382,16 @@ func (e *ElastAlertEngine) parseRules(pkgZips map[string][]byte) (detections []*
 			rule, err := ParseElastAlertRule(data)
 			if err != nil {
 				errMap[file.Name] = err
+				continue
+			}
+
+			if e.denyRegex != nil && e.denyRegex.MatchString(string(data)) {
+				log.WithField("file", file.Name).Info("content matched ElastAlert's denyRegex")
+				continue
+			}
+
+			if e.allowRegex != nil && !e.allowRegex.MatchString(string(data)) {
+				log.WithField("file", file.Name).Info("content didn't match ElastAlert's allowRegex")
 				continue
 			}
 
@@ -451,6 +508,11 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 			rule, err := e.sigmaToElastAlert(ctx, det) // get sigma from docker container
 			if err != nil {
 				errMap[det.PublicID] = fmt.Errorf("unable to convert sigma to elastalert: %s", err)
+				continue
+			}
+
+			rule, err = wrapRule(det, rule)
+			if err != nil {
 				continue
 			}
 
@@ -599,12 +661,7 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 
 	query = strings.TrimSpace(query)
 
-	elastRule, err := wrapRule(det, query)
-	if err != nil {
-		return "", fmt.Errorf("unable to wrap rule: %w", err)
-	}
-
-	return elastRule, nil
+	return query, nil
 }
 
 type CustomWrapper struct {

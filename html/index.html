@@ -664,8 +664,8 @@
                     </v-container>
 
                   </template>
-                  <template v-if="isMultiSelect()" v-slot:header.data-table-select="{ on, props }">
-                    <div class="multiselect-container">
+                  <template v-slot:header.data-table-select="{ on, props }">
+                    <div v-if="isMultiSelect()" class="multiselect-container">
                       <v-simple-checkbox id="multiselect-checkbox"
                         color="blue"
                         v-bind="props"
@@ -1047,15 +1047,15 @@
 
             <v-tabs grow v-model="activeTab" v-else>
               <v-tab id="detection_summaryTab" href="#summary">
-                <v-icon left>fa-comments</v-icon>
+                <v-icon left>fa-circle-nodes</v-icon>
                 <div class="d-none d-lg-block">{{ i18n.overview }}</div>
               </v-tab>
               <v-tab id="detection_commentsTab" href="#comments">
                 <v-icon left>fa-paperclip</v-icon>
-                <div class="d-none d-lg-block">{{ i18n.comments }}</div>
+                <div class="d-none d-lg-block">{{ i18n.detectionComments }}</div>
               </v-tab>
               <v-tab id="detection_signatureTab" href="#source">
-                <v-icon left>fa-eye</v-icon>
+                <v-icon left>fa-code</v-icon>
                 <div class="d-none d-lg-block">{{ i18n.detectionSource }}</div>
               </v-tab>
               <!-- <v-tab id="detection_playbookTab" href="#playbook">
@@ -1063,7 +1063,7 @@
                 <div class="d-none d-lg-block">Investigative Playbook</div>
               </v-tab> -->
               <v-tab id="detection_tuningTab" href="#tuning">
-                <v-icon left>fa-link</v-icon>
+                <v-icon left>fa-wrench</v-icon>
                 <div class="d-none d-lg-block">{{ i18n.tuning }}</div>
               </v-tab>
               <v-tab id="detection_historyTab" href="#history">
@@ -1213,7 +1213,7 @@
                             {{ $root.getAvatar($root.username) }}
                             </div>
                           </v-avatar>
-                          <h3 class="text--primary">{{ i18n.commentAdd }}</h3>
+                          <h3 class="text--primary">{{ i18n.commentAddDetection }}</h3>
                         </div>
                         <div class="d-flex flex-column" style="width: 100%;">
                           <div class="d-flex flex-column flex-sm-row align-sm-center align-self-start text-body-2 mb-1 ml-3">
@@ -1240,7 +1240,7 @@
                   </v-col>
                 </div>
               </v-tab-item>
-              <v-tab-item value="signature">
+              <v-tab-item value="source">
                 <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
                   <!-- PublicID -->
                   <v-text-field id="detection-publicId-edit" v-model="detect.publicId" :readonly="detect.isCommunity" :rules="requestRules([rules.required, rules.minLength(5)])" persistent-hint :hint="i18n.publicId" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)">
@@ -1253,7 +1253,10 @@
                 </div>
                 <div class="d-flex align-center align-self-end justify-end text-body-2 mt-2">
                   <div class="d-inline-flex justify-end">
-                    <v-btn id="detection-cancel" text small color="primary" class="align-self-end" @click="cancelDetection()">
+                    <v-btn v-if="detect.engine === 'elastalert'" id="detection-convert" text small color="primary" class="align-self-end" @click="convertDetection()">
+                      {{ i18n.convert }}
+                    </v-btn>
+                    <v-btn id="detection-cancel" v-if="!detect.isCommunity" text small color="primary" class="align-self-end" @click="cancelDetection()">
                       {{ i18n.cancel }}
                     </v-btn>
                     <v-btn id="detection-update" v-if="!detect.isCommunity" text small color="primary" class="align-self-end" @click="saveDetection(false)">
@@ -1668,6 +1671,27 @@
                 <!-- </div> -->
               </v-tab-item>
             </v-tabs>
+            <v-dialog v-model="showSigmaDialog" persistent width="800px">
+              <v-card>
+                <v-card-title class="lighten-4 py-4 title">{{ i18n.convertToElasticsearch }}</v-card-title>
+                <v-container>
+                  <div class="sigma-dialog-body">
+                    {{ convertedRule }}
+                  </div>
+                </v-container>
+                <div id="convert-button-container">
+                  <v-btn outlined color="primary" @click="cancelConvert()">
+                    {{ i18n.cancel }}
+                  </v-btn>
+                  <v-btn outlined color="primary" @click="copyConvertToClipboard()">
+                    {{ i18n.copyToClipboard }}
+                  </v-btn>
+                  <v-btn outlined color="primary" @click="runQueryInDiscover()">
+                    {{ i18n.viewInDiscover }}
+                  </v-btn>
+                </div>
+              </v-card>
+            </v-dialog>
           </div>
           <div class="col-md-3 order-md-2 col-12 order-1">
             <v-expansion-panels focusable multiple v-model="panel">
@@ -1717,7 +1741,7 @@
                     {{ i18n.type }}:
                   </div>
                   <div class="ops-value case-title">
-                    {{ detect.engine }}
+                    {{ detect.language }}
                   </div>
                   <div class="ops-header">
                     {{ i18n.severity }}:
@@ -5142,6 +5166,7 @@
     <script src="js/external/chartjs-chart-sankey-0.12.0.min.js"></script>
     <script src="js/external/chartjs-adapter-moment-1.0.0.min.js"></script>
     <script src="js/external/js-yaml.min.js"></script>
+    <script src="js/external/lz-string.min.js"></script>
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>

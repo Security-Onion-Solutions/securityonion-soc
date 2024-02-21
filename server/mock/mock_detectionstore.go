@@ -98,6 +98,21 @@ func (mr *MockDetectionstoreMockRecorder) DeleteDetection(arg0, arg1 any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDetection", reflect.TypeOf((*MockDetectionstore)(nil).DeleteDetection), arg0, arg1)
 }
 
+// DoesTemplateExist mocks base method.
+func (m *MockDetectionstore) DoesTemplateExist(arg0 context.Context, arg1 string) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DoesTemplateExist", arg0, arg1)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DoesTemplateExist indicates an expected call of DoesTemplateExist.
+func (mr *MockDetectionstoreMockRecorder) DoesTemplateExist(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DoesTemplateExist", reflect.TypeOf((*MockDetectionstore)(nil).DoesTemplateExist), arg0, arg1)
+}
+
 // GetAllCommunitySIDs mocks base method.
 func (m *MockDetectionstore) GetAllCommunitySIDs(arg0 context.Context, arg1 *model.EngineName) (map[string]*model.Detection, error) {
 	m.ctrl.T.Helper()

@@ -46,6 +46,8 @@ type SuricataEngine struct {
 	communityRulesImportFrequencySeconds int
 	isRunning                            bool
 	thread                               *sync.WaitGroup
+	allowRegex                           *regexp.Regexp
+	denyRegex                            *regexp.Regexp
 }
 
 func NewSuricataEngine(srv *server.Server) *SuricataEngine {
@@ -62,6 +64,25 @@ func (s *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 	s.communityRulesFile = module.GetStringDefault(config, "communityRulesFile", "/nsm/rules/suricata/emerging-all.rules")
 	s.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", "/opt/so/conf/soc/emerging-all.fingerprint")
 	s.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", 5)
+
+	allow := module.GetStringDefault(config, "allowRegex", "")
+	deny := module.GetStringDefault(config, "denyRegex", "")
+
+	if allow != "" {
+		var err error
+		s.allowRegex, err = regexp.Compile(allow)
+		if err != nil {
+			return fmt.Errorf("unable to compile Suricata's allowRegex: %w", err)
+		}
+	}
+
+	if deny != "" {
+		var err error
+		s.denyRegex, err = regexp.Compile(deny)
+		if err != nil {
+			return fmt.Errorf("unable to compile Suricata's denyRegex: %w", err)
+		}
+	}
 
 	return nil
 }
@@ -88,6 +109,10 @@ func (s *SuricataEngine) IsRunning() bool {
 	return s.isRunning
 }
 
+func (s *SuricataEngine) ConvertRule(ctx context.Context, detect *model.Detection) (string, error) {
+	return "", fmt.Errorf("not implemented")
+}
+
 func (s *SuricataEngine) watchCommunityRules() {
 	defer func() {
 		s.thread.Done()
@@ -96,6 +121,8 @@ func (s *SuricataEngine) watchCommunityRules() {
 
 	ctx := s.srv.Context
 
+	templateFound := false
+
 	for s.isRunning {
 		time.Sleep(time.Duration(s.communityRulesImportFrequencySeconds) * time.Second)
 		if !s.isRunning {
@@ -103,6 +130,21 @@ func (s *SuricataEngine) watchCommunityRules() {
 		}
 
 		start := time.Now()
+
+		if !templateFound {
+			exists, err := s.srv.Detectionstore.DoesTemplateExist(ctx, "so-detection")
+			if err != nil {
+				log.WithError(err).Error("unable to check for detection index template")
+				continue
+			}
+
+			if !exists {
+				log.Warn("detection index template does not exist, skipping import")
+				continue
+			}
+
+			templateFound = true
+		}
 
 		rules, hash, err := readAndHash(s.communityRulesFile)
 		if err != nil {
@@ -223,6 +265,16 @@ func (s *SuricataEngine) parseRules(content string, ruleset string) ([]*model.De
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			// empty or commented line, ignore
+			continue
+		}
+
+		if s.denyRegex != nil && s.denyRegex.MatchString(line) {
+			log.WithField("rule", line).Info("content matched Suricata's denyRegex")
+			continue
+		}
+
+		if s.allowRegex != nil && !s.allowRegex.MatchString(line) {
+			log.WithField("rule", line).Info("content didn't match Suricata's allowRegex")
 			continue
 		}
 

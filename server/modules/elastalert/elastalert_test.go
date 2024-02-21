@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os/exec"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -60,37 +61,37 @@ func TestParseSigmaPackages(t *testing.T) {
 
 	table := []struct {
 		Name     string
-		Input    string
+		Input    []string
 		Expected []string
 	}{
 		{
 			Name:     "Simple Sunny Day Path",
-			Input:    "core",
+			Input:    []string{"core"},
 			Expected: []string{"core"},
 		},
 		{
 			Name:     "Multiple Packages",
-			Input:    "core+\nemerging_threats",
+			Input:    []string{"core+", "emerging_threats"},
 			Expected: []string{"core+", "emerging_threats_addon"},
 		},
 		{
 			Name:     "Rename (all => all_rules)",
-			Input:    "all",
+			Input:    []string{"all"},
 			Expected: []string{"all_rules"},
 		},
 		{
 			Name:     "Rename (emerging_threats_addon => emerging_threats)",
-			Input:    "emerging_threats",
+			Input:    []string{"emerging_threats"},
 			Expected: []string{"emerging_threats_addon"},
 		},
 		{
 			Name:     "Normalize",
-			Input:    "CoRe++\n",
+			Input:    []string{"CoRe++"},
 			Expected: []string{"core++"},
 		},
 		{
 			Name:     "Account For Nesting Packages",
-			Input:    "core\ncore+\ncore++\nall_rules\nemerging_threats",
+			Input:    []string{"core", "core+", "core++", "all_rules", "emerging_threats"},
 			Expected: []string{"all_rules"},
 		},
 	}
@@ -234,7 +235,10 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 		Severity: model.SeverityHigh,
 	}
 
-	wrappedRule, err := engine.sigmaToElastAlert(context.Background(), det)
+	query, err := engine.sigmaToElastAlert(context.Background(), det)
+	assert.NoError(t, err)
+
+	wrappedRule, err := wrapRule(det, query)
 	assert.NoError(t, err)
 
 	expected := `play_title: Test Detection
@@ -293,8 +297,8 @@ func TestSigmaToElastAlertError(t *testing.T) {
 		Severity: model.SeverityHigh,
 	}
 
-	wrappedRule, err := engine.sigmaToElastAlert(context.Background(), det)
-	assert.Empty(t, wrappedRule)
+	query, err := engine.sigmaToElastAlert(context.Background(), det)
+	assert.Empty(t, query)
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "problem with sigma cli")
 }
@@ -333,6 +337,24 @@ level: high
 	_, err = bad.Write([]byte("bad data"))
 	assert.NoError(t, err)
 
+	denied, err := writer.Create("rules/deny.yml")
+	assert.NoError(t, err)
+
+	_, err = denied.Write([]byte("deny"))
+	assert.NoError(t, err)
+
+	allowThenDeny, err := writer.Create("rules/eventually_deny.yml")
+	assert.NoError(t, err)
+
+	_, err = allowThenDeny.Write([]byte("00000000-0000-0000-0000-00000000 deny"))
+	assert.NoError(t, err)
+
+	matchesNeither, err := writer.Create("rules/not_allowed.yml")
+	assert.NoError(t, err)
+
+	_, err = matchesNeither.Write([]byte("123"))
+	assert.NoError(t, err)
+
 	err = writer.Close()
 	assert.NoError(t, err)
 
@@ -341,6 +363,8 @@ level: high
 	}
 
 	engine := ElastAlertEngine{}
+	engine.allowRegex = regexp.MustCompile("00000000-0000-0000-0000-00000000")
+	engine.denyRegex = regexp.MustCompile("deny")
 
 	expected := &model.Detection{
 		PublicID:    "00000000-0000-0000-0000-00000000",
