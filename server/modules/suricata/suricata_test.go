@@ -318,26 +318,24 @@ func TestParse(t *testing.T) {
 			},
 			ExpectedDetections: []*model.Detection{
 				{
-					PublicID:    SimpleRuleSID,
-					Title:       `GPL ATTACK_RESPONSE id check returned root`,
-					Severity:    model.SeverityUnknown,
-					Content:     SimpleRule,
-					IsCommunity: true,
-					Engine:      model.EngineNameSuricata,
-					Language:    model.SigLangSuricata,
-					Ruleset:     ruleset,
-					License:     "Unknown",
+					PublicID: SimpleRuleSID,
+					Title:    `GPL ATTACK_RESPONSE id check returned root`,
+					Severity: model.SeverityUnknown,
+					Content:  SimpleRule,
+					Engine:   model.EngineNameSuricata,
+					Language: model.SigLangSuricata,
+					Ruleset:  ruleset,
+					License:  "Unknown",
 				},
 				{
-					PublicID:    "20000",
-					Title:       `a "tricky";\ msg`,
-					Severity:    model.SeverityInformational,
-					Content:     `alert http any any <> any any (metadata:signature_severity Informational; sid:"20000"; msg:"a \"tricky\"\;\\ msg";)`,
-					IsCommunity: true,
-					Engine:      model.EngineNameSuricata,
-					Language:    model.SigLangSuricata,
-					Ruleset:     ruleset,
-					License:     "Unknown",
+					PublicID: "20000",
+					Title:    `a "tricky";\ msg`,
+					Severity: model.SeverityInformational,
+					Content:  `alert http any any <> any any (metadata:signature_severity Informational; sid:"20000"; msg:"a \"tricky\"\;\\ msg";)`,
+					Engine:   model.EngineNameSuricata,
+					Language: model.SigLangSuricata,
+					Ruleset:  ruleset,
+					License:  "Unknown",
 				},
 			},
 		},
@@ -354,7 +352,7 @@ func TestParse(t *testing.T) {
 
 			data := strings.Join(test.Lines, "\n")
 
-			detections, err := mod.parseRules(data, *ruleset)
+			detections, err := mod.ParseRules(data, ruleset)
 			if test.ExpectedError == nil {
 				assert.NoError(t, err)
 				assert.Equal(t, test.ExpectedDetections, detections)

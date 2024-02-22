@@ -136,8 +136,44 @@ func (e *ElastAlertEngine) ValidateRule(data string) (string, error) {
 	return string(data), nil
 }
 
-func (s *ElastAlertEngine) ConvertRule(ctx context.Context, detect *model.Detection) (string, error) {
-	return s.sigmaToElastAlert(ctx, detect)
+func (e *ElastAlertEngine) ConvertRule(ctx context.Context, detect *model.Detection) (string, error) {
+	return e.sigmaToElastAlert(ctx, detect)
+}
+
+func (e *ElastAlertEngine) ExtractDetails(detect *model.Detection) error {
+	rule, err := ParseElastAlertRule([]byte(detect.Content))
+	if err != nil {
+		return err
+	}
+
+	if rule.ID != nil {
+		detect.PublicID = *rule.ID
+	}
+
+	if rule.Level != nil {
+		switch strings.ToLower(string(*rule.Level)) {
+		case "informational":
+			detect.Severity = model.SeverityInformational
+		case "low":
+			detect.Severity = model.SeverityLow
+		case "medium":
+			detect.Severity = model.SeverityMedium
+		case "high":
+			detect.Severity = model.SeverityHigh
+		case "critical":
+			detect.Severity = model.SeverityCritical
+		default:
+			detect.Severity = model.SeverityUnknown
+		}
+	}
+
+	if rule.Title != "" {
+		detect.Title = rule.Title
+	} else {
+		detect.Title = "Detection title not yet provided - click here to update this title"
+	}
+
+	return nil
 }
 
 func (e *ElastAlertEngine) parseSigmaPackages(pkgs []string) {

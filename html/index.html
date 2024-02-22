@@ -1006,27 +1006,11 @@
               <!-- Create View -->
               <v-form ref="detection" v-model="editForm.valid">
                 <div class="col pt-5" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
-                  <!-- Description -->
-                  <v-textarea id="detection-description-create" hide-details="auto" outlined v-model="detect.description" :rules="[rules.required]" persistent-hint :hint="i18n.detectionDescription" auto-grow rows="5"></v-textarea>
-
-                  <!-- PublicID -->
-                  <v-text-field id="detection-publicId-create" class="mt-0" v-model="detect.publicId" :rules="[rules.required, rules.minLength(5)]" persistent-hint :hint="i18n.publicId">
-                    <template v-slot:append v-if="!detect.publicId">
-                      <v-btn id="gen-public-id-create" text small color="primary" @click="generatePublicID()">Generate</v-btn>
-                    </template>
-                  </v-text-field>
-
-                  <!-- Author -->
-                  <v-text-field id="detection-author-create" v-model="detect.author" :rules="[rules.required]" persistent-hint :hint="i18n.author"></v-text-field>
-
-                  <!-- Severity -->
-                  <v-select id="detection-severity-create" v-model="detect.severity" :items="getPresets('severity')" persistent-hint :hint="i18n.detectionSeverity"/>
-
                   <!-- Language -->
                   <v-select id="detection-language-create" v-model="detect.language" :items="getPresets('language')" persistent-hint :hint="i18n.language" :rules="[rules.required]" v-on:change="onDetectionChange"/>
 
-                  <!-- Reporting -->
-                  <v-checkbox id="detection-reporting-create" class="mt-5" v-model="detect.isReporting" :label="i18n.reporting"/>
+                  <!-- License -->
+                  <v-text-field id="detection-license-create" class="mt-0" v-model="detect.license" persistent-hint :hint="i18n.license" />
 
                   <!-- Signature -->
                   <div class="font-weight-bold mb-1">{{ i18n.signature }}:</div>
@@ -1039,6 +1023,9 @@
                     </v-btn>
                     <v-btn id="detection-create-create" text small color="primary" class="align-self-end" @click="saveDetection(true)">
                       {{ i18n.create }}
+                    </v-btn>
+                    <v-btn id="detection-create-convert" v-if="detect.language === 'sigma'" text small color="primary" class="align-self-end" @click="convertDetection(detect.content)">
+                      {{ i18n.convert }}
                     </v-btn>
                   </div>
                 </div>
@@ -1253,7 +1240,7 @@
                 </div>
                 <div class="d-flex align-center align-self-end justify-end text-body-2 mt-2">
                   <div class="d-inline-flex justify-end">
-                    <v-btn v-if="detect.engine === 'elastalert'" id="detection-convert" text small color="primary" class="align-self-end" @click="convertDetection()">
+                    <v-btn v-if="detect.engine === 'elastalert'" id="detection-convert" text small color="primary" class="align-self-end" @click="convertDetection(detect.content)">
                       {{ i18n.convert }}
                     </v-btn>
                     <v-btn id="detection-cancel" v-if="!detect.isCommunity" text small color="primary" class="align-self-end" @click="cancelDetection()">

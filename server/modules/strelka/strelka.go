@@ -131,6 +131,26 @@ func (s *StrelkaEngine) ConvertRule(ctx context.Context, detect *model.Detection
 	return "", fmt.Errorf("not implemented")
 }
 
+func (s *StrelkaEngine) ExtractDetails(detect *model.Detection) error {
+	rules, err := s.parseYaraRules([]byte(detect.Content), false)
+	if err != nil {
+		return err
+	}
+
+	rule := rules[0]
+
+	if rule.Identifier != "" {
+		detect.Title = rule.Identifier
+	} else {
+		detect.Title = "Detection title not yet provided - click here to update this title"
+	}
+
+	detect.Severity = model.SeverityUnknown
+	detect.PublicID = rule.GetID()
+
+	return nil
+}
+
 func (e *StrelkaEngine) SyncLocalDetections(ctx context.Context, _ []*model.Detection) (errMap map[string]string, err error) {
 	return e.syncDetections(ctx)
 }

@@ -1145,10 +1145,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				this.$root.stopLoading();
 			}
 		},
-		async convertDetection() {
+		async convertDetection(content) {
 			this.$root.startLoading();
 			try {
-				const response = await this.$root.papi.get('detection/' + encodeURIComponent(this.detect.id) + '/convert');
+				const response = await this.$root.papi.post('detection/convert', { content: content });
 				if (response && response.data) {
 					this.convertedRule = response.data.query;
 					this.showSigmaDialog = true;
