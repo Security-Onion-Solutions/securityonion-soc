@@ -61,6 +61,7 @@ type ElastAlertEngine struct {
 	thread                               *sync.WaitGroup
 	allowRegex                           *regexp.Regexp
 	denyRegex                            *regexp.Regexp
+	autoUpdateEnabled                    bool
 	IOManager
 }
 
@@ -82,6 +83,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) error {
 	e.sigmaPackageDownloadTemplate = module.GetStringDefault(config, "sigmaPackageDownloadTemplate", "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip")
 	e.elastAlertRulesFolder = module.GetStringDefault(config, "elastAlertRulesFolder", "/opt/so/rules/elastalert")
 	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", "/opt/so/conf/soc/sigma.fingerprint")
+	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", false)
 
 	pkgs := module.GetStringArrayDefault(config, "sigmaRulePackages", []string{"core"})
 	e.parseSigmaPackages(pkgs)
@@ -302,10 +304,21 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			templateFound = true
 		}
 
-		zips, errMap := e.downloadSigmaPackages(ctx)
-		if len(errMap) != 0 {
-			log.WithField("errorMap", errMap).Error("something went wrong downloading sigma packages")
-			continue
+		var zips map[string][]byte
+		var errMap map[string]error
+		if e.autoUpdateEnabled {
+			zips, errMap = e.downloadSigmaPackages(ctx)
+			if len(errMap) != 0 {
+				log.WithField("errorMap", errMap).Error("something went wrong downloading sigma packages")
+				continue
+			}
+		} else {
+			// Possible airgap installation, or admin has disabled auto-updates.
+			
+			// TODO: Perform a one-time check for a pre-downloaded ruleset on disk and if exists,
+			// let the rest of the loop continue but then exit the loop. For now we're just hardcoding 
+			// to always exit the loop.
+			return
 		}
 
 		zipHashes := map[string]string{}
