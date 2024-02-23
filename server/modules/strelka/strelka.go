@@ -53,6 +53,7 @@ type StrelkaEngine struct {
 	allowRegex                           *regexp.Regexp
 	denyRegex                            *regexp.Regexp
 	compileRules                         bool
+	autoUpdateEnabled                    bool
 	IOManager
 }
 
@@ -76,6 +77,7 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) error {
 	e.rulesRepos = module.GetStringArrayDefault(config, "rulesRepos", []string{"github.com/Security-Onion-Solutions/securityonion-yara"})
 	e.compileYaraPythonScriptPath = module.GetStringDefault(config, "compileYaraPythonScriptPath", "/opt/so/conf/strelka/compile_yara.py")
 	e.compileRules = module.GetBoolDefault(config, "compileRules", true)
+	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", false)
 
 	allow := module.GetStringDefault(config, "allowRegex", "")
 	deny := module.GetStringDefault(config, "denyRegex", "")
@@ -200,61 +202,70 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 		upToDate := map[string]struct{}{}
 
-		// pull or clone repos
-		for _, repo := range e.rulesRepos {
-			parser, err := url.Parse(repo)
-			if err != nil {
-				log.WithError(err).WithField("repo", repo).Error("Failed to parse repo URL, doing nothing with it")
-				continue
-			}
-
-			_, lastFolder := path.Split(parser.Path)
-			repoPath := filepath.Join(e.reposFolder, lastFolder)
-
-			if _, ok := existingRepos[lastFolder]; ok {
-				// repo already exists, pull
-				repo, err := git.PlainOpen(repoPath)
+		if e.autoUpdateEnabled {
+			// pull or clone repos
+			for _, repo := range e.rulesRepos {
+				parser, err := url.Parse(repo)
 				if err != nil {
-					log.WithError(err).WithField("repo", repo).Error("Failed to open repo, doing nothing with it")
+					log.WithError(err).WithField("repo", repo).Error("Failed to parse repo URL, doing nothing with it")
 					continue
 				}
 
-				work, err := repo.Worktree()
-				if err != nil {
-					log.WithError(err).WithField("repo", repo).Error("Failed to get worktree, doing nothing with it")
-					continue
-				}
+				_, lastFolder := path.Split(parser.Path)
+				repoPath := filepath.Join(e.reposFolder, lastFolder)
 
-				ctx, cancel := context.WithTimeout(e.srv.Context, time.Minute*5)
+				if _, ok := existingRepos[lastFolder]; ok {
+					// repo already exists, pull
+					repo, err := git.PlainOpen(repoPath)
+					if err != nil {
+						log.WithError(err).WithField("repo", repo).Error("Failed to open repo, doing nothing with it")
+						continue
+					}
 
-				err = work.PullContext(ctx, &git.PullOptions{
-					Depth:        1,
-					SingleBranch: true,
-				})
-				if err != nil && err != git.NoErrAlreadyUpToDate {
+					work, err := repo.Worktree()
+					if err != nil {
+						log.WithError(err).WithField("repo", repo).Error("Failed to get worktree, doing nothing with it")
+						continue
+					}
+
+					ctx, cancel := context.WithTimeout(e.srv.Context, time.Minute*5)
+
+					err = work.PullContext(ctx, &git.PullOptions{
+						Depth:        1,
+						SingleBranch: true,
+					})
+					if err != nil && err != git.NoErrAlreadyUpToDate {
+						cancel()
+						log.WithError(err).WithField("repo", repo).Error("Failed to pull repo, doing nothing with it")
+						continue
+					}
 					cancel()
-					log.WithError(err).WithField("repo", repo).Error("Failed to pull repo, doing nothing with it")
-					continue
-				}
-				cancel()
 
-				if err == nil {
+					if err == nil {
+						upToDate[repoPath] = struct{}{}
+					}
+				} else {
+					// repo does not exist, clone
+					_, err = git.PlainClone(repoPath, false, &git.CloneOptions{
+						Depth:        1,
+						SingleBranch: true,
+						URL:          repo,
+					})
+					if err != nil {
+						log.WithError(err).WithField("repo", repo).Error("Failed to clone repo, doing nothing with it")
+						continue
+					}
+
 					upToDate[repoPath] = struct{}{}
 				}
-			} else {
-				// repo does not exist, clone
-				_, err = git.PlainClone(repoPath, false, &git.CloneOptions{
-					Depth:        1,
-					SingleBranch: true,
-					URL:          repo,
-				})
-				if err != nil {
-					log.WithError(err).WithField("repo", repo).Error("Failed to clone repo, doing nothing with it")
-					continue
-				}
-
-				upToDate[repoPath] = struct{}{}
 			}
+		} else {
+			// Possible airgap installation, or admin has disabled auto-updates.
+			
+			// TODO: Perform a one-time check for a pre-downloaded ruleset on disk and if exists,
+			// let the rest of the loop continue but then exit the loop. For now we're just hardcoding 
+			// to always exit the loop.
+			return
 		}
 
 		if len(upToDate) == 0 {
