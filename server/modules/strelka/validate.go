@@ -72,7 +72,7 @@ func (md *Metadata) Set(key, value string) {
 
 func (rule *YaraRule) GetID() string {
 	if rule.Meta.ID != nil {
-		return *rule.Meta.ID
+		return util.Unquote(*rule.Meta.ID)
 	}
 
 	hash := sha256.Sum256([]byte(rule.Identifier))

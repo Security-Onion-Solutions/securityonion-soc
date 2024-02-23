@@ -47,7 +47,7 @@ type SigmaRule struct {
 	Title          string                 `yaml:"title"`
 	ID             *string                `yaml:"id"`
 	LogSource      LogSource              `yaml:"logsource"`
-	Detection      SigmaDetection              `yaml:"detection"`
+	Detection      SigmaDetection         `yaml:"detection"`
 	Status         *SigmaStatus           `yaml:"status"`
 	Description    *string                `yaml:"description"`
 	License        *string                `yaml:"license"`

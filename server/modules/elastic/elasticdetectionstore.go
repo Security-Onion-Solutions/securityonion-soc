@@ -371,6 +371,17 @@ func (store *ElasticDetectionstore) CreateDetection(ctx context.Context, detect 
 		return nil, errors.New("Unexpected ID found in new comment")
 	}
 
+	if detect.PublicID != "" {
+		duplicates, err := store.getAll(ctx, fmt.Sprintf(`_index:"%s" AND %skind:"%s" AND %sdetection.publicId:"%s" AND %sdetection.engine:"%s"`, store.index, store.schemaPrefix, "detection", store.schemaPrefix, detect.PublicID, store.schemaPrefix, detect.Engine), 1)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(duplicates) > 0 {
+			return nil, errors.New("publicId already exists for this engine")
+		}
+	}
+
 	now := time.Now()
 	detect.CreateTime = &now
 

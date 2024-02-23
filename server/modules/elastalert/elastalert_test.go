@@ -426,31 +426,53 @@ func TestDownloadSigmaPackages(t *testing.T) {
 }
 
 const (
-	SimpleRuleSID = "10000"
+	SimpleRuleSID = "bcc6f179-11cd-4111-a9a6-0fab68515cf7"
 	SimpleRule    = `title: Griffon Malware Attack Pattern
-	id: bcc6f179-11cd-4111-a9a6-0fab68515cf7
-	status: experimental
-	description: Detects process execution patterns related to Griffon malware as reported by Kaspersky
-	references:
-			- https://securelist.com/fin7-5-the-infamous-cybercrime-rig-fin7-continues-its-activities/90703/
-	author: Nasreddine Bencherchali (Nextron Systems)
-	date: 2023/03/09
-	tags:
-			- attack.execution
-			- detection.emerging_threats
-	logsource:
-			category: process_creation
-			product: windows
-	detection:
-			selection:
-					CommandLine|contains|all:
-							- '\local\temp\'
-							- '//b /e:jscript'
-							- '.txt'
-			condition: selection
-	falsepositives:
-			- Unlikely
-	level: critical`
+id: bcc6f179-11cd-4111-a9a6-0fab68515cf7
+status: experimental
+description: Detects process execution patterns related to Griffon malware as reported by Kaspersky
+references:
+  - https://securelist.com/fin7-5-the-infamous-cybercrime-rig-fin7-continues-its-activities/90703/
+author: Nasreddine Bencherchali (Nextron Systems)
+date: 2023/03/09
+tags:
+  - attack.execution
+  - detection.emerging_threats
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+      - '\local\temp\'
+      - '//b /e:jscript'
+      - '.txt'
+  condition: selection
+falsepositives:
+  - Unlikely
+level: critical`
+	SimpleRuleNoExtract = `title: Required
+status: experimental
+description: Detects process execution patterns related to Griffon malware as reported by Kaspersky
+references:
+  - https://securelist.com/fin7-5-the-infamous-cybercrime-rig-fin7-continues-its-activities/90703/
+author: Nasreddine Bencherchali (Nextron Systems)
+date: 2023/03/09
+tags:
+  - attack.execution
+  - detection.emerging_threats
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+      - '\local\temp\'
+      - '//b /e:jscript'
+      - '.txt'
+  condition: selection
+falsepositives:
+  - Unlikely`
 )
 
 type MockDirEntry struct {
@@ -617,6 +639,53 @@ func TestSyncElastAlert(t *testing.T) {
 
 			assert.Equal(t, test.ExpectedErr, err)
 			assert.Equal(t, test.ExpectedErrMap, errMap)
+		})
+	}
+}
+
+func TestExtractDetails(t *testing.T) {
+	t.Parallel()
+
+	table := []struct {
+		Name             string
+		Input            string
+		ExpectedTitle    string
+		ExpectedPublicID string
+		ExpectedSeverity model.Severity
+	}{
+		{
+			Name:             "Simple Extraction",
+			Input:            SimpleRule,
+			ExpectedTitle:    "Griffon Malware Attack Pattern",
+			ExpectedPublicID: SimpleRuleSID,
+			ExpectedSeverity: model.SeverityCritical,
+		},
+		{
+			Name:             "No Extracted Values",
+			Input:            SimpleRuleNoExtract,
+			ExpectedTitle:    "Required",
+			ExpectedPublicID: "",
+			ExpectedSeverity: model.SeverityUnknown,
+		},
+	}
+
+	eng := &ElastAlertEngine{}
+
+	for _, test := range table {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			detect := &model.Detection{
+				Content: test.Input,
+			}
+
+			err := eng.ExtractDetails(detect)
+			assert.NoError(t, err)
+
+			assert.Equal(t, test.ExpectedTitle, detect.Title)
+			assert.Equal(t, test.ExpectedPublicID, detect.PublicID)
+			assert.Equal(t, test.ExpectedSeverity, detect.Severity)
 		})
 	}
 }

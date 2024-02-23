@@ -49,7 +49,7 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Get("/{id}/comment", h.getDetectionComments)
 
 		r.Get("/{id}/history", h.getDetectionHistory)
-		r.Get("/{id}/convert", h.convertDetection)
+		r.Post("/convert", h.convertContent)
 
 		r.Put("/", h.putDetection)
 
@@ -104,8 +104,34 @@ func (h *DetectionHandler) postDetection(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
+	switch detect.Language {
+	case "sigma":
+		detect.Engine = model.EngineNameElastAlert
+	case "yara":
+		detect.Engine = model.EngineNameStrelka
+	case "suricata":
+		detect.Engine = model.EngineNameSuricata
+	}
+
+	engine, ok := h.server.DetectionEngines[detect.Engine]
+	if !ok {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("unsupported engine"))
+		return
+	}
+
+	err = engine.ExtractDetails(detect)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
 	detect, err = h.server.Detectionstore.CreateDetection(ctx, detect)
 	if err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			web.Respond(w, r, http.StatusConflict, err)
+			return
+		}
+
 		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
@@ -534,27 +560,20 @@ func (h *DetectionHandler) getDetectionComments(w http.ResponseWriter, r *http.R
 	web.Respond(w, r, http.StatusOK, obj)
 }
 
-func (h *DetectionHandler) convertDetection(w http.ResponseWriter, r *http.Request) {
+func (h *DetectionHandler) convertContent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	id := chi.URLParam(r, "id")
 
-	detect, err := h.server.Detectionstore.GetDetection(ctx, id)
+	body := struct {
+		Content string `json:"content"`
+	}{}
+
+	err := web.ReadJson(r, &body)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			web.Respond(w, r, http.StatusNotFound, err)
-		} else {
-			web.Respond(w, r, http.StatusInternalServerError, err)
-		}
-
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
-	if detect.Engine != model.EngineNameElastAlert {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("currently only ElastAlert detections support conversion"))
-		return
-	}
-
-	eaQuery, err := h.server.DetectionEngines[model.EngineNameElastAlert].ConvertRule(ctx, detect)
+	eaQuery, err := h.server.DetectionEngines[model.EngineNameElastAlert].ConvertRule(ctx, &model.Detection{Content: body.Content})
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return

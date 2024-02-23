@@ -113,6 +113,51 @@ func (s *SuricataEngine) ConvertRule(ctx context.Context, detect *model.Detectio
 	return "", fmt.Errorf("not implemented")
 }
 
+func (s *SuricataEngine) ExtractDetails(detect *model.Detection) error {
+	rule, err := ParseSuricataRule(detect.Content)
+	if err != nil {
+		return err
+	}
+
+	for _, opt := range rule.Options {
+		if strings.EqualFold(opt.Name, "sid") && opt.Value != nil {
+			detect.PublicID = *opt.Value
+			continue
+		}
+
+		if strings.EqualFold(opt.Name, "msg") && opt.Value != nil {
+			detect.Title = util.Unquote(*opt.Value)
+			continue
+		}
+	}
+
+	if detect.Title == "" {
+		detect.Title = "Detection title not yet provided - click here to update this title"
+	}
+
+	detect.Severity = model.SeverityUnknown
+
+	md := rule.ParseMetaData()
+	for _, meta := range md {
+		if strings.EqualFold(meta.Key, "signature_severity") {
+			switch strings.ToLower(meta.Value) {
+			case "informational":
+				detect.Severity = model.SeverityInformational
+			case "minor":
+				detect.Severity = model.SeverityLow
+			case "major":
+				detect.Severity = model.SeverityHigh
+			case "critical":
+				detect.Severity = model.SeverityCritical
+			}
+
+			break
+		}
+	}
+
+	return nil
+}
+
 func (s *SuricataEngine) watchCommunityRules() {
 	defer func() {
 		s.thread.Done()
@@ -171,10 +216,14 @@ func (s *SuricataEngine) watchCommunityRules() {
 
 		ruleset := settingByID(allSettings, "idstools.config.ruleset")
 
-		commDetections, err := s.parseRules(rules, ruleset.Value)
+		commDetections, err := s.ParseRules(rules, util.Ptr(ruleset.Value))
 		if err != nil {
 			log.WithError(err).Error("unable to parse community rules")
 			continue
+		}
+
+		for _, d := range commDetections {
+			d.IsCommunity = true
 		}
 
 		errMap, err := s.syncCommunityDetections(ctx, commDetections)
@@ -256,7 +305,7 @@ func (s *SuricataEngine) ValidateRule(rule string) (string, error) {
 	return parsed.String(), nil
 }
 
-func (s *SuricataEngine) parseRules(content string, ruleset string) ([]*model.Detection, error) {
+func (s *SuricataEngine) ParseRules(content string, ruleset *string) ([]*model.Detection, error) {
 	// expecting one rule per line
 	lines := strings.Split(content, "\n")
 	dets := []*model.Detection{}
@@ -337,17 +386,21 @@ func (s *SuricataEngine) parseRules(content string, ruleset string) ([]*model.De
 			}
 		}
 
-		dets = append(dets, &model.Detection{
-			PublicID:    sid,
-			Title:       title,
-			Severity:    severity,
-			Content:     line,
-			IsCommunity: true,
-			Engine:      model.EngineNameSuricata,
-			Language:    model.SigLangSuricata,
-			Ruleset:     util.Ptr(ruleset),
-			License:     lookupLicense(ruleset),
-		})
+		d := &model.Detection{
+			PublicID: sid,
+			Title:    title,
+			Severity: severity,
+			Content:  line,
+			Engine:   model.EngineNameSuricata,
+			Language: model.SigLangSuricata,
+		}
+
+		if ruleset != nil {
+			d.Ruleset = util.Copy(ruleset)
+			d.License = lookupLicense(*ruleset)
+		}
+
+		dets = append(dets, d)
 	}
 
 	return dets, nil

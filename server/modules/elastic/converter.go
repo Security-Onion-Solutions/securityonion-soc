@@ -722,7 +722,9 @@ func convertElasticEventToDetection(event *model.EventRecord, schemaPrefix strin
 				obj.IsCommunity = value.(bool)
 			}
 			if value, ok := event.Payload[schemaPrefix+"detection.ruleset"]; ok {
-				obj.Ruleset = util.Ptr(value.(string))
+				if value != nil {
+					obj.Ruleset = util.Ptr(value.(string))
+				}
 			}
 			if value, ok := event.Payload[schemaPrefix+"detection.engine"]; ok {
 				obj.Engine = model.EngineName(value.(string))

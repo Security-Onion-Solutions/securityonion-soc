@@ -167,6 +167,20 @@ condition : // comment
 $my_text_string or $my_hex_string
 }`
 
+const ExtractableRule = `import "pe"
+
+rule ExtractableRule {
+	meta:
+		id = "2050327"
+
+	strings:
+		$my_text_string = "text here"
+		$my_hex_string = { E2 34 A1 C8 23 FB }
+
+	condition:
+		$my_text_string or $my_hex_string
+}`
+
 func TestStrelkaModule(t *testing.T) {
 	srv := &server.Server{
 		DetectionEngines: map[model.EngineName]server.DetectionEngine{},
@@ -490,4 +504,51 @@ func TestRuleString(t *testing.T) {
 	raw := rules[0].String()
 	fmt.Println(raw)
 	assert.Equal(t, NormalizedBasicRuleWMeta, raw)
+}
+
+func TestExtractDetails(t *testing.T) {
+	t.Parallel()
+
+	table := []struct {
+		Name             string
+		Input            string
+		ExpectedTitle    string
+		ExpectedPublicID string
+		ExpectedSeverity model.Severity
+	}{
+		{
+			Name:             "Simple Extraction",
+			Input:            ExtractableRule,
+			ExpectedTitle:    "ExtractableRule",
+			ExpectedPublicID: "2050327",
+			ExpectedSeverity: model.SeverityUnknown,
+		},
+		{
+			Name:             "No Extracted Values",
+			Input:            simpleRule,
+			ExpectedTitle:    "dummy",
+			ExpectedPublicID: "b5a2c962-5061-4366-aa27-2ffac6d9744a",
+			ExpectedSeverity: model.SeverityUnknown,
+		},
+	}
+
+	eng := &StrelkaEngine{}
+
+	for _, test := range table {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			detect := &model.Detection{
+				Content: test.Input,
+			}
+
+			err := eng.ExtractDetails(detect)
+			assert.NoError(t, err)
+
+			assert.Equal(t, test.ExpectedTitle, detect.Title)
+			assert.Equal(t, test.ExpectedPublicID, detect.PublicID)
+			assert.Equal(t, test.ExpectedSeverity, detect.Severity)
+		})
+	}
 }
