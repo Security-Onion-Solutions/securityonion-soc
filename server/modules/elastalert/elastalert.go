@@ -165,6 +165,8 @@ func (e *ElastAlertEngine) ExtractDetails(detect *model.Detection) error {
 		default:
 			detect.Severity = model.SeverityUnknown
 		}
+	} else {
+		detect.Severity = model.SeverityUnknown
 	}
 
 	if rule.Title != "" {

@@ -126,7 +126,7 @@ func (s *SuricataEngine) ExtractDetails(detect *model.Detection) error {
 		}
 
 		if strings.EqualFold(opt.Name, "msg") && opt.Value != nil {
-			detect.Title = *opt.Value
+			detect.Title = util.Unquote(*opt.Value)
 			continue
 		}
 	}
@@ -134,6 +134,8 @@ func (s *SuricataEngine) ExtractDetails(detect *model.Detection) error {
 	if detect.Title == "" {
 		detect.Title = "Detection title not yet provided - click here to update this title"
 	}
+
+	detect.Severity = model.SeverityUnknown
 
 	md := rule.ParseMetaData()
 	for _, meta := range md {
@@ -147,8 +149,6 @@ func (s *SuricataEngine) ExtractDetails(detect *model.Detection) error {
 				detect.Severity = model.SeverityHigh
 			case "critical":
 				detect.Severity = model.SeverityCritical
-			default:
-				detect.Severity = model.SeverityUnknown
 			}
 
 			break

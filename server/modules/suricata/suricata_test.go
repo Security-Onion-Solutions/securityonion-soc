@@ -687,3 +687,50 @@ func TestSyncSuricata(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractDetails(t *testing.T) {
+	t.Parallel()
+
+	table := []struct {
+		Name             string
+		Input            string
+		ExpectedTitle    string
+		ExpectedPublicID string
+		ExpectedSeverity model.Severity
+	}{
+		{
+			Name:             "Simple Extraction",
+			Input:            `alert tls $HOME_NET any -> $EXTERNAL_NET any (msg:"ET MALWARE ScarCruft TA409 Domain in TLS SNI (nav .offlinedocument .site)"; flow:established,to_server; tls.sni; bsize:24; content:"nav.offlinedocument.site"; fast_pattern; reference:url,www.sentinelone.com/labs/a-glimpse-into-future-scarcruft-campaigns-attackers-gather-strategic-intelligence-and-target-cybersecurity-professionals/; classtype:trojan-activity; sid:2050327; rev:1; metadata:affected_product Windows_XP_Vista_7_8_10_Server_32_64_Bit, attack_target Client_Endpoint, created_at 2024_01_22, deployment Perimeter, performance_impact Low, confidence Medium, signature_severity Major, tag ScarCruft, tag TA409, updated_at 2024_01_22;)`,
+			ExpectedTitle:    "ET MALWARE ScarCruft TA409 Domain in TLS SNI (nav .offlinedocument .site)",
+			ExpectedPublicID: "2050327",
+			ExpectedSeverity: model.SeverityHigh,
+		},
+		{
+			Name:             "No Extracted Values",
+			Input:            `alert tls $HOME_NET any -> $EXTERNAL_NET any (flow:established,to_server; tls.sni; bsize:24; content:"nav.offlinedocument.site"; fast_pattern; reference:url,www.sentinelone.com/labs/a-glimpse-into-future-scarcruft-campaigns-attackers-gather-strategic-intelligence-and-target-cybersecurity-professionals/; classtype:trojan-activity; rev:1; metadata:affected_product Windows_XP_Vista_7_8_10_Server_32_64_Bit, attack_target Client_Endpoint, created_at 2024_01_22, deployment Perimeter, performance_impact Low, confidence Medium, tag ScarCruft, tag TA409, updated_at 2024_01_22;)`,
+			ExpectedTitle:    "Detection title not yet provided - click here to update this title",
+			ExpectedPublicID: "",
+			ExpectedSeverity: model.SeverityUnknown,
+		},
+	}
+
+	eng := &SuricataEngine{}
+
+	for _, test := range table {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			detect := &model.Detection{
+				Content: test.Input,
+			}
+
+			err := eng.ExtractDetails(detect)
+			assert.NoError(t, err)
+
+			assert.Equal(t, test.ExpectedTitle, detect.Title)
+			assert.Equal(t, test.ExpectedPublicID, detect.PublicID)
+			assert.Equal(t, test.ExpectedSeverity, detect.Severity)
+		})
+	}
+}
