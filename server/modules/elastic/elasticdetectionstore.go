@@ -410,6 +410,20 @@ func (store *ElasticDetectionstore) GetDetection(ctx context.Context, detectId s
 	return detect, err
 }
 
+func (store *ElasticDetectionstore) GetDetectionByPublicId(ctx context.Context, publicId string) (detect *model.Detection, err error) {
+	err = store.validateId(publicId, "publicId")
+	if err != nil {
+		return nil, err
+	}
+
+	obj, err := store.Query(ctx, fmt.Sprintf(`_index:"%s" AND %skind:"detection" AND %sdetection.publicId:"%s"`, store.index, store.schemaPrefix, store.schemaPrefix, publicId), 1)
+	if err == nil && len(obj) > 0 {
+		detect = obj[0].(*model.Detection)
+	}
+
+	return detect, err
+}
+
 func (store *ElasticDetectionstore) UpdateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error) {
 	err := store.validateDetection(detect)
 	if err != nil {

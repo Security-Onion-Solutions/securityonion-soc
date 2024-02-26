@@ -828,6 +828,8 @@ const i18n = {
       trafficManOutAbbr: 'Mgmt Out',
       transcriptCyberChefHelp: 'Send the transcript to CyberChef',
       ttr: 'Time Tracking',
+      tuneDetection: 'Tune Detection',
+      tuneDetectionHelp: 'Tune the Detection That Triggered This Event',
       tuning: 'Tuning',
       type: 'Type',
       unaccepted: 'Pending',

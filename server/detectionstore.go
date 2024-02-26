@@ -15,6 +15,7 @@ import (
 type Detectionstore interface {
 	CreateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error)
 	GetDetection(ctx context.Context, detectId string) (*model.Detection, error)
+	GetDetectionByPublicId(ctx context.Context, publicId string) (*model.Detection, error)
 	UpdateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error)
 	UpdateDetectionField(ctx context.Context, id string, fields map[string]interface{}) (*model.Detection, error)
 	DeleteDetection(ctx context.Context, detectID string) (*model.Detection, error)

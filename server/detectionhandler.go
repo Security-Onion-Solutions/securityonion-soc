@@ -38,6 +38,7 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 
 	r.Route(prefix, func(r chi.Router) {
 		r.Get("/{id}", h.getDetection)
+		r.Get("/public/{publicid}", h.getByPublicId)
 
 		r.Post("/", h.postDetection)
 		r.Post("/{id}/duplicate", h.duplicateDetection)
@@ -76,6 +77,31 @@ func (h *DetectionHandler) getDetection(w http.ResponseWriter, r *http.Request) 
 	}
 
 	web.Respond(w, r, http.StatusOK, detect)
+}
+
+func (h *DetectionHandler) getByPublicId(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	publicId := chi.URLParam(r, "publicid")
+	q := fmt.Sprintf(`so_detection.publicId:"%s" _index:"*:so-detection"`, publicId)
+
+	detections, err := h.server.Detectionstore.Query(ctx, q, 1)
+	if err != nil {
+		if err.Error() == "Object not found" {
+			web.Respond(w, r, http.StatusNotFound, nil)
+		} else {
+			web.Respond(w, r, http.StatusInternalServerError, err)
+		}
+
+		return
+	}
+
+	if len(detections) == 0 {
+		web.Respond(w, r, http.StatusNotFound, nil)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, detections[0])
 }
 
 func (h *DetectionHandler) postDetection(w http.ResponseWriter, r *http.Request) {
