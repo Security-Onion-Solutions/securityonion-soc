@@ -626,3 +626,8 @@ td {
 #convert-button-container > * {
   margin-left: 12px;
 }
+
+#actionTuneDetection-disabled {
+  color: gray;
+  cursor: pointer;
+}
