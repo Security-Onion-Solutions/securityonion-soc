@@ -173,6 +173,21 @@ func (mr *MockDetectionstoreMockRecorder) GetDetection(arg0, arg1 any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDetection", reflect.TypeOf((*MockDetectionstore)(nil).GetDetection), arg0, arg1)
 }
 
+// GetDetectionByPublicId mocks base method.
+func (m *MockDetectionstore) GetDetectionByPublicId(arg0 context.Context, arg1 string) (*model.Detection, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDetectionByPublicId", arg0, arg1)
+	ret0, _ := ret[0].(*model.Detection)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDetectionByPublicId indicates an expected call of GetDetectionByPublicId.
+func (mr *MockDetectionstoreMockRecorder) GetDetectionByPublicId(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDetectionByPublicId", reflect.TypeOf((*MockDetectionstore)(nil).GetDetectionByPublicId), arg0, arg1)
+}
+
 // GetDetectionHistory mocks base method.
 func (m *MockDetectionstore) GetDetectionHistory(arg0 context.Context, arg1 string) ([]any, error) {
 	m.ctrl.T.Helper()

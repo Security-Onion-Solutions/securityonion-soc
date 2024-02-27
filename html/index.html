@@ -804,6 +804,14 @@
                 {{ i18n.filterDrilldown }}
               </v-list-item-title>
             </v-list-item>
+            <v-list-item id="actionTuneDetection" v-if="quickActionDetId" dense :to='{ name: "detection", params: { id: quickActionDetId }, query: { tab: "tuning" } }' :title="i18n.tuneDetectionHelp">
+              <v-list-item-icon>
+                <v-icon :alt="i18n.tuneDetection" color="white">fa-wrench</v-icon>
+              </v-list-item-icon>
+              <v-list-item-title class="white--text">
+                {{ i18n.tuneDetection }}
+              </v-list-item-title>
+            </v-list-item>
             <v-list-item id="actionGroupBy" dense :to="groupByRoute" :title="i18n.groupIncludeHelp">
               <v-list-item-icon>
                 <v-icon :alt="i18n.groupInclude" color="white">fa-layer-group</v-icon>

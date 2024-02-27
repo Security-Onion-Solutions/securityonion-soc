@@ -147,6 +147,7 @@ const huntComponent = {
       { text: this.$root.i18n.enable, value: 'enable' },
       { text: this.$root.i18n.disable, value: 'disable' },
     ],
+    quickActionDetId: null,
   }},
   created() {
     this.$root.initializeCharts();
@@ -1068,6 +1069,25 @@ const huntComponent = {
         this.quickActionVisible = false;
         this.escalationMenuVisible = false;
         return;
+      }
+
+      if (this.isCategory('alerts')) {
+        const alert = this.eventData.find(item => {
+          for (const key in event) {
+            if (key !== "count" && item[key] !== event[key]) {
+              return false;
+            }
+          }
+          return true;
+        });
+
+        if (alert) {
+          // don't slow down the UI with this call
+          const publicId = alert["rule.uuid"];
+          this.$root.papi.get(`detection/public/${publicId}`).then(response => {
+            this.quickActionDetId = response.data.id;
+          });
+        }
       }
 
       this.quickActionIsNumeric = this.isNumeric(value);
