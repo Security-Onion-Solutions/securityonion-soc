@@ -829,7 +829,7 @@ const i18n = {
       transcriptCyberChefHelp: 'Send the transcript to CyberChef',
       ttr: 'Time Tracking',
       tuneDetection: 'Tune Detection',
-      tuneDetectionHelp: 'Tune the Detection That Triggered This Event',
+      tuneDetectionHelp: 'Tune the detection that triggered this alert',
       tuning: 'Tuning',
       type: 'Type',
       unaccepted: 'Pending',
