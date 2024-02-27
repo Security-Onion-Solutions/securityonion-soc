@@ -812,6 +812,14 @@
                 {{ i18n.tuneDetection }}
               </v-list-item-title>
             </v-list-item>
+            <v-list-item id="actionTuneDetection-disabled" v-else dense :title="i18n.tuneDetectionHelp">
+              <v-list-item-icon>
+                <v-icon :alt="i18n.tuneDetection" color="grey">fa-wrench</v-icon>
+              </v-list-item-icon>
+              <v-list-item-title>
+                {{ i18n.tuneDetection }}
+              </v-list-item-title>
+            </v-list-item>
             <v-list-item id="actionGroupBy" dense :to="groupByRoute" :title="i18n.groupIncludeHelp">
               <v-list-item-icon>
                 <v-icon :alt="i18n.groupInclude" color="white">fa-layer-group</v-icon>
