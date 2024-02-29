@@ -252,7 +252,11 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			this.extractedReferences = [];
 			for (let i = 0; i < matches.length; i++) {
-				this.extractedReferences.push({ type: "url", text: matches[i][1], link: this.fixProtocol(matches[i][1]) });
+				if (this.isValidUrl(matches[i][1])) {
+					this.extractedReferences.push({ type: "url", text: matches[i][1], link: this.fixProtocol(matches[i][1]) });
+				} else {
+					this.extractedReferences.push({ type: "text", text: matches[i][1] });
+				}
 			}
 		},
 		extractElastAlertReferences() {
@@ -262,8 +266,21 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			}
 
 			this.extractedReferences = yaml['references'].map(r => {
-				return { type: "url", text: r, link: this.fixProtocol(r) };
+				if (this.isValidUrl(r)) {
+					return { type: "url", text: r, link: this.fixProtocol(r) };
+				} else {
+					return { type: "text", text: r };
+				}
 			});
+		},
+		isValidUrl(urlString) {
+	  	var urlPattern = new RegExp('^(https?:\\/\\/)?'+ // validate protocol
+	    '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|'+ // validate domain name
+	    '((\\d{1,3}\\.){3}\\d{1,3}))'+ // validate OR ip (v4) address
+	    '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*'+ // validate port and path
+	    '(\\?[;&a-z\\d%_.~+=-]*)?'+ // validate query string
+	    '(\\#[-a-z\\d_]*)?$','i'); // validate fragment locator
+	  return !!urlPattern.test(urlString);
 		},
 		fixProtocol(url) {
 			if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -309,17 +326,22 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		extractStrelkaLogic() {
 			// from strings to the end of the rule
-			let stringsStart = this.detect.content.indexOf('strings:');
+			let logicStart = this.detect.content.indexOf('strings:');
 			let ruleStop = this.detect.content.lastIndexOf('}');
 
-			// back up to the beginning of the strings line
-			while (this.detect.content[stringsStart] !== '\n') {
-				stringsStart--;
+			if (logicStart === -1) {
+				// no strings section? look for conditions
+				logicStart = this.detect.content.indexOf('condition:');
 			}
-			stringsStart++;
+
+			// back up to the beginning of the strings line
+			while (this.detect.content[logicStart] !== '\n') {
+				logicStart--;
+			}
+			logicStart++;
 
 			// cut out the part we want
-			const dump = this.detect.content.substring(stringsStart, ruleStop);
+			const dump = this.detect.content.substring(logicStart, ruleStop);
 
 			// begin unindenting
 			let lines = dump.split('\n');
@@ -328,7 +350,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			const ws = dump[0];
 			if (ws !== ' ' && ws !== '\t') {
 				// does not begin with whitespace, no indentation to remove
-				return dump
+				this.extractedLogic = dump;
+				return;
 			}
 
 			// find the line with the least whitespace, don't count blank lines
@@ -351,7 +374,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			if (min === 0) {
 				// the line with the least amount of whitespace is already 0
-				return dump;
+				this.extractedLogic = dump;
+				return;
 			}
 
 			// remove the minimum amount of whitespace from each line

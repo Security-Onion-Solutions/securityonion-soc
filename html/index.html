@@ -1010,7 +1010,7 @@
 
     <script type="text/x-template" id="page-detection">
       <v-container fluid v-if="detect">
-        <div class="mx-sm-12 mx-lg-6 mt-2 mb-6 mb-md-1">
+        <div v-if="!isNew()" class="mx-sm-12 mx-lg-6 mt-2 mb-6 mb-md-1">
           <!-- Title -->
           <h2 id="detection-title" @click="startEdit('detection-title', 'title')" v-if="!isEdit('detection-title')">{{ detect.title }}</h2>
           <v-text-field id="detection-title-edit" v-else hide-details="auto" outlined v-model="detect.title" :rules="[rules.required]" persistent-hint :hint="i18n.detectionTitle" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"></v-text-field>
@@ -1030,7 +1030,7 @@
 
                   <!-- Signature -->
                   <div class="font-weight-bold mb-1">{{ i18n.signature }}:</div>
-                  <v-textarea class="config-editor" outlined v-model="detect.content" rows="10" :rules="[rules.required]" @input="onDetectionChange()" />
+                  <v-textarea id="signature-source" class="config-editor" outlined v-model="detect.content" rows="10" :rules="[rules.required]" @input="onDetectionChange()" />
                 </div>
                 <div class="d-flex align-center align-self-end text-body-2 mt-2">
                   <div class="d-inline-flex justify-end">
@@ -1078,11 +1078,11 @@
                 <div class="col pt-5 summary-backdrop">
                   <div>
                     <div class="header">{{i18n.summary}}</div>
-                    <div>
+                    <div class="summary">
                       {{ extractedSummary }}
                     </div>
                     <div class="header">{{i18n.references}}</div>
-                    <div>
+                    <div class="reference-links">
                       <div v-for="r in extractedReferences">
                         <a :href="r.link" v-if="r.type==='url'" target="_blank">{{r.text}}</a>
                         <span v-else>{{r.text}}</span>
