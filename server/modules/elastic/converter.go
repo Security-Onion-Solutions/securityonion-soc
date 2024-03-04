@@ -29,7 +29,7 @@ func stripSegmentOptions(keys []string) []string {
 	return tmp
 }
 
-func makeAggregation(store *ElasticEventstore, prefix string, keys []string, count int, ascending bool) (map[string]interface{}, string) {
+func makeAggregation(fieldDefs map[string]*FieldDefinition, prefix string, keys []string, count int, ascending bool) (map[string]interface{}, string) {
 	agg := make(map[string]interface{})
 	orderFields := make(map[string]interface{})
 	orderFields["_count"] = "desc"
@@ -42,7 +42,7 @@ func makeAggregation(store *ElasticEventstore, prefix string, keys []string, cou
 		aggFields["missing"] = "__missing__"
 	}
 
-	aggFields["field"] = store.mapElasticField(keys[0])
+	aggFields["field"] = mapElasticField(fieldDefs, keys[0])
 	aggFields["size"] = count
 	aggFields["order"] = orderFields
 	agg["terms"] = aggFields
@@ -50,7 +50,7 @@ func makeAggregation(store *ElasticEventstore, prefix string, keys []string, cou
 	name := prefix + "|" + keys[0]
 	if len(keys) > 1 {
 		inner := make(map[string]interface{})
-		innerAgg, innerName := makeAggregation(store, name, keys[1:], count, ascending)
+		innerAgg, innerName := makeAggregation(fieldDefs, name, keys[1:], count, ascending)
 		inner[innerName] = innerAgg
 		agg["aggs"] = inner
 	}
@@ -75,12 +75,12 @@ func formatSearch(input string) string {
 	return input
 }
 
-func mapSearch(store *ElasticEventstore, searchSegment *model.SearchSegment) *model.SearchSegment {
+func mapSearch(fieldDefs map[string]*FieldDefinition, searchSegment *model.SearchSegment) *model.SearchSegment {
 	const delim = ":"
 	for _, term := range searchSegment.Terms() {
 		if strings.HasSuffix(term.Raw, delim) && !term.Grouped && !term.Quoted {
 			field := strings.Trim(term.Raw, delim)
-			newField := store.mapElasticField(field)
+			newField := mapElasticField(fieldDefs, field)
 			if newField != field {
 				term.Raw = newField + delim
 			}
@@ -89,12 +89,12 @@ func mapSearch(store *ElasticEventstore, searchSegment *model.SearchSegment) *mo
 	return searchSegment
 }
 
-func makeQuery(store *ElasticEventstore, parsedQuery *model.Query, beginTime time.Time, endTime time.Time) map[string]interface{} {
+func makeQuery(fieldDefs map[string]*FieldDefinition, parsedQuery *model.Query, beginTime time.Time, endTime time.Time) map[string]interface{} {
 	searchString := ""
 	segment := parsedQuery.NamedSegment(model.SegmentKind_Search)
 	if segment != nil {
 		searchSegment := segment.(*model.SearchSegment)
-		searchString = mapSearch(store, searchSegment).String()
+		searchString = mapSearch(fieldDefs, searchSegment).String()
 	}
 
 	queryDetails := make(map[string]interface{})
@@ -189,13 +189,13 @@ func calcTimelineInterval(intervals int, beginTime time.Time, endTime time.Time)
 	return "30d"
 }
 
-func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSearchCriteria) (string, error) {
+func convertToElasticRequest(fieldDefs map[string]*FieldDefinition, intervals int, criteria *model.EventSearchCriteria) (string, error) {
 	var err error
 	var esJson string
 
 	esMap := make(map[string]interface{})
 	esMap["size"] = criteria.EventLimit
-	esMap["query"] = makeQuery(store, criteria.ParsedQuery, criteria.BeginTime, criteria.EndTime)
+	esMap["query"] = makeQuery(fieldDefs, criteria.ParsedQuery, criteria.BeginTime, criteria.EndTime)
 
 	if len(criteria.SearchAfter) != 0 {
 		esMap["search_after"] = criteria.SearchAfter
@@ -205,7 +205,7 @@ func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSear
 
 	if criteria.MetricLimit > 0 {
 		if !criteria.EndTime.IsZero() {
-			aggregations["timeline"] = makeTimeline(calcTimelineInterval(store.intervals, criteria.BeginTime, criteria.EndTime))
+			aggregations["timeline"] = makeTimeline(calcTimelineInterval(intervals, criteria.BeginTime, criteria.EndTime))
 		}
 		segments := criteria.ParsedQuery.NamedSegments(model.SegmentKind_GroupBy)
 		for idx, segment := range segments {
@@ -214,10 +214,10 @@ func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSear
 			fields = stripSegmentOptions(fields)
 			if len(fields) > 0 {
 				prefix := fmt.Sprintf("groupby_%d", idx)
-				agg, name := makeAggregation(store, prefix, fields, criteria.MetricLimit, false)
+				agg, name := makeAggregation(fieldDefs, prefix, fields, criteria.MetricLimit, false)
 				aggregations[name] = agg
 				if aggregations["bottom"] == nil {
-					aggregations["bottom"], _ = makeAggregation(store, "", fields[0:1], criteria.MetricLimit, true)
+					aggregations["bottom"], _ = makeAggregation(fieldDefs, "", fields[0:1], criteria.MetricLimit, true)
 				}
 			}
 		}
@@ -307,25 +307,25 @@ func parseAggregation(name string, aggObj interface{}, keys []interface{}, resul
 	}
 }
 
-func flattenKeyValue(store *ElasticEventstore, fieldMap map[string]interface{}, prefix string, value map[string]interface{}) {
+func flattenKeyValue(fieldDefs map[string]*FieldDefinition, fieldMap map[string]interface{}, prefix string, value map[string]interface{}) {
 	for key, value := range value {
 		flattenedKey := prefix + key
 		switch v := value.(type) {
 		case map[string]interface{}:
-			flattenKeyValue(store, fieldMap, flattenedKey+".", v)
+			flattenKeyValue(fieldDefs, fieldMap, flattenedKey+".", v)
 		default:
-			fieldMap[store.unmapElasticField(flattenedKey)] = value
+			fieldMap[unmapElasticField(fieldDefs, flattenedKey)] = value
 		}
 	}
 }
 
-func flatten(store *ElasticEventstore, data map[string]interface{}) map[string]interface{} {
+func flatten(fieldDefs map[string]*FieldDefinition, data map[string]interface{}) map[string]interface{} {
 	fieldMap := make(map[string]interface{})
-	flattenKeyValue(store, fieldMap, "", data)
+	flattenKeyValue(fieldDefs, fieldMap, "", data)
 	return fieldMap
 }
 
-func convertFromElasticResults(store *ElasticEventstore, esJson string, results *model.EventSearchResults) error {
+func convertFromElasticResults(fieldDefs map[string]*FieldDefinition, esJson string, results *model.EventSearchResults) error {
 	esResults := make(map[string]interface{})
 	err := json.LoadJson([]byte(esJson), &esResults)
 	if esResults["took"] == nil || esResults["timed_out"] == nil || esResults["hits"] == nil {
@@ -358,7 +358,7 @@ func convertFromElasticResults(store *ElasticEventstore, esJson string, results 
 		if esRecord["_score"] != nil {
 			event.Score = esRecord["_score"].(float64)
 		}
-		event.Payload = flatten(store, esRecord["_source"].(map[string]interface{}))
+		event.Payload = flatten(fieldDefs, esRecord["_source"].(map[string]interface{}))
 		if esRecord["sort"] != nil {
 			event.Sort = esRecord["sort"].([]interface{})
 		}
@@ -835,7 +835,7 @@ func convertToElasticUpdateRequest(store *ElasticEventstore, criteria *model.Eve
 	var esJson string
 
 	esMap := make(map[string]interface{})
-	esMap["query"] = makeQuery(store, criteria.ParsedQuery, criteria.BeginTime, criteria.EndTime)
+	esMap["query"] = makeQuery(store.fieldDefs, criteria.ParsedQuery, criteria.BeginTime, criteria.EndTime)
 
 	script := make(map[string]string)
 	script["inline"] = strings.Join(criteria.UpdateScripts, "; ")
@@ -875,7 +875,7 @@ func convertObjectToDocumentMap(name string, obj interface{}, schemaPrefix strin
 	return doc
 }
 
-func convertToElasticIndexRequest(store *ElasticEventstore, event map[string]interface{}) (string, error) {
+func convertToElasticIndexRequest(event map[string]interface{}) (string, error) {
 	var err error
 	var esJson string
 
@@ -887,7 +887,7 @@ func convertToElasticIndexRequest(store *ElasticEventstore, event map[string]int
 	return esJson, err
 }
 
-func convertFromElasticIndexResults(store *ElasticEventstore, esJson string, results *model.EventIndexResults) error {
+func convertFromElasticIndexResults(esJson string, results *model.EventIndexResults) error {
 	esResults := make(map[string]interface{})
 	err := json.LoadJson([]byte(esJson), &esResults)
 

@@ -25,7 +25,7 @@ func NewTestStore() *ElasticEventstore {
 
 func TestMakeAggregation(t *testing.T) {
 	keys := []string{"one*", "two", "three*"}
-	agg, name := makeAggregation(NewTestStore(), "groupby_0", keys, 10, false)
+	agg, name := makeAggregation(NewTestStore().fieldDefs, "groupby_0", keys, 10, false)
 	assert.Equal(t, "groupby_0|one", name)
 
 	assert.NotNil(t, agg["terms"])
@@ -84,7 +84,8 @@ func TestCalcTimelineInterval(t *testing.T) {
 func TestConvertToElasticRequestEmptyCriteria(t *testing.T) {
 	criteria := model.NewEventSearchCriteria()
 	criteria.MetricLimit = 0
-	actualJson, err := convertToElasticRequest(NewTestStore(), criteria)
+	teststore := NewTestStore()
+	actualJson, err := convertToElasticRequest(teststore.fieldDefs, teststore.intervals, criteria)
 	assert.Nil(t, err)
 
 	expectedJson := `{"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"*"}}],"must_not":[],"should":[]}},"size":25}`
@@ -97,7 +98,8 @@ func TestConvertToElasticRequestGroupByCriteria(t *testing.T) {
 	err := criteria.Populate(`abc AND def AND q:"\\\\file\\path" | groupby -something "ghi" jkl*`, "2020-01-02T12:13:14Z - 2020-01-02T13:13:14Z", time.RFC3339, "America/New_York", "10", "25")
 	assert.NoError(t, err)
 
-	actualJson, err := convertToElasticRequest(NewTestStore(), criteria)
+	teststore := NewTestStore()
+	actualJson, err := convertToElasticRequest(teststore.fieldDefs, teststore.intervals, criteria)
 	assert.Nil(t, err)
 
 	expectedJson := `{"aggs":{"bottom":{"terms":{"field":"ghi","order":{"_count":"asc"},"size":10}},"groupby_0|ghi":{"aggs":{"groupby_0|ghi|jkl":{"terms":{"field":"jkl","missing":"__missing__","order":{"_count":"desc"},"size":10}}},"terms":{"field":"ghi","order":{"_count":"desc"},"size":10}},"timeline":{"date_histogram":{"field":"@timestamp","fixed_interval":"1m","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"abc AND def AND q: \"\\\\\\\\file\\\\path\""}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"2020-01-02T12:13:14Z","lte":"2020-01-02T13:13:14Z"}}}],"must_not":[],"should":[]}},"size":25}`
@@ -114,7 +116,9 @@ func TestConvertToElasticRequestSortByCriteria(t *testing.T) {
 		{Field: "ignored", Order: "ignored"},
 	}
 
-	actualJson, err := convertToElasticRequest(NewTestStore(), criteria)
+	teststore := NewTestStore()
+
+	actualJson, err := convertToElasticRequest(teststore.fieldDefs, teststore.intervals, criteria)
 	assert.Nil(t, err)
 
 	expectedJson := `{"aggs":{"timeline":{"date_histogram":{"field":"@timestamp","fixed_interval":"1m","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"abc AND def AND q: \"\\\\\\\\file\\\\path\""}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"2020-01-02T12:13:14Z","lte":"2020-01-02T13:13:14Z"}}}],"must_not":[],"should":[]}},"size":25,"sort":[{"ghi":{"missing":"_last","order":"desc","unmapped_type":"date"}},{"jkl":{"missing":"_last","order":"asc","unmapped_type":"date"}}]}`
@@ -125,7 +129,8 @@ func TestConvertToElasticRequestGroupBySortByCriteria(t *testing.T) {
 	criteria := model.NewEventSearchCriteria()
 	err := criteria.Populate(`abc AND def AND q:"\\\\file\\path" | groupby ghi jkl* | groupby mno | sortby ghi jkl^`, "2020-01-02T12:13:14Z - 2020-01-02T13:13:14Z", time.RFC3339, "America/New_York", "10", "25")
 	assert.NoError(t, err)
-	actualJson, err := convertToElasticRequest(NewTestStore(), criteria)
+	teststore := NewTestStore()
+	actualJson, err := convertToElasticRequest(teststore.fieldDefs, teststore.intervals, criteria)
 	assert.Nil(t, err)
 
 	expectedJson := `{"aggs":{"bottom":{"terms":{"field":"ghi","order":{"_count":"asc"},"size":10}},"groupby_0|ghi":{"aggs":{"groupby_0|ghi|jkl":{"terms":{"field":"jkl","missing":"__missing__","order":{"_count":"desc"},"size":10}}},"terms":{"field":"ghi","order":{"_count":"desc"},"size":10}},"groupby_1|mno":{"terms":{"field":"mno","order":{"_count":"desc"},"size":10}},"timeline":{"date_histogram":{"field":"@timestamp","fixed_interval":"1m","min_doc_count":1}}},"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"abc AND def AND q: \"\\\\\\\\file\\\\path\""}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"2020-01-02T12:13:14Z","lte":"2020-01-02T13:13:14Z"}}}],"must_not":[],"should":[]}},"size":25,"sort":[{"ghi":{"missing":"_last","order":"desc","unmapped_type":"date"}},{"jkl":{"missing":"_last","order":"asc","unmapped_type":"date"}}]}`
@@ -138,7 +143,8 @@ func TestConvertToElasticRequestProgrammaticSortBy(t *testing.T) {
 	criteria.SortFields = []*model.SortCriteria{
 		{Field: "name", Order: "asc"},
 	}
-	actualJson, err := convertToElasticRequest(NewTestStore(), criteria)
+	teststore := NewTestStore()
+	actualJson, err := convertToElasticRequest(teststore.fieldDefs, teststore.intervals, criteria)
 	assert.Nil(t, err)
 
 	expectedJson := `{"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"*"}}],"must_not":[],"should":[]}},"size":25,"sort":{"name":"asc"}}`
@@ -150,7 +156,7 @@ func TestConvertFromElasticResultsSuccess(t *testing.T) {
 	assert.Nil(t, err)
 
 	results := model.NewEventSearchResults()
-	err = convertFromElasticResults(NewTestStore(), string(esData), results)
+	err = convertFromElasticResults(NewTestStore().fieldDefs, string(esData), results)
 	if assert.Nil(t, err) {
 		assert.Equal(t, 9534, results.ElapsedMs)
 		assert.Equal(t, 23689430, results.TotalEvents)
@@ -170,7 +176,7 @@ func TestConvertFromElasticResultsFailure(t *testing.T) {
 	assert.Nil(t, err)
 
 	results := model.NewEventSearchResults()
-	err = convertFromElasticResults(NewTestStore(), string(esData), results)
+	err = convertFromElasticResults(NewTestStore().fieldDefs, string(esData), results)
 	if assert.NotNil(t, err) {
 		assert.Error(t, err, "ERROR_QUERY_FAILED_ELASTICSEARCH")
 		assert.Equal(t, 9534, results.ElapsedMs)
@@ -188,7 +194,7 @@ func TestConvertFromElasticResultsFailure(t *testing.T) {
 
 func TestConvertFromElasticResultsTimedOut(t *testing.T) {
 	results := model.NewEventSearchResults()
-	err := convertFromElasticResults(NewTestStore(), `{ "took": 123, "timed_out": true, "hits": {} }`, results)
+	err := convertFromElasticResults(NewTestStore().fieldDefs, `{ "took": 123, "timed_out": true, "hits": {} }`, results)
 	assert.Error(t, err)
 
 	assert.Equal(t, 123, results.ElapsedMs, "ElapsedMs should exist even on timeout.")
@@ -196,7 +202,7 @@ func TestConvertFromElasticResultsTimedOut(t *testing.T) {
 
 func TestConvertFromElasticResultsInvalid(t *testing.T) {
 	results := model.NewEventSearchResults()
-	err := convertFromElasticResults(NewTestStore(), `{ }`, results)
+	err := convertFromElasticResults(NewTestStore().fieldDefs, `{ }`, results)
 	assert.Error(t, err)
 }
 
@@ -278,7 +284,7 @@ func validateMappedQuery(t *testing.T, original string, expected string) {
 	query := model.NewQuery()
 	query.Parse(original)
 	search := query.NamedSegment(model.SegmentKind_Search)
-	mapSearch(store, search.(*model.SearchSegment))
+	mapSearch(store.fieldDefs, search.(*model.SearchSegment))
 	output := search.String()
 	assert.Equal(t, expected, output)
 }
@@ -302,22 +308,20 @@ func TestConvertObjectToDocumentMap(t *testing.T) {
 }
 
 func TestConvertToElasticIndexRequest(t *testing.T) {
-	store := NewTestStore()
 	event := make(map[string]interface{})
 	event["foo"] = "bar"
 	expected := `{"foo":"bar"}`
 
-	actual, err := convertToElasticIndexRequest(store, event)
+	actual, err := convertToElasticIndexRequest(event)
 	assert.NoError(t, err)
 	assert.Equal(t, expected, actual)
 }
 
 func TestConvertFromElasticIndexResults(t *testing.T) {
-	store := NewTestStore()
 	results := model.NewEventIndexResults()
 	json := `{"_version":1, "_id":"123abc", "result": "successful"}`
 
-	err := convertFromElasticIndexResults(store, json, results)
+	err := convertFromElasticIndexResults(json, results)
 	assert.NoError(t, err)
 }
 
@@ -326,7 +330,7 @@ func TestConvertFromElasticResults_Failure(t *testing.T) {
 	results := model.NewEventSearchResults()
 	json := `{"took" : 11,"timed_out" : false,"_shards" : {"total" : 28,"successful" : 16,"skipped" : 0,"failed" : 12,"failures" : [{"shard" : 0,"index" : "manager:.ds-logs-elastic_agent-default-2023.09.29-000002","node" : null,"reason" : {"type" : "no_shard_available_action_exception","reason" : "no"}},{"shard" : 0,"index" : "manager:.ds-logs-elastic_agent.filebeat-default-2023.09.29-000002","node" : null,"reason" : {"type" : null,"reason" : null}},{"shard" : 0,"index" : "manager:.ds-logs-elastic_agent.fleet_server-default-2023.09.29-000002","node" : null,"reason" : {"type" : "no_shard_available_action_exception","reason" : null}}]}, "hits":{"hits":[],"total":{"value": 0}}}`
 
-	err := convertFromElasticResults(store, json, results)
+	err := convertFromElasticResults(store.fieldDefs, json, results)
 	assert.Error(t, err, "ERROR_QUERY_FAILED_ELASTICSEARCH")
 }
 

@@ -261,9 +261,9 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			}
 		} else {
 			// Possible airgap installation, or admin has disabled auto-updates.
-			
+
 			// TODO: Perform a one-time check for a pre-downloaded ruleset on disk and if exists,
-			// let the rest of the loop continue but then exit the loop. For now we're just hardcoding 
+			// let the rest of the loop continue but then exit the loop. For now we're just hardcoding
 			// to always exit the loop.
 			return
 		}
