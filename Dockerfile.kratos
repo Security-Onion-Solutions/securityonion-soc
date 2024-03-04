@@ -40,8 +40,8 @@ ARG UID=928
 ARG GID=928
 ARG OWNER=ory
 
-RUN groupadd --system ory; \
-    useradd --system ory --no-create-home -g ory
+RUN groupadd --system kratos --gid "$GID" ; \
+    useradd --system kratos --no-create-home -g kratos --uid "$UID"
 
 RUN echo "#!/bin/sh" > /start-kratos.sh
 RUN echo "kratos -c /kratos-conf/kratos.yaml migrate sql -e --yes >> /kratos-log/kratos-migrate.log 2>&1" >> /start-kratos.sh
@@ -52,7 +52,7 @@ RUN chmod a+x /start-kratos.sh
 
 COPY --from=builder /go/src/github.com/$OWNER/kratos/kratos /usr/bin/kratos
 COPY --from=builder /go/src/github.com/$OWNER/kratos/.schema /.schema
-USER ory
+USER kratos
 
 
 EXPOSE 4433
