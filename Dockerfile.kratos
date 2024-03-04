@@ -32,7 +32,7 @@ RUN go mod download
 RUN go build -tags sqlite -ldflags="-X 'github.com/ory/kratos/driver/config.Version=${VERSION}' -X 'github.com/ory/kratos/driver/config.Date=$(date -I)' -X 'github.com/ory/kratos/driver/config.Commit=$(git rev-parse --short HEAD)'"
  
 
-FROM ghcr.io/security-onion-solutions/alpine:latest
+FROM ghcr.io/security-onion-solutions/ubuntu:23.04
 
 ENV DSN=sqlite:///kratos-data/db.sqlite?_fk=true
 
@@ -40,11 +40,8 @@ ARG UID=928
 ARG GID=928
 ARG OWNER=ory
 
-RUN addgroup --gid "$GID" -S kratos; \
-    adduser -u "$UID" -S kratos -G kratos -D -H -s /bin/nologin
-RUN apk add -U --no-cache ca-certificates
-
-RUN [ ! -e /etc/nsswitch.conf ] && echo 'hosts: files dns' > /etc/nsswitch.conf
+RUN groupadd --system ory; \
+    useradd --system ory --no-create-home -g ory
 
 RUN echo "#!/bin/sh" > /start-kratos.sh
 RUN echo "kratos -c /kratos-conf/kratos.yaml migrate sql -e --yes >> /kratos-log/kratos-migrate.log 2>&1" >> /start-kratos.sh
@@ -55,7 +52,7 @@ RUN chmod a+x /start-kratos.sh
 
 COPY --from=builder /go/src/github.com/$OWNER/kratos/kratos /usr/bin/kratos
 COPY --from=builder /go/src/github.com/$OWNER/kratos/.schema /.schema
-USER kratos
+USER ory
 
 
 EXPOSE 4433
