@@ -1167,7 +1167,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.$root.copyToClipboard(this.convertedRule);
 		},
 		runQueryInDiscover() {
-			let query = `GET /so-*/_eql/search
+			let query = `GET /.ds-logs-*/_eql/search
 {
 	"query": """
 	${this.convertedRule}
