@@ -627,7 +627,7 @@ func (store *ElasticDetectionstore) GetAllCommunitySIDs(ctx context.Context, eng
 }
 
 func (store *ElasticDetectionstore) GetDetectionHistory(ctx context.Context, detectID string) ([]interface{}, error) {
-	query := fmt.Sprintf(`_index:"%s" AND %s%s:"%s" | sortby @timestamp^`, store.auditIndex, store.schemaPrefix, AUDIT_DOC_ID, detectID)
+	query := fmt.Sprintf(`_index:"%s" AND (%s%s:"%s" OR %sdetectioncomment.detectionId:"%s") | sortby @timestamp^`, store.auditIndex, store.schemaPrefix, AUDIT_DOC_ID, detectID, store.schemaPrefix, detectID)
 	history, err := store.Query(ctx, query, store.maxAssociations)
 
 	return history, err
