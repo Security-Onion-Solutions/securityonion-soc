@@ -140,6 +140,14 @@ const huntComponent = {
     mruCases: [],
     selectedMruCase: null,
     disableRouteLoad: false,
+    selectAllState: false,
+    selectedCount: 0,
+    selectedAction: 'enable',
+    bulkActions: [
+      { text: this.$root.i18n.enable, value: 'enable' },
+      { text: this.$root.i18n.disable, value: 'disable' },
+    ],
+    quickActionDetId: null,
   }},
   created() {
     this.$root.initializeCharts();
@@ -174,11 +182,16 @@ const huntComponent = {
   beforeDestroy() {
     this.$root.setSubtitle("");
     this.stopRefreshTimer();
+    this.$root.unsubscribe('detections:bulkUpdate', this.bulkUpdateReport);
   },
   mounted() {
     this.$root.startLoading();
     this.category = this.$route.path.replace("/", "");
     this.$root.loadParameters(this.category, this.initHunt);
+
+    if (this.isCategory('detections')) {
+      this.$root.subscribe('detections:bulkUpdate', this.bulkUpdateReport);
+    }
   },
   watch: {
     '$route': 'loadData',
@@ -260,10 +273,15 @@ const huntComponent = {
       }
     },
     applyQuerySubstitutions(queries) {
-      queries.forEach(query => {
-        query.query = query.query.replace(/\{myId\}/g, this.$root.user.id);
-      });
-      return queries;
+      if (Array.isArray(queries)) {
+        queries.forEach(query => {
+          query.query = query.query.replace(/\{myId\}/g, this.$root.user.id);
+        });
+
+        return queries;
+      } else {
+        return [];
+      }
     },
     notifyInputsChanged(replaceHistory = false) {
       var hunted = false;
@@ -311,6 +329,9 @@ const huntComponent = {
       }
       this.resetRefreshTimer();
 
+      this.selectAllState = false;
+      this.selectedCount = 0;
+
       if (document.activeElement) {
         // Release focus to avoid clicking away causing a second hunt
         document.activeElement.blur();
@@ -338,19 +359,21 @@ const huntComponent = {
         q = this.queryBaseFilter;
       }
 
-      for (var i = 0; i < this.filterToggles.length; i++) {
-        filter = this.filterToggles[i];
+      if (Array.isArray(this.filterToggles)) {
+        for (var i = 0; i < this.filterToggles.length; i++) {
+          filter = this.filterToggles[i];
 
-        if (filter.enabled) {
-          if (q.length > 0) {
-            q = q + " AND ";
+          if (filter.enabled) {
+            if (q.length > 0) {
+              q = q + " AND ";
+            }
+            q = q + filter.filter;
+          } else if (filter.exclusive) {
+            if (q.length > 0) {
+              q = q + " AND ";
+            }
+            q = q + "NOT " + filter.filter;
           }
-          q = q + filter.filter;
-        } else if (filter.exclusive) {
-          if (q.length > 0) {
-            q = q + " AND ";
-          }
-          q = q + "NOT " + filter.filter;
         }
       }
 
@@ -424,20 +447,22 @@ const huntComponent = {
         this.groupQuery(this.$route.query.groupByField, this.$route.query.groupByGroup);
         reRoute = true;
       }
-      for (const q in this.$route.query) {
-        this.filterToggles.forEach(toggle => {
-          if (toggle.name === q) {
-            const orig = toggle.enabled;
-            let enabled = this.$route.query[q];
-            if (typeof enabled === 'string') {
-              enabled = enabled.toLowerCase() === 'true';
+      if (Array.isArray(this.filterToggles)) {
+        for (const q in this.$route.query) {
+          this.filterToggles.forEach(toggle => {
+            if (toggle.name === q) {
+              const orig = toggle.enabled;
+              let enabled = this.$route.query[q];
+              if (typeof enabled === 'string') {
+                enabled = enabled.toLowerCase() === 'true';
+              }
+              toggle.enabled = enabled;
+              if (orig !== toggle.enabled) {
+                reRoute = true;
+              }
             }
-            toggle.enabled = enabled;
-            if (orig !== toggle.enabled) {
-              reRoute = true;
-            }
-          }
-        });
+          });
+        }
       }
       if (reRoute) return false;
       return true;
@@ -454,14 +479,78 @@ const huntComponent = {
         // This must occur before the following await, so that Vue flushes the old groupby DOM renders
         this.groupBys.splice(0);
 
-        const response = await this.$root.papi.get('events/', { params: {
-          query: await this.getQuery(),
-          range: this.dateRange,
-          format: this.i18n.timePickerSample,
-          zone: this.zone,
-          metricLimit: this.groupByLimit,
-          eventLimit: this.eventLimit
-        }});
+        let response;
+        if (this.category === 'playbooks') {
+          response = {
+            data: {
+              "metrics": {
+                "timeline": null,
+              },
+              "elapsedMs": 668,
+	            "errors": [],
+	            "criteria": {
+		            "query": "(_id:*) AND _index:\"*:so-case\" AND so_kind:detection",
+		            "dateRange": "",
+		            "metricLimit": 0,
+		            "eventLimit": 50,
+                "BeginTime": "2021-08-23T15:41:39-06:00",
+                "EndTime": "2023-08-23T15:41:39-06:00",
+                "CreateTime": "2023-08-23T15:41:39.446264196-06:00",
+                "ParsedQuery": {
+                  "Segments": [
+                    {}
+                  ]
+                },
+                "SortFields": null
+              },
+              "events": [
+                {
+                  "source": "manager:so-case",
+                  "Time": "2023-08-23T14:48:17.140438075-06:00",
+                  "timestamp": "2023-08-23T14:48:17.140Z",
+                  "id": "RDmUHooB-8rNCo4d3nIc",
+                  "type": "",
+                  "score": 3.287682,
+                  "payload": {
+                    "@timestamp": "2023-08-23T14:48:17.140438075-06:00",
+                    "so_playbook.onionId": "75332a3c-b029-46a0-9392-509ff90737a8",
+                    "so_playbook.publicId": "4020131e-223a-421e-8ebe-8a211a5ac4d6",
+                    "so_playbook.title": "Find the baddies",
+                    "so_playbook.severity": "high",
+                    "so_playbook.description": "A long description that spans multiple lines. A long description that spans multiple lines. A long description that spans multiple lines. A long description that spans multiple lines. A long description that spans multiple lines. A long description that spans multiple lines.",
+                    "so_playbook.mechanism": "suricata",
+                    "so_playbook.tags": ["one", "two", "three"],
+                    "so_playbook.relatedPlaybooks": [],
+                    "so_playbook.contributors": ["Jim Bob"],
+                    "so_playbook.userEditable": true,
+                    "so_playbook.createTime": "2023-08-22T12:49:47.302819008-06:00",
+                    "so_playbook.kind": "playbook",
+                    "so_playbook.userId": "83656890-2acd-4c0b-8ab9-7c73e71ddaf3",
+                    "so_kind": "playbook"
+                  }
+                }
+              ],
+              createTime: moment().subtract(2, 'seconds').toISOString(),
+              completeTime: moment().toISOString(),
+            }
+          };
+          response.data.totalEvents = response.data.events.length;
+        } else {
+          let range = this.dateRange;
+          if (this.isCategory('detections')) {
+            range = moment(0).format(this.i18n.timePickerFormat) + " - " + moment().format(this.i18n.timePickerFormat);
+          }
+          response = await this.$root.papi.get('events/', {
+            params: {
+              query: await this.getQuery(),
+              range: range,
+              format: this.i18n.timePickerSample,
+              zone: this.zone,
+              metricLimit: this.groupByLimit,
+              eventLimit: this.eventLimit
+            }
+          });
+        }
 
         this.eventPage = 1;
         this.groupByPage = 1;
@@ -982,6 +1071,25 @@ const huntComponent = {
         return;
       }
 
+      if (this.isCategory('alerts')) {
+        const alert = this.eventData.find(item => {
+          for (const key in event) {
+            if (key !== "count" && item[key] !== event[key]) {
+              return false;
+            }
+          }
+          return true;
+        });
+
+        if (alert) {
+          // don't slow down the UI with this call
+          const publicId = alert["rule.uuid"];
+          this.$root.papi.get(`detection/public/${publicId}`).then(response => {
+            this.quickActionDetId = response.data.id;
+          });
+        }
+      }
+
       this.quickActionIsNumeric = this.isNumeric(value);
       if (this.quickActionIsNumeric) {
         this.filterRouteLessThan = this.buildFilterRoute(field, "<" + value, FILTER_INCLUDE, true);
@@ -1236,6 +1344,7 @@ const huntComponent = {
       if (events != null && events.length > 0) {
         let batch = [];
 
+        const multiSelect = this.isMultiSelect();
         events.forEach(function(event, index) {
           var record = event.payload;
           record.soc_id = event.id;
@@ -1244,6 +1353,11 @@ const huntComponent = {
           record.soc_timestamp = event.timestamp;
           record.soc_source = event.source;
           route.lookupSocIds(record);
+
+          if (multiSelect) {
+            record._isSelected = false;
+          }
+
           records.push(record);
 
           for (const key in record) {
@@ -1359,13 +1473,13 @@ const huntComponent = {
     removeColumnHeader(field) {
       this.populateQueryTableFields();
       this.queryTableFields = this.queryTableFields.filter(item => item != field);
-      
+
       // do not revert back to the predefined headers if this was the last column that was just removed. Otherwise
       // users would get frustrated if they're trying to remove all the columns to then add their own.
       this.repopulateEventHeaders(); // no defaults fields provided
     },
     isColumnHeader(field) {
-      return this.eventHeaders.find((item) => { 
+      return this.eventHeaders.find((item) => {
         if (item.value == field) {
           return true;
         }
@@ -1494,11 +1608,19 @@ const huntComponent = {
     isExpanded(item) {
       return (this.expanded.length > 0 && this.expanded[0] == item);
     },
+    isMultiSelect() {
+      return this.isCategory('detections');
+    },
     getExpandedData() {
       var records = []
       if (this.expanded.length > 0) {
         var data = this.expanded[0];
         for (key in data) {
+          if (key === '_isSelected') {
+            // Should we exclude all fields beginning with an underscore?
+            continue;
+          }
+
           var record = {};
           record.key = key;
           record.value = data[key];
@@ -2037,7 +2159,154 @@ const huntComponent = {
       }
 
       window.open(url, target);
-    }
+    },
+    updateBulkSelector(item) {
+      if (item._isSelected) {
+        this.selectedCount = Math.min(this.selectedCount + 1, this.totalEvents);
+      } else {
+        this.selectedCount = Math.max(this.selectedCount - 1, 0);
+      }
+
+      switch (this.selectedCount) {
+        case 0:
+          this.selectAllState = false;
+          break;
+        case this.totalEvents:
+          this.selectAllState = true;
+          break;
+        default:
+          this.selectAllState = 'indeterminate';
+          break;
+      }
+    },
+    toggleSelectAll() {
+      switch (this.selectAllState) {
+        case 'indeterminate':
+          this.selectAllState = false;
+          this.selectAllEvents(false);
+          this.selectedCount = 0;
+          break;
+        case false:
+          this.selectAllState = 'indeterminate';
+          this.selectCurrentPage(true);
+          break;
+        case true:
+          this.selectAllState = false;
+          this.selectAllEvents(false);
+          break;
+      }
+    },
+    selectAllEvents(selection = true, ALL = false) {
+      for (let i = 0; i < this.eventData.length; i++) {
+        if (this.eventData[i]._isSelected !== selection) {
+          this.eventData[i]._isSelected = selection;
+          if (selection) {
+            this.selectedCount++;
+          } else {
+            this.selectedCount--;
+          }
+        }
+      }
+
+      this.selectedCount = Math.max(Math.min(this.selectedCount, this.totalEvents), 0);
+
+      if (ALL && selection) {
+        this.selectAllState = true;
+      }
+    },
+    selectCurrentPage(selection = true) {
+      this.$refs.eventTable._data.internalCurrentItems.forEach((item) => {
+        if (item._isSelected !== selection) {
+          item._isSelected = selection;
+          if (selection) {
+            this.selectedCount++;
+          } else {
+            this.selectedCount--;
+          }
+        }
+      });
+
+      this.selectedCount = Math.max(Math.min(this.selectedCount, this.totalEvents), 0);
+    },
+    isPageSelected() {
+      return this.$refs.eventTable._data.internalCurrentItems.every((item) => item._isSelected);
+    },
+    countSelected() {
+      let count = 0;
+      for (let i = 0; i < this.eventData.length; i++) {
+        if (this.eventData[i]._isSelected) {
+          count++;
+        }
+      }
+
+      this.selectedCount = count;
+    },
+    async bulkAction() {
+      let payload = {};
+
+      switch (this.selectAllState) {
+        case true:
+          payload.query = this.query;
+          break;
+        case 'indeterminate':
+          let ids = [];
+          for (let i = 0; i < this.eventData.length; i++) {
+            if (this.eventData[i]._isSelected) {
+              ids.push(this.eventData[i].soc_id);
+            }
+          }
+
+          payload.ids = ids;
+          break;
+      }
+
+      try {
+        await this.$root.papi.post('detection/bulk/' + this.selectedAction, payload);
+      } catch (e) {
+        this.$root.handleError(e);
+      } finally {
+        this.selectAllState = false;
+        this.selectedCount = 0;
+        this.hunt(false);
+      }
+    },
+    bulkUpdateReport(stats) {
+      if (stats.error > 0) {
+        let msg = this.i18n.bulkError;
+        msg += ' ' + stats.error.toLocaleString() + ' ' + (stats.error == 1 ? this.i18n.errorSingular : this.i18n.errorPlural) + '.';
+
+        this.$root.showError(msg);
+      } else {
+        let seconds = Math.floor(stats.time);
+        let hours = Math.floor(seconds / 3600);
+        seconds %= 3600;
+        let minutes = Math.floor(seconds / 60);
+        seconds = Math.floor(seconds % 60);
+
+        let t = '';
+
+        if (hours > 0) {
+          t += hours + 'h ';
+        }
+
+        if (minutes > 0 || t.length > 0) {
+          if (t.length > 0) {
+            minutes = `0${minutes}`;
+          }
+
+          t += minutes + 'm ';
+        }
+
+        t += seconds.toFixed(0) + 's';
+
+        let msg = this.i18n.bulkSuccess;
+        msg = msg.replaceAll('{modified}', stats.modified.toLocaleString());
+        msg = msg.replaceAll('{total}', stats.total.toLocaleString());
+        msg = msg.replaceAll('{time}', t);
+
+        this.$root.showInfo(msg);
+      }
+    },
   }
 };
 
@@ -2051,3 +2320,9 @@ routes.push({ path: '/cases', name: 'cases', component: casesComponent});
 
 const dashboardsComponent = Object.assign({}, huntComponent);
 routes.push({ path: '/dashboards', name: 'dashboards', component: dashboardsComponent});
+
+const detectionsComponent = Object.assign({}, huntComponent);
+routes.push({ path: '/detections', name: 'detections', component: detectionsComponent });
+
+const playbooksComponent = Object.assign({}, huntComponent);
+routes.push({ path: '/playbooks', name: 'playbooks', component: playbooksComponent });

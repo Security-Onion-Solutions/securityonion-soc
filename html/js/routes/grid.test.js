@@ -278,3 +278,27 @@ test('hasQueuestore', () => {
 	item = {containers: [{Name: 'so-something'}, {Name: 'so-nope'}, {Name: 'so-another'}]};
 	expect(comp.hasQueuestore(item)).toBe(false);
 });
+
+test('hasSteno', () => {
+	var item = {containers: [{Name: 'so-something'}, {Name: 'so-steno'}, {Name: 'so-another'}]};
+	expect(comp.hasSteno(item)).toBe(true);
+
+	item = {containers: [{Name: 'so-something'}, {Name: 'so-nope'}, {Name: 'so-another'}]};
+	expect(comp.hasQueuestore(item)).toBe(false);
+});
+
+test('hasSuri', () => {
+	var item = {containers: [{Name: 'so-something'}, {Name: 'so-suricata'}, {Name: 'so-another'}]};
+	expect(comp.hasSuri(item)).toBe(true);
+
+	item = {containers: [{Name: 'so-something'}, {Name: 'so-nope'}, {Name: 'so-another'}]};
+	expect(comp.hasQueuestore(item)).toBe(false);
+});
+
+test('hasZeek', () => {
+	var item = {containers: [{Name: 'so-something'}, {Name: 'so-zeek'}, {Name: 'so-another'}]};
+	expect(comp.hasZeek(item)).toBe(true);
+
+	item = {containers: [{Name: 'so-something'}, {Name: 'so-nope'}, {Name: 'so-another'}]};
+	expect(comp.hasQueuestore(item)).toBe(false);
+});

@@ -76,35 +76,11 @@ func (kratos *KratosUserstore) GetUserById(ctx context.Context, id string) (*mod
 }
 
 func (kratos *KratosUserstore) GetUsers(ctx context.Context) ([]*model.User, error) {
-	kratosUsers := make([]*KratosUser, 0, 0)
+	users := make([]*model.User, 0, 0)
+	myUserOnly := make([]*model.User, 0, 0)
 
-	if err := kratos.server.CheckAuthorized(ctx, "read", "users"); err != nil {
-		// User is only allowed to get their own user. Even though the user is already on
-		// the context we have to fetch it again to ensure it's fully updated with the
-		// latest user attributes.
-
-		if requestorId, ok := ctx.Value(web.ContextKeyRequestorId).(string); ok {
-			log.WithFields(log.Fields{
-				"requestorId": requestorId,
-				"requestId":   ctx.Value(web.ContextKeyRequestId),
-			}).Debug("Fetching own user for requestor ID")
-
-			var kratosUser KratosUser
-			_, err = kratos.client.SendObject("GET", "/identities/"+requestorId, "", &kratosUser, false)
-			if err != nil {
-				log.WithError(err).WithFields(log.Fields{
-					"userId":    requestorId,
-					"requestId": ctx.Value(web.ContextKeyRequestId),
-				}).Error("Failed to fetch user from Kratos")
-				return nil, err
-			}
-			kratosUsers = append(kratosUsers, &kratosUser)
-		} else {
-			// Missing context data, unlikely to occur
-			return nil, err
-		}
-	} else {
-		// User is allowed to view all users, go get them
+	if requestorId, ok := ctx.Value(web.ContextKeyRequestorId).(string); ok {
+		kratosUsers := make([]*KratosUser, 0, 0)
 		_, err := kratos.client.SendObject("GET", "/identities", "", &kratosUsers, false)
 		if err != nil {
 			log.WithError(err).WithFields(log.Fields{
@@ -112,31 +88,39 @@ func (kratos *KratosUserstore) GetUsers(ctx context.Context) ([]*model.User, err
 			}).Error("Failed to fetch users from Kratos")
 			return nil, err
 		}
+
+		// Convert the kratos users to SOC users
+		enabledCount := 0
+		for _, kratosUser := range kratosUsers {
+			user := model.NewUser()
+
+			// If the requesting user has write access to all users, then also fetch the detailed
+			// data about each user.
+			if err := kratos.server.CheckAuthorized(ctx, "write", "users"); err == nil {
+				kratos.populateUserDetails(ctx, kratosUser)
+			}
+
+			kratosUser.copyToUser(user)
+			if kratos.server.Rolestore != nil {
+				kratos.server.Rolestore.PopulateUserRoles(ctx, user)
+			}
+			users = append(users, user)
+			if user.Status != "locked" {
+				enabledCount = enabledCount + 1
+			}
+
+			if user.Id == requestorId {
+				myUserOnly = append(myUserOnly, user)
+			}
+		}
+
+		licensing.ValidateUserCount(enabledCount)
 	}
 
-	// Convert the kratos users to SOC users
-	users := make([]*model.User, 0, 0)
-	enabledCount := 0
-	for _, kratosUser := range kratosUsers {
-		user := model.NewUser()
-
-		// If the requesting user has write access to all users, then also fetch the detailed
-		// data about each user.
-		if err := kratos.server.CheckAuthorized(ctx, "write", "users"); err == nil {
-			kratos.populateUserDetails(ctx, kratosUser)
-		}
-
-		kratosUser.copyToUser(user)
-		if kratos.server.Rolestore != nil {
-			kratos.server.Rolestore.PopulateUserRoles(ctx, user)
-		}
-		users = append(users, user)
-		if user.Status != "locked" {
-			enabledCount = enabledCount + 1
-		}
+	if err := kratos.server.CheckAuthorized(ctx, "read", "users"); err != nil {
+		// User does not have access to read all users, return only that user
+		return myUserOnly, nil
 	}
-
-	licensing.ValidateUserCount(enabledCount)
 
 	return users, nil
 }

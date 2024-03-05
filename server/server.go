@@ -33,6 +33,7 @@ type Server struct {
 	Rolestore        Rolestore
 	Eventstore       Eventstore
 	Casestore        Casestore
+	Detectionstore   Detectionstore
 	Configstore      Configstore
 	GridMembersstore GridMembersstore
 	Metrics          Metrics
@@ -40,13 +41,15 @@ type Server struct {
 	Authorizer       rbac.Authorizer
 	Agent            *model.User
 	Context          context.Context
+	DetectionEngines map[model.EngineName]DetectionEngine
 }
 
 func NewServer(cfg *config.ServerConfig, version string) *Server {
 	server := &Server{
-		Config:      cfg,
-		Host:        web.NewHost(cfg.BindAddress, cfg.HtmlDir, cfg.IdleConnectionTimeoutMs, version, cfg.SrvKeyBytes, AGENT_ID),
-		stoppedChan: make(chan bool, 1),
+		Config:           cfg,
+		Host:             web.NewHost(cfg.BindAddress, cfg.HtmlDir, cfg.IdleConnectionTimeoutMs, version, cfg.SrvKeyBytes, AGENT_ID),
+		stoppedChan:      make(chan bool, 1),
+		DetectionEngines: map[model.EngineName]DetectionEngine{},
 	}
 	server.initContext()
 
@@ -60,7 +63,11 @@ func (server *Server) initContext() {
 	server.Agent = model.NewUser()
 	server.Agent.Id = AGENT_ID
 	server.Agent.Email = server.Agent.Id
-	server.Context = context.WithValue(context.Background(), web.ContextKeyRequestor, server.Agent)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestor, server.Agent)
+	ctx = context.WithValue(ctx, web.ContextKeyRequestorId, AGENT_ID)
+
+	server.Context = ctx
 }
 
 func (server *Server) Start() {
@@ -87,6 +94,7 @@ func (server *Server) Start() {
 		RegisterConfigRoutes(server, r, "/api/config")
 		RegisterGridMemberRoutes(server, r, "/api/gridmembers")
 		RegisterRolesRoutes(server, r, "/api/roles")
+		RegisterDetectionRoutes(server, r, "/api/detection")
 		RegisterUtilRoutes(server, r, "/api/util")
 
 		server.Host.RegisterRouter("/api/", r)
@@ -734,16 +742,4 @@ func (server *Server) GetTimezones() []string {
 		zones = append(zones, "Zulu")
 	}
 	return zones
-}
-
-func Ptr[T any](x T) *T {
-	return &x
-}
-
-func Copy[T any](x *T) *T {
-	if x == nil {
-		return nil
-	}
-
-	return Ptr(*x)
 }

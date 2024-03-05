@@ -14,7 +14,9 @@ import (
 func Validate(value string, syntax string) error {
 	var err error
 
-	if strings.Contains(value, "{#") || strings.Contains(value, "{{") || strings.Contains(value, "{%") {
+	if (strings.Contains(value, "{#") && strings.Contains(value, "#}")) ||
+		(strings.Contains(value, "{{") && strings.Contains(value, "}}")) ||
+		(strings.Contains(value, "{%") && strings.Contains(value, "%}")) {
 		err = errors.New("ERROR_JINJA_NOT_SUPPORTED")
 	} else {
 		switch strings.ToLower(syntax) {

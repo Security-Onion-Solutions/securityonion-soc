@@ -6,7 +6,7 @@
 
 const routes = [];
 
-const FEAT_TIMETRACKING = 'timetracking';
+const FEAT_TTR = 'ttr';
 
 const LICENSE_STATUS_ACTIVE = "active";
 const LICENSE_STATUS_EXCEEDED = "exceeded";
@@ -74,7 +74,6 @@ $(document).ready(function() {
       settingsUrl: null,
       version: '0.0.0',
       elasticVersion: '0.0.0',
-      wazuhVersion: '0.0.0',
       papi: null,
       connectionTimeout: 300000,
       wsConnectionTimeout: 15000,
@@ -198,6 +197,17 @@ $(document).ready(function() {
         }
         return content
       },
+      processAncestors(content) {
+        content = content.toString();
+        if (content.replace) {
+          try {
+            content = content.replace(/,/g, "\" OR process.entity_id:\"");
+          } catch (e) {
+            console.error("Failed to set process ancestors for content: " + e);
+          }
+        }
+        return content
+      },
       replaceActionVar(content, field, value, uriEncode) {
         if (value === undefined || value == null) return content;
 
@@ -212,6 +222,7 @@ $(document).ready(function() {
         content = content.replace("{" + field + "|base64}", encode(this.base64encode(value)));
         content = content.replace("{" + field + "|escape}", encode(this.escape(value)));
         content = content.replace("{" + field + "|escape|base64}", encode(this.base64encode(this.escape(value))));
+        content = content.replace("{" + field + "|processAncestors}", encode(this.processAncestors(value)));
         return content;
       },
       copyToClipboard(data, style) {
@@ -308,9 +319,18 @@ $(document).ready(function() {
                 this.license = response.data.license;
                 this.licenseKey = response.data.licenseKey;
                 this.licenseStatus = response.data.licenseStatus;
+
+                if (this.licenseStatus == LICENSE_STATUS_EXCEEDED) {
+                  this.showWarning(this.i18n.licenseExceeded);
+                } else if (this.licenseStatus == LICENSE_STATUS_PENDING) {
+                  this.showWarning(this.i18n.licensePending);
+                } else if (this.licenseStatus == LICENSE_STATUS_EXPIRED) {
+                  this.showWarning(this.i18n.licenseExpired);
+                } else if (this.licenseStatus == LICENSE_STATUS_INVALID) {
+                  this.showWarning(this.i18n.licenseInvalid);
+                }
                 this.parameters = response.data.parameters;
                 this.elasticVersion = response.data.elasticVersion;
-                this.wazuhVersion = response.data.wazuhVersion;
                 this.timezones = response.data.timezones;
                 this.enableReverseLookup = response.data.parameters.enableReverseLookup;
 
@@ -471,7 +491,7 @@ $(document).ready(function() {
       },
       colorLicenseStatus(value) {
         if (value == LICENSE_STATUS_ACTIVE) return "success";
-        if (value == LICENSE_STATUS_EXCEEDED) return "warning";
+        if (value == LICENSE_STATUS_EXCEEDED) return "error";
         if (value == LICENSE_STATUS_EXPIRED) return "warning";
         if (value == LICENSE_STATUS_INVALID) return "error";
         if (value == LICENSE_STATUS_PENDING) return "warning";
@@ -953,7 +973,9 @@ $(document).ready(function() {
         if (event.code == "Escape") {
           this.unmaximize(true);
         }
-        event.cancel();
+        if (typeof event.cancelable !== "boolean" || event.cancelable) {
+          event.preventDefault();
+        }
       },
       batchLookup(ips, comp) {
         if (!this.enableReverseLookup) {

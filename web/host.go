@@ -180,7 +180,7 @@ func (host *Host) pruneConnections() {
 
 	activeConnections := make([]*Connection, 0)
 	for _, connection := range host.connections {
-		durationSinceLastPing := int(time.Now().Sub(connection.lastPingTime).Milliseconds())
+		durationSinceLastPing := int(time.Since(connection.lastPingTime).Milliseconds())
 		if durationSinceLastPing < host.idleConnectionTimeoutMs {
 			activeConnections = append(activeConnections, connection)
 		} else if connection.websocket != nil {

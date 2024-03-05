@@ -38,16 +38,27 @@ func NewFakeEventstore() *FakeEventstore {
 	store.InputSearchCriterias = make([]*model.EventSearchCriteria, 0)
 	store.InputUpdateCriterias = make([]*model.EventUpdateCriteria, 0)
 	store.InputAckCriterias = make([]*model.EventAckCriteria, 0)
-	store.SearchResults = make([]*model.EventSearchResults, 0, 0)
+	store.SearchResults = make([]*model.EventSearchResults, 0)
 	store.SearchResults = append(store.SearchResults, model.NewEventSearchResults())
-	store.IndexResults = make([]*model.EventIndexResults, 0, 0)
+	store.IndexResults = make([]*model.EventIndexResults, 0)
 	store.IndexResults = append(store.IndexResults, model.NewEventIndexResults())
-	store.UpdateResults = make([]*model.EventUpdateResults, 0, 0)
+	store.UpdateResults = make([]*model.EventUpdateResults, 0)
 	store.UpdateResults = append(store.UpdateResults, model.NewEventUpdateResults())
 	return store
 }
 
 func (store *FakeEventstore) Search(context context.Context, criteria *model.EventSearchCriteria) (*model.EventSearchResults, error) {
+	store.InputContexts = append(store.InputContexts, context)
+	store.InputSearchCriterias = append(store.InputSearchCriterias, criteria)
+	if store.searchCount >= len(store.SearchResults) {
+		store.searchCount = len(store.SearchResults) - 1
+	}
+	result := store.SearchResults[store.searchCount]
+	store.searchCount += 1
+	return result, store.Err
+}
+
+func (store *FakeEventstore) EventSearch(context context.Context, criteria *model.EventSearchCriteria) (*model.EventSearchResults, error) {
 	store.InputContexts = append(store.InputContexts, context)
 	store.InputSearchCriterias = append(store.InputSearchCriterias, criteria)
 	if store.searchCount >= len(store.SearchResults) {

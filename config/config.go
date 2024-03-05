@@ -44,5 +44,6 @@ func LoadConfig(filename string, version string, buildTime time.Time) (*Config, 
 			err = cfg.Server.Verify()
 		}
 	}
+
 	return cfg, err
 }

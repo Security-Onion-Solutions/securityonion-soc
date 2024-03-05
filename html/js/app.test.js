@@ -20,6 +20,12 @@ test('base64encode', () => {
   expect(app.base64encode('hello')).toBe('aGVsbG8=');
 });
 
+test('processAncestors', () => {
+  expect(app.processAncestors([])).toBe('');
+  expect(app.processAncestors(['asdf1'])).toBe('asdf1');
+  expect(app.processAncestors(['asdf1','asdf2','asdf3'])).toBe('asdf1\" OR process.entity_id:\"asdf2\" OR process.entity_id:\"asdf3');
+});
+
 test('replaceActionVar', () => {
   expect(app.replaceActionVar('test here', 'foo', 'bar', true)).toBe('test here');
   expect(app.replaceActionVar('test {bar} here', 'foo', 'bar', true)).toBe('test {bar} here');
@@ -30,13 +36,11 @@ test('replaceActionVar', () => {
   expect(app.replaceActionVar('test {foo|escape} here', 'foo', 'sand "bar\\bad"', true)).toBe('test sand%20%5C%22bar%5C%5Cbad%5C%22 here');
   expect(app.replaceActionVar('test {foo|escape|base64} here', 'foo', 'sand "bar\\bad"', false)).toBe('test c2FuZCBcImJhclxcYmFkXCI= here');
   expect(app.replaceActionVar('test {foo|escape|base64} here', 'foo', 'sand "bar\\bad"', true)).toBe('test c2FuZCBcImJhclxcYmFkXCI%3D here');
+  expect(app.replaceActionVar('test {foo|processAncestors} here', 'foo', '', true)).toBe('test  here');
+  expect(app.replaceActionVar('test {foo|processAncestors} here', 'foo', 'bar', true)).toBe('test bar here');
+  expect(app.replaceActionVar('test {foo|processAncestors} here', 'foo', ['asdf1','asdf2','asdf3'], true)).toBe('test asdf1%22%20OR%20process.entity_id%3A%22asdf2%22%20OR%20process.entity_id%3A%22asdf3 here');
   expect(app.replaceActionVar('test {foo} here', 'foo', null, true)).toBe('test {foo} here');
   expect(app.replaceActionVar('test {foo} here', 'foo', undefined, true)).toBe('test {foo} here');
-});
-
-test('base64encode', () => {
-  expect(app.base64encode('')).toBe('');
-  expect(app.base64encode('hello')).toBe('aGVsbG8=');
 });
 
 test('formatMarkdown', () => {
@@ -157,7 +161,6 @@ test('loadServerSettings', async () => {
       casesEnabled: true
     },
     elasticVersion: 'myElasticVersion',
-    wazuhVersion: 'myWazuhVersion',
     timezones: ['UTC'],
     userId: 'myUserId'
   };
@@ -173,7 +176,6 @@ test('loadServerSettings', async () => {
   expect(app.version).toBe('myVersion');
   expect(app.license).toBe('myLicense');
   expect(app.elasticVersion).toBe('myElasticVersion');
-  expect(app.wazuhVersion).toBe('myWazuhVersion');
   expect(app.timezones[0]).toBe('UTC');
   expect(app.wsConnectionTimeout).toBe(456);
   expect(app.connectionTimeout).toBe(123);
@@ -368,7 +370,7 @@ test('colorLicenseStatus', () => {
   expect(app.colorLicenseStatus('foo')).toBe('info');
   expect(app.colorLicenseStatus(null)).toBe('info');
   expect(app.colorLicenseStatus("active")).toBe('success');
-  expect(app.colorLicenseStatus("exceeded")).toBe('warning');
+  expect(app.colorLicenseStatus("exceeded")).toBe('error');
   expect(app.colorLicenseStatus("expired")).toBe('warning');
   expect(app.colorLicenseStatus("invalid")).toBe('error');
   expect(app.colorLicenseStatus("pending")).toBe('warning');

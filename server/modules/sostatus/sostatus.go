@@ -98,7 +98,7 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 	nodes := status.server.Datastore.GetNodes(ctx)
 	for _, node := range nodes {
 
-		staleMs := int(time.Now().Sub(node.UpdateTime) / time.Millisecond)
+		staleMs := int(time.Since(node.UpdateTime) / time.Millisecond)
 		if staleMs > status.offlineThresholdMs {
 			if node.ConnectionStatus != model.NodeStatusFault {
 				log.WithFields(log.Fields{

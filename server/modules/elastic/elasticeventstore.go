@@ -37,23 +37,24 @@ type FieldDefinition struct {
 }
 
 type ElasticEventstore struct {
-	server            *server.Server
-	hostUrls          []string
-	esClient          *elasticsearch.Client
-	esRemoteClients   []*elasticsearch.Client
-	esAllClients      []*elasticsearch.Client
-	timeShiftMs       int
-	defaultDurationMs int
-	esSearchOffsetMs  int
-	timeoutMs         time.Duration
-	index             string
-	cacheMs           time.Duration
-	cacheTime         time.Time
-	cacheLock         sync.Mutex
-	fieldDefs         map[string]*FieldDefinition
-	intervals         int
-	asyncThreshold    int
-	maxLogLength      int
+	server             *server.Server
+	hostUrls           []string
+	esClient           *elasticsearch.Client
+	esRemoteClients    []*elasticsearch.Client
+	esAllClients       []*elasticsearch.Client
+	timeShiftMs        int
+	defaultDurationMs  int
+	esSearchOffsetMs   int
+	timeoutMs          time.Duration
+	index              string
+	cacheMs            time.Duration
+	cacheTime          time.Time
+	cacheLock          sync.Mutex
+	fieldDefs          map[string]*FieldDefinition
+	intervals          int
+	asyncThreshold     int
+	maxLogLength       int
+	lookupTunnelParent bool
 }
 
 func NewElasticEventstore(srv *server.Server) *ElasticEventstore {
@@ -78,7 +79,8 @@ func (store *ElasticEventstore) Init(hostUrl string,
 	index string,
 	asyncThreshold int,
 	intervals int,
-	maxLogLength int) error {
+	maxLogLength int,
+	lookupTunnelParent bool) error {
 	store.timeShiftMs = timeShiftMs
 	store.defaultDurationMs = defaultDurationMs
 	store.esSearchOffsetMs = esSearchOffsetMs
@@ -88,6 +90,7 @@ func (store *ElasticEventstore) Init(hostUrl string,
 	store.cacheMs = time.Duration(cacheMs) * time.Millisecond
 	store.intervals = intervals
 	store.maxLogLength = maxLogLength
+	store.lookupTunnelParent = lookupTunnelParent
 
 	var err error
 	store.esClient, err = store.makeEsClient(hostUrl, user, pass, verifyCert)
@@ -149,11 +152,11 @@ func (store *ElasticEventstore) makeEsClient(host string, user string, pass stri
 	return esClient, err
 }
 
-func (store *ElasticEventstore) mapElasticField(field string) string {
-	mappedField := store.fieldDefs[field]
+func mapElasticField(fieldDefs map[string]*FieldDefinition, field string) string {
+	mappedField := fieldDefs[field]
 	if mappedField != nil && !mappedField.aggregatable {
 		keyword := field + ".keyword"
-		mappedField = store.fieldDefs[keyword]
+		mappedField = fieldDefs[keyword]
 		if mappedField != nil && mappedField.aggregatable {
 			field = keyword
 		}
@@ -161,11 +164,11 @@ func (store *ElasticEventstore) mapElasticField(field string) string {
 	return field
 }
 
-func (store *ElasticEventstore) unmapElasticField(field string) string {
+func unmapElasticField(fieldDefs map[string]*FieldDefinition, field string) string {
 	suffix := ".keyword"
 	if strings.HasSuffix(field, suffix) {
 		newField := strings.TrimSuffix(field, suffix)
-		mappedField := store.fieldDefs[newField]
+		mappedField := fieldDefs[newField]
 		if mappedField != nil && !mappedField.aggregatable {
 			field = newField
 		}
@@ -173,24 +176,34 @@ func (store *ElasticEventstore) unmapElasticField(field string) string {
 	return field
 }
 
+func (store *ElasticEventstore) EventSearch(ctx context.Context, critera *model.EventSearchCriteria) (*model.EventSearchResults, error) {
+	err := store.server.CheckAuthorized(ctx, "read", "events")
+	if err != nil {
+		return nil, err
+	}
+
+	return store.Search(ctx, critera)
+}
+
 func (store *ElasticEventstore) Search(ctx context.Context, criteria *model.EventSearchCriteria) (*model.EventSearchResults, error) {
 	var err error
 	results := model.NewEventSearchResults()
-	if err = store.server.CheckAuthorized(ctx, "read", "events"); err == nil {
-		store.refreshCache(ctx)
 
-		var query string
-		query, err = convertToElasticRequest(store, criteria)
+	store.refreshCache(ctx)
+
+	var query string
+	query, err = convertToElasticRequest(store.fieldDefs, store.intervals, criteria)
+	if err == nil {
+		var response string
+		response, err = store.luceneSearch(ctx, query)
 		if err == nil {
-			var response string
-			response, err = store.luceneSearch(ctx, query)
-			if err == nil {
-				err = convertFromElasticResults(store, response, results)
-				results.Criteria = criteria
-			}
+			err = convertFromElasticResults(store.fieldDefs, response, results)
+			results.Criteria = criteria
 		}
 	}
+
 	results.Complete()
+
 	return results, err
 }
 
@@ -260,14 +273,14 @@ func (store *ElasticEventstore) Index(ctx context.Context, index string, documen
 		store.refreshCache(ctx)
 
 		var request string
-		request, err = convertToElasticIndexRequest(store, document)
+		request, err = convertToElasticIndexRequest(document)
 		if err == nil {
 			var response string
 
 			log.Debug("Sending index request to primary Elasticsearch client")
 			response, err = store.indexDocument(ctx, store.disableCrossClusterIndex(index), request, id)
 			if err == nil {
-				err = convertFromElasticIndexResults(store, response, results)
+				err = convertFromElasticIndexResults(response, results)
 				if err != nil {
 					log.WithError(err).Error("Encountered error while converting document index results")
 				}
@@ -287,7 +300,7 @@ func (store *ElasticEventstore) Delete(ctx context.Context, index string, id str
 		log.Debug("Sending delete request to primary Elasticsearch client")
 		response, err = store.deleteDocument(ctx, store.disableCrossClusterIndex(index), id)
 		if err == nil {
-			err = convertFromElasticIndexResults(store, response, results)
+			err = convertFromElasticIndexResults(response, results)
 			if err != nil {
 				log.WithError(err).Error("Encountered error while converting document index results")
 			}
@@ -302,13 +315,13 @@ func (store *ElasticEventstore) luceneSearch(ctx context.Context, query string) 
 	return store.indexSearch(ctx, query, strings.Split(store.index, ","))
 }
 
-func (store *ElasticEventstore) transformIndex(index string) string {
+func transformIndex(index string) string {
 	today := time.Now().Format("2006.01.02")
 	index = strings.ReplaceAll(index, "{today}", today)
 	return index
 }
 
-func (store *ElasticEventstore) readErrorFromJson(json string) error {
+func readErrorFromJson(json string) error {
 	errorType := gjson.Get(json, "error.type").String()
 	errorReason := gjson.Get(json, "error.reason").String()
 	errorDetails := json
@@ -319,13 +332,13 @@ func (store *ElasticEventstore) readErrorFromJson(json string) error {
 	return err
 }
 
-func (store *ElasticEventstore) readJsonFromResponse(res *esapi.Response) (string, error) {
+func readJsonFromResponse(res *esapi.Response) (string, error) {
 	var err error
 	var b bytes.Buffer
 	b.ReadFrom(res.Body)
 	json := b.String()
 	if res.IsError() {
-		err = store.readErrorFromJson(json)
+		err = readErrorFromJson(json)
 	}
 	return json, err
 }
@@ -335,7 +348,9 @@ func (store *ElasticEventstore) indexSearch(ctx context.Context, query string, i
 		"query":     store.truncate(query),
 		"requestId": ctx.Value(web.ContextKeyRequestId),
 	}).Info("Searching Elasticsearch")
+
 	var json string
+
 	res, err := store.esClient.Search(
 		store.esClient.Search.WithContext(ctx),
 		store.esClient.Search.WithIndex(indexes...),
@@ -345,7 +360,7 @@ func (store *ElasticEventstore) indexSearch(ctx context.Context, query string, i
 	)
 	if err == nil {
 		defer res.Body.Close()
-		json, err = store.readJsonFromResponse(res)
+		json, err = readJsonFromResponse(res)
 	}
 	log.WithFields(log.Fields{
 		"response":  store.truncate(json),
@@ -362,17 +377,19 @@ func (store *ElasticEventstore) indexDocument(ctx context.Context, index string,
 		"requestId": ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Adding document to Elasticsearch")
 
-	res, err := store.esClient.Index(store.transformIndex(index),
+	res, err := store.esClient.Index(transformIndex(index),
 		strings.NewReader(document),
 		store.esClient.Index.WithRefresh("true"),
-		store.esClient.Index.WithDocumentID(id))
+		store.esClient.Index.WithDocumentID(id),
+		store.esClient.Index.WithContext(ctx),
+	)
 
 	if err != nil {
 		log.WithError(err).Error("Unable to index document into Elasticsearch")
 		return "", err
 	}
 	defer res.Body.Close()
-	json, err := store.readJsonFromResponse(res)
+	json, err := readJsonFromResponse(res)
 
 	log.WithFields(log.Fields{
 		"response":  store.truncate(json),
@@ -388,7 +405,7 @@ func (store *ElasticEventstore) deleteDocument(ctx context.Context, index string
 		"requestId": ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Deleting document from Elasticsearch")
 
-	res, err := store.esClient.Delete(store.transformIndex(index), id)
+	res, err := store.esClient.Delete(transformIndex(index), id, store.esClient.Delete.WithContext(ctx))
 
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -399,7 +416,7 @@ func (store *ElasticEventstore) deleteDocument(ctx context.Context, index string
 		return "", err
 	}
 	defer res.Body.Close()
-	json, err := store.readJsonFromResponse(res)
+	json, err := readJsonFromResponse(res)
 
 	log.WithFields(log.Fields{
 		"index":     index,
@@ -427,7 +444,7 @@ func (store *ElasticEventstore) updateDocuments(ctx context.Context, client *ela
 	)
 	if err == nil {
 		defer res.Body.Close()
-		json, err = store.readJsonFromResponse(res)
+		json, err = readJsonFromResponse(res)
 	}
 	log.WithFields(log.Fields{
 		"response":  store.truncate(json),
@@ -439,7 +456,7 @@ func (store *ElasticEventstore) updateDocuments(ctx context.Context, client *ela
 func (store *ElasticEventstore) refreshCache(ctx context.Context) {
 	store.cacheLock.Lock()
 	defer store.cacheLock.Unlock()
-	if store.cacheTime.IsZero() || time.Now().Sub(store.cacheTime) > store.cacheMs {
+	if store.cacheTime.IsZero() || time.Since(store.cacheTime) > store.cacheMs {
 		err := store.refreshCacheFromFieldCaps(ctx)
 		if err == nil {
 			store.cacheTime = time.Now()
@@ -459,7 +476,7 @@ func (store *ElasticEventstore) refreshCacheFromFieldCaps(ctx context.Context) e
 	)
 	if err == nil {
 		defer res.Body.Close()
-		json, err = store.readJsonFromResponse(res)
+		json, err = readJsonFromResponse(res)
 		log.WithFields(log.Fields{"response": store.truncate(json)}).Debug("Fetch finished")
 		store.cacheFieldsFromJson(json)
 	} else {
@@ -470,10 +487,12 @@ func (store *ElasticEventstore) refreshCacheFromFieldCaps(ctx context.Context) e
 
 func (store *ElasticEventstore) cacheFieldsFromJson(json string) {
 	store.fieldDefs = make(map[string]*FieldDefinition)
-	gjson.Get(json, "fields").ForEach(store.cacheFields)
+	gjson.Get(json, "fields").ForEach(func(key, value gjson.Result) bool {
+		return cacheFields(store.fieldDefs, key, value)
+	})
 }
 
-func (store *ElasticEventstore) cacheFields(name gjson.Result, details gjson.Result) bool {
+func cacheFields(fieldDefs map[string]*FieldDefinition, name gjson.Result, details gjson.Result) bool {
 	fieldName := name.String()
 	detailsMap := make(map[string]map[string]interface{})
 	json.NewDecoder(strings.NewReader(details.String())).Decode(&detailsMap)
@@ -492,8 +511,8 @@ func (store *ElasticEventstore) cacheFields(name gjson.Result, details gjson.Res
 		// there will be a .keyword subfield across both indices which will be used
 		// for aggregation purposes until all ingested data is fully ECS data type
 		// compliant.
-		if store.fieldDefs[fieldName] == nil || !fieldDef.aggregatable {
-			store.fieldDefs[fieldName] = fieldDef
+		if fieldDefs[fieldName] == nil || !fieldDef.aggregatable {
+			fieldDefs[fieldName] = fieldDef
 		}
 
 		log.WithFields(log.Fields{
@@ -564,7 +583,7 @@ func (store *ElasticEventstore) buildRangeFilter(timestampStr string) (string, t
   - Fetch record via provided Elasticsearch document query.
   - If the record has a tunnel_parent, search for a UID=tunnel_parent[0]
   - - If found, discard original record and replace with the new record
-  - If the record has source IP/port and destination IP/port, use it as the filter.
+  - If the record has source IP/port and destination IP/port, or protocol is icmp, use it as the filter.
   - Else if the record has a Zeek x509 "ID" search for the first Zeek record with this ID.
   - Else if the record has a Zeek file "FUID" search for the first Zeek record with this FUID.
   - Search for the Zeek record with a matching log.id.uid equal to the UID from the previously found record
@@ -577,8 +596,8 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 
 	query := fmt.Sprintf(`
     {
-      "query" : { 
-        "bool": { 
+      "query" : {
+        "bool": {
           "must": [
             { "match" : { "%s" : "%s" }}%s
           ]
@@ -611,42 +630,45 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 		rangeFilter, timestamp = store.buildRangeFilter(timestampStr)
 	}
 
-	// Check if user has pivoted to a PCAP that is encapsulated in a tunnel. The best we
-	// can do in this situation is respond with the tunnel PCAP data, which could be excessive.
-	tunnelParent := gjson.Get(json, "hits.hits.0._source.log.id.tunnel_parents").String()
-	if len(tunnelParent) > 0 {
-		log.Info("Document is inside of a tunnel; attempting to lookup tunnel connection log")
-		if tunnelParent[0] == '[' {
-			tunnelParent = gjson.Get(json, "hits.hits.0._source.log.id.tunnel_parents.0").String()
-		}
-		query := fmt.Sprintf(`
-      {
-        "query" : { 
-          "bool": { 
-            "must": [
-              { "match" : { "log.id.uid" : "%s" }}%s
-            ]
-          }
-        }
-      }`, tunnelParent, rangeFilter)
+	if store.lookupTunnelParent {
+		// Check if user has pivoted to a PCAP that is encapsulated in a tunnel. The best we
+		// can do in this situation is respond with the tunnel PCAP data, which could be excessive.
+		tunnelParent := gjson.Get(json, "hits.hits.0._source.log.id.tunnel_parents").String()
+		if len(tunnelParent) > 0 {
+			log.Info("Document is inside of a tunnel; attempting to lookup tunnel connection log")
+			if tunnelParent[0] == '[' {
+				tunnelParent = gjson.Get(json, "hits.hits.0._source.log.id.tunnel_parents.0").String()
+			}
+			query := fmt.Sprintf(`
+		{
+			"query" : {
+			"bool": {
+				"must": [
+				{ "match" : { "log.id.uid" : "%s" }}%s
+				]
+			}
+			}
+		}`, tunnelParent, rangeFilter)
 
-		json, err = store.luceneSearch(ctx, query)
-		log.WithFields(log.Fields{
-			"query":    store.truncate(query),
-			"response": store.truncate(json),
-		}).Debug("Elasticsearch tunnel search finished")
-		if err != nil {
-			log.WithField("query", store.truncate(query)).WithError(err).Error("Unable to lookup tunnel record")
-			return err
-		}
-		hits := gjson.Get(json, "hits.total.value").Int()
-		if hits == 0 {
-			log.WithField("query", store.truncate(query)).Error("Tunnel record was not found")
-			return errors.New("Unable to locate encapsulating tunnel record")
+			json, err = store.luceneSearch(ctx, query)
+			log.WithFields(log.Fields{
+				"query":    store.truncate(query),
+				"response": store.truncate(json),
+			}).Debug("Elasticsearch tunnel search finished")
+			if err != nil {
+				log.WithField("query", store.truncate(query)).WithError(err).Error("Unable to lookup tunnel record")
+				return err
+			}
+			hits := gjson.Get(json, "hits.total.value").Int()
+			if hits == 0 {
+				log.WithField("query", store.truncate(query)).Error("Tunnel record was not found")
+				return errors.New("Unable to locate encapsulating tunnel record")
+			}
 		}
 	}
 
 	filter.ImportId = gjson.Get(json, "hits.hits.0._source.import.id").String()
+	filter.Protocol = strings.ToLower(gjson.Get(json, "hits.hits.0._source.network.transport").String())
 	filter.SrcIp = gjson.Get(json, "hits.hits.0._source.source.ip").String()
 	filter.SrcPort = int(gjson.Get(json, "hits.hits.0._source.source.port").Int())
 	filter.DstIp = gjson.Get(json, "hits.hits.0._source.destination.ip").String()
@@ -658,7 +680,7 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 	duration := int64(store.defaultDurationMs)
 
 	// If source and destination IP/port details aren't available search ES again for a correlating Zeek record
-	if len(filter.SrcIp) == 0 || len(filter.DstIp) == 0 || filter.SrcPort == 0 || filter.DstPort == 0 {
+	if (len(filter.SrcIp) == 0 || len(filter.DstIp) == 0 || filter.SrcPort == 0 || filter.DstPort == 0) && filter.Protocol != model.PROTOCOL_ICMP {
 		if len(uid) == 0 || uid[0] != 'C' {
 			zeekFileQuery := ""
 			if len(x509id) > 0 && x509id[0] == 'F' {
@@ -746,12 +768,13 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 			matchTs, err = time.Parse(time.RFC3339, ts.String())
 			if err == nil {
 				idxStr := strconv.Itoa(idx)
+				protocol := strings.ToLower(gjson.Get(json, "hits.hits.0._source.network.transport").String())
 				srcIp := gjson.Get(json, "hits.hits."+idxStr+"._source.source.ip").String()
 				srcPort := int(gjson.Get(json, "hits.hits."+idxStr+"._source.source.port").Int())
 				dstIp := gjson.Get(json, "hits.hits."+idxStr+"._source.destination.ip").String()
 				dstPort := int(gjson.Get(json, "hits.hits."+idxStr+"._source.destination.port").Int())
 
-				if len(srcIp) > 0 && len(dstIp) > 0 && srcPort > 0 && dstPort > 0 {
+				if (len(srcIp) > 0 && len(dstIp) > 0 && srcPort > 0 && dstPort > 0) || (protocol == model.PROTOCOL_ICMP) {
 					delta := timestamp.Sub(matchTs)
 					deltaNs := delta.Nanoseconds()
 					if deltaNs < 0 {
@@ -761,6 +784,7 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 						closestDeltaNs = deltaNs
 
 						timestamp = matchTs
+						filter.Protocol = protocol
 						filter.SrcIp = srcIp
 						filter.SrcPort = srcPort
 						filter.DstIp = dstIp
@@ -780,13 +804,13 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 		}).Info("Obtained output parameters")
 	}
 
-	if len(filter.SrcIp) == 0 || len(filter.DstIp) == 0 || filter.SrcPort == 0 || filter.DstPort == 0 {
+	if len(filter.SrcIp) == 0 || len(filter.DstIp) == 0 || ((filter.SrcPort == 0 || filter.DstPort == 0) && filter.Protocol != model.PROTOCOL_ICMP) {
 		log.WithFields(log.Fields{
 			"query":     store.truncate(query),
 			"uid":       uid,
 			"requestId": ctx.Value(web.ContextKeyRequestId),
-		}).Warn("Unable to lookup PCAP due to missing TCP/UDP parameters")
-		return errors.New("No TCP/UDP record was found for retrieving PCAP")
+		}).Warn("Unable to lookup PCAP due to missing TCP/UDP/ICMP parameters")
+		return errors.New("No TCP/UDP/ICMP record was found for retrieving PCAP")
 	}
 
 	filter.BeginTime = timestamp.Add(time.Duration(-duration-int64(store.timeShiftMs)) * time.Millisecond)
@@ -835,7 +859,7 @@ func (store *ElasticEventstore) Acknowledge(ctx context.Context, ackCriteria *mo
 			for key, value := range ackCriteria.EventFilter {
 				if strings.ToLower(key) != "count" {
 					valueStr := fmt.Sprintf("%v", value)
-					searchSegment.AddFilter(store.mapElasticField(key), valueStr, model.IsScalar(value), true, false)
+					searchSegment.AddFilter(mapElasticField(store.fieldDefs, key), valueStr, model.IsScalar(value), true, false)
 				} else if int(value.(float64)) > store.asyncThreshold {
 					log.WithFields(log.Fields{
 						key:         value,

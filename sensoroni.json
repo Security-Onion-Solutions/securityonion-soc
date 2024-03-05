@@ -1,7 +1,8 @@
 {
-  "logLevel": "info",
+  "logLevel": "debug",
   "logFilename": "logs/soc.log",
   "server": {
+    "developerEnabled": true,
     "bindAddress": "0.0.0.0:9822",
     "baseUrl": "/",
     "maxPacketCount": 5000,
@@ -21,6 +22,8 @@
     "serverUrl": "http://0.0.0.0:9822",
     "verifyCert": true,
     "modules": {
+      "suriquery": {
+      },
       "statickeyauth": {
         "apiKey": "samplekey"
       }

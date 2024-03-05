@@ -9,6 +9,7 @@ package modules
 import (
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/elastalert"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/elastic"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/elasticcases"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/filedatastore"
@@ -19,6 +20,8 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/sostatus"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/statickeyauth"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/staticrbac"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/strelka"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/suricata"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/thehive"
 )
 
@@ -35,5 +38,9 @@ func BuildModuleMap(srv *server.Server) map[string]module.Module {
 	moduleMap["statickeyauth"] = statickeyauth.NewStaticKeyAuth(srv)
 	moduleMap["staticrbac"] = staticrbac.NewStaticRbac(srv)
 	moduleMap["thehive"] = thehive.NewTheHive(srv)
+	moduleMap["suricataengine"] = suricata.NewSuricataEngine(srv)
+	moduleMap["elastalertengine"] = elastalert.NewElastAlertEngine(srv)
+	moduleMap["strelkaengine"] = strelka.NewStrelkaEngine(srv)
+
 	return moduleMap
 }

@@ -46,7 +46,9 @@ func (h *NodeHandler) postNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.server.Metrics.UpdateNodeMetrics(ctx, node)
+	if h.server.Metrics != nil {
+		h.server.Metrics.UpdateNodeMetrics(ctx, node)
+	}
 	h.server.Host.Broadcast("node", "nodes", node)
 	job := h.server.Datastore.GetNextJob(ctx, node.Id)
 
