@@ -875,8 +875,8 @@ func wrapRule(det *model.Detection, rule string) (string, error) {
 	wrapper := &CustomWrapper{
 		PlayTitle:     det.Title,
 		PlayID:        det.Id,
-		EventModule:   "elastalert",
-		EventDataset:  "elastalert.alert",
+		EventModule:   "sigma",
+		EventDataset:  "sigma.alert",
 		EventSeverity: sevNum,
 		RuleCategory:  "", // TODO: what should this be?
 		SigmaLevel:    string(det.Severity),
