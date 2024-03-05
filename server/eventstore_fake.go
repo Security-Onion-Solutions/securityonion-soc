@@ -58,6 +58,17 @@ func (store *FakeEventstore) Search(context context.Context, criteria *model.Eve
 	return result, store.Err
 }
 
+func (store *FakeEventstore) EventSearch(context context.Context, criteria *model.EventSearchCriteria) (*model.EventSearchResults, error) {
+	store.InputContexts = append(store.InputContexts, context)
+	store.InputSearchCriterias = append(store.InputSearchCriterias, criteria)
+	if store.searchCount >= len(store.SearchResults) {
+		store.searchCount = len(store.SearchResults) - 1
+	}
+	result := store.SearchResults[store.searchCount]
+	store.searchCount += 1
+	return result, store.Err
+}
+
 func (store *FakeEventstore) Index(context context.Context, index string, document map[string]interface{}, id string) (*model.EventIndexResults, error) {
 	store.InputContexts = append(store.InputContexts, context)
 	store.InputIndexes = append(store.InputIndexes, index)
