@@ -83,7 +83,7 @@ func (store *ElasticCasestore) validateStringArray(array []string, maxLen int, m
 	var err error
 	length := len(array)
 	if length > maxElements {
-		err = errors.New(fmt.Sprintf("Field 'Tags' contains excessive elements (%d/%d)", length, maxElements))
+		err = errors.New(fmt.Sprintf("Field '%s' contains excessive elements (%d/%d)", label, length, maxElements))
 	} else {
 		for idx, tag := range array {
 			err = store.validateString(tag, maxLen, fmt.Sprintf("tag[%d]", idx))
@@ -98,7 +98,7 @@ func (store *ElasticCasestore) validateStringArray(array []string, maxLen int, m
 func (store *ElasticCasestore) validateCase(socCase *model.Case) error {
 	var err error
 
-	if err == nil && socCase.Id != "" {
+	if socCase.Id != "" {
 		err = store.validateId(socCase.Id, "caseId")
 	}
 	if err == nil && socCase.UserId != "" {
@@ -150,7 +150,7 @@ func (store *ElasticCasestore) validateCase(socCase *model.Case) error {
 func (store *ElasticCasestore) validateRelatedEvent(event *model.RelatedEvent) error {
 	var err error
 
-	if err == nil && event.Id != "" {
+	if event.Id != "" {
 		err = store.validateId(event.Id, "relatedEventId")
 	}
 	if err == nil && event.CaseId != "" {
@@ -174,7 +174,7 @@ func (store *ElasticCasestore) validateRelatedEvent(event *model.RelatedEvent) e
 func (store *ElasticCasestore) validateComment(comment *model.Comment) error {
 	var err error
 
-	if err == nil && comment.Id != "" {
+	if comment.Id != "" {
 		err = store.validateId(comment.Id, "commentId")
 	}
 	if err == nil && comment.CaseId != "" {
@@ -198,7 +198,7 @@ func (store *ElasticCasestore) validateComment(comment *model.Comment) error {
 func (store *ElasticCasestore) validateArtifact(artifact *model.Artifact) error {
 	var err error
 
-	if err == nil && artifact.Id != "" {
+	if artifact.Id != "" {
 		err = store.validateId(artifact.Id, "artifactId")
 	}
 	if err == nil && artifact.UserId != "" {
@@ -255,7 +255,7 @@ func (store *ElasticCasestore) validateArtifact(artifact *model.Artifact) error 
 func (store *ElasticCasestore) validateArtifactStream(artifactstream *model.ArtifactStream) error {
 	var err error
 
-	if err == nil && artifactstream.Id != "" {
+	if artifactstream.Id != "" {
 		err = store.validateId(artifactstream.Id, "artifactStreamId")
 	}
 	if err == nil && artifactstream.UserId != "" {
@@ -876,7 +876,7 @@ func (store *ElasticCasestore) ExtractCommonObservables(ctx context.Context, eve
 
 	for key, value := range event.Fields {
 		valueStr := fmt.Sprintf("%v", value)
-		if len(valueStr) == 0 || existingValueMap[valueStr] == true {
+		if len(valueStr) == 0 || existingValueMap[valueStr] {
 			continue
 		}
 		for _, obs := range store.commonObservables {

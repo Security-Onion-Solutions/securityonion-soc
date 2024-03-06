@@ -81,6 +81,22 @@ func (store *ElasticDetectionstore) validateStringRequired(str string, min int, 
 	return err
 }
 
+func (store *ElasticDetectionstore) validateStringArray(array []string, maxLen int, maxElements int, label string) error {
+	var err error
+	length := len(array)
+	if length > maxElements {
+		err = errors.New(fmt.Sprintf("Field '%s' contains excessive elements (%d/%d)", label, length, maxElements))
+	} else {
+		for idx, tag := range array {
+			err = store.validateString(tag, maxLen, fmt.Sprintf("Tag[%d]", idx))
+			if err != nil {
+				break
+			}
+		}
+	}
+	return err
+}
+
 func (store *ElasticDetectionstore) validateDetection(detect *model.Detection) error {
 	var err error
 
@@ -112,31 +128,38 @@ func (store *ElasticDetectionstore) validateDetection(detect *model.Detection) e
 		err = store.validateString(detect.Content, LONG_STRING_MAX, "content")
 	}
 
-	if err == nil && detect.IsCommunity && detect.Ruleset == nil {
+	if err == nil && detect.IsCommunity && detect.Ruleset != nil {
 		err = store.validateStringRequired(*detect.Ruleset, 0, SHORT_STRING_MAX, "ruleset")
 	}
 
-	if err == nil && len(detect.Tags) > 0 {
-		for _, tag := range detect.Tags {
-			err = store.validateString(tag, SHORT_STRING_MAX, "tag")
-			if err != nil {
-				break
+	if err == nil && len(detect.Tags) != 0 {
+		err = store.validateStringArray(detect.Tags, SHORT_STRING_MAX, MAX_ARRAY_ELEMENTS, "Tags")
+	}
+
+	if err == nil {
+		engine, okEngine := model.EnginesByName[detect.Engine]
+		if !okEngine {
+			err = errors.New("invalid engine")
+		}
+
+		if err == nil {
+			_, okLang := model.SupportedLanguages[model.SigLanguage(detect.Language)]
+			if !okLang {
+				err = errors.New("invalid language")
+			} else {
+				if engine.SigLanguage != model.SigLanguage(detect.Language) {
+					err = errors.New("engine and language mismatch")
+				}
 			}
 		}
 	}
 
-	if err == nil {
-		_, okEngine := model.EnginesByName[detect.Engine]
-		if !okEngine {
-			err = errors.New("invalid engine")
-		}
+	if err == nil && len(detect.Kind) > 0 {
+		err = errors.New("Field 'Kind' must not be specified")
 	}
 
-	if err == nil {
-		_, okLang := model.SupportedLanguages[model.SigLanguage(detect.Language)]
-		if !okLang {
-			err = errors.New("invalid language")
-		}
+	if err == nil && len(detect.Operation) > 0 {
+		err = errors.New("Field 'Operation' must not be specified")
 	}
 
 	return err
@@ -424,7 +447,7 @@ func (store *ElasticDetectionstore) DoesTemplateExist(ctx context.Context, tmpl 
 		return false, err
 	}
 
-	return response.StatusCode == 200, nil
+	return response.StatusCode >= 200 && response.StatusCode < 300, nil
 }
 
 func (store *ElasticDetectionstore) CreateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error) {
@@ -506,6 +529,49 @@ func (store *ElasticDetectionstore) UpdateDetection(ctx context.Context, detect 
 	old, err = store.GetDetection(ctx, detect.Id)
 	if err != nil {
 		return nil, err
+	}
+
+	now := time.Now()
+
+	for _, over := range detect.Overrides {
+		if over.CreatedAt.IsZero() {
+			over.CreatedAt = now
+		}
+
+		update := true
+		for i, oldOver := range old.Overrides {
+			if *over == *oldOver {
+				// Did the old detection contain an override with the EXACT same parameters?
+				// If so, we don't need to update the UpdatedAt field.
+				update = false
+
+				// A match was found, the old override can be removed from the list so it
+				// isn't compared to other overrides. i.e. removing it means it can only
+				// match one override in the new list.
+				old.Overrides = append(old.Overrides[:i], old.Overrides[i+1:]...)
+
+				break
+			}
+		}
+
+		if over.UpdatedAt.IsZero() || update {
+			over.UpdatedAt = now
+		}
+	}
+
+	if old.IsCommunity {
+		// the only editable fields for community rules are IsEnabled, IsReporting, Note, and Overrides
+		old.IsEnabled = detect.IsEnabled
+		old.IsReporting = detect.IsReporting
+		old.Overrides = detect.Overrides
+
+		detect = old
+
+		log.Infof("existing detection %s is a community rule, only updating IsEnabled, IsReporting, Note, and Overrides", detect.Id)
+	} else if detect.IsCommunity {
+		// web.Respond(w, r, http.StatusBadRequest, errors.New("cannot update an existing non-community detection to make it a community detection"))
+		// return
+		return nil, errors.New("cannot update an existing non-community detection to make it a community detection")
 	}
 
 	var results *model.EventIndexResults
@@ -634,11 +700,6 @@ func (store *ElasticDetectionstore) GetDetectionHistory(ctx context.Context, det
 }
 
 func (store *ElasticDetectionstore) audit(ctx context.Context, document map[string]interface{}, id string) error {
-	err := store.server.CheckAuthorized(ctx, "write", "detection")
-	if err != nil {
-		return err
-	}
-
 	request, err := convertToElasticIndexRequest(document)
 	if err == nil {
 		log.Debug("Sending index request to primary Elasticsearch client")
@@ -652,11 +713,6 @@ func (store *ElasticDetectionstore) audit(ctx context.Context, document map[stri
 }
 
 func (store *ElasticDetectionstore) indexDocument(ctx context.Context, index string, document string, id string) (string, error) {
-	err := store.server.CheckAuthorized(ctx, "write", "detection")
-	if err != nil {
-		return "", err
-	}
-
 	log.WithFields(log.Fields{
 		"index":     index,
 		"id":        id,
