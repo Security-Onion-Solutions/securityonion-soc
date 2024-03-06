@@ -275,6 +275,7 @@ const i18n = {
       destination: 'Destination',
       details: 'Details',
       detections: 'Detections',
+      detectionsExcludeToggle: 'Exclude Detections data',
       detectionComments: 'Operational Notes',
       detectionDefaultTitle: 'Detection title not yet provided - click here to update this title',
       detectionDefaultDescription: 'Detection description not yet provided',
