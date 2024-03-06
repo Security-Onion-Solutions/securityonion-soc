@@ -37,6 +37,7 @@ type ClientParameters struct {
 	Tools               []ClientTool        `json:"tools"`
 	CasesEnabled        bool                `json:"casesEnabled"`
 	EnableReverseLookup bool                `json:"enableReverseLookup"`
+	DetectionsEnabled   bool                `json:"detectionsEnabled"`
 }
 
 func (config *ClientParameters) Verify() error {

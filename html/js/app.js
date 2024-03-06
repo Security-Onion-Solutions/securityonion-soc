@@ -86,6 +86,7 @@ $(document).ready(function() {
       chartsInitialized: false,
       tools: [],
       casesEnabled: false,
+      detectionsEnabled: false,
       subtitle: '',
       currentStatus: null,
       connected: false,
@@ -367,6 +368,7 @@ $(document).ready(function() {
                   }
                 }
                 this.casesEnabled = this.parameters.casesEnabled;
+                this.detectionsEnabled = this.parameters.detectionsEnabled;
 
                 this.subscribe("status", this.updateStatus);
                 this.subscribe('import', (url) => {
