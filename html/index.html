@@ -68,7 +68,7 @@
               <v-list-item-title v-text="i18n.cases"></v-list-item-title>
             </v-list-item-content>
           </v-list-item>
-          <v-list-item @click="" to="/detections">
+          <v-list-item @click="" to="/detections" v-if="detectionsEnabled">
             <v-list-item-action>
               <v-icon>fa-magnifying-glass</v-icon>
             </v-list-item-action>
@@ -804,7 +804,7 @@
                 {{ i18n.filterDrilldown }}
               </v-list-item-title>
             </v-list-item>
-            <v-list-item id="actionTuneDetection" v-if="quickActionDetId" dense :to='{ name: "detection", params: { id: quickActionDetId }, query: { tab: "tuning" } }' :title="i18n.tuneDetectionHelp">
+            <v-list-item id="actionTuneDetection" v-if="quickActionDetId && $root.detectionsEnabled" dense :to='{ name: "detection", params: { id: quickActionDetId }, query: { tab: "tuning" } }' :title="i18n.tuneDetectionHelp">
               <v-list-item-icon>
                 <v-icon :alt="i18n.tuneDetection" color="white">fa-wrench</v-icon>
               </v-list-item-icon>
@@ -812,7 +812,7 @@
                 {{ i18n.tuneDetection }}
               </v-list-item-title>
             </v-list-item>
-            <v-list-item id="actionTuneDetection-disabled" v-else dense :title="i18n.tuneDetectionHelp">
+            <v-list-item id="actionTuneDetection-disabled" v-if="!quickActionDetId && $root.detectionsEnabled" dense :title="i18n.tuneDetectionHelp">
               <v-list-item-icon>
                 <v-icon :alt="i18n.tuneDetection" color="grey">fa-wrench</v-icon>
               </v-list-item-icon>
