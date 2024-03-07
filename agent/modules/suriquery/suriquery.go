@@ -8,6 +8,7 @@ package suriquery
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/google/gopacket"
+	"github.com/pierrec/lz4/v4"
 	"github.com/security-onion-solutions/securityonion-soc/agent"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
@@ -30,6 +32,7 @@ const DEFAULT_EPOCH_REFRESH_MS = 120000
 const DEFAULT_DATA_LAG_MS = 120000
 const DEFAULT_PCAP_MAX_COUNT = 999999
 
+const SURI_LZ4_SUFFIX = ".lz4"
 const SURI_PCAP_PREFIX = "so-pcap."
 
 type SuriQuery struct {
@@ -126,16 +129,64 @@ func (suri *SuriQuery) CleanupJob(job *model.Job) {
 	// Noop
 }
 
+func (suri *SuriQuery) decompress(path string) (string, error) {
+	decompressedPath := strings.TrimSuffix(path, SURI_LZ4_SUFFIX)
+	if decompressedPath != path {
+		inputReader, oerr := os.Open(path)
+		if oerr != nil {
+			return "", oerr
+		}
+		defer inputReader.Close()
+
+		outputWriter, cerr := os.Create(decompressedPath)
+		if cerr != nil {
+			return "", cerr
+		}
+		defer outputWriter.Close()
+
+		lz4Reader := lz4.NewReader(inputReader)
+		count, copyErr := io.Copy(outputWriter, lz4Reader)
+		if copyErr != nil {
+			if strings.Contains(fmt.Sprint(copyErr), "unexpected EOF") {
+				log.WithFields(log.Fields {
+					"decompressedPath": decompressedPath,
+				}).Debug("ignoring EOF error since the filestream is likely still active")
+			} else {
+				return "", copyErr
+			}
+		}
+		log.WithFields(log.Fields {
+			"pcapPath": path,
+			"decompressedPath": decompressedPath,
+			"decompressedBytes": count,
+		}).Debug("Decompressed lz4 PCAP file")
+	}
+	return decompressedPath, nil
+}
+
 func (suri *SuriQuery) streamPacketsInPcaps(paths []string, filter *model.Filter) (io.ReadCloser, error) {
 	allPackets := make([]gopacket.Packet, 0, 0)
 
 	for _, path := range paths {
-		packets, perr := packet.ParseRawPcap(path, suri.pcapMaxCount, filter)
+		decompressedPath, derr := suri.decompress(path)
+		if derr != nil {
+			log.WithError(derr).WithField("pcapPath", path).Error("Failed to decompress PCAP file")
+			continue
+		}
+
+		packets, perr := packet.ParseRawPcap(decompressedPath, suri.pcapMaxCount, filter)
 		if perr != nil {
-			log.WithError(perr).WithField("pcapPath", path).Error("Failed to parse PCAP file")
+			log.WithError(perr).WithField("pcapPath", decompressedPath).Error("Failed to parse PCAP file")
 		}
 		if packets != nil && len(packets) > 0 {
 			allPackets = append(allPackets, packets...)
+		}
+
+		if path != decompressedPath {
+			rerr := os.Remove(decompressedPath)
+			if rerr != nil {
+				log.WithError(rerr).WithField("pcapPath", decompressedPath).Error("Failed to remove decompressed PCAP file")
+			}
 		}
 	}
 
@@ -155,7 +206,8 @@ func (suri *SuriQuery) getPcapCreateTime(filepath string) (time.Time, error) {
 	if !strings.HasPrefix(filename, SURI_PCAP_PREFIX) {
 		err = errors.New("unsupported pcap file")
 	} else {
-		secondsStr := strings.TrimLeft(filename, SURI_PCAP_PREFIX)
+		secondsStr := strings.TrimRight(filename, SURI_LZ4_SUFFIX)
+		secondsStr = strings.TrimLeft(secondsStr, SURI_PCAP_PREFIX)
 		var seconds int64
 		seconds, err = strconv.ParseInt(secondsStr, 10, 64)
 		if err == nil {

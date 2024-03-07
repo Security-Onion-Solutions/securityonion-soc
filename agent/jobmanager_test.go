@@ -51,10 +51,14 @@ func (jp *idJobProcessor) GetDataEpoch() time.Time {
 }
 
 // panicProcessor is a JobProcessor that always returns an error.
-type panicProcessor struct{}
+type panicProcessor struct{
+	processCount int
+	errorString string
+}
 
 func (jp *panicProcessor) ProcessJob(job *model.Job, reader io.ReadCloser) (io.ReadCloser, error) {
-	return reader, errors.New("panic")
+	jp.processCount++
+	return reader, errors.New(jp.errorString)
 }
 
 func (jp *panicProcessor) CleanupJob(*model.Job) {}
@@ -69,7 +73,7 @@ func TestProcessJob(t *testing.T) {
 	jm := &JobManager{}
 
 	jm.AddJobProcessor(&idJobProcessor{})
-	jm.AddJobProcessor(&panicProcessor{})
+	jm.AddJobProcessor(&panicProcessor{ errorString: "panic" })
 
 	// prep model
 	job := &model.Job{
@@ -85,6 +89,26 @@ func TestProcessJob(t *testing.T) {
 
 	assert.Equal(t, "101", string(data))
 	assert.ErrorContains(t, err, "panic")
+}
+
+func TestProcessJobContinuesIfNoDataAvailable(t *testing.T) {
+	// prep test object
+	jm := &JobManager{}
+
+	proc := panicProcessor{ errorString: "No data available"}
+	jm.AddJobProcessor(&proc)
+	jm.AddJobProcessor(&proc)
+
+	// prep model
+	job := &model.Job{
+		Id: 101,
+	}
+
+	// test
+	_, err := jm.ProcessJob(job)
+
+	assert.Equal(t, 2, proc.processCount)
+	assert.ErrorContains(t, err, "No data available")
 }
 
 func TestUpdateDataEpoch(t *testing.T) {
