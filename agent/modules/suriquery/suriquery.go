@@ -220,6 +220,10 @@ func (suri *SuriQuery) getPcapCreateTime(filepath string) (time.Time, error) {
 func (suri *SuriQuery) findFilesInTimeRange(start time.Time, stop time.Time) []string {
 	eligibleFiles := make([]string, 0, 0)
 	err := filepath.Walk(suri.pcapInputPath, func(filepath string, fileinfo os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		
 		if fileinfo.IsDir() {
 			return nil
 		}
