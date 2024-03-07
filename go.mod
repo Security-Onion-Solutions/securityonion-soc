@@ -21,6 +21,7 @@ require (
 
 require (
 	github.com/go-git/go-git/v5 v5.11.0
+	github.com/pierrec/lz4/v4 v4.1.21
 	github.com/pkg/errors v0.9.1
 	github.com/samber/lo v1.39.0
 	github.com/tj/assert v0.0.3
@@ -45,7 +46,6 @@ require (
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/oapi-codegen/runtime v1.0.0 // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
-	github.com/pierrec/lz4/v4 v4.1.21 // indirect
 	github.com/pjbgf/sha1cd v0.3.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/sergi/go-diff v1.1.0 // indirect
