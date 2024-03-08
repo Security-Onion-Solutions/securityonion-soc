@@ -112,7 +112,7 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 func getYaraRepos(cfg module.ModuleConfig) ([]*yaraRepo, error) {
 	repoMaps, ok := cfg["rulesRepos"].([]interface{})
 	if !ok {
-		return nil, fmt.Errorf("failed to parse yara repos")
+		return nil, fmt.Errorf(`top level config value "rulesRepos" is not an array of objects`)
 	}
 
 	repos := make([]*yaraRepo, 0, len(repoMaps))
@@ -120,17 +120,17 @@ func getYaraRepos(cfg module.ModuleConfig) ([]*yaraRepo, error) {
 	for _, repoMap := range repoMaps {
 		obj, ok := repoMap.(map[string]interface{})
 		if !ok {
-			return nil, fmt.Errorf("failed to parse yara repo")
+			return nil, fmt.Errorf(`"rulesRepo" entry is not an object`)
 		}
 
 		repo, ok := obj["repo"].(string)
 		if !ok {
-			return nil, fmt.Errorf("failed to parse yara repo")
+			return nil, fmt.Errorf(`missing "repo" link from "rulesRepo" entry`)
 		}
 
 		license, ok := obj["license"].(string)
 		if !ok {
-			return nil, fmt.Errorf("failed to parse yara repo")
+			return nil, fmt.Errorf(`missing "license" from "rulesRepo" entry`)
 		}
 
 		repos = append(repos, &yaraRepo{

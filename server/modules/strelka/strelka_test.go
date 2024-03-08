@@ -605,7 +605,7 @@ func TestGetYaraRepos(t *testing.T) {
 					},
 				},
 			},
-			Error: util.Ptr("failed to parse yara repo"),
+			Error: util.Ptr(`missing "license" from "rulesRepo" entry`),
 		},
 		{
 			Name: "Missing Repo",
@@ -616,14 +616,14 @@ func TestGetYaraRepos(t *testing.T) {
 					},
 				},
 			},
-			Error: util.Ptr("failed to parse yara repo"),
+			Error: util.Ptr(`missing "repo" link from "rulesRepo" entry`),
 		},
 		{
 			Name: "Wrong Structure A",
 			Config: map[string]interface{}{
 				"rulesRepos": "repo",
 			},
-			Error: util.Ptr("failed to parse yara repo"),
+			Error: util.Ptr(`top level config value "rulesRepos" is not an array of objects`),
 		},
 		{
 			Name: "Wrong Structure B",
@@ -632,7 +632,7 @@ func TestGetYaraRepos(t *testing.T) {
 					"github",
 				},
 			},
-			Error: util.Ptr("failed to parse yara repo"),
+			Error: util.Ptr(`"rulesRepo" entry is not an object`),
 		},
 	}
 
