@@ -8,11 +8,9 @@ package agent
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -103,14 +101,10 @@ func (mgr *JobManager) ProcessJob(job *model.Job) (io.ReadCloser, error) {
 	defer mgr.lock.RUnlock()
 	var reader io.ReadCloser
 	var err error
+
+	job.Size = 0
 	for _, processor := range mgr.jobProcessors {
 		reader, err = processor.ProcessJob(job, reader)
-		if err != nil && !strings.Contains(fmt.Sprint(err), "No data available") {
-			log.WithError(err).WithFields(log.Fields{
-				"jobId": job.Id,
-			}).Error("Failed to process job; job processing aborted")
-			break
-		}
 	}
 	return reader, err
 }

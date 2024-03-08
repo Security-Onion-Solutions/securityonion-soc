@@ -107,11 +107,12 @@ func TestStreamPacketsInPcaps(tester *testing.T) {
 	filter.DstIp = "176.126.243.198"
 	filter.DstPort = 34515
 
-	reader, err := sq.streamPacketsInPcaps(paths, filter)
+	reader, size, err := sq.streamPacketsInPcaps(paths, filter)
 	assert.Nil(tester, err)
 	pcap_length := 14122 // correlates to so-pcap test file
 	bytes := make([]byte, 32768)
 	count, err := reader.Read(bytes)
 	assert.Nil(tester, err)
 	assert.Equal(tester, pcap_length, count)
+	assert.Equal(tester, pcap_length, size)
 }

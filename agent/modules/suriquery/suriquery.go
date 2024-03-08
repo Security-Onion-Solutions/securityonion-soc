@@ -103,12 +103,6 @@ func (suri *SuriQuery) ProcessJob(job *model.Job, reader io.ReadCloser) (io.Read
 			"importId": job.Filter.ImportId,
 		}).Debug("Skipping suri processor due to presence of importId")
 		return reader, nil
-	} else if reader != nil {
-		log.WithFields(log.Fields{
-			"jobId": job.Id,
-			"kind":  job.GetKind(),
-		}).Debug("Skipping suricata processor due to another processor already provided PCAP data")
-		return reader, nil
 	} else if job.Filter == nil || job.Filter.EndTime.Before(suri.GetDataEpoch()) || job.Filter.BeginTime.After(suri.getDataLagDate()) {
 		log.WithFields(log.Fields{
 			"jobId":                  job.Id,
@@ -123,10 +117,20 @@ func (suri *SuriQuery) ProcessJob(job *model.Job, reader io.ReadCloser) (io.Read
 			"jobId": job.Id,
 		}).Debug("Starting to process new Suricata PCAP job")
 		pcapFiles := suri.findFilesInTimeRange(job.Filter.BeginTime, job.Filter.EndTime)
-		reader, err = suri.streamPacketsInPcaps(pcapFiles, job.Filter)
-		log.WithFields(log.Fields{
-			"err": err,
-		}).Debug("Finished processing PCAP")
+		var newReader io.ReadCloser
+		var size int
+		newReader, size, err = suri.streamPacketsInPcaps(pcapFiles, job.Filter)
+
+		if job.Size > size {
+			log.Warn("Discarding Suricata job output since existing job already has more content from another processor")
+		} else {
+			job.Size = size
+			reader = newReader
+			log.WithFields(log.Fields{
+				"pcapStreamErr":  err,
+				"pcapStreamSize": size,
+			}).Debug("Finished processing PCAP via Suricata")
+		}
 	}
 	return reader, err
 }
@@ -154,23 +158,23 @@ func (suri *SuriQuery) decompress(path string) (string, error) {
 		count, copyErr := io.Copy(outputWriter, lz4Reader)
 		if copyErr != nil {
 			if strings.Contains(fmt.Sprint(copyErr), "unexpected EOF") {
-				log.WithFields(log.Fields {
+				log.WithFields(log.Fields{
 					"decompressedPath": decompressedPath,
 				}).Debug("ignoring EOF error since the filestream is likely still active")
 			} else {
 				return "", copyErr
 			}
 		}
-		log.WithFields(log.Fields {
-			"pcapPath": path,
-			"decompressedPath": decompressedPath,
+		log.WithFields(log.Fields{
+			"pcapPath":          path,
+			"decompressedPath":  decompressedPath,
 			"decompressedBytes": count,
 		}).Debug("Decompressed lz4 PCAP file")
 	}
 	return decompressedPath, nil
 }
 
-func (suri *SuriQuery) streamPacketsInPcaps(paths []string, filter *model.Filter) (io.ReadCloser, error) {
+func (suri *SuriQuery) streamPacketsInPcaps(paths []string, filter *model.Filter) (io.ReadCloser, int, error) {
 	allPackets := make([]gopacket.Packet, 0, 0)
 
 	for _, path := range paths {
@@ -185,8 +189,8 @@ func (suri *SuriQuery) streamPacketsInPcaps(paths []string, filter *model.Filter
 			log.WithError(perr).WithField("pcapPath", decompressedPath).Error("Failed to parse PCAP file")
 		}
 		if packets != nil && len(packets) > 0 {
-			log.WithFields(log.Fields {
-				"pcapPath": decompressedPath,
+			log.WithFields(log.Fields{
+				"pcapPath":    decompressedPath,
 				"packetCount": len(packets),
 			}).Debug("found matching packets")
 			allPackets = append(allPackets, packets...)

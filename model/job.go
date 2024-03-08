@@ -48,6 +48,7 @@ type Job struct {
 	UserId         string       `json:"userId"`
 	Kind           string       `json:"kind"`
 	Results        []*JobResult `json:"results"`
+	Size           int          `json:"size"`
 }
 
 func NewJob() *Job {

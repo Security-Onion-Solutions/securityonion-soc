@@ -53,7 +53,7 @@ func TestParseAndStream(tester *testing.T) {
 	assert.Nil(tester, perr)
 	assert.Len(tester, packets, 12)
 
-	reader, err := ToStream(packets)
+	reader, size, err := ToStream(packets)
 
 	assert.Nil(tester, err)
 	pcap_length := 14122 // correlates to so-pcap test file
@@ -61,6 +61,7 @@ func TestParseAndStream(tester *testing.T) {
 	count, err := reader.Read(bytes)
 	assert.Nil(tester, err)
 	assert.Equal(tester, pcap_length, count)
+	assert.Equal(tester, pcap_length, size)
 }
 
 func TestParseWrongProtocol(tester *testing.T) {
@@ -104,7 +105,7 @@ func TestParseAndStreamIcmp(tester *testing.T) {
 	assert.Nil(tester, perr)
 	assert.Len(tester, packets, 2)
 
-	reader, err := ToStream(packets)
+	reader, size, err := ToStream(packets)
 
 	assert.Nil(tester, err)
 	pcap_length := 196 // correlates to two icmp packets in icmp.pcap
@@ -112,4 +113,5 @@ func TestParseAndStreamIcmp(tester *testing.T) {
 	count, err := reader.Read(bytes)
 	assert.Nil(tester, err)
 	assert.Equal(tester, pcap_length, count)
+	assert.Equal(tester, pcap_length, size)
 }
