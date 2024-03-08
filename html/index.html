@@ -4194,7 +4194,7 @@
                                 <span class="filter label">{{ i18n.osUptime }}:</span>
                                 <span id="node_uptime" :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'">
                                   {{ item.osUptimeSeconds | formatDuration }}
-                                  <span v-if="item.osNeedsRestart" id="node_restart-required-note" :class="areMetricsCurrent(item) ? 'warning--text' : 'warning--text stale'">
+                                  <span v-if="item.osNeedsRestart" id="node_restart-required-note" :class="areMetricsCurrent(item) ? 'info--text' : 'info--text stale'">
                                     {{ i18n.restartRequired }}
                                   </span>
                                 </span>
@@ -4233,7 +4233,7 @@
                               <div v-if="item.metricsEnabled" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.nodeStatusRaid }}</span>
                                 <span>
-                                  <span v-if="!item.raidStatus || item.raidStatus == NodeStatusUnknown" id="node_raidStatus" class="info--text filter value">
+                                  <span v-if="!item.raidStatus || item.raidStatus == NodeStatusUnknown" id="node_raidStatus" class="filter value">
                                     {{ i18n.featureRequiresAppliance }}
                                   </span>
                                   <span v-else id="node_raidStatus" v-text="$root.localizeMessage(item.raidStatus)" :class="areMetricsCurrent(item) ? colorNodeStatus(item.raidStatus) + '--text filter value' : 'filter value stale'"/>
@@ -4401,10 +4401,10 @@
                                   <v-icon>fa-upload</v-icon>
                                 </v-btn>
                                 <v-btn id="restart-minion" icon :title="item.osNeedsRestart == 1 ? i18n.restartRequiredHelp : i18n.restartMinionHelp" @click="showRestartConfirm(item.id + '_' + item.role)">
-                                  <v-icon :color="item.osNeedsRestart == 1 ? 'warning' : ''">fa-power-off</v-icon>
+                                  <v-icon :color="item.osNeedsRestart == 1 ? 'info' : ''">fa-power-off</v-icon>
                                 </v-btn>
                                 <v-btn icon :title="i18n.clickForMoreInformation" :href="$root.parameters.docsUrl + 'grid.html'" :target="$root.target('so-help')" >
-                                  <v-icon color="info">fa-circle-question</v-icon>
+                                  <v-icon>fa-circle-question</v-icon>
                                 </v-btn>
                               </div>
                             </v-card-text>
@@ -4437,7 +4437,7 @@
                                       <td :class="areMetricsCurrent(item) ? colorContainerStatus(container.Status) + '--text text-left' : 'stale text-left'">
                                         {{ $root.localizeMessage(container.Status) }}
                                       </td>
-                                      <td :class="areMetricsCurrent(item) ? 'info--text text-left d-none d-lg-table-cell' : 'stale info-text-left text-left d-none d-lg-table-cell'">
+                                      <td :class="areMetricsCurrent(item) ? colorContainerDetails(container.Details) + '--text text-left d-none d-lg-table-cell' : 'stale info-text-left text-left d-none d-lg-table-cell'">
                                         {{ container.Details }}
                                       </td>
                                     </tr>
@@ -4457,7 +4457,7 @@
                               <span v-if="!item.imageFront">
                                 {{ i18n.nodeImageUnavailable }}
                                 <a :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'grid.html'" style="text-decoration: none; cursor: 'pointer'"  :title="i18n.clickForMoreInformation">
-                                  <v-icon color="info" class="mb-2">fa-circle-question</v-icon>
+                                  <v-icon class="mb-2">fa-circle-question</v-icon>
                                 </a>
                               </span>
                               <img class="rounded-lg elevation-5" v-if="item.imageFront" :src="'images/appliances/' + item.imageFront">

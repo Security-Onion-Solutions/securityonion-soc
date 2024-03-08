@@ -50,7 +50,7 @@ func TestRefreshGrid(tester *testing.T) {
 	status, _ := NewTestStatus()
 
 	status.refreshGrid(context.Background())
-	assert.Equal(tester, 2, status.currentStatus.Grid.UnhealthyNodeCount)
+	assert.Equal(tester, 1, status.currentStatus.Grid.UnhealthyNodeCount)
 	assert.Equal(tester, 2, status.currentStatus.Grid.TotalNodeCount)
 	assert.Equal(tester, 12, status.currentStatus.Grid.Eps)
 }

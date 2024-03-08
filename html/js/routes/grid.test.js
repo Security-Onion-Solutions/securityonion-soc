@@ -72,8 +72,15 @@ test('colorNodeStatus', () => {
 	expect(comp.colorNodeStatus("pending")).toBe("warning");
 	expect(comp.colorNodeStatus("pending", true)).toBe("warning");
 	expect(comp.colorNodeStatus("unknown", true)).toBe("warning");
-	expect(comp.colorNodeStatus("restart", false)).toBe("warning");
-	expect(comp.colorNodeStatus("restart", true)).toBe("warning");
+	expect(comp.colorNodeStatus("restart", false)).toBe("info");
+	expect(comp.colorNodeStatus("restart", true)).toBe("info");
+});
+
+test('colorContainerDetails', () => {
+	expect(comp.colorContainerDetails("Up 2 hours")).toBe("normal");
+	expect(comp.colorContainerDetails("Up 3 minutes")).toBe("info");
+	expect(comp.colorContainerDetails("Up 5 seconds", true)).toBe("warning");
+	expect(comp.colorContainerDetails("Up Less than a second", true)).toBe("warning");
 });
 
 test('formatLinearColor', () => {

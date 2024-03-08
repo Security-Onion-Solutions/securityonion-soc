@@ -380,7 +380,18 @@ routes.push({ path: '/grid', name: 'grid', component: {
         case NodeStatusFault: color = nonCritical ? "warning" : "error"; break;
         case NodeStatusOk: color = "success"; break;
         case NodeStatusPending: color = "warning"; break;
-        case NodeStatusRestart: color = "warning"; break;
+        case NodeStatusRestart: color = "info"; break;
+      }
+      return color;
+    },
+    colorContainerDetails(str) {
+      var color = "normal";
+      if (str.indexOf("unhealthy") != -1) {
+        color = "error";
+      } else if (str.indexOf("second") != -1) {
+        color = "warning";
+      } else if (str.indexOf("minutes") != -1) {
+        color = "info";
       }
       return color;
     },

@@ -66,7 +66,7 @@ type FakeDatastore struct {
 func NewFakeDatastore() *FakeDatastore {
 	nodes := make([]*model.Node, 0)
 	nodes = append(nodes, &model.Node{})
-	nodes = append(nodes, &model.Node{})
+	nodes = append(nodes, &model.Node{Status: model.NodeStatusRestart})
 
 	jobs := make([]*model.Job, 0)
 	jobs = append(jobs, &model.Job{})
