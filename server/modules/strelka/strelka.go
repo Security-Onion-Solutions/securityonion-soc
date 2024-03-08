@@ -41,6 +41,11 @@ type IOManager interface {
 	ExecCommand(cmd *exec.Cmd) ([]byte, int, time.Duration, error)
 }
 
+type yaraRepo struct {
+	Repo    string `json:"repo"`
+	License string `json:"license"`
+}
+
 type StrelkaEngine struct {
 	srv                                  *server.Server
 	isRunning                            bool
@@ -48,7 +53,7 @@ type StrelkaEngine struct {
 	communityRulesImportFrequencySeconds int
 	yaraRulesFolder                      string
 	reposFolder                          string
-	rulesRepos                           []string
+	rulesRepos                           []*yaraRepo
 	compileYaraPythonScriptPath          string
 	allowRegex                           *regexp.Regexp
 	denyRegex                            *regexp.Regexp
@@ -68,22 +73,25 @@ func (e *StrelkaEngine) PrerequisiteModules() []string {
 	return nil
 }
 
-func (e *StrelkaEngine) Init(config module.ModuleConfig) error {
+func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 	e.thread = &sync.WaitGroup{}
 
 	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", 600)
 	e.yaraRulesFolder = module.GetStringDefault(config, "yaraRulesFolder", "/opt/so/conf/strelka/rules")
 	e.reposFolder = module.GetStringDefault(config, "reposFolder", "/opt/so/conf/strelka/repos")
-	e.rulesRepos = module.GetStringArrayDefault(config, "rulesRepos", []string{"github.com/Security-Onion-Solutions/securityonion-yara"})
 	e.compileYaraPythonScriptPath = module.GetStringDefault(config, "compileYaraPythonScriptPath", "/opt/so/conf/strelka/compile_yara.py")
 	e.compileRules = module.GetBoolDefault(config, "compileRules", true)
 	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", false)
+
+	e.rulesRepos, err = getYaraRepos(config)
+	if err != nil {
+		return fmt.Errorf("unable to parse Strelka's rulesRepos: %w", err)
+	}
 
 	allow := module.GetStringDefault(config, "allowRegex", "")
 	deny := module.GetStringDefault(config, "denyRegex", "")
 
 	if allow != "" {
-		var err error
 		e.allowRegex, err = regexp.Compile(allow)
 		if err != nil {
 			return fmt.Errorf("unable to compile Strelka's allowRegex: %w", err)
@@ -99,6 +107,39 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) error {
 	}
 
 	return nil
+}
+
+func getYaraRepos(cfg module.ModuleConfig) ([]*yaraRepo, error) {
+	repoMaps, ok := cfg["rulesRepos"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf(`top level config value "rulesRepos" is not an array of objects`)
+	}
+
+	repos := make([]*yaraRepo, 0, len(repoMaps))
+
+	for _, repoMap := range repoMaps {
+		obj, ok := repoMap.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf(`"rulesRepo" entry is not an object`)
+		}
+
+		repo, ok := obj["repo"].(string)
+		if !ok {
+			return nil, fmt.Errorf(`missing "repo" link from "rulesRepo" entry`)
+		}
+
+		license, ok := obj["license"].(string)
+		if !ok {
+			return nil, fmt.Errorf(`missing "license" from "rulesRepo" entry`)
+		}
+
+		repos = append(repos, &yaraRepo{
+			Repo:    repo,
+			License: license,
+		})
+	}
+
+	return repos, nil
 }
 
 func (e *StrelkaEngine) Start() error {
@@ -200,12 +241,12 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			existingRepos[entry.Name()] = struct{}{}
 		}
 
-		upToDate := map[string]struct{}{}
+		upToDate := map[string]*yaraRepo{}
 
 		if e.autoUpdateEnabled {
 			// pull or clone repos
 			for _, repo := range e.rulesRepos {
-				parser, err := url.Parse(repo)
+				parser, err := url.Parse(repo.Repo)
 				if err != nil {
 					log.WithError(err).WithField("repo", repo).Error("Failed to parse repo URL, doing nothing with it")
 					continue
@@ -216,15 +257,15 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 				if _, ok := existingRepos[lastFolder]; ok {
 					// repo already exists, pull
-					repo, err := git.PlainOpen(repoPath)
+					gitrepo, err := git.PlainOpen(repoPath)
 					if err != nil {
-						log.WithError(err).WithField("repo", repo).Error("Failed to open repo, doing nothing with it")
+						log.WithError(err).WithField("repo", gitrepo).Error("Failed to open repo, doing nothing with it")
 						continue
 					}
 
-					work, err := repo.Worktree()
+					work, err := gitrepo.Worktree()
 					if err != nil {
-						log.WithError(err).WithField("repo", repo).Error("Failed to get worktree, doing nothing with it")
+						log.WithError(err).WithField("repo", gitrepo).Error("Failed to get worktree, doing nothing with it")
 						continue
 					}
 
@@ -242,21 +283,21 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 					cancel()
 
 					if err == nil {
-						upToDate[repoPath] = struct{}{}
+						upToDate[repoPath] = repo
 					}
 				} else {
 					// repo does not exist, clone
 					_, err = git.PlainClone(repoPath, false, &git.CloneOptions{
 						Depth:        1,
 						SingleBranch: true,
-						URL:          repo,
+						URL:          repo.Repo,
 					})
 					if err != nil {
 						log.WithError(err).WithField("repo", repo).Error("Failed to clone repo, doing nothing with it")
 						continue
 					}
 
-					upToDate[repoPath] = struct{}{}
+					upToDate[repoPath] = repo
 				}
 			}
 		} else {
@@ -281,8 +322,8 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 		}
 
 		// parse *.yar files in repos
-		for repo := range upToDate {
-			err = filepath.WalkDir(repo, func(path string, d fs.DirEntry, err error) error {
+		for repopath, repo := range upToDate {
+			err = filepath.WalkDir(repopath, func(path string, d fs.DirEntry, err error) error {
 				if err != nil {
 					log.WithError(err).WithField("path", path).Error("Failed to walk path")
 					return nil
@@ -330,7 +371,12 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 						sev = model.SeverityCritical
 					}
 
-					ruleset := filepath.Base(repo)
+					license, ok := rule.Meta.Rest["license"]
+					if !ok {
+						license = repo.License
+					}
+
+					ruleset := filepath.Base(repopath)
 
 					det := &model.Detection{
 						Engine:      model.EngineNameStrelka,
@@ -341,6 +387,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 						IsCommunity: true,
 						Language:    model.SigLangYara,
 						Ruleset:     util.Ptr(ruleset),
+						License:     license,
 					}
 
 					comRule, exists := communityDetections[det.PublicID]
@@ -377,7 +424,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 				return nil
 			})
 			if err != nil {
-				log.WithError(err).WithField("repo", repo).Error("Failed to walk repo")
+				log.WithError(err).WithField("repo", repopath).Error("Failed to walk repo")
 				continue
 			}
 		}
