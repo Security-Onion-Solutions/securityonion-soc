@@ -44,7 +44,7 @@ func ParsePcap(filename string, offset int, count int, unwrap bool) ([]*model.Pa
 	return packets, nil
 }
 
-func ToStream(packets []gopacket.Packet) (io.ReadCloser, error) {
+func ToStream(packets []gopacket.Packet) (io.ReadCloser, int, error) {
 	var snaplen uint32 = 65536
 	var full bytes.Buffer
 
@@ -58,11 +58,11 @@ func ToStream(packets []gopacket.Packet) (io.ReadCloser, error) {
 		buf.Clear()
 		err := gopacket.SerializePacket(buf, opts, packet)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		writer.WritePacket(packet.Metadata().CaptureInfo, buf.Bytes())
 	}
-	return io.NopCloser(bytes.NewReader(full.Bytes())), nil
+	return io.NopCloser(bytes.NewReader(full.Bytes())), full.Len(), nil
 }
 
 func getPacketProtocol(packet gopacket.Packet) string {
