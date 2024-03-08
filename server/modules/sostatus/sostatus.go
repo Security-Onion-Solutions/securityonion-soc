@@ -125,7 +125,7 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 			status.server.Host.Broadcast("node", "nodes", node)
 		}
 
-		if node.Status != model.NodeStatusOk && !node.NonCriticalNode {
+		if node.Status != model.NodeStatusOk && node.Status != model.NodeStatusRestart && !node.NonCriticalNode {
 			unhealthyNodes++
 		}
 	}
