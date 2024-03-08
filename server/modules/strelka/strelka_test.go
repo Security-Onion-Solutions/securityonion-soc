@@ -553,3 +553,102 @@ func TestExtractDetails(t *testing.T) {
 		})
 	}
 }
+
+func TestGetYaraRepos(t *testing.T) {
+	t.Parallel()
+
+	table := []struct {
+		Name     string
+		Config   map[string]interface{}
+		Expected []*yaraRepo
+		Error    *string
+	}{
+		{
+			Name: "Valid",
+			Config: map[string]interface{}{
+				"rulesRepos": []interface{}{
+					map[string]interface{}{
+						"repo":    "repo1",
+						"license": "MIT",
+					},
+					map[string]interface{}{
+						"repo":    "repo2",
+						"license": "GPL2",
+					},
+					map[string]interface{}{
+						"repo":    "repo3",
+						"license": "DRL",
+					},
+				},
+			},
+			Expected: []*yaraRepo{
+				{
+					Repo:    "repo1",
+					License: "MIT",
+				},
+				{
+					Repo:    "repo2",
+					License: "GPL2",
+				},
+				{
+					Repo:    "repo3",
+					License: "DRL",
+				},
+			},
+		},
+		{
+			Name: "Missing License",
+			Config: map[string]interface{}{
+				"rulesRepos": []interface{}{
+					map[string]interface{}{
+						"repo": "repo1",
+					},
+				},
+			},
+			Error: util.Ptr("failed to parse yara repo"),
+		},
+		{
+			Name: "Missing Repo",
+			Config: map[string]interface{}{
+				"rulesRepos": []interface{}{
+					map[string]interface{}{
+						"license": "DRL",
+					},
+				},
+			},
+			Error: util.Ptr("failed to parse yara repo"),
+		},
+		{
+			Name: "Wrong Structure A",
+			Config: map[string]interface{}{
+				"rulesRepos": "repo",
+			},
+			Error: util.Ptr("failed to parse yara repo"),
+		},
+		{
+			Name: "Wrong Structure B",
+			Config: map[string]interface{}{
+				"rulesRepos": []interface{}{
+					"github",
+				},
+			},
+			Error: util.Ptr("failed to parse yara repo"),
+		},
+	}
+
+	for _, test := range table {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			repos, err := getYaraRepos(test.Config)
+			if test.Error == nil {
+				assert.NoError(t, err)
+			} else {
+				assert.Contains(t, err.Error(), *test.Error)
+			}
+
+			assert.Equal(t, test.Expected, repos)
+		})
+	}
+}
