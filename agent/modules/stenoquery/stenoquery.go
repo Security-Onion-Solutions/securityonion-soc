@@ -102,6 +102,12 @@ func (steno *StenoQuery) ProcessJob(job *model.Job, reader io.ReadCloser) (io.Re
 			"importId": job.Filter.ImportId,
 		}).Debug("Skipping steno processor due to presence of importId")
 		return reader, nil
+	} else if reader != nil {
+		log.WithFields(log.Fields{
+			"jobId": job.Id,
+			"kind":  job.GetKind(),
+		}).Debug("Skipping steno processor due to another processor already provided PCAP data")
+		return reader, nil
 	} else if job.Filter == nil || job.Filter.EndTime.Before(steno.GetDataEpoch()) || job.Filter.BeginTime.After(steno.getDataLagDate()) {
 		log.WithFields(log.Fields{
 			"jobId":                  job.Id,
@@ -136,6 +142,17 @@ func (steno *StenoQuery) ProcessJob(job *model.Job, reader io.ReadCloser) (io.Re
 			var file *os.File
 			file, err = os.Open(pcapFilepath)
 			if err == nil {
+				info, err := os.Stat(pcapFilepath)
+				if err != nil {
+					log.WithError(err).WithFields(log.Fields {
+						"pcapPath": pcapFilepath,
+					}).Error("Failed to collect output file stats")
+				} else {
+					log.WithFields(log.Fields {
+						"pcapPath": pcapFilepath,
+						"pcapBytes": info.Size(),
+					}).Debug("Found matching packets")	
+				}
 				reader = file
 			}
 		}
