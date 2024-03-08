@@ -110,7 +110,13 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 }
 
 func getYaraRepos(cfg module.ModuleConfig) ([]*yaraRepo, error) {
-	repoMaps, ok := cfg["rulesRepos"].([]interface{})
+	cfgInter, ok := cfg["rulesRepos"]
+	if !ok {
+		// config doesn't have any rulesRepos, no error, but also no repos
+		return nil, nil
+	}
+
+	repoMaps, ok := cfgInter.([]interface{})
 	if !ok {
 		return nil, fmt.Errorf(`top level config value "rulesRepos" is not an array of objects`)
 	}
