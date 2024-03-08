@@ -1703,16 +1703,17 @@
                   <h3>{{ i18n.operations }}</h3>
                 </v-expansion-panel-header>
                 <v-expansion-panel-content>
-                  <!-- <v-checkbox id="detection-enabled-edit" v-model="detect.isEnabled" @change="stopEdit(true)" :label="i18n.detectionEnabled"/> -->
-                  <div class="ops-header">
-                    {{ i18n.status }}:
-                  </div>
-                  <div class="ops-value">
-                    <span @click="startEdit('detection-enabled', 'isEnabled')" v-if="!isEdit('detection-enabled')">
-                      {{ detect.isEnabled ? i18n.enabled : i18n.disabled }}
-                    </span>
-                    <v-checkbox id="detection-enabled-edit" v-model="detect.isEnabled" v-else @change="stopEdit(true)" />
-                  </div>
+                  <span class="clicktoedit">
+                    <div class="ops-header">
+                      {{ i18n.status }}:
+                    </div>
+                    <div class="ops-value">
+                      <span @click="startEdit('detection-enabled', 'isEnabled')" v-if="!isEdit('detection-enabled')">
+                        {{ detect.isEnabled ? i18n.enabled : i18n.disabled }}
+                      </span>
+                      <v-checkbox id="detection-enabled-edit" v-model="detect.isEnabled" v-else @change="stopEdit(true)" />
+                    </div>
+                  </span>
                   <!-- <div class="ops-header">
                     Related Playbooks:
                   </div>
