@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestInit(tester *testing.T) {
+func TestCaseInit(tester *testing.T) {
 	store := NewElasticCasestore(nil)
 	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, []string{"source.ip", "destination.ip"})
 	assert.Equal(tester, "myIndex", store.index)
@@ -27,7 +27,7 @@ func TestInit(tester *testing.T) {
 	assert.Equal(tester, []string{"source.ip", "destination.ip"}, store.commonObservables)
 }
 
-func TestPrepareForSave(tester *testing.T) {
+func TestCasePrepareForSave(tester *testing.T) {
 	store := NewElasticCasestore(nil)
 	obj := &model.Auditable{
 		Id: "myId",
@@ -40,7 +40,7 @@ func TestPrepareForSave(tester *testing.T) {
 	assert.Nil(tester, obj.UpdateTime)
 }
 
-func TestValidateIdInvalid(tester *testing.T) {
+func TestCaseValidateIdInvalid(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
 	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, nil)
 
@@ -67,7 +67,7 @@ func TestValidateIdInvalid(tester *testing.T) {
 	assert.Error(tester, err)
 }
 
-func TestValidateIdValid(tester *testing.T) {
+func TestCaseValidateIdValid(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
 	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, nil)
 
@@ -88,7 +88,7 @@ func TestValidateIdValid(tester *testing.T) {
 	assert.NoError(tester, err)
 }
 
-func TestValidateStringInvalid(tester *testing.T) {
+func TestCaseValidateStringInvalid(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
 	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, nil)
 
@@ -100,7 +100,7 @@ func TestValidateStringInvalid(tester *testing.T) {
 	assert.Error(tester, err)
 }
 
-func TestValidateStringValid(tester *testing.T) {
+func TestCaseValidateStringValid(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
 	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, nil)
 
@@ -221,7 +221,7 @@ func TestValidateCaseInvalid(tester *testing.T) {
 		socCase.Tags = append(socCase.Tags, "myTag")
 	}
 	err = store.validateCase(socCase)
-	assert.EqualError(tester, err, "Field 'Tags' contains excessive elements (499/50)")
+	assert.EqualError(tester, err, "Field 'tags' contains excessive elements (499/50)")
 	socCase.Tags = nil
 }
 
@@ -305,7 +305,7 @@ func TestValidateRelatedEventValid(tester *testing.T) {
 	assert.NoError(tester, err)
 }
 
-func TestValidateCommentInvalid(tester *testing.T) {
+func TestCaseValidateCommentInvalid(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
 	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, nil)
 
@@ -345,7 +345,7 @@ func TestValidateCommentInvalid(tester *testing.T) {
 	comment.Description = "myDescription"
 }
 
-func TestValidateCommentValid(tester *testing.T) {
+func TestCaseValidateCommentValid(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil))
 	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, nil)
 
@@ -479,7 +479,7 @@ func TestValidateArtifactInvalid(tester *testing.T) {
 		artifact.Tags = append(artifact.Tags, "myTag")
 	}
 	err = store.validateArtifact(artifact)
-	assert.EqualError(tester, err, "Field 'Tags' contains excessive elements (499/50)")
+	assert.EqualError(tester, err, "Field 'tags' contains excessive elements (499/50)")
 	artifact.Tags = nil
 }
 

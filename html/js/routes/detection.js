@@ -160,11 +160,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			});
 		},
 		newDetection() {
-			let author = [this.$root.user.firstName, this.$root.user.lastName].filter(x => x).join(' ');
 			return {
 				title: this.i18n.detectionDefaultTitle,
 				description: this.i18n.detectionDefaultDescription,
-				author: author,
+				author: '',
 				publicId: '',
 				severity: this.getDefaultPreset('severity'),
 				content: '',
@@ -243,7 +242,11 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.extractedReferences = [];
 			// ensure the value has a protocol
 			for (let i = 0; i < matches.length; i++) {
-				this.extractedReferences.push({ type: matches[i][1], text: matches[i][2], link: this.fixProtocol(matches[i][2]) });
+				if (matches[i][1] === 'url') {
+					this.extractedReferences.push({ type: matches[i][1], text: matches[i][2], link: this.fixProtocol(matches[i][2]) });
+				} else {
+					this.extractedReferences.push({ type: matches[i][1], text: matches[i][2] });
+				}
 			}
 		},
 		extractStrelkaReferences() {
@@ -252,7 +255,11 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			this.extractedReferences = [];
 			for (let i = 0; i < matches.length; i++) {
-				this.extractedReferences.push({ type: "url", text: matches[i][1], link: this.fixProtocol(matches[i][1]) });
+				if (this.isValidUrl(matches[i][1])) {
+					this.extractedReferences.push({ type: "url", text: matches[i][1], link: this.fixProtocol(matches[i][1]) });
+				} else {
+					this.extractedReferences.push({ type: "text", text: matches[i][1] });
+				}
 			}
 		},
 		extractElastAlertReferences() {
@@ -262,8 +269,21 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			}
 
 			this.extractedReferences = yaml['references'].map(r => {
-				return { type: "url", text: r, link: this.fixProtocol(r) };
+				if (this.isValidUrl(r)) {
+					return { type: "url", text: r, link: this.fixProtocol(r) };
+				} else {
+					return { type: "text", text: r };
+				}
 			});
+		},
+		isValidUrl(urlString) {
+	  	var urlPattern = new RegExp('^(https?:\\/\\/)?'+ // validate protocol
+	    '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|'+ // validate domain name
+	    '((\\d{1,3}\\.){3}\\d{1,3}))'+ // validate OR ip (v4) address
+	    '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*'+ // validate port and path
+	    '(\\?[;&a-z\\d%_.~+=-]*)?'+ // validate query string
+	    '(\\#[-a-z\\d_]*)?$','i'); // validate fragment locator
+	  return !!urlPattern.test(urlString);
 		},
 		fixProtocol(url) {
 			if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -305,21 +325,26 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				return ['msg', 'reference', 'metadata', 'sid', 'rev', 'classtype'].indexOf(key) === -1;
 			}).map(opt => opt.trim());
 
-			this.extractedLogic = [head, ...meta].join('\n\n');
+			this.extractedLogic = [head.trim(), ...meta].join('\n\n');
 		},
 		extractStrelkaLogic() {
 			// from strings to the end of the rule
-			let stringsStart = this.detect.content.indexOf('strings:');
+			let logicStart = this.detect.content.indexOf('strings:');
 			let ruleStop = this.detect.content.lastIndexOf('}');
 
-			// back up to the beginning of the strings line
-			while (this.detect.content[stringsStart] !== '\n') {
-				stringsStart--;
+			if (logicStart === -1) {
+				// no strings section? look for conditions
+				logicStart = this.detect.content.indexOf('condition:');
 			}
-			stringsStart++;
+
+			// back up to the beginning of the strings line
+			while (this.detect.content[logicStart] !== '\n') {
+				logicStart--;
+			}
+			logicStart++;
 
 			// cut out the part we want
-			const dump = this.detect.content.substring(stringsStart, ruleStop);
+			const dump = this.detect.content.substring(logicStart, ruleStop);
 
 			// begin unindenting
 			let lines = dump.split('\n');
@@ -328,7 +353,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			const ws = dump[0];
 			if (ws !== ' ' && ws !== '\t') {
 				// does not begin with whitespace, no indentation to remove
-				return dump
+				this.extractedLogic = dump.trim();
+				return;
 			}
 
 			// find the line with the least whitespace, don't count blank lines
@@ -351,7 +377,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			if (min === 0) {
 				// the line with the least amount of whitespace is already 0
-				return dump;
+				this.extractedLogic = dump.trim();
+				return;
 			}
 
 			// remove the minimum amount of whitespace from each line
@@ -362,7 +389,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			const logSource = yaml['logsource'];
 			const detection = yaml['detection'];
 
-			this.extractedLogic = jsyaml.dump({ logsource: logSource, detection: detection });
+			this.extractedLogic = jsyaml.dump({ logsource: logSource, detection: detection }).trim();
 		},
 		extractDetails() {
 			this.extractedAuthor = this.extractedCreated = this.extractedUpdated = '';
@@ -458,6 +485,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				switch (kind) {
 					case 'severity':
 					case 'engine':
+					case 'language':
 						return this.capitalizeOptions(this.presets[kind].labels);
 					default:
 						return this.presets[kind].labels;
@@ -562,6 +590,9 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			if (this.isNew()) {
 				this.$refs.detection.validate();
 				if (!this.editForm.valid) return;
+
+				let author = [this.$root.user.firstName, this.$root.user.lastName].filter(x => x).join(' ');
+				this.detect.author = author;
 			}
 
 			let err;
@@ -582,11 +613,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				return;
 			}
 
-			if (this.detect.overrides) {
-				for (let i = 0; i < this.detect.overrides.length; i++) {
-					this.detect.overrides[i] = this.cleanupOverride(this.detect.engine, this.detect.overrides[i]);
-				}
-			}
+			this.cleanupOverrides();
 
 			try {
 				let response;
@@ -843,6 +870,13 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			return [];
 		},
+		cleanupOverrides() {
+			if (this.detect.overrides) {
+				for (let i = 0; i < this.detect.overrides.length; i++) {
+					this.detect.overrides[i] = this.cleanupOverride(this.detect.engine, this.detect.overrides[i]);
+				}
+			}
+		},
 		cleanupOverride(engine, o) {
 			// ensures an override about to be saved
 			// only has the fields relevant to the engine
@@ -863,8 +897,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			if (engine === 'elastalert') {
 				out.customFilter = o.customFilter;
 			} else {
-				out.type = o.type
-
 				switch (o.type) {
 					case 'modify':
 						out.regex = o.regex;
