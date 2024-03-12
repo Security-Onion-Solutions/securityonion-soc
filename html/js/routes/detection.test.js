@@ -5,7 +5,6 @@
 // Elastic License 2.0.
 
 require('../test_common.js');
-require('../external/js-yaml.min.js');
 require('./detection.js');
 
 let comp;
