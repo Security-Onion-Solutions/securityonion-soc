@@ -106,6 +106,10 @@ func (mgr *JobManager) ProcessJob(job *model.Job) (io.ReadCloser, error) {
 	for _, processor := range mgr.jobProcessors {
 		reader, err = processor.ProcessJob(job, reader)
 	}
+	if err != nil && reader != nil {
+		// Don't fail all processors if at least one provided some data.
+		err = nil
+	}
 	return reader, err
 }
 
