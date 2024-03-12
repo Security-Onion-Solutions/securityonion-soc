@@ -569,8 +569,6 @@ func (store *ElasticDetectionstore) UpdateDetection(ctx context.Context, detect 
 
 		log.Infof("existing detection %s is a community rule, only updating IsEnabled, IsReporting, Note, and Overrides", detect.Id)
 	} else if detect.IsCommunity {
-		// web.Respond(w, r, http.StatusBadRequest, errors.New("cannot update an existing non-community detection to make it a community detection"))
-		// return
 		return nil, errors.New("cannot update an existing non-community detection to make it a community detection")
 	}
 
