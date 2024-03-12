@@ -62,8 +62,8 @@ func (s *SuricataEngine) PrerequisiteModules() []string {
 
 func (s *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 	s.communityRulesFile = module.GetStringDefault(config, "communityRulesFile", "/nsm/rules/suricata/emerging-all.rules")
-	s.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", "/opt/so/conf/soc/emerging-all.fingerprint")
-	s.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", 5)
+	s.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", "/opt/sensoroni/fingerprints/emerging-all.fingerprint")
+	s.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", 86400)
 
 	allow := module.GetStringDefault(config, "allowRegex", "")
 	deny := module.GetStringDefault(config, "denyRegex", "")
@@ -226,7 +226,7 @@ func (s *SuricataEngine) watchCommunityRules() {
 			d.IsCommunity = true
 		}
 
-		errMap, err := s.syncCommunityDetections(ctx, commDetections)
+		errMap, err := s.syncCommunityDetections(ctx, commDetections, allSettings)
 		if err != nil {
 			if err == errModuleStopped {
 				log.Info("incomplete sync of suricata community detections due to module stopping")
@@ -613,7 +613,7 @@ func (s *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*
 	return errMap, nil
 }
 
-func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections []*model.Detection) (errMap map[string]string, err error) {
+func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections []*model.Detection, allSettings []*model.Setting) (errMap map[string]string, err error) {
 	defer func() {
 		if len(errMap) == 0 {
 			errMap = nil
@@ -627,11 +627,6 @@ func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 		Removed   int
 		Unchanged int
 	}{}
-
-	allSettings, err := s.srv.Configstore.GetSettings(ctx)
-	if err != nil {
-		return nil, err
-	}
 
 	disabled := settingByID(allSettings, "idstools.sids.disabled")
 	if disabled == nil {

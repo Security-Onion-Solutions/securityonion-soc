@@ -76,9 +76,9 @@ func (e *StrelkaEngine) PrerequisiteModules() []string {
 func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 	e.thread = &sync.WaitGroup{}
 
-	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", 600)
-	e.yaraRulesFolder = module.GetStringDefault(config, "yaraRulesFolder", "/opt/so/conf/strelka/rules")
-	e.reposFolder = module.GetStringDefault(config, "reposFolder", "/opt/so/conf/strelka/repos")
+	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", 86400)
+	e.yaraRulesFolder = module.GetStringDefault(config, "yaraRulesFolder", "/opt/sensoroni/yara/rules")
+	e.reposFolder = module.GetStringDefault(config, "reposFolder", "/opt/sensoroni/yara/repos")
 	e.compileYaraPythonScriptPath = module.GetStringDefault(config, "compileYaraPythonScriptPath", "/opt/so/conf/strelka/compile_yara.py")
 	e.compileRules = module.GetBoolDefault(config, "compileRules", true)
 	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", false)
@@ -112,8 +112,13 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 func getYaraRepos(cfg module.ModuleConfig) ([]*yaraRepo, error) {
 	cfgInter, ok := cfg["rulesRepos"]
 	if !ok {
-		// config doesn't have any rulesRepos, no error, but also no repos
-		return nil, nil
+		// config doesn't have any rulesRepos, no error, return defaults
+		return []*yaraRepo{
+			{
+				Repo:    "https://github.com/Security-Onion-Solutions/securityonion-yara",
+				License: "DRL",
+			},
+		}, nil
 	}
 
 	repoMaps, ok := cfgInter.([]interface{})

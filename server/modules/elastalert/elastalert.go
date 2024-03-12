@@ -79,13 +79,13 @@ func (e *ElastAlertEngine) PrerequisiteModules() []string {
 func (e *ElastAlertEngine) Init(config module.ModuleConfig) error {
 	e.thread = &sync.WaitGroup{}
 
-	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", 600)
+	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", 86400)
 	e.sigmaPackageDownloadTemplate = module.GetStringDefault(config, "sigmaPackageDownloadTemplate", "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip")
-	e.elastAlertRulesFolder = module.GetStringDefault(config, "elastAlertRulesFolder", "/opt/so/rules/elastalert")
-	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", "/opt/so/conf/soc/sigma.fingerprint")
+	e.elastAlertRulesFolder = module.GetStringDefault(config, "elastAlertRulesFolder", "/opt/sensoroni/elastalert")
+	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", "/opt/sensoroni/fingerprints/sigma.fingerprint")
 	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", false)
 
-	pkgs := module.GetStringArrayDefault(config, "sigmaRulePackages", []string{"core"})
+	pkgs := module.GetStringArrayDefault(config, "sigmaRulePackages", []string{"core", "emerging_threats_addon"})
 	e.parseSigmaPackages(pkgs)
 
 	allow := module.GetStringDefault(config, "allowRegex", "")
