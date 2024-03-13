@@ -51,12 +51,12 @@ func TestParseAndStream(tester *testing.T) {
 
 	packets, perr := ParseRawPcap(path, 999, filter)
 	assert.Nil(tester, perr)
-	assert.Len(tester, packets, 12)
+	assert.Len(tester, packets, 22)
 
 	reader, size, err := ToStream(packets)
 
 	assert.Nil(tester, err)
-	pcap_length := 14122 // correlates to so-pcap test file
+	pcap_length := 14918 // correlates to so-pcap test file
 	bytes := make([]byte, 32768)
 	count, err := reader.Read(bytes)
 	assert.Nil(tester, err)
@@ -97,9 +97,9 @@ func TestParseAndStreamIcmp(tester *testing.T) {
 	filter.EndTime = endTime
 	filter.Protocol = model.PROTOCOL_ICMP
 	filter.SrcIp = "90.151.225.16"
-	filter.SrcPort = 19
+	filter.SrcPort = 19 // will be ignored since Protocol = ICMP
 	filter.DstIp = "192.168.10.128"
-	filter.DstPort = 34515
+	filter.DstPort = 34515 // will be ignored since Protocol = ICMP
 
 	packets, perr := ParseRawPcap(path, 999, filter)
 	assert.Nil(tester, perr)

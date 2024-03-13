@@ -109,7 +109,7 @@ func TestStreamPacketsInPcaps(tester *testing.T) {
 
 	reader, size, err := sq.streamPacketsInPcaps(paths, filter)
 	assert.Nil(tester, err)
-	pcap_length := 14122 // correlates to so-pcap test file
+	pcap_length := 14918 // correlates to so-pcap test file
 	bytes := make([]byte, 32768)
 	count, err := reader.Read(bytes)
 	assert.Nil(tester, err)
