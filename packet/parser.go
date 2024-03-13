@@ -80,47 +80,55 @@ func getPacketProtocol(packet gopacket.Packet) string {
 }
 
 func filterPacket(filter *model.Filter, packet gopacket.Packet) bool {
-	var srcIp, dstIp string
-	var srcPort, dstPort int
 
+	// Quickly exit if packet time is outside the bounds of the time filter or protocol doesn't match
 	timestamp := packet.Metadata().Timestamp
-	layer := packet.Layer(layers.LayerTypeIPv6)
+	if (!filter.BeginTime.IsZero() && filter.BeginTime.After(timestamp)) ||
+		(!filter.EndTime.IsZero() && filter.EndTime.Before(timestamp)) ||
+		(filter.Protocol != "" && filter.Protocol != getPacketProtocol(packet)) {
+		return false
+	}
+
+	// Grab the source and destination IPs, if they exist
+	var srcIp, dstIp string
+	layer := packet.Layer(layers.LayerTypeIPv4)
 	if layer != nil {
-		layer := layer.(*layers.IPv6)
+		layer := layer.(*layers.IPv4)
 		srcIp = layer.SrcIP.String()
 		dstIp = layer.DstIP.String()
 	} else {
-		layer = packet.Layer(layers.LayerTypeIPv4)
+		layer = packet.Layer(layers.LayerTypeIPv6)
 		if layer != nil {
-			layer := layer.(*layers.IPv4)
+			layer := layer.(*layers.IPv6)
 			srcIp = layer.SrcIP.String()
 			dstIp = layer.DstIP.String()
 		}
 	}
 
-	layer = packet.Layer(layers.LayerTypeTCP)
-	if layer != nil {
-		layer := layer.(*layers.TCP)
-		srcPort = int(layer.SrcPort)
-		dstPort = int(layer.DstPort)
-	}
+	// Check for IP match in both directions
+	include := (filter.SrcIp == "" || filter.SrcIp == srcIp || filter.SrcIp == dstIp) &&
+		(filter.DstIp == "" || filter.DstIp == dstIp || filter.DstIp == srcIp)
 
-	layer = packet.Layer(layers.LayerTypeUDP)
-	if layer != nil {
-		layer := layer.(*layers.UDP)
-		srcPort = int(layer.SrcPort)
-		dstPort = int(layer.DstPort)
-	}
+	if include && (filter.Protocol == "" || filter.Protocol == "udp" || filter.Protocol == "tcp") && (filter.SrcPort != 0 || filter.DstPort != 0) {
 
-	include := (filter.BeginTime.IsZero() || timestamp.After(filter.BeginTime)) &&
-		(filter.EndTime.IsZero() || timestamp.Before(filter.EndTime)) &&
-		(filter.Protocol == "" || filter.Protocol == getPacketProtocol(packet)) &&
-		(filter.SrcIp == "" || srcIp == filter.SrcIp) &&
-		(filter.DstIp == "" || dstIp == filter.DstIp)
+		var srcPort, dstPort int
+		layer = packet.Layer(layers.LayerTypeTCP)
+		if layer != nil {
+			layer := layer.(*layers.TCP)
+			srcPort = int(layer.SrcPort)
+			dstPort = int(layer.DstPort)
+		} else {
+			layer = packet.Layer(layers.LayerTypeUDP)
+			if layer != nil {
+				layer := layer.(*layers.UDP)
+				srcPort = int(layer.SrcPort)
+				dstPort = int(layer.DstPort)
+			}
+		}
 
-	if include && (filter.Protocol == "udp" || filter.Protocol == "tcp") {
-		include = (filter.SrcPort == 0 || srcPort == filter.SrcPort) &&
-			(filter.DstPort == 0 || dstPort == filter.DstPort)
+		include = include &&
+			(filter.SrcPort == 0 || filter.SrcPort == srcPort || filter.SrcPort == dstPort) &&
+			(filter.DstPort == 0 || filter.DstPort == dstPort || filter.DstPort == srcPort)
 	}
 
 	return include
