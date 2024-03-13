@@ -195,6 +195,8 @@ const i18n = {
       configQLNIDSHeader: 'NIDS',
       configQLNIDSRuleset: 'Change NIDS Ruleset',
       configQLNIDSOinkCode: 'Paid NIDS Rulesets Registration Code (oinkcode)',
+      configQLSIDS: 'SIDS - ENABLE | DISABLE | MODIFY',
+      configQLSIDSThresholding: 'SIDS - Thresholding',
       configQLAnalystTitle: 'Analyst Quick Links',
       configQLSuricataHeader: 'Suricata',
       configQLHomeNet: 'Suricata Home Networks',
