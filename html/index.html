@@ -4804,6 +4804,12 @@
                       {{i18n.configQLSuricataHeader}}
                       <ul>
                         <li>
+                          <router-link :to="{name: 'config', query: {s: 'idstools.sids'}}">{{i18n.configQLSIDS}}</router-link>
+                        </li>
+                        <li>
+                          <router-link :to="{name: 'config', query: {s: 'suricata.thresholding.sids__yaml'}}">{{i18n.configQLSIDSThresholding}}</router-link>
+                        </li>
+                        <li>
                           <router-link :to="{name: 'config', query: {s: 'suricata.config.vars.address-groups.HOME_NET'}}">{{i18n.configQLHomeNet}}</router-link>
                         </li>
                         <li>
