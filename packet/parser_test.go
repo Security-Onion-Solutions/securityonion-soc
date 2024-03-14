@@ -115,3 +115,20 @@ func TestParseAndStreamIcmp(tester *testing.T) {
 	assert.Equal(tester, pcap_length, count)
 	assert.Equal(tester, pcap_length, size)
 }
+
+func TestCreateBpf(tester *testing.T) {
+	filter := model.NewFilter()
+	startTime, _ := time.Parse(time.RFC3339, "2024-02-12T00:00:00Z")
+	filter.BeginTime = startTime
+	endTime, _ := time.Parse(time.RFC3339, "2024-02-12T23:59:59Z")
+	filter.EndTime = endTime
+	filter.Protocol = model.PROTOCOL_ICMP
+	filter.SrcIp = "90.151.225.16"
+	filter.SrcPort = 19 // will be ignored since Protocol = ICMP
+	filter.DstIp = "192.168.10.128"
+	filter.DstPort = 34515 // will be ignored since Protocol = ICMP
+
+	actual := createBpf(filter)
+	expected := "(icmp and host 90.151.225.16 and host 192.168.10.128) or (vlan and icmp and host 90.151.225.16 and host 192.168.10.128)"
+	assert.Equal(tester, expected, actual)
+}
