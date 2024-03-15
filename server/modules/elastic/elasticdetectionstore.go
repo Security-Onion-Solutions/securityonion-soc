@@ -880,6 +880,6 @@ func (store *ElasticDetectionstore) DeleteComment(ctx context.Context, id string
 		return err
 	}
 
-	_, err = store.deleteDocument(ctx, store.index, id)
+	_, err = store.deleteDocument(ctx, store.disableCrossClusterIndex(store.index), id)
 	return err
 }

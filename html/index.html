@@ -1232,10 +1232,10 @@
                     </div>
                     <div class="d-flex align-center align-self-end text-body-2 mt-2">
                       <div class="d-inline-flex justify-end">
-                        <v-btn text small color="primary" class="align-self-end" @click="resetForm()">
+                        <v-btn id="detection-comment-cancel" text small color="primary" class="align-self-end" @click="resetForm()">
                         {{ i18n.cancel }}
                         </v-btn>
-                        <v-btn :disabled="!commentsForm.valid" text small color="primary" class="align-self-end" @click="addComment()">
+                        <v-btn id="detection-comment-add" :disabled="!commentsForm.valid" text small color="primary" class="align-self-end" @click="addComment()">
                         {{ origComment ? i18n.update : i18n.add }}
                         </v-btn>
                       </div>
