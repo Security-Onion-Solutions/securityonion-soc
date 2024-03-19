@@ -177,7 +177,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			try {
 				const response = await this.$root.papi.get('detection/' + encodeURIComponent(this.$route.params.id));
+
 				this.detect = response.data;
+				delete this.detect.kind;
+
 				this.tagOverrides();
 				this.loadAssociations();
 			} catch (error) {
@@ -657,8 +660,17 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.$router.push({name: 'detection', params: {id: response.data.id}});
 		},
 		async deleteDetection() {
-			await this.$root.papi.delete('/detection/' + encodeURIComponent(this.$route.params.id));
-			this.$router.push({ name: 'detections' });
+			try {
+				this.$root.startLoading();
+				await this.$root.papi.delete('/detection/' + encodeURIComponent(this.$route.params.id));
+				this.$root.stopLoading();
+
+				this.$router.push({ name: 'detections' });
+			} catch (error) {
+				this.$root.showError(error);
+			} finally {
+				this.$root.stopLoading();
+			}
 		},
 		validateYara() {
 			return null;

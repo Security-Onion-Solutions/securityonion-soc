@@ -655,7 +655,7 @@ func (store *ElasticDetectionstore) DeleteDetection(ctx context.Context, id stri
 		return nil, err
 	}
 
-	_, err = store.deleteDocument(ctx, store.index, detect, "detection", id)
+	_, err = store.deleteDocument(ctx, store.disableCrossClusterIndex(store.index), detect, "detection", id)
 
 	return detect, err
 }
