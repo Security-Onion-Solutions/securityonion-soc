@@ -134,9 +134,31 @@ func (steno *StenoQuery) ProcessJob(job *model.Job, reader io.ReadCloser) (io.Re
 		}).Debug("Executed stenoread")
 		if err == nil {
 			var file *os.File
+			var info os.FileInfo
 			file, err = os.Open(pcapFilepath)
 			if err == nil {
-				reader = file
+				info, err = os.Stat(pcapFilepath)
+				if err != nil {
+					log.WithError(err).WithFields(log.Fields{
+						"pcapPath": pcapFilepath,
+					}).Error("Failed to collect output file stats")
+				} else {
+					size := int(info.Size())
+					log.WithFields(log.Fields{
+						"pcapPath":  pcapFilepath,
+						"pcapBytes": size,
+					}).Debug("Found matching packets")
+					if job.Size > size {
+						log.Warn("Discarding Stenographer job output since existing job already has more content from another processor")
+					} else {
+						job.Size = size
+						reader = file
+						log.WithFields(log.Fields{
+							"pcapStreamErr":  err,
+							"pcapStreamSize": size,
+						}).Debug("Finished processing PCAP via Stenographer")
+					}
+				}
 			}
 		}
 	}

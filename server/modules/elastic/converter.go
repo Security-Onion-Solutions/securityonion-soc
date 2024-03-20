@@ -16,6 +16,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/json"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/util"
 )
 
 func stripSegmentOptions(keys []string) []string {
@@ -28,7 +29,7 @@ func stripSegmentOptions(keys []string) []string {
 	return tmp
 }
 
-func makeAggregation(store *ElasticEventstore, prefix string, keys []string, count int, ascending bool) (map[string]interface{}, string) {
+func makeAggregation(fieldDefs map[string]*FieldDefinition, prefix string, keys []string, count int, ascending bool) (map[string]interface{}, string) {
 	agg := make(map[string]interface{})
 	orderFields := make(map[string]interface{})
 	orderFields["_count"] = "desc"
@@ -41,7 +42,7 @@ func makeAggregation(store *ElasticEventstore, prefix string, keys []string, cou
 		aggFields["missing"] = "__missing__"
 	}
 
-	aggFields["field"] = store.mapElasticField(keys[0])
+	aggFields["field"] = mapElasticField(fieldDefs, keys[0])
 	aggFields["size"] = count
 	aggFields["order"] = orderFields
 	agg["terms"] = aggFields
@@ -49,7 +50,7 @@ func makeAggregation(store *ElasticEventstore, prefix string, keys []string, cou
 	name := prefix + "|" + keys[0]
 	if len(keys) > 1 {
 		inner := make(map[string]interface{})
-		innerAgg, innerName := makeAggregation(store, name, keys[1:], count, ascending)
+		innerAgg, innerName := makeAggregation(fieldDefs, name, keys[1:], count, ascending)
 		inner[innerName] = innerAgg
 		agg["aggs"] = inner
 	}
@@ -74,12 +75,12 @@ func formatSearch(input string) string {
 	return input
 }
 
-func mapSearch(store *ElasticEventstore, searchSegment *model.SearchSegment) *model.SearchSegment {
+func mapSearch(fieldDefs map[string]*FieldDefinition, searchSegment *model.SearchSegment) *model.SearchSegment {
 	const delim = ":"
 	for _, term := range searchSegment.Terms() {
 		if strings.HasSuffix(term.Raw, delim) && !term.Grouped && !term.Quoted {
 			field := strings.Trim(term.Raw, delim)
-			newField := store.mapElasticField(field)
+			newField := mapElasticField(fieldDefs, field)
 			if newField != field {
 				term.Raw = newField + delim
 			}
@@ -88,12 +89,12 @@ func mapSearch(store *ElasticEventstore, searchSegment *model.SearchSegment) *mo
 	return searchSegment
 }
 
-func makeQuery(store *ElasticEventstore, parsedQuery *model.Query, beginTime time.Time, endTime time.Time) map[string]interface{} {
+func makeQuery(fieldDefs map[string]*FieldDefinition, parsedQuery *model.Query, beginTime time.Time, endTime time.Time) map[string]interface{} {
 	searchString := ""
 	segment := parsedQuery.NamedSegment(model.SegmentKind_Search)
 	if segment != nil {
 		searchSegment := segment.(*model.SearchSegment)
-		searchString = mapSearch(store, searchSegment).String()
+		searchString = mapSearch(fieldDefs, searchSegment).String()
 	}
 
 	queryDetails := make(map[string]interface{})
@@ -103,7 +104,7 @@ func makeQuery(store *ElasticEventstore, parsedQuery *model.Query, beginTime tim
 
 	query := make(map[string]interface{})
 	query["query_string"] = queryDetails
-	must := make([]interface{}, 0, 0)
+	must := make([]interface{}, 0)
 	must = append(must, query)
 
 	if !endTime.IsZero() {
@@ -188,19 +189,23 @@ func calcTimelineInterval(intervals int, beginTime time.Time, endTime time.Time)
 	return "30d"
 }
 
-func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSearchCriteria) (string, error) {
+func convertToElasticRequest(fieldDefs map[string]*FieldDefinition, intervals int, criteria *model.EventSearchCriteria) (string, error) {
 	var err error
 	var esJson string
 
 	esMap := make(map[string]interface{})
 	esMap["size"] = criteria.EventLimit
-	esMap["query"] = makeQuery(store, criteria.ParsedQuery, criteria.BeginTime, criteria.EndTime)
+	esMap["query"] = makeQuery(fieldDefs, criteria.ParsedQuery, criteria.BeginTime, criteria.EndTime)
+
+	if len(criteria.SearchAfter) != 0 {
+		esMap["search_after"] = criteria.SearchAfter
+	}
 
 	aggregations := make(map[string]interface{})
 
 	if criteria.MetricLimit > 0 {
 		if !criteria.EndTime.IsZero() {
-			aggregations["timeline"] = makeTimeline(calcTimelineInterval(store.intervals, criteria.BeginTime, criteria.EndTime))
+			aggregations["timeline"] = makeTimeline(calcTimelineInterval(intervals, criteria.BeginTime, criteria.EndTime))
 		}
 		segments := criteria.ParsedQuery.NamedSegments(model.SegmentKind_GroupBy)
 		for idx, segment := range segments {
@@ -209,10 +214,10 @@ func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSear
 			fields = stripSegmentOptions(fields)
 			if len(fields) > 0 {
 				prefix := fmt.Sprintf("groupby_%d", idx)
-				agg, name := makeAggregation(store, prefix, fields, criteria.MetricLimit, false)
+				agg, name := makeAggregation(fieldDefs, prefix, fields, criteria.MetricLimit, false)
 				aggregations[name] = agg
 				if aggregations["bottom"] == nil {
-					aggregations["bottom"], _ = makeAggregation(store, "", fields[0:1], criteria.MetricLimit, true)
+					aggregations["bottom"], _ = makeAggregation(fieldDefs, "", fields[0:1], criteria.MetricLimit, true)
 				}
 			}
 		}
@@ -227,7 +232,7 @@ func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSear
 		sortBySegment := segment.(*model.SortBySegment)
 		fields := sortBySegment.RawFields()
 		if len(fields) > 0 {
-			sorting := make([]map[string]map[string]string, 0, 0)
+			sorting := []map[string]map[string]string{}
 			for _, field := range fields {
 				newSort := make(map[string]map[string]string)
 				order := "desc"
@@ -242,7 +247,19 @@ func convertToElasticRequest(store *ElasticEventstore, criteria *model.EventSear
 				newSort[field] = sortParams
 				sorting = append(sorting, newSort)
 			}
-			esMap["sort"] = sorting
+
+			if len(sorting) != 0 {
+				esMap["sort"] = sorting
+			}
+		}
+	} else {
+		sort := map[string]string{}
+		for _, field := range criteria.SortFields {
+			sort[field.Field] = field.Order
+		}
+
+		if len(sort) != 0 {
+			esMap["sort"] = sort
 		}
 	}
 
@@ -260,7 +277,7 @@ func parseAggregation(name string, aggObj interface{}, keys []interface{}, resul
 	if buckets != nil {
 		metrics := results.Metrics[name]
 		if metrics == nil {
-			metrics = make([]*model.EventMetric, 0, 0)
+			metrics = []*model.EventMetric{}
 		}
 		for _, bucketObj := range buckets.([]interface{}) {
 			bucket := bucketObj.(map[string]interface{})
@@ -290,25 +307,25 @@ func parseAggregation(name string, aggObj interface{}, keys []interface{}, resul
 	}
 }
 
-func flattenKeyValue(store *ElasticEventstore, fieldMap map[string]interface{}, prefix string, value map[string]interface{}) {
+func flattenKeyValue(fieldDefs map[string]*FieldDefinition, fieldMap map[string]interface{}, prefix string, value map[string]interface{}) {
 	for key, value := range value {
 		flattenedKey := prefix + key
-		switch value.(type) {
+		switch v := value.(type) {
 		case map[string]interface{}:
-			flattenKeyValue(store, fieldMap, flattenedKey+".", value.(map[string]interface{}))
+			flattenKeyValue(fieldDefs, fieldMap, flattenedKey+".", v)
 		default:
-			fieldMap[store.unmapElasticField(flattenedKey)] = value
+			fieldMap[unmapElasticField(fieldDefs, flattenedKey)] = value
 		}
 	}
 }
 
-func flatten(store *ElasticEventstore, data map[string]interface{}) map[string]interface{} {
+func flatten(fieldDefs map[string]*FieldDefinition, data map[string]interface{}) map[string]interface{} {
 	fieldMap := make(map[string]interface{})
-	flattenKeyValue(store, fieldMap, "", data)
+	flattenKeyValue(fieldDefs, fieldMap, "", data)
 	return fieldMap
 }
 
-func convertFromElasticResults(store *ElasticEventstore, esJson string, results *model.EventSearchResults) error {
+func convertFromElasticResults(fieldDefs map[string]*FieldDefinition, esJson string, results *model.EventSearchResults) error {
 	esResults := make(map[string]interface{})
 	err := json.LoadJson([]byte(esJson), &esResults)
 	if esResults["took"] == nil || esResults["timed_out"] == nil || esResults["hits"] == nil {
@@ -341,7 +358,10 @@ func convertFromElasticResults(store *ElasticEventstore, esJson string, results 
 		if esRecord["_score"] != nil {
 			event.Score = esRecord["_score"].(float64)
 		}
-		event.Payload = flatten(store, esRecord["_source"].(map[string]interface{}))
+		event.Payload = flatten(fieldDefs, esRecord["_source"].(map[string]interface{}))
+		if esRecord["sort"] != nil {
+			event.Sort = esRecord["sort"].([]interface{})
+		}
 
 		if event.Payload["@timestamp"] != nil {
 			event.Time, _ = time.Parse(time.RFC3339, event.Payload["@timestamp"].(string))
@@ -355,7 +375,7 @@ func convertFromElasticResults(store *ElasticEventstore, esJson string, results 
 	aggs := esResults["aggregations"]
 	if aggs != nil {
 		for name, aggObj := range aggs.(map[string]interface{}) {
-			keys := make([]interface{}, 0, 0)
+			keys := make([]interface{}, 0)
 			parseAggregation(name, aggObj, keys, results)
 		}
 	}
@@ -390,13 +410,13 @@ func parseTime(fieldmap map[string]interface{}, key string) *time.Time {
 	var t time.Time
 
 	if value, ok := fieldmap[key]; ok {
-		switch value.(type) {
+		switch v := value.(type) {
 		case time.Time:
-			t = value.(time.Time)
+			t = v
 		case *time.Time:
-			t = *(value.(*time.Time))
+			t = *v
 		case string:
-			t, _ = time.Parse(time.RFC3339, value.(string))
+			t, _ = time.Parse(time.RFC3339, v)
 		}
 	}
 
@@ -487,7 +507,7 @@ func convertElasticEventToCase(event *model.EventRecord, schemaPrefix string) (*
 }
 
 func convertToStringArray(input []interface{}) []string {
-	out := make([]string, len(input), len(input))
+	out := make([]string, len(input))
 	for idx, value := range input {
 		out[idx] = value.(string)
 	}
@@ -517,6 +537,30 @@ func convertElasticEventToComment(event *model.EventRecord, schemaPrefix string)
 				}
 			}
 			obj.CreateTime = parseTime(event.Payload, schemaPrefix+"comment.createTime")
+		}
+	}
+
+	return obj, err
+}
+
+func convertElasticEventToDetectionComment(event *model.EventRecord, schemaPrefix string) (*model.DetectionComment, error) {
+	var err error
+	var obj *model.DetectionComment
+
+	if event != nil {
+		obj = &model.DetectionComment{}
+		err = convertElasticEventToAuditable(event, &obj.Auditable, schemaPrefix)
+		if err == nil {
+			if value, ok := event.Payload[schemaPrefix+"detectioncomment.value"]; ok {
+				obj.Value = value.(string)
+			}
+			if value, ok := event.Payload[schemaPrefix+"detectioncomment.userId"]; ok {
+				obj.UserId = value.(string)
+			}
+			if value, ok := event.Payload[schemaPrefix+"detectioncomment.detectionId"]; ok {
+				obj.DetectionId = value.(string)
+			}
+			obj.CreateTime = parseTime(event.Payload, schemaPrefix+"detectioncomment.createTime")
 		}
 	}
 
@@ -639,6 +683,126 @@ func convertElasticEventToArtifactStream(event *model.EventRecord, schemaPrefix 
 	return obj, err
 }
 
+func convertElasticEventToDetection(event *model.EventRecord, schemaPrefix string) (*model.Detection, error) {
+	var err error
+	var obj *model.Detection
+
+	if event != nil {
+		obj = &model.Detection{}
+		err = convertElasticEventToAuditable(event, &obj.Auditable, schemaPrefix)
+		if err == nil {
+			if value, ok := event.Payload[schemaPrefix+"detection.userId"]; ok {
+				obj.UserId = value.(string)
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.publicId"]; ok {
+				obj.PublicID = value.(string)
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.title"]; ok {
+				obj.Title = value.(string)
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.severity"]; ok {
+				obj.Severity = model.Severity(value.(string))
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.author"]; ok {
+				obj.Author = value.(string)
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.description"]; ok {
+				obj.Description = value.(string)
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.content"]; ok {
+				obj.Content = value.(string)
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.isEnabled"]; ok {
+				obj.IsEnabled = value.(bool)
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.isReporting"]; ok {
+				obj.IsReporting = value.(bool)
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.isCommunity"]; ok {
+				obj.IsCommunity = value.(bool)
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.ruleset"]; ok {
+				if value != nil {
+					obj.Ruleset = util.Ptr(value.(string))
+				}
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.engine"]; ok {
+				obj.Engine = model.EngineName(value.(string))
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.language"]; ok {
+				obj.Language = model.SigLanguage(value.(string))
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.license"]; ok {
+				obj.License = value.(string)
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.tags"]; ok && value != nil {
+				arr := value.([]interface{})
+				obj.Tags = make([]string, 0, len(arr))
+
+				for _, tag := range arr {
+					obj.Tags = append(obj.Tags, tag.(string))
+				}
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.overrides"]; ok && value != nil {
+				obj.Overrides = convertElasticEventToOverride(value.([]interface{}))
+			}
+
+			obj.CreateTime = parseTime(event.Payload, schemaPrefix+"detection.createTime")
+		}
+	}
+
+	return obj, err
+}
+
+func convertElasticEventToOverride(overrides []interface{}) []*model.Override {
+	overs := make([]*model.Override, 0, len(overrides))
+	for _, inter := range overrides {
+		override := inter.(map[string]interface{})
+		over := &model.Override{}
+
+		if value, ok := override["type"]; ok {
+			over.Type = model.OverrideType(value.(string))
+		}
+		if value, ok := override["isEnabled"]; ok {
+			over.IsEnabled = value.(bool)
+		}
+		if value, ok := override["createdAt"]; ok {
+			over.CreatedAt, _ = time.Parse(time.RFC3339, value.(string))
+		}
+		if value, ok := override["updatedAt"]; ok {
+			over.UpdatedAt, _ = time.Parse(time.RFC3339, value.(string))
+		}
+		if value, ok := override["thresholdType"]; ok && value != nil {
+			over.ThresholdType = util.Ptr(value.(string))
+		}
+		if value, ok := override["regex"]; ok && value != nil {
+			over.Regex = util.Ptr(value.(string))
+		}
+		if value, ok := override["value"]; ok && value != nil {
+			over.Value = util.Ptr(value.(string))
+		}
+		if value, ok := override["ip"]; ok && value != nil {
+			over.IP = util.Ptr(value.(string))
+		}
+		if value, ok := override["track"]; ok && value != nil {
+			over.Track = util.Ptr(value.(string))
+		}
+		if value, ok := override["count"]; ok && value != nil {
+			over.Count = util.Ptr(int(value.(float64)))
+		}
+		if value, ok := override["seconds"]; ok && value != nil {
+			over.Seconds = util.Ptr(int(value.(float64)))
+		}
+		if value, ok := override["customFilter"]; ok && value != nil {
+			over.CustomFilter = util.Ptr(value.(string))
+		}
+
+		overs = append(overs, over)
+	}
+
+	return overs
+}
+
 func convertElasticEventToObject(event *model.EventRecord, schemaPrefix string) (interface{}, error) {
 	var obj interface{}
 	var err error
@@ -649,12 +813,16 @@ func convertElasticEventToObject(event *model.EventRecord, schemaPrefix string) 
 			obj, err = convertElasticEventToCase(event, schemaPrefix)
 		case "comment":
 			obj, err = convertElasticEventToComment(event, schemaPrefix)
+		case "detectioncomment":
+			obj, err = convertElasticEventToDetectionComment(event, schemaPrefix)
 		case "related":
 			obj, err = convertElasticEventToRelatedEvent(event, schemaPrefix)
 		case "artifact":
 			obj, err = convertElasticEventToArtifact(event, schemaPrefix)
 		case "artifactstream":
 			obj, err = convertElasticEventToArtifactStream(event, schemaPrefix)
+		case "detection":
+			obj, err = convertElasticEventToDetection(event, schemaPrefix)
 		}
 	} else {
 		err = errors.New("Unknown object kind; id=" + event.Id)
@@ -667,7 +835,7 @@ func convertToElasticUpdateRequest(store *ElasticEventstore, criteria *model.Eve
 	var esJson string
 
 	esMap := make(map[string]interface{})
-	esMap["query"] = makeQuery(store, criteria.ParsedQuery, criteria.BeginTime, criteria.EndTime)
+	esMap["query"] = makeQuery(store.fieldDefs, criteria.ParsedQuery, criteria.BeginTime, criteria.EndTime)
 
 	script := make(map[string]string)
 	script["inline"] = strings.Join(criteria.UpdateScripts, "; ")
@@ -707,7 +875,7 @@ func convertObjectToDocumentMap(name string, obj interface{}, schemaPrefix strin
 	return doc
 }
 
-func convertToElasticIndexRequest(store *ElasticEventstore, event map[string]interface{}) (string, error) {
+func convertToElasticIndexRequest(event map[string]interface{}) (string, error) {
 	var err error
 	var esJson string
 
@@ -719,7 +887,7 @@ func convertToElasticIndexRequest(store *ElasticEventstore, event map[string]int
 	return esJson, err
 }
 
-func convertFromElasticIndexResults(store *ElasticEventstore, esJson string, results *model.EventIndexResults) error {
+func convertFromElasticIndexResults(esJson string, results *model.EventIndexResults) error {
 	esResults := make(map[string]interface{})
 	err := json.LoadJson([]byte(esJson), &esResults)
 

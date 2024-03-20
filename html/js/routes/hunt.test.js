@@ -1093,3 +1093,101 @@ test('moveColumnHeader', () => {
   // double check that repopulateEventHeaders was invoked
   expect(comp.eventHeaders).toStrictEqual([{"text":"x", "value":"x"},{"text":"y", "value":"y"},{"text":"z", "value": "z"}]);
 });
+
+test('updateBulkSelector', () => {
+  const selected = { _isSelected: true };
+  const unselected = { _isSelected: false };
+
+  comp.totalEvents = 2;
+
+  expect(comp.selectedCount).toBe(0);
+  expect(comp.selectAllState).toBe(false);
+
+  comp.updateBulkSelector(selected);
+
+  expect(comp.selectedCount).toBe(1);
+  expect(comp.selectAllState).toBe('indeterminate');
+
+  comp.updateBulkSelector(selected);
+
+  expect(comp.selectedCount).toBe(2);
+  expect(comp.selectAllState).toBe(true);
+
+  comp.updateBulkSelector(unselected);
+
+  expect(comp.selectedCount).toBe(1);
+  expect(comp.selectAllState).toBe('indeterminate');
+
+  comp.updateBulkSelector(unselected);
+
+  expect(comp.selectedCount).toBe(0);
+  expect(comp.selectAllState).toBe(false);
+});
+
+test('toggleSelectAll', () => {
+  comp.totalEvents = 11;
+  comp.eventData = [];
+  comp.$refs = {
+    eventTable: {
+      _data: {
+        internalCurrentItems: []
+      }
+    }
+  };
+
+  for (let i = 0; i < comp.totalEvents; i++) {
+    let obj = { _isSelected: i === 0 };
+    comp.eventData.push(obj);
+    if (comp.$refs.eventTable._data.internalCurrentItems.length < 10) {
+      comp.$refs.eventTable._data.internalCurrentItems.push(obj);
+    }
+  }
+
+  comp.selectAllState = 'indeterminate';
+  comp.countSelected();
+
+  expect(comp.selectedCount).toBe(1);
+  expect(comp.isPageSelected()).toBe(false);
+
+  // the comp has 11 eventData, the first 10 are in the eventTable's internalCurrentItems
+  // eventData[0] is the only one selected
+
+  // some selected => none selected
+  comp.toggleSelectAll();
+
+  expect(comp.selectAllState).toBe(false);
+  expect(comp.selectedCount).toBe(0);
+  expect(comp.eventData[0]._isSelected).toBe(false);
+  comp.countSelected();
+  expect(comp.selectedCount).toBe(0);
+  expect(comp.isPageSelected()).toBe(false);
+
+  // none selected => page selected
+  comp.toggleSelectAll();
+
+  expect(comp.selectAllState).toBe('indeterminate');
+  expect(comp.selectedCount).toBe(10);
+  expect(comp.eventData[10]._isSelected).toBe(false);
+  comp.countSelected();
+  expect(comp.selectedCount).toBe(10);
+  expect(comp.isPageSelected()).toBe(true);
+
+  // page selected => all selected
+  comp.selectAllEvents(true, true);
+
+  expect(comp.selectAllState).toBe(true);
+  expect(comp.selectedCount).toBe(11);
+  expect(comp.eventData[10]._isSelected).toBe(true);
+  comp.countSelected();
+  expect(comp.selectedCount).toBe(11);
+  expect(comp.isPageSelected()).toBe(true);
+
+  // all selected => none selected
+  comp.toggleSelectAll();
+
+  expect(comp.selectAllState).toBe(false);
+  expect(comp.selectedCount).toBe(0);
+  comp.countSelected();
+  expect(comp.selectedCount).toBe(0);
+  expect(comp.isPageSelected()).toBe(false);
+});

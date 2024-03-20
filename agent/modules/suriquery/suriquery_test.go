@@ -7,6 +7,7 @@
 package suriquery
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -43,8 +44,29 @@ func TestFindFilesExcludesMalformedNamesAndImpossibleStartTimes(tester *testing.
 	start, _ := time.Parse(time.RFC3339, "2024-02-05T00:00:00Z")
 	stop, _ := time.Parse(time.RFC3339, "2099-02-06T00:00:00Z")
 	files := sq.findFilesInTimeRange(start, stop)
-	assert.Len(tester, files, 1)
-	assert.Equal(tester, files[0], "test_resources/3/so-pcap.1575817346")
+	assert.Len(tester, files, 2)
+	assert.Equal(tester, files[0], "test_resources/1/so-pcap.1575817346.lz4")
+	assert.Equal(tester, files[1], "test_resources/3/so-pcap.1575817346")
+}
+
+func TestDecompress(tester *testing.T) {
+	decompressedFilename := "test_resources/1/so-pcap.1575817346"
+	compressedFilename := decompressedFilename + SURI_LZ4_SUFFIX
+
+	sq := initTest()
+	defer os.Remove(decompressedFilename)
+
+	// Ensure decompressed file does not exist
+	_, statErrBefore := os.Stat(decompressedFilename)
+	assert.Error(tester, statErrBefore, os.ErrNotExist)
+	newPath, err := sq.decompress(compressedFilename)
+	assert.Nil(tester, err)
+	assert.Equal(tester, decompressedFilename, newPath)
+
+	// Ensure decompressed file does exist
+	stats, statErrAfter := os.Stat(decompressedFilename)
+	assert.Nil(tester, err, statErrAfter)
+	assert.Equal(tester, int64(14918), stats.Size())
 }
 
 func TestGetPcapCreateTime(tester *testing.T) {
@@ -85,11 +107,12 @@ func TestStreamPacketsInPcaps(tester *testing.T) {
 	filter.DstIp = "176.126.243.198"
 	filter.DstPort = 34515
 
-	reader, err := sq.streamPacketsInPcaps(paths, filter)
+	reader, size, err := sq.streamPacketsInPcaps(paths, filter)
 	assert.Nil(tester, err)
-	pcap_length := 14122 // correlates to so-pcap test file
+	pcap_length := 14918 // correlates to so-pcap test file
 	bytes := make([]byte, 32768)
 	count, err := reader.Read(bytes)
 	assert.Nil(tester, err)
 	assert.Equal(tester, pcap_length, count)
+	assert.Equal(tester, pcap_length, size)
 }

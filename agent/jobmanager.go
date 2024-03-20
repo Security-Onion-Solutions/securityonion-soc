@@ -101,14 +101,14 @@ func (mgr *JobManager) ProcessJob(job *model.Job) (io.ReadCloser, error) {
 	defer mgr.lock.RUnlock()
 	var reader io.ReadCloser
 	var err error
+
+	job.Size = 0
 	for _, processor := range mgr.jobProcessors {
 		reader, err = processor.ProcessJob(job, reader)
-		if err != nil {
-			log.WithError(err).WithFields(log.Fields{
-				"jobId": job.Id,
-			}).Error("Failed to process job; job processing aborted")
-			break
-		}
+	}
+	if err != nil && reader != nil {
+		// Don't fail all processors if at least one provided some data.
+		err = nil
 	}
 	return reader, err
 }

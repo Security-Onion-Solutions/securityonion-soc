@@ -66,7 +66,7 @@ type FakeDatastore struct {
 func NewFakeDatastore() *FakeDatastore {
 	nodes := make([]*model.Node, 0)
 	nodes = append(nodes, &model.Node{})
-	nodes = append(nodes, &model.Node{})
+	nodes = append(nodes, &model.Node{Status: model.NodeStatusRestart})
 
 	jobs := make([]*model.Job, 0)
 	jobs = append(jobs, &model.Job{})
@@ -170,7 +170,7 @@ func NewFakeServer(authorized bool, roleMap map[string][]string) *Server {
 		roleMap: roleMap,
 	}
 
-	users := make([]*model.User, 0, 0)
+	users := make([]*model.User, 0)
 	users = append(users, &model.User{
 		Id:    "user-id-1",
 		Email: "user1@somewhere.invalid",

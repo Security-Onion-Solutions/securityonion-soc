@@ -8,6 +8,7 @@ package suriquery
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/google/gopacket"
+	"github.com/pierrec/lz4/v4"
 	"github.com/security-onion-solutions/securityonion-soc/agent"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
@@ -30,6 +32,7 @@ const DEFAULT_EPOCH_REFRESH_MS = 120000
 const DEFAULT_DATA_LAG_MS = 120000
 const DEFAULT_PCAP_MAX_COUNT = 999999
 
+const SURI_LZ4_SUFFIX = ".lz4"
 const SURI_PCAP_PREFIX = "so-pcap."
 
 type SuriQuery struct {
@@ -62,7 +65,7 @@ func (suri *SuriQuery) Init(cfg module.ModuleConfig) error {
 	suri.dataLagMs = module.GetIntDefault(cfg, "dataLagMs", DEFAULT_DATA_LAG_MS)
 	suri.pcapMaxCount = module.GetIntDefault(cfg, "pcapMaxCount", DEFAULT_PCAP_MAX_COUNT)
 	if suri.agent == nil {
-		err = errors.New("Unable to invoke JobMgr.AddJobProcessor due to nil agent")
+		err = errors.New("unable to invoke JobMgr.AddJobProcessor due to nil agent")
 	} else {
 		suri.agent.JobMgr.AddJobProcessor(suri)
 	}
@@ -108,16 +111,26 @@ func (suri *SuriQuery) ProcessJob(job *model.Job, reader io.ReadCloser) (io.Read
 			"jobBeginDate":           job.Filter.BeginTime,
 			"jobEndDate":             job.Filter.EndTime,
 		}).Info("Skipping suri processor due to date range conflict")
-		err = errors.New("No data available for the requested dates")
+		err = errors.New("no data available for the requested dates")
 	} else {
 		log.WithFields(log.Fields{
 			"jobId": job.Id,
 		}).Debug("Starting to process new Suricata PCAP job")
 		pcapFiles := suri.findFilesInTimeRange(job.Filter.BeginTime, job.Filter.EndTime)
-		reader, err = suri.streamPacketsInPcaps(pcapFiles, job.Filter)
-		log.WithFields(log.Fields{
-			"err": err,
-		}).Debug("Finished processing PCAP")
+		var newReader io.ReadCloser
+		var size int
+		newReader, size, err = suri.streamPacketsInPcaps(pcapFiles, job.Filter)
+
+		if job.Size > size {
+			log.Warn("Discarding Suricata job output since existing job already has more content from another processor")
+		} else {
+			job.Size = size
+			reader = newReader
+			log.WithFields(log.Fields{
+				"pcapStreamErr":  err,
+				"pcapStreamSize": size,
+			}).Debug("Finished processing PCAP via Suricata")
+		}
 	}
 	return reader, err
 }
@@ -126,16 +139,75 @@ func (suri *SuriQuery) CleanupJob(job *model.Job) {
 	// Noop
 }
 
-func (suri *SuriQuery) streamPacketsInPcaps(paths []string, filter *model.Filter) (io.ReadCloser, error) {
-	allPackets := make([]gopacket.Packet, 0, 0)
+func (suri *SuriQuery) decompress(path string) (string, error) {
+	decompressedPath := strings.TrimSuffix(path, SURI_LZ4_SUFFIX)
+	if decompressedPath != path {
+		inputReader, oerr := os.Open(path)
+		if oerr != nil {
+			return "", oerr
+		}
+		defer inputReader.Close()
+
+		outputWriter, cerr := os.Create(decompressedPath)
+		if cerr != nil {
+			return "", cerr
+		}
+		defer outputWriter.Close()
+
+		lz4Reader := lz4.NewReader(inputReader)
+		count, copyErr := io.Copy(outputWriter, lz4Reader)
+		if copyErr != nil {
+			if strings.Contains(fmt.Sprint(copyErr), "unexpected EOF") {
+				log.WithFields(log.Fields{
+					"decompressedPath": decompressedPath,
+				}).Debug("ignoring EOF error since the filestream is likely still active")
+			} else {
+				return "", copyErr
+			}
+		}
+		log.WithFields(log.Fields{
+			"pcapPath":          path,
+			"decompressedPath":  decompressedPath,
+			"decompressedBytes": count,
+		}).Debug("Decompressed lz4 PCAP file")
+	}
+	return decompressedPath, nil
+}
+
+func (suri *SuriQuery) streamPacketsInPcaps(paths []string, filter *model.Filter) (io.ReadCloser, int, error) {
+	allPackets := make([]gopacket.Packet, 0)
 
 	for _, path := range paths {
-		packets, perr := packet.ParseRawPcap(path, suri.pcapMaxCount, filter)
-		if perr != nil {
-			log.WithError(perr).WithField("pcapPath", path).Error("Failed to parse PCAP file")
+		log.WithFields(log.Fields{
+			"pcapPath": path,
+		}).Debug("Analyzing Suricata PCAP file")
+		decompressedPath, derr := suri.decompress(path)
+		if derr != nil {
+			log.WithError(derr).WithField("pcapPath", path).Error("Failed to decompress PCAP file")
+			continue
 		}
-		if packets != nil && len(packets) > 0 {
+
+		packets, perr := packet.ParseRawPcap(decompressedPath, suri.pcapMaxCount, filter)
+		if perr != nil {
+			log.WithError(perr).WithField("pcapPath", decompressedPath).Error("Failed to parse PCAP file")
+		}
+		if len(packets) > 0 {
+			log.WithFields(log.Fields{
+				"pcapPath":    decompressedPath,
+				"packetCount": len(packets),
+			}).Info("Found matching Suricata packets")
 			allPackets = append(allPackets, packets...)
+		} else {
+			log.WithFields(log.Fields{
+				"pcapPath": decompressedPath,
+			}).Info("No matching Suricata packets found")
+		}
+
+		if path != decompressedPath {
+			rerr := os.Remove(decompressedPath)
+			if rerr != nil {
+				log.WithError(rerr).WithField("pcapPath", decompressedPath).Error("Failed to remove decompressed PCAP file")
+			}
 		}
 	}
 
@@ -143,7 +215,7 @@ func (suri *SuriQuery) streamPacketsInPcaps(paths []string, filter *model.Filter
 		return a.Metadata().Timestamp.Compare(b.Metadata().Timestamp)
 	})
 
-	log.WithField("matchedCount", len(allPackets)).Debug("Finished filtering eligible packets")
+	log.WithField("matchedCount", len(allPackets)).Info("Finished filtering and sorting matching packets")
 
 	return packet.ToStream(allPackets)
 }
@@ -155,7 +227,8 @@ func (suri *SuriQuery) getPcapCreateTime(filepath string) (time.Time, error) {
 	if !strings.HasPrefix(filename, SURI_PCAP_PREFIX) {
 		err = errors.New("unsupported pcap file")
 	} else {
-		secondsStr := strings.TrimLeft(filename, SURI_PCAP_PREFIX)
+		secondsStr := strings.TrimSuffix(filename, SURI_LZ4_SUFFIX)
+		secondsStr = strings.TrimPrefix(secondsStr, SURI_PCAP_PREFIX)
 		var seconds int64
 		seconds, err = strconv.ParseInt(secondsStr, 10, 64)
 		if err == nil {
@@ -166,8 +239,12 @@ func (suri *SuriQuery) getPcapCreateTime(filepath string) (time.Time, error) {
 }
 
 func (suri *SuriQuery) findFilesInTimeRange(start time.Time, stop time.Time) []string {
-	eligibleFiles := make([]string, 0, 0)
+	eligibleFiles := make([]string, 0)
 	err := filepath.Walk(suri.pcapInputPath, func(filepath string, fileinfo os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+
 		if fileinfo.IsDir() {
 			return nil
 		}
@@ -179,20 +256,27 @@ func (suri *SuriQuery) findFilesInTimeRange(start time.Time, stop time.Time) []s
 		}
 
 		modTime := fileinfo.ModTime()
-		log.WithFields(log.Fields{
-			"pcapPath":   filepath,
-			"createTime": createTime,
-			"modTime":    modTime,
-		}).Debug("Reviewing eligibility for PCAP file")
 
+		eligible := false
 		// file was created before the time range but has still open when time range started.
 		if (createTime.Before(start) && modTime.After(start)) ||
 			// file was created and finished in between time range start and stop times
 			(createTime.After(start) && createTime.Before(modTime) && modTime.Before(stop)) ||
 			// file was created before the end of the time range but was still being written to after the time range stop time
 			(createTime.Before(stop) && modTime.After(stop)) {
+
 			eligibleFiles = append(eligibleFiles, filepath)
+			eligible = true
 		}
+		log.WithFields(log.Fields{
+			"pcapPath":   filepath,
+			"createTime": createTime,
+			"modTime":    modTime,
+			"startTime":  start,
+			"stopTime":   stop,
+			"eligible":   eligible,
+		}).Debug("Checked eligibility of Suricata PCAP file")
+
 		return nil
 	})
 	if err != nil {

@@ -51,16 +51,17 @@ func TestParseAndStream(tester *testing.T) {
 
 	packets, perr := ParseRawPcap(path, 999, filter)
 	assert.Nil(tester, perr)
-	assert.Len(tester, packets, 12)
+	assert.Len(tester, packets, 22)
 
-	reader, err := ToStream(packets)
+	reader, size, err := ToStream(packets)
 
 	assert.Nil(tester, err)
-	pcap_length := 14122 // correlates to so-pcap test file
+	pcap_length := 14918 // correlates to so-pcap test file
 	bytes := make([]byte, 32768)
 	count, err := reader.Read(bytes)
 	assert.Nil(tester, err)
 	assert.Equal(tester, pcap_length, count)
+	assert.Equal(tester, pcap_length, size)
 }
 
 func TestParseWrongProtocol(tester *testing.T) {
@@ -96,15 +97,15 @@ func TestParseAndStreamIcmp(tester *testing.T) {
 	filter.EndTime = endTime
 	filter.Protocol = model.PROTOCOL_ICMP
 	filter.SrcIp = "90.151.225.16"
-	filter.SrcPort = 19
+	filter.SrcPort = 19 // will be ignored since Protocol = ICMP
 	filter.DstIp = "192.168.10.128"
-	filter.DstPort = 34515
+	filter.DstPort = 34515 // will be ignored since Protocol = ICMP
 
 	packets, perr := ParseRawPcap(path, 999, filter)
 	assert.Nil(tester, perr)
 	assert.Len(tester, packets, 2)
 
-	reader, err := ToStream(packets)
+	reader, size, err := ToStream(packets)
 
 	assert.Nil(tester, err)
 	pcap_length := 196 // correlates to two icmp packets in icmp.pcap
@@ -112,4 +113,22 @@ func TestParseAndStreamIcmp(tester *testing.T) {
 	count, err := reader.Read(bytes)
 	assert.Nil(tester, err)
 	assert.Equal(tester, pcap_length, count)
+	assert.Equal(tester, pcap_length, size)
+}
+
+func TestCreateBpf(tester *testing.T) {
+	filter := model.NewFilter()
+	startTime, _ := time.Parse(time.RFC3339, "2024-02-12T00:00:00Z")
+	filter.BeginTime = startTime
+	endTime, _ := time.Parse(time.RFC3339, "2024-02-12T23:59:59Z")
+	filter.EndTime = endTime
+	filter.Protocol = model.PROTOCOL_ICMP
+	filter.SrcIp = "90.151.225.16"
+	filter.SrcPort = 19 // will be ignored since Protocol = ICMP
+	filter.DstIp = "192.168.10.128"
+	filter.DstPort = 34515 // will be ignored since Protocol = ICMP
+
+	actual := createBpf(filter)
+	expected := "(icmp and host 90.151.225.16 and host 192.168.10.128) or (vlan and icmp and host 90.151.225.16 and host 192.168.10.128)"
+	assert.Equal(tester, expected, actual)
 }

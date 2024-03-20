@@ -7,12 +7,16 @@
 package model
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/apex/log"
 )
+
+var indexExtractor = regexp.MustCompile(`_index:[ \t]?"([^ \t]+)"`)
+var kindExtractor = regexp.MustCompile(`so_kind:[ \t]?"([^ \t]+)"`)
 
 type EventResults struct {
 	CreateTime   time.Time `json:"createTime"`
@@ -40,7 +44,7 @@ type EventSearchResults struct {
 
 func NewEventSearchResults() *EventSearchResults {
 	results := &EventSearchResults{
-		Events:  make([]*EventRecord, 0, 0),
+		Events:  make([]*EventRecord, 0),
 		Metrics: make(map[string]([]*EventMetric)),
 	}
 	results.initEventResults()
@@ -62,6 +66,7 @@ type EventSearchCriteria struct {
 	CreateTime  time.Time
 	ParsedQuery *Query
 	SortFields  []*SortCriteria
+	SearchAfter []interface{}
 }
 
 func (criteria *EventSearchCriteria) initSearchCriteria() {
@@ -128,6 +133,7 @@ type EventRecord struct {
 	Type      string                 `json:"type"`
 	Score     float64                `json:"score"`
 	Payload   map[string]interface{} `json:"payload"`
+	Sort      []interface{}          `json:"sort"`
 }
 
 type EventUpdateCriteria struct {

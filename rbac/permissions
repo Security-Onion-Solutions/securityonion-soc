@@ -29,7 +29,10 @@ roles/write:      user-admin
 users/read:       user-monitor
 users/write:      user-admin
 users/delete:     user-admin
-
+detection/read:   agent
+detection/write:  agent
+detection/read:   event-monitor
+detection/write:  event-admin
 
 # Define low-level permission set inheritence relationships
 # Syntax      => roleB: roleA

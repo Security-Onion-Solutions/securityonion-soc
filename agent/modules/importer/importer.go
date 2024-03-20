@@ -113,9 +113,32 @@ func (importer *Importer) ProcessJob(job *model.Job, reader io.ReadCloser) (io.R
 		}).Debug("Executed tcpdump")
 		if err == nil {
 			var file *os.File
+			var info os.FileInfo
 			file, err = os.Open(pcapOutputFilepath)
 			if err == nil {
-				reader = file
+				info, err = os.Stat(pcapOutputFilepath)
+				if err != nil {
+					log.WithError(err).WithFields(log.Fields{
+						"pcapPath": pcapOutputFilepath,
+					}).Error("Failed to collect output file stats")
+				} else {
+					size := int(info.Size())
+					log.WithFields(log.Fields{
+						"pcapPath": pcapOutputFilepath,
+						"pcapSize": size,
+						"jobSize":  job.Size,
+					}).Debug("Found matching packets")
+					if job.Size > size {
+						log.Warn("Discarding Importer job output since existing job already has more content from another processor")
+					} else {
+						job.Size = size
+						reader = file
+						log.WithFields(log.Fields{
+							"pcapStreamErr":  err,
+							"pcapStreamSize": size,
+						}).Debug("Finished processing PCAP via Importer")
+					}
+				}
 			}
 		}
 	}

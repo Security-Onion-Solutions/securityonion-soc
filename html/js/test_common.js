@@ -154,6 +154,8 @@ global.JobStatusDeleted = 3;
 global.moment = require('./external/moment-2.29.4.min.js');
 global.marked = require('./external/marked-11.1.0.min.js');
 global.DOMPurify = require('./external/purify-3.0.6.min.js');
+global.jsyaml = require('./external/js-yaml.4.1.0.min.js');
+global.LZString = require('./external/lz-string.1.5.0.min.js');
 
 // polyfill for out of date packages we can't import
 moment.tz = {

@@ -21,6 +21,7 @@ func TestVerifyClientParameters(tester *testing.T) {
 	assert.Zero(tester, params.ApiTimeoutMs)
 	assert.Zero(tester, params.CacheExpirationMs)
 	assert.False(tester, params.CasesEnabled)
+	assert.False(tester, params.DetectionsEnabled)
 	verifyInitialHuntingParams(tester, &params.HuntingParams)
 	verifyInitialHuntingParams(tester, &params.AlertingParams)
 	verifyInitialHuntingParams(tester, &params.CasesParams)

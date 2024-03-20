@@ -499,3 +499,135 @@ td {
 .theme--light .resolved-host {
   color: rgba(0, 0, 0, 0.5);
 }
+
+.multiselect-container {
+  width: 100%;
+  position: relative;
+  display: flex;
+  justify-content: flex-start;
+}
+
+#multiselect-checkbox {
+  display: inline-block;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.detection-selection {
+  display: inline-block;
+  vertical-align: sub;
+}
+
+.selection-counter {
+  margin-left: auto;
+  padding-right: 12px;
+}
+
+.bulk-actions {
+  display: inline-block;
+  max-width: 100px;
+  margin: 0 4px;
+}
+
+.detection-hunt-btn {
+  margin-top: 20px;
+}
+
+.summary-backdrop {
+  background-color: rgb(53, 53, 53);
+  border-radius: 4px;
+}
+
+.summary-backdrop > div {
+  background-color: #2a2a2a;
+  border-radius: 4px;
+  padding: 16px;
+}
+
+.header {
+  font-size: 1.3em;
+  font-weight: bold;
+}
+
+.header:not(:first-child) {
+  margin-top: 16px;
+}
+
+.extracted-content {
+  background-color: #404040;
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.extracted-content > pre {
+  text-wrap: wrap;
+  word-break: break-word;
+}
+
+.detect-reference {
+  font-size: small;
+  display: table;
+  margin-top: 12px;
+  margin-left: 12px;
+}
+
+.detect-reference > div {
+  display: table-row;
+}
+
+.detect-reference > div > div {
+  display: table-cell;
+  padding: 0 4px;
+}
+
+.detect-reference .key {
+  font-weight: bold;
+  text-align: right;
+}
+
+.ops-header {
+  font-weight: bold;
+  margin-top: 16px;
+}
+
+.ops-value > .v-input--selection-controls {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  height: 24px !important;
+}
+
+#ops-buttons {
+  margin-top: 12px;
+  display: grid;
+  grid-auto-flow: column;
+  justify-items: stretch;
+  grid-template-columns: 50% 50%;
+  grid-gap: 12px;
+}
+
+.case-title {
+  text-transform: capitalize;
+}
+
+.sigma-dialog-body {
+  background-color: #404040;
+  margin: 12px;
+  padding: 12px;
+}
+
+#convert-button-container {
+  display: flex;
+  flex-direction: row;
+  justify-content: end;
+  padding: 24px;
+}
+
+#convert-button-container > * {
+  margin-left: 12px;
+}
+
+#actionTuneDetection-disabled {
+  color: gray;
+  cursor: pointer;
+}

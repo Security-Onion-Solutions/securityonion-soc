@@ -158,7 +158,8 @@ test('loadServerSettings', async () => {
       tipTimeoutMs: 222,
       tools: [{"name": "tool1"},{"name": "tool2"}],
       inactiveTools: ['tool2'],
-      casesEnabled: true
+      casesEnabled: true,
+      detectionsEnabled: true,
     },
     elasticVersion: 'myElasticVersion',
     timezones: ['UTC'],
@@ -166,6 +167,7 @@ test('loadServerSettings', async () => {
   };
 
   expect(app.casesEnabled).toBe(false);
+  expect(app.detectionsEnabled).toBe(false);
   const getElementByIdMock = global.document.getElementById = jest.fn().mockReturnValueOnce(true);
   resetPapi();
   const mock = mockPapi("get", {data: fakeInfo});
@@ -186,6 +188,7 @@ test('loadServerSettings', async () => {
   expect(app.tools[1].name).toBe('tool2');
   expect(app.tools[1].enabled).toBe(false);
   expect(app.casesEnabled).toBe(true);
+  expect(app.detectionsEnabled).toBe(true);
   expect(app.papi.defaults.headers.common['X-Srv-Token']).toBe('xyz');
 });
 
