@@ -1232,10 +1232,10 @@
                     </div>
                     <div class="d-flex align-center align-self-end text-body-2 mt-2">
                       <div class="d-inline-flex justify-end">
-                        <v-btn text small color="primary" class="align-self-end" @click="resetForm()">
+                        <v-btn id="detection-comment-cancel" text small color="primary" class="align-self-end" @click="resetForm()">
                         {{ i18n.cancel }}
                         </v-btn>
-                        <v-btn :disabled="!commentsForm.valid" text small color="primary" class="align-self-end" @click="addComment()">
+                        <v-btn id="detection-comment-add" :disabled="!commentsForm.valid" text small color="primary" class="align-self-end" @click="addComment()">
                         {{ origComment ? i18n.update : i18n.add }}
                         </v-btn>
                       </div>
@@ -1245,12 +1245,6 @@
               </v-tab-item>
               <v-tab-item value="source">
                 <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
-                  <!-- PublicID -->
-                  <v-text-field id="detection-publicId-edit" v-model="detect.publicId" :readonly="detect.isCommunity" :rules="requestRules([rules.required, rules.minLength(5)])" persistent-hint :hint="i18n.publicId" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)">
-                    <template v-slot:append v-if="!detect.publicId && !detect.isCommunity">
-                      <v-btn id="gen-public-id" text small color="primary" @click="extractPublicID()">{{i18n.extract}}</v-btn>
-                    </template>
-                  </v-text-field>
                   <!-- Signature -->
                   <v-textarea class="config-editor mt-2" :readonly="detect.isCommunity" outlined v-model="detect.content" auto-grow rows="15" />
                 </div>

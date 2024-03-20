@@ -1526,9 +1526,13 @@ func TestDeleteDetectionComment(t *testing.T) {
 	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 
 	body1 := `{"result":"deleted", "_id":"ABC123"}`
+	body2 := `{"result":"created", "_id":"DEF456"}`
 
 	mocktrans.AddResponse(&http.Response{
 		Body: io.NopCloser(strings.NewReader(body1)),
+	})
+	mocktrans.AddResponse(&http.Response{
+		Body: io.NopCloser(strings.NewReader(body2)),
 	})
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
@@ -1538,7 +1542,7 @@ func TestDeleteDetectionComment(t *testing.T) {
 
 	reqs := mocktrans.GetRequests()
 
-	assert.Equal(t, 1, len(reqs))
+	assert.Equal(t, 2, len(reqs))
 	assert.Equal(t, http.MethodDelete, reqs[0].Method)
 }
 

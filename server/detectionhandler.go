@@ -40,7 +40,7 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Get("/{id}", h.getDetection)
 		r.Get("/public/{publicid}", h.getByPublicId)
 
-		r.Post("/", h.postDetection)
+		r.Post("/", h.createDetection)
 		r.Post("/{id}/duplicate", h.duplicateDetection)
 
 		r.Post("/{id}/comment", h.createComment)
@@ -52,7 +52,7 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Get("/{id}/history", h.getDetectionHistory)
 		r.Post("/convert", h.convertContent)
 
-		r.Put("/", h.putDetection)
+		r.Put("/", h.updateDetection)
 
 		r.Delete("/{id}", h.deleteDetection)
 
@@ -104,7 +104,7 @@ func (h *DetectionHandler) getByPublicId(w http.ResponseWriter, r *http.Request)
 	web.Respond(w, r, http.StatusOK, detections[0])
 }
 
-func (h *DetectionHandler) postDetection(w http.ResponseWriter, r *http.Request) {
+func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	detect := &model.Detection{}
@@ -222,7 +222,7 @@ func (h *DetectionHandler) duplicateDetection(w http.ResponseWriter, r *http.Req
 	web.Respond(w, r, http.StatusOK, detect)
 }
 
-func (h *DetectionHandler) putDetection(w http.ResponseWriter, r *http.Request) {
+func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	detect := &model.Detection{}

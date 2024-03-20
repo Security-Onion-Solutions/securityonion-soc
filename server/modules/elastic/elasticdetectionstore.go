@@ -222,30 +222,7 @@ func (store *ElasticDetectionstore) Index(ctx context.Context, index string, doc
 	return results, err
 }
 
-func (store *ElasticDetectionstore) Delete(ctx context.Context, index string, id string) error {
-	results := model.NewEventIndexResults()
-
-	err := store.server.CheckAuthorized(ctx, "write", "detection")
-	if err != nil {
-		return err
-	}
-
-	var response string
-	log.Debug("Sending delete request to primary Elasticsearch client")
-	response, err = store.deleteDocument(ctx, store.disableCrossClusterIndex(index), id)
-	if err == nil {
-		err = convertFromElasticIndexResults(response, results)
-		if err != nil {
-			log.WithError(err).Error("Encountered error while converting document index results")
-		}
-	} else {
-		log.WithError(err).Error("Encountered error while deleting document from elasticsearch")
-	}
-
-	return err
-}
-
-func (store *ElasticDetectionstore) deleteDocument(ctx context.Context, index string, id string) (string, error) {
+func (store *ElasticDetectionstore) deleteDocument(ctx context.Context, index string, obj interface{}, kind string, id string) (string, error) {
 	log.WithFields(log.Fields{
 		"index":     index,
 		"id":        id,
@@ -263,6 +240,19 @@ func (store *ElasticDetectionstore) deleteDocument(ctx context.Context, index st
 		return "", err
 	}
 	defer res.Body.Close()
+
+	document := convertObjectToDocumentMap(kind, obj, store.schemaPrefix)
+	document[store.schemaPrefix+AUDIT_DOC_ID] = id
+	document[store.schemaPrefix+"kind"] = kind
+	document[store.schemaPrefix+"operation"] = "delete"
+	err = store.audit(ctx, document, id)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"documentId": id,
+			"detectionKind":       kind,
+		}).WithError(err).Error("Object deleted successfully however audit record failed to index")
+	}
+
 	json, err := readJsonFromResponse(res)
 
 	log.WithFields(log.Fields{
@@ -665,7 +655,7 @@ func (store *ElasticDetectionstore) DeleteDetection(ctx context.Context, id stri
 		return nil, err
 	}
 
-	err = store.Delete(ctx, store.index, id)
+	_, err = store.deleteDocument(ctx, store.disableCrossClusterIndex(store.index), detect, "detection", id)
 
 	return detect, err
 }
@@ -875,11 +865,11 @@ func (store *ElasticDetectionstore) UpdateComment(ctx context.Context, comment *
 }
 
 func (store *ElasticDetectionstore) DeleteComment(ctx context.Context, id string) error {
-	_, err := store.GetComment(ctx, id)
+	dc, err := store.GetComment(ctx, id)
 	if err != nil {
 		return err
 	}
 
-	_, err = store.deleteDocument(ctx, store.index, id)
+	_, err = store.deleteDocument(ctx, store.disableCrossClusterIndex(store.index), dc, "detectioncomment", id)
 	return err
 }
