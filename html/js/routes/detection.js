@@ -663,8 +663,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			try {
 				this.$root.startLoading();
 				await this.$root.papi.delete('/detection/' + encodeURIComponent(this.$route.params.id));
-				this.$root.stopLoading();
-
 				this.$router.push({ name: 'detections' });
 			} catch (error) {
 				this.$root.showError(error);

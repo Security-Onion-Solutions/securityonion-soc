@@ -249,7 +249,7 @@ func (store *ElasticDetectionstore) deleteDocument(ctx context.Context, index st
 	if err != nil {
 		log.WithFields(log.Fields{
 			"documentId": id,
-			"kind":       kind,
+			"detectionKind":       kind,
 		}).WithError(err).Error("Object deleted successfully however audit record failed to index")
 	}
 
