@@ -41,11 +41,6 @@ type IOManager interface {
 	ExecCommand(cmd *exec.Cmd) ([]byte, int, time.Duration, error)
 }
 
-type yaraRepo struct {
-	Repo    string `json:"repo"`
-	License string `json:"license"`
-}
-
 type StrelkaEngine struct {
 	srv                                  *server.Server
 	isRunning                            bool
@@ -53,7 +48,7 @@ type StrelkaEngine struct {
 	communityRulesImportFrequencySeconds int
 	yaraRulesFolder                      string
 	reposFolder                          string
-	rulesRepos                           []*yaraRepo
+	rulesRepos                           []*module.RuleRepo
 	compileYaraPythonScriptPath          string
 	allowRegex                           *regexp.Regexp
 	denyRegex                            *regexp.Regexp
@@ -83,7 +78,12 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 	e.compileRules = module.GetBoolDefault(config, "compileRules", true)
 	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", false)
 
-	e.rulesRepos, err = getYaraRepos(config)
+	e.rulesRepos, err = module.GetReposDefault(config, "rulesRepos", []*module.RuleRepo{
+		{
+			Repo:    "https://github.com/Security-Onion-Solutions/securityonion-yara",
+			License: "DRL",
+		},
+	})
 	if err != nil {
 		return fmt.Errorf("unable to parse Strelka's rulesRepos: %w", err)
 	}
@@ -107,50 +107,6 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 	}
 
 	return nil
-}
-
-func getYaraRepos(cfg module.ModuleConfig) ([]*yaraRepo, error) {
-	cfgInter, ok := cfg["rulesRepos"]
-	if !ok {
-		// config doesn't have any rulesRepos, no error, return defaults
-		return []*yaraRepo{
-			{
-				Repo:    "https://github.com/Security-Onion-Solutions/securityonion-yara",
-				License: "DRL",
-			},
-		}, nil
-	}
-
-	repoMaps, ok := cfgInter.([]interface{})
-	if !ok {
-		return nil, fmt.Errorf(`top level config value "rulesRepos" is not an array of objects`)
-	}
-
-	repos := make([]*yaraRepo, 0, len(repoMaps))
-
-	for _, repoMap := range repoMaps {
-		obj, ok := repoMap.(map[string]interface{})
-		if !ok {
-			return nil, fmt.Errorf(`"rulesRepo" entry is not an object`)
-		}
-
-		repo, ok := obj["repo"].(string)
-		if !ok {
-			return nil, fmt.Errorf(`missing "repo" link from "rulesRepo" entry`)
-		}
-
-		license, ok := obj["license"].(string)
-		if !ok {
-			return nil, fmt.Errorf(`missing "license" from "rulesRepo" entry`)
-		}
-
-		repos = append(repos, &yaraRepo{
-			Repo:    repo,
-			License: license,
-		})
-	}
-
-	return repos, nil
 }
 
 func (e *StrelkaEngine) Start() error {
@@ -252,7 +208,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			existingRepos[entry.Name()] = struct{}{}
 		}
 
-		upToDate := map[string]*yaraRepo{}
+		upToDate := map[string]*module.RuleRepo{}
 
 		if e.autoUpdateEnabled {
 			// pull or clone repos

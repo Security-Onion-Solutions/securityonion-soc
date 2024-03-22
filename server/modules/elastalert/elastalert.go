@@ -16,8 +16,10 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -25,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-git/go-git/v5"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -48,6 +51,7 @@ type IOManager interface {
 	ReadDir(path string) ([]os.DirEntry, error)
 	MakeRequest(*http.Request) (*http.Response, error)
 	ExecCommand(cmd *exec.Cmd) ([]byte, int, time.Duration, error)
+	WalkDir(root string, fn fs.WalkDirFunc) error
 }
 
 type ElastAlertEngine struct {
@@ -57,6 +61,8 @@ type ElastAlertEngine struct {
 	elastAlertRulesFolder                string
 	rulesFingerprintFile                 string
 	sigmaRulePackages                    []string
+	rulesRepos                           []*module.RuleRepo
+	reposFolder                          string
 	isRunning                            bool
 	thread                               *sync.WaitGroup
 	allowRegex                           *regexp.Regexp
@@ -76,7 +82,7 @@ func (e *ElastAlertEngine) PrerequisiteModules() []string {
 	return nil
 }
 
-func (e *ElastAlertEngine) Init(config module.ModuleConfig) error {
+func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.thread = &sync.WaitGroup{}
 
 	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", 86400)
@@ -87,6 +93,17 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) error {
 
 	pkgs := module.GetStringArrayDefault(config, "sigmaRulePackages", []string{"core", "emerging_threats_addon"})
 	e.parseSigmaPackages(pkgs)
+
+	e.reposFolder = module.GetStringDefault(config, "reposFolder", "/opt/sensoroni/sigma/repos")
+	e.rulesRepos, err = module.GetReposDefault(config, "rulesRepos", []*module.RuleRepo{
+		{
+			Repo:    "https://github.com/Security-Onion-Solutions/securityonion-resources",
+			License: "DRL",
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("unable to parse ElastAlert's rulesRepos: %w", err)
+	}
 
 	allow := module.GetStringDefault(config, "allowRegex", "")
 	deny := module.GetStringDefault(config, "denyRegex", "")
@@ -308,12 +325,22 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			templateFound = true
 		}
 
+		var allRepos map[string]*module.RuleRepo
+		var repoChanges bool
+
 		var zips map[string][]byte
 		var errMap map[string]error
 		if e.autoUpdateEnabled {
-			zips, errMap = e.downloadSigmaPackages(ctx)
+			zips, errMap = e.downloadSigmaPackages()
 			if len(errMap) != 0 {
 				log.WithField("errorMap", errMap).Error("something went wrong downloading sigma packages")
+				continue
+			}
+
+			var err error
+			allRepos, repoChanges, err = e.updateRepos()
+			if err != nil {
+				log.WithError(err).Error("unable to update sigma repos")
 				continue
 			}
 		} else {
@@ -344,7 +371,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 				continue
 			}
 
-			if reflect.DeepEqual(oldHashes, zipHashes) {
+			if reflect.DeepEqual(oldHashes, zipHashes) && !repoChanges {
 				// only an exact match means no work needs to be done.
 				// If there's extra hashes in the old file, we need to remove them.
 				// If there's extra hashes in the new file, we need to add them.
@@ -355,11 +382,19 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			}
 		}
 
-		detections, errMap := e.parseRules(zips)
+		detections, errMap := e.parseZipRules(zips)
 		if errMap != nil {
 			log.WithField("error", errMap).Error("something went wrong while parsing sigma rule files")
 			continue
 		}
+
+		repoDets, errMap := e.parseRepoRules(allRepos)
+		if errMap != nil {
+			log.WithField("error", errMap).Error("something went wrong while parsing sigma rule files")
+			continue
+		}
+
+		detections = append(detections, repoDets...)
 
 		errMap, err = e.syncCommunityDetections(ctx, detections)
 		if err != nil {
@@ -398,7 +433,89 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 	}
 }
 
-func (e *ElastAlertEngine) parseRules(pkgZips map[string][]byte) (detections []*model.Detection, errMap map[string]error) {
+func (e *ElastAlertEngine) updateRepos() (allRepos map[string]*module.RuleRepo, anythingNew bool, err error) {
+	allRepos = map[string]*module.RuleRepo{} // map[repoPath]repo
+
+	// read existing repos
+	entries, err := os.ReadDir(e.reposFolder)
+	if err != nil {
+		log.WithError(err).Error("Failed to read sigma repos folder")
+		return nil, false, err
+	}
+
+	existingRepos := map[string]struct{}{}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		existingRepos[entry.Name()] = struct{}{}
+	}
+
+	// pull or clone repos
+	for _, repo := range e.rulesRepos {
+		parser, err := url.Parse(repo.Repo)
+		if err != nil {
+			log.WithError(err).WithField("repo", repo).Error("Failed to parse repo URL, doing nothing with it")
+			continue
+		}
+
+		_, lastFolder := path.Split(parser.Path)
+		repoPath := filepath.Join(e.reposFolder, lastFolder)
+
+		allRepos[repoPath] = repo
+
+		if _, ok := existingRepos[lastFolder]; ok {
+			// repo already exists, pull
+			gitrepo, err := git.PlainOpen(repoPath)
+			if err != nil {
+				log.WithError(err).WithField("repo", gitrepo).Error("Failed to open repo, doing nothing with it")
+				continue
+			}
+
+			work, err := gitrepo.Worktree()
+			if err != nil {
+				log.WithError(err).WithField("repo", gitrepo).Error("Failed to get worktree, doing nothing with it")
+				continue
+			}
+
+			ctx, cancel := context.WithTimeout(e.srv.Context, time.Minute*5)
+
+			err = work.PullContext(ctx, &git.PullOptions{
+				Depth:        1,
+				SingleBranch: true,
+			})
+			if err != nil && err != git.NoErrAlreadyUpToDate {
+				cancel()
+				log.WithError(err).WithField("repo", repo).Error("Failed to pull repo, doing nothing with it")
+				continue
+			}
+			cancel()
+
+			if err == nil {
+				anythingNew = true
+			}
+		} else {
+			// repo does not exist, clone
+			_, err = git.PlainClone(repoPath, false, &git.CloneOptions{
+				Depth:        1,
+				SingleBranch: true,
+				URL:          repo.Repo,
+			})
+			if err != nil {
+				log.WithError(err).WithField("repo", repo).Error("Failed to clone repo, doing nothing with it")
+				continue
+			}
+
+			anythingNew = true
+		}
+	}
+
+	return allRepos, anythingNew, nil
+}
+
+func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detections []*model.Detection, errMap map[string]error) {
 	errMap = map[string]error{} // map[pkgName|fileName]error
 	defer func() {
 		if len(errMap) == 0 {
@@ -450,40 +567,62 @@ func (e *ElastAlertEngine) parseRules(pkgZips map[string][]byte) (detections []*
 				continue
 			}
 
-			id := rule.Title
+			det := rule.ToDetection(string(data), pkg, model.LicenseDRL)
 
-			if rule.ID != nil {
-				id = *rule.ID
+			detections = append(detections, det)
+		}
+	}
+
+	return detections, errMap
+}
+
+func (e *ElastAlertEngine) parseRepoRules(allRepos map[string]*module.RuleRepo) (detections []*model.Detection, errMap map[string]error) {
+	errMap = map[string]error{} // map[repoName]error
+	defer func() {
+		if len(errMap) == 0 {
+			errMap = nil
+		}
+	}()
+
+	for repopath, repo := range allRepos {
+		err := e.WalkDir(repopath, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				log.WithError(err).WithField("path", path).Error("Failed to walk path")
+				return nil
 			}
 
-			sev := model.SeverityUnknown
-
-			if rule.Level != nil {
-				switch strings.ToLower(string(*rule.Level)) {
-				case "informational":
-					sev = model.SeverityInformational
-				case "low":
-					sev = model.SeverityLow
-				case "medium":
-					sev = model.SeverityMedium
-				case "high":
-					sev = model.SeverityHigh
-				case "critical":
-					sev = model.SeverityCritical
-				}
+			if d.IsDir() {
+				return nil
 			}
 
-			detections = append(detections, &model.Detection{
-				PublicID:    id,
-				Title:       rule.Title,
-				Severity:    sev,
-				Content:     string(data),
-				IsCommunity: true,
-				Engine:      model.EngineNameElastAlert,
-				Language:    model.SigLangSigma,
-				Ruleset:     util.Ptr(pkg),
-				License:     model.LicenseDRL,
-			})
+			ext := filepath.Ext(d.Name())
+			if strings.ToLower(ext) != ".yml" && strings.ToLower(ext) != ".yaml" {
+				return nil
+			}
+
+			raw, err := e.ReadFile(path)
+			if err != nil {
+				log.WithError(err).WithField("file", path).Error("failed to read yara rule file")
+				return nil
+			}
+
+			rule, err := ParseElastAlertRule(raw)
+			if err != nil {
+				errMap[path] = err
+				return nil
+			}
+
+			ruleset := filepath.Base(repopath)
+
+			det := rule.ToDetection(string(raw), ruleset, repo.License)
+
+			detections = append(detections, det)
+
+			return nil
+		})
+		if err != nil {
+			log.WithError(err).WithField("repo", repopath).Error("Failed to walk repo")
+			continue
 		}
 	}
 
@@ -612,7 +751,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 	return errMap, nil
 }
 
-func (e *ElastAlertEngine) downloadSigmaPackages(ctx context.Context) (zipData map[string][]byte, errMap map[string]error) {
+func (e *ElastAlertEngine) downloadSigmaPackages() (zipData map[string][]byte, errMap map[string]error) {
 	errMap = map[string]error{} // map[pkgName]error
 	defer func() {
 		if len(errMap) == 0 {
@@ -940,4 +1079,8 @@ func (_ *ResourceManager) ExecCommand(cmd *exec.Cmd) (output []byte, exitCode in
 	exitCode = cmd.ProcessState.ExitCode()
 
 	return output, exitCode, runtime, err
+}
+
+func (_ *ResourceManager) WalkDir(root string, fn fs.WalkDirFunc) error {
+	return filepath.WalkDir(root, fn)
 }
