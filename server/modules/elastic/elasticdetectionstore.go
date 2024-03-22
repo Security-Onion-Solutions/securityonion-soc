@@ -248,8 +248,8 @@ func (store *ElasticDetectionstore) deleteDocument(ctx context.Context, index st
 	err = store.audit(ctx, document, id)
 	if err != nil {
 		log.WithFields(log.Fields{
-			"documentId": id,
-			"detectionKind":       kind,
+			"documentId":    id,
+			"detectionKind": kind,
 		}).WithError(err).Error("Object deleted successfully however audit record failed to index")
 	}
 
@@ -557,7 +557,7 @@ func (store *ElasticDetectionstore) UpdateDetection(ctx context.Context, detect 
 
 		detect = old
 
-		log.Infof("existing detection %s is a community rule, only updating IsEnabled, IsReporting, Note, and Overrides", detect.Id)
+		log.Infof("existing detection %s is a community rule, only updating IsEnabled, IsReporting, and Overrides", detect.Id)
 	} else if detect.IsCommunity {
 		return nil, errors.New("cannot update an existing non-community detection to make it a community detection")
 	}
