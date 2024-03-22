@@ -249,15 +249,15 @@ func createManager(status string, available []string, licenseKey *LicenseKey, st
 	go startPillarMonitor()
 
 	log.WithFields(log.Fields{
-		"status":     manager.status,
-		"available":  manager.available,
-		"features":   manager.licenseKey.Features,
-		"effective":  manager.licenseKey.Effective,
-		"expiration": manager.licenseKey.Expiration,
-		"users":      manager.licenseKey.Users,
-		"nodes":      manager.licenseKey.Nodes,
-		"socUrl":     manager.licenseKey.SocUrl,
-		"dataUrl":    manager.licenseKey.DataUrl,
+		"licenseStatus":     manager.status,
+		"licenseAvailable":  manager.available,
+		"licenseFeatures":   manager.licenseKey.Features,
+		"licenseEffective":  manager.licenseKey.Effective,
+		"licenseExpiration": manager.licenseKey.Expiration,
+		"licenseUsers":      manager.licenseKey.Users,
+		"licenseNodes":      manager.licenseKey.Nodes,
+		"licenseSocUrl":     manager.licenseKey.SocUrl,
+		"licenseDataUrl":    manager.licenseKey.DataUrl,
 	}).Info("Initialized license manager")
 }
 
