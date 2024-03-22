@@ -99,6 +99,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 		{
 			Repo:    "https://github.com/Security-Onion-Solutions/securityonion-resources",
 			License: "DRL",
+			Folder:  util.Ptr("sigma/stable"),
 		},
 	})
 	if err != nil {
@@ -585,7 +586,12 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos map[string]*module.RuleRepo) 
 	}()
 
 	for repopath, repo := range allRepos {
-		err := e.WalkDir(repopath, func(path string, d fs.DirEntry, err error) error {
+		baseDir := repopath
+		if repo.Folder != nil {
+			baseDir = filepath.Join(baseDir, *repo.Folder)
+		}
+
+		err := e.WalkDir(baseDir, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				log.WithError(err).WithField("path", path).Error("Failed to walk path")
 				return nil

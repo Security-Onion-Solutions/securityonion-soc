@@ -132,6 +132,7 @@ func TestGetRepos(t *testing.T) {
 					map[string]interface{}{
 						"repo":    "repo2",
 						"license": "GPL2",
+						"folder":  "sigma/stable",
 					},
 					map[string]interface{}{
 						"repo":    "repo3",
@@ -147,6 +148,7 @@ func TestGetRepos(t *testing.T) {
 				{
 					Repo:    "repo2",
 					License: "GPL2",
+					Folder:  util.Ptr("sigma/stable"),
 				},
 				{
 					Repo:    "repo3",

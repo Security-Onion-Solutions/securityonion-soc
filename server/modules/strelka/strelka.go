@@ -290,7 +290,12 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 		// parse *.yar files in repos
 		for repopath, repo := range upToDate {
-			err = filepath.WalkDir(repopath, func(path string, d fs.DirEntry, err error) error {
+			baseDir := repopath
+			if repo.Folder != nil {
+				baseDir = filepath.Join(baseDir, *repo.Folder)
+			}
+
+			err = filepath.WalkDir(baseDir, func(path string, d fs.DirEntry, err error) error {
 				if err != nil {
 					log.WithError(err).WithField("path", path).Error("Failed to walk path")
 					return nil

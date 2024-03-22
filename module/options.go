@@ -99,6 +99,7 @@ func GetStringArrayDefault(options map[string]interface{}, key string, dflt []st
 type RuleRepo struct {
 	Repo    string
 	License string
+	Folder  *string
 }
 
 func GetReposDefault(cfg ModuleConfig, field string, dflt []*RuleRepo) ([]*RuleRepo, error) {
@@ -131,10 +132,17 @@ func GetReposDefault(cfg ModuleConfig, field string, dflt []*RuleRepo) ([]*RuleR
 			return nil, fmt.Errorf(`missing "license" from "%s" entry`, field)
 		}
 
-		repos = append(repos, &RuleRepo{
+		r := &RuleRepo{
 			Repo:    repo,
 			License: license,
-		})
+		}
+
+		folder, ok := obj["folder"].(string)
+		if ok {
+			r.Folder = &folder
+		}
+
+		repos = append(repos, r)
 	}
 
 	return repos, nil
