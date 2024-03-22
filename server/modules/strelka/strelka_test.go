@@ -66,8 +66,8 @@ rule MetadataExample {
 		reference = "http://somewhere.invalid"
 		description = "Example Rule"
 		my_identifier_1 = "Some string data"
-		mY_iDeNtIfIeR_2 = 24
-		MY_IDENTIFIER_3 = true
+		mY_iDeNtIfIeR_2 = "24"
+		MY_IDENTIFIER_3 = "true"
 
 	strings:
 		$my_text_string = "text here"
@@ -87,8 +87,8 @@ rule MetadataExample {
 		reference = "http://somewhere.invalid"
 		description = "Example Rule"
 		my_identifier_1 = "Some string data"
-		my_identifier_2 = 24
-		my_identifier_3 = true
+		my_identifier_2 = "24"
+		my_identifier_3 = "true"
 
 	strings:
 		$my_text_string = "text here"
@@ -323,13 +323,13 @@ func TestParseRule(t *testing.T) {
 					},
 					Identifier: "MetadataExample",
 					Meta: Metadata{
-						Author:      util.Ptr(`"John Doe"`),
-						Date:        util.Ptr(`"2023-12-27"`),
-						Version:     util.Ptr(`"1.0"`),
-						Reference:   util.Ptr(`"http://somewhere.invalid"`),
-						Description: util.Ptr(`"Example Rule"`),
+						Author:      util.Ptr("John Doe"),
+						Date:        util.Ptr("2023-12-27"),
+						Version:     util.Ptr("1.0"),
+						Reference:   util.Ptr("http://somewhere.invalid"),
+						Description: util.Ptr("Example Rule"),
 						Rest: map[string]string{
-							"my_identifier_1": "\"Some string data\"",
+							"my_identifier_1": "Some string data",
 							"my_identifier_2": "24",
 							"my_identifier_3": "true",
 						},
