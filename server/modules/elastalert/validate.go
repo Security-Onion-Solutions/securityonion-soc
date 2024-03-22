@@ -9,6 +9,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/util"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -116,4 +119,43 @@ func (e *SigmaRule) Validate() error {
 	}
 
 	return nil
+}
+
+func (r *SigmaRule) ToDetection(content string, ruleset string, license string) *model.Detection {
+	id := r.Title
+
+	if r.ID != nil {
+		id = *r.ID
+	}
+
+	sev := model.SeverityUnknown
+
+	if r.Level != nil {
+		switch strings.ToLower(string(*r.Level)) {
+		case "informational":
+			sev = model.SeverityInformational
+		case "low":
+			sev = model.SeverityLow
+		case "medium":
+			sev = model.SeverityMedium
+		case "high":
+			sev = model.SeverityHigh
+		case "critical":
+			sev = model.SeverityCritical
+		}
+	}
+
+	det := &model.Detection{
+		Engine:      model.EngineNameElastAlert,
+		PublicID:    id,
+		Title:       r.Title,
+		Severity:    sev,
+		Content:     content,
+		IsCommunity: true,
+		Language:    model.SigLangSigma,
+		Ruleset:     util.Ptr(ruleset),
+		License:     license,
+	}
+
+	return det
 }

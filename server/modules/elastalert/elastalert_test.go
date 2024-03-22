@@ -304,7 +304,7 @@ func TestSigmaToElastAlertError(t *testing.T) {
 	assert.ErrorContains(t, err, "problem with sigma cli")
 }
 
-func TestParseRules(t *testing.T) {
+func TestParseZipRules(t *testing.T) {
 	t.Parallel()
 
 	data := `title: Always Alert
@@ -379,9 +379,70 @@ level: high
 		License:     model.LicenseDRL,
 	}
 
-	dets, errMap := engine.parseRules(pkgZips)
+	dets, errMap := engine.parseZipRules(pkgZips)
 	assert.NotNil(t, errMap)
 	assert.Error(t, errMap["rules/bad.yml"])
+	assert.Len(t, dets, 1)
+	assert.Equal(t, expected, dets[0])
+}
+
+func TestParseRepoRules(t *testing.T) {
+	t.Parallel()
+
+	data := `title: Security Onion - SOC Login Failure
+id: bf86ef21-41e6-417b-9a05-b9ea6bf28a38
+status: experimental
+description: Detects when a user fails to login to the Security Onion Console (Web UI). Review associated logs for target username and source IP.
+license: Elastic-2.0
+author: 'Security Onion Solutions'
+date: 2024/03/06
+logsource:
+  product: kratos
+  service: audit
+detection:
+  selection:
+    msg: 'Encountered self-service login error.'
+  condition: selection
+falsepositives:
+  - none
+level: high
+`
+
+	repos := map[string]*module.RuleRepo{
+		"repo-path": {
+			Repo:    "github.com/repo-user/repo-path",
+			License: "DRL",
+		},
+	}
+
+	mio := mock.NewMockIOManager(gomock.NewController(t))
+	mio.EXPECT().WalkDir(gomock.Eq("repo-path"), gomock.Any()).DoAndReturn(func(path string, fn fs.WalkDirFunc) error {
+		return fn("rules/so_soc_failed_login.yml", &MockDirEntry{
+			name: "so_soc_failed_login.yml",
+		}, nil)
+	})
+	mio.EXPECT().ReadFile(gomock.Eq("rules/so_soc_failed_login.yml")).Return([]byte(data), nil)
+
+	engine := ElastAlertEngine{
+		IOManager: mio,
+	}
+	engine.allowRegex = regexp.MustCompile("bf86ef21-41e6-417b-9a05-b9ea6bf28a38")
+	engine.denyRegex = regexp.MustCompile("deny")
+
+	expected := &model.Detection{
+		PublicID:    "bf86ef21-41e6-417b-9a05-b9ea6bf28a38",
+		Title:       "Security Onion - SOC Login Failure",
+		Severity:    model.SeverityHigh,
+		Content:     data,
+		IsCommunity: true,
+		Engine:      model.EngineNameElastAlert,
+		Language:    model.SigLangSigma,
+		Ruleset:     util.Ptr("repo-path"),
+		License:     model.LicenseDRL,
+	}
+
+	dets, errMap := engine.parseRepoRules(repos)
+	assert.Nil(t, errMap)
 	assert.Len(t, dets, 1)
 	assert.Equal(t, expected, dets[0])
 }
@@ -416,7 +477,7 @@ func TestDownloadSigmaPackages(t *testing.T) {
 		IOManager:                    mio,
 	}
 
-	pkgZips, errMap := engine.downloadSigmaPackages(context.Background())
+	pkgZips, errMap := engine.downloadSigmaPackages()
 	assert.NotNil(t, errMap)
 	assert.Error(t, errMap["fake"])
 	assert.Len(t, pkgZips, len(pkgs)-1)
@@ -544,7 +605,7 @@ func TestSyncElastAlert(t *testing.T) {
 				// sigmaToElastAlert
 				m.EXPECT().ExecCommand(gomock.Any()).Return([]byte("[sigma rule]"), 0, time.Duration(0), nil)
 				// WriteFile when enabling
-				m.EXPECT().WriteFile(SimpleRuleSID + ".yml", []byte("play_title: TEST\nplay_id: " + SimpleRuleSID + "\nevent.module: sigma\nevent.dataset: sigma.alert\nevent.severity: 3\nrule.category: \"\"\nsigma_level: medium\nalert:\n    - modules.so.playbook-es.PlaybookESAlerter\nindex: .ds-logs-*\nname: TEST - " + SimpleRuleSID + "\ntype: any\nfilter:\n    - eql: '[sigma rule]'\nplay_url: play_url\nkibana_pivot: kibana_pivot\nsoc_pivot: soc_pivot\n"), fs.FileMode(0644)).Return(nil)
+				m.EXPECT().WriteFile(SimpleRuleSID+".yml", []byte("play_title: TEST\nplay_id: "+SimpleRuleSID+"\nevent.module: sigma\nevent.dataset: sigma.alert\nevent.severity: 3\nrule.category: \"\"\nsigma_level: medium\nalert:\n    - modules.so.playbook-es.PlaybookESAlerter\nindex: .ds-logs-*\nname: TEST - "+SimpleRuleSID+"\ntype: any\nfilter:\n    - eql: '[sigma rule]'\nplay_url: play_url\nkibana_pivot: kibana_pivot\nsoc_pivot: soc_pivot\n"), fs.FileMode(0644)).Return(nil)
 			},
 		},
 		{
@@ -610,7 +671,7 @@ func TestSyncElastAlert(t *testing.T) {
 				// sigmaToElastAlert
 				m.EXPECT().ExecCommand(gomock.Any()).Return([]byte("[sigma rule]"), 0, time.Duration(0), nil)
 				// WriteFile when enabling
-				m.EXPECT().WriteFile(SimpleRuleSID + ".yml", []byte("play_title: TEST\nplay_id: " + SimpleRuleSID + "\nevent.module: sigma\nevent.dataset: sigma.alert\nevent.severity: 3\nrule.category: \"\"\nsigma_level: medium\nalert:\n    - modules.so.playbook-es.PlaybookESAlerter\nindex: .ds-logs-*\nname: TEST - " + SimpleRuleSID + "\ntype: any\nfilter:\n    - eql: ([sigma rule]) and TRUE\nplay_url: play_url\nkibana_pivot: kibana_pivot\nsoc_pivot: soc_pivot\n"), fs.FileMode(0644)).Return(nil)
+				m.EXPECT().WriteFile(SimpleRuleSID+".yml", []byte("play_title: TEST\nplay_id: "+SimpleRuleSID+"\nevent.module: sigma\nevent.dataset: sigma.alert\nevent.severity: 3\nrule.category: \"\"\nsigma_level: medium\nalert:\n    - modules.so.playbook-es.PlaybookESAlerter\nindex: .ds-logs-*\nname: TEST - "+SimpleRuleSID+"\ntype: any\nfilter:\n    - eql: ([sigma rule]) and TRUE\nplay_url: play_url\nkibana_pivot: kibana_pivot\nsoc_pivot: soc_pivot\n"), fs.FileMode(0644)).Return(nil)
 			},
 		},
 	}

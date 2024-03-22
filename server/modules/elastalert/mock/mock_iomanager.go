@@ -117,6 +117,20 @@ func (mr *MockIOManagerMockRecorder) ReadFile(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadFile", reflect.TypeOf((*MockIOManager)(nil).ReadFile), arg0)
 }
 
+// WalkDir mocks base method.
+func (m *MockIOManager) WalkDir(arg0 string, arg1 fs.WalkDirFunc) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WalkDir", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WalkDir indicates an expected call of WalkDir.
+func (mr *MockIOManagerMockRecorder) WalkDir(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WalkDir", reflect.TypeOf((*MockIOManager)(nil).WalkDir), arg0, arg1)
+}
+
 // WriteFile mocks base method.
 func (m *MockIOManager) WriteFile(arg0 string, arg1 []byte, arg2 fs.FileMode) error {
 	m.ctrl.T.Helper()
