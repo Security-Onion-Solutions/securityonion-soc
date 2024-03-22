@@ -385,13 +385,13 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 
 		detections, errMap := e.parseZipRules(zips)
 		if errMap != nil {
-			log.WithField("error", errMap).Error("something went wrong while parsing sigma rule files")
+			log.WithField("error", errMap).Error("something went wrong while parsing sigma rule files from zips")
 			continue
 		}
 
 		repoDets, errMap := e.parseRepoRules(allRepos)
 		if errMap != nil {
-			log.WithField("error", errMap).Error("something went wrong while parsing sigma rule files")
+			log.WithField("error", errMap).Error("something went wrong while parsing sigma rule files from repos")
 			continue
 		}
 
