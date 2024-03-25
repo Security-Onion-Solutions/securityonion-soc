@@ -585,6 +585,7 @@ const i18n = {
       order: 'Order',
       osUptime: 'OS Uptime',
       other: 'Other',
+      overrideDocumentationHelp: 'Click for more information',
       overrideExpand: 'Show all override fields',
       overview: 'Overview',
       owner: 'Owner',
