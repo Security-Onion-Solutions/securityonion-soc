@@ -631,3 +631,8 @@ td {
   color: gray;
   cursor: pointer;
 }
+
+.override-help {
+  vertical-align: -webkit-baseline-middle;
+  margin-right: 8px;
+}

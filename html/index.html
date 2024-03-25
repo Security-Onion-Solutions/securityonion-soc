@@ -1325,6 +1325,9 @@
                         </div>
                         <div v-if="newOverride" class="d-flex justify-end text-body-2 mt-2">
                           <div class="d-inline-flex">
+                            <a href="https://docs.securityonion.net/en/2.4/" target="_blank">
+                              <v-icon :title="i18n.overrideDocumentationHelp" class="override-help">fa-regular fa-circle-question</v-icon>
+                            </a>
                             <v-btn id="detection-create-cancel" text small color="primary" class="align-self-end" @click="newOverride = null">
                               {{ i18n.cancel }}
                             </v-btn>
@@ -1455,6 +1458,9 @@
                           </div>
                           <div class="d-flex justify-end text-body-2 mt-4">
                             <div class="d-inline-flex">
+                              <a href="https://docs.securityonion.net/en/2.4/" target="_blank">
+                                <v-icon :title="i18n.overrideDocumentationHelp" class="override-help">fa-regular fa-circle-question</v-icon>
+                              </a>
                               <v-btn id="override-edit-delete" text small color="red" @click="deleteOverride(item)">
                                 {{ i18n.delete }}
                               </v-btn>
