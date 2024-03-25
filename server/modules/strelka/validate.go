@@ -49,6 +49,8 @@ func (md *Metadata) IsEmpty() bool {
 func (md *Metadata) Set(key, value string) {
 	key = strings.ToLower(key)
 
+	value = util.Unquote(value)
+
 	switch key {
 	case "id":
 		md.ID = util.Ptr(value)
@@ -109,23 +111,23 @@ func (r *YaraRule) String() string {
 		buffer.WriteString("\tmeta:\n")
 
 		if r.Meta.Author != nil {
-			buffer.WriteString(fmt.Sprintf("\t\tauthor = %s\n", *r.Meta.Author))
+			buffer.WriteString(fmt.Sprintf("\t\tauthor = \"%s\"\n", *r.Meta.Author))
 		}
 
 		if r.Meta.Date != nil {
-			buffer.WriteString(fmt.Sprintf("\t\tdate = %s\n", *r.Meta.Date))
+			buffer.WriteString(fmt.Sprintf("\t\tdate = \"%s\"\n", *r.Meta.Date))
 		}
 
 		if r.Meta.Version != nil {
-			buffer.WriteString(fmt.Sprintf("\t\tversion = %s\n", *r.Meta.Version))
+			buffer.WriteString(fmt.Sprintf("\t\tversion = \"%s\"\n", *r.Meta.Version))
 		}
 
 		if r.Meta.Reference != nil {
-			buffer.WriteString(fmt.Sprintf("\t\treference = %s\n", *r.Meta.Reference))
+			buffer.WriteString(fmt.Sprintf("\t\treference = \"%s\"\n", *r.Meta.Reference))
 		}
 
 		if r.Meta.Description != nil {
-			buffer.WriteString(fmt.Sprintf("\t\tdescription = %s\n", *r.Meta.Description))
+			buffer.WriteString(fmt.Sprintf("\t\tdescription = \"%s\"\n", *r.Meta.Description))
 		}
 
 		keys := []string{}
@@ -136,7 +138,7 @@ func (r *YaraRule) String() string {
 		sort.Strings(keys)
 
 		for _, k := range keys {
-			buffer.WriteString(fmt.Sprintf("\t\t%s = %s\n", k, r.Meta.Rest[k]))
+			buffer.WriteString(fmt.Sprintf("\t\t%s = \"%s\"\n", k, r.Meta.Rest[k]))
 		}
 
 		buffer.WriteString("\n")
