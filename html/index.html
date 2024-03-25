@@ -1368,86 +1368,86 @@
                             7. Custom Filter - engine:elastalert
                           -->
                           <!-- isEnabled -->
-                          <div>
+                          <div @click="startOverrideEdit('override-enabled', item, 'isEnabled')" :class="{ clicktoedit: !isOverrideEdit('override-enabled') }">
                             <div class="font-weight-bold mt-4">
                               {{i18n.enabled}}:
                             </div>
-                            <span id="override-enabled" v-if="!isOverrideEdit('override-enabled')" @click="startOverrideEdit('override-enabled', item, 'isEnabled')">
+                            <span id="override-enabled" v-if="!isOverrideEdit('override-enabled')">
                               {{item.isEnabled}}
                             </span>
                             <v-checkbox v-else id="override-enabled-edit" ref="override-enabled" hide-details="auto" outlined v-model="item.isEnabled"
                               persistent-hint :hint="i18n.enabled" v-on:change="stopOverrideEdit(true)"></v-checkbox>
                           </div>
                           <!-- regex -->
-                          <div v-if="item.type === 'modify'">
+                          <div v-if="item.type === 'modify'" @click="startOverrideEdit('override-regex', item, 'regex')" :class="{ clicktoedit: !isOverrideEdit('override-regex') }">
                             <div class="font-weight-bold mt-4">
                               Regex:
                             </div>
-                            <span id="override-regex" v-if="!isOverrideEdit('override-regex')" @click="startOverrideEdit('override-regex', item, 'regex')">
+                            <span id="override-regex" v-if="!isOverrideEdit('override-regex')">
                               {{item.regex}}
                             </span>
                             <v-text-field v-else id="override-regex-edit" ref="override-regex" hide-details="auto" outlined v-model="item.regex" :rules="[rules.required]"
                               persistent-hint :hint="i18n.regex" v-on:keyup.enter="stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)"></v-text-field>
                           </div>
                           <!-- value -->
-                          <div v-if="item.type === 'modify'">
+                          <div v-if="item.type === 'modify'" @click="startOverrideEdit('override-value', item, 'value')" :class="{ clicktoedit: !isOverrideEdit('override-value') }">
                             <div class="font-weight-bold mt-4">
                               Value:
                             </div>
-                            <span id="override-value" v-if="!isOverrideEdit('override-value')" @click="startOverrideEdit('override-value', item, 'value')">
+                            <span id="override-value" v-if="!isOverrideEdit('override-value')">
                               {{item.value}}
                             </span>
                             <v-text-field v-else id="override-value-edit" ref="override-value" hide-details="auto" outlined v-model="item.value" :rules="[rules.required]"
                               persistent-hint :hint="i18n.value" v-on:keyup.enter="stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)"></v-text-field>
                           </div>
                           <!-- type (threshold) -->
-                          <div v-if="item.type === 'threshold'">
+                          <div v-if="item.type === 'threshold'" @click="startOverrideEdit('override-threshold-type', item, 'thresholdType')" :class="{ clicktoedit: !isOverrideEdit('override-threshold-type') }">
                             <div class="font-weight-bold mt-4">
                               Type:
                             </div>
-                            <span id="override-threshold-type" v-if="!isOverrideEdit('override-threshold-type')" @click="startOverrideEdit('override-threshold-type', item, 'thresholdType')">
+                            <span id="override-threshold-type" v-if="!isOverrideEdit('override-threshold-type')">
                               {{item.thresholdType}}
                             </span>
                             <v-select v-else id="override-threshold-type-edit" ref="override-threshold-type" v-model="item.thresholdType" :items="thresholdTypes" :rules="[rules.required]" persistent-hint :hint="i18n.type" @change="stopOverrideEdit(true)"></v-select>
                           </div>
                           <!-- track -->
-                          <div v-if="['suppress', 'threshold'].includes(item.type)">
+                          <div v-if="['suppress', 'threshold'].includes(item.type)" @click="startOverrideEdit('override-track', item, 'track')" :class="{ clicktoedit: !isOverrideEdit('override-track') }">
                             <div class="font-weight-bold mt-4">
                               Track:
                             </div>
-                            <span id="override-track" v-if="!isOverrideEdit('override-track')" @click="startOverrideEdit('override-track', item, 'track')">
+                            <span id="override-track" v-if="!isOverrideEdit('override-track')">
                               {{item.track}}
                             </span>
                             <v-select v-else id="override-track-edit" ref="override-track" v-model="item.track" :items="getTrackOptions(item.type)" :rules="[rules.required]" persistent-hint :hint="i18n.type" @change="stopOverrideEdit(true)"></v-select>
                           </div>
                           <!-- ip -->
-                          <div v-if="item.type === 'suppress'">
+                          <div v-if="item.type === 'suppress'" @click="startOverrideEdit('override-ip', item, 'ip')" :class="{ clicktoedit: !isOverrideEdit('override-ip') }">
                             <div class="font-weight-bold mt-4">
                               IP:
                             </div>
-                            <span id="override-ip" v-if="!isOverrideEdit('override-ip')" @click="startOverrideEdit('override-ip', item, 'ip')">
+                            <span id="override-ip" v-if="!isOverrideEdit('override-ip')">
                               {{item.ip}}
                             </span>
                             <v-text-field v-else id="override-ip-edit" ref="override-ip" hide-details="auto" outlined v-model="item.ip" :rules="[rules.required, rules.ciderFormat]"
                               persistent-hint :hint="i18n.cidr" v-on:keyup.enter="stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)"></v-text-field>
                           </div>
                           <!-- count -->
-                          <div v-if="item.type === 'threshold'">
+                          <div v-if="item.type === 'threshold'" @click="startOverrideEdit('override-count', item, 'count')" :class="{ clicktoedit: !isOverrideEdit('override-count') }">
                             <div class="font-weight-bold mt-4">
                               Count:
                             </div>
-                            <span id="override-count" v-if="!isOverrideEdit('override-count')" @click="startOverrideEdit('override-count', item, 'count')">
+                            <span id="override-count" v-if="!isOverrideEdit('override-count')">
                               {{item.count}}
                             </span>
                             <v-text-field v-else id="override-count-edit" ref="override-count" hide-details="auto" outlined v-model="item.count" :rules="[rules.required, rules.number]"
                               persistent-hint :hint="i18n.count" v-on:keyup.enter="stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)"></v-text-field>
                           </div>
                           <!-- seconds -->
-                          <div v-if="item.type === 'threshold'">
+                          <div v-if="item.type === 'threshold'" @click="startOverrideEdit('override-seconds', item, 'seconds')" :class="{ clicktoedit: !isOverrideEdit('override-seconds') }">
                             <div class="font-weight-bold mt-4">
                               Seconds:
                             </div>
-                            <span id="override-seconds" v-if="!isOverrideEdit('override-seconds')" @click="startOverrideEdit('override-seconds', item, 'seconds')">
+                            <span id="override-seconds" v-if="!isOverrideEdit('override-seconds')">
                               {{item.seconds}}
                             </span>
                             <v-text-field v-else id="override-seconds-edit" ref="override-seconds" hide-details="auto" outlined v-model="item.seconds" :rules="[rules.required, rules.number]"
@@ -1803,7 +1803,7 @@
                   {{ i18n.author }}:
                 </div>
                 <div class="value">
-                  <span v-if="detect.language !== 'suricata'">
+                  <span v-if="!detect.isCommunity">
                     {{ detect.author }}
                   </span>
                   <span v-else>

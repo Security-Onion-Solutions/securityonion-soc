@@ -594,7 +594,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				this.$refs.detection.validate();
 				if (!this.editForm.valid) return;
 
-				let author = [this.$root.user.firstName, this.$root.user.lastName].filter(x => x).join(' ');
+				const author = [this.$root.user.firstName, this.$root.user.lastName].filter(x => x).join(' ') || this.$root.user.email;
 				this.detect.author = author;
 			}
 
