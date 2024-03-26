@@ -694,6 +694,7 @@ func TestExtractDetails(t *testing.T) {
 	table := []struct {
 		Name             string
 		Input            string
+		ExpectedErr      *string
 		ExpectedTitle    string
 		ExpectedPublicID string
 		ExpectedSeverity model.Severity
@@ -706,10 +707,15 @@ func TestExtractDetails(t *testing.T) {
 			ExpectedSeverity: model.SeverityHigh,
 		},
 		{
-			Name:             "No Extracted Values",
-			Input:            `alert tls $HOME_NET any -> $EXTERNAL_NET any (flow:established,to_server; tls.sni; bsize:24; content:"nav.offlinedocument.site"; fast_pattern; reference:url,www.sentinelone.com/labs/a-glimpse-into-future-scarcruft-campaigns-attackers-gather-strategic-intelligence-and-target-cybersecurity-professionals/; classtype:trojan-activity; rev:1; metadata:affected_product Windows_XP_Vista_7_8_10_Server_32_64_Bit, attack_target Client_Endpoint, created_at 2024_01_22, deployment Perimeter, performance_impact Low, confidence Medium, tag ScarCruft, tag TA409, updated_at 2024_01_22;)`,
-			ExpectedTitle:    "Detection title not yet provided - click here to update this title",
-			ExpectedPublicID: "",
+			Name:        "Missing Public Id",
+			Input:       `alert tls $HOME_NET any -> $EXTERNAL_NET any (flow:established,to_server; tls.sni; bsize:24; content:"nav.offlinedocument.site"; fast_pattern; reference:url,www.sentinelone.com/labs/a-glimpse-into-future-scarcruft-campaigns-attackers-gather-strategic-intelligence-and-target-cybersecurity-professionals/; classtype:trojan-activity; rev:1; metadata:affected_product Windows_XP_Vista_7_8_10_Server_32_64_Bit, attack_target Client_Endpoint, created_at 2024_01_22, deployment Perimeter, performance_impact Low, confidence Medium, tag ScarCruft, tag TA409, updated_at 2024_01_22;)`,
+			ExpectedErr: util.Ptr("rule does not contain a public Id"),
+		},
+		{
+			Name:             "Minimal Extraction",
+			Input:            `alert any any <> any any (msg:"Required";sid:10000;)`,
+			ExpectedTitle:    "Required",
+			ExpectedPublicID: "10000",
 			ExpectedSeverity: model.SeverityUnknown,
 		},
 	}
@@ -726,7 +732,11 @@ func TestExtractDetails(t *testing.T) {
 			}
 
 			err := eng.ExtractDetails(detect)
-			assert.NoError(t, err)
+			if test.ExpectedErr == nil {
+				assert.NoError(t, err)
+			} else {
+				assert.Equal(t, *test.ExpectedErr, err.Error())
+			}
 
 			assert.Equal(t, test.ExpectedTitle, detect.Title)
 			assert.Equal(t, test.ExpectedPublicID, detect.PublicID)

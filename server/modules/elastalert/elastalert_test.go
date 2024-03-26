@@ -513,7 +513,31 @@ detection:
 falsepositives:
   - Unlikely
 level: critical`
+	SimpleRuleNoId = `title: Griffon Malware Attack Pattern
+status: experimental
+description: Detects process execution patterns related to Griffon malware as reported by Kaspersky
+references:
+  - https://securelist.com/fin7-5-the-infamous-cybercrime-rig-fin7-continues-its-activities/90703/
+author: Nasreddine Bencherchali (Nextron Systems)
+date: 2023/03/09
+tags:
+  - attack.execution
+  - detection.emerging_threats
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+      - '\local\temp\'
+      - '//b /e:jscript'
+      - '.txt'
+  condition: selection
+falsepositives:
+  - Unlikely
+level: critical`
 	SimpleRuleNoExtract = `title: Required
+id: 00000000-0000-0000-0000-000000000000
 status: experimental
 description: Detects process execution patterns related to Griffon malware as reported by Kaspersky
 references:
@@ -711,6 +735,7 @@ func TestExtractDetails(t *testing.T) {
 	table := []struct {
 		Name             string
 		Input            string
+		ExpectedErr      *string
 		ExpectedTitle    string
 		ExpectedPublicID string
 		ExpectedSeverity model.Severity
@@ -723,10 +748,15 @@ func TestExtractDetails(t *testing.T) {
 			ExpectedSeverity: model.SeverityCritical,
 		},
 		{
-			Name:             "No Extracted Values",
+			Name:        "No Public Id",
+			Input:       SimpleRuleNoId,
+			ExpectedErr: util.Ptr("rule does not contain a public Id"),
+		},
+		{
+			Name:             "Minimal Extracted Values, No Error",
 			Input:            SimpleRuleNoExtract,
 			ExpectedTitle:    "Required",
-			ExpectedPublicID: "",
+			ExpectedPublicID: "00000000-0000-0000-0000-000000000000",
 			ExpectedSeverity: model.SeverityUnknown,
 		},
 	}
@@ -743,7 +773,11 @@ func TestExtractDetails(t *testing.T) {
 			}
 
 			err := eng.ExtractDetails(detect)
-			assert.NoError(t, err)
+			if test.ExpectedErr == nil {
+				assert.NoError(t, err)
+			} else {
+				assert.Equal(t, *test.ExpectedErr, err.Error())
+			}
 
 			assert.Equal(t, test.ExpectedTitle, detect.Title)
 			assert.Equal(t, test.ExpectedPublicID, detect.PublicID)
