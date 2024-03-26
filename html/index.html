@@ -1469,22 +1469,22 @@
                         </td>
                         <td :colspan="headers.length" class="pa-4" v-else-if="detect.engine === 'elastalert'">
                           <!-- isEnabled -->
-                          <div>
+                          <div @click="startOverrideEdit('override-enabled', item, 'isEnabled')" class="clicktoedit">
                             <div class="font-weight-bold mt-2">
                               {{i18n.enabled}}:
                             </div>
-                            <span id="override-enabled" v-if="!isOverrideEdit('override-enabled')" @click="startOverrideEdit('override-enabled', item, 'isEnabled')">
+                            <span id="override-enabled" v-if="!isOverrideEdit('override-enabled')">
                               {{item.isEnabled}}
                             </span>
                             <v-checkbox v-else id="override-enabled-edit" ref="override-enabled" hide-details="auto" outlined v-model="item.isEnabled"
                               persistent-hint :hint="i18n.enabled" @change="stopOverrideEdit(true, $event)"></v-checkbox>
                           </div>
                           <!-- custom filter -->
-                          <div>
+                          <div @click="startOverrideEdit('override-custom-filter', item, 'customFilter')" class="clicktoedit">
                             <div class="font-weight-bold mt-2">
-                              Custom Filter:
+                              {{i18n.customFilter}}:
                             </div>
-                            <span id="override-custom-filter" v-if="!isOverrideEdit('override-custom-filter')" @click="startOverrideEdit('override-custom-filter', item, 'customFilter')">
+                            <span id="override-custom-filter" v-if="!isOverrideEdit('override-custom-filter')">
                               {{item.customFilter}}
                             </span>
                             <v-text-field v-else id="override-custom-filter-edit" ref="override-custom-filter" hide-details="auto" outlined v-model="item.customFilter" :rules="[rules.required]"
@@ -1492,6 +1492,9 @@
                           </div>
                           <div class="d-flex justify-end text-body-2 mt-2">
                             <div class="d-inline-flex">
+                              <a :href="$root.parameters.docsUrl" target="_blank">
+                                <v-icon :title="i18n.overrideDocumentationHelp" class="override-help">fa-regular fa-circle-question</v-icon>
+                              </a>
                               <v-btn id="override-edit-delete" text small color="red" @click="deleteOverride(item)">
                                 {{ i18n.delete }}
                               </v-btn>
