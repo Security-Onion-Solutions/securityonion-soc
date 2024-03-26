@@ -147,7 +147,12 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 
 	err = engine.ExtractDetails(detect)
 	if err != nil {
-		web.Respond(w, r, http.StatusBadRequest, err)
+		if err.Error() == "rule does not contain a public Id" {
+			web.Respond(w, r, http.StatusBadRequest, "missingPublicIdErr")
+		} else {
+			web.Respond(w, r, http.StatusBadRequest, err)
+		}
+
 		return
 	}
 

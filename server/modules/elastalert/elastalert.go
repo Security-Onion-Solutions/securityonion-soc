@@ -170,6 +170,10 @@ func (e *ElastAlertEngine) ExtractDetails(detect *model.Detection) error {
 		detect.PublicID = *rule.ID
 	}
 
+	if detect.PublicID == "" {
+		return fmt.Errorf("rule does not contain a public Id")
+	}
+
 	if detect.Description == "" && rule.Description != nil {
 		detect.Description = *rule.Description
 	}

@@ -531,6 +531,7 @@ const i18n = {
       memUsageAbbr: 'Mem',
       message: 'Message',
       minutes: 'minutes',
+      missingPublicIdErr: "This detection is missing it's public Id. A public Id is required.",
       model: 'Model',
       module: 'Module',
       months: 'months',
