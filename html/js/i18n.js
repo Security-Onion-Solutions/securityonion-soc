@@ -620,6 +620,7 @@ const i18n = {
       protocol: 'Protocol',
       protocolHelp: 'Optional protocol, such as "icmp" or "tcp".',
       publicId: 'Public Id',
+      publicIdConflictErr: 'A detection with this public Id already exists. Please choose a different public Id.',
       queriesHelp: 'Choose from several pre-defined queries',
       queryHelp: 'Specify a query in Onion Query Language (OQL)',
       quickActions: 'Actions',

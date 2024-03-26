@@ -154,7 +154,7 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 	detect, err = h.server.Detectionstore.CreateDetection(ctx, detect)
 	if err != nil {
 		if strings.Contains(err.Error(), "already exists") {
-			web.Respond(w, r, http.StatusConflict, err)
+			web.Respond(w, r, http.StatusConflict, "publicIdConflictErr")
 			return
 		}
 
