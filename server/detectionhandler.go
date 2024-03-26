@@ -244,6 +244,23 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	engine, ok := h.server.DetectionEngines[detect.Engine]
+	if !ok {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("unsupported engine"))
+		return
+	}
+
+	err = engine.ExtractDetails(detect)
+	if err != nil {
+		if err.Error() == "rule does not contain a public Id" {
+			web.Respond(w, r, http.StatusBadRequest, "missingPublicIdErr")
+		} else {
+			web.Respond(w, r, http.StatusBadRequest, err)
+		}
+
+		return
+	}
+
 	detect, err = h.server.Detectionstore.UpdateDetection(ctx, detect)
 	if err != nil {
 		if strings.Contains(err.Error(), "existing non-community detection") {
