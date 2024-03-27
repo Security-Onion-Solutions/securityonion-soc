@@ -363,7 +363,9 @@ level: high
 		"all_rules": buf.Bytes(),
 	}
 
-	engine := ElastAlertEngine{}
+	engine := ElastAlertEngine{
+		isRunning: true,
+	}
 	engine.allowRegex = regexp.MustCompile("00000000-0000-0000-0000-00000000")
 	engine.denyRegex = regexp.MustCompile("deny")
 
@@ -424,6 +426,7 @@ level: high
 	mio.EXPECT().ReadFile(gomock.Eq("rules/so_soc_failed_login.yml")).Return([]byte(data), nil)
 
 	engine := ElastAlertEngine{
+		isRunning: true,
 		IOManager: mio,
 	}
 	engine.allowRegex = regexp.MustCompile("bf86ef21-41e6-417b-9a05-b9ea6bf28a38")

@@ -345,6 +345,8 @@ func TestParse(t *testing.T) {
 	mod.allowRegex = regexp.MustCompile("[12]0000")
 	mod.denyRegex = regexp.MustCompile("flowbits")
 
+	mod.isRunning = true
+
 	for _, test := range table {
 		test := test
 		t.Run(test.Name, func(t *testing.T) {

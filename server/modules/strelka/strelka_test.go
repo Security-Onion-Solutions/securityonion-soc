@@ -272,6 +272,7 @@ func TestSyncSuricata(t *testing.T) {
 				DetectionEngines: map[model.EngineName]server.DetectionEngine{},
 				Detectionstore:   mockDetStore,
 			})
+			mod.isRunning = true
 			mod.srv.DetectionEngines[model.EngineNameSuricata] = mod
 			mod.IOManager = mio
 			mod.compileRules = true
