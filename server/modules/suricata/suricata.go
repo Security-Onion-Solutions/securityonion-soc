@@ -28,11 +28,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var errModuleStopped = fmt.Errorf("suricata module has stopped running")
+
 var sidExtracter = regexp.MustCompile(`(?i)\bsid: ?['"]?(.*?)['"]?;`)
 
 const modifyFromTo = `"flowbits" "noalert; flowbits"`
-
-var errModuleStopped = fmt.Errorf("module has stopped running")
 
 var licenseBySource = map[string]string{
 	"etopen": model.LicenseBSD,
@@ -46,6 +46,8 @@ type SuricataEngine struct {
 	communityRulesImportFrequencySeconds int
 	isRunning                            bool
 	thread                               *sync.WaitGroup
+	interrupt                            chan struct{}
+	interm                               sync.Mutex
 	allowRegex                           *regexp.Regexp
 	denyRegex                            *regexp.Regexp
 }
@@ -61,6 +63,9 @@ func (s *SuricataEngine) PrerequisiteModules() []string {
 }
 
 func (s *SuricataEngine) Init(config module.ModuleConfig) (err error) {
+	s.thread = &sync.WaitGroup{}
+	s.interrupt = make(chan struct{}, 1)
+
 	s.communityRulesFile = module.GetStringDefault(config, "communityRulesFile", "/nsm/rules/suricata/emerging-all.rules")
 	s.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", "/opt/sensoroni/fingerprints/emerging-all.fingerprint")
 	s.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", 86400)
@@ -89,8 +94,6 @@ func (s *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 
 func (s *SuricataEngine) Start() error {
 	s.srv.DetectionEngines[model.EngineNameSuricata] = s
-	s.thread = &sync.WaitGroup{}
-	s.thread.Add(1)
 	s.isRunning = true
 
 	go s.watchCommunityRules()
@@ -100,9 +103,28 @@ func (s *SuricataEngine) Start() error {
 
 func (s *SuricataEngine) Stop() error {
 	s.isRunning = false
+	s.InterruptSleep()
 	s.thread.Wait()
 
 	return nil
+}
+
+func (s *SuricataEngine) InterruptSleep() {
+	s.interm.Lock()
+	defer s.interm.Unlock()
+
+	if len(s.interrupt) == 0 {
+		s.interrupt <- struct{}{}
+	}
+}
+
+func (s *SuricataEngine) resetInterrupt() {
+	s.interm.Lock()
+	defer s.interm.Unlock()
+
+	if len(s.interrupt) != 0 {
+		<-s.interrupt
+	}
 }
 
 func (s *SuricataEngine) IsRunning() bool {
@@ -163,6 +185,7 @@ func (s *SuricataEngine) ExtractDetails(detect *model.Detection) error {
 }
 
 func (s *SuricataEngine) watchCommunityRules() {
+	s.thread.Add(1)
 	defer func() {
 		s.thread.Done()
 		s.isRunning = false
@@ -173,7 +196,15 @@ func (s *SuricataEngine) watchCommunityRules() {
 	templateFound := false
 
 	for s.isRunning {
-		time.Sleep(time.Duration(s.communityRulesImportFrequencySeconds) * time.Second)
+		s.resetInterrupt()
+
+		timer := time.NewTimer(time.Second * time.Duration(s.communityRulesImportFrequencySeconds))
+
+		select {
+		case <-timer.C:
+		case <-s.interrupt:
+		}
+
 		if !s.isRunning {
 			break
 		}
@@ -216,6 +247,10 @@ func (s *SuricataEngine) watchCommunityRules() {
 		if err != nil {
 			log.WithError(err).Error("unable to get settings")
 			continue
+		}
+
+		if !s.isRunning {
+			break
 		}
 
 		ruleset := settingByID(allSettings, "idstools.config.ruleset")
@@ -315,6 +350,10 @@ func (s *SuricataEngine) ParseRules(content string, ruleset *string) ([]*model.D
 	dets := []*model.Detection{}
 
 	for i, line := range lines {
+		if !s.isRunning {
+			return nil, errModuleStopped
+		}
+
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			// empty or commented line, ignore
@@ -660,7 +699,7 @@ func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 
 	for _, detect := range detections {
 		if !s.isRunning {
-			return errMap, errModuleStopped
+			return nil, errModuleStopped
 		}
 
 		_, disabled := disabledIndex[detect.PublicID]
@@ -695,6 +734,10 @@ func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 	}
 
 	for sid := range toDelete {
+		if !s.isRunning {
+			return nil, errModuleStopped
+		}
+
 		_, err = s.srv.Detectionstore.DeleteDetection(ctx, commSIDs[sid].Id)
 		if err != nil {
 			errMap[sid] = fmt.Sprintf("unable to delete detection; reason=%s", err.Error())

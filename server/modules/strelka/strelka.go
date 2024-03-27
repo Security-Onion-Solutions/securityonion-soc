@@ -32,6 +32,8 @@ import (
 	"github.com/go-git/go-git/v5"
 )
 
+var errModuleStopped = fmt.Errorf("strelka module has stopped running")
+
 type IOManager interface {
 	ReadFile(path string) ([]byte, error)
 	WriteFile(path string, contents []byte, perm fs.FileMode) error
@@ -45,6 +47,8 @@ type StrelkaEngine struct {
 	srv                                  *server.Server
 	isRunning                            bool
 	thread                               *sync.WaitGroup
+	interrupt                            chan struct{}
+	interm                               sync.Mutex
 	communityRulesImportFrequencySeconds int
 	yaraRulesFolder                      string
 	reposFolder                          string
@@ -70,6 +74,7 @@ func (e *StrelkaEngine) PrerequisiteModules() []string {
 
 func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 	e.thread = &sync.WaitGroup{}
+	e.interrupt = make(chan struct{}, 1)
 
 	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", 86400)
 	e.yaraRulesFolder = module.GetStringDefault(config, "yaraRulesFolder", "/opt/sensoroni/yara/rules")
@@ -120,8 +125,28 @@ func (e *StrelkaEngine) Start() error {
 
 func (e *StrelkaEngine) Stop() error {
 	e.isRunning = false
+	e.InterruptSleep()
+	e.thread.Wait()
 
 	return nil
+}
+
+func (e *StrelkaEngine) InterruptSleep() {
+	e.interm.Lock()
+	defer e.interm.Unlock()
+
+	if len(e.interrupt) == 0 {
+		e.interrupt <- struct{}{}
+	}
+}
+
+func (e *StrelkaEngine) resetInterrupt() {
+	e.interm.Lock()
+	defer e.interm.Unlock()
+
+	if len(e.interrupt) != 0 {
+		<-e.interrupt
+	}
 }
 
 func (e *StrelkaEngine) IsRunning() bool {
@@ -166,10 +191,24 @@ func (e *StrelkaEngine) SyncLocalDetections(ctx context.Context, _ []*model.Dete
 }
 
 func (e *StrelkaEngine) startCommunityRuleImport() {
+	e.thread.Add(1)
+	defer func() {
+		e.thread.Done()
+		e.isRunning = false
+	}()
+
 	templateFound := false
 
 	for e.isRunning {
-		time.Sleep(time.Duration(e.communityRulesImportFrequencySeconds) * time.Second)
+		e.resetInterrupt()
+
+		timer := time.NewTimer(time.Second * time.Duration(e.communityRulesImportFrequencySeconds))
+
+		select {
+		case <-timer.C:
+		case <-e.interrupt:
+		}
+
 		if !e.isRunning {
 			break
 		}
@@ -213,6 +252,10 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 		if e.autoUpdateEnabled {
 			// pull or clone repos
 			for _, repo := range e.rulesRepos {
+				if !e.isRunning {
+					break
+				}
+
 				parser, err := url.Parse(repo.Repo)
 				if err != nil {
 					log.WithError(err).WithField("repo", repo).Error("Failed to parse repo URL, doing nothing with it")
@@ -290,6 +333,10 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 		// parse *.yar files in repos
 		for repopath, repo := range upToDate {
+			if !e.isRunning {
+				return
+			}
+
 			baseDir := repopath
 			if repo.Folder != nil {
 				baseDir = filepath.Join(baseDir, *repo.Folder)
@@ -299,6 +346,10 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 				if err != nil {
 					log.WithError(err).WithField("path", path).Error("Failed to walk path")
 					return nil
+				}
+
+				if !e.isRunning {
+					return errModuleStopped
 				}
 
 				if d.IsDir() {
@@ -403,7 +454,13 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 		errMap, err := e.syncDetections(e.srv.Context)
 		if err != nil {
-			log.WithError(err).Error("Failed to sync community detections")
+			if err == errModuleStopped {
+				log.Info("incomplete sync of YARA community detections due to module stopping")
+				return
+			}
+
+			log.WithError(err).Error("unable to sync YARA community detections")
+			continue
 		}
 
 		log.WithFields(log.Fields{
@@ -618,6 +675,10 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]s
 
 	enabledDetections := map[string]*model.Detection{}
 	for _, det := range results {
+		if !e.isRunning {
+			return nil, errModuleStopped
+		}
+
 		d := det.(*model.Detection)
 		enabledDetections[d.PublicID] = d
 	}

@@ -1405,13 +1405,15 @@
                             7. Custom Filter - engine:elastalert
                           -->
                           <!-- isEnabled -->
-                          <div @click="startOverrideEdit('override-enabled', item, 'isEnabled')" :class="{ clicktoedit: !isOverrideEdit('override-enabled') }">
+                          <div @click="startOverrideEdit('override-enabled', item, 'isEnabled')" :class="{ clicktoedit: !isOverrideEdit('override-enabled') }" data-aid="detection_override_enabled_toggle">
                             <div class="font-weight-bold mt-4">
                               {{i18n.enabled}}:
                             </div>
                             <span id="override-enabled" v-if="!isOverrideEdit('override-enabled')" data-aid="detection_override_enabled_display">
                               {{item.isEnabled}}
                             </span>
+                            <v-checkbox v-else id="override-enabled-edit" ref="override-enabled" hide-details="auto" outlined v-model="item.isEnabled"
+                              persistent-hint :hint="i18n.enabled" v-on:change="stopOverrideEdit(true)"></v-checkbox>
                           </div>
                           <!-- regex -->
                           <div v-if="item.type === 'modify'" @click="startOverrideEdit('override-regex', item, 'regex')" :class="{ clicktoedit: !isOverrideEdit('override-regex') }">
@@ -1501,16 +1503,18 @@
                         </td>
                         <td :colspan="headers.length" class="pa-4" v-else-if="detect.engine === 'elastalert'">
                           <!-- isEnabled -->
-                          <div @click="startOverrideEdit('override-enabled', item, 'isEnabled')" class="clicktoedit">
+                          <div @click="startOverrideEdit('override-enabled', item, 'isEnabled')" :class="{ clicktoedit: !isOverrideEdit('override-enabled') }" data-aid="detection_override_enabled_toggle">
                             <div class="font-weight-bold mt-2">
                               {{i18n.enabled}}:
                             </div>
                             <span id="override-enabled" v-if="!isOverrideEdit('override-enabled')" data-aid="detection_override_enabled_display">
                               {{item.isEnabled}}
                             </span>
+                            <v-checkbox v-else id="override-enabled-edit" ref="override-enabled" hide-details="auto" outlined v-model="item.isEnabled"
+                              persistent-hint :hint="i18n.enabled" v-on:change="stopOverrideEdit(true)"></v-checkbox>
                           </div>
                           <!-- custom filter -->
-                          <div @click="startOverrideEdit('override-custom-filter', item, 'customFilter')" class="clicktoedit">
+                          <div @click="startOverrideEdit('override-custom-filter', item, 'customFilter')" :class="{ clicktoedit: !isOverrideEdit('override-custom-filter') }">
                             <div class="font-weight-bold mt-2">
                               {{i18n.customFilter}}:
                             </div>
@@ -1736,23 +1740,17 @@
                   <h3>{{ i18n.operations }}</h3>
                 </v-expansion-panel-header>
                 <v-expansion-panel-content>
-                  <span class="clicktoedit">
+                  <span @click="startEdit('detection-enabled', 'isEnabled')" :class="{ clicktoedit: !isEdit('detection-enabled') }">
                     <div class="ops-header">
                       {{ i18n.status }}:
                     </div>
                     <div class="ops-value" data-aid="detection_metadata_enabled_toggle">
-                      <span @click="startEdit('detection-enabled', 'isEnabled')" v-if="!isEdit('detection-enabled')">
+                      <span v-if="!isEdit('detection-enabled')">
                         {{ detect.isEnabled ? i18n.enabled : i18n.disabled }}
                       </span>
                       <v-checkbox id="detection-enabled-edit" v-model="detect.isEnabled" v-else @change="stopEdit(true)" />
                     </div>
                   </span>
-                  <!-- <div class="ops-header">
-                    Related Playbooks:
-                  </div>
-                  <div class="ops-value">
-                    TODO
-                  </div> -->
                   <div id="ops-buttons">
                     <v-btn id="detection-duplicate" color="primary" @click="duplicateDetection()" data-aid="detection_metadata_duplicate">
                       {{i18n.duplicate}}
@@ -1764,7 +1762,7 @@
                 </v-expansion-panel-content>
               </v-expansion-panel>
               <v-expansion-panel v-if="!isNew()" data-aid="detection_metadata_details">
-                <v-expansion-panel-header id="detection-related-playbooks">
+                <v-expansion-panel-header id="detection-extracted-details">
                   <h3>{{ i18n.details }}</h3>
                 </v-expansion-panel-header>
                 <v-expansion-panel-content>
