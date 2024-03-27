@@ -37,7 +37,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var errModuleStopped = fmt.Errorf("module has stopped running")
+var errModuleStopped = fmt.Errorf("elastalert module has stopped running")
 
 var acceptedExtensions = map[string]bool{
 	".yml":  true,
@@ -65,6 +65,8 @@ type ElastAlertEngine struct {
 	reposFolder                          string
 	isRunning                            bool
 	thread                               *sync.WaitGroup
+	interrupt                            chan struct{}
+	interm                               sync.Mutex
 	allowRegex                           *regexp.Regexp
 	denyRegex                            *regexp.Regexp
 	autoUpdateEnabled                    bool
@@ -84,6 +86,7 @@ func (e *ElastAlertEngine) PrerequisiteModules() []string {
 
 func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.thread = &sync.WaitGroup{}
+	e.interrupt = make(chan struct{}, 1)
 
 	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", 86400)
 	e.sigmaPackageDownloadTemplate = module.GetStringDefault(config, "sigmaPackageDownloadTemplate", "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip")
@@ -139,8 +142,28 @@ func (e *ElastAlertEngine) Start() error {
 
 func (e *ElastAlertEngine) Stop() error {
 	e.isRunning = false
+	e.InterruptSleep()
+	e.thread.Wait()
 
 	return nil
+}
+
+func (e *ElastAlertEngine) InterruptSleep() {
+	e.interm.Lock()
+	defer e.interm.Unlock()
+
+	if len(e.interrupt) == 0 {
+		e.interrupt <- struct{}{}
+	}
+}
+
+func (e *ElastAlertEngine) resetInterrupt() {
+	e.interm.Lock()
+	defer e.interm.Unlock()
+
+	if len(e.interrupt) != 0 {
+		<-e.interrupt
+	}
 }
 
 func (e *ElastAlertEngine) IsRunning() bool {
@@ -308,9 +331,17 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 	templateFound := false
 
 	for e.isRunning {
-		time.Sleep(time.Duration(e.communityRulesImportFrequencySeconds) * time.Second)
+		e.resetInterrupt()
+
+		timer := time.NewTimer(time.Second * time.Duration(e.communityRulesImportFrequencySeconds))
+
+		select {
+		case <-timer.C:
+		case <-e.interrupt:
+		}
+
 		if !e.isRunning {
-			return
+			break
 		}
 
 		start := time.Now()
@@ -387,16 +418,28 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			}
 		}
 
+		if !e.isRunning {
+			break
+		}
+
 		detections, errMap := e.parseZipRules(zips)
 		if errMap != nil {
 			log.WithField("error", errMap).Error("something went wrong while parsing sigma rule files from zips")
 			continue
 		}
 
+		if errMap["module"] == errModuleStopped || !e.isRunning {
+			break
+		}
+
 		repoDets, errMap := e.parseRepoRules(allRepos)
 		if errMap != nil {
 			log.WithField("error", errMap).Error("something went wrong while parsing sigma rule files from repos")
 			continue
+		}
+
+		if errMap["module"] == errModuleStopped || !e.isRunning {
+			break
 		}
 
 		detections = append(detections, repoDets...)
@@ -460,6 +503,10 @@ func (e *ElastAlertEngine) updateRepos() (allRepos map[string]*module.RuleRepo, 
 
 	// pull or clone repos
 	for _, repo := range e.rulesRepos {
+		if !e.isRunning {
+			return nil, false, errModuleStopped
+		}
+
 		parser, err := url.Parse(repo.Repo)
 		if err != nil {
 			log.WithError(err).WithField("repo", repo).Error("Failed to parse repo URL, doing nothing with it")
@@ -529,6 +576,10 @@ func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detections 
 	}()
 
 	for pkg, zipData := range pkgZips {
+		if !e.isRunning {
+			return nil, map[string]error{"module": errModuleStopped}
+		}
+
 		reader, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
 		if err != nil {
 			errMap[pkg] = err
@@ -536,6 +587,10 @@ func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detections 
 		}
 
 		for _, file := range reader.File {
+			if !e.isRunning {
+				return nil, map[string]error{"module": errModuleStopped}
+			}
+
 			if file.FileInfo().IsDir() || !acceptedExtensions[strings.ToLower(filepath.Ext(file.Name))] {
 				continue
 			}
@@ -590,6 +645,10 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos map[string]*module.RuleRepo) 
 	}()
 
 	for repopath, repo := range allRepos {
+		if !e.isRunning {
+			return nil, map[string]error{"module": errModuleStopped}
+		}
+
 		baseDir := repopath
 		if repo.Folder != nil {
 			baseDir = filepath.Join(baseDir, *repo.Folder)
@@ -599,6 +658,10 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos map[string]*module.RuleRepo) 
 			if err != nil {
 				log.WithError(err).WithField("path", path).Error("Failed to walk path")
 				return nil
+			}
+
+			if !e.isRunning {
+				return errModuleStopped
 			}
 
 			if d.IsDir() {
@@ -671,6 +734,10 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 	errMap = map[string]error{} // map[publicID]error
 
 	for _, det := range detections {
+		if !e.isRunning {
+			return nil, errModuleStopped
+		}
+
 		path, ok := index[det.PublicID]
 		if !ok {
 			path = index[det.Title]
@@ -741,6 +808,10 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 	}
 
 	for publicId := range toDelete {
+		if !e.isRunning {
+			return nil, errModuleStopped
+		}
+
 		_, err = e.srv.Detectionstore.DeleteDetection(ctx, community[publicId].Id)
 		if err != nil {
 			errMap[publicId] = fmt.Errorf("unable to delete detection: %s", err)
