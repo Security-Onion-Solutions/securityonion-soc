@@ -131,6 +131,10 @@ func (s *SuricataEngine) ExtractDetails(detect *model.Detection) error {
 		}
 	}
 
+	if detect.PublicID == "" {
+		return fmt.Errorf("rule does not contain a public Id")
+	}
+
 	if detect.Title == "" {
 		detect.Title = "Detection title not yet provided - click here to update this title"
 	}

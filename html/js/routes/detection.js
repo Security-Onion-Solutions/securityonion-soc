@@ -594,17 +594,17 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				this.$refs.detection.validate();
 				if (!this.editForm.valid) return;
 
-				let author = [this.$root.user.firstName, this.$root.user.lastName].filter(x => x).join(' ');
+				const author = [this.$root.user.firstName, this.$root.user.lastName].filter(x => x).join(' ') || this.$root.user.email;
 				this.detect.author = author;
 			}
 
 			let err;
 			switch (this.detect.engine) {
-				case 'yara':
-					err = this.validateYara();
+				case 'strelka':
+					err = this.validateStrelka();
 					break;
-				case 'sigma':
-					err = this.validateSigma();
+				case 'elastalert':
+					err = this.validateElastAlert();
 					break;
 				case 'suricata':
 					err = this.validateSuricata();
@@ -670,11 +670,24 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				this.$root.stopLoading();
 			}
 		},
-		validateYara() {
+		validateStrelka() {
 			return null;
 		},
-		validateSigma() {
-			return null;
+		validateElastAlert() {
+			try {
+				const id = this.extractElastAlertPublicID();
+				if (!id) {
+					throw this.i18n.idMissingErr;
+				}
+
+				if (this.detect.publicId !== id) {
+					throw this.i18n.idMismatchErr;
+				}
+
+				return null;
+			} catch (e) {
+				return e;
+			}
 		},
 		validateSuricata() {
 			try {
@@ -751,6 +764,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		extractSuricataPublicID() {
 			const results = this.sidExtract.exec(this.detect.content);
+			if (results === null || results.length < 2) {
+				throw this.i18n.sidMissingErr;
+			}
+
 			return results[1];
 		},
 		extractSuricataSeverity() {
