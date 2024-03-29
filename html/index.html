@@ -370,12 +370,16 @@
                     <v-select :disabled="loading()" @change="saveTimezone" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint prepend-icon="fa-user-clock"></v-select>
                   </span>
                   <div v-if="isCategory('detections')" class="manual-sync">
-                    <div>
+                    <div data-aid="detections_manualsync_engine">
                       <v-select :items="getPresets('manualSync')" v-model="manualSyncTargetEngine" :hint="i18n.manualSyncHint" persistent-hint prepend-icon="fa-sync"></v-select>
                     </div>
                     <div class="manual-sync-buttons">
-                      <v-btn @click="startManualSync(manualSyncTargetEngine, 'update')">{{i18n.manualSyncUpdate}}</v-btn>
-                      <v-btn @click="startManualSync(manualSyncTargetEngine, 'full')">{{i18n.manualSyncFull}}</v-btn>
+                      <span data-aid="detections_manualsync_differentialupdate">
+                        <v-btn @click="startManualSync(manualSyncTargetEngine, 'update')">{{i18n.manualSyncUpdate}}</v-btn>
+                      </span>
+                      <span data-aid="detections_manualsync_fullupdate">
+                        <v-btn @click="startManualSync(manualSyncTargetEngine, 'full')">{{i18n.manualSyncFull}}</v-btn>
+                      </span>
                     </div>
                   </div>
                 </v-expansion-panel-content>
