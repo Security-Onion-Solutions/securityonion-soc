@@ -642,7 +642,7 @@ td {
   display: flex;
 }
 
-.manual-sync > div:first-child {
+.manual-sync div:first-child {
   flex-grow: 1;
   margin-right: 8px;
 }
@@ -652,6 +652,10 @@ td {
   flex-direction: column;
 }
 
-.manual-sync-buttons > button:first-child {
+.manual-sync-buttons button:first-child {
   margin-bottom: 6px;
+}
+
+.manual-sync-buttons button {
+  width: 100%;
 }
