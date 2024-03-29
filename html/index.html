@@ -370,7 +370,7 @@
                     <v-select :disabled="loading()" @change="saveTimezone" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint prepend-icon="fa-user-clock"></v-select>
                   </span>
                   <div v-if="isCategory('detections')" class="manual-sync">
-                    <div data-aid="detections_manualsync_engine">
+                    <div data-aid="detections_manualsync_engine_select">
                       <v-select :items="getPresets('manualSync')" v-model="manualSyncTargetEngine" :hint="i18n.manualSyncHint" persistent-hint prepend-icon="fa-sync"></v-select>
                     </div>
                     <div class="manual-sync-buttons">
