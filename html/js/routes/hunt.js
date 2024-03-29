@@ -148,6 +148,8 @@ const huntComponent = {
       { text: this.$root.i18n.disable, value: 'disable' },
     ],
     quickActionDetId: null,
+    presets: {},
+    manualSyncTargetEngine: null,
   }},
   created() {
     this.$root.initializeCharts();
@@ -245,6 +247,7 @@ const huntComponent = {
       this.chartLabelMaxLength = params["chartLabelMaxLength"]
       this.chartLabelOtherLimit = params["chartLabelOtherLimit"]
       this.chartLabelFieldSeparator = params["chartLabelFieldSeparator"]
+      this.presets = params["presets"];
       if (this.queries != null && this.queries.length > 0) {
         this.query = this.queries[0].query;
       }
@@ -479,78 +482,20 @@ const huntComponent = {
         // This must occur before the following await, so that Vue flushes the old groupby DOM renders
         this.groupBys.splice(0);
 
-        let response;
-        if (this.category === 'playbooks') {
-          response = {
-            data: {
-              "metrics": {
-                "timeline": null,
-              },
-              "elapsedMs": 668,
-	            "errors": [],
-	            "criteria": {
-		            "query": "(_id:*) AND _index:\"*:so-case\" AND so_kind:detection",
-		            "dateRange": "",
-		            "metricLimit": 0,
-		            "eventLimit": 50,
-                "BeginTime": "2021-08-23T15:41:39-06:00",
-                "EndTime": "2023-08-23T15:41:39-06:00",
-                "CreateTime": "2023-08-23T15:41:39.446264196-06:00",
-                "ParsedQuery": {
-                  "Segments": [
-                    {}
-                  ]
-                },
-                "SortFields": null
-              },
-              "events": [
-                {
-                  "source": "manager:so-case",
-                  "Time": "2023-08-23T14:48:17.140438075-06:00",
-                  "timestamp": "2023-08-23T14:48:17.140Z",
-                  "id": "RDmUHooB-8rNCo4d3nIc",
-                  "type": "",
-                  "score": 3.287682,
-                  "payload": {
-                    "@timestamp": "2023-08-23T14:48:17.140438075-06:00",
-                    "so_playbook.onionId": "75332a3c-b029-46a0-9392-509ff90737a8",
-                    "so_playbook.publicId": "4020131e-223a-421e-8ebe-8a211a5ac4d6",
-                    "so_playbook.title": "Find the baddies",
-                    "so_playbook.severity": "high",
-                    "so_playbook.description": "A long description that spans multiple lines. A long description that spans multiple lines. A long description that spans multiple lines. A long description that spans multiple lines. A long description that spans multiple lines. A long description that spans multiple lines.",
-                    "so_playbook.mechanism": "suricata",
-                    "so_playbook.tags": ["one", "two", "three"],
-                    "so_playbook.relatedPlaybooks": [],
-                    "so_playbook.contributors": ["Jim Bob"],
-                    "so_playbook.userEditable": true,
-                    "so_playbook.createTime": "2023-08-22T12:49:47.302819008-06:00",
-                    "so_playbook.kind": "playbook",
-                    "so_playbook.userId": "83656890-2acd-4c0b-8ab9-7c73e71ddaf3",
-                    "so_kind": "playbook"
-                  }
-                }
-              ],
-              createTime: moment().subtract(2, 'seconds').toISOString(),
-              completeTime: moment().toISOString(),
-            }
-          };
-          response.data.totalEvents = response.data.events.length;
-        } else {
-          let range = this.dateRange;
-          if (this.isCategory('detections')) {
-            range = moment(0).format(this.i18n.timePickerFormat) + " - " + moment().format(this.i18n.timePickerFormat);
-          }
-          response = await this.$root.papi.get('events/', {
-            params: {
-              query: await this.getQuery(),
-              range: range,
-              format: this.i18n.timePickerSample,
-              zone: this.zone,
-              metricLimit: this.groupByLimit,
-              eventLimit: this.eventLimit
-            }
-          });
+        let range = this.dateRange;
+        if (this.isCategory('detections')) {
+          range = moment(0).format(this.i18n.timePickerFormat) + " - " + moment().format(this.i18n.timePickerFormat);
         }
+        let response = await this.$root.papi.get('events/', {
+          params: {
+            query: await this.getQuery(),
+            range: range,
+            format: this.i18n.timePickerSample,
+            zone: this.zone,
+            metricLimit: this.groupByLimit,
+            eventLimit: this.eventLimit
+          }
+        });
 
         this.eventPage = 1;
         this.groupByPage = 1;
@@ -577,6 +522,13 @@ const huntComponent = {
         this.$root.showError(error);
       }
       this.$root.stopLoading();
+    },
+    getPresets(kind) {
+      if (this.presets && this.presets[kind]) {
+        return this.presets[kind].labels;
+      }
+
+      return [];
     },
     async filterQuery(field, value, filterMode, notify = true, scalar = false) {
       try {
@@ -2305,6 +2257,21 @@ const huntComponent = {
         msg = msg.replaceAll('{time}', t);
 
         this.$root.showInfo(msg);
+      }
+    },
+    startManualSync(engine, type) {
+      try {
+        this.$root.papi.post(`detection/sync/${engine}/${type}`);
+
+        let msg = this.i18n.startSyncFull;
+        if (type !== 'full') {
+          msg = this.i18n.startSyncUpdate;
+        }
+
+        msg = msg.replace("{engine}", engine);
+        this.$root.showTip(msg);
+      } catch (e) {
+        this.$root.showError(e);
       }
     },
   }

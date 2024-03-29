@@ -57,6 +57,7 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Delete("/{id}", h.deleteDetection)
 
 		r.Post("/bulk/{newStatus}", h.bulkUpdateDetection)
+		r.Post("/sync/{engine}/{type}", h.syncEngineDetections)
 	})
 }
 
@@ -587,4 +588,27 @@ func (h *DetectionHandler) convertContent(w http.ResponseWriter, r *http.Request
 	web.Respond(w, r, http.StatusOK, map[string]string{
 		"query": eaQuery,
 	})
+}
+
+func (h *DetectionHandler) syncEngineDetections(w http.ResponseWriter, r *http.Request) {
+	engine := strings.ToLower(chi.URLParam(r, "engine"))
+	typ := strings.ToLower(chi.URLParam(r, "type"))
+
+	fullUpgrade := typ == "full"
+
+	if engine == "all" {
+		for _, engine := range h.server.DetectionEngines {
+			engine.InterruptSleep(fullUpgrade)
+		}
+	} else {
+		engine, ok := h.server.DetectionEngines[model.EngineName(engine)]
+		if !ok {
+			web.Respond(w, r, http.StatusBadRequest, errors.New("unknown engine"))
+			return
+		}
+
+		engine.InterruptSleep(fullUpgrade)
+	}
+
+	web.Respond(w, r, http.StatusOK, nil)
 }

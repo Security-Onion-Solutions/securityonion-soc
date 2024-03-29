@@ -46,10 +46,11 @@ type SuricataEngine struct {
 	communityRulesImportFrequencySeconds int
 	isRunning                            bool
 	thread                               *sync.WaitGroup
-	interrupt                            chan struct{}
+	interrupt                            chan bool
 	interm                               sync.Mutex
 	allowRegex                           *regexp.Regexp
 	denyRegex                            *regexp.Regexp
+	notify                               bool
 }
 
 func NewSuricataEngine(srv *server.Server) *SuricataEngine {
@@ -64,7 +65,7 @@ func (s *SuricataEngine) PrerequisiteModules() []string {
 
 func (s *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 	s.thread = &sync.WaitGroup{}
-	s.interrupt = make(chan struct{}, 1)
+	s.interrupt = make(chan bool, 1)
 
 	s.communityRulesFile = module.GetStringDefault(config, "communityRulesFile", "/nsm/rules/suricata/emerging-all.rules")
 	s.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", "/opt/sensoroni/fingerprints/emerging-all.fingerprint")
@@ -103,24 +104,28 @@ func (s *SuricataEngine) Start() error {
 
 func (s *SuricataEngine) Stop() error {
 	s.isRunning = false
-	s.InterruptSleep()
+	s.InterruptSleep(false)
 	s.thread.Wait()
 
 	return nil
 }
 
-func (s *SuricataEngine) InterruptSleep() {
+func (s *SuricataEngine) InterruptSleep(fullUpgrade bool) {
 	s.interm.Lock()
 	defer s.interm.Unlock()
 
+	s.notify = true
+
 	if len(s.interrupt) == 0 {
-		s.interrupt <- struct{}{}
+		s.interrupt <- fullUpgrade
 	}
 }
 
 func (s *SuricataEngine) resetInterrupt() {
 	s.interm.Lock()
 	defer s.interm.Unlock()
+
+	s.notify = false
 
 	if len(s.interrupt) != 0 {
 		<-s.interrupt
@@ -200,14 +205,21 @@ func (s *SuricataEngine) watchCommunityRules() {
 
 		timer := time.NewTimer(time.Second * time.Duration(s.communityRulesImportFrequencySeconds))
 
+		var forceSync bool
+
 		select {
 		case <-timer.C:
-		case <-s.interrupt:
+		case typ := <-s.interrupt:
+			forceSync = typ
 		}
 
 		if !s.isRunning {
 			break
 		}
+
+		log.WithFields(log.Fields{
+			"forceSync": forceSync,
+		}).Info("syncing suricata community rules")
 
 		start := time.Now()
 
@@ -215,11 +227,27 @@ func (s *SuricataEngine) watchCommunityRules() {
 			exists, err := s.srv.Detectionstore.DoesTemplateExist(ctx, "so-detection")
 			if err != nil {
 				log.WithError(err).Error("unable to check for detection index template")
+
+				if s.notify {
+					s.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+						Engine: model.EngineNameSuricata,
+						Status: "error",
+					})
+				}
+
 				continue
 			}
 
 			if !exists {
 				log.Warn("detection index template does not exist, skipping import")
+
+				if s.notify {
+					s.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+						Engine: model.EngineNameSuricata,
+						Status: "error",
+					})
+				}
+
 				continue
 			}
 
@@ -228,24 +256,49 @@ func (s *SuricataEngine) watchCommunityRules() {
 
 		rules, hash, err := readAndHash(s.communityRulesFile)
 		if err != nil {
+			if s.notify {
+				s.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					Engine: model.EngineNameSuricata,
+					Status: "error",
+				})
+			}
+
 			log.WithError(err).Error("unable to read community rules file")
+
 			continue
 		}
 
-		fingerprint, haveFP, err := readFingerprint(s.rulesFingerprintFile)
-		if err != nil {
-			log.WithError(err).Error("unable to read rules fingerprint file")
-			continue
-		}
+		if !forceSync {
+			fingerprint, haveFP, err := readFingerprint(s.rulesFingerprintFile)
+			if err != nil {
+				log.WithError(err).Error("unable to read rules fingerprint file")
+				continue
+			}
 
-		if haveFP && strings.EqualFold(*fingerprint, hash) {
-			// if we have a fingerprint and the hashes are equal, there's nothing to do
-			continue
+			if haveFP && strings.EqualFold(*fingerprint, hash) {
+				// if we have a fingerprint and the hashes are equal, there's nothing to do
+				if s.notify {
+					s.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+						Engine: model.EngineNameSuricata,
+						Status: "success",
+					})
+				}
+
+				continue
+			}
 		}
 
 		allSettings, err := s.srv.Configstore.GetSettings(ctx)
 		if err != nil {
+			if s.notify {
+				s.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					Engine: model.EngineNameSuricata,
+					Status: "error",
+				})
+			}
+
 			log.WithError(err).Error("unable to get settings")
+
 			continue
 		}
 
@@ -257,7 +310,15 @@ func (s *SuricataEngine) watchCommunityRules() {
 
 		commDetections, err := s.ParseRules(rules, util.Ptr(ruleset.Value))
 		if err != nil {
+			if s.notify {
+				s.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					Engine: model.EngineNameSuricata,
+					Status: "error",
+				})
+			}
+
 			log.WithError(err).Error("unable to parse community rules")
+
 			continue
 		}
 
@@ -269,10 +330,18 @@ func (s *SuricataEngine) watchCommunityRules() {
 		if err != nil {
 			if err == errModuleStopped {
 				log.Info("incomplete sync of suricata community detections due to module stopping")
-				return
+				break
+			}
+
+			if s.notify {
+				s.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					Engine: model.EngineNameSuricata,
+					Status: "error",
+				})
 			}
 
 			log.WithError(err).Error("unable to sync suricata community detections")
+
 			continue
 		}
 
@@ -282,10 +351,24 @@ func (s *SuricataEngine) watchCommunityRules() {
 			log.WithFields(log.Fields{
 				"errors": errMap,
 			}).Error("unable to sync all community detections")
+
+			if s.notify {
+				s.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					Engine: model.EngineNameSuricata,
+					Status: "partial",
+				})
+			}
 		} else {
 			err = os.WriteFile(s.rulesFingerprintFile, []byte(hash), 0644)
 			if err != nil {
 				log.WithError(err).WithField("path", s.rulesFingerprintFile).Error("unable to write rules fingerprint file")
+			}
+
+			if s.notify {
+				s.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					Engine: model.EngineNameSuricata,
+					Status: "success",
+				})
 			}
 		}
 
@@ -293,7 +376,7 @@ func (s *SuricataEngine) watchCommunityRules() {
 
 		log.WithFields(log.Fields{
 			"durationSeconds": dur.Seconds(),
-		}).Info("suricata community rules synced")
+		}).Info("suricata community rules sync finished")
 	}
 }
 
