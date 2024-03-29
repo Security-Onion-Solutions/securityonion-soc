@@ -762,7 +762,7 @@
                       </td>
                       <td v-for="field in eventHeaders" :key="field.value">
                         <div :id="'events_quick_action_' + category + '_' + field.value" class="quick-action-trigger d-inline-block" @click="toggleQuickAction($event, item, field.value, item[field.value])" :data-aid="'events_quick_action_' + category">
-                          <span v-if="field.value != 'soc_timestamp'">{{ item[field.value] }}<span class="resolved-host" v-if="$root.pickHostname(item[field.value])"><br/>- {{ $root.pickHostname(item[field.value]) }}</span></span>
+                          <span v-if="field.value != 'soc_timestamp'">{{ $root.correctCasing(item[field.value]) }}<span class="resolved-host" v-if="$root.pickHostname(item[field.value])"><br/>- {{ $root.pickHostname(item[field.value]) }}</span></span>
                           <span v-if="field.value == 'soc_timestamp'" v-text="$root.formatLocalTimestamp(item[field.value], zone)"/>
                         </div>
                       </td>
@@ -1133,34 +1133,7 @@
                       <pre>{{extractedLogic}}</pre>
                     </div>
                   </div>
-                  <!-- <div>
-                    <span class="font-weight-bold">{{i18n.description}}:</span><br/>
-                    <span id="detection-description" @click="startEdit('detection-description', 'description')" v-if="!isEdit('detection-description')">{{ detect.description }}</span>
-                    <v-textarea id="detection-description-edit" v-else hide-details="auto" outlined v-model="detect.description" :rules="requestRules([rules.required])" persistent-hint :hint="i18n.detectionDescription" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)" auto-grow rows="5"></v-textarea>
-                  </div>
-                  <v-select id="detection-engine-edit" v-model="detect.engine" :readonly="detect.isCommunity" :items="getPresets('engine')" persistent-hint :hint="i18n.engine" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
-                  <v-text-field id="detection-author-edit" v-model="detect.author" :readonly="detect.isCommunity" :rules="requestRules([rules.required])" persistent-hint :hint="i18n.author" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"></v-text-field>
-
-                  <v-select id="detection-severity-edit" class="text-capitalize" :readonly="detect.isCommunity" v-model="detect.severity" :items="getPresets('severity')" persistent-hint :hint="i18n.severity" @change="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"/>
-
-                  <span data-aid="detection_enabled_toggle">
-                    <v-checkbox id="detection-enabled-edit" v-model="detect.isEnabled" @change="stopEdit(true)" :label="i18n.detectionEnabled"/>
-                  </span>
-
-                  <span data-aid="detection_reporting_toggle">
-                    <v-checkbox id="detection-reporting-edit" v-model="detect.isReporting" @change="stopEdit(true)" :label="i18n.reporting"/>
-                  </span>
                 </div>
-                <div class="d-flex justify-end text-body-2 mt-2">
-                  <div class="d-inline-flex justify-end">
-                    <v-btn v-if="!isNew()" id="detection-duplicate" text small color="primary" class="align-self-end" @click="duplicateDetection()">
-                      {{i18n.duplicate}}
-                    </v-btn>
-                    <v-btn v-if="!isNew() && !detect.isCommunity" id="detection-delete" text small color="error" class="align-self-end" @click="deleteDetection()">
-                      {{i18n.delete}}
-                    </v-btn>
-                  </div>
-                </div> -->
               </v-tab-item>
               <v-tab-item value="comments" data-aid="detection_comments">
                 <v-row>
@@ -1670,25 +1643,19 @@
                           <div>
                             <v-row no-gutters class="py-1 case tabular-row">
                               <v-col cols="4"><span class="case tabular-label">{{ i18n.severity }}:</span></v-col>
-                              <v-col cols="8"><span class="case">{{ props.item.severity }}</span></v-col>
+                              <v-col cols="8"><span class="case">{{ $root.correctCasing(props.item.severity) }}</span></v-col>
                             </v-row>
                           </div>
                           <div>
                             <v-row no-gutters class="py-1 case tabular-row">
                               <v-col cols="4"><span class="case tabular-label">{{ i18n.engine }}:</span></v-col>
-                              <v-col cols="8"><span class="case">{{ props.item.engine }}</span></v-col>
+                              <v-col cols="8"><span class="case">{{ $root.correctCasing(props.item.engine) }}</span></v-col>
                             </v-row>
                           </div>
                           <div>
                             <v-row no-gutters class="py-1 case tabular-row">
                               <v-col cols="4"><span class="case tabular-label">{{ i18n.content }}:</span></v-col>
                               <v-col cols="8"><span class="case">{{ props.item.content }}</span></v-col>
-                            </v-row>
-                          </div>
-                          <div>
-                            <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label">{{ i18n.note }}:</span></v-col>
-                              <v-col cols="8"><span class="case">{{ props.item.note }}</span></v-col>
                             </v-row>
                           </div>
 
@@ -1789,7 +1756,7 @@
                     {{ i18n.type }}:
                   </div>
                   <div class="ops-value case-title" data-aid="detection_metadata_public_language_display">
-                    {{ detect.language }}
+                    {{ this.$root.correctCasing(detect.language) }}
                   </div>
                   <div class="ops-header">
                     {{ i18n.severity }}:

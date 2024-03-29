@@ -384,15 +384,17 @@ $(document).ready(function() {
                   }
                 });
                 this.subscribe('detection-sync', (report) => {
+                  const eng = this.correctCasing(report.engine);
+
                   switch (report.status) {
                     case 'success':
-                      this.showInfo(this.i18n.syncSuccess.replace('{engine}', report.engine));
+                      this.showInfo(this.i18n.syncSuccess.replace('{engine}', eng));
                       break;
                     case 'partial':
-                      this.showWarning(this.i18n.syncPartialSuccess.replace('{engine}', report.engine));
+                      this.showWarning(this.i18n.syncPartialSuccess.replace('{engine}', eng));
                       break;
                     case 'error':
-                      this.showError(this.i18n.syncFailure.replace('{engine}', report.engine));
+                      this.showError(this.i18n.syncFailure.replace('{engine}', eng));
                       break;
                     }
                 });
@@ -625,6 +627,15 @@ $(document).ready(function() {
           }
           localized = msg;
         }
+        return localized;
+      },
+      correctCasing(origMsg) {
+        const msg = (origMsg+'').toLowerCase();
+        var localized = this.i18n['cc_'+msg];
+        if (!localized) {
+          return origMsg;
+        }
+
         return localized;
       },
       showError(msg) {
