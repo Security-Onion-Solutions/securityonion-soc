@@ -65,11 +65,12 @@ type ElastAlertEngine struct {
 	reposFolder                          string
 	isRunning                            bool
 	thread                               *sync.WaitGroup
-	interrupt                            chan struct{}
+	interrupt                            chan bool
 	interm                               sync.Mutex
 	allowRegex                           *regexp.Regexp
 	denyRegex                            *regexp.Regexp
 	autoUpdateEnabled                    bool
+	notify                               bool
 	IOManager
 }
 
@@ -86,7 +87,7 @@ func (e *ElastAlertEngine) PrerequisiteModules() []string {
 
 func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.thread = &sync.WaitGroup{}
-	e.interrupt = make(chan struct{}, 1)
+	e.interrupt = make(chan bool, 1)
 
 	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", 86400)
 	e.sigmaPackageDownloadTemplate = module.GetStringDefault(config, "sigmaPackageDownloadTemplate", "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip")
@@ -142,24 +143,28 @@ func (e *ElastAlertEngine) Start() error {
 
 func (e *ElastAlertEngine) Stop() error {
 	e.isRunning = false
-	e.InterruptSleep()
+	e.InterruptSleep(false)
 	e.thread.Wait()
 
 	return nil
 }
 
-func (e *ElastAlertEngine) InterruptSleep() {
+func (e *ElastAlertEngine) InterruptSleep(fullUpgrade bool) {
 	e.interm.Lock()
 	defer e.interm.Unlock()
 
+	e.notify = true
+
 	if len(e.interrupt) == 0 {
-		e.interrupt <- struct{}{}
+		e.interrupt <- fullUpgrade
 	}
 }
 
 func (e *ElastAlertEngine) resetInterrupt() {
 	e.interm.Lock()
 	defer e.interm.Unlock()
+
+	e.notify = false
 
 	if len(e.interrupt) != 0 {
 		<-e.interrupt
@@ -327,6 +332,8 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 		e.isRunning = false
 	}()
 
+	var err error
+
 	ctx := e.srv.Context
 	templateFound := false
 
@@ -335,14 +342,21 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 
 		timer := time.NewTimer(time.Second * time.Duration(e.communityRulesImportFrequencySeconds))
 
+		var forceSync bool
+
 		select {
 		case <-timer.C:
-		case <-e.interrupt:
+		case typ := <-e.interrupt:
+			forceSync = typ
 		}
 
 		if !e.isRunning {
 			break
 		}
+
+		log.WithFields(log.Fields{
+			"forceSync": forceSync,
+		}).Info("syncing elastalert community rules")
 
 		start := time.Now()
 
@@ -350,11 +364,27 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			exists, err := e.srv.Detectionstore.DoesTemplateExist(ctx, "so-detection")
 			if err != nil {
 				log.WithError(err).Error("unable to check for detection index template")
+
+				if e.notify {
+					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+						Engine: model.EngineNameElastAlert,
+						Status: "error",
+					})
+				}
+
 				continue
 			}
 
 			if !exists {
 				log.Warn("detection index template does not exist, skipping import")
+
+				if e.notify {
+					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+						Engine: model.EngineNameElastAlert,
+						Status: "error",
+					})
+				}
+
 				continue
 			}
 
@@ -370,13 +400,28 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			zips, errMap = e.downloadSigmaPackages()
 			if len(errMap) != 0 {
 				log.WithField("errorMap", errMap).Error("something went wrong downloading sigma packages")
+
+				if e.notify {
+					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+						Engine: model.EngineNameElastAlert,
+						Status: "error",
+					})
+				}
+
 				continue
 			}
 
-			var err error
 			allRepos, repoChanges, err = e.updateRepos()
 			if err != nil {
 				log.WithError(err).Error("unable to update sigma repos")
+
+				if e.notify {
+					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+						Engine: model.EngineNameElastAlert,
+						Status: "error",
+					})
+				}
+
 				continue
 			}
 		} else {
@@ -394,27 +439,37 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			zipHashes[pkg] = base64.StdEncoding.EncodeToString(h[:])
 		}
 
-		raw, err := e.ReadFile(e.rulesFingerprintFile)
-		if err != nil && !os.IsNotExist(err) {
-			log.WithError(err).WithField("path", e.rulesFingerprintFile).Error("unable to read rules fingerprint file")
-			continue
-		} else if err == nil {
-			oldHashes := map[string]string{}
-
-			err = json.Unmarshal(raw, &oldHashes)
-			if err != nil {
-				log.WithError(err).Error("unable to unmarshal rules fingerprint file")
+		if !forceSync {
+			raw, err := e.ReadFile(e.rulesFingerprintFile)
+			if err != nil && !os.IsNotExist(err) {
+				log.WithError(err).WithField("path", e.rulesFingerprintFile).Error("unable to read rules fingerprint file")
 				continue
-			}
+			} else if err == nil {
+				oldHashes := map[string]string{}
 
-			if reflect.DeepEqual(oldHashes, zipHashes) && !repoChanges {
-				// only an exact match means no work needs to be done.
-				// If there's extra hashes in the old file, we need to remove them.
-				// If there's extra hashes in the new file, we need to add them.
-				// If there's a mix of new and old hashes, we need to include them all
-				// or the old ones would be removed.
-				log.Info("no sigma package changes to sync")
-				continue
+				err = json.Unmarshal(raw, &oldHashes)
+				if err != nil {
+					log.WithError(err).Error("unable to unmarshal rules fingerprint file")
+					continue
+				}
+
+				if reflect.DeepEqual(oldHashes, zipHashes) && !repoChanges {
+					// only an exact match means no work needs to be done.
+					// If there's extra hashes in the old file, we need to remove them.
+					// If there's extra hashes in the new file, we need to add them.
+					// If there's a mix of new and old hashes, we need to include them all
+					// or the old ones would be removed.
+					log.Info("no sigma package changes to sync")
+
+					if e.notify {
+						e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+							Engine: model.EngineNameElastAlert,
+							Status: "success",
+						})
+					}
+
+					continue
+				}
 			}
 		}
 
@@ -425,7 +480,6 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 		detections, errMap := e.parseZipRules(zips)
 		if errMap != nil {
 			log.WithField("error", errMap).Error("something went wrong while parsing sigma rule files from zips")
-			continue
 		}
 
 		if errMap["module"] == errModuleStopped || !e.isRunning {
@@ -435,7 +489,6 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 		repoDets, errMap := e.parseRepoRules(allRepos)
 		if errMap != nil {
 			log.WithField("error", errMap).Error("something went wrong while parsing sigma rule files from repos")
-			continue
 		}
 
 		if errMap["module"] == errModuleStopped || !e.isRunning {
@@ -452,6 +505,14 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			}
 
 			log.WithError(err).Error("unable to sync elastalert community detections")
+
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					Engine: model.EngineNameElastAlert,
+					Status: "error",
+				})
+			}
+
 			continue
 		}
 
@@ -461,6 +522,13 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			log.WithFields(log.Fields{
 				"errors": errMap,
 			}).Error("unable to sync all community detections")
+
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					Engine: model.EngineNameElastAlert,
+					Status: "partial",
+				})
+			}
 		} else {
 			fingerprints, err := json.Marshal(zipHashes)
 			if err != nil {
@@ -471,13 +539,20 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 					log.WithError(err).WithField("path", e.rulesFingerprintFile).Error("unable to write rules fingerprint file")
 				}
 			}
+
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					Engine: model.EngineNameElastAlert,
+					Status: "success",
+				})
+			}
 		}
 
 		dur := time.Since(start)
 
 		log.WithFields(log.Fields{
 			"durationSeconds": dur.Seconds(),
-		}).Info("elastalert community rules synced")
+		}).Info("elastalert community rules sync finished")
 	}
 }
 

@@ -379,9 +379,22 @@ $(document).ready(function() {
                     if (u.host.toUpperCase() == window.location.host.toUpperCase()) {
                       url = u.hash;
                     }
-                    const content = this.i18n.gridMemberImportSuccess.replace('<[url]>', url);
+                    const content = this.i18n.gridMemberImportSuccess.replace('{url}', url);
                     this.showInfo(content);
                   }
+                });
+                this.subscribe('detection-sync', (report) => {
+                  switch (report.status) {
+                    case 'success':
+                      this.showInfo(this.i18n.syncSuccess.replace('{engine}', report.engine));
+                      break;
+                    case 'partial':
+                      this.showWarning(this.i18n.syncPartialSuccess.replace('{engine}', report.engine));
+                      break;
+                    case 'error':
+                      this.showError(this.i18n.syncFailure.replace('{engine}', report.engine));
+                      break;
+                    }
                 });
               }
             } catch (error) {

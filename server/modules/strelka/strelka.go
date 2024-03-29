@@ -47,7 +47,7 @@ type StrelkaEngine struct {
 	srv                                  *server.Server
 	isRunning                            bool
 	thread                               *sync.WaitGroup
-	interrupt                            chan struct{}
+	interrupt                            chan bool
 	interm                               sync.Mutex
 	communityRulesImportFrequencySeconds int
 	yaraRulesFolder                      string
@@ -58,6 +58,7 @@ type StrelkaEngine struct {
 	denyRegex                            *regexp.Regexp
 	compileRules                         bool
 	autoUpdateEnabled                    bool
+	notify                               bool
 	IOManager
 }
 
@@ -74,7 +75,7 @@ func (e *StrelkaEngine) PrerequisiteModules() []string {
 
 func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 	e.thread = &sync.WaitGroup{}
-	e.interrupt = make(chan struct{}, 1)
+	e.interrupt = make(chan bool, 1)
 
 	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", 86400)
 	e.yaraRulesFolder = module.GetStringDefault(config, "yaraRulesFolder", "/opt/sensoroni/yara/rules")
@@ -125,24 +126,28 @@ func (e *StrelkaEngine) Start() error {
 
 func (e *StrelkaEngine) Stop() error {
 	e.isRunning = false
-	e.InterruptSleep()
+	e.InterruptSleep(false)
 	e.thread.Wait()
 
 	return nil
 }
 
-func (e *StrelkaEngine) InterruptSleep() {
+func (e *StrelkaEngine) InterruptSleep(fullUpgrade bool) {
 	e.interm.Lock()
 	defer e.interm.Unlock()
 
+	e.notify = true
+
 	if len(e.interrupt) == 0 {
-		e.interrupt <- struct{}{}
+		e.interrupt <- fullUpgrade
 	}
 }
 
 func (e *StrelkaEngine) resetInterrupt() {
 	e.interm.Lock()
 	defer e.interm.Unlock()
+
+	e.notify = false
 
 	if len(e.interrupt) != 0 {
 		<-e.interrupt
@@ -204,14 +209,21 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 		timer := time.NewTimer(time.Second * time.Duration(e.communityRulesImportFrequencySeconds))
 
+		var forceSync bool
+
 		select {
 		case <-timer.C:
-		case <-e.interrupt:
+		case typ := <-e.interrupt:
+			forceSync = typ
 		}
 
 		if !e.isRunning {
 			break
 		}
+
+		log.WithFields(log.Fields{
+			"forceSync": forceSync,
+		}).Info("syncing strelka community rules")
 
 		start := time.Now()
 
@@ -219,11 +231,27 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			exists, err := e.srv.Detectionstore.DoesTemplateExist(e.srv.Context, "so-detection")
 			if err != nil {
 				log.WithError(err).Error("unable to check for detection index template")
+
+				if e.notify {
+					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+						Engine: model.EngineNameStrelka,
+						Status: "error",
+					})
+				}
+
 				continue
 			}
 
 			if !exists {
 				log.Warn("detection index template does not exist, skipping import")
+
+				if e.notify {
+					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+						Engine: model.EngineNameStrelka,
+						Status: "error",
+					})
+				}
+
 				continue
 			}
 
@@ -234,6 +262,14 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 		entries, err := os.ReadDir(e.reposFolder)
 		if err != nil {
 			log.WithError(err).Error("Failed to read yara repos folder")
+
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					Engine: model.EngineNameStrelka,
+					Status: "error",
+				})
+			}
+
 			continue
 		}
 
@@ -292,7 +328,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 					}
 					cancel()
 
-					if err == nil {
+					if err == nil || forceSync {
 						upToDate[repoPath] = repo
 					}
 				} else {
@@ -322,12 +358,28 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 		if len(upToDate) == 0 {
 			// no updates, skip
 			log.Info("All repos are up to date, ending import")
+
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					Engine: model.EngineNameStrelka,
+					Status: "success",
+				})
+			}
+
 			continue
 		}
 
 		communityDetections, err := e.srv.Detectionstore.GetAllCommunitySIDs(e.srv.Context, util.Ptr(model.EngineNameStrelka))
 		if err != nil {
 			log.WithError(err).Error("Failed to get all community SIDs")
+
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					Engine: model.EngineNameStrelka,
+					Status: "error",
+				})
+			}
+
 			continue
 		}
 
@@ -448,6 +500,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			})
 			if err != nil {
 				log.WithError(err).WithField("repo", repopath).Error("Failed to walk repo")
+
 				continue
 			}
 		}
@@ -460,13 +513,35 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			}
 
 			log.WithError(err).Error("unable to sync YARA community detections")
+
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					Engine: model.EngineNameStrelka,
+					Status: "error",
+				})
+			}
+
 			continue
+		}
+
+		if e.notify {
+			if len(errMap) > 0 {
+				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					Engine: model.EngineNameStrelka,
+					Status: "partial",
+				})
+			} else {
+				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					Engine: model.EngineNameStrelka,
+					Status: "success",
+				})
+			}
 		}
 
 		log.WithFields(log.Fields{
 			"errMap": errMap,
 			"time":   time.Since(start).Seconds(),
-		}).Info("synced community detections")
+		}).Info("strelka community rules sync finished")
 	}
 }
 

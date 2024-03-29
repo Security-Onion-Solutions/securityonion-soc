@@ -636,3 +636,22 @@ td {
   vertical-align: -webkit-baseline-middle;
   margin-right: 8px;
 }
+
+.manual-sync {
+  margin: 6px;
+  display: flex;
+}
+
+.manual-sync > div:first-child {
+  flex-grow: 1;
+  margin-right: 8px;
+}
+
+.manual-sync-buttons {
+  display: flex;
+  flex-direction: column;
+}
+
+.manual-sync-buttons > button:first-child {
+  margin-bottom: 6px;
+}
