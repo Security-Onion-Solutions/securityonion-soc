@@ -927,12 +927,6 @@ const i18n = {
       cc_strelka: 'Strelka',
       cc_suricata: 'Suricata',
       cc_yara: 'YARA',
-      cc_unknown: 'Unknown',
-      cc_informational: 'Informational',
-      cc_low: 'Low',
-      cc_medium: 'Medium',
-      cc_high: 'High',
-      cc_critical: 'Critical',
     },
   },
 

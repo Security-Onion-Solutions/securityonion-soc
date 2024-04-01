@@ -477,7 +477,4 @@ test('correctCasing', () => {
   expect(app.correctCasing('yara')).toBe('YARA');
   expect(app.correctCasing('Yara')).toBe('YARA');
   expect(app.correctCasing('yArA')).toBe('YARA');
-  expect(app.correctCasing('unknown')).toBe('Unknown');
-  expect(app.correctCasing('UNKNOWN')).toBe('Unknown');
-  expect(app.correctCasing('UNKNOWN ')).toBe('UNKNOWN ');
 })
