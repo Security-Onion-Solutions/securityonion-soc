@@ -920,6 +920,13 @@ const i18n = {
       ERROR_SALT_SEND_FILE: 'Unable to send file to minion; ensure that salt is running on the manager node and check salt logs.',
       ERROR_SALT_IMPORT: 'Unable to import file on minion; ensure that salt is running on the manager node and check salt logs.',
       ERROR_SALT_STATE: 'Unable to sync settings. Ensure that salt is running on the manager node and check salt logs.',
+
+      // correct casing
+      cc_elastalert: 'ElastAlert',
+      cc_sigma: 'Sigma',
+      cc_strelka: 'Strelka',
+      cc_suricata: 'Suricata',
+      cc_yara: 'YARA',
     },
   },
 

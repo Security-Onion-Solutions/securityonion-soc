@@ -489,7 +489,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					case 'severity':
 					case 'engine':
 					case 'language':
-						return this.capitalizeOptions(this.presets[kind].labels);
+						return this.translateOptions(this.presets[kind].labels);
 					default:
 						return this.presets[kind].labels;
 				}
@@ -506,14 +506,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			return [];
 		},
-		capitalizeOptions(opts) {
-			return opts.map(opt => {
-				const cap = opt.charAt(0).toUpperCase() + opt.slice(1).toLowerCase();
-				return {
-					text: cap,
-					value: opt,
-				}
-			})
+		translateOptions(opts) {
+			return opts.map(opt => this.$root.correctCasing(opt))
 		},
 		requestRules(rules) {
 			if (this.detect.isCommunity) {
