@@ -469,3 +469,15 @@ test('checkForUnauthorized', () => {
   testCheckForUnauthorized('/login/banner.md', {}, '/blah', false);
   testCheckForUnauthorized('/auth/self-service/login/browser', {}, '/blah', true);
 });
+
+test('correctCasing', () => {
+  expect(app.correctCasing('')).toBe('');
+  expect(app.correctCasing('foo')).toBe('foo');
+  expect(app.correctCasing('FOO')).toBe('FOO');
+  expect(app.correctCasing('yara')).toBe('YARA');
+  expect(app.correctCasing('Yara')).toBe('YARA');
+  expect(app.correctCasing('yArA')).toBe('YARA');
+  expect(app.correctCasing('unknown')).toBe('Unknown');
+  expect(app.correctCasing('UNKNOWN')).toBe('Unknown');
+  expect(app.correctCasing('UNKNOWN ')).toBe('UNKNOWN ');
+})
