@@ -629,7 +629,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				}
 
 				this.detect = response.data;
+				delete this.detect.kind;
+
 				this.tagOverrides();
+				this.loadAssociations();
 				this.origDetect = Object.assign({}, this.detect);
 
 				// reinstate expanded override
