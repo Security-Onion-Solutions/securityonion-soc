@@ -836,7 +836,18 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 				results.Unchanged++
 			}
 		} else {
+
+			//autoEnabledSigmaRules := module.GetStringArrayDefault(config, "autoEnabledSigmaRules", []string{"securityonion-resources+critical", "securityonion-resources+high"})
+			autoEnabledSigmaRules := []string{"securityonion-resources+critical", "sigmarulestest+high"}
+
 			det.IsEnabled = false
+			metaCombined := *det.Ruleset + "+" + string(det.Severity)
+			for _, rule := range autoEnabledSigmaRules {
+				if rule == metaCombined {
+					det.IsEnabled = true
+					break
+				}
+			}
 
 			_, err = e.srv.Detectionstore.CreateDetection(ctx, det)
 			if err != nil {
