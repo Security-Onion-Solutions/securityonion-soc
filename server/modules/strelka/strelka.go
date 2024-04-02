@@ -34,7 +34,7 @@ import (
 
 var errModuleStopped = fmt.Errorf("strelka module has stopped running")
 
-var socAuthor = "SOC Import"
+var socAuthor = "__SOC_IMPORT__"
 
 type IOManager interface {
 	ReadFile(path string) ([]byte, error)

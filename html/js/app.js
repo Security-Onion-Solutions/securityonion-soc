@@ -629,6 +629,14 @@ $(document).ready(function() {
         }
         return localized;
       },
+      tryLocalize(msg) {
+        const localized = this.localizeMessage(msg);
+        if (localized) {
+          return localized;
+        }
+
+        return msg;
+      },
       correctCasing(origMsg) {
         const msg = (origMsg+'').toLowerCase();
         var localized = this.i18n['cc_'+msg];

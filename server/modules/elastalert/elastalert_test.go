@@ -370,7 +370,7 @@ level: high
 	engine.denyRegex = regexp.MustCompile("deny")
 
 	expected := &model.Detection{
-		Author:      "SOC Import",
+		Author:      "__SOC_IMPORT__",
 		PublicID:    "00000000-0000-0000-0000-00000000",
 		Title:       "Always Alert",
 		Severity:    model.SeverityHigh,
@@ -434,6 +434,7 @@ level: high
 	engine.denyRegex = regexp.MustCompile("deny")
 
 	expected := &model.Detection{
+		Author:      "__SOC_IMPORT__",
 		PublicID:    "bf86ef21-41e6-417b-9a05-b9ea6bf28a38",
 		Title:       "Security Onion - SOC Login Failure",
 		Severity:    model.SeverityHigh,

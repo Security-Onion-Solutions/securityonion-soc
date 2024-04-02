@@ -39,7 +39,7 @@ var licenseBySource = map[string]string{
 	"etpro":  model.LicenseCommercial,
 }
 
-var socAuthor = "SOC Import"
+var socAuthor = "__SOC_IMPORT__"
 
 type SuricataEngine struct {
 	srv                                  *server.Server
