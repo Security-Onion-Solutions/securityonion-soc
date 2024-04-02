@@ -591,6 +591,10 @@ td {
   margin-top: 16px;
 }
 
+.ops-value::after {
+  content: "\00a0";
+}
+
 .ops-value > .v-input--selection-controls {
   margin-top: 0 !important;
   padding-top: 0 !important;

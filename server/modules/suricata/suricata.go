@@ -39,6 +39,8 @@ var licenseBySource = map[string]string{
 	"etpro":  model.LicenseCommercial,
 }
 
+var socAuthor = "SOC Import"
+
 type SuricataEngine struct {
 	srv                                  *server.Server
 	communityRulesFile                   string
@@ -513,6 +515,7 @@ func (s *SuricataEngine) ParseRules(content string, ruleset *string) ([]*model.D
 		}
 
 		d := &model.Detection{
+			Author:   socAuthor,
 			PublicID: sid,
 			Title:    title,
 			Severity: severity,

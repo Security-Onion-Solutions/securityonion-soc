@@ -1820,12 +1820,7 @@
                   {{ i18n.author }}:
                 </div>
                 <div class="value" data-aid="detection_metadata_author_display">
-                  <span v-if="!detect.isCommunity">
-                    {{ detect.author }}
-                  </span>
-                  <span v-else>
-                    {{ detect.ruleset }}
-                  </span>
+                  {{ detect.author }}
                 </div>
               </div>
               <div>

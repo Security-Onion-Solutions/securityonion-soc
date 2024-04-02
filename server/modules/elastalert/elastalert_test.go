@@ -370,6 +370,7 @@ level: high
 	engine.denyRegex = regexp.MustCompile("deny")
 
 	expected := &model.Detection{
+		Author:      "SOC Import",
 		PublicID:    "00000000-0000-0000-0000-00000000",
 		Title:       "Always Alert",
 		Severity:    model.SeverityHigh,
