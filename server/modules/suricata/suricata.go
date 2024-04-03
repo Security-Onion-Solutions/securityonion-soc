@@ -22,6 +22,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	mutil "github.com/security-onion-solutions/securityonion-soc/server/modules/util"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
 	"github.com/apex/log"
@@ -203,32 +204,6 @@ func (e *SuricataEngine) ExtractDetails(detect *model.Detection) error {
 	return nil
 }
 
-func (e *SuricataEngine) determineWaitTime() time.Duration {
-	lastImport, err := e.readStateFile()
-	if err != nil {
-		log.WithError(err).Error("unable to read ElastAlert state file, deleting it")
-
-		derr := e.DeleteFile(e.stateFilePath)
-		if derr != nil {
-			log.WithError(derr).WithField("path", e.stateFilePath).Error("unable to remove ElastAlert state file, ignoring it")
-		}
-	}
-
-	var timerDur time.Duration
-
-	if lastImport != nil {
-		lastImportTime := time.Unix(int64(*lastImport), 0)
-		nextImportTime := lastImportTime.Add(time.Second * time.Duration(e.communityRulesImportFrequencySeconds))
-
-		timerDur = time.Until(nextImportTime)
-	} else {
-		log.Info("no ElastAlert state file found, waiting 20 mins for first import")
-		timerDur = time.Duration(time.Minute * 20)
-	}
-
-	return timerDur
-}
-
 func (e *SuricataEngine) watchCommunityRules() {
 	e.thread.Add(1)
 	defer func() {
@@ -240,7 +215,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 
 	templateFound := false
 
-	timerDur := e.determineWaitTime()
+	timerDur := mutil.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Second*time.Duration(e.communityRulesImportFrequencySeconds))
 
 	for e.isRunning {
 		e.resetInterrupt()
@@ -323,7 +298,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 				// if we have a fingerprint and the hashes are equal, there's nothing to do
 				log.Info("Suricata sync found no changes")
 
-				e.writeStateFile()
+				mutil.WriteStateFile(e.IOManager, e.stateFilePath)
 
 				if e.notify {
 					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
@@ -393,7 +368,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 			continue
 		}
 
-		e.writeStateFile()
+		mutil.WriteStateFile(e.IOManager, e.stateFilePath)
 
 		if len(errMap) > 0 {
 			// there were errors, don't save the fingerprint.
@@ -889,34 +864,6 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 	}).Info("suricata community diff")
 
 	return errMap, nil
-}
-
-func (e *SuricataEngine) readStateFile() (lastImport *uint64, err error) {
-	raw, err := e.ReadFile(e.stateFilePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-
-		return nil, fmt.Errorf("unable to read Suricata state file: %w", err)
-	}
-
-	unix, err := strconv.ParseUint(string(raw), 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("unable to parse Suricata state file: %w", err)
-	}
-
-	return &unix, nil
-}
-
-func (e *SuricataEngine) writeStateFile() {
-	unix := time.Now().Unix()
-	sUnix := strconv.FormatInt(unix, 10)
-
-	err := e.WriteFile(e.stateFilePath, []byte(sUnix), 0644)
-	if err != nil {
-		log.WithError(err).Error("unable to write Suricata state file")
-	}
 }
 
 func settingByID(all []*model.Setting, id string) *model.Setting {

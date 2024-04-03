@@ -23,7 +23,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +31,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	mutil "github.com/security-onion-solutions/securityonion-soc/server/modules/util"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
 	"github.com/apex/log"
@@ -80,7 +80,6 @@ type ElastAlertEngine struct {
 }
 
 func checkRulesetEnabled(e *ElastAlertEngine, det *model.Detection) {
-
 	det.IsEnabled = false
 	metaCombined := *det.Ruleset + "+" + string(det.Severity)
 	for _, rule := range e.autoEnabledSigmaRules {
@@ -346,32 +345,6 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 	return errMap, nil
 }
 
-func (e *ElastAlertEngine) determineWaitTime() time.Duration {
-	lastImport, err := e.readStateFile()
-	if err != nil {
-		log.WithError(err).Error("unable to read ElastAlert state file, deleting it")
-
-		derr := e.DeleteFile(e.stateFilePath)
-		if derr != nil {
-			log.WithError(derr).WithField("path", e.stateFilePath).Error("unable to remove ElastAlert state file, ignoring it")
-		}
-	}
-
-	var timerDur time.Duration
-
-	if lastImport != nil {
-		lastImportTime := time.Unix(int64(*lastImport), 0)
-		nextImportTime := lastImportTime.Add(time.Second * time.Duration(e.communityRulesImportFrequencySeconds))
-
-		timerDur = time.Until(nextImportTime)
-	} else {
-		log.Info("no ElastAlert state file found, waiting 20 mins for first import")
-		timerDur = time.Duration(time.Minute * 20)
-	}
-
-	return timerDur
-}
-
 func (e *ElastAlertEngine) startCommunityRuleImport() {
 	e.thread.Add(1)
 	defer func() {
@@ -384,7 +357,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 	ctx := e.srv.Context
 	templateFound := false
 
-	timerDur := e.determineWaitTime()
+	timerDur := mutil.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Duration(e.communityRulesImportFrequencySeconds)*time.Second)
 
 	for e.isRunning {
 		e.resetInterrupt()
@@ -512,7 +485,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 					// or the old ones would be removed.
 					log.Info("ElastAlert sync found no changes")
 
-					e.writeStateFile()
+					mutil.WriteStateFile(e.IOManager, e.stateFilePath)
 
 					if e.notify {
 						e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
@@ -569,7 +542,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			continue
 		}
 
-		e.writeStateFile()
+		mutil.WriteStateFile(e.IOManager, e.stateFilePath)
 
 		if len(errMap) > 0 {
 			// there were errors, don't save the fingerprint.
@@ -1068,34 +1041,6 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 	query = strings.TrimSpace(query)
 
 	return query, nil
-}
-
-func (e *ElastAlertEngine) readStateFile() (lastImport *uint64, err error) {
-	raw, err := e.ReadFile(e.stateFilePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-
-		return nil, fmt.Errorf("unable to read ElastAlert state file: %w", err)
-	}
-
-	unix, err := strconv.ParseUint(string(raw), 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("unable to parse ElastAlert state file: %w", err)
-	}
-
-	return &unix, nil
-}
-
-func (e *ElastAlertEngine) writeStateFile() {
-	unix := time.Now().Unix()
-	sUnix := strconv.FormatInt(unix, 10)
-
-	err := e.WriteFile(e.stateFilePath, []byte(sUnix), 0644)
-	if err != nil {
-		log.WithError(err).Error("unable to write ElastAlert state file")
-	}
 }
 
 type CustomWrapper struct {

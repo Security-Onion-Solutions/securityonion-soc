@@ -26,6 +26,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	mutil "github.com/security-onion-solutions/securityonion-soc/server/modules/util"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
 	"github.com/apex/log"
@@ -200,32 +201,6 @@ func (e *StrelkaEngine) SyncLocalDetections(ctx context.Context, _ []*model.Dete
 	return e.syncDetections(ctx)
 }
 
-func (e *StrelkaEngine) determineWaitTime() time.Duration {
-	lastImport, err := e.readStateFile()
-	if err != nil {
-		log.WithError(err).Error("unable to read Strelka state file, deleting it")
-
-		derr := e.DeleteFile(e.stateFilePath)
-		if derr != nil {
-			log.WithError(derr).WithField("path", e.stateFilePath).Error("unable to remove Strelka state file, ignoring it")
-		}
-	}
-
-	var timerDur time.Duration
-
-	if lastImport != nil {
-		lastImportTime := time.Unix(int64(*lastImport), 0)
-		nextImportTime := lastImportTime.Add(time.Second * time.Duration(e.communityRulesImportFrequencySeconds))
-
-		timerDur = time.Until(nextImportTime)
-	} else {
-		log.Info("no Strelka state file found, waiting 20 mins for first import")
-		timerDur = time.Duration(time.Minute * 20)
-	}
-
-	return timerDur
-}
-
 func (e *StrelkaEngine) startCommunityRuleImport() {
 	e.thread.Add(1)
 	defer func() {
@@ -235,7 +210,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 	templateFound := false
 
-	timerDur := e.determineWaitTime()
+	timerDur := mutil.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Second*time.Duration(e.communityRulesImportFrequencySeconds))
 
 	for e.isRunning {
 		e.resetInterrupt()
@@ -394,7 +369,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			// no updates, skip
 			log.Info("Strelka sync found no changes")
 
-			e.writeStateFile()
+			mutil.WriteStateFile(e.IOManager, e.stateFilePath)
 
 			if e.notify {
 				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
@@ -562,7 +537,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			continue
 		}
 
-		e.writeStateFile()
+		mutil.WriteStateFile(e.IOManager, e.stateFilePath)
 
 		if e.notify {
 			if len(errMap) > 0 {
@@ -840,34 +815,6 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]s
 	}
 
 	return nil, nil
-}
-
-func (e *StrelkaEngine) readStateFile() (lastImport *uint64, err error) {
-	raw, err := e.ReadFile(e.stateFilePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-
-		return nil, fmt.Errorf("unable to read Strelka state file: %w", err)
-	}
-
-	unix, err := strconv.ParseUint(string(raw), 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("unable to parse Strelka state file: %w", err)
-	}
-
-	return &unix, nil
-}
-
-func (e *StrelkaEngine) writeStateFile() {
-	unix := time.Now().Unix()
-	sUnix := strconv.FormatInt(unix, 10)
-
-	err := e.WriteFile(e.stateFilePath, []byte(sUnix), 0644)
-	if err != nil {
-		log.WithError(err).Error("unable to write Strelka state file")
-	}
 }
 
 // go install go.uber.org/mock/mockgen@latest
