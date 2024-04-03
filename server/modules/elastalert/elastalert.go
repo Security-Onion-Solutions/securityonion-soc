@@ -31,6 +31,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	mutil "github.com/security-onion-solutions/securityonion-soc/server/modules/util"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
 	"github.com/apex/log"
@@ -74,11 +75,11 @@ type ElastAlertEngine struct {
 	denyRegex                            *regexp.Regexp
 	autoUpdateEnabled                    bool
 	notify                               bool
+	stateFilePath                        string
 	IOManager
 }
 
 func checkRulesetEnabled(e *ElastAlertEngine, det *model.Detection) {
-
 	det.IsEnabled = false
 	metaCombined := *det.Ruleset + "+" + string(det.Severity)
 	for _, rule := range e.autoEnabledSigmaRules {
@@ -145,6 +146,8 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 			return fmt.Errorf("unable to compile ElastAlert's denyRegex: %w", err)
 		}
 	}
+
+	e.stateFilePath = module.GetStringDefault(config, "stateFilePath", "/opt/so/conf/soc/elastalertengine.state")
 
 	return nil
 }
@@ -354,10 +357,12 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 	ctx := e.srv.Context
 	templateFound := false
 
+	timerDur := mutil.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Duration(e.communityRulesImportFrequencySeconds)*time.Second)
+
 	for e.isRunning {
 		e.resetInterrupt()
 
-		timer := time.NewTimer(time.Second * time.Duration(e.communityRulesImportFrequencySeconds))
+		timer := time.NewTimer(timerDur)
 
 		var forceSync bool
 
@@ -370,6 +375,8 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 		if !e.isRunning {
 			break
 		}
+
+		timerDur = time.Second * time.Duration(e.communityRulesImportFrequencySeconds)
 
 		log.WithFields(log.Fields{
 			"forceSync": forceSync,
@@ -476,7 +483,9 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 					// If there's extra hashes in the new file, we need to add them.
 					// If there's a mix of new and old hashes, we need to include them all
 					// or the old ones would be removed.
-					log.Info("no sigma package changes to sync")
+					log.Info("ElastAlert sync found no changes")
+
+					mutil.WriteStateFile(e.IOManager, e.stateFilePath)
 
 					if e.notify {
 						e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
@@ -532,6 +541,8 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 
 			continue
 		}
+
+		mutil.WriteStateFile(e.IOManager, e.stateFilePath)
 
 		if len(errMap) > 0 {
 			// there were errors, don't save the fingerprint.

@@ -26,6 +26,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	mutil "github.com/security-onion-solutions/securityonion-soc/server/modules/util"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
 	"github.com/apex/log"
@@ -61,6 +62,7 @@ type StrelkaEngine struct {
 	compileRules                         bool
 	autoUpdateEnabled                    bool
 	notify                               bool
+	stateFilePath                        string
 	IOManager
 }
 
@@ -113,6 +115,8 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 			return fmt.Errorf("unable to compile Strelka's denyRegex: %w", err)
 		}
 	}
+
+	e.stateFilePath = module.GetStringDefault(config, "stateFilePath", "/opt/so/conf/soc/strelkaengine.state")
 
 	return nil
 }
@@ -206,10 +210,12 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 	templateFound := false
 
+	timerDur := mutil.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Second*time.Duration(e.communityRulesImportFrequencySeconds))
+
 	for e.isRunning {
 		e.resetInterrupt()
 
-		timer := time.NewTimer(time.Second * time.Duration(e.communityRulesImportFrequencySeconds))
+		timer := time.NewTimer(timerDur)
 
 		var forceSync bool
 
@@ -222,6 +228,8 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 		if !e.isRunning {
 			break
 		}
+
+		timerDur = time.Second * time.Duration(e.communityRulesImportFrequencySeconds)
 
 		log.WithFields(log.Fields{
 			"forceSync": forceSync,
@@ -359,7 +367,9 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 		if len(upToDate) == 0 {
 			// no updates, skip
-			log.Info("All repos are up to date, ending import")
+			log.Info("Strelka sync found no changes")
+
+			mutil.WriteStateFile(e.IOManager, e.stateFilePath)
 
 			if e.notify {
 				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
@@ -526,6 +536,8 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 			continue
 		}
+
+		mutil.WriteStateFile(e.IOManager, e.stateFilePath)
 
 		if e.notify {
 			if len(errMap) > 0 {
