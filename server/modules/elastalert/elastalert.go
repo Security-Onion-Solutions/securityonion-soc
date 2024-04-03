@@ -61,6 +61,7 @@ type ElastAlertEngine struct {
 	elastAlertRulesFolder                string
 	rulesFingerprintFile                 string
 	sigmaRulePackages                    []string
+	autoEnabledSigmaRules                []string
 	rulesRepos                           []*module.RuleRepo
 	reposFolder                          string
 	isRunning                            bool
@@ -72,6 +73,19 @@ type ElastAlertEngine struct {
 	autoUpdateEnabled                    bool
 	notify                               bool
 	IOManager
+}
+
+func checkRulesetEnabled(e *ElastAlertEngine, det *model.Detection) {
+
+	det.IsEnabled = false
+	metaCombined := *det.Ruleset + "+" + string(det.Severity)
+	for _, rule := range e.autoEnabledSigmaRules {
+		if rule == metaCombined {
+			det.IsEnabled = true
+			break
+		}
+	}
+
 }
 
 func NewElastAlertEngine(srv *server.Server) *ElastAlertEngine {
@@ -94,6 +108,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.elastAlertRulesFolder = module.GetStringDefault(config, "elastAlertRulesFolder", "/opt/sensoroni/elastalert")
 	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", "/opt/sensoroni/fingerprints/sigma.fingerprint")
 	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", false)
+	e.autoEnabledSigmaRules = module.GetStringArrayDefault(config, "autoEnabledSigmaRules", []string{"securityonion-resources+critical", "securityonion-resources+high"})
 
 	pkgs := module.GetStringArrayDefault(config, "sigmaRulePackages", []string{"core", "emerging_threats_addon"})
 	e.parseSigmaPackages(pkgs)
@@ -836,7 +851,8 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 				results.Unchanged++
 			}
 		} else {
-			det.IsEnabled = false
+
+			checkRulesetEnabled(e, det)
 
 			_, err = e.srv.Detectionstore.CreateDetection(ctx, det)
 			if err != nil {
