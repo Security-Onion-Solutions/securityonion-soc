@@ -158,5 +158,9 @@ func (r *SigmaRule) ToDetection(content string, ruleset string, license string) 
 		License:     license,
 	}
 
+	if r.Description != nil {
+		det.Description = *r.Description
+	}
+
 	return det
 }
