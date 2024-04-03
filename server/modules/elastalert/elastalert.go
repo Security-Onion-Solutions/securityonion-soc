@@ -346,6 +346,32 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 	return errMap, nil
 }
 
+func (e *ElastAlertEngine) determineWaitTime() time.Duration {
+	lastImport, err := e.readStateFile()
+	if err != nil {
+		log.WithError(err).Error("unable to read ElastAlert state file, deleting it")
+
+		derr := e.DeleteFile(e.stateFilePath)
+		if derr != nil {
+			log.WithError(derr).WithField("path", e.stateFilePath).Error("unable to remove ElastAlert state file, ignoring it")
+		}
+	}
+
+	var timerDur time.Duration
+
+	if lastImport != nil {
+		lastImportTime := time.Unix(int64(*lastImport), 0)
+		nextImportTime := lastImportTime.Add(time.Second * time.Duration(e.communityRulesImportFrequencySeconds))
+
+		timerDur = time.Until(nextImportTime)
+	} else {
+		log.Info("no ElastAlert state file found, waiting 20 mins for first import")
+		timerDur = time.Duration(time.Minute * 20)
+	}
+
+	return timerDur
+}
+
 func (e *ElastAlertEngine) startCommunityRuleImport() {
 	e.thread.Add(1)
 	defer func() {
@@ -358,27 +384,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 	ctx := e.srv.Context
 	templateFound := false
 
-	lastImport, err := e.readStateFile()
-	if err != nil {
-		log.WithError(err).Error("unable to read state file, deleting it")
-
-		err = e.DeleteFile(e.stateFilePath)
-		if err != nil {
-			log.WithError(err).WithField("path", e.stateFilePath).Error("unable to remove state file, ignoring it")
-		}
-	}
-
-	timerDur := time.Second * time.Duration(e.communityRulesImportFrequencySeconds)
-
-	if lastImport != nil {
-		lastImportTime := time.Unix(int64(*lastImport), 0)
-		nextImportTime := lastImportTime.Add(time.Second * time.Duration(e.communityRulesImportFrequencySeconds))
-
-		timerDur = time.Until(nextImportTime)
-	} else if err == nil {
-		log.Info("no ElastAlert state file found, waiting 20 mins for first import")
-		timerDur = time.Duration(time.Minute * 20)
-	}
+	timerDur := e.determineWaitTime()
 
 	for e.isRunning {
 		e.resetInterrupt()

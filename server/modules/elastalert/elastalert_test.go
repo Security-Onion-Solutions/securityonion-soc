@@ -17,6 +17,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -817,4 +818,54 @@ func TestExtractDetails(t *testing.T) {
 			assert.Equal(t, test.ExpectedSeverity, detect.Severity)
 		})
 	}
+}
+
+func TestDetermineWaitTimeNoState(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mio := mock.NewMockIOManager(ctrl)
+
+	mio.EXPECT().ReadFile("state").Return(nil, fs.ErrNotExist)
+
+	engine := ElastAlertEngine{
+		stateFilePath: "state",
+		IOManager:     mio,
+	}
+
+	dur := engine.determineWaitTime()
+	assert.Equal(t, time.Duration(time.Minute*20), dur)
+}
+
+func TestDetermineWaitTime(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mio := mock.NewMockIOManager(ctrl)
+
+	tenSecAgo := time.Now().Unix() - 10
+	tenSecAgoStr := strconv.FormatInt(tenSecAgo, 10)
+
+	mio.EXPECT().ReadFile("state").Return([]byte(tenSecAgoStr), nil)
+
+	engine := ElastAlertEngine{
+		stateFilePath:                        "state",
+		communityRulesImportFrequencySeconds: 60,
+		IOManager:                            mio,
+	}
+
+	dur := engine.determineWaitTime()
+	assert.InEpsilon(t, time.Duration(time.Second*50), dur, 1)
+}
+
+func TestDetermineWaitTimeBadRead(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mio := mock.NewMockIOManager(ctrl)
+
+	mio.EXPECT().ReadFile("state").Return(nil, errors.New("bad read"))
+	mio.EXPECT().DeleteFile("state").Return(nil)
+
+	engine := ElastAlertEngine{
+		stateFilePath: "state",
+		IOManager:     mio,
+	}
+
+	dur := engine.determineWaitTime()
+	assert.Equal(t, time.Duration(time.Minute*20), dur)
 }

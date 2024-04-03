@@ -71,24 +71,24 @@ func NewSuricataEngine(srv *server.Server) *SuricataEngine {
 	}
 }
 
-func (s *SuricataEngine) PrerequisiteModules() []string {
+func (e *SuricataEngine) PrerequisiteModules() []string {
 	return nil
 }
 
-func (s *SuricataEngine) Init(config module.ModuleConfig) (err error) {
-	s.thread = &sync.WaitGroup{}
-	s.interrupt = make(chan bool, 1)
+func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
+	e.thread = &sync.WaitGroup{}
+	e.interrupt = make(chan bool, 1)
 
-	s.communityRulesFile = module.GetStringDefault(config, "communityRulesFile", "/nsm/rules/suricata/emerging-all.rules")
-	s.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", "/opt/sensoroni/fingerprints/emerging-all.fingerprint")
-	s.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", 86400)
+	e.communityRulesFile = module.GetStringDefault(config, "communityRulesFile", "/nsm/rules/suricata/emerging-all.rules")
+	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", "/opt/sensoroni/fingerprints/emerging-all.fingerprint")
+	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", 86400)
 
 	allow := module.GetStringDefault(config, "allowRegex", "")
 	deny := module.GetStringDefault(config, "denyRegex", "")
 
 	if allow != "" {
 		var err error
-		s.allowRegex, err = regexp.Compile(allow)
+		e.allowRegex, err = regexp.Compile(allow)
 		if err != nil {
 			return fmt.Errorf("unable to compile Suricata's allowRegex: %w", err)
 		}
@@ -96,65 +96,65 @@ func (s *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 
 	if deny != "" {
 		var err error
-		s.denyRegex, err = regexp.Compile(deny)
+		e.denyRegex, err = regexp.Compile(deny)
 		if err != nil {
 			return fmt.Errorf("unable to compile Suricata's denyRegex: %w", err)
 		}
 	}
 
-	s.stateFilePath = module.GetStringDefault(config, "stateFilePath", "/opt/so/conf/soc/suricataengine.state")
+	e.stateFilePath = module.GetStringDefault(config, "stateFilePath", "/opt/so/conf/soc/suricataengine.state")
 
 	return nil
 }
 
-func (s *SuricataEngine) Start() error {
-	s.srv.DetectionEngines[model.EngineNameSuricata] = s
-	s.isRunning = true
+func (e *SuricataEngine) Start() error {
+	e.srv.DetectionEngines[model.EngineNameSuricata] = e
+	e.isRunning = true
 
-	go s.watchCommunityRules()
-
-	return nil
-}
-
-func (s *SuricataEngine) Stop() error {
-	s.isRunning = false
-	s.InterruptSleep(false)
-	s.thread.Wait()
+	go e.watchCommunityRules()
 
 	return nil
 }
 
-func (s *SuricataEngine) InterruptSleep(fullUpgrade bool) {
-	s.interm.Lock()
-	defer s.interm.Unlock()
+func (e *SuricataEngine) Stop() error {
+	e.isRunning = false
+	e.InterruptSleep(false)
+	e.thread.Wait()
 
-	s.notify = true
+	return nil
+}
 
-	if len(s.interrupt) == 0 {
-		s.interrupt <- fullUpgrade
+func (e *SuricataEngine) InterruptSleep(fullUpgrade bool) {
+	e.interm.Lock()
+	defer e.interm.Unlock()
+
+	e.notify = true
+
+	if len(e.interrupt) == 0 {
+		e.interrupt <- fullUpgrade
 	}
 }
 
-func (s *SuricataEngine) resetInterrupt() {
-	s.interm.Lock()
-	defer s.interm.Unlock()
+func (e *SuricataEngine) resetInterrupt() {
+	e.interm.Lock()
+	defer e.interm.Unlock()
 
-	s.notify = false
+	e.notify = false
 
-	if len(s.interrupt) != 0 {
-		<-s.interrupt
+	if len(e.interrupt) != 0 {
+		<-e.interrupt
 	}
 }
 
-func (s *SuricataEngine) IsRunning() bool {
-	return s.isRunning
+func (e *SuricataEngine) IsRunning() bool {
+	return e.isRunning
 }
 
-func (s *SuricataEngine) ConvertRule(ctx context.Context, detect *model.Detection) (string, error) {
+func (e *SuricataEngine) ConvertRule(ctx context.Context, detect *model.Detection) (string, error) {
 	return "", fmt.Errorf("not implemented")
 }
 
-func (s *SuricataEngine) ExtractDetails(detect *model.Detection) error {
+func (e *SuricataEngine) ExtractDetails(detect *model.Detection) error {
 	rule, err := ParseSuricataRule(detect.Content)
 	if err != nil {
 		return err
@@ -203,41 +203,47 @@ func (s *SuricataEngine) ExtractDetails(detect *model.Detection) error {
 	return nil
 }
 
-func (s *SuricataEngine) watchCommunityRules() {
-	s.thread.Add(1)
-	defer func() {
-		s.thread.Done()
-		s.isRunning = false
-	}()
-
-	ctx := s.srv.Context
-
-	templateFound := false
-
-	lastImport, err := s.readStateFile()
+func (e *SuricataEngine) determineWaitTime() time.Duration {
+	lastImport, err := e.readStateFile()
 	if err != nil {
-		log.WithError(err).Error("unable to read state file, deleting it")
+		log.WithError(err).Error("unable to read ElastAlert state file, deleting it")
 
-		err = s.DeleteFile(s.stateFilePath)
-		if err != nil {
-			log.WithError(err).WithField("path", s.stateFilePath).Error("unable to remove state file, ignoring it")
+		derr := e.DeleteFile(e.stateFilePath)
+		if derr != nil {
+			log.WithError(derr).WithField("path", e.stateFilePath).Error("unable to remove ElastAlert state file, ignoring it")
 		}
 	}
 
-	timerDur := time.Second * time.Duration(s.communityRulesImportFrequencySeconds)
+	var timerDur time.Duration
 
 	if lastImport != nil {
 		lastImportTime := time.Unix(int64(*lastImport), 0)
-		nextImportTime := lastImportTime.Add(time.Second * time.Duration(s.communityRulesImportFrequencySeconds))
+		nextImportTime := lastImportTime.Add(time.Second * time.Duration(e.communityRulesImportFrequencySeconds))
 
 		timerDur = time.Until(nextImportTime)
-	} else if err == nil {
-		log.Info("no Suricata state file found, waiting 20 mins for first import")
+	} else {
+		log.Info("no ElastAlert state file found, waiting 20 mins for first import")
 		timerDur = time.Duration(time.Minute * 20)
 	}
 
-	for s.isRunning {
-		s.resetInterrupt()
+	return timerDur
+}
+
+func (e *SuricataEngine) watchCommunityRules() {
+	e.thread.Add(1)
+	defer func() {
+		e.thread.Done()
+		e.isRunning = false
+	}()
+
+	ctx := e.srv.Context
+
+	templateFound := false
+
+	timerDur := e.determineWaitTime()
+
+	for e.isRunning {
+		e.resetInterrupt()
 
 		timer := time.NewTimer(timerDur)
 
@@ -245,15 +251,15 @@ func (s *SuricataEngine) watchCommunityRules() {
 
 		select {
 		case <-timer.C:
-		case typ := <-s.interrupt:
+		case typ := <-e.interrupt:
 			forceSync = typ
 		}
 
-		if !s.isRunning {
+		if !e.isRunning {
 			break
 		}
 
-		timerDur = time.Second * time.Duration(s.communityRulesImportFrequencySeconds)
+		timerDur = time.Second * time.Duration(e.communityRulesImportFrequencySeconds)
 
 		log.WithFields(log.Fields{
 			"forceSync": forceSync,
@@ -262,12 +268,12 @@ func (s *SuricataEngine) watchCommunityRules() {
 		start := time.Now()
 
 		if !templateFound {
-			exists, err := s.srv.Detectionstore.DoesTemplateExist(ctx, "so-detection")
+			exists, err := e.srv.Detectionstore.DoesTemplateExist(ctx, "so-detection")
 			if err != nil {
 				log.WithError(err).Error("unable to check for detection index template")
 
-				if s.notify {
-					s.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+				if e.notify {
+					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
 						Engine: model.EngineNameSuricata,
 						Status: "error",
 					})
@@ -279,8 +285,8 @@ func (s *SuricataEngine) watchCommunityRules() {
 			if !exists {
 				log.Warn("detection index template does not exist, skipping import")
 
-				if s.notify {
-					s.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+				if e.notify {
+					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
 						Engine: model.EngineNameSuricata,
 						Status: "error",
 					})
@@ -292,10 +298,10 @@ func (s *SuricataEngine) watchCommunityRules() {
 			templateFound = true
 		}
 
-		rules, hash, err := readAndHash(s.communityRulesFile)
+		rules, hash, err := readAndHash(e.communityRulesFile)
 		if err != nil {
-			if s.notify {
-				s.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
 					Engine: model.EngineNameSuricata,
 					Status: "error",
 				})
@@ -307,7 +313,7 @@ func (s *SuricataEngine) watchCommunityRules() {
 		}
 
 		if !forceSync {
-			fingerprint, haveFP, err := readFingerprint(s.rulesFingerprintFile)
+			fingerprint, haveFP, err := readFingerprint(e.rulesFingerprintFile)
 			if err != nil {
 				log.WithError(err).Error("unable to read rules fingerprint file")
 				continue
@@ -317,10 +323,10 @@ func (s *SuricataEngine) watchCommunityRules() {
 				// if we have a fingerprint and the hashes are equal, there's nothing to do
 				log.Info("Suricata sync found no changes")
 
-				s.writeStateFile()
+				e.writeStateFile()
 
-				if s.notify {
-					s.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+				if e.notify {
+					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
 						Engine: model.EngineNameSuricata,
 						Status: "success",
 					})
@@ -330,10 +336,10 @@ func (s *SuricataEngine) watchCommunityRules() {
 			}
 		}
 
-		allSettings, err := s.srv.Configstore.GetSettings(ctx)
+		allSettings, err := e.srv.Configstore.GetSettings(ctx)
 		if err != nil {
-			if s.notify {
-				s.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
 					Engine: model.EngineNameSuricata,
 					Status: "error",
 				})
@@ -344,16 +350,16 @@ func (s *SuricataEngine) watchCommunityRules() {
 			continue
 		}
 
-		if !s.isRunning {
+		if !e.isRunning {
 			break
 		}
 
 		ruleset := settingByID(allSettings, "idstools.config.ruleset")
 
-		commDetections, err := s.ParseRules(rules, util.Ptr(ruleset.Value))
+		commDetections, err := e.ParseRules(rules, util.Ptr(ruleset.Value))
 		if err != nil {
-			if s.notify {
-				s.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
 					Engine: model.EngineNameSuricata,
 					Status: "error",
 				})
@@ -368,15 +374,15 @@ func (s *SuricataEngine) watchCommunityRules() {
 			d.IsCommunity = true
 		}
 
-		errMap, err := s.syncCommunityDetections(ctx, commDetections, allSettings)
+		errMap, err := e.syncCommunityDetections(ctx, commDetections, allSettings)
 		if err != nil {
 			if err == errModuleStopped {
 				log.Info("incomplete sync of suricata community detections due to module stopping")
 				break
 			}
 
-			if s.notify {
-				s.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
 					Engine: model.EngineNameSuricata,
 					Status: "error",
 				})
@@ -387,7 +393,7 @@ func (s *SuricataEngine) watchCommunityRules() {
 			continue
 		}
 
-		s.writeStateFile()
+		e.writeStateFile()
 
 		if len(errMap) > 0 {
 			// there were errors, don't save the fingerprint.
@@ -396,20 +402,20 @@ func (s *SuricataEngine) watchCommunityRules() {
 				"errors": errMap,
 			}).Error("unable to sync all community detections")
 
-			if s.notify {
-				s.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
 					Engine: model.EngineNameSuricata,
 					Status: "partial",
 				})
 			}
 		} else {
-			err = os.WriteFile(s.rulesFingerprintFile, []byte(hash), 0644)
+			err = os.WriteFile(e.rulesFingerprintFile, []byte(hash), 0644)
 			if err != nil {
-				log.WithError(err).WithField("path", s.rulesFingerprintFile).Error("unable to write rules fingerprint file")
+				log.WithError(err).WithField("path", e.rulesFingerprintFile).Error("unable to write rules fingerprint file")
 			}
 
-			if s.notify {
-				s.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
 					Engine: model.EngineNameSuricata,
 					Status: "success",
 				})
@@ -462,7 +468,7 @@ func readFingerprint(path string) (fingerprint *string, ok bool, err error) {
 	return fingerprint, true, nil
 }
 
-func (s *SuricataEngine) ValidateRule(rule string) (string, error) {
+func (e *SuricataEngine) ValidateRule(rule string) (string, error) {
 	parsed, err := ParseSuricataRule(rule)
 	if err != nil {
 		return rule, err
@@ -471,13 +477,13 @@ func (s *SuricataEngine) ValidateRule(rule string) (string, error) {
 	return parsed.String(), nil
 }
 
-func (s *SuricataEngine) ParseRules(content string, ruleset *string) ([]*model.Detection, error) {
+func (e *SuricataEngine) ParseRules(content string, ruleset *string) ([]*model.Detection, error) {
 	// expecting one rule per line
 	lines := strings.Split(content, "\n")
 	dets := []*model.Detection{}
 
 	for i, line := range lines {
-		if !s.isRunning {
+		if !e.isRunning {
 			return nil, errModuleStopped
 		}
 
@@ -487,17 +493,17 @@ func (s *SuricataEngine) ParseRules(content string, ruleset *string) ([]*model.D
 			continue
 		}
 
-		if s.denyRegex != nil && s.denyRegex.MatchString(line) {
+		if e.denyRegex != nil && e.denyRegex.MatchString(line) {
 			log.WithField("rule", line).Info("content matched Suricata's denyRegex")
 			continue
 		}
 
-		if s.allowRegex != nil && !s.allowRegex.MatchString(line) {
+		if e.allowRegex != nil && !e.allowRegex.MatchString(line) {
 			log.WithField("rule", line).Info("content didn't match Suricata's allowRegex")
 			continue
 		}
 
-		line, err := s.ValidateRule(line)
+		line, err := e.ValidateRule(line)
 		if err != nil {
 			return nil, fmt.Errorf("unable to parse line %d: %w", i+1, err)
 		}
@@ -577,14 +583,14 @@ func (s *SuricataEngine) ParseRules(content string, ruleset *string) ([]*model.D
 	return dets, nil
 }
 
-func (s *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*model.Detection) (errMap map[string]string, err error) {
+func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*model.Detection) (errMap map[string]string, err error) {
 	defer func() {
 		if len(errMap) == 0 {
 			errMap = nil
 		}
 	}()
 
-	allSettings, err := s.srv.Configstore.GetSettings(ctx)
+	allSettings, err := e.srv.Configstore.GetSettings(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -756,27 +762,27 @@ func (s *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*
 
 	threshold.Value = string(yamlThreshold)
 
-	err = s.srv.Configstore.UpdateSetting(ctx, local, false)
+	err = e.srv.Configstore.UpdateSetting(ctx, local, false)
 	if err != nil {
 		return errMap, err
 	}
 
-	err = s.srv.Configstore.UpdateSetting(ctx, enabled, false)
+	err = e.srv.Configstore.UpdateSetting(ctx, enabled, false)
 	if err != nil {
 		return errMap, err
 	}
 
-	err = s.srv.Configstore.UpdateSetting(ctx, disabled, false)
+	err = e.srv.Configstore.UpdateSetting(ctx, disabled, false)
 	if err != nil {
 		return errMap, err
 	}
 
-	err = s.srv.Configstore.UpdateSetting(ctx, modify, false)
+	err = e.srv.Configstore.UpdateSetting(ctx, modify, false)
 	if err != nil {
 		return errMap, err
 	}
 
-	err = s.srv.Configstore.UpdateSetting(ctx, threshold, false)
+	err = e.srv.Configstore.UpdateSetting(ctx, threshold, false)
 	if err != nil {
 		return errMap, err
 	}
@@ -784,7 +790,7 @@ func (s *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*
 	return errMap, nil
 }
 
-func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections []*model.Detection, allSettings []*model.Setting) (errMap map[string]string, err error) {
+func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detections []*model.Detection, allSettings []*model.Setting) (errMap map[string]string, err error) {
 	defer func() {
 		if len(errMap) == 0 {
 			errMap = nil
@@ -815,7 +821,7 @@ func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 	disabledIndex := indexEnabled(disabledLines, true)
 	modifyIndex := indexModify(modifyLines)
 
-	commSIDs, err := s.srv.Detectionstore.GetAllCommunitySIDs(ctx, util.Ptr(model.EngineNameSuricata))
+	commSIDs, err := e.srv.Detectionstore.GetAllCommunitySIDs(ctx, util.Ptr(model.EngineNameSuricata))
 	if err != nil {
 		return nil, err
 	}
@@ -826,7 +832,7 @@ func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 	}
 
 	for _, detect := range detections {
-		if !s.isRunning {
+		if !e.isRunning {
 			return nil, errModuleStopped
 		}
 
@@ -840,7 +846,7 @@ func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 				detect.Id = orig.Id
 				detect.Overrides = orig.Overrides
 
-				_, err = s.srv.Detectionstore.UpdateDetection(ctx, detect)
+				_, err = e.srv.Detectionstore.UpdateDetection(ctx, detect)
 				if err != nil {
 					errMap[detect.PublicID] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
 				} else {
@@ -852,7 +858,7 @@ func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 				delete(toDelete, detect.PublicID)
 			}
 		} else {
-			_, err = s.srv.Detectionstore.CreateDetection(ctx, detect)
+			_, err = e.srv.Detectionstore.CreateDetection(ctx, detect)
 			if err != nil {
 				errMap[detect.PublicID] = fmt.Sprintf("unable to create detection; reason=%s", err.Error())
 			} else {
@@ -862,11 +868,11 @@ func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 	}
 
 	for sid := range toDelete {
-		if !s.isRunning {
+		if !e.isRunning {
 			return nil, errModuleStopped
 		}
 
-		_, err = s.srv.Detectionstore.DeleteDetection(ctx, commSIDs[sid].Id)
+		_, err = e.srv.Detectionstore.DeleteDetection(ctx, commSIDs[sid].Id)
 		if err != nil {
 			errMap[sid] = fmt.Sprintf("unable to delete detection; reason=%s", err.Error())
 		} else {
@@ -885,8 +891,8 @@ func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 	return errMap, nil
 }
 
-func (s *SuricataEngine) readStateFile() (lastImport *uint64, err error) {
-	raw, err := s.ReadFile(s.stateFilePath)
+func (e *SuricataEngine) readStateFile() (lastImport *uint64, err error) {
+	raw, err := e.ReadFile(e.stateFilePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -903,11 +909,11 @@ func (s *SuricataEngine) readStateFile() (lastImport *uint64, err error) {
 	return &unix, nil
 }
 
-func (s *SuricataEngine) writeStateFile() {
+func (e *SuricataEngine) writeStateFile() {
 	unix := time.Now().Unix()
 	sUnix := strconv.FormatInt(unix, 10)
 
-	err := s.WriteFile(s.stateFilePath, []byte(sUnix), 0644)
+	err := e.WriteFile(e.stateFilePath, []byte(sUnix), 0644)
 	if err != nil {
 		log.WithError(err).Error("unable to write Suricata state file")
 	}
