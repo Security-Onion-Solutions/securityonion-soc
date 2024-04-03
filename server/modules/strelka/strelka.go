@@ -61,6 +61,7 @@ type StrelkaEngine struct {
 	compileRules                         bool
 	autoUpdateEnabled                    bool
 	notify                               bool
+	stateFilePath                        string
 	IOManager
 }
 
@@ -113,6 +114,8 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 			return fmt.Errorf("unable to compile Strelka's denyRegex: %w", err)
 		}
 	}
+
+	e.stateFilePath = module.GetStringDefault(config, "stateFilePath", "/opt/so/conf/soc/strelkaengine.state")
 
 	return nil
 }
@@ -206,10 +209,32 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 	templateFound := false
 
+	lastImport, err := e.readStateFile()
+	if err != nil {
+		log.WithError(err).Error("unable to read state file, deleting it")
+
+		err = e.DeleteFile(e.stateFilePath)
+		if err != nil {
+			log.WithError(err).WithField("path", e.stateFilePath).Error("unable to remove state file, ignoring it")
+		}
+	}
+
+	timerDur := time.Second * time.Duration(e.communityRulesImportFrequencySeconds)
+
+	if lastImport != nil {
+		lastImportTime := time.Unix(int64(*lastImport), 0)
+		nextImportTime := lastImportTime.Add(time.Second * time.Duration(e.communityRulesImportFrequencySeconds))
+
+		timerDur = time.Until(nextImportTime)
+	} else if err == nil {
+		log.Info("no Strelka state file found, waiting 20 mins for first import")
+		timerDur = time.Duration(time.Minute * 20)
+	}
+
 	for e.isRunning {
 		e.resetInterrupt()
 
-		timer := time.NewTimer(time.Second * time.Duration(e.communityRulesImportFrequencySeconds))
+		timer := time.NewTimer(timerDur)
 
 		var forceSync bool
 
@@ -222,6 +247,8 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 		if !e.isRunning {
 			break
 		}
+
+		timerDur = time.Second * time.Duration(e.communityRulesImportFrequencySeconds)
 
 		log.WithFields(log.Fields{
 			"forceSync": forceSync,
@@ -359,7 +386,9 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 		if len(upToDate) == 0 {
 			// no updates, skip
-			log.Info("All repos are up to date, ending import")
+			log.Info("Strelka sync found no changes")
+
+			e.writeStateFile()
 
 			if e.notify {
 				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
@@ -526,6 +555,8 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 			continue
 		}
+
+		e.writeStateFile()
 
 		if e.notify {
 			if len(errMap) > 0 {
@@ -803,6 +834,34 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]s
 	}
 
 	return nil, nil
+}
+
+func (e *StrelkaEngine) readStateFile() (lastImport *uint64, err error) {
+	raw, err := e.ReadFile(e.stateFilePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+
+		return nil, fmt.Errorf("unable to read Strelka state file: %w", err)
+	}
+
+	unix, err := strconv.ParseUint(string(raw), 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse Strelka state file: %w", err)
+	}
+
+	return &unix, nil
+}
+
+func (e *StrelkaEngine) writeStateFile() {
+	unix := time.Now().Unix()
+	sUnix := strconv.FormatInt(unix, 10)
+
+	err := e.WriteFile(e.stateFilePath, []byte(sUnix), 0644)
+	if err != nil {
+		log.WithError(err).Error("unable to write Strelka state file")
+	}
 }
 
 // go install go.uber.org/mock/mockgen@latest

@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -74,6 +75,7 @@ type ElastAlertEngine struct {
 	denyRegex                            *regexp.Regexp
 	autoUpdateEnabled                    bool
 	notify                               bool
+	stateFilePath                        string
 	IOManager
 }
 
@@ -145,6 +147,8 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 			return fmt.Errorf("unable to compile ElastAlert's denyRegex: %w", err)
 		}
 	}
+
+	e.stateFilePath = module.GetStringDefault(config, "stateFilePath", "/opt/so/conf/soc/elastalertengine.state")
 
 	return nil
 }
@@ -354,10 +358,32 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 	ctx := e.srv.Context
 	templateFound := false
 
+	lastImport, err := e.readStateFile()
+	if err != nil {
+		log.WithError(err).Error("unable to read state file, deleting it")
+
+		err = e.DeleteFile(e.stateFilePath)
+		if err != nil {
+			log.WithError(err).WithField("path", e.stateFilePath).Error("unable to remove state file, ignoring it")
+		}
+	}
+
+	timerDur := time.Second * time.Duration(e.communityRulesImportFrequencySeconds)
+
+	if lastImport != nil {
+		lastImportTime := time.Unix(int64(*lastImport), 0)
+		nextImportTime := lastImportTime.Add(time.Second * time.Duration(e.communityRulesImportFrequencySeconds))
+
+		timerDur = time.Until(nextImportTime)
+	} else if err == nil {
+		log.Info("no ElastAlert state file found, waiting 20 mins for first import")
+		timerDur = time.Duration(time.Minute * 20)
+	}
+
 	for e.isRunning {
 		e.resetInterrupt()
 
-		timer := time.NewTimer(time.Second * time.Duration(e.communityRulesImportFrequencySeconds))
+		timer := time.NewTimer(timerDur)
 
 		var forceSync bool
 
@@ -370,6 +396,8 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 		if !e.isRunning {
 			break
 		}
+
+		timerDur = time.Second * time.Duration(e.communityRulesImportFrequencySeconds)
 
 		log.WithFields(log.Fields{
 			"forceSync": forceSync,
@@ -476,7 +504,9 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 					// If there's extra hashes in the new file, we need to add them.
 					// If there's a mix of new and old hashes, we need to include them all
 					// or the old ones would be removed.
-					log.Info("no sigma package changes to sync")
+					log.Info("ElastAlert sync found no changes")
+
+					e.writeStateFile()
 
 					if e.notify {
 						e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
@@ -532,6 +562,8 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 
 			continue
 		}
+
+		e.writeStateFile()
 
 		if len(errMap) > 0 {
 			// there were errors, don't save the fingerprint.
@@ -1030,6 +1062,34 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 	query = strings.TrimSpace(query)
 
 	return query, nil
+}
+
+func (e *ElastAlertEngine) readStateFile() (lastImport *uint64, err error) {
+	raw, err := e.ReadFile(e.stateFilePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+
+		return nil, fmt.Errorf("unable to read ElastAlert state file: %w", err)
+	}
+
+	unix, err := strconv.ParseUint(string(raw), 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse ElastAlert state file: %w", err)
+	}
+
+	return &unix, nil
+}
+
+func (e *ElastAlertEngine) writeStateFile() {
+	unix := time.Now().Unix()
+	sUnix := strconv.FormatInt(unix, 10)
+
+	err := e.WriteFile(e.stateFilePath, []byte(sUnix), 0644)
+	if err != nil {
+		log.WithError(err).Error("unable to write ElastAlert state file")
+	}
 }
 
 type CustomWrapper struct {

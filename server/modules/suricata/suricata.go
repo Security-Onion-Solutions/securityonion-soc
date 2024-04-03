@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"regexp"
 	"strconv"
@@ -41,6 +42,12 @@ var licenseBySource = map[string]string{
 
 var socAuthor = "__soc_import__"
 
+type IOManager interface {
+	ReadFile(path string) ([]byte, error)
+	WriteFile(path string, contents []byte, perm fs.FileMode) error
+	DeleteFile(path string) error
+}
+
 type SuricataEngine struct {
 	srv                                  *server.Server
 	communityRulesFile                   string
@@ -53,11 +60,14 @@ type SuricataEngine struct {
 	allowRegex                           *regexp.Regexp
 	denyRegex                            *regexp.Regexp
 	notify                               bool
+	stateFilePath                        string
+	IOManager
 }
 
 func NewSuricataEngine(srv *server.Server) *SuricataEngine {
 	return &SuricataEngine{
-		srv: srv,
+		srv:       srv,
+		IOManager: &ResourceManager{},
 	}
 }
 
@@ -91,6 +101,8 @@ func (s *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 			return fmt.Errorf("unable to compile Suricata's denyRegex: %w", err)
 		}
 	}
+
+	s.stateFilePath = module.GetStringDefault(config, "stateFilePath", "/opt/so/conf/soc/suricataengine.state")
 
 	return nil
 }
@@ -202,10 +214,32 @@ func (s *SuricataEngine) watchCommunityRules() {
 
 	templateFound := false
 
+	lastImport, err := s.readStateFile()
+	if err != nil {
+		log.WithError(err).Error("unable to read state file, deleting it")
+
+		err = s.DeleteFile(s.stateFilePath)
+		if err != nil {
+			log.WithError(err).WithField("path", s.stateFilePath).Error("unable to remove state file, ignoring it")
+		}
+	}
+
+	timerDur := time.Second * time.Duration(s.communityRulesImportFrequencySeconds)
+
+	if lastImport != nil {
+		lastImportTime := time.Unix(int64(*lastImport), 0)
+		nextImportTime := lastImportTime.Add(time.Second * time.Duration(s.communityRulesImportFrequencySeconds))
+
+		timerDur = time.Until(nextImportTime)
+	} else if err == nil {
+		log.Info("no Suricata state file found, waiting 20 mins for first import")
+		timerDur = time.Duration(time.Minute * 20)
+	}
+
 	for s.isRunning {
 		s.resetInterrupt()
 
-		timer := time.NewTimer(time.Second * time.Duration(s.communityRulesImportFrequencySeconds))
+		timer := time.NewTimer(timerDur)
 
 		var forceSync bool
 
@@ -218,6 +252,8 @@ func (s *SuricataEngine) watchCommunityRules() {
 		if !s.isRunning {
 			break
 		}
+
+		timerDur = time.Second * time.Duration(s.communityRulesImportFrequencySeconds)
 
 		log.WithFields(log.Fields{
 			"forceSync": forceSync,
@@ -279,6 +315,10 @@ func (s *SuricataEngine) watchCommunityRules() {
 
 			if haveFP && strings.EqualFold(*fingerprint, hash) {
 				// if we have a fingerprint and the hashes are equal, there's nothing to do
+				log.Info("Suricata sync found no changes")
+
+				s.writeStateFile()
+
 				if s.notify {
 					s.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
 						Engine: model.EngineNameSuricata,
@@ -346,6 +386,8 @@ func (s *SuricataEngine) watchCommunityRules() {
 
 			continue
 		}
+
+		s.writeStateFile()
 
 		if len(errMap) > 0 {
 			// there were errors, don't save the fingerprint.
@@ -843,6 +885,34 @@ func (s *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 	return errMap, nil
 }
 
+func (s *SuricataEngine) readStateFile() (lastImport *uint64, err error) {
+	raw, err := s.ReadFile(s.stateFilePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+
+		return nil, fmt.Errorf("unable to read Suricata state file: %w", err)
+	}
+
+	unix, err := strconv.ParseUint(string(raw), 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse Suricata state file: %w", err)
+	}
+
+	return &unix, nil
+}
+
+func (s *SuricataEngine) writeStateFile() {
+	unix := time.Now().Unix()
+	sUnix := strconv.FormatInt(unix, 10)
+
+	err := s.WriteFile(s.stateFilePath, []byte(sUnix), 0644)
+	if err != nil {
+		log.WithError(err).Error("unable to write Suricata state file")
+	}
+}
+
 func settingByID(all []*model.Setting, id string) *model.Setting {
 	found, ok := lo.Find(all, func(s *model.Setting) bool {
 		return s.Id == id
@@ -929,4 +999,21 @@ func lookupLicense(ruleset string) string {
 	}
 
 	return license
+}
+
+// go install go.uber.org/mock/mockgen@latest
+//go:generate mockgen -destination mock/mock_iomanager.go -package mock . IOManager
+
+type ResourceManager struct{}
+
+func (_ *ResourceManager) ReadFile(path string) ([]byte, error) {
+	return os.ReadFile(path)
+}
+
+func (_ *ResourceManager) WriteFile(path string, contents []byte, perm fs.FileMode) error {
+	return os.WriteFile(path, contents, perm)
+}
+
+func (_ *ResourceManager) DeleteFile(path string) error {
+	return os.Remove(path)
 }
