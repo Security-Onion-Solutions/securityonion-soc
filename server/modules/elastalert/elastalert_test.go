@@ -32,6 +32,34 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func TestCheckAutoEnabledSigmaRule(t *testing.T) {
+	e := &ElastAlertEngine{
+		autoEnabledSigmaRules: []string{"securityonion-resources+high", "core+critical"},
+	}
+
+	tests := []struct {
+		name     string
+		ruleset  string
+		severity model.Severity
+		expected bool
+	}{
+		{"securityonion-resources rule with high severity, rule enabled", "securityonion-resources", model.SeverityHigh, true},
+		{"core rule with critical severity, rule enabled", "core", model.SeverityCritical, true},
+		{"core rule with high severity, rule not enabled", "core", model.SeverityHigh, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			det := &model.Detection{
+				Ruleset:  util.Ptr(tt.ruleset),
+				Severity: tt.severity,
+			}
+			checkRulesetEnabled(e, det)
+			assert.Equal(t, tt.expected, det.IsEnabled)
+		})
+	}
+}
+
 func TestElastAlertModule(t *testing.T) {
 	srv := &server.Server{
 		DetectionEngines: map[model.EngineName]server.DetectionEngine{},

@@ -75,6 +75,19 @@ type ElastAlertEngine struct {
 	IOManager
 }
 
+func checkRulesetEnabled(e *ElastAlertEngine, det *model.Detection) {
+
+	det.IsEnabled = false
+	metaCombined := *det.Ruleset + "+" + string(det.Severity)
+	for _, rule := range e.autoEnabledSigmaRules {
+		if rule == metaCombined {
+			det.IsEnabled = true
+			break
+		}
+	}
+
+}
+
 func NewElastAlertEngine(srv *server.Server) *ElastAlertEngine {
 	return &ElastAlertEngine{
 		srv:       srv,
@@ -839,14 +852,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 			}
 		} else {
 
-			det.IsEnabled = false
-			metaCombined := *det.Ruleset + "+" + string(det.Severity)
-			for _, rule := range e.autoEnabledSigmaRules {
-				if rule == metaCombined {
-					det.IsEnabled = true
-					break
-				}
-			}
+			checkRulesetEnabled(e, det)
 
 			_, err = e.srv.Detectionstore.CreateDetection(ctx, det)
 			if err != nil {
