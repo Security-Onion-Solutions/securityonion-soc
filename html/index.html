@@ -762,8 +762,9 @@
                       </td>
                       <td v-for="field in eventHeaders" :key="field.value">
                         <div :id="'events_quick_action_' + category + '_' + field.value" class="quick-action-trigger d-inline-block" @click="toggleQuickAction($event, item, field.value, item[field.value])" :data-aid="'events_quick_action_' + category">
-                          <span v-if="field.value != 'soc_timestamp'">{{ $root.correctCasing(item[field.value]) }}<span class="resolved-host" v-if="$root.pickHostname(item[field.value])"><br/>- {{ $root.pickHostname(item[field.value]) }}</span></span>
+                          <span v-if="field.value != 'soc_timestamp' && !field.value.endsWith('detection.author')">{{ $root.correctCasing(item[field.value]) }}<span class="resolved-host" v-if="$root.pickHostname(item[field.value])"><br/>- {{ $root.pickHostname(item[field.value]) }}</span></span>
                           <span v-if="field.value == 'soc_timestamp'" v-text="$root.formatLocalTimestamp(item[field.value], zone)"/>
+                          <span v-if="field.value.endsWith('detection.author')" v-text="$root.tryLocalize(item[field.value])"/>
                         </div>
                       </td>
                     </tr>
@@ -786,7 +787,7 @@
                                 <div :id="'events_fields_' + category + '_' + item.key" class="d-inline-block expansion" v-text="item.key" :data-aid="'events_field_name_' + category"></div>
                               </td>
                               <td class="expansion" :data-aid="'events_field_value_' + category">
-                                <div class="quick-action-trigger d-inline-block expansion hardwrap" @click="toggleQuickAction($event, expanded[0], item.key, item.value)">{{item.value}}<span class="resolved-host" v-if="$root.pickHostname(item.value)"> - {{ $root.pickHostname(item.value) }}</span></div>
+                                <div class="quick-action-trigger d-inline-block expansion hardwrap" @click="toggleQuickAction($event, expanded[0], item.key, item.value)">{{item.key.endsWith('detection.author') ? $root.tryLocalize(item.value) : item.value}}<span class="resolved-host" v-if="$root.pickHostname(item.value)"> - {{ $root.pickHostname(item.value) }}</span></div>
                               </td>
                             </tr>
                           </template>
@@ -1619,7 +1620,7 @@
                           <div>
                             <v-row no-gutters class="py-1 case tabular-row">
                               <v-col cols="4"><span class="case tabular-label">{{ i18n.author }}:</span></v-col>
-                              <v-col cols="8"><span class="case">{{ props.item.author }}</span></v-col>
+                              <v-col cols="8"><span class="case">{{ $root.tryLocalize(props.item.author) }}</span></v-col>
                             </v-row>
                           </div>
                           <div>
@@ -1776,22 +1777,22 @@
                   <div class="ops-value" data-aid="detection_metadata_public_license_display">
                     {{ detect.license }}
                   </div>
-                  <div class="ops-header" v-if="extractedCreated">
+                  <div class="ops-header">
                     {{ i18n.dateCreated }}:
                   </div>
-                  <div class="ops-value" v-if="extractedCreated" data-aid="detection_metadata_public_created_time_display">
+                  <div class="ops-value" data-aid="detection_metadata_public_created_time_display">
                     {{ extractedCreated }}
                   </div>
-                  <div class="ops-header" v-if="extractedUpdated">
+                  <div class="ops-header">
                     {{ i18n.dateModified }}:
                   </div>
-                  <div class="ops-value"  v-if="extractedUpdated" data-aid="detection_metadata_public_updated_time_display">
+                  <div class="ops-value" data-aid="detection_metadata_public_updated_time_display">
                     {{ extractedUpdated }}
                   </div>
-                  <div class="ops-header" v-if="extractedAuthor">
+                  <div class="ops-header">
                     {{ i18n.author }}:
                   </div>
-                  <div class="ops-value"  v-if="extractedAuthor" data-aid="detection_metadata_public_author_display">
+                  <div class="ops-value" data-aid="detection_metadata_public_author_display">
                     {{ extractedAuthor }}
                   </div>
                   <!-- <div class="ops-header">
@@ -1820,12 +1821,7 @@
                   {{ i18n.author }}:
                 </div>
                 <div class="value" data-aid="detection_metadata_author_display">
-                  <span v-if="!detect.isCommunity">
-                    {{ detect.author }}
-                  </span>
-                  <span v-else>
-                    {{ detect.ruleset }}
-                  </span>
+                  {{ $root.tryLocalize(detect.author) }}
                 </div>
               </div>
               <div>

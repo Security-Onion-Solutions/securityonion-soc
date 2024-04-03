@@ -34,6 +34,8 @@ import (
 
 var errModuleStopped = fmt.Errorf("strelka module has stopped running")
 
+var socAuthor = "__soc_import__"
+
 type IOManager interface {
 	ReadFile(path string) ([]byte, error)
 	WriteFile(path string, contents []byte, perm fs.FileMode) error
@@ -454,6 +456,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 					ruleset := filepath.Base(repopath)
 
 					det := &model.Detection{
+						Author:      socAuthor,
 						Engine:      model.EngineNameStrelka,
 						PublicID:    rule.GetID(),
 						Title:       rule.Identifier,

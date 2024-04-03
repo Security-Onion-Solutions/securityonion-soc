@@ -44,6 +44,8 @@ var acceptedExtensions = map[string]bool{
 	".yaml": true,
 }
 
+var socAuthor = "__soc_import__"
+
 type IOManager interface {
 	ReadFile(path string) ([]byte, error)
 	WriteFile(path string, contents []byte, perm fs.FileMode) error

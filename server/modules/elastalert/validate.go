@@ -146,6 +146,7 @@ func (r *SigmaRule) ToDetection(content string, ruleset string, license string) 
 	}
 
 	det := &model.Detection{
+		Author:      socAuthor,
 		Engine:      model.EngineNameElastAlert,
 		PublicID:    id,
 		Title:       r.Title,

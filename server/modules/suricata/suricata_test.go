@@ -318,6 +318,7 @@ func TestParse(t *testing.T) {
 			},
 			ExpectedDetections: []*model.Detection{
 				{
+					Author:   "__soc_import__",
 					PublicID: SimpleRuleSID,
 					Title:    `GPL ATTACK_RESPONSE id check returned root`,
 					Severity: model.SeverityUnknown,
@@ -328,6 +329,7 @@ func TestParse(t *testing.T) {
 					License:  "Unknown",
 				},
 				{
+					Author:   "__soc_import__",
 					PublicID: "20000",
 					Title:    `a "tricky";\ msg`,
 					Severity: model.SeverityInformational,
