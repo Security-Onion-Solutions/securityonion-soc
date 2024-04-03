@@ -363,10 +363,10 @@
                       @click="filterToggled($event, toggle)"
                       :label="$root.localizeMessage(toggle.name)" @click="notifyInputsChanged()"></v-switch>
                   </span>
-                  <span :data-aid="'autorefresh_select_' + category">
+                  <span :data-aid="'autorefresh_select_' + category" v-if="!isCategory('detections')">
                     <v-select id="autoRefresh" class="ml-" :disabled="loading()" v-model="autoRefreshInterval" :items="autoRefreshIntervals" :hint="i18n.autoRefresh" persistent-hint prepend-icon="fa-hourglass-half"></v-select>
                   </span>
-                  <span :data-aid="'timezone_select_' + category">
+                  <span :data-aid="'timezone_select_' + category" v-if="!isCategory('detections')">
                     <v-select :disabled="loading()" @change="saveTimezone" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint prepend-icon="fa-user-clock"></v-select>
                   </span>
                   <div v-if="isCategory('detections')" class="manual-sync">
