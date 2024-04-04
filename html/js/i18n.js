@@ -423,7 +423,7 @@ const i18n = {
       gridMemberTest: "Test Grid Sensor",
       gridMemberTestConfirmTitle: "Confirm Sensor Test",
       gridMemberTestConfirmHelp: "Testing this sensor will cause test data to be ingested into Security Onion. This can be useful for validating proper sensor operation. Test data will remain loaded until the index is curated. This operation can take several minutes to complete. Do you want to continue?",
-      gridMemberTestSuccess: "Test data has been replayed to the monitoring interface, and is now being ingested into the search nodes. This may take a few minutes depending on grid resources.",
+      gridMemberTestSuccess: "Test data has been replayed to the monitoring interface, and is now being ingested into the search nodes. This may take a few minutes depending on grid resources. Note that this action could trigger alerts on other enterprise monitoring systems, depending on your network and interface configuration.",
       gridMemberUploadTitleBoth: 'Upload a PCAP or EVTX File',
       gridMemberUploadTitleEvtx: 'Upload a EVTX File',
       gridMemberUploadTitlePcap: 'Upload a PCAP File',
