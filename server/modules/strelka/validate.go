@@ -10,8 +10,10 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
+	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 )
 
@@ -175,4 +177,50 @@ func (r *YaraRule) Validate() error {
 	}
 
 	return nil
+}
+
+func (r *YaraRule) ToDetection(license string, ruleset string) *model.Detection {
+	sev := model.SeverityUnknown
+
+	metaSev, err := strconv.Atoi(r.Meta.Rest["severity"])
+	if err == nil {
+		metaSev = 0
+	}
+
+	switch {
+	case metaSev >= 1 && metaSev < 20:
+		sev = model.SeverityInformational
+	case metaSev >= 20 && metaSev < 40:
+		sev = model.SeverityLow
+	case metaSev >= 40 && metaSev < 60:
+		sev = model.SeverityMedium
+	case metaSev >= 60 && metaSev < 80:
+		sev = model.SeverityHigh
+	case metaSev >= 80:
+		sev = model.SeverityCritical
+	}
+
+	lic, ok := r.Meta.Rest["license"]
+	if !ok {
+		lic = license
+	}
+
+	det := &model.Detection{
+		Author:      socAuthor,
+		Engine:      model.EngineNameStrelka,
+		PublicID:    r.GetID(),
+		Title:       r.Identifier,
+		Severity:    sev,
+		Content:     r.String(),
+		IsCommunity: true,
+		Language:    model.SigLangYara,
+		Ruleset:     util.Ptr(ruleset),
+		License:     lic,
+	}
+
+	if r.Meta.Description != nil {
+		det.Description = util.Unquote(*r.Meta.Description)
+	}
+
+	return det
 }
