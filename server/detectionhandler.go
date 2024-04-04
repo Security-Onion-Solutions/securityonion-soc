@@ -218,6 +218,7 @@ func (h *DetectionHandler) duplicateDetection(w http.ResponseWriter, r *http.Req
 	detect.IsEnabled = false
 	detect.IsReporting = false
 	detect.IsCommunity = false
+	detect.Kind = ""
 
 	detect, err = h.server.Detectionstore.CreateDetection(ctx, detect)
 	if err != nil {
