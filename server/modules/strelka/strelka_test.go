@@ -2,7 +2,6 @@ package strelka
 
 import (
 	"context"
-	"fmt"
 	"io/fs"
 	"os/exec"
 	"regexp"
@@ -206,7 +205,7 @@ func TestStrelkaModule(t *testing.T) {
 	assert.Same(t, mod, srv.DetectionEngines[model.EngineNameStrelka])
 }
 
-func TestSyncSuricata(t *testing.T) {
+func TestSyncStrelka(t *testing.T) {
 	table := []struct {
 		Name           string
 		InitMock       func(*servermock.MockDetectionstore, *mock.MockIOManager)
@@ -502,9 +501,9 @@ func TestRuleString(t *testing.T) {
 	rules, err := e.parseYaraRules([]byte(BasicRuleWMeta), false)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, rules)
+	assert.Equal(t, 1, len(rules))
 
 	raw := rules[0].String()
-	fmt.Println(raw)
 	assert.Equal(t, NormalizedBasicRuleWMeta, raw)
 }
 
@@ -553,4 +552,30 @@ func TestExtractDetails(t *testing.T) {
 			assert.Equal(t, test.ExpectedSeverity, detect.Severity)
 		})
 	}
+}
+
+func TestToDetection(t *testing.T) {
+	e := &StrelkaEngine{}
+
+	expected := &model.Detection{
+		Engine:      model.EngineNameStrelka,
+		Language:    model.SigLangYara,
+		PublicID:    "7669eb89-c61c-446e-aaff-12b2c0994dea",
+		Author:      socAuthor,
+		Title:       "MetadataExample",
+		Description: "Example Rule",
+		Content:     NormalizedBasicRuleWMeta,
+		Severity:    model.SeverityUnknown,
+		IsCommunity: true,
+		Ruleset:     util.Ptr("ruleset"),
+		License:     "license",
+	}
+
+	rules, err := e.parseYaraRules([]byte(BasicRuleWMeta), false)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, rules)
+	assert.Equal(t, 1, len(rules))
+
+	det := rules[0].ToDetection("license", "ruleset")
+	assert.Equal(t, expected, det)
 }

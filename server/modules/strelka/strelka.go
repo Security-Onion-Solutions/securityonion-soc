@@ -18,7 +18,6 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -438,58 +437,12 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 				}
 
 				for _, rule := range parsed {
-					sev := model.SeverityUnknown
-
-					metaSev, err := strconv.Atoi(rule.Meta.Rest["severity"])
-					if err == nil {
-						metaSev = 0
-					}
-
-					switch {
-					case metaSev >= 1 && metaSev < 20:
-						sev = model.SeverityInformational
-					case metaSev >= 20 && metaSev < 40:
-						sev = model.SeverityLow
-					case metaSev >= 40 && metaSev < 60:
-						sev = model.SeverityMedium
-					case metaSev >= 60 && metaSev < 80:
-						sev = model.SeverityHigh
-					case metaSev >= 80:
-						sev = model.SeverityCritical
-					}
-
-					license, ok := rule.Meta.Rest["license"]
-					if !ok {
-						license = repo.License
-					}
-
-					ruleset := filepath.Base(repopath)
-
-					det := &model.Detection{
-						Author:      socAuthor,
-						Engine:      model.EngineNameStrelka,
-						PublicID:    rule.GetID(),
-						Title:       rule.Identifier,
-						Severity:    sev,
-						Content:     rule.String(),
-						IsCommunity: true,
-						Language:    model.SigLangYara,
-						Ruleset:     util.Ptr(ruleset),
-						License:     license,
-					}
+					det := rule.ToDetection(repo.License, filepath.Base(repopath))
 
 					comRule, exists := communityDetections[det.PublicID]
 					if exists {
 						det.Id = comRule.Id
 						det.IsEnabled = comRule.IsEnabled
-					}
-
-					if rule.Meta.Author != nil {
-						det.Author = util.Unquote(*rule.Meta.Author)
-					}
-
-					if rule.Meta.Description != nil {
-						det.Description = util.Unquote(*rule.Meta.Description)
 					}
 
 					if exists {
