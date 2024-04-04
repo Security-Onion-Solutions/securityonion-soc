@@ -568,7 +568,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		isEdit(target) {
 			return this.curEditTarget === target;
 		},
-		async stopEdit(commit) {
+		stopEdit(commit) {
 			if (!commit) {
 				this.detect[this.editField] = this.origValue;
 			}
@@ -578,7 +578,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.editField = null;
 
 			if (commit && !this.isNew()) {
-				this.saveDetection(false);
+				this.$nextTick(async () => {
+					await this.saveDetection(false);
+					this.curEditTarget = null;
+				});
 			}
 		},
 		async saveDetection(createNew) {
@@ -983,13 +986,16 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		isOverrideEdit(target) {
 			return this.curOverrideEditTarget === target;
 		},
-		async stopOverrideEdit(commit) {
+		stopOverrideEdit(commit) {
 			if (commit && this.$refs[this.curOverrideEditTarget].hasError) return;
 
 			if (!commit) {
 				this.editOverride[this.overrideEditField] = this.origOverrideValue;
 			} else {
-				this.saveDetection(false);
+				this.$nextTick(async () => {
+					await this.saveDetection(false);
+					this.curOverrideEditTarget = null;
+				});
 			}
 
 			this.curOverrideEditTarget = null;
