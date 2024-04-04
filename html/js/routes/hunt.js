@@ -248,6 +248,7 @@ const huntComponent = {
       this.chartLabelOtherLimit = params["chartLabelOtherLimit"]
       this.chartLabelFieldSeparator = params["chartLabelFieldSeparator"]
       this.presets = params["presets"];
+      this.manualSyncTargetEngine = this.getPresets("manualSync")[0];
       if (this.queries != null && this.queries.length > 0) {
         this.query = this.queries[0].query;
       }
@@ -2260,6 +2261,10 @@ const huntComponent = {
       }
     },
     startManualSync(engine, type) {
+      if (!engine) {
+        this.$root.showTip(this.i18n.engineSelect);
+        return;
+      }
       try {
         this.$root.papi.post(`detection/sync/${engine}/${type}`);
 
