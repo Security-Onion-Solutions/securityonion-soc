@@ -950,7 +950,7 @@
                 </v-list-item-title>
               </v-list-item>
             </v-list-group>
-            <v-list-group dense @click.stop color="white" :data-aid="'context_menu_quickaction_' + category">
+            <v-list-group dense @click.stop color="white" :data-aid="'context_menu_quickaction_' + category" v-if="!!actions && actions.length">
               <template v-slot:activator>
                 <v-list-item-icon>
                   <v-icon color="white">fa-external-link-alt</v-icon>
