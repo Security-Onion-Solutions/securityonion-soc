@@ -319,7 +319,7 @@ const i18n = {
       endTime: 'Filter End',
       endTimeHelp: 'Filter end time in RFC 3339 format (Ex: 2020-10-16 15:30:00.230-04:00). Unused for imported PCAPs.',
       engine: 'Engine',
-      engineSelect: 'Please select an Engine to sync',
+      engineSelect: 'Please select an engine to synchronize.',
       eps: 'EPS',
       epsProduction: 'Production EPS:',
       epsConsumption: 'Consumption EPS:',
