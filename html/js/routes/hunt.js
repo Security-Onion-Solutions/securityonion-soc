@@ -251,7 +251,7 @@ const huntComponent = {
       if (this.queries != null && this.queries.length > 0) {
         this.query = this.queries[0].query;
       }
-      this.actions = params["actions"];
+      this.actions = params["actions"] || [];
       this.zone = moment.tz.guess();
 
       this.loadLocalSettings();
