@@ -578,10 +578,9 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.editField = null;
 
 			if (commit && !this.isNew()) {
-				this.$nextTick(async () => {
-					await this.saveDetection(false);
-					this.curEditTarget = null;
-				});
+					this.saveDetection(false).then(() => {
+						this.curEditTarget = null;
+					});
 			}
 		},
 		async saveDetection(createNew) {
@@ -627,10 +626,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					});
 				}
 
-				if (response.status === 206) {
-					this.$root.showWarning(this.i18n.disabledFailedSync);
-				}
-
 				// get any expanded overrides before updating this.detect
 				let index = -1;
 				if (this.expanded && this.expanded.length) {
@@ -649,7 +644,11 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					this.expand(this.detect.overrides[index]);
 				}
 
-				this.$root.showTip(this.i18n.saveSuccess);
+				if (response.status === 206) {
+					this.$root.showWarning(this.i18n.disabledFailedSync);
+				} else {
+					this.$root.showTip(this.i18n.saveSuccess);
+				}
 
 				if (createNew) {
 					this.$router.push({ name: 'detection', params: { id: response.data.id } });
