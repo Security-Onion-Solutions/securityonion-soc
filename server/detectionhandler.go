@@ -276,8 +276,28 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 
 	errMap, err := SyncLocalDetections(ctx, h.server, []*model.Detection{detect})
 	if err != nil {
-		web.Respond(w, r, http.StatusInternalServerError, err)
-		return
+		fixed := false
+		if detect.IsEnabled {
+			var uerr error
+			log.WithError(err).WithField("detection", detect).Error("unable to sync detection; attempting to disable and resync")
+
+			detect.IsEnabled = false
+			detect.Kind = ""
+
+			detect, uerr = h.server.Detectionstore.UpdateDetection(ctx, detect)
+			if uerr == nil {
+				errMap, err = SyncLocalDetections(ctx, h.server, []*model.Detection{detect})
+				fixed = true
+			}
+		}
+
+		if err != nil {
+			web.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		} else if fixed {
+			web.Respond(w, r, http.StatusPartialContent, detect)
+			return
+		}
 	}
 
 	if len(errMap) != 0 {

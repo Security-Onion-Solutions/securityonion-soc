@@ -723,6 +723,10 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]s
 		}
 
 		d := det.(*model.Detection)
+		_, exists := enabledDetections[d.PublicID]
+		if exists {
+			return nil, errors.New(fmt.Sprintf("duplicate detection with public ID %s", d.PublicID))
+		}
 		enabledDetections[d.PublicID] = d
 	}
 
