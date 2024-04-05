@@ -1346,7 +1346,7 @@
                         </div>
                         <div v-if="newOverride" class="d-flex justify-end text-body-2 mt-2">
                           <div class="d-inline-flex">
-                            <a :href="$root.parameters.docsUrl" target="_blank" data-aid="detection_override_help">
+                            <a :href="$root.parameters.docsUrl + 'detections.html'" target="_blank" data-aid="detection_override_help">
                               <v-icon :title="i18n.overrideDocumentationHelp" class="override-help">fa-regular fa-circle-question</v-icon>
                             </a>
                             <v-btn id="detection-create-cancel" text small color="primary" class="align-self-end" @click="newOverride = null" data-aid="detection_new_override_cancel">
