@@ -131,6 +131,8 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
+	detect.Language = model.SigLanguage(strings.ToLower(string(detect.Language)))
+
 	switch detect.Language {
 	case "sigma":
 		detect.Engine = model.EngineNameElastAlert
