@@ -591,6 +591,7 @@ const i18n = {
       order: 'Order',
       osUptime: 'OS Uptime',
       other: 'Other',
+      overrideDeleteHelp: 'Delete this rule override',
       overrideDocumentationHelp: 'Click for more information',
       overrideExpand: 'Show all override fields',
       overview: 'Overview',
