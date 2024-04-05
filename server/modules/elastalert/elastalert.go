@@ -549,7 +549,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			// idempotency means we might fix it if we try again later.
 			log.WithFields(log.Fields{
 				"errors": errMap,
-			}).Error("unable to sync all community detections")
+			}).Error("unable to sync all ElastAlert community detections")
 
 			if e.notify {
 				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{

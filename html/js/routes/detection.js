@@ -622,7 +622,13 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				if (createNew) {
 					response = await this.$root.papi.post('/detection', this.detect);
 				} else {
-					response = await this.$root.papi.put('/detection', this.detect);
+					response = await this.$root.papi.put('/detection', this.detect, {
+						validateStatus: (s) => (s >= 200 && s < 300)
+					});
+				}
+
+				if (response.status === 206) {
+					this.$root.showWarning(this.i18n.disabledFailedSync);
 				}
 
 				// get any expanded overrides before updating this.detect

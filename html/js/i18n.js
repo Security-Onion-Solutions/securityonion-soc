@@ -290,6 +290,7 @@ const i18n = {
       detectionType: 'Detection Type',
       disable: 'Disable',
       disabled: 'Disabled',
+      disabledFailedSync: 'The detection was saved but synchronization failed. The detection has been disabled. Check SOC logs for details.',
       disconnected: 'Disconnected from manager',
       diskUsageElastic: 'Elastic Storage Used',
       diskUsageInfluxDb: 'InfluxDB Storage Used',
