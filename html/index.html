@@ -1344,17 +1344,17 @@
                           <!-- custom filter -->
                           <v-text-field id="new-override-custom-filter-edit" v-model="newOverride.customFilter" :rules="[rules.required]" persistent-hint :hint="i18n.customFilter" data-aid="detection_new_override_filter_input"></v-text-field>
                         </div>
-                        <div v-if="newOverride" class="d-flex justify-end text-body-2 mt-2">
-                          <div class="d-inline-flex">
-                            <a :href="$root.parameters.docsUrl" target="_blank" data-aid="detection_override_help">
-                              <v-icon :title="i18n.overrideDocumentationHelp" class="override-help">fa-regular fa-circle-question</v-icon>
-                            </a>
+                        <div v-if="newOverride" class="d-flex align-center align-self-end text-body-2 mt-2">
+                          <div class="d-inline-flex justify-end">
                             <v-btn id="detection-create-cancel" text small color="primary" class="align-self-end" @click="newOverride = null" data-aid="detection_new_override_cancel">
                               {{ i18n.cancel }}
                             </v-btn>
                             <v-btn v-if="newOverride.type" id="detection-create-create" text small color="primary" class="align-self-end" @click="addNewOverride()" data-aid="detection_new_override_save">
                               {{ i18n.create }}
                             </v-btn>
+                            <v-btn icon :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'detections.html'" :title="i18n.overrideDocumentationHelp" data-aid="detection_override_help_new">
+                              <v-icon>fa-regular fa-circle-question</v-icon>
+                            </v-btn>                              
                           </div>
                         </div>
                       </v-form>
@@ -1479,11 +1479,11 @@
                           </div>
                           <div class="d-flex justify-end text-body-2 mt-4">
                             <div class="d-inline-flex">
-                              <a :href="$root.parameters.docsUrl" target="_blank">
-                                <v-icon :title="i18n.overrideDocumentationHelp" class="override-help" data-aid="detection_override_help">fa-regular fa-circle-question</v-icon>
-                              </a>
-                              <v-btn id="override-edit-delete" text small color="red" @click="deleteOverride(item)" data-aid="detection_override_delete">
-                                {{ i18n.delete }}
+                              <v-btn icon :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'detections.html'" :title="i18n.overrideDocumentationHelp" data-aid="detection_override_help_suricata">
+                                <v-icon>fa-regular fa-circle-question</v-icon>
+                              </v-btn>
+                              <v-btn color="red" @click="deleteOverride(item)" icon :title="i18n.overrideDeleteHelp" data-aid="override_edit_delete_suricata">
+                                <v-icon>fa-circle-xmark</v-icon>
                               </v-btn>
                             </div>
                           </div>
@@ -1513,11 +1513,11 @@
                           </div>
                           <div class="d-flex justify-end text-body-2 mt-2">
                             <div class="d-inline-flex">
-                              <a :href="$root.parameters.docsUrl" target="_blank">
-                                <v-icon :title="i18n.overrideDocumentationHelp" class="override-help" data-aid="detection_override_help">fa-regular fa-circle-question</v-icon>
-                              </a>
-                              <v-btn id="override-edit-delete" text small color="red" @click="deleteOverride(item)" data-aid="detection_override_delete">
-                                {{ i18n.delete }}
+                              <v-btn icon :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'detections.html'" :title="i18n.overrideDocumentationHelp" data-aid="detection_override_help_elastalert">
+                                <v-icon>fa-regular fa-circle-question</v-icon>
+                              </v-btn>
+                              <v-btn color="red" @click="deleteOverride(item)" icon :title="i18n.overrideDeleteHelp" data-aid="override_edit_delete_elastalert">
+                                <v-icon>fa-circle-xmark</v-icon>
                               </v-btn>
                             </div>
                           </div>
