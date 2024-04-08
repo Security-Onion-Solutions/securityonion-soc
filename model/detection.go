@@ -7,8 +7,12 @@ package model
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/security-onion-solutions/securityonion-soc/util"
+	"gopkg.in/yaml.v3"
 )
 
 type ScanType string
@@ -139,6 +143,46 @@ type OverrideParameters struct {
 
 	// elastalert
 	CustomFilter *string `json:"customFilter,omitempty" yaml:"-"` // modify
+}
+
+func (o Override) PrepareForSigma() (map[string]interface{}, error) {
+	if o.CustomFilter == nil || !o.IsEnabled {
+		return map[string]interface{}{}, nil
+	}
+
+	mid := map[string]interface{}{}
+	out := map[string]interface{}{}
+
+	filter := util.TabsToSpaces(*o.CustomFilter)
+
+	err := yaml.Unmarshal([]byte(filter), mid)
+
+	for k, v := range mid {
+		// does the property begin with sofilter?
+		if !strings.HasPrefix(k, "sofilter") {
+			// does the object already contain a property with the sofilter prefix?
+			_, exists := out["sofilter_"+k]
+			if exists {
+				// keep appending numbers until there's no collision
+				for i := 0; ; i++ {
+					num := strconv.Itoa(i)
+					_, exists = out["sofilter_"+k+num]
+					if !exists {
+						out["sofilter_"+k+num] = v
+						break
+					}
+				}
+			} else {
+				// the property doesn't begin with sofilter, but adding it isn't a collsion
+				out["sofilter_"+k] = v
+			}
+		} else {
+			// the property begins with sofilter
+			out[k] = v
+		}
+	}
+
+	return out, err
 }
 
 func (o Override) MarshalYAML() (interface{}, error) {

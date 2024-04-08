@@ -896,7 +896,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					];
 				case 'elastalert':
 					return [
-						{ value: 'custom filter', text: 'Custom Filter' }
+						{ value: 'customFilter', text: 'Custom Filter' }
 					];
 			}
 
@@ -1214,8 +1214,15 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		async convertDetection(content) {
 			this.$root.startLoading();
+
+			let payload = this.detect;
+			if (this.isNew()) {
+				payload = {
+					content: this.content,
+				}
+			}
 			try {
-				const response = await this.$root.papi.post('detection/convert', { content: content });
+				const response = await this.$root.papi.post('detection/convert', payload);
 				if (response && response.data) {
 					this.convertedRule = response.data.query;
 					this.showSigmaDialog = true;
