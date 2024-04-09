@@ -275,7 +275,7 @@ test('canAddOverride elastalert', () => {
 
 	comp.detect.overrides = [
 		{
-			type: 'custom filter',
+			type: 'customFilter',
 			isEnabled: 'isEnabled',
 			createdAt: 'createdAt',
 			updatedAt: 'updatedAt',
@@ -290,7 +290,7 @@ test('canAddOverride elastalert', () => {
 		},
 	];
 
-	expect(comp.canAddOverride()).toBe(false);
+	expect(comp.canAddOverride()).toBe(true);
 });
 
 test('tagOverrides', () => {
@@ -305,6 +305,6 @@ test('tagOverrides', () => {
 	comp.tagOverrides();
 
 	for (let i = 0; i < comp.detect.overrides.length; i++) {
-		expect(comp.detect.overrides[0]).toStrictEqual({ index: 0 });
+		expect(comp.detect.overrides[i]).toStrictEqual({ index: i });
 	}
 });

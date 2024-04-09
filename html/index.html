@@ -1361,13 +1361,13 @@
                     </div>
                   </v-col>
                   <v-data-table :sort-by.sync="sortBy" :expanded.sync="expanded" :sort-desc.sync="sortDesc" must-sort :headers="overrideHeaders"
-                    :items="detect.overrides" item-key="index" show-expand single-expand :custom-sort="sortOverrides" hide-default-footer="true">
-                    <template v-slot:item="{ item, index }">
+                    :items="detect.overrides" show-expand single-expand :custom-sort="sortOverrides" hide-default-footer="true">
+                    <template v-slot:item="{ item, index, expand, isExpanded }">
                       <tr>
                         <td>
-                          <v-btn id="expandOverrideArrow" icon small @click="expand(item)">
-                            <v-icon v-if="isExpanded(item)" :alt="i18n.overrideExpand" :title="i18n.eventExpandHelp" data-aid="detection_overrides_collapse">fa-angle-down</v-icon>
-                            <v-icon v-if="!isExpanded(item)" :alt="i18n.overrideExpand" :title="i18n.eventExpandHelp" data-aid="detection_overrides_expand">fa-angle-right</v-icon>
+                          <v-btn id="expandOverrideArrow" icon small @click="expand(!isExpanded)">
+                            <v-icon v-if="isExpanded" :alt="i18n.overrideExpand" :title="i18n.eventExpandHelp" data-aid="detection_overrides_collapse">fa-angle-down</v-icon>
+                            <v-icon v-else :alt="i18n.overrideExpand" :title="i18n.eventExpandHelp" data-aid="detection_overrides_expand">fa-angle-right</v-icon>
                           </v-btn>
                         </td>
                         <td v-for="field in overrideHeaders" :key="field.value" data-aid="detection_overrides_headers_display">
@@ -1543,32 +1543,32 @@
                   <v-data-table ref="historyTable" :sort-by.sync="historyTableOpts.sortBy" :sort-desc.sync="historyTableOpts.sortDesc" :items-per-page.sync="historyTableOpts.itemsPerPage"
                     :search="historyTableOpts.search" :footer-props="historyTableOpts.footerProps" must-sort :headers="historyTableOpts.headers"
                     :items="history" item-key="id" :loading="historyTableOpts.loading" :expanded="historyTableOpts.expanded" class="history-table">
-                    <template v-slot:item="props">
+                    <template v-slot:item="{item, index, expand, isExpanded}">
                       <tr>
                         <td class="associated actions">
-                          <v-btn :id="`history-${props.index}-expand`" icon small @click="expandRow(props.item)">
-                            <v-icon v-if="isExpanded(props.item)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="detection_history_collapse">fa-angle-down</v-icon>
-                            <v-icon v-if="!isExpanded(props.item)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="detection_history_expand">fa-angle-right</v-icon>
+                          <v-btn :id="`history-${index}-expand`" icon small @click="expand(!isExpanded)">
+                            <v-icon v-if="isExpanded" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="detection_history_collapse">fa-angle-down</v-icon>
+                            <v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="detection_history_expand">fa-angle-right</v-icon>
                           </v-btn>
                         </td>
                         <td class="associated" data-aid="detection_history_owner_display">
                           <v-avatar color="primary" class="mr-2 white--text" size="28" data-aid="detection_history_avatar_display">
-                            <div class="font-weight-bold" :title="props.item.owner">
-                              {{ $root.getAvatar(props.item.owner) }}
+                            <div class="font-weight-bold" :title="item.owner">
+                              {{ $root.getAvatar(item.owner) }}
                             </div>
                           </v-avatar>
-                          {{ props.item.owner }}
+                          {{ item.owner }}
                         </td>
-                        <td class="associated" data-aid="detection_history_timestamp_display">{{ props.item.updateTime | formatDateTime }}</td>
+                        <td class="associated" data-aid="detection_history_timestamp_display">{{ item.updateTime | formatDateTime }}</td>
                         <td class="associated" data-aid="detection_history_kind_display">
                           <v-icon>fa-magnifying-glass</v-icon>
-                          <span class="rounded ml-2">{{ props.item.kind }}</span>
+                          <span class="rounded ml-2">{{ item.kind }}</span>
                         </td>
                         <td class="associated" data-aid="detection_history_operation_display">
-                          <v-icon v-if="props.item.operation.toLowerCase() == i18n.create.toLowerCase()">fa-plus</v-icon>
-                          <v-icon v-if="props.item.operation.toLowerCase() == i18n.delete.toLowerCase()">fa-circle-xmark</v-icon>
-                          <v-icon v-if="props.item.operation.toLowerCase() == i18n.update.toLowerCase()">fa-pencil-alt</v-icon>
-                          <span class="rounded ml-2">{{ props.item.operation }}</span>
+                          <v-icon v-if="item.operation.toLowerCase() == i18n.create.toLowerCase()">fa-plus</v-icon>
+                          <v-icon v-if="item.operation.toLowerCase() == i18n.delete.toLowerCase()">fa-circle-xmark</v-icon>
+                          <v-icon v-if="item.operation.toLowerCase() == i18n.update.toLowerCase()">fa-pencil-alt</v-icon>
+                          <span class="rounded ml-2">{{ item.operation }}</span>
                         </td>
                       </tr>
                     </template>
