@@ -5,6 +5,8 @@
 
 package util
 
+import "strings"
+
 func Ptr[T any](x T) *T {
 	return &x
 }
@@ -15,4 +17,24 @@ func Copy[T any](x *T) *T {
 	}
 
 	return Ptr(*x)
+}
+
+func TabsToSpaces(s string) string {
+	lines := strings.Split(s, "\n")
+	for i := range lines {
+		tabs := 0
+		for _, c := range lines[i] {
+			if c == '\t' {
+				tabs++
+			} else {
+				break
+			}
+		}
+
+		if tabs != 0 {
+			lines[i] = strings.Repeat("  ", tabs) + strings.TrimSpace(lines[i])
+		}
+	}
+
+	return strings.Join(lines, "\n")
 }

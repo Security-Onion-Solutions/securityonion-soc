@@ -592,17 +592,15 @@ func (h *DetectionHandler) getDetectionComments(w http.ResponseWriter, r *http.R
 func (h *DetectionHandler) convertContent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	body := struct {
-		Content string `json:"content"`
-	}{}
+	det := &model.Detection{}
 
-	err := web.ReadJson(r, &body)
+	err := web.ReadJson(r, &det)
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
-	eaQuery, err := h.server.DetectionEngines[model.EngineNameElastAlert].ConvertRule(ctx, &model.Detection{Content: body.Content})
+	eaQuery, err := h.server.DetectionEngines[model.EngineNameElastAlert].ConvertRule(ctx, det)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return

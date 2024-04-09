@@ -711,14 +711,12 @@ func TestSyncElastAlert(t *testing.T) {
 							Type:      model.OverrideTypeCustomFilter,
 							IsEnabled: false,
 							OverrideParameters: model.OverrideParameters{
-								CustomFilter: util.Ptr("FALSE"),
-							},
-						},
-						{
-							Type:      model.OverrideTypeCustomFilter,
-							IsEnabled: true,
-							OverrideParameters: model.OverrideParameters{
-								CustomFilter: util.Ptr("TRUE"),
+								CustomFilter: util.Ptr(`sofilter_users:
+	user.name: SA_ITOPS
+sofilter_hosts:
+	host.name|contains:
+		- devops
+		- sysadmin`),
 							},
 						},
 					},
@@ -728,9 +726,9 @@ func TestSyncElastAlert(t *testing.T) {
 				// IndexExistingRules
 				m.EXPECT().ReadDir(mod.elastAlertRulesFolder).Return([]fs.DirEntry{}, nil)
 				// sigmaToElastAlert
-				m.EXPECT().ExecCommand(gomock.Any()).Return([]byte("[sigma rule]"), 0, time.Duration(0), nil)
+				m.EXPECT().ExecCommand(gomock.Any()).Return([]byte(`any where process.command_line:"*\\local\\temp\\*" and process.command_line:"*//b /e:jscript*" and process.command_line:"*.txt*"`), 0, time.Duration(0), nil)
 				// WriteFile when enabling
-				m.EXPECT().WriteFile(SimpleRuleSID+".yml", []byte("play_title: TEST\nplay_id: "+SimpleRuleSID+"\nevent.module: sigma\nevent.dataset: sigma.alert\nevent.severity: 3\nrule.category: \"\"\nsigma_level: medium\nalert:\n    - modules.so.playbook-es.PlaybookESAlerter\nindex: .ds-logs-*\nname: TEST - "+SimpleRuleSID+"\ntype: any\nfilter:\n    - eql: ([sigma rule]) and TRUE\nplay_url: play_url\nkibana_pivot: kibana_pivot\nsoc_pivot: soc_pivot\n"), fs.FileMode(0644)).Return(nil)
+				m.EXPECT().WriteFile(SimpleRuleSID+".yml", []byte("play_title: TEST\nplay_id: "+SimpleRuleSID+"\nevent.module: sigma\nevent.dataset: sigma.alert\nevent.severity: 3\nrule.category: \"\"\nsigma_level: medium\nalert:\n    - modules.so.playbook-es.PlaybookESAlerter\nindex: .ds-logs-*\nname: TEST - "+SimpleRuleSID+"\ntype: any\nfilter:\n    - eql: any where process.command_line:\"*\\\\local\\\\temp\\\\*\" and process.command_line:\"*//b /e:jscript*\" and process.command_line:\"*.txt*\"\nplay_url: play_url\nkibana_pivot: kibana_pivot\nsoc_pivot: soc_pivot\n"), fs.FileMode(0644)).Return(nil)
 			},
 		},
 	}

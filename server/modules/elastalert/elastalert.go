@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/samber/lo"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -878,9 +879,8 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 		}
 
 		if det.IsEnabled {
-			// 2. if enabled, send data to docker container to get converted to query
-
-			rule, err := e.sigmaToElastAlert(ctx, det) // get sigma from docker container
+			// 2. if enabled, send data to cli pakcage to get converted to query
+			rule, err := e.sigmaToElastAlert(ctx, det)
 			if err != nil {
 				errMap[det.PublicID] = fmt.Errorf("unable to convert sigma to elastalert: %s", err)
 				continue
@@ -891,7 +891,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 				continue
 			}
 
-			// 3. put query in /opt/so/rules/sigma for salt to pick up
+			// 3. put query in elastAlertRulesFolder for salt to pick up
 			if path == "" {
 				path = filepath.Join(e.elastAlertRulesFolder, fmt.Sprintf("%s.yml", det.PublicID))
 			}
@@ -1012,10 +1012,52 @@ func (e *ElastAlertEngine) IndexExistingRules() (index map[string]string, err er
 }
 
 func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Detection) (string, error) {
+	rule := det.Content
+
+	filters := lo.Filter(det.Overrides, func(item *model.Override, _ int) bool {
+		return item.Type == model.OverrideTypeCustomFilter && item.IsEnabled
+	})
+
+	// apply overrides
+	if len(filters) > 0 {
+		doc := map[string]interface{}{}
+
+		err := yaml.Unmarshal([]byte(rule), &doc)
+		if err != nil {
+			return "", fmt.Errorf("unable to unmarshal sigma rule: %w", err)
+		}
+
+		detection := doc["detection"].(map[string]interface{})
+		if detection == nil {
+			return "", fmt.Errorf("sigma rule does not contain a detection section")
+		}
+
+		for _, f := range filters {
+			o, err := f.PrepareForSigma()
+			if err != nil {
+				return "", fmt.Errorf("unable to marshal filter: %w", err)
+			}
+
+			for k, v := range o {
+				detection[k] = v
+			}
+		}
+
+		condition := detection["condition"].(string)
+		detection["condition"] = fmt.Sprintf("(%s) and not 1 of sofilter*", condition)
+
+		raw, err := yaml.Marshal(doc)
+		if err != nil {
+			return "", fmt.Errorf("unable to marshal sigma rule with overrides: %w", err)
+		}
+
+		rule = string(raw)
+	}
+
 	args := []string{"convert", "-t", "eql", "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "/dev/stdin"}
 
 	cmd := exec.CommandContext(ctx, "sigma", args...)
-	cmd.Stdin = strings.NewReader(det.Content)
+	cmd.Stdin = strings.NewReader(rule)
 
 	raw, code, runtime, err := e.ExecCommand(cmd)
 
