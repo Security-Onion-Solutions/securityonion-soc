@@ -639,11 +639,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				this.loadAssociations();
 				this.origDetect = Object.assign({}, this.detect);
 
-				// reinstate expanded override
-				if (index != -1 && this.detect.overrides && this.detect.overrides.length > index) {
-					this.expand(this.detect.overrides[index]);
-				}
-
 				if (response.status === 206) {
 					this.$root.showWarning(this.i18n.disabledFailedSync);
 				} else {

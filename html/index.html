@@ -1392,15 +1392,12 @@
                             7. Custom Filter - engine:elastalert
                           -->
                           <!-- isEnabled -->
-                          <div @click="startOverrideEdit('override-enabled', item, 'isEnabled')" :class="{ clicktoedit: !isOverrideEdit('override-enabled') }" data-aid="detection_override_enabled_toggle">
+                          <div data-aid="detection_override_enabled_toggle">
                             <div class="font-weight-bold mt-4">
-                              {{i18n.enabled}}:
+                              {{i18n.enabled}}: {{item.isEnabled}}
                             </div>
-                            <span id="override-enabled" v-if="!isOverrideEdit('override-enabled')" data-aid="detection_override_enabled_display">
-                              {{item.isEnabled}}
-                            </span>
-                            <v-checkbox v-else id="override-enabled-edit" ref="override-enabled" hide-details="auto" outlined v-model="item.isEnabled"
-                              persistent-hint :hint="i18n.enabled" v-on:change="stopOverrideEdit(true)"></v-checkbox>
+                            <v-switch id="override-enabled-edit" ref="override-enabled" hide-details="auto" v-model="item.isEnabled"
+                              inset @change="saveDetection(false)"></v-switch>
                           </div>
                           <!-- regex -->
                           <div v-if="item.type === 'modify'" @click="startOverrideEdit('override-regex', item, 'regex')" :class="{ clicktoedit: !isOverrideEdit('override-regex') }">
@@ -1726,7 +1723,6 @@
                       {{ i18n.status }}: {{ detect.isEnabled ? i18n.enabled : i18n.disabled }}
                     </div>
                     <div data-aid="detection_metadata_enabled_toggle">
-                      <!-- <v-checkbox id="detection-enabled-edit" v-model="detect.isEnabled" @change="stopEdit(true)" /> -->
                       <v-switch id="detection-enabled-edit" inset v-model="detect.isEnabled" @change="saveDetection(false)"></v-switch>
                     </div>
                   </span>
