@@ -862,16 +862,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			}
 			return b < a ? -1 : 1;
 		},
-		expand(item) {
-			if (this.isExpanded(item)) {
-				this.expanded = [];
-			} else {
-				this.expanded = [item];
-			}
-		},
-		isExpanded(item) {
-			return (this.expanded.length > 0 && this.expanded[0] === item);
-		},
 		createNewOverride() {
 			this.newOverride = {
 				type: null,
@@ -966,6 +956,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				this.detect.overrides = [];
 			}
 
+			this.newOverride.isEnabled = true;
+
 			this.detect.overrides.push(this.newOverride);
 
 			this.saveDetection(false);
@@ -1013,21 +1005,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.saveDetection(false);
 		},
 		canAddOverride() {
-			if (this.detect.engine === 'elastalert') {
-				if (this.detect.overrides && this.detect.overrides.length > 0) {
-					for (let i = 0; i < this.detect.overrides.length; i++) {
-						if (this.detect.overrides[i].type === 'custom filter') {
-							// elastalert detections that already have a custom filter
-							// cannot have any other custom filter overrides
-							return false;
-						}
-					}
-				}
-			} else if (this.detect.engine === 'strelka') {
-				return false;
-			}
-
-			return true;
+			return this.detect.engine !== 'strelka';
 		},
 		tagOverrides() {
 			if (this.detect.overrides) {
@@ -1037,26 +1015,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			} else {
 				this.detect.overrides = [];
 			}
-		},
-		isExpanded(row) {
-			const expanded = this.historyTableOpts.expanded;
-			for (var i = 0; i < expanded.length; i++) {
-				if (expanded[i].id == row.id) {
-					return true;
-				}
-			}
-			return false;
-		},
-		async expandRow(row) {
-			const expanded = this.historyTableOpts.expanded;
-			for (var i = 0; i < expanded.length; i++) {
-				if (expanded[i].id == row.id) {
-					expanded.splice(i, 1);
-					return;
-				}
-			}
-
-			expanded.push(row);
 		},
 		prepareForInput(id) {
 			const el = document.getElementById(id)
