@@ -1078,7 +1078,7 @@
                     <v-btn id="detection-create-create" text small color="primary" class="align-self-end" @click="saveDetection(true)" data-aid="detection_new_save">
                       {{ i18n.create }}
                     </v-btn>
-                    <v-btn id="detection-create-convert" v-if="detect.language === 'sigma'" text small color="primary" class="align-self-end" @click="convertDetection(detect.content)" data-aid="detection_convert">
+                    <v-btn id="detection-create-convert" v-if="canConvert()" text small color="primary" class="align-self-end" @click="convertDetection()" data-aid="detection_convert">
                       {{ i18n.convert }}
                     </v-btn>
                   </div>
@@ -1265,7 +1265,7 @@
                 </div>
                 <div class="d-flex align-center align-self-end justify-end text-body-2 mt-2">
                   <div class="d-inline-flex justify-end">
-                    <v-btn v-if="detect.engine === 'elastalert'" id="detection-convert" text small color="primary" class="align-self-end" @click="convertDetection(detect.content)" data-aid="detection_source_convert">
+                    <v-btn v-if="canConvert()" id="detection-convert" text small color="primary" class="align-self-end" @click="convertDetection()" data-aid="detection_source_convert">
                       {{ i18n.convert }}
                     </v-btn>
                     <v-btn id="detection-cancel" v-if="!detect.isCommunity" text small color="primary" class="align-self-end" @click="cancelDetection()" data-aid="detection_source_cancel">
