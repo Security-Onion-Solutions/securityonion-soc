@@ -177,12 +177,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			try {
 				const response = await this.$root.papi.get('detection/' + encodeURIComponent(this.$route.params.id));
-
-				this.detect = response.data;
-				delete this.detect.kind;
-
-				this.tagOverrides();
-				this.loadAssociations();
+				this.extractDetection(response);
 			} catch (error) {
 				if (error.response != undefined && error.response.status == 404) {
 					this.$root.showError(this.i18n.notFound);
@@ -192,6 +187,14 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			}
 
 			this.$root.stopLoading();
+		},
+		extractDetection(response) {
+			this.detect = response.data;
+			delete this.detect.kind;
+
+			this.tagOverrides();
+			this.loadAssociations();
+			this.origDetect = Object.assign({}, this.detect);
 		},
 		loadAssociations() {
 			this.extractSummary();
@@ -632,12 +635,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					index = this.expanded[0].index;
 				}
 
-				this.detect = response.data;
-				delete this.detect.kind;
-
-				this.tagOverrides();
-				this.loadAssociations();
-				this.origDetect = Object.assign({}, this.detect);
+				this.extractDetection(response);
 
 				if (response.status === 206) {
 					this.$root.showWarning(this.i18n.disabledFailedSync);
@@ -657,7 +655,9 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		async duplicateDetection() {
 			const response = await this.$root.papi.post('/detection/' + encodeURIComponent(this.$route.params.id) + '/duplicate');
-			this.$router.push({name: 'detection', params: {id: response.data.id}});
+			this.extractDetection(response);
+
+			this.$router.push({ name: 'detection', params: { id: response.data.id } });
 		},
 		async deleteDetection() {
 			try {
@@ -1002,6 +1002,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		canAddOverride() {
 			return this.detect.engine !== 'strelka';
 		},
+		canConvert() {
+			let lang = this.detect.language || '';
+			return lang.toLowerCase() === 'sigma';
+		},
 		tagOverrides() {
 			if (this.detect.overrides) {
 				for (let i = 0; i < this.detect.overrides.length; i++) {
@@ -1167,15 +1171,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		async convertDetection(content) {
 			this.$root.startLoading();
-
-			let payload = this.detect;
-			if (this.isNew()) {
-				payload = {
-					content: this.content,
-				}
-			}
 			try {
-				const response = await this.$root.papi.post('detection/convert', payload);
+				const response = await this.$root.papi.post('detection/convert', this.detect);
 				if (response && response.data) {
 					this.convertedRule = response.data.query;
 					this.showSigmaDialog = true;
