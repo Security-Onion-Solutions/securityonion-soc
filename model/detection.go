@@ -215,20 +215,10 @@ func (detect *Detection) Validate() error {
 		return ErrUnsupportedEngine
 	}
 
-	customs := 0
-
 	for _, o := range detect.Overrides {
 		if err := o.Validate(detect.Engine); err != nil {
 			return err
 		}
-
-		if o.Type == OverrideTypeCustomFilter {
-			customs++
-		}
-	}
-
-	if detect.Engine == EngineNameElastAlert && customs > 1 {
-		return errors.New("only one custom filter override is allowed per ElastAlert detection")
 	}
 
 	return nil

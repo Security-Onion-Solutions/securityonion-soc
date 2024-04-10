@@ -828,6 +828,16 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 		}
 	}
 
+	// carry forward existing overrides
+	for i := range detections {
+		det := detections[i]
+
+		comDet, exists := community[det.PublicID]
+		if exists {
+			det.Overrides = comDet.Overrides
+		}
+	}
+
 	results := struct {
 		Added     int
 		Updated   int
@@ -1233,14 +1243,6 @@ func wrapRule(det *model.Detection, rule string) (string, error) {
 	}
 
 	sevNum := severities[det.Severity]
-
-	// apply the first (should only have 1) CustomFilter override if any
-	for _, o := range det.Overrides {
-		if o.IsEnabled && o.Type == model.OverrideTypeCustomFilter && o.CustomFilter != nil {
-			rule = fmt.Sprintf("(%s) and %s", rule, *o.CustomFilter)
-			break
-		}
-	}
 
 	wrapper := &CustomWrapper{
 		PlayTitle:     det.Title,
