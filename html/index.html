@@ -1502,8 +1502,20 @@
                             <span id="override-custom-filter" v-if="!isOverrideEdit('override-custom-filter')">
                               <pre>{{item.customFilter}}</pre>
                             </span>
-                            <v-textarea v-else id="override-custom-filter-edit" ref="override-custom-filter" hide-details="auto" rows="2" auto-grow v-model="item.customFilter" :rules="[rules.required]"
-                              persistent-hint :hint="i18n.customFilter" v-on:keyup.enter="stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)" data-aid="detection_override_filter_input"></v-textarea>
+                            <span v-else>
+                              <span data-aid="detection_override_filter_input">
+                                <v-textarea id="override-custom-filter-edit" ref="override-custom-filter" hide-details="auto" rows="2" auto-grow v-model="item.customFilter" :rules="[rules.required]"
+                                persistent-hint :hint="i18n.customFilter" v-on:keyup.esc="stopOverrideEdit(false)"></v-textarea>
+                              </span>
+                              <div id="override-filter-edit-buttons">
+                                <v-btn @click.stop="stopOverrideEdit(false)" color="error" text data-aid="detection_override_filter_cancel">
+                                  Cancel
+                                </v-btn>
+                                <v-btn @click.stop="stopOverrideEdit(true)" color="primary" text data-aid="detection_override_filter_save">
+                                  Update
+                                </v-btn>
+                              </div>
+                            </span>
                           </div>
                           <div class="d-flex justify-end text-body-2 mt-2">
                             <div class="d-inline-flex">
