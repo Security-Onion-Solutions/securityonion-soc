@@ -663,3 +663,8 @@ td {
 .manual-sync-buttons button {
   width: 100%;
 }
+
+#override-filter-edit-buttons {
+  display: flex;
+  justify-content: end;
+}
