@@ -443,6 +443,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 					if exists {
 						det.Id = comRule.Id
 						det.IsEnabled = comRule.IsEnabled
+						det.Overrides = comRule.Overrides
 					}
 
 					if exists {
@@ -592,7 +593,7 @@ func (e *StrelkaEngine) parseYaraRules(data []byte, filter bool) ([]*YaraRule, e
 				if buf != "" {
 					rule.Identifier = buf
 				} else {
-					return nil, errors.New(fmt.Sprintf("expected rule identifier at %d", i))
+					return nil, fmt.Errorf("expected rule identifier at %d", i)
 				}
 
 				buffer.Reset()
@@ -610,7 +611,7 @@ func (e *StrelkaEngine) parseYaraRules(data []byte, filter bool) ([]*YaraRule, e
 				if curHeader != "meta" &&
 					curHeader != "strings" &&
 					curHeader != "condition" {
-					return nil, errors.New(fmt.Sprintf("unexpected header at %d: %s", i, curHeader))
+					return nil, fmt.Errorf("unexpected header at %d: %s", i, curHeader)
 				}
 
 				state = parseStateInSection
@@ -630,7 +631,7 @@ func (e *StrelkaEngine) parseYaraRules(data []byte, filter bool) ([]*YaraRule, e
 						case "meta":
 							parts := strings.SplitN(buf, "=", 2)
 							if len(parts) != 2 {
-								return nil, errors.New(fmt.Sprintf("invalid meta line at %d: %s", i, buf))
+								return nil, fmt.Errorf("invalid meta line at %d: %s", i, buf)
 							}
 
 							key := strings.TrimSpace(parts[0])
