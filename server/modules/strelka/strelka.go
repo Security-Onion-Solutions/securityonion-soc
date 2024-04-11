@@ -115,7 +115,7 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 		}
 	}
 
-	e.stateFilePath = module.GetStringDefault(config, "stateFilePath", "/opt/so/conf/soc/strelkaengine.state")
+	e.stateFilePath = module.GetStringDefault(config, "stateFilePath", "/opt/sensoroni/fingerprints/strelkaengine.state")
 
 	return nil
 }

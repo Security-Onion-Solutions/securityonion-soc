@@ -148,7 +148,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 		}
 	}
 
-	e.stateFilePath = module.GetStringDefault(config, "stateFilePath", "/opt/so/conf/soc/elastalertengine.state")
+	e.stateFilePath = module.GetStringDefault(config, "stateFilePath", "/opt/sensoroni/fingerprints/elastalertengine.state")
 
 	return nil
 }

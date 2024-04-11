@@ -103,7 +103,7 @@ func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 		}
 	}
 
-	e.stateFilePath = module.GetStringDefault(config, "stateFilePath", "/opt/so/conf/soc/suricataengine.state")
+	e.stateFilePath = module.GetStringDefault(config, "stateFilePath", "/opt/sensoroni/fingerprints/suricataengine.state")
 
 	return nil
 }
