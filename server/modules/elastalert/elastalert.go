@@ -16,10 +16,8 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -27,7 +25,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-git/go-git/v5"
 	"github.com/samber/lo"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
@@ -416,7 +413,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			templateFound = true
 		}
 
-		var allRepos map[string]*module.RuleRepo
+		allRepos := map[string]*module.RuleRepo{}
 		var repoChanges bool
 
 		var zips map[string][]byte
@@ -436,9 +433,15 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 				continue
 			}
 
-			allRepos, repoChanges, err = e.updateRepos()
+			var dirtyRepos map[string]*mutil.DirtyRepo
+
+			dirtyRepos, repoChanges, err = mutil.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos)
 			if err != nil {
-				log.WithError(err).Error("unable to update sigma repos")
+				if strings.Contains(err.Error(), "module stopped") {
+					break
+				}
+
+				log.WithError(err).Error("unable to update Sigma repos")
 
 				if e.notify {
 					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
@@ -448,6 +451,10 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 				}
 
 				continue
+			}
+
+			for k, v := range dirtyRepos {
+				allRepos[k] = v.Repo
 			}
 		} else {
 			// Possible airgap installation, or admin has disabled auto-updates.
@@ -583,92 +590,6 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			"durationSeconds": dur.Seconds(),
 		}).Info("elastalert community rules sync finished")
 	}
-}
-
-func (e *ElastAlertEngine) updateRepos() (allRepos map[string]*module.RuleRepo, anythingNew bool, err error) {
-	allRepos = map[string]*module.RuleRepo{} // map[repoPath]repo
-
-	// read existing repos
-	entries, err := os.ReadDir(e.reposFolder)
-	if err != nil {
-		log.WithError(err).Error("Failed to read sigma repos folder")
-		return nil, false, err
-	}
-
-	existingRepos := map[string]struct{}{}
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-
-		existingRepos[entry.Name()] = struct{}{}
-	}
-
-	// pull or clone repos
-	for _, repo := range e.rulesRepos {
-		if !e.isRunning {
-			return nil, false, errModuleStopped
-		}
-
-		parser, err := url.Parse(repo.Repo)
-		if err != nil {
-			log.WithError(err).WithField("repo", repo).Error("Failed to parse repo URL, doing nothing with it")
-			continue
-		}
-
-		_, lastFolder := path.Split(parser.Path)
-		repoPath := filepath.Join(e.reposFolder, lastFolder)
-
-		allRepos[repoPath] = repo
-
-		if _, ok := existingRepos[lastFolder]; ok {
-			// repo already exists, pull
-			gitrepo, err := git.PlainOpen(repoPath)
-			if err != nil {
-				log.WithError(err).WithField("repo", gitrepo).Error("Failed to open repo, doing nothing with it")
-				continue
-			}
-
-			work, err := gitrepo.Worktree()
-			if err != nil {
-				log.WithError(err).WithField("repo", gitrepo).Error("Failed to get worktree, doing nothing with it")
-				continue
-			}
-
-			ctx, cancel := context.WithTimeout(e.srv.Context, time.Minute*5)
-
-			err = work.PullContext(ctx, &git.PullOptions{
-				Depth:        1,
-				SingleBranch: true,
-			})
-			if err != nil && err != git.NoErrAlreadyUpToDate {
-				cancel()
-				log.WithError(err).WithField("repo", repo).Error("Failed to pull repo, doing nothing with it")
-				continue
-			}
-			cancel()
-
-			if err == nil {
-				anythingNew = true
-			}
-		} else {
-			// repo does not exist, clone
-			_, err = git.PlainClone(repoPath, false, &git.CloneOptions{
-				Depth:        1,
-				SingleBranch: true,
-				URL:          repo.Repo,
-			})
-			if err != nil {
-				log.WithError(err).WithField("repo", repo).Error("Failed to clone repo, doing nothing with it")
-				continue
-			}
-
-			anythingNew = true
-		}
-	}
-
-	return allRepos, anythingNew, nil
 }
 
 func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detections []*model.Detection, errMap map[string]error) {

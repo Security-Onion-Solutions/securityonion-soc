@@ -1,13 +1,19 @@
 package util
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
+	"path"
+	"path/filepath"
 	"strconv"
 	"time"
 
 	"github.com/apex/log"
+	"github.com/go-git/go-git/v5"
+	"github.com/security-onion-solutions/securityonion-soc/module"
 )
 
 type IOManager interface {
@@ -71,4 +77,137 @@ func WriteStateFile(iom IOManager, path string) {
 	if err != nil {
 		log.WithError(err).Error("unable to write state file")
 	}
+}
+
+type DirtyRepo struct {
+	WasModified bool
+	Repo        *module.RuleRepo
+}
+
+func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*module.RuleRepo) (allRepos map[string]*DirtyRepo, anythingNew bool, err error) {
+	allRepos = map[string]*DirtyRepo{} // map[repoPath]repo
+
+	// read existing repos
+	entries, err := os.ReadDir(baseRepoFolder)
+	if err != nil {
+		log.WithError(err).WithField("reposFolder", baseRepoFolder).Error("Failed to read repos folder")
+		return nil, false, err
+	}
+
+	existingRepos := map[string]struct{}{}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		existingRepos[entry.Name()] = struct{}{}
+	}
+
+	// pull or clone repos
+	for _, repo := range rulesRepos {
+		if !*isRunning {
+			return nil, false, fmt.Errorf("module has stopped running")
+		}
+
+		parser, err := url.Parse(repo.Repo)
+		if err != nil {
+			log.WithError(err).WithField("repoUrl", repo.Repo).Error("Failed to parse repo URL, doing nothing with it")
+			continue
+		}
+
+		_, lastFolder := path.Split(parser.Path)
+		repoPath := filepath.Join(baseRepoFolder, lastFolder)
+
+		dirty := &DirtyRepo{
+			Repo: repo,
+		}
+
+		allRepos[repoPath] = dirty
+		reclone := false
+
+		_, ok := existingRepos[lastFolder]
+		if ok {
+			var work *git.Worktree
+			var ctx context.Context
+			var cancel context.CancelFunc
+
+			// repo already exists, pull
+			gitrepo, err := git.PlainOpen(repoPath)
+			if err != nil {
+				log.WithError(err).WithField("repoPath", repoPath).Error("failed to open repo, doing nothing with it")
+				reclone = true
+
+				goto skippull
+			}
+
+			work, err = gitrepo.Worktree()
+			if err != nil {
+				log.WithError(err).WithField("repoPath", repoPath).Error("failed to get worktree, doing nothing with it")
+				reclone = true
+
+				goto skippull
+			}
+
+			err = work.Reset(&git.ResetOptions{
+				Mode: git.HardReset,
+			})
+			if err != nil {
+				log.WithError(err).WithField("repoPath", repoPath).Error("failed to reset worktree, doing nothing with it")
+				reclone = true
+
+				goto skippull
+			}
+
+			ctx, cancel = context.WithTimeout(context.Background(), time.Minute*5)
+
+			err = work.PullContext(ctx, &git.PullOptions{
+				Depth:        1,
+				SingleBranch: true,
+			})
+			if err != nil && err != git.NoErrAlreadyUpToDate {
+				cancel()
+				log.WithError(err).WithField("repoPath", repoPath).Error("failed to pull repo, doing nothing with it")
+				reclone = true
+
+				goto skippull
+			}
+			cancel()
+
+			if err == nil {
+				anythingNew = true
+				dirty.WasModified = true
+			}
+
+		skippull:
+		}
+
+		if reclone {
+			log.WithField("repoPath", repoPath).Info("removing problematic repo before re-clone")
+
+			err = os.RemoveAll(repoPath)
+			if err != nil {
+				log.WithError(err).WithField("repoPath", repoPath).Error("failed to remove repo, doing nothing with it")
+				continue
+			}
+		}
+
+		if !ok || reclone {
+			// repo does not exist or was just deleted, clone
+			_, err = git.PlainClone(repoPath, false, &git.CloneOptions{
+				Depth:        1,
+				SingleBranch: true,
+				URL:          repo.Repo,
+			})
+			if err != nil {
+				log.WithError(err).WithField("repoPath", repoPath).Error("failed to clone repo, doing nothing with it")
+				continue
+			}
+
+			anythingNew = true
+			dirty.WasModified = true
+		}
+	}
+
+	return allRepos, anythingNew, nil
 }

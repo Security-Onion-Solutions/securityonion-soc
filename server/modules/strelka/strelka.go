@@ -12,10 +12,8 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -29,7 +27,6 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
 	"github.com/apex/log"
-	"github.com/go-git/go-git/v5"
 )
 
 var errModuleStopped = fmt.Errorf("strelka module has stopped running")
@@ -267,92 +264,34 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			templateFound = true
 		}
 
-		// read existing repos
-		entries, err := os.ReadDir(e.reposFolder)
-		if err != nil {
-			log.WithError(err).Error("Failed to read yara repos folder")
-
-			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
-					Engine: model.EngineNameStrelka,
-					Status: "error",
-				})
-			}
-
-			continue
-		}
-
-		existingRepos := map[string]struct{}{}
-
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-
-			existingRepos[entry.Name()] = struct{}{}
-		}
-
 		upToDate := map[string]*module.RuleRepo{}
 
 		if e.autoUpdateEnabled {
-			// pull or clone repos
-			for _, repo := range e.rulesRepos {
-				if !e.isRunning {
+			allRepos, anythingNew, err := mutil.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos)
+			if err != nil {
+				if strings.Contains(err.Error(), "module stopped") {
 					break
 				}
+			}
+			if !anythingNew && !forceSync {
+				// no updates, skip
+				log.Info("Strelka sync found no changes")
 
-				parser, err := url.Parse(repo.Repo)
-				if err != nil {
-					log.WithError(err).WithField("repo", repo).Error("Failed to parse repo URL, doing nothing with it")
-					continue
+				mutil.WriteStateFile(e.IOManager, e.stateFilePath)
+
+				if e.notify {
+					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+						Engine: model.EngineNameStrelka,
+						Status: "success",
+					})
 				}
 
-				_, lastFolder := path.Split(parser.Path)
-				repoPath := filepath.Join(e.reposFolder, lastFolder)
+				continue
+			}
 
-				if _, ok := existingRepos[lastFolder]; ok {
-					// repo already exists, pull
-					gitrepo, err := git.PlainOpen(repoPath)
-					if err != nil {
-						log.WithError(err).WithField("repo", gitrepo).Error("Failed to open repo, doing nothing with it")
-						continue
-					}
-
-					work, err := gitrepo.Worktree()
-					if err != nil {
-						log.WithError(err).WithField("repo", gitrepo).Error("Failed to get worktree, doing nothing with it")
-						continue
-					}
-
-					ctx, cancel := context.WithTimeout(e.srv.Context, time.Minute*5)
-
-					err = work.PullContext(ctx, &git.PullOptions{
-						Depth:        1,
-						SingleBranch: true,
-					})
-					if err != nil && err != git.NoErrAlreadyUpToDate {
-						cancel()
-						log.WithError(err).WithField("repo", repo).Error("Failed to pull repo, doing nothing with it")
-						continue
-					}
-					cancel()
-
-					if err == nil || forceSync {
-						upToDate[repoPath] = repo
-					}
-				} else {
-					// repo does not exist, clone
-					_, err = git.PlainClone(repoPath, false, &git.CloneOptions{
-						Depth:        1,
-						SingleBranch: true,
-						URL:          repo.Repo,
-					})
-					if err != nil {
-						log.WithError(err).WithField("repo", repo).Error("Failed to clone repo, doing nothing with it")
-						continue
-					}
-
-					upToDate[repoPath] = repo
+			for k, v := range allRepos {
+				if v.WasModified {
+					upToDate[k] = v.Repo
 				}
 			}
 		} else {
@@ -362,22 +301,6 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			// let the rest of the loop continue but then exit the loop. For now we're just hardcoding
 			// to always exit the loop.
 			return
-		}
-
-		if len(upToDate) == 0 {
-			// no updates, skip
-			log.Info("Strelka sync found no changes")
-
-			mutil.WriteStateFile(e.IOManager, e.stateFilePath)
-
-			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
-					Engine: model.EngineNameStrelka,
-					Status: "success",
-				})
-			}
-
-			continue
 		}
 
 		communityDetections, err := e.srv.Detectionstore.GetAllCommunitySIDs(e.srv.Context, util.Ptr(model.EngineNameStrelka))
@@ -726,7 +649,7 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]s
 		d := det.(*model.Detection)
 		_, exists := enabledDetections[d.PublicID]
 		if exists {
-			return nil, errors.New(fmt.Sprintf("duplicate detection with public ID %s", d.PublicID))
+			return nil, fmt.Errorf("duplicate detection with public ID %s", d.PublicID)
 		}
 		enabledDetections[d.PublicID] = d
 	}
