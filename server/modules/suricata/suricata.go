@@ -594,6 +594,10 @@ func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*
 		}
 	}
 
+	if len(localDets) == 0 {
+		return errMap, nil
+	}
+
 	local := settingByID(allSettings, "idstools.rules.local__rules")
 	if local == nil {
 		return nil, fmt.Errorf("unable to find local rules setting")
@@ -652,21 +656,21 @@ func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*
 		_, isFlowbits := parsedRule.GetOption("flowbits")
 
 		// update local
-		updateLocal(localLines, localIndex, sid, detect)
+		localLines = updateLocal(localLines, localIndex, sid, detect)
 
 		// update enabled
-		updateEnabled(enabledLines, enabledIndex, sid, isFlowbits, detect)
+		enabledLines = updateEnabled(enabledLines, enabledIndex, sid, isFlowbits, detect)
 
 		// update disabled
-		updateDisabled(disabledLines, disabledIndex, sid, isFlowbits, detect)
+		disabledLines = updateDisabled(disabledLines, disabledIndex, sid, isFlowbits, detect)
 
-		if isFlowbits {
-			updateModifyForDisabledFlowbits(modifyLines, modifyIndex, sid, detect)
+		// update overrides
+		modifyLines = updateModify(modifyLines, modifyIndex, sid, detect)
+
+		if isFlowbits && !detect.IsEnabled {
+			modifyLines = updateModifyForDisabledFlowbits(modifyLines, modifyIndex, sid, detect)
 		}
 
-		updateModify(modifyLines, modifyIndex, sid, detect)
-
-		// tuning
 		updateThreshold(thresholdIndex, parsedRule.GetGenId(), detect)
 	}
 
@@ -721,7 +725,7 @@ func removeBlankLines(lines []string) []string {
 	})
 }
 
-func updateLocal(localLines []string, localIndex map[string]int, sid string, detect *model.Detection) {
+func updateLocal(localLines []string, localIndex map[string]int, sid string, detect *model.Detection) []string {
 	lineNum, inLocal := localIndex[sid]
 	if !inLocal {
 		localLines = append(localLines, detect.Content)
@@ -730,36 +734,42 @@ func updateLocal(localLines []string, localIndex map[string]int, sid string, det
 	} else {
 		localLines[lineNum] = detect.Content
 	}
+
+	return localLines
 }
 
-func updateEnabled(enabledLines []string, enabledIndex map[string]int, sid string, isFlowbits bool, detect *model.Detection) {
+func updateEnabled(enabledLines []string, enabledIndex map[string]int, sid string, isFlowbits bool, detect *model.Detection) []string {
 	lineNum, inEnabled := enabledIndex[sid]
-	if !inEnabled {
-		line := detect.PublicID
-		if !detect.IsEnabled && !isFlowbits {
-			line = "# " + line
-		}
+	remove := !detect.IsEnabled && !isFlowbits
 
+	line := detect.PublicID
+	if remove {
+		line = ""
+	}
+
+	if !inEnabled {
 		enabledLines = append(enabledLines, line)
 		lineNum = len(enabledLines) - 1
 		enabledIndex[sid] = lineNum
 	} else {
-		line := detect.PublicID
-		if !detect.IsEnabled && !isFlowbits {
-			line = "# " + line
-		}
-
 		enabledLines[lineNum] = line
+		if remove {
+			delete(enabledIndex, sid)
+		}
 	}
+
+	return enabledLines
 }
 
-func updateModify(modifyLines []string, modifyIndex map[string]int, sid string, detect *model.Detection) {
+func updateModify(modifyLines []string, modifyIndex map[string]int, sid string, detect *model.Detection) []string {
 	// find active modify override, if it exists
 	var override *model.Override
-	for _, o := range detect.Overrides {
-		if o.Type == model.OverrideTypeModify && o.IsEnabled {
-			override = o
-			break
+	if detect.IsEnabled {
+		for _, o := range detect.Overrides {
+			if o.Type == model.OverrideTypeModify && o.IsEnabled {
+				override = o
+				break
+			}
 		}
 	}
 
@@ -767,10 +777,11 @@ func updateModify(modifyLines []string, modifyIndex map[string]int, sid string, 
 		// no active override, remove any that are present
 		lineNum, inModify := modifyIndex[sid]
 		if inModify {
-			delete(modifyIndex, sid)
 			modifyLines[lineNum] = ""
+			delete(modifyIndex, sid)
 		}
-		return
+
+		return modifyLines
 	}
 
 	line := fmt.Sprintf("%s %s %s", detect.PublicID, *override.Regex, *override.Value)
@@ -783,52 +794,50 @@ func updateModify(modifyLines []string, modifyIndex map[string]int, sid string, 
 	} else {
 		modifyLines[lineNum] = line
 	}
+
+	return modifyLines
 }
 
-func updateDisabled(disabledLines []string, disabledIndex map[string]int, sid string, isFlowbits bool, detect *model.Detection) {
+func updateDisabled(disabledLines []string, disabledIndex map[string]int, sid string, isFlowbits bool, detect *model.Detection) []string {
 	if !isFlowbits {
 		lineNum, inDisabled := disabledIndex[sid]
-		if !inDisabled {
-			line := detect.PublicID
-			if detect.IsEnabled {
-				line = "# " + line
-			}
 
+		line := detect.PublicID
+		if detect.IsEnabled {
+			line = ""
+		}
+
+		if !inDisabled {
 			disabledLines = append(disabledLines, line)
 			lineNum = len(disabledLines) - 1
 			disabledIndex[sid] = lineNum
 		} else {
-			line := detect.PublicID
-			if detect.IsEnabled {
-				line = "# " + line
-			}
-
 			disabledLines[lineNum] = line
+			if detect.IsEnabled {
+				delete(disabledIndex, sid)
+			}
 		}
 	}
+
+	return disabledLines
 }
 
 // updateModifyForDisabledFlowbits updates the modify file for disabled flowbits rules so the rules stay enabled but don't alert
-func updateModifyForDisabledFlowbits(modifyLines []string, modifyIndex map[string]int, sid string, detect *model.Detection) {
+func updateModifyForDisabledFlowbits(modifyLines []string, modifyIndex map[string]int, sid string, detect *model.Detection) []string {
 	lineNum, inModify := modifyIndex[sid]
-	if !inModify && !detect.IsEnabled {
+	line := fmt.Sprintf("%s %s", detect.PublicID, modifyFromTo)
+
+	if !inModify {
 		// not in the modify file, but should be
-		line := fmt.Sprintf("%s %s", detect.PublicID, modifyFromTo)
 		modifyLines = append(modifyLines, line)
 		lineNum = len(modifyLines) - 1
 		modifyIndex[sid] = lineNum
-	} else if inModify && detect.IsEnabled {
-		// in modify, but shouldn't be
-		var after []string
-		before := modifyLines[:lineNum]
-
-		if lineNum+1 < len(modifyLines) {
-			after = modifyLines[lineNum+1:]
-		}
-
-		modifyLines = append(before, after...)
-		delete(modifyIndex, sid)
+	} else {
+		// in modify, but should be updated
+		modifyLines[lineNum] = line
 	}
+
+	return modifyLines
 }
 
 func updateThreshold(thresholdIndex map[string][]*model.Override, genID int, detect *model.Detection) {
@@ -917,6 +926,13 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 			return nil, errModuleStopped
 		}
 
+		orig, exists := commSIDs[detect.PublicID]
+		if exists {
+			detect.IsEnabled = orig.IsEnabled
+			detect.Id = orig.Id
+			detect.Overrides = orig.Overrides
+		}
+
 		parsedRule, err := ParseSuricataRule(detect.Content)
 		if err != nil {
 			errMap[detect.PublicID] = fmt.Sprintf("unable to parse rule; reason=%s", err.Error())
@@ -933,25 +949,22 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 		_, isFlowbits := parsedRule.GetOption("flowbits")
 
 		// update enabled
-		updateEnabled(enabledLines, enabledIndex, sid, isFlowbits, detect)
+		enabledLines = updateEnabled(enabledLines, enabledIndex, sid, isFlowbits, detect)
 
 		// update disabled
-		updateDisabled(disabledLines, disabledIndex, sid, isFlowbits, detect)
+		disabledLines = updateDisabled(disabledLines, disabledIndex, sid, isFlowbits, detect)
 
-		if isFlowbits {
-			updateModifyForDisabledFlowbits(modifyLines, modifyIndex, sid, detect)
-		}
-
-		// overrides
-		updateModify(modifyLines, modifyIndex, sid, detect)
+		// update overrides
+		modifyLines = updateModify(modifyLines, modifyIndex, sid, detect)
 		updateThreshold(thresholdIndex, parsedRule.GetGenId(), detect)
 
-		orig, exists := commSIDs[detect.PublicID]
+		if isFlowbits && !detect.IsEnabled {
+			modifyLines = updateModifyForDisabledFlowbits(modifyLines, modifyIndex, sid, detect)
+		}
+
 		if exists {
-			if orig.Content != detect.Content {
-				detect.IsEnabled = orig.IsEnabled
-				detect.Id = orig.Id
-				detect.Overrides = orig.Overrides
+			if orig.Content != detect.Content || len(detect.Overrides) != 0 {
+				detect.Kind = ""
 
 				_, err = e.srv.Detectionstore.UpdateDetection(ctx, detect)
 				if err != nil {
@@ -993,6 +1006,10 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 			}
 		}
 	}
+
+	enabledLines = removeBlankLines(enabledLines)
+	disabledLines = removeBlankLines(disabledLines)
+	modifyLines = removeBlankLines(modifyLines)
 
 	// re-pack indices back to settings
 	enabled.Value = strings.Join(enabledLines, "\n")
@@ -1097,8 +1114,8 @@ func indexModify(lines []string) map[string]int {
 	for i, line := range lines {
 		line = strings.TrimSpace(strings.TrimLeft(line, "# \t"))
 
-		if strings.HasSuffix(line, modifyFromTo) {
-			parts := strings.SplitN(line, " ", 2)
+		parts := strings.SplitN(line, " ", 2)
+		if parts[0] != "" {
 			index[parts[0]] = i
 		}
 	}
