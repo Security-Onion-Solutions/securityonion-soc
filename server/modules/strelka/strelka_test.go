@@ -205,6 +205,31 @@ func TestStrelkaModule(t *testing.T) {
 	assert.Same(t, mod, srv.DetectionEngines[model.EngineNameStrelka])
 }
 
+func TestCheckAutoEnabledYaraRule(t *testing.T) {
+	e := &StrelkaEngine{
+		autoEnabledYaraRules: []string{"securityonion-yara"},
+	}
+
+	tests := []struct {
+		name     string
+		ruleset  string
+		expected bool
+	}{
+		{"securityonion-yara rule, rule enabled", "securityonion-yara", true},
+		{"securityonion-fake rule, rule not enabled", "securityonion-fake", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			det := &model.Detection{
+				Ruleset: util.Ptr(tt.ruleset),
+			}
+			checkRulesetEnabled(e, det)
+			assert.Equal(t, tt.expected, det.IsEnabled)
+		})
+	}
+}
+
 func TestSyncStrelka(t *testing.T) {
 	table := []struct {
 		Name           string
