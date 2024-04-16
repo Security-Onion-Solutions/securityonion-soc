@@ -51,6 +51,7 @@ type StrelkaEngine struct {
 	communityRulesImportFrequencySeconds int
 	yaraRulesFolder                      string
 	reposFolder                          string
+	autoEnabledYaraRules                 []string
 	rulesRepos                           []*module.RuleRepo
 	compileYaraPythonScriptPath          string
 	allowRegex                           *regexp.Regexp
@@ -60,6 +61,17 @@ type StrelkaEngine struct {
 	notify                               bool
 	stateFilePath                        string
 	IOManager
+}
+
+func checkRulesetEnabled(e *StrelkaEngine, det *model.Detection) {
+	det.IsEnabled = false
+	for _, rule := range e.autoEnabledYaraRules {
+		if rule == *det.Ruleset {
+			det.IsEnabled = true
+			break
+		}
+	}
+
 }
 
 func NewStrelkaEngine(srv *server.Server) *StrelkaEngine {
@@ -83,6 +95,7 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 	e.compileYaraPythonScriptPath = module.GetStringDefault(config, "compileYaraPythonScriptPath", "/opt/so/conf/strelka/compile_yara.py")
 	e.compileRules = module.GetBoolDefault(config, "compileRules", true)
 	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", false)
+	e.autoEnabledYaraRules = module.GetStringArrayDefault(config, "autoEnabledYaraRules", []string{"securityonion-yara"})
 
 	e.rulesRepos, err = module.GetReposDefault(config, "rulesRepos", []*module.RuleRepo{
 		{
@@ -290,7 +303,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			}
 
 			for k, v := range allRepos {
-				if v.WasModified {
+				if v.WasModified || forceSync {
 					upToDate[k] = v.Repo
 				}
 			}
@@ -361,6 +374,10 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 				for _, rule := range parsed {
 					det := rule.ToDetection(repo.License, filepath.Base(repopath))
+					log.WithFields(log.Fields{
+						"Id":    det.PublicID,
+						"title": det.Title,
+					}).Info("Strelka community sync - processing YARA rule")
 
 					comRule, exists := communityDetections[det.PublicID]
 					if exists {
@@ -371,6 +388,10 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 					if exists {
 						// pre-existing detection, update it
+						log.WithFields(log.Fields{
+							"Id":    det.PublicID,
+							"title": det.Title,
+						}).Info("Updating Yara detection")
 						det, err = e.srv.Detectionstore.UpdateDetection(e.srv.Context, det)
 						if err != nil {
 							log.WithError(err).WithField("det", det).Error("Failed to update detection")
@@ -378,6 +399,11 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 						}
 					} else {
 						// new detection, create it
+						log.WithFields(log.Fields{
+							"Id":    det.PublicID,
+							"title": det.Title,
+						}).Info("Creating new Yara detection")
+						checkRulesetEnabled(e, det)
 						det, err = e.srv.Detectionstore.CreateDetection(e.srv.Context, det)
 						if err != nil {
 							log.WithError(err).WithField("det", det).Error("Failed to create detection")
