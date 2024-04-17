@@ -7,6 +7,7 @@ package model
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -84,7 +85,8 @@ var (
 		SigLangYara:     {},
 	}
 
-	ErrUnsupportedEngine = errors.New("unsupported engine")
+	ErrUnsupportedEngine   = errors.New("unsupported engine")
+	ErrInvalidOverrideType = errors.New("invalid override type")
 )
 
 type DetectionEngine struct {
@@ -287,7 +289,19 @@ func (o *Override) Validate(engine EngineName) error {
 				o.Seconds != nil {
 				return errors.New("unnecessary fields in override")
 			}
+
+			*o.CustomFilter = util.TabsToSpaces(*o.CustomFilter)
+			fauxDoc := map[string]interface{}{}
+
+			err := yaml.Unmarshal([]byte(*o.CustomFilter), fauxDoc)
+			if err != nil {
+				return fmt.Errorf("custom filter override has invalid YAML: %w", err)
+			}
+		default:
+			return ErrInvalidOverrideType
 		}
+	} else {
+		return ErrInvalidOverrideType
 	}
 
 	return nil
