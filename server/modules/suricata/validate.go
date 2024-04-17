@@ -7,6 +7,7 @@ package suricata
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -209,4 +210,18 @@ func (rule *SuricataRule) String() string {
 	}
 
 	return fmt.Sprintf("%s %s %s %s %s (%s)", rule.Action, rule.Protocol, rule.Source, rule.Direction, rule.Destination, strings.Join(opts, " "))
+}
+
+func (rule *SuricataRule) GetGenId() int {
+	genID := 1
+
+	gid, ok := rule.GetOption("gid")
+	if ok && gid != nil {
+		id, err := strconv.Atoi(*gid)
+		if err != nil {
+			genID = id
+		}
+	}
+
+	return genID
 }

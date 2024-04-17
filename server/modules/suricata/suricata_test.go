@@ -209,13 +209,9 @@ func TestIndexModify(t *testing.T) {
 		`e4bd794a-8156-4fcc-b6a9-9fb2c9ecadc5 that this`,
 	}
 
-	// Reminder: We only care about the lines that the API has added,
-	// if a line doesn't end with suricataModifyFromTo (`"flowbits" "noalert; flowbits"`)
-	// then it's a line we don't want to touch.
-
 	output := indexModify(lines)
 
-	assert.Equal(t, 4, len(output))
+	assert.Equal(t, 8, len(output))
 	assert.Contains(t, output, "10000")
 	assert.Equal(t, output["10000"], 1)
 	assert.Contains(t, output, "20000")
@@ -224,9 +220,12 @@ func TestIndexModify(t *testing.T) {
 	assert.Equal(t, output["a83ba97b-a8e8-4258-be1b-022aff230e6e"], 5)
 	assert.Contains(t, output, "23220e49-7229-43a1-92d5-d68e46d27105")
 	assert.Equal(t, output["23220e49-7229-43a1-92d5-d68e46d27105"], 6)
-	assert.NotContains(t, output, "90000")
-	assert.NotContains(t, output, "30000")
-	assert.NotContains(t, output, "e4bd794a-8156-4fcc-b6a9-9fb2c9ecadc5")
+	assert.Contains(t, output, "90000")
+	assert.Equal(t, output["90000"], 0)
+	assert.Contains(t, output, "30000")
+	assert.Equal(t, output["30000"], 3)
+	assert.Contains(t, output, "e4bd794a-8156-4fcc-b6a9-9fb2c9ecadc5")
+	assert.Equal(t, output["e4bd794a-8156-4fcc-b6a9-9fb2c9ecadc5"], 7)
 }
 
 func TestValidate(t *testing.T) {
@@ -388,9 +387,9 @@ func TestSyncSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules":      "\n" + SimpleRule,
-				"idstools.sids.enabled":            "\n" + SimpleRuleSID,
-				"idstools.sids.disabled":           "\n# " + SimpleRuleSID,
+				"idstools.rules.local__rules":      SimpleRule,
+				"idstools.sids.enabled":            SimpleRuleSID,
+				"idstools.sids.disabled":           "",
 				"idstools.sids.modify":             "",
 				"suricata.thresholding.sids__yaml": "{}\n",
 			},
@@ -406,9 +405,9 @@ func TestSyncSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules":      "\n" + SimpleRule,
-				"idstools.sids.enabled":            "\n# " + SimpleRuleSID,
-				"idstools.sids.disabled":           "\n" + SimpleRuleSID,
+				"idstools.rules.local__rules":      SimpleRule,
+				"idstools.sids.enabled":            "",
+				"idstools.sids.disabled":           SimpleRuleSID,
 				"idstools.sids.modify":             "",
 				"suricata.thresholding.sids__yaml": "{}\n",
 			},
@@ -432,7 +431,7 @@ func TestSyncSuricata(t *testing.T) {
 			ExpectedSettings: map[string]string{
 				"idstools.rules.local__rules":      SimpleRule,
 				"idstools.sids.enabled":            SimpleRuleSID,
-				"idstools.sids.disabled":           "# " + SimpleRuleSID,
+				"idstools.sids.disabled":           "",
 				"idstools.sids.modify":             "",
 				"suricata.thresholding.sids__yaml": "{}\n",
 			},
@@ -455,7 +454,7 @@ func TestSyncSuricata(t *testing.T) {
 			},
 			ExpectedSettings: map[string]string{
 				"idstools.rules.local__rules":      SimpleRule,
-				"idstools.sids.enabled":            "# " + SimpleRuleSID,
+				"idstools.sids.enabled":            "",
 				"idstools.sids.disabled":           SimpleRuleSID,
 				"idstools.sids.modify":             "",
 				"suricata.thresholding.sids__yaml": "{}\n",
@@ -472,8 +471,8 @@ func TestSyncSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules":      "\n" + FlowbitsRuleA,
-				"idstools.sids.enabled":            "\n" + FlowbitsRuleASID,
+				"idstools.rules.local__rules":      FlowbitsRuleA,
+				"idstools.sids.enabled":            FlowbitsRuleASID,
 				"idstools.sids.disabled":           "",
 				"idstools.sids.modify":             "",
 				"suricata.thresholding.sids__yaml": "{}\n",
@@ -490,10 +489,10 @@ func TestSyncSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules":      "\n" + FlowbitsRuleA,
-				"idstools.sids.enabled":            "\n" + FlowbitsRuleASID,
+				"idstools.rules.local__rules":      FlowbitsRuleA,
+				"idstools.sids.enabled":            FlowbitsRuleASID,
 				"idstools.sids.disabled":           "",
-				"idstools.sids.modify":             "\n" + FlowbitsRuleASID + ` "flowbits" "noalert; flowbits"`,
+				"idstools.sids.modify":             FlowbitsRuleASID + ` "flowbits" "noalert; flowbits"`,
 				"suricata.thresholding.sids__yaml": "{}\n",
 			},
 		},
@@ -541,7 +540,7 @@ func TestSyncSuricata(t *testing.T) {
 				"idstools.rules.local__rules":      FlowbitsRuleB,
 				"idstools.sids.enabled":            FlowbitsRuleBSID,
 				"idstools.sids.disabled":           "# " + FlowbitsRuleBSID,
-				"idstools.sids.modify":             "\n" + FlowbitsRuleBSID + ` "flowbits" "noalert; flowbits"`,
+				"idstools.sids.modify":             FlowbitsRuleBSID + ` "flowbits" "noalert; flowbits"`,
 				"suricata.thresholding.sids__yaml": "{}\n",
 			},
 		},
@@ -594,10 +593,10 @@ func TestSyncSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules":      "\n" + SimpleRule,
-				"idstools.sids.enabled":            "\n" + SimpleRuleSID,
-				"idstools.sids.disabled":           "\n# " + SimpleRuleSID,
-				"idstools.sids.modify":             "",
+				"idstools.rules.local__rules":      SimpleRule,
+				"idstools.sids.enabled":            SimpleRuleSID,
+				"idstools.sids.disabled":           "",
+				"idstools.sids.modify":             SimpleRuleSID + " rev:7; rev:8;",
 				"suricata.thresholding.sids__yaml": "\"10000\":\n    - modify:\n        regex: rev:7;\n        value: rev:8;\n",
 			},
 		},
@@ -622,9 +621,9 @@ func TestSyncSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules":      "\n" + SimpleRule,
-				"idstools.sids.enabled":            "\n" + SimpleRuleSID,
-				"idstools.sids.disabled":           "\n# " + SimpleRuleSID,
+				"idstools.rules.local__rules":      SimpleRule,
+				"idstools.sids.enabled":            SimpleRuleSID,
+				"idstools.sids.disabled":           "",
 				"idstools.sids.modify":             "",
 				"suricata.thresholding.sids__yaml": "\"10000\":\n    - suppress:\n        gen_id: 1\n        track: by_src\n        ip: 0.0.0.0\n",
 			},
@@ -652,9 +651,9 @@ func TestSyncSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules":      "\n" + SimpleRule,
-				"idstools.sids.enabled":            "\n" + SimpleRuleSID,
-				"idstools.sids.disabled":           "\n# " + SimpleRuleSID,
+				"idstools.rules.local__rules":      SimpleRule,
+				"idstools.sids.enabled":            SimpleRuleSID,
+				"idstools.sids.disabled":           "",
 				"idstools.sids.modify":             "",
 				"suricata.thresholding.sids__yaml": "\"10000\":\n    - threshold:\n        gen_id: 1\n        type: limit\n        track: by_src\n        count: 5\n        seconds: 60\n",
 			},
@@ -674,6 +673,8 @@ func TestSyncSuricata(t *testing.T) {
 				DetectionEngines: map[model.EngineName]server.DetectionEngine{},
 			})
 			mod.srv.DetectionEngines[model.EngineNameSuricata] = mod
+
+			mod.isRunning = true
 
 			errMap, err := mod.SyncLocalDetections(ctx, test.Detections)
 

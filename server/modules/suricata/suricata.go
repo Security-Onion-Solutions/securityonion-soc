@@ -349,7 +349,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 			d.IsCommunity = true
 		}
 
-		errMap, err := e.syncCommunityDetections(ctx, commDetections, allSettings)
+		errMap, err := e.syncCommunityDetections(ctx, commDetections, true, allSettings)
 		if err != nil {
 			if err == errModuleStopped {
 				log.Info("incomplete sync of suricata community detections due to module stopping")
@@ -570,6 +570,34 @@ func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*
 		return nil, err
 	}
 
+	localDets := []*model.Detection{}
+	communityDets := []*model.Detection{}
+
+	for _, detect := range detections {
+		if detect.IsCommunity {
+			communityDets = append(communityDets, detect)
+		} else {
+			localDets = append(localDets, detect)
+		}
+	}
+
+	errMap = map[string]string{} // map[sid]error
+
+	if len(communityDets) != 0 {
+		eMap, err := e.syncCommunityDetections(ctx, communityDets, false, allSettings)
+		if err != nil {
+			return eMap, err
+		}
+
+		for sid, e := range eMap {
+			errMap[sid] = e
+		}
+	}
+
+	if len(localDets) == 0 {
+		return errMap, nil
+	}
+
 	local := settingByID(allSettings, "idstools.rules.local__rules")
 	if local == nil {
 		return nil, fmt.Errorf("unable to find local rules setting")
@@ -607,9 +635,11 @@ func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*
 		return nil, err
 	}
 
-	errMap = map[string]string{} // map[sid]error
+	for _, detect := range localDets {
+		if !e.isRunning {
+			return nil, errModuleStopped
+		}
 
-	for _, detect := range detections {
 		parsedRule, err := ParseSuricataRule(detect.Content)
 		if err != nil {
 			errMap[detect.PublicID] = fmt.Sprintf("unable to parse rule; reason=%s", err.Error())
@@ -625,105 +655,29 @@ func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*
 		sid := *opt
 		_, isFlowbits := parsedRule.GetOption("flowbits")
 
-		lineNum, inLocal := localIndex[sid]
-		if !inLocal {
-			localLines = append(localLines, detect.Content)
-			lineNum = len(localLines) - 1
-			localIndex[sid] = lineNum
-		} else {
-			localLines[lineNum] = detect.Content
+		// update local
+		localLines = updateLocal(localLines, localIndex, sid, detect)
+
+		// update enabled
+		enabledLines = updateEnabled(enabledLines, enabledIndex, sid, isFlowbits, detect)
+
+		// update disabled
+		disabledLines = updateDisabled(disabledLines, disabledIndex, sid, isFlowbits, detect)
+
+		// update overrides
+		modifyLines = updateModify(modifyLines, modifyIndex, sid, detect)
+
+		if isFlowbits && !detect.IsEnabled {
+			modifyLines = updateModifyForDisabledFlowbits(modifyLines, modifyIndex, sid, detect)
 		}
 
-		lineNum, inEnabled := enabledIndex[sid]
-		if !inEnabled {
-			line := detect.PublicID
-			if !detect.IsEnabled && !isFlowbits {
-				line = "# " + line
-			}
-
-			enabledLines = append(enabledLines, line)
-			lineNum = len(enabledLines) - 1
-			enabledIndex[sid] = lineNum
-		} else {
-			line := detect.PublicID
-			if !detect.IsEnabled && !isFlowbits {
-				line = "# " + line
-			}
-
-			enabledLines[lineNum] = line
-		}
-
-		if !isFlowbits {
-			lineNum, inDisabled := disabledIndex[sid]
-			if !inDisabled {
-				line := detect.PublicID
-				if detect.IsEnabled {
-					line = "# " + line
-				}
-
-				disabledLines = append(disabledLines, line)
-				lineNum = len(disabledLines) - 1
-				disabledIndex[sid] = lineNum
-			} else {
-				line := detect.PublicID
-				if detect.IsEnabled {
-					line = "# " + line
-				}
-
-				disabledLines[lineNum] = line
-			}
-		}
-
-		if isFlowbits {
-			lineNum, inModify := modifyIndex[sid]
-			if !inModify && !detect.IsEnabled {
-				// not in the modify file, but should be
-				line := fmt.Sprintf("%s %s", detect.PublicID, modifyFromTo)
-				modifyLines = append(modifyLines, line)
-				lineNum = len(modifyLines) - 1
-				modifyIndex[sid] = lineNum
-			} else if inModify && detect.IsEnabled {
-				// in modify, but shouldn't be
-				var after []string
-				before := modifyLines[:lineNum]
-
-				if lineNum+1 < len(modifyLines) {
-					after = modifyLines[lineNum+1:]
-				}
-
-				modifyLines = append(before, after...)
-				delete(modifyIndex, sid)
-			}
-		}
-
-		// tuning
-		delete(thresholdIndex, detect.PublicID)
-		detOverrides := lo.Filter(detect.Overrides, func(o *model.Override, _ int) bool {
-			return o.IsEnabled
-		})
-
-		if len(detOverrides) > 0 {
-			// the only place we care about genID, we don't get it from the user except
-			// through the content of the rule. Default to 1 if we can't find it.
-			genID := 1
-
-			gid, ok := parsedRule.GetOption("gid")
-			if ok && gid != nil {
-				id, err := strconv.Atoi(*gid)
-				if err != nil {
-					genID = id
-				}
-			}
-
-			for _, o := range detOverrides {
-				if o.Type == model.OverrideTypeSuppress || o.Type == model.OverrideTypeThreshold {
-					o.GenID = util.Ptr(genID)
-				}
-			}
-
-			thresholdIndex[detect.PublicID] = detOverrides
-		}
+		updateThreshold(thresholdIndex, parsedRule.GetGenId(), detect)
 	}
+
+	localLines = removeBlankLines(localLines)
+	enabledLines = removeBlankLines(enabledLines)
+	disabledLines = removeBlankLines(disabledLines)
+	modifyLines = removeBlankLines(modifyLines)
 
 	local.Value = strings.Join(localLines, "\n")
 	enabled.Value = strings.Join(enabledLines, "\n")
@@ -765,7 +719,153 @@ func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*
 	return errMap, nil
 }
 
-func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detections []*model.Detection, allSettings []*model.Setting) (errMap map[string]string, err error) {
+func removeBlankLines(lines []string) []string {
+	return lo.Filter(lines, func(line string, _ int) bool {
+		return strings.TrimSpace(line) != ""
+	})
+}
+
+func updateLocal(localLines []string, localIndex map[string]int, sid string, detect *model.Detection) []string {
+	lineNum, inLocal := localIndex[sid]
+	if !inLocal {
+		localLines = append(localLines, detect.Content)
+		lineNum = len(localLines) - 1
+		localIndex[sid] = lineNum
+	} else {
+		localLines[lineNum] = detect.Content
+	}
+
+	return localLines
+}
+
+func updateEnabled(enabledLines []string, enabledIndex map[string]int, sid string, isFlowbits bool, detect *model.Detection) []string {
+	lineNum, inEnabled := enabledIndex[sid]
+	remove := !detect.IsEnabled && !isFlowbits
+
+	line := detect.PublicID
+	if remove {
+		line = ""
+	}
+
+	if !inEnabled {
+		enabledLines = append(enabledLines, line)
+		lineNum = len(enabledLines) - 1
+		enabledIndex[sid] = lineNum
+	} else {
+		enabledLines[lineNum] = line
+		if remove {
+			delete(enabledIndex, sid)
+		}
+	}
+
+	return enabledLines
+}
+
+func updateModify(modifyLines []string, modifyIndex map[string]int, sid string, detect *model.Detection) []string {
+	// find active modify override, if it exists
+	var override *model.Override
+	if detect.IsEnabled {
+		for _, o := range detect.Overrides {
+			if o.Type == model.OverrideTypeModify && o.IsEnabled {
+				override = o
+				break
+			}
+		}
+	}
+
+	if override == nil {
+		// no active override, remove any that are present
+		lineNum, inModify := modifyIndex[sid]
+		if inModify {
+			modifyLines[lineNum] = ""
+			delete(modifyIndex, sid)
+		}
+
+		return modifyLines
+	}
+
+	line := fmt.Sprintf("%s %s %s", detect.PublicID, *override.Regex, *override.Value)
+
+	lineNum, inModify := modifyIndex[sid]
+	if !inModify {
+		modifyLines = append(modifyLines, line)
+		lineNum = len(modifyLines) - 1
+		modifyIndex[sid] = lineNum
+	} else {
+		modifyLines[lineNum] = line
+	}
+
+	return modifyLines
+}
+
+func updateDisabled(disabledLines []string, disabledIndex map[string]int, sid string, isFlowbits bool, detect *model.Detection) []string {
+	if !isFlowbits {
+		lineNum, inDisabled := disabledIndex[sid]
+
+		line := detect.PublicID
+		if detect.IsEnabled {
+			line = ""
+		}
+
+		if !inDisabled {
+			disabledLines = append(disabledLines, line)
+			lineNum = len(disabledLines) - 1
+			disabledIndex[sid] = lineNum
+		} else {
+			disabledLines[lineNum] = line
+			if detect.IsEnabled {
+				delete(disabledIndex, sid)
+			}
+		}
+	}
+
+	return disabledLines
+}
+
+// updateModifyForDisabledFlowbits updates the modify file for disabled flowbits rules so the rules stay enabled but don't alert
+func updateModifyForDisabledFlowbits(modifyLines []string, modifyIndex map[string]int, sid string, detect *model.Detection) []string {
+	lineNum, inModify := modifyIndex[sid]
+	line := fmt.Sprintf("%s %s", detect.PublicID, modifyFromTo)
+
+	if !inModify {
+		// not in the modify file, but should be
+		modifyLines = append(modifyLines, line)
+		lineNum = len(modifyLines) - 1
+		modifyIndex[sid] = lineNum
+	} else {
+		// in modify, but should be updated
+		modifyLines[lineNum] = line
+	}
+
+	return modifyLines
+}
+
+func updateThreshold(thresholdIndex map[string][]*model.Override, genID int, detect *model.Detection) {
+	delete(thresholdIndex, detect.PublicID)
+	detOverrides := lo.Filter(detect.Overrides, func(o *model.Override, _ int) bool {
+		return o.IsEnabled
+	})
+
+	if len(detOverrides) > 0 {
+		for _, o := range detOverrides {
+			if o.Type == model.OverrideTypeSuppress || o.Type == model.OverrideTypeThreshold {
+				o.GenID = util.Ptr(genID)
+			}
+		}
+
+		thresholdIndex[detect.PublicID] = detOverrides
+	}
+}
+
+func removeFromIndex(lines []string, index map[string]int, sid string) {
+	lineNum, inIndex := index[sid]
+	if inIndex {
+		delete(index, sid)
+		lines[lineNum] = ""
+	}
+}
+
+func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detections []*model.Detection, deleteUnreferenced bool, allSettings []*model.Setting) (errMap map[string]string, err error) {
 	defer func() {
 		if len(errMap) == 0 {
 			errMap = nil
@@ -780,6 +880,11 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 		Unchanged int
 	}{}
 
+	enabled := settingByID(allSettings, "idstools.sids.enabled")
+	if enabled == nil {
+		return nil, fmt.Errorf("unable to find enabled setting")
+	}
+
 	disabled := settingByID(allSettings, "idstools.sids.disabled")
 	if disabled == nil {
 		return nil, fmt.Errorf("unable to find disabled setting")
@@ -790,11 +895,21 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 		return nil, fmt.Errorf("unable to find modify setting")
 	}
 
+	threshold := settingByID(allSettings, "suricata.thresholding.sids__yaml")
+
+	// unpack settings into lines/indices
+	enabledLines := strings.Split(enabled.Value, "\n")
 	disabledLines := strings.Split(disabled.Value, "\n")
 	modifyLines := strings.Split(modify.Value, "\n")
 
-	disabledIndex := indexEnabled(disabledLines, true)
+	enabledIndex := indexEnabled(enabledLines, false)
+	disabledIndex := indexEnabled(disabledLines, false)
 	modifyIndex := indexModify(modifyLines)
+
+	thresholdIndex, err := indexThreshold(threshold.Value)
+	if err != nil {
+		return nil, err
+	}
 
 	commSIDs, err := e.srv.Detectionstore.GetAllCommunitySIDs(ctx, util.Ptr(model.EngineNameSuricata))
 	if err != nil {
@@ -811,15 +926,45 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 			return nil, errModuleStopped
 		}
 
-		_, disabled := disabledIndex[detect.PublicID]
-		_, modified := modifyIndex[detect.PublicID]
-		detect.IsEnabled = !(disabled || modified)
-
 		orig, exists := commSIDs[detect.PublicID]
 		if exists {
-			if orig.Content != detect.Content {
-				detect.Id = orig.Id
-				detect.Overrides = orig.Overrides
+			detect.IsEnabled = orig.IsEnabled
+			detect.Id = orig.Id
+			detect.Overrides = orig.Overrides
+		}
+
+		parsedRule, err := ParseSuricataRule(detect.Content)
+		if err != nil {
+			errMap[detect.PublicID] = fmt.Sprintf("unable to parse rule; reason=%s", err.Error())
+			continue
+		}
+
+		opt, ok := parsedRule.GetOption("sid")
+		if !ok || opt == nil {
+			errMap[detect.PublicID] = fmt.Sprintf("rule does not contain a SID; rule=%s", detect.Content)
+			continue
+		}
+
+		sid := *opt
+		_, isFlowbits := parsedRule.GetOption("flowbits")
+
+		// update enabled
+		enabledLines = updateEnabled(enabledLines, enabledIndex, sid, isFlowbits, detect)
+
+		// update disabled
+		disabledLines = updateDisabled(disabledLines, disabledIndex, sid, isFlowbits, detect)
+
+		// update overrides
+		modifyLines = updateModify(modifyLines, modifyIndex, sid, detect)
+		updateThreshold(thresholdIndex, parsedRule.GetGenId(), detect)
+
+		if isFlowbits && !detect.IsEnabled {
+			modifyLines = updateModifyForDisabledFlowbits(modifyLines, modifyIndex, sid, detect)
+		}
+
+		if exists {
+			if orig.Content != detect.Content || len(detect.Overrides) != 0 {
+				detect.Kind = ""
 
 				_, err = e.srv.Detectionstore.UpdateDetection(ctx, detect)
 				if err != nil {
@@ -842,25 +987,69 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 		}
 	}
 
-	for sid := range toDelete {
-		if !e.isRunning {
-			return nil, errModuleStopped
-		}
+	if deleteUnreferenced {
+		for sid := range toDelete {
+			if !e.isRunning {
+				return nil, errModuleStopped
+			}
 
-		_, err = e.srv.Detectionstore.DeleteDetection(ctx, commSIDs[sid].Id)
-		if err != nil {
-			errMap[sid] = fmt.Sprintf("unable to delete detection; reason=%s", err.Error())
-		} else {
-			results.Removed++
+			removeFromIndex(enabledLines, enabledIndex, sid)
+			removeFromIndex(disabledLines, disabledIndex, sid)
+			removeFromIndex(modifyLines, modifyIndex, sid)
+			delete(thresholdIndex, sid)
+
+			_, err = e.srv.Detectionstore.DeleteDetection(ctx, commSIDs[sid].Id)
+			if err != nil {
+				errMap[sid] = fmt.Sprintf("unable to delete detection; reason=%s", err.Error())
+			} else {
+				results.Removed++
+			}
 		}
 	}
 
+	enabledLines = removeBlankLines(enabledLines)
+	disabledLines = removeBlankLines(disabledLines)
+	modifyLines = removeBlankLines(modifyLines)
+
+	// re-pack indices back to settings
+	enabled.Value = strings.Join(enabledLines, "\n")
+	disabled.Value = strings.Join(disabledLines, "\n")
+	modify.Value = strings.Join(modifyLines, "\n")
+
+	yamlThreshold, err := yaml.Marshal(thresholdIndex)
+	if err != nil {
+		return errMap, err
+	}
+
+	threshold.Value = string(yamlThreshold)
+
+	err = e.srv.Configstore.UpdateSetting(ctx, enabled, false)
+	if err != nil {
+		return errMap, err
+	}
+
+	err = e.srv.Configstore.UpdateSetting(ctx, disabled, false)
+	if err != nil {
+		return errMap, err
+	}
+
+	err = e.srv.Configstore.UpdateSetting(ctx, modify, false)
+	if err != nil {
+		return errMap, err
+	}
+
+	err = e.srv.Configstore.UpdateSetting(ctx, threshold, false)
+	if err != nil {
+		return errMap, err
+	}
+
 	log.WithFields(log.Fields{
-		"added":     results.Added,
-		"updated":   results.Updated,
-		"removed":   results.Removed,
-		"unchanged": results.Unchanged,
-		"errors":    errMap,
+		"added":              results.Added,
+		"updated":            results.Updated,
+		"removed":            results.Removed,
+		"unchanged":          results.Unchanged,
+		"errors":             errMap,
+		"deleteUnreferenced": deleteUnreferenced,
 	}).Info("suricata community diff")
 
 	return errMap, nil
@@ -925,8 +1114,8 @@ func indexModify(lines []string) map[string]int {
 	for i, line := range lines {
 		line = strings.TrimSpace(strings.TrimLeft(line, "# \t"))
 
-		if strings.HasSuffix(line, modifyFromTo) {
-			parts := strings.SplitN(line, " ", 2)
+		parts := strings.SplitN(line, " ", 2)
+		if parts[0] != "" {
 			index[parts[0]] = i
 		}
 	}
