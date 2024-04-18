@@ -680,26 +680,28 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]s
 		enabledDetections[d.PublicID] = d
 	}
 
-	filename := filepath.Join(e.yaraRulesFolder, "enabled_rules.yar")
-
-	if len(enabledDetections) == 0 {
-		err = e.DeleteFile(filename)
-		if err != nil && !os.IsNotExist(err) {
-			return nil, err
-		}
-
-		return nil, nil
-	}
-
-	buf := bytes.Buffer{}
-
-	for _, det := range enabledDetections {
-		buf.WriteString(det.Content + "\n")
-	}
-
-	err = e.WriteFile(filename, buf.Bytes(), 0644)
+	// Clear existing .yar files in the directory
+	files, err := os.ReadDir(e.yaraRulesFolder)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read directory: %v", err)
+	}
+
+	for _, file := range files {
+		if filepath.Ext(file.Name()) == ".yar" {
+			err := os.Remove(filepath.Join(e.yaraRulesFolder, file.Name()))
+			if err != nil {
+				return nil, fmt.Errorf("failed to delete existing .yar file %s: %v", file.Name(), err)
+			}
+		}
+	}
+
+	// Process and write new .yar files
+	for publicID, det := range enabledDetections {
+		filename := filepath.Join(e.yaraRulesFolder, fmt.Sprintf("%s.yar", publicID))
+		err := os.WriteFile(filename, []byte(det.Content), 0644)
+		if err != nil {
+			return nil, fmt.Errorf("failed to write file for detection %s: %v", publicID, err)
+		}
 	}
 
 	if e.compileRules {
