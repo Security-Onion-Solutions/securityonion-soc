@@ -375,8 +375,8 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 				for _, rule := range parsed {
 					det := rule.ToDetection(repo.License, filepath.Base(repopath))
 					log.WithFields(log.Fields{
-						"Id":    det.PublicID,
-						"title": det.Title,
+						"rule.uuid": det.PublicID,
+						"rule.name": det.Title,
 					}).Info("Strelka community sync - processing YARA rule")
 
 					comRule, exists := communityDetections[det.PublicID]
@@ -389,8 +389,8 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 					if exists {
 						// pre-existing detection, update it
 						log.WithFields(log.Fields{
-							"Id":    det.PublicID,
-							"title": det.Title,
+							"rule.uuid": det.PublicID,
+							"rule.name": det.Title,
 						}).Info("Updating Yara detection")
 						det, err = e.srv.Detectionstore.UpdateDetection(e.srv.Context, det)
 						if err != nil {
@@ -400,8 +400,8 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 					} else {
 						// new detection, create it
 						log.WithFields(log.Fields{
-							"Id":    det.PublicID,
-							"title": det.Title,
+							"rule.uuid": det.PublicID,
+							"rule.name": det.Title,
 						}).Info("Creating new Yara detection")
 						checkRulesetEnabled(e, det)
 						det, err = e.srv.Detectionstore.CreateDetection(e.srv.Context, det)
@@ -681,14 +681,14 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]s
 	}
 
 	// Clear existing .yar files in the directory
-	files, err := os.ReadDir(e.yaraRulesFolder)
+	files, err := e.ReadDir(e.yaraRulesFolder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read directory: %v", err)
 	}
 
 	for _, file := range files {
 		if filepath.Ext(file.Name()) == ".yar" {
-			err := os.Remove(filepath.Join(e.yaraRulesFolder, file.Name()))
+			err := e.DeleteFile(filepath.Join(e.yaraRulesFolder, file.Name()))
 			if err != nil {
 				return nil, fmt.Errorf("failed to delete existing .yar file %s: %v", file.Name(), err)
 			}
@@ -696,11 +696,11 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]s
 	}
 
 	// Process and write new .yar files
-	for publicID, det := range enabledDetections {
-		filename := filepath.Join(e.yaraRulesFolder, fmt.Sprintf("%s.yar", publicID))
-		err := os.WriteFile(filename, []byte(det.Content), 0644)
+	for publicId, det := range enabledDetections {
+		filename := filepath.Join(e.yaraRulesFolder, fmt.Sprintf("%s.yar", publicId))
+		err := e.WriteFile(filename, []byte(det.Content), 0644)
 		if err != nil {
-			return nil, fmt.Errorf("failed to write file for detection %s: %v", publicID, err)
+			return nil, fmt.Errorf("failed to write file for detection %s: %v", publicId, err)
 		}
 	}
 
