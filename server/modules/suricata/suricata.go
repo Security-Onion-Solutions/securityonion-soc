@@ -147,6 +147,28 @@ func (e *SuricataEngine) resetInterrupt() {
 	}
 }
 
+func checkAndExtractCategory(title string) string {
+	// Regex to extract the first two words from the title
+	regex, err := regexp.Compile(`^(\w+)\s+(\w+)`)
+	if err != nil {
+		log.WithError(err).Error("unable to compile suricata category extraction regex")
+	}
+
+	matches := regex.FindStringSubmatch(title)
+	if len(matches) > 1 {
+		firstWord := matches[1]
+		secondWord := matches[2]
+
+		// Check if the first word is one of the keywords
+		switch firstWord {
+		case "ET", "ETPRO", "GPL":
+			return firstWord + " " + secondWord // Return both words if the first is a keyword
+		}
+	}
+
+	return "" // Return empty string if no matches or keyword doesn't match
+}
+
 func (e *SuricataEngine) IsRunning() bool {
 	return e.isRunning
 }
@@ -169,6 +191,8 @@ func (e *SuricataEngine) ExtractDetails(detect *model.Detection) error {
 
 		if strings.EqualFold(opt.Name, "msg") && opt.Value != nil {
 			detect.Title = util.Unquote(*opt.Value)
+			detect.Category = checkAndExtractCategory(detect.Title)
+
 			continue
 		}
 	}
@@ -516,6 +540,8 @@ func (e *SuricataEngine) ParseRules(content string, ruleset *string) ([]*model.D
 		title = strings.ReplaceAll(title, `\"`, `"`)
 		title = strings.ReplaceAll(title, `\\`, `\`)
 
+		category := checkAndExtractCategory(title)
+
 		severity := model.SeverityUnknown // TODO: Default severity?
 
 		md := parsed.ParseMetaData()
@@ -539,6 +565,7 @@ func (e *SuricataEngine) ParseRules(content string, ruleset *string) ([]*model.D
 
 		d := &model.Detection{
 			Author:   socAuthor,
+			Category: category,
 			PublicID: sid,
 			Title:    title,
 			Severity: severity,

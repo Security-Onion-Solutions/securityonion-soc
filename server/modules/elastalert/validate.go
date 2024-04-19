@@ -162,5 +162,17 @@ func (r *SigmaRule) ToDetection(content string, ruleset string, license string) 
 		det.Description = *r.Description
 	}
 
+	if r.LogSource.Category != nil && *r.LogSource.Category != "" {
+		det.Category = *r.LogSource.Category
+	}
+
+	if r.LogSource.Product != nil && *r.LogSource.Product != "" {
+		det.Product = *r.LogSource.Product
+	}
+
+	if r.LogSource.Service != nil && *r.LogSource.Service != "" {
+		det.Service = *r.LogSource.Service
+	}
+
 	return det
 }
