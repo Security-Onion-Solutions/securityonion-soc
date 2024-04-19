@@ -102,6 +102,7 @@ type Detection struct {
 	Title       string      `json:"title"`
 	Severity    Severity    `json:"severity"`
 	Author      string      `json:"author"`
+	Category    string      `json:"category,omitempty"`
 	Description string      `json:"description"`
 	Content     string      `json:"content"`
 	IsEnabled   bool        `json:"isEnabled"`
@@ -113,6 +114,10 @@ type Detection struct {
 	Tags        []string    `json:"tags"`
 	Ruleset     *string     `json:"ruleset"`
 	License     string      `json:"license"`
+
+	// elastalert - sigma only
+	Product string `json:"product,omitempty"`
+	Service string `json:"service,omitempty"`
 }
 
 type DetectionComment struct {

@@ -224,6 +224,18 @@ func (e *ElastAlertEngine) ExtractDetails(detect *model.Detection) error {
 		detect.Description = *rule.Description
 	}
 
+	if rule.LogSource.Category != nil {
+		detect.Category = *rule.LogSource.Category
+	}
+
+	if rule.LogSource.Product != nil {
+		detect.Product = *rule.LogSource.Product
+	}
+
+	if rule.LogSource.Service != nil {
+		detect.Service = *rule.LogSource.Service
+	}
+
 	if rule.Level != nil {
 		switch strings.ToLower(string(*rule.Level)) {
 		case "informational":
