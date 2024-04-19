@@ -44,8 +44,12 @@ func TestCheckAutoEnabledSigmaRule(t *testing.T) {
 		expected bool
 	}{
 		{"securityonion-resources rule with high severity, rule enabled", "securityonion-resources", model.SeverityHigh, true},
+		{"securityonion-resources rule with high severity upper case, rule enabled", "securityonion-RESOURCES", model.SeverityHigh, true},
 		{"core rule with critical severity, rule enabled", "core", model.SeverityCritical, true},
 		{"core rule with high severity, rule not enabled", "core", model.SeverityHigh, false},
+		{"empty ruleset, high severity, rule not enabled", "", model.SeverityHigh, false},
+		{"core ruleset, empty severity, rule not enabled", "core", "", false},
+		{"empty ruleset, empty severity, rule not enabled", "", "", false},
 	}
 
 	for _, tt := range tests {

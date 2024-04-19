@@ -79,14 +79,18 @@ type ElastAlertEngine struct {
 
 func checkRulesetEnabled(e *ElastAlertEngine, det *model.Detection) {
 	det.IsEnabled = false
+	if det.Ruleset == nil || det.Severity == "" {
+		return
+	}
+
+	// Combine Ruleset and Severity into a single string
 	metaCombined := *det.Ruleset + "+" + string(det.Severity)
 	for _, rule := range e.autoEnabledSigmaRules {
-		if rule == metaCombined {
+		if strings.EqualFold(rule, metaCombined) {
 			det.IsEnabled = true
 			break
 		}
 	}
-
 }
 
 func NewElastAlertEngine(srv *server.Server) *ElastAlertEngine {

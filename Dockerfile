@@ -22,8 +22,13 @@ RUN if [ "$VERSION" != "0.0.0" ]; then mkdir gitdocs && cd gitdocs && \
 RUN npm install jest jest-environment-jsdom --global
 RUN ./build.sh "$VERSION"
 
-RUN pip3 install sigma-cli pysigma-backend-elasticsearch pysigma-pipeline-windows yara-python --break-system-packages
+RUN pip3 install sigma-cli pysigma-backend-elasticsearch pysigma-pipeline-windows --break-system-packages
 RUN sed -i 's/#!\/usr\/bin\/python3/#!\/usr\/bin\/env python/g' /usr/bin/sigma
+
+# Build specific version of yara-python - needs to be pinned to Strelka's version.
+FROM ghcr.io/security-onion-solutions/python:3-slim as stage_2
+RUN apt-get update && apt-get install -y gcc python3-dev libssl-dev
+RUN pip3 install yara-python==4.3.1
 
 FROM ghcr.io/security-onion-solutions/python:3-slim
 
@@ -51,6 +56,8 @@ COPY --from=builder /build/sensoroni.json .
 COPY --from=builder /build/gitdocs/_build/html ./html/docs
 COPY --from=builder /usr/lib/python3.11/site-packages /usr/local/lib/python3.9/site-packages
 COPY --from=builder /usr/bin/sigma /usr/bin/sigma
+COPY --from=stage_2 /usr/local/lib/python3.9/site-packages/yara_python-4.3.1.dist-info /usr/local/lib/python3.9/site-packages/
+COPY --from=stage_2 /usr/local/lib/python3.9/site-packages/yara.cpython-39-x86_64-linux-gnu.so /usr/local/lib/python3.9/site-packages/
 RUN find html/js -name "*test*.js" -delete
 RUN chmod u+x scripts/*
 RUN chown 939:939 scripts/*

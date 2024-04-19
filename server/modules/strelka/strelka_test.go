@@ -205,6 +205,33 @@ func TestStrelkaModule(t *testing.T) {
 	assert.Same(t, mod, srv.DetectionEngines[model.EngineNameStrelka])
 }
 
+func TestCheckAutoEnabledYaraRule(t *testing.T) {
+	e := &StrelkaEngine{
+		autoEnabledYaraRules: []string{"securityonion-yara"},
+	}
+
+	tests := []struct {
+		name     string
+		ruleset  string
+		expected bool
+	}{
+		{"securityonion-yara rule, rule enabled", "securityonion-yara", true},
+		{"securityonion-YARA rule upper case, rule enabled", "securityonion-YARA", true},
+		{"securityonion-fake rule, rule not enabled", "securityonion-fake", false},
+		{"no ruleset, rule not enabled", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			det := &model.Detection{
+				Ruleset: util.Ptr(tt.ruleset),
+			}
+			checkRulesetEnabled(e, det)
+			assert.Equal(t, tt.expected, det.IsEnabled)
+		})
+	}
+}
+
 func TestSyncStrelka(t *testing.T) {
 	table := []struct {
 		Name           string
@@ -230,7 +257,9 @@ func TestSyncStrelka(t *testing.T) {
 					},
 				}, nil)
 
-				mio.EXPECT().WriteFile(gomock.Any(), []byte(simpleRule+"\n"+simpleRule+"\n"), fs.FileMode(0644)).Return(nil)
+				mio.EXPECT().ReadDir("yaraRulesFolder").Return(nil, nil)
+
+				mio.EXPECT().WriteFile(gomock.Any(), []byte(simpleRule), fs.FileMode(0644)).Return(nil).MaxTimes(2)
 
 				mio.EXPECT().ExecCommand(gomock.Cond(func(c any) bool {
 					cmd := c.(*exec.Cmd)
@@ -245,13 +274,6 @@ func TestSyncStrelka(t *testing.T) {
 
 					return true
 				})).Return([]byte{}, 0, time.Duration(0), nil)
-			},
-		},
-		{
-			Name: "No Enabled Rules",
-			InitMock: func(mockDetStore *servermock.MockDetectionstore, mio *mock.MockIOManager) {
-				mockDetStore.EXPECT().Query(gomock.Any(), gomock.Any(), gomock.Any()).Return([]interface{}{}, nil)
-				mio.EXPECT().DeleteFile("yaraRulesFolder/enabled_rules.yar").Return(nil)
 			},
 		},
 	}
