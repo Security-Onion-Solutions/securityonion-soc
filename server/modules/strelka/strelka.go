@@ -65,13 +65,17 @@ type StrelkaEngine struct {
 
 func checkRulesetEnabled(e *StrelkaEngine, det *model.Detection) {
 	det.IsEnabled = false
+
+	if det.Ruleset == nil {
+		return
+	}
+
 	for _, rule := range e.autoEnabledYaraRules {
-		if rule == *det.Ruleset {
+		if strings.EqualFold(rule, *det.Ruleset) {
 			det.IsEnabled = true
 			break
 		}
 	}
-
 }
 
 func NewStrelkaEngine(srv *server.Server) *StrelkaEngine {

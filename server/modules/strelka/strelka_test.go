@@ -216,7 +216,9 @@ func TestCheckAutoEnabledYaraRule(t *testing.T) {
 		expected bool
 	}{
 		{"securityonion-yara rule, rule enabled", "securityonion-yara", true},
+		{"securityonion-YARA rule upper case, rule enabled", "securityonion-YARA", true},
 		{"securityonion-fake rule, rule not enabled", "securityonion-fake", false},
+		{"no ruleset, rule not enabled", "", false},
 	}
 
 	for _, tt := range tests {
@@ -255,7 +257,7 @@ func TestSyncStrelka(t *testing.T) {
 					},
 				}, nil)
 
-				mio.EXPECT().ReadDir("yaraRulesFolder")
+				mio.EXPECT().ReadDir("yaraRulesFolder").Return(nil, nil)
 
 				mio.EXPECT().WriteFile(gomock.Any(), []byte(simpleRule), fs.FileMode(0644)).Return(nil).MaxTimes(2)
 
