@@ -798,7 +798,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 		oldDet, exists := community[det.PublicID]
 		if exists {
 			det.IsEnabled, det.Id = oldDet.IsEnabled, oldDet.Id
-			if oldDet.Content != det.Content {
+			if oldDet.Content != det.Content || !util.Compare(oldDet.Ruleset, det.Ruleset) || len(det.Overrides) != 0 {
 				_, err = e.srv.Detectionstore.UpdateDetection(ctx, det)
 				if err != nil {
 					errMap[det.PublicID] = fmt.Errorf("unable to update detection: %s", err)

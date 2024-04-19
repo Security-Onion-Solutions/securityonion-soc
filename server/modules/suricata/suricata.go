@@ -990,7 +990,7 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 		}
 
 		if exists {
-			if orig.Content != detect.Content || len(detect.Overrides) != 0 {
+			if orig.Content != detect.Content || !util.Compare(orig.Ruleset, detect.Ruleset) || len(detect.Overrides) != 0 {
 				detect.Kind = ""
 
 				_, err = e.srv.Detectionstore.UpdateDetection(ctx, detect)

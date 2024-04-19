@@ -160,7 +160,7 @@ func (o Override) PrepareForSigma() (map[string]interface{}, error) {
 	mid := map[string]interface{}{}
 	out := map[string]interface{}{}
 
-	filter := util.TabsToSpaces(*o.CustomFilter)
+	filter := util.TabsToSpaces(*o.CustomFilter, 2)
 
 	err := yaml.Unmarshal([]byte(filter), mid)
 
@@ -295,7 +295,7 @@ func (o *Override) Validate(engine EngineName) error {
 				return errors.New("unnecessary fields in override")
 			}
 
-			*o.CustomFilter = util.TabsToSpaces(*o.CustomFilter)
+			*o.CustomFilter = util.TabsToSpaces(*o.CustomFilter, 2)
 			fauxDoc := map[string]interface{}{}
 
 			err := yaml.Unmarshal([]byte(*o.CustomFilter), fauxDoc)
