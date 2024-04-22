@@ -12,6 +12,32 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+func TestTruncateMap(t *testing.T) {
+	errMap := map[string]error{
+		"db6c06c4-bf3b-421c-aa88-15672b88c743": errors.New("error 1"),
+		"db92dd33-a3ad-49cf-8c2c-608c3e30ace0": errors.New("error 2"),
+		"dbc1f800-0fe0-4bc0-9c66-292c2abe3f78": errors.New("error 3"),
+		"Random key":                           errors.New("random value"),
+	}
+
+	// Test truncating to one element
+	truncatedErrMap := TruncateMap(errMap, 2)
+	assert.Equal(t, 2, len(truncatedErrMap), "Truncated map should have exactly two elements.")
+
+	// Ensure the key in the truncated map exists in the original map and has the correct error message
+	for key, val := range truncatedErrMap {
+		assert.Equal(t, errMap[key], val, "Error messages should match for truncated keys.")
+	}
+
+	// Test truncating to more elements than exist in the map
+	truncatedErrMap = TruncateMap(errMap, 10)
+	assert.Equal(t, len(errMap), len(truncatedErrMap), "Truncated map should equal the original map in size when the limit exceeds the number of map elements.")
+
+	// Test truncating to zero elements
+	truncatedErrMap = TruncateMap(errMap, 0)
+	assert.Equal(t, 0, len(truncatedErrMap), "Truncated map should have no elements when limit is 0.")
+}
+
 func TestDetermineWaitTimeNoState(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mio := mock.NewMockIOManager(ctrl)
