@@ -1,3 +1,8 @@
+// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
+
 package util
 
 import (
@@ -132,12 +137,17 @@ func TestTabsToSpaces(t *testing.T) {
 func TestCompare(t *testing.T) {
 	x := Ptr("X")
 	o := Ptr("O")
+	z := Ptr("0")
 	var n *string
 
-	assert.True(t, Compare(x, x))
-	assert.True(t, Compare(n, n))
-	assert.False(t, Compare(x, o))
-	assert.False(t, Compare(n, o))
-	assert.False(t, Compare(x, n))
-	assert.False(t, Compare(o, n))
+	assert.True(t, ComparePtrs(x, x))
+	assert.True(t, ComparePtrs(n, n))
+	assert.False(t, ComparePtrs(x, o))
+	assert.False(t, ComparePtrs(n, o))
+	assert.False(t, ComparePtrs(x, n))
+	assert.False(t, ComparePtrs(o, n))
+	assert.False(t, ComparePtrs(z, x))
+	assert.False(t, ComparePtrs(z, o))
+	assert.False(t, ComparePtrs(o, z))
+	assert.False(t, ComparePtrs(x, z))
 }

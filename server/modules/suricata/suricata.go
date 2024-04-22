@@ -958,6 +958,7 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 			detect.IsEnabled = orig.IsEnabled
 			detect.Id = orig.Id
 			detect.Overrides = orig.Overrides
+			detect.CreateTime = orig.CreateTime
 		}
 
 		parsedRule, err := ParseSuricataRule(detect.Content)
@@ -990,7 +991,7 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 		}
 
 		if exists {
-			if orig.Content != detect.Content || !util.Compare(orig.Ruleset, detect.Ruleset) || len(detect.Overrides) != 0 {
+			if orig.Content != detect.Content || !util.ComparePtrs(orig.Ruleset, detect.Ruleset) || len(detect.Overrides) != 0 {
 				detect.Kind = ""
 
 				_, err = e.srv.Detectionstore.UpdateDetection(ctx, detect)

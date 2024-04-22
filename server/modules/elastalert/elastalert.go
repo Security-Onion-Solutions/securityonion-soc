@@ -797,8 +797,12 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 		// 1. Save sigma Detection to ElasticSearch
 		oldDet, exists := community[det.PublicID]
 		if exists {
-			det.IsEnabled, det.Id = oldDet.IsEnabled, oldDet.Id
-			if oldDet.Content != det.Content || !util.Compare(oldDet.Ruleset, det.Ruleset) || len(det.Overrides) != 0 {
+			det.IsEnabled = oldDet.IsEnabled
+			det.Id = oldDet.Id
+			det.Overrides = oldDet.Overrides
+			det.CreateTime = oldDet.CreateTime
+
+			if oldDet.Content != det.Content || !util.ComparePtrs(oldDet.Ruleset, det.Ruleset) || len(det.Overrides) != 0 {
 				_, err = e.srv.Detectionstore.UpdateDetection(ctx, det)
 				if err != nil {
 					errMap[det.PublicID] = fmt.Errorf("unable to update detection: %s", err)

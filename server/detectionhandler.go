@@ -21,6 +21,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+var errPublicIdExists = errors.New("publicId already exists for this engine")
+
 type BulkOp struct {
 	IDs       []string `json:"ids"`
 	Query     *string  `json:"query"`
@@ -31,10 +33,14 @@ type DetectionHandler struct {
 	server *Server
 }
 
-func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
-	h := &DetectionHandler{
+func NewDetectionHandler(srv *Server) *DetectionHandler {
+	return &DetectionHandler{
 		server: srv,
 	}
+}
+
+func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
+	h := NewDetectionHandler(srv)
 
 	r.Route(prefix, func(r chi.Router) {
 		r.Get("/{id}", h.getDetection)
@@ -254,69 +260,18 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	err = engine.ExtractDetails(detect)
+	err = h.PrepareForSave(ctx, detect, engine)
 	if err != nil {
-		if err.Error() == "rule does not contain a public Id" {
+		if err.Error() == "Object not found" {
+			web.Respond(w, r, http.StatusNotFound, nil)
+		} else if errors.Is(err, errPublicIdExists) {
+			web.Respond(w, r, http.StatusConflict, err)
+		} else if err.Error() == "rule does not contain a public Id" {
 			web.Respond(w, r, http.StatusBadRequest, "missingPublicIdErr")
 		} else {
 			web.Respond(w, r, http.StatusBadRequest, err)
 		}
 
-		return
-	}
-
-	old, err := h.server.Detectionstore.GetDetection(ctx, detect.Id)
-	if err != nil {
-		if err.Error() == "Object not found" {
-			web.Respond(w, r, http.StatusNotFound, nil)
-		} else {
-			web.Respond(w, r, http.StatusInternalServerError, err)
-		}
-
-		return
-	}
-
-	now := time.Now()
-
-	for _, over := range detect.Overrides {
-		if over.CreatedAt.IsZero() {
-			over.CreatedAt = now
-		}
-
-		update := true
-		for i, oldOver := range old.Overrides {
-			if *over == *oldOver {
-				// Did the old detection contain an override with the EXACT same parameters?
-				// If so, we don't need to update the UpdatedAt field.
-				update = false
-
-				// A match was found, the old override can be removed from the list so it
-				// isn't compared to other overrides. i.e. removing it means it can only
-				// match one override in the new list.
-				old.Overrides = append(old.Overrides[:i], old.Overrides[i+1:]...)
-
-				break
-			}
-		}
-
-		if over.UpdatedAt.IsZero() || update {
-			over.UpdatedAt = now
-		}
-	}
-
-	if old.IsCommunity {
-		// the only editable fields for community rules are IsEnabled, IsReporting, Note, and Overrides
-		old.IsEnabled = detect.IsEnabled
-		old.IsReporting = detect.IsReporting
-		old.Overrides = detect.Overrides
-		old.Tags = detect.Tags
-
-		detect = old
-		detect.Kind = ""
-
-		log.Infof("existing detection %s is a community rule, only updating select fields", detect.Id)
-	} else if detect.IsCommunity {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("cannot update an existing non-community detection to make it a community detection"))
 		return
 	}
 
@@ -689,4 +644,83 @@ func (h *DetectionHandler) syncEngineDetections(w http.ResponseWriter, r *http.R
 	}
 
 	web.Respond(w, r, http.StatusOK, nil)
+}
+
+func (h *DetectionHandler) PrepareForSave(ctx context.Context, detect *model.Detection, e DetectionEngine) error {
+	err := e.ExtractDetails(detect)
+	if err != nil {
+		return err
+	}
+
+	var old *model.Detection
+
+	if detect.PublicID != "" {
+		dupe, err := h.server.Detectionstore.GetDetectionByPublicId(ctx, detect.PublicID)
+		if err != nil {
+			return err
+		}
+
+		if dupe != nil {
+			if dupe.Id == detect.Id {
+				old = dupe
+			} else {
+				return errPublicIdExists
+			}
+		}
+	}
+
+	if old == nil {
+		old, err = h.server.Detectionstore.GetDetection(ctx, detect.Id)
+		if err != nil {
+			return err
+		}
+	}
+
+	detect.CreateTime = old.CreateTime
+
+	now := time.Now()
+
+	for _, over := range detect.Overrides {
+		if over.CreatedAt.IsZero() {
+			over.CreatedAt = now
+		}
+
+		update := true
+		for i, oldOver := range old.Overrides {
+			if over.Equal(oldOver) {
+				// Did the old detection contain an override with the EXACT same parameters?
+				// If so, we don't need to update the UpdatedAt field.
+				update = false
+
+				// A match was found, the old override can be removed from the list so it
+				// isn't compared to other overrides. i.e. removing it means it can only
+				// match one override in the new list.
+				old.Overrides = append(old.Overrides[:i], old.Overrides[i+1:]...)
+
+				break
+			}
+		}
+
+		if over.UpdatedAt.IsZero() || update {
+			over.UpdatedAt = now
+		}
+	}
+
+	if old.IsCommunity {
+		// the only editable fields for community rules are IsEnabled, IsReporting, Note, and Overrides
+		old.IsEnabled = detect.IsEnabled
+		old.IsReporting = detect.IsReporting
+		old.Overrides = detect.Overrides
+		old.Tags = detect.Tags
+
+		*detect = *old
+
+		log.Infof("existing detection %s is a community rule, only updating select fields", detect.Id)
+	} else if detect.IsCommunity {
+		return errors.New("cannot update an existing non-community detection to make it a community detection")
+	}
+
+	detect.Kind = ""
+
+	return nil
 }

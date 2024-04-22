@@ -149,7 +149,7 @@ type OverrideParameters struct {
 	Seconds       *int    `json:"seconds,omitempty" yaml:"seconds,omitempty"`    // threshold
 
 	// elastalert
-	CustomFilter *string `json:"customFilter,omitempty" yaml:"-"` // modify
+	CustomFilter *string `json:"customFilter,omitempty" yaml:"-"` // customFilter
 }
 
 func (o Override) PrepareForSigma() (map[string]interface{}, error) {
@@ -310,4 +310,38 @@ func (o *Override) Validate(engine EngineName) error {
 	}
 
 	return nil
+}
+
+func (o *Override) Equal(other *Override) bool {
+	if o == nil && other == nil {
+		return true
+	}
+
+	if (o == nil || other == nil) ||
+		(o.Type != other.Type) ||
+		(o.IsEnabled != other.IsEnabled) ||
+		(o.CreatedAt != other.CreatedAt) ||
+		(o.UpdatedAt != other.UpdatedAt) {
+		return false
+	}
+
+	result := false
+
+	switch o.Type {
+	case OverrideTypeSuppress:
+		result = util.ComparePtrs(o.IP, other.IP) &&
+			util.ComparePtrs(o.Track, other.Track)
+	case OverrideTypeThreshold:
+		result = util.ComparePtrs(o.ThresholdType, other.ThresholdType) &&
+			util.ComparePtrs(o.Track, other.Track) &&
+			util.ComparePtrs(o.Count, other.Count) &&
+			util.ComparePtrs(o.Seconds, other.Seconds)
+	case OverrideTypeModify:
+		result = util.ComparePtrs(o.Regex, other.Regex) &&
+			util.ComparePtrs(o.Value, other.Value)
+	case OverrideTypeCustomFilter:
+		result = util.ComparePtrs(o.CustomFilter, other.CustomFilter)
+	}
+
+	return result
 }

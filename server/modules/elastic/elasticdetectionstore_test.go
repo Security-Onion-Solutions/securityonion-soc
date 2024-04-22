@@ -3,7 +3,6 @@ package elastic
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,60 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	modmock "github.com/security-onion-solutions/securityonion-soc/server/modules/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
 	"github.com/tidwall/gjson"
 )
-
-type MockTransport struct {
-	requests    []*http.Request
-	responses   []*http.Response
-	roundTripFn func(req *http.Request) (*http.Response, error)
-}
-
-func (t *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	t.requests = append(t.requests, req)
-	return t.roundTripFn(req)
-}
-
-func (t *MockTransport) AddResponse(res *http.Response) {
-	if res.Body == nil {
-		res.Body = http.NoBody
-	}
-
-	t.responses = append(t.responses, res)
-}
-
-func (t *MockTransport) GetRequests() []*http.Request {
-	return t.requests
-}
-
-func newMockClient(t *testing.T) (*elasticsearch.Client, *MockTransport) {
-	mocktrans := MockTransport{}
-	mocktrans.roundTripFn = func(req *http.Request) (*http.Response, error) {
-		if len(mocktrans.responses) != 0 {
-			res := mocktrans.responses[0]
-			mocktrans.responses = mocktrans.responses[1:]
-
-			return res, nil
-		} else {
-			return nil, errors.New("unexpected call to client")
-		}
-	}
-
-	client, err := elasticsearch.NewClient(elasticsearch.Config{
-		Transport: &mocktrans,
-	})
-	if err != nil {
-		t.Fatalf("Error creating Elasticsearch client: %s", err)
-	}
-
-	return client, &mocktrans
-}
 
 func TestDetectionInit(t *testing.T) {
 	t.Parallel()
@@ -360,7 +313,7 @@ func TestValidateDetectionInvalid(t *testing.T) {
 func TestCreateDetectionValid(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 
@@ -532,7 +485,7 @@ func TestCreateDetectionPublicIdCollision(t *testing.T) {
 func TestUpdateDetectionValid(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 
@@ -685,7 +638,7 @@ func TestUpdateDetectionValid(t *testing.T) {
 func TestUpdateDetectionInvalid404(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 
@@ -735,7 +688,7 @@ func TestUpdateDetectionInvalid404(t *testing.T) {
 func TestDeleteDetectionValid(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 
@@ -791,7 +744,7 @@ func TestDeleteDetectionValid(t *testing.T) {
 func TestDeleteDetectionInvalid(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakesrv.Eventstore = server.NewFakeEventstore()
 	store := NewElasticDetectionstore(fakesrv, client, 100)
@@ -813,7 +766,7 @@ func TestDeleteDetectionInvalid(t *testing.T) {
 func TestDoesTemplateExistValid(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	store := NewElasticDetectionstore(fakesrv, client, 100)
 	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
@@ -843,7 +796,7 @@ func TestDoesTemplateExistValid(t *testing.T) {
 func TestDoesTemplateExistInvalid(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	store := NewElasticDetectionstore(fakesrv, client, 100)
 	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
@@ -873,7 +826,7 @@ func TestDoesTemplateExistInvalid(t *testing.T) {
 func TestGetDetectionById(t *testing.T) {
 	t.Parallel()
 
-	client, _ := newMockClient(t)
+	client, _ := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	store := NewElasticDetectionstore(fakesrv, client, 100)
 	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
@@ -925,7 +878,7 @@ func TestGetDetectionById(t *testing.T) {
 func TestUpdateDetectionFieldValid(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 
 	store := NewElasticDetectionstore(fakesrv, client, 100)
@@ -963,7 +916,7 @@ func TestUpdateDetectionFieldValid(t *testing.T) {
 func TestUpdateDetectionFieldInvalid(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 
 	store := NewElasticDetectionstore(fakesrv, client, 100)
@@ -985,7 +938,7 @@ func TestUpdateDetectionFieldInvalid(t *testing.T) {
 func TestGetAllCommunitySIDs(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 
@@ -1069,7 +1022,7 @@ func TestGetAllCommunitySIDs(t *testing.T) {
 func TestGetDetectionHistory(t *testing.T) {
 	t.Parallel()
 
-	client, _ := newMockClient(t)
+	client, _ := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 
@@ -1131,7 +1084,7 @@ func TestGetDetectionHistory(t *testing.T) {
 func TestCreateDetectionComment(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 
@@ -1190,7 +1143,7 @@ func TestCreateDetectionComment(t *testing.T) {
 func TestGetDetectionComments(t *testing.T) {
 	t.Parallel()
 
-	client, _ := newMockClient(t)
+	client, _ := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 
@@ -1236,7 +1189,7 @@ func TestGetDetectionComments(t *testing.T) {
 func TestUpdateDetectionCommentValid(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 
@@ -1290,7 +1243,7 @@ func TestUpdateDetectionCommentValid(t *testing.T) {
 func TestUpdateDetectionCommentInvalid(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 
@@ -1328,7 +1281,7 @@ func TestUpdateDetectionCommentInvalid(t *testing.T) {
 func TestDeleteDetectionComment(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 

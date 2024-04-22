@@ -186,7 +186,7 @@ func (e *StrelkaEngine) ValidateRule(data string) (string, error) {
 	return string(data), nil
 }
 
-func (s *StrelkaEngine) ConvertRule(ctx context.Context, detect *model.Detection) (string, error) {
+func (e *StrelkaEngine) ConvertRule(ctx context.Context, detect *model.Detection) (string, error) {
 	return "", fmt.Errorf("not implemented")
 }
 
@@ -385,9 +385,11 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 					comRule, exists := communityDetections[det.PublicID]
 					if exists {
+						det.IsEnabled = comRule.IsEnabled
 						det.Id = comRule.Id
 						det.IsEnabled = comRule.IsEnabled
 						det.Overrides = comRule.Overrides
+						det.CreateTime = comRule.CreateTime
 					}
 
 					if exists {
