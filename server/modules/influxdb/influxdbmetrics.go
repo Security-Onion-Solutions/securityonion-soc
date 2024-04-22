@@ -16,6 +16,7 @@ import (
 	"github.com/apex/log"
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	"github.com/influxdata/influxdb-client-go/v2/api"
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 )
@@ -499,6 +500,9 @@ func (metrics *InfluxDBMetrics) UpdateNodeMetrics(ctx context.Context, node *mod
 
 		enhancedStatusEnabled := (metrics.client != nil)
 		status = node.UpdateOverallStatus(enhancedStatusEnabled)
+
+		licensing.ValidateFeature(licensing.FEAT_FPS, node.FpsEnabled == 1)
+		licensing.ValidateFeature(licensing.FEAT_LKS, node.LksEnabled == 1)
 	}
 	return status
 }
