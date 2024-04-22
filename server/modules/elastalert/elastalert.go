@@ -572,7 +572,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			// there were errors, don't save the fingerprint.
 			// idempotency means we might fix it if we try again later.
 			log.WithFields(log.Fields{
-				"errors": errMap,
+				"errors": mutil.TruncateMap(errMap, 5),
 			}).Error("unable to sync all ElastAlert community detections")
 
 			if e.notify {
@@ -877,7 +877,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 		"updated":   results.Updated,
 		"removed":   results.Removed,
 		"unchanged": results.Unchanged,
-		"errors":    errMap,
+		"errors":    mutil.TruncateMap(errMap, 5),
 	}).Info("elastalert community diff")
 
 	return errMap, nil
