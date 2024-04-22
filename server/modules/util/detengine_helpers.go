@@ -69,6 +69,23 @@ func readStateFile(iom IOManager, path string) (lastImport *uint64, err error) {
 	return &unix, nil
 }
 
+func TruncateMap(originalMap map[string]error, limit int) map[string]error {
+	if len(originalMap) <= limit {
+		return originalMap // Return the original map if it's already within the limit
+	}
+
+	truncatedMap := make(map[string]error, limit)
+	count := 0
+	for key, value := range originalMap {
+		if count >= limit {
+			break
+		}
+		truncatedMap[key] = value
+		count++
+	}
+	return truncatedMap
+}
+
 func WriteStateFile(iom IOManager, path string) {
 	unix := time.Now().Unix()
 	sUnix := strconv.FormatInt(unix, 10)
