@@ -637,10 +637,13 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 				this.extractDetection(response);
 
-				if (response.status === 206) {
-					this.$root.showWarning(this.i18n.disabledFailedSync);
-				} else {
-					this.$root.showTip(this.i18n.saveSuccess);
+				switch (response.status) {
+					case 206:
+						this.$root.showWarning(this.i18n.disabledFailedSync);
+						break;
+					default:
+						this.$root.showTip(this.i18n.saveSuccess);
+						break;
 				}
 
 				if (createNew) {
@@ -648,7 +651,14 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				}
 
 			} catch (error) {
-				this.$root.showError(error);
+				switch (error.response.status) {
+					case 409:
+						this.$root.showWarning(this.i18n.publicIdConflictErr);
+						break;
+					default:
+						this.$root.showError(error);
+						break;
+				}
 			} finally {
 				this.$root.stopLoading();
 			}
@@ -680,7 +690,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					throw this.i18n.idMissingErr;
 				}
 
-				if (this.detect.publicId !== id) {
+				if (this.detect.publicId && this.detect.publicId !== id) {
 					throw this.i18n.idMismatchErr;
 				}
 

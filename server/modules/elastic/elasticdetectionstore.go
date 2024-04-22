@@ -514,6 +514,26 @@ func (store *ElasticDetectionstore) UpdateDetection(ctx context.Context, detect 
 		return nil, err
 	}
 
+	if detect.PublicID != "" {
+		duplicates, err := store.getAll(ctx, fmt.Sprintf(`_index:"%s" AND %skind:"%s" AND %sdetection.publicId:"%s" AND %sdetection.engine:"%s"`, store.index, store.schemaPrefix, "detection", store.schemaPrefix, detect.PublicID, store.schemaPrefix, detect.Engine), 1)
+		if err != nil {
+			return nil, err
+		}
+
+		// remove self from list of duplicates
+		dupDets := make([]*model.Detection, 0, len(duplicates))
+		for _, dup := range duplicates {
+			dupDet := dup.(*model.Detection)
+			if dupDet.Id != detect.Id {
+				dupDets = append(dupDets, dupDet)
+			}
+		}
+
+		if len(dupDets) > 0 {
+			return nil, errors.New("publicId already exists for this engine")
+		}
+	}
+
 	var old *model.Detection
 
 	old, err = store.GetDetection(ctx, detect.Id)

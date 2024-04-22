@@ -312,6 +312,7 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 		old.Tags = detect.Tags
 
 		detect = old
+		detect.Kind = ""
 
 		log.Infof("existing detection %s is a community rule, only updating select fields", detect.Id)
 	} else if detect.IsCommunity {
@@ -323,6 +324,8 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		if strings.Contains(err.Error(), "existing non-community detection") {
 			web.Respond(w, r, http.StatusBadRequest, err)
+		} else if strings.Contains(err.Error(), "publicId already exists for this engine") {
+			web.Respond(w, r, http.StatusConflict, err)
 		} else {
 			web.Respond(w, r, http.StatusNotFound, err)
 		}
