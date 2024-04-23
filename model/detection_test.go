@@ -271,3 +271,225 @@ func TestDetectionOverrideValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestOverrideEqual(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		Name     string
+		Engine   EngineName
+		One      *Override
+		Two      *Override
+		Expected bool
+	}{
+		{
+			Name:     "Both Nil",
+			Expected: true,
+		},
+		{
+			Name:   "One Nil",
+			Engine: EngineNameSuricata,
+			One: &Override{
+				Type: OverrideTypeModify,
+				OverrideParameters: OverrideParameters{
+					Regex: util.Ptr(".*"),
+					Value: util.Ptr("test"),
+				},
+			},
+		},
+		{
+			Name:   "Unequal Meta",
+			Engine: EngineNameSuricata,
+			One: &Override{
+				Type: OverrideTypeModify,
+				OverrideParameters: OverrideParameters{
+					Regex: util.Ptr(".*"),
+					Value: util.Ptr("test"),
+				},
+			},
+			Two: &Override{
+				Type: OverrideTypeSuppress,
+				OverrideParameters: OverrideParameters{
+					IP:    util.Ptr("0.0.0.0"),
+					Track: util.Ptr("by_src"),
+				},
+			},
+			Expected: false,
+		},
+		{
+			Name:   "Equal Modify",
+			Engine: EngineNameSuricata,
+			One: &Override{
+				Type: OverrideTypeModify,
+				OverrideParameters: OverrideParameters{
+					Regex: util.Ptr(".*"),
+					Value: util.Ptr("test"),
+				},
+			},
+			Two: &Override{
+				Type: OverrideTypeModify,
+				OverrideParameters: OverrideParameters{
+					Regex: util.Ptr(".*"),
+					Value: util.Ptr("test"),
+				},
+			},
+			Expected: true,
+		},
+		{
+			Name:   "Unequal Modify",
+			Engine: EngineNameSuricata,
+			One: &Override{
+				Type: OverrideTypeModify,
+				OverrideParameters: OverrideParameters{
+					Regex: util.Ptr(".+"),
+					Value: util.Ptr("Hello World"),
+				},
+			},
+			Two: &Override{
+				Type: OverrideTypeModify,
+				OverrideParameters: OverrideParameters{
+					Regex: util.Ptr(".*"),
+					Value: util.Ptr("test"),
+				},
+			},
+		},
+		{
+			Name:   "Equal Suppress",
+			Engine: EngineNameSuricata,
+			One: &Override{
+				Type: OverrideTypeSuppress,
+				OverrideParameters: OverrideParameters{
+					IP:    util.Ptr("0.0.0.0"),
+					Track: util.Ptr("by_src"),
+				},
+			},
+			Two: &Override{
+				Type: OverrideTypeSuppress,
+				OverrideParameters: OverrideParameters{
+					IP:    util.Ptr("0.0.0.0"),
+					Track: util.Ptr("by_src"),
+				},
+			},
+			Expected: true,
+		},
+		{
+			Name:   "Equal Suppress",
+			Engine: EngineNameSuricata,
+			One: &Override{
+				Type: OverrideTypeSuppress,
+				OverrideParameters: OverrideParameters{
+					IP:    util.Ptr("0.0.0.0"),
+					Track: util.Ptr("by_src"),
+				},
+			},
+			Two: &Override{
+				Type: OverrideTypeSuppress,
+				OverrideParameters: OverrideParameters{
+					IP:    util.Ptr("127.0.0.1"),
+					Track: util.Ptr("by_either"),
+				},
+			},
+		},
+		{
+			Name:   "Equal Threshold",
+			Engine: EngineNameSuricata,
+			One: &Override{
+				Type: OverrideTypeThreshold,
+				OverrideParameters: OverrideParameters{
+					ThresholdType: util.Ptr("limit"),
+					Track:         util.Ptr("by_src"),
+					Count:         util.Ptr(3),
+					Seconds:       util.Ptr(60),
+				},
+			},
+			Two: &Override{
+				Type: OverrideTypeThreshold,
+				OverrideParameters: OverrideParameters{
+					ThresholdType: util.Ptr("limit"),
+					Track:         util.Ptr("by_src"),
+					Count:         util.Ptr(3),
+					Seconds:       util.Ptr(60),
+				},
+			},
+			Expected: true,
+		},
+		{
+			Name:   "Unequal Threshold",
+			Engine: EngineNameSuricata,
+			One: &Override{
+				Type: OverrideTypeThreshold,
+				OverrideParameters: OverrideParameters{
+					ThresholdType: util.Ptr("suppress"),
+					Track:         util.Ptr("by_src"),
+					Count:         util.Ptr(1),
+					Seconds:       util.Ptr(180),
+				},
+			},
+			Two: &Override{
+				Type: OverrideTypeThreshold,
+				OverrideParameters: OverrideParameters{
+					ThresholdType: util.Ptr("limit"),
+					Track:         util.Ptr("by_dest"),
+					Count:         util.Ptr(3),
+					Seconds:       util.Ptr(60),
+				},
+			},
+		},
+		{
+			Name:   "Equal Custom Filter",
+			Engine: EngineNameElastAlert,
+			One: &Override{
+				Type: OverrideTypeCustomFilter,
+				OverrideParameters: OverrideParameters{
+					CustomFilter: util.Ptr("k: v"),
+				},
+			},
+			Two: &Override{
+				Type: OverrideTypeCustomFilter,
+				OverrideParameters: OverrideParameters{
+					CustomFilter: util.Ptr("k: v"),
+				},
+			},
+			Expected: true,
+		},
+		{
+			Name:   "Unequal Custom Filter",
+			Engine: EngineNameElastAlert,
+			One: &Override{
+				Type: OverrideTypeCustomFilter,
+				OverrideParameters: OverrideParameters{
+					CustomFilter: util.Ptr("k: v"),
+				},
+			},
+			Two: &Override{
+				Type: OverrideTypeCustomFilter,
+				OverrideParameters: OverrideParameters{
+					CustomFilter: util.Ptr("k2: v2"),
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			if test.One != nil {
+				err := test.One.Validate(test.Engine)
+				assert.NoError(t, err)
+			}
+
+			if test.Two != nil {
+				err := test.Two.Validate(test.Engine)
+				assert.NoError(t, err)
+			}
+
+			actual := test.One.Equal(test.Two)
+			assert.Equal(t, test.Expected, actual)
+
+			actual = test.Two.Equal(test.One)
+			assert.Equal(t, test.Expected, actual)
+		})
+	}
+}
