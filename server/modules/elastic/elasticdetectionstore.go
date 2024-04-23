@@ -514,60 +514,7 @@ func (store *ElasticDetectionstore) UpdateDetection(ctx context.Context, detect 
 		return nil, err
 	}
 
-	var old *model.Detection
-
-	old, err = store.GetDetection(ctx, detect.Id)
-	if err != nil {
-		return nil, err
-	}
-
-	now := time.Now()
-
-	for _, over := range detect.Overrides {
-		if over.CreatedAt.IsZero() {
-			over.CreatedAt = now
-		}
-
-		update := true
-		for i, oldOver := range old.Overrides {
-			if *over == *oldOver {
-				// Did the old detection contain an override with the EXACT same parameters?
-				// If so, we don't need to update the UpdatedAt field.
-				update = false
-
-				// A match was found, the old override can be removed from the list so it
-				// isn't compared to other overrides. i.e. removing it means it can only
-				// match one override in the new list.
-				old.Overrides = append(old.Overrides[:i], old.Overrides[i+1:]...)
-
-				break
-			}
-		}
-
-		if over.UpdatedAt.IsZero() || update {
-			over.UpdatedAt = now
-		}
-	}
-
-	if old.IsCommunity {
-		// the only editable fields for community rules are IsEnabled, IsReporting, Note, and Overrides
-		old.IsEnabled = detect.IsEnabled
-		old.IsReporting = detect.IsReporting
-		old.Overrides = detect.Overrides
-
-		detect = old
-
-		log.Infof("existing detection %s is a community rule, only updating IsEnabled, IsReporting, and Overrides", detect.Id)
-	} else if detect.IsCommunity {
-		return nil, errors.New("cannot update an existing non-community detection to make it a community detection")
-	}
-
-	var results *model.EventIndexResults
-
-	// Preserve read-only fields
-	detect.CreateTime = old.CreateTime
-
-	results, err = store.save(ctx, detect, "detection", store.prepareForSave(ctx, &detect.Auditable))
+	results, err := store.save(ctx, detect, "detection", store.prepareForSave(ctx, &detect.Auditable))
 	if err != nil {
 		return nil, err
 	}

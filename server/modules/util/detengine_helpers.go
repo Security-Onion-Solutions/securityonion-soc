@@ -196,6 +196,8 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*module.Ru
 				dirty.WasModified = true
 			}
 
+			delete(existingRepos, lastFolder)
+
 		skippull:
 		}
 
@@ -223,6 +225,17 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*module.Ru
 
 			anythingNew = true
 			dirty.WasModified = true
+		}
+	}
+
+	for repo := range existingRepos {
+		// remove any repos that are no longer in the list
+		repoPath := filepath.Join(baseRepoFolder, repo)
+
+		err = os.RemoveAll(repoPath)
+		if err != nil {
+			log.WithError(err).WithField("repoPath", repoPath).Error("failed to remove repo, doing nothing with it")
+			continue
 		}
 	}
 

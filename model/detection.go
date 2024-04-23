@@ -149,7 +149,7 @@ type OverrideParameters struct {
 	Seconds       *int    `json:"seconds,omitempty" yaml:"seconds,omitempty"`    // threshold
 
 	// elastalert
-	CustomFilter *string `json:"customFilter,omitempty" yaml:"-"` // modify
+	CustomFilter *string `json:"customFilter,omitempty" yaml:"-"` // customFilter
 }
 
 func (o Override) PrepareForSigma() (map[string]interface{}, error) {
@@ -160,7 +160,7 @@ func (o Override) PrepareForSigma() (map[string]interface{}, error) {
 	mid := map[string]interface{}{}
 	out := map[string]interface{}{}
 
-	filter := util.TabsToSpaces(*o.CustomFilter)
+	filter := util.TabsToSpaces(*o.CustomFilter, 2)
 
 	err := yaml.Unmarshal([]byte(filter), mid)
 
@@ -295,7 +295,7 @@ func (o *Override) Validate(engine EngineName) error {
 				return errors.New("unnecessary fields in override")
 			}
 
-			*o.CustomFilter = util.TabsToSpaces(*o.CustomFilter)
+			*o.CustomFilter = util.TabsToSpaces(*o.CustomFilter, 2)
 			fauxDoc := map[string]interface{}{}
 
 			err := yaml.Unmarshal([]byte(*o.CustomFilter), fauxDoc)
@@ -310,4 +310,38 @@ func (o *Override) Validate(engine EngineName) error {
 	}
 
 	return nil
+}
+
+func (o *Override) Equal(other *Override) bool {
+	if o == nil && other == nil {
+		return true
+	}
+
+	if (o == nil || other == nil) ||
+		(o.Type != other.Type) ||
+		(o.IsEnabled != other.IsEnabled) ||
+		(o.CreatedAt != other.CreatedAt) ||
+		(o.UpdatedAt != other.UpdatedAt) {
+		return false
+	}
+
+	result := false
+
+	switch o.Type {
+	case OverrideTypeSuppress:
+		result = util.ComparePtrs(o.IP, other.IP) &&
+			util.ComparePtrs(o.Track, other.Track)
+	case OverrideTypeThreshold:
+		result = util.ComparePtrs(o.ThresholdType, other.ThresholdType) &&
+			util.ComparePtrs(o.Track, other.Track) &&
+			util.ComparePtrs(o.Count, other.Count) &&
+			util.ComparePtrs(o.Seconds, other.Seconds)
+	case OverrideTypeModify:
+		result = util.ComparePtrs(o.Regex, other.Regex) &&
+			util.ComparePtrs(o.Value, other.Value)
+	case OverrideTypeCustomFilter:
+		result = util.ComparePtrs(o.CustomFilter, other.CustomFilter)
+	}
+
+	return result
 }
