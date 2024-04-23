@@ -532,10 +532,7 @@ func (e *SuricataEngine) ParseRules(content string, ruleset *string) ([]*model.D
 
 		msg = strings.ReplaceAll(msg, `\;`, `;`)
 
-		title, err := strconv.Unquote(msg)
-		if err != nil {
-			title = msg
-		}
+		title := util.Unquote(msg)
 
 		title = strings.ReplaceAll(title, `\"`, `"`)
 		title = strings.ReplaceAll(title, `\\`, `\`)
