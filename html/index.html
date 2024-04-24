@@ -4798,6 +4798,14 @@
                   <p class="font-weight-bold">{{i18n.configQLGridTitle}}</p>
                   <ul>
                     <li>
+                      {{i18n.configQLElasticsearchHeader}}
+                      <ul>
+                        <li>
+                          <router-link data-aid="config_quicklink_es_delete" :to="{ name: 'config', query: {s: 'elasticsearch.index_settings.global_overrides.policy.phases.delete.min_age'}}">{{i18n.configQLElasticsearchDelete}}</router-link>
+                        </li>
+                      </ul>
+                    </li>
+                    <li>
                       {{i18n.configQLNTPHeader}}
                       <ul>
                         <li>

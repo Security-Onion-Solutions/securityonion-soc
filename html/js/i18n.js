@@ -183,6 +183,8 @@ const i18n = {
       config: 'Configuration',
       configTitle: 'Grid Configuration',
       configQLGridTitle: 'Grid Administration Quick Links',
+      configQLElasticsearchDelete: 'Elasticsearch ILM Deletion',
+      configQLElasticsearchHeader: 'Elasticsearch',
       configQLNTP: 'Specify custom Network Time Protocol server(s)',
       configQLNTPHeader: 'NTP',
       configQLFirewallHeader: 'Firewall',
