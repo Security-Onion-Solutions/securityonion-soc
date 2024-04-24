@@ -310,23 +310,24 @@ func TestParse(t *testing.T) {
 				"# Comment",
 				SimpleRule, // allowRegex has the SID, should allow
 				"",
-				` alert  http any any  <>   any any (metadata:signature_severity   Informational; sid: "20000"; msg:"a \\\"tricky\"\;\\ msg";)`, // allowRegex has the SID, should allow
+				`# alert  http any any  <>   any any (metadata:signature_severity   Informational; sid: "20000"; msg:"a \\\"tricky\"\;\\ msg";)`, // allowRegex has the SID, should allow
 				" # " + FlowbitsRuleA,
 				FlowbitsRuleB, // denyRegex will prevent this from being parsed
 				"alert http any any -> any any (msg:\"This rule doesn't have a SID\";)", // doesn't match either regex, will be left out
 			},
 			ExpectedDetections: []*model.Detection{
 				{
-					Author:   "__soc_import__",
-					PublicID: SimpleRuleSID,
-					Title:    `GPL ATTACK_RESPONSE id check returned root`,
-					Category: `GPL ATTACK_RESPONSE`,
-					Severity: model.SeverityUnknown,
-					Content:  SimpleRule,
-					Engine:   model.EngineNameSuricata,
-					Language: model.SigLangSuricata,
-					Ruleset:  ruleset,
-					License:  "Unknown",
+					Author:    "__soc_import__",
+					PublicID:  SimpleRuleSID,
+					Title:     `GPL ATTACK_RESPONSE id check returned root`,
+					Category:  `GPL ATTACK_RESPONSE`,
+					Severity:  model.SeverityUnknown,
+					Content:   SimpleRule,
+					IsEnabled: true,
+					Engine:    model.EngineNameSuricata,
+					Language:  model.SigLangSuricata,
+					Ruleset:   ruleset,
+					License:   "Unknown",
 				},
 				{
 					Author:   "__soc_import__",
@@ -334,7 +335,7 @@ func TestParse(t *testing.T) {
 					Title:    `a \"tricky";\ msg`,
 					Category: ``,
 					Severity: model.SeverityInformational,
-					Content:  `alert http any any <> any any (metadata:signature_severity Informational; sid:"20000"; msg:"a \\\"tricky\"\;\\ msg";)`,
+					Content:  `alert  http any any  <>   any any (metadata:signature_severity   Informational; sid: "20000"; msg:"a \\\"tricky\"\;\\ msg";)`,
 					Engine:   model.EngineNameSuricata,
 					Language: model.SigLangSuricata,
 					Ruleset:  ruleset,
