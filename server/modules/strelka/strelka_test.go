@@ -601,3 +601,60 @@ func TestToDetection(t *testing.T) {
 	det := rules[0].ToDetection("license", "ruleset")
 	assert.Equal(t, expected, det)
 }
+
+func TestAddMissingImports(t *testing.T) {
+	tests := []struct {
+		Name            string
+		Input           *YaraRule
+		FileImports     map[string]*regexp.Regexp
+		ExpectedSrc     string
+		ExpectedImports []string
+	}{
+		{
+			Name:  "No Imports",
+			Input: &YaraRule{},
+			FileImports: map[string]*regexp.Regexp{
+				"pe": buildImportChecker("pe"),
+			},
+			ExpectedSrc:     "",
+			ExpectedImports: nil,
+		},
+		{
+			Name: "No Missing Imports",
+			Input: &YaraRule{
+				Imports: []string{
+					"pe",
+				},
+				Src: "import \"pe\"\nrule Test {\ncondition:\npe.imphash() == \"1234\"\n}",
+			},
+			FileImports: map[string]*regexp.Regexp{
+				"pe": buildImportChecker("pe"),
+			},
+			ExpectedSrc:     "import \"pe\"\nrule Test {\ncondition:\npe.imphash() == \"1234\"\n}",
+			ExpectedImports: []string{"pe"},
+		},
+		{
+			Name: "Missing pe Import",
+			Input: &YaraRule{
+				Src: "rule Test {\ncondition:\npe.imphash() == \"1234\"\n}",
+			},
+			FileImports: map[string]*regexp.Regexp{
+				"pe": buildImportChecker("pe"),
+			},
+			ExpectedSrc:     "import \"pe\"\n\nrule Test {\ncondition:\npe.imphash() == \"1234\"\n}",
+			ExpectedImports: []string{"pe"},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			addMissingImports(test.Input, test.FileImports)
+
+			assert.Equal(t, test.ExpectedSrc, test.Input.Src)
+			assert.Equal(t, test.ExpectedImports, test.Input.Imports)
+		})
+	}
+}

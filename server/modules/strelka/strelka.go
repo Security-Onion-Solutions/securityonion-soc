@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -478,9 +479,10 @@ func (e *StrelkaEngine) parseYaraRules(data []byte, filter bool) ([]*YaraRule, e
 	raw := string(data)
 	buffer := bytes.NewBuffer([]byte{})
 	last := ' '
-	curCommentType := ' ' // either '/' or '*' if in a comment, ' ' if not in comment
-	curHeader := ""       // meta, strings, condition, or empty if not yet in a section
-	curQuotes := ' '      // either ' or " if in a string, ' ' if not in a string
+	curCommentType := ' '                      // either '/' or '*' if in a comment, ' ' if not in comment
+	curHeader := ""                            // meta, strings, condition, or empty if not yet in a section
+	curQuotes := ' '                           // either ' or " if in a string, ' ' if not in a string
+	fileImports := map[string]*regexp.Regexp{} // every import in the file paired with it's regex
 
 	for i, r := range raw {
 		rule.Src += string(r)
@@ -531,6 +533,7 @@ func (e *StrelkaEngine) parseYaraRules(data []byte, filter bool) ([]*YaraRule, e
 					buf = strings.Trim(buf, `"`)
 
 					rule.Imports = append(rule.Imports, buf)
+					fileImports[buf] = buildImportChecker(buf)
 
 					buffer.Reset()
 				}
@@ -618,20 +621,16 @@ func (e *StrelkaEngine) parseYaraRules(data []byte, filter bool) ([]*YaraRule, e
 				}
 
 				if keep {
+					addMissingImports(rule, fileImports)
 					rules = append(rules, rule)
 				}
 
-				imports := []string{}
 				buffer.Reset()
 
 				state = parseStateImportsID
 				curHeader = ""
 				curQuotes = ' '
 				rule = &YaraRule{}
-
-				if len(imports) > 0 {
-					rule.Imports = append([]string{}, imports...)
-				}
 			} else {
 				buffer.WriteRune(r)
 				if (r == '\'' || r == '"' || r == '{') && last != '\\' && curQuotes == ' ' {
@@ -664,6 +663,31 @@ func (e *StrelkaEngine) parseYaraRules(data []byte, filter bool) ([]*YaraRule, e
 	}
 
 	return rules, nil
+}
+
+func addMissingImports(rule *YaraRule, imports map[string]*regexp.Regexp) {
+	newImports := []string{}
+
+	for pkg, finder := range imports {
+		hasImport := slices.Contains(rule.Imports, pkg)
+		if !hasImport {
+			usesImport := finder.MatchString(rule.Src)
+			if usesImport {
+				rule.Imports = append(rule.Imports, pkg)
+				newImports = append(newImports, fmt.Sprintf("import \"%s\"", pkg))
+			}
+		}
+	}
+
+	if len(newImports) != 0 {
+		rule.Src = fmt.Sprintf("%s\n\n%s", strings.Join(newImports, "\n"), rule.Src)
+	}
+}
+
+// buildImportChecker builds a regex looking for the use of a package in an use case
+// other than the import statement.
+func buildImportChecker(pkg string) *regexp.Regexp {
+	return regexp.MustCompile(fmt.Sprintf(`[^"]\b%s\b[^"]`, pkg))
 }
 
 func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]string, err error) {
