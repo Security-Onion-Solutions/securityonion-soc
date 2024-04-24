@@ -134,7 +134,7 @@ func ParseSuricataRule(rule string) (*SuricataRule, error) {
 						// is the current option a regular expression?
 						// if so, only end the quotes if the next character is a semicolon
 						next, _, _ := r.ReadRune()
-						r.UnreadRune()
+						_ = r.UnreadRune()
 
 						if next == ';' {
 							inQuotes = false

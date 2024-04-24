@@ -487,9 +487,25 @@ func (e *SuricataEngine) ParseRules(content string, ruleset *string) ([]*model.D
 		}
 
 		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			// empty or commented line, ignore
+		if line == "" {
+			// empty line, ignore
 			continue
+		}
+
+		wasCommented := false
+		if strings.HasPrefix(line, "#") {
+			line = strings.TrimSpace(strings.TrimLeft(line, "#"))
+
+			lower := strings.ToLower(line)
+			if strings.HasPrefix(lower, "alert") ||
+				strings.HasPrefix(lower, "drop") ||
+				strings.HasPrefix(lower, "reject") ||
+				strings.HasPrefix(lower, "pass") {
+				wasCommented = true
+			} else {
+				// actual comment, skip line
+				continue
+			}
 		}
 
 		if e.denyRegex != nil && e.denyRegex.MatchString(line) {
@@ -500,11 +516,6 @@ func (e *SuricataEngine) ParseRules(content string, ruleset *string) ([]*model.D
 		if e.allowRegex != nil && !e.allowRegex.MatchString(line) {
 			log.WithField("rule", line).Info("content didn't match Suricata's allowRegex")
 			continue
-		}
-
-		line, err := e.ValidateRule(line)
-		if err != nil {
-			return nil, fmt.Errorf("unable to parse line %d: %w", i+1, err)
 		}
 
 		parsed, err := ParseSuricataRule(line)
@@ -570,6 +581,8 @@ func (e *SuricataEngine) ParseRules(content string, ruleset *string) ([]*model.D
 			Engine:   model.EngineNameSuricata,
 			Language: model.SigLangSuricata,
 		}
+
+		d.IsEnabled = !wasCommented
 
 		if ruleset != nil {
 			d.Ruleset = util.Copy(ruleset)
@@ -973,11 +986,16 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 		sid := *opt
 		_, isFlowbits := parsedRule.GetOption("flowbits")
 
-		// update enabled
-		enabledLines = updateEnabled(enabledLines, enabledIndex, sid, isFlowbits, detect)
+		_, inEnabled := enabledIndex[sid]
+		_, inDisabled := disabledIndex[sid]
 
-		// update disabled
-		disabledLines = updateDisabled(disabledLines, disabledIndex, sid, isFlowbits, detect)
+		if inEnabled || inDisabled {
+			// update enabled
+			enabledLines = updateEnabled(enabledLines, enabledIndex, sid, isFlowbits, detect)
+
+			// update disabled
+			disabledLines = updateDisabled(disabledLines, disabledIndex, sid, isFlowbits, detect)
+		}
 
 		// update overrides
 		modifyLines = updateModify(modifyLines, modifyIndex, sid, detect)
