@@ -11,7 +11,7 @@
 case-monitor:      auditor limited-auditor
 case-admin:        analyst limited-analyst superuser
 config-admin:      superuser
-detection-monitor: auditor limited-auditor
+detection-monitor: limited-analyst auditor limited-auditor
 detection-admin:   agent analyst superuser
 event-admin:       analyst limited-analyst superuser
 event-monitor:     auditor limited-auditor
