@@ -28,6 +28,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
 	"github.com/apex/log"
+	"github.com/kennygrant/sanitize"
 )
 
 var errModuleStopped = fmt.Errorf("strelka module has stopped running")
@@ -727,7 +728,9 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]s
 
 	// Process and write new .yar files
 	for publicId, det := range enabledDetections {
-		filename := filepath.Join(e.yaraRulesFolder, fmt.Sprintf("%s.yar", publicId))
+		name := sanitize.Name(publicId)
+		filename := filepath.Join(e.yaraRulesFolder, fmt.Sprintf("%s.yar", name))
+
 		err := e.WriteFile(filename, []byte(det.Content), 0644)
 		if err != nil {
 			return nil, fmt.Errorf("failed to write file for detection %s: %v", publicId, err)

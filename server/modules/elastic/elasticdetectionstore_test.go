@@ -95,6 +95,21 @@ func TestDetectionValidateIdInvalid(t *testing.T) {
 
 	err = store.validateId("123456789012345678901234567890123456789012345678901", "test")
 	assert.Error(t, err)
+
+	err = store.validateId("../../etc/passwd", "test")
+	assert.Error(t, err)
+
+	err = store.validateId(`..\..\etc\passwd`, "test")
+	assert.Error(t, err)
+
+	err = store.validateId("......", "test")
+	assert.Error(t, err)
+
+	err = store.validateId("//////", "test")
+	assert.Error(t, err)
+
+	err = store.validateId(`\\\\\\`, "test")
+	assert.Error(t, err)
 }
 
 func TestDetectionValidateStringValid(t *testing.T) {
