@@ -34,6 +34,7 @@ import (
 
 	"github.com/apex/log"
 	"gopkg.in/yaml.v3"
+	"github.com/kennygrant/sanitize"
 )
 
 var errModuleStopped = fmt.Errorf("elastalert module has stopped running")
@@ -326,7 +327,8 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 	for _, det := range detections {
 		path := index[det.PublicID]
 		if path == "" {
-			path = filepath.Join(e.elastAlertRulesFolder, fmt.Sprintf("%s.yml", det.PublicID))
+			name := sanitize.Name(det.PublicID)
+			path = filepath.Join(e.elastAlertRulesFolder, fmt.Sprintf("%s.yml", name))
 		}
 
 		if det.IsEnabled {
@@ -844,7 +846,8 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 
 			// 3. put query in elastAlertRulesFolder for salt to pick up
 			if path == "" {
-				path = filepath.Join(e.elastAlertRulesFolder, fmt.Sprintf("%s.yml", det.PublicID))
+				name := sanitize.Name(det.PublicID)
+				path = filepath.Join(e.elastAlertRulesFolder, fmt.Sprintf("%s.yml", name))
 			}
 
 			err = e.WriteFile(path, []byte(rule), 0644)

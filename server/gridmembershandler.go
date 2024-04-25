@@ -16,12 +16,12 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"unicode"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/kennygrant/sanitize"
 	"github.com/samber/lo"
 )
 
@@ -165,7 +165,7 @@ func (h *GridMembersHandler) postImport(w http.ResponseWriter, r *http.Request) 
 	}
 
 	filename := path.Base(header.Filename)
-	filename = sanitize(filename)
+	filename = sanitize.Name(filename)
 
 	targetFile := filepath.Join(targetDir, filename)
 
@@ -309,15 +309,4 @@ func canUploadEvtx(node string) bool {
 	}
 
 	return lo.Contains(keywords, "manager")
-}
-
-func sanitize(filename string) string {
-	return string(lo.Map([]rune(filename), func(r rune, _ int) rune {
-		switch {
-		case strings.ContainsRune(`._-`, r), unicode.IsLetter(r), unicode.IsDigit(r):
-			return r
-		}
-
-		return '_'
-	}))
 }
