@@ -166,7 +166,7 @@ func (store *ElasticDetectionstore) validateDetection(detect *model.Detection) e
 }
 
 func (store *ElasticDetectionstore) save(ctx context.Context, obj interface{}, kind string, id string) (*model.EventIndexResults, error) {
-	if err := store.server.CheckAuthorized(ctx, "write", "detection"); err != nil {
+	if err := store.server.CheckAuthorized(ctx, "write", "detections"); err != nil {
 		return nil, err
 	}
 
@@ -198,7 +198,7 @@ func (store *ElasticDetectionstore) save(ctx context.Context, obj interface{}, k
 func (store *ElasticDetectionstore) Index(ctx context.Context, index string, document map[string]interface{}, id string) (*model.EventIndexResults, error) {
 	results := model.NewEventIndexResults()
 
-	err := store.server.CheckAuthorized(ctx, "write", "detection")
+	err := store.server.CheckAuthorized(ctx, "write", "detections")
 	if err != nil {
 		return results, err
 	}
@@ -265,7 +265,7 @@ func (store *ElasticDetectionstore) deleteDocument(ctx context.Context, index st
 }
 
 func (store *ElasticDetectionstore) get(ctx context.Context, id string, kind string) (interface{}, error) {
-	err := store.server.CheckAuthorized(ctx, "read", "detection")
+	err := store.server.CheckAuthorized(ctx, "read", "detections")
 	if err != nil {
 		return nil, err
 	}
@@ -285,7 +285,7 @@ func (store *ElasticDetectionstore) get(ctx context.Context, id string, kind str
 }
 
 func (store *ElasticDetectionstore) getAll(ctx context.Context, query string, max int) ([]interface{}, error) {
-	err := store.server.CheckAuthorized(ctx, "read", "detection")
+	err := store.server.CheckAuthorized(ctx, "read", "detections")
 	if err != nil {
 		return nil, err
 	}
@@ -332,7 +332,7 @@ func (store *ElasticDetectionstore) getAll(ctx context.Context, query string, ma
 func (store *ElasticDetectionstore) Query(ctx context.Context, query string, max int) ([]interface{}, error) {
 	var objects []interface{}
 
-	err := store.server.CheckAuthorized(ctx, "read", "detection")
+	err := store.server.CheckAuthorized(ctx, "read", "detections")
 	if err != nil {
 		return nil, err
 	}
@@ -410,7 +410,7 @@ func (store *ElasticDetectionstore) Query(ctx context.Context, query string, max
 }
 
 func (store *ElasticDetectionstore) DetectionSearch(ctx context.Context, criteria *model.EventSearchCriteria) (*model.EventSearchResults, error) {
-	err := store.server.CheckAuthorized(ctx, "read", "detection")
+	err := store.server.CheckAuthorized(ctx, "read", "detections")
 	if err != nil {
 		return nil, err
 	}
@@ -524,7 +524,7 @@ func (store *ElasticDetectionstore) UpdateDetection(ctx context.Context, detect 
 }
 
 func (store *ElasticDetectionstore) UpdateDetectionField(ctx context.Context, id string, fields map[string]interface{}) (*model.Detection, error) {
-	err := store.server.CheckAuthorized(ctx, "write", "detection")
+	err := store.server.CheckAuthorized(ctx, "write", "detections")
 	if err != nil {
 		return nil, err
 	}
