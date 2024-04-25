@@ -624,6 +624,14 @@ func (h *DetectionHandler) convertContent(w http.ResponseWriter, r *http.Request
 }
 
 func (h *DetectionHandler) syncEngineDetections(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	err := h.server.CheckAuthorized(ctx, "write", "detections")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
 	engine := strings.ToLower(chi.URLParam(r, "engine"))
 	typ := strings.ToLower(chi.URLParam(r, "type"))
 
