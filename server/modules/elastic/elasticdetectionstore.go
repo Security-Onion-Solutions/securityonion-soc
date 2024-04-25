@@ -198,11 +198,6 @@ func (store *ElasticDetectionstore) save(ctx context.Context, obj interface{}, k
 func (store *ElasticDetectionstore) Index(ctx context.Context, index string, document map[string]interface{}, id string) (*model.EventIndexResults, error) {
 	results := model.NewEventIndexResults()
 
-	err := store.server.CheckAuthorized(ctx, "write", "detections")
-	if err != nil {
-		return results, err
-	}
-
 	request, err := convertToElasticIndexRequest(document)
 	if err == nil {
 		var response string
@@ -223,6 +218,11 @@ func (store *ElasticDetectionstore) Index(ctx context.Context, index string, doc
 }
 
 func (store *ElasticDetectionstore) deleteDocument(ctx context.Context, index string, obj interface{}, kind string, id string) (string, error) {
+	err := store.server.CheckAuthorized(ctx, "write", "detections")
+	if err != nil {
+		return "", err
+	}
+
 	log.WithFields(log.Fields{
 		"index":     index,
 		"id":        id,
@@ -265,11 +265,6 @@ func (store *ElasticDetectionstore) deleteDocument(ctx context.Context, index st
 }
 
 func (store *ElasticDetectionstore) get(ctx context.Context, id string, kind string) (interface{}, error) {
-	err := store.server.CheckAuthorized(ctx, "read", "detections")
-	if err != nil {
-		return nil, err
-	}
-
 	query := fmt.Sprintf(`_index:"%s" AND %skind:"%s" AND _id:"%s"`, store.index, store.schemaPrefix, kind, id)
 
 	objects, err := store.Query(ctx, query, 1)
@@ -285,11 +280,6 @@ func (store *ElasticDetectionstore) get(ctx context.Context, id string, kind str
 }
 
 func (store *ElasticDetectionstore) getAll(ctx context.Context, query string, max int) ([]interface{}, error) {
-	err := store.server.CheckAuthorized(ctx, "read", "detections")
-	if err != nil {
-		return nil, err
-	}
-
 	criteria := model.NewEventSearchCriteria()
 	format := "2006-01-02 3:04:05 PM"
 
@@ -299,7 +289,7 @@ func (store *ElasticDetectionstore) getAll(ctx context.Context, query string, ma
 	endTime := now.Format(format)
 	zone := now.Location().String()
 
-	err = criteria.Populate(query,
+	err := criteria.Populate(query,
 		zeroTimeStr+" - "+endTime, // timeframe range
 		format,                    // timeframe format
 		zone,                      // timezone
@@ -648,6 +638,11 @@ func (store *ElasticDetectionstore) audit(ctx context.Context, document map[stri
 }
 
 func (store *ElasticDetectionstore) indexDocument(ctx context.Context, index string, document string, id string) (string, error) {
+	err := store.server.CheckAuthorized(ctx, "write", "detections")
+	if err != nil {
+		return "", err
+	}
+
 	log.WithFields(log.Fields{
 		"index":     index,
 		"id":        id,
