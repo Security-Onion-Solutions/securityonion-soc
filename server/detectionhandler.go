@@ -113,6 +113,7 @@ func (h *DetectionHandler) getByPublicId(w http.ResponseWriter, r *http.Request)
 
 func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	ctx = web.MarkChangedByUser(ctx, true)
 
 	detect := &model.Detection{}
 
@@ -209,6 +210,7 @@ func (h *DetectionHandler) getDetectionHistory(w http.ResponseWriter, r *http.Re
 
 func (h *DetectionHandler) duplicateDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	ctx = web.MarkChangedByUser(ctx, true)
 
 	detectId := chi.URLParam(r, "id")
 
@@ -239,6 +241,7 @@ func (h *DetectionHandler) duplicateDetection(w http.ResponseWriter, r *http.Req
 
 func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	ctx = web.MarkChangedByUser(ctx, true)
 
 	detect := &model.Detection{}
 
@@ -324,6 +327,7 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 
 func (h *DetectionHandler) deleteDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	ctx = web.MarkChangedByUser(ctx, true)
 
 	id := chi.URLParam(r, "id")
 
@@ -365,12 +369,17 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 
 	body.NewStatus = enabled
 
-	// TODO: Check any permissions needing to be checked, we can't return a 4XX after this point
+	err = h.server.CheckAuthorized(ctx, "write", "detections")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
 
 	// new context that doesn't contain a timeout or deadline, but does include
 	// the user we're making requests to ES on behalf of.
 	noTimeOutCtx := context.WithValue(context.Background(), web.ContextKeyRequestor, ctx.Value(web.ContextKeyRequestor).(*model.User))
 	noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
+	noTimeOutCtx = web.MarkChangedByUser(noTimeOutCtx, true)
 
 	go h.bulkUpdateDetectionAsync(noTimeOutCtx, body)
 
@@ -511,6 +520,8 @@ func SyncLocalDetections(ctx context.Context, srv *Server, detections []*model.D
 
 func (h *DetectionHandler) createComment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	ctx = web.MarkChangedByUser(ctx, true)
+
 	detectId := chi.URLParam(r, "id")
 
 	body := &model.DetectionComment{}
@@ -548,6 +559,8 @@ func (h *DetectionHandler) getDetectionComment(w http.ResponseWriter, r *http.Re
 
 func (h *DetectionHandler) updateComment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	ctx = web.MarkChangedByUser(ctx, true)
+
 	commentId := chi.URLParam(r, "id")
 
 	body := &model.DetectionComment{}
@@ -571,6 +584,8 @@ func (h *DetectionHandler) updateComment(w http.ResponseWriter, r *http.Request)
 
 func (h *DetectionHandler) deleteComment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	ctx = web.MarkChangedByUser(ctx, true)
+
 	commentId := chi.URLParam(r, "id")
 
 	err := h.server.Detectionstore.DeleteComment(ctx, commentId)

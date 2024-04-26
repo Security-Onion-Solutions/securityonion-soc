@@ -14,8 +14,11 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 )
 
 const (
@@ -370,7 +373,7 @@ func TestParse(t *testing.T) {
 	}
 }
 
-func TestSyncSuricata(t *testing.T) {
+func TestSyncLocalSuricata(t *testing.T) {
 	table := []struct {
 		Name             string
 		InitialSettings  []*model.Setting
@@ -680,6 +683,103 @@ func TestSyncSuricata(t *testing.T) {
 			mod.isRunning = true
 
 			errMap, err := mod.SyncLocalDetections(ctx, test.Detections)
+
+			assert.Equal(t, test.ExpectedErr, err)
+			assert.Equal(t, test.ExpectedErrMap, errMap)
+
+			set, err := mCfgStore.GetSettings(ctx)
+			assert.NoError(t, err, "GetSettings should not return an error")
+
+			for id, expectedValue := range test.ExpectedSettings {
+				setting := settingByID(set, id)
+				assert.NotNil(t, setting, "Setting %s", id)
+				assert.Equal(t, expectedValue, setting.Value, "Setting %s", id)
+			}
+		})
+	}
+}
+
+func TestSyncCommunitySuricata(t *testing.T) {
+	table := []struct {
+		Name             string
+		InitialSettings  []*model.Setting
+		Detections       []*model.Detection // Content (Valid Rule), PublicID, IsEnabled
+		ChangedByUser    bool
+		InitMock         func(*servermock.MockDetectionstore)
+		ExpectedSettings map[string]string
+		ExpectedErr      error
+		ExpectedErrMap   map[string]string
+	}{
+		{
+			Name:            "Non-User Update Community Simple Rule",
+			InitialSettings: emptySettings(),
+			Detections: []*model.Detection{
+				{
+					PublicID:    SimpleRuleSID,
+					Content:     SimpleRule,
+					IsEnabled:   true,
+					IsCommunity: true,
+				},
+			},
+			InitMock: func(detStore *servermock.MockDetectionstore) {
+				detStore.EXPECT().GetAllCommunitySIDs(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
+				detStore.EXPECT().CreateDetection(gomock.Any(), gomock.Any()).Return(nil, nil)
+			},
+			ExpectedSettings: map[string]string{
+				"idstools.sids.enabled":            "",
+				"idstools.sids.disabled":           "",
+				"idstools.sids.modify":             "",
+				"suricata.thresholding.sids__yaml": "{}\n",
+			},
+		},
+		{
+			Name:            "User Update Community Simple Rule",
+			InitialSettings: emptySettings(),
+			Detections: []*model.Detection{
+				{
+					PublicID:    SimpleRuleSID,
+					Content:     SimpleRule,
+					IsEnabled:   true,
+					IsCommunity: true,
+				},
+			},
+			ChangedByUser: true,
+			InitMock: func(detStore *servermock.MockDetectionstore) {
+				detStore.EXPECT().GetAllCommunitySIDs(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
+				detStore.EXPECT().CreateDetection(gomock.Any(), gomock.Any()).Return(nil, nil)
+			},
+			ExpectedSettings: map[string]string{
+				"idstools.sids.enabled":            SimpleRuleSID,
+				"idstools.sids.disabled":           "",
+				"idstools.sids.modify":             "",
+				"suricata.thresholding.sids__yaml": "{}\n",
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+
+	for _, test := range table {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			detStore := servermock.NewMockDetectionstore(ctrl)
+			test.InitMock(detStore)
+
+			mCfgStore := server.NewMemConfigStore(test.InitialSettings)
+			mod := NewSuricataEngine(&server.Server{
+				Configstore:      mCfgStore,
+				DetectionEngines: map[model.EngineName]server.DetectionEngine{},
+				Detectionstore:   detStore,
+			})
+			mod.srv.DetectionEngines[model.EngineNameSuricata] = mod
+
+			mod.isRunning = true
+
+			ctx := web.MarkChangedByUser(context.Background(), test.ChangedByUser)
+
+			errMap, err := mod.syncCommunityDetections(ctx, test.Detections, false, test.InitialSettings)
 
 			assert.Equal(t, test.ExpectedErr, err)
 			assert.Equal(t, test.ExpectedErrMap, errMap)

@@ -24,6 +24,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	mutil "github.com/security-onion-solutions/securityonion-soc/server/modules/util"
 	"github.com/security-onion-solutions/securityonion-soc/util"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
 	"github.com/samber/lo"
@@ -910,6 +911,8 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 	}()
 	errMap = map[string]string{}
 
+	changedByUser := web.IsChangedByUser(ctx)
+
 	results := struct {
 		Added     int
 		Updated   int
@@ -933,6 +936,9 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 	}
 
 	threshold := settingByID(allSettings, "suricata.thresholding.sids__yaml")
+	if threshold == nil {
+		return nil, fmt.Errorf("unable to find threshold setting")
+	}
 
 	// unpack settings into lines/indices
 	enabledLines := strings.Split(enabled.Value, "\n")
@@ -989,7 +995,7 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 		_, inEnabled := enabledIndex[sid]
 		_, inDisabled := disabledIndex[sid]
 
-		if inEnabled || inDisabled {
+		if changedByUser || inEnabled || inDisabled {
 			// update enabled
 			enabledLines = updateEnabled(enabledLines, enabledIndex, sid, isFlowbits, detect)
 

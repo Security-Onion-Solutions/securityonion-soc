@@ -192,3 +192,17 @@ func compareJSON(jsn1 []byte, jsn2 []byte) (success bool, err error) {
 
 	return reflect.DeepEqual(one, two), nil
 }
+
+func TestChangedByUser(t *testing.T) {
+	t.Parallel()
+
+	assert.False(t, IsChangedByUser(nil))
+
+	assert.False(t, IsChangedByUser(context.Background()))
+
+	ctx := MarkChangedByUser(context.Background(), true)
+	assert.True(t, IsChangedByUser(ctx))
+
+	ctx = MarkChangedByUser(context.Background(), false)
+	assert.False(t, IsChangedByUser(ctx))
+}
