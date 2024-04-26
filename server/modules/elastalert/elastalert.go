@@ -33,8 +33,8 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
 	"github.com/apex/log"
-	"gopkg.in/yaml.v3"
 	"github.com/kennygrant/sanitize"
+	"gopkg.in/yaml.v3"
 )
 
 var errModuleStopped = fmt.Errorf("elastalert module has stopped running")
@@ -373,7 +373,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 	ctx := e.srv.Context
 	templateFound := false
 
-	timerDur := mutil.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Duration(e.communityRulesImportFrequencySeconds)*time.Second)
+	lastImport, timerDur := mutil.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Duration(e.communityRulesImportFrequencySeconds)*time.Second)
 
 	for e.isRunning {
 		e.resetInterrupt()
@@ -487,6 +487,11 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 		for pkg, data := range zips {
 			h := sha256.Sum256(data)
 			zipHashes[pkg] = base64.StdEncoding.EncodeToString(h[:])
+		}
+
+		// If no import has been completed, then do a full sync
+		if lastImport == nil {
+			forceSync = true
 		}
 
 		if !forceSync {

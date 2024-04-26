@@ -44,8 +44,10 @@ func TestDetermineWaitTimeNoState(t *testing.T) {
 
 	mio.EXPECT().ReadFile("state").Return(nil, fs.ErrNotExist)
 
-	dur := DetermineWaitTime(mio, "state", time.Minute)
-	assert.Equal(t, time.Duration(time.Minute*20), dur)
+	lastImport, dur := DetermineWaitTime(mio, "state", time.Minute)
+
+	assert.Nil(t, lastImport, "Expected lastImport to be nil")
+	assert.Equal(t, time.Minute*20, dur, "Expected duration to be 20 minutes")
 }
 
 func TestDetermineWaitTime(t *testing.T) {
@@ -57,7 +59,8 @@ func TestDetermineWaitTime(t *testing.T) {
 
 	mio.EXPECT().ReadFile("state").Return([]byte(tenSecAgoStr), nil)
 
-	dur := DetermineWaitTime(mio, "state", time.Minute)
+	lastImport, dur := DetermineWaitTime(mio, "state", time.Minute)
+	assert.NotNil(t, lastImport, "Expected lastImport not to be nil")
 	assert.InEpsilon(t, time.Duration(time.Second*50), dur, 1)
 }
 
@@ -68,7 +71,8 @@ func TestDetermineWaitTimeBadRead(t *testing.T) {
 	mio.EXPECT().ReadFile("state").Return(nil, errors.New("bad read"))
 	mio.EXPECT().DeleteFile("state").Return(nil)
 
-	dur := DetermineWaitTime(mio, "state", time.Minute)
+	lastImport, dur := DetermineWaitTime(mio, "state", time.Minute)
+	assert.Nil(t, lastImport, "Expected lastImport to be nil")
 	assert.Equal(t, time.Duration(time.Minute*20), dur)
 }
 
@@ -79,7 +83,8 @@ func TestDetermineWaitTimeBadValue(t *testing.T) {
 	mio.EXPECT().ReadFile("state").Return([]byte("bad"), nil)
 	mio.EXPECT().DeleteFile("state").Return(nil)
 
-	dur := DetermineWaitTime(mio, "state", time.Minute)
+	lastImport, dur := DetermineWaitTime(mio, "state", time.Minute)
+	assert.Nil(t, lastImport, "Expected lastImport to be nil")
 	assert.Equal(t, time.Duration(time.Minute*20), dur)
 }
 

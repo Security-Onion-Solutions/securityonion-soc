@@ -225,7 +225,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 	templateFound := false
 
-	timerDur := mutil.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Second*time.Duration(e.communityRulesImportFrequencySeconds))
+	lastImport, timerDur := mutil.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Second*time.Duration(e.communityRulesImportFrequencySeconds))
 
 	for e.isRunning {
 		e.resetInterrupt()
@@ -292,6 +292,12 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 					break
 				}
 			}
+
+			// If no import has been completed, then do a full sync
+			if lastImport == nil {
+				forceSync = true
+			}
+
 			if !anythingNew && !forceSync {
 				// no updates, skip
 				log.Info("Strelka sync found no changes")
