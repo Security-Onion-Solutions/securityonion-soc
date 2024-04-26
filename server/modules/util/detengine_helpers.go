@@ -25,7 +25,7 @@ type IOManager interface {
 // go install go.uber.org/mock/mockgen@latest
 //go:generate mockgen -destination mock/mock_iomanager.go -package mock . IOManager
 
-func DetermineWaitTime(iom IOManager, path string, importFrequency time.Duration) time.Duration {
+func DetermineWaitTime(iom IOManager, path string, importFrequency time.Duration) (*uint64, time.Duration) {
 	lastImport, err := readStateFile(iom, path)
 	if err != nil {
 		log.WithError(err).Error("unable to read state file, deleting it")
@@ -34,6 +34,7 @@ func DetermineWaitTime(iom IOManager, path string, importFrequency time.Duration
 		if derr != nil {
 			log.WithError(derr).WithField("path", path).Error("unable to remove state file, ignoring it")
 		}
+		lastImport = nil
 	}
 
 	var timerDur time.Duration
@@ -44,11 +45,11 @@ func DetermineWaitTime(iom IOManager, path string, importFrequency time.Duration
 
 		timerDur = time.Until(nextImportTime)
 	} else {
-		log.Info("no ElastAlert state file found, waiting 20 mins for first import")
+		log.Info("no engine state file found, waiting 20 mins for first import")
 		timerDur = time.Duration(time.Minute * 20)
 	}
 
-	return timerDur
+	return lastImport, timerDur
 }
 
 func readStateFile(iom IOManager, path string) (lastImport *uint64, err error) {
@@ -58,12 +59,12 @@ func readStateFile(iom IOManager, path string) (lastImport *uint64, err error) {
 			return nil, nil
 		}
 
-		return nil, fmt.Errorf("unable to read ElastAlert state file: %w", err)
+		return nil, fmt.Errorf("unable to read engine state file: %w", err)
 	}
 
 	unix, err := strconv.ParseUint(string(raw), 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse ElastAlert state file: %w", err)
+		return nil, fmt.Errorf("unable to parse engine state file: %w", err)
 	}
 
 	return &unix, nil
