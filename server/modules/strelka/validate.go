@@ -26,6 +26,7 @@ const (
 )
 
 type YaraRule struct {
+	IsPrivate  bool
 	Imports    []string
 	Identifier string
 	Meta       Metadata
@@ -103,6 +104,10 @@ func (r *YaraRule) String() string {
 
 	if len(r.Imports) > 0 {
 		buffer.WriteString("\n")
+	}
+
+	if r.IsPrivate {
+		buffer.WriteString("private ")
 	}
 
 	// identifier
