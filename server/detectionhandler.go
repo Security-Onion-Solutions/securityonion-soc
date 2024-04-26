@@ -90,7 +90,7 @@ func (h *DetectionHandler) getByPublicId(w http.ResponseWriter, r *http.Request)
 	ctx := r.Context()
 
 	publicId := chi.URLParam(r, "publicid")
-	q := fmt.Sprintf(`so_detection.publicId:"%s" _index:"*:so-detection"`, publicId)
+	q := fmt.Sprintf(`so_detection.publicId:"%s" AND _index:"*:so-detection"`, publicId)
 
 	detections, err := h.server.Detectionstore.Query(ctx, q, 1)
 	if err != nil {
