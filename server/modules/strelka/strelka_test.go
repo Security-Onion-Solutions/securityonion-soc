@@ -57,7 +57,7 @@ const DeniedRule = `rule DenyRule
 
 const BasicRuleWMeta = `import "pe"
 
-rule MetadataExample {
+private rule MetadataExample {
 	meta:
 		author = "John Doe"
 		date = "2023-12-27"
@@ -78,7 +78,7 @@ rule MetadataExample {
 
 const NormalizedBasicRuleWMeta = `import "pe"
 
-rule MetadataExample {
+private rule MetadataExample {
 	meta:
 		author = "John Doe"
 		date = "2023-12-27"
@@ -343,6 +343,7 @@ func TestParseRule(t *testing.T) {
 					Imports: []string{
 						"pe",
 					},
+					IsPrivate:  true,
 					Identifier: "MetadataExample",
 					Meta: Metadata{
 						Author:      util.Ptr("John Doe"),

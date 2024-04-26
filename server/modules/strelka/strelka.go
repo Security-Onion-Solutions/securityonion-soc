@@ -539,7 +539,13 @@ func (e *StrelkaEngine) parseYaraRules(data []byte, filter bool) ([]*YaraRule, e
 					buffer.Reset()
 				}
 			case '{':
-				buf := strings.TrimSpace(buffer.String()) // expected: `rule foo {` or `rule foo\n{`
+				buf := strings.TrimSpace(buffer.String()) // expected: `rule foo {` or `private rule foo\n{`
+
+				if strings.HasPrefix(buf, "private ") {
+					rule.IsPrivate = true
+					buf = strings.TrimSpace(strings.TrimPrefix(buf, "private"))
+				}
+
 				buf = strings.TrimSpace(strings.TrimPrefix(buf, "rule"))
 
 				if strings.Contains(buf, ":") {
