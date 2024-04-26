@@ -1034,6 +1034,8 @@ const huntComponent = {
           return true;
         });
 
+        this.quickActionDetId = null;
+
         if (alert) {
           // don't slow down the UI with this call
           const id = alert["rule.uuid"] || '';
