@@ -9,6 +9,7 @@ const i18n = {
     "en-US": {
       __missing__: '*Missing', // This should be sufficiently unique to avoid collisions with actual values
       __soc_import__: 'SOC Import',
+      __custom__: 'Custom',
       accept: 'Accept',
       accepted: 'Accepted',
       acceptingMinionsTakesTime: 'Accepting new minions can take 1-2 minutes to complete.',

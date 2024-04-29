@@ -15,6 +15,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/go-chi/chi/v5"
@@ -22,6 +23,8 @@ import (
 )
 
 var errPublicIdExists = errors.New("publicId already exists for this engine")
+
+const customRuleset = "__custom__"
 
 type BulkOp struct {
 	IDs       []string `json:"ids"`
@@ -139,6 +142,7 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 	}
 
 	detect.Language = model.SigLanguage(strings.ToLower(string(detect.Language)))
+	detect.Ruleset = util.Ptr(customRuleset)
 
 	switch detect.Language {
 	case "sigma":
@@ -228,6 +232,7 @@ func (h *DetectionHandler) duplicateDetection(w http.ResponseWriter, r *http.Req
 	detect.IsEnabled = false
 	detect.IsReporting = false
 	detect.IsCommunity = false
+	detect.Ruleset = util.Ptr(customRuleset)
 	detect.Kind = ""
 
 	detect, err = h.server.Detectionstore.CreateDetection(ctx, detect)
@@ -700,6 +705,7 @@ func (h *DetectionHandler) PrepareForSave(ctx context.Context, detect *model.Det
 	}
 
 	detect.CreateTime = old.CreateTime
+	detect.Ruleset = util.Copy(old.Ruleset)
 
 	now := time.Now()
 
