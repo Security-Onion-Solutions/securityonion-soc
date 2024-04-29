@@ -675,7 +675,7 @@ func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detections 
 				continue
 			}
 
-			det := rule.ToDetection(string(data), pkg, model.LicenseDRL)
+			det := rule.ToDetection(string(data), pkg, model.LicenseDRL, true)
 
 			detections = append(detections, det)
 		}
@@ -735,7 +735,7 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos map[string]*module.RuleRepo) 
 
 			ruleset := filepath.Base(repopath)
 
-			det := rule.ToDetection(string(raw), ruleset, repo.License)
+			det := rule.ToDetection(string(raw), ruleset, repo.License, repo.Community)
 
 			detections = append(detections, det)
 

@@ -184,7 +184,7 @@ func (r *YaraRule) Validate() error {
 	return nil
 }
 
-func (r *YaraRule) ToDetection(license string, ruleset string) *model.Detection {
+func (r *YaraRule) ToDetection(license string, ruleset string, isCommunity bool) *model.Detection {
 	sev := model.SeverityUnknown
 
 	metaSev, err := strconv.Atoi(r.Meta.Rest["severity"])
@@ -217,7 +217,7 @@ func (r *YaraRule) ToDetection(license string, ruleset string) *model.Detection 
 		Title:       r.Identifier,
 		Severity:    sev,
 		Content:     r.String(),
-		IsCommunity: true,
+		IsCommunity: isCommunity,
 		Language:    model.SigLangYara,
 		Ruleset:     ruleset,
 		License:     lic,

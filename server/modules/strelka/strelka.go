@@ -381,7 +381,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 				}
 
 				for _, rule := range parsed {
-					det := rule.ToDetection(repo.License, filepath.Base(repopath))
+					det := rule.ToDetection(repo.License, filepath.Base(repopath), repo.Community)
 					log.WithFields(log.Fields{
 						"rule.uuid": det.PublicID,
 						"rule.name": det.Title,

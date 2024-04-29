@@ -126,24 +126,28 @@ func TestGetRepos(t *testing.T) {
 			Config: map[string]interface{}{
 				"rulesRepos": []interface{}{
 					map[string]interface{}{
-						"repo":    "repo1",
-						"license": "MIT",
+						"repo":      "repo1",
+						"license":   "MIT",
+						"community": "1",
 					},
 					map[string]interface{}{
-						"repo":    "repo2",
-						"license": "GPL2",
-						"folder":  "sigma/stable",
+						"repo":      "repo2",
+						"license":   "GPL2",
+						"folder":    "sigma/stable",
+						"community": "no",
 					},
 					map[string]interface{}{
-						"repo":    "repo3",
-						"license": "DRL",
+						"repo":      "repo3",
+						"license":   "DRL",
+						"community": true,
 					},
 				},
 			},
 			Expected: []*RuleRepo{
 				{
-					Repo:    "repo1",
-					License: "MIT",
+					Repo:      "repo1",
+					License:   "MIT",
+					Community: true,
 				},
 				{
 					Repo:    "repo2",
@@ -151,8 +155,9 @@ func TestGetRepos(t *testing.T) {
 					Folder:  util.Ptr("sigma/stable"),
 				},
 				{
-					Repo:    "repo3",
-					License: "DRL",
+					Repo:      "repo3",
+					License:   "DRL",
+					Community: true,
 				},
 			},
 		},
