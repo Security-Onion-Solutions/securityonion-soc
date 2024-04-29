@@ -112,7 +112,7 @@ type Detection struct {
 	Language    SigLanguage `json:"language"`
 	Overrides   []*Override `json:"overrides"` // Tuning
 	Tags        []string    `json:"tags"`
-	Ruleset     *string     `json:"ruleset"`
+	Ruleset     string      `json:"ruleset"`
 	License     string      `json:"license"`
 
 	// elastalert - sigma only

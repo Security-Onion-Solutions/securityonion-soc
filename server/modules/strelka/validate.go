@@ -219,7 +219,7 @@ func (r *YaraRule) ToDetection(license string, ruleset string) *model.Detection 
 		Content:     r.String(),
 		IsCommunity: true,
 		Language:    model.SigLangYara,
-		Ruleset:     util.Ptr(ruleset),
+		Ruleset:     ruleset,
 		License:     lic,
 	}
 

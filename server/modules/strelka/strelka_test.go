@@ -224,7 +224,7 @@ func TestCheckAutoEnabledYaraRule(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			det := &model.Detection{
-				Ruleset: util.Ptr(tt.ruleset),
+				Ruleset: tt.ruleset,
 			}
 			checkRulesetEnabled(e, det)
 			assert.Equal(t, tt.expected, det.IsEnabled)
@@ -590,7 +590,7 @@ func TestToDetection(t *testing.T) {
 		Content:     NormalizedBasicRuleWMeta,
 		Severity:    model.SeverityUnknown,
 		IsCommunity: true,
-		Ruleset:     util.Ptr("ruleset"),
+		Ruleset:     "ruleset",
 		License:     "license",
 	}
 

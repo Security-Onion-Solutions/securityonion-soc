@@ -55,7 +55,7 @@ func TestCheckAutoEnabledSigmaRule(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			det := &model.Detection{
-				Ruleset:  util.Ptr(tt.ruleset),
+				Ruleset:  tt.ruleset,
 				Severity: tt.severity,
 			}
 			checkRulesetEnabled(e, det)
@@ -406,7 +406,7 @@ level: high
 		IsCommunity: true,
 		Engine:      model.EngineNameElastAlert,
 		Language:    model.SigLangSigma,
-		Ruleset:     util.Ptr("all_rules"),
+		Ruleset:     "all_rules",
 		License:     model.LicenseDRL,
 	}
 
@@ -473,7 +473,7 @@ level: high
 		Service:     "audit",
 		Engine:      model.EngineNameElastAlert,
 		Language:    model.SigLangSigma,
-		Ruleset:     util.Ptr("repo-path"),
+		Ruleset:     "repo-path",
 		License:     model.LicenseDRL,
 	}
 

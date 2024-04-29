@@ -128,8 +128,8 @@ func (store *ElasticDetectionstore) validateDetection(detect *model.Detection) e
 		err = store.validateString(detect.Content, LONG_STRING_MAX, "content")
 	}
 
-	if err == nil && detect.IsCommunity && detect.Ruleset != nil {
-		err = store.validateStringRequired(*detect.Ruleset, 0, SHORT_STRING_MAX, "ruleset")
+	if err == nil && detect.Ruleset != "" {
+		err = store.validateStringRequired(detect.Ruleset, 0, SHORT_STRING_MAX, "ruleset")
 	}
 
 	if err == nil && len(detect.Tags) != 0 {

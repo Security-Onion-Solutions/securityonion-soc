@@ -299,7 +299,7 @@ func TestValidate(t *testing.T) {
 }
 
 func TestParse(t *testing.T) {
-	ruleset := util.Ptr("ruleset")
+	ruleset := "ruleset"
 
 	table := []struct {
 		Name               string
