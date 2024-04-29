@@ -1040,14 +1040,9 @@ const huntComponent = {
           // don't slow down the UI with this call
           const id = alert["rule.uuid"] || '';
           if (id) {
-            const module = alert["event.module"] || '';
-            if (module.toLowerCase() === 'sigma') {
-              this.quickActionDetId = id;
-            } else {
               this.$root.papi.get(`detection/public/${id}`).then(response => {
                 this.quickActionDetId = response.data.id;
               });
-            }
           }
         }
       }
