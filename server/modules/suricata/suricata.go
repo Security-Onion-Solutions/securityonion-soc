@@ -361,7 +361,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 
 		ruleset := settingByID(allSettings, "idstools.config.ruleset")
 
-		commDetections, err := e.ParseRules(rules, util.Ptr(ruleset.Value))
+		commDetections, err := e.ParseRules(rules, ruleset.Value)
 		if err != nil {
 			if e.notify {
 				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
@@ -482,7 +482,7 @@ func (e *SuricataEngine) ValidateRule(rule string) (string, error) {
 	return parsed.String(), nil
 }
 
-func (e *SuricataEngine) ParseRules(content string, ruleset *string) ([]*model.Detection, error) {
+func (e *SuricataEngine) ParseRules(content string, ruleset string) ([]*model.Detection, error) {
 	// expecting one rule per line
 	lines := strings.Split(content, "\n")
 	dets := []*model.Detection{}
@@ -578,21 +578,17 @@ func (e *SuricataEngine) ParseRules(content string, ruleset *string) ([]*model.D
 		}
 
 		d := &model.Detection{
-			Author:   socAuthor,
-			Category: category,
-			PublicID: sid,
-			Title:    title,
-			Severity: severity,
-			Content:  line,
-			Engine:   model.EngineNameSuricata,
-			Language: model.SigLangSuricata,
-		}
-
-		d.IsEnabled = !wasCommented
-
-		if ruleset != nil {
-			d.Ruleset = util.Copy(ruleset)
-			d.License = lookupLicense(*ruleset)
+			IsEnabled: !wasCommented,
+			Author:    socAuthor,
+			Category:  category,
+			PublicID:  sid,
+			Title:     title,
+			Severity:  severity,
+			Content:   line,
+			Engine:    model.EngineNameSuricata,
+			Language:  model.SigLangSuricata,
+			Ruleset:   ruleset,
+			License:   lookupLicense(ruleset),
 		}
 
 		dets = append(dets, d)
@@ -1017,7 +1013,7 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 		}
 
 		if exists {
-			if orig.Content != detect.Content || !util.ComparePtrs(orig.Ruleset, detect.Ruleset) || len(detect.Overrides) != 0 {
+			if orig.Content != detect.Content || orig.Ruleset != detect.Ruleset || len(detect.Overrides) != 0 {
 				detect.Kind = ""
 
 				_, err = e.srv.Detectionstore.UpdateDetection(ctx, detect)

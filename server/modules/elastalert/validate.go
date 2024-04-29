@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/util"
 
 	"gopkg.in/yaml.v3"
 )
@@ -154,7 +153,7 @@ func (r *SigmaRule) ToDetection(content string, ruleset string, license string) 
 		Content:     content,
 		IsCommunity: true,
 		Language:    model.SigLangSigma,
-		Ruleset:     util.Ptr(ruleset),
+		Ruleset:     ruleset,
 		License:     license,
 	}
 

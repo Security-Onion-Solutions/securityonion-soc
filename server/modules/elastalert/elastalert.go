@@ -80,12 +80,12 @@ type ElastAlertEngine struct {
 
 func checkRulesetEnabled(e *ElastAlertEngine, det *model.Detection) {
 	det.IsEnabled = false
-	if det.Ruleset == nil || det.Severity == "" {
+	if det.Ruleset == "" || det.Severity == "" {
 		return
 	}
 
 	// Combine Ruleset and Severity into a single string
-	metaCombined := *det.Ruleset + "+" + string(det.Severity)
+	metaCombined := det.Ruleset + "+" + string(det.Severity)
 	for _, rule := range e.autoEnabledSigmaRules {
 		if strings.EqualFold(rule, metaCombined) {
 			det.IsEnabled = true
@@ -809,7 +809,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 			det.Overrides = oldDet.Overrides
 			det.CreateTime = oldDet.CreateTime
 
-			if oldDet.Content != det.Content || !util.ComparePtrs(oldDet.Ruleset, det.Ruleset) || len(det.Overrides) != 0 {
+			if oldDet.Content != det.Content || oldDet.Ruleset != det.Ruleset || len(det.Overrides) != 0 {
 				_, err = e.srv.Detectionstore.UpdateDetection(ctx, det)
 				if err != nil {
 					errMap[det.PublicID] = fmt.Errorf("unable to update detection: %s", err)

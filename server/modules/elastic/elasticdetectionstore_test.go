@@ -221,7 +221,7 @@ func TestValidateDetectionValid(t *testing.T) {
 		Author:      "Jane Doe",
 		Content:     "myContent",
 		IsCommunity: true,
-		Ruleset:     util.Ptr("myRuleset"),
+		Ruleset:     "myRuleset",
 		Tags:        []string{"myTag"},
 		Engine:      "suricata",
 		Language:    "suricata",
@@ -269,10 +269,10 @@ func TestValidateDetectionInvalid(t *testing.T) {
 	det.Content = ""
 
 	det.IsCommunity = true
-	det.Ruleset = util.Ptr(strings.Repeat("a", SHORT_STRING_MAX+1))
+	det.Ruleset = strings.Repeat("a", SHORT_STRING_MAX+1)
 	err = store.validateDetection(det)
 	assert.EqualError(t, err, "ruleset is too long (101/100)")
-	det.Ruleset = nil
+	det.Ruleset = ""
 	det.IsCommunity = false
 
 	for x := 1; x < 30000; x++ {
@@ -380,7 +380,7 @@ func TestCreateDetectionValid(t *testing.T) {
 		IsEnabled:   true,
 		IsReporting: true,
 		IsCommunity: true,
-		Ruleset:     util.Ptr("myRuleset"),
+		Ruleset:     "myRuleset",
 		Engine:      "suricata",
 		Language:    "suricata",
 		License:     "DRL",
@@ -560,7 +560,7 @@ func TestUpdateDetectionValid(t *testing.T) {
 		Content:     "myContent",
 		IsEnabled:   true,
 		IsReporting: true,
-		Ruleset:     util.Ptr("myRuleset"),
+		Ruleset:     "myRuleset",
 		Engine:      "suricata",
 		Language:    "suricata",
 		License:     "DRL",
@@ -674,7 +674,7 @@ func TestUpdateDetectionInvalid404(t *testing.T) {
 		IsEnabled:   true,
 		IsReporting: true,
 		IsCommunity: true,
-		Ruleset:     util.Ptr("myRuleset"),
+		Ruleset:     "myRuleset",
 		Engine:      "suricata",
 		Language:    "suricata",
 		License:     "DRL",

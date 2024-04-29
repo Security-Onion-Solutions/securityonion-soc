@@ -23,6 +23,8 @@ import (
 
 var errPublicIdExists = errors.New("publicId already exists for this engine")
 
+const customRuleset = "__custom__"
+
 type BulkOp struct {
 	IDs       []string `json:"ids"`
 	Query     *string  `json:"query"`
@@ -139,6 +141,7 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 	}
 
 	detect.Language = model.SigLanguage(strings.ToLower(string(detect.Language)))
+	detect.Ruleset = customRuleset
 
 	switch detect.Language {
 	case "sigma":
@@ -228,6 +231,7 @@ func (h *DetectionHandler) duplicateDetection(w http.ResponseWriter, r *http.Req
 	detect.IsEnabled = false
 	detect.IsReporting = false
 	detect.IsCommunity = false
+	detect.Ruleset = customRuleset
 	detect.Kind = ""
 
 	detect, err = h.server.Detectionstore.CreateDetection(ctx, detect)
@@ -700,6 +704,7 @@ func (h *DetectionHandler) PrepareForSave(ctx context.Context, detect *model.Det
 	}
 
 	detect.CreateTime = old.CreateTime
+	detect.Ruleset = old.Ruleset
 
 	now := time.Now()
 
