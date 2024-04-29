@@ -260,9 +260,7 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 	}
 
 	det := &model.Detection{
-		Auditable: model.Auditable{
-			Id: "00000000-0000-0000-0000-000000000000",
-		},
+		PublicID: "00000000-0000-0000-0000-000000000000",
 		Content:  "totally good sigma",
 		Title:    "Test Detection",
 		Severity: model.SeverityHigh,
@@ -274,23 +272,19 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 	wrappedRule, err := wrapRule(det, query)
 	assert.NoError(t, err)
 
-	expected := `play_title: Test Detection
-play_id: 00000000-0000-0000-0000-000000000000
+	expected := `detection_title: Test Detection
+detection_public_id: 00000000-0000-0000-0000-000000000000
 event.module: sigma
 event.dataset: sigma.alert
 event.severity: 4
-rule.category: ""
 sigma_level: high
 alert:
-    - modules.so.playbook-es.PlaybookESAlerter
+    - modules.so.securityonion-es.SecurityOnionESAlerter
 index: .ds-logs-*
-name: Test Detection - 00000000-0000-0000-0000-000000000000
+name: Test Detection -- 00000000-0000-0000-0000-000000000000
 type: any
 filter:
     - eql: <eql>
-play_url: play_url
-kibana_pivot: kibana_pivot
-soc_pivot: soc_pivot
 `
 	assert.YAMLEq(t, expected, wrappedRule)
 }
@@ -659,10 +653,7 @@ func TestSyncElastAlert(t *testing.T) {
 					Content:   SimpleRule,
 					IsEnabled: true,
 					Title:     "TEST",
-					Auditable: model.Auditable{
-						Id: SimpleRuleSID,
-					},
-					Severity: model.SeverityMedium,
+					Severity:  model.SeverityMedium,
 				},
 			},
 			InitMock: func(mod *ElastAlertEngine, m *mock.MockIOManager) {
@@ -671,7 +662,7 @@ func TestSyncElastAlert(t *testing.T) {
 				// sigmaToElastAlert
 				m.EXPECT().ExecCommand(gomock.Any()).Return([]byte("[sigma rule]"), 0, time.Duration(0), nil)
 				// WriteFile when enabling
-				m.EXPECT().WriteFile(SimpleRuleSID+".yml", []byte("play_title: TEST\nplay_id: "+SimpleRuleSID+"\nevent.module: sigma\nevent.dataset: sigma.alert\nevent.severity: 3\nrule.category: \"\"\nsigma_level: medium\nalert:\n    - modules.so.playbook-es.PlaybookESAlerter\nindex: .ds-logs-*\nname: TEST - "+SimpleRuleSID+"\ntype: any\nfilter:\n    - eql: '[sigma rule]'\nplay_url: play_url\nkibana_pivot: kibana_pivot\nsoc_pivot: soc_pivot\n"), fs.FileMode(0644)).Return(nil)
+				m.EXPECT().WriteFile(SimpleRuleSID+".yml", []byte("detection_title: TEST\ndetection_public_id: "+SimpleRuleSID+"\nevent.module: sigma\nevent.dataset: sigma.alert\nevent.severity: 3\nsigma_level: medium\nalert:\n    - modules.so.securityonion-es.SecurityOnionESAlerter\nindex: .ds-logs-*\nname: TEST -- "+SimpleRuleSID+"\ntype: any\nfilter:\n    - eql: '[sigma rule]'\n"), fs.FileMode(0644)).Return(nil)
 			},
 		},
 		{
@@ -709,10 +700,7 @@ func TestSyncElastAlert(t *testing.T) {
 					Content:   SimpleRule,
 					IsEnabled: true,
 					Title:     "TEST",
-					Auditable: model.Auditable{
-						Id: SimpleRuleSID,
-					},
-					Severity: model.SeverityMedium,
+					Severity:  model.SeverityMedium,
 					Overrides: []*model.Override{
 						{
 							Type:      model.OverrideTypeCustomFilter,
@@ -735,7 +723,7 @@ sofilter_hosts:
 				// sigmaToElastAlert
 				m.EXPECT().ExecCommand(gomock.Any()).Return([]byte(`any where process.command_line:"*\\local\\temp\\*" and process.command_line:"*//b /e:jscript*" and process.command_line:"*.txt*"`), 0, time.Duration(0), nil)
 				// WriteFile when enabling
-				m.EXPECT().WriteFile(SimpleRuleSID+".yml", []byte("play_title: TEST\nplay_id: "+SimpleRuleSID+"\nevent.module: sigma\nevent.dataset: sigma.alert\nevent.severity: 3\nrule.category: \"\"\nsigma_level: medium\nalert:\n    - modules.so.playbook-es.PlaybookESAlerter\nindex: .ds-logs-*\nname: TEST - "+SimpleRuleSID+"\ntype: any\nfilter:\n    - eql: any where process.command_line:\"*\\\\local\\\\temp\\\\*\" and process.command_line:\"*//b /e:jscript*\" and process.command_line:\"*.txt*\"\nplay_url: play_url\nkibana_pivot: kibana_pivot\nsoc_pivot: soc_pivot\n"), fs.FileMode(0644)).Return(nil)
+				m.EXPECT().WriteFile(SimpleRuleSID+".yml", []byte("detection_title: TEST\ndetection_public_id: "+SimpleRuleSID+"\nevent.module: sigma\nevent.dataset: sigma.alert\nevent.severity: 3\nsigma_level: medium\nalert:\n    - modules.so.securityonion-es.SecurityOnionESAlerter\nindex: .ds-logs-*\nname: TEST -- "+SimpleRuleSID+"\ntype: any\nfilter:\n    - eql: any where process.command_line:\"*\\\\local\\\\temp\\\\*\" and process.command_line:\"*//b /e:jscript*\" and process.command_line:\"*.txt*\"\n"), fs.FileMode(0644)).Return(nil)
 			},
 		},
 	}

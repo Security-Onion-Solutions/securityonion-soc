@@ -1045,23 +1045,22 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 }
 
 type CustomWrapper struct {
-	PlayTitle     string   `yaml:"play_title"`
-	PlayID        string   `yaml:"play_id"`
-	EventModule   string   `yaml:"event.module"`
-	EventDataset  string   `yaml:"event.dataset"`
-	EventSeverity int      `yaml:"event.severity"`
-	RuleCategory  string   `yaml:"rule.category"`
-	SigmaLevel    string   `yaml:"sigma_level"`
-	Alert         []string `yaml:"alert"`
+	DetectionTitle    string   `yaml:"detection_title"`
+	DetectionPublicId string   `yaml:"detection_public_id"`
+	SigmaCategory     string   `yaml:"sigma_category,omitempty"`
+	SigmaProduct      string   `yaml:"sigma_product,omitempty"`
+	SigmaService      string   `yaml:"sigma_service,omitempty"`
+	EventModule       string   `yaml:"event.module"`
+	EventDataset      string   `yaml:"event.dataset"`
+	EventSeverity     int      `yaml:"event.severity"`
+	SigmaLevel        string   `yaml:"sigma_level"`
+	Alert             []string `yaml:"alert"`
 
-	Index       string                   `yaml:"index"`
-	Name        string                   `yaml:"name"`
-	Realert     *TimeFrame               `yaml:"realert,omitempty"` // or 0
-	Type        string                   `yaml:"type"`
-	Filter      []map[string]interface{} `yaml:"filter"`
-	PlayUrl     string                   `yaml:"play_url"`
-	KibanaPivot string                   `yaml:"kibana_pivot"`
-	SocPivot    string                   `yaml:"soc_pivot"`
+	Index   string                   `yaml:"index"`
+	Name    string                   `yaml:"name"`
+	Realert *TimeFrame               `yaml:"realert,omitempty"` // or 0
+	Type    string                   `yaml:"type"`
+	Filter  []map[string]interface{} `yaml:"filter"`
 }
 
 type TimeFrame struct {
@@ -1194,26 +1193,21 @@ func wrapRule(det *model.Detection, rule string) (string, error) {
 	sevNum := severities[det.Severity]
 
 	wrapper := &CustomWrapper{
-		PlayTitle:     det.Title,
-		PlayID:        det.Id,
-		EventModule:   "sigma",
-		EventDataset:  "sigma.alert",
-		EventSeverity: sevNum,
-		RuleCategory:  "", // TODO: what should this be?
-		SigmaLevel:    string(det.Severity),
-		Alert:         []string{"modules.so.playbook-es.PlaybookESAlerter"},
-		Index:         ".ds-logs-*",
-		Name:          fmt.Sprintf("%s - %s", det.Title, det.Id),
-		Realert:       nil,
-		Type:          "any",
-		Filter: []map[string]interface{}{
-			{
-				"eql": rule,
-			},
-		},
-		PlayUrl:     "play_url",
-		KibanaPivot: "kibana_pivot",
-		SocPivot:    "soc_pivot",
+		DetectionTitle:    det.Title,
+		DetectionPublicId: det.PublicID,
+		EventModule:       "sigma",
+		EventDataset:      "sigma.alert",
+		EventSeverity:     sevNum,
+		SigmaCategory:     det.Category,
+		SigmaService:      det.Service,
+		SigmaProduct:      det.Product,
+		SigmaLevel:        string(det.Severity),
+		Alert:             []string{"modules.so.securityonion-es.SecurityOnionESAlerter"},
+		Index:             ".ds-logs-*",
+		Name:              fmt.Sprintf("%s -- %s", det.Title, det.PublicID),
+		Realert:           nil,
+		Type:              "any",
+		Filter:            []map[string]interface{}{{"eql": rule}},
 	}
 
 	rawYaml, err := yaml.Marshal(wrapper)
