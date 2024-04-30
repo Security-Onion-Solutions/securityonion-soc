@@ -11,9 +11,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/model"
+
 	"github.com/apex/log"
 	"github.com/go-git/go-git/v5"
-	"github.com/security-onion-solutions/securityonion-soc/module"
 )
 
 type IOManager interface {
@@ -99,10 +100,10 @@ func WriteStateFile(iom IOManager, path string) {
 
 type DirtyRepo struct {
 	WasModified bool
-	Repo        *module.RuleRepo
+	Repo        *model.RuleRepo
 }
 
-func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*module.RuleRepo) (allRepos map[string]*DirtyRepo, anythingNew bool, err error) {
+func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.RuleRepo) (allRepos map[string]*DirtyRepo, anythingNew bool, err error) {
 	allRepos = map[string]*DirtyRepo{} // map[repoPath]repo
 
 	// read existing repos

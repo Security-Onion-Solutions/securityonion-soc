@@ -439,7 +439,7 @@ falsepositives:
 level: high
 `
 
-	repos := map[string]*module.RuleRepo{
+	repos := map[string]*model.RuleRepo{
 		"repo-path": {
 			Repo:    "github.com/repo-user/repo-path",
 			License: "DRL",

@@ -120,7 +120,7 @@ func (e *SigmaRule) Validate() error {
 	return nil
 }
 
-func (r *SigmaRule) ToDetection(content string, ruleset string, license string) *model.Detection {
+func (r *SigmaRule) ToDetection(content string, ruleset string, license string, isCommunity bool) *model.Detection {
 	id := r.Title
 
 	if r.ID != nil {
@@ -151,7 +151,7 @@ func (r *SigmaRule) ToDetection(content string, ruleset string, license string) 
 		Title:       r.Title,
 		Severity:    sev,
 		Content:     content,
-		IsCommunity: true,
+		IsCommunity: isCommunity,
 		Language:    model.SigLangSigma,
 		Ruleset:     ruleset,
 		License:     license,

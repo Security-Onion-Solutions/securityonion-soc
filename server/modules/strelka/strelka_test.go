@@ -599,7 +599,7 @@ func TestToDetection(t *testing.T) {
 	assert.NotEmpty(t, rules)
 	assert.Equal(t, 1, len(rules))
 
-	det := rules[0].ToDetection("license", "ruleset")
+	det := rules[0].ToDetection("license", "ruleset", true)
 	assert.Equal(t, expected, det)
 }
 

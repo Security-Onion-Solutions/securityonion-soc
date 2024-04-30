@@ -54,7 +54,7 @@ type StrelkaEngine struct {
 	yaraRulesFolder                      string
 	reposFolder                          string
 	autoEnabledYaraRules                 []string
-	rulesRepos                           []*module.RuleRepo
+	rulesRepos                           []*model.RuleRepo
 	compileYaraPythonScriptPath          string
 	allowRegex                           *regexp.Regexp
 	denyRegex                            *regexp.Regexp
@@ -99,7 +99,7 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", false)
 	e.autoEnabledYaraRules = module.GetStringArrayDefault(config, "autoEnabledYaraRules", []string{"securityonion-yara"})
 
-	e.rulesRepos, err = module.GetReposDefault(config, "rulesRepos", []*module.RuleRepo{
+	e.rulesRepos, err = model.GetReposDefault(config, "rulesRepos", []*model.RuleRepo{
 		{
 			Repo:    "https://github.com/Security-Onion-Solutions/securityonion-yara",
 			License: "DRL",
@@ -279,7 +279,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			templateFound = true
 		}
 
-		upToDate := map[string]*module.RuleRepo{}
+		upToDate := map[string]*model.RuleRepo{}
 
 		if e.autoUpdateEnabled {
 			allRepos, anythingNew, err := mutil.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos)
@@ -381,7 +381,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 				}
 
 				for _, rule := range parsed {
-					det := rule.ToDetection(repo.License, filepath.Base(repopath))
+					det := rule.ToDetection(repo.License, filepath.Base(repopath), repo.Community)
 					log.WithFields(log.Fields{
 						"rule.uuid": det.PublicID,
 						"rule.name": det.Title,
