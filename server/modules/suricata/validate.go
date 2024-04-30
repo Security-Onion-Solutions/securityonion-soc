@@ -205,7 +205,11 @@ func (rule *SuricataRule) String() string {
 		} else if opt.Value == nil {
 			opts = append(opts, fmt.Sprintf("%s;", opt.Name))
 		} else {
-			opts = append(opts, fmt.Sprintf("%s:%s;", opt.Name, *opt.Value))
+			if strings.Contains(*opt.Value, ";") {
+				opts = append(opts, fmt.Sprintf("%s:\"%s\";", opt.Name, *opt.Value))
+			} else {
+				opts = append(opts, fmt.Sprintf("%s:%s;", opt.Name, *opt.Value))
+			}
 		}
 	}
 

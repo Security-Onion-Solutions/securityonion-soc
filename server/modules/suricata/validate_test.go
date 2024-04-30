@@ -137,12 +137,13 @@ func TestSuricataRule(t *testing.T) {
 
 func TestDuplicateDetection(t *testing.T) {
 	det := &model.Detection{
-		Engine:      model.EngineNameElastAlert,
-		Language:    model.SigLangSigma,
-		Content:     `alert any any <> any any (msg:"test"; sid:12345;)`,
+		Engine:      model.EngineNameSuricata,
+		Language:    model.SigLangSuricata,
+		Content:     `alert http $HOME_NET any -> $EXTERNAL_NET any (msg:"ET TROJAN Likely Fake Antivirus Download ws.exe"; flow:established,to_server; content:"GET"; http_method; content:"/install/ws.exe"; http_uri; nocase; reference:url,doc.emergingthreats.net/2010051; classtype:trojan-activity; sid:2010051; rev:4;)`,
 		IsCommunity: true,
 		Ruleset:     "somewhere",
 		Author:      "Dade Murphy",
+		Severity:    model.SeverityUnknown,
 	}
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
@@ -186,13 +187,13 @@ func TestDuplicateDetection(t *testing.T) {
 	assert.Equal(t, det.Author, dupe.Author)
 	assert.Equal(t, det.Category, dupe.Category)
 	assert.Equal(t, det.Description, dupe.Description)
-	assert.Equal(t, det.IsEnabled, dupe.IsEnabled)
-	assert.Equal(t, det.IsReporting, dupe.IsReporting)
 	assert.Equal(t, det.Engine, dupe.Engine)
 	assert.Equal(t, det.Language, dupe.Language)
 
 	// always empty after duplication
-	assert.Empty(t, dupe.License)
+	assert.False(t, det.IsEnabled)
+	assert.False(t, det.IsReporting)
+	assert.Equal(t, dupe.License, model.LicenseUnknown)
 	assert.Empty(t, dupe.Overrides)
 	assert.Empty(t, dupe.Tags)
 }

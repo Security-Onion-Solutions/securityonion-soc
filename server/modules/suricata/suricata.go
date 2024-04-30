@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math/rand/v2"
 	"os"
 	"regexp"
 	"strconv"
@@ -1187,14 +1188,90 @@ func indexThreshold(content string) (map[string][]*model.Override, error) {
 func lookupLicense(ruleset string) string {
 	license, ok := licenseBySource[strings.ToLower(ruleset)]
 	if !ok {
-		license = "Unknown"
+		license = model.LicenseUnknown
 	}
 
 	return license
 }
 
+func (e *SuricataEngine) generateUnusedPublicId(ctx context.Context) (string, error) {
+	id := strconv.Itoa(rand.IntN(1000000) + 1000000) // [1000000, 2000000)
+
+	i := 0
+	for ; i < 10; i++ {
+		detect, err := e.srv.Detectionstore.GetDetectionByPublicId(ctx, id)
+		if err != nil {
+			return "", err
+		}
+
+		if detect == nil {
+			// no detection with this publicId, we're good
+			break
+		}
+
+		id = strconv.Itoa(rand.IntN(1000000) + 1000000)
+	}
+
+	if i >= 10 {
+		return "", fmt.Errorf("unable to generate a unique publicId")
+	}
+
+	return id, nil
+}
+
 func (e *SuricataEngine) DuplicateDetection(ctx context.Context, detection *model.Detection) (*model.Detection, error) {
-	return nil, nil
+	id, err := e.generateUnusedPublicId(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rule, err := ParseSuricataRule(detection.Content)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, opt := range rule.Options {
+		if strings.EqualFold(opt.Name, "sid") {
+			opt.Value = &id
+		} else if strings.EqualFold(opt.Name, "msg") {
+			if opt.Value != nil {
+				*opt.Value = util.Unquote(*opt.Value) + " (copy)"
+			} else {
+				opt.Value = util.Ptr("(copy)")
+			}
+		}
+	}
+
+	dets, err := e.ParseRules(rule.String(), "__custom__")
+	if err != nil {
+		return nil, err
+	}
+
+	if len(dets) == 0 {
+		return nil, fmt.Errorf("unable to parse detection")
+	}
+
+	det := dets[0]
+
+	err = e.ExtractDetails(det)
+	if err != nil {
+		return nil, err
+	}
+
+	userID := ctx.Value(web.ContextKeyRequestorId).(string)
+	user, err := e.srv.Userstore.GetUserById(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	author := strings.Join([]string{user.FirstName, user.LastName}, " ")
+	if author == "" {
+		author = user.Email
+	}
+
+	det.Author = author
+
+	return det, nil
 }
 
 // go install go.uber.org/mock/mockgen@latest
