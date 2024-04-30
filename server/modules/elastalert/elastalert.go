@@ -15,7 +15,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -39,7 +38,6 @@ import (
 )
 
 var errModuleStopped = fmt.Errorf("elastalert module has stopped running")
-var syncRetryCount int = 0
 
 var acceptedExtensions = map[string]bool{
 	".yml":  true,
@@ -382,6 +380,12 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 	for e.isRunning {
 		e.resetInterrupt()
 
+		// set timerDur to short retry duration
+		timerDur = time.Duration(e.communityRulesImportRetrySeconds) * time.Second
+		log.WithFields(log.Fields{
+			"retryTime": timerDur.Minutes(),
+		}).Info("setting import retry")
+
 		timer := time.NewTimer(timerDur)
 
 		var forceSync bool
@@ -395,8 +399,6 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 		if !e.isRunning {
 			break
 		}
-
-		timerDur = time.Second * time.Duration(e.communityRulesImportFrequencySeconds)
 
 		log.WithFields(log.Fields{
 			"forceSync": forceSync,
@@ -585,17 +587,6 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			log.WithFields(log.Fields{
 				"errors": mutil.TruncateMap(errMap, 5),
 			}).Error("unable to sync all ElastAlert community detections")
-			timerDur = time.Duration(e.communityRulesImportRetrySeconds) * time.Second
-
-			// Exponential backoff calculation
-			timerDur := time.Duration(300*math.Pow(2, float64(syncRetryCount))) * time.Second
-			if timerDur > 21600*time.Second {
-				timerDur = 21600 * time.Second // cap the wait interval at 6 hours
-			}
-
-			log.WithField("retry_time", timerDur).Info("will retry Elastalert community detection sync in retry_time (seconds)")
-
-			syncRetryCount++
 
 			if e.notify {
 				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
@@ -614,14 +605,17 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 				}
 			}
 
-			syncRetryCount = 0
-
 			if e.notify {
 				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
 					Engine: model.EngineNameElastAlert,
 					Status: "success",
 				})
 			}
+			// succesful sync, set to normal update duration
+			lastImport, timerDur = mutil.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Duration(e.communityRulesImportFrequencySeconds)*time.Second)
+			log.WithFields(log.Fields{
+				"retryTime": timerDur.Minutes(),
+			}).Info("elastalert sigma sync completed, setting normal update duration")
 		}
 
 		dur := time.Since(start)
@@ -740,7 +734,7 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos map[string]*module.RuleRepo) 
 
 			raw, err := e.ReadFile(path)
 			if err != nil {
-				log.WithError(err).WithField("file", path).Error("failed to read yara rule file")
+				log.WithError(err).WithField("file", path).Error("failed to read elastalert rule file")
 				return nil
 			}
 
