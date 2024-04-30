@@ -59,6 +59,7 @@ type IOManager interface {
 type ElastAlertEngine struct {
 	srv                                  *server.Server
 	communityRulesImportFrequencySeconds int
+	communityRulesImportRetrySeconds     int
 	sigmaPackageDownloadTemplate         string
 	elastAlertRulesFolder                string
 	rulesFingerprintFile                 string
@@ -110,6 +111,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.interrupt = make(chan bool, 1)
 
 	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", 86400)
+	e.communityRulesImportRetrySeconds = module.GetIntDefault(config, "communityRulesImportRetrySeconds", 300)
 	e.sigmaPackageDownloadTemplate = module.GetStringDefault(config, "sigmaPackageDownloadTemplate", "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip")
 	e.elastAlertRulesFolder = module.GetStringDefault(config, "elastAlertRulesFolder", "/opt/sensoroni/elastalert")
 	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", "/opt/sensoroni/fingerprints/sigma.fingerprint")
@@ -372,11 +374,13 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 
 	ctx := e.srv.Context
 	templateFound := false
+	syncFailed := false
 
 	lastImport, timerDur := mutil.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Duration(e.communityRulesImportFrequencySeconds)*time.Second)
 
 	for e.isRunning {
 		e.resetInterrupt()
+		syncFailed = false
 
 		timer := time.NewTimer(timerDur)
 
@@ -578,6 +582,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 		if len(errMap) > 0 {
 			// there were errors, don't save the fingerprint.
 			// idempotency means we might fix it if we try again later.
+			syncFailed = true
 			log.WithFields(log.Fields{
 				"errors": mutil.TruncateMap(errMap, 5),
 			}).Error("unable to sync all ElastAlert community detections")
@@ -605,6 +610,13 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 					Status: "success",
 				})
 			}
+		}
+
+		if syncFailed {
+			timerDur = time.Duration(e.communityRulesImportRetrySeconds) * time.Second
+			log.WithFields(log.Fields{
+				"retryTimeSeconds": timerDur.Seconds(),
+			}).Error("unable to sync all ElastAlert Sigma community detections, will retry")
 		}
 
 		dur := time.Since(start)
@@ -723,7 +735,7 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos map[string]*model.RuleRepo) (
 
 			raw, err := e.ReadFile(path)
 			if err != nil {
-				log.WithError(err).WithField("file", path).Error("failed to read yara rule file")
+				log.WithError(err).WithField("file", path).Error("failed to read elastalert rule file")
 				return nil
 			}
 
