@@ -30,6 +30,7 @@ type Setting struct {
 	HelpLink            string `json:"helpLink"`
 	Syntax              string `json:"syntax"`
 	ForcedType          string `json:"forcedType"`
+	Duplicates          bool   `json:"duplicates"`
 }
 
 func NewSetting(Id string) *Setting {

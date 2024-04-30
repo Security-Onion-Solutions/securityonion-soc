@@ -4928,6 +4928,18 @@
                     <v-subtitle v-text="i18n.settingReadOnly" />
                   </div>
                   <v-container fluid>
+                    <v-row v-if="selected.duplicates && !selected.readonly">
+                      <v-col>
+                        <v-btn id="config-toggle-duplicate-button" @click="toggleDuplicate(selected)" v-text="i18n.settingDuplicate" data-aid="config_item_show_duplicate"/>
+                        <div v-if="showDuplicate" class="mt-2 mb-8 pl-8">
+                          <div class="mb-4">{{ i18n.settingDuplicateHelp }}</div>
+                          <v-form id="duplicate-id-form" v-model="duplicateIdValid">
+                            <v-text-field id="duplicate-id-input" :rules="duplicate_id_rules" :label="i18n.settingDuplicateName" v-model="duplicateId" data-aid="config_item_duplicate_name_input" />
+                            <v-btn id="config-create-duplicate-button" :disabled="!duplicateIdValid" @click="duplicate(selected)" v-text="i18n.settingDuplicateCreate" data-aid="config_item_create_duplicate"/>
+                          </v-form>
+                        </div>
+                      </v-col>
+                    </v-row>
                     <v-row v-if="!selected.readonly && selected.defaultAvailable">
                       <v-col>
                         <v-btn id="config-toggle-default-button" @click="showDefault = !showDefault" v-text="showDefault ? i18n.settingHideDefault : i18n.settingShowDefault" data-aid="config_item_show_default"/>

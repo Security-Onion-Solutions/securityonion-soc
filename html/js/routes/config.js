@@ -17,6 +17,10 @@ routes.push({ path: '/config', name: 'config', component: {
       key: "",
       value: "",
     },
+    duplicate_id_rules: [
+      value => !!value || this.$root.i18n.required,
+      value => (!!value && /^[a-zA-Z0-9_]{3,50}$/.test(value)) || this.$root.i18n.settingDuplicateNameInvalid,
+    ],
 
     selectedNode: null,
     cancelDialog: false,
@@ -31,6 +35,9 @@ routes.push({ path: '/config', name: 'config', component: {
     settingsAvailable: 0,
     showDefault: false,
     nextStopId: null,
+    showDuplicate: false,
+    duplicateId: null,
+    duplicateIdValid: false,
   }},
   mounted() {
     this.processRouteParameters();
@@ -167,6 +174,7 @@ routes.push({ path: '/config', name: 'config', component: {
         helpLink: setting.helpLink,
         advanced: setting.advanced,
         syntax: setting.syntax,
+        duplicates: setting.duplicates,
       };
       this.merge(created, setting);
       return created;
@@ -472,6 +480,33 @@ routes.push({ path: '/config', name: 'config', component: {
         return n.status == GridMemberAccepted && !setting.nodeValues.has(n.id);
       });
       this.availableNodes = eligible.map(n => { return { text: n.name + " (" + n.role + ")", value: n.id } });
+    },
+    toggleDuplicate(setting) {
+      this.duplicateId = this.suggestDuplicateName(setting);
+      this.showDuplicate = !this.showDuplicate; 
+    },
+    suggestDuplicateName(setting) {
+      return setting.name + "_dup";
+    },
+    duplicate(setting) {
+      const new_name = this.duplicateId;
+      var new_id = setting.id.substring(0, setting.id.lastIndexOf(setting.name));
+      new_id += new_name;
+      this.$root.startLoading();
+      const found = this.settings.find(s => s.id == new_id);
+      this.$root.stopLoading();
+      if (found) {
+        this.$root.showWarning(this.i18n.settingDuplicateInvalid);
+        return
+      }
+      var new_setting = structuredClone(setting);
+      new_setting.id = new_id;
+      new_setting.name = new_name;
+      this.settings.push(new_setting);
+      this.settings.sort((a,b) => { if (a.id > b.id) return 1; else if (a.id < b.id) return -1; else return 0 });
+      this.refreshTree();
+      this.active = [new_id]
+      this.showDuplicate = false;      
     },
   }
 }});
