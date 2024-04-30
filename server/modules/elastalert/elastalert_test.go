@@ -441,8 +441,9 @@ level: high
 
 	repos := map[string]*model.RuleRepo{
 		"repo-path": {
-			Repo:    "github.com/repo-user/repo-path",
-			License: "DRL",
+			Repo:      "github.com/repo-user/repo-path",
+			License:   "DRL",
+			Community: true,
 		},
 	}
 
