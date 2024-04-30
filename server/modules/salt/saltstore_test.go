@@ -1059,6 +1059,7 @@ func TestUpdateSettingWithAnnotation(tester *testing.T) {
 	annotations["regexFailureMessage"] = "My Failure Message"
 	annotations["helpLink"] = "My help link"
 	annotations["syntax"] = "yaml"
+	annotations["duplicates"] = true
 
 	assert.False(tester, setting.Multiline)
 	salt.updateSettingWithAnnotation(setting, annotations)
@@ -1078,6 +1079,7 @@ func TestUpdateSettingWithAnnotation(tester *testing.T) {
 	assert.Equal(tester, "some default", setting.Default)
 	assert.Equal(tester, "some local", setting.Value)
 	assert.Equal(tester, "yaml", setting.Syntax)
+	assert.True(tester, setting.Duplicates)
 }
 
 func TestManageUser_AddUser(tester *testing.T) {

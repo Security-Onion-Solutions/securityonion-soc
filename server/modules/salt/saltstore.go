@@ -470,6 +470,8 @@ func (store *Saltstore) updateSettingWithAnnotation(setting *model.Setting, anno
 					setting.Value = setting.Default
 				}
 			}
+		case "duplicates":
+			setting.Duplicates = value.(bool)
 		}
 	}
 }

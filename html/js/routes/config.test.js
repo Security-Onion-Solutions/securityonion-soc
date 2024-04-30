@@ -52,6 +52,7 @@ test('loadData', async () => {
       "default": null,
       "defaultAvailable": false, 
       "description": "Nearby",
+      "duplicates": undefined,
       "file": undefined,
       "global": false,
       "helpLink": undefined,
@@ -73,6 +74,7 @@ test('loadData', async () => {
       "default": undefined,
       "defaultAvailable": undefined, 
       "description": "NADA",
+      "duplicates": undefined,
       "file": undefined,
       "global": undefined,
       "helpLink": undefined,
@@ -94,6 +96,7 @@ test('loadData', async () => {
       "default": undefined,
       "defaultAvailable": undefined, 
       "description": "Cocoa",
+      "duplicates": undefined,
       "file": undefined,
       "global": undefined,
       "helpLink": undefined,
@@ -122,6 +125,7 @@ test('loadData', async () => {
               "default": null, 
               "defaultAvailable": false, 
               "description": "Nearby", 
+              "duplicates": undefined,
               "file": undefined,
               "global": false, 
               "helpLink": undefined,
@@ -143,6 +147,7 @@ test('loadData', async () => {
               "default": undefined,
               "defaultAvailable": undefined, 
               "description": "Cocoa", 
+              "duplicates": undefined,
               "file": undefined,
               "global": undefined, 
               "helpLink": undefined,
@@ -172,6 +177,7 @@ test('loadData', async () => {
       "default": undefined,
       "defaultAvailable": undefined, 
       "description": "NADA", 
+      "duplicates": undefined,
       "file": undefined,
       "global": undefined, 
       "helpLink": undefined,
@@ -516,4 +522,39 @@ test('addToNode_Malformed', () => {
     comp.addToNode({name: 'test'}, {}, ['parent'], {name: 'test'});
   };
   expect(closure).toThrow("Setting name 'test' conflicts with another similarly named setting");
+});
+
+test('toggleDuplicate', () => {
+  const setting = {
+    id: "a.b.c",
+    name: "c",
+    duplicates: true,
+  }
+  expect(comp.showDuplicate).toBe(false)
+  comp.toggleDuplicate(setting)
+  expect(comp.duplicateId).toBe("c_dup");
+  expect(comp.showDuplicate).toBe(true)
+});
+
+test('duplicate', () => {
+  const setting = {
+    id: "a.b.c",
+    name: "c",
+    duplicates: true,
+  }
+  const setting2 = {
+    id: "a.b.c",
+    name: "c",
+    duplicates: true,
+  }
+  global.structuredClone = jest.fn().mockReturnValueOnce(setting2);
+  comp.settings = [setting];
+  comp.showDuplicate = true;
+  comp.duplicateId = "foo"
+  expect(comp.settings.length).toBe(1);
+  comp.duplicate(setting);
+  expect(comp.showDuplicate).toBe(false);
+  expect(comp.settings.length).toBe(2);
+  expect(comp.settings[1].id).toBe("a.b.foo");
+  expect(comp.settings[1].name).toBe("foo");
 });
