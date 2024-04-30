@@ -17,6 +17,7 @@ type DetectionEngine interface {
 	ConvertRule(ctx context.Context, detect *model.Detection) (string, error)
 	ExtractDetails(detect *model.Detection) error
 	InterruptSleep(forceFull bool)
+	DuplicateDetection(ctx context.Context, detection *model.Detection) (*model.Detection, error)
 }
 
 type SyncStatus struct {

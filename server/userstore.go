@@ -20,3 +20,5 @@ type Userstore interface {
 	GetUsers(ctx context.Context) ([]*model.User, error)
 	GetUserById(ctx context.Context, id string) (*model.User, error)
 }
+
+//go:generate mockgen -destination mock/mock_userstore.go -package mock . Userstore

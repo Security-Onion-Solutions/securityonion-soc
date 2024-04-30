@@ -767,6 +767,10 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]s
 	return nil, nil
 }
 
+func (e *StrelkaEngine) DuplicateDetection(ctx context.Context, detection *model.Detection) (*model.Detection, error) {
+	return nil, nil
+}
+
 // go install go.uber.org/mock/mockgen@latest
 //go:generate mockgen -destination mock/mock_iomanager.go -package mock . IOManager
 

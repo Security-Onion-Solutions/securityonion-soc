@@ -6,9 +6,15 @@
 package suricata
 
 import (
+	"context"
 	"testing"
 
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
+	"github.com/security-onion-solutions/securityonion-soc/web"
+	"go.uber.org/mock/gomock"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -127,4 +133,66 @@ func TestSuricataRule(t *testing.T) {
 	opt, ok = rule.GetOption("notfound")
 	assert.False(t, ok)
 	assert.Nil(t, opt)
+}
+
+func TestDuplicateDetection(t *testing.T) {
+	det := &model.Detection{
+		Engine:      model.EngineNameElastAlert,
+		Language:    model.SigLangSigma,
+		Content:     `alert any any <> any any (msg:"test"; sid:12345;)`,
+		IsCommunity: true,
+		Ruleset:     "somewhere",
+		Author:      "Dade Murphy",
+	}
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+
+	ctrl := gomock.NewController(t)
+	mUser := mock.NewMockUserstore(ctrl)
+	mUser.EXPECT().GetUserById(ctx, "myRequestorId").Return(&model.User{
+		FirstName: "Dade",
+		LastName:  "Murphy",
+	}, nil)
+
+	mDetect := mock.NewMockDetectionstore(ctrl)
+	mDetect.EXPECT().GetDetectionByPublicId(ctx, gomock.Any()).Return(&model.Detection{}, nil)
+	mDetect.EXPECT().GetDetectionByPublicId(ctx, gomock.Any()).Return(nil, nil)
+
+	eng := SuricataEngine{
+		srv: &server.Server{
+			Userstore:      mUser,
+			Detectionstore: mDetect,
+		},
+		isRunning: true,
+	}
+
+	_ = eng.ExtractDetails(det)
+
+	dupe, err := eng.DuplicateDetection(ctx, det)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, dupe)
+
+	// expected differences
+	assert.NotEqual(t, det.Title, dupe.Title)
+	assert.Equal(t, det.Title, dupe.Title[:len(dupe.Title)-len(" (copy)")])
+	assert.NotEqual(t, det.PublicID, dupe.PublicID)
+	assert.NotEmpty(t, dupe.PublicID)
+	assert.NotEqual(t, det.IsCommunity, dupe.IsCommunity)
+	assert.NotEqual(t, det.Ruleset, dupe.Ruleset)
+
+	// expected similarities
+	assert.Equal(t, det.Severity, dupe.Severity)
+	assert.Equal(t, det.Author, dupe.Author)
+	assert.Equal(t, det.Category, dupe.Category)
+	assert.Equal(t, det.Description, dupe.Description)
+	assert.Equal(t, det.IsEnabled, dupe.IsEnabled)
+	assert.Equal(t, det.IsReporting, dupe.IsReporting)
+	assert.Equal(t, det.Engine, dupe.Engine)
+	assert.Equal(t, det.Language, dupe.Language)
+
+	// always empty after duplication
+	assert.Empty(t, dupe.License)
+	assert.Empty(t, dupe.Overrides)
+	assert.Empty(t, dupe.Tags)
 }

@@ -1193,6 +1193,10 @@ func lookupLicense(ruleset string) string {
 	return license
 }
 
+func (e *SuricataEngine) DuplicateDetection(ctx context.Context, detection *model.Detection) (*model.Detection, error) {
+	return nil, nil
+}
+
 // go install go.uber.org/mock/mockgen@latest
 //go:generate mockgen -destination mock/mock_iomanager.go -package mock . IOManager
 

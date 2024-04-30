@@ -25,15 +25,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/samber/lo"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	mutil "github.com/security-onion-solutions/securityonion-soc/server/modules/util"
 	"github.com/security-onion-solutions/securityonion-soc/util"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
+	"github.com/google/uuid"
 	"github.com/kennygrant/sanitize"
+	"github.com/samber/lo"
 	"gopkg.in/yaml.v3"
 )
 
@@ -675,7 +677,7 @@ func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detections 
 				continue
 			}
 
-			det := rule.ToDetection(string(data), pkg, model.LicenseDRL, true)
+			det := rule.ToDetection(pkg, model.LicenseDRL, true)
 
 			detections = append(detections, det)
 		}
@@ -735,7 +737,7 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos map[string]*model.RuleRepo) (
 
 			ruleset := filepath.Base(repopath)
 
-			det := rule.ToDetection(string(raw), ruleset, repo.License, repo.Community)
+			det := rule.ToDetection(ruleset, repo.License, repo.Community)
 
 			detections = append(detections, det)
 
@@ -1042,6 +1044,68 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 	query = strings.TrimSpace(query)
 
 	return query, nil
+}
+
+func (e *ElastAlertEngine) generateUnusedPublicId(ctx context.Context) (string, error) {
+	id := uuid.New().String()
+
+	i := 0
+	for ; i < 10; i++ {
+		detect, err := e.srv.Detectionstore.GetDetectionByPublicId(ctx, id)
+		if err != nil {
+			return "", err
+		}
+
+		if detect == nil {
+			// no detection with this publicId, we're good
+			break
+		}
+
+		id = uuid.New().String()
+	}
+
+	if i >= 10 {
+		return "", fmt.Errorf("unable to generate a unique publicId")
+	}
+
+	return id, nil
+}
+
+func (e *ElastAlertEngine) DuplicateDetection(ctx context.Context, detection *model.Detection) (*model.Detection, error) {
+	id, err := e.generateUnusedPublicId(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rule, err := ParseElastAlertRule([]byte(detection.Content))
+	if err != nil {
+		return nil, err
+	}
+
+	rule.Title += " (copy)"
+	rule.ID = &id
+
+	det := rule.ToDetection("__custom__", model.LicenseUnknown, false)
+
+	err = e.ExtractDetails(det)
+	if err != nil {
+		return nil, err
+	}
+
+	userID := ctx.Value(web.ContextKeyRequestorId).(string)
+	user, err := e.srv.Userstore.GetUserById(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	author := strings.Join([]string{user.FirstName, user.LastName}, " ")
+	if author == "" {
+		author = user.Email
+	}
+
+	det.Author = author
+
+	return det, nil
 }
 
 type CustomWrapper struct {

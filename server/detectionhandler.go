@@ -92,9 +92,8 @@ func (h *DetectionHandler) getByPublicId(w http.ResponseWriter, r *http.Request)
 	ctx := r.Context()
 
 	publicId := chi.URLParam(r, "publicid")
-	q := fmt.Sprintf(`so_detection.publicId:"%s" AND _index:"*:so-detection"`, publicId)
 
-	detections, err := h.server.Detectionstore.Query(ctx, q, 1)
+	detect, err := h.server.Detectionstore.GetDetectionByPublicId(ctx, publicId)
 	if err != nil {
 		if err.Error() == "Object not found" {
 			web.Respond(w, r, http.StatusNotFound, nil)
@@ -105,12 +104,12 @@ func (h *DetectionHandler) getByPublicId(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if len(detections) == 0 {
+	if detect == nil {
 		web.Respond(w, r, http.StatusNotFound, nil)
 		return
 	}
 
-	web.Respond(w, r, http.StatusOK, detections[0])
+	web.Respond(w, r, http.StatusOK, detect)
 }
 
 func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Request) {
@@ -223,18 +222,19 @@ func (h *DetectionHandler) duplicateDetection(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	detect.Id = ""
-	detect.PublicID = ""
-	detect.Title = fmt.Sprintf("%s (copy)", detect.Title)
-	detect.CreateTime = nil
-	detect.UpdateTime = nil
-	detect.IsEnabled = false
-	detect.IsReporting = false
-	detect.IsCommunity = false
-	detect.Ruleset = customRuleset
-	detect.Kind = ""
+	eng, ok := h.server.DetectionEngines[detect.Engine]
+	if !ok {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("unsupported engine"))
+		return
+	}
 
-	detect, err = h.server.Detectionstore.CreateDetection(ctx, detect)
+	dupe, err := eng.DuplicateDetection(ctx, detect)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	detect, err = h.server.Detectionstore.CreateDetection(ctx, dupe)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return

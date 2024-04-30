@@ -55,6 +55,7 @@ const (
 	LicenseDRL        = "DRL"
 	LicenseCommercial = "Commercial"
 	LicenseBSD        = "BSD"
+	LicenseUnknown    = "Unknown"
 )
 
 var (

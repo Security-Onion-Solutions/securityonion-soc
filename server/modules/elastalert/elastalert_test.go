@@ -339,14 +339,14 @@ status: experimental
 description: Always Alerts
 author: Corey Ogburn
 date: 2023/11/03
-modified: 2023/11/03
 logsource:
     product: windows
 detection:
+    condition: filter
     filter:
-       event.module: "zeek"
-    condition: "filter"
+        event.module: zeek
 level: high
+modified: 2023/11/03
 `
 
 	buf := bytes.NewBuffer([]byte{})
@@ -424,19 +424,19 @@ func TestParseRepoRules(t *testing.T) {
 id: bf86ef21-41e6-417b-9a05-b9ea6bf28a38
 status: experimental
 description: Detects when a user fails to login to the Security Onion Console (Web UI). Review associated logs for target username and source IP.
-license: Elastic-2.0
-author: 'Security Onion Solutions'
+author: Security Onion Solutions
 date: 2024/03/06
 logsource:
-  product: kratos
-  service: audit
+    product: kratos
+    service: audit
 detection:
-  selection:
-    msg: 'Encountered self-service login error.'
-  condition: selection
+    condition: selection
+    selection:
+        msg: Encountered self-service login error.
 falsepositives:
-  - none
+    - none
 level: high
+license: Elastic-2.0
 `
 
 	repos := map[string]*model.RuleRepo{
