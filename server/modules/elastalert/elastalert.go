@@ -64,7 +64,7 @@ type ElastAlertEngine struct {
 	rulesFingerprintFile                 string
 	sigmaRulePackages                    []string
 	autoEnabledSigmaRules                []string
-	rulesRepos                           []*module.RuleRepo
+	rulesRepos                           []*model.RuleRepo
 	reposFolder                          string
 	isRunning                            bool
 	thread                               *sync.WaitGroup
@@ -120,7 +120,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.parseSigmaPackages(pkgs)
 
 	e.reposFolder = module.GetStringDefault(config, "reposFolder", "/opt/sensoroni/sigma/repos")
-	e.rulesRepos, err = module.GetReposDefault(config, "rulesRepos", []*module.RuleRepo{
+	e.rulesRepos, err = model.GetReposDefault(config, "rulesRepos", []*model.RuleRepo{
 		{
 			Repo:    "https://github.com/Security-Onion-Solutions/securityonion-resources",
 			License: "DRL",
@@ -431,7 +431,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			templateFound = true
 		}
 
-		allRepos := map[string]*module.RuleRepo{}
+		allRepos := map[string]*model.RuleRepo{}
 		var repoChanges bool
 
 		var zips map[string][]byte
@@ -684,7 +684,7 @@ func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detections 
 	return detections, errMap
 }
 
-func (e *ElastAlertEngine) parseRepoRules(allRepos map[string]*module.RuleRepo) (detections []*model.Detection, errMap map[string]error) {
+func (e *ElastAlertEngine) parseRepoRules(allRepos map[string]*model.RuleRepo) (detections []*model.Detection, errMap map[string]error) {
 	errMap = map[string]error{} // map[repoName]error
 	defer func() {
 		if len(errMap) == 0 {
