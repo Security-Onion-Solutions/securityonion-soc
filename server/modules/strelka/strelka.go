@@ -26,6 +26,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	mutil "github.com/security-onion-solutions/securityonion-soc/server/modules/util"
 	"github.com/security-onion-solutions/securityonion-soc/util"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
 	"github.com/kennygrant/sanitize"
@@ -200,6 +201,10 @@ func (s *StrelkaEngine) ExtractDetails(detect *model.Detection) error {
 		detect.Title = rule.Identifier
 	} else {
 		detect.Title = "Detection title not yet provided - click here to update this title"
+	}
+
+	if rule.Meta.Description != nil {
+		detect.Description = *rule.Meta.Description
 	}
 
 	detect.Severity = model.SeverityUnknown
@@ -768,7 +773,40 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]s
 }
 
 func (e *StrelkaEngine) DuplicateDetection(ctx context.Context, detection *model.Detection) (*model.Detection, error) {
-	return nil, nil
+	rules, err := e.parseYaraRules([]byte(detection.Content), false)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(rules) == 0 {
+		return nil, fmt.Errorf("unable to parse rule")
+	}
+
+	rule := rules[0]
+
+	rule.Identifier += "_copy"
+
+	det := rule.ToDetection(model.LicenseUnknown, "__custom__", false)
+
+	err = e.ExtractDetails(det)
+	if err != nil {
+		return nil, err
+	}
+
+	userID := ctx.Value(web.ContextKeyRequestorId).(string)
+	user, err := e.srv.Userstore.GetUserById(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	author := strings.Join([]string{user.FirstName, user.LastName}, " ")
+	if author == "" {
+		author = user.Email
+	}
+
+	det.Author = author
+
+	return det, nil
 }
 
 // go install go.uber.org/mock/mockgen@latest
