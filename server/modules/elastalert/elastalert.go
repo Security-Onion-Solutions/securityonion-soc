@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -38,6 +39,7 @@ import (
 )
 
 var errModuleStopped = fmt.Errorf("elastalert module has stopped running")
+var syncRetryCount int = 0
 
 var acceptedExtensions = map[string]bool{
 	".yml":  true,
@@ -59,6 +61,7 @@ type IOManager interface {
 type ElastAlertEngine struct {
 	srv                                  *server.Server
 	communityRulesImportFrequencySeconds int
+	communityRulesImportRetrySeconds     int
 	sigmaPackageDownloadTemplate         string
 	elastAlertRulesFolder                string
 	rulesFingerprintFile                 string
@@ -110,6 +113,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.interrupt = make(chan bool, 1)
 
 	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", 86400)
+	e.communityRulesImportRetrySeconds = module.GetIntDefault(config, "communityRulesImportRetrySeconds", 300)
 	e.sigmaPackageDownloadTemplate = module.GetStringDefault(config, "sigmaPackageDownloadTemplate", "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip")
 	e.elastAlertRulesFolder = module.GetStringDefault(config, "elastAlertRulesFolder", "/opt/sensoroni/elastalert")
 	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", "/opt/sensoroni/fingerprints/sigma.fingerprint")
@@ -581,6 +585,17 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			log.WithFields(log.Fields{
 				"errors": mutil.TruncateMap(errMap, 5),
 			}).Error("unable to sync all ElastAlert community detections")
+			timerDur = time.Duration(e.communityRulesImportRetrySeconds) * time.Second
+
+			// Exponential backoff calculation
+			timerDur := time.Duration(300*math.Pow(2, float64(syncRetryCount))) * time.Second
+			if timerDur > 21600*time.Second {
+				timerDur = 21600 * time.Second // cap the wait interval at 6 hours
+			}
+
+			log.WithField("retry_time", timerDur).Info("will retry Elastalert community detection sync in retry_time (seconds)")
+
+			syncRetryCount++
 
 			if e.notify {
 				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
@@ -598,6 +613,8 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 					log.WithError(err).WithField("path", e.rulesFingerprintFile).Error("unable to write rules fingerprint file")
 				}
 			}
+
+			syncRetryCount = 0
 
 			if e.notify {
 				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
