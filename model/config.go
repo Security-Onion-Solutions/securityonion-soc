@@ -22,6 +22,7 @@ type Setting struct {
 	Value               string `json:"value"`
 	Multiline           bool   `json:"multiline"`
 	Readonly            bool   `json:"readonly"`
+	ReadonlyUi          bool   `json:"readonlyUi"`
 	Sensitive           bool   `json:"sensitive"`
 	Regex               string `json:"regex"`
 	RegexFailureMessage string `json:"regexFailureMessage"`

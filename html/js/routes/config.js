@@ -167,6 +167,7 @@ routes.push({ path: '/config', name: 'config', component: {
         default: null,
         defaultAvailable: false,
         readonly: setting.readonly,
+        readonlyUi: setting.readonlyUi,
         sensitive: setting.sensitive,
         regex: setting.regex,
         regexFailureMessage: setting.regexFailureMessage,
@@ -507,6 +508,9 @@ routes.push({ path: '/config', name: 'config', component: {
       this.refreshTree();
       this.active = [new_id]
       this.showDuplicate = false;      
+    },
+    isReadOnly(item) {
+      return item.readonly || item.readonlyUi;
     },
   }
 }});

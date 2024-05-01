@@ -1053,6 +1053,7 @@ func TestUpdateSettingWithAnnotation(tester *testing.T) {
 	annotations["file"] = true
 	annotations["advanced"] = true
 	annotations["readonly"] = true
+	annotations["readonlyUi"] = true
 	annotations["description"] = "My Desc"
 	annotations["title"] = "My Title"
 	annotations["regex"] = "My Regex"
@@ -1070,6 +1071,7 @@ func TestUpdateSettingWithAnnotation(tester *testing.T) {
 	assert.True(tester, setting.File)
 	assert.True(tester, setting.Advanced)
 	assert.True(tester, setting.Readonly)
+	assert.True(tester, setting.ReadonlyUi)
 	assert.Equal(tester, "My Desc", setting.Description)
 	assert.Equal(tester, "My Title", setting.Title)
 	assert.Equal(tester, "My Regex", setting.Regex)
