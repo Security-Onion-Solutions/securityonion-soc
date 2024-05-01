@@ -1,4 +1,4 @@
-package util
+package detections
 
 import (
 	"errors"
@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/security-onion-solutions/securityonion-soc/server/modules/util/mock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/tj/assert"
 	"go.uber.org/mock/gomock"
 )

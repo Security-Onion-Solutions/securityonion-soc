@@ -205,7 +205,11 @@ func (rule *SuricataRule) String() string {
 		} else if opt.Value == nil {
 			opts = append(opts, fmt.Sprintf("%s;", opt.Name))
 		} else {
-			opts = append(opts, fmt.Sprintf("%s:%s;", opt.Name, *opt.Value))
+			if strings.Contains(*opt.Value, ";") {
+				opts = append(opts, fmt.Sprintf("%s:\"%s\";", opt.Name, *opt.Value))
+			} else {
+				opts = append(opts, fmt.Sprintf("%s:%s;", opt.Name, *opt.Value))
+			}
 		}
 	}
 
@@ -224,4 +228,30 @@ func (rule *SuricataRule) GetGenId() int {
 	}
 
 	return genID
+}
+
+func (rule *SuricataRule) UpdateForDuplication(publicId string) {
+	var setPublicId, setTitle bool
+	for _, opt := range rule.Options {
+		if strings.EqualFold(opt.Name, "sid") {
+			opt.Value = util.Ptr(publicId)
+			setPublicId = true
+		} else if strings.EqualFold(opt.Name, "msg") {
+			if opt.Value != nil {
+				*opt.Value = util.Unquote(*opt.Value) + " (copy)"
+			} else {
+				opt.Value = util.Ptr("(copy)")
+			}
+
+			setTitle = true
+		}
+	}
+
+	if !setTitle {
+		rule.Options = append([]*RuleOption{{Name: "msg", Value: util.Ptr("(copy)")}}, rule.Options...)
+	}
+
+	if !setPublicId {
+		rule.Options = append(rule.Options, &RuleOption{Name: "sid", Value: util.Ptr(publicId)})
+	}
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
@@ -320,7 +321,7 @@ func TestParse(t *testing.T) {
 			},
 			ExpectedDetections: []*model.Detection{
 				{
-					Author:    "__soc_import__",
+					Author:    detections.AUTHOR_SOC,
 					PublicID:  SimpleRuleSID,
 					Title:     `GPL ATTACK_RESPONSE id check returned root`,
 					Category:  `GPL ATTACK_RESPONSE`,
@@ -333,7 +334,7 @@ func TestParse(t *testing.T) {
 					License:   "Unknown",
 				},
 				{
-					Author:   "__soc_import__",
+					Author:   detections.AUTHOR_SOC,
 					PublicID: "20000",
 					Title:    `a \"tricky";\ msg`,
 					Category: ``,

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math/rand/v2"
 	"os"
 	"regexp"
 	"strconv"
@@ -22,7 +23,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
-	mutil "github.com/security-onion-solutions/securityonion-soc/server/modules/util"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
@@ -41,8 +42,6 @@ var licenseBySource = map[string]string{
 	"etopen": model.LicenseBSD,
 	"etpro":  model.LicenseCommercial,
 }
-
-var socAuthor = "__soc_import__"
 
 type IOManager interface {
 	ReadFile(path string) ([]byte, error)
@@ -240,7 +239,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 
 	templateFound := false
 
-	lastImport, timerDur := mutil.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Second*time.Duration(e.communityRulesImportFrequencySeconds))
+	lastImport, timerDur := detections.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Second*time.Duration(e.communityRulesImportFrequencySeconds))
 
 	for e.isRunning {
 		e.resetInterrupt()
@@ -328,7 +327,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 				// if we have a fingerprint and the hashes are equal, there's nothing to do
 				log.Info("Suricata sync found no changes")
 
-				mutil.WriteStateFile(e.IOManager, e.stateFilePath)
+				detections.WriteStateFile(e.IOManager, e.stateFilePath)
 
 				if e.notify {
 					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
@@ -398,7 +397,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 			continue
 		}
 
-		mutil.WriteStateFile(e.IOManager, e.stateFilePath)
+		detections.WriteStateFile(e.IOManager, e.stateFilePath)
 
 		if len(errMap) > 0 {
 			// there were errors, don't save the fingerprint.
@@ -579,7 +578,7 @@ func (e *SuricataEngine) ParseRules(content string, ruleset string) ([]*model.De
 
 		d := &model.Detection{
 			IsEnabled: !wasCommented,
-			Author:    socAuthor,
+			Author:    detections.AUTHOR_SOC,
 			Category:  category,
 			PublicID:  sid,
 			Title:     title,
@@ -1187,10 +1186,80 @@ func indexThreshold(content string) (map[string][]*model.Override, error) {
 func lookupLicense(ruleset string) string {
 	license, ok := licenseBySource[strings.ToLower(ruleset)]
 	if !ok {
-		license = "Unknown"
+		license = model.LicenseUnknown
 	}
 
 	return license
+}
+
+func (e *SuricataEngine) generateUnusedPublicId(ctx context.Context) (string, error) {
+	id := strconv.Itoa(rand.IntN(1000000) + 1000000) // [1000000, 2000000)
+
+	i := 0
+	for ; i < 10; i++ {
+		detect, err := e.srv.Detectionstore.GetDetectionByPublicId(ctx, id)
+		if err != nil {
+			return "", err
+		}
+
+		if detect == nil {
+			// no detection with this publicId, we're good
+			break
+		}
+
+		id = strconv.Itoa(rand.IntN(1000000) + 1000000)
+	}
+
+	if i >= 10 {
+		return "", fmt.Errorf("unable to generate a unique publicId")
+	}
+
+	return id, nil
+}
+
+func (e *SuricataEngine) DuplicateDetection(ctx context.Context, detection *model.Detection) (*model.Detection, error) {
+	id, err := e.generateUnusedPublicId(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rule, err := ParseSuricataRule(detection.Content)
+	if err != nil {
+		return nil, err
+	}
+
+	rule.UpdateForDuplication(id)
+
+	dets, err := e.ParseRules(rule.String(), detections.RULESET_CUSTOM)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(dets) == 0 {
+		return nil, fmt.Errorf("unable to parse detection")
+	}
+
+	det := dets[0]
+
+	err = e.ExtractDetails(det)
+	if err != nil {
+		return nil, err
+	}
+
+	userID := ctx.Value(web.ContextKeyRequestorId).(string)
+	user, err := e.srv.Userstore.GetUserById(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	author := strings.Join([]string{user.FirstName, user.LastName}, " ")
+	if author == "" {
+		author = user.Email
+	}
+
+	det.Author = author
+
+	return det, nil
 }
 
 // go install go.uber.org/mock/mockgen@latest

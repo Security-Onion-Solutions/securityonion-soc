@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 
 	"gopkg.in/yaml.v3"
 )
@@ -48,27 +49,27 @@ const (
 type SigmaRule struct {
 	Title          string                 `yaml:"title"`
 	ID             *string                `yaml:"id"`
+	Status         *SigmaStatus           `yaml:"status"`
+	Description    *string                `yaml:"description,omitempty"`
+	Author         *string                `yaml:"author,omitempty"`
+	Date           *string                `yaml:"date"`
+	Reference      []string               `yaml:"reference,omitempty"`
 	LogSource      LogSource              `yaml:"logsource"`
 	Detection      SigmaDetection         `yaml:"detection"`
-	Status         *SigmaStatus           `yaml:"status"`
-	Description    *string                `yaml:"description"`
-	License        *string                `yaml:"license"`
-	Reference      []string               `yaml:"reference"`
-	Related        []*RelatedRule         `yaml:"related"`
-	Author         *string                `yaml:"author"`
-	Date           *string                `yaml:"date"`
-	Modified       *string                `yaml:"modified"`
-	Fields         []string               `yaml:"fields"`
-	FalsePositives OneOrMore[string]      `yaml:"falsepositives"`
+	FalsePositives OneOrMore[string]      `yaml:"falsepositives,omitempty"`
 	Level          *SigmaLevel            `yaml:"level"`
+	License        *string                `yaml:"license,omitempty"`
+	Related        []*RelatedRule         `yaml:"related,omitempty"`
+	Modified       *string                `yaml:"modified,omitempty"`
+	Fields         []string               `yaml:"fields,omitempty"`
 	Rest           map[string]interface{} `yaml:",inline"`
 }
 
 type LogSource struct {
-	Category   *string `yaml:"category"`
-	Product    *string `yaml:"product"`
-	Service    *string `yaml:"service"`
-	Definition *string `yaml:"definition"`
+	Category   *string `yaml:"category,omitempty"`
+	Product    *string `yaml:"product,omitempty"`
+	Service    *string `yaml:"service,omitempty"`
+	Definition *string `yaml:"definition,omitempty"`
 }
 
 type SigmaDetection struct {
@@ -120,7 +121,7 @@ func (e *SigmaRule) Validate() error {
 	return nil
 }
 
-func (r *SigmaRule) ToDetection(content string, ruleset string, license string, isCommunity bool) *model.Detection {
+func (r *SigmaRule) ToDetection(ruleset string, license string, isCommunity bool) *model.Detection {
 	id := r.Title
 
 	if r.ID != nil {
@@ -144,13 +145,15 @@ func (r *SigmaRule) ToDetection(content string, ruleset string, license string, 
 		}
 	}
 
+	content, _ := yaml.Marshal(r)
+
 	det := &model.Detection{
-		Author:      socAuthor,
+		Author:      detections.AUTHOR_SOC,
 		Engine:      model.EngineNameElastAlert,
 		PublicID:    id,
 		Title:       r.Title,
 		Severity:    sev,
-		Content:     content,
+		Content:     string(content),
 		IsCommunity: isCommunity,
 		Language:    model.SigLangSigma,
 		Ruleset:     ruleset,

@@ -25,15 +25,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/samber/lo"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
-	mutil "github.com/security-onion-solutions/securityonion-soc/server/modules/util"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/util"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
+	"github.com/google/uuid"
 	"github.com/kennygrant/sanitize"
+	"github.com/samber/lo"
 	"gopkg.in/yaml.v3"
 )
 
@@ -43,8 +45,6 @@ var acceptedExtensions = map[string]bool{
 	".yml":  true,
 	".yaml": true,
 }
-
-var socAuthor = "__soc_import__"
 
 type IOManager interface {
 	ReadFile(path string) ([]byte, error)
@@ -373,7 +373,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 	ctx := e.srv.Context
 	templateFound := false
 
-	lastImport, timerDur := mutil.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Duration(e.communityRulesImportFrequencySeconds)*time.Second)
+	lastImport, timerDur := detections.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Duration(e.communityRulesImportFrequencySeconds)*time.Second)
 
 	for e.isRunning {
 		e.resetInterrupt()
@@ -451,9 +451,9 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 				continue
 			}
 
-			var dirtyRepos map[string]*mutil.DirtyRepo
+			var dirtyRepos map[string]*detections.DirtyRepo
 
-			dirtyRepos, repoChanges, err = mutil.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos)
+			dirtyRepos, repoChanges, err = detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos)
 			if err != nil {
 				if strings.Contains(err.Error(), "module stopped") {
 					break
@@ -516,7 +516,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 					// or the old ones would be removed.
 					log.Info("ElastAlert sync found no changes")
 
-					mutil.WriteStateFile(e.IOManager, e.stateFilePath)
+					detections.WriteStateFile(e.IOManager, e.stateFilePath)
 
 					if e.notify {
 						e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
@@ -534,7 +534,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			break
 		}
 
-		detections, errMap := e.parseZipRules(zips)
+		detects, errMap := e.parseZipRules(zips)
 		if errMap != nil {
 			log.WithField("error", errMap).Error("something went wrong while parsing sigma rule files from zips")
 		}
@@ -552,9 +552,9 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			break
 		}
 
-		detections = append(detections, repoDets...)
+		detects = append(detects, repoDets...)
 
-		errMap, err = e.syncCommunityDetections(ctx, detections)
+		errMap, err = e.syncCommunityDetections(ctx, detects)
 		if err != nil {
 			if err == errModuleStopped {
 				log.Info("incomplete sync of elastalert community detections due to module stopping")
@@ -573,13 +573,13 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			continue
 		}
 
-		mutil.WriteStateFile(e.IOManager, e.stateFilePath)
+		detections.WriteStateFile(e.IOManager, e.stateFilePath)
 
 		if len(errMap) > 0 {
 			// there were errors, don't save the fingerprint.
 			// idempotency means we might fix it if we try again later.
 			log.WithFields(log.Fields{
-				"errors": mutil.TruncateMap(errMap, 5),
+				"errors": detections.TruncateMap(errMap, 5),
 			}).Error("unable to sync all ElastAlert community detections")
 
 			if e.notify {
@@ -675,7 +675,7 @@ func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detections 
 				continue
 			}
 
-			det := rule.ToDetection(string(data), pkg, model.LicenseDRL, true)
+			det := rule.ToDetection(pkg, model.LicenseDRL, true)
 
 			detections = append(detections, det)
 		}
@@ -735,7 +735,7 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos map[string]*model.RuleRepo) (
 
 			ruleset := filepath.Base(repopath)
 
-			det := rule.ToDetection(string(raw), ruleset, repo.License, repo.Community)
+			det := rule.ToDetection(ruleset, repo.License, repo.Community)
 
 			detections = append(detections, det)
 
@@ -750,7 +750,7 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos map[string]*model.RuleRepo) (
 	return detections, errMap
 }
 
-func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detections []*model.Detection) (errMap map[string]error, err error) {
+func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects []*model.Detection) (errMap map[string]error, err error) {
 	existing, err := e.IndexExistingRules()
 	if err != nil {
 		return nil, err
@@ -773,8 +773,8 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 	}
 
 	// carry forward existing overrides
-	for i := range detections {
-		det := detections[i]
+	for i := range detects {
+		det := detects[i]
 
 		comDet, exists := community[det.PublicID]
 		if exists {
@@ -791,7 +791,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 
 	errMap = map[string]error{} // map[publicID]error
 
-	for _, det := range detections {
+	for _, det := range detects {
 		if !e.isRunning {
 			return nil, errModuleStopped
 		}
@@ -889,7 +889,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detectio
 		"updated":   results.Updated,
 		"removed":   results.Removed,
 		"unchanged": results.Unchanged,
-		"errors":    mutil.TruncateMap(errMap, 5),
+		"errors":    detections.TruncateMap(errMap, 5),
 	}).Info("elastalert community diff")
 
 	return errMap, nil
@@ -1042,6 +1042,68 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 	query = strings.TrimSpace(query)
 
 	return query, nil
+}
+
+func (e *ElastAlertEngine) generateUnusedPublicId(ctx context.Context) (string, error) {
+	id := uuid.New().String()
+
+	i := 0
+	for ; i < 10; i++ {
+		detect, err := e.srv.Detectionstore.GetDetectionByPublicId(ctx, id)
+		if err != nil {
+			return "", err
+		}
+
+		if detect == nil {
+			// no detection with this publicId, we're good
+			break
+		}
+
+		id = uuid.New().String()
+	}
+
+	if i >= 10 {
+		return "", fmt.Errorf("unable to generate a unique publicId")
+	}
+
+	return id, nil
+}
+
+func (e *ElastAlertEngine) DuplicateDetection(ctx context.Context, detection *model.Detection) (*model.Detection, error) {
+	id, err := e.generateUnusedPublicId(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rule, err := ParseElastAlertRule([]byte(detection.Content))
+	if err != nil {
+		return nil, err
+	}
+
+	rule.Title += " (copy)"
+	rule.ID = &id
+
+	det := rule.ToDetection(detections.RULESET_CUSTOM, model.LicenseUnknown, false)
+
+	err = e.ExtractDetails(det)
+	if err != nil {
+		return nil, err
+	}
+
+	userID := ctx.Value(web.ContextKeyRequestorId).(string)
+	user, err := e.srv.Userstore.GetUserById(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	author := strings.Join([]string{user.FirstName, user.LastName}, " ")
+	if author == "" {
+		author = user.Email
+	}
+
+	det.Author = author
+
+	return det, nil
 }
 
 type CustomWrapper struct {
