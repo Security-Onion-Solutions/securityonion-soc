@@ -43,8 +43,6 @@ var licenseBySource = map[string]string{
 	"etpro":  model.LicenseCommercial,
 }
 
-var socAuthor = "__soc_import__"
-
 type IOManager interface {
 	ReadFile(path string) ([]byte, error)
 	WriteFile(path string, contents []byte, perm fs.FileMode) error
@@ -1242,7 +1240,7 @@ func (e *SuricataEngine) DuplicateDetection(ctx context.Context, detection *mode
 		}
 	}
 
-	dets, err := e.ParseRules(rule.String(), "__custom__")
+	dets, err := e.ParseRules(rule.String(), module.RulesetCustom)
 	if err != nil {
 		return nil, err
 	}

@@ -34,8 +34,6 @@ import (
 
 var errModuleStopped = fmt.Errorf("strelka module has stopped running")
 
-var socAuthor = "__soc_import__"
-
 type IOManager interface {
 	ReadFile(path string) ([]byte, error)
 	WriteFile(path string, contents []byte, perm fs.FileMode) error
@@ -786,7 +784,7 @@ func (e *StrelkaEngine) DuplicateDetection(ctx context.Context, detection *model
 
 	rule.Identifier += "_copy"
 
-	det := rule.ToDetection(model.LicenseUnknown, "__custom__", false)
+	det := rule.ToDetection(model.LicenseUnknown, module.RulesetCustom, false)
 
 	err = e.ExtractDetails(det)
 	if err != nil {

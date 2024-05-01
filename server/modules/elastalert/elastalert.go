@@ -46,8 +46,6 @@ var acceptedExtensions = map[string]bool{
 	".yaml": true,
 }
 
-var socAuthor = "__soc_import__"
-
 type IOManager interface {
 	ReadFile(path string) ([]byte, error)
 	WriteFile(path string, contents []byte, perm fs.FileMode) error
@@ -1085,7 +1083,7 @@ func (e *ElastAlertEngine) DuplicateDetection(ctx context.Context, detection *mo
 	rule.Title += " (copy)"
 	rule.ID = &id
 
-	det := rule.ToDetection("__custom__", model.LicenseUnknown, false)
+	det := rule.ToDetection(module.RulesetCustom, model.LicenseUnknown, false)
 
 	err = e.ExtractDetails(det)
 	if err != nil {

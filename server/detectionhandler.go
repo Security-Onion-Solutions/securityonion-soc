@@ -15,6 +15,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/go-chi/chi/v5"
@@ -23,7 +24,6 @@ import (
 
 var errPublicIdExists = errors.New("publicId already exists for this engine")
 
-const customRuleset = "__custom__"
 
 type BulkOp struct {
 	IDs       []string `json:"ids"`
@@ -140,7 +140,7 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 	}
 
 	detect.Language = model.SigLanguage(strings.ToLower(string(detect.Language)))
-	detect.Ruleset = customRuleset
+	detect.Ruleset = module.RulesetCustom
 
 	switch detect.Language {
 	case "sigma":

@@ -320,7 +320,7 @@ func TestParse(t *testing.T) {
 			},
 			ExpectedDetections: []*model.Detection{
 				{
-					Author:    "__soc_import__",
+					Author:    module.AuthorSOC,
 					PublicID:  SimpleRuleSID,
 					Title:     `GPL ATTACK_RESPONSE id check returned root`,
 					Category:  `GPL ATTACK_RESPONSE`,
@@ -333,7 +333,7 @@ func TestParse(t *testing.T) {
 					License:   "Unknown",
 				},
 				{
-					Author:   "__soc_import__",
+					Author:   module.AuthorSOC,
 					PublicID: "20000",
 					Title:    `a \"tricky";\ msg`,
 					Category: ``,
