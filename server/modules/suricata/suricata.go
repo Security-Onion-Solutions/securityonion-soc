@@ -23,7 +23,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
-	mutil "github.com/security-onion-solutions/securityonion-soc/server/modules/util"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
@@ -239,7 +239,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 
 	templateFound := false
 
-	lastImport, timerDur := mutil.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Second*time.Duration(e.communityRulesImportFrequencySeconds))
+	lastImport, timerDur := detections.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Second*time.Duration(e.communityRulesImportFrequencySeconds))
 
 	for e.isRunning {
 		e.resetInterrupt()
@@ -327,7 +327,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 				// if we have a fingerprint and the hashes are equal, there's nothing to do
 				log.Info("Suricata sync found no changes")
 
-				mutil.WriteStateFile(e.IOManager, e.stateFilePath)
+				detections.WriteStateFile(e.IOManager, e.stateFilePath)
 
 				if e.notify {
 					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
@@ -397,7 +397,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 			continue
 		}
 
-		mutil.WriteStateFile(e.IOManager, e.stateFilePath)
+		detections.WriteStateFile(e.IOManager, e.stateFilePath)
 
 		if len(errMap) > 0 {
 			// there were errors, don't save the fingerprint.
@@ -578,7 +578,7 @@ func (e *SuricataEngine) ParseRules(content string, ruleset string) ([]*model.De
 
 		d := &model.Detection{
 			IsEnabled: !wasCommented,
-			Author:    socAuthor,
+			Author:    detections.AUTHOR_SOC,
 			Category:  category,
 			PublicID:  sid,
 			Title:     title,
@@ -1228,19 +1228,9 @@ func (e *SuricataEngine) DuplicateDetection(ctx context.Context, detection *mode
 		return nil, err
 	}
 
-	for _, opt := range rule.Options {
-		if strings.EqualFold(opt.Name, "sid") {
-			opt.Value = &id
-		} else if strings.EqualFold(opt.Name, "msg") {
-			if opt.Value != nil {
-				*opt.Value = util.Unquote(*opt.Value) + " (copy)"
-			} else {
-				opt.Value = util.Ptr("(copy)")
-			}
-		}
-	}
+	rule.UpdateForDuplication(id)
 
-	dets, err := e.ParseRules(rule.String(), module.RulesetCustom)
+	dets, err := e.ParseRules(rule.String(), detections.RULESET_CUSTOM)
 	if err != nil {
 		return nil, err
 	}

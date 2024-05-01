@@ -197,3 +197,132 @@ func TestDuplicateDetection(t *testing.T) {
 	assert.Empty(t, dupe.Overrides)
 	assert.Empty(t, dupe.Tags)
 }
+
+func TestGenerateUnusedPublicId(t *testing.T) {
+	ctx := context.Background()
+
+	ctrl := gomock.NewController(t)
+	mDetect := mock.NewMockDetectionstore(ctrl)
+	mDetect.EXPECT().GetDetectionByPublicId(ctx, gomock.Any()).Return(&model.Detection{}, nil).Times(10)
+
+	eng := SuricataEngine{
+		srv: &server.Server{
+			Detectionstore: mDetect,
+		},
+		isRunning: true,
+	}
+
+	id, err := eng.generateUnusedPublicId(ctx)
+
+	assert.Empty(t, id)
+	assert.Error(t, err)
+	assert.Equal(t, "unable to generate a unique publicId", err.Error())
+}
+
+func TestUpdateForDuplication(t *testing.T) {
+	publicId := "2"
+
+	tests := []struct {
+		Name            string
+		Input           string
+		OptionsBefore   int
+		OptionsAfter    int
+		ExpectedOptions []*RuleOption
+	}{
+		{
+			Name:          "Normal Options",
+			Input:         `alert any any <> any any (msg:"test"; sid:1; rev:1;)`,
+			OptionsBefore: 3,
+			OptionsAfter:  3,
+			ExpectedOptions: []*RuleOption{
+				{Name: "msg", Value: util.Ptr("test (copy)")},
+				{Name: "sid", Value: util.Ptr(publicId)},
+				{Name: "rev", Value: util.Ptr("1")},
+			},
+		},
+		{
+			Name:          "Present but Empty Options",
+			Input:         `alert any any <> any any (msg; sid; rev;)`,
+			OptionsBefore: 3,
+			OptionsAfter:  3,
+			ExpectedOptions: []*RuleOption{
+				{Name: "msg", Value: util.Ptr("(copy)")},
+				{Name: "sid", Value: util.Ptr(publicId)},
+				{Name: "rev", Value: nil},
+			},
+		},
+		{
+			Name:          "Missing Options",
+			Input:         `alert any any <> any any (rev;)`,
+			OptionsBefore: 1,
+			OptionsAfter:  3,
+			ExpectedOptions: []*RuleOption{
+				{Name: "msg", Value: util.Ptr("(copy)")},
+				{Name: "sid", Value: util.Ptr(publicId)},
+				{Name: "rev", Value: nil},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			rule, err := ParseSuricataRule(test.Input)
+			assert.NoError(t, err)
+			assert.NotNil(t, rule)
+
+			assert.Equal(t, test.OptionsBefore, len(rule.Options))
+
+			rule.UpdateForDuplication(publicId)
+
+			assert.Equal(t, test.OptionsAfter, len(rule.Options))
+
+			for _, exOpt := range test.ExpectedOptions {
+				opt, ok := rule.GetOption(exOpt.Name)
+				assert.True(t, ok)
+				if exOpt.Value != nil {
+					assert.NotNil(t, opt)
+					assert.Equal(t, *exOpt.Value, *opt)
+				} else {
+					assert.Nil(t, opt)
+				}
+			}
+		})
+	}
+
+	// rule, err = ParseSuricataRule(`alert any any <> any any (rev:1;)`)
+	// assert.NoError(t, err)
+	// assert.NotNil(t, rule)
+	//
+	// assert.Equal(t, len(rule.Options), 1)
+	// rev, ok = rule.GetOption("rev")
+	// assert.True(t, ok)
+	// assert.NotNil(t, rev)
+	// assert.Equal(t, "1", *rev)
+	//
+	// sid, ok = rule.GetOption("sid")
+	// assert.False(t, ok)
+	// assert.Nil(t, sid)
+	//
+	// msg, ok = rule.GetOption("msg")
+	// assert.False(t, ok)
+	// assert.Nil(t, msg)
+	//
+	// rule.UpdateForDuplication("1")
+	//
+	// assert.Equal(t, len(rule.Options), 3)
+	//
+	// sid, ok = rule.GetOption("sid")
+	// assert.True(t, ok)
+	// assert.NotNil(t, sid)
+	// assert.Equal(t, "1", *sid)
+	//
+	// msg, ok = rule.GetOption("msg")
+	// assert.True(t, ok)
+	// assert.NotNil(t, msg)
+	// assert.Equal(t, "(copy)", *msg)
+	//
+	// rev, ok = rule.GetOption("rev")
+	// assert.True(t, ok)
+	// assert.NotNil(t, rev)
+	// assert.Equal(t, "1", *rev)
+}

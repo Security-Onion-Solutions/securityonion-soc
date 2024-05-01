@@ -4,7 +4,7 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-package module
+package detections
 
-const RulesetCustom = "__custom__"
-const AuthorSOC = "__soc_import__"
+const RULESET_CUSTOM = "__custom__"
+const AUTHOR_SOC = "__soc_import__"

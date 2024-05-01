@@ -1,4 +1,4 @@
-package util
+package detections
 
 import (
 	"context"

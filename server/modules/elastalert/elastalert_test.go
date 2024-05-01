@@ -24,6 +24,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/elastalert/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
@@ -396,7 +397,7 @@ modified: 2023/11/03
 	engine.denyRegex = regexp.MustCompile("deny")
 
 	expected := &model.Detection{
-		Author:      module.AuthorSOC,
+		Author:      detections.AUTHOR_SOC,
 		PublicID:    "00000000-0000-0000-0000-00000000",
 		Title:       "Always Alert",
 		Severity:    model.SeverityHigh,
@@ -463,7 +464,7 @@ license: Elastic-2.0
 	engine.denyRegex = regexp.MustCompile("deny")
 
 	expected := &model.Detection{
-		Author:      module.AuthorSOC,
+		Author:      detections.AUTHOR_SOC,
 		PublicID:    "bf86ef21-41e6-417b-9a05-b9ea6bf28a38",
 		Title:       "Security Onion - SOC Login Failure",
 		Severity:    model.SeverityHigh,

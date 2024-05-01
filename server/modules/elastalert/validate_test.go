@@ -153,3 +153,24 @@ level: high`,
 	assert.Empty(t, dupe.Overrides)
 	assert.Empty(t, dupe.Tags)
 }
+
+func TestGenerateUnusedPublicId(t *testing.T) {
+	ctx := context.Background()
+
+	ctrl := gomock.NewController(t)
+	mDetect := mock.NewMockDetectionstore(ctrl)
+	mDetect.EXPECT().GetDetectionByPublicId(ctx, gomock.Any()).Return(&model.Detection{}, nil).Times(10)
+
+	eng := ElastAlertEngine{
+		srv: &server.Server{
+			Detectionstore: mDetect,
+		},
+		isRunning: true,
+	}
+
+	id, err := eng.generateUnusedPublicId(ctx)
+
+	assert.Empty(t, id)
+	assert.Error(t, err)
+	assert.Equal(t, "unable to generate a unique publicId", err.Error())
+}

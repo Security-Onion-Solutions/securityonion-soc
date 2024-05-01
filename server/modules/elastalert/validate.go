@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 
 	"gopkg.in/yaml.v3"
 )
@@ -147,7 +148,7 @@ func (r *SigmaRule) ToDetection(ruleset string, license string, isCommunity bool
 	content, _ := yaml.Marshal(r)
 
 	det := &model.Detection{
-		Author:      socAuthor,
+		Author:      detections.AUTHOR_SOC,
 		Engine:      model.EngineNameElastAlert,
 		PublicID:    id,
 		Title:       r.Title,

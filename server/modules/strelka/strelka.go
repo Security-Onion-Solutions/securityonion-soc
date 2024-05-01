@@ -24,7 +24,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
-	mutil "github.com/security-onion-solutions/securityonion-soc/server/modules/util"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
@@ -224,7 +224,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 	templateFound := false
 
-	lastImport, timerDur := mutil.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Second*time.Duration(e.communityRulesImportFrequencySeconds))
+	lastImport, timerDur := detections.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Second*time.Duration(e.communityRulesImportFrequencySeconds))
 
 	for e.isRunning {
 		e.resetInterrupt()
@@ -285,7 +285,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 		upToDate := map[string]*model.RuleRepo{}
 
 		if e.autoUpdateEnabled {
-			allRepos, anythingNew, err := mutil.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos)
+			allRepos, anythingNew, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos)
 			if err != nil {
 				if strings.Contains(err.Error(), "module stopped") {
 					break
@@ -301,7 +301,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 				// no updates, skip
 				log.Info("Strelka sync found no changes")
 
-				mutil.WriteStateFile(e.IOManager, e.stateFilePath)
+				detections.WriteStateFile(e.IOManager, e.stateFilePath)
 
 				if e.notify {
 					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
@@ -453,7 +453,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			continue
 		}
 
-		mutil.WriteStateFile(e.IOManager, e.stateFilePath)
+		detections.WriteStateFile(e.IOManager, e.stateFilePath)
 
 		if e.notify {
 			if len(errMap) > 0 {
@@ -784,7 +784,7 @@ func (e *StrelkaEngine) DuplicateDetection(ctx context.Context, detection *model
 
 	rule.Identifier += "_copy"
 
-	det := rule.ToDetection(model.LicenseUnknown, module.RulesetCustom, false)
+	det := rule.ToDetection(model.LicenseUnknown, detections.RULESET_CUSTOM, false)
 
 	err = e.ExtractDetails(det)
 	if err != nil {
