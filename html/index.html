@@ -4923,12 +4923,12 @@
                       <v-icon color="info" class="mb-2">fa-circle-question</v-icon>
                     </a>
                   </div>
-                  <div v-if="selected.readonly" :title="i18n.settingReadOnlyHelp" data-aid="config_item_readonly_warning">
+                  <div v-if="isReadOnly(selected)" :title="i18n.settingReadOnlyHelp" data-aid="config_item_readonly_warning">
                     <v-icon class="ma-2" color="warning">fa-ban</v-icon>
                     <v-subtitle v-text="i18n.settingReadOnly" />
                   </div>
                   <v-container fluid>
-                    <v-row v-if="selected.duplicates && !selected.readonly">
+                    <v-row v-if="selected.duplicates && !isReadOnly(selected)">
                       <v-col>
                         <v-btn id="config-toggle-duplicate-button" @click="toggleDuplicate(selected)" v-text="i18n.settingDuplicate" data-aid="config_item_show_duplicate"/>
                         <div v-if="showDuplicate" class="mt-2 mb-8 pl-8">
@@ -4940,7 +4940,7 @@
                         </div>
                       </v-col>
                     </v-row>
-                    <v-row v-if="!selected.readonly && selected.defaultAvailable">
+                    <v-row v-if="!isReadOnly(selected) && selected.defaultAvailable">
                       <v-col>
                         <v-btn id="config-toggle-default-button" @click="showDefault = !showDefault" v-text="showDefault ? i18n.settingHideDefault : i18n.settingShowDefault" data-aid="config_item_show_default"/>
                         <div v-if="showDefault" class="mt-8">
@@ -4951,7 +4951,7 @@
                     </v-row>
                     <v-row v-if="selected.global || !selected.node">
                       <v-col>
-                        <div v-if="!selected.readonly" class="mb-n1 text-right">
+                        <div v-if="!isReadOnly(selected)" class="mb-n1 text-right">
                           <v-btn id="setting-global-reset" icon @click="remove(selected)" :title="i18n.settingResetHelp" :disabled="!isSettingModified(selected) || isPendingSave(selected)" data-aid="config_item_reset" >
                             <v-icon color="primary">fa-circle-arrow-left</v-icon>
                           </v-btn>
@@ -4963,11 +4963,11 @@
                           </v-btn>
                         </div>
                         <div v-if="isMultiline(selected)">
-                          <v-textarea v-if="form.key != selected.id" id="value-output" outlined :label="i18n.settingGlobal" @focus="edit(selected)" :value="selected.value" readonly :disabled="selected.readonly" class="config-editor" data-aid="config_item_customize_multiline_display" />
+                          <v-textarea v-if="form.key != selected.id" id="value-output" outlined :label="i18n.settingGlobal" @focus="edit(selected)" :value="selected.value" readonly :disabled="isReadOnly(selected)" class="config-editor" data-aid="config_item_customize_multiline_display" />
                           <v-textarea v-else id="value-input" outlined :label="i18n.settingGlobal" v-model="form.value" class="editing config-editor" data-aid="config_item_customize_multiline_input" />
                         </div>
                         <div v-else>
-                          <v-text-field v-if="form.key != selected.id" id="value-output" outlined :label="i18n.settingGlobal" @focus="edit(selected)" :value="selected.value" readonly :disabled="selected.readonly" :type="selected.sensitive ? 'password' : 'text'" data-aid="config_item_customize_singleline_display" />
+                          <v-text-field v-if="form.key != selected.id" id="value-output" outlined :label="i18n.settingGlobal" @focus="edit(selected)" :value="selected.value" readonly :disabled="isReadOnly(selected)" :type="selected.sensitive ? 'password' : 'text'" data-aid="config_item_customize_singleline_display" />
                           <v-text-field v-else id="value-input" outlined :label="i18n.settingGlobal" v-model="form.value" class="editing"  @keydown.enter.prevent="save(selected)" data-aid="config_item_singleline_input" />
                         </div>
                       </v-col>
@@ -4986,11 +4986,11 @@
                           </v-btn>
                         </div>
                         <div v-if="isMultiline(selected)">
-                          <v-textarea v-if="form.key != item[0]" :id="'node-value-output-' + item[0]" outlined :label="item[0]" @focus="edit(selected, item[0])" :value="item[1]"  readonly :disabled="selected.readonly" class="config-editor" data-aid="config_item_customize_node_multiline_display" />
+                          <v-textarea v-if="form.key != item[0]" :id="'node-value-output-' + item[0]" outlined :label="item[0]" @focus="edit(selected, item[0])" :value="item[1]"  readonly :disabled="isReadOnly(selected)" class="config-editor" data-aid="config_item_customize_node_multiline_display" />
                           <v-textarea v-else outlined :id="'node-value-input-' + item[0]" :label="item[0]" v-model="form.value" class="editing config-editor" data-aid="config_item_customize_node_multiline_input" />
                         </div>
                         <div v-else>
-                          <v-text-field v-if="form.key != item[0]" :id="'node-value-output-' + item[0]" outlined :label="item[0]" @focus="edit(selected, item[0])" :value="item[1]" readonly :disabled="selected.readonly" :type="selected.sensitive ? 'password' : 'text'" data-aid="config_item_customize_node_singleline_display" />
+                          <v-text-field v-if="form.key != item[0]" :id="'node-value-output-' + item[0]" outlined :label="item[0]" @focus="edit(selected, item[0])" :value="item[1]" readonly :disabled="isReadOnly(selected)" :type="selected.sensitive ? 'password' : 'text'" data-aid="config_item_customize_node_singleline_display" />
                           <v-text-field v-else outlined :label="item[0]" :id="'node-value-input-' + item[0]" v-model="form.value" class="editing"  @keydown.enter.prevent="save(selected, item[0])" data-aid="config_item_customize_node_singleline_display" />
                         </div>
                       </v-col>

@@ -62,6 +62,7 @@ test('loadData', async () => {
       "node": undefined,
       "nodeValues": m1,
       "readonly": undefined,
+      "readonlyUi": undefined,
       "regex": "True|False",
       "regexFailureMessage": "Wrong!",
       "sensitive": undefined,
@@ -84,6 +85,7 @@ test('loadData', async () => {
       "node": false,
       "nodeValues": new Map(),
       "readonly": undefined,
+      "readonlyUi": undefined,
       "regex": undefined,
       "regexFailureMessage": undefined,
       "sensitive": undefined,
@@ -106,6 +108,7 @@ test('loadData', async () => {
       "node": false,
       "nodeValues": new Map(),
       "readonly": undefined,
+      "readonlyUi": undefined,
       "regex": undefined,
       "regexFailureMessage": undefined,
       "sensitive": undefined,
@@ -135,6 +138,7 @@ test('loadData', async () => {
               "node": undefined, 
               "nodeValues": m1, 
               "readonly": undefined, 
+              "readonlyUi": undefined,
               "regex": "True|False",
               "regexFailureMessage": "Wrong!",
               "sensitive": undefined, 
@@ -157,6 +161,7 @@ test('loadData', async () => {
               "node": false, 
               "nodeValues": new Map(), 
               "readonly": undefined, 
+              "readonlyUi": undefined,
               "regex": undefined,
               "regexFailureMessage": undefined,
               "sensitive": undefined, 
@@ -187,6 +192,7 @@ test('loadData', async () => {
       "node": false, 
       "nodeValues": new Map(), 
       "readonly": undefined, 
+      "readonlyUi": undefined,
       "regex": undefined,
       "regexFailureMessage": undefined,
       "sensitive": undefined, 
@@ -557,4 +563,20 @@ test('duplicate', () => {
   expect(comp.settings.length).toBe(2);
   expect(comp.settings[1].id).toBe("a.b.foo");
   expect(comp.settings[1].name).toBe("foo");
+});
+
+test('isReadOnly', () => {
+  const setting = {
+    id: "a1",
+    readonly: false,
+    readonlyUi: false,
+  };
+  expect(comp.isReadOnly(setting)).toBe(false);
+  setting.readonly = true;
+  expect(comp.isReadOnly(setting)).toBe(true);
+  setting.readonly = false;
+  setting.readonlyUi = true;
+  expect(comp.isReadOnly(setting)).toBe(true);
+  setting.readonly = true;
+  expect(comp.isReadOnly(setting)).toBe(true);
 });
