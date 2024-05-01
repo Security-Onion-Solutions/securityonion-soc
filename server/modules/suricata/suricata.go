@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"math/rand/v2"
+	"math/rand"
 	"os"
 	"regexp"
 	"strconv"
@@ -1193,7 +1193,7 @@ func lookupLicense(ruleset string) string {
 }
 
 func (e *SuricataEngine) generateUnusedPublicId(ctx context.Context) (string, error) {
-	id := strconv.Itoa(rand.IntN(1000000) + 1000000) // [1000000, 2000000)
+	id := strconv.Itoa(rand.Intn(1000000) + 1000000) // [1000000, 2000000)
 
 	i := 0
 	for ; i < 10; i++ {
@@ -1207,7 +1207,7 @@ func (e *SuricataEngine) generateUnusedPublicId(ctx context.Context) (string, er
 			break
 		}
 
-		id = strconv.Itoa(rand.IntN(1000000) + 1000000)
+		id = strconv.Itoa(rand.Intn(1000000) + 1000000)
 	}
 
 	if i >= 10 {
