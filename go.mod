@@ -1,6 +1,6 @@
 module github.com/security-onion-solutions/securityonion-soc
 
-go 1.21
+go 1.22
 
 require (
 	github.com/apex/log v1.9.0
