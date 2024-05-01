@@ -4,7 +4,7 @@
 # https://securityonion.net/license; you may not use this file except in compliance with the
 # Elastic License 2.0.
 
-FROM ghcr.io/security-onion-solutions/golang:1.21.5-alpine as builder
+FROM ghcr.io/security-onion-solutions/golang:1.22 as builder
 ARG VERSION=0.0.0
 RUN apk update && apk add libpcap-dev bash git musl-dev gcc npm python3 py3-pip py3-virtualenv python3-dev openssl-dev linux-headers
 COPY . /build
