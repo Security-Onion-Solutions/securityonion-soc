@@ -43,6 +43,15 @@ var licenseBySource = map[string]string{
 	"etpro":  model.LicenseCommercial,
 }
 
+const (
+	DEFAULT_COMMUNITY_RULES_FILE                  = "/nsm/rules/suricata/emerging-all.rules"
+	DEFAULT_RULES_FINGERPRINT_FILE                = "/opt/sensoroni/fingerprints/emerging-all.fingerprint"
+	DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECS = 86400
+	DEFAULT_STATE_FILE_PATH                       = "/opt/sensoroni/fingerprints/suricataengine.state"
+	DEFAULT_ALLOW_REGEX                           = ""
+	DEFAULT_DENY_REGEX                            = ""
+)
+
 type IOManager interface {
 	ReadFile(path string) ([]byte, error)
 	WriteFile(path string, contents []byte, perm fs.FileMode) error
@@ -80,12 +89,12 @@ func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 	e.thread = &sync.WaitGroup{}
 	e.interrupt = make(chan bool, 1)
 
-	e.communityRulesFile = module.GetStringDefault(config, "communityRulesFile", "/nsm/rules/suricata/emerging-all.rules")
-	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", "/opt/sensoroni/fingerprints/emerging-all.fingerprint")
-	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", 86400)
+	e.communityRulesFile = module.GetStringDefault(config, "communityRulesFile", DEFAULT_COMMUNITY_RULES_FILE)
+	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", DEFAULT_RULES_FINGERPRINT_FILE)
+	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECS)
 
-	allow := module.GetStringDefault(config, "allowRegex", "")
-	deny := module.GetStringDefault(config, "denyRegex", "")
+	allow := module.GetStringDefault(config, "allowRegex", DEFAULT_ALLOW_REGEX)
+	deny := module.GetStringDefault(config, "denyRegex", DEFAULT_DENY_REGEX)
 
 	if allow != "" {
 		var err error
@@ -103,7 +112,7 @@ func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 		}
 	}
 
-	e.stateFilePath = module.GetStringDefault(config, "stateFilePath", "/opt/sensoroni/fingerprints/suricataengine.state")
+	e.stateFilePath = module.GetStringDefault(config, "stateFilePath", DEFAULT_STATE_FILE_PATH)
 
 	return nil
 }

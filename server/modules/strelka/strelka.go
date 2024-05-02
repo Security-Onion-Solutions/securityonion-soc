@@ -32,6 +32,19 @@ import (
 	"github.com/kennygrant/sanitize"
 )
 
+const (
+	DEFAULT_ALLOW_REGEX                              = ""
+	DEFAULT_DENY_REGEX                               = ""
+	DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECONDS = 86400
+	DEFAULT_YARA_RULES_FOLDER                        = "/opt/sensoroni/yara/rules"
+	DEFAULT_REPOS_FOLDER                             = "/opt/sensoroni/yara/repos"
+	DEFAULT_COMPILE_YARA_PYTHON_SCRIPT_PATH          = "/opt/so/conf/strelka/compile_yara.py"
+	DEFAULT_COMPILE_RULES                            = true
+	DEFAULT_AUTO_UPDATE_ENABLED                      = false
+	DEFAULT_STATE_FILE_PATH                          = "/opt/sensoroni/fingerprints/strelkaengine.state"
+	DEFAULT_AUTO_ENABLED_YARA_RULES                  = "securityonion-yara"
+)
+
 var errModuleStopped = fmt.Errorf("strelka module has stopped running")
 
 type IOManager interface {
@@ -90,13 +103,13 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 	e.thread = &sync.WaitGroup{}
 	e.interrupt = make(chan bool, 1)
 
-	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", 86400)
-	e.yaraRulesFolder = module.GetStringDefault(config, "yaraRulesFolder", "/opt/sensoroni/yara/rules")
-	e.reposFolder = module.GetStringDefault(config, "reposFolder", "/opt/sensoroni/yara/repos")
-	e.compileYaraPythonScriptPath = module.GetStringDefault(config, "compileYaraPythonScriptPath", "/opt/so/conf/strelka/compile_yara.py")
-	e.compileRules = module.GetBoolDefault(config, "compileRules", true)
-	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", false)
-	e.autoEnabledYaraRules = module.GetStringArrayDefault(config, "autoEnabledYaraRules", []string{"securityonion-yara"})
+	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECONDS)
+	e.yaraRulesFolder = module.GetStringDefault(config, "yaraRulesFolder", DEFAULT_YARA_RULES_FOLDER)
+	e.reposFolder = module.GetStringDefault(config, "reposFolder", DEFAULT_REPOS_FOLDER)
+	e.compileYaraPythonScriptPath = module.GetStringDefault(config, "compileYaraPythonScriptPath", DEFAULT_COMPILE_YARA_PYTHON_SCRIPT_PATH)
+	e.compileRules = module.GetBoolDefault(config, "compileRules", DEFAULT_COMPILE_RULES)
+	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", DEFAULT_AUTO_UPDATE_ENABLED)
+	e.autoEnabledYaraRules = module.GetStringArrayDefault(config, "autoEnabledYaraRules", []string{DEFAULT_AUTO_ENABLED_YARA_RULES})
 
 	e.rulesRepos, err = model.GetReposDefault(config, "rulesRepos", []*model.RuleRepo{
 		{
@@ -108,8 +121,8 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 		return fmt.Errorf("unable to parse Strelka's rulesRepos: %w", err)
 	}
 
-	allow := module.GetStringDefault(config, "allowRegex", "")
-	deny := module.GetStringDefault(config, "denyRegex", "")
+	allow := module.GetStringDefault(config, "allowRegex", DEFAULT_ALLOW_REGEX)
+	deny := module.GetStringDefault(config, "denyRegex", DEFAULT_DENY_REGEX)
 
 	if allow != "" {
 		e.allowRegex, err = regexp.Compile(allow)
@@ -126,7 +139,7 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 		}
 	}
 
-	e.stateFilePath = module.GetStringDefault(config, "stateFilePath", "/opt/sensoroni/fingerprints/strelkaengine.state")
+	e.stateFilePath = module.GetStringDefault(config, "stateFilePath", DEFAULT_STATE_FILE_PATH)
 
 	return nil
 }

@@ -41,6 +41,17 @@ import (
 
 var errModuleStopped = fmt.Errorf("elastalert module has stopped running")
 
+const (
+	DEFAULT_ALLOW_REGEX                              = ""
+	DEFAULT_DENY_REGEX                               = ""
+	DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECONDS = 86400
+	DEFAULT_SIGMA_PACKAGE_DOWNLOAD_TEMPLATE          = "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip"
+	DEFAULT_ELASTALERT_RULES_FOLDER                  = "/opt/sensoroni/elastalert"
+	DEFAULT_RULES_FINGERPRINT_FILE                   = "/opt/sensoroni/fingerprints/sigma.fingerprint"
+	DEFAULT_REPOS_FOLDER                             = "/opt/sensoroni/sigma/repos"
+	DEFAULT_STATE_FILE_PATH                          = "/opt/sensoroni/fingerprints/elastalertengine.state"
+)
+
 var acceptedExtensions = map[string]bool{
 	".yml":  true,
 	".yaml": true,
@@ -109,17 +120,17 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.thread = &sync.WaitGroup{}
 	e.interrupt = make(chan bool, 1)
 
-	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", 86400)
-	e.sigmaPackageDownloadTemplate = module.GetStringDefault(config, "sigmaPackageDownloadTemplate", "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip")
-	e.elastAlertRulesFolder = module.GetStringDefault(config, "elastAlertRulesFolder", "/opt/sensoroni/elastalert")
-	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", "/opt/sensoroni/fingerprints/sigma.fingerprint")
+	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECONDS)
+	e.sigmaPackageDownloadTemplate = module.GetStringDefault(config, "sigmaPackageDownloadTemplate", DEFAULT_SIGMA_PACKAGE_DOWNLOAD_TEMPLATE)
+	e.elastAlertRulesFolder = module.GetStringDefault(config, "elastAlertRulesFolder", DEFAULT_ELASTALERT_RULES_FOLDER)
+	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", DEFAULT_RULES_FINGERPRINT_FILE)
 	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", false)
 	e.autoEnabledSigmaRules = module.GetStringArrayDefault(config, "autoEnabledSigmaRules", []string{"securityonion-resources+critical", "securityonion-resources+high"})
 
 	pkgs := module.GetStringArrayDefault(config, "sigmaRulePackages", []string{"core", "emerging_threats_addon"})
 	e.parseSigmaPackages(pkgs)
 
-	e.reposFolder = module.GetStringDefault(config, "reposFolder", "/opt/sensoroni/sigma/repos")
+	e.reposFolder = module.GetStringDefault(config, "reposFolder", DEFAULT_REPOS_FOLDER)
 	e.rulesRepos, err = model.GetReposDefault(config, "rulesRepos", []*model.RuleRepo{
 		{
 			Repo:    "https://github.com/Security-Onion-Solutions/securityonion-resources",
@@ -131,8 +142,8 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 		return fmt.Errorf("unable to parse ElastAlert's rulesRepos: %w", err)
 	}
 
-	allow := module.GetStringDefault(config, "allowRegex", "")
-	deny := module.GetStringDefault(config, "denyRegex", "")
+	allow := module.GetStringDefault(config, "allowRegex", DEFAULT_ALLOW_REGEX)
+	deny := module.GetStringDefault(config, "denyRegex", DEFAULT_DENY_REGEX)
 
 	if allow != "" {
 		var err error
@@ -150,7 +161,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 		}
 	}
 
-	e.stateFilePath = module.GetStringDefault(config, "stateFilePath", "/opt/sensoroni/fingerprints/elastalertengine.state")
+	e.stateFilePath = module.GetStringDefault(config, "stateFilePath", DEFAULT_STATE_FILE_PATH)
 
 	return nil
 }
