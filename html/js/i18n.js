@@ -700,7 +700,7 @@ const i18n = {
       settingDuplicateInvalid: 'The chosen duplicate ID is already taken. Change the ID to a unique value and try again.',
       settingDuplicateName: 'Name of new setting',
       settingDuplicateNameInvalid: 'Must be between 3 and 50 characters in length, and must only contain letters, underscores, and digits',
-      settingDuplicateHelp: 'This config setting can be duplicated if additional or explicitly-named settings are needed. Clicking the Duplicate button will result in a new sibling setting with the given name. Setting names must be unique. Duplicated settings cannot be removed or renamed via the SOC user interface.',
+      settingDuplicateHelp: 'This config setting can be duplicated if additional or explicitly-named settings are needed. Clicking the button below will result in a new advanced setting with the given name. IMPORTANT: The new setting will not be saved to the server until its value has been modified. Setting names must be unique. Duplicated settings cannot be removed or renamed via the SOC user interface. Since duplicated settings are considered advanced settings, future access to the settings via this Configuration screen will require enabling the Advanced option.',
       settingHelp: 'View documentation or related information for this setting',
       settingSelect: 'Select a setting from the tree view on the left or the quick links on the right.',
       settingGlobal: 'Current Grid Value',

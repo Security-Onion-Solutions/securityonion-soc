@@ -10,6 +10,7 @@ routes.push({ path: '/config', name: 'config', component: {
     i18n: this.$root.i18n,
     settings: [],
     search: "",
+    searchFilter: null,
     autoExpand: false,
     autoSelect: "",
     form: {
@@ -70,6 +71,7 @@ routes.push({ path: '/config', name: 'config', component: {
         this.autoExpand = true;
         this.search = this.$route.query.s;
       }
+      this.applySearchFilter();
     },
     findActiveSetting() {
       if (this.active.length > 0) {
@@ -81,8 +83,12 @@ routes.push({ path: '/config', name: 'config', component: {
       }
       return null;
     },
+    applySearchFilter() {
+      this.searchFilter = this.search;
+    },
     clearFilter() {
       this.search = "";
+      this.searchFilter = "";
     },
     filter(item, search, textKey) {
       if (!search) return true;
@@ -317,6 +323,8 @@ routes.push({ path: '/config', name: 'config', component: {
       }
       this.recomputeAvailableNodes(this.findActiveSetting());
       this.activeBackup = [...this.active];
+      this.showDuplicate = false; 
+      this.showDefault = false;
       window.scrollTo(0,0);
     },
     cancel(force) {
@@ -507,7 +515,6 @@ routes.push({ path: '/config', name: 'config', component: {
       this.settings.sort((a,b) => { if (a.id > b.id) return 1; else if (a.id < b.id) return -1; else return 0 });
       this.refreshTree();
       this.active = [new_id]
-      this.showDuplicate = false;      
     },
     isReadOnly(item) {
       return item.readonly || item.readonlyUi;
