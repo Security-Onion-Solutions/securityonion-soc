@@ -555,14 +555,22 @@ test('duplicate', () => {
   }
   global.structuredClone = jest.fn().mockReturnValueOnce(setting2);
   comp.settings = [setting];
-  comp.showDuplicate = true;
   comp.duplicateId = "foo"
   expect(comp.settings.length).toBe(1);
   comp.duplicate(setting);
-  expect(comp.showDuplicate).toBe(false);
   expect(comp.settings.length).toBe(2);
   expect(comp.settings[1].id).toBe("a.b.foo");
   expect(comp.settings[1].name).toBe("foo");
+});
+
+test('applySearchFilter', () => {
+  comp.search = "foo";
+  comp.searchFilter = "";
+  comp.applySearchFilter();
+  expect(comp.searchFilter).toBe(comp.search);
+  comp.clearFilter();
+  expect(comp.search).toBe("");
+  expect(comp.searchFilter).toBe("");
 });
 
 test('isReadOnly', () => {

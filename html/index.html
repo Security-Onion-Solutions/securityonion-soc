@@ -4748,10 +4748,13 @@
             <v-container fluid>
               <v-row>
                 <v-col>
-                  <v-text-field id="filter-input" :label="i18n.filter" v-model="search" clearable :hint="i18n.filterHelp" persistent-hint @click:clear="clearFilter()" class="mb-3" data-aid="config_filter_input" />
+                  <v-text-field id="filter-input" :label="i18n.filter" v-model="search" clearable :hint="i18n.filterHelp" persistent-hint @click:clear="clearFilter()" @keydown.enter="applySearchFilter()" class="mb-3" data-aid="config_filter_input" />
                 </v-col>
                 <v-col>
-                  <span class="mt-3 text-no-wrap overflow-x-hidden">
+                  <div class="mt-3 text-no-wrap overflow-x-hidden">
+                    <v-btn id="apply-search-button" icon @click="applySearchFilter()" :title="i18n.search" data-aid="config_apply_search_filter">
+                      <v-icon>fa-magnifying-glass</v-icon>
+                    </v-btn>
                     <v-btn id="expand-all-button" icon @click="expand()" :title="i18n.expandAll" data-aid="config_expand_all">
                       <v-icon>fa-angles-down</v-icon>
                     </v-btn>
@@ -4764,7 +4767,7 @@
                     <v-btn id="show-node-modified-button" icon @click="expand(null, isSettingModifiedPerNode)" :title="i18n.settingHasNodeValuesHelp" data-aid="config_show_node_modified">
                       <v-icon color="warning">fa-circle-nodes</v-icon>
                     </v-btn>
-                  </span>
+                  </div>
                 </v-col>
               </v-row>
             </v-container>
@@ -4773,7 +4776,7 @@
               :active.sync="active"
               :items="hierarchy"
               :open.sync="open"
-              :search="search"
+              :search="searchFilter"
               :filter="filter"
               activatable
               color="primary"
@@ -4928,7 +4931,7 @@
                     <v-subtitle v-text="i18n.settingReadOnly" />
                   </div>
                   <v-container fluid>
-                    <v-row v-if="selected.duplicates && !isReadOnly(selected)">
+                    <v-row v-if="selected.duplicates && !isReadOnly(selected) && advanced">
                       <v-col>
                         <v-btn id="config-toggle-duplicate-button" @click="toggleDuplicate(selected)" v-text="i18n.settingDuplicate" data-aid="config_item_show_duplicate"/>
                         <div v-if="showDuplicate" class="mt-2 mb-8 pl-8">
