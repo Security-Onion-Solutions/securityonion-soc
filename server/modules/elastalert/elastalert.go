@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -42,6 +43,7 @@ import (
 var errModuleStopped = fmt.Errorf("elastalert module has stopped running")
 
 const (
+	DEFAULT_AIRGAP_BASE_PATH                         = "/nsm/rules/detect-sigma/rulesets/"
 	DEFAULT_ALLOW_REGEX                              = ""
 	DEFAULT_DENY_REGEX                               = ""
 	DEFAULT_AUTO_UPDATE_ENABLED                      = false
@@ -66,10 +68,12 @@ type IOManager interface {
 	MakeRequest(*http.Request) (*http.Response, error)
 	ExecCommand(cmd *exec.Cmd) ([]byte, int, time.Duration, error)
 	WalkDir(root string, fn fs.WalkDirFunc) error
+	JoinPath(parts ...string) string
 }
 
 type ElastAlertEngine struct {
 	srv                                  *server.Server
+	airgapBasePath                       string
 	communityRulesImportFrequencySeconds int
 	sigmaPackageDownloadTemplate         string
 	elastAlertRulesFolder                string
@@ -121,6 +125,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.thread = &sync.WaitGroup{}
 	e.interrupt = make(chan bool, 1)
 
+	e.airgapBasePath = module.GetStringDefault(config, "airgapBasePath", DEFAULT_AIRGAP_BASE_PATH)
 	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECONDS)
 	e.sigmaPackageDownloadTemplate = module.GetStringDefault(config, "sigmaPackageDownloadTemplate", DEFAULT_SIGMA_PACKAGE_DOWNLOAD_TEMPLATE)
 	e.elastAlertRulesFolder = module.GetStringDefault(config, "elastAlertRulesFolder", DEFAULT_ELASTALERT_RULES_FOLDER)
@@ -448,51 +453,50 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 
 		var zips map[string][]byte
 		var errMap map[string]error
+
 		if e.autoUpdateEnabled {
+			// Not AirGap, download the sigma packages
 			zips, errMap = e.downloadSigmaPackages()
-			if len(errMap) != 0 {
-				log.WithField("errorMap", errMap).Error("something went wrong downloading sigma packages")
-
-				if e.notify {
-					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
-						Engine: model.EngineNameElastAlert,
-						Status: "error",
-					})
-				}
-
-				continue
-			}
-
-			var dirtyRepos map[string]*detections.DirtyRepo
-
-			dirtyRepos, repoChanges, err = detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos)
-			if err != nil {
-				if strings.Contains(err.Error(), "module stopped") {
-					break
-				}
-
-				log.WithError(err).Error("unable to update Sigma repos")
-
-				if e.notify {
-					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
-						Engine: model.EngineNameElastAlert,
-						Status: "error",
-					})
-				}
-
-				continue
-			}
-
-			for k, v := range dirtyRepos {
-				allRepos[k] = v.Repo
-			}
 		} else {
-			// Possible airgap installation, or admin has disabled auto-updates.
+			// AirGap, load the sigma packages from disk
+			zips, errMap = e.loadSigmaPackagesFromDisk()
+		}
 
-			// TODO: Perform a one-time check for a pre-downloaded ruleset on disk and if exists,
-			// let the rest of the loop continue but then exit the loop. For now we're just hardcoding
-			// to always exit the loop.
-			return
+		if len(errMap) != 0 {
+			log.WithField("errorMap", errMap).Error("something went wrong loading sigma packages")
+
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					Engine: model.EngineNameElastAlert,
+					Status: "error",
+				})
+			}
+
+			continue
+		}
+
+		var dirtyRepos map[string]*detections.DirtyRepo
+
+		dirtyRepos, repoChanges, err = detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos)
+		if err != nil {
+			if strings.Contains(err.Error(), "module stopped") {
+				break
+			}
+
+			log.WithError(err).Error("unable to update Sigma repos")
+
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					Engine: model.EngineNameElastAlert,
+					Status: "error",
+				})
+			}
+
+			continue
+		}
+
+		for k, v := range dirtyRepos {
+			allRepos[k] = v.Repo
 		}
 
 		zipHashes := map[string]string{}
@@ -907,6 +911,35 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 	return errMap, nil
 }
 
+func (e *ElastAlertEngine) loadSigmaPackagesFromDisk() (zipData map[string][]byte, errMap map[string]error) {
+	errMap = map[string]error{} // map[pkgName]error
+	defer func() {
+		if len(errMap) == 0 {
+			errMap = nil
+		}
+	}()
+
+	zipData = map[string][]byte{}
+	stats := map[string]int{}
+
+	for _, pkg := range e.sigmaRulePackages {
+		filePath := e.JoinPath(e.airgapBasePath, "sigma_"+pkg+".zip")
+
+		data, err := e.ReadFile(filePath)
+		if err != nil {
+			errMap[pkg] = err
+			continue
+		}
+
+		zipData[pkg] = data
+		stats[pkg] = len(data)
+	}
+
+	log.WithField("packageSizes", stats).Info("loaded sigma packages from disk")
+
+	return zipData, errMap
+}
+
 func (e *ElastAlertEngine) downloadSigmaPackages() (zipData map[string][]byte, errMap map[string]error) {
 	errMap = map[string]error{} // map[pkgName]error
 	defer func() {
@@ -1307,6 +1340,10 @@ func (_ *ResourceManager) WriteFile(path string, contents []byte, perm fs.FileMo
 
 func (_ *ResourceManager) DeleteFile(path string) error {
 	return os.Remove(path)
+}
+
+func (r *ResourceManager) JoinPath(parts ...string) string {
+	return path.Join(parts...)
 }
 
 func (_ *ResourceManager) ReadDir(path string) ([]os.DirEntry, error) {
