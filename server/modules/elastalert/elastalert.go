@@ -52,6 +52,8 @@ const (
 	DEFAULT_RULES_FINGERPRINT_FILE                   = "/opt/sensoroni/fingerprints/sigma.fingerprint"
 	DEFAULT_REPOS_FOLDER                             = "/opt/sensoroni/sigma/repos"
 	DEFAULT_STATE_FILE_PATH                          = "/opt/sensoroni/fingerprints/elastalertengine.state"
+	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS        = 300
+	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT       = 10
 )
 
 var acceptedExtensions = map[string]bool{
@@ -73,6 +75,8 @@ type ElastAlertEngine struct {
 	srv                                  *server.Server
 	airgapBasePath                       string
 	communityRulesImportFrequencySeconds int
+	communityRulesImportErrorSeconds     int
+	failAfterConsecutiveErrorCount       int
 	sigmaPackageDownloadTemplate         string
 	elastAlertRulesFolder                string
 	rulesFingerprintFile                 string
@@ -130,6 +134,8 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", DEFAULT_RULES_FINGERPRINT_FILE)
 	e.airgapEnabled = module.GetBoolDefault(config, "airgapEnabled", DEFAULT_AIRGAP_ENABLED)
 	e.autoEnabledSigmaRules = module.GetStringArrayDefault(config, "autoEnabledSigmaRules", []string{"securityonion-resources+critical", "securityonion-resources+high"})
+	e.communityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
+	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 
 	pkgs := module.GetStringArrayDefault(config, "sigmaRulePackages", []string{"core", "emerging_threats_addon"})
 	e.parseSigmaPackages(pkgs)
@@ -385,6 +391,15 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 
 	var err error
 
+	// |> nil: no import has been completed, it's this way during the first sync
+	// so that the timerDur returned by DetermineWaitTime is used. After first sync,
+	// the pointer should always have a value
+	// |> false: the last sync was not successful, the timer for the next sync should use
+	// the shorter communityRulesImportErrorSeconds timer.
+	// |> true: the last sync was successful, the timer for the next sync should use
+	// the normal communityRulesImportFrequencySeconds timer.
+	var lastSyncSuccess *bool
+
 	ctx := e.srv.Context
 	templateFound := false
 
@@ -393,19 +408,37 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 	for e.isRunning {
 		e.resetInterrupt()
 
+		var forceSync bool
+
+		if lastSyncSuccess != nil {
+			if *lastSyncSuccess {
+				timerDur = time.Second * time.Duration(e.communityRulesImportFrequencySeconds)
+			} else {
+				timerDur = time.Second * time.Duration(e.communityRulesImportErrorSeconds)
+				forceSync = true
+			}
+		}
+
 		timer := time.NewTimer(timerDur)
 
-		var forceSync bool
+		log.WithFields(log.Fields{
+			"waitTimeSeconds":   timerDur.Seconds(),
+			"forceSync":         forceSync,
+			"lastSyncSuccess":   lastSyncSuccess,
+			"expectedStartTime": time.Now().Add(timerDur).Format(time.RFC3339),
+		}).Info("waiting for next elastalert community rules sync")
 
 		select {
 		case <-timer.C:
 		case typ := <-e.interrupt:
-			forceSync = typ
+			forceSync = forceSync || typ
 		}
 
 		if !e.isRunning {
 			break
 		}
+
+		lastSyncSuccess = util.Ptr(false)
 
 		timerDur = time.Second * time.Duration(e.communityRulesImportFrequencySeconds)
 
@@ -528,9 +561,10 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 					// If there's extra hashes in the new file, we need to add them.
 					// If there's a mix of new and old hashes, we need to include them all
 					// or the old ones would be removed.
-					log.Info("ElastAlert sync found no changes")
+					log.Info("elastalert sync found no changes")
 
 					detections.WriteStateFile(e.IOManager, e.stateFilePath)
+					lastSyncSuccess = util.Ptr(true)
 
 					if e.notify {
 						e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
@@ -588,6 +622,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 		}
 
 		detections.WriteStateFile(e.IOManager, e.stateFilePath)
+		lastSyncSuccess = util.Ptr(true)
 
 		if len(errMap) > 0 {
 			// there were errors, don't save the fingerprint.
@@ -680,12 +715,12 @@ func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detections 
 			}
 
 			if e.denyRegex != nil && e.denyRegex.MatchString(string(data)) {
-				log.WithField("file", file.Name).Info("content matched ElastAlert's denyRegex")
+				log.WithField("file", file.Name).Info("content matched elastalert's denyRegex")
 				continue
 			}
 
 			if e.allowRegex != nil && !e.allowRegex.MatchString(string(data)) {
-				log.WithField("file", file.Name).Info("content didn't match ElastAlert's allowRegex")
+				log.WithField("file", file.Name).Info("content didn't match elastalert's allowRegex")
 				continue
 			}
 
@@ -804,6 +839,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 	}{}
 
 	errMap = map[string]error{} // map[publicID]error
+	et := detections.NewErrorTracker(e.failAfterConsecutiveErrorCount)
 
 	for _, det := range detects {
 		if !e.isRunning {
@@ -825,22 +861,31 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 
 			if oldDet.Content != det.Content || oldDet.Ruleset != det.Ruleset || len(det.Overrides) != 0 {
 				_, err = e.srv.Detectionstore.UpdateDetection(ctx, det)
+				eterr := et.AddError(err)
+				if eterr != nil {
+					return nil, eterr
+				}
+
 				if err != nil {
 					errMap[det.PublicID] = fmt.Errorf("unable to update detection: %s", err)
 					continue
 				}
 
-				delete(toDelete, det.PublicID)
 				results.Updated++
 			} else {
-				delete(toDelete, det.PublicID)
 				results.Unchanged++
 			}
-		} else {
 
+			delete(toDelete, det.PublicID)
+		} else {
 			checkRulesetEnabled(e, det)
 
 			_, err = e.srv.Detectionstore.CreateDetection(ctx, det)
+			eterr := et.AddError(err)
+			if eterr != nil {
+				return nil, eterr
+			}
+
 			if err != nil {
 				errMap[det.PublicID] = fmt.Errorf("unable to create detection: %s", err)
 				continue
@@ -851,7 +896,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 		}
 
 		if det.IsEnabled {
-			// 2. if enabled, send data to cli pakcage to get converted to query
+			// 2. if enabled, send data to cli package to get converted to query
 			rule, err := e.sigmaToElastAlert(ctx, det)
 			if err != nil {
 				errMap[det.PublicID] = fmt.Errorf("unable to convert sigma to elastalert: %s", err)
