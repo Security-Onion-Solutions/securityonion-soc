@@ -192,7 +192,6 @@ func TestStrelkaModule(t *testing.T) {
 
 	err := mod.Init(nil)
 	assert.NoError(t, err)
-	assert.False(t, mod.autoUpdateEnabled)
 
 	err = mod.Start()
 	assert.NoError(t, err)

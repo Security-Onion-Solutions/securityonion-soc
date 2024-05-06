@@ -132,7 +132,6 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.sigmaPackageDownloadTemplate = module.GetStringDefault(config, "sigmaPackageDownloadTemplate", DEFAULT_SIGMA_PACKAGE_DOWNLOAD_TEMPLATE)
 	e.elastAlertRulesFolder = module.GetStringDefault(config, "elastAlertRulesFolder", DEFAULT_ELASTALERT_RULES_FOLDER)
 	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", DEFAULT_RULES_FINGERPRINT_FILE)
-	e.airgapEnabled = module.GetBoolDefault(config, "airgapEnabled", DEFAULT_AIRGAP_ENABLED)
 	e.autoEnabledSigmaRules = module.GetStringArrayDefault(config, "autoEnabledSigmaRules", []string{"securityonion-resources+critical", "securityonion-resources+high"})
 	e.communityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
@@ -150,6 +149,12 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	})
 	if err != nil {
 		return fmt.Errorf("unable to parse ElastAlert's rulesRepos: %w", err)
+	}
+
+	if e.srv != nil && e.srv.Config != nil {
+		e.airgapEnabled = e.srv.Config.AirgapEnabled
+	} else {
+		e.airgapEnabled = DEFAULT_AIRGAP_ENABLED
 	}
 
 	allow := module.GetStringDefault(config, "allowRegex", DEFAULT_ALLOW_REGEX)
