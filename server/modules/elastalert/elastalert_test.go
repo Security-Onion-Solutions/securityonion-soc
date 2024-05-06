@@ -76,7 +76,7 @@ func TestElastAlertModule(t *testing.T) {
 
 	err := mod.Init(nil)
 	assert.NoError(t, err)
-	assert.False(t, mod.autoUpdateEnabled)
+	assert.False(t, mod.airgapEnabled)
 
 	err = mod.Start()
 	assert.NoError(t, err)
@@ -522,6 +522,49 @@ func TestDownloadSigmaPackages(t *testing.T) {
 
 	for _, pkg := range pkgs[:len(pkgs)-1] {
 		assert.Equal(t, []byte(body), pkgZips[pkg])
+	}
+}
+
+func TestLoadSigmaPackagesFromDisks(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mio := mock.NewMockIOManager(ctrl)
+	airgapBasePath := "/nsm/rules/detect-sigma/rulesets/"
+
+	// List of packages to be loaded from disk
+	pkgs := []string{"core", "core+", "core++", "emerging_threats_addon", "all_rules", "fake"}
+
+	// Setting up mocks for each expected file read, except for the "fake" package to simulate an error
+	for _, pkg := range pkgs[:len(pkgs)-1] {
+		expectedFilePath := airgapBasePath + "sigma_" + pkg + ".zip"
+		//mio.EXPECT().Join(airgapBasePath, "sigma_"+pkg+".zip").Return(expectedFilePath)
+		mio.EXPECT().ReadFile(expectedFilePath).Return([]byte("mocked data for "+pkg), nil)
+	}
+
+	// Simulating an error for the 'fake' package
+	fakeFilePath := airgapBasePath + "sigma_fake.zip"
+	//mio.EXPECT().JoinPath(airgapBasePath, "sigma_fake.zip").Return(fakeFilePath)
+	mio.EXPECT().ReadFile(fakeFilePath).Return(nil, errors.New("file not found"))
+
+	engine := ElastAlertEngine{
+		sigmaRulePackages: pkgs,
+		airgapBasePath:    airgapBasePath,
+		IOManager:         mio,
+	}
+
+	zipData, errMap := engine.loadSigmaPackagesFromDisk()
+
+	// Assertions
+	assert.NotNil(t, errMap, "Expected error map to not be nil")
+	assert.Error(t, errMap["fake"], "Expected an error for 'fake' package")
+	assert.Nil(t, errMap["core"], "No error expected for 'core' package")
+	assert.Len(t, zipData, len(pkgs)-1, "Expect one less entry in zipData due to the 'fake' package error")
+
+	// Verify that the content for each successful load is as expected
+	for _, pkg := range pkgs[:len(pkgs)-1] {
+		expectedContent := []byte("mocked data for " + pkg)
+		assert.Equal(t, expectedContent, zipData[pkg], "Expect the content to match the mocked content for package: "+pkg)
 	}
 }
 
