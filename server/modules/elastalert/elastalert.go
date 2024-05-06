@@ -18,7 +18,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -68,7 +67,6 @@ type IOManager interface {
 	MakeRequest(*http.Request) (*http.Response, error)
 	ExecCommand(cmd *exec.Cmd) ([]byte, int, time.Duration, error)
 	WalkDir(root string, fn fs.WalkDirFunc) error
-	JoinPath(parts ...string) string
 }
 
 type ElastAlertEngine struct {
@@ -923,7 +921,7 @@ func (e *ElastAlertEngine) loadSigmaPackagesFromDisk() (zipData map[string][]byt
 	stats := map[string]int{}
 
 	for _, pkg := range e.sigmaRulePackages {
-		filePath := e.JoinPath(e.airgapBasePath, "sigma_"+pkg+".zip")
+		filePath := filepath.Join(e.airgapBasePath, "sigma_"+pkg+".zip")
 
 		data, err := e.ReadFile(filePath)
 		if err != nil {
@@ -1340,10 +1338,6 @@ func (_ *ResourceManager) WriteFile(path string, contents []byte, perm fs.FileMo
 
 func (_ *ResourceManager) DeleteFile(path string) error {
 	return os.Remove(path)
-}
-
-func (r *ResourceManager) JoinPath(parts ...string) string {
-	return path.Join(parts...)
 }
 
 func (_ *ResourceManager) ReadDir(path string) ([]os.DirEntry, error) {

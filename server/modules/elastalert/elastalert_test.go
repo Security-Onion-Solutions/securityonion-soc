@@ -76,7 +76,7 @@ func TestElastAlertModule(t *testing.T) {
 
 	err := mod.Init(nil)
 	assert.NoError(t, err)
-	assert.False(t, mod.autoUpdateEnabled)
+	assert.False(t, mod.airgapEnabled)
 
 	err = mod.Start()
 	assert.NoError(t, err)
@@ -537,14 +537,14 @@ func TestLoadSigmaPackagesFromDisks(t *testing.T) {
 
 	// Setting up mocks for each expected file read, except for the "fake" package to simulate an error
 	for _, pkg := range pkgs[:len(pkgs)-1] {
-		expectedFilePath := airgapBasePath + "/sigma_" + pkg + ".zip"
-		mio.EXPECT().JoinPath(airgapBasePath, "sigma_"+pkg+".zip").Return(expectedFilePath)
+		expectedFilePath := airgapBasePath + "sigma_" + pkg + ".zip"
+		//mio.EXPECT().Join(airgapBasePath, "sigma_"+pkg+".zip").Return(expectedFilePath)
 		mio.EXPECT().ReadFile(expectedFilePath).Return([]byte("mocked data for "+pkg), nil)
 	}
 
 	// Simulating an error for the 'fake' package
-	fakeFilePath := airgapBasePath + "/sigma_fake.zip"
-	mio.EXPECT().JoinPath(airgapBasePath, "sigma_fake.zip").Return(fakeFilePath)
+	fakeFilePath := airgapBasePath + "sigma_fake.zip"
+	//mio.EXPECT().JoinPath(airgapBasePath, "sigma_fake.zip").Return(fakeFilePath)
 	mio.EXPECT().ReadFile(fakeFilePath).Return(nil, errors.New("file not found"))
 
 	engine := ElastAlertEngine{
