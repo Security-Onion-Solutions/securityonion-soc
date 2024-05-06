@@ -50,6 +50,8 @@ const (
 	DEFAULT_STATE_FILE_PATH                       = "/opt/sensoroni/fingerprints/suricataengine.state"
 	DEFAULT_ALLOW_REGEX                           = ""
 	DEFAULT_DENY_REGEX                            = ""
+	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS     = 300
+	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT    = 10
 )
 
 type IOManager interface {
@@ -63,6 +65,8 @@ type SuricataEngine struct {
 	communityRulesFile                   string
 	rulesFingerprintFile                 string
 	communityRulesImportFrequencySeconds int
+	communityRulesImportErrorSeconds     int
+	failAfterConsecutiveErrorCount       int
 	isRunning                            bool
 	thread                               *sync.WaitGroup
 	interrupt                            chan bool
@@ -92,6 +96,8 @@ func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 	e.communityRulesFile = module.GetStringDefault(config, "communityRulesFile", DEFAULT_COMMUNITY_RULES_FILE)
 	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", DEFAULT_RULES_FINGERPRINT_FILE)
 	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECS)
+	e.communityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
+	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 
 	allow := module.GetStringDefault(config, "allowRegex", DEFAULT_ALLOW_REGEX)
 	deny := module.GetStringDefault(config, "denyRegex", DEFAULT_DENY_REGEX)
@@ -244,8 +250,8 @@ func (e *SuricataEngine) watchCommunityRules() {
 		e.isRunning = false
 	}()
 
+	var lastSyncSuccess *bool
 	ctx := e.srv.Context
-
 	templateFound := false
 
 	lastImport, timerDur := detections.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Second*time.Duration(e.communityRulesImportFrequencySeconds))
@@ -253,21 +259,37 @@ func (e *SuricataEngine) watchCommunityRules() {
 	for e.isRunning {
 		e.resetInterrupt()
 
+		var forceSync bool
+
+		if lastSyncSuccess != nil {
+			if *lastSyncSuccess {
+				timerDur = time.Second * time.Duration(e.communityRulesImportFrequencySeconds)
+			} else {
+				timerDur = time.Second * time.Duration(e.communityRulesImportErrorSeconds)
+				forceSync = true
+			}
+		}
+
 		timer := time.NewTimer(timerDur)
 
-		var forceSync bool
+		log.WithFields(log.Fields{
+			"waitTimeSeconds":   timerDur.Seconds(),
+			"forceSync":         forceSync,
+			"lastSyncSuccess":   lastSyncSuccess,
+			"expectedStartTime": time.Now().Add(timerDur).Format(time.RFC3339),
+		}).Info("waiting for next suricata community rules sync")
 
 		select {
 		case <-timer.C:
 		case typ := <-e.interrupt:
-			forceSync = typ
+			forceSync = forceSync || typ
 		}
 
 		if !e.isRunning {
 			break
 		}
 
-		timerDur = time.Second * time.Duration(e.communityRulesImportFrequencySeconds)
+		lastSyncSuccess = util.Ptr(false)
 
 		log.WithFields(log.Fields{
 			"forceSync": forceSync,
@@ -334,9 +356,10 @@ func (e *SuricataEngine) watchCommunityRules() {
 
 			if haveFP && strings.EqualFold(*fingerprint, hash) {
 				// if we have a fingerprint and the hashes are equal, there's nothing to do
-				log.Info("Suricata sync found no changes")
+				log.Info("suricata sync found no changes")
 
 				detections.WriteStateFile(e.IOManager, e.stateFilePath)
+				lastSyncSuccess = util.Ptr(true)
 
 				if e.notify {
 					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
@@ -407,6 +430,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 		}
 
 		detections.WriteStateFile(e.IOManager, e.stateFilePath)
+		lastSyncSuccess = util.Ptr(true)
 
 		if len(errMap) > 0 {
 			// there were errors, don't save the fingerprint.
@@ -523,12 +547,12 @@ func (e *SuricataEngine) ParseRules(content string, ruleset string) ([]*model.De
 		}
 
 		if e.denyRegex != nil && e.denyRegex.MatchString(line) {
-			log.WithField("rule", line).Info("content matched Suricata's denyRegex")
+			log.WithField("rule", line).Info("content matched suricata's denyRegex")
 			continue
 		}
 
 		if e.allowRegex != nil && !e.allowRegex.MatchString(line) {
-			log.WithField("rule", line).Info("content didn't match Suricata's allowRegex")
+			log.WithField("rule", line).Info("content didn't match suricata's allowRegex")
 			continue
 		}
 
@@ -912,7 +936,7 @@ func removeFromIndex(lines []string, index map[string]int, sid string) {
 	}
 }
 
-func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detections []*model.Detection, deleteUnreferenced bool, allSettings []*model.Setting) (errMap map[string]string, err error) {
+func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detects []*model.Detection, deleteUnreferenced bool, allSettings []*model.Setting) (errMap map[string]string, err error) {
 	defer func() {
 		if len(errMap) == 0 {
 			errMap = nil
@@ -973,7 +997,9 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 		toDelete[sid] = struct{}{}
 	}
 
-	for _, detect := range detections {
+	et := detections.NewErrorTracker(e.failAfterConsecutiveErrorCount)
+
+	for _, detect := range detects {
 		if !e.isRunning {
 			return nil, errModuleStopped
 		}
@@ -1031,6 +1057,11 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 					results.Updated++
 					delete(toDelete, detect.PublicID)
 				}
+
+				err = et.AddError(err)
+				if err != nil {
+					return errMap, err
+				}
 			} else {
 				results.Unchanged++
 				delete(toDelete, detect.PublicID)
@@ -1041,6 +1072,11 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detections
 				errMap[detect.PublicID] = fmt.Sprintf("unable to create detection; reason=%s", err.Error())
 			} else {
 				results.Added++
+			}
+
+			err = et.AddError(err)
+			if err != nil {
+				return errMap, err
 			}
 		}
 	}

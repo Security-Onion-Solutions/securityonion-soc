@@ -42,6 +42,8 @@ const (
 	DEFAULT_COMPILE_RULES                            = true
 	DEFAULT_STATE_FILE_PATH                          = "/opt/sensoroni/fingerprints/strelkaengine.state"
 	DEFAULT_AUTO_ENABLED_YARA_RULES                  = "securityonion-yara"
+	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS        = 300
+	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT       = 10
 )
 
 var errModuleStopped = fmt.Errorf("strelka module has stopped running")
@@ -62,6 +64,8 @@ type StrelkaEngine struct {
 	interrupt                            chan bool
 	interm                               sync.Mutex
 	communityRulesImportFrequencySeconds int
+	communityRulesImportErrorSeconds     int
+	failAfterConsecutiveErrorCount       int
 	yaraRulesFolder                      string
 	reposFolder                          string
 	autoEnabledYaraRules                 []string
@@ -107,6 +111,8 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 	e.compileYaraPythonScriptPath = module.GetStringDefault(config, "compileYaraPythonScriptPath", DEFAULT_COMPILE_YARA_PYTHON_SCRIPT_PATH)
 	e.compileRules = module.GetBoolDefault(config, "compileRules", DEFAULT_COMPILE_RULES)
 	e.autoEnabledYaraRules = module.GetStringArrayDefault(config, "autoEnabledYaraRules", []string{DEFAULT_AUTO_ENABLED_YARA_RULES})
+	e.communityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
+	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 
 	e.rulesRepos, err = model.GetReposDefault(config, "rulesRepos", []*model.RuleRepo{
 		{
@@ -232,6 +238,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 		e.isRunning = false
 	}()
 
+	var lastSyncSuccess *bool
 	templateFound := false
 
 	lastImport, timerDur := detections.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Second*time.Duration(e.communityRulesImportFrequencySeconds))
@@ -239,25 +246,43 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 	for e.isRunning {
 		e.resetInterrupt()
 
+		var forceSync bool
+
+		if lastSyncSuccess != nil {
+			if *lastSyncSuccess {
+				timerDur = time.Second * time.Duration(e.communityRulesImportFrequencySeconds)
+			} else {
+				timerDur = time.Second * time.Duration(e.communityRulesImportErrorSeconds)
+				forceSync = true
+			}
+		}
+
 		timer := time.NewTimer(timerDur)
 
-		var forceSync bool
+		log.WithFields(log.Fields{
+			"waitTimeSeconds":   timerDur.Seconds(),
+			"forceSync":         forceSync,
+			"lastSyncSuccess":   lastSyncSuccess,
+			"expectedStartTime": time.Now().Add(timerDur).Format(time.RFC3339),
+		}).Info("waiting for next Strelka community rules sync")
 
 		select {
 		case <-timer.C:
 		case typ := <-e.interrupt:
-			forceSync = typ
+			forceSync = forceSync || typ
 		}
 
 		if !e.isRunning {
 			break
 		}
 
+		lastSyncSuccess = util.Ptr(false)
+
 		timerDur = time.Second * time.Duration(e.communityRulesImportFrequencySeconds)
 
 		log.WithFields(log.Fields{
 			"forceSync": forceSync,
-		}).Info("syncing strelka community rules")
+		}).Info("syncing Strelka community rules")
 
 		start := time.Now()
 
@@ -311,6 +336,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			log.Info("Strelka sync found no changes")
 
 			detections.WriteStateFile(e.IOManager, e.stateFilePath)
+			lastSyncSuccess = util.Ptr(true)
 
 			if e.notify {
 				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
@@ -341,6 +367,9 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 			continue
 		}
+
+		var tooManyErrs error
+		et := detections.NewErrorTracker(e.failAfterConsecutiveErrorCount)
 
 		// parse *.yar files in repos
 		for repopath, repo := range upToDate {
@@ -406,7 +435,13 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 							"rule.uuid": det.PublicID,
 							"rule.name": det.Title,
 						}).Info("Updating Yara detection")
+
 						det, err = e.srv.Detectionstore.UpdateDetection(e.srv.Context, det)
+						eterr := et.AddError(err)
+						if eterr != nil {
+							return eterr
+						}
+
 						if err != nil {
 							log.WithError(err).WithField("det", det).Error("Failed to update detection")
 							continue
@@ -417,8 +452,16 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 							"rule.uuid": det.PublicID,
 							"rule.name": det.Title,
 						}).Info("Creating new Yara detection")
+
 						checkRulesetEnabled(e, det)
+
 						det, err = e.srv.Detectionstore.CreateDetection(e.srv.Context, det)
+
+						eterr := et.AddError(err)
+						if eterr != nil {
+							return eterr
+						}
+
 						if err != nil {
 							log.WithError(err).WithField("det", det).Error("Failed to create detection")
 							continue
@@ -429,10 +472,20 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 				return nil
 			})
 			if err != nil {
-				log.WithError(err).WithField("repo", repopath).Error("Failed to walk repo")
+				if errors.As(err, &detections.ErrorTrackerError{}) {
+					tooManyErrs = err
+					break
+				}
+
+				log.WithError(err).WithField("repo", repopath).Error("failed while walking repo")
 
 				continue
 			}
+		}
+
+		if tooManyErrs != nil {
+			log.WithError(tooManyErrs).Error("unable to sync strelka community detections")
+			continue
 		}
 
 		errMap, err := e.syncDetections(e.srv.Context)
@@ -455,6 +508,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 		}
 
 		detections.WriteStateFile(e.IOManager, e.stateFilePath)
+		lastSyncSuccess = util.Ptr(true)
 
 		if e.notify {
 			if len(errMap) > 0 {
@@ -473,7 +527,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 		log.WithFields(log.Fields{
 			"errMap": errMap,
 			"time":   time.Since(start).Seconds(),
-		}).Info("strelka community rules sync finished")
+		}).Info("Strelka community rules sync finished")
 	}
 }
 
