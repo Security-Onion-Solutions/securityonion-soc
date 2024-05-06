@@ -319,6 +319,7 @@ test('selectSetting', () => {
   expect(comp.activeBackup).toStrictEqual(["s-id"]);
   expect(comp.availableNodes).toStrictEqual([{text: "node2 (standalone)", value: "n2"}]);
   expect(comp.cancelDialog).toBe(false);
+  expect(comp.confirmResetDialog).toBe(false);
 });
 
 test('cancel', () => {
@@ -342,26 +343,60 @@ test('cancel', () => {
   expect(comp.form.key).toBe("cancel-id");
 });
 
-test('remove', async () => {
+test('remove', () => {
+  expect(comp.confirmResetDialog).toBe(false);
+  expect(comp.resetSetting).toBe(null);
+  expect(comp.resetNodeId).toBe(null);
+  comp.resetNodeId = "foo"
+  comp.resetSetting = "bar"
+  comp.confirmResetDialog = true
+  comp.remove("bar", "foo");
+  expect(comp.confirmResetDialog).toBe(true);
+  expect(comp.resetSetting).toBe("bar");
+  expect(comp.resetNodeId).toBe("foo");
+});
+
+test('cancelReset', () => {
+  expect(comp.confirmResetDialog).toBe(false);
+  expect(comp.resetSetting).toBe(null);
+  expect(comp.resetNodeId).toBe(null);
+  comp.resetNodeId = "foo"
+  comp.resetSetting = "bar"
+  comp.confirmResetDialog = true
+  comp.cancelRemove("bar", "foo");
+  expect(comp.confirmResetDialog).toBe(false);
+  expect(comp.resetSetting).toBe(null);
+  expect(comp.resetNodeId).toBe(null);
+});
+
+test('confirmRemove', async () => {
   setupSettings();
 
   // No-op path
+  comp.remove(comp.settings[0], "nonexisting");
   var mock = mockPapi("delete");
-  await comp.remove(comp.settings[0], "nonexisting");
+  await comp.confirmRemove();
   var expectedNodeValues = new Map();
   expectedNodeValues.set("n1", "123");
   expectedNodeValues.set("n1a", "abc");
   expect(comp.settings[0].nodeValues).toStrictEqual(expectedNodeValues);
+  expect(comp.resetSetting).toBe(null);
+  expect(comp.resetNodeId).toBe(null);
+  expect(comp.confirmResetDialog).toBe(false);
   expect(comp.cancelDialog).toBe(false);
   expect(comp.form.key).toBe(null);
   expect(mock).toHaveBeenCalledWith('config/', { params: {"id": "s-id", "minion": "nonexisting" }});
 
   // Good path
+  comp.remove(comp.settings[0], "n1");
   mock = mockPapi("delete");
-  await comp.remove(comp.settings[0], "n1");
+  await comp.confirmRemove();
   expectedNodeValues = new Map();
   expectedNodeValues.set("n1a", "abc");
   expect(comp.settings[0].nodeValues).toStrictEqual(expectedNodeValues);
+  expect(comp.resetSetting).toBe(null);
+  expect(comp.resetNodeId).toBe(null);
+  expect(comp.confirmResetDialog).toBe(false);
   expect(comp.cancelDialog).toBe(false);
   expect(comp.form.key).toBe(null);
   expect(mock).toHaveBeenCalledWith('config/', { params: {"id": "s-id", "minion": "n1" }});

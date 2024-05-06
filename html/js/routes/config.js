@@ -39,6 +39,9 @@ routes.push({ path: '/config', name: 'config', component: {
     showDuplicate: false,
     duplicateId: null,
     duplicateIdValid: false,
+    resetSetting: null,
+    resetNodeId: null,
+    confirmResetDialog: false,
   }},
   mounted() {
     this.processRouteParameters();
@@ -363,26 +366,37 @@ routes.push({ path: '/config', name: 'config', component: {
 
       return true;
     },
-    async remove(setting, nodeId) {
-      if (setting) {
+    remove(setting, nodeId) {
+      this.resetSetting = setting;
+      this.resetNodeId = nodeId;
+      this.confirmResetDialog = true;
+    },
+    cancelRemove() {
+      this.resetSetting = null;
+      this.resetNodeId = null;
+      this.confirmResetDialog = false;
+    },
+    async confirmRemove() {
+      this.confirmResetDialog = false;
+      if (this.resetSetting) {
         this.$root.startLoading();
         try {
-          await this.$root.papi.delete('config/', { params: { id: setting.id, minion: nodeId }});
+          await this.$root.papi.delete('config/', { params: { id: this.resetSetting.id, minion: this.resetNodeId }});
 
-          if (nodeId) {
+          if (this.resetNodeId) {
             // Rebuild UI as needed
             const newMap = new Map();
-            for (const [key, value] of setting.nodeValues.entries()) {
-              if (key != nodeId) {
+            for (const [key, value] of this.resetSetting.nodeValues.entries()) {
+              if (key != this.resetNodeId) {
                 newMap.set(key, value);
               }
             }
-            setting.nodeValues.clear();
-            setting.nodeValues = newMap;
+            this.resetSetting.nodeValues.clear();
+            this.resetSetting.nodeValues = newMap;
             this.recomputeAvailableNodes(this.findActiveSetting());
           } else {
-            this.reset(setting);
-            setting.value = setting.default;
+            this.reset(this.resetSetting);
+            this.resetSetting.value = this.resetSetting.default;
           }
 
           this.countCustomized();
@@ -394,6 +408,7 @@ routes.push({ path: '/config', name: 'config', component: {
         }
         this.$root.stopLoading();
       }
+      this.cancelRemove();
       this.cancel(true);
     },
     async save(setting, nodeId) {
