@@ -391,7 +391,15 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 
 	var err error
 
+	// |> nil: no import has been completed, it's this way during the first sync
+	// so that the timerDur returned by DetermineWaitTime is used. After first sync,
+	// the pointer should always have a value
+	// |> false: the last sync was not successful, the timer for the next sync should use
+	// the shorter communityRulesImportErrorSeconds timer.
+	// |> true: the last sync was successful, the timer for the next sync should use
+	// the normal communityRulesImportFrequencySeconds timer.
 	var lastSyncSuccess *bool
+
 	ctx := e.srv.Context
 	templateFound := false
 
