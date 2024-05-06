@@ -46,7 +46,7 @@ const (
 	DEFAULT_AIRGAP_BASE_PATH                         = "/nsm/rules/detect-sigma/rulesets/"
 	DEFAULT_ALLOW_REGEX                              = ""
 	DEFAULT_DENY_REGEX                               = ""
-	DEFAULT_AUTO_UPDATE_ENABLED                      = false
+	DEFAULT_AIRGAP_ENABLED                           = false
 	DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECONDS = 86400
 	DEFAULT_SIGMA_PACKAGE_DOWNLOAD_TEMPLATE          = "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip"
 	DEFAULT_ELASTALERT_RULES_FOLDER                  = "/opt/sensoroni/elastalert"
@@ -88,7 +88,7 @@ type ElastAlertEngine struct {
 	interm                               sync.Mutex
 	allowRegex                           *regexp.Regexp
 	denyRegex                            *regexp.Regexp
-	autoUpdateEnabled                    bool
+	airgapEnabled                        bool
 	notify                               bool
 	stateFilePath                        string
 	IOManager
@@ -130,7 +130,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.sigmaPackageDownloadTemplate = module.GetStringDefault(config, "sigmaPackageDownloadTemplate", DEFAULT_SIGMA_PACKAGE_DOWNLOAD_TEMPLATE)
 	e.elastAlertRulesFolder = module.GetStringDefault(config, "elastAlertRulesFolder", DEFAULT_ELASTALERT_RULES_FOLDER)
 	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", DEFAULT_RULES_FINGERPRINT_FILE)
-	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", DEFAULT_AUTO_UPDATE_ENABLED)
+	e.airgapEnabled = module.GetBoolDefault(config, "airgapEnabled", DEFAULT_AIRGAP_ENABLED)
 	e.autoEnabledSigmaRules = module.GetStringArrayDefault(config, "autoEnabledSigmaRules", []string{"securityonion-resources+critical", "securityonion-resources+high"})
 
 	pkgs := module.GetStringArrayDefault(config, "sigmaRulePackages", []string{"core", "emerging_threats_addon"})
@@ -454,12 +454,12 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 		var zips map[string][]byte
 		var errMap map[string]error
 
-		if e.autoUpdateEnabled {
-			// Not AirGap, download the sigma packages
-			zips, errMap = e.downloadSigmaPackages()
-		} else {
+		if e.airgapEnabled {
 			// AirGap, load the sigma packages from disk
 			zips, errMap = e.loadSigmaPackagesFromDisk()
+		} else {
+			// Not AirGap, download the sigma packages
+			zips, errMap = e.downloadSigmaPackages()
 		}
 
 		if len(errMap) != 0 {

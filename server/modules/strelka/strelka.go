@@ -40,7 +40,6 @@ const (
 	DEFAULT_REPOS_FOLDER                             = "/opt/sensoroni/yara/repos"
 	DEFAULT_COMPILE_YARA_PYTHON_SCRIPT_PATH          = "/opt/so/conf/strelka/compile_yara.py"
 	DEFAULT_COMPILE_RULES                            = true
-	DEFAULT_AUTO_UPDATE_ENABLED                      = false
 	DEFAULT_STATE_FILE_PATH                          = "/opt/sensoroni/fingerprints/strelkaengine.state"
 	DEFAULT_AUTO_ENABLED_YARA_RULES                  = "securityonion-yara"
 )
@@ -71,7 +70,6 @@ type StrelkaEngine struct {
 	allowRegex                           *regexp.Regexp
 	denyRegex                            *regexp.Regexp
 	compileRules                         bool
-	autoUpdateEnabled                    bool
 	notify                               bool
 	stateFilePath                        string
 	IOManager
@@ -108,7 +106,6 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 	e.reposFolder = module.GetStringDefault(config, "reposFolder", DEFAULT_REPOS_FOLDER)
 	e.compileYaraPythonScriptPath = module.GetStringDefault(config, "compileYaraPythonScriptPath", DEFAULT_COMPILE_YARA_PYTHON_SCRIPT_PATH)
 	e.compileRules = module.GetBoolDefault(config, "compileRules", DEFAULT_COMPILE_RULES)
-	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", DEFAULT_AUTO_UPDATE_ENABLED)
 	e.autoEnabledYaraRules = module.GetStringArrayDefault(config, "autoEnabledYaraRules", []string{DEFAULT_AUTO_ENABLED_YARA_RULES})
 
 	e.rulesRepos, err = model.GetReposDefault(config, "rulesRepos", []*model.RuleRepo{
@@ -297,47 +294,38 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 		upToDate := map[string]*model.RuleRepo{}
 
-		if e.autoUpdateEnabled {
-			allRepos, anythingNew, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos)
-			if err != nil {
-				if strings.Contains(err.Error(), "module stopped") {
-					break
-				}
+		allRepos, anythingNew, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos)
+		if err != nil {
+			if strings.Contains(err.Error(), "module stopped") {
+				break
+			}
+		}
+
+		// If no import has been completed, then do a full sync
+		if lastImport == nil {
+			forceSync = true
+		}
+
+		if !anythingNew && !forceSync {
+			// no updates, skip
+			log.Info("Strelka sync found no changes")
+
+			detections.WriteStateFile(e.IOManager, e.stateFilePath)
+
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					Engine: model.EngineNameStrelka,
+					Status: "success",
+				})
 			}
 
-			// If no import has been completed, then do a full sync
-			if lastImport == nil {
-				forceSync = true
+			continue
+		}
+
+		for k, v := range allRepos {
+			if v.WasModified || forceSync {
+				upToDate[k] = v.Repo
 			}
-
-			if !anythingNew && !forceSync {
-				// no updates, skip
-				log.Info("Strelka sync found no changes")
-
-				detections.WriteStateFile(e.IOManager, e.stateFilePath)
-
-				if e.notify {
-					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
-						Engine: model.EngineNameStrelka,
-						Status: "success",
-					})
-				}
-
-				continue
-			}
-
-			for k, v := range allRepos {
-				if v.WasModified || forceSync {
-					upToDate[k] = v.Repo
-				}
-			}
-		} else {
-			// Possible airgap installation, or admin has disabled auto-updates.
-
-			// TODO: Perform a one-time check for a pre-downloaded ruleset on disk and if exists,
-			// let the rest of the loop continue but then exit the loop. For now we're just hardcoding
-			// to always exit the loop.
-			return
 		}
 
 		communityDetections, err := e.srv.Detectionstore.GetAllCommunitySIDs(e.srv.Context, util.Ptr(model.EngineNameStrelka))
