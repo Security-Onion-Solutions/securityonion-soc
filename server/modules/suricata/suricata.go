@@ -311,7 +311,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 				log.WithError(err).Error("unable to check for detection index template")
 
 				if e.notify {
-					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 						Engine: model.EngineNameSuricata,
 						Status: "error",
 					})
@@ -324,7 +324,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 				log.Warn("detection index template does not exist, skipping import")
 
 				if e.notify {
-					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 						Engine: model.EngineNameSuricata,
 						Status: "error",
 					})
@@ -339,7 +339,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 		rules, hash, err := readAndHash(e.communityRulesFile)
 		if err != nil {
 			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 					Engine: model.EngineNameSuricata,
 					Status: "error",
 				})
@@ -370,7 +370,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 				lastSyncSuccess = util.Ptr(true)
 
 				if e.notify {
-					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 						Engine: model.EngineNameSuricata,
 						Status: "success",
 					})
@@ -383,7 +383,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 		allSettings, err := e.srv.Configstore.GetSettings(ctx)
 		if err != nil {
 			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 					Engine: model.EngineNameSuricata,
 					Status: "error",
 				})
@@ -403,7 +403,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 		commDetections, err := e.ParseRules(rules, ruleset.Value)
 		if err != nil {
 			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 					Engine: model.EngineNameSuricata,
 					Status: "error",
 				})
@@ -426,7 +426,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 			}
 
 			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 					Engine: model.EngineNameSuricata,
 					Status: "error",
 				})
@@ -448,7 +448,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 			}).Error("unable to sync all community detections")
 
 			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 					Engine: model.EngineNameSuricata,
 					Status: "partial",
 				})
@@ -460,7 +460,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 			}
 
 			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 					Engine: model.EngineNameSuricata,
 					Status: "success",
 				})

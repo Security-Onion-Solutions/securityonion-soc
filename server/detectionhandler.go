@@ -410,7 +410,7 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 			"totalTime":  totalTime.Seconds(),
 		}).Error("bulk update Detections finished")
 
-		h.server.Host.Broadcast("detections:bulkUpdate", "detection", map[string]interface{}{
+		h.server.Host.Broadcast("detections:bulkUpdate", "detections", map[string]interface{}{
 			"error":    len(errMap),
 			"total":    len(IDs),
 			"modified": len(modified),

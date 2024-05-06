@@ -300,7 +300,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 				log.WithError(err).Error("unable to check for detection index template")
 
 				if e.notify {
-					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 						Engine: model.EngineNameStrelka,
 						Status: "error",
 					})
@@ -313,7 +313,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 				log.Warn("detection index template does not exist, skipping import")
 
 				if e.notify {
-					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 						Engine: model.EngineNameStrelka,
 						Status: "error",
 					})
@@ -347,7 +347,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			lastSyncSuccess = util.Ptr(true)
 
 			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 					Engine: model.EngineNameStrelka,
 					Status: "success",
 				})
@@ -367,7 +367,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			log.WithError(err).Error("Failed to get all community SIDs")
 
 			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 					Engine: model.EngineNameStrelka,
 					Status: "error",
 				})
@@ -506,7 +506,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			log.WithError(err).Error("unable to sync YARA community detections")
 
 			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 					Engine: model.EngineNameStrelka,
 					Status: "error",
 				})
@@ -520,12 +520,12 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 		if e.notify {
 			if len(errMap) > 0 {
-				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 					Engine: model.EngineNameStrelka,
 					Status: "partial",
 				})
 			} else {
-				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 					Engine: model.EngineNameStrelka,
 					Status: "success",
 				})
