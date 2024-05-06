@@ -459,7 +459,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 				log.WithError(err).Error("unable to check for detection index template")
 
 				if e.notify {
-					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 						Engine: model.EngineNameElastAlert,
 						Status: "error",
 					})
@@ -472,7 +472,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 				log.Warn("detection index template does not exist, skipping import")
 
 				if e.notify {
-					e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+					e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 						Engine: model.EngineNameElastAlert,
 						Status: "error",
 					})
@@ -502,7 +502,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			log.WithField("errorMap", errMap).Error("something went wrong loading sigma packages")
 
 			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 					Engine: model.EngineNameElastAlert,
 					Status: "error",
 				})
@@ -522,7 +522,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			log.WithError(err).Error("unable to update Sigma repos")
 
 			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 					Engine: model.EngineNameElastAlert,
 					Status: "error",
 				})
@@ -572,7 +572,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 					lastSyncSuccess = util.Ptr(true)
 
 					if e.notify {
-						e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+						e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 							Engine: model.EngineNameElastAlert,
 							Status: "success",
 						})
@@ -617,7 +617,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			log.WithError(err).Error("unable to sync elastalert community detections")
 
 			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 					Engine: model.EngineNameElastAlert,
 					Status: "error",
 				})
@@ -637,7 +637,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			}).Error("unable to sync all ElastAlert community detections")
 
 			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 					Engine: model.EngineNameElastAlert,
 					Status: "partial",
 				})
@@ -654,7 +654,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			}
 
 			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detection", server.SyncStatus{
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 					Engine: model.EngineNameElastAlert,
 					Status: "success",
 				})
