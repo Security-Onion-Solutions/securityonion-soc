@@ -695,6 +695,8 @@ const i18n = {
       settingCategory_ui: 'User Interface',
       settingConfirmCancel: 'Unsaved Changes',
       settingConfirmCancelHelp: 'Discard unsaved changes?',
+      settingConfirmReset: 'Reset Value',
+      settingConfirmResetHelp: 'Delete this custom setting, and reset to default if available?',
       settingAdvanced: 'Provide optional, custom configuration in YAML format. Note that improper customizations often are the cause of grid malfunctions.',
       settingDefault: 'Default Value',
       settingDeleted: 'Setting deleted/reset successfully. Changes typically apply within 15 minutes.',

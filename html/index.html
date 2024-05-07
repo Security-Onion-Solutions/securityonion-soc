@@ -5018,6 +5018,17 @@
             </v-card-actions>
           </v-card>
         </v-dialog>
+        <v-dialog v-model="confirmResetDialog" persistent max-width="290" data-aid="config_confirm_reset_dialog">
+          <v-card>
+            <v-card-title class="text-h5" v-text="i18n.settingConfirmReset" />
+            <v-card-text v-text="i18n.settingConfirmResetHelp" />
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn text id="config-reset-proceed-button" @click="confirmRemove()" v-text="i18n.yes" data-aid="config_reset_dialog_confirm" />
+              <v-btn text id="config-reset-cancel-button" @click="cancelRemove()" v-text="i18n.no" data-aid="config_reset_dialog_abort" />
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
       </v-container>
     </script>
 
