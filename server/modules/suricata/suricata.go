@@ -400,7 +400,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 
 		ruleset := settingByID(allSettings, "idstools.config.ruleset")
 
-		commDetections, err := e.ParseRules(rules, ruleset.Value)
+		commDetections, err := e.ParseRules(rules, ruleset.Value, true)
 		if err != nil {
 			if e.notify {
 				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
@@ -522,7 +522,7 @@ func (e *SuricataEngine) ValidateRule(rule string) (string, error) {
 	return parsed.String(), nil
 }
 
-func (e *SuricataEngine) ParseRules(content string, ruleset string) ([]*model.Detection, error) {
+func (e *SuricataEngine) ParseRules(content string, ruleset string, applyFilters bool) ([]*model.Detection, error) {
 	// expecting one rule per line
 	lines := strings.Split(content, "\n")
 	dets := []*model.Detection{}
@@ -554,14 +554,16 @@ func (e *SuricataEngine) ParseRules(content string, ruleset string) ([]*model.De
 			}
 		}
 
-		if e.denyRegex != nil && e.denyRegex.MatchString(line) {
-			log.WithField("rule", line).Info("content matched suricata's denyRegex")
-			continue
-		}
+		if applyFilters {
+			if e.denyRegex != nil && e.denyRegex.MatchString(line) {
+				log.WithField("rule", line).Info("content matched suricata's denyRegex")
+				continue
+			}
 
-		if e.allowRegex != nil && !e.allowRegex.MatchString(line) {
-			log.WithField("rule", line).Info("content didn't match suricata's allowRegex")
-			continue
+			if e.allowRegex != nil && !e.allowRegex.MatchString(line) {
+				log.WithField("rule", line).Info("content didn't match suricata's allowRegex")
+				continue
+			}
 		}
 
 		parsed, err := ParseSuricataRule(line)
@@ -1283,7 +1285,7 @@ func (e *SuricataEngine) DuplicateDetection(ctx context.Context, detection *mode
 
 	rule.UpdateForDuplication(id)
 
-	dets, err := e.ParseRules(rule.String(), detections.RULESET_CUSTOM)
+	dets, err := e.ParseRules(rule.String(), detections.RULESET_CUSTOM, false)
 	if err != nil {
 		return nil, err
 	}
