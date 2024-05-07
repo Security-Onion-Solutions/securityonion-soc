@@ -362,7 +362,7 @@ func TestParse(t *testing.T) {
 
 			data := strings.Join(test.Lines, "\n")
 
-			detections, err := mod.ParseRules(data, ruleset)
+			detections, err := mod.ParseRules(data, ruleset, true)
 			if test.ExpectedError == nil {
 				assert.NoError(t, err)
 				assert.Equal(t, test.ExpectedDetections, detections)
