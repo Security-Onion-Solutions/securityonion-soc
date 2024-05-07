@@ -46,6 +46,7 @@ const (
 )
 
 func ParseSuricataRule(rule string) (*SuricataRule, error) {
+	rule = strings.TrimSpace(rule)
 	r := strings.NewReader(rule)
 	curState := stateAction
 	buf := strings.Builder{}
