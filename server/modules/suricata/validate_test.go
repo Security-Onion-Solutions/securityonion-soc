@@ -101,7 +101,7 @@ func TestParseSuricata(t *testing.T) {
 }
 
 func TestSuricataRule(t *testing.T) {
-	input := `a b source port <> destination port (msg:"\\\""; noalert; sid:12345; rev: "9"; )`
+	input := `a b source port <> destination port (msg:"\\\""; noalert; sid:12345; rev: "9"; ) 	`
 
 	rule, err := ParseSuricataRule(input)
 	assert.NoError(t, err)
