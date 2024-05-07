@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
@@ -231,6 +232,78 @@ func TestTimeFrame(t *testing.T) {
 	err = yaml.Unmarshal(yml, &tf)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, *tf.Weeks)
+}
+
+func TestCheckSigmaPipelines(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockIO := mock.NewMockIOManager(ctrl)
+
+	e := &ElastAlertEngine{
+		sigmaPipelineFinal:            "/opt/sensoroni/sigma_final_pipeline.yaml",
+		sigmaPipelineSO:               "/opt/sensoroni/sigma_so_pipeline.yaml",
+		sigmaPipelinesFingerprintFile: "/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint",
+		IOManager:                     mockIO,
+	}
+
+	testList := []struct {
+		name           string
+		setupMock      func()
+		expectedChange bool
+		expectedHash   string
+		expectedErr    error
+	}{
+		{
+			name: "No changes in pipelines",
+			setupMock: func() {
+				// Setup the hash values to be the same
+				mockIO.EXPECT().ReadFile("/opt/sensoroni/sigma_final_pipeline.yaml").Return([]byte("data"), nil)
+				mockIO.EXPECT().ReadFile("/opt/sensoroni/sigma_so_pipeline.yaml").Return([]byte("data"), nil)
+				hash := "3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7-3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7"
+				mockIO.EXPECT().ReadFile("/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint").Return([]byte(hash), nil)
+			},
+			expectedChange: false,
+			expectedHash:   "",
+			expectedErr:    nil,
+		},
+		{
+			name: "Changes detected in pipelines",
+			setupMock: func() {
+				// Setup the hash values to be different
+				mockIO.EXPECT().ReadFile("/opt/sensoroni/sigma_final_pipeline.yaml").Return([]byte("data1"), nil)
+				mockIO.EXPECT().ReadFile("/opt/sensoroni/sigma_so_pipeline.yaml").Return([]byte("data2"), nil)
+				hash := "7c563a27ed29beba2a5e9fd515c0b4435065d7c90af52b29a7f96f1ba2f00d7b-6d8758d5149c097c5131dd1355b7b8891b2b207384ff8f66a650537c3d2ffd6f"
+				mockIO.EXPECT().ReadFile("/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint").Return([]byte(hash), nil)
+			},
+			expectedChange: true,
+			expectedHash:   "5b41362bc82b7f3d56edc5a306db22105707d01ff4819e26faef9724a2d406c9-d98cf53e0c8b77c14a96358d5b69584225b4bb9026423cbc2f7b0161894c402c",
+			expectedErr:    nil,
+		},
+		{
+			name: "Error reading final pipeline file",
+			setupMock: func() {
+				mockIO.EXPECT().ReadFile("/opt/sensoroni/sigma_final_pipeline.yaml").Return(nil, errors.New("file read error"))
+			},
+			expectedChange: false,
+			expectedHash:   "",
+			expectedErr:    fmt.Errorf("error hashing file /opt/sensoroni/sigma_final_pipeline.yaml: file read error"),
+		},
+	}
+
+	for _, tt := range testList {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setupMock()
+			regenNeeded, updatedHash, err := e.checkSigmaPipelines()
+			if tt.expectedErr != nil {
+				assert.Error(t, err)
+				assert.Equal(t, tt.expectedErr.Error(), err.Error())
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedChange, regenNeeded)
+				assert.Equal(t, tt.expectedHash, updatedHash)
+			}
+		})
+	}
 }
 
 func TestSigmaToElastAlertSunnyDay(t *testing.T) {
