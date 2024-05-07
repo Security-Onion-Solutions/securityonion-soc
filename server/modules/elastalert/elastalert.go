@@ -506,7 +506,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 		// If they have, (later) set forceSync to true to regenerate the elastalert rule files.
 		regenNeeded, sigmaPipelineNewHash, err = e.checkSigmaPipelines()
 		if err != nil {
-			log.WithField("errorMap", err).Error("failed to check the sigma processing pipelines")
+			log.WithField("sigmaPipelineError", err).Error("failed to check the sigma processing pipelines")
 		} else {
 			log.Info("successfully checked the sigma processing pipelines")
 		}
@@ -520,7 +520,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 		}
 
 		if len(errMap) != 0 {
-			log.WithField("errorMap", errMap).Error("something went wrong loading sigma packages")
+			log.WithField("sigmaPackageErrors", errMap).Error("something went wrong loading sigma packages")
 
 			if e.notify {
 				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
@@ -572,7 +572,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 		if !forceSync {
 			raw, err := e.ReadFile(e.rulesFingerprintFile)
 			if err != nil && !os.IsNotExist(err) {
-				log.WithError(err).WithField("path", e.rulesFingerprintFile).Error("unable to read rules fingerprint file")
+				log.WithError(err).WithField("fingerprintPath", e.rulesFingerprintFile).Error("unable to read rules fingerprint file")
 				continue
 			} else if err == nil {
 				oldHashes := map[string]string{}
@@ -672,7 +672,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			} else {
 				err = e.WriteFile(e.rulesFingerprintFile, fingerprints, 0644)
 				if err != nil {
-					log.WithError(err).WithField("path", e.rulesFingerprintFile).Error("unable to write rules fingerprint file")
+					log.WithError(err).WithField("fingerprintPath", e.rulesFingerprintFile).Error("unable to write rules fingerprint file")
 				}
 			}
 
@@ -680,9 +680,9 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			if regenNeeded {
 				err = e.WriteFile(e.sigmaPipelinesFingerprintFile, []byte(sigmaPipelineNewHash), 0644)
 				if err != nil {
-					log.WithError(err).WithField("path", e.sigmaPipelinesFingerprintFile).Error("unable to write sigma pipelines fingerprint file")
+					log.WithError(err).WithField("fingerprintPath", e.sigmaPipelinesFingerprintFile).Error("unable to write sigma pipelines fingerprint file")
 				} else {
-					log.WithField("path", e.sigmaPipelinesFingerprintFile).Info("updated sigma pipelines fingerprint file")
+					log.WithField("fingerprintPath", e.sigmaPipelinesFingerprintFile).Info("updated sigma pipelines fingerprint file")
 				}
 
 			}
@@ -831,7 +831,7 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos map[string]*model.RuleRepo) (
 
 		err := e.WalkDir(baseDir, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
-				log.WithError(err).WithField("path", path).Error("Failed to walk path")
+				log.WithError(err).WithField("repoPath", path).Error("Failed to walk path")
 				return nil
 			}
 
