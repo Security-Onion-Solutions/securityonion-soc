@@ -470,11 +470,15 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.extractedUpdated = yaml['modified'];
 		},
 		async loadHistory() {
-			const route = this;
-			const id = route.$route.params.id;
+			const id = this.$route.params.id;
+
 			const response = await this.$root.papi.get(`detection/${id}/history`);
 			if (response && response.data) {
 				this.history = response.data;
+
+				for (var i = 0; i < this.history.length; i++) {
+					this.$root.populateUserDetails(this.history[i], "userId", "owner");
+				}
 			}
 		},
 		getDefaultPreset(preset) {
