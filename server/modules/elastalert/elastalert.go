@@ -11,6 +11,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -50,6 +51,9 @@ const (
 	DEFAULT_SIGMA_PACKAGE_DOWNLOAD_TEMPLATE          = "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip"
 	DEFAULT_ELASTALERT_RULES_FOLDER                  = "/opt/sensoroni/elastalert"
 	DEFAULT_RULES_FINGERPRINT_FILE                   = "/opt/sensoroni/fingerprints/sigma.fingerprint"
+	DEFAULT_SIGMA_PIPELINES_FINGERPRINT_FILE         = "/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint"
+	DEFAULT_SIGMA_PIPELINE_FINAL_FILE                = "/opt/sensoroni/sigma_final_pipeline.yaml"
+	DEFAULT_SIGMA_PIPELINE_SO_FILE                   = "/opt/sensoroni/sigma_so_pipeline.yaml"
 	DEFAULT_REPOS_FOLDER                             = "/opt/sensoroni/sigma/repos"
 	DEFAULT_STATE_FILE_PATH                          = "/opt/sensoroni/fingerprints/elastalertengine.state"
 	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS        = 300
@@ -80,6 +84,9 @@ type ElastAlertEngine struct {
 	sigmaPackageDownloadTemplate         string
 	elastAlertRulesFolder                string
 	rulesFingerprintFile                 string
+	sigmaPipelineFinal                   string
+	sigmaPipelineSO                      string
+	sigmaPipelinesFingerprintFile        string
 	sigmaRulePackages                    []string
 	autoEnabledSigmaRules                []string
 	rulesRepos                           []*model.RuleRepo
@@ -131,6 +138,9 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECONDS)
 	e.sigmaPackageDownloadTemplate = module.GetStringDefault(config, "sigmaPackageDownloadTemplate", DEFAULT_SIGMA_PACKAGE_DOWNLOAD_TEMPLATE)
 	e.elastAlertRulesFolder = module.GetStringDefault(config, "elastAlertRulesFolder", DEFAULT_ELASTALERT_RULES_FOLDER)
+	e.sigmaPipelineFinal = module.GetStringDefault(config, "sigmaPipelineFinal", DEFAULT_SIGMA_PIPELINE_FINAL_FILE)
+	e.sigmaPipelineSO = module.GetStringDefault(config, "sigmaPipelineSO", DEFAULT_SIGMA_PIPELINE_SO_FILE)
+	e.sigmaPipelinesFingerprintFile = module.GetStringDefault(config, "sigmaPipelinesFingerprintFile", DEFAULT_SIGMA_PIPELINES_FINGERPRINT_FILE)
 	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", DEFAULT_RULES_FINGERPRINT_FILE)
 	e.autoEnabledSigmaRules = module.GetStringArrayDefault(config, "autoEnabledSigmaRules", []string{"securityonion-resources+critical", "securityonion-resources+high"})
 	e.communityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
@@ -489,12 +499,23 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 
 		var zips map[string][]byte
 		var errMap map[string]error
+		var regenNeeded bool
+		var sigmaPipelineNewHash string
 
+		// Check to see if the sigma processing pipelines have changed.
+		// If they have, (later) set forceSync to true to regenerate the elastalert rule files.
+		regenNeeded, sigmaPipelineNewHash, err = e.checkSigmaPipelines()
+		if err != nil {
+			log.WithField("errorMap", err).Error("failed to check the sigma processing pipelines")
+		} else {
+			log.Info("successfully checked the sigma processing pipelines")
+		}
+
+		// If the system is Airgap, load the sigma packages from disk.
+		// else, not Airgap, downoad the sigma packages.
 		if e.airgapEnabled {
-			// AirGap, load the sigma packages from disk
 			zips, errMap = e.loadSigmaPackagesFromDisk()
 		} else {
-			// Not AirGap, download the sigma packages
 			zips, errMap = e.downloadSigmaPackages()
 		}
 
@@ -541,8 +562,10 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			zipHashes[pkg] = base64.StdEncoding.EncodeToString(h[:])
 		}
 
-		// If no import has been completed, then do a full sync
-		if lastImport == nil {
+		// If no import has been completed, or
+		// elastalert rule files need to be regenerated -
+		// then do a full sync.
+		if lastImport == nil || regenNeeded {
 			forceSync = true
 		}
 
@@ -653,6 +676,17 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 				}
 			}
 
+			// Now that a successful sync completed - if the sigma pipelines changed, write out the new sigma pipelines hash .
+			if regenNeeded {
+				err = e.WriteFile(e.sigmaPipelinesFingerprintFile, []byte(sigmaPipelineNewHash), 0644)
+				if err != nil {
+					log.WithError(err).WithField("path", e.sigmaPipelinesFingerprintFile).Error("unable to write sigma pipelines fingerprint file")
+				} else {
+					log.WithField("path", e.sigmaPipelinesFingerprintFile).Info("updated sigma pipelines fingerprint file")
+				}
+
+			}
+
 			if e.notify {
 				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 					Engine: model.EngineNameElastAlert,
@@ -667,6 +701,45 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			"durationSeconds": dur.Seconds(),
 		}).Info("elastalert community rules sync finished")
 	}
+}
+
+func (e *ElastAlertEngine) checkSigmaPipelines() (bool, string, error) {
+	// Hash the pipeline files
+	hashFinal, err := e.hashFile(e.sigmaPipelineFinal)
+	if err != nil {
+		return false, "", fmt.Errorf("error hashing file %s: %w", e.sigmaPipelineFinal, err)
+	}
+	hashSO, err := e.hashFile(e.sigmaPipelineSO)
+	if err != nil {
+		return false, "", fmt.Errorf("error hashing file %s: %w", e.sigmaPipelineSO, err)
+	}
+	newHash := hashFinal + "-" + hashSO
+
+	// Read the existing hash from the fingerprint file
+	oldHash, err := e.ReadFile(e.sigmaPipelinesFingerprintFile)
+	if err != nil && !os.IsNotExist(err) {
+		return false, "", fmt.Errorf("error reading fingerprint file: %w", err)
+	}
+
+	// Compare hashes
+	if string(oldHash) == newHash {
+		log.Info("no changes to sigma processing pipeline")
+		return false, "", nil
+	}
+
+	// If hashes do not match, the elastalert rules need to be regenerated
+	log.Info("changes detected in sigma processing pipelines")
+
+	return true, newHash, nil
+}
+
+func (e *ElastAlertEngine) hashFile(filePath string) (string, error) {
+	data, err := e.ReadFile(filePath)
+	if err != nil {
+		return "", err
+	}
+	hash := sha256.Sum256(data)
+	return hex.EncodeToString(hash[:]), nil
 }
 
 func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detections []*model.Detection, errMap map[string]error) {
