@@ -83,8 +83,8 @@ func TestPreprocess(tester *testing.T) {
 			if assert.NotNil(tester, requestor) {
 				sensorUser := requestor.(*model.User)
 				assert.NotNil(tester, sensorUser)
-				assert.Equal(tester, "agent", sensorUser.Id)
-				assert.Equal(tester, "agent", sensorUser.Email)
+				assert.Equal(tester, "00000000-0000-0000-0000-000000000000", sensorUser.Id)
+				assert.Equal(tester, "00000000-0000-0000-0000-000000000000", sensorUser.Email)
 			}
 		}
 	}

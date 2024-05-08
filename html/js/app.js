@@ -21,6 +21,8 @@ const USER_PASSWORD_LENGTH_MIN = 8;
 const USER_PASSWORD_LENGTH_MAX = 72;
 const USER_PASSWORD_INVALID_RX = /["'$&!]/;
 
+const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
+
 if (typeof global !== 'undefined') global.routes = routes;
 
 $(document).ready(function() {
@@ -930,7 +932,13 @@ $(document).ready(function() {
       },
       async populateUserDetails(obj, idField, outputField) {
         if (obj[idField] && obj[idField].length > 0) {
-          const user = await this.$root.getUserById(obj[idField]);
+          const id = obj[idField];
+          if (id === SYSTEM_USER_ID) {
+            Vue.set(obj, outputField, this.i18n.systemUser);
+            return
+          }
+
+          const user = await this.$root.getUserById(id);
           if (user) {
             Vue.set(obj, outputField, user.email);
           }

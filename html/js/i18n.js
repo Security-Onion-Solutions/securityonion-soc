@@ -812,6 +812,7 @@ const i18n = {
       syncSuccess: 'Synchronized {engine} community rules successfully.',
       syncPartialSuccess: 'Synchronized {engine} community rules with some errors. Check SOC logs for details.',
       syncFailure: 'Something went wrong attempting to synchronize {engine} community rules. Check SOC logs for details.',
+      systemUser: "System",
       tags: 'Tags',
       thresholdType: 'Threshold Type',
       throttledLogin: 'Excessive login requests detected. Login requests can resume momentarily.',
