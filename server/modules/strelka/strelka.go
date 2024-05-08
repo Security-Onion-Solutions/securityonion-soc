@@ -791,8 +791,14 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]s
 		return nil, fmt.Errorf("failed to read directory: %v", err)
 	}
 
+	deleteByExt := map[string]struct{}{
+		".yar":      {},
+		".compiled": {},
+	}
+
 	for _, file := range files {
-		if filepath.Ext(file.Name()) == ".yar" {
+		_, ok := deleteByExt[strings.ToLower(filepath.Ext(file.Name()))]
+		if ok {
 			err := e.DeleteFile(filepath.Join(e.yaraRulesFolder, file.Name()))
 			if err != nil {
 				return nil, fmt.Errorf("failed to delete existing .yar file %s: %v", file.Name(), err)
@@ -812,21 +818,25 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]s
 	}
 
 	if e.compileRules {
-		// compile yara rules
-		cmd := exec.CommandContext(ctx, "python3", e.compileYaraPythonScriptPath, e.yaraRulesFolder)
+		if len(enabledDetections) != 0 {
+			// compile yara rules
+			cmd := exec.CommandContext(ctx, "python3", e.compileYaraPythonScriptPath, e.yaraRulesFolder)
 
-		raw, code, dur, err := e.ExecCommand(cmd)
+			raw, code, dur, err := e.ExecCommand(cmd)
 
-		log.WithFields(log.Fields{
-			"command":  cmd.String(),
-			"output":   string(raw),
-			"code":     code,
-			"execTime": dur.Seconds(),
-			"error":    err,
-		}).Info("yara compilation results")
+			log.WithFields(log.Fields{
+				"command":  cmd.String(),
+				"output":   string(raw),
+				"code":     code,
+				"execTime": dur.Seconds(),
+				"error":    err,
+			}).Info("yara compilation results")
 
-		if err != nil {
-			return nil, err
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			log.Info("no detections to compile, skipping compilation step of strelka sync")
 		}
 	}
 
