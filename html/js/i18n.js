@@ -40,6 +40,8 @@ const i18n = {
       actionProcessAncestorsHelp: 'Show all parent processes for this process',
       actionProcessInfo: 'Process Info',
       actionProcessInfoHelp: 'Show all logs for this process',
+      actionRelatedAlerts: 'Related Alerts',
+      actionRelatedAlertsHelp: 'Find alerts related to this detection',
       actionSublime: 'Sublime Platform Email Review',
       actionSublimeHelp: 'Review email in Sublime Platform',
       actionSuccess: 'Action completed: ',
