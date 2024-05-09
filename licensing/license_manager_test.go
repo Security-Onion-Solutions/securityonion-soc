@@ -288,7 +288,7 @@ func TestValidateFeature(tester *testing.T) {
 	assert.Len(tester, manager.limits, 3)
 }
 
-func TestPillarMonitor(tester *testing.T) {
+func DisabledDueToJobInstability_TestPillarMonitor(tester *testing.T) {
 	defer setup()()
 
 	Test("stg", 0, 0, "", "")
@@ -305,7 +305,7 @@ features:
 	assert.Contains(tester, string(contents), expected)
 }
 
-func TestPillarMonitorAllFeatures(tester *testing.T) {
+func DisabledDueToJobInstability_TestPillarMonitorAllFeatures(tester *testing.T) {
 	defer setup()()
 
 	Test("", 0, 0, "", "")

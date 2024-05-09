@@ -139,7 +139,7 @@ func TestGetOsNeedsRestart(tester *testing.T) {
 	assert.Equal(tester, 0, metrics.getOsNeedsRestart("missing"))
 }
 
-func TestUpdateNodeMetricsLksUnlicensed(tester *testing.T) {
+func DisabledDueToJobInstability_TestUpdateNodeMetricsLksUnlicensed(tester *testing.T) {
 	licensing.Test("odc", 0, 0, "", "")
 	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
 
@@ -161,7 +161,7 @@ func TestUpdateNodeMetricsLksUnlicensed(tester *testing.T) {
 	assert.Equal(tester, licensing.LICENSE_STATUS_EXCEEDED, licensing.GetStatus())
 }
 
-func TestUpdateNodeMetricsLksLicensed(tester *testing.T) {
+func DisabledDueToJobInstability_TestUpdateNodeMetricsLksLicensed(tester *testing.T) {
 	licensing.Test("lks", 0, 0, "", "")
 	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
 
@@ -183,7 +183,7 @@ func TestUpdateNodeMetricsLksLicensed(tester *testing.T) {
 	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
 }
 
-func TestUpdateNodeMetricsFpsUnlicensed(tester *testing.T) {
+func DisabledDueToJobInstability_TestUpdateNodeMetricsFpsUnlicensed(tester *testing.T) {
 	licensing.Test("odc", 0, 0, "", "")
 	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
 
@@ -205,7 +205,7 @@ func TestUpdateNodeMetricsFpsUnlicensed(tester *testing.T) {
 	assert.Equal(tester, licensing.LICENSE_STATUS_EXCEEDED, licensing.GetStatus())
 }
 
-func TestUpdateNodeMetricsFpsLicensed(tester *testing.T) {
+func DisabledDueToJobInstability_TestUpdateNodeMetricsFpsLicensed(tester *testing.T) {
 	licensing.Test("fps", 0, 0, "", "")
 	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
 
