@@ -28,7 +28,7 @@ RUN sed -i 's/#!\/usr\/bin\/python3/#!\/usr\/bin\/env python/g' /usr/bin/sigma
 # Build specific version of yara-python - needs to be pinned to Strelka's version.
 # Also install & then copy over the git binary to the final stage, needed for Detections
 FROM ghcr.io/security-onion-solutions/python:3-slim as stage_2
-RUN apt-get update && apt-get install -y gcc python3-dev libssl-dev git
+RUN apt-get update && apt-get install -y gcc python3-dev libssl-dev
 RUN pip3 install yara-python==4.3.1
 
 FROM ghcr.io/security-onion-solutions/python:3-slim
@@ -40,7 +40,7 @@ ARG ELASTIC_VERSION=0.0.0
 ARG WAZUH_VERSION=0.0.0
 
 RUN apt update -y
-RUN apt install -y bash tzdata ca-certificates wget curl tcpdump unzip
+RUN apt install -y bash tzdata ca-certificates wget curl tcpdump unzip git
 RUN update-ca-certificates
 RUN addgroup --gid "$GID" socore
 RUN adduser --disabled-password --uid "$UID" --ingroup socore --gecos '' socore
@@ -57,7 +57,6 @@ COPY --from=builder /build/sensoroni.json .
 COPY --from=builder /build/gitdocs/_build/html ./html/docs
 COPY --from=builder /usr/lib/python3.11/site-packages /usr/local/lib/python3.9/site-packages
 COPY --from=builder /usr/bin/sigma /usr/bin/sigma
-COPY --from=stage_2 /usr/bin/git /usr/bin/git
 COPY --from=stage_2 /usr/local/lib/python3.9/site-packages/yara_python-4.3.1.dist-info /usr/local/lib/python3.9/site-packages/
 COPY --from=stage_2 /usr/local/lib/python3.9/site-packages/yara.cpython-39-x86_64-linux-gnu.so /usr/local/lib/python3.9/site-packages/
 RUN find html/js -name "*test*.js" -delete
