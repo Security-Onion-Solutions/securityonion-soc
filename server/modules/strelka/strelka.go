@@ -818,25 +818,21 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]s
 	}
 
 	if e.compileRules {
-		if len(enabledDetections) != 0 {
-			// compile yara rules
-			cmd := exec.CommandContext(ctx, "python3", e.compileYaraPythonScriptPath, e.yaraRulesFolder)
+		// compile yara rules, call even if no yara rules
+		cmd := exec.CommandContext(ctx, "python3", e.compileYaraPythonScriptPath, e.yaraRulesFolder)
 
-			raw, code, dur, err := e.ExecCommand(cmd)
+		raw, code, dur, err := e.ExecCommand(cmd)
 
-			log.WithFields(log.Fields{
-				"command":  cmd.String(),
-				"output":   string(raw),
-				"code":     code,
-				"execTime": dur.Seconds(),
-				"error":    err,
-			}).Info("yara compilation results")
+		log.WithFields(log.Fields{
+			"command":  cmd.String(),
+			"output":   string(raw),
+			"code":     code,
+			"execTime": dur.Seconds(),
+			"error":    err,
+		}).Info("yara compilation results")
 
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			log.Info("no detections to compile, skipping compilation step of strelka sync")
+		if err != nil {
+			return nil, err
 		}
 	}
 
