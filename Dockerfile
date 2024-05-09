@@ -26,7 +26,6 @@ RUN pip3 install sigma-cli pysigma-backend-elasticsearch pysigma-pipeline-window
 RUN sed -i 's/#!\/usr\/bin\/python3/#!\/usr\/bin\/env python/g' /usr/bin/sigma
 
 # Build specific version of yara-python - needs to be pinned to Strelka's version.
-# Also install & then copy over the git binary to the final stage, needed for Detections
 FROM ghcr.io/security-onion-solutions/python:3-slim as stage_2
 RUN apt-get update && apt-get install -y gcc python3-dev libssl-dev
 RUN pip3 install yara-python==4.3.1
