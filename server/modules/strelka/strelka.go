@@ -247,6 +247,9 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 	// the normal communityRulesImportFrequencySeconds timer.
 	var lastSyncSuccess *bool
 
+	// publicId of a detection that was written but not read back
+	var writeNoRead *string
+
 	templateFound := false
 
 	lastImport, timerDur := detections.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Second*time.Duration(e.communityRulesImportFrequencySeconds))
@@ -286,7 +289,12 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 		lastSyncSuccess = util.Ptr(false)
 
-		timerDur = time.Second * time.Duration(e.communityRulesImportFrequencySeconds)
+		fail := e.checkWriteNoRead(writeNoRead)
+		if fail {
+			continue
+		}
+
+		writeNoRead = nil
 
 		log.WithFields(log.Fields{
 			"forceSync": forceSync,
@@ -376,8 +384,8 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			continue
 		}
 
-		var tooManyErrs error
 		et := detections.NewErrorTracker(e.failAfterConsecutiveErrorCount)
+		failSync := false
 
 		// parse *.yar files in repos
 		for repopath, repo := range upToDate {
@@ -445,6 +453,15 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 						}).Info("Updating Yara detection")
 
 						det, err = e.srv.Detectionstore.UpdateDetection(e.srv.Context, det)
+						if err.Error() == "Object not found" {
+							log.WithField("publicId", det.PublicID).Error("unable to read back successful write")
+
+							writeNoRead = util.Ptr(det.PublicID)
+							failSync = true
+
+							return err
+						}
+
 						eterr := et.AddError(err)
 						if eterr != nil {
 							return eterr
@@ -464,9 +481,19 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 						checkRulesetEnabled(e, det)
 
 						det, err = e.srv.Detectionstore.CreateDetection(e.srv.Context, det)
+						if err.Error() == "Object not found" {
+							log.WithField("publicId", det.PublicID).Error("unable to read back successful write")
+
+							writeNoRead = util.Ptr(det.PublicID)
+							failSync = true
+
+							return err
+						}
 
 						eterr := et.AddError(err)
 						if eterr != nil {
+							failSync = true
+
 							return eterr
 						}
 
@@ -480,19 +507,17 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 				return nil
 			})
 			if err != nil {
-				if errors.As(err, &detections.ErrorTrackerError{}) {
-					tooManyErrs = err
+				log.WithError(err).WithField("repo", repopath).Error("failed while walking repo")
+
+				if failSync {
 					break
 				}
-
-				log.WithError(err).WithField("repo", repopath).Error("failed while walking repo")
 
 				continue
 			}
 		}
 
-		if tooManyErrs != nil {
-			log.WithError(tooManyErrs).Error("unable to sync strelka community detections")
+		if failSync {
 			continue
 		}
 
@@ -686,12 +711,12 @@ func (e *StrelkaEngine) parseYaraRules(data []byte, filter bool) ([]*YaraRule, e
 				keep := true
 
 				if filter && e.denyRegex != nil && e.denyRegex.MatchString(rule.Src) {
-					log.WithField("id", rule.Identifier).Info("content matched Strelka's denyRegex")
+					log.WithField("identifier", rule.Identifier).Debug("content matched Strelka's denyRegex")
 					keep = false
 				}
 
 				if filter && e.allowRegex != nil && !e.allowRegex.MatchString(rule.Src) {
-					log.WithField("id", rule.Identifier).Info("content didn't match Strelka's allowRegex")
+					log.WithField("identifier", rule.Identifier).Debug("content didn't match Strelka's allowRegex")
 					keep = false
 				}
 
@@ -874,6 +899,41 @@ func (e *StrelkaEngine) DuplicateDetection(ctx context.Context, detection *model
 	det.Author = author
 
 	return det, nil
+}
+
+func (e *StrelkaEngine) checkWriteNoRead(writeNoRead *string) (shouldFail bool) {
+	if writeNoRead == nil {
+		return false
+	}
+
+	log.WithField("publicId", *writeNoRead).Error("detection was written but not read back, attempting read before continuing")
+
+	det, err := e.srv.Detectionstore.GetDetectionByPublicId(e.srv.Context, *writeNoRead)
+	if err != nil {
+		log.WithError(err).WithField("publicId", *writeNoRead).Error("failed to read back detection")
+
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameStrelka,
+				Status: "error",
+			})
+		}
+
+		return true
+	}
+
+	fields := log.Fields{
+		"publicId":       *writeNoRead,
+		"detectionDocId": det.Id,
+	}
+
+	if det.CreateTime != nil {
+		fields["durationCouldNotRead"] = time.Since(*det.CreateTime).Seconds()
+	}
+
+	log.WithFields(fields).Info("detection read back successfully")
+
+	return false
 }
 
 // go install go.uber.org/mock/mockgen@latest
