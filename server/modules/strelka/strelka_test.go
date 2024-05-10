@@ -2,7 +2,6 @@ package strelka
 
 import (
 	"context"
-	"errors"
 	"io/fs"
 	"os/exec"
 	"regexp"
@@ -659,35 +658,4 @@ func TestAddMissingImports(t *testing.T) {
 			assert.Equal(t, test.ExpectedImports, test.Input.Imports)
 		})
 	}
-}
-
-func TestCheckWriteNoRead(t *testing.T) {
-	t.Parallel()
-
-	eng := &StrelkaEngine{}
-
-	shouldFail := eng.checkWriteNoRead(nil)
-	assert.False(t, shouldFail)
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	id := util.Ptr("99999")
-
-	mio := servermock.NewMockDetectionstore(ctrl)
-
-	mio.EXPECT().GetDetectionByPublicId(gomock.Any(), *id).Return(nil, errors.New("Object not found"))
-
-	eng.srv = &server.Server{
-		Detectionstore: mio,
-		Context:        context.Background(),
-	}
-
-	shouldFail = eng.checkWriteNoRead(id)
-	assert.True(t, shouldFail)
-
-	mio.EXPECT().GetDetectionByPublicId(gomock.Any(), *id).Return(&model.Detection{}, nil)
-
-	shouldFail = eng.checkWriteNoRead(id)
-	assert.False(t, shouldFail)
 }

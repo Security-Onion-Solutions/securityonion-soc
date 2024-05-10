@@ -1,13 +1,17 @@
 package detections
 
 import (
+	"context"
 	"errors"
 	"io/fs"
 	"strconv"
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
+	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/tj/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -101,4 +105,29 @@ func TestWriteStateFile(t *testing.T) {
 	})
 
 	WriteStateFile(mio, "state")
+}
+
+func TestCheckWriteNoRead(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	id := util.Ptr("99999")
+	ctx := context.Background()
+
+	mio := servermock.NewMockDetectionstore(ctrl)
+
+	shouldFail := CheckWriteNoRead(ctx, mio, nil)
+	assert.False(t, shouldFail)
+
+	mio.EXPECT().GetDetectionByPublicId(gomock.Any(), *id).Return(nil, errors.New("Object not found"))
+
+	shouldFail = CheckWriteNoRead(ctx, mio, id)
+	assert.True(t, shouldFail)
+
+	mio.EXPECT().GetDetectionByPublicId(gomock.Any(), *id).Return(&model.Detection{}, nil)
+
+	shouldFail = CheckWriteNoRead(ctx, mio, id)
+	assert.False(t, shouldFail)
 }

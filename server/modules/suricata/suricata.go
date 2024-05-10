@@ -259,6 +259,9 @@ func (e *SuricataEngine) watchCommunityRules() {
 	// the normal communityRulesImportFrequencySeconds timer.
 	var lastSyncSuccess *bool
 
+	// publicId of a detection that was written but not read back
+	var writeNoRead *string
+
 	ctx := e.srv.Context
 	templateFound := false
 
@@ -298,6 +301,19 @@ func (e *SuricataEngine) watchCommunityRules() {
 		}
 
 		lastSyncSuccess = util.Ptr(false)
+
+		if detections.CheckWriteNoRead(e.srv.Context, e.srv.Detectionstore, writeNoRead) {
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+					Engine: model.EngineNameStrelka,
+					Status: "error",
+				})
+			}
+
+			continue
+		}
+
+		writeNoRead = nil
 
 		log.WithFields(log.Fields{
 			"forceSync": forceSync,
@@ -423,6 +439,14 @@ func (e *SuricataEngine) watchCommunityRules() {
 			if err == errModuleStopped {
 				log.Info("incomplete sync of suricata community detections due to module stopping")
 				break
+			}
+
+			if err.Error() == "Object not found" {
+				// errMap contains exactly 1 error: the publicId of the detection that
+				// was written to but not read back
+				for publicId := range errMap {
+					writeNoRead = util.Ptr(publicId)
+				}
 			}
 
 			if e.notify {
@@ -1062,6 +1086,14 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detects []
 
 				_, err = e.srv.Detectionstore.UpdateDetection(ctx, detect)
 				if err != nil {
+					if err.Error() == "Object not found" {
+						errMap = map[string]string{
+							detect.PublicID: "Object not found",
+						}
+
+						return errMap, err
+					}
+
 					errMap[detect.PublicID] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
 				} else {
 					results.Updated++
@@ -1079,6 +1111,14 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detects []
 		} else {
 			_, err = e.srv.Detectionstore.CreateDetection(ctx, detect)
 			if err != nil {
+				if err.Error() == "Object not found" {
+					errMap = map[string]string{
+						detect.PublicID: err.Error(),
+					}
+
+					return errMap, err
+				}
+
 				errMap[detect.PublicID] = fmt.Sprintf("unable to create detection; reason=%s", err.Error())
 			} else {
 				results.Added++

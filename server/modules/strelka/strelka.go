@@ -289,8 +289,14 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 		lastSyncSuccess = util.Ptr(false)
 
-		fail := e.checkWriteNoRead(writeNoRead)
-		if fail {
+		if detections.CheckWriteNoRead(e.srv.Context, e.srv.Detectionstore, writeNoRead) {
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+					Engine: model.EngineNameStrelka,
+					Status: "error",
+				})
+			}
+
 			continue
 		}
 
@@ -899,41 +905,6 @@ func (e *StrelkaEngine) DuplicateDetection(ctx context.Context, detection *model
 	det.Author = author
 
 	return det, nil
-}
-
-func (e *StrelkaEngine) checkWriteNoRead(writeNoRead *string) (shouldFail bool) {
-	if writeNoRead == nil {
-		return false
-	}
-
-	log.WithField("publicId", *writeNoRead).Error("detection was written but not read back, attempting read before continuing")
-
-	det, err := e.srv.Detectionstore.GetDetectionByPublicId(e.srv.Context, *writeNoRead)
-	if err != nil {
-		log.WithError(err).WithField("publicId", *writeNoRead).Error("failed to read back detection")
-
-		if e.notify {
-			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-				Engine: model.EngineNameStrelka,
-				Status: "error",
-			})
-		}
-
-		return true
-	}
-
-	fields := log.Fields{
-		"publicId":       *writeNoRead,
-		"detectionDocId": det.Id,
-	}
-
-	if det.CreateTime != nil {
-		fields["durationCouldNotRead"] = time.Since(*det.CreateTime).Seconds()
-	}
-
-	log.WithFields(fields).Info("detection read back successfully")
-
-	return false
 }
 
 // go install go.uber.org/mock/mockgen@latest
