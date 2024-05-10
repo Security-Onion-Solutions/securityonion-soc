@@ -11,7 +11,7 @@ COPY . /build
 WORKDIR /build
 RUN if [ "$VERSION" != "0.0.0" ]; then mkdir gitdocs && cd gitdocs && \
 	git clone --no-single-branch --depth 50 https://github.com/Security-Onion-Solutions/securityonion-docs.git . && \
-	git checkout --force origin/$(echo $VERSION | cut -d'.' -f1,2) && \
+	git checkout --force origin/dev && \
 	git clean -d -f -f && \
 	sed -i "s|'display_github': True|'display_github': False|g" conf.py && \
 	python3 -mvirtualenv /tmp/virtualenv && \
