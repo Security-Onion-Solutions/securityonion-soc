@@ -17,6 +17,10 @@ import (
 	"github.com/go-git/go-git/v5"
 )
 
+type GetterByPublicId interface {
+	GetDetectionByPublicId(ctx context.Context, publicId string) (*model.Detection, error)
+}
+
 type IOManager interface {
 	ReadFile(path string) ([]byte, error)
 	WriteFile(path string, contents []byte, perm fs.FileMode) error
@@ -242,4 +246,33 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 	}
 
 	return allRepos, anythingNew, nil
+}
+
+func CheckWriteNoRead(ctx context.Context, DetStore GetterByPublicId, writeNoRead *string) (shouldFail bool) {
+	if writeNoRead == nil {
+		return false
+	}
+
+	log.WithField("publicId", *writeNoRead).Error("detection was written but not read back, attempting read before continuing")
+
+	// det, err := e.srv.Detectionstore.GetDetectionByPublicId(e.srv.Context, *writeNoRead)
+	det, err := DetStore.GetDetectionByPublicId(ctx, *writeNoRead)
+	if err != nil {
+		log.WithError(err).WithField("publicId", *writeNoRead).Error("failed to read back detection")
+
+		return true
+	}
+
+	fields := log.Fields{
+		"publicId":       *writeNoRead,
+		"detectionDocId": det.Id,
+	}
+
+	if det.CreateTime != nil {
+		fields["durationCouldNotRead"] = time.Since(*det.CreateTime).Seconds()
+	}
+
+	log.WithFields(fields).Info("detection read back successfully")
+
+	return false
 }

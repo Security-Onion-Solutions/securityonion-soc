@@ -415,6 +415,9 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 	// the normal communityRulesImportFrequencySeconds timer.
 	var lastSyncSuccess *bool
 
+	// publicId of a detection that was written but not read back
+	var writeNoRead *string
+
 	ctx := e.srv.Context
 	templateFound := false
 
@@ -454,6 +457,19 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 		}
 
 		lastSyncSuccess = util.Ptr(false)
+
+		if detections.CheckWriteNoRead(e.srv.Context, e.srv.Detectionstore, writeNoRead) {
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+					Engine: model.EngineNameStrelka,
+					Status: "error",
+				})
+			}
+
+			continue
+		}
+
+		writeNoRead = nil
 
 		timerDur = time.Second * time.Duration(e.communityRulesImportFrequencySeconds)
 
@@ -635,6 +651,14 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			if err == errModuleStopped {
 				log.Info("incomplete sync of elastalert community detections due to module stopping")
 				return
+			}
+
+			if err.Error() == "Object not found" {
+				// errMap contains exactly 1 error: the publicId of the detection that
+				// was written to but not read back
+				for publicId := range errMap {
+					writeNoRead = util.Ptr(publicId)
+				}
 			}
 
 			log.WithError(err).Error("unable to sync elastalert community detections")
@@ -939,6 +963,14 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 
 			if oldDet.Content != det.Content || oldDet.Ruleset != det.Ruleset || len(det.Overrides) != 0 {
 				_, err = e.srv.Detectionstore.UpdateDetection(ctx, det)
+				if err.Error() == "Object not found" {
+					errMap = map[string]error{
+						det.PublicID: err,
+					}
+
+					return errMap, err
+				}
+
 				eterr := et.AddError(err)
 				if eterr != nil {
 					return nil, eterr
@@ -959,6 +991,14 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 			checkRulesetEnabled(e, det)
 
 			_, err = e.srv.Detectionstore.CreateDetection(ctx, det)
+			if err.Error() == "Object not found" {
+				errMap = map[string]error{
+					det.PublicID: err,
+				}
+
+				return errMap, err
+			}
+
 			eterr := et.AddError(err)
 			if eterr != nil {
 				return nil, eterr
