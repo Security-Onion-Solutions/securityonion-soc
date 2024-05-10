@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"math/rand/v2"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -26,6 +27,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+	"golang.org/x/mod/semver"
 
 	"github.com/apex/log"
 	"github.com/samber/lo"
@@ -33,7 +35,6 @@ import (
 )
 
 var errModuleStopped = fmt.Errorf("suricata module has stopped running")
-
 var sidExtracter = regexp.MustCompile(`(?i)\bsid: ?['"]?(.*?)['"]?;`)
 
 const modifyFromTo = `"flowbits" "noalert; flowbits"`
@@ -58,6 +59,7 @@ type IOManager interface {
 	ReadFile(path string) ([]byte, error)
 	WriteFile(path string, contents []byte, perm fs.FileMode) error
 	DeleteFile(path string) error
+	ReadDir(path string) ([]os.DirEntry, error)
 }
 
 type SuricataEngine struct {
@@ -75,14 +77,21 @@ type SuricataEngine struct {
 	denyRegex                            *regexp.Regexp
 	notify                               bool
 	stateFilePath                        string
+	migrations                           map[string]func([]byte) error
 	IOManager
 }
 
 func NewSuricataEngine(srv *server.Server) *SuricataEngine {
-	return &SuricataEngine{
+	e := &SuricataEngine{
 		srv:       srv,
 		IOManager: &ResourceManager{},
 	}
+
+	e.migrations = map[string]func([]byte) error{
+		"2.4.70": e.Migration2470,
+	}
+
+	return e
 }
 
 func (e *SuricataEngine) PrerequisiteModules() []string {
@@ -264,6 +273,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 
 	ctx := e.srv.Context
 	templateFound := false
+	checkMigrationsOnce := sync.OnceFunc(e.checkForMigrations)
 
 	lastImport, timerDur := detections.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Second*time.Duration(e.communityRulesImportFrequencySeconds))
 
@@ -392,6 +402,8 @@ func (e *SuricataEngine) watchCommunityRules() {
 					})
 				}
 
+				checkMigrationsOnce()
+
 				continue
 			}
 		}
@@ -496,6 +508,67 @@ func (e *SuricataEngine) watchCommunityRules() {
 		log.WithFields(log.Fields{
 			"durationSeconds": dur.Seconds(),
 		}).Info("suricata community rules sync finished")
+
+		checkMigrationsOnce()
+	}
+}
+
+func (e *SuricataEngine) checkForMigrations() {
+	migrationFinder := regexp.MustCompile(`suricata-migration-(.*)`)
+
+	migDir := "/tmp/socdev/so/conf/soc"
+
+	items, err := e.ReadDir(migDir)
+	if err != nil {
+		log.WithError(err).Error("unable to read directory")
+		return
+	}
+
+	migStates := map[string][]byte{}
+	versions := []string{}
+
+	// discover and read the state files
+	for _, item := range items {
+		if item.IsDir() {
+			continue
+		}
+
+		matches := migrationFinder.FindStringSubmatch(item.Name())
+		if matches == nil {
+			continue
+		}
+
+		ver := matches[1]
+
+		path := filepath.Join(migDir, item.Name())
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			log.WithError(err).WithField("filepath", path).Error("unable to read migration file")
+			continue
+		}
+
+		migStates[ver] = raw
+		versions = append(versions, ver)
+	}
+
+	// attempt to apply migrations in order
+	semver.Sort(versions)
+
+	for _, key := range versions {
+		state := migStates[key]
+
+		migFunc, ok := e.migrations[key]
+		if !ok {
+			log.WithField("version", key).Error("migration function not found")
+			continue
+		}
+
+		log.WithField("version", key).Info("applying migration")
+
+		err := migFunc(state)
+		if err != nil {
+			log.WithError(err).WithField("version", key).Error("unable to apply migration")
+		}
 	}
 }
 
@@ -1372,4 +1445,8 @@ func (_ *ResourceManager) WriteFile(path string, contents []byte, perm fs.FileMo
 
 func (_ *ResourceManager) DeleteFile(path string) error {
 	return os.Remove(path)
+}
+
+func (_ *ResourceManager) ReadDir(path string) ([]os.DirEntry, error) {
+	return os.ReadDir(path)
 }
