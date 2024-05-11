@@ -441,7 +441,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 				break
 			}
 
-			if err.Error() == "Object not found" {
+			if err != nil && err.Error() == "Object not found" {
 				// errMap contains exactly 1 error: the publicId of the detection that
 				// was written to but not read back
 				for publicId := range errMap {

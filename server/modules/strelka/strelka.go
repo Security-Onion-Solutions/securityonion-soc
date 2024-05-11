@@ -459,7 +459,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 						}).Info("Updating Yara detection")
 
 						det, err = e.srv.Detectionstore.UpdateDetection(e.srv.Context, det)
-						if err.Error() == "Object not found" {
+						if err != nil && err.Error() == "Object not found" {
 							log.WithField("publicId", det.PublicID).Error("unable to read back successful write")
 
 							writeNoRead = util.Ptr(det.PublicID)
@@ -487,7 +487,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 						checkRulesetEnabled(e, det)
 
 						det, err = e.srv.Detectionstore.CreateDetection(e.srv.Context, det)
-						if err.Error() == "Object not found" {
+						if err != nil && err.Error() == "Object not found" {
 							log.WithField("publicId", det.PublicID).Error("unable to read back successful write")
 
 							writeNoRead = util.Ptr(det.PublicID)

@@ -653,7 +653,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 				return
 			}
 
-			if err.Error() == "Object not found" {
+			if err != nil && err.Error() == "Object not found" {
 				// errMap contains exactly 1 error: the publicId of the detection that
 				// was written to but not read back
 				for publicId := range errMap {
@@ -963,7 +963,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 
 			if oldDet.Content != det.Content || oldDet.Ruleset != det.Ruleset || len(det.Overrides) != 0 {
 				_, err = e.srv.Detectionstore.UpdateDetection(ctx, det)
-				if err.Error() == "Object not found" {
+				if err != nil && err.Error() == "Object not found" {
 					errMap = map[string]error{
 						det.PublicID: err,
 					}
@@ -991,7 +991,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 			checkRulesetEnabled(e, det)
 
 			_, err = e.srv.Detectionstore.CreateDetection(ctx, det)
-			if err.Error() == "Object not found" {
+			if err != nil && err.Error() == "Object not found" {
 				errMap = map[string]error{
 					det.PublicID: err,
 				}
