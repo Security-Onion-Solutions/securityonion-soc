@@ -73,7 +73,6 @@ type StrelkaEngine struct {
 	compileYaraPythonScriptPath          string
 	allowRegex                           *regexp.Regexp
 	denyRegex                            *regexp.Regexp
-	compileRules                         bool
 	notify                               bool
 	stateFilePath                        string
 	IOManager
@@ -109,7 +108,6 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 	e.yaraRulesFolder = module.GetStringDefault(config, "yaraRulesFolder", DEFAULT_YARA_RULES_FOLDER)
 	e.reposFolder = module.GetStringDefault(config, "reposFolder", DEFAULT_REPOS_FOLDER)
 	e.compileYaraPythonScriptPath = module.GetStringDefault(config, "compileYaraPythonScriptPath", DEFAULT_COMPILE_YARA_PYTHON_SCRIPT_PATH)
-	e.compileRules = module.GetBoolDefault(config, "compileRules", DEFAULT_COMPILE_RULES)
 	e.autoEnabledYaraRules = module.GetStringArrayDefault(config, "autoEnabledYaraRules", []string{DEFAULT_AUTO_ENABLED_YARA_RULES})
 	e.communityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
@@ -848,23 +846,21 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]s
 		}
 	}
 
-	if e.compileRules {
-		// compile yara rules, call even if no yara rules
-		cmd := exec.CommandContext(ctx, "python3", e.compileYaraPythonScriptPath, e.yaraRulesFolder)
+	// compile yara rules, call even if no yara rules
+	cmd := exec.CommandContext(ctx, "python3", e.compileYaraPythonScriptPath, e.yaraRulesFolder)
 
-		raw, code, dur, err := e.ExecCommand(cmd)
+	raw, code, dur, err := e.ExecCommand(cmd)
 
-		log.WithFields(log.Fields{
-			"command":  cmd.String(),
-			"output":   string(raw),
-			"code":     code,
-			"execTime": dur.Seconds(),
-			"error":    err,
-		}).Info("yara compilation results")
+	log.WithFields(log.Fields{
+		"command":  cmd.String(),
+		"output":   string(raw),
+		"code":     code,
+		"execTime": dur.Seconds(),
+		"error":    err,
+	}).Info("yara compilation results")
 
-		if err != nil {
-			return nil, err
-		}
+	if err != nil {
+		return nil, err
 	}
 
 	return nil, nil
