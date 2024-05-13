@@ -296,7 +296,6 @@ func TestSyncStrelka(t *testing.T) {
 			mod.isRunning = true
 			mod.srv.DetectionEngines[model.EngineNameSuricata] = mod
 			mod.IOManager = mio
-			mod.compileRules = true
 
 			mod.compileYaraPythonScriptPath = "compileYaraPythonScriptPath"
 			mod.yaraRulesFolder = "yaraRulesFolder"
