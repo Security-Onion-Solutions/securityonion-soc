@@ -534,17 +534,6 @@ td {
   margin-top: 20px;
 }
 
-.summary-backdrop {
-  background-color: rgb(53, 53, 53);
-  border-radius: 4px;
-}
-
-.summary-backdrop > div {
-  background-color: #2a2a2a;
-  border-radius: 4px;
-  padding: 16px;
-}
-
 .header {
   font-size: 1.3em;
   font-weight: bold;
@@ -555,7 +544,6 @@ td {
 }
 
 .extracted-content {
-  background-color: #404040;
   border-radius: 4px;
   padding: 8px;
 }
@@ -612,12 +600,6 @@ td {
 
 .case-title {
   text-transform: capitalize;
-}
-
-.sigma-dialog-body {
-  background-color: #404040;
-  margin: 12px;
-  padding: 12px;
 }
 
 #convert-button-container {

@@ -24,7 +24,6 @@ type ClientParameters struct {
 	JobParams           HuntingParameters   `json:"job"`
 	DetectionsParams    DetectionParameters `json:"detections"`
 	DetectionParams     DetectionParameters `json:"detection"`
-	PlaybooksParams     HuntingParameters   `json:"playbooks"`
 	DocsUrl             string              `json:"docsUrl"`
 	CheatsheetUrl       string              `json:"cheatsheetUrl"`
 	ReleaseNotesUrl     string              `json:"releaseNotesUrl"`

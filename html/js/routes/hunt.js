@@ -2299,6 +2299,3 @@ routes.push({ path: '/dashboards', name: 'dashboards', component: dashboardsComp
 
 const detectionsComponent = Object.assign({}, huntComponent);
 routes.push({ path: '/detections', name: 'detections', component: detectionsComponent });
-
-const playbooksComponent = Object.assign({}, huntComponent);
-routes.push({ path: '/playbooks', name: 'playbooks', component: playbooksComponent });
