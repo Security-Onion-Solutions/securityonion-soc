@@ -52,6 +52,21 @@ func (mr *MockIOManagerMockRecorder) DeleteFile(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteFile", reflect.TypeOf((*MockIOManager)(nil).DeleteFile), arg0)
 }
 
+// ReadDir mocks base method.
+func (m *MockIOManager) ReadDir(arg0 string) ([]fs.DirEntry, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReadDir", arg0)
+	ret0, _ := ret[0].([]fs.DirEntry)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReadDir indicates an expected call of ReadDir.
+func (mr *MockIOManagerMockRecorder) ReadDir(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadDir", reflect.TypeOf((*MockIOManager)(nil).ReadDir), arg0)
+}
+
 // ReadFile mocks base method.
 func (m *MockIOManager) ReadFile(arg0 string) ([]byte, error) {
 	m.ctrl.T.Helper()

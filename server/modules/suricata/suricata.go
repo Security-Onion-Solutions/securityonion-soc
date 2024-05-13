@@ -77,7 +77,7 @@ type SuricataEngine struct {
 	denyRegex                            *regexp.Regexp
 	notify                               bool
 	stateFilePath                        string
-	migrations                           map[string]func([]byte) error
+	migrations                           map[string]func(string) error
 	IOManager
 }
 
@@ -87,7 +87,7 @@ func NewSuricataEngine(srv *server.Server) *SuricataEngine {
 		IOManager: &ResourceManager{},
 	}
 
-	e.migrations = map[string]func([]byte) error{
+	e.migrations = map[string]func(string) error{
 		"2.4.70": e.Migration2470,
 	}
 
@@ -514,9 +514,11 @@ func (e *SuricataEngine) watchCommunityRules() {
 }
 
 func (e *SuricataEngine) checkForMigrations() {
-	migrationFinder := regexp.MustCompile(`suricata-migration-(.*)`)
+	log.Info("checking for suricata migrations")
 
-	migDir := "/tmp/socdev/so/conf/soc"
+	migrationFinder := regexp.MustCompile(`^suricata-migration-(.*)$`)
+
+	migDir := "/opt/so/conf/soc"
 
 	items, err := e.ReadDir(migDir)
 	if err != nil {
@@ -524,7 +526,7 @@ func (e *SuricataEngine) checkForMigrations() {
 		return
 	}
 
-	migStates := map[string][]byte{}
+	migStates := map[string]string{} // map[semver]stateFilePath
 	versions := []string{}
 
 	// discover and read the state files
@@ -541,18 +543,18 @@ func (e *SuricataEngine) checkForMigrations() {
 		ver := matches[1]
 
 		path := filepath.Join(migDir, item.Name())
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			log.WithError(err).WithField("filepath", path).Error("unable to read migration file")
-			continue
-		}
-
-		migStates[ver] = raw
+		migStates[ver] = path
 		versions = append(versions, ver)
 	}
 
 	// attempt to apply migrations in order
 	semver.Sort(versions)
+
+	if len(versions) == 0 {
+		log.Info("no suricata migrations found")
+	} else {
+		log.WithField("migrationCount", len(versions)).Info("found suricata migrations")
+	}
 
 	for _, key := range versions {
 		state := migStates[key]
@@ -563,13 +565,16 @@ func (e *SuricataEngine) checkForMigrations() {
 			continue
 		}
 
-		log.WithField("version", key).Info("applying migration")
+		log.WithField("version", key).Info("attempting migration")
 
 		err := migFunc(state)
 		if err != nil {
-			log.WithError(err).WithField("version", key).Error("unable to apply migration")
+			log.WithError(err).WithField("version", key).Error("unable to apply migration, halting migrations")
+			break
 		}
 	}
+
+	log.Info("done checking for suricata migrations")
 }
 
 func readAndHash(path string) (content string, sha256Hash string, err error) {
