@@ -280,6 +280,7 @@ const i18n = {
       description: 'Description',
       destination: 'Destination',
       details: 'Details',
+      detection: 'Detection',
       detections: 'Detections',
       detectionsExcludeToggle: 'Exclude Detections data',
       detectionComments: 'Operational Notes',

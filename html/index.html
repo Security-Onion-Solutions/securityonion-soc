@@ -1045,7 +1045,8 @@
             <div v-if="isNew()">
               <!-- Create View -->
               <v-form ref="detection" v-model="editForm.valid">
-                <div class="col pt-5" style="background-color: rgb(53, 53, 53); border-radius: 4px;">
+                <div class="col pt-5 contrast-bg rounded rounded-md">
+                  <div class="header">{{ i18n.add }} {{ i18n.detection }}</div>
                   <!-- Language -->
                   <span data-aid="detection_new_language_select">
                     <v-select id="detection-language-create" v-model="detect.language" :items="getPresets('language')" persistent-hint :hint="i18n.language" :rules="[rules.required]" v-on:change="onDetectionChange"/>
