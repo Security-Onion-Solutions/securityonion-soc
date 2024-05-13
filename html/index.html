@@ -637,7 +637,7 @@
         </v-col>
         <v-col id="events" v-if="loaded && eventsEnabled && (isAdvanced() || !metricsEnabled)" :data-aid="'events_' + category">
           <v-toolbar v-if="isAdvanced()" dense flat>
-            <v-toolbar-title>{{ i18n.events }}</v-toolbar-title>
+            <v-toolbar-title>{{ isCategory("detections") || isCategory("alerts") || isCategory("cases") ? i18n[category] : i18n.events }}</v-toolbar-title>
             <v-spacer />
             <v-btn
               plain
