@@ -129,9 +129,6 @@ func NewElastAlertEngine(srv *server.Server) *ElastAlertEngine {
 	return &ElastAlertEngine{
 		srv:       srv,
 		IOManager: &ResourceManager{},
-		EngineState: model.EngineState{
-			IntegrityFailure: true,
-		},
 	}
 }
 

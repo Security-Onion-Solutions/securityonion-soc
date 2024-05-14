@@ -94,9 +94,6 @@ func NewStrelkaEngine(srv *server.Server) *StrelkaEngine {
 	return &StrelkaEngine{
 		srv:       srv,
 		IOManager: &ResourceManager{},
-		EngineState: model.EngineState{
-			IntegrityFailure: true,
-		},
 	}
 }
 

@@ -17,7 +17,7 @@ type IntegrityChecked interface {
 	IsRunning() bool
 }
 
-func IntegrityChecker(engName model.EngineName, eng IntegrityChecked, thread *sync.WaitGroup, interrupt chan bool, isCheckerRunning *bool, intCheckStatus *bool, integrityCheckFrequencySeconds int) {
+func IntegrityChecker(engName model.EngineName, eng IntegrityChecked, thread *sync.WaitGroup, interrupt chan bool, isCheckerRunning *bool, intCheckFailure *bool, integrityCheckFrequencySeconds int) {
 	thread.Add(1)
 	defer func() {
 		thread.Done()
@@ -61,7 +61,7 @@ func IntegrityChecker(engName model.EngineName, eng IntegrityChecked, thread *sy
 					eng.InterruptSync(true, false)
 				default:
 					// 2a
-					*intCheckStatus = false
+					*intCheckFailure = true
 					logger.WithError(err).Error("integrity check repeat failure, alerting user")
 					failCount = 0
 				}
@@ -71,7 +71,7 @@ func IntegrityChecker(engName model.EngineName, eng IntegrityChecked, thread *sy
 		} else {
 			logger.Info("integrity check passed")
 
-			*intCheckStatus = true
+			*intCheckFailure = false
 			failCount = 0
 		}
 	}

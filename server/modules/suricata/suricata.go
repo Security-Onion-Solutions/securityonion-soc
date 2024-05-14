@@ -86,9 +86,6 @@ func NewSuricataEngine(srv *server.Server) *SuricataEngine {
 	e := &SuricataEngine{
 		srv:       srv,
 		IOManager: &ResourceManager{},
-		EngineState: model.EngineState{
-			IntegrityFailure: true,
-		},
 	}
 
 	e.migrations = map[string]func(string) error{
