@@ -215,8 +215,7 @@ func (e *ElastAlertEngine) Start() error {
 
 	go e.startCommunityRuleImport()
 	go detections.IntegrityChecker(model.EngineNameElastAlert, e, e.integrityCheckerThread, e.interruptIntCheck,
-		&e.isRunning, &e.integrityCheckerRunning, &e.EngineState.IntegrityCheck,
-		e.integrityCheckFrequencySeconds)
+		&e.integrityCheckerRunning, &e.EngineState.IntegrityCheck, e.integrityCheckFrequencySeconds)
 
 	return nil
 }

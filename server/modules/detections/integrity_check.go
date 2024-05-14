@@ -17,7 +17,7 @@ type IntegrityChecked interface {
 	IsRunning() bool
 }
 
-func IntegrityChecker(engName model.EngineName, eng IntegrityChecked, thread *sync.WaitGroup, interrupt chan bool, isModuleRunning *bool, isCheckerRunning *bool, intCheckStatus *bool, integrityCheckFrequencySeconds int) {
+func IntegrityChecker(engName model.EngineName, eng IntegrityChecked, thread *sync.WaitGroup, interrupt chan bool, isCheckerRunning *bool, intCheckStatus *bool, integrityCheckFrequencySeconds int) {
 	thread.Add(1)
 	defer func() {
 		thread.Done()
@@ -28,7 +28,7 @@ func IntegrityChecker(engName model.EngineName, eng IntegrityChecked, thread *sy
 	failCount := uint(0)
 
 	for {
-		if !*isModuleRunning {
+		if !eng.IsRunning() {
 			logger.Info("integrity checker stopping")
 			return
 		}
