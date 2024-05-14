@@ -323,7 +323,7 @@ test('deleteDetection', async () => {
 	expect(comp.$router.length).toBe(1);
 });
 
-test('deleteDetectionCancel', async () => {
+test('deleteDetectionCancel', () => {
 	expect(comp.confirmDeleteDialog).toBe(false);
 	comp.deleteDetection();
 	expect(comp.confirmDeleteDialog).toBe(true);
