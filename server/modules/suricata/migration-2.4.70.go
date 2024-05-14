@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	idstoolsYaml = "/nsm/backup/detections-migration/idstools/soc_idstools.sls" // enabled/disabled
-	sidsYaml     = "/nsm/backup/detections-migration/suricata/sids.yaml"        // thresholds
+	idstoolsYaml = "/nsm/backup/detections-migration/idstools/soc_idstools.sls"       // enabled/disabled
+	sidsYaml     = "/nsm/backup/detections-migration/suricata/thresholding/sids.yaml" // thresholds
 )
 
 var (
