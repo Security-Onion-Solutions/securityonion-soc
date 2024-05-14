@@ -18,9 +18,14 @@ type DetectionEngine interface {
 	ExtractDetails(detect *model.Detection) error
 	InterruptSleep(forceFull bool)
 	DuplicateDetection(ctx context.Context, detection *model.Detection) (*model.Detection, error)
+	GetState() *EngineState
 }
 
 type SyncStatus struct {
 	Engine model.EngineName `json:"engine"`
 	Status string           `json:"status"`
+}
+
+type EngineState struct {
+	IntegrityCheck bool
 }

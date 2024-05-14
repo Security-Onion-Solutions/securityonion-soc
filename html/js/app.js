@@ -967,6 +967,12 @@ $(document).ready(function() {
         this.updateTitle();
         this.loadServerSettings(true);
       },
+      isDetectionsUnhealthy() {
+        return this.currentStatus &&
+          !(this.currentStatus.detections.elastalert &&
+            this.currentStatus.detections.suricata &&
+            this.currentStatus.detections.strelka);
+      },
       isGridUnhealthy() {
         return this.currentStatus && this.currentStatus.grid.unhealthyNodeCount > 0
       },

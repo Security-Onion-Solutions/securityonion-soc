@@ -75,6 +75,7 @@ type StrelkaEngine struct {
 	denyRegex                            *regexp.Regexp
 	notify                               bool
 	stateFilePath                        string
+	server.EngineState
 	IOManager
 }
 
@@ -93,11 +94,18 @@ func NewStrelkaEngine(srv *server.Server) *StrelkaEngine {
 	return &StrelkaEngine{
 		srv:       srv,
 		IOManager: &ResourceManager{},
+		EngineState: server.EngineState{
+			IntegrityCheck: true,
+		},
 	}
 }
 
 func (e *StrelkaEngine) PrerequisiteModules() []string {
 	return nil
+}
+
+func (e *StrelkaEngine) GetState() *server.EngineState {
+	return util.Ptr(e.EngineState)
 }
 
 func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {

@@ -101,6 +101,7 @@ type ElastAlertEngine struct {
 	airgapEnabled                        bool
 	notify                               bool
 	stateFilePath                        string
+	server.EngineState
 	IOManager
 }
 
@@ -124,11 +125,18 @@ func NewElastAlertEngine(srv *server.Server) *ElastAlertEngine {
 	return &ElastAlertEngine{
 		srv:       srv,
 		IOManager: &ResourceManager{},
+		EngineState: server.EngineState{
+			IntegrityCheck: true,
+		},
 	}
 }
 
 func (e *ElastAlertEngine) PrerequisiteModules() []string {
 	return nil
+}
+
+func (e *ElastAlertEngine) GetState() *server.EngineState {
+	return util.Ptr(e.EngineState)
 }
 
 func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
