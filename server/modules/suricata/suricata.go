@@ -480,7 +480,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 			// there were errors, don't save the fingerprint.
 			// idempotency means we might fix it if we try again later.
 			log.WithFields(log.Fields{
-				"errors": errMap,
+				"suricataSyncErrors": errMap,
 			}).Error("unable to sync all community detections")
 
 			if e.notify {
@@ -492,7 +492,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 		} else {
 			err = os.WriteFile(e.rulesFingerprintFile, []byte(hash), 0644)
 			if err != nil {
-				log.WithError(err).WithField("path", e.rulesFingerprintFile).Error("unable to write rules fingerprint file")
+				log.WithError(err).WithField("repoPath", e.rulesFingerprintFile).Error("unable to write rules fingerprint file")
 			}
 
 			if e.notify {
@@ -561,15 +561,15 @@ func (e *SuricataEngine) checkForMigrations() {
 
 		migFunc, ok := e.migrations[key]
 		if !ok {
-			log.WithField("version", key).Error("migration function not found")
+			log.WithField("mirgationVersion", key).Error("migration function not found")
 			continue
 		}
 
-		log.WithField("version", key).Info("attempting migration")
+		log.WithField("migrationVersion", key).Info("attempting migration")
 
 		err := migFunc(state)
 		if err != nil {
-			log.WithError(err).WithField("version", key).Error("unable to apply migration, halting migrations")
+			log.WithError(err).WithField("migrationVersion", key).Error("unable to apply migration, halting migrations")
 			break
 		}
 	}
@@ -658,12 +658,12 @@ func (e *SuricataEngine) ParseRules(content string, ruleset string, applyFilters
 
 		if applyFilters {
 			if e.denyRegex != nil && e.denyRegex.MatchString(line) {
-				log.WithField("rule", line).Info("content matched suricata's denyRegex")
+				log.WithField("suricataDenyRegex", line).Debug("content matched suricata's denyRegex")
 				continue
 			}
 
 			if e.allowRegex != nil && !e.allowRegex.MatchString(line) {
-				log.WithField("rule", line).Info("content didn't match suricata's allowRegex")
+				log.WithField("suricataAllowRegex", line).Debug("content didn't match suricata's allowRegex")
 				continue
 			}
 		}
@@ -1266,12 +1266,12 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detects []
 	}
 
 	log.WithFields(log.Fields{
-		"added":              results.Added,
-		"updated":            results.Updated,
-		"removed":            results.Removed,
-		"unchanged":          results.Unchanged,
-		"errors":             errMap,
-		"deleteUnreferenced": deleteUnreferenced,
+		"syncAdded":              results.Added,
+		"syncUpdated":            results.Updated,
+		"syncRemoved":            results.Removed,
+		"syncUnchanged":          results.Unchanged,
+		"syncErrors":             errMap,
+		"syncDeleteUnreferenced": deleteUnreferenced,
 	}).Info("suricata community diff")
 
 	return errMap, nil
