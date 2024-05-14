@@ -93,14 +93,18 @@ type ElastAlertEngine struct {
 	rulesRepos                           []*model.RuleRepo
 	reposFolder                          string
 	isRunning                            bool
-	thread                               *sync.WaitGroup
-	interrupt                            chan bool
+	syncThread                           *sync.WaitGroup
+	interruptSync                        chan bool
 	interm                               sync.Mutex
 	allowRegex                           *regexp.Regexp
 	denyRegex                            *regexp.Regexp
 	airgapEnabled                        bool
 	notify                               bool
 	stateFilePath                        string
+	integrityCheckerThread               *sync.WaitGroup
+	integrityCheckerRunning              bool
+	integrityCheckFrequencySeconds       int
+	interruptIntCheck                    chan bool
 	server.EngineState
 	IOManager
 }
@@ -140,8 +144,10 @@ func (e *ElastAlertEngine) GetState() *server.EngineState {
 }
 
 func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
-	e.thread = &sync.WaitGroup{}
-	e.interrupt = make(chan bool, 1)
+	e.syncThread = &sync.WaitGroup{}
+	e.integrityCheckerThread = &sync.WaitGroup{}
+	e.interruptSync = make(chan bool, 1)
+	e.interruptIntCheck = make(chan bool, 1)
 
 	e.airgapBasePath = module.GetStringDefault(config, "airgapBasePath", DEFAULT_AIRGAP_BASE_PATH)
 	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECONDS)
@@ -155,6 +161,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.communityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 	e.additionalAlerters = module.GetStringArrayDefault(config, "additionalAlerters", []string{})
+	e.integrityCheckFrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", 300)
 
 	pkgs := module.GetStringArrayDefault(config, "sigmaRulePackages", []string{"core", "emerging_threats_addon"})
 	e.parseSigmaPackages(pkgs)
@@ -204,39 +211,64 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 func (e *ElastAlertEngine) Start() error {
 	e.srv.DetectionEngines[model.EngineNameElastAlert] = e
 	e.isRunning = true
+	e.integrityCheckerRunning = true
 
 	go e.startCommunityRuleImport()
+	go detections.IntegrityChecker(model.EngineNameElastAlert, e, e.integrityCheckerThread, e.interruptIntCheck,
+		&e.isRunning, &e.integrityCheckerRunning, &e.EngineState.IntegrityCheck,
+		e.integrityCheckFrequencySeconds)
 
 	return nil
 }
 
 func (e *ElastAlertEngine) Stop() error {
 	e.isRunning = false
-	e.InterruptSleep(false)
-	e.thread.Wait()
+
+	e.InterruptSync(false, false)
+	e.syncThread.Wait()
+	e.pauseIntegrityChecker()
+	e.interruptIntegrityCheck()
+	e.integrityCheckerThread.Wait()
 
 	return nil
 }
 
-func (e *ElastAlertEngine) InterruptSleep(fullUpgrade bool) {
+func (e *ElastAlertEngine) InterruptSync(fullUpgrade bool, notify bool) {
 	e.interm.Lock()
 	defer e.interm.Unlock()
 
-	e.notify = true
+	e.notify = notify
 
-	if len(e.interrupt) == 0 {
-		e.interrupt <- fullUpgrade
+	if len(e.interruptSync) == 0 {
+		e.interruptSync <- fullUpgrade
 	}
 }
 
-func (e *ElastAlertEngine) resetInterrupt() {
+func (e *ElastAlertEngine) interruptIntegrityCheck() {
+	e.interm.Lock()
+	defer e.interm.Unlock()
+
+	if len(e.interruptIntCheck) == 0 {
+		e.interruptIntCheck <- true
+	}
+}
+
+func (e *ElastAlertEngine) pauseIntegrityChecker() {
+	e.integrityCheckerRunning = false
+}
+
+func (e *ElastAlertEngine) resumeIntegrityChecker() {
+	e.integrityCheckerRunning = true
+}
+
+func (e *ElastAlertEngine) resetInterruptSync() {
 	e.interm.Lock()
 	defer e.interm.Unlock()
 
 	e.notify = false
 
-	if len(e.interrupt) != 0 {
-		<-e.interrupt
+	if len(e.interruptSync) != 0 {
+		<-e.interruptSync
 	}
 }
 
@@ -412,9 +444,9 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 }
 
 func (e *ElastAlertEngine) startCommunityRuleImport() {
-	e.thread.Add(1)
+	e.syncThread.Add(1)
 	defer func() {
-		e.thread.Done()
+		e.syncThread.Done()
 		e.isRunning = false
 	}()
 
@@ -438,7 +470,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 	lastImport, timerDur := detections.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Duration(e.communityRulesImportFrequencySeconds)*time.Second)
 
 	for e.isRunning {
-		e.resetInterrupt()
+		e.resetInterruptSync()
 
 		var forceSync bool
 
@@ -460,11 +492,15 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			"expectedStartTime": time.Now().Add(timerDur).Format(time.RFC3339),
 		}).Info("waiting for next elastalert community rules sync")
 
+		e.resumeIntegrityChecker()
+
 		select {
 		case <-timer.C:
-		case typ := <-e.interrupt:
+		case typ := <-e.interruptSync:
 			forceSync = forceSync || typ
 		}
+
+		e.pauseIntegrityChecker()
 
 		if !e.isRunning {
 			break
@@ -1501,6 +1537,11 @@ func wrapRule(det *model.Detection, rule string, additionalAlerters []string) (s
 	}
 
 	return string(rawYaml), nil
+}
+
+func (e *ElastAlertEngine) IntegrityCheck() error {
+
+	return nil
 }
 
 // go install go.uber.org/mock/mockgen@latest

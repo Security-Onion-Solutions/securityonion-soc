@@ -151,17 +151,17 @@ func (e *SuricataEngine) Start() error {
 
 func (e *SuricataEngine) Stop() error {
 	e.isRunning = false
-	e.InterruptSleep(false)
+	e.InterruptSync(false, false)
 	e.thread.Wait()
 
 	return nil
 }
 
-func (e *SuricataEngine) InterruptSleep(fullUpgrade bool) {
+func (e *SuricataEngine) InterruptSync(fullUpgrade bool, notify bool) {
 	e.interm.Lock()
 	defer e.interm.Unlock()
 
-	e.notify = true
+	e.notify = notify
 
 	if len(e.interrupt) == 0 {
 		e.interrupt <- fullUpgrade

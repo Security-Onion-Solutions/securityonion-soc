@@ -16,7 +16,7 @@ type DetectionEngine interface {
 	SyncLocalDetections(ctx context.Context, detections []*model.Detection) (errMap map[string]string, err error)
 	ConvertRule(ctx context.Context, detect *model.Detection) (string, error)
 	ExtractDetails(detect *model.Detection) error
-	InterruptSleep(forceFull bool)
+	InterruptSync(forceFull bool, notify bool)
 	DuplicateDetection(ctx context.Context, detection *model.Detection) (*model.Detection, error)
 	GetState() *EngineState
 }

@@ -164,17 +164,17 @@ func (e *StrelkaEngine) Start() error {
 
 func (e *StrelkaEngine) Stop() error {
 	e.isRunning = false
-	e.InterruptSleep(false)
+	e.InterruptSync(false, false)
 	e.thread.Wait()
 
 	return nil
 }
 
-func (e *StrelkaEngine) InterruptSleep(fullUpgrade bool) {
+func (e *StrelkaEngine) InterruptSync(fullUpgrade bool, notify bool) {
 	e.interm.Lock()
 	defer e.interm.Unlock()
 
-	e.notify = true
+	e.notify = notify
 
 	if len(e.interrupt) == 0 {
 		e.interrupt <- fullUpgrade
