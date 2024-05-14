@@ -17,11 +17,18 @@ type IntegrityChecked interface {
 	IsRunning() bool
 }
 
-func IntegrityChecker(engName model.EngineName, eng IntegrityChecked, thread *sync.WaitGroup, interrupt chan bool, isCheckerRunning *bool, intCheckFailure *bool, integrityCheckFrequencySeconds int) {
-	thread.Add(1)
+type IntegrityCheckerData struct {
+	Thread           *sync.WaitGroup
+	IsRunning        bool
+	FrequencySeconds int
+	Interrupt        chan bool
+}
+
+func IntegrityChecker(engName model.EngineName, eng IntegrityChecked, data *IntegrityCheckerData, intCheckFailure *bool) {
+	data.Thread.Add(1)
 	defer func() {
-		thread.Done()
-		*isCheckerRunning = false
+		data.Thread.Done()
+		data.IsRunning = false
 	}()
 
 	logger := log.WithField("engineName", engName)
@@ -33,13 +40,13 @@ func IntegrityChecker(engName model.EngineName, eng IntegrityChecked, thread *sy
 			return
 		}
 
-		timer := time.NewTimer(time.Second * time.Duration(integrityCheckFrequencySeconds))
+		timer := time.NewTimer(time.Second * time.Duration(data.FrequencySeconds))
 		select {
 		case <-timer.C:
-		case <-interrupt:
+		case <-data.Interrupt:
 		}
 
-		if !*isCheckerRunning {
+		if !data.IsRunning {
 			continue
 		}
 

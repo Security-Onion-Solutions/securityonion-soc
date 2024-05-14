@@ -70,14 +70,15 @@ type SuricataEngine struct {
 	communityRulesImportErrorSeconds     int
 	failAfterConsecutiveErrorCount       int
 	isRunning                            bool
-	thread                               *sync.WaitGroup
-	interrupt                            chan bool
+	syncThread                           *sync.WaitGroup
+	interruptSync                        chan bool
 	interm                               sync.Mutex
 	allowRegex                           *regexp.Regexp
 	denyRegex                            *regexp.Regexp
 	notify                               bool
 	stateFilePath                        string
 	migrations                           map[string]func(string) error
+	detections.IntegrityCheckerData
 	model.EngineState
 	IOManager
 }
@@ -104,14 +105,17 @@ func (e *SuricataEngine) GetState() *model.EngineState {
 }
 
 func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
-	e.thread = &sync.WaitGroup{}
-	e.interrupt = make(chan bool, 1)
+	e.syncThread = &sync.WaitGroup{}
+	e.interruptSync = make(chan bool, 1)
+	e.IntegrityCheckerData.Thread = &sync.WaitGroup{}
+	e.IntegrityCheckerData.Interrupt = make(chan bool, 1)
 
 	e.communityRulesFile = module.GetStringDefault(config, "communityRulesFile", DEFAULT_COMMUNITY_RULES_FILE)
 	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", DEFAULT_RULES_FINGERPRINT_FILE)
 	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECS)
 	e.communityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
+	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", 300)
 
 	allow := module.GetStringDefault(config, "allowRegex", DEFAULT_ALLOW_REGEX)
 	deny := module.GetStringDefault(config, "denyRegex", DEFAULT_DENY_REGEX)
@@ -140,8 +144,10 @@ func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 func (e *SuricataEngine) Start() error {
 	e.srv.DetectionEngines[model.EngineNameSuricata] = e
 	e.isRunning = true
+	e.IntegrityCheckerData.IsRunning = true
 
 	go e.watchCommunityRules()
+	go detections.IntegrityChecker(model.EngineNameSuricata, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
 
 	return nil
 }
@@ -149,7 +155,10 @@ func (e *SuricataEngine) Start() error {
 func (e *SuricataEngine) Stop() error {
 	e.isRunning = false
 	e.InterruptSync(false, false)
-	e.thread.Wait()
+	e.syncThread.Wait()
+	e.pauseIntegrityChecker()
+	e.interruptIntegrityCheck()
+	e.IntegrityCheckerData.Thread.Wait()
 
 	return nil
 }
@@ -160,8 +169,8 @@ func (e *SuricataEngine) InterruptSync(fullUpgrade bool, notify bool) {
 
 	e.notify = notify
 
-	if len(e.interrupt) == 0 {
-		e.interrupt <- fullUpgrade
+	if len(e.interruptSync) == 0 {
+		e.interruptSync <- fullUpgrade
 	}
 }
 
@@ -171,9 +180,26 @@ func (e *SuricataEngine) resetInterrupt() {
 
 	e.notify = false
 
-	if len(e.interrupt) != 0 {
-		<-e.interrupt
+	if len(e.interruptSync) != 0 {
+		<-e.interruptSync
 	}
+}
+
+func (e *SuricataEngine) interruptIntegrityCheck() {
+	e.interm.Lock()
+	defer e.interm.Unlock()
+
+	if len(e.IntegrityCheckerData.Interrupt) == 0 {
+		e.IntegrityCheckerData.Interrupt <- true
+	}
+}
+
+func (e *SuricataEngine) pauseIntegrityChecker() {
+	e.IntegrityCheckerData.IsRunning = false
+}
+
+func (e *SuricataEngine) resumeIntegrityChecker() {
+	e.IntegrityCheckerData.IsRunning = true
 }
 
 func checkAndExtractCategory(title string) string {
@@ -258,9 +284,9 @@ func (e *SuricataEngine) ExtractDetails(detect *model.Detection) error {
 }
 
 func (e *SuricataEngine) watchCommunityRules() {
-	e.thread.Add(1)
+	e.syncThread.Add(1)
 	defer func() {
-		e.thread.Done()
+		e.syncThread.Done()
 		e.isRunning = false
 	}()
 
@@ -305,11 +331,15 @@ func (e *SuricataEngine) watchCommunityRules() {
 			"expectedStartTime": time.Now().Add(timerDur).Format(time.RFC3339),
 		}).Info("waiting for next suricata community rules sync")
 
+		e.resumeIntegrityChecker()
+
 		select {
 		case <-timer.C:
-		case typ := <-e.interrupt:
+		case typ := <-e.interruptSync:
 			forceSync = forceSync || typ
 		}
+
+		e.pauseIntegrityChecker()
 
 		if !e.isRunning {
 			break
@@ -458,7 +488,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 				break
 			}
 
-			if err != nil && err.Error() == "Object not found" {
+			if err.Error() == "Object not found" {
 				// errMap contains exactly 1 error: the publicId of the detection that
 				// was written to but not read back
 				for publicId := range errMap {
@@ -1437,6 +1467,11 @@ func (e *SuricataEngine) DuplicateDetection(ctx context.Context, detection *mode
 	det.Author = detections.AddUser(det.Author, user, ", ")
 
 	return det, nil
+}
+
+func (e *SuricataEngine) IntegrityCheck() error {
+
+	return nil
 }
 
 // go install go.uber.org/mock/mockgen@latest

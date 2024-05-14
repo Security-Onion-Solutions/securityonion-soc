@@ -101,10 +101,7 @@ type ElastAlertEngine struct {
 	airgapEnabled                        bool
 	notify                               bool
 	stateFilePath                        string
-	integrityCheckerThread               *sync.WaitGroup
-	integrityCheckerRunning              bool
-	integrityCheckFrequencySeconds       int
-	interruptIntCheck                    chan bool
+	detections.IntegrityCheckerData
 	model.EngineState
 	IOManager
 }
@@ -142,9 +139,9 @@ func (e *ElastAlertEngine) GetState() *model.EngineState {
 
 func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.syncThread = &sync.WaitGroup{}
-	e.integrityCheckerThread = &sync.WaitGroup{}
 	e.interruptSync = make(chan bool, 1)
-	e.interruptIntCheck = make(chan bool, 1)
+	e.IntegrityCheckerData.Thread = &sync.WaitGroup{}
+	e.IntegrityCheckerData.Interrupt = make(chan bool, 1)
 
 	e.airgapBasePath = module.GetStringDefault(config, "airgapBasePath", DEFAULT_AIRGAP_BASE_PATH)
 	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECONDS)
@@ -158,7 +155,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.communityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 	e.additionalAlerters = module.GetStringArrayDefault(config, "additionalAlerters", []string{})
-	e.integrityCheckFrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", 300)
+	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", 300)
 
 	pkgs := module.GetStringArrayDefault(config, "sigmaRulePackages", []string{"core", "emerging_threats_addon"})
 	e.parseSigmaPackages(pkgs)
@@ -208,11 +205,10 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 func (e *ElastAlertEngine) Start() error {
 	e.srv.DetectionEngines[model.EngineNameElastAlert] = e
 	e.isRunning = true
-	e.integrityCheckerRunning = true
+	e.IntegrityCheckerData.IsRunning = true
 
 	go e.startCommunityRuleImport()
-	go detections.IntegrityChecker(model.EngineNameElastAlert, e, e.integrityCheckerThread, e.interruptIntCheck,
-		&e.integrityCheckerRunning, &e.EngineState.IntegrityFailure, e.integrityCheckFrequencySeconds)
+	go detections.IntegrityChecker(model.EngineNameElastAlert, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
 
 	return nil
 }
@@ -224,7 +220,7 @@ func (e *ElastAlertEngine) Stop() error {
 	e.syncThread.Wait()
 	e.pauseIntegrityChecker()
 	e.interruptIntegrityCheck()
-	e.integrityCheckerThread.Wait()
+	e.IntegrityCheckerData.Thread.Wait()
 
 	return nil
 }
@@ -240,23 +236,6 @@ func (e *ElastAlertEngine) InterruptSync(fullUpgrade bool, notify bool) {
 	}
 }
 
-func (e *ElastAlertEngine) interruptIntegrityCheck() {
-	e.interm.Lock()
-	defer e.interm.Unlock()
-
-	if len(e.interruptIntCheck) == 0 {
-		e.interruptIntCheck <- true
-	}
-}
-
-func (e *ElastAlertEngine) pauseIntegrityChecker() {
-	e.integrityCheckerRunning = false
-}
-
-func (e *ElastAlertEngine) resumeIntegrityChecker() {
-	e.integrityCheckerRunning = true
-}
-
 func (e *ElastAlertEngine) resetInterruptSync() {
 	e.interm.Lock()
 	defer e.interm.Unlock()
@@ -266,6 +245,23 @@ func (e *ElastAlertEngine) resetInterruptSync() {
 	if len(e.interruptSync) != 0 {
 		<-e.interruptSync
 	}
+}
+
+func (e *ElastAlertEngine) interruptIntegrityCheck() {
+	e.interm.Lock()
+	defer e.interm.Unlock()
+
+	if len(e.IntegrityCheckerData.Interrupt) == 0 {
+		e.IntegrityCheckerData.Interrupt <- true
+	}
+}
+
+func (e *ElastAlertEngine) pauseIntegrityChecker() {
+	e.IntegrityCheckerData.IsRunning = false
+}
+
+func (e *ElastAlertEngine) resumeIntegrityChecker() {
+	e.IntegrityCheckerData.IsRunning = true
 }
 
 func (e *ElastAlertEngine) IsRunning() bool {
