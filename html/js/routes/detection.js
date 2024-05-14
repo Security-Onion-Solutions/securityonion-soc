@@ -121,6 +121,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			origComment: null,
 			showSigmaDialog: false,
 			convertedRule: '',
+			confirmDeleteDialog: false,
 	}},
 	created() {
 		this.onDetectionChange = debounce(this.onDetectionChange, 300);
@@ -673,11 +674,19 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			this.$router.push({ name: 'detection', params: { id: response.data.id } });
 		},
-		async deleteDetection() {
+		deleteDetection() {
+			this.confirmDeleteDialog = true;
+		},
+		cancelDeleteDetection() {
+			this.confirmDeleteDialog = false;
+		},
+		async confirmDeleteDetection() {
+			this.cancelDeleteDetection();
 			try {
 				this.$root.startLoading();
 				await this.$root.papi.delete('/detection/' + encodeURIComponent(this.$route.params.id));
 				this.$router.push({ name: 'detections' });
+				this.$root.showTip(this.i18n.detectionDeleteSuccessful);
 			} catch (error) {
 				this.$root.showError(error);
 			} finally {

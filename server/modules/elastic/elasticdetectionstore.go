@@ -595,6 +595,14 @@ func (store *ElasticDetectionstore) DeleteDetection(ctx context.Context, id stri
 
 	_, err = store.deleteDocument(ctx, store.disableCrossClusterIndex(store.index), detect, "detection", id)
 
+	if err == nil {
+		log.WithFields(log.Fields{
+			"ruleId":    id,
+			"requestId": ctx.Value(web.ContextKeyRequestId),
+			"userId":    ctx.Value(web.ContextKeyRequestorId).(string),
+		}).Info("Detection deleted")
+	}
+
 	return detect, err
 }
 

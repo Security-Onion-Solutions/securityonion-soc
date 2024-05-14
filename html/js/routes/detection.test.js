@@ -308,3 +308,41 @@ test('tagOverrides', () => {
 		expect(comp.detect.overrides[i]).toStrictEqual({ index: i });
 	}
 });
+
+test('deleteDetection', async () => {
+	const mock = jest.fn().mockReturnValue(Promise.resolve({ data: [] }));
+	const showErrorMock = mockShowError();
+	comp.$root.papi['delete'] = mock;
+	comp.$route.params.id = "testid"
+	await comp.confirmDeleteDetection();
+	expect(comp.confirmDeleteDialog).toBe(false);
+	expect(mock).toHaveBeenCalledTimes(1);
+	expect(mock).toHaveBeenCalledWith('/detection/testid');
+	expect(comp.$root.loading).toBe(false);
+	expect(showErrorMock).toHaveBeenCalledTimes(0);
+	expect(comp.$router.length).toBe(1);
+});
+
+test('deleteDetectionCancel', () => {
+	expect(comp.confirmDeleteDialog).toBe(false);
+	comp.deleteDetection();
+	expect(comp.confirmDeleteDialog).toBe(true);
+	comp.cancelDeleteDetection();
+	expect(comp.confirmDeleteDialog).toBe(false);
+	comp.deleteDetection();
+})
+
+test('deleteDetectionFailure', async () => {
+	resetPapi().mockPapi("delete", null, new Error("something bad"));
+	const showErrorMock = mockShowError();
+	comp.$root.papi['delete'] = mock;
+	comp.$route.params.id = "testid"
+	comp.deleteDetection();
+	await comp.confirmDeleteDetection();
+	expect(comp.confirmDeleteDialog).toBe(false);
+	expect(mock).toHaveBeenCalledTimes(1);
+	expect(mock).toHaveBeenCalledWith('/detection/testid');
+	expect(comp.$root.loading).toBe(false);
+	expect(showErrorMock).toHaveBeenCalledTimes(1);
+	expect(comp.$router.length).toBe(0);
+});
