@@ -1713,6 +1713,17 @@
                     <v-btn :disabled="detect.isCommunity" id="detection-delete" color="error" @click="deleteDetection()" data-aid="detection_metadata_delete">
                       {{i18n.delete}}
                     </v-btn>
+                    <v-dialog v-model="confirmDeleteDialog" persistent max-width="350" data-aid="detection_confirm_delete_dialog">
+                      <v-card>
+                        <v-card-title class="text-h5" v-text="i18n.detectionConfirmDelete" />
+                        <v-card-text v-html="i18n.detectionConfirmDeleteHelp" />
+                        <v-card-actions>
+                          <v-spacer></v-spacer>
+                          <v-btn text id="detection-delete-proceed-button" @click="confirmDeleteDetection()" v-text="i18n.yes" data-aid="detection_delete_dialog_confirm" />
+                          <v-btn text id="detection-delete-cancel-button" @click="cancelDeleteDetection()" v-text="i18n.no" data-aid="detection_delete_dialog_abort" />
+                        </v-card-actions>
+                      </v-card>
+                    </v-dialog>
                   </div>
                 </v-expansion-panel-content>
               </v-expansion-panel>
