@@ -628,7 +628,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 
 		detects, errMap := e.parseZipRules(zips)
 		if errMap != nil {
-			log.WithField("error", errMap).Error("something went wrong while parsing sigma rule files from zips")
+			log.WithField("sigmaParseError", errMap).Error("something went wrong while parsing sigma rule files from zips")
 		}
 
 		if errMap["module"] == errModuleStopped || !e.isRunning {
@@ -637,7 +637,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 
 		repoDets, errMap := e.parseRepoRules(allRepos)
 		if errMap != nil {
-			log.WithField("error", errMap).Error("something went wrong while parsing sigma rule files from repos")
+			log.WithField("sigmaParseError", errMap).Error("something went wrong while parsing sigma rule files from repos")
 		}
 
 		if errMap["module"] == errModuleStopped || !e.isRunning {
@@ -680,7 +680,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			// there were errors, don't save the fingerprint.
 			// idempotency means we might fix it if we try again later.
 			log.WithFields(log.Fields{
-				"errors": detections.TruncateMap(errMap, 5),
+				"elastAlertSyncErrors": detections.TruncateMap(errMap, 5),
 			}).Error("unable to sync all ElastAlert community detections")
 
 			if e.notify {
@@ -817,12 +817,12 @@ func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detections 
 			}
 
 			if e.denyRegex != nil && e.denyRegex.MatchString(string(data)) {
-				log.WithField("file", file.Name).Info("content matched elastalert's denyRegex")
+				log.WithField("elastAlertRuleFile", file.Name).Debug("content matched elastalert's denyRegex")
 				continue
 			}
 
 			if e.allowRegex != nil && !e.allowRegex.MatchString(string(data)) {
-				log.WithField("file", file.Name).Info("content didn't match elastalert's allowRegex")
+				log.WithField("elastAlertRuleFile", file.Name).Debug("content didn't match elastalert's allowRegex")
 				continue
 			}
 
@@ -874,7 +874,7 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos map[string]*model.RuleRepo) (
 
 			raw, err := e.ReadFile(path)
 			if err != nil {
-				log.WithError(err).WithField("file", path).Error("failed to read yara rule file")
+				log.WithError(err).WithField("elastAlertRuleFile", path).Error("failed to read elastalert rule file")
 				return nil
 			}
 
@@ -893,7 +893,7 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos map[string]*model.RuleRepo) (
 			return nil
 		})
 		if err != nil {
-			log.WithError(err).WithField("repo", repopath).Error("Failed to walk repo")
+			log.WithError(err).WithField("elastAlertRuleRepo", repopath).Error("Failed to walk repo")
 			continue
 		}
 	}
@@ -1062,11 +1062,11 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 	}
 
 	log.WithFields(log.Fields{
-		"added":     results.Added,
-		"updated":   results.Updated,
-		"removed":   results.Removed,
-		"unchanged": results.Unchanged,
-		"errors":    detections.TruncateMap(errMap, 5),
+		"elastAlertSyncadded":     results.Added,
+		"elastAlertSyncupdated":   results.Updated,
+		"elastAlertSyncremoved":   results.Removed,
+		"elastAlertSyncunchanged": results.Unchanged,
+		"elastAlertSyncerrors":    detections.TruncateMap(errMap, 5),
 	}).Info("elastalert community diff")
 
 	return errMap, nil
@@ -1227,11 +1227,11 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 	raw, code, runtime, err := e.ExecCommand(cmd)
 
 	log.WithFields(log.Fields{
-		"code":     code,
-		"output":   string(raw),
-		"command":  cmd.String(),
-		"execTime": runtime.Seconds(),
-		"error":    err,
+		"sigmaConvertCode":     code,
+		"sigmaConvertOutput":   string(raw),
+		"sigmaConvertCommand":  cmd.String(),
+		"sigmaConvertExecTime": runtime.Seconds(),
+		"sigmaConvertError":    err,
 	}).Info("executing sigma cli")
 
 	if err != nil {

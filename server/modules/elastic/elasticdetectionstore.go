@@ -187,8 +187,8 @@ func (store *ElasticDetectionstore) save(ctx context.Context, obj interface{}, k
 		_, err = store.Index(ctx, store.auditIndex, document, "")
 		if err != nil {
 			log.WithFields(log.Fields{
-				"documentId": results.DocumentId,
-				"kind":       kind,
+				"documentId":   results.DocumentId,
+				"documentKind": kind,
 			}).WithError(err).Error("Object indexed successfully however audit record failed to index")
 		}
 	}
@@ -225,18 +225,18 @@ func (store *ElasticDetectionstore) deleteDocument(ctx context.Context, index st
 	}
 
 	log.WithFields(log.Fields{
-		"index":     index,
-		"id":        id,
-		"requestId": ctx.Value(web.ContextKeyRequestId),
+		"deleteIndex": index,
+		"documentId":  id,
+		"requestId":   ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Deleting document from Elasticsearch")
 
 	res, err := store.esClient.Delete(transformIndex(index), id, store.esClient.Delete.WithContext(ctx))
 
 	if err != nil {
 		log.WithFields(log.Fields{
-			"index":     index,
-			"id":        id,
-			"requestId": ctx.Value(web.ContextKeyRequestId),
+			"deleteIndex": index,
+			"documentId":  id,
+			"requestId":   ctx.Value(web.ContextKeyRequestId),
 		}).WithError(err).Error("Unable to delete document from Elasticsearch")
 		return "", err
 	}
@@ -257,10 +257,10 @@ func (store *ElasticDetectionstore) deleteDocument(ctx context.Context, index st
 	json, err := readJsonFromResponse(res)
 
 	log.WithFields(log.Fields{
-		"index":     index,
-		"id":        id,
-		"response":  store.truncate(json),
-		"requestId": ctx.Value(web.ContextKeyRequestId),
+		"deleteIndex": index,
+		"documentId":  id,
+		"response":    store.truncate(json),
+		"requestId":   ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Delete document finished")
 	return json, err
 }
@@ -310,7 +310,7 @@ func (store *ElasticDetectionstore) getAll(ctx context.Context, query string, ma
 	for _, event := range results.Events {
 		obj, err := convertElasticEventToObject(event, store.schemaPrefix)
 		if err != nil {
-			log.WithField("event", event).WithError(err).Error("Unable to convert detection object")
+			log.WithField("returnedEvent", event).WithError(err).Error("Unable to convert detection object")
 			continue
 		}
 
@@ -386,7 +386,7 @@ func (store *ElasticDetectionstore) Query(ctx context.Context, query string, max
 			if err == nil {
 				objects = append(objects, obj)
 			} else {
-				log.WithField("event", event).WithError(err).Error("Unable to convert case object")
+				log.WithField("returnedEvent", event).WithError(err).Error("Unable to convert case object")
 			}
 		}
 
@@ -579,8 +579,8 @@ func (store *ElasticDetectionstore) UpdateDetectionField(ctx context.Context, id
 	err = store.audit(ctx, document, id)
 	if err != nil {
 		log.WithFields(log.Fields{
-			"documentId": id,
-			"kind":       "detection",
+			"documentId":   id,
+			"documentKind": "detection",
 		}).WithError(err).Error("Detection updated successfully however audit record failed to index")
 	}
 
@@ -645,10 +645,10 @@ func (store *ElasticDetectionstore) indexDocument(ctx context.Context, index str
 	}
 
 	log.WithFields(log.Fields{
-		"index":     index,
-		"id":        id,
-		"document":  store.truncate(document),
-		"requestId": ctx.Value(web.ContextKeyRequestId),
+		"documentIndex": index,
+		"documentId":    id,
+		"document":      store.truncate(document),
+		"requestId":     ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Adding document to Elasticsearch")
 
 	res, err := store.esClient.Index(index,

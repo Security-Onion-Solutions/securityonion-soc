@@ -404,7 +404,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 			err = filepath.WalkDir(baseDir, func(path string, d fs.DirEntry, err error) error {
 				if err != nil {
-					log.WithError(err).WithField("path", path).Error("Failed to walk path")
+					log.WithError(err).WithField("repoPath", path).Error("Failed to walk path")
 					return nil
 				}
 
@@ -423,13 +423,13 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 				raw, err := e.ReadFile(path)
 				if err != nil {
-					log.WithError(err).WithField("file", path).Error("failed to read yara rule file")
+					log.WithError(err).WithField("yaraRuleFile", path).Error("failed to read yara rule file")
 					return nil
 				}
 
 				parsed, err := e.parseYaraRules(raw, true)
 				if err != nil {
-					log.WithError(err).WithField("file", path).Error("failed to parse yara rule file")
+					log.WithError(err).WithField("yaraRuleFile", path).Error("failed to parse yara rule file")
 					return nil
 				}
 
@@ -472,7 +472,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 						}
 
 						if err != nil {
-							log.WithError(err).WithField("det", det).Error("Failed to update detection")
+							log.WithError(err).WithField("publicId", det.PublicID).Error("Failed to update detection")
 							continue
 						}
 					} else {
@@ -484,7 +484,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 						checkRulesetEnabled(e, det)
 
-						det, err = e.srv.Detectionstore.CreateDetection(e.srv.Context, det)
+						_, err = e.srv.Detectionstore.CreateDetection(e.srv.Context, det)
 						if err != nil && err.Error() == "Object not found" {
 							log.WithField("publicId", det.PublicID).Error("unable to read back successful write")
 
@@ -502,7 +502,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 						}
 
 						if err != nil {
-							log.WithError(err).WithField("det", det).Error("Failed to create detection")
+							log.WithError(err).WithField("publicId", det.PublicID).Error("Failed to create detection")
 							continue
 						}
 					}
@@ -511,7 +511,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 				return nil
 			})
 			if err != nil {
-				log.WithError(err).WithField("repo", repopath).Error("failed while walking repo")
+				log.WithError(err).WithField("strelkaRepo", repopath).Error("failed while walking repo")
 
 				if failSync {
 					break
@@ -562,8 +562,8 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 		}
 
 		log.WithFields(log.Fields{
-			"errMap": errMap,
-			"time":   time.Since(start).Seconds(),
+			"errMap":        errMap,
+			"syncStartTime": time.Since(start).Seconds(),
 		}).Info("Strelka community rules sync finished")
 	}
 }
@@ -715,12 +715,12 @@ func (e *StrelkaEngine) parseYaraRules(data []byte, filter bool) ([]*YaraRule, e
 				keep := true
 
 				if filter && e.denyRegex != nil && e.denyRegex.MatchString(rule.Src) {
-					log.WithField("identifier", rule.Identifier).Debug("content matched Strelka's denyRegex")
+					log.WithField("ruleIdentifier", rule.Identifier).Debug("content matched Strelka's denyRegex")
 					keep = false
 				}
 
 				if filter && e.allowRegex != nil && !e.allowRegex.MatchString(rule.Src) {
-					log.WithField("identifier", rule.Identifier).Debug("content didn't match Strelka's allowRegex")
+					log.WithField("ruleIdentifier", rule.Identifier).Debug("content didn't match Strelka's allowRegex")
 					keep = false
 				}
 
@@ -852,11 +852,11 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]s
 	raw, code, dur, err := e.ExecCommand(cmd)
 
 	log.WithFields(log.Fields{
-		"command":  cmd.String(),
-		"output":   string(raw),
-		"code":     code,
-		"execTime": dur.Seconds(),
-		"error":    err,
+		"yaraCommand":  cmd.String(),
+		"yaraOutput":   string(raw),
+		"yaraCode":     code,
+		"yaraExecTime": dur.Seconds(),
+		"yaraError":    err,
 	}).Info("yara compilation results")
 
 	if err != nil {
