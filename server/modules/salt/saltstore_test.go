@@ -546,6 +546,16 @@ func TestUpdateSetting_UpdateFile(tester *testing.T) {
 	updated_setting := findSetting(settings, "myapp.foo__txt", "")
 	assert.Equal(tester, "anything", updated_setting.Default)
 	assert.Equal(tester, "something", updated_setting.Value)
+
+	// Delete setting
+	err = salt.UpdateSetting(ctx(), setting, true)
+	assert.NoError(tester, err)
+
+	settings, get_err = salt.GetSettings(ctx())
+	assert.NoError(tester, get_err)
+	updated_setting = findSetting(settings, "myapp.foo__txt", "")
+	assert.Equal(tester, "anything", updated_setting.Default)
+	assert.Equal(tester, "anything", updated_setting.Value)
 }
 
 func TestUpdateSetting_UpdateAdvancedFailToParse(tester *testing.T) {
