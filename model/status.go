@@ -23,9 +23,16 @@ type AlertsStatus struct {
 }
 
 type DetectionsStatus struct {
-	ElastAlertIntegrityCheckPass bool `json:"elastalert"`
-	SuricataIntegrityCheckPass   bool `json:"suricata"`
-	StrelkaIntegrityCheckPass    bool `json:"strelka"`
+	ElastAlert *EngineState `json:"elastalert"`
+	Suricata   *EngineState `json:"suricata"`
+	Strelka    *EngineState `json:"strelka"`
+}
+
+type EngineState struct {
+	IntegrityFailure bool `json:"integrityFailure"`
+	Migrating        bool `json:"migrating"`
+	Importing        bool `json:"importing"`
+	Syncing          bool `json:"syncing"`
 }
 
 func NewStatus() *Status {

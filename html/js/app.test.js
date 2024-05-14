@@ -5,6 +5,7 @@
 // Elastic License 2.0.
 
 require('./test_common.js');
+require('./test_common.js');
 
 const app = global.getApp();
 
@@ -493,4 +494,103 @@ test('correctCasing', () => {
   expect(app.correctCasing('yara')).toBe('YARA');
   expect(app.correctCasing('Yara')).toBe('YARA');
   expect(app.correctCasing('yArA')).toBe('YARA');
-})
+});
+
+test('isDetectionsUnhealthy', () => {
+  // Unhealthy
+  app.currentStatus = { detections: {
+    elastalert: {
+      integrityFailure: true,
+    },
+    strelka: {
+      integrityFailure: true,
+    },
+    suricata: {
+      integrityFailure: true,
+    },
+  }}
+  expect(app.isDetectionsUnhealthy()).toBe(true);
+
+  // Healthy
+  app.currentStatus.detections.elastalert.integrityFailure = false
+  expect(app.isDetectionsUnhealthy()).toBe(true);
+  app.currentStatus.detections.strelka.integrityFailure = false
+  expect(app.isDetectionsUnhealthy()).toBe(true);
+  app.currentStatus.detections.suricata.integrityFailure = false
+  expect(app.isDetectionsUnhealthy()).toBe(false);
+
+  // Neither Unhealthy nor Healthy
+  app.currentStatus.detections.elastalert.migrating = true
+  app.currentStatus.detections.strelka.importing = true
+  app.currentStatus.detections.suricata.syncing = true
+  expect(app.isDetectionsUnhealthy()).toBe(false);
+});
+
+test('isDetectionsUpdating', () => {
+  // Unhealthy
+  app.currentStatus = { detections: {
+    elastalert: {
+      integrityFailure: true,
+    },
+    strelka: {
+      integrityFailure: true,
+    },
+    suricata: {
+      integrityFailure: true,
+    },
+  }};
+  expect(app.isDetectionsUpdating()).toBe(false);
+
+  // All healthy
+  app.currentStatus.detections.elastalert.integrityFailure = false;
+  expect(app.isDetectionsUpdating()).toBe(false);
+  app.currentStatus.detections.strelka.integrityFailure = false;
+  expect(app.isDetectionsUpdating()).toBe(false);
+  app.currentStatus.detections.suricata.integrityFailure = false;
+  expect(app.isDetectionsUpdating()).toBe(false);
+
+  // Suricata migrating
+  app.currentStatus.detections.suricata.migrating = true;
+  expect(app.isDetectionsUpdating()).toBe(true);
+  app.currentStatus.detections.suricata.migrating = false;
+
+  // Strelka migrating
+  app.currentStatus.detections.strelka.migrating = true;
+  expect(app.isDetectionsUpdating()).toBe(true);
+  app.currentStatus.detections.strelka.migrating = false;
+
+  // ElastAlert migrating
+  app.currentStatus.detections.elastalert.migrating = true;
+  expect(app.isDetectionsUpdating()).toBe(true);
+  app.currentStatus.detections.elastalert.migrating = false;
+
+  // Suricata importing
+  app.currentStatus.detections.suricata.importing = true;
+  expect(app.isDetectionsUpdating()).toBe(true);
+  app.currentStatus.detections.suricata.importing = false;
+
+  // Strelka importing
+  app.currentStatus.detections.strelka.importing = true;
+  expect(app.isDetectionsUpdating()).toBe(true);
+  app.currentStatus.detections.strelka.importing = false;
+
+  // ElastAlert importing
+  app.currentStatus.detections.elastalert.importing = true;
+  expect(app.isDetectionsUpdating()).toBe(true);
+  app.currentStatus.detections.elastalert.importing = false;
+
+  // Suricata syncing
+  app.currentStatus.detections.suricata.syncing = true;
+  expect(app.isDetectionsUpdating()).toBe(true);
+  app.currentStatus.detections.suricata.syncing = false;
+
+  // Strelka syncing
+  app.currentStatus.detections.strelka.syncing = true;
+  expect(app.isDetectionsUpdating()).toBe(true);
+  app.currentStatus.detections.strelka.syncing = false;
+
+  // ElastAlert syncing
+  app.currentStatus.detections.elastalert.syncing = true;
+  expect(app.isDetectionsUpdating()).toBe(true);
+  app.currentStatus.detections.elastalert.syncing = false;
+});

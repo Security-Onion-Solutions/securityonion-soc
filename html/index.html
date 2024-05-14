@@ -79,6 +79,9 @@
             <v-list-item-icon v-if="isDetectionsUnhealthy()">
               <v-icon color="warning">fa-exclamation</v-icon>
             </v-list-item-icon>
+            <v-list-item-icon v-else-if="isDetectionsUpdating()">
+              <v-icon color="info">fa-arrows-spin</v-icon>
+            </v-list-item-icon>
           </v-list-item>
           <v-list-item data-aid="nav_jobs" @click="" to="/jobs">
             <v-list-item-action>

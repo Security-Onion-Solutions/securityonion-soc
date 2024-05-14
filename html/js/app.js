@@ -968,10 +968,23 @@ $(document).ready(function() {
         this.loadServerSettings(true);
       },
       isDetectionsUnhealthy() {
-        return this.currentStatus &&
-          !(this.currentStatus.detections.elastalert &&
-            this.currentStatus.detections.suricata &&
-            this.currentStatus.detections.strelka);
+        return this.currentStatus != null && this.currentStatus.detections != null &&
+          (this.currentStatus.detections.elastalert.integrityFailure ||
+            this.currentStatus.detections.suricata.integrityFailure ||
+            this.currentStatus.detections.strelka.integrityFailure );
+      },
+      isDetectionsUpdating() {
+        return this.currentStatus != null && this.currentStatus.detections != null &&
+          !this.isDetectionsUnhealthy() && 
+          (this.currentStatus.detections.elastalert.importing === true ||
+          this.currentStatus.detections.elastalert.migrating === true ||
+          this.currentStatus.detections.elastalert.syncing === true ||
+          this.currentStatus.detections.strelka.importing === true ||
+          this.currentStatus.detections.strelka.migrating === true ||
+          this.currentStatus.detections.strelka.syncing === true ||
+          this.currentStatus.detections.suricata.importing === true ||
+          this.currentStatus.detections.suricata.migrating === true ||
+          this.currentStatus.detections.suricata.syncing === true);
       },
       isGridUnhealthy() {
         return this.currentStatus && this.currentStatus.grid.unhealthyNodeCount > 0

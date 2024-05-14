@@ -138,7 +138,7 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 }
 
 func (status *SoStatus) refreshDetections(ctx context.Context) {
-	status.currentStatus.Detections.ElastAlertIntegrityCheckPass = status.server.DetectionEngines[model.EngineNameElastAlert].GetState().IntegrityCheck
-	status.currentStatus.Detections.SuricataIntegrityCheckPass = status.server.DetectionEngines[model.EngineNameSuricata].GetState().IntegrityCheck
-	status.currentStatus.Detections.StrelkaIntegrityCheckPass = status.server.DetectionEngines[model.EngineNameStrelka].GetState().IntegrityCheck
+	status.currentStatus.Detections.ElastAlert = status.server.DetectionEngines[model.EngineNameElastAlert].GetState()
+	status.currentStatus.Detections.Suricata = status.server.DetectionEngines[model.EngineNameSuricata].GetState()
+	status.currentStatus.Detections.Strelka = status.server.DetectionEngines[model.EngineNameStrelka].GetState()
 }

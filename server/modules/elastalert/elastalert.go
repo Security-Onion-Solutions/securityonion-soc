@@ -105,7 +105,7 @@ type ElastAlertEngine struct {
 	integrityCheckerRunning              bool
 	integrityCheckFrequencySeconds       int
 	interruptIntCheck                    chan bool
-	server.EngineState
+	model.EngineState
 	IOManager
 }
 
@@ -129,8 +129,8 @@ func NewElastAlertEngine(srv *server.Server) *ElastAlertEngine {
 	return &ElastAlertEngine{
 		srv:       srv,
 		IOManager: &ResourceManager{},
-		EngineState: server.EngineState{
-			IntegrityCheck: true,
+		EngineState: model.EngineState{
+			IntegrityFailure: true,
 		},
 	}
 }
@@ -139,7 +139,7 @@ func (e *ElastAlertEngine) PrerequisiteModules() []string {
 	return nil
 }
 
-func (e *ElastAlertEngine) GetState() *server.EngineState {
+func (e *ElastAlertEngine) GetState() *model.EngineState {
 	return util.Ptr(e.EngineState)
 }
 
@@ -215,7 +215,7 @@ func (e *ElastAlertEngine) Start() error {
 
 	go e.startCommunityRuleImport()
 	go detections.IntegrityChecker(model.EngineNameElastAlert, e, e.integrityCheckerThread, e.interruptIntCheck,
-		&e.integrityCheckerRunning, &e.EngineState.IntegrityCheck, e.integrityCheckFrequencySeconds)
+		&e.integrityCheckerRunning, &e.EngineState.IntegrityFailure, e.integrityCheckFrequencySeconds)
 
 	return nil
 }

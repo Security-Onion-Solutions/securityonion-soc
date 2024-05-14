@@ -78,7 +78,7 @@ type SuricataEngine struct {
 	notify                               bool
 	stateFilePath                        string
 	migrations                           map[string]func(string) error
-	server.EngineState
+	model.EngineState
 	IOManager
 }
 
@@ -86,8 +86,8 @@ func NewSuricataEngine(srv *server.Server) *SuricataEngine {
 	e := &SuricataEngine{
 		srv:       srv,
 		IOManager: &ResourceManager{},
-		EngineState: server.EngineState{
-			IntegrityCheck: true,
+		EngineState: model.EngineState{
+			IntegrityFailure: true,
 		},
 	}
 
@@ -102,7 +102,7 @@ func (e *SuricataEngine) PrerequisiteModules() []string {
 	return nil
 }
 
-func (e *SuricataEngine) GetState() *server.EngineState {
+func (e *SuricataEngine) GetState() *model.EngineState {
 	return util.Ptr(e.EngineState)
 }
 
