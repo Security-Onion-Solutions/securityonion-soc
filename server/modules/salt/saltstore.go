@@ -661,23 +661,32 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 		}
 
 		log.WithFields(log.Fields{
-			"settingId": setting.Id,
-			"minionId":  setting.NodeId,
-			"path":      path,
-			"length":    len(setting.Value),
+			"settingId":     setting.Id,
+			"minionId":      setting.NodeId,
+			"settingPath":   path,
+			"settingLength": len(setting.Value),
 		}).Info("Updating advanced settings to new value")
 		os.WriteFile(path, []byte(setting.Value), 0600)
 
 	} else if setting.File {
 		path := fmt.Sprintf("%s/local/salt/%s", store.saltstackDir, store.relPathFromId(setting.Id))
+		if !remove {
+			log.WithFields(log.Fields{
+				"settingId":     setting.Id,
+				"settingPath":   path,
+				"settingLength": len(setting.Value),
+			}).Info("Updating custom file setting to new value")
 
-		log.WithFields(log.Fields{
-			"settingId": setting.Id,
-			"path":      path,
-			"length":    len(setting.Value),
-		}).Info("Updating custom file setting to new value")
+			err = os.WriteFile(path, []byte(setting.Value), 0600)
+		} else {
+			log.WithFields(log.Fields{
+				"settingId":     setting.Id,
+				"settingPath":   path,
+				"settingLength": len(setting.Value),
+			}).Info("Deleting custom file")
 
-		err = os.WriteFile(path, []byte(setting.Value), 0600)
+			err = os.Remove(path)
+		}
 	} else {
 		var path string
 		if setting.NodeId == "" {
@@ -691,15 +700,15 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 		if err == nil {
 			if !remove {
 				log.WithFields(log.Fields{
-					"settingId": setting.Id,
-					"path":      path,
-					"length":    len(setting.Value),
+					"settingId":     setting.Id,
+					"settingPath":   path,
+					"settingLength": len(setting.Value),
 				}).Info("Updating setting to new value")
 				err = store.updateSetting(mapped, sections, setting)
 			} else {
 				log.WithFields(log.Fields{
-					"settingId": setting.Id,
-					"path":      path,
+					"settingId":   setting.Id,
+					"settingPath": path,
 				}).Info("Deleting setting")
 				_, err = store.deleteSetting(mapped, sections)
 			}
