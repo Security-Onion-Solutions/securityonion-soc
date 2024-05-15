@@ -9,7 +9,8 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
-var errIntCheckerStopped = fmt.Errorf("integrity checker has stopped running")
+var ErrIntCheckerStopped = fmt.Errorf("integrity checker has stopped running")
+var ErrIntCheckFailed = fmt.Errorf("integrity check failed; discrepancies found")
 
 type IntegrityChecked interface {
 	IntegrityCheck() error
@@ -52,7 +53,7 @@ func IntegrityChecker(engName model.EngineName, eng IntegrityChecked, data *Inte
 
 		err := eng.IntegrityCheck()
 		if err != nil {
-			if err != errIntCheckerStopped {
+			if err != ErrIntCheckerStopped {
 				failCount++
 
 				// we just had a bad integrity check, we should:
@@ -82,4 +83,30 @@ func IntegrityChecker(engName model.EngineName, eng IntegrityChecked, data *Inte
 			failCount = 0
 		}
 	}
+}
+
+func DiffLists[T comparable](A []T, B []T) (onlyA []T, onlyB []T, both []T) {
+	onlyA = []T{}
+	onlyB = []T{}
+	both = []T{}
+
+	aMap := make(map[T]struct{})
+	for _, a := range A {
+		aMap[a] = struct{}{}
+	}
+
+	for _, b := range B {
+		if _, ok := aMap[b]; ok {
+			both = append(both, b)
+			delete(aMap, b)
+		} else {
+			onlyB = append(onlyB, b)
+		}
+	}
+
+	for a := range aMap {
+		onlyA = append(onlyA, a)
+	}
+
+	return
 }

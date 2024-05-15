@@ -929,3 +929,37 @@ func TestExtractDetails(t *testing.T) {
 		})
 	}
 }
+
+func TestGetDeployedPublicIds(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mio := mock.NewMockIOManager(ctrl)
+	path := "path"
+
+	mio.EXPECT().ReadDir(path).Return([]fs.DirEntry{
+		&MockDirEntry{
+			name: "00000000-0000-0000-0000-000000000000.yml",
+		},
+		&MockDirEntry{
+			name: "11111111-1111-1111-1111-111111111111.yaml",
+		},
+		&MockDirEntry{
+			name:  "ignored_dir",
+			isDir: true,
+		},
+		&MockDirEntry{
+			name: "ignored.txt",
+		},
+	}, nil)
+
+	eng := &ElastAlertEngine{
+		elastAlertRulesFolder: path,
+		IOManager:             mio,
+	}
+
+	ids, err := eng.getDeployedPublicIds()
+	assert.NoError(t, err)
+
+	assert.Len(t, ids, 2)
+	assert.Contains(t, ids, "00000000-0000-0000-0000-000000000000")
+	assert.Contains(t, ids, "11111111-1111-1111-1111-111111111111")
+}

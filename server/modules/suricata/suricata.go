@@ -610,7 +610,7 @@ func (e *SuricataEngine) checkForMigrations() {
 
 		migFunc, ok := e.migrations[key]
 		if !ok {
-			log.WithField("mirgationVersion", key).Error("migration function not found")
+			log.WithField("migrationVersion", key).Error("migration function not found")
 			continue
 		}
 
@@ -1151,7 +1151,7 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detects []
 		return nil, err
 	}
 
-	commSIDs, err := e.srv.Detectionstore.GetAllCommunitySIDs(ctx, util.Ptr(model.EngineNameSuricata))
+	commSIDs, err := e.srv.Detectionstore.GetAllDetections(ctx, util.Ptr(model.EngineNameSuricata), nil)
 	if err != nil {
 		return nil, err
 	}

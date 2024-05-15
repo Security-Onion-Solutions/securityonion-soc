@@ -155,7 +155,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.communityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 	e.additionalAlerters = module.GetStringArrayDefault(config, "additionalAlerters", []string{})
-	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", 300)
+	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", 600)
 
 	pkgs := module.GetStringArrayDefault(config, "sigmaRulePackages", []string{"core", "emerging_threats_addon"})
 	e.parseSigmaPackages(pkgs)
@@ -961,7 +961,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 		return nil, err
 	}
 
-	community, err := e.srv.Detectionstore.GetAllCommunitySIDs(ctx, util.Ptr(model.EngineNameElastAlert))
+	community, err := e.srv.Detectionstore.GetAllDetections(ctx, util.Ptr(model.EngineNameElastAlert), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1544,8 +1544,90 @@ func wrapRule(det *model.Detection, rule string, additionalAlerters []string) (s
 }
 
 func (e *ElastAlertEngine) IntegrityCheck() error {
+	// escape
+	if !e.IntegrityCheckerData.IsRunning {
+		return detections.ErrIntCheckerStopped
+	}
+
+	logger := log.WithFields(log.Fields{
+		"detectionEngine": model.EngineNameElastAlert,
+		"intCheckId":      uuid.New().String(),
+	})
+
+	deployed, err := e.getDeployedPublicIds()
+	if err != nil {
+		logger.WithError(err).Error("unable to get deployed publicIds")
+		return detections.ErrIntCheckFailed
+	}
+
+	log.WithField("deployedPublicIdsCount", len(deployed)).Debug("deployed publicIds")
+
+	// escape
+	if !e.IntegrityCheckerData.IsRunning {
+		logger.Info("integrity checker stopped")
+		return detections.ErrIntCheckerStopped
+	}
+
+	ret, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, util.Ptr(model.EngineNameElastAlert), util.Ptr(true))
+	if err != nil {
+		logger.WithError(err).Error("unable to query for enabled detections")
+		return detections.ErrIntCheckFailed
+	}
+
+	enabled := make([]string, 0, len(ret))
+	for _, d := range ret {
+		enabled = append(enabled, d.PublicID)
+	}
+
+	log.WithField("enabledDetectionsCount", len(enabled)).Debug("enabled detections")
+
+	// escape
+	if !e.IntegrityCheckerData.IsRunning {
+		logger.Info("integrity checker stopped")
+		return detections.ErrIntCheckerStopped
+	}
+
+	deployedButNotEnabled, enabledButNotDeployed, _ := detections.DiffLists(deployed, enabled)
+
+	logger.WithFields(log.Fields{
+		"deployedButNotEnabled": deployedButNotEnabled,
+		"enabledButNotDeployed": enabledButNotDeployed,
+	}).Info("integrity check report")
+
+	if len(deployedButNotEnabled) > 0 || len(enabledButNotDeployed) > 0 {
+		logger.Info("integrity check failed")
+		return detections.ErrIntCheckFailed
+	}
+
+	logger.Info("integrity check passed")
 
 	return nil
+}
+
+func (e *ElastAlertEngine) getDeployedPublicIds() (publicIds []string, err error) {
+	files, err := e.ReadDir(e.elastAlertRulesFolder)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read elastalert rules folder: %w", err)
+	}
+
+	publicIds = make([]string, 0, len(files))
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		ext := filepath.Ext(file.Name())
+
+		_, ok := acceptedExtensions[strings.ToLower(ext)]
+		if !ok {
+			continue
+		}
+
+		pid := strings.TrimSuffix(file.Name(), ext)
+		publicIds = append(publicIds, pid)
+	}
+
+	return publicIds, nil
 }
 
 // go install go.uber.org/mock/mockgen@latest

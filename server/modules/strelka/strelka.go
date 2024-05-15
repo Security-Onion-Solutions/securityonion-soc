@@ -423,7 +423,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			}
 		}
 
-		communityDetections, err := e.srv.Detectionstore.GetAllCommunitySIDs(e.srv.Context, util.Ptr(model.EngineNameStrelka))
+		communityDetections, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, util.Ptr(model.EngineNameStrelka), nil)
 		if err != nil {
 			log.WithError(err).Error("Failed to get all community SIDs")
 
