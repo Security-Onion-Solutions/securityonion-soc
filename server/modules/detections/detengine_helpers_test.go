@@ -118,14 +118,23 @@ func TestCheckWriteNoRead(t *testing.T) {
 
 	mio := servermock.NewMockDetectionstore(ctrl)
 
+	// No pending ID to read
 	shouldFail := CheckWriteNoRead(ctx, mio, nil)
 	assert.False(t, shouldFail)
 
-	mio.EXPECT().GetDetectionByPublicId(gomock.Any(), *id).Return(nil, errors.New("Object not found"))
+	// Error querying ES
+	mio.EXPECT().GetDetectionByPublicId(gomock.Any(), *id).Return(nil, errors.New("connection error"))
 
 	shouldFail = CheckWriteNoRead(ctx, mio, id)
 	assert.True(t, shouldFail)
 
+	// Detection still not found
+	mio.EXPECT().GetDetectionByPublicId(gomock.Any(), *id).Return(nil, nil)
+
+	shouldFail = CheckWriteNoRead(ctx, mio, id)
+	assert.True(t, shouldFail)
+
+	// Successfully read back the missing ID
 	mio.EXPECT().GetDetectionByPublicId(gomock.Any(), *id).Return(&model.Detection{}, nil)
 
 	shouldFail = CheckWriteNoRead(ctx, mio, id)
