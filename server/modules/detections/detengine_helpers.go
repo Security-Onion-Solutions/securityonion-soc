@@ -263,6 +263,12 @@ func CheckWriteNoRead(ctx context.Context, DetStore GetterByPublicId, writeNoRea
 		return true
 	}
 
+	if det == nil {
+		log.WithField("publicId", *writeNoRead).Error("detection still not found")
+
+		return true
+	}
+
 	fields := log.Fields{
 		"publicId":       *writeNoRead,
 		"detectionDocId": det.Id,
