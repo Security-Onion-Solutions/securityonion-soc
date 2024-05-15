@@ -518,7 +518,7 @@ func (e *SuricataEngine) checkForMigrations() {
 
 	migrationFinder := regexp.MustCompile(`^suricata-migration-(.*)$`)
 
-	migDir := "/opt/so/conf/soc"
+	migDir := "/opt/so/conf/soc/migrations/"
 
 	items, err := e.ReadDir(migDir)
 	if err != nil {
