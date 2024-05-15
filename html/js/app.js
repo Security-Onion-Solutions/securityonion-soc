@@ -967,11 +967,65 @@ $(document).ready(function() {
         this.updateTitle();
         this.loadServerSettings(true);
       },
+      getDetectionEngines() {
+        return ['elastalert', 'strelka', 'suricata'];
+      },
+      getDetectionEngineStatusClass(engine) {
+        if (!this.currentStatus || !this.currentStatus.detections || !this.currentStatus.detections[engine]) {
+          return "normal--text";
+        }
+
+        const status = this.currentStatus.detections[engine];
+        if (status.importing) {
+          return "warning--text";
+        } else if (status.migrating) {
+          return "warning--text";
+        } else if (status.migrationFailure) {
+          return "error--text";
+        } else if (status.syncFailure) {
+          return "error--text";
+        } else if (status.integrityFailure) {
+          return "error--text";
+        } else if (status.syncing) {
+          return "warning--text";
+        }
+        return "success--text";
+      },
+      getDetectionEngineStatus(engine) {
+        if (!this.currentStatus || !this.currentStatus.detections || !this.currentStatus.detections[engine]) {
+          return "Unknown";
+        }
+
+        const status = this.currentStatus.detections[engine];
+        if (status.migrating) {
+          return "Migrating";
+        } else if (status.importing) {
+          if (status.syncing) {
+            return "Importing";
+          }
+          return "ImportPending";
+        } else if (status.migrationFailure) {
+          return "MigrationFailure";
+        } else if (status.syncFailure) {
+          return "SyncFailure";
+        } else if (status.integrityFailure) {
+          return "IntegrityFailure";
+        } else if (status.syncing) {
+          return "Syncing";
+        }
+        return "Healthy";
+      },
       isDetectionsUnhealthy() {
         return this.currentStatus != null && this.currentStatus.detections != null &&
-          (this.currentStatus.detections.elastalert.integrityFailure ||
+          ( this.currentStatus.detections.elastalert.integrityFailure ||
             this.currentStatus.detections.suricata.integrityFailure ||
-            this.currentStatus.detections.strelka.integrityFailure );
+            this.currentStatus.detections.strelka.integrityFailure ||
+            this.currentStatus.detections.elastalert.syncFailure ||
+            this.currentStatus.detections.suricata.syncFailure ||
+            this.currentStatus.detections.strelka.syncFailure ||
+            this.currentStatus.detections.elastalert.migrationFailure ||
+            this.currentStatus.detections.suricata.migrationFailure ||
+            this.currentStatus.detections.strelka.migrationFailure );
       },
       isDetectionsUpdating() {
         return this.currentStatus != null && this.currentStatus.detections != null &&
@@ -993,7 +1047,7 @@ $(document).ready(function() {
         return this.currentStatus && this.currentStatus.alerts.newCount  > 0
       },
       isAttentionNeeded() {
-        return this.isNewAlert() || this.isGridUnhealthy() || !this.connected || this.reconnecting;
+        return this.isNewAlert() || this.isGridUnhealthy() || this.isDetectionsUnhealthy() || !this.connected || this.reconnecting;
       },
       isMaximized() {
         return this.maximizedTarget != null;

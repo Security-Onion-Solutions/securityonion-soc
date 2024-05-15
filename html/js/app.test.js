@@ -496,28 +496,47 @@ test('correctCasing', () => {
   expect(app.correctCasing('yArA')).toBe('YARA');
 });
 
-test('isDetectionsUnhealthy', () => {
-  // Unhealthy
+function verifyEngineFailureStates(e1f1, e1f2, e1f3, e2f1, e2f2, e2f3, e3f1, e3f2, e3f3, expected) {
   app.currentStatus = { detections: {
     elastalert: {
-      integrityFailure: true,
+      integrityFailure: e1f1,
+      syncFailure: e1f2,
+      migrationFailure: e1f3,
     },
     strelka: {
-      integrityFailure: true,
+      integrityFailure: e2f1,
+      syncFailure: e2f2,
+      migrationFailure: e2f3,
     },
     suricata: {
-      integrityFailure: true,
+      integrityFailure: e3f1,
+      syncFailure: e3f2,
+      migrationFailure: e3f3,
     },
   }}
-  expect(app.isDetectionsUnhealthy()).toBe(true);
+  expect(app.isDetectionsUnhealthy()).toBe(expected);
+}
 
+test('isDetectionsUnhealthy', () => {
+  // Unhealthy
+  verifyEngineFailureStates(true, false, false, true, false, false, true, false, false, true);
+  verifyEngineFailureStates(false, true, false, false, true, false, false, true, false, true);
+  verifyEngineFailureStates(false, false, true, false, false, true, false, false, true, true);
+  verifyEngineFailureStates(true, true, false, true, true, false, true, true, false, true);
+  verifyEngineFailureStates(false, true, true, false, true, true, false, true, true, true);
+  verifyEngineFailureStates(true, false, true, true, false, true, true, false, true, true);
+  verifyEngineFailureStates(true, true, true, true, true, true, true, true, true, true);
+  verifyEngineFailureStates(true, true, true, true, true, true, true, true, true, true);
+  verifyEngineFailureStates(false, false, true, true, true, true, true, true, true, true);
+  verifyEngineFailureStates(false, false, false, true, true, true, true, true, true, true);
+  verifyEngineFailureStates(false, false, false, false, true, true, true, true, true, true);
+  verifyEngineFailureStates(false, false, false, false, false, true, true, true, true, true);
+  verifyEngineFailureStates(false, false, false, false, false, false, true, true, true, true);
+  verifyEngineFailureStates(false, false, false, false, false, false, false, true, true, true);
+  verifyEngineFailureStates(false, false, false, false, false, false, false, false, true, true);
+  
   // Healthy
-  app.currentStatus.detections.elastalert.integrityFailure = false
-  expect(app.isDetectionsUnhealthy()).toBe(true);
-  app.currentStatus.detections.strelka.integrityFailure = false
-  expect(app.isDetectionsUnhealthy()).toBe(true);
-  app.currentStatus.detections.suricata.integrityFailure = false
-  expect(app.isDetectionsUnhealthy()).toBe(false);
+  verifyEngineFailureStates(false, false, false, false, false, false, false, false, false, false);
 
   // Neither Unhealthy nor Healthy
   app.currentStatus.detections.elastalert.migrating = true
@@ -594,3 +613,98 @@ test('isDetectionsUpdating', () => {
   expect(app.isDetectionsUpdating()).toBe(true);
   app.currentStatus.detections.elastalert.syncing = false;
 });
+
+test('getDetectionEngines', () => {
+  expect(app.getDetectionEngines()).toStrictEqual(['elastalert', 'strelka', 'suricata']);
+});
+
+test('getDetectionEngineStatusClass', () => {
+  expect(app.getDetectionEngineStatusClass('unknown')).toBe('normal--text');
+  app.currentStatus = { detections: { strelka: { syncing: true }}};
+  expect(app.getDetectionEngineStatusClass('strelka')).toBe('warning--text');
+  app.currentStatus = { detections: { strelka: { migrationFailure: true, syncFailure: true }}};
+  expect(app.getDetectionEngineStatusClass('strelka')).toBe('error--text');
+  app.currentStatus = { detections: { strelka: { syncFailure: true, integrityFailure: true }}};
+  expect(app.getDetectionEngineStatusClass('strelka')).toBe('error--text');
+  app.currentStatus = { detections: { strelka: { integrityFailure: true, syncing: true }}};
+  expect(app.getDetectionEngineStatusClass('strelka')).toBe('error--text');
+  app.currentStatus = { detections: { strelka: { migrating: true, integrityFailure: true }}};
+  expect(app.getDetectionEngineStatusClass('strelka')).toBe('warning--text');
+  app.currentStatus = { detections: { strelka: { importing: true, migrating: true }}};
+  expect(app.getDetectionEngineStatusClass('strelka')).toBe('warning--text');
+  app.currentStatus = { detections: { strelka: { importing: false }}};
+  expect(app.getDetectionEngineStatusClass('strelka')).toBe('success--text');
+});
+
+test('getDetectionEngineStatus', () => {
+  expect(app.getDetectionEngineStatus('unknown')).toBe('Unknown');
+  app.currentStatus = { detections: { strelka: { syncing: true }}};
+  expect(app.getDetectionEngineStatus('strelka')).toBe('Syncing');
+  app.currentStatus = { detections: { strelka: { migrationFailure: true, syncFailure: true }}};
+  expect(app.getDetectionEngineStatus('strelka')).toBe('MigrationFailure');
+  app.currentStatus = { detections: { strelka: { syncFailure: true, integrityFailure: true }}};
+  expect(app.getDetectionEngineStatus('strelka')).toBe('SyncFailure');
+  app.currentStatus = { detections: { strelka: { integrityFailure: true, syncing: true }}};
+  expect(app.getDetectionEngineStatus('strelka')).toBe('IntegrityFailure');
+  app.currentStatus = { detections: { strelka: { migrating: true, importing: true, syncing: true, integrityFailure: true }}};
+  expect(app.getDetectionEngineStatus('strelka')).toBe('Migrating');
+  app.currentStatus = { detections: { strelka: { importing: true, migrating: false, syncing: true }}};
+  expect(app.getDetectionEngineStatus('strelka')).toBe('Importing');
+  app.currentStatus = { detections: { strelka: { importing: true, migrating: false, syncing: false }}};
+  expect(app.getDetectionEngineStatus('strelka')).toBe('ImportPending');
+  app.currentStatus = { detections: { strelka: { importing: false }}};
+  expect(app.getDetectionEngineStatus('strelka')).toBe('Healthy');
+});
+
+test('isAttentionNeeded', () => {
+  app.connected =  true;
+  app.currentStatus = { 
+    detections: {
+      elastalert: {
+        integrityFailure: false,
+        syncFailure: false,
+        migrationFailure: false,
+      },
+      strelka: {
+        integrityFailure: false,
+        syncFailure: false,
+        migrationFailure: false,
+      },
+      suricata: {
+        integrityFailure: false,
+        syncFailure: false,
+        migrationFailure: false,
+      },
+    },
+    alerts: {
+      newCount: 0,
+    },
+    grid: {
+      unhealthyNodeCount: 0,
+    },
+  };
+  expect(app.isAttentionNeeded()).toBe(false);
+
+  // Attention when unable to connect to server
+  app.connected = false;
+  expect(app.isAttentionNeeded()).toBe(true);
+  app.connected = true;
+
+  // Attention when unhealthy grid count > 0
+  app.currentStatus.grid.unhealthyNodeCount = 1
+  expect(app.isAttentionNeeded()).toBe(true);
+  app.currentStatus.grid.unhealthyNodeCount = 0
+
+  // Attention when new alert count > 0
+  app.currentStatus.alerts.newCount = 1
+  expect(app.isAttentionNeeded()).toBe(true);
+  app.currentStatus.alerts.newCount = 0
+
+  // Attention when detections engines unhealthy
+  app.currentStatus.detections.elastalert.syncFailure = true;
+  expect(app.isAttentionNeeded()).toBe(true);
+  app.currentStatus.detections.elastalert.syncFailure = false;
+
+  // Back to normal
+  expect(app.isAttentionNeeded()).toBe(false);
+})

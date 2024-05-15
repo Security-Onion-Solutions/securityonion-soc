@@ -309,6 +309,16 @@ func (e *SuricataEngine) watchCommunityRules() {
 	lastImport, timerDur := detections.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Second*time.Duration(e.communityRulesImportFrequencySeconds))
 
 	for e.isRunning {
+		if lastImport == nil && lastSyncSuccess != nil && *lastSyncSuccess {
+			now := uint64(time.Now().UnixMilli())
+			lastImport = &now
+		}
+
+		e.EngineState.Syncing = false
+		e.EngineState.Importing = lastImport == nil
+		e.EngineState.Migrating = false
+		e.EngineState.SyncFailure = lastSyncSuccess != nil && !*lastSyncSuccess
+
 		e.resetInterrupt()
 
 		var forceSync bool
@@ -363,6 +373,8 @@ func (e *SuricataEngine) watchCommunityRules() {
 		log.WithFields(log.Fields{
 			"forceSync": forceSync,
 		}).Info("syncing suricata community rules")
+
+		e.EngineState.Syncing = true
 
 		start := time.Now()
 
@@ -592,6 +604,8 @@ func (e *SuricataEngine) checkForMigrations() {
 	}
 
 	for _, key := range versions {
+		e.EngineState.Migrating = true
+
 		state := migStates[key]
 
 		migFunc, ok := e.migrations[key]
@@ -605,9 +619,12 @@ func (e *SuricataEngine) checkForMigrations() {
 		err := migFunc(state)
 		if err != nil {
 			log.WithError(err).WithField("migrationVersion", key).Error("unable to apply migration, halting migrations")
+			e.EngineState.MigrationFailure = true
 			break
 		}
 	}
+
+	e.EngineState.Migrating = false
 
 	log.Info("done checking for suricata migrations")
 }

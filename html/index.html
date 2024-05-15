@@ -80,7 +80,7 @@
               <v-icon color="warning">fa-exclamation</v-icon>
             </v-list-item-icon>
             <v-list-item-icon v-else-if="isDetectionsUpdating()">
-              <v-icon color="info">fa-arrows-spin</v-icon>
+              <v-icon color="info">fa-hourglass-half</v-icon>
             </v-list-item-icon>
           </v-list-item>
           <v-list-item data-aid="nav_jobs" @click="" to="/jobs">
@@ -387,14 +387,22 @@
           <v-spacer></v-spacer>
           <v-col cols="12" lg="2" align="end">
             <h4 v-if="loaded" :data-aid="'event_total_' + category">{{ i18n.eventTotal }} {{ totalEvents.toLocaleString() }}</h4>
+            <div v-if="isCategory('detections') && loaded" :data-aid="'event_health_' + category">
+              <h5 v-for="engine in $root.getDetectionEngines()">
+                {{ i18n['cc_' + engine] }} {{ i18n.rules }}: 
+                <router-link :to="{ name: 'hunt', query: {q: `tags:so-soc AND ` + engine + ` | groupby log.level`, t: moment().subtract(1, 'hours').format(i18n.timePickerFormat) + ' - ' + moment().format(i18n.timePickerFormat) }}" style="text-decoration: none; cursor: 'pointer'" :class="$root.getDetectionEngineStatusClass(engine)" :data-aid="'detection_engine_status_' + engine" :title="i18n['detectionEngine' + $root.getDetectionEngineStatus(engine) + 'Help']">
+                  {{ i18n['detectionEngine' + $root.getDetectionEngineStatus(engine)] }}
+                </router-link>
+              </h5>
+            </div>
           </v-col>
         </v-row>
         <v-row align="start" v-if="createLink != ''">
           <v-col cols="12">
             <v-toolbar class="elevation-0" fixed>
-              <router-link :to="createLink" style="text-decoration: none; cursor: 'pointer'" :data-aid="'create_new_case' + category">
-                <v-btn color="primary" id="add-case-button">
-                  <v-icon :title="i18n.create">fa-plus</v-icon>
+              <router-link :to="createLink" style="text-decoration: none; cursor: 'pointer'" :data-aid="'create_new_record_' + category">
+                <v-btn color="primary" id="add-case-button" :title="i18n.create">
+                  <v-icon>fa-plus</v-icon>
                 </v-btn>
               </router-link>
             </v-toolbar>

@@ -31,8 +31,10 @@ type DetectionsStatus struct {
 type EngineState struct {
 	IntegrityFailure bool `json:"integrityFailure"`
 	Migrating        bool `json:"migrating"`
+	MigrationFailure bool `json:"migrationFailure"`
 	Importing        bool `json:"importing"`
 	Syncing          bool `json:"syncing"`
+	SyncFailure      bool `json:"syncFailure"`
 }
 
 func NewStatus() *Status {

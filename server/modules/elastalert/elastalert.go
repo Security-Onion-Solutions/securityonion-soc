@@ -462,6 +462,16 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 	lastImport, timerDur := detections.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Duration(e.communityRulesImportFrequencySeconds)*time.Second)
 
 	for e.isRunning {
+		if lastImport == nil && lastSyncSuccess != nil && *lastSyncSuccess {
+			now := uint64(time.Now().UnixMilli())
+			lastImport = &now
+		}
+
+		e.EngineState.Syncing = false
+		e.EngineState.Importing = lastImport == nil
+		e.EngineState.Migrating = false
+		e.EngineState.SyncFailure = lastSyncSuccess != nil && !*lastSyncSuccess
+
 		e.resetInterruptSync()
 
 		var forceSync bool
@@ -518,6 +528,8 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 		log.WithFields(log.Fields{
 			"forceSync": forceSync,
 		}).Info("syncing elastalert community rules")
+
+		e.EngineState.Syncing = true
 
 		start := time.Now()
 
