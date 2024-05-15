@@ -102,6 +102,8 @@ func (e *SuricataEngine) Migration2470(statePath string) error {
 			continue
 		}
 
+		det.Kind = ""
+
 		_, err := e.srv.Detectionstore.UpdateDetection(e.srv.Context, det)
 		if err != nil {
 			return err
