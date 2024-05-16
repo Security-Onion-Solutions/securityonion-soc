@@ -8,6 +8,7 @@ package suricata
 import (
 	"context"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 
@@ -208,27 +209,81 @@ func TestIndexModify(t *testing.T) {
 		`30000 "flowbits" "noalert; flowbits" # we'll turn this on later`,
 		`# An unrelated comment`,
 		`a83ba97b-a8e8-4258-be1b-022aff230e6e "flowbits" "noalert; flowbits"`,
+		`e4bd794a-8156-4fcc-b6a9-9fb2c9ecadc5 that this`,
+	}
+
+	output := indexModify(lines, false, false)
+
+	assert.Equal(t, 7, len(output))
+	assert.Contains(t, output, "90000")
+	assert.Equal(t, 0, output["90000"])
+	assert.Contains(t, output, "10000")
+	assert.Equal(t, 1, output["10000"])
+	assert.Contains(t, output, "20000")
+	assert.Equal(t, 2, output["20000"])
+	assert.Contains(t, output, "a83ba97b-a8e8-4258-be1b-022aff230e6e")
+	assert.Equal(t, 5, output["a83ba97b-a8e8-4258-be1b-022aff230e6e"])
+	assert.Contains(t, output, "90000")
+	assert.Equal(t, 0, output["90000"])
+	assert.Contains(t, output, "30000")
+	assert.Equal(t, 3, output["30000"])
+	assert.Contains(t, output, "e4bd794a-8156-4fcc-b6a9-9fb2c9ecadc5")
+	assert.Equal(t, 6, output["e4bd794a-8156-4fcc-b6a9-9fb2c9ecadc5"])
+
+	output = indexModify(lines, true, false)
+
+	assert.Equal(t, 5, len(output))
+	assert.Contains(t, output, "10000")
+	assert.Equal(t, 1, output["10000"])
+	assert.Contains(t, output, "a83ba97b-a8e8-4258-be1b-022aff230e6e")
+	assert.Equal(t, 5, output["a83ba97b-a8e8-4258-be1b-022aff230e6e"])
+	assert.Contains(t, output, "90000")
+	assert.Equal(t, 0, output["90000"])
+	assert.Contains(t, output, "30000")
+	assert.Equal(t, 3, output["30000"])
+	assert.Contains(t, output, "e4bd794a-8156-4fcc-b6a9-9fb2c9ecadc5")
+	assert.Equal(t, 6, output["e4bd794a-8156-4fcc-b6a9-9fb2c9ecadc5"])
+
+	output = indexModify(lines, false, true)
+
+	assert.Equal(t, 4, len(output))
+	assert.Contains(t, output, "10000")
+	assert.Equal(t, 1, output["10000"])
+	assert.Contains(t, output, "20000")
+	assert.Equal(t, 2, output["20000"])
+	assert.Contains(t, output, "a83ba97b-a8e8-4258-be1b-022aff230e6e")
+	assert.Equal(t, 5, output["a83ba97b-a8e8-4258-be1b-022aff230e6e"])
+	assert.Contains(t, output, "30000")
+	assert.Equal(t, 3, output["30000"])
+
+	output = indexModify(lines, true, true)
+
+	assert.Equal(t, 3, len(output))
+	assert.Contains(t, output, "10000")
+	assert.Equal(t, 1, output["10000"])
+	assert.Contains(t, output, "30000")
+	assert.Equal(t, 3, output["30000"])
+	assert.Contains(t, output, "a83ba97b-a8e8-4258-be1b-022aff230e6e")
+	assert.Equal(t, 5, output["a83ba97b-a8e8-4258-be1b-022aff230e6e"])
+}
+
+func TestIndexRules(t *testing.T) {
+	lines := []string{
+		`90000 this that`,
+		`10000 "flowbits" "noalert; flowbits"`,
+		`alert http any any -> any any (msg:"FILE pdf detected"; filemagic:"PDF document"; filestore; sid:1100000; rev:1;)`,
+		`#alert smtp any any -> any any (msg:"FILE pdf detected"; filemagic:"PDF document"; filestore; sid:1100001; rev:1;)`,
+		`# An unrelated comment`,
+		`a83ba97b-a8e8-4258-be1b-022aff230e6e "flowbits" "noalert; flowbits"`,
 		` # 23220e49-7229-43a1-92d5-d68e46d27105 "flowbits" "noalert; flowbits"`,
 		`e4bd794a-8156-4fcc-b6a9-9fb2c9ecadc5 that this`,
 	}
 
-	output := indexModify(lines)
+	output := indexRules(lines, true)
 
-	assert.Equal(t, 8, len(output))
-	assert.Contains(t, output, "10000")
-	assert.Equal(t, output["10000"], 1)
-	assert.Contains(t, output, "20000")
-	assert.Equal(t, output["20000"], 2)
-	assert.Contains(t, output, "a83ba97b-a8e8-4258-be1b-022aff230e6e")
-	assert.Equal(t, output["a83ba97b-a8e8-4258-be1b-022aff230e6e"], 5)
-	assert.Contains(t, output, "23220e49-7229-43a1-92d5-d68e46d27105")
-	assert.Equal(t, output["23220e49-7229-43a1-92d5-d68e46d27105"], 6)
-	assert.Contains(t, output, "90000")
-	assert.Equal(t, output["90000"], 0)
-	assert.Contains(t, output, "30000")
-	assert.Equal(t, output["30000"], 3)
-	assert.Contains(t, output, "e4bd794a-8156-4fcc-b6a9-9fb2c9ecadc5")
-	assert.Equal(t, output["e4bd794a-8156-4fcc-b6a9-9fb2c9ecadc5"], 7)
+	assert.Equal(t, 1, len(output))
+	assert.Contains(t, output, "1100000")
+	assert.Equal(t, output["1100000"], 2)
 }
 
 func TestValidate(t *testing.T) {
@@ -849,6 +904,66 @@ func TestExtractDetails(t *testing.T) {
 			assert.Equal(t, test.ExpectedTitle, detect.Title)
 			assert.Equal(t, test.ExpectedPublicID, detect.PublicID)
 			assert.Equal(t, test.ExpectedSeverity, detect.Severity)
+		})
+	}
+}
+
+func TestConslidateEnabled(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		Name         string
+		Rules        []string
+		Disabled     []string
+		ExpectedSIDs []string
+	}{
+		{
+			Name:         "Empty",
+			Rules:        []string{},
+			Disabled:     []string{},
+			ExpectedSIDs: []string{},
+		},
+		{
+			Name:         "No Disabled",
+			Rules:        []string{"10000", "20000", "30000", "40000", "50000"},
+			Disabled:     []string{},
+			ExpectedSIDs: []string{"10000", "20000", "30000", "40000", "50000"},
+		},
+		{
+			Name:         "No Enabled",
+			Rules:        []string{},
+			Disabled:     []string{"10000", "20000", "30000", "40000", "50000"},
+			ExpectedSIDs: []string{},
+		},
+		{
+			Name:         "Some Enabled, Some Disabled",
+			Rules:        []string{"10000", "20000", "30000", "40000", "50000"},
+			Disabled:     []string{"20000", "40000", "60000"},
+			ExpectedSIDs: []string{"10000", "30000", "50000"},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			rulesIndex := map[string]int{}
+			for _, rule := range test.Rules {
+				rulesIndex[rule] = 0
+			}
+
+			disabledIndex := map[string]int{}
+			for _, rule := range test.Disabled {
+				disabledIndex[rule] = 0
+			}
+
+			deployed := consolidateEnabled(rulesIndex, disabledIndex)
+
+			sort.Strings(deployed)
+			sort.Strings(test.ExpectedSIDs)
+
+			assert.Equal(t, test.ExpectedSIDs, deployed)
 		})
 	}
 }

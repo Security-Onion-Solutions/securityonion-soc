@@ -77,8 +77,6 @@ func IntegrityChecker(engName model.EngineName, eng IntegrityChecked, data *Inte
 				logger.Info("integrity check stopped by something else")
 			}
 		} else {
-			logger.Info("integrity check passed")
-
 			*intCheckFailure = false
 			failCount = 0
 		}

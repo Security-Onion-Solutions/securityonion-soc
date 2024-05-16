@@ -58,6 +58,7 @@ const (
 	DEFAULT_STATE_FILE_PATH                          = "/opt/sensoroni/fingerprints/elastalertengine.state"
 	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS        = 300
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT       = 10
+	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS        = 600
 )
 
 var acceptedExtensions = map[string]bool{
@@ -155,7 +156,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.communityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 	e.additionalAlerters = module.GetStringArrayDefault(config, "additionalAlerters", []string{})
-	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", 600)
+	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS)
 
 	pkgs := module.GetStringArrayDefault(config, "sigmaRulePackages", []string{"core", "emerging_threats_addon"})
 	e.parseSigmaPackages(pkgs)
@@ -1560,7 +1561,7 @@ func (e *ElastAlertEngine) IntegrityCheck() error {
 		return detections.ErrIntCheckFailed
 	}
 
-	log.WithField("deployedPublicIdsCount", len(deployed)).Debug("deployed publicIds")
+	logger.WithField("deployedPublicIdsCount", len(deployed)).Debug("deployed publicIds")
 
 	// escape
 	if !e.IntegrityCheckerData.IsRunning {
@@ -1579,7 +1580,7 @@ func (e *ElastAlertEngine) IntegrityCheck() error {
 		enabled = append(enabled, d.PublicID)
 	}
 
-	log.WithField("enabledDetectionsCount", len(enabled)).Debug("enabled detections")
+	logger.WithField("enabledDetectionsCount", len(enabled)).Debug("enabled detections")
 
 	// escape
 	if !e.IntegrityCheckerData.IsRunning {
