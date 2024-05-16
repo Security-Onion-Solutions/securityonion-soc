@@ -196,6 +196,11 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.tagOverrides();
 			this.loadAssociations();
 			this.origDetect = Object.assign({}, this.detect);
+			// Don't await the user details -- takes too long for the task scheduler to
+			// complete all these futures when looping across hundreds of records. Let
+			// the UI update as they finish, for a better user experience.
+			this.$root.populateUserDetails(this.detect, "userId", "userName");
+
 		},
 		loadAssociations() {
 			this.extractSummary();
@@ -285,11 +290,11 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		isValidUrl(urlString) {
 	  	var urlPattern = new RegExp('^(https?:\\/\\/)?'+ // validate protocol
-	    '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|'+ // validate domain name
-	    '((\\d{1,3}\\.){3}\\d{1,3}))'+ // validate OR ip (v4) address
-	    '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*'+ // validate port and path
-	    '(\\?[;&a-z\\d%_.~+=-]*)?'+ // validate query string
-	    '(\\#[-a-z\\d_]*)?$','i'); // validate fragment locator
+		'((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|'+ // validate domain name
+		'((\\d{1,3}\\.){3}\\d{1,3}))'+ // validate OR ip (v4) address
+		'(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*'+ // validate port and path
+		'(\\?[;&a-z\\d%_.~+=-]*)?'+ // validate query string
+		'(\\#[-a-z\\d_]*)?$','i'); // validate fragment locator
 	  return !!urlPattern.test(urlString);
 		},
 		fixProtocol(url) {
