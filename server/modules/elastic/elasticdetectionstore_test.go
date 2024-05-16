@@ -1015,12 +1015,12 @@ func TestGetAllCommunitySIDs(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
-	sids, err := store.GetAllDetections(ctx, nil, nil)
+	sids, err := store.GetAllDetections(ctx, nil, nil, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(sids))
 	assert.NotNil(t, sids["ABC123"])
 
-	sids, err = store.GetAllDetections(ctx, util.Ptr(model.EngineName("suricata")), nil)
+	sids, err = store.GetAllDetections(ctx, util.Ptr(model.EngineName("suricata")), nil, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(sids))
 	assert.NotNil(t, sids["ABC123"])

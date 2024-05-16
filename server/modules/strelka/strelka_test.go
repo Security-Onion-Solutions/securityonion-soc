@@ -657,3 +657,37 @@ func TestAddMissingImports(t *testing.T) {
 		})
 	}
 }
+
+func TestGetDeployed(t *testing.T) {
+	report := &model.CompilationReport{
+		Successful: []string{"a", "b"},
+		Failed:     []string{"c", "d"},
+	}
+
+	publicIds := getDeployed(report)
+	assert.Equal(t, []string{"ca978112-ca1b-4dca-bac2-31b39a23dc4d",
+		"3e23e816-0039-494a-b389-4f6564e1b134",
+		"2e7d2c03-a950-4ae2-a5ec-f5b5356885a5",
+		"18ac3e73-43f0-4689-8c51-0e93f9352611"}, publicIds)
+}
+
+func TestVerifyCompiledHash(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mio := mock.NewMockIOManager(ctrl)
+	mio.EXPECT().ReadFile("/opt/so/conf/strelka/rules/rules.compiled").Return([]byte("abc"), nil).Times(2)
+
+	eng := &StrelkaEngine{
+		IOManager:       mio,
+		yaraRulesFolder: "/opt/so/conf/strelka/rules",
+	}
+
+	err := eng.verifyCompiledHash("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+	assert.NoError(t, err)
+
+	err = eng.verifyCompiledHash("a bad hash that'll never match")
+	assert.Error(t, err)
+}

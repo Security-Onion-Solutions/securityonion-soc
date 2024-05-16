@@ -9,6 +9,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/mock"
@@ -168,4 +169,17 @@ func TestDuplicateDetection(t *testing.T) {
 	assert.Equal(t, det.License, dupe.License)
 	assert.Empty(t, dupe.Overrides)
 	assert.Empty(t, dupe.Tags)
+}
+
+func TestStringToUUID(t *testing.T) {
+	one := "Hello World"
+	two := "Hello, World!"
+
+	uuidOne := stringToUUID(one)
+	uuidTwo := stringToUUID(two)
+
+	assert.NotEqual(t, uuidOne, uuidTwo)
+
+	assert.NoError(t, uuid.Validate(uuidOne))
+	assert.NoError(t, uuid.Validate(uuidTwo))
 }

@@ -80,17 +80,21 @@ func (rule *YaraRule) GetID() string {
 		return util.Unquote(*rule.Meta.ID)
 	}
 
-	hash := sha256.Sum256([]byte(rule.Identifier))
-
-	hash[6] = 0x40 | (hash[6] & 0x0f)
-	hash[8] = 0x80 | (hash[8] & 0x3f)
-	id := fmt.Sprintf("%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
-		hash[0], hash[1], hash[2], hash[3], hash[4], hash[5], hash[6], hash[7], hash[8],
-		hash[9], hash[10], hash[11], hash[12], hash[13], hash[14], hash[15])
+	id := stringToUUID(rule.Identifier)
 
 	rule.Meta.ID = util.Ptr(id)
 
 	return id
+}
+
+func stringToUUID(s string) string {
+	hash := sha256.Sum256([]byte(s))
+
+	hash[6] = 0x40 | (hash[6] & 0x0f)
+	hash[8] = 0x80 | (hash[8] & 0x3f)
+	return fmt.Sprintf("%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+		hash[0], hash[1], hash[2], hash[3], hash[4], hash[5], hash[6], hash[7], hash[8],
+		hash[9], hash[10], hash[11], hash[12], hash[13], hash[14], hash[15])
 }
 
 func (r *YaraRule) String() string {

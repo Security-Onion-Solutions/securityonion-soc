@@ -608,7 +608,7 @@ func (store *ElasticDetectionstore) DeleteDetection(ctx context.Context, id stri
 	return detect, err
 }
 
-func (store *ElasticDetectionstore) GetAllDetections(ctx context.Context, engine *model.EngineName, isEnabled *bool) (map[string]*model.Detection, error) {
+func (store *ElasticDetectionstore) GetAllDetections(ctx context.Context, engine *model.EngineName, isEnabled *bool, isCommunity *bool) (map[string]*model.Detection, error) {
 	query := fmt.Sprintf(`_index:"%s" AND %skind:"%s"`, store.index, store.schemaPrefix, "detection")
 
 	if engine != nil {
@@ -617,6 +617,10 @@ func (store *ElasticDetectionstore) GetAllDetections(ctx context.Context, engine
 
 	if isEnabled != nil {
 		query += fmt.Sprintf(` AND %sdetection.isEnabled:%t`, store.schemaPrefix, *isEnabled)
+	}
+
+	if isCommunity != nil {
+		query += fmt.Sprintf(` AND %sdetection.isCommunity:%t`, store.schemaPrefix, *isCommunity)
 	}
 
 	all, err := store.Query(ctx, query, -1)

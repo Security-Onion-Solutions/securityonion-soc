@@ -114,18 +114,18 @@ func (mr *MockDetectionstoreMockRecorder) DoesTemplateExist(arg0, arg1 any) *gom
 }
 
 // GetAllDetections mocks base method.
-func (m *MockDetectionstore) GetAllDetections(arg0 context.Context, arg1 *model.EngineName, arg2 *bool) (map[string]*model.Detection, error) {
+func (m *MockDetectionstore) GetAllDetections(arg0 context.Context, arg1 *model.EngineName, arg2, arg3 *bool) (map[string]*model.Detection, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAllDetections", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetAllDetections", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(map[string]*model.Detection)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetAllDetections indicates an expected call of GetAllDetections.
-func (mr *MockDetectionstoreMockRecorder) GetAllDetections(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockDetectionstoreMockRecorder) GetAllDetections(arg0, arg1, arg2, arg3 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllDetections", reflect.TypeOf((*MockDetectionstore)(nil).GetAllDetections), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllDetections", reflect.TypeOf((*MockDetectionstore)(nil).GetAllDetections), arg0, arg1, arg2, arg3)
 }
 
 // GetComment mocks base method.

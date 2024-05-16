@@ -1153,7 +1153,7 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detects []
 		return nil, err
 	}
 
-	commSIDs, err := e.srv.Detectionstore.GetAllDetections(ctx, util.Ptr(model.EngineNameSuricata), nil)
+	commSIDs, err := e.srv.Detectionstore.GetAllDetections(ctx, util.Ptr(model.EngineNameSuricata), nil, util.Ptr(true))
 	if err != nil {
 		return nil, err
 	}
@@ -1594,7 +1594,7 @@ func (e *SuricataEngine) IntegrityCheck() error {
 		return detections.ErrIntCheckerStopped
 	}
 
-	ret, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, util.Ptr(model.EngineNameSuricata), util.Ptr(true))
+	ret, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, util.Ptr(model.EngineNameSuricata), util.Ptr(true), util.Ptr(true))
 	if err != nil {
 		logger.WithError(err).Error("unable to query for enabled detections")
 		return detections.ErrIntCheckFailed
