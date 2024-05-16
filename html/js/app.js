@@ -971,25 +971,13 @@ $(document).ready(function() {
         return ['elastalert', 'strelka', 'suricata'];
       },
       getDetectionEngineStatusClass(engine) {
-        if (!this.currentStatus || !this.currentStatus.detections || !this.currentStatus.detections[engine]) {
-          return "normal--text";
+        switch (this.getDetectionEngineStatus(engine)) {
+          case "MigrationFailure": return "warning--text";
+          case "SyncFailure": return "warning--text";
+          case "IntegrityFailure": return "warning--text";
+          case "Healthy": return "success--text";
         }
-
-        const status = this.currentStatus.detections[engine];
-        if (status.importing) {
-          return "warning--text";
-        } else if (status.migrating) {
-          return "warning--text";
-        } else if (status.migrationFailure) {
-          return "error--text";
-        } else if (status.syncFailure) {
-          return "error--text";
-        } else if (status.integrityFailure) {
-          return "error--text";
-        } else if (status.syncing) {
-          return "warning--text";
-        }
-        return "success--text";
+        return "normal--text";
       },
       getDetectionEngineStatus(engine) {
         if (!this.currentStatus || !this.currentStatus.detections || !this.currentStatus.detections[engine]) {
@@ -997,19 +985,22 @@ $(document).ready(function() {
         }
 
         const status = this.currentStatus.detections[engine];
+
+        // Order is important in this if/else block. Certain status should take priority. For example,
+        // If a sync failure and integrity failure both occurred then show the sync failure, because
+        // if it can't sync cleanly then there can be no expectation of integrity.
         if (status.migrating) {
           return "Migrating";
-        } else if (status.importing) {
-          if (status.syncing) {
-            return "Importing";
-          }
-          return "ImportPending";
+        } else if (status.importing && status.syncing) {
+          return "Importing";
         } else if (status.migrationFailure) {
           return "MigrationFailure";
         } else if (status.syncFailure) {
           return "SyncFailure";
         } else if (status.integrityFailure) {
           return "IntegrityFailure";
+        } else if (status.importing && !status.syncing) {
+          return "ImportPending";
         } else if (status.syncing) {
           return "Syncing";
         }
@@ -1030,15 +1021,15 @@ $(document).ready(function() {
       isDetectionsUpdating() {
         return this.currentStatus != null && this.currentStatus.detections != null &&
           !this.isDetectionsUnhealthy() && 
-          (this.currentStatus.detections.elastalert.importing === true ||
-          this.currentStatus.detections.elastalert.migrating === true ||
-          this.currentStatus.detections.elastalert.syncing === true ||
-          this.currentStatus.detections.strelka.importing === true ||
-          this.currentStatus.detections.strelka.migrating === true ||
-          this.currentStatus.detections.strelka.syncing === true ||
-          this.currentStatus.detections.suricata.importing === true ||
-          this.currentStatus.detections.suricata.migrating === true ||
-          this.currentStatus.detections.suricata.syncing === true);
+          ( this.currentStatus.detections.elastalert.importing === true ||
+            this.currentStatus.detections.elastalert.migrating === true ||
+            this.currentStatus.detections.elastalert.syncing === true ||
+            this.currentStatus.detections.strelka.importing === true ||
+            this.currentStatus.detections.strelka.migrating === true ||
+            this.currentStatus.detections.strelka.syncing === true ||
+            this.currentStatus.detections.suricata.importing === true ||
+            this.currentStatus.detections.suricata.migrating === true ||
+            this.currentStatus.detections.suricata.syncing === true );
       },
       isGridUnhealthy() {
         return this.currentStatus && this.currentStatus.grid.unhealthyNodeCount > 0
