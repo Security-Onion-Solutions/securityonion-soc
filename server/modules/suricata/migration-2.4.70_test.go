@@ -92,6 +92,22 @@ func TestM2470LoadEnabledDisabled(t *testing.T) {
 
 	assert.Equal(t, []string{"1", "2", "3"}, enabled)
 	assert.Equal(t, []string{"4", "5", "6"}, disabled)
+
+	mio.EXPECT().ReadFile(idstoolsYaml).Return([]byte(`{}`), nil)
+
+	enabled, disabled, err = e.m2470LoadEnabledDisabled()
+	assert.NoError(t, err)
+
+	assert.Equal(t, 0, len(enabled))
+	assert.Equal(t, 0, len(disabled))
+
+	mio.EXPECT().ReadFile(idstoolsYaml).Return([]byte(`{ "idstools": {}}`), nil)
+
+	enabled, disabled, err = e.m2470LoadEnabledDisabled()
+	assert.NoError(t, err)
+
+	assert.Equal(t, 0, len(enabled))
+	assert.Equal(t, 0, len(disabled))
 }
 
 func TestM2470ApplyList(t *testing.T) {
