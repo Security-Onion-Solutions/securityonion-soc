@@ -1,7 +1,6 @@
 package suricata
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -15,11 +14,6 @@ import (
 const (
 	idstoolsYaml = "/nsm/backup/detections-migration/idstools/soc_idstools.sls"       // enabled/disabled
 	sidsYaml     = "/nsm/backup/detections-migration/suricata/thresholding/sids.yaml" // thresholds
-)
-
-var (
-	errUnknownYamlLayoutIdstools = errors.New("unknown yaml layout: couldn't find idstools field")
-	errUnknownYamlLayoutSids     = errors.New("unknown yaml layout: couldn't find sids field")
 )
 
 func (e *SuricataEngine) Migration2470(statePath string) error {
@@ -168,12 +162,12 @@ func (e *SuricataEngine) m2470LoadEnabledDisabled() (enabled []string, disabled 
 
 	idstools, ok := root["idstools"].(map[string]interface{})
 	if !ok {
-		return nil, nil, errUnknownYamlLayoutIdstools
+		return nil, nil, nil
 	}
 
 	sids, ok := idstools["sids"].(map[string]interface{})
 	if !ok {
-		return nil, nil, errUnknownYamlLayoutSids
+		return nil, nil, nil
 	}
 
 	en, ok := sids["enabled"].([]interface{})
