@@ -723,7 +723,7 @@ func (e *SuricataEngine) ParseRules(content string, ruleset string, applyFilters
 
 		d := &model.Detection{
 			IsEnabled: !wasCommented,
-			Author:    detections.AUTHOR_SOC,
+			Author:    ruleset,
 			Category:  category,
 			PublicID:  sid,
 			Title:     title,
@@ -1419,18 +1419,17 @@ func (e *SuricataEngine) DuplicateDetection(ctx context.Context, detection *mode
 		return nil, err
 	}
 
+	// Preserve the original license and author
+	det.Author = detection.Author
+	det.License = detection.License
+
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 	user, err := e.srv.Userstore.GetUserById(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	author := strings.Join([]string{user.FirstName, user.LastName}, " ")
-	if author == "" {
-		author = user.Email
-	}
-
-	det.Author = author
+	det.Author = detections.AddUser(det.Author, user, ", ")
 
 	return det, nil
 }

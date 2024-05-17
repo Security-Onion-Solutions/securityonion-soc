@@ -167,6 +167,14 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Don't trust the client to send the correct author, grab it from the context
+	userID := ctx.Value(web.ContextKeyRequestorId).(string)
+	user, err := h.server.Userstore.GetUserById(ctx, userID)
+	if err != nil {
+		return
+	}
+	detect.Author = detections.MakeUser(user)
+
 	detect, err = h.server.Detectionstore.CreateDetection(ctx, detect)
 	if err != nil {
 		if strings.Contains(err.Error(), "already exists") {
@@ -704,6 +712,14 @@ func (h *DetectionHandler) PrepareForSave(ctx context.Context, detect *model.Det
 
 	detect.CreateTime = old.CreateTime
 	detect.Ruleset = old.Ruleset
+
+	// Existing rules will preserve their Author and License for copyright reasons.
+	if len(old.Author) > 0 {
+		detect.Author = old.Author
+	}
+	if len(old.License) > 0 {
+		detect.License = old.License
+	}
 
 	now := time.Now()
 

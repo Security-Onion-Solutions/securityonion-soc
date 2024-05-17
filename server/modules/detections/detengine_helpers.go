@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -281,4 +282,27 @@ func CheckWriteNoRead(ctx context.Context, DetStore GetterByPublicId, writeNoRea
 	log.WithFields(fields).Info("detection read back successfully")
 
 	return false
+}
+
+func MakeUser(user *model.User) string {
+	author := strings.Join([]string{user.FirstName, user.LastName}, " ")
+	if len(strings.TrimSpace(author)) == 0 {
+		author = user.Email
+	}
+	return author
+}
+
+func AddUser(previous string, user *model.User, sep string) string {
+	author := MakeUser(user)
+	previous = strings.TrimSpace(previous)
+
+	if previous == author {
+		return previous
+	}
+
+	if len(previous) > 0 {
+		previous += sep
+	}
+
+	return previous + author
 }

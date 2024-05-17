@@ -302,6 +302,10 @@ func (e *ElastAlertEngine) ExtractDetails(detect *model.Detection) error {
 		detect.Title = "Detection title not yet provided - click here to update this title"
 	}
 
+	if rule.Author != nil {
+		detect.Author = *rule.Author
+	}
+
 	return nil
 }
 
@@ -653,7 +657,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 				return
 			}
 
-			if err != nil && err.Error() == "Object not found" {
+			if err.Error() == "Object not found" {
 				// errMap contains exactly 1 error: the publicId of the detection that
 				// was written to but not read back
 				for publicId := range errMap {
@@ -1289,7 +1293,7 @@ func (e *ElastAlertEngine) DuplicateDetection(ctx context.Context, detection *mo
 	rule.Title += " (copy)"
 	rule.ID = &id
 
-	det := rule.ToDetection(detections.RULESET_CUSTOM, model.LicenseUnknown, false)
+	det := rule.ToDetection(detections.RULESET_CUSTOM, detection.License, false)
 
 	err = e.ExtractDetails(det)
 	if err != nil {
@@ -1302,12 +1306,7 @@ func (e *ElastAlertEngine) DuplicateDetection(ctx context.Context, detection *mo
 		return nil, err
 	}
 
-	author := strings.Join([]string{user.FirstName, user.LastName}, " ")
-	if author == "" {
-		author = user.Email
-	}
-
-	det.Author = author
+	det.Author = detections.AddUser(det.Author, user, ", ")
 
 	return det, nil
 }

@@ -933,7 +933,7 @@ $(document).ready(function() {
       async populateUserDetails(obj, idField, outputField) {
         if (obj[idField] && obj[idField].length > 0) {
           const id = obj[idField];
-          if (id === SYSTEM_USER_ID) {
+          if (id === SYSTEM_USER_ID || id === "agent") {
             Vue.set(obj, outputField, this.i18n.systemUser);
             return
           }
