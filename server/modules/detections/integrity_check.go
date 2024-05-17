@@ -13,7 +13,7 @@ var ErrIntCheckerStopped = fmt.Errorf("integrity checker has stopped running")
 var ErrIntCheckFailed = fmt.Errorf("integrity check failed; discrepancies found")
 
 type IntegrityChecked interface {
-	IntegrityCheck() error
+	IntegrityCheck(bool) error
 	InterruptSync(forceFull bool, notify bool)
 	IsRunning() bool
 }
@@ -51,7 +51,7 @@ func IntegrityChecker(engName model.EngineName, eng IntegrityChecked, data *Inte
 			continue
 		}
 
-		err := eng.IntegrityCheck()
+		err := eng.IntegrityCheck(true)
 		if err != nil {
 			if err != ErrIntCheckerStopped {
 				failCount++

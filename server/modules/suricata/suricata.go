@@ -453,6 +453,15 @@ func (e *SuricataEngine) watchCommunityRules() {
 
 				checkMigrationsOnce()
 
+				err = e.IntegrityCheck(false)
+				e.EngineState.IntegrityFailure = err != nil
+
+				if err != nil {
+					log.WithError(err).Error("post-sync integrity check failed")
+				} else {
+					log.Info("post-sync integrity check passed")
+				}
+
 				continue
 			}
 		}
@@ -549,6 +558,15 @@ func (e *SuricataEngine) watchCommunityRules() {
 					Engine: model.EngineNameSuricata,
 					Status: "success",
 				})
+			}
+
+			err = e.IntegrityCheck(false)
+			e.EngineState.IntegrityFailure = err != nil
+
+			if err != nil {
+				log.WithError(err).Error("post-sync integrity check failed")
+			} else {
+				log.Info("post-sync integrity check passed")
 			}
 		}
 
@@ -1516,9 +1534,9 @@ func (e *SuricataEngine) DuplicateDetection(ctx context.Context, detection *mode
 	return det, nil
 }
 
-func (e *SuricataEngine) IntegrityCheck() error {
+func (e *SuricataEngine) IntegrityCheck(canInterrupt bool) error {
 	// escape
-	if !e.IntegrityCheckerData.IsRunning {
+	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		return detections.ErrIntCheckerStopped
 	}
 
@@ -1533,7 +1551,7 @@ func (e *SuricataEngine) IntegrityCheck() error {
 	}
 
 	// escape
-	if !e.IntegrityCheckerData.IsRunning {
+	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		logger.Info("integrity checker stopped")
 		return detections.ErrIntCheckerStopped
 	}
@@ -1560,7 +1578,7 @@ func (e *SuricataEngine) IntegrityCheck() error {
 	}
 
 	// escape
-	if !e.IntegrityCheckerData.IsRunning {
+	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		return detections.ErrIntCheckerStopped
 	}
 
@@ -1581,7 +1599,7 @@ func (e *SuricataEngine) IntegrityCheck() error {
 	}
 
 	// escape
-	if !e.IntegrityCheckerData.IsRunning {
+	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		return detections.ErrIntCheckerStopped
 	}
 
@@ -1590,7 +1608,7 @@ func (e *SuricataEngine) IntegrityCheck() error {
 	logger.WithField("deployedPublicIdsCount", len(deployed)).Debug("deployed sids")
 
 	// escape
-	if !e.IntegrityCheckerData.IsRunning {
+	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		return detections.ErrIntCheckerStopped
 	}
 
@@ -1601,7 +1619,7 @@ func (e *SuricataEngine) IntegrityCheck() error {
 	}
 
 	// escape
-	if !e.IntegrityCheckerData.IsRunning {
+	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		return detections.ErrIntCheckerStopped
 	}
 
@@ -1613,7 +1631,7 @@ func (e *SuricataEngine) IntegrityCheck() error {
 	logger.WithField("enabledDetectionsCount", len(enabled)).Debug("enabled detections")
 
 	// escape
-	if !e.IntegrityCheckerData.IsRunning {
+	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		logger.Info("integrity checker stopped")
 		return detections.ErrIntCheckerStopped
 	}

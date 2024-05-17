@@ -696,10 +696,7 @@ func TestGetDeployed(t *testing.T) {
 	}
 
 	publicIds := getDeployed(report)
-	assert.Equal(t, []string{"ca978112-ca1b-4dca-bac2-31b39a23dc4d",
-		"3e23e816-0039-494a-b389-4f6564e1b134",
-		"2e7d2c03-a950-4ae2-a5ec-f5b5356885a5",
-		"18ac3e73-43f0-4689-8c51-0e93f9352611"}, publicIds)
+	assert.Equal(t, []string{"a", "b", "c", "d"}, publicIds)
 }
 
 func TestVerifyCompiledHash(t *testing.T) {
@@ -709,8 +706,8 @@ func TestVerifyCompiledHash(t *testing.T) {
 	defer ctrl.Finish()
 
 	mio := mock.NewMockIOManager(ctrl)
-	mio.EXPECT().ReadFile("/opt/so/conf/strelka/rules/rules.compiled").Return([]byte("abc"), nil).Times(3)
-	mio.EXPECT().ReadFile("/opt/so/conf/strelka/rules/rules.compiled").Return(nil, os.ErrNotExist).Times(2)
+	mio.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return([]byte("abc"), nil).Times(3)
+	mio.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return(nil, os.ErrNotExist).Times(2)
 
 	eng := &StrelkaEngine{
 		IOManager:       mio,

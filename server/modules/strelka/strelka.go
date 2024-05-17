@@ -48,7 +48,7 @@ const (
 	DEFAULT_AUTO_ENABLED_YARA_RULES                  = "securityonion-yara"
 	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS        = 300
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT       = 10
-	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS        = 6
+	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS        = 600
 )
 
 var errModuleStopped = fmt.Errorf("strelka module has stopped running")
@@ -419,6 +419,15 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 				})
 			}
 
+			err = e.IntegrityCheck(false)
+			e.EngineState.IntegrityFailure = err != nil
+
+			if err != nil {
+				log.WithError(err).Error("post-sync integrity check failed")
+			} else {
+				log.Info("post-sync integrity check passed")
+			}
+
 			continue
 		}
 
@@ -631,6 +640,15 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 					Status: "success",
 				})
 			}
+		}
+
+		err = e.IntegrityCheck(false)
+		e.EngineState.IntegrityFailure = err != nil
+
+		if err != nil {
+			log.WithError(err).Error("post-sync integrity check failed")
+		} else {
+			log.Info("post-sync integrity check passed")
 		}
 
 		log.WithFields(log.Fields{
@@ -970,9 +988,9 @@ func (e *StrelkaEngine) DuplicateDetection(ctx context.Context, detection *model
 	return det, nil
 }
 
-func (e *StrelkaEngine) IntegrityCheck() error {
+func (e *StrelkaEngine) IntegrityCheck(canInterrupt bool) error {
 	// escape
-	if !e.IntegrityCheckerData.IsRunning {
+	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		return detections.ErrIntCheckerStopped
 	}
 
@@ -1003,14 +1021,14 @@ func (e *StrelkaEngine) IntegrityCheck() error {
 	}).Debug("deployed rules")
 
 	// escape
-	if !e.IntegrityCheckerData.IsRunning {
+	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		return detections.ErrIntCheckerStopped
 	}
 
 	deployed := getDeployed(report)
 
 	// escape
-	if !e.IntegrityCheckerData.IsRunning {
+	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		return detections.ErrIntCheckerStopped
 	}
 
@@ -1021,7 +1039,7 @@ func (e *StrelkaEngine) IntegrityCheck() error {
 	}
 
 	// escape
-	if !e.IntegrityCheckerData.IsRunning {
+	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		return detections.ErrIntCheckerStopped
 	}
 
@@ -1033,7 +1051,7 @@ func (e *StrelkaEngine) IntegrityCheck() error {
 	logger.WithField("enabledDetectionsCount", len(enabled)).Debug("enabled detections")
 
 	// escape
-	if !e.IntegrityCheckerData.IsRunning {
+	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		logger.Info("integrity checker stopped")
 		return detections.ErrIntCheckerStopped
 	}

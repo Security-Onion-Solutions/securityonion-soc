@@ -672,6 +672,15 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 						})
 					}
 
+					err = e.IntegrityCheck(false)
+					e.EngineState.IntegrityFailure = err != nil
+
+					if err != nil {
+						log.WithError(err).Error("post-sync integrity check failed")
+					} else {
+						log.Info("post-sync integrity check passed")
+					}
+
 					continue
 				}
 			}
@@ -771,6 +780,15 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 					Engine: model.EngineNameElastAlert,
 					Status: "success",
 				})
+			}
+
+			err = e.IntegrityCheck(false)
+			e.EngineState.IntegrityFailure = err != nil
+
+			if err != nil {
+				log.WithError(err).Error("post-sync integrity check failed")
+			} else {
+				log.Info("post-sync integrity check passed")
 			}
 		}
 
@@ -1544,9 +1562,9 @@ func wrapRule(det *model.Detection, rule string, additionalAlerters []string) (s
 	return string(rawYaml), nil
 }
 
-func (e *ElastAlertEngine) IntegrityCheck() error {
+func (e *ElastAlertEngine) IntegrityCheck(canInterrupt bool) error {
 	// escape
-	if !e.IntegrityCheckerData.IsRunning {
+	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		return detections.ErrIntCheckerStopped
 	}
 
@@ -1564,7 +1582,7 @@ func (e *ElastAlertEngine) IntegrityCheck() error {
 	logger.WithField("deployedPublicIdsCount", len(deployed)).Debug("deployed publicIds")
 
 	// escape
-	if !e.IntegrityCheckerData.IsRunning {
+	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		logger.Info("integrity checker stopped")
 		return detections.ErrIntCheckerStopped
 	}
@@ -1583,7 +1601,7 @@ func (e *ElastAlertEngine) IntegrityCheck() error {
 	logger.WithField("enabledDetectionsCount", len(enabled)).Debug("enabled detections")
 
 	// escape
-	if !e.IntegrityCheckerData.IsRunning {
+	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		logger.Info("integrity checker stopped")
 		return detections.ErrIntCheckerStopped
 	}
