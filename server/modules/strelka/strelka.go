@@ -513,7 +513,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 							"rule.name": det.Title,
 						}).Info("Updating Yara detection")
 
-						det, err = e.srv.Detectionstore.UpdateDetection(e.srv.Context, det)
+						_, err = e.srv.Detectionstore.UpdateDetection(e.srv.Context, det)
 						if err != nil && err.Error() == "Object not found" {
 							log.WithField("publicId", det.PublicID).Error("unable to read back successful write")
 
@@ -988,18 +988,18 @@ func (e *StrelkaEngine) IntegrityCheck() error {
 		return detections.ErrIntCheckFailed
 	}
 
-	err = e.verifyCompiledHash(report.CompiledHash)
+	err = e.verifyCompiledHash(report.CompiledRulesHash)
 	if err != nil {
 		logger.WithError(err).Error("compiled rules hash mismatch, this report is not for the latest compiled rules")
 		return detections.ErrIntCheckFailed
 	}
 
 	logger.WithFields(log.Fields{
-		"successfullyDeployed": len(report.Successful),
-		"failedToDeploy":       len(report.Failed),
-		"rulesCount":           len(report.Successful) + len(report.Failed),
+		"successfullyDeployed": len(report.Success),
+		"failedToDeploy":       len(report.Failure),
+		"rulesCount":           len(report.Success) + len(report.Failure),
 		"lastDeployed":         report.Timestamp,
-		"compiledHash":         report.CompiledHash,
+		"compiledHash":         report.CompiledRulesHash,
 	}).Debug("deployed rules")
 
 	// escape
@@ -1014,7 +1014,7 @@ func (e *StrelkaEngine) IntegrityCheck() error {
 		return detections.ErrIntCheckerStopped
 	}
 
-	ret, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, util.Ptr(model.EngineNameSuricata), util.Ptr(true), nil)
+	ret, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, util.Ptr(model.EngineNameStrelka), util.Ptr(true), nil)
 	if err != nil {
 		logger.WithError(err).Error("unable to query for enabled detections")
 		return detections.ErrIntCheckFailed
@@ -1056,7 +1056,7 @@ func (e *StrelkaEngine) IntegrityCheck() error {
 }
 
 func (e *StrelkaEngine) getCompilationReport() (*model.CompilationReport, error) {
-	path := filepath.Join(e.yaraRulesFolder, "compilation_report.json")
+	path := "/opt/sensoroni/logs/detections_yara_compilation-total.log"
 
 	raw, err := e.ReadFile(path)
 	if err != nil {
@@ -1074,10 +1074,15 @@ func (e *StrelkaEngine) getCompilationReport() (*model.CompilationReport, error)
 }
 
 func (e *StrelkaEngine) verifyCompiledHash(hash string) error {
-	path := filepath.Join(e.yaraRulesFolder, "rules.compiled")
+	path := "/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled"
 
 	raw, err := e.ReadFile(path)
 	if err != nil {
+		if os.IsNotExist(err) && hash == "" {
+			// there were no enabled rules
+			return nil
+		}
+
 		return fmt.Errorf("failed to read compiled rules: %w", err)
 	}
 
@@ -1094,16 +1099,7 @@ func (e *StrelkaEngine) verifyCompiledHash(hash string) error {
 }
 
 func getDeployed(report *model.CompilationReport) []string {
-	deployed := make([]string, 0, len(report.Successful)+len(report.Failed))
-	for _, name := range report.Successful {
-		deployed = append(deployed, stringToUUID(name))
-	}
-
-	for _, name := range report.Failed {
-		deployed = append(deployed, stringToUUID(name))
-	}
-
-	return deployed
+	return append(report.Success, report.Failure...)
 }
 
 // go install go.uber.org/mock/mockgen@latest

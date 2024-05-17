@@ -1,8 +1,8 @@
 package model
 
 type CompilationReport struct {
-	Timestamp    string   `json:"timestamp"`
-	Successful   []string `json:"successful"`
-	Failed       []string `json:"failed"`
-	CompiledHash string   `json:"compiledHash"`
+	Timestamp         string   `json:"timestamp"`
+	Success           []string `json:"success"`
+	Failure           []string `json:"failure"`
+	CompiledRulesHash string   `json:"compiled_sha256"`
 }
