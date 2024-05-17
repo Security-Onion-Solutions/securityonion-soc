@@ -420,7 +420,10 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			}
 
 			err = e.IntegrityCheck(false)
-			e.EngineState.IntegrityFailure = err != nil
+
+			success := err != nil
+			e.EngineState.IntegrityFailure = success
+			lastSyncSuccess = &success
 
 			if err != nil {
 				log.WithError(err).Error("post-sync integrity check failed")
@@ -643,7 +646,10 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 		}
 
 		err = e.IntegrityCheck(false)
-		e.EngineState.IntegrityFailure = err != nil
+
+		success := err != nil
+		e.EngineState.IntegrityFailure = success
+		lastSyncSuccess = &success
 
 		if err != nil {
 			log.WithError(err).Error("post-sync integrity check failed")
@@ -1020,6 +1026,17 @@ func (e *StrelkaEngine) IntegrityCheck(canInterrupt bool) error {
 		"compiledHash":         report.CompiledRulesHash,
 	}).Debug("deployed rules")
 
+	if len(report.Failure) > 0 {
+		problemSample := report.Failure
+		if len(report.Failure) > 5 {
+			problemSample = report.Failure[:5]
+		}
+
+		logger.WithField("failedPublicIDs", problemSample).Error("integrity check failed because some rules failed to deploy")
+
+		return detections.ErrIntCheckFailed
+	}
+
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		return detections.ErrIntCheckerStopped
@@ -1074,7 +1091,7 @@ func (e *StrelkaEngine) IntegrityCheck(canInterrupt bool) error {
 }
 
 func (e *StrelkaEngine) getCompilationReport() (*model.CompilationReport, error) {
-	path := "/opt/sensoroni/logs/detections_yara_compilation-total.log"
+	path := "/opt/so/state/detections_yara_compilation-total.log"
 
 	raw, err := e.ReadFile(path)
 	if err != nil {

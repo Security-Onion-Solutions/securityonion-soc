@@ -673,7 +673,10 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 					}
 
 					err = e.IntegrityCheck(false)
-					e.EngineState.IntegrityFailure = err != nil
+
+					success := err != nil
+					e.EngineState.IntegrityFailure = success
+					lastSyncSuccess = &success
 
 					if err != nil {
 						log.WithError(err).Error("post-sync integrity check failed")
@@ -783,7 +786,10 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			}
 
 			err = e.IntegrityCheck(false)
-			e.EngineState.IntegrityFailure = err != nil
+
+			success := err != nil
+			e.EngineState.IntegrityFailure = success
+			lastSyncSuccess = &success
 
 			if err != nil {
 				log.WithError(err).Error("post-sync integrity check failed")

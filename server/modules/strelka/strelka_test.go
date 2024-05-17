@@ -673,7 +673,7 @@ func TestGetCompilationResult(t *testing.T) {
 }`
 
 	mio := mock.NewMockIOManager(ctrl)
-	mio.EXPECT().ReadFile("/opt/sensoroni/logs/detections_yara_compilation-total.log").Return([]byte(jsn), nil)
+	mio.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return([]byte(jsn), nil)
 
 	eng := &StrelkaEngine{
 		IOManager:       mio,

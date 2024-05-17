@@ -442,7 +442,6 @@ func (e *SuricataEngine) watchCommunityRules() {
 				log.Info("suricata sync found no changes")
 
 				detections.WriteStateFile(e.IOManager, e.stateFilePath)
-				lastSyncSuccess = util.Ptr(true)
 
 				if e.notify {
 					e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
@@ -454,7 +453,10 @@ func (e *SuricataEngine) watchCommunityRules() {
 				checkMigrationsOnce()
 
 				err = e.IntegrityCheck(false)
-				e.EngineState.IntegrityFailure = err != nil
+
+				success := err != nil
+				e.EngineState.IntegrityFailure = success
+				lastSyncSuccess = &success
 
 				if err != nil {
 					log.WithError(err).Error("post-sync integrity check failed")
@@ -561,7 +563,10 @@ func (e *SuricataEngine) watchCommunityRules() {
 			}
 
 			err = e.IntegrityCheck(false)
-			e.EngineState.IntegrityFailure = err != nil
+
+			success := err != nil
+			e.EngineState.IntegrityFailure = success
+			lastSyncSuccess = &success
 
 			if err != nil {
 				log.WithError(err).Error("post-sync integrity check failed")
