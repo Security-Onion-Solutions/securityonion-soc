@@ -342,7 +342,7 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 	query, err := engine.sigmaToElastAlert(context.Background(), det)
 	assert.NoError(t, err)
 
-	wrappedRule, err := wrapRule(det, query)
+	wrappedRule, err := wrapRule(det, query, []string{"email", "slack"})
 	assert.NoError(t, err)
 
 	expected := `detection_title: Test Detection
@@ -353,6 +353,8 @@ event.severity: 4
 sigma_level: high
 alert:
     - modules.so.securityonion-es.SecurityOnionESAlerter
+    - email
+    - slack
 index: .ds-logs-*
 name: Test Detection -- 00000000-0000-0000-0000-000000000000
 type: any
