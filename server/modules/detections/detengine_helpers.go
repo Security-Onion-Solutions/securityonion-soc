@@ -296,7 +296,7 @@ func AddUser(previous string, user *model.User, sep string) string {
 	author := MakeUser(user)
 	previous = strings.TrimSpace(previous)
 
-	if previous == author {
+	if previous == author || len(author) == 0 {
 		return previous
 	}
 

@@ -125,6 +125,22 @@ test('populateUserDetails', async () => {
   expect(obj.owner).toBe('hi@there.net');
 });
 
+test('populateUserDetailsSystem', async () => {
+  const obj = {userId:'00000000-0000-0000-0000-000000000000'};
+  app.users = [{id:'123',email:'hi@there.net'}];
+  app.usersLoadedTime = new Date().time;
+  await app.populateUserDetails(obj, "userId", "owner")
+  expect(obj.owner).toBe(app.i18n.systemUser);
+});
+
+test('populateUserDetailsAgent', async () => {
+  const obj = {userId:'agent'};
+  app.users = [{id:'123',email:'hi@there.net'}];
+  app.usersLoadedTime = new Date().time;
+  await app.populateUserDetails(obj, "userId", "owner")
+  expect(obj.owner).toBe(app.i18n.systemUser);
+});
+
 test('isUserAdmin', async () => {
   var user = {id:'123',email:'hi@there.net',roles:['nope', 'peon']};
   app.user = user;
