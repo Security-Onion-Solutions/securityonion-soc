@@ -89,6 +89,7 @@ type ElastAlertEngine struct {
 	sigmaPipelinesFingerprintFile        string
 	sigmaRulePackages                    []string
 	autoEnabledSigmaRules                []string
+	additionalAlerters                   []string
 	rulesRepos                           []*model.RuleRepo
 	reposFolder                          string
 	isRunning                            bool
@@ -145,6 +146,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.autoEnabledSigmaRules = module.GetStringArrayDefault(config, "autoEnabledSigmaRules", []string{"securityonion-resources+critical", "securityonion-resources+high"})
 	e.communityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
+	e.additionalAlerters = module.GetStringArrayDefault(config, "additionalAlerters", []string{})
 
 	pkgs := module.GetStringArrayDefault(config, "sigmaRulePackages", []string{"core", "emerging_threats_addon"})
 	e.parseSigmaPackages(pkgs)
@@ -378,7 +380,7 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 				continue
 			}
 
-			wrapped, err := wrapRule(det, eaRule)
+			wrapped, err := wrapRule(det, eaRule, e.additionalAlerters)
 			if err != nil {
 				continue
 			}
@@ -1025,7 +1027,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 				continue
 			}
 
-			rule, err = wrapRule(det, rule)
+			rule, err = wrapRule(det, rule, e.additionalAlerters)
 			if err != nil {
 				continue
 			}
@@ -1447,7 +1449,7 @@ func (dur *TimeFrame) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return err
 }
 
-func wrapRule(det *model.Detection, rule string) (string, error) {
+func wrapRule(det *model.Detection, rule string, additionalAlerters []string) (string, error) {
 	severities := map[model.Severity]int{
 		model.SeverityUnknown:       0,
 		model.SeverityInformational: 1,
@@ -1475,6 +1477,14 @@ func wrapRule(det *model.Detection, rule string) (string, error) {
 		Realert:           nil,
 		Type:              "any",
 		Filter:            []map[string]interface{}{{"eql": rule}},
+	}
+
+	// Add any custom alerters to the rule.
+	for _, alerter := range additionalAlerters {
+		alerter = strings.TrimSpace(alerter)
+		if len(alerter) > 0 {
+			wrapper.Alert = append(wrapper.Alert, alerter)
+		}
 	}
 
 	rawYaml, err := yaml.Marshal(wrapper)
