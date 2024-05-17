@@ -156,7 +156,7 @@ func TestDuplicateDetection(t *testing.T) {
 
 	// expected similarities
 	assert.Equal(t, det.Severity, dupe.Severity)
-	assert.Equal(t, det.Author, dupe.Author)
+	assert.Equal(t, "Benjamin DELPY (gentilkiwi); Didier Stevens; David Levinson", dupe.Author)
 	assert.Equal(t, det.Category, dupe.Category)
 	assert.Equal(t, det.Description, dupe.Description)
 	assert.Equal(t, det.Engine, dupe.Engine)
@@ -165,7 +165,7 @@ func TestDuplicateDetection(t *testing.T) {
 	// always empty after duplication
 	assert.False(t, det.IsEnabled)
 	assert.False(t, det.IsReporting)
-	assert.Equal(t, dupe.License, model.LicenseUnknown)
+	assert.Equal(t, det.License, dupe.License)
 	assert.Empty(t, dupe.Overrides)
 	assert.Empty(t, dupe.Tags)
 }

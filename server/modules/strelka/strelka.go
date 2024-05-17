@@ -221,6 +221,9 @@ func (s *StrelkaEngine) ExtractDetails(detect *model.Detection) error {
 
 	detect.Severity = model.SeverityUnknown
 	detect.PublicID = rule.GetID()
+	if rule.Meta.Author != nil {
+		detect.Author = *rule.Meta.Author
+	}
 
 	return nil
 }
@@ -880,7 +883,7 @@ func (e *StrelkaEngine) DuplicateDetection(ctx context.Context, detection *model
 
 	rule.Identifier += "_copy"
 
-	det := rule.ToDetection(model.LicenseUnknown, detections.RULESET_CUSTOM, false)
+	det := rule.ToDetection(detection.License, detections.RULESET_CUSTOM, false)
 
 	err = e.ExtractDetails(det)
 	if err != nil {
@@ -893,12 +896,7 @@ func (e *StrelkaEngine) DuplicateDetection(ctx context.Context, detection *model
 		return nil, err
 	}
 
-	author := strings.Join([]string{user.FirstName, user.LastName}, " ")
-	if author == "" {
-		author = user.Email
-	}
-
-	det.Author = author
+	det.Author = detections.AddUser(det.Author, user, "; ")
 
 	return det, nil
 }

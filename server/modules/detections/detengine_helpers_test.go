@@ -140,3 +140,23 @@ func TestCheckWriteNoRead(t *testing.T) {
 	shouldFail = CheckWriteNoRead(ctx, mio, id)
 	assert.False(t, shouldFail)
 }
+
+func TestAddUser(t *testing.T) {
+	user := model.User{
+		FirstName: "fn",
+		LastName:  "ln",
+		Email:     "em",
+	}
+	assert.Equal(t, "foo bar, fn ln", AddUser("foo bar", &user, ", "))
+
+	user.FirstName = ""
+	user.LastName = ""
+	assert.Equal(t, "foo bar, em", AddUser("foo bar", &user, ", "))
+
+	user.Email = ""
+	assert.Equal(t, "foo bar", AddUser("foo bar", &user, ", "))
+
+	user.FirstName = "foo"
+	user.LastName = "bar"
+	assert.Equal(t, "foo bar", AddUser("foo bar", &user, ", "))
+}

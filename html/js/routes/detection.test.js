@@ -35,7 +35,6 @@ test('extract suricata', () => {
 	expect(comp.extractedLogic).toBe('any any <> any any');
 	expect(comp.extractedCreated).toBe('2020-01-01');
 	expect(comp.extractedUpdated).toBe('2020-01-02');
-	expect(comp.extractedAuthor).toBe('Bob');
 });
 
 test('extract strelka', () => {
@@ -59,7 +58,6 @@ test('extract strelka', () => {
 	expect(comp.extractedLogic).toBe('strings:\n$a = "test"\ncondition:\n$a');
 	expect(comp.extractedCreated).toBe('2020-01-01');
 	expect(comp.extractedUpdated).toBe('');
-	expect(comp.extractedAuthor).toBe('Bob');
 });
 
 test('extract elastalert', () => {
@@ -83,7 +81,6 @@ test('extract elastalert', () => {
 	expect(comp.extractedLogic).toBe('logsource:\n  product: windows\n  category: file_event\ndetection:\n  selection:\n    TargetFilename|contains:\n      - ds7002.lnk\n      - ds7002.pdf\n      - ds7002.zip\n    condition: selection');
 	expect(comp.extractedCreated).toBe('2018/11/20');
 	expect(comp.extractedUpdated).toBe('2023/02/20');
-	expect(comp.extractedAuthor).toBe('@41thexplorer');
 });
 
 test('fixProtocol', () => {

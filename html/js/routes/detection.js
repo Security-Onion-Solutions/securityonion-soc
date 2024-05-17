@@ -55,8 +55,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			activeTab: '',
 			sidExtract: /\bsid: ?['"]?(.*?)['"]?;/, // option
 			severityExtract: /\bsignature_severity ['"]?(.*?)['"]?[,;]/, // metadata
-			authorExtract: /\bauthor: ?['"]?(.*?)['"]?;/, // option
-			authorMetaExtract: /\bauthor ['"]?(.*?)['"]?[,;]/, // metadata
 			sortBy: 'createdAt',
 			sortDesc: false,
 			expanded: [],
@@ -97,7 +95,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			history: [],
 			extractedCreated: '',
 			extractedUpdated: '',
-			extractedAuthor: '',
 			comments: [],
 			commentsTable: {
 				showAll: false,
@@ -196,6 +193,11 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.tagOverrides();
 			this.loadAssociations();
 			this.origDetect = Object.assign({}, this.detect);
+			// Don't await the user details -- takes too long for the task scheduler to
+			// complete all these futures when looping across hundreds of records. Let
+			// the UI update as they finish, for a better user experience.
+			this.$root.populateUserDetails(this.detect, "userId", "userName");
+
 		},
 		loadAssociations() {
 			this.extractSummary();
@@ -285,11 +287,11 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		isValidUrl(urlString) {
 	  	var urlPattern = new RegExp('^(https?:\\/\\/)?'+ // validate protocol
-	    '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|'+ // validate domain name
-	    '((\\d{1,3}\\.){3}\\d{1,3}))'+ // validate OR ip (v4) address
-	    '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*'+ // validate port and path
-	    '(\\?[;&a-z\\d%_.~+=-]*)?'+ // validate query string
-	    '(\\#[-a-z\\d_]*)?$','i'); // validate fragment locator
+		'((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|'+ // validate domain name
+		'((\\d{1,3}\\.){3}\\d{1,3}))'+ // validate OR ip (v4) address
+		'(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*'+ // validate port and path
+		'(\\?[;&a-z\\d%_.~+=-]*)?'+ // validate query string
+		'(\\#[-a-z\\d_]*)?$','i'); // validate fragment locator
 	  return !!urlPattern.test(urlString);
 		},
 		fixProtocol(url) {
@@ -399,7 +401,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.extractedLogic = jsyaml.dump({ logsource: logSource, detection: detection }).trim();
 		},
 		extractDetails() {
-			this.extractedAuthor = this.extractedCreated = this.extractedUpdated = '';
+			this.extractedCreated = this.extractedUpdated = '';
 
 			switch (this.detect.engine) {
 				case 'suricata':
@@ -441,22 +443,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 						this.extractedUpdated = date[0];
 					}
 				}
-
-				if (md.indexOf('author') > -1) {
-					this.extractedAuthor = md.replace('author', '').trim();
-				}
 			}
 		},
 		extractStrelkaDetails() {
-			const authorExtractor = /^\s*author\s*=\s*"(.*)"/im;
 			const dateExtractor = /^\s*date\s*=\s*"(.*)"/im;
-
-			const authorMatch = authorExtractor.exec(this.detect.content);
-
-			if (authorMatch) {
-				this.extractedAuthor = authorMatch[1];
-			}
-
 			const dateMatch = dateExtractor.exec(this.detect.content);
 
 			if (dateMatch) {
@@ -466,7 +456,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		extractElastAlertDetails() {
 			const yaml = jsyaml.load(this.detect.content, { schema: jsyaml.FAILSAFE_SCHEMA });
 
-			this.extractedAuthor = yaml['author'];
 			this.extractedCreated = yaml['date'];
 			this.extractedUpdated = yaml['modified'];
 		},
@@ -597,9 +586,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			if (this.isNew()) {
 				this.$refs.detection.validate();
 				if (!this.editForm.valid) return;
-
-				const author = [this.$root.user.firstName, this.$root.user.lastName].filter(x => x).join(' ') || this.$root.user.email;
-				this.detect.author = author;
 			}
 
 			let err;
@@ -766,25 +752,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			this.detect.severity = sev;
 		},
-		extractAuthor() {
-			let author = this.detect.author;
-			switch (this.detect.engine) {
-				case 'suricata':
-					try {
-						const a = this.extractSuricataAuthor();
-						if (a) author = a;
-					} catch {}
-					break;
-				case 'elastalert':
-					try {
-						const a = this.extractElastAlertAuthor();
-						if (a) author = a;
-					} catch {}
-					break;
-			}
-
-			this.detect.author = author;
-		},
 		extractSuricataPublicID() {
 			const results = this.sidExtract.exec(this.detect.content);
 			if (results === null || results.length < 2) {
@@ -807,17 +774,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			return sev;
 		},
-		extractSuricataAuthor() {
-			// do suricata rules even have a place for an author?
-
-			// first look for an option labeled author
-			const author = this.authorExtract.exec(this.detect.content);
-			if (author && author.length >= 2) return author[1];
-
-			// if no option, check metadata for a field labeled author
-			const authorMeta = this.authorMetaExtract.exec(this.detect.content);
-			if (authorMeta && authorMeta.length >= 2) return authorMeta[1];
-		},
 		extractElastAlertPublicID() {
 			const yaml = jsyaml.load(this.detect.content, {schema: jsyaml.FAILSAFE_SCHEMA});
 			return yaml['id'];
@@ -832,15 +788,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				}
 			}
 		},
-		extractElastAlertAuthor() {
-			const yaml = jsyaml.load(this.detect.content, {schema: jsyaml.FAILSAFE_SCHEMA});
-			return yaml['author'];
-		},
 		onDetectionChange() {
 			if (this.detect.engine) {
 				this.extractPublicID();
 				this.extractSeverity();
-				this.extractAuthor();
 			}
 		},
 		saveSetting(name, value, defaultValue = null) {

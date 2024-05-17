@@ -1778,7 +1778,7 @@
                     {{ i18n.author }}:
                   </div>
                   <div class="ops-value" data-aid="detection_metadata_public_author_display">
-                    {{ extractedAuthor }}
+                    {{ detect.author }}
                   </div>
                   <!-- <div class="ops-header">
                     {{ i18n.tags }}:
@@ -1803,10 +1803,10 @@
               </div>
               <div>
                 <div class="key">
-                  {{ i18n.author }}:
+                  {{ i18n.socUser }}:
                 </div>
                 <div class="value" data-aid="detection_metadata_author_display">
-                  {{ $root.tryLocalize(detect.author) }}
+                  {{ $root.tryLocalize(detect.userName) }}
                 </div>
               </div>
               <div>
@@ -3864,7 +3864,7 @@
                       <span class="case value" data-aid="case_metadata_id_display">{{ caseObj.id }}</span>
                     </div>
                     <div class="case summary">
-                      <span class="case label">{{ i18n.author }}:</span>
+                      <span class="case label">{{ i18n.socUser }}:</span>
                       <span class="case value" data-aid="case_metadata_owner_display">{{ caseObj.owner }}</span>
                     </div>
                     <div class="case summary">
