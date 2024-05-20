@@ -14,7 +14,6 @@ import (
 	"strings"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 )
 
@@ -212,7 +211,7 @@ func (r *YaraRule) ToDetection(license string, ruleset string, isCommunity bool)
 	}
 
 	det := &model.Detection{
-		Author:      detections.AUTHOR_SOC,
+		Author:      *r.Meta.Author,
 		Engine:      model.EngineNameStrelka,
 		PublicID:    r.GetID(),
 		Title:       r.Identifier,
