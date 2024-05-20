@@ -215,7 +215,6 @@ func (r *YaraRule) ToDetection(license string, ruleset string, isCommunity bool)
 	}
 
 	det := &model.Detection{
-		Author:      *r.Meta.Author,
 		Engine:      model.EngineNameStrelka,
 		PublicID:    r.GetID(),
 		Title:       r.Identifier,
@@ -225,6 +224,10 @@ func (r *YaraRule) ToDetection(license string, ruleset string, isCommunity bool)
 		Language:    model.SigLangYara,
 		Ruleset:     ruleset,
 		License:     lic,
+	}
+
+	if r.Meta.Author != nil {
+		det.Author = *r.Meta.Author
 	}
 
 	if r.Meta.Description != nil {

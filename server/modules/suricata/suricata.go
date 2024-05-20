@@ -336,10 +336,15 @@ func (e *SuricataEngine) watchCommunityRules() {
 
 		timer := time.NewTimer(timerDur)
 
+		lastSyncStatus := "nil"
+		if lastSyncSuccess != nil {
+			lastSyncStatus = strconv.FormatBool(*lastSyncSuccess)
+		}
+
 		log.WithFields(log.Fields{
 			"waitTimeSeconds":   timerDur.Seconds(),
 			"forceSync":         forceSync,
-			"lastSyncSuccess":   lastSyncSuccess,
+			"lastSyncSuccess":   lastSyncStatus,
 			"expectedStartTime": time.Now().Add(timerDur).Format(time.RFC3339),
 		}).Info("waiting for next suricata community rules sync")
 
@@ -454,9 +459,8 @@ func (e *SuricataEngine) watchCommunityRules() {
 
 				err = e.IntegrityCheck(false)
 
-				success := err != nil
-				e.EngineState.IntegrityFailure = success
-				lastSyncSuccess = &success
+				e.EngineState.IntegrityFailure = err != nil
+				lastSyncSuccess = util.Ptr(err == nil)
 
 				if err != nil {
 					log.WithError(err).Error("post-sync integrity check failed")
@@ -564,9 +568,8 @@ func (e *SuricataEngine) watchCommunityRules() {
 
 			err = e.IntegrityCheck(false)
 
-			success := err != nil
-			e.EngineState.IntegrityFailure = success
-			lastSyncSuccess = &success
+			e.EngineState.IntegrityFailure = err != nil
+			lastSyncSuccess = util.Ptr(err == nil)
 
 			if err != nil {
 				log.WithError(err).Error("post-sync integrity check failed")
@@ -1195,7 +1198,11 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detects []
 
 		orig, exists := commSIDs[detect.PublicID]
 		if exists {
-			detect.IsEnabled = orig.IsEnabled
+			_, isSpecificallyEnabled := enabledIndex[detect.PublicID]
+			_, isSpecificallyDisabled := disabledIndex[detect.PublicID]
+			if isSpecificallyDisabled || isSpecificallyEnabled {
+				detect.IsEnabled = orig.IsEnabled
+			}
 			detect.Id = orig.Id
 			detect.Overrides = orig.Overrides
 			detect.CreateTime = orig.CreateTime
@@ -1236,7 +1243,7 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detects []
 		}
 
 		if exists {
-			if orig.Content != detect.Content || orig.Ruleset != detect.Ruleset || len(detect.Overrides) != 0 {
+			if orig.Content != detect.Content || orig.Ruleset != detect.Ruleset || len(detect.Overrides) != 0 || orig.IsEnabled != detect.IsEnabled {
 				detect.Kind = ""
 
 				_, err = e.srv.Detectionstore.UpdateDetection(ctx, detect)

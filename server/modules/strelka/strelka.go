@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -316,10 +317,15 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 		timer := time.NewTimer(timerDur)
 
+		lastSyncStatus := "nil"
+		if lastSyncSuccess != nil {
+			lastSyncStatus = strconv.FormatBool(*lastSyncSuccess)
+		}
+
 		log.WithFields(log.Fields{
 			"waitTimeSeconds":   timerDur.Seconds(),
 			"forceSync":         forceSync,
-			"lastSyncSuccess":   lastSyncSuccess,
+			"lastSyncSuccess":   lastSyncStatus,
 			"expectedStartTime": time.Now().Add(timerDur).Format(time.RFC3339),
 		}).Info("waiting for next Strelka community rules sync")
 
@@ -410,7 +416,6 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			log.Info("Strelka sync found no changes")
 
 			detections.WriteStateFile(e.IOManager, e.stateFilePath)
-			lastSyncSuccess = util.Ptr(true)
 
 			if e.notify {
 				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
@@ -421,9 +426,8 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 			err = e.IntegrityCheck(false)
 
-			success := err != nil
-			e.EngineState.IntegrityFailure = success
-			lastSyncSuccess = &success
+			e.EngineState.IntegrityFailure = err != nil
+			lastSyncSuccess = util.Ptr(err == nil)
 
 			if err != nil {
 				log.WithError(err).Error("post-sync integrity check failed")
@@ -629,7 +633,6 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 		}
 
 		detections.WriteStateFile(e.IOManager, e.stateFilePath)
-		lastSyncSuccess = util.Ptr(true)
 
 		if e.notify {
 			if len(errMap) > 0 {
@@ -647,9 +650,8 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 		err = e.IntegrityCheck(false)
 
-		success := err != nil
-		e.EngineState.IntegrityFailure = success
-		lastSyncSuccess = &success
+		e.EngineState.IntegrityFailure = err != nil
+		lastSyncSuccess = util.Ptr(err == nil)
 
 		if err != nil {
 			log.WithError(err).Error("post-sync integrity check failed")

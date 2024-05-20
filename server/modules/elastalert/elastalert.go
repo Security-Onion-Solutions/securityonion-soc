@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -488,10 +489,15 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 
 		timer := time.NewTimer(timerDur)
 
+		lastSyncStatus := "nil"
+		if lastSyncSuccess != nil {
+			lastSyncStatus = strconv.FormatBool(*lastSyncSuccess)
+		}
+
 		log.WithFields(log.Fields{
 			"waitTimeSeconds":   timerDur.Seconds(),
 			"forceSync":         forceSync,
-			"lastSyncSuccess":   lastSyncSuccess,
+			"lastSyncSuccess":   lastSyncStatus,
 			"expectedStartTime": time.Now().Add(timerDur).Format(time.RFC3339),
 		}).Info("waiting for next elastalert community rules sync")
 
@@ -663,7 +669,6 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 					log.Info("elastalert sync found no changes")
 
 					detections.WriteStateFile(e.IOManager, e.stateFilePath)
-					lastSyncSuccess = util.Ptr(true)
 
 					if e.notify {
 						e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
@@ -674,9 +679,8 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 
 					err = e.IntegrityCheck(false)
 
-					success := err != nil
-					e.EngineState.IntegrityFailure = success
-					lastSyncSuccess = &success
+					e.EngineState.IntegrityFailure = err != nil
+					lastSyncSuccess = util.Ptr(err == nil)
 
 					if err != nil {
 						log.WithError(err).Error("post-sync integrity check failed")
@@ -787,9 +791,8 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 
 			err = e.IntegrityCheck(false)
 
-			success := err != nil
-			e.EngineState.IntegrityFailure = success
-			lastSyncSuccess = &success
+			e.EngineState.IntegrityFailure = err != nil
+			lastSyncSuccess = util.Ptr(err == nil)
 
 			if err != nil {
 				log.WithError(err).Error("post-sync integrity check failed")
