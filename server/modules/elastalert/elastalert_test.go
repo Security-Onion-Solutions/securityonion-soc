@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -341,6 +342,65 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 	query, err := engine.sigmaToElastAlert(context.Background(), det)
 	assert.NoError(t, err)
 
+	// No license
+	wrappedRule, err := wrapRule(det, query, []string{"email", "slack"})
+	assert.NoError(t, err)
+
+	expected := `detection_title: Test Detection
+detection_public_id: 00000000-0000-0000-0000-000000000000
+event.module: sigma
+event.dataset: sigma.alert
+event.severity: 4
+sigma_level: high
+alert:
+    - modules.so.securityonion-es.SecurityOnionESAlerter
+index: .ds-logs-*
+name: Test Detection -- 00000000-0000-0000-0000-000000000000
+type: any
+filter:
+    - eql: <eql>
+`
+	assert.YAMLEq(t, expected, wrappedRule)
+}
+
+func TestSigmaToElastAlertSunnyDayLicensed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mio := mock.NewMockIOManager(ctrl)
+
+	mio.EXPECT().ExecCommand(gomock.Cond(func(x any) bool {
+		cmd := x.(*exec.Cmd)
+
+		if !strings.HasSuffix(cmd.Path, "sigma") {
+			return false
+		}
+
+		if !slices.Contains(cmd.Args, "convert") {
+			return false
+		}
+
+		if cmd.Stdin == nil {
+			return false
+		}
+
+		return true
+	})).Return([]byte("<eql>"), 0, time.Duration(0), nil)
+
+	engine := ElastAlertEngine{
+		IOManager: mio,
+	}
+
+	det := &model.Detection{
+		PublicID: "00000000-0000-0000-0000-000000000000",
+		Content:  "totally good sigma",
+		Title:    "Test Detection",
+		Severity: model.SeverityHigh,
+	}
+
+	query, err := engine.sigmaToElastAlert(context.Background(), det)
+	assert.NoError(t, err)
+
+	// License
+	licensing.Test(licensing.FEAT_NOT, 0, 0, "", "")
 	wrappedRule, err := wrapRule(det, query, []string{"email", "slack"})
 	assert.NoError(t, err)
 
