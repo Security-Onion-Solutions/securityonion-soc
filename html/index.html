@@ -1036,8 +1036,7 @@
       <v-container fluid v-if="detect" data-aid="detections_screen">
         <div v-if="!isNew()" class="mx-sm-12 mx-lg-6 mt-2 mb-6 mb-md-1" data-aid="detection_title_input">
           <!-- Title -->
-          <h2 id="detection-title" @click="startEdit('detection-title', 'title')" v-if="!isEdit('detection-title')">{{ detect.title }}</h2>
-          <v-text-field id="detection-title-edit" v-else hide-details="auto" outlined v-model="detect.title" :rules="[rules.required]" persistent-hint :hint="i18n.detectionTitle" v-on:keyup.enter="stopEdit(true)" v-on:keyup.esc="stopEdit(false)"></v-text-field>
+          <h2 id="detection-title">{{ detect.title }}</h2>
         </div>
 
         <div class="row mx-sm-8 mx-md-12 mx-lg-4 flex-column flex-md-row">
