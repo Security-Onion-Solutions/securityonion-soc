@@ -48,19 +48,20 @@ const (
 type SigmaRule struct {
 	Title          string                 `yaml:"title"`
 	ID             *string                `yaml:"id"`
+	Related        []*RelatedRule         `yaml:"related,omitempty"`
 	Status         *SigmaStatus           `yaml:"status"`
 	Description    *string                `yaml:"description,omitempty"`
+	References     []string               `yaml:"references,omitempty"`
 	Author         *string                `yaml:"author,omitempty"`
 	Date           *string                `yaml:"date"`
-	Reference      []string               `yaml:"reference,omitempty"`
+	Modified       *string                `yaml:"modified,omitempty"`
+	Tags           []string               `yaml:"tags,omitempty"`
 	LogSource      LogSource              `yaml:"logsource"`
 	Detection      SigmaDetection         `yaml:"detection"`
+	Fields         []string               `yaml:"fields,omitempty"`
 	FalsePositives OneOrMore[string]      `yaml:"falsepositives,omitempty"`
 	Level          *SigmaLevel            `yaml:"level"`
 	License        *string                `yaml:"license,omitempty"`
-	Related        []*RelatedRule         `yaml:"related,omitempty"`
-	Modified       *string                `yaml:"modified,omitempty"`
-	Fields         []string               `yaml:"fields,omitempty"`
 	Rest           map[string]interface{} `yaml:",inline"`
 }
 
@@ -72,8 +73,8 @@ type LogSource struct {
 }
 
 type SigmaDetection struct {
-	Condition OneOrMore[string]      `yaml:"condition"`
 	Rest      map[string]interface{} `yaml:",inline"`
+	Condition OneOrMore[string]      `yaml:"condition"`
 }
 
 type RelatedRule struct {
