@@ -167,6 +167,26 @@ condition : // comment
 $my_text_string or $my_hex_string
 }`
 
+const problematicRule = `rule my_Methodology_Contains_Shortcut_OtherURIhandlers
+{
+  meta:
+    author = "@itsreallynick (Nick Carr)"
+    description = "Noisy rule for .URL shortcuts containing unique URI handlers"
+    description = "Detects possible shortcut usage for .URL persistence"
+    reference = "https://twitter.com/cglyer/status/1176184798248919044"
+    score = 35
+    date = "27.09.2019"
+  strings:
+    $file = "URL="
+    $filenegate = /[\x0a\x0d](Base|)URL\s*=\s*(https?|file):\/\// nocase
+    $url_clsid = "[{000214A0-0000-0000-C000-000000000046}]"
+    $url_explicit = "[InternetShortcut]" nocase
+  condition:
+    $file and any of ($url*) and not $filenegate
+    and uint16(0) != 0x5A4D and uint32(0) != 0x464c457f and uint32(0) != 0xBEBAFECA and uint32(0) != 0xFEEDFACE and uint32(0) != 0xFEEDFACF and uint32(0) != 0xCEFAEDFE
+    and filesize < 30KB
+}`
+
 const ExtractableRule = `import "pe"
 
 rule ExtractableRule {
@@ -466,6 +486,32 @@ func TestParseRule(t *testing.T) {
 			},
 		},
 		{
+			Name:  "Problematic Rule",
+			Input: problematicRule,
+			ExpectedRules: []*YaraRule{
+				{
+					Identifier: "my_Methodology_Contains_Shortcut_OtherURIhandlers",
+					Meta: Metadata{
+						Author:      util.Ptr("@itsreallynick (Nick Carr)"),
+						Date:        util.Ptr("27.09.2019"),
+						Reference:   util.Ptr("https://twitter.com/cglyer/status/1176184798248919044"),
+						Description: util.Ptr("Detects possible shortcut usage for .URL persistence"),
+						Rest: map[string]string{
+							"score": "35",
+						},
+					},
+					Strings: []string{
+						`$file = "URL="`,
+						`$filenegate = /[\x0a\x0d](Base|)URL\s*=\s*(https?|file):\/\// nocase`,
+						`$url_clsid = "[{000214A0-0000-0000-C000-000000000046}]"`,
+						`$url_explicit = "[InternetShortcut]" nocase`,
+					},
+					Condition: `$file and any of ($url*) and not $filenegate and uint16(0) != 0x5A4D and uint32(0) != 0x464c457f and uint32(0) != 0xBEBAFECA and uint32(0) != 0xFEEDFACE and uint32(0) != 0xFEEDFACF and uint32(0) != 0xCEFAEDFE and filesize < 30KB`,
+					Src:       problematicRule,
+				},
+			},
+		},
+		{
 			Name:          "Missing Identifier",
 			Input:         NoIdentifier,
 			ExpectedError: util.Ptr("expected rule identifier at 5"),
@@ -513,20 +559,6 @@ func TestParseRule(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestRuleString(t *testing.T) {
-	e := &StrelkaEngine{}
-	e.allowRegex = regexp.MustCompile("thing not in rule")
-	e.denyRegex = regexp.MustCompile("Metadata Example")
-
-	rules, err := e.parseYaraRules([]byte(BasicRuleWMeta), false)
-	assert.NoError(t, err)
-	assert.NotEmpty(t, rules)
-	assert.Equal(t, 1, len(rules))
-
-	raw := rules[0].String()
-	assert.Equal(t, NormalizedBasicRuleWMeta, raw)
 }
 
 func TestExtractDetails(t *testing.T) {
@@ -586,7 +618,7 @@ func TestToDetection(t *testing.T) {
 		Author:      "John Doe",
 		Title:       "MetadataExample",
 		Description: "Example Rule",
-		Content:     NormalizedBasicRuleWMeta,
+		Content:     BasicRuleWMeta,
 		Severity:    model.SeverityUnknown,
 		IsCommunity: true,
 		Ruleset:     "ruleset",
