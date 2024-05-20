@@ -1,8 +1,3 @@
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
-// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
-// https://securityonion.net/license; you may not use this file except in compliance with the
-// Elastic License 2.0.
-
 package elastalert
 
 import (
@@ -10,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
-
 	"gopkg.in/yaml.v3"
 )
 
@@ -75,6 +69,40 @@ type LogSource struct {
 type SigmaDetection struct {
 	Rest      map[string]interface{} `yaml:",inline"`
 	Condition OneOrMore[string]      `yaml:"condition"`
+}
+
+// Custom marshaller for MarshalYAML to ensure that Condition is the ordered correctly
+func (s SigmaDetection) MarshalYAML() (interface{}, error) {
+	node := yaml.Node{
+		Kind:    yaml.MappingNode,
+		Content: []*yaml.Node{},
+	}
+
+	// Add other fields from Rest
+	for key, value := range s.Rest {
+		keyNode := yaml.Node{
+			Kind:  yaml.ScalarNode,
+			Value: key,
+		}
+		valueNode := yaml.Node{}
+		if err := valueNode.Encode(value); err != nil {
+			return nil, err
+		}
+		node.Content = append(node.Content, &keyNode, &valueNode)
+	}
+
+	// Add Condition field last
+	conditionKeyNode := yaml.Node{
+		Kind:  yaml.ScalarNode,
+		Value: "condition",
+	}
+	conditionValueNode := yaml.Node{}
+	if err := conditionValueNode.Encode(s.Condition); err != nil {
+		return nil, err
+	}
+	node.Content = append(node.Content, &conditionKeyNode, &conditionValueNode)
+
+	return &node, nil
 }
 
 type RelatedRule struct {
