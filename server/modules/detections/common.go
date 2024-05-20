@@ -7,4 +7,3 @@
 package detections
 
 const RULESET_CUSTOM = "__custom__"
-const AUTHOR_SOC = "__soc_import__"

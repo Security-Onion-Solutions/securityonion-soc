@@ -14,7 +14,6 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
-	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/strelka/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/tj/assert"
@@ -583,7 +582,7 @@ func TestToDetection(t *testing.T) {
 		Engine:      model.EngineNameStrelka,
 		Language:    model.SigLangYara,
 		PublicID:    "7669eb89-c61c-446e-aaff-12b2c0994dea",
-		Author:      detections.AUTHOR_SOC,
+		Author:      "John Doe",
 		Title:       "MetadataExample",
 		Description: "Example Rule",
 		Content:     NormalizedBasicRuleWMeta,
