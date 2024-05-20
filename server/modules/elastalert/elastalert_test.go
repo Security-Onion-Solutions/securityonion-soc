@@ -413,14 +413,14 @@ status: experimental
 description: Always Alerts
 author: Corey Ogburn
 date: 2023/11/03
+modified: 2023/11/03
 logsource:
     product: windows
 detection:
-    condition: filter
     filter:
         event.module: zeek
+    condition: filter
 level: high
-modified: 2023/11/03
 `
 
 	buf := bytes.NewBuffer([]byte{})
@@ -504,9 +504,9 @@ logsource:
     product: kratos
     service: audit
 detection:
-    condition: selection
     selection:
         msg: Encountered self-service login error.
+    condition: selection
 falsepositives:
     - none
 level: high
