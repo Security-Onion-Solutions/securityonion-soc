@@ -19,7 +19,7 @@ type Detectionstore interface {
 	UpdateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error)
 	UpdateDetectionField(ctx context.Context, id string, fields map[string]interface{}) (*model.Detection, error)
 	DeleteDetection(ctx context.Context, detectID string) (*model.Detection, error)
-	GetAllCommunitySIDs(ctx context.Context, engine *model.EngineName) (map[string]*model.Detection, error) // map[detection.PublicId]detection
+	GetAllDetections(ctx context.Context, engine *model.EngineName, isEnabled *bool, isCommunity *bool) (map[string]*model.Detection, error) // map[detection.PublicId]detection
 	Query(ctx context.Context, query string, max int) ([]interface{}, error)
 	GetDetectionHistory(ctx context.Context, detectID string) ([]interface{}, error)
 

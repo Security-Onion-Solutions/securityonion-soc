@@ -1,7 +1,6 @@
 package suricata
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -13,13 +12,8 @@ import (
 )
 
 const (
-	idstoolsYaml = "/nsm/backup/detections-migration/idstools/soc_idstools.sls" // enabled/disabled
-	sidsYaml     = "/nsm/backup/detections-migration/suricata/sids.yaml"        // thresholds
-)
-
-var (
-	errUnknownYamlLayoutIdstools = errors.New("unknown yaml layout: couldn't find idstools field")
-	errUnknownYamlLayoutSids     = errors.New("unknown yaml layout: couldn't find sids field")
+	idstoolsYaml = "/nsm/backup/detections-migration/idstools/soc_idstools.sls"       // enabled/disabled
+	sidsYaml     = "/nsm/backup/detections-migration/suricata/thresholding/sids.yaml" // thresholds
 )
 
 func (e *SuricataEngine) Migration2470(statePath string) error {
@@ -49,7 +43,7 @@ func (e *SuricataEngine) Migration2470(statePath string) error {
 	dirty := map[string]struct{}{} // map[sid]X
 
 	// retrieve all suricata rules
-	detects, err := e.srv.Detectionstore.GetAllCommunitySIDs(e.srv.Context, util.Ptr(model.EngineNameSuricata))
+	detects, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, util.Ptr(model.EngineNameSuricata), nil, nil)
 	if err != nil {
 		return err
 	}
@@ -101,6 +95,8 @@ func (e *SuricataEngine) Migration2470(statePath string) error {
 		if !ok {
 			continue
 		}
+
+		det.Kind = ""
 
 		_, err := e.srv.Detectionstore.UpdateDetection(e.srv.Context, det)
 		if err != nil {
@@ -166,12 +162,12 @@ func (e *SuricataEngine) m2470LoadEnabledDisabled() (enabled []string, disabled 
 
 	idstools, ok := root["idstools"].(map[string]interface{})
 	if !ok {
-		return nil, nil, errUnknownYamlLayoutIdstools
+		return nil, nil, nil
 	}
 
 	sids, ok := idstools["sids"].(map[string]interface{})
 	if !ok {
-		return nil, nil, errUnknownYamlLayoutSids
+		return nil, nil, nil
 	}
 
 	en, ok := sids["enabled"].([]interface{})

@@ -440,17 +440,6 @@ const huntComponent = {
         this.autoRefreshEnabled = false;
         this.autoRefreshInterval = 0;
       }
-
-      // Check for special params that force a re-route
-      var reRoute = false;
-      if (this.$route.query.filterValue) {
-        this.filterQuery(this.$route.query.filterField, this.$route.query.filterValue, this.$route.query.filterMode, undefined, this.$route.query.scalar === 'true');
-        reRoute = true;
-      }
-      if (this.$route.query.groupByField) {
-        this.groupQuery(this.$route.query.groupByField, this.$route.query.groupByGroup);
-        reRoute = true;
-      }
       if (Array.isArray(this.filterToggles)) {
         for (const q in this.$route.query) {
           this.filterToggles.forEach(toggle => {
@@ -461,14 +450,24 @@ const huntComponent = {
                 enabled = enabled.toLowerCase() === 'true';
               }
               toggle.enabled = enabled;
-              if (orig !== toggle.enabled) {
-                reRoute = true;
-              }
             }
           });
         }
       }
+
+      // Check for special params that force a re-route. This is needed when async functions will handle the hunt themselves. 
+      // So setting reroute=true tells the current thread not to perform the hunt, because the async thread will be doing it momentarily. 
+      var reRoute = false;
+      if (this.$route.query.filterValue) {
+        this.filterQuery(this.$route.query.filterField, this.$route.query.filterValue, this.$route.query.filterMode, undefined, this.$route.query.scalar === 'true');
+        reRoute = true;
+      }
+      if (this.$route.query.groupByField) {
+        this.groupQuery(this.$route.query.groupByField, this.$route.query.groupByGroup);
+        reRoute = true;
+      }
       if (reRoute) return false;
+
       return true;
     },
     async loadData() {

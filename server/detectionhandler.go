@@ -665,7 +665,7 @@ func (h *DetectionHandler) syncEngineDetections(w http.ResponseWriter, r *http.R
 
 	if engine == "all" {
 		for _, engine := range h.server.DetectionEngines {
-			engine.InterruptSleep(fullUpgrade)
+			engine.InterruptSync(fullUpgrade, true)
 		}
 	} else {
 		engine, ok := h.server.DetectionEngines[model.EngineName(engine)]
@@ -674,7 +674,7 @@ func (h *DetectionHandler) syncEngineDetections(w http.ResponseWriter, r *http.R
 			return
 		}
 
-		engine.InterruptSleep(fullUpgrade)
+		engine.InterruptSync(fullUpgrade, true)
 	}
 
 	web.Respond(w, r, http.StatusOK, nil)

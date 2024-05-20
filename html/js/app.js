@@ -967,6 +967,70 @@ $(document).ready(function() {
         this.updateTitle();
         this.loadServerSettings(true);
       },
+      getDetectionEngines() {
+        return ['elastalert', 'strelka', 'suricata'];
+      },
+      getDetectionEngineStatusClass(engine) {
+        switch (this.getDetectionEngineStatus(engine)) {
+          case "MigrationFailure": return "warning--text";
+          case "SyncFailure": return "warning--text";
+          case "IntegrityFailure": return "warning--text";
+          case "Healthy": return "success--text";
+        }
+        return "normal--text";
+      },
+      getDetectionEngineStatus(engine) {
+        if (!this.currentStatus || !this.currentStatus.detections || !this.currentStatus.detections[engine]) {
+          return "Unknown";
+        }
+
+        const status = this.currentStatus.detections[engine];
+
+        // Order is important in this if/else block. Certain status should take priority. For example,
+        // If a sync failure and integrity failure both occurred then show the sync failure, because
+        // if it can't sync cleanly then there can be no expectation of integrity.
+        if (status.migrating) {
+          return "Migrating";
+        } else if (status.importing && status.syncing) {
+          return "Importing";
+        } else if (status.migrationFailure) {
+          return "MigrationFailure";
+        } else if (status.syncFailure) {
+          return "SyncFailure";
+        } else if (status.integrityFailure) {
+          return "IntegrityFailure";
+        } else if (status.importing && !status.syncing) {
+          return "ImportPending";
+        } else if (status.syncing) {
+          return "Syncing";
+        }
+        return "Healthy";
+      },
+      isDetectionsUnhealthy() {
+        return this.currentStatus != null && this.currentStatus.detections != null &&
+          ( this.currentStatus.detections.elastalert.integrityFailure ||
+            this.currentStatus.detections.suricata.integrityFailure ||
+            this.currentStatus.detections.strelka.integrityFailure ||
+            this.currentStatus.detections.elastalert.syncFailure ||
+            this.currentStatus.detections.suricata.syncFailure ||
+            this.currentStatus.detections.strelka.syncFailure ||
+            this.currentStatus.detections.elastalert.migrationFailure ||
+            this.currentStatus.detections.suricata.migrationFailure ||
+            this.currentStatus.detections.strelka.migrationFailure );
+      },
+      isDetectionsUpdating() {
+        return this.currentStatus != null && this.currentStatus.detections != null &&
+          !this.isDetectionsUnhealthy() && 
+          ( this.currentStatus.detections.elastalert.importing === true ||
+            this.currentStatus.detections.elastalert.migrating === true ||
+            this.currentStatus.detections.elastalert.syncing === true ||
+            this.currentStatus.detections.strelka.importing === true ||
+            this.currentStatus.detections.strelka.migrating === true ||
+            this.currentStatus.detections.strelka.syncing === true ||
+            this.currentStatus.detections.suricata.importing === true ||
+            this.currentStatus.detections.suricata.migrating === true ||
+            this.currentStatus.detections.suricata.syncing === true );
+      },
       isGridUnhealthy() {
         return this.currentStatus && this.currentStatus.grid.unhealthyNodeCount > 0
       },
@@ -974,7 +1038,7 @@ $(document).ready(function() {
         return this.currentStatus && this.currentStatus.alerts.newCount  > 0
       },
       isAttentionNeeded() {
-        return this.isNewAlert() || this.isGridUnhealthy() || !this.connected || this.reconnecting;
+        return this.isNewAlert() || this.isGridUnhealthy() || this.isDetectionsUnhealthy() || !this.connected || this.reconnecting;
       },
       isMaximized() {
         return this.maximizedTarget != null;
