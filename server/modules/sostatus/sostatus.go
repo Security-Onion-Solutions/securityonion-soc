@@ -89,6 +89,7 @@ func (status *SoStatus) IsRunning() bool {
 func (status *SoStatus) Refresh(ctx context.Context) {
 	log.Debug("Updating grid status")
 	status.refreshGrid(ctx)
+	status.refreshDetections(ctx)
 	status.server.Host.Broadcast("status", "nodes", status.currentStatus)
 }
 
@@ -134,4 +135,10 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 	status.currentStatus.Grid.Eps = status.server.Metrics.GetGridEps(ctx)
 
 	licensing.ValidateNodeCount(len(nodes))
+}
+
+func (status *SoStatus) refreshDetections(ctx context.Context) {
+	status.currentStatus.Detections.ElastAlert = status.server.DetectionEngines[model.EngineNameElastAlert].GetState()
+	status.currentStatus.Detections.Suricata = status.server.DetectionEngines[model.EngineNameSuricata].GetState()
+	status.currentStatus.Detections.Strelka = status.server.DetectionEngines[model.EngineNameStrelka].GetState()
 }

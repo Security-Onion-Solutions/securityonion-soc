@@ -43,7 +43,7 @@ func (e *SuricataEngine) Migration2470(statePath string) error {
 	dirty := map[string]struct{}{} // map[sid]X
 
 	// retrieve all suricata rules
-	detects, err := e.srv.Detectionstore.GetAllCommunitySIDs(e.srv.Context, util.Ptr(model.EngineNameSuricata))
+	detects, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, util.Ptr(model.EngineNameSuricata), nil, nil)
 	if err != nil {
 		return err
 	}
