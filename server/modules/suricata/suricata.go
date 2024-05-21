@@ -1553,6 +1553,7 @@ func (e *SuricataEngine) DuplicateDetection(ctx context.Context, detection *mode
 	}
 
 	det.Author = detections.AddUser(det.Author, user, ", ")
+	det.IsEnabled = false
 
 	return det, nil
 }

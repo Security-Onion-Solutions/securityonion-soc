@@ -194,6 +194,8 @@ func TestDuplicateDetection(t *testing.T) {
 	// always empty after duplication
 	assert.False(t, det.IsEnabled)
 	assert.False(t, det.IsReporting)
+	assert.False(t, dupe.IsEnabled)
+	assert.False(t, dupe.IsCommunity)
 	assert.Equal(t, det.License, dupe.License)
 	assert.Empty(t, dupe.Overrides)
 	assert.Empty(t, dupe.Tags)
