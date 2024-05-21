@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -1555,11 +1556,13 @@ func wrapRule(det *model.Detection, rule string, additionalAlerters []string) (s
 		Filter:            []map[string]interface{}{{"eql": rule}},
 	}
 
-	// Add any custom alerters to the rule.
-	for _, alerter := range additionalAlerters {
-		alerter = strings.TrimSpace(alerter)
-		if len(alerter) > 0 {
-			wrapper.Alert = append(wrapper.Alert, alerter)
+	if licensing.IsEnabled(licensing.FEAT_NTF) {
+		// Add any custom alerters to the rule.
+		for _, alerter := range additionalAlerters {
+			alerter = strings.TrimSpace(alerter)
+			if len(alerter) > 0 {
+				wrapper.Alert = append(wrapper.Alert, alerter)
+			}
 		}
 	}
 

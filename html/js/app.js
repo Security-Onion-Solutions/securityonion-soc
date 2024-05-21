@@ -987,18 +987,18 @@ $(document).ready(function() {
         const status = this.currentStatus.detections[engine];
 
         // Order is important in this if/else block. Certain status should take priority. For example,
-        // If a sync failure and integrity failure both occurred then show the sync failure, because
-        // if it can't sync cleanly then there can be no expectation of integrity.
+        // If a sync failure and integrity failure both occurred then show the integrity failure, because
+        // if it got to the integrity check then the sync finished but the integrity check failed.
         if (status.migrating) {
           return "Migrating";
         } else if (status.importing && status.syncing) {
           return "Importing";
         } else if (status.migrationFailure) {
           return "MigrationFailure";
-        } else if (status.syncFailure) {
-          return "SyncFailure";
         } else if (status.integrityFailure) {
           return "IntegrityFailure";
+        } else if (status.syncFailure) {
+          return "SyncFailure";
         } else if (status.importing && !status.syncing) {
           return "ImportPending";
         } else if (status.syncing) {

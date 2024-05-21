@@ -123,12 +123,13 @@ func TestListAvailableFeatures(tester *testing.T) {
 
 	Init(EXPIRED_KEY)
 	manager.status = LICENSE_STATUS_ACTIVE
-	assert.Len(tester, ListAvailableFeatures(), 5)
+	assert.Len(tester, ListAvailableFeatures(), 6)
 	assert.Equal(tester, ListAvailableFeatures()[0], FEAT_FPS)
 	assert.Equal(tester, ListAvailableFeatures()[1], FEAT_LKS)
 	assert.Equal(tester, ListAvailableFeatures()[2], FEAT_ODC)
 	assert.Equal(tester, ListAvailableFeatures()[3], FEAT_STG)
 	assert.Equal(tester, ListAvailableFeatures()[4], FEAT_TTR)
+	assert.Equal(tester, ListAvailableFeatures()[5], FEAT_NTF)
 }
 
 func TestListEnabledFeaturesUnprovisioned(tester *testing.T) {
@@ -138,12 +139,13 @@ func TestListEnabledFeaturesUnprovisioned(tester *testing.T) {
 	assert.Len(tester, ListEnabledFeatures(), 0)
 
 	Init(EXPIRED_KEY)
-	assert.Len(tester, ListEnabledFeatures(), 5)
+	assert.Len(tester, ListEnabledFeatures(), 6)
 	assert.Equal(tester, ListEnabledFeatures()[0], FEAT_FPS)
 	assert.Equal(tester, ListEnabledFeatures()[1], FEAT_LKS)
 	assert.Equal(tester, ListEnabledFeatures()[2], FEAT_ODC)
 	assert.Equal(tester, ListEnabledFeatures()[3], FEAT_STG)
 	assert.Equal(tester, ListEnabledFeatures()[4], FEAT_TTR)
+	assert.Equal(tester, ListEnabledFeatures()[5], FEAT_NTF)
 
 	Init(EXPIRED_KEY)
 	manager.licenseKey.Features = append(manager.licenseKey.Features, "foo")
@@ -162,14 +164,14 @@ func TestGetLicenseKey(tester *testing.T) {
 	assert.Equal(tester, key.Nodes, 1)
 	assert.Equal(tester, key.SocUrl, "https://somewhere.invalid")
 	assert.Equal(tester, key.DataUrl, "https://another.place")
-	assert.Len(tester, key.Features, 5)
+	assert.Len(tester, key.Features, 6)
 
 	// Modify the returned object and make sure it doesn't affect the orig object
 	key.Users = 100
 	key.Features = append(key.Features, "foo")
 	assert.Equal(tester, GetLicenseKey().Users, 1)
-	assert.Len(tester, key.Features, 6)
-	assert.Len(tester, GetLicenseKey().Features, 5)
+	assert.Len(tester, key.Features, 7)
+	assert.Len(tester, GetLicenseKey().Features, 6)
 }
 
 func TestGetStatus(tester *testing.T) {

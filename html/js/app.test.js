@@ -643,9 +643,9 @@ test('getDetectionEngineStatus', () => {
   app.currentStatus = { detections: { strelka: { migrationFailure: true, syncFailure: true }}};
   expect(app.getDetectionEngineStatus('strelka')).toBe('MigrationFailure');
   app.currentStatus = { detections: { strelka: { syncFailure: true, integrityFailure: true }}};
-  expect(app.getDetectionEngineStatus('strelka')).toBe('SyncFailure');
-  app.currentStatus = { detections: { strelka: { integrityFailure: true, syncing: true }}};
   expect(app.getDetectionEngineStatus('strelka')).toBe('IntegrityFailure');
+  app.currentStatus = { detections: { strelka: { syncFailure: true, integrityFailure: false }}};
+  expect(app.getDetectionEngineStatus('strelka')).toBe('SyncFailure');
   app.currentStatus = { detections: { strelka: { migrating: true, importing: true, syncing: true, integrityFailure: true }}};
   expect(app.getDetectionEngineStatus('strelka')).toBe('Migrating');
   app.currentStatus = { detections: { strelka: { importing: true, migrating: false, syncing: true }}};
