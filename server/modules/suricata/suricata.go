@@ -919,7 +919,7 @@ func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*
 		_, isFlowbits := parsedRule.GetOption("flowbits")
 
 		// update local
-		localLines = updateLocal(localLines, localIndex, sid, detect)
+		localLines = updateLocal(localLines, localIndex, sid, isFlowbits, detect)
 
 		// update enabled
 		enabledLines = updateEnabled(enabledLines, enabledIndex, sid, isFlowbits, detect)
@@ -988,10 +988,10 @@ func removeBlankLines(lines []string) []string {
 	})
 }
 
-func updateLocal(localLines []string, localIndex map[string]int, sid string, detect *model.Detection) []string {
+func updateLocal(localLines []string, localIndex map[string]int, sid string, isFlowbits bool, detect *model.Detection) []string {
 	lineNum, inLocal := localIndex[sid]
 	if !inLocal {
-		if detect.IsEnabled {
+		if detect.IsEnabled || isFlowbits {
 			// not in local, but should be
 			localLines = append(localLines, detect.Content)
 			lineNum = len(localLines) - 1
@@ -999,7 +999,7 @@ func updateLocal(localLines []string, localIndex map[string]int, sid string, det
 		}
 	} else {
 		// in local...
-		if detect.IsEnabled {
+		if detect.IsEnabled || isFlowbits {
 			// and should be, update it
 			localLines[lineNum] = detect.Content
 		} else {

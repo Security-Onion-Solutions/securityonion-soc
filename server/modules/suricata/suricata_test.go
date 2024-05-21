@@ -466,7 +466,7 @@ func TestSyncLocalSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules":      SimpleRule,
+				"idstools.rules.local__rules":      "",
 				"idstools.sids.enabled":            "",
 				"idstools.sids.disabled":           SimpleRuleSID,
 				"idstools.sids.modify":             "",
@@ -514,7 +514,7 @@ func TestSyncLocalSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules":      SimpleRule,
+				"idstools.rules.local__rules":      "",
 				"idstools.sids.enabled":            "",
 				"idstools.sids.disabled":           SimpleRuleSID,
 				"idstools.sids.modify":             "",
@@ -989,7 +989,7 @@ func TestUpdateLocal(t *testing.T) {
 	}
 
 	// is enabled, not present
-	localLines = updateLocal(localLines, localIndex, sid, det)
+	localLines = updateLocal(localLines, localIndex, sid, false, det)
 
 	assert.Equal(t, 4, len(localLines))
 	assert.Equal(t, "400000", localLines[3])
@@ -998,8 +998,9 @@ func TestUpdateLocal(t *testing.T) {
 
 	det.Content = "400000!"
 
+	// no flowbits
 	// is enabled, present, different content
-	localLines = updateLocal(localLines, localIndex, sid, det)
+	localLines = updateLocal(localLines, localIndex, sid, false, det)
 
 	assert.Equal(t, 4, len(localLines))
 	assert.Equal(t, "400000!", localLines[3])
@@ -1009,10 +1010,51 @@ func TestUpdateLocal(t *testing.T) {
 	det.IsEnabled = false
 
 	// is disabled, present, should be removed
-	localLines = updateLocal(localLines, localIndex, sid, det)
+	localLines = updateLocal(localLines, localIndex, sid, false, det)
 
 	assert.Equal(t, 4, len(localLines))
 	assert.Equal(t, "", localLines[3])
 	assert.Equal(t, 3, len(localIndex))
 	assert.NotContains(t, localIndex, "400000")
+
+	// is disabled, not present, no change
+	localLines = updateLocal(localLines, localIndex, sid, false, det)
+
+	assert.Equal(t, 4, len(localLines))
+	assert.Equal(t, "", localLines[3])
+	assert.Equal(t, 3, len(localIndex))
+	assert.NotContains(t, localIndex, "400000")
+
+	// reset
+	localLines = localLines[:3]
+	det.Content = "400000"
+
+	// again, but with Flowbits
+	// is enabled, not present
+	localLines = updateLocal(localLines, localIndex, sid, true, det)
+
+	assert.Equal(t, 4, len(localLines))
+	assert.Equal(t, "400000", localLines[3])
+	assert.Equal(t, 4, len(localIndex))
+	assert.Equal(t, 3, localIndex["400000"])
+
+	det.Content = "400000!"
+
+	// is enabled, present, different content
+	localLines = updateLocal(localLines, localIndex, sid, true, det)
+
+	assert.Equal(t, 4, len(localLines))
+	assert.Equal(t, "400000!", localLines[3])
+	assert.Equal(t, 4, len(localIndex))
+	assert.Equal(t, 3, localIndex["400000"])
+
+	det.IsEnabled = false
+
+	// is disabled, present, should be NOT removed because Flowbits
+	localLines = updateLocal(localLines, localIndex, sid, true, det)
+
+	assert.Equal(t, 4, len(localLines))
+	assert.Equal(t, "400000!", localLines[3])
+	assert.Equal(t, 4, len(localIndex))
+	assert.Contains(t, localIndex, "400000")
 }
