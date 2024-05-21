@@ -118,7 +118,7 @@ func (store *ElasticDetectionstore) validateDetection(detect *model.Detection) e
 	}
 
 	if err == nil && detect.Author != "" {
-		err = store.validateString(detect.Author, 250, "author")
+		err = store.validateString(detect.Author, MAX_AUTHOR_LENGTH, "author")
 	}
 
 	if err == nil && detect.Description != "" {
