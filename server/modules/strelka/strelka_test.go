@@ -173,7 +173,7 @@ const problematicRule = `rule my_Methodology_Contains_Shortcut_OtherURIhandlers
     author = "@itsreallynick (Nick Carr)"
     description = "Noisy rule for .URL shortcuts containing unique URI handlers"
     description = "Detects possible shortcut usage for .URL persistence"
-    reference = "redacted"
+    reference = "hidden"
     score = 35
     date = "27.09.2019"
   strings:
@@ -494,7 +494,7 @@ func TestParseRule(t *testing.T) {
 					Meta: Metadata{
 						Author:      util.Ptr("@itsreallynick (Nick Carr)"),
 						Date:        util.Ptr("27.09.2019"),
-						Reference:   util.Ptr("redacted"),
+						Reference:   util.Ptr("hidden"),
 						Description: util.Ptr("Detects possible shortcut usage for .URL persistence"),
 						Rest: map[string]string{
 							"score": "35",
