@@ -400,7 +400,7 @@ func TestSigmaToElastAlertSunnyDayLicensed(t *testing.T) {
 	assert.NoError(t, err)
 
 	// License
-	licensing.Test(licensing.FEAT_NOT, 0, 0, "", "")
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
 	wrappedRule, err := wrapRule(det, query, []string{"email", "slack"})
 	assert.NoError(t, err)
 

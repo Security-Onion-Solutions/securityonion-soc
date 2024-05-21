@@ -129,7 +129,7 @@ func TestListAvailableFeatures(tester *testing.T) {
 	assert.Equal(tester, ListAvailableFeatures()[2], FEAT_ODC)
 	assert.Equal(tester, ListAvailableFeatures()[3], FEAT_STG)
 	assert.Equal(tester, ListAvailableFeatures()[4], FEAT_TTR)
-	assert.Equal(tester, ListAvailableFeatures()[5], FEAT_NOT)
+	assert.Equal(tester, ListAvailableFeatures()[5], FEAT_NTF)
 }
 
 func TestListEnabledFeaturesUnprovisioned(tester *testing.T) {
@@ -145,7 +145,7 @@ func TestListEnabledFeaturesUnprovisioned(tester *testing.T) {
 	assert.Equal(tester, ListEnabledFeatures()[2], FEAT_ODC)
 	assert.Equal(tester, ListEnabledFeatures()[3], FEAT_STG)
 	assert.Equal(tester, ListEnabledFeatures()[4], FEAT_TTR)
-	assert.Equal(tester, ListEnabledFeatures()[5], FEAT_NOT)
+	assert.Equal(tester, ListEnabledFeatures()[5], FEAT_NTF)
 
 	Init(EXPIRED_KEY)
 	manager.licenseKey.Features = append(manager.licenseKey.Features, "foo")

@@ -41,7 +41,7 @@ const LICENSE_STATUS_UNPROVISIONED = "unprovisioned"
 
 const FEAT_FPS = "fps"
 const FEAT_ODC = "odc"
-const FEAT_NOT = "not"
+const FEAT_NTF = "ntf"
 const FEAT_STG = "stg"
 const FEAT_LKS = "lks"
 const FEAT_TTR = "ttr"
@@ -170,7 +170,7 @@ func CreateAvailableFeatureList() []string {
 	available = append(available, FEAT_ODC)
 	available = append(available, FEAT_STG)
 	available = append(available, FEAT_TTR)
-	available = append(available, FEAT_NOT)
+	available = append(available, FEAT_NTF)
 	return available
 }
 

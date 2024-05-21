@@ -1556,7 +1556,7 @@ func wrapRule(det *model.Detection, rule string, additionalAlerters []string) (s
 		Filter:            []map[string]interface{}{{"eql": rule}},
 	}
 
-	if licensing.IsEnabled(licensing.FEAT_NOT) {
+	if licensing.IsEnabled(licensing.FEAT_NTF) {
 		// Add any custom alerters to the rule.
 		for _, alerter := range additionalAlerters {
 			alerter = strings.TrimSpace(alerter)
