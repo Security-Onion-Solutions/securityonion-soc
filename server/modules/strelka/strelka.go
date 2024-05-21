@@ -53,6 +53,7 @@ const (
 )
 
 var errModuleStopped = fmt.Errorf("strelka module has stopped running")
+var titleUpdater = regexp.MustCompile(`(?i)rule\s+(\w+)(\s+:(\s*[^{]+))?(\s+){`)
 
 type IOManager interface {
 	ReadFile(path string) ([]byte, error)
@@ -520,7 +521,6 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 						// pre-existing detection, update it
 						det.IsEnabled = comRule.IsEnabled
 						det.Id = comRule.Id
-						det.IsEnabled = comRule.IsEnabled
 						det.Overrides = comRule.Overrides
 						det.CreateTime = comRule.CreateTime
 
@@ -697,8 +697,9 @@ func (e *StrelkaEngine) parseYaraRules(data []byte, filter bool) ([]*YaraRule, e
 			}
 		}
 
-		if last == '/' && curQuotes == ' ' && curCommentType == ' ' {
+		if last == '/' && (curQuotes == ' ' || curQuotes == '/') && curCommentType == ' ' {
 			if r == '/' {
+				curQuotes = ' '
 				curCommentType = '/'
 				if buffer.Len() != 0 {
 					buffer.Truncate(buffer.Len() - 1)
@@ -741,7 +742,9 @@ func (e *StrelkaEngine) parseYaraRules(data []byte, filter bool) ([]*YaraRule, e
 					buf = strings.TrimSpace(strings.TrimPrefix(buf, "private"))
 				}
 
-				buf = strings.TrimSpace(strings.TrimPrefix(buf, "rule"))
+				if strings.HasPrefix(strings.ToLower(buf), "rule") {
+					buf = strings.TrimSpace(buf[4:])
+				}
 
 				if strings.Contains(buf, ":") {
 					// gets rid of inheritance?
@@ -835,7 +838,7 @@ func (e *StrelkaEngine) parseYaraRules(data []byte, filter bool) ([]*YaraRule, e
 				rule = &YaraRule{}
 			} else {
 				buffer.WriteRune(r)
-				if (r == '\'' || r == '"' || r == '{') && last != '\\' && curQuotes == ' ' {
+				if (r == '\'' || r == '"' || r == '{' || r == '/') && last != '\\' && curQuotes == ' ' {
 					// starting a string
 					if r == '{' {
 						curQuotes = '}'
@@ -849,7 +852,7 @@ func (e *StrelkaEngine) parseYaraRules(data []byte, filter bool) ([]*YaraRule, e
 			}
 		}
 
-		if r == '\\' && last == '\\' && curQuotes != ' ' {
+		if (r == '\\' || r == '/') && last == '\\' && curQuotes != ' ' {
 			// this is an escaped slash in the middle of a string,
 			// so we need to remove the previous slash so it's not
 			// mistaken for an escape character in case this is the
@@ -976,7 +979,7 @@ func (e *StrelkaEngine) DuplicateDetection(ctx context.Context, detection *model
 
 	rule := rules[0]
 
-	rule.Identifier += "_copy"
+	rule.Src = titleUpdater.ReplaceAllString(rule.Src, "rule ${1}_copy${2}${4}{")
 
 	det := rule.ToDetection(detection.License, detections.RULESET_CUSTOM, false)
 

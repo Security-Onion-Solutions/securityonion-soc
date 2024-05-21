@@ -23,6 +23,7 @@ import (
 
 const AUDIT_DOC_ID = "audit_doc_id"
 const SHORT_STRING_MAX = 100
+const MAX_AUTHOR_LENGTH = 250
 const LONG_STRING_MAX = 1000000
 const MAX_ARRAY_ELEMENTS = 50
 

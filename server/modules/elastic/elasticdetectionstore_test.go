@@ -258,9 +258,9 @@ func TestValidateDetectionInvalid(t *testing.T) {
 	assert.EqualError(t, err, "severity is too long (101/100)")
 	det.Severity = ""
 
-	det.Author = strings.Repeat("a", SHORT_STRING_MAX+1)
+	det.Author = strings.Repeat("a", 251)
 	err = store.validateDetection(det)
-	assert.EqualError(t, err, "author is too long (101/100)")
+	assert.EqualError(t, err, "author is too long (251/250)")
 	det.Author = ""
 
 	det.Content = strings.Repeat("a", LONG_STRING_MAX+1)

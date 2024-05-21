@@ -6,10 +6,8 @@
 package strelka
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -97,79 +95,6 @@ func stringToUUID(s string) string {
 		hash[9], hash[10], hash[11], hash[12], hash[13], hash[14], hash[15])
 }
 
-func (r *YaraRule) String() string {
-	buffer := bytes.NewBuffer([]byte{})
-
-	// imports
-	for _, i := range r.Imports {
-		line := fmt.Sprintf("import \"%s\"\n", i)
-		buffer.WriteString(line)
-	}
-
-	if len(r.Imports) > 0 {
-		buffer.WriteString("\n")
-	}
-
-	if r.IsPrivate {
-		buffer.WriteString("private ")
-	}
-
-	// identifier
-	buffer.WriteString(fmt.Sprintf("rule %s {\n", r.Identifier))
-
-	// meta
-	if !r.Meta.IsEmpty() {
-		buffer.WriteString("\tmeta:\n")
-
-		if r.Meta.Author != nil {
-			buffer.WriteString(fmt.Sprintf("\t\tauthor = \"%s\"\n", *r.Meta.Author))
-		}
-
-		if r.Meta.Date != nil {
-			buffer.WriteString(fmt.Sprintf("\t\tdate = \"%s\"\n", *r.Meta.Date))
-		}
-
-		if r.Meta.Version != nil {
-			buffer.WriteString(fmt.Sprintf("\t\tversion = \"%s\"\n", *r.Meta.Version))
-		}
-
-		if r.Meta.Reference != nil {
-			buffer.WriteString(fmt.Sprintf("\t\treference = \"%s\"\n", *r.Meta.Reference))
-		}
-
-		if r.Meta.Description != nil {
-			buffer.WriteString(fmt.Sprintf("\t\tdescription = \"%s\"\n", *r.Meta.Description))
-		}
-
-		keys := []string{}
-		for k := range r.Meta.Rest {
-			keys = append(keys, k)
-		}
-
-		sort.Strings(keys)
-
-		for _, k := range keys {
-			buffer.WriteString(fmt.Sprintf("\t\t%s = \"%s\"\n", k, r.Meta.Rest[k]))
-		}
-
-		buffer.WriteString("\n")
-	}
-
-	// strings
-	if len(r.Strings) > 0 {
-		buffer.WriteString("\tstrings:\n")
-
-		for _, s := range r.Strings {
-			buffer.WriteString(fmt.Sprintf("\t\t%s\n", s))
-		}
-	}
-
-	// condition and closing bracket
-	buffer.WriteString(fmt.Sprintf("\n\tcondition:\n\t\t%s\n}", r.Condition))
-
-	return buffer.String()
-}
-
 func (r *YaraRule) Validate() error {
 	missing := []string{}
 
@@ -219,7 +144,7 @@ func (r *YaraRule) ToDetection(license string, ruleset string, isCommunity bool)
 		PublicID:    r.GetID(),
 		Title:       r.Identifier,
 		Severity:    sev,
-		Content:     r.String(),
+		Content:     r.Src,
 		IsCommunity: isCommunity,
 		Language:    model.SigLangYara,
 		Ruleset:     ruleset,
