@@ -455,8 +455,8 @@ const huntComponent = {
         }
       }
 
-      // Check for special params that force a re-route. This is needed when async functions will handle the hunt themselves. 
-      // So setting reroute=true tells the current thread not to perform the hunt, because the async thread will be doing it momentarily. 
+      // Check for special params that force a re-route. This is needed when async functions will handle the hunt themselves.
+      // So setting reroute=true tells the current thread not to perform the hunt, because the async thread will be doing it momentarily.
       var reRoute = false;
       if (this.$route.query.filterValue) {
         this.filterQuery(this.$route.query.filterField, this.$route.query.filterValue, this.$route.query.filterMode, undefined, this.$route.query.scalar === 'true');
@@ -1024,25 +1024,14 @@ const huntComponent = {
       }
 
       if (this.isCategory('alerts')) {
-        const alert = this.eventData.find(item => {
-          for (const key in event) {
-            if (key !== "count" && item[key] !== event[key]) {
-              return false;
-            }
-          }
-          return true;
-        });
-
+        const id = event["rule.uuid"];
         this.quickActionDetId = null;
 
-        if (alert) {
-          // don't slow down the UI with this call
-          const id = alert["rule.uuid"] || '';
-          if (id) {
-              this.$root.papi.get(`detection/public/${id}`).then(response => {
-                this.quickActionDetId = response.data.id;
-              });
-          }
+        // don't slow down the UI with this call
+        if (id) {
+          this.$root.papi.get(`detection/public/${id}`).then(response => {
+            this.quickActionDetId = response.data.id;
+          });
         }
       }
 
