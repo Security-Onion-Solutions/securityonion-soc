@@ -14,10 +14,31 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+	"gopkg.in/yaml.v3"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
+
+func TestSigmaDetectionOrdering(t *testing.T) {
+	detection := SigmaDetection{
+		Rest: map[string]interface{}{
+			"selection": map[string]interface{}{
+				"TargetObject|startswith": "HKCR\\ms-msdt\\",
+			},
+		},
+		Condition: OneOrMore[string]{Value: "selection"},
+	}
+
+	yamlContent, err := yaml.Marshal(detection)
+	assert.NoError(t, err)
+
+	expectedYAML := `selection:
+    TargetObject|startswith: HKCR\ms-msdt\
+condition: selection
+`
+	assert.Equal(t, expectedYAML, string(yamlContent))
+}
 
 func TestParseRule(t *testing.T) {
 	t.Parallel()

@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
-
 	"gopkg.in/yaml.v3"
 )
 
@@ -48,19 +47,20 @@ const (
 type SigmaRule struct {
 	Title          string                 `yaml:"title"`
 	ID             *string                `yaml:"id"`
+	Related        []*RelatedRule         `yaml:"related,omitempty"`
 	Status         *SigmaStatus           `yaml:"status"`
 	Description    *string                `yaml:"description,omitempty"`
+	References     []string               `yaml:"references,omitempty"`
 	Author         *string                `yaml:"author,omitempty"`
 	Date           *string                `yaml:"date"`
-	Reference      []string               `yaml:"reference,omitempty"`
+	Modified       *string                `yaml:"modified,omitempty"`
+	Tags           []string               `yaml:"tags,omitempty"`
 	LogSource      LogSource              `yaml:"logsource"`
 	Detection      SigmaDetection         `yaml:"detection"`
+	Fields         []string               `yaml:"fields,omitempty"`
 	FalsePositives OneOrMore[string]      `yaml:"falsepositives,omitempty"`
 	Level          *SigmaLevel            `yaml:"level"`
 	License        *string                `yaml:"license,omitempty"`
-	Related        []*RelatedRule         `yaml:"related,omitempty"`
-	Modified       *string                `yaml:"modified,omitempty"`
-	Fields         []string               `yaml:"fields,omitempty"`
 	Rest           map[string]interface{} `yaml:",inline"`
 }
 
@@ -72,8 +72,42 @@ type LogSource struct {
 }
 
 type SigmaDetection struct {
-	Condition OneOrMore[string]      `yaml:"condition"`
 	Rest      map[string]interface{} `yaml:",inline"`
+	Condition OneOrMore[string]      `yaml:"condition"`
+}
+
+// Custom marshaller for MarshalYAML to ensure that Condition is the ordered correctly
+func (s SigmaDetection) MarshalYAML() (interface{}, error) {
+	node := yaml.Node{
+		Kind:    yaml.MappingNode,
+		Content: []*yaml.Node{},
+	}
+
+	// Add other fields from Rest
+	for key, value := range s.Rest {
+		keyNode := yaml.Node{
+			Kind:  yaml.ScalarNode,
+			Value: key,
+		}
+		valueNode := yaml.Node{}
+		if err := valueNode.Encode(value); err != nil {
+			return nil, err
+		}
+		node.Content = append(node.Content, &keyNode, &valueNode)
+	}
+
+	// Add Condition field last
+	conditionKeyNode := yaml.Node{
+		Kind:  yaml.ScalarNode,
+		Value: "condition",
+	}
+	conditionValueNode := yaml.Node{}
+	if err := conditionValueNode.Encode(s.Condition); err != nil {
+		return nil, err
+	}
+	node.Content = append(node.Content, &conditionKeyNode, &conditionValueNode)
+
+	return &node, nil
 }
 
 type RelatedRule struct {
