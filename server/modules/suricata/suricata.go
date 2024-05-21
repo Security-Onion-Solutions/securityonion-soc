@@ -991,11 +991,22 @@ func removeBlankLines(lines []string) []string {
 func updateLocal(localLines []string, localIndex map[string]int, sid string, detect *model.Detection) []string {
 	lineNum, inLocal := localIndex[sid]
 	if !inLocal {
-		localLines = append(localLines, detect.Content)
-		lineNum = len(localLines) - 1
-		localIndex[sid] = lineNum
+		if detect.IsEnabled {
+			// not in local, but should be
+			localLines = append(localLines, detect.Content)
+			lineNum = len(localLines) - 1
+			localIndex[sid] = lineNum
+		}
 	} else {
-		localLines[lineNum] = detect.Content
+		// in local...
+		if detect.IsEnabled {
+			// and should be, update it
+			localLines[lineNum] = detect.Content
+		} else {
+			// and shouldn't be, remove it
+			localLines[lineNum] = ""
+			delete(localIndex, sid)
+		}
 	}
 
 	return localLines

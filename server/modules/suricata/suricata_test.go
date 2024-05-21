@@ -967,3 +967,52 @@ func TestConslidateEnabled(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateLocal(t *testing.T) {
+	localLines := []string{
+		"100000",
+		"200000",
+		"300000",
+	}
+
+	localIndex := map[string]int{
+		"100000": 0,
+		"200000": 1,
+		"300000": 2,
+	}
+
+	sid := "400000"
+
+	det := &model.Detection{
+		IsEnabled: true,
+		Content:   sid,
+	}
+
+	// is enabled, not present
+	localLines = updateLocal(localLines, localIndex, sid, det)
+
+	assert.Equal(t, 4, len(localLines))
+	assert.Equal(t, "400000", localLines[3])
+	assert.Equal(t, 4, len(localIndex))
+	assert.Equal(t, 3, localIndex["400000"])
+
+	det.Content = "400000!"
+
+	// is enabled, present, different content
+	localLines = updateLocal(localLines, localIndex, sid, det)
+
+	assert.Equal(t, 4, len(localLines))
+	assert.Equal(t, "400000!", localLines[3])
+	assert.Equal(t, 4, len(localIndex))
+	assert.Equal(t, 3, localIndex["400000"])
+
+	det.IsEnabled = false
+
+	// is disabled, present, should be removed
+	localLines = updateLocal(localLines, localIndex, sid, det)
+
+	assert.Equal(t, 4, len(localLines))
+	assert.Equal(t, "", localLines[3])
+	assert.Equal(t, 3, len(localIndex))
+	assert.NotContains(t, localIndex, "400000")
+}
