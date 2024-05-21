@@ -604,6 +604,7 @@ const i18n = {
       none: 'None',
       note: 'Note',
       notFound: 'The selected item no longer exists',
+      ntf: 'Notifications',
       number: 'Num',
       numericOps: 'Numeric Ops',
       odc: 'Open ID Connect',
