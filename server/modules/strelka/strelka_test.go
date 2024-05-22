@@ -46,6 +46,16 @@ const BasicRule = `rule ExampleRule
 		$text_string or $hex_string
 }`
 
+const MyBasic_Rule = `rule Example Rule
+{
+	strings:
+		$my_text_string = "text here"
+		$my_hex_string = { E2 34 A1 C8 23 FB }
+
+	condition:
+		$my_text_string or $my_hex_string
+}`
+
 const DeniedRule = `rule DenyRule
 {
 	strings:
@@ -262,14 +272,14 @@ func TestSyncStrelka(t *testing.T) {
 		{
 			Name: "Enable Simple Rules",
 			InitMock: func(mockDetStore *servermock.MockDetectionstore, mio *mock.MockIOManager) {
-				mockDetStore.EXPECT().Query(gomock.Any(), gomock.Any(), gomock.Any()).Return([]interface{}{
-					&model.Detection{
+				mockDetStore.EXPECT().GetAllDetections(gomock.Any(), util.Ptr(model.EngineNameStrelka), util.Ptr(true), nil).Return(map[string]*model.Detection{
+					"1": &model.Detection{
 						PublicID:  "1",
 						Engine:    model.EngineNameStrelka,
 						Content:   simpleRule,
 						IsEnabled: true,
 					},
-					&model.Detection{
+					"2": &model.Detection{
 						PublicID:  "2",
 						Engine:    model.EngineNameStrelka,
 						Content:   simpleRule,
@@ -514,7 +524,7 @@ func TestParseRule(t *testing.T) {
 		{
 			Name:          "Missing Identifier",
 			Input:         NoIdentifier,
-			ExpectedError: util.Ptr("expected rule identifier at 5"),
+			ExpectedError: util.Ptr("unexpected character in rule identifier around 5"),
 		},
 		{
 			Name:          "Invalid Metadata",
@@ -532,6 +542,11 @@ func TestParseRule(t *testing.T) {
 			// DeniedRule will be filtered out by the denyRegex.
 			Input:         BasicRule + "\n\n" + DeniedRule,
 			ExpectedRules: []*YaraRule{},
+		},
+		{
+			Name:          "Space in Identifier",
+			Input:         MyBasic_Rule,
+			ExpectedError: util.Ptr("unexpected character in rule identifier around 18"),
 		},
 	}
 
@@ -575,14 +590,14 @@ func TestExtractDetails(t *testing.T) {
 			Name:             "Simple Extraction",
 			Input:            ExtractableRule,
 			ExpectedTitle:    "ExtractableRule",
-			ExpectedPublicID: "2050327",
+			ExpectedPublicID: "ExtractableRule",
 			ExpectedSeverity: model.SeverityUnknown,
 		},
 		{
 			Name:             "No Extracted Values",
 			Input:            simpleRule,
 			ExpectedTitle:    "dummy",
-			ExpectedPublicID: "b5a2c962-5061-4366-aa27-2ffac6d9744a",
+			ExpectedPublicID: "dummy",
 			ExpectedSeverity: model.SeverityUnknown,
 		},
 	}
@@ -614,7 +629,7 @@ func TestToDetection(t *testing.T) {
 	expected := &model.Detection{
 		Engine:      model.EngineNameStrelka,
 		Language:    model.SigLangYara,
-		PublicID:    "7669eb89-c61c-446e-aaff-12b2c0994dea",
+		PublicID:    "MetadataExample",
 		Author:      "John Doe",
 		Title:       "MetadataExample",
 		Description: "Example Rule",

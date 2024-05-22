@@ -6,7 +6,6 @@
 package strelka
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"strconv"
 	"strings"
@@ -73,28 +72,6 @@ func (md *Metadata) Set(key, value string) {
 	}
 }
 
-func (rule *YaraRule) GetID() string {
-	if rule.Meta.ID != nil {
-		return util.Unquote(*rule.Meta.ID)
-	}
-
-	id := stringToUUID(rule.Identifier)
-
-	rule.Meta.ID = util.Ptr(id)
-
-	return id
-}
-
-func stringToUUID(s string) string {
-	hash := sha256.Sum256([]byte(s))
-
-	hash[6] = 0x40 | (hash[6] & 0x0f)
-	hash[8] = 0x80 | (hash[8] & 0x3f)
-	return fmt.Sprintf("%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
-		hash[0], hash[1], hash[2], hash[3], hash[4], hash[5], hash[6], hash[7], hash[8],
-		hash[9], hash[10], hash[11], hash[12], hash[13], hash[14], hash[15])
-}
-
 func (r *YaraRule) Validate() error {
 	missing := []string{}
 
@@ -141,7 +118,7 @@ func (r *YaraRule) ToDetection(license string, ruleset string, isCommunity bool)
 
 	det := &model.Detection{
 		Engine:      model.EngineNameStrelka,
-		PublicID:    r.GetID(),
+		PublicID:    r.Identifier,
 		Title:       r.Identifier,
 		Severity:    sev,
 		Content:     r.Src,

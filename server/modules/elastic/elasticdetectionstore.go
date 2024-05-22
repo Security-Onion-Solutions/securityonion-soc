@@ -65,6 +65,17 @@ func (store *ElasticDetectionstore) validateId(id string, label string) error {
 	return err
 }
 
+func (store *ElasticDetectionstore) validatePublicId(id string, label string) error {
+	var err error
+
+	isValidId := regexp.MustCompile(`^[A-Za-z0-9-_]{5,128}$`).MatchString
+	if !isValidId(id) {
+		err = fmt.Errorf("invalid ID for %s", label)
+	}
+
+	return err
+}
+
 func (store *ElasticDetectionstore) validateString(str string, max int, label string) error {
 	return store.validateStringRequired(str, 0, max, label)
 }
@@ -106,7 +117,7 @@ func (store *ElasticDetectionstore) validateDetection(detect *model.Detection) e
 	}
 
 	if err == nil && detect.PublicID != "" {
-		err = store.validateId(detect.PublicID, "publicId")
+		err = store.validatePublicId(detect.PublicID, "publicId")
 	}
 
 	if err == nil && detect.Title != "" {

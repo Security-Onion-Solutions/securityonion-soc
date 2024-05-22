@@ -34,7 +34,6 @@ import (
 
 	"github.com/apex/log"
 	"github.com/google/uuid"
-	"github.com/kennygrant/sanitize"
 )
 
 const (
@@ -54,6 +53,7 @@ const (
 
 var errModuleStopped = fmt.Errorf("strelka module has stopped running")
 var titleUpdater = regexp.MustCompile(`(?i)rule\s+(\w+)(\s+:(\s*[^{]+))?(\s+){`)
+var nameValidator = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]{0,127}$`) // alphanumeric + underscore, can't start with a number
 
 type IOManager interface {
 	ReadFile(path string) ([]byte, error)
@@ -257,7 +257,7 @@ func (s *StrelkaEngine) ExtractDetails(detect *model.Detection) error {
 	}
 
 	detect.Severity = model.SeverityUnknown
-	detect.PublicID = rule.GetID()
+	detect.PublicID = detect.Title
 	if rule.Meta.Author != nil {
 		detect.Author = *rule.Meta.Author
 	}
@@ -753,6 +753,10 @@ func (e *StrelkaEngine) parseYaraRules(data []byte, filter bool) ([]*YaraRule, e
 					buf = strings.TrimSpace(parts[0])
 				}
 
+				if !nameValidator.MatchString(buf) {
+					return nil, fmt.Errorf("unexpected character in rule identifier around %d", i)
+				}
+
 				if buf != "" {
 					rule.Identifier = buf
 				} else {
@@ -896,23 +900,22 @@ func buildImportChecker(pkg string) *regexp.Regexp {
 }
 
 func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]string, err error) {
-	results, err := e.srv.Detectionstore.Query(ctx, `so_detection.engine:strelka AND so_detection.isEnabled:true AND _index:"*:so-detection"`, -1)
+	results, err := e.srv.Detectionstore.GetAllDetections(ctx, util.Ptr(model.EngineNameStrelka), util.Ptr(true), nil)
 	if err != nil {
 		return nil, err
 	}
 
 	enabledDetections := map[string]*model.Detection{}
-	for _, det := range results {
+	for pid, det := range results {
 		if !e.isRunning {
 			return nil, errModuleStopped
 		}
 
-		d := det.(*model.Detection)
-		_, exists := enabledDetections[d.PublicID]
+		_, exists := enabledDetections[pid]
 		if exists {
-			return nil, fmt.Errorf("duplicate detection with public ID %s", d.PublicID)
+			return nil, fmt.Errorf("duplicate detection with public ID %s", pid)
 		}
-		enabledDetections[d.PublicID] = d
+		enabledDetections[pid] = det
 	}
 
 	// Clear existing .yar files in the directory
@@ -938,8 +941,7 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]s
 
 	// Process and write new .yar files
 	for publicId, det := range enabledDetections {
-		name := sanitize.Name(publicId)
-		filename := filepath.Join(e.yaraRulesFolder, fmt.Sprintf("%s.yar", name))
+		filename := filepath.Join(e.yaraRulesFolder, fmt.Sprintf("%s.yar", publicId))
 
 		err := e.WriteFile(filename, []byte(det.Content), 0644)
 		if err != nil {
