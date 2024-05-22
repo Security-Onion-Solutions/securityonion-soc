@@ -390,7 +390,7 @@
             <div v-if="isCategory('detections') && loaded" :data-aid="'event_health_' + category">
               <h5 v-for="engine in $root.getDetectionEngines()">
                 {{ i18n['cc_' + engine] }} {{ i18n.rules }}: 
-                <router-link :to="{ name: 'hunt', query: {q: `tags:so-soc AND ` + engine + ` | groupby log.level`, t: moment().subtract(1, 'hours').format(i18n.timePickerFormat) + ' - ' + moment().format(i18n.timePickerFormat), socExcludeToggle: false }}" style="text-decoration: none; cursor: 'pointer'" :class="$root.getDetectionEngineStatusClass(engine)" :data-aid="'detection_engine_status_' + engine" :title="i18n['detectionEngine' + $root.getDetectionEngineStatus(engine) + 'Help']">
+                <router-link :to="{ name: 'hunt', query: {q: `tags:so-soc AND ` + engine + ` | groupby log.level | groupby event.action`, t: moment().subtract(1, 'hours').format(i18n.timePickerFormat) + ' - ' + moment().format(i18n.timePickerFormat), socExcludeToggle: false }}" style="text-decoration: none; cursor: 'pointer'" :class="$root.getDetectionEngineStatusClass(engine)" :data-aid="'detection_engine_status_' + engine" :title="i18n['detectionEngine' + $root.getDetectionEngineStatus(engine) + 'Help']">
                   {{ i18n['detectionEngine' + $root.getDetectionEngineStatus(engine)] }}
                 </router-link>
               </h5>
