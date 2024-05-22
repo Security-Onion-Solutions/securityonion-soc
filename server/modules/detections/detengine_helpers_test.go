@@ -160,3 +160,55 @@ func TestAddUser(t *testing.T) {
 	user.LastName = "bar"
 	assert.Equal(t, "foo bar", AddUser("foo bar", &user, ", "))
 }
+
+func TestEscapeDoubleQuotes(t *testing.T) {
+	tests := []struct {
+		Name      string
+		Input     string
+		ExpOutput string
+	}{
+		{
+			Name:      "Nothing to escape",
+			Input:     "ab",
+			ExpOutput: "ab",
+		},
+		{
+			Name:      "Simple",
+			Input:     `a"b`,
+			ExpOutput: `a\"b`,
+		},
+		{
+			Name:      "Pre-Escaped (No Change)",
+			Input:     `a\"b`,
+			ExpOutput: `a\"b`,
+		},
+		{
+			Name:      "Complicated",
+			Input:     `a\\"b`,
+			ExpOutput: `a\\\"b`,
+		},
+		{
+			Name:      "Complicated Pre-Escaped (No Change)",
+			Input:     `a\\\"b`,
+			ExpOutput: `a\\\"b`,
+		},
+		{
+			Name:      "Multiple Quotes",
+			Input:     `a"b"c`,
+			ExpOutput: `a\"b\"c`,
+		},
+		{
+			Name:      "Only Quotes",
+			Input:     `"""`,
+			ExpOutput: `\"\"\"`,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			escaped := EscapeDoubleQuotes(test.Input)
+			assert.Equal(t, test.ExpOutput, escaped)
+		})
+	}
+}

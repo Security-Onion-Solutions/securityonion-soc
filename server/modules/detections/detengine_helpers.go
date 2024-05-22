@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +18,8 @@ import (
 	"github.com/apex/log"
 	"github.com/go-git/go-git/v5"
 )
+
+var doubleQuoteEscaper = regexp.MustCompile(`\\([\s\S])|(")`)
 
 type GetterByPublicId interface {
 	GetDetectionByPublicId(ctx context.Context, publicId string) (*model.Detection, error)
@@ -305,4 +308,8 @@ func AddUser(previous string, user *model.User, sep string) string {
 	}
 
 	return previous + author
+}
+
+func EscapeDoubleQuotes(str string) string {
+	return doubleQuoteEscaper.ReplaceAllString(str, "\\$1$2")
 }
