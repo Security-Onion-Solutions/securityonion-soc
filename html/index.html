@@ -625,7 +625,7 @@
                               </v-btn>
                             </td>
                             <td>
-                              <v-tooltip bottom v-if="loaded && eventsEnabled && metricsEnabled && ( (group.headers.length==3 && group.headers[1]['value']=='count' ) || (group.headers.length==5 && group.headers[1]['value']=='count' && group.headers[2]['value']=='rule.name' && group.headers[3]['value']=='event.module' && group.headers[4]['value']=='event.severity_label') ) " :data-aid="'groups_drilldown_' + category">
+                              <v-tooltip bottom v-if="loaded && eventsEnabled && metricsEnabled && ( (group.headers.length==3 && group.headers[1]['value']=='count' ) || (group.headers.length==6 && group.headers[1]['value']=='count' && group.headers[2]['value']=='rule.name' && group.headers[3]['value']=='event.module' && group.headers[4]['value']=='event.severity_label' && group.headers[5]['value']=='rule.uuid') ) " :data-aid="'groups_drilldown_' + category">
                                 <template v-slot:activator="{ on, attrs }">
                                   <span v-bind="attrs" v-on="on">
                                     <div class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()" v-bind="attrs" @click="countDrilldown(item)"></div>
