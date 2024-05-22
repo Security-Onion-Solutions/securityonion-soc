@@ -900,7 +900,7 @@ func buildImportChecker(pkg string) *regexp.Regexp {
 }
 
 func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]string, err error) {
-	results, err := e.srv.Detectionstore.GetAllDetections(ctx, util.Ptr(model.EngineNameStrelka), util.Ptr(true), nil) // e.srv.Detectionstore.Query(ctx, `so_detection.engine:strelka AND so_detection.isEnabled:true AND _index:"*:so-detection"`, -1)
+	results, err := e.srv.Detectionstore.GetAllDetections(ctx, util.Ptr(model.EngineNameStrelka), util.Ptr(true), nil)
 	if err != nil {
 		return nil, err
 	}

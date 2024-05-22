@@ -112,6 +112,77 @@ func TestDetectionValidateIdInvalid(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestDetectionValidatePublicIdValid(t *testing.T) {
+	t.Parallel()
+
+	store := NewElasticDetectionstore(server.NewFakeAuthorizedServer(nil), nil, 100)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+
+	err := store.validatePublicId("12345", "test")
+	assert.NoError(t, err)
+
+	err = store.validatePublicId("123456", "test")
+	assert.NoError(t, err)
+
+	err = store.validatePublicId("1-2-A-b", "test")
+	assert.NoError(t, err)
+
+	err = store.validatePublicId("1-2-a-b_2klj", "test")
+	assert.NoError(t, err)
+
+	err = store.validatePublicId("12345678901234567890123456789012345678901234567890", "test")
+	assert.NoError(t, err)
+
+	err = store.validatePublicId(strings.Repeat("1234567890", 12), "test")
+	assert.NoError(t, err)
+}
+
+func TestDetectionValidatePublicIdInvalid(t *testing.T) {
+	t.Parallel()
+
+	store := NewElasticDetectionstore(server.NewFakeAuthorizedServer(nil), nil, 100)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+
+	err := store.validatePublicId("", "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId("1", "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId("a", "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId("this is invalid since it has spaces", "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId("'quotes'", "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId("\"dblquotes\"", "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId(strings.Repeat("1234567890", 13), "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId("../../etc/passwd", "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId(`..\..\etc\passwd`, "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId("......", "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId("//////", "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId(`\\\\\\`, "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId(`123456!`, "test")
+	assert.Error(t, err)
+}
+
 func TestDetectionValidateStringValid(t *testing.T) {
 	t.Parallel()
 
