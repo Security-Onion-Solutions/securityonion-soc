@@ -990,7 +990,7 @@ func removeBlankLines(lines []string) []string {
 
 func updateLocal(localLines []string, localIndex map[string]int, sid string, isFlowbits bool, detect *model.Detection) []string {
 	lineNum, inLocal := localIndex[sid]
-	if !inLocal {
+	if !inLocal && !detect.PendingDelete {
 		if detect.IsEnabled || isFlowbits {
 			// not in local, but should be
 			localLines = append(localLines, detect.Content)
@@ -999,7 +999,7 @@ func updateLocal(localLines []string, localIndex map[string]int, sid string, isF
 		}
 	} else {
 		// in local...
-		if detect.IsEnabled || isFlowbits {
+		if (detect.IsEnabled || isFlowbits) && !detect.PendingDelete {
 			// and should be, update it
 			localLines[lineNum] = detect.Content
 		} else {
@@ -1014,7 +1014,7 @@ func updateLocal(localLines []string, localIndex map[string]int, sid string, isF
 
 func updateEnabled(enabledLines []string, enabledIndex map[string]int, sid string, isFlowbits bool, detect *model.Detection) []string {
 	lineNum, inEnabled := enabledIndex[sid]
-	remove := !detect.IsEnabled && !isFlowbits
+	remove := (!detect.IsEnabled && !isFlowbits) || detect.PendingDelete
 
 	line := detect.PublicID
 	if remove {
@@ -1022,9 +1022,11 @@ func updateEnabled(enabledLines []string, enabledIndex map[string]int, sid strin
 	}
 
 	if !inEnabled {
-		enabledLines = append(enabledLines, line)
-		lineNum = len(enabledLines) - 1
-		enabledIndex[sid] = lineNum
+		if !remove {
+			enabledLines = append(enabledLines, line)
+			lineNum = len(enabledLines) - 1
+			enabledIndex[sid] = lineNum
+		}
 	} else {
 		enabledLines[lineNum] = line
 		if remove {
@@ -1038,7 +1040,7 @@ func updateEnabled(enabledLines []string, enabledIndex map[string]int, sid strin
 func updateModify(modifyLines []string, modifyIndex map[string]int, sid string, detect *model.Detection) []string {
 	// find active modify override, if it exists
 	var override *model.Override
-	if detect.IsEnabled {
+	if detect.IsEnabled && !detect.PendingDelete {
 		for _, o := range detect.Overrides {
 			if o.Type == model.OverrideTypeModify && o.IsEnabled {
 				override = o
@@ -1076,21 +1078,23 @@ func updateModify(modifyLines []string, modifyIndex map[string]int, sid string, 
 }
 
 func updateDisabled(disabledLines []string, disabledIndex map[string]int, sid string, isFlowbits bool, detect *model.Detection) []string {
-	if !isFlowbits {
+	if !isFlowbits || detect.PendingDelete {
 		lineNum, inDisabled := disabledIndex[sid]
 
 		line := detect.PublicID
-		if detect.IsEnabled {
+		if detect.IsEnabled || detect.PendingDelete {
 			line = ""
 		}
 
 		if !inDisabled {
-			disabledLines = append(disabledLines, line)
-			lineNum = len(disabledLines) - 1
-			disabledIndex[sid] = lineNum
+			if !detect.PendingDelete && !detect.IsEnabled {
+				disabledLines = append(disabledLines, line)
+				lineNum = len(disabledLines) - 1
+				disabledIndex[sid] = lineNum
+			}
 		} else {
 			disabledLines[lineNum] = line
-			if detect.IsEnabled {
+			if detect.IsEnabled || detect.PendingDelete {
 				delete(disabledIndex, sid)
 			}
 		}
@@ -1104,11 +1108,17 @@ func updateModifyForDisabledFlowbits(modifyLines []string, modifyIndex map[strin
 	lineNum, inModify := modifyIndex[sid]
 	line := fmt.Sprintf("%s %s", detect.PublicID, modifyFromTo)
 
+	if detect.PendingDelete {
+		line = ""
+	}
+
 	if !inModify {
 		// not in the modify file, but should be
-		modifyLines = append(modifyLines, line)
-		lineNum = len(modifyLines) - 1
-		modifyIndex[sid] = lineNum
+		if !detect.PendingDelete {
+			modifyLines = append(modifyLines, line)
+			lineNum = len(modifyLines) - 1
+			modifyIndex[sid] = lineNum
+		}
 	} else {
 		// in modify, but should be updated
 		modifyLines[lineNum] = line
@@ -1119,8 +1129,12 @@ func updateModifyForDisabledFlowbits(modifyLines []string, modifyIndex map[strin
 
 func updateThreshold(thresholdIndex map[string][]*model.Override, genID int, detect *model.Detection) {
 	delete(thresholdIndex, detect.PublicID)
+	if detect.PendingDelete {
+		return
+	}
+
 	detOverrides := lo.Filter(detect.Overrides, func(o *model.Override, _ int) bool {
-		return o.IsEnabled
+		return o.IsEnabled && (o.Type == model.OverrideTypeThreshold || o.Type == model.OverrideTypeSuppress)
 	})
 
 	if len(detOverrides) > 0 {

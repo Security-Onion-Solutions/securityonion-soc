@@ -349,6 +349,7 @@ func (h *DetectionHandler) deleteDetection(w http.ResponseWriter, r *http.Reques
 	}
 
 	old.IsEnabled = false
+	old.PendingDelete = true
 
 	errMap, err := SyncLocalDetections(ctx, h.server, []*model.Detection{old})
 	if err != nil {

@@ -99,22 +99,23 @@ type DetectionEngine struct {
 
 type Detection struct {
 	Auditable
-	PublicID    string      `json:"publicId"`
-	Title       string      `json:"title"`
-	Severity    Severity    `json:"severity"`
-	Author      string      `json:"author"`
-	Category    string      `json:"category,omitempty"`
-	Description string      `json:"description"`
-	Content     string      `json:"content"`
-	IsEnabled   bool        `json:"isEnabled"`
-	IsReporting bool        `json:"isReporting"`
-	IsCommunity bool        `json:"isCommunity"`
-	Engine      EngineName  `json:"engine"`
-	Language    SigLanguage `json:"language"`
-	Overrides   []*Override `json:"overrides"` // Tuning
-	Tags        []string    `json:"tags"`
-	Ruleset     string      `json:"ruleset"`
-	License     string      `json:"license"`
+	PublicID      string      `json:"publicId"`
+	Title         string      `json:"title"`
+	Severity      Severity    `json:"severity"`
+	Author        string      `json:"author"`
+	Category      string      `json:"category,omitempty"`
+	Description   string      `json:"description"`
+	Content       string      `json:"content"`
+	IsEnabled     bool        `json:"isEnabled"`
+	IsReporting   bool        `json:"isReporting"`
+	IsCommunity   bool        `json:"isCommunity"`
+	Engine        EngineName  `json:"engine"`
+	Language      SigLanguage `json:"language"`
+	Overrides     []*Override `json:"overrides"` // Tuning
+	Tags          []string    `json:"tags"`
+	Ruleset       string      `json:"ruleset"`
+	License       string      `json:"license"`
+	PendingDelete bool        `json:"-"` // this is a transient field, not stored in the database
 
 	// elastalert - sigma only
 	Product string `json:"product,omitempty"`

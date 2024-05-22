@@ -1057,6 +1057,100 @@ func TestUpdateLocal(t *testing.T) {
 	assert.Equal(t, "400000!", localLines[3])
 	assert.Equal(t, 4, len(localIndex))
 	assert.Contains(t, localIndex, "400000")
+
+	det.PendingDelete = true
+
+	// PendingDelete should remove it regardless the rest of the state
+	localLines = updateLocal(localLines, localIndex, sid, true, det)
+
+	assert.Equal(t, 4, len(localLines))
+	assert.Equal(t, "", localLines[3])
+	assert.Equal(t, 3, len(localIndex))
+	assert.NotContains(t, localIndex, "400000")
+}
+
+func TestUpdateEnabled(t *testing.T) {
+	enableLines := []string{}
+	enableIndex := map[string]int{}
+
+	sid := "12345"
+	det := &model.Detection{
+		PublicID:  sid,
+		IsEnabled: false,
+	}
+
+	// no flowbits
+	// disabled, no change
+	enableLines = updateEnabled(enableLines, enableIndex, sid, false, det)
+
+	assert.Equal(t, 0, len(enableLines))
+	assert.Equal(t, 0, len(enableIndex))
+
+	det.IsEnabled = true
+
+	// enabled
+	enableLines = updateEnabled(enableLines, enableIndex, sid, false, det)
+
+	assert.Equal(t, 1, len(enableLines))
+	assert.Equal(t, sid, enableLines[0])
+	assert.Equal(t, 1, len(enableIndex))
+	assert.Equal(t, 0, enableIndex[sid])
+
+	det.IsEnabled = false
+
+	// disabled, remove entry
+	enableLines = updateEnabled(enableLines, enableIndex, sid, false, det)
+
+	assert.Equal(t, 1, len(enableLines))
+	assert.Equal(t, "", enableLines[0])
+	assert.Equal(t, 0, len(enableIndex))
+	assert.NotContains(t, enableIndex, sid)
+
+	det.IsEnabled = true
+
+	// enabled, restore entry
+	enableLines = updateEnabled(enableLines, enableIndex, sid, false, det)
+
+	assert.Equal(t, 2, len(enableLines))
+	assert.Equal(t, sid, enableLines[1])
+	assert.Equal(t, 1, len(enableIndex))
+	assert.Equal(t, 1, enableIndex[sid])
+
+	det.PendingDelete = true
+
+	// pending delete
+	enableLines = updateEnabled(enableLines, enableIndex, sid, false, det)
+
+	assert.Equal(t, 2, len(enableLines))
+	assert.Equal(t, "", enableLines[1])
+	assert.Equal(t, 0, len(enableIndex))
+	assert.NotContains(t, enableIndex, sid)
+
+	// reset for flowbits
+	enableLines = []string{}
+	enableIndex = map[string]int{}
+
+	det.IsEnabled = true
+	det.PendingDelete = false
+
+	// with flowbits
+	// enabled
+	enableLines = updateEnabled(enableLines, enableIndex, sid, true, det)
+
+	assert.Equal(t, 1, len(enableLines))
+	assert.Equal(t, sid, enableLines[0])
+	assert.Equal(t, 1, len(enableIndex))
+	assert.Equal(t, 0, enableIndex[sid])
+
+	det.IsEnabled = true
+
+	// disabled
+	enableLines = updateEnabled(enableLines, enableIndex, sid, true, det)
+
+	assert.Equal(t, 1, len(enableLines))
+	assert.Equal(t, sid, enableLines[0])
+	assert.Equal(t, 1, len(enableIndex))
+	assert.Equal(t, 0, enableIndex[sid])
 }
 
 func TestUpdateModify(t *testing.T) {
@@ -1130,4 +1224,280 @@ func TestUpdateModify(t *testing.T) {
 	assert.Equal(t, ``, modifyLines[0])
 	assert.Equal(t, 0, len(modifyIndex))
 	assert.NotContains(t, modifyIndex, "12345")
+
+	// put it back so we can take it out...
+	det.Overrides[0].IsEnabled = true
+	modifyLines = updateModify(modifyLines, modifyIndex, sid, det)
+	assert.Equal(t, 2, len(modifyLines))
+	assert.Equal(t, `12345 "A" "\"C\""`, modifyLines[1])
+	assert.Equal(t, 1, len(modifyIndex))
+	assert.Equal(t, 1, modifyIndex["12345"])
+
+	det.PendingDelete = true
+
+	// PendingDelete, remove it regardless the rest of state
+	modifyLines = updateModify(modifyLines, modifyIndex, sid, det)
+
+	assert.Equal(t, 2, len(modifyLines))
+	assert.Equal(t, ``, modifyLines[1])
+	assert.Equal(t, 0, len(modifyIndex))
+	assert.NotContains(t, modifyIndex, "12345")
+}
+
+func TestUpdateDisabled(t *testing.T) {
+	disableLines := []string{}
+	disableIndex := map[string]int{}
+
+	sid := "12345"
+	det := &model.Detection{
+		PublicID:  sid,
+		IsEnabled: true,
+	}
+
+	// no flowbits
+	// enabled, no change
+	disableLines = updateDisabled(disableLines, disableIndex, sid, false, det)
+
+	assert.Equal(t, 0, len(disableLines))
+	assert.Equal(t, 0, len(disableIndex))
+
+	det.IsEnabled = false
+
+	// disabled
+	disableLines = updateDisabled(disableLines, disableIndex, sid, false, det)
+
+	assert.Equal(t, 1, len(disableLines))
+	assert.Equal(t, sid, disableLines[0])
+	assert.Equal(t, 1, len(disableIndex))
+	assert.Equal(t, 0, disableIndex[sid])
+
+	det.IsEnabled = true
+
+	// enabled, remove disabled entry
+	disableLines = updateDisabled(disableLines, disableIndex, sid, false, det)
+
+	assert.Equal(t, 1, len(disableLines))
+	assert.Equal(t, "", disableLines[0])
+	assert.Equal(t, 0, len(disableIndex))
+	assert.NotContains(t, disableIndex, sid)
+
+	det.IsEnabled = false
+
+	// disabled
+	disableLines = updateDisabled(disableLines, disableIndex, sid, false, det)
+
+	assert.Equal(t, 2, len(disableLines))
+	assert.Equal(t, sid, disableLines[1])
+	assert.Equal(t, 1, len(disableIndex))
+	assert.Equal(t, 1, disableIndex[sid])
+
+	det.PendingDelete = true
+
+	// pending delete
+	disableLines = updateDisabled(disableLines, disableIndex, sid, false, det)
+
+	assert.Equal(t, 2, len(disableLines))
+	assert.Equal(t, "", disableLines[1])
+	assert.Equal(t, 0, len(disableIndex))
+	assert.NotContains(t, disableIndex, sid)
+
+	// reset for flowbits
+	disableLines = []string{}
+	disableIndex = map[string]int{}
+
+	det.IsEnabled = false
+	det.PendingDelete = false
+
+	// with flowbits
+	// disabled
+	disableLines = updateDisabled(disableLines, disableIndex, sid, true, det)
+
+	assert.Equal(t, 0, len(disableLines))
+	assert.Equal(t, 0, len(disableIndex))
+
+	det.IsEnabled = true
+
+	// enabled
+	disableLines = updateDisabled(disableLines, disableIndex, sid, true, det)
+
+	assert.Equal(t, 0, len(disableLines))
+	assert.Equal(t, 0, len(disableIndex))
+}
+
+func TestUpdateModifyForDisabledFlowbits(t *testing.T) {
+	modifyLines := []string{}
+	modifyIndex := map[string]int{}
+
+	sid := "12345"
+	det := &model.Detection{
+		PublicID: sid,
+	}
+
+	// not present, add
+	modifyLines = updateModifyForDisabledFlowbits(modifyLines, modifyIndex, sid, det)
+
+	assert.Equal(t, 1, len(modifyLines))
+	assert.Equal(t, sid+" "+modifyFromTo, modifyLines[0])
+	assert.Equal(t, 1, len(modifyIndex))
+	assert.Equal(t, 0, modifyIndex[sid])
+
+	// present, don't add
+	modifyLines = updateModifyForDisabledFlowbits(modifyLines, modifyIndex, sid, det)
+
+	assert.Equal(t, 1, len(modifyLines))
+	assert.Equal(t, sid+" "+modifyFromTo, modifyLines[0])
+	assert.Equal(t, 1, len(modifyIndex))
+	assert.Equal(t, 0, modifyIndex[sid])
+
+	det.PendingDelete = true
+
+	// pending delete, remove
+	modifyLines = updateModifyForDisabledFlowbits(modifyLines, modifyIndex, sid, det)
+
+	assert.Equal(t, 1, len(modifyLines))
+	assert.Equal(t, "", modifyLines[0])
+	assert.Equal(t, 0, len(modifyIndex))
+}
+
+func TestUpdateThreshold(t *testing.T) {
+	thresholdIndex := map[string][]*model.Override{}
+	genId := 1
+	sid := "12345"
+	det := &model.Detection{
+		PublicID: sid,
+	}
+
+	// no overrides, no change
+	updateThreshold(thresholdIndex, genId, det)
+
+	assert.Equal(t, 0, len(thresholdIndex))
+
+	det.Overrides = []*model.Override{
+		{
+			IsEnabled: true,
+			Type:      model.OverrideTypeThreshold,
+			OverrideParameters: model.OverrideParameters{
+				ThresholdType: util.Ptr("limit"),
+				Track:         util.Ptr("by_src"),
+				Count:         util.Ptr(5),
+				Seconds:       util.Ptr(60),
+			},
+		},
+		{
+			IsEnabled: true,
+			Type:      model.OverrideTypeSuppress,
+			OverrideParameters: model.OverrideParameters{
+				Track: util.Ptr("by_dest"),
+				IP:    util.Ptr("127.0.0.1"),
+			},
+		},
+		{
+			IsEnabled: true,
+			Type:      model.OverrideTypeModify,
+			OverrideParameters: model.OverrideParameters{
+				Regex: util.Ptr("A"),
+				Value: util.Ptr("B"),
+			},
+		},
+	}
+
+	// add two
+	updateThreshold(thresholdIndex, genId, det)
+
+	assert.Equal(t, 1, len(thresholdIndex))
+	assert.Equal(t, 2, len(thresholdIndex["12345"]))
+	assert.Equal(t, &model.Override{
+		IsEnabled: true,
+		Type:      model.OverrideTypeThreshold,
+		OverrideParameters: model.OverrideParameters{
+			GenID:         util.Ptr(genId),
+			ThresholdType: util.Ptr("limit"),
+			Track:         util.Ptr("by_src"),
+			Count:         util.Ptr(5),
+			Seconds:       util.Ptr(60),
+		},
+	}, thresholdIndex["12345"][0])
+	assert.Equal(t, &model.Override{
+		IsEnabled: true,
+		Type:      model.OverrideTypeSuppress,
+		OverrideParameters: model.OverrideParameters{
+			GenID: util.Ptr(genId),
+			Track: util.Ptr("by_dest"),
+			IP:    util.Ptr("127.0.0.1"),
+		},
+	}, thresholdIndex[sid][1])
+
+	// update
+	det.Overrides = []*model.Override{
+		{
+			IsEnabled: true,
+			Type:      model.OverrideTypeSuppress,
+			OverrideParameters: model.OverrideParameters{
+				Track: util.Ptr("by_src"),
+				IP:    util.Ptr("0.0.0.0"),
+			},
+		},
+	}
+
+	// add two
+	updateThreshold(thresholdIndex, genId, det)
+
+	assert.Equal(t, 1, len(thresholdIndex))
+	assert.Equal(t, 1, len(thresholdIndex["12345"]))
+	assert.Equal(t, &model.Override{
+		IsEnabled: true,
+		Type:      model.OverrideTypeSuppress,
+		OverrideParameters: model.OverrideParameters{
+			GenID: util.Ptr(genId),
+			Track: util.Ptr("by_src"),
+			IP:    util.Ptr("0.0.0.0"),
+		},
+	}, thresholdIndex["12345"][0])
+
+	det.PendingDelete = true
+
+	updateThreshold(thresholdIndex, genId, det)
+
+	assert.Equal(t, 0, len(thresholdIndex))
+}
+
+func TestRemoveFromIndex(t *testing.T) {
+	localLines := []string{
+		"100000",
+		"200000",
+		"300000",
+	}
+
+	localIndex := map[string]int{
+		"100000": 0,
+		"200000": 1,
+		"300000": 2,
+	}
+
+	// remove non-existent entry, no change
+	removeFromIndex(localLines, localIndex, "500000")
+
+	assert.Equal(t, []string{
+		"100000",
+		"200000",
+		"300000",
+	}, localLines)
+	assert.Equal(t, map[string]int{
+		"100000": 0,
+		"200000": 1,
+		"300000": 2,
+	}, localIndex)
+
+	// remove existing entry
+	removeFromIndex(localLines, localIndex, "200000")
+
+	assert.Equal(t, []string{
+		"100000",
+		"",
+		"300000",
+	}, localLines)
+	assert.Equal(t, map[string]int{
+		"100000": 0,
+		"300000": 2,
+	}, localIndex)
 }
