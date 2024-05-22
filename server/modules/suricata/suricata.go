@@ -1058,7 +1058,10 @@ func updateModify(modifyLines []string, modifyIndex map[string]int, sid string, 
 		return modifyLines
 	}
 
-	line := fmt.Sprintf("%s %s %s", detect.PublicID, *override.Regex, *override.Value)
+	find := detections.EscapeDoubleQuotes(*override.Regex)
+	replace := detections.EscapeDoubleQuotes(*override.Value)
+
+	line := fmt.Sprintf(`%s "%s" "%s"`, detect.PublicID, find, replace)
 
 	lineNum, inModify := modifyIndex[sid]
 	if !inModify {

@@ -1058,3 +1058,76 @@ func TestUpdateLocal(t *testing.T) {
 	assert.Equal(t, 4, len(localIndex))
 	assert.Contains(t, localIndex, "400000")
 }
+
+func TestUpdateModify(t *testing.T) {
+	modifyLines := []string{}
+	modifyIndex := map[string]int{}
+
+	sid := "12345"
+
+	det := &model.Detection{
+		PublicID:  sid,
+		IsEnabled: true,
+	}
+
+	// enabled, no override
+	modifyLines = updateModify(modifyLines, modifyIndex, sid, det)
+
+	assert.Equal(t, 0, len(modifyLines))
+	assert.Equal(t, 0, len(modifyIndex))
+
+	det.IsEnabled = false
+
+	// disabled, no override
+	modifyLines = updateModify(modifyLines, modifyIndex, sid, det)
+
+	assert.Equal(t, 0, len(modifyLines))
+	assert.Equal(t, 0, len(modifyIndex))
+
+	det.Overrides = []*model.Override{
+		{
+			Type: model.OverrideTypeModify,
+			OverrideParameters: model.OverrideParameters{
+				Regex: util.Ptr("A"),
+				Value: util.Ptr("B"),
+			},
+			IsEnabled: true,
+		},
+	}
+
+	// disabled, with override
+	modifyLines = updateModify(modifyLines, modifyIndex, sid, det)
+
+	assert.Equal(t, 0, len(modifyLines))
+	assert.Equal(t, 0, len(modifyIndex))
+
+	det.IsEnabled = true
+
+	// enabled, with override
+	modifyLines = updateModify(modifyLines, modifyIndex, sid, det)
+
+	assert.Equal(t, 1, len(modifyLines))
+	assert.Equal(t, `12345 "A" "B"`, modifyLines[0])
+	assert.Equal(t, 1, len(modifyIndex))
+	assert.Equal(t, 0, modifyIndex["12345"])
+
+	det.Overrides[0].Value = util.Ptr(`"C"`)
+
+	// enabled, with override, new contents
+	modifyLines = updateModify(modifyLines, modifyIndex, sid, det)
+
+	assert.Equal(t, 1, len(modifyLines))
+	assert.Equal(t, `12345 "A" "\"C\""`, modifyLines[0])
+	assert.Equal(t, 1, len(modifyIndex))
+	assert.Equal(t, 0, modifyIndex["12345"])
+
+	det.Overrides[0].IsEnabled = false
+
+	// enabled, with disabled override
+	modifyLines = updateModify(modifyLines, modifyIndex, sid, det)
+
+	assert.Equal(t, 1, len(modifyLines))
+	assert.Equal(t, ``, modifyLines[0])
+	assert.Equal(t, 0, len(modifyIndex))
+	assert.NotContains(t, modifyIndex, "12345")
+}
