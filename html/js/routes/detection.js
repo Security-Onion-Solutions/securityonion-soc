@@ -67,6 +67,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			],
 			zone: moment.tz.guess(),
 			newOverride: null,
+			newOverrideValid: false,
 			thresholdTypes: [
 				{ value: 'threshold', text: 'Threshold' },
 				{ value: 'limit', text: 'Limit' },

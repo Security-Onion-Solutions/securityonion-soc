@@ -1292,7 +1292,7 @@
                   </v-col>
                 </v-row>
                 <div v-if="newOverride != null">
-                  <v-form ref="OverrideCreate">
+                  <v-form ref="OverrideCreate" v-model="newOverrideValid">
                     <span data-aid="detection_new_override_type_select">
                       <v-select id="new-override-type" v-model="newOverride.type" :items="getOverrideTypes()" persistent-hint :hint="i18n.type" @change="createOverrideTypeChange()"></v-select>
                     </span>
@@ -1337,7 +1337,7 @@
                         <v-btn id="detection-create-cancel" text small color="primary" class="align-self-end" @click="newOverride = null" data-aid="detection_new_override_cancel">
                           {{ i18n.cancel }}
                         </v-btn>
-                        <v-btn v-if="newOverride.type" id="detection-create-create" text small color="primary" class="align-self-end" @click="addNewOverride()" data-aid="detection_new_override_save">
+                        <v-btn v-if="newOverride.type" id="detection-create-create" :disabled="!newOverrideValid" text small color="primary" class="align-self-end" @click="addNewOverride()" data-aid="detection_new_override_save">
                           {{ i18n.create }}
                         </v-btn>
                         <v-btn icon :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'detections.html#managing-detections'" :title="i18n.overrideDocumentationHelp" data-aid="detection_override_help_new">
