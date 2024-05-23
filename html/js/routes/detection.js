@@ -593,7 +593,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		async saveDetection(createNew, skipSourceCheck) {
 			if (this.curEditTarget !== null) this.stopEdit(true);
-			if (!skipSourceCheck && this.isDetectionSourceDirty()) {
+			if (!this.isNew() && !skipSourceCheck && this.isDetectionSourceDirty()) {
 				this.showDirtySourceDialog = true;
 				this.revertEnabled();
 				return;
