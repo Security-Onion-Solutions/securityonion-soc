@@ -4290,7 +4290,7 @@
                                         {{ container.Name }}
                                       </td>
                                       <td class="text-center">
-                                        <router-link :to="{ name: 'hunt', query: {q: `tags:&quot;${container.Name}&quot; | groupby log.level | groupby event.action`, t: moment().subtract(1, 'hours').format(i18n.timePickerFormat) + ' - ' + moment().format(i18n.timePickerFormat) }}" :class="'text-decoration-none hunt-logs-' + container.Name" :data-aid="'grid_node_hunt_' + container.Name">
+                                        <router-link :to="{ name: 'hunt', query: {q: `tags:&quot;${container.Name}&quot; | groupby log.level | groupby event.action`, t: moment().subtract(1, 'hours').format(i18n.timePickerFormat) + ' - ' + moment().format(i18n.timePickerFormat), socExcludeToggle: false }}" :class="'text-decoration-none hunt-logs-' + container.Name" :data-aid="'grid_node_hunt_' + container.Name">
                                           <v-icon :title="i18n.huntForError">fa-crosshairs</v-icon>
                                         </router-link>
                                       </td>
