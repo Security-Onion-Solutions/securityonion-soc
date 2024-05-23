@@ -1110,6 +1110,7 @@ func updateModifyForDisabledFlowbits(modifyLines []string, modifyIndex map[strin
 
 	if detect.PendingDelete {
 		line = ""
+		delete(modifyIndex, sid)
 	}
 
 	if !inModify {
