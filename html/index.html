@@ -386,15 +386,17 @@
           </v-col>
           <v-spacer></v-spacer>
           <v-col cols="12" lg="2" align="end">
-            <h4 v-if="loaded" :data-aid="'event_total_' + category">{{ i18n.eventTotal }} {{ totalEvents.toLocaleString() }}</h4>
             <div v-if="isCategory('detections') && loaded" :data-aid="'event_health_' + category">
               <h5 v-for="engine in $root.getDetectionEngines()">
-                {{ i18n['cc_' + engine] }} {{ i18n.rules }}: 
+                {{ i18n['cc_' + engine] }}: 
                 <router-link :to="{ name: 'hunt', query: {q: `tags:so-soc AND ` + engine + ` | groupby log.level | groupby event.action | groupby soc.fields.error`, t: moment().subtract(1, 'hours').format(i18n.timePickerFormat) + ' - ' + moment().format(i18n.timePickerFormat), socExcludeToggle: false }}" style="text-decoration: none; cursor: 'pointer'" :class="$root.getDetectionEngineStatusClass(engine)" :data-aid="'detection_engine_status_' + engine" :title="i18n['detectionEngine' + $root.getDetectionEngineStatus(engine) + 'Help']">
                   {{ i18n['detectionEngine' + $root.getDetectionEngineStatus(engine)] }}
                 </router-link>
               </h5>
             </div>
+          </v-col>
+          <v-col cols="12" lg="2" align="end">
+            <h4 v-if="loaded" :data-aid="'event_total_' + category">{{ i18n.eventTotal }} {{ totalEvents.toLocaleString() }}</h4>
           </v-col>
         </v-row>
         <v-row align="start" v-if="createLink != ''">
