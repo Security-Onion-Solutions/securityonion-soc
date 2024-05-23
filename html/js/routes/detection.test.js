@@ -359,4 +359,34 @@ test('isDetectionSourceDirty', () => {
 	comp.origDetect.content = 'Y';
 
 	expect(comp.isDetectionSourceDirty()).toBe(false);
+});
+
+test('revertEnabled', () => {
+	comp.detect = {
+		isEnabled: true,
+	};
+	comp.origDetect = Object.assign({}, comp.detect);
+
+	// both true
+	comp.revertEnabled();
+	expect(comp.detect.isEnabled).toBe(true);
+	expect(comp.origDetect.isEnabled).toBe(true);
+
+	// det false, orig true
+	comp.detect.isEnabled = false;
+	comp.revertEnabled();
+	expect(comp.detect.isEnabled).toBe(true);
+	expect(comp.origDetect.isEnabled).toBe(true);
+
+	// det true, orig false
+	comp.detect.isEnabled = true;
+	comp.origDetect.isEnabled = false;
+	comp.revertEnabled();
+	expect(comp.detect.isEnabled).toBe(false);
+	expect(comp.origDetect.isEnabled).toBe(false);
+
+	// both false
+	comp.revertEnabled();
+	expect(comp.detect.isEnabled).toBe(false);
+	expect(comp.origDetect.isEnabled).toBe(false);
 })

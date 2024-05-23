@@ -119,6 +119,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			showSigmaDialog: false,
 			convertedRule: '',
 			confirmDeleteDialog: false,
+			showDirtySourceDialog: false,
 	}},
 	created() {
 		this.onDetectionChange = debounce(this.onDetectionChange, 300);
@@ -197,7 +198,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			// complete all these futures when looping across hundreds of records. Let
 			// the UI update as they finish, for a better user experience.
 			this.$root.populateUserDetails(this.detect, "userId", "userName");
-
 		},
 		loadAssociations() {
 			this.extractSummary();
@@ -529,8 +529,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			if (this.isNew()) {
 				this.$router.push({name: 'detections'});
 			} else {
-				this.detect = this.origDetect;
+				this.detect = Object.assign({}, this.origDetect);
 			}
+
+			this.showDirtySourceDialog = false;
 		},
 		async startEdit(target, field) {
 			if (this.curEditTarget === target) return;
@@ -583,8 +585,21 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					});
 			}
 		},
-		async saveDetection(createNew) {
+		revertEnabled() {
+			const route = this;
+			this.$nextTick(() => {
+				route.detect.isEnabled = route.origDetect.isEnabled;
+			});
+		},
+		async saveDetection(createNew, skipSourceCheck) {
 			if (this.curEditTarget !== null) this.stopEdit(true);
+			if (!skipSourceCheck && this.isDetectionSourceDirty()) {
+				this.showDirtySourceDialog = true;
+				this.revertEnabled();
+				return;
+			}
+
+			this.showDirtySourceDialog = false;
 
 			if (this.isNew()) {
 				this.$refs.detection.validate();
@@ -606,6 +621,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			if (err) {
 				this.$root.showError(err);
+				this.revertEnabled();
+
 				return;
 			}
 
@@ -653,6 +670,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 						this.$root.showError(error);
 						break;
 				}
+
+				this.revertEnabled();
 			} finally {
 				this.$root.stopLoading();
 			}

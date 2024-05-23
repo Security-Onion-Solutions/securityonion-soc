@@ -282,6 +282,8 @@ const i18n = {
       details: 'Details',
       detection: 'Detection',
       detections: 'Detections',
+      detectionDirtyTitle: 'Unsaved Changes to Source',
+      detectionDirtyBody: 'The Detection Source has unsaved changes. Would you like to save them first?',
       detectionsExcludeToggle: 'Exclude Detections data',
       detectionComments: 'Operational Notes',
       detectionConfirmDelete: 'Confirm Delete Detection',
