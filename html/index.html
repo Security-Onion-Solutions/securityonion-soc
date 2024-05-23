@@ -388,7 +388,7 @@
           <v-col cols="12" lg="2" align="end">
             <div v-if="isCategory('detections') && loaded" :data-aid="'event_health_' + category">
               <h5 v-for="engine in $root.getDetectionEngines()">
-                {{ i18n['cc_' + engine] }}: 
+                {{ i18n['cc_' + engine] }}:
                 <router-link :to="{ name: 'hunt', query: {q: `tags:so-soc AND ` + engine + ` | groupby log.level | groupby event.action | groupby soc.fields.error`, t: moment().subtract(1, 'hours').format(i18n.timePickerFormat) + ' - ' + moment().format(i18n.timePickerFormat), socExcludeToggle: false }}" style="text-decoration: none; cursor: 'pointer'" :class="$root.getDetectionEngineStatusClass(engine)" :data-aid="'detection_engine_status_' + engine" :title="i18n['detectionEngine' + $root.getDetectionEngineStatus(engine) + 'Help']">
                   {{ i18n['detectionEngine' + $root.getDetectionEngineStatus(engine)] }}
                 </router-link>
@@ -1269,10 +1269,10 @@
                         <v-btn v-if="canConvert()" id="detection-convert" text small color="primary" class="align-self-end" @click="convertDetection()" data-aid="detection_source_convert">
                           {{ i18n.convert }}
                         </v-btn>
-                        <v-btn id="detection-cancel" v-if="!detect.isCommunity" text small color="primary" class="align-self-end" @click="cancelDetection()" data-aid="detection_source_cancel">
+                        <v-btn id="detection-cancel" v-if="!detect.isCommunity && isDetectionSourceDirty()" text small color="primary" class="align-self-end" @click="cancelDetection()" data-aid="detection_source_cancel">
                           {{ i18n.cancel }}
                         </v-btn>
-                        <v-btn id="detection-update" v-if="!detect.isCommunity" text small color="primary" class="align-self-end" @click="saveDetection(false)" data-aid="detection_source_save">
+                        <v-btn id="detection-update" v-if="!detect.isCommunity && isDetectionSourceDirty()" text small color="primary" class="align-self-end" @click="saveDetection(false, true)" data-aid="detection_source_save">
                           {{i18n.update}}
                         </v-btn>
                       </div>
@@ -1703,6 +1703,21 @@
                     {{ i18n.viewInDiscover }}
                   </v-btn>
                 </div>
+              </v-card>
+            </v-dialog>
+            <v-dialog v-model="showDirtySourceDialog" persistent max-width="450px" data-aid="detection_dirty_source_dialog">
+              <v-card>
+                <v-card-title class="text-h5" v-text="i18n.detectionDirtyTitle" />
+                <v-card-text v-text="i18n.detectionDirtyBody" />
+                <v-card-actions>
+                  <v-spacer></v-spacer>
+                  <v-btn text @click="saveDetection(false, true)" data-aid="detection_dirty_source_save">
+                    {{ i18n.yes }}
+                  </v-btn>
+                  <v-btn text @click="cancelDetection()" data-aid="detection_dirty_source_cancel">
+                    {{ i18n.no }}
+                  </v-btn>
+                </v-card-actions>
               </v-card>
             </v-dialog>
           </div>

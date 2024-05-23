@@ -343,3 +343,50 @@ test('deleteDetectionFailure', async () => {
 	expect(showErrorMock).toHaveBeenCalledTimes(1);
 	expect(comp.$router.length).toBe(0);
 });
+
+test('isDetectionSourceDirty', () => {
+	comp.detect = {
+		content: 'X',
+	};
+	comp.origDetect = Object.assign({}, comp.detect);
+
+	expect(comp.isDetectionSourceDirty()).toBe(false);
+
+	comp.detect.content = 'Y';
+
+	expect(comp.isDetectionSourceDirty()).toBe(true);
+
+	comp.origDetect.content = 'Y';
+
+	expect(comp.isDetectionSourceDirty()).toBe(false);
+});
+
+test('revertEnabled', () => {
+	comp.detect = {
+		isEnabled: true,
+	};
+	comp.origDetect = Object.assign({}, comp.detect);
+
+	// both true
+	comp.revertEnabled();
+	expect(comp.detect.isEnabled).toBe(true);
+	expect(comp.origDetect.isEnabled).toBe(true);
+
+	// det false, orig true
+	comp.detect.isEnabled = false;
+	comp.revertEnabled();
+	expect(comp.detect.isEnabled).toBe(true);
+	expect(comp.origDetect.isEnabled).toBe(true);
+
+	// det true, orig false
+	comp.detect.isEnabled = true;
+	comp.origDetect.isEnabled = false;
+	comp.revertEnabled();
+	expect(comp.detect.isEnabled).toBe(false);
+	expect(comp.origDetect.isEnabled).toBe(false);
+
+	// both false
+	comp.revertEnabled();
+	expect(comp.detect.isEnabled).toBe(false);
+	expect(comp.origDetect.isEnabled).toBe(false);
+})
