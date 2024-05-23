@@ -522,6 +522,9 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		isNew() {
 			return this.$route.params.id === 'create';
 		},
+		isDetectionSourceDirty() {
+			return this.detect.content != this.origDetect.content;
+		},
 		cancelDetection() {
 			if (this.isNew()) {
 				this.$router.push({name: 'detections'});

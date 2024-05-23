@@ -343,3 +343,20 @@ test('deleteDetectionFailure', async () => {
 	expect(showErrorMock).toHaveBeenCalledTimes(1);
 	expect(comp.$router.length).toBe(0);
 });
+
+test('isDetectionSourceDirty', () => {
+	comp.detect = {
+		content: 'X',
+	};
+	comp.origDetect = Object.assign({}, comp.detect);
+
+	expect(comp.isDetectionSourceDirty()).toBe(false);
+
+	comp.detect.content = 'Y';
+
+	expect(comp.isDetectionSourceDirty()).toBe(true);
+
+	comp.origDetect.content = 'Y';
+
+	expect(comp.isDetectionSourceDirty()).toBe(false);
+})
