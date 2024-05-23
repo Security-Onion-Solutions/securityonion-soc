@@ -553,27 +553,6 @@ td {
   word-break: break-word;
 }
 
-.detect-reference {
-  font-size: small;
-  display: table;
-  margin-top: 12px;
-  margin-left: 12px;
-}
-
-.detect-reference > div {
-  display: table-row;
-}
-
-.detect-reference > div > div {
-  display: table-cell;
-  padding: 0 4px;
-}
-
-.detect-reference .key {
-  font-weight: bold;
-  text-align: right;
-}
-
 .ops-header {
   font-weight: bold;
   margin-top: 16px;

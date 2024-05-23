@@ -1822,38 +1822,23 @@
                 </v-expansion-panel-content>
               </v-expansion-panel>
             </v-expansion-panels>
-            <div class="detect-reference" v-if="!isNew()">
-              <div>
-                <div class="key">
-                  {{i18n.socId}}:
-                </div>
-                <div class="value" data-aid="detection_metadata_id_display">
-                  {{ detect.id }}
-                </div>
+
+            <div v-if="!isNew()" class="ml-2 mt-2">
+              <div class="case summary">
+                <span class="case label">{{i18n.socId}}:</span>
+                <span class="case value" data-aid="detection_metadata_id_display">{{ detect.id }}</span>
               </div>
-              <div>
-                <div class="key">
-                  {{ i18n.socUser }}:
-                </div>
-                <div class="value" data-aid="detection_metadata_author_display">
-                  {{ $root.tryLocalize(detect.userName) }}
-                </div>
+              <div class="case summary">
+                <span class="case label">{{i18n.socUser}}:</span>
+                <span class="case value" data-aid="detection_metadata_author_display">{{ $root.tryLocalize(detect.userName) }}</span>
               </div>
-              <div>
-                <div class="key">
-                  {{ i18n.dateCreated }}:
-                </div>
-                <div class="value" data-aid="detection_metadata_create_time_display">
-                  {{ detect.createTime | formatDateTime}}
-                </div>
+              <div class="case summary">
+                <span class="case label">{{i18n.dateCreated}}:</span>
+                <span class="case value" data-aid="detection_metadata_create_time_display">{{ detect.createTime | formatDateTime}}</span>
               </div>
-              <div>
-                <div class="key">
-                  {{ i18n.dateModified }}:
-                </div>
-                <div class="value" data-aid="detection_metadata_update_time_display">
-                  {{ detect.updateTime | formatDateTime }}
-                </div>
+              <div class="case summary">
+                <span class="case label">{{i18n.dateModified}}:</span>
+                <span class="case value" data-aid="detection_metadata_update_time_display">{{ detect.updateTime | formatDateTime }}</span>
               </div>
             </div>
           </div>
