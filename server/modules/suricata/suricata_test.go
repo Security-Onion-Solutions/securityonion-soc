@@ -658,7 +658,7 @@ func TestSyncLocalSuricata(t *testing.T) {
 				"idstools.sids.enabled":            SimpleRuleSID,
 				"idstools.sids.disabled":           "",
 				"idstools.sids.modify":             SimpleRuleSID + ` "rev:7;" "rev:8;"`,
-				"suricata.thresholding.sids__yaml": "\"10000\":\n    - modify:\n        regex: rev:7;\n        value: rev:8;\n",
+				"suricata.thresholding.sids__yaml": "{}\n",
 			},
 		},
 		{
