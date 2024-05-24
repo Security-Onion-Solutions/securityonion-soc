@@ -390,3 +390,16 @@ test('revertEnabled', () => {
 	expect(comp.detect.isEnabled).toBe(false);
 	expect(comp.origDetect.isEnabled).toBe(false);
 })
+
+test('isFieldValid', () => {
+	comp.$refs = {}
+	expect(comp.isFieldValid('foo')).toBe(true)
+
+	comp.$refs = {bar: { valid: false}}
+	expect(comp.isFieldValid('foo')).toBe(true)
+	expect(comp.isFieldValid('bar')).toBe(false)
+
+	comp.$refs = {bar: { valid: true}}
+	expect(comp.isFieldValid('bar')).toBe(true)
+
+})

@@ -662,6 +662,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					this.$router.push({ name: 'detection', params: { id: response.data.id } });
 				}
 
+				return true;
+
 			} catch (error) {
 				switch (error.response.status) {
 					case 409:
@@ -941,7 +943,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.$refs.OverrideCreate.reset();
 			this.newOverride = null;
 		},
-		addNewOverride() {
+		async addNewOverride() {
 			if (!this.newOverride) return;
 
 			if (!this.detect.overrides) {
@@ -952,7 +954,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			this.detect.overrides.push(this.newOverride);
 
-			this.saveDetection(false);
+			const result = await this.saveDetection(false);
+			if (!result) {
+				this.detect.overrides.pop();
+			}
 			this.newOverride = null;
 		},
 		async startOverrideEdit(target, override, field) {
@@ -1197,6 +1202,13 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			const compress = LZString.compressToEncodedURIComponent(query);
 			const url = `/kibana/app/dev_tools#/console?load_from=data:text/plain,${compress}`;
 			window.open(url, '_blank');
-		}
+		},
+		isFieldValid(refName) {
+			const ref = this.$refs[refName];
+			if (ref) {
+				return ref.valid;
+			}
+			return true;
+		},
 	}
 }});
