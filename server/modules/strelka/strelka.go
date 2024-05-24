@@ -518,13 +518,13 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 					comRule, exists := communityDetections[det.PublicID]
 					if exists {
-						// pre-existing detection, update it
-						det.IsEnabled = comRule.IsEnabled
-						det.Id = comRule.Id
-						det.Overrides = comRule.Overrides
-						det.CreateTime = comRule.CreateTime
-
 						if comRule.Content != det.Content || comRule.Ruleset != det.Ruleset || len(det.Overrides) != 0 {
+							// pre-existing detection, update it
+							det.IsEnabled = comRule.IsEnabled
+							det.Id = comRule.Id
+							det.Overrides = comRule.Overrides
+							det.CreateTime = comRule.CreateTime
+
 							log.WithFields(log.Fields{
 								"rule.uuid": det.PublicID,
 								"rule.name": det.Title,
