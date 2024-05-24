@@ -492,7 +492,7 @@ func (store *ElasticDetectionstore) GetDetection(ctx context.Context, detectId s
 }
 
 func (store *ElasticDetectionstore) GetDetectionByPublicId(ctx context.Context, publicId string) (detect *model.Detection, err error) {
-	err = store.validateId(publicId, "publicId")
+	err = store.validatePublicId(publicId, "publicId")
 	if err != nil {
 		return nil, err
 	}
