@@ -1,6 +1,7 @@
 package suricata
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"sort"
@@ -309,12 +310,15 @@ func TestM2470LoadOverrides(t *testing.T) {
 	defer ctrl.Finish()
 
 	mio := mock.NewMockIOManager(ctrl)
-	mio.EXPECT().ReadFile(sidsYaml).Return([]byte(`{ "2013030": [ "suppress": {"gen_id": 1, "track": "by_src", "ip": "10.10.3.0/24"} ]}`), nil)
+	mio.EXPECT().ReadFile(sidsYaml).Return([]byte(`{ "2013030": [ "suppress": {"gen_id": 1, "track": "by_src", "ip": "10.10.3.0/24"} ]}`), nil) // success
+	mio.EXPECT().ReadFile(sidsYaml).Return(nil, errors.New("bad"))                                                                              // bad error
+	mio.EXPECT().ReadFile(sidsYaml).Return(nil, fs.ErrNotExist)                                                                                 // good error
 
 	e := &SuricataEngine{
 		IOManager: mio,
 	}
 
+	// file is present and contains data
 	overrides, err := e.m2470LoadOverrides()
 	assert.NoError(t, err)
 
@@ -329,6 +333,16 @@ func TestM2470LoadOverrides(t *testing.T) {
 			IP:    util.Ptr("10.10.3.0/24"),
 		},
 	})
+
+	// error opening the file
+	overrides, err = e.m2470LoadOverrides()
+	assert.Error(t, err)
+	assert.Equal(t, 0, len(overrides))
+
+	// file does not exist, no error expected
+	overrides, err = e.m2470LoadOverrides()
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(overrides))
 }
 
 func TestM2470ApplyOverrides(t *testing.T) {
@@ -354,10 +368,16 @@ func TestM2470ApplyOverrides(t *testing.T) {
 	e.m2470ApplyOverrides(detects, overrides)
 
 	assert.Equal(t, 2, len(detects))
+	assert.NotZero(t, detects["1"].Overrides[0].CreatedAt)
+	assert.NotZero(t, detects["1"].Overrides[0].UpdatedAt)
+
+	then := detects["1"].Overrides[0].CreatedAt
 	assert.Equal(t, detects["1"].Overrides, []*model.Override{
 		{
 			Type:      model.OverrideTypeSuppress,
 			IsEnabled: true,
+			CreatedAt: then,
+			UpdatedAt: then,
 			OverrideParameters: model.OverrideParameters{
 				GenID: util.Ptr(1),
 				Track: util.Ptr("by_src"),

@@ -2,8 +2,10 @@ package suricata
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -234,6 +236,10 @@ func (e *SuricataEngine) m2470ToggleEnabled(detects map[string]*model.Detection,
 func (e *SuricataEngine) m2470LoadOverrides() (overrides map[string][]*model.Override, err error) {
 	raw, err := e.ReadFile(sidsYaml)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+
 		return nil, err
 	}
 
@@ -248,11 +254,14 @@ func (e *SuricataEngine) m2470LoadOverrides() (overrides map[string][]*model.Ove
 }
 
 func (e *SuricataEngine) m2470ApplyOverrides(detects map[string]*model.Detection, overrides map[string][]*model.Override) {
+	now := time.Now()
 	for pid, overrides := range overrides {
 		d, ok := detects[pid]
 		if ok {
 			for _, o := range overrides {
 				o.IsEnabled = true
+				o.CreatedAt = now
+				o.UpdatedAt = now
 			}
 
 			d.Overrides = append(d.Overrides, overrides...)
