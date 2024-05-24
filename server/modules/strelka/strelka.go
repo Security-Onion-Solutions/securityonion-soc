@@ -524,29 +524,31 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 						det.Overrides = comRule.Overrides
 						det.CreateTime = comRule.CreateTime
 
-						log.WithFields(log.Fields{
-							"rule.uuid": det.PublicID,
-							"rule.name": det.Title,
-						}).Info("Updating Yara detection")
+						if comRule.Content != det.Content || comRule.Ruleset != det.Ruleset || len(det.Overrides) != 0 {
+							log.WithFields(log.Fields{
+								"rule.uuid": det.PublicID,
+								"rule.name": det.Title,
+							}).Info("Updating Yara detection")
 
-						_, err = e.srv.Detectionstore.UpdateDetection(e.srv.Context, det)
-						if err != nil && err.Error() == "Object not found" {
-							log.WithField("publicId", det.PublicID).Error("unable to read back successful write")
+							_, err = e.srv.Detectionstore.UpdateDetection(e.srv.Context, det)
+							if err != nil && err.Error() == "Object not found" {
+								log.WithField("publicId", det.PublicID).Error("unable to read back successful write")
 
-							writeNoRead = util.Ptr(det.PublicID)
-							failSync = true
+								writeNoRead = util.Ptr(det.PublicID)
+								failSync = true
 
-							return err
-						}
+								return err
+							}
 
-						eterr := et.AddError(err)
-						if eterr != nil {
-							return eterr
-						}
+							eterr := et.AddError(err)
+							if eterr != nil {
+								return eterr
+							}
 
-						if err != nil {
-							log.WithError(err).WithField("publicId", det.PublicID).Error("Failed to update detection")
-							continue
+							if err != nil {
+								log.WithError(err).WithField("publicId", det.PublicID).Error("Failed to update detection")
+								continue
+							}
 						}
 
 						delete(toDelete, det.PublicID)
