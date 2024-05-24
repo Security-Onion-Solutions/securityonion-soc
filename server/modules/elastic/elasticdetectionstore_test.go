@@ -959,6 +959,11 @@ func TestGetDetectionById(t *testing.T) {
 
 	assert.Equal(t, 1, len(fakeStore.InputSearchCriterias))
 	assert.Contains(t, fakeStore.InputSearchCriterias[0].RawQuery, `so_detection.publicId:"123456"`)
+
+	// large (up to 128) public Ids should not cause an error
+	bigId := strings.Repeat("1234567890", 12) // length = 120
+	_, err = store.GetDetectionByPublicId(ctx, bigId)
+	assert.NoError(t, err)
 }
 
 func TestUpdateDetectionFieldValid(t *testing.T) {
