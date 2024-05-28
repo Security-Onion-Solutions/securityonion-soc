@@ -445,7 +445,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			}
 		}
 
-		communityDetections, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, util.Ptr(model.EngineNameStrelka), nil, util.Ptr(true))
+		communityDetections, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, model.WithEngine(model.EngineNameStrelka), model.WithCommunity(true))
 		if err != nil {
 			log.WithError(err).Error("Failed to get all community SIDs")
 
@@ -902,7 +902,7 @@ func buildImportChecker(pkg string) *regexp.Regexp {
 }
 
 func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]string, err error) {
-	results, err := e.srv.Detectionstore.GetAllDetections(ctx, util.Ptr(model.EngineNameStrelka), util.Ptr(true), nil)
+	results, err := e.srv.Detectionstore.GetAllDetections(ctx, model.WithEngine(model.EngineNameStrelka), model.WithEnabled(true))
 	if err != nil {
 		return nil, err
 	}
@@ -1064,7 +1064,7 @@ func (e *StrelkaEngine) IntegrityCheck(canInterrupt bool) error {
 		return detections.ErrIntCheckerStopped
 	}
 
-	ret, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, util.Ptr(model.EngineNameStrelka), util.Ptr(true), nil)
+	ret, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, model.WithEngine(model.EngineNameStrelka), model.WithEnabled(true))
 	if err != nil {
 		logger.WithError(err).Error("unable to query for enabled detections")
 		return detections.ErrIntCheckFailed

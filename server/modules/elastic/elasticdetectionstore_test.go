@@ -15,6 +15,7 @@ import (
 	modmock "github.com/security-onion-solutions/securityonion-soc/server/modules/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/tidwall/gjson"
 )
@@ -1091,12 +1092,12 @@ func TestGetAllCommunitySIDs(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
-	sids, err := store.GetAllDetections(ctx, nil, nil, nil)
+	sids, err := store.GetAllDetections(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(sids))
 	assert.NotNil(t, sids["ABC123"])
 
-	sids, err = store.GetAllDetections(ctx, util.Ptr(model.EngineName("suricata")), nil, nil)
+	sids, err = store.GetAllDetections(ctx, model.WithEngine(model.EngineNameSuricata))
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(sids))
 	assert.NotNil(t, sids["ABC123"])

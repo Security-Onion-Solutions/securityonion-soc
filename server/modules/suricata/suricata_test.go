@@ -18,6 +18,7 @@ import (
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -777,7 +778,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 				},
 			},
 			InitMock: func(detStore *servermock.MockDetectionstore) {
-				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
 				detStore.EXPECT().CreateDetection(gomock.Any(), gomock.Any()).Return(nil, nil)
 			},
 			ExpectedSettings: map[string]string{
@@ -800,7 +801,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 			},
 			ChangedByUser: true,
 			InitMock: func(detStore *servermock.MockDetectionstore) {
-				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
 				detStore.EXPECT().CreateDetection(gomock.Any(), gomock.Any()).Return(nil, nil)
 			},
 			ExpectedSettings: map[string]string{
