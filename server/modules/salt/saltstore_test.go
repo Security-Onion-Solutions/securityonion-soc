@@ -546,6 +546,16 @@ func TestUpdateSetting_UpdateFile(tester *testing.T) {
 	updated_setting := findSetting(settings, "myapp.foo__txt", "")
 	assert.Equal(tester, "anything", updated_setting.Default)
 	assert.Equal(tester, "something", updated_setting.Value)
+
+	// Delete setting
+	err = salt.UpdateSetting(ctx(), setting, true)
+	assert.NoError(tester, err)
+
+	settings, get_err = salt.GetSettings(ctx())
+	assert.NoError(tester, get_err)
+	updated_setting = findSetting(settings, "myapp.foo__txt", "")
+	assert.Equal(tester, "anything", updated_setting.Default)
+	assert.Equal(tester, "anything", updated_setting.Value)
 }
 
 func TestUpdateSetting_UpdateAdvancedFailToParse(tester *testing.T) {
@@ -1053,12 +1063,14 @@ func TestUpdateSettingWithAnnotation(tester *testing.T) {
 	annotations["file"] = true
 	annotations["advanced"] = true
 	annotations["readonly"] = true
+	annotations["readonlyUi"] = true
 	annotations["description"] = "My Desc"
 	annotations["title"] = "My Title"
 	annotations["regex"] = "My Regex"
 	annotations["regexFailureMessage"] = "My Failure Message"
 	annotations["helpLink"] = "My help link"
 	annotations["syntax"] = "yaml"
+	annotations["duplicates"] = true
 
 	assert.False(tester, setting.Multiline)
 	salt.updateSettingWithAnnotation(setting, annotations)
@@ -1069,6 +1081,7 @@ func TestUpdateSettingWithAnnotation(tester *testing.T) {
 	assert.True(tester, setting.File)
 	assert.True(tester, setting.Advanced)
 	assert.True(tester, setting.Readonly)
+	assert.True(tester, setting.ReadonlyUi)
 	assert.Equal(tester, "My Desc", setting.Description)
 	assert.Equal(tester, "My Title", setting.Title)
 	assert.Equal(tester, "My Regex", setting.Regex)
@@ -1078,6 +1091,7 @@ func TestUpdateSettingWithAnnotation(tester *testing.T) {
 	assert.Equal(tester, "some default", setting.Default)
 	assert.Equal(tester, "some local", setting.Value)
 	assert.Equal(tester, "yaml", setting.Syntax)
+	assert.True(tester, setting.Duplicates)
 }
 
 func TestManageUser_AddUser(tester *testing.T) {

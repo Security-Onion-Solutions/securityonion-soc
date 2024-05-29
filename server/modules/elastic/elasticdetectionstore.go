@@ -16,13 +16,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/apex/log"
-	"github.com/elastic/go-elasticsearch/v8"
-	"github.com/elastic/go-elasticsearch/v8/esapi"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+
+	"github.com/apex/log"
+	"github.com/elastic/go-elasticsearch/v8"
+	"github.com/elastic/go-elasticsearch/v8/esapi"
 	"github.com/tidwall/gjson"
 )
 
@@ -57,6 +58,17 @@ func (store *ElasticDetectionstore) validateId(id string, label string) error {
 	var err error
 
 	isValidId := regexp.MustCompile(`^[A-Za-z0-9-_]{5,50}$`).MatchString
+	if !isValidId(id) {
+		err = fmt.Errorf("invalid ID for %s", label)
+	}
+
+	return err
+}
+
+func (store *ElasticDetectionstore) validatePublicId(id string, label string) error {
+	var err error
+
+	isValidId := regexp.MustCompile(`^[A-Za-z0-9-_]{5,128}$`).MatchString
 	if !isValidId(id) {
 		err = fmt.Errorf("invalid ID for %s", label)
 	}
@@ -105,7 +117,7 @@ func (store *ElasticDetectionstore) validateDetection(detect *model.Detection) e
 	}
 
 	if err == nil && detect.PublicID != "" {
-		err = store.validateId(detect.PublicID, "publicId")
+		err = store.validatePublicId(detect.PublicID, "publicId")
 	}
 
 	if err == nil && detect.Title != "" {
@@ -117,7 +129,7 @@ func (store *ElasticDetectionstore) validateDetection(detect *model.Detection) e
 	}
 
 	if err == nil && detect.Author != "" {
-		err = store.validateString(detect.Author, SHORT_STRING_MAX, "author")
+		err = store.validateString(detect.Author, MAX_AUTHOR_LENGTH, "author")
 	}
 
 	if err == nil && detect.Description != "" {
@@ -128,8 +140,8 @@ func (store *ElasticDetectionstore) validateDetection(detect *model.Detection) e
 		err = store.validateString(detect.Content, LONG_STRING_MAX, "content")
 	}
 
-	if err == nil && detect.IsCommunity && detect.Ruleset != nil {
-		err = store.validateStringRequired(*detect.Ruleset, 0, SHORT_STRING_MAX, "ruleset")
+	if err == nil && detect.Ruleset != "" {
+		err = store.validateStringRequired(detect.Ruleset, 0, SHORT_STRING_MAX, "ruleset")
 	}
 
 	if err == nil && len(detect.Tags) != 0 {
@@ -166,7 +178,7 @@ func (store *ElasticDetectionstore) validateDetection(detect *model.Detection) e
 }
 
 func (store *ElasticDetectionstore) save(ctx context.Context, obj interface{}, kind string, id string) (*model.EventIndexResults, error) {
-	if err := store.server.CheckAuthorized(ctx, "write", "detection"); err != nil {
+	if err := store.server.CheckAuthorized(ctx, "write", "detections"); err != nil {
 		return nil, err
 	}
 
@@ -186,8 +198,8 @@ func (store *ElasticDetectionstore) save(ctx context.Context, obj interface{}, k
 		_, err = store.Index(ctx, store.auditIndex, document, "")
 		if err != nil {
 			log.WithFields(log.Fields{
-				"documentId": results.DocumentId,
-				"kind":       kind,
+				"documentId":   results.DocumentId,
+				"documentKind": kind,
 			}).WithError(err).Error("Object indexed successfully however audit record failed to index")
 		}
 	}
@@ -197,11 +209,6 @@ func (store *ElasticDetectionstore) save(ctx context.Context, obj interface{}, k
 
 func (store *ElasticDetectionstore) Index(ctx context.Context, index string, document map[string]interface{}, id string) (*model.EventIndexResults, error) {
 	results := model.NewEventIndexResults()
-
-	err := store.server.CheckAuthorized(ctx, "write", "detection")
-	if err != nil {
-		return results, err
-	}
 
 	request, err := convertToElasticIndexRequest(document)
 	if err == nil {
@@ -222,64 +229,54 @@ func (store *ElasticDetectionstore) Index(ctx context.Context, index string, doc
 	return results, err
 }
 
-func (store *ElasticDetectionstore) Delete(ctx context.Context, index string, id string) error {
-	results := model.NewEventIndexResults()
-
-	err := store.server.CheckAuthorized(ctx, "write", "detection")
+func (store *ElasticDetectionstore) deleteDocument(ctx context.Context, index string, obj interface{}, kind string, id string) (string, error) {
+	err := store.server.CheckAuthorized(ctx, "write", "detections")
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	var response string
-	log.Debug("Sending delete request to primary Elasticsearch client")
-	response, err = store.deleteDocument(ctx, store.disableCrossClusterIndex(index), id)
-	if err == nil {
-		err = convertFromElasticIndexResults(response, results)
-		if err != nil {
-			log.WithError(err).Error("Encountered error while converting document index results")
-		}
-	} else {
-		log.WithError(err).Error("Encountered error while deleting document from elasticsearch")
-	}
-
-	return err
-}
-
-func (store *ElasticDetectionstore) deleteDocument(ctx context.Context, index string, id string) (string, error) {
 	log.WithFields(log.Fields{
-		"index":     index,
-		"id":        id,
-		"requestId": ctx.Value(web.ContextKeyRequestId),
+		"deleteIndex": index,
+		"documentId":  id,
+		"requestId":   ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Deleting document from Elasticsearch")
 
 	res, err := store.esClient.Delete(transformIndex(index), id, store.esClient.Delete.WithContext(ctx))
 
 	if err != nil {
 		log.WithFields(log.Fields{
-			"index":     index,
-			"id":        id,
-			"requestId": ctx.Value(web.ContextKeyRequestId),
+			"deleteIndex": index,
+			"documentId":  id,
+			"requestId":   ctx.Value(web.ContextKeyRequestId),
 		}).WithError(err).Error("Unable to delete document from Elasticsearch")
 		return "", err
 	}
 	defer res.Body.Close()
+
+	document := convertObjectToDocumentMap(kind, obj, store.schemaPrefix)
+	document[store.schemaPrefix+AUDIT_DOC_ID] = id
+	document[store.schemaPrefix+"kind"] = kind
+	document[store.schemaPrefix+"operation"] = "delete"
+	err = store.audit(ctx, document, id)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"documentId":    id,
+			"detectionKind": kind,
+		}).WithError(err).Error("Object deleted successfully however audit record failed to index")
+	}
+
 	json, err := readJsonFromResponse(res)
 
 	log.WithFields(log.Fields{
-		"index":     index,
-		"id":        id,
-		"response":  store.truncate(json),
-		"requestId": ctx.Value(web.ContextKeyRequestId),
+		"deleteIndex": index,
+		"documentId":  id,
+		"response":    store.truncate(json),
+		"requestId":   ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Delete document finished")
 	return json, err
 }
 
 func (store *ElasticDetectionstore) get(ctx context.Context, id string, kind string) (interface{}, error) {
-	err := store.server.CheckAuthorized(ctx, "read", "detection")
-	if err != nil {
-		return nil, err
-	}
-
 	query := fmt.Sprintf(`_index:"%s" AND %skind:"%s" AND _id:"%s"`, store.index, store.schemaPrefix, kind, id)
 
 	objects, err := store.Query(ctx, query, 1)
@@ -295,11 +292,6 @@ func (store *ElasticDetectionstore) get(ctx context.Context, id string, kind str
 }
 
 func (store *ElasticDetectionstore) getAll(ctx context.Context, query string, max int) ([]interface{}, error) {
-	err := store.server.CheckAuthorized(ctx, "read", "detection")
-	if err != nil {
-		return nil, err
-	}
-
 	criteria := model.NewEventSearchCriteria()
 	format := "2006-01-02 3:04:05 PM"
 
@@ -309,7 +301,7 @@ func (store *ElasticDetectionstore) getAll(ctx context.Context, query string, ma
 	endTime := now.Format(format)
 	zone := now.Location().String()
 
-	err = criteria.Populate(query,
+	err := criteria.Populate(query,
 		zeroTimeStr+" - "+endTime, // timeframe range
 		format,                    // timeframe format
 		zone,                      // timezone
@@ -329,7 +321,7 @@ func (store *ElasticDetectionstore) getAll(ctx context.Context, query string, ma
 	for _, event := range results.Events {
 		obj, err := convertElasticEventToObject(event, store.schemaPrefix)
 		if err != nil {
-			log.WithField("event", event).WithError(err).Error("Unable to convert detection object")
+			log.WithField("returnedEvent", event).WithError(err).Error("Unable to convert detection object")
 			continue
 		}
 
@@ -342,7 +334,7 @@ func (store *ElasticDetectionstore) getAll(ctx context.Context, query string, ma
 func (store *ElasticDetectionstore) Query(ctx context.Context, query string, max int) ([]interface{}, error) {
 	var objects []interface{}
 
-	err := store.server.CheckAuthorized(ctx, "read", "detection")
+	err := store.server.CheckAuthorized(ctx, "read", "detections")
 	if err != nil {
 		return nil, err
 	}
@@ -405,7 +397,7 @@ func (store *ElasticDetectionstore) Query(ctx context.Context, query string, max
 			if err == nil {
 				objects = append(objects, obj)
 			} else {
-				log.WithField("event", event).WithError(err).Error("Unable to convert case object")
+				log.WithField("returnedEvent", event).WithError(err).Error("Unable to convert case object")
 			}
 		}
 
@@ -420,7 +412,7 @@ func (store *ElasticDetectionstore) Query(ctx context.Context, query string, max
 }
 
 func (store *ElasticDetectionstore) DetectionSearch(ctx context.Context, criteria *model.EventSearchCriteria) (*model.EventSearchResults, error) {
-	err := store.server.CheckAuthorized(ctx, "read", "detection")
+	err := store.server.CheckAuthorized(ctx, "read", "detections")
 	if err != nil {
 		return nil, err
 	}
@@ -500,7 +492,7 @@ func (store *ElasticDetectionstore) GetDetection(ctx context.Context, detectId s
 }
 
 func (store *ElasticDetectionstore) GetDetectionByPublicId(ctx context.Context, publicId string) (detect *model.Detection, err error) {
-	err = store.validateId(publicId, "publicId")
+	err = store.validatePublicId(publicId, "publicId")
 	if err != nil {
 		return nil, err
 	}
@@ -524,60 +516,7 @@ func (store *ElasticDetectionstore) UpdateDetection(ctx context.Context, detect 
 		return nil, err
 	}
 
-	var old *model.Detection
-
-	old, err = store.GetDetection(ctx, detect.Id)
-	if err != nil {
-		return nil, err
-	}
-
-	now := time.Now()
-
-	for _, over := range detect.Overrides {
-		if over.CreatedAt.IsZero() {
-			over.CreatedAt = now
-		}
-
-		update := true
-		for i, oldOver := range old.Overrides {
-			if *over == *oldOver {
-				// Did the old detection contain an override with the EXACT same parameters?
-				// If so, we don't need to update the UpdatedAt field.
-				update = false
-
-				// A match was found, the old override can be removed from the list so it
-				// isn't compared to other overrides. i.e. removing it means it can only
-				// match one override in the new list.
-				old.Overrides = append(old.Overrides[:i], old.Overrides[i+1:]...)
-
-				break
-			}
-		}
-
-		if over.UpdatedAt.IsZero() || update {
-			over.UpdatedAt = now
-		}
-	}
-
-	if old.IsCommunity {
-		// the only editable fields for community rules are IsEnabled, IsReporting, Note, and Overrides
-		old.IsEnabled = detect.IsEnabled
-		old.IsReporting = detect.IsReporting
-		old.Overrides = detect.Overrides
-
-		detect = old
-
-		log.Infof("existing detection %s is a community rule, only updating IsEnabled, IsReporting, Note, and Overrides", detect.Id)
-	} else if detect.IsCommunity {
-		return nil, errors.New("cannot update an existing non-community detection to make it a community detection")
-	}
-
-	var results *model.EventIndexResults
-
-	// Preserve read-only fields
-	detect.CreateTime = old.CreateTime
-
-	results, err = store.save(ctx, detect, "detection", store.prepareForSave(ctx, &detect.Auditable))
+	results, err := store.save(ctx, detect, "detection", store.prepareForSave(ctx, &detect.Auditable))
 	if err != nil {
 		return nil, err
 	}
@@ -587,7 +526,7 @@ func (store *ElasticDetectionstore) UpdateDetection(ctx context.Context, detect 
 }
 
 func (store *ElasticDetectionstore) UpdateDetectionField(ctx context.Context, id string, fields map[string]interface{}) (*model.Detection, error) {
-	err := store.server.CheckAuthorized(ctx, "write", "detection")
+	err := store.server.CheckAuthorized(ctx, "write", "detections")
 	if err != nil {
 		return nil, err
 	}
@@ -651,8 +590,8 @@ func (store *ElasticDetectionstore) UpdateDetectionField(ctx context.Context, id
 	err = store.audit(ctx, document, id)
 	if err != nil {
 		log.WithFields(log.Fields{
-			"documentId": id,
-			"kind":       "detection",
+			"documentId":   id,
+			"documentKind": "detection",
 		}).WithError(err).Error("Detection updated successfully however audit record failed to index")
 	}
 
@@ -665,15 +604,34 @@ func (store *ElasticDetectionstore) DeleteDetection(ctx context.Context, id stri
 		return nil, err
 	}
 
-	err = store.Delete(ctx, store.index, id)
+	_, err = store.deleteDocument(ctx, store.disableCrossClusterIndex(store.index), detect, "detection", id)
+
+	if err == nil {
+		log.WithFields(log.Fields{
+			"ruleId":       id,
+			"rulePublicId": detect.PublicID,
+			"ruleName":     detect.Title,
+			"requestId":    ctx.Value(web.ContextKeyRequestId),
+			"userId":       ctx.Value(web.ContextKeyRequestorId).(string),
+		}).Info("Detection deleted")
+	}
 
 	return detect, err
 }
 
-func (store *ElasticDetectionstore) GetAllCommunitySIDs(ctx context.Context, engine *model.EngineName) (map[string]*model.Detection, error) {
+func (store *ElasticDetectionstore) GetAllDetections(ctx context.Context, engine *model.EngineName, isEnabled *bool, isCommunity *bool) (map[string]*model.Detection, error) {
 	query := fmt.Sprintf(`_index:"%s" AND %skind:"%s"`, store.index, store.schemaPrefix, "detection")
+
 	if engine != nil {
 		query += fmt.Sprintf(` AND %sdetection.engine:"%s"`, store.schemaPrefix, *engine)
+	}
+
+	if isEnabled != nil {
+		query += fmt.Sprintf(` AND %sdetection.isEnabled:%t`, store.schemaPrefix, *isEnabled)
+	}
+
+	if isCommunity != nil {
+		query += fmt.Sprintf(` AND %sdetection.isCommunity:%t`, store.schemaPrefix, *isCommunity)
 	}
 
 	all, err := store.Query(ctx, query, -1)
@@ -711,11 +669,16 @@ func (store *ElasticDetectionstore) audit(ctx context.Context, document map[stri
 }
 
 func (store *ElasticDetectionstore) indexDocument(ctx context.Context, index string, document string, id string) (string, error) {
+	err := store.server.CheckAuthorized(ctx, "write", "detections")
+	if err != nil {
+		return "", err
+	}
+
 	log.WithFields(log.Fields{
-		"index":     index,
-		"id":        id,
-		"document":  store.truncate(document),
-		"requestId": ctx.Value(web.ContextKeyRequestId),
+		"documentIndex": index,
+		"documentId":    id,
+		"document":      store.truncate(document),
+		"requestId":     ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Adding document to Elasticsearch")
 
 	res, err := store.esClient.Index(index,
@@ -875,11 +838,11 @@ func (store *ElasticDetectionstore) UpdateComment(ctx context.Context, comment *
 }
 
 func (store *ElasticDetectionstore) DeleteComment(ctx context.Context, id string) error {
-	_, err := store.GetComment(ctx, id)
+	dc, err := store.GetComment(ctx, id)
 	if err != nil {
 		return err
 	}
 
-	_, err = store.deleteDocument(ctx, store.index, id)
+	_, err = store.deleteDocument(ctx, store.disableCrossClusterIndex(store.index), dc, "detectioncomment", id)
 	return err
 }

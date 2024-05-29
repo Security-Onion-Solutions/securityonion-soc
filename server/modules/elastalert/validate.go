@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/security-onion-solutions/securityonion-soc/model"
 	"gopkg.in/yaml.v3"
 )
 
@@ -46,32 +47,67 @@ const (
 type SigmaRule struct {
 	Title          string                 `yaml:"title"`
 	ID             *string                `yaml:"id"`
+	Related        []*RelatedRule         `yaml:"related,omitempty"`
+	Status         *SigmaStatus           `yaml:"status"`
+	Description    *string                `yaml:"description,omitempty"`
+	References     []string               `yaml:"references,omitempty"`
+	Author         *string                `yaml:"author,omitempty"`
+	Date           *string                `yaml:"date"`
+	Modified       *string                `yaml:"modified,omitempty"`
+	Tags           []string               `yaml:"tags,omitempty"`
 	LogSource      LogSource              `yaml:"logsource"`
 	Detection      SigmaDetection         `yaml:"detection"`
-	Status         *SigmaStatus           `yaml:"status"`
-	Description    *string                `yaml:"description"`
-	License        *string                `yaml:"license"`
-	Reference      []string               `yaml:"reference"`
-	Related        []*RelatedRule         `yaml:"related"`
-	Author         *string                `yaml:"author"`
-	Date           *string                `yaml:"date"`
-	Modified       *string                `yaml:"modified"`
-	Fields         []string               `yaml:"fields"`
-	FalsePositives OneOrMore[string]      `yaml:"falsepositives"`
+	Fields         []string               `yaml:"fields,omitempty"`
+	FalsePositives OneOrMore[string]      `yaml:"falsepositives,omitempty"`
 	Level          *SigmaLevel            `yaml:"level"`
+	License        *string                `yaml:"license,omitempty"`
 	Rest           map[string]interface{} `yaml:",inline"`
 }
 
 type LogSource struct {
-	Category   *string `yaml:"category"`
-	Product    *string `yaml:"product"`
-	Service    *string `yaml:"service"`
-	Definition *string `yaml:"definition"`
+	Category   *string `yaml:"category,omitempty"`
+	Product    *string `yaml:"product,omitempty"`
+	Service    *string `yaml:"service,omitempty"`
+	Definition *string `yaml:"definition,omitempty"`
 }
 
 type SigmaDetection struct {
-	Condition OneOrMore[string]      `yaml:"condition"`
 	Rest      map[string]interface{} `yaml:",inline"`
+	Condition OneOrMore[string]      `yaml:"condition"`
+}
+
+// Custom marshaller for MarshalYAML to ensure that Condition is the ordered correctly
+func (s SigmaDetection) MarshalYAML() (interface{}, error) {
+	node := yaml.Node{
+		Kind:    yaml.MappingNode,
+		Content: []*yaml.Node{},
+	}
+
+	// Add other fields from Rest
+	for key, value := range s.Rest {
+		keyNode := yaml.Node{
+			Kind:  yaml.ScalarNode,
+			Value: key,
+		}
+		valueNode := yaml.Node{}
+		if err := valueNode.Encode(value); err != nil {
+			return nil, err
+		}
+		node.Content = append(node.Content, &keyNode, &valueNode)
+	}
+
+	// Add Condition field last
+	conditionKeyNode := yaml.Node{
+		Kind:  yaml.ScalarNode,
+		Value: "condition",
+	}
+	conditionValueNode := yaml.Node{}
+	if err := conditionValueNode.Encode(s.Condition); err != nil {
+		return nil, err
+	}
+	node.Content = append(node.Content, &conditionKeyNode, &conditionValueNode)
+
+	return &node, nil
 }
 
 type RelatedRule struct {
@@ -116,4 +152,62 @@ func (e *SigmaRule) Validate() error {
 	}
 
 	return nil
+}
+
+func (r *SigmaRule) ToDetection(ruleset string, license string, isCommunity bool) *model.Detection {
+	id := r.Title
+
+	if r.ID != nil {
+		id = *r.ID
+	}
+
+	sev := model.SeverityUnknown
+
+	if r.Level != nil {
+		switch strings.ToLower(string(*r.Level)) {
+		case "informational":
+			sev = model.SeverityInformational
+		case "low":
+			sev = model.SeverityLow
+		case "medium":
+			sev = model.SeverityMedium
+		case "high":
+			sev = model.SeverityHigh
+		case "critical":
+			sev = model.SeverityCritical
+		}
+	}
+
+	content, _ := yaml.Marshal(r)
+
+	det := &model.Detection{
+		Author:      *r.Author,
+		Engine:      model.EngineNameElastAlert,
+		PublicID:    id,
+		Title:       r.Title,
+		Severity:    sev,
+		Content:     string(content),
+		IsCommunity: isCommunity,
+		Language:    model.SigLangSigma,
+		Ruleset:     ruleset,
+		License:     license,
+	}
+
+	if r.Description != nil {
+		det.Description = *r.Description
+	}
+
+	if r.LogSource.Category != nil && *r.LogSource.Category != "" {
+		det.Category = *r.LogSource.Category
+	}
+
+	if r.LogSource.Product != nil && *r.LogSource.Product != "" {
+		det.Product = *r.LogSource.Product
+	}
+
+	if r.LogSource.Service != nil && *r.LogSource.Service != "" {
+		det.Service = *r.LogSource.Service
+	}
+
+	return det
 }

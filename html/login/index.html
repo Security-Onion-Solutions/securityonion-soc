@@ -19,38 +19,39 @@
     <link rel="stylesheet" href="css/external/vuetify-v2.7.1.min.css">
     <link rel="stylesheet" href="css/external/all-6.5.1.min.css">
     <link rel="stylesheet" href="css/app.css?v=VERSION_PLACEHOLDER">
+    <script src="js/analytics.js?v=VERSION_PLACEHOLDER"></script>
     <title>Security Onion</title>
   </head>
   <body style="background-color: #242424;">
-    <v-app id="app" style="display:none">
+    <v-app id="app" style="display:none" data-aid="login_app">
       <v-app-bar clipped-left app >
-        <router-link id="title" to="/">
+        <router-link id="title" to="/" data-aid="login_home">
           <img class="pt-1" :title="i18n.product" :alt="i18n.product" height="45" src="images/so-logo.svg"></v-img>
         </router-link>
       </v-app-bar>
       <v-main>
         <v-progress-linear v-if="loading" :active="loading" indeterminate></v-progress-linear>
-        <v-alert dismissible type="error" icon="fa-exclamation-triangle" v-model="error" transition="scale-transition" v-text="errorMessage"></v-alert>
-        <v-alert dismissible type="warning" icon="fa-exclamation" v-model="warning" transition="scale-transition" v-text="warningMessage"></v-alert>
-        <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition">{{ infoMessage }}</v-alert>
+        <v-alert dismissible type="error" icon="fa-exclamation-triangle" v-model="error" transition="scale-transition" v-text="errorMessage" data-aid="login_banner_error"></v-alert>
+        <v-alert dismissible type="warning" icon="fa-exclamation" v-model="warning" transition="scale-transition" v-text="warningMessage" data-aid="login_banner_warning"></v-alert>
+        <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" data-aid="login_banner_info">{{ infoMessage }}</v-alert>
         <router-view></router-view>
       </v-main>
       <v-footer app inset>
         <v-spacer></v-spacer>
         <span class="center text-no-wrap">
-          &copy; {{ new Date().getFullYear() }} <a class="footer" target="sos" href="https://securityonionsolutions.com/">Security Onion Solutions, LLC</a>
+          &copy; {{ new Date().getFullYear() }} <a class="footer" target="sos" href="https://securityonionsolutions.com/" data-aid="login_nav_sos">Security Onion Solutions, LLC</a>
         </span>
         <v-spacer></v-spacer>
       </v-footer>
     </v-app>
 
-    <script type="text/x-template" id="page-login">
+    <script type="text/x-template" id="page-login" data-aid="login_screen">
       <v-card class="mt-12 mx-auto" max-width="600">
         <v-card-title class="lighten-4 py-4 title" v-text="i18n.loginTitle"></v-card-title>
 
         <v-container v-if="showLoginForm" grid-list-sm class="pa-4">
           <v-row>
-            <v-col class="mx-auto px-12">
+            <v-col class="mx-auto px-12" data-aid="login_banner">
               <div id="banner" class="markdown-body" :inner-html.prop="banner | formatMarkdown"></div>
             </v-col>
           </v-row>
@@ -60,7 +61,7 @@
                 <v-form v-for="provider in oidc" method="post" :action="authLoginUrl">
                   <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
                   <v-text-field name="provider" :value="provider" class="d-none"></v-text-field>
-                  <v-btn :id="'oidc_submit_' + provider" type="submit">
+                  <v-btn :id="'oidc_submit_' + provider" type="submit" :data-aid="'login_oidc_' + provider">
                     <v-icon left v-if="provider.toLowerCase() == 'microsoft'">fa-brands fa-microsoft</v-icon>
                     <v-icon left  v-else-if="provider.toLowerCase() == 'google'">fa-brands fa-google</v-icon>
                     <v-icon left  v-else-if="provider.toLowerCase() == 'github'">fa-brands fa-github</v-icon>
@@ -73,14 +74,14 @@
               <v-form v-if="!webauthnForm.continue && passwordEnabled" id="loginForm" v-model="form.valid" method="post" :action="authLoginUrl">
                 <v-card-subtitle v-text="i18n.passwordLoginMethod"></v-card-subtitle>
                 <v-card-text>
-                  <v-text-field id="password_identifier" name="identifier" v-model="form.email" :placeholder="i18n.email" :hint="i18n.emailHelp" autofocus="true" :rules="[rules.required]"></v-text-field>
-                  <v-text-field name="password" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required]"></v-text-field>
+                  <v-text-field id="password_identifier" name="identifier" v-model="form.email" :placeholder="i18n.email" :hint="i18n.emailHelp" autofocus="true" :rules="[rules.required]" data-aid="login_email_input"></v-text-field>
+                  <v-text-field name="password" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required]" data-aid="login_password_input"></v-text-field>
                   <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
                   <v-text-field name="method" value="password" class="d-none"></v-text-field>
                 </v-card-text>
                 <v-card-actions>
                   <v-spacer></v-spacer>
-                  <v-btn id="password_submit" type="submit" :disabled="!form.valid" text color="primary" v-text="i18n.login"></v-btn>
+                  <v-btn id="password_submit" type="submit" :disabled="!form.valid" text color="primary" v-text="i18n.login" data-aid="login_password_submit"></v-btn>
                 </v-card-actions>
               </v-form>
 
@@ -88,14 +89,14 @@
                 <v-card-subtitle v-text="i18n.totp"></v-card-subtitle>
                 <v-card-text>
                   <div class="mb-4">{{ i18n.totpCodeHelp }}</div>
-                  <v-otp-input id="totp" autocomplete="off" v-model="form.totpCode" :length="totpCodeLength" @finish="submitTotp"></v-otp-input>
+                  <v-otp-input id="totp" autocomplete="off" v-model="form.totpCode" :length="totpCodeLength" @finish="submitTotp" data-aid="login_totp_input"></v-otp-input>
                   <v-text-field name="totp_code" id="totp_code" v-model="form.totpCode" class="d-none"></v-text-field>
                   <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
                   <v-text-field name="method" value="totp" class="d-none"></v-text-field>
                 </v-card-text>
                 <v-card-actions>
                   <v-spacer></v-spacer>
-                  <v-btn id="password_submit" type="submit" :disabled="!form.valid" text color="primary" v-text="i18n.login"></v-btn>
+                  <v-btn id="password_submit" type="submit" :disabled="!form.valid" text color="primary" v-text="i18n.login" data-aid="login_totp_submit"></v-btn>
                 </v-card-actions>
               </v-form>
 
@@ -108,7 +109,7 @@
                 </v-card-text>
                 <v-card-actions>
                   <v-spacer></v-spacer>
-                  <v-btn id="webauthn_submit" type="submit" :disabled="!webauthnForm.valid" text color="primary" v-text="i18n.login"></v-btn>
+                  <v-btn id="webauthn_submit" type="submit" :disabled="!webauthnForm.valid" text color="primary" v-text="i18n.login" data-aid="login_webauthn_submit"></v-btn>
                 </v-card-actions>
               </v-form>
 
@@ -122,7 +123,7 @@
                 </v-card-text>
                 <v-card-actions>
                   <v-spacer></v-spacer>
-                  <v-btn type="button" name="webauthn_login_trigger" text color="primary" v-text="i18n.login" @click="runWebauthn()"></v-btn>
+                  <v-btn type="button" name="webauthn_login_trigger" text color="primary" v-text="i18n.login" @click="runWebauthn()" data-aid="login_webauthn_trigger"></v-btn>
                 </v-card-actions>
               </v-form>
             </v-col>
@@ -135,7 +136,7 @@
               <div id="banner" class="mb-4">{{ i18n.throttledLogin }}</div>
               <div class="text-center">
                 <div v-if="countdown > 0" id="countdown" class="display-1">{{ countdown }}</div>
-                <v-btn v-if="countdown == 0" id="relogin" text color="primary" class="text-lg-center" v-text="i18n.login" @click="this.$root.showLogin()"></v-btn>
+                <v-btn v-if="countdown == 0" id="relogin" text color="primary" class="text-lg-center" v-text="i18n.login" @click="this.$root.showLogin()" data-aid="login_banner_throttled_relogin"></v-btn>
               </div>
             </v-col>
           </v-row>

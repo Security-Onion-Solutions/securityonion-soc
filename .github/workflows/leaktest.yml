@@ -13,3 +13,5 @@ jobs:
 
     - name: Gitleaks
       uses: gitleaks/gitleaks-action@v1.6.0
+      with:
+        config-path: .github/.gitleaks.toml

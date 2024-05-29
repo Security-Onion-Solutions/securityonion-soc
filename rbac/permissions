@@ -12,11 +12,13 @@ cases/read:       case-monitor
 cases/write:      case-admin
 config/read:      config-monitor
 config/write:     config-admin
+detections/read:  detection-monitor
+detections/write: detection-admin
 events/read:      event-monitor
 events/write:     event-admin
 events/ack:       event-admin
-grid/read:				grid-monitor
-grid/write:				grid-admin
+grid/read:        grid-monitor
+grid/write:       grid-admin
 jobs/read:        job-monitor
 jobs/pivot:       job-user
 jobs/write:       job-admin
@@ -29,20 +31,17 @@ roles/write:      user-admin
 users/read:       user-monitor
 users/write:      user-admin
 users/delete:     user-admin
-detection/read:   agent
-detection/write:  agent
-detection/read:   event-monitor
-detection/write:  event-admin
 
 # Define low-level permission set inheritence relationships
 # Syntax      => roleB: roleA
 # Explanation => roleA inherits all of roleB's permissions
 
-case-monitor:     case-admin
-config-monitor:		config-admin
-event-monitor:    event-admin
-grid-monitor:			grid-admin
-job-monitor:      job-admin
-job-user:         job-admin
-node-monitor:     node-admin
-user-monitor:     user-admin
+case-monitor:      case-admin
+config-monitor:    config-admin
+detection-monitor: detection-admin
+event-monitor:     event-admin
+grid-monitor:      grid-admin
+job-monitor:       job-admin
+job-user:          job-admin
+node-monitor:      node-admin
+user-monitor:      user-admin

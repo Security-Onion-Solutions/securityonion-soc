@@ -20,6 +20,12 @@ import (
 	"github.com/apex/log"
 )
 
+type contextKey string
+
+const (
+	ContextKeyChangedByUser contextKey = "changedByUser"
+)
+
 func Middleware(host *Host, isWS bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -193,4 +199,21 @@ func isNil(i interface{}) bool {
 		return reflect.ValueOf(i).IsNil()
 	}
 	return false
+}
+
+func MarkChangedByUser(ctx context.Context, value bool) context.Context {
+	return context.WithValue(ctx, ContextKeyChangedByUser, value)
+}
+
+func IsChangedByUser(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+
+	v := ctx.Value(ContextKeyChangedByUser)
+	if v == nil {
+		return false
+	}
+
+	return v.(bool)
 }

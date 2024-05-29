@@ -41,6 +41,7 @@ const LICENSE_STATUS_UNPROVISIONED = "unprovisioned"
 
 const FEAT_FPS = "fps"
 const FEAT_ODC = "odc"
+const FEAT_NTF = "ntf"
 const FEAT_STG = "stg"
 const FEAT_LKS = "lks"
 const FEAT_TTR = "ttr"
@@ -169,6 +170,7 @@ func CreateAvailableFeatureList() []string {
 	available = append(available, FEAT_ODC)
 	available = append(available, FEAT_STG)
 	available = append(available, FEAT_TTR)
+	available = append(available, FEAT_NTF)
 	return available
 }
 
@@ -249,15 +251,15 @@ func createManager(status string, available []string, licenseKey *LicenseKey, st
 	go startPillarMonitor()
 
 	log.WithFields(log.Fields{
-		"status":     manager.status,
-		"available":  manager.available,
-		"features":   manager.licenseKey.Features,
-		"effective":  manager.licenseKey.Effective,
-		"expiration": manager.licenseKey.Expiration,
-		"users":      manager.licenseKey.Users,
-		"nodes":      manager.licenseKey.Nodes,
-		"socUrl":     manager.licenseKey.SocUrl,
-		"dataUrl":    manager.licenseKey.DataUrl,
+		"licenseStatus":     manager.status,
+		"licenseAvailable":  manager.available,
+		"licenseFeatures":   manager.licenseKey.Features,
+		"licenseEffective":  manager.licenseKey.Effective,
+		"licenseExpiration": manager.licenseKey.Expiration,
+		"licenseUsers":      manager.licenseKey.Users,
+		"licenseNodes":      manager.licenseKey.Nodes,
+		"licenseSocUrl":     manager.licenseKey.SocUrl,
+		"licenseDataUrl":    manager.licenseKey.DataUrl,
 	}).Info("Initialized license manager")
 }
 

@@ -148,6 +148,8 @@ const huntComponent = {
       { text: this.$root.i18n.disable, value: 'disable' },
     ],
     quickActionDetId: null,
+    presets: {},
+    manualSyncTargetEngine: null,
   }},
   created() {
     this.$root.initializeCharts();
@@ -245,10 +247,12 @@ const huntComponent = {
       this.chartLabelMaxLength = params["chartLabelMaxLength"]
       this.chartLabelOtherLimit = params["chartLabelOtherLimit"]
       this.chartLabelFieldSeparator = params["chartLabelFieldSeparator"]
+      this.presets = params["presets"];
+      this.manualSyncTargetEngine = this.getPresets("manualSync")[0];
       if (this.queries != null && this.queries.length > 0) {
         this.query = this.queries[0].query;
       }
-      this.actions = params["actions"];
+      this.actions = params["actions"] || [];
       this.zone = moment.tz.guess();
 
       this.loadLocalSettings();
@@ -436,17 +440,6 @@ const huntComponent = {
         this.autoRefreshEnabled = false;
         this.autoRefreshInterval = 0;
       }
-
-      // Check for special params that force a re-route
-      var reRoute = false;
-      if (this.$route.query.filterValue) {
-        this.filterQuery(this.$route.query.filterField, this.$route.query.filterValue, this.$route.query.filterMode, undefined, this.$route.query.scalar === 'true');
-        reRoute = true;
-      }
-      if (this.$route.query.groupByField) {
-        this.groupQuery(this.$route.query.groupByField, this.$route.query.groupByGroup);
-        reRoute = true;
-      }
       if (Array.isArray(this.filterToggles)) {
         for (const q in this.$route.query) {
           this.filterToggles.forEach(toggle => {
@@ -457,14 +450,24 @@ const huntComponent = {
                 enabled = enabled.toLowerCase() === 'true';
               }
               toggle.enabled = enabled;
-              if (orig !== toggle.enabled) {
-                reRoute = true;
-              }
             }
           });
         }
       }
+
+      // Check for special params that force a re-route. This is needed when async functions will handle the hunt themselves.
+      // So setting reroute=true tells the current thread not to perform the hunt, because the async thread will be doing it momentarily.
+      var reRoute = false;
+      if (this.$route.query.filterValue) {
+        this.filterQuery(this.$route.query.filterField, this.$route.query.filterValue, this.$route.query.filterMode, undefined, this.$route.query.scalar === 'true');
+        reRoute = true;
+      }
+      if (this.$route.query.groupByField) {
+        this.groupQuery(this.$route.query.groupByField, this.$route.query.groupByGroup);
+        reRoute = true;
+      }
       if (reRoute) return false;
+
       return true;
     },
     async loadData() {
@@ -479,78 +482,20 @@ const huntComponent = {
         // This must occur before the following await, so that Vue flushes the old groupby DOM renders
         this.groupBys.splice(0);
 
-        let response;
-        if (this.category === 'playbooks') {
-          response = {
-            data: {
-              "metrics": {
-                "timeline": null,
-              },
-              "elapsedMs": 668,
-	            "errors": [],
-	            "criteria": {
-		            "query": "(_id:*) AND _index:\"*:so-case\" AND so_kind:detection",
-		            "dateRange": "",
-		            "metricLimit": 0,
-		            "eventLimit": 50,
-                "BeginTime": "2021-08-23T15:41:39-06:00",
-                "EndTime": "2023-08-23T15:41:39-06:00",
-                "CreateTime": "2023-08-23T15:41:39.446264196-06:00",
-                "ParsedQuery": {
-                  "Segments": [
-                    {}
-                  ]
-                },
-                "SortFields": null
-              },
-              "events": [
-                {
-                  "source": "manager:so-case",
-                  "Time": "2023-08-23T14:48:17.140438075-06:00",
-                  "timestamp": "2023-08-23T14:48:17.140Z",
-                  "id": "RDmUHooB-8rNCo4d3nIc",
-                  "type": "",
-                  "score": 3.287682,
-                  "payload": {
-                    "@timestamp": "2023-08-23T14:48:17.140438075-06:00",
-                    "so_playbook.onionId": "75332a3c-b029-46a0-9392-509ff90737a8",
-                    "so_playbook.publicId": "4020131e-223a-421e-8ebe-8a211a5ac4d6",
-                    "so_playbook.title": "Find the baddies",
-                    "so_playbook.severity": "high",
-                    "so_playbook.description": "A long description that spans multiple lines. A long description that spans multiple lines. A long description that spans multiple lines. A long description that spans multiple lines. A long description that spans multiple lines. A long description that spans multiple lines.",
-                    "so_playbook.mechanism": "suricata",
-                    "so_playbook.tags": ["one", "two", "three"],
-                    "so_playbook.relatedPlaybooks": [],
-                    "so_playbook.contributors": ["Jim Bob"],
-                    "so_playbook.userEditable": true,
-                    "so_playbook.createTime": "2023-08-22T12:49:47.302819008-06:00",
-                    "so_playbook.kind": "playbook",
-                    "so_playbook.userId": "83656890-2acd-4c0b-8ab9-7c73e71ddaf3",
-                    "so_kind": "playbook"
-                  }
-                }
-              ],
-              createTime: moment().subtract(2, 'seconds').toISOString(),
-              completeTime: moment().toISOString(),
-            }
-          };
-          response.data.totalEvents = response.data.events.length;
-        } else {
-          let range = this.dateRange;
-          if (this.isCategory('detections')) {
-            range = moment(0).format(this.i18n.timePickerFormat) + " - " + moment().format(this.i18n.timePickerFormat);
-          }
-          response = await this.$root.papi.get('events/', {
-            params: {
-              query: await this.getQuery(),
-              range: range,
-              format: this.i18n.timePickerSample,
-              zone: this.zone,
-              metricLimit: this.groupByLimit,
-              eventLimit: this.eventLimit
-            }
-          });
+        let range = this.dateRange;
+        if (this.isCategory('detections')) {
+          range = moment(0).format(this.i18n.timePickerFormat) + " - " + moment().format(this.i18n.timePickerFormat);
         }
+        let response = await this.$root.papi.get('events/', {
+          params: {
+            query: await this.getQuery(),
+            range: range,
+            format: this.i18n.timePickerSample,
+            zone: this.zone,
+            metricLimit: this.groupByLimit,
+            eventLimit: this.eventLimit
+          }
+        });
 
         this.eventPage = 1;
         this.groupByPage = 1;
@@ -577,6 +522,13 @@ const huntComponent = {
         this.$root.showError(error);
       }
       this.$root.stopLoading();
+    },
+    getPresets(kind) {
+      if (this.presets && this.presets[kind]) {
+        return this.presets[kind].labels;
+      }
+
+      return [];
     },
     async filterQuery(field, value, filterMode, notify = true, scalar = false) {
       try {
@@ -1040,7 +992,7 @@ const huntComponent = {
       return this.buildGroupOptionRoute(groupIdx, removals, '');
     },
     countDrilldown(event) {
-      if ( (Object.keys(event).length == 2 && Object.keys(event)[0] == "count") || (Object.keys(event).length == 4 && Object.keys(event)[0] == "count" && Object.keys(event)[1] == "rule.name" && Object.keys(event)[2] == "event.module" && Object.keys(event)[3] == "event.severity_label") ) {
+      if ( (Object.keys(event).length == 2 && Object.keys(event)[0] == "count") || (Object.keys(event).length == 5 && Object.keys(event)[0] == "count" && Object.keys(event)[1] == "rule.name" && Object.keys(event)[2] == "event.module" && Object.keys(event)[3] == "event.severity_label" && Object.keys(event)[4] == "rule.uuid") ) {
         this.filterRouteDrilldown = this.buildFilterRoute(Object.keys(event)[1], event[Object.keys(event)[1]], FILTER_DRILLDOWN);
         this.$router.push(this.filterRouteDrilldown);
       }
@@ -1072,19 +1024,12 @@ const huntComponent = {
       }
 
       if (this.isCategory('alerts')) {
-        const alert = this.eventData.find(item => {
-          for (const key in event) {
-            if (key !== "count" && item[key] !== event[key]) {
-              return false;
-            }
-          }
-          return true;
-        });
+        const id = event["rule.uuid"];
+        this.quickActionDetId = null;
 
-        if (alert) {
-          // don't slow down the UI with this call
-          const publicId = alert["rule.uuid"];
-          this.$root.papi.get(`detection/public/${publicId}`).then(response => {
+        // don't slow down the UI with this call
+        if (id) {
+          this.$root.papi.get(`detection/public/${id}`).then(response => {
             this.quickActionDetId = response.data.id;
           });
         }
@@ -2307,6 +2252,25 @@ const huntComponent = {
         this.$root.showInfo(msg);
       }
     },
+    startManualSync(engine, type) {
+      if (!engine) {
+        this.$root.showTip(this.i18n.engineSelect);
+        return;
+      }
+      try {
+        this.$root.papi.post(`detection/sync/${engine}/${type}`);
+
+        let msg = this.i18n.startSyncFull;
+        if (type !== 'full') {
+          msg = this.i18n.startSyncUpdate;
+        }
+
+        msg = msg.replace("{engine}", engine);
+        this.$root.showTip(msg);
+      } catch (e) {
+        this.$root.showError(e);
+      }
+    },
   }
 };
 
@@ -2323,6 +2287,3 @@ routes.push({ path: '/dashboards', name: 'dashboards', component: dashboardsComp
 
 const detectionsComponent = Object.assign({}, huntComponent);
 routes.push({ path: '/detections', name: 'detections', component: detectionsComponent });
-
-const playbooksComponent = Object.assign({}, huntComponent);
-routes.push({ path: '/playbooks', name: 'playbooks', component: playbooksComponent });

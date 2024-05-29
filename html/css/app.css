@@ -534,17 +534,6 @@ td {
   margin-top: 20px;
 }
 
-.summary-backdrop {
-  background-color: rgb(53, 53, 53);
-  border-radius: 4px;
-}
-
-.summary-backdrop > div {
-  background-color: #2a2a2a;
-  border-radius: 4px;
-  padding: 16px;
-}
-
 .header {
   font-size: 1.3em;
   font-weight: bold;
@@ -555,7 +544,6 @@ td {
 }
 
 .extracted-content {
-  background-color: #404040;
   border-radius: 4px;
   padding: 8px;
 }
@@ -565,30 +553,13 @@ td {
   word-break: break-word;
 }
 
-.detect-reference {
-  font-size: small;
-  display: table;
-  margin-top: 12px;
-  margin-left: 12px;
-}
-
-.detect-reference > div {
-  display: table-row;
-}
-
-.detect-reference > div > div {
-  display: table-cell;
-  padding: 0 4px;
-}
-
-.detect-reference .key {
-  font-weight: bold;
-  text-align: right;
-}
-
 .ops-header {
   font-weight: bold;
   margin-top: 16px;
+}
+
+.ops-value::after {
+  content: "\00a0";
 }
 
 .ops-value > .v-input--selection-controls {
@@ -610,12 +581,6 @@ td {
   text-transform: capitalize;
 }
 
-.sigma-dialog-body {
-  background-color: #404040;
-  margin: 12px;
-  padding: 12px;
-}
-
 #convert-button-container {
   display: flex;
   flex-direction: row;
@@ -630,4 +595,37 @@ td {
 #actionTuneDetection-disabled {
   color: gray;
   cursor: pointer;
+}
+
+.override-help {
+  vertical-align: -webkit-baseline-middle;
+  margin-right: 8px;
+}
+
+.manual-sync {
+  margin: 6px;
+  display: flex;
+}
+
+.manual-sync div:first-child {
+  flex-grow: 1;
+  margin-right: 8px;
+}
+
+.manual-sync-buttons {
+  display: flex;
+  flex-direction: column;
+}
+
+.manual-sync-buttons button:first-child {
+  margin-bottom: 6px;
+}
+
+.manual-sync-buttons button {
+  width: 100%;
+}
+
+#override-filter-edit-buttons {
+  display: flex;
+  justify-content: end;
 }

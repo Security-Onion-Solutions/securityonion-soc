@@ -79,7 +79,7 @@ func TestGetStringArray(tester *testing.T) {
 	options := make(map[string]interface{})
 	_, err := GetStringArray(options, "MyKey")
 	assert.Error(tester, err)
-	array := make([]interface{}, 2, 2)
+	array := make([]interface{}, 2)
 	array[0] = "MyValue1"
 	array[1] = "MyValue2"
 	options["MyKey"] = array
@@ -95,7 +95,7 @@ func TestGetStringArrayDefault(tester *testing.T) {
 	actual := GetStringArrayDefault(options, "MyKey", make([]string, 0, 0))
 	assert.Len(tester, actual, 0)
 
-	array := make([]interface{}, 2, 2)
+	array := make([]interface{}, 2)
 	array[0] = "MyValue1"
 	array[1] = "MyValue2"
 	options["MyKey"] = array

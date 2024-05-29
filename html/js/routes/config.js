@@ -10,6 +10,7 @@ routes.push({ path: '/config', name: 'config', component: {
     i18n: this.$root.i18n,
     settings: [],
     search: "",
+    searchFilter: null,
     autoExpand: false,
     autoSelect: "",
     form: {
@@ -17,6 +18,10 @@ routes.push({ path: '/config', name: 'config', component: {
       key: "",
       value: "",
     },
+    duplicate_id_rules: [
+      value => !!value || this.$root.i18n.required,
+      value => (!!value && /^[a-zA-Z0-9_]{3,50}$/.test(value)) || this.$root.i18n.settingDuplicateNameInvalid,
+    ],
 
     selectedNode: null,
     cancelDialog: false,
@@ -31,6 +36,12 @@ routes.push({ path: '/config', name: 'config', component: {
     settingsAvailable: 0,
     showDefault: false,
     nextStopId: null,
+    showDuplicate: false,
+    duplicateId: null,
+    duplicateIdValid: false,
+    resetSetting: null,
+    resetNodeId: null,
+    confirmResetDialog: false,
   }},
   mounted() {
     this.processRouteParameters();
@@ -63,6 +74,7 @@ routes.push({ path: '/config', name: 'config', component: {
         this.autoExpand = true;
         this.search = this.$route.query.s;
       }
+      this.applySearchFilter();
     },
     findActiveSetting() {
       if (this.active.length > 0) {
@@ -74,8 +86,12 @@ routes.push({ path: '/config', name: 'config', component: {
       }
       return null;
     },
+    applySearchFilter() {
+      this.searchFilter = this.search;
+    },
     clearFilter() {
       this.search = "";
+      this.searchFilter = "";
     },
     filter(item, search, textKey) {
       if (!search) return true;
@@ -160,6 +176,7 @@ routes.push({ path: '/config', name: 'config', component: {
         default: null,
         defaultAvailable: false,
         readonly: setting.readonly,
+        readonlyUi: setting.readonlyUi,
         sensitive: setting.sensitive,
         regex: setting.regex,
         regexFailureMessage: setting.regexFailureMessage,
@@ -167,6 +184,7 @@ routes.push({ path: '/config', name: 'config', component: {
         helpLink: setting.helpLink,
         advanced: setting.advanced,
         syntax: setting.syntax,
+        duplicates: setting.duplicates,
       };
       this.merge(created, setting);
       return created;
@@ -308,6 +326,8 @@ routes.push({ path: '/config', name: 'config', component: {
       }
       this.recomputeAvailableNodes(this.findActiveSetting());
       this.activeBackup = [...this.active];
+      this.showDuplicate = false; 
+      this.showDefault = false;
       window.scrollTo(0,0);
     },
     cancel(force) {
@@ -346,26 +366,37 @@ routes.push({ path: '/config', name: 'config', component: {
 
       return true;
     },
-    async remove(setting, nodeId) {
-      if (setting) {
+    remove(setting, nodeId) {
+      this.resetSetting = setting;
+      this.resetNodeId = nodeId;
+      this.confirmResetDialog = true;
+    },
+    cancelRemove() {
+      this.resetSetting = null;
+      this.resetNodeId = null;
+      this.confirmResetDialog = false;
+    },
+    async confirmRemove() {
+      this.confirmResetDialog = false;
+      if (this.resetSetting) {
         this.$root.startLoading();
         try {
-          await this.$root.papi.delete('config/', { params: { id: setting.id, minion: nodeId }});
+          await this.$root.papi.delete('config/', { params: { id: this.resetSetting.id, minion: this.resetNodeId }});
 
-          if (nodeId) {
+          if (this.resetNodeId) {
             // Rebuild UI as needed
             const newMap = new Map();
-            for (const [key, value] of setting.nodeValues.entries()) {
-              if (key != nodeId) {
+            for (const [key, value] of this.resetSetting.nodeValues.entries()) {
+              if (key != this.resetNodeId) {
                 newMap.set(key, value);
               }
             }
-            setting.nodeValues.clear();
-            setting.nodeValues = newMap;
+            this.resetSetting.nodeValues.clear();
+            this.resetSetting.nodeValues = newMap;
             this.recomputeAvailableNodes(this.findActiveSetting());
           } else {
-            this.reset(setting);
-            setting.value = setting.default;
+            this.reset(this.resetSetting);
+            this.resetSetting.value = this.resetSetting.default;
           }
 
           this.countCustomized();
@@ -377,6 +408,7 @@ routes.push({ path: '/config', name: 'config', component: {
         }
         this.$root.stopLoading();
       }
+      this.cancelRemove();
       this.cancel(true);
     },
     async save(setting, nodeId) {
@@ -472,6 +504,35 @@ routes.push({ path: '/config', name: 'config', component: {
         return n.status == GridMemberAccepted && !setting.nodeValues.has(n.id);
       });
       this.availableNodes = eligible.map(n => { return { text: n.name + " (" + n.role + ")", value: n.id } });
+    },
+    toggleDuplicate(setting) {
+      this.duplicateId = this.suggestDuplicateName(setting);
+      this.showDuplicate = !this.showDuplicate; 
+    },
+    suggestDuplicateName(setting) {
+      return setting.name + "_dup";
+    },
+    duplicate(setting) {
+      const new_name = this.duplicateId;
+      var new_id = setting.id.substring(0, setting.id.lastIndexOf(setting.name));
+      new_id += new_name;
+      this.$root.startLoading();
+      const found = this.settings.find(s => s.id == new_id);
+      this.$root.stopLoading();
+      if (found) {
+        this.$root.showWarning(this.i18n.settingDuplicateInvalid);
+        return
+      }
+      var new_setting = structuredClone(setting);
+      new_setting.id = new_id;
+      new_setting.name = new_name;
+      this.settings.push(new_setting);
+      this.settings.sort((a,b) => { if (a.id > b.id) return 1; else if (a.id < b.id) return -1; else return 0 });
+      this.refreshTree();
+      this.active = [new_id]
+    },
+    isReadOnly(item) {
+      return item.readonly || item.readonlyUi;
     },
   }
 }});

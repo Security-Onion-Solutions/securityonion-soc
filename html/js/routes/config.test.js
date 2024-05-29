@@ -52,6 +52,7 @@ test('loadData', async () => {
       "default": null,
       "defaultAvailable": false, 
       "description": "Nearby",
+      "duplicates": undefined,
       "file": undefined,
       "global": false,
       "helpLink": undefined,
@@ -61,6 +62,7 @@ test('loadData', async () => {
       "node": undefined,
       "nodeValues": m1,
       "readonly": undefined,
+      "readonlyUi": undefined,
       "regex": "True|False",
       "regexFailureMessage": "Wrong!",
       "sensitive": undefined,
@@ -73,6 +75,7 @@ test('loadData', async () => {
       "default": undefined,
       "defaultAvailable": undefined, 
       "description": "NADA",
+      "duplicates": undefined,
       "file": undefined,
       "global": undefined,
       "helpLink": undefined,
@@ -82,6 +85,7 @@ test('loadData', async () => {
       "node": false,
       "nodeValues": new Map(),
       "readonly": undefined,
+      "readonlyUi": undefined,
       "regex": undefined,
       "regexFailureMessage": undefined,
       "sensitive": undefined,
@@ -94,6 +98,7 @@ test('loadData', async () => {
       "default": undefined,
       "defaultAvailable": undefined, 
       "description": "Cocoa",
+      "duplicates": undefined,
       "file": undefined,
       "global": undefined,
       "helpLink": undefined,
@@ -103,6 +108,7 @@ test('loadData', async () => {
       "node": false,
       "nodeValues": new Map(),
       "readonly": undefined,
+      "readonlyUi": undefined,
       "regex": undefined,
       "regexFailureMessage": undefined,
       "sensitive": undefined,
@@ -122,6 +128,7 @@ test('loadData', async () => {
               "default": null, 
               "defaultAvailable": false, 
               "description": "Nearby", 
+              "duplicates": undefined,
               "file": undefined,
               "global": false, 
               "helpLink": undefined,
@@ -131,6 +138,7 @@ test('loadData', async () => {
               "node": undefined, 
               "nodeValues": m1, 
               "readonly": undefined, 
+              "readonlyUi": undefined,
               "regex": "True|False",
               "regexFailureMessage": "Wrong!",
               "sensitive": undefined, 
@@ -143,6 +151,7 @@ test('loadData', async () => {
               "default": undefined,
               "defaultAvailable": undefined, 
               "description": "Cocoa", 
+              "duplicates": undefined,
               "file": undefined,
               "global": undefined, 
               "helpLink": undefined,
@@ -152,6 +161,7 @@ test('loadData', async () => {
               "node": false, 
               "nodeValues": new Map(), 
               "readonly": undefined, 
+              "readonlyUi": undefined,
               "regex": undefined,
               "regexFailureMessage": undefined,
               "sensitive": undefined, 
@@ -172,6 +182,7 @@ test('loadData', async () => {
       "default": undefined,
       "defaultAvailable": undefined, 
       "description": "NADA", 
+      "duplicates": undefined,
       "file": undefined,
       "global": undefined, 
       "helpLink": undefined,
@@ -181,6 +192,7 @@ test('loadData', async () => {
       "node": false, 
       "nodeValues": new Map(), 
       "readonly": undefined, 
+      "readonlyUi": undefined,
       "regex": undefined,
       "regexFailureMessage": undefined,
       "sensitive": undefined, 
@@ -307,6 +319,7 @@ test('selectSetting', () => {
   expect(comp.activeBackup).toStrictEqual(["s-id"]);
   expect(comp.availableNodes).toStrictEqual([{text: "node2 (standalone)", value: "n2"}]);
   expect(comp.cancelDialog).toBe(false);
+  expect(comp.confirmResetDialog).toBe(false);
 });
 
 test('cancel', () => {
@@ -330,26 +343,60 @@ test('cancel', () => {
   expect(comp.form.key).toBe("cancel-id");
 });
 
-test('remove', async () => {
+test('remove', () => {
+  expect(comp.confirmResetDialog).toBe(false);
+  expect(comp.resetSetting).toBe(null);
+  expect(comp.resetNodeId).toBe(null);
+  comp.resetNodeId = "foo"
+  comp.resetSetting = "bar"
+  comp.confirmResetDialog = true
+  comp.remove("bar", "foo");
+  expect(comp.confirmResetDialog).toBe(true);
+  expect(comp.resetSetting).toBe("bar");
+  expect(comp.resetNodeId).toBe("foo");
+});
+
+test('cancelReset', () => {
+  expect(comp.confirmResetDialog).toBe(false);
+  expect(comp.resetSetting).toBe(null);
+  expect(comp.resetNodeId).toBe(null);
+  comp.resetNodeId = "foo"
+  comp.resetSetting = "bar"
+  comp.confirmResetDialog = true
+  comp.cancelRemove("bar", "foo");
+  expect(comp.confirmResetDialog).toBe(false);
+  expect(comp.resetSetting).toBe(null);
+  expect(comp.resetNodeId).toBe(null);
+});
+
+test('confirmRemove', async () => {
   setupSettings();
 
   // No-op path
+  comp.remove(comp.settings[0], "nonexisting");
   var mock = mockPapi("delete");
-  await comp.remove(comp.settings[0], "nonexisting");
+  await comp.confirmRemove();
   var expectedNodeValues = new Map();
   expectedNodeValues.set("n1", "123");
   expectedNodeValues.set("n1a", "abc");
   expect(comp.settings[0].nodeValues).toStrictEqual(expectedNodeValues);
+  expect(comp.resetSetting).toBe(null);
+  expect(comp.resetNodeId).toBe(null);
+  expect(comp.confirmResetDialog).toBe(false);
   expect(comp.cancelDialog).toBe(false);
   expect(comp.form.key).toBe(null);
   expect(mock).toHaveBeenCalledWith('config/', { params: {"id": "s-id", "minion": "nonexisting" }});
 
   // Good path
+  comp.remove(comp.settings[0], "n1");
   mock = mockPapi("delete");
-  await comp.remove(comp.settings[0], "n1");
+  await comp.confirmRemove();
   expectedNodeValues = new Map();
   expectedNodeValues.set("n1a", "abc");
   expect(comp.settings[0].nodeValues).toStrictEqual(expectedNodeValues);
+  expect(comp.resetSetting).toBe(null);
+  expect(comp.resetNodeId).toBe(null);
+  expect(comp.confirmResetDialog).toBe(false);
   expect(comp.cancelDialog).toBe(false);
   expect(comp.form.key).toBe(null);
   expect(mock).toHaveBeenCalledWith('config/', { params: {"id": "s-id", "minion": "n1" }});
@@ -516,4 +563,63 @@ test('addToNode_Malformed', () => {
     comp.addToNode({name: 'test'}, {}, ['parent'], {name: 'test'});
   };
   expect(closure).toThrow("Setting name 'test' conflicts with another similarly named setting");
+});
+
+test('toggleDuplicate', () => {
+  const setting = {
+    id: "a.b.c",
+    name: "c",
+    duplicates: true,
+  }
+  expect(comp.showDuplicate).toBe(false)
+  comp.toggleDuplicate(setting)
+  expect(comp.duplicateId).toBe("c_dup");
+  expect(comp.showDuplicate).toBe(true)
+});
+
+test('duplicate', () => {
+  const setting = {
+    id: "a.b.c",
+    name: "c",
+    duplicates: true,
+  }
+  const setting2 = {
+    id: "a.b.c",
+    name: "c",
+    duplicates: true,
+  }
+  global.structuredClone = jest.fn().mockReturnValueOnce(setting2);
+  comp.settings = [setting];
+  comp.duplicateId = "foo"
+  expect(comp.settings.length).toBe(1);
+  comp.duplicate(setting);
+  expect(comp.settings.length).toBe(2);
+  expect(comp.settings[1].id).toBe("a.b.foo");
+  expect(comp.settings[1].name).toBe("foo");
+});
+
+test('applySearchFilter', () => {
+  comp.search = "foo";
+  comp.searchFilter = "";
+  comp.applySearchFilter();
+  expect(comp.searchFilter).toBe(comp.search);
+  comp.clearFilter();
+  expect(comp.search).toBe("");
+  expect(comp.searchFilter).toBe("");
+});
+
+test('isReadOnly', () => {
+  const setting = {
+    id: "a1",
+    readonly: false,
+    readonlyUi: false,
+  };
+  expect(comp.isReadOnly(setting)).toBe(false);
+  setting.readonly = true;
+  expect(comp.isReadOnly(setting)).toBe(true);
+  setting.readonly = false;
+  setting.readonlyUi = true;
+  expect(comp.isReadOnly(setting)).toBe(true);
+  setting.readonly = true;
+  expect(comp.isReadOnly(setting)).toBe(true);
 });

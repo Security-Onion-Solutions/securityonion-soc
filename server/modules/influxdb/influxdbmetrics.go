@@ -16,6 +16,7 @@ import (
 	"github.com/apex/log"
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	"github.com/influxdata/influxdb-client-go/v2/api"
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 )
@@ -443,8 +444,8 @@ func (metrics *InfluxDBMetrics) getEventstoreStatus(host string) string {
 		}
 	} else {
 		log.WithFields(log.Fields{
-			"host":          host,
-			"processStatus": metrics.eventstoreStatus,
+			"host":             host,
+			"eventStoreStatus": metrics.eventstoreStatus,
 		}).Warn("Host not found in process status metrics")
 	}
 	return status
@@ -499,6 +500,9 @@ func (metrics *InfluxDBMetrics) UpdateNodeMetrics(ctx context.Context, node *mod
 
 		enhancedStatusEnabled := (metrics.client != nil)
 		status = node.UpdateOverallStatus(enhancedStatusEnabled)
+
+		licensing.ValidateFeature(licensing.FEAT_FPS, node.FpsEnabled == 1)
+		licensing.ValidateFeature(licensing.FEAT_LKS, node.LksEnabled == 1)
 	}
 	return status
 }

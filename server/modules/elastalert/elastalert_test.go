@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
@@ -21,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -31,6 +33,38 @@ import (
 	"go.uber.org/mock/gomock"
 	"gopkg.in/yaml.v3"
 )
+
+func TestCheckAutoEnabledSigmaRule(t *testing.T) {
+	e := &ElastAlertEngine{
+		autoEnabledSigmaRules: []string{"securityonion-resources+high", "core+critical"},
+	}
+
+	tests := []struct {
+		name     string
+		ruleset  string
+		severity model.Severity
+		expected bool
+	}{
+		{"securityonion-resources rule with high severity, rule enabled", "securityonion-resources", model.SeverityHigh, true},
+		{"securityonion-resources rule with high severity upper case, rule enabled", "securityonion-RESOURCES", model.SeverityHigh, true},
+		{"core rule with critical severity, rule enabled", "core", model.SeverityCritical, true},
+		{"core rule with high severity, rule not enabled", "core", model.SeverityHigh, false},
+		{"empty ruleset, high severity, rule not enabled", "", model.SeverityHigh, false},
+		{"core ruleset, empty severity, rule not enabled", "core", "", false},
+		{"empty ruleset, empty severity, rule not enabled", "", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			det := &model.Detection{
+				Ruleset:  tt.ruleset,
+				Severity: tt.severity,
+			}
+			checkRulesetEnabled(e, det)
+			assert.Equal(t, tt.expected, det.IsEnabled)
+		})
+	}
+}
 
 func TestElastAlertModule(t *testing.T) {
 	srv := &server.Server{
@@ -43,7 +77,6 @@ func TestElastAlertModule(t *testing.T) {
 
 	err := mod.Init(nil)
 	assert.NoError(t, err)
-	assert.False(t, mod.autoUpdateEnabled)
 
 	err = mod.Start()
 	assert.NoError(t, err)
@@ -201,6 +234,78 @@ func TestTimeFrame(t *testing.T) {
 	assert.Equal(t, 1, *tf.Weeks)
 }
 
+func TestCheckSigmaPipelines(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockIO := mock.NewMockIOManager(ctrl)
+
+	e := &ElastAlertEngine{
+		sigmaPipelineFinal:            "/opt/sensoroni/sigma_final_pipeline.yaml",
+		sigmaPipelineSO:               "/opt/sensoroni/sigma_so_pipeline.yaml",
+		sigmaPipelinesFingerprintFile: "/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint",
+		IOManager:                     mockIO,
+	}
+
+	testList := []struct {
+		name           string
+		setupMock      func()
+		expectedChange bool
+		expectedHash   string
+		expectedErr    error
+	}{
+		{
+			name: "No changes in pipelines",
+			setupMock: func() {
+				// Setup the hash values to be the same
+				mockIO.EXPECT().ReadFile("/opt/sensoroni/sigma_final_pipeline.yaml").Return([]byte("data"), nil)
+				mockIO.EXPECT().ReadFile("/opt/sensoroni/sigma_so_pipeline.yaml").Return([]byte("data"), nil)
+				hash := "3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7-3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7"
+				mockIO.EXPECT().ReadFile("/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint").Return([]byte(hash), nil)
+			},
+			expectedChange: false,
+			expectedHash:   "",
+			expectedErr:    nil,
+		},
+		{
+			name: "Changes detected in pipelines",
+			setupMock: func() {
+				// Setup the hash values to be different
+				mockIO.EXPECT().ReadFile("/opt/sensoroni/sigma_final_pipeline.yaml").Return([]byte("data1"), nil)
+				mockIO.EXPECT().ReadFile("/opt/sensoroni/sigma_so_pipeline.yaml").Return([]byte("data2"), nil)
+				hash := "7c563a27ed29beba2a5e9fd515c0b4435065d7c90af52b29a7f96f1ba2f00d7b-6d8758d5149c097c5131dd1355b7b8891b2b207384ff8f66a650537c3d2ffd6f"
+				mockIO.EXPECT().ReadFile("/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint").Return([]byte(hash), nil)
+			},
+			expectedChange: true,
+			expectedHash:   "5b41362bc82b7f3d56edc5a306db22105707d01ff4819e26faef9724a2d406c9-d98cf53e0c8b77c14a96358d5b69584225b4bb9026423cbc2f7b0161894c402c",
+			expectedErr:    nil,
+		},
+		{
+			name: "Error reading final pipeline file",
+			setupMock: func() {
+				mockIO.EXPECT().ReadFile("/opt/sensoroni/sigma_final_pipeline.yaml").Return(nil, errors.New("file read error"))
+			},
+			expectedChange: false,
+			expectedHash:   "",
+			expectedErr:    fmt.Errorf("error hashing file /opt/sensoroni/sigma_final_pipeline.yaml: file read error"),
+		},
+	}
+
+	for _, tt := range testList {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setupMock()
+			regenNeeded, updatedHash, err := e.checkSigmaPipelines()
+			if tt.expectedErr != nil {
+				assert.Error(t, err)
+				assert.Equal(t, tt.expectedErr.Error(), err.Error())
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedChange, regenNeeded)
+				assert.Equal(t, tt.expectedHash, updatedHash)
+			}
+		})
+	}
+}
+
 func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mio := mock.NewMockIOManager(ctrl)
@@ -228,9 +333,7 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 	}
 
 	det := &model.Detection{
-		Auditable: model.Auditable{
-			Id: "00000000-0000-0000-0000-000000000000",
-		},
+		PublicID: "00000000-0000-0000-0000-000000000000",
 		Content:  "totally good sigma",
 		Title:    "Test Detection",
 		Severity: model.SeverityHigh,
@@ -239,26 +342,87 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 	query, err := engine.sigmaToElastAlert(context.Background(), det)
 	assert.NoError(t, err)
 
-	wrappedRule, err := wrapRule(det, query)
+	// No license
+	wrappedRule, err := wrapRule(det, query, []string{"email", "slack"})
 	assert.NoError(t, err)
 
-	expected := `play_title: Test Detection
-play_id: 00000000-0000-0000-0000-000000000000
+	expected := `detection_title: Test Detection
+detection_public_id: 00000000-0000-0000-0000-000000000000
 event.module: sigma
 event.dataset: sigma.alert
 event.severity: 4
-rule.category: ""
 sigma_level: high
 alert:
-    - modules.so.playbook-es.PlaybookESAlerter
+    - modules.so.securityonion-es.SecurityOnionESAlerter
 index: .ds-logs-*
-name: Test Detection - 00000000-0000-0000-0000-000000000000
+name: Test Detection -- 00000000-0000-0000-0000-000000000000
+realert:
+    seconds: 0
 type: any
 filter:
     - eql: <eql>
-play_url: play_url
-kibana_pivot: kibana_pivot
-soc_pivot: soc_pivot
+`
+	assert.YAMLEq(t, expected, wrappedRule)
+}
+
+func TestSigmaToElastAlertSunnyDayLicensed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mio := mock.NewMockIOManager(ctrl)
+
+	mio.EXPECT().ExecCommand(gomock.Cond(func(x any) bool {
+		cmd := x.(*exec.Cmd)
+
+		if !strings.HasSuffix(cmd.Path, "sigma") {
+			return false
+		}
+
+		if !slices.Contains(cmd.Args, "convert") {
+			return false
+		}
+
+		if cmd.Stdin == nil {
+			return false
+		}
+
+		return true
+	})).Return([]byte("<eql>"), 0, time.Duration(0), nil)
+
+	engine := ElastAlertEngine{
+		IOManager: mio,
+	}
+
+	det := &model.Detection{
+		PublicID: "00000000-0000-0000-0000-000000000000",
+		Content:  "totally good sigma",
+		Title:    "Test Detection",
+		Severity: model.SeverityHigh,
+	}
+
+	query, err := engine.sigmaToElastAlert(context.Background(), det)
+	assert.NoError(t, err)
+
+	// License
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+	wrappedRule, err := wrapRule(det, query, []string{"email", "slack"})
+	assert.NoError(t, err)
+
+	expected := `detection_title: Test Detection
+detection_public_id: 00000000-0000-0000-0000-000000000000
+event.module: sigma
+event.dataset: sigma.alert
+event.severity: 4
+sigma_level: high
+alert:
+    - modules.so.securityonion-es.SecurityOnionESAlerter
+    - email
+    - slack
+index: .ds-logs-*
+name: Test Detection -- 00000000-0000-0000-0000-000000000000
+type: any
+realert:
+    seconds: 0
+filter:
+    - eql: <eql>
 `
 	assert.YAMLEq(t, expected, wrappedRule)
 }
@@ -304,7 +468,7 @@ func TestSigmaToElastAlertError(t *testing.T) {
 	assert.ErrorContains(t, err, "problem with sigma cli")
 }
 
-func TestParseRules(t *testing.T) {
+func TestParseZipRules(t *testing.T) {
 	t.Parallel()
 
 	data := `title: Always Alert
@@ -318,8 +482,8 @@ logsource:
     product: windows
 detection:
     filter:
-       event.module: "zeek"
-    condition: "filter"
+        event.module: zeek
+    condition: filter
 level: high
 `
 
@@ -363,25 +527,97 @@ level: high
 		"all_rules": buf.Bytes(),
 	}
 
-	engine := ElastAlertEngine{}
+	engine := ElastAlertEngine{
+		isRunning: true,
+	}
 	engine.allowRegex = regexp.MustCompile("00000000-0000-0000-0000-00000000")
 	engine.denyRegex = regexp.MustCompile("deny")
 
 	expected := &model.Detection{
+		Author:      "Corey Ogburn",
 		PublicID:    "00000000-0000-0000-0000-00000000",
 		Title:       "Always Alert",
 		Severity:    model.SeverityHigh,
 		Content:     data,
+		Description: "Always Alerts",
+		Product:     "windows",
 		IsCommunity: true,
 		Engine:      model.EngineNameElastAlert,
 		Language:    model.SigLangSigma,
-		Ruleset:     util.Ptr("all_rules"),
+		Ruleset:     "all_rules",
 		License:     model.LicenseDRL,
 	}
 
-	dets, errMap := engine.parseRules(pkgZips)
+	dets, errMap := engine.parseZipRules(pkgZips)
 	assert.NotNil(t, errMap)
 	assert.Error(t, errMap["rules/bad.yml"])
+	assert.Len(t, dets, 1)
+	assert.Equal(t, expected, dets[0])
+}
+
+func TestParseRepoRules(t *testing.T) {
+	t.Parallel()
+
+	data := `title: Security Onion - SOC Login Failure
+id: bf86ef21-41e6-417b-9a05-b9ea6bf28a38
+status: experimental
+description: Detects when a user fails to login to the Security Onion Console (Web UI). Review associated logs for target username and source IP.
+author: Security Onion Solutions
+date: 2024/03/06
+logsource:
+    product: kratos
+    service: audit
+detection:
+    selection:
+        msg: Encountered self-service login error.
+    condition: selection
+falsepositives:
+    - none
+level: high
+license: Elastic-2.0
+`
+
+	repos := map[string]*model.RuleRepo{
+		"repo-path": {
+			Repo:      "github.com/repo-user/repo-path",
+			License:   "DRL",
+			Community: true,
+		},
+	}
+
+	mio := mock.NewMockIOManager(gomock.NewController(t))
+	mio.EXPECT().WalkDir(gomock.Eq("repo-path"), gomock.Any()).DoAndReturn(func(path string, fn fs.WalkDirFunc) error {
+		return fn("rules/so_soc_failed_login.yml", &MockDirEntry{
+			name: "so_soc_failed_login.yml",
+		}, nil)
+	})
+	mio.EXPECT().ReadFile(gomock.Eq("rules/so_soc_failed_login.yml")).Return([]byte(data), nil)
+
+	engine := ElastAlertEngine{
+		isRunning: true,
+		IOManager: mio,
+	}
+	engine.allowRegex = regexp.MustCompile("bf86ef21-41e6-417b-9a05-b9ea6bf28a38")
+	engine.denyRegex = regexp.MustCompile("deny")
+
+	expected := &model.Detection{
+		Author:      "Security Onion Solutions",
+		PublicID:    "bf86ef21-41e6-417b-9a05-b9ea6bf28a38",
+		Title:       "Security Onion - SOC Login Failure",
+		Severity:    model.SeverityHigh,
+		Content:     data,
+		Description: "Detects when a user fails to login to the Security Onion Console (Web UI). Review associated logs for target username and source IP.",
+		IsCommunity: true,
+		Product:     "kratos",
+		Service:     "audit",
+		Engine:      model.EngineNameElastAlert,
+		Language:    model.SigLangSigma,
+		Ruleset:     "repo-path",
+		License:     model.LicenseDRL,
+	}
+
+	dets, errMap := engine.parseRepoRules(repos)
+	assert.Nil(t, errMap)
 	assert.Len(t, dets, 1)
 	assert.Equal(t, expected, dets[0])
 }
@@ -416,13 +652,54 @@ func TestDownloadSigmaPackages(t *testing.T) {
 		IOManager:                    mio,
 	}
 
-	pkgZips, errMap := engine.downloadSigmaPackages(context.Background())
+	pkgZips, errMap := engine.downloadSigmaPackages()
 	assert.NotNil(t, errMap)
 	assert.Error(t, errMap["fake"])
 	assert.Len(t, pkgZips, len(pkgs)-1)
 
 	for _, pkg := range pkgs[:len(pkgs)-1] {
 		assert.Equal(t, []byte(body), pkgZips[pkg])
+	}
+}
+
+func TestLoadSigmaPackagesFromDisks(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mio := mock.NewMockIOManager(ctrl)
+	airgapBasePath := "/nsm/rules/detect-sigma/rulesets/"
+
+	// List of packages to be loaded from disk
+	pkgs := []string{"core", "core+", "core++", "emerging_threats_addon", "all_rules", "fake"}
+
+	// Setting up mocks for each expected file read, except for the "fake" package to simulate an error
+	for _, pkg := range pkgs[:len(pkgs)-1] {
+		expectedFilePath := airgapBasePath + "sigma_" + pkg + ".zip"
+		mio.EXPECT().ReadFile(expectedFilePath).Return([]byte("mocked data for "+pkg), nil)
+	}
+
+	// Simulating an error for the 'fake' package
+	fakeFilePath := airgapBasePath + "sigma_fake.zip"
+	mio.EXPECT().ReadFile(fakeFilePath).Return(nil, errors.New("file not found"))
+
+	engine := ElastAlertEngine{
+		sigmaRulePackages: pkgs,
+		airgapBasePath:    airgapBasePath,
+		IOManager:         mio,
+	}
+
+	zipData, errMap := engine.loadSigmaPackagesFromDisk()
+
+	// Assertions
+	assert.NotNil(t, errMap, "Expected error map to not be nil")
+	assert.Error(t, errMap["fake"], "Expected an error for 'fake' package")
+	assert.Nil(t, errMap["core"], "No error expected for 'core' package")
+	assert.Len(t, zipData, len(pkgs)-1, "Expect one less entry in zipData due to the 'fake' package error")
+
+	// Verify that the content for each successful load is as expected
+	for _, pkg := range pkgs[:len(pkgs)-1] {
+		expectedContent := []byte("mocked data for " + pkg)
+		assert.Equal(t, expectedContent, zipData[pkg], "Expect the content to match the mocked content for package: "+pkg)
 	}
 }
 
@@ -452,7 +729,31 @@ detection:
 falsepositives:
   - Unlikely
 level: critical`
+	SimpleRuleNoId = `title: Griffon Malware Attack Pattern
+status: experimental
+description: Detects process execution patterns related to Griffon malware as reported by Kaspersky
+references:
+  - https://securelist.com/fin7-5-the-infamous-cybercrime-rig-fin7-continues-its-activities/90703/
+author: Nasreddine Bencherchali (Nextron Systems)
+date: 2023/03/09
+tags:
+  - attack.execution
+  - detection.emerging_threats
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+      - '\local\temp\'
+      - '//b /e:jscript'
+      - '.txt'
+  condition: selection
+falsepositives:
+  - Unlikely
+level: critical`
 	SimpleRuleNoExtract = `title: Required
+id: 00000000-0000-0000-0000-000000000000
 status: experimental
 description: Detects process execution patterns related to Griffon malware as reported by Kaspersky
 references:
@@ -532,10 +833,7 @@ func TestSyncElastAlert(t *testing.T) {
 					Content:   SimpleRule,
 					IsEnabled: true,
 					Title:     "TEST",
-					Auditable: model.Auditable{
-						Id: SimpleRuleSID,
-					},
-					Severity: model.SeverityMedium,
+					Severity:  model.SeverityMedium,
 				},
 			},
 			InitMock: func(mod *ElastAlertEngine, m *mock.MockIOManager) {
@@ -544,7 +842,7 @@ func TestSyncElastAlert(t *testing.T) {
 				// sigmaToElastAlert
 				m.EXPECT().ExecCommand(gomock.Any()).Return([]byte("[sigma rule]"), 0, time.Duration(0), nil)
 				// WriteFile when enabling
-				m.EXPECT().WriteFile(SimpleRuleSID + ".yml", []byte("play_title: TEST\nplay_id: " + SimpleRuleSID + "\nevent.module: sigma\nevent.dataset: sigma.alert\nevent.severity: 3\nrule.category: \"\"\nsigma_level: medium\nalert:\n    - modules.so.playbook-es.PlaybookESAlerter\nindex: .ds-logs-*\nname: TEST - " + SimpleRuleSID + "\ntype: any\nfilter:\n    - eql: '[sigma rule]'\nplay_url: play_url\nkibana_pivot: kibana_pivot\nsoc_pivot: soc_pivot\n"), fs.FileMode(0644)).Return(nil)
+				m.EXPECT().WriteFile(SimpleRuleSID+".yml", []byte("detection_title: TEST\ndetection_public_id: "+SimpleRuleSID+"\nevent.module: sigma\nevent.dataset: sigma.alert\nevent.severity: 3\nsigma_level: medium\nalert:\n    - modules.so.securityonion-es.SecurityOnionESAlerter\nindex: .ds-logs-*\nname: TEST -- "+SimpleRuleSID+"\nrealert:\n    seconds: 0\ntype: any\nfilter:\n    - eql: '[sigma rule]'\n"), fs.FileMode(0644)).Return(nil)
 			},
 		},
 		{
@@ -582,23 +880,18 @@ func TestSyncElastAlert(t *testing.T) {
 					Content:   SimpleRule,
 					IsEnabled: true,
 					Title:     "TEST",
-					Auditable: model.Auditable{
-						Id: SimpleRuleSID,
-					},
-					Severity: model.SeverityMedium,
+					Severity:  model.SeverityMedium,
 					Overrides: []*model.Override{
 						{
 							Type:      model.OverrideTypeCustomFilter,
 							IsEnabled: false,
 							OverrideParameters: model.OverrideParameters{
-								CustomFilter: util.Ptr("FALSE"),
-							},
-						},
-						{
-							Type:      model.OverrideTypeCustomFilter,
-							IsEnabled: true,
-							OverrideParameters: model.OverrideParameters{
-								CustomFilter: util.Ptr("TRUE"),
+								CustomFilter: util.Ptr(`sofilter_users:
+	user.name: SA_ITOPS
+sofilter_hosts:
+	host.name|contains:
+		- devops
+		- sysadmin`),
 							},
 						},
 					},
@@ -608,9 +901,9 @@ func TestSyncElastAlert(t *testing.T) {
 				// IndexExistingRules
 				m.EXPECT().ReadDir(mod.elastAlertRulesFolder).Return([]fs.DirEntry{}, nil)
 				// sigmaToElastAlert
-				m.EXPECT().ExecCommand(gomock.Any()).Return([]byte("[sigma rule]"), 0, time.Duration(0), nil)
+				m.EXPECT().ExecCommand(gomock.Any()).Return([]byte(`any where process.command_line:"*\\local\\temp\\*" and process.command_line:"*//b /e:jscript*" and process.command_line:"*.txt*"`), 0, time.Duration(0), nil)
 				// WriteFile when enabling
-				m.EXPECT().WriteFile(SimpleRuleSID + ".yml", []byte("play_title: TEST\nplay_id: " + SimpleRuleSID + "\nevent.module: sigma\nevent.dataset: sigma.alert\nevent.severity: 3\nrule.category: \"\"\nsigma_level: medium\nalert:\n    - modules.so.playbook-es.PlaybookESAlerter\nindex: .ds-logs-*\nname: TEST - " + SimpleRuleSID + "\ntype: any\nfilter:\n    - eql: ([sigma rule]) and TRUE\nplay_url: play_url\nkibana_pivot: kibana_pivot\nsoc_pivot: soc_pivot\n"), fs.FileMode(0644)).Return(nil)
+				m.EXPECT().WriteFile(SimpleRuleSID+".yml", []byte("detection_title: TEST\ndetection_public_id: "+SimpleRuleSID+"\nevent.module: sigma\nevent.dataset: sigma.alert\nevent.severity: 3\nsigma_level: medium\nalert:\n    - modules.so.securityonion-es.SecurityOnionESAlerter\nindex: .ds-logs-*\nname: TEST -- "+SimpleRuleSID+"\nrealert:\n    seconds: 0\ntype: any\nfilter:\n    - eql: any where process.command_line:\"*\\\\local\\\\temp\\\\*\" and process.command_line:\"*//b /e:jscript*\" and process.command_line:\"*.txt*\"\n"), fs.FileMode(0644)).Return(nil)
 			},
 		},
 	}
@@ -650,6 +943,7 @@ func TestExtractDetails(t *testing.T) {
 	table := []struct {
 		Name             string
 		Input            string
+		ExpectedErr      *string
 		ExpectedTitle    string
 		ExpectedPublicID string
 		ExpectedSeverity model.Severity
@@ -662,10 +956,15 @@ func TestExtractDetails(t *testing.T) {
 			ExpectedSeverity: model.SeverityCritical,
 		},
 		{
-			Name:             "No Extracted Values",
+			Name:        "No Public Id",
+			Input:       SimpleRuleNoId,
+			ExpectedErr: util.Ptr("rule does not contain a public Id"),
+		},
+		{
+			Name:             "Minimal Extracted Values, No Error",
 			Input:            SimpleRuleNoExtract,
 			ExpectedTitle:    "Required",
-			ExpectedPublicID: "",
+			ExpectedPublicID: "00000000-0000-0000-0000-000000000000",
 			ExpectedSeverity: model.SeverityUnknown,
 		},
 	}
@@ -682,11 +981,49 @@ func TestExtractDetails(t *testing.T) {
 			}
 
 			err := eng.ExtractDetails(detect)
-			assert.NoError(t, err)
+			if test.ExpectedErr == nil {
+				assert.NoError(t, err)
+			} else {
+				assert.Equal(t, *test.ExpectedErr, err.Error())
+			}
 
 			assert.Equal(t, test.ExpectedTitle, detect.Title)
 			assert.Equal(t, test.ExpectedPublicID, detect.PublicID)
 			assert.Equal(t, test.ExpectedSeverity, detect.Severity)
 		})
 	}
+}
+
+func TestGetDeployedPublicIds(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mio := mock.NewMockIOManager(ctrl)
+	path := "path"
+
+	mio.EXPECT().ReadDir(path).Return([]fs.DirEntry{
+		&MockDirEntry{
+			name: "00000000-0000-0000-0000-000000000000.yml",
+		},
+		&MockDirEntry{
+			name: "11111111-1111-1111-1111-111111111111.yaml",
+		},
+		&MockDirEntry{
+			name:  "ignored_dir",
+			isDir: true,
+		},
+		&MockDirEntry{
+			name: "ignored.txt",
+		},
+	}, nil)
+
+	eng := &ElastAlertEngine{
+		elastAlertRulesFolder: path,
+		IOManager:             mio,
+	}
+
+	ids, err := eng.getDeployedPublicIds()
+	assert.NoError(t, err)
+
+	assert.Len(t, ids, 2)
+	assert.Contains(t, ids, "00000000-0000-0000-0000-000000000000")
+	assert.Contains(t, ids, "11111111-1111-1111-1111-111111111111")
 }

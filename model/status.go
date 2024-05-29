@@ -7,8 +7,9 @@
 package model
 
 type Status struct {
-	Grid   *GridStatus   `json:"grid"`
-	Alerts *AlertsStatus `json:"alerts"`
+	Grid       *GridStatus       `json:"grid"`
+	Alerts     *AlertsStatus     `json:"alerts"`
+	Detections *DetectionsStatus `json:"detections"`
 }
 
 type GridStatus struct {
@@ -21,10 +22,26 @@ type AlertsStatus struct {
 	NewCount int `json:"newCount"`
 }
 
+type DetectionsStatus struct {
+	ElastAlert *EngineState `json:"elastalert"`
+	Suricata   *EngineState `json:"suricata"`
+	Strelka    *EngineState `json:"strelka"`
+}
+
+type EngineState struct {
+	IntegrityFailure bool `json:"integrityFailure"`
+	Migrating        bool `json:"migrating"`
+	MigrationFailure bool `json:"migrationFailure"`
+	Importing        bool `json:"importing"`
+	Syncing          bool `json:"syncing"`
+	SyncFailure      bool `json:"syncFailure"`
+}
+
 func NewStatus() *Status {
 	newStatus := &Status{
-		Grid:   &GridStatus{},
-		Alerts: &AlertsStatus{},
+		Grid:       &GridStatus{},
+		Alerts:     &AlertsStatus{},
+		Detections: &DetectionsStatus{},
 	}
 	return newStatus
 }

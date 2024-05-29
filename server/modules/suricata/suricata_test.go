@@ -8,14 +8,18 @@ package suricata
 import (
 	"context"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 )
 
 const (
@@ -205,28 +209,81 @@ func TestIndexModify(t *testing.T) {
 		`30000 "flowbits" "noalert; flowbits" # we'll turn this on later`,
 		`# An unrelated comment`,
 		`a83ba97b-a8e8-4258-be1b-022aff230e6e "flowbits" "noalert; flowbits"`,
+		`e4bd794a-8156-4fcc-b6a9-9fb2c9ecadc5 that this`,
+	}
+
+	output := indexModify(lines, false, false)
+
+	assert.Equal(t, 7, len(output))
+	assert.Contains(t, output, "90000")
+	assert.Equal(t, 0, output["90000"])
+	assert.Contains(t, output, "10000")
+	assert.Equal(t, 1, output["10000"])
+	assert.Contains(t, output, "20000")
+	assert.Equal(t, 2, output["20000"])
+	assert.Contains(t, output, "a83ba97b-a8e8-4258-be1b-022aff230e6e")
+	assert.Equal(t, 5, output["a83ba97b-a8e8-4258-be1b-022aff230e6e"])
+	assert.Contains(t, output, "90000")
+	assert.Equal(t, 0, output["90000"])
+	assert.Contains(t, output, "30000")
+	assert.Equal(t, 3, output["30000"])
+	assert.Contains(t, output, "e4bd794a-8156-4fcc-b6a9-9fb2c9ecadc5")
+	assert.Equal(t, 6, output["e4bd794a-8156-4fcc-b6a9-9fb2c9ecadc5"])
+
+	output = indexModify(lines, true, false)
+
+	assert.Equal(t, 5, len(output))
+	assert.Contains(t, output, "10000")
+	assert.Equal(t, 1, output["10000"])
+	assert.Contains(t, output, "a83ba97b-a8e8-4258-be1b-022aff230e6e")
+	assert.Equal(t, 5, output["a83ba97b-a8e8-4258-be1b-022aff230e6e"])
+	assert.Contains(t, output, "90000")
+	assert.Equal(t, 0, output["90000"])
+	assert.Contains(t, output, "30000")
+	assert.Equal(t, 3, output["30000"])
+	assert.Contains(t, output, "e4bd794a-8156-4fcc-b6a9-9fb2c9ecadc5")
+	assert.Equal(t, 6, output["e4bd794a-8156-4fcc-b6a9-9fb2c9ecadc5"])
+
+	output = indexModify(lines, false, true)
+
+	assert.Equal(t, 4, len(output))
+	assert.Contains(t, output, "10000")
+	assert.Equal(t, 1, output["10000"])
+	assert.Contains(t, output, "20000")
+	assert.Equal(t, 2, output["20000"])
+	assert.Contains(t, output, "a83ba97b-a8e8-4258-be1b-022aff230e6e")
+	assert.Equal(t, 5, output["a83ba97b-a8e8-4258-be1b-022aff230e6e"])
+	assert.Contains(t, output, "30000")
+	assert.Equal(t, 3, output["30000"])
+
+	output = indexModify(lines, true, true)
+
+	assert.Equal(t, 3, len(output))
+	assert.Contains(t, output, "10000")
+	assert.Equal(t, 1, output["10000"])
+	assert.Contains(t, output, "30000")
+	assert.Equal(t, 3, output["30000"])
+	assert.Contains(t, output, "a83ba97b-a8e8-4258-be1b-022aff230e6e")
+	assert.Equal(t, 5, output["a83ba97b-a8e8-4258-be1b-022aff230e6e"])
+}
+
+func TestIndexRules(t *testing.T) {
+	lines := []string{
+		`90000 this that`,
+		`10000 "flowbits" "noalert; flowbits"`,
+		`alert http any any -> any any (msg:"FILE pdf detected"; filemagic:"PDF document"; filestore; sid:1100000; rev:1;)`,
+		`#alert smtp any any -> any any (msg:"FILE pdf detected"; filemagic:"PDF document"; filestore; sid:1100001; rev:1;)`,
+		`# An unrelated comment`,
+		`a83ba97b-a8e8-4258-be1b-022aff230e6e "flowbits" "noalert; flowbits"`,
 		` # 23220e49-7229-43a1-92d5-d68e46d27105 "flowbits" "noalert; flowbits"`,
 		`e4bd794a-8156-4fcc-b6a9-9fb2c9ecadc5 that this`,
 	}
 
-	// Reminder: We only care about the lines that the API has added,
-	// if a line doesn't end with suricataModifyFromTo (`"flowbits" "noalert; flowbits"`)
-	// then it's a line we don't want to touch.
+	output := indexRules(lines, true)
 
-	output := indexModify(lines)
-
-	assert.Equal(t, 4, len(output))
-	assert.Contains(t, output, "10000")
-	assert.Equal(t, output["10000"], 1)
-	assert.Contains(t, output, "20000")
-	assert.Equal(t, output["20000"], 2)
-	assert.Contains(t, output, "a83ba97b-a8e8-4258-be1b-022aff230e6e")
-	assert.Equal(t, output["a83ba97b-a8e8-4258-be1b-022aff230e6e"], 5)
-	assert.Contains(t, output, "23220e49-7229-43a1-92d5-d68e46d27105")
-	assert.Equal(t, output["23220e49-7229-43a1-92d5-d68e46d27105"], 6)
-	assert.NotContains(t, output, "90000")
-	assert.NotContains(t, output, "30000")
-	assert.NotContains(t, output, "e4bd794a-8156-4fcc-b6a9-9fb2c9ecadc5")
+	assert.Equal(t, 1, len(output))
+	assert.Contains(t, output, "1100000")
+	assert.Equal(t, output["1100000"], 2)
 }
 
 func TestValidate(t *testing.T) {
@@ -297,7 +354,7 @@ func TestValidate(t *testing.T) {
 }
 
 func TestParse(t *testing.T) {
-	ruleset := util.Ptr("ruleset")
+	ruleset := "ruleset"
 
 	table := []struct {
 		Name               string
@@ -311,27 +368,32 @@ func TestParse(t *testing.T) {
 				"# Comment",
 				SimpleRule, // allowRegex has the SID, should allow
 				"",
-				` alert  http any any  <>   any any (metadata:signature_severity   Informational; sid: "20000"; msg:"a \"tricky\"\;\\ msg";)`, // allowRegex has the SID, should allow
+				`# alert  http any any  <>   any any (metadata:signature_severity   Informational; sid: "20000"; msg:"a \\\"tricky\"\;\\ msg";)`, // allowRegex has the SID, should allow
 				" # " + FlowbitsRuleA,
 				FlowbitsRuleB, // denyRegex will prevent this from being parsed
 				"alert http any any -> any any (msg:\"This rule doesn't have a SID\";)", // doesn't match either regex, will be left out
 			},
 			ExpectedDetections: []*model.Detection{
 				{
-					PublicID: SimpleRuleSID,
-					Title:    `GPL ATTACK_RESPONSE id check returned root`,
-					Severity: model.SeverityUnknown,
-					Content:  SimpleRule,
-					Engine:   model.EngineNameSuricata,
-					Language: model.SigLangSuricata,
-					Ruleset:  ruleset,
-					License:  "Unknown",
+					Author:    ruleset,
+					PublicID:  SimpleRuleSID,
+					Title:     `GPL ATTACK_RESPONSE id check returned root`,
+					Category:  `GPL ATTACK_RESPONSE`,
+					Severity:  model.SeverityUnknown,
+					Content:   SimpleRule,
+					IsEnabled: true,
+					Engine:    model.EngineNameSuricata,
+					Language:  model.SigLangSuricata,
+					Ruleset:   ruleset,
+					License:   "Unknown",
 				},
 				{
+					Author:   ruleset,
 					PublicID: "20000",
-					Title:    `a "tricky";\ msg`,
+					Title:    `a \"tricky";\ msg`,
+					Category: ``,
 					Severity: model.SeverityInformational,
-					Content:  `alert http any any <> any any (metadata:signature_severity Informational; sid:"20000"; msg:"a \"tricky\"\;\\ msg";)`,
+					Content:  `alert  http any any  <>   any any (metadata:signature_severity   Informational; sid: "20000"; msg:"a \\\"tricky\"\;\\ msg";)`,
 					Engine:   model.EngineNameSuricata,
 					Language: model.SigLangSuricata,
 					Ruleset:  ruleset,
@@ -345,6 +407,8 @@ func TestParse(t *testing.T) {
 	mod.allowRegex = regexp.MustCompile("[12]0000")
 	mod.denyRegex = regexp.MustCompile("flowbits")
 
+	mod.isRunning = true
+
 	for _, test := range table {
 		test := test
 		t.Run(test.Name, func(t *testing.T) {
@@ -352,7 +416,7 @@ func TestParse(t *testing.T) {
 
 			data := strings.Join(test.Lines, "\n")
 
-			detections, err := mod.ParseRules(data, ruleset)
+			detections, err := mod.ParseRules(data, ruleset, true)
 			if test.ExpectedError == nil {
 				assert.NoError(t, err)
 				assert.Equal(t, test.ExpectedDetections, detections)
@@ -364,7 +428,7 @@ func TestParse(t *testing.T) {
 	}
 }
 
-func TestSyncSuricata(t *testing.T) {
+func TestSyncLocalSuricata(t *testing.T) {
 	table := []struct {
 		Name             string
 		InitialSettings  []*model.Setting
@@ -384,9 +448,9 @@ func TestSyncSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules":      "\n" + SimpleRule,
-				"idstools.sids.enabled":            "\n" + SimpleRuleSID,
-				"idstools.sids.disabled":           "\n# " + SimpleRuleSID,
+				"idstools.rules.local__rules":      SimpleRule,
+				"idstools.sids.enabled":            SimpleRuleSID,
+				"idstools.sids.disabled":           "",
 				"idstools.sids.modify":             "",
 				"suricata.thresholding.sids__yaml": "{}\n",
 			},
@@ -402,9 +466,9 @@ func TestSyncSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules":      "\n" + SimpleRule,
-				"idstools.sids.enabled":            "\n# " + SimpleRuleSID,
-				"idstools.sids.disabled":           "\n" + SimpleRuleSID,
+				"idstools.rules.local__rules":      "",
+				"idstools.sids.enabled":            "",
+				"idstools.sids.disabled":           SimpleRuleSID,
 				"idstools.sids.modify":             "",
 				"suricata.thresholding.sids__yaml": "{}\n",
 			},
@@ -428,7 +492,7 @@ func TestSyncSuricata(t *testing.T) {
 			ExpectedSettings: map[string]string{
 				"idstools.rules.local__rules":      SimpleRule,
 				"idstools.sids.enabled":            SimpleRuleSID,
-				"idstools.sids.disabled":           "# " + SimpleRuleSID,
+				"idstools.sids.disabled":           "",
 				"idstools.sids.modify":             "",
 				"suricata.thresholding.sids__yaml": "{}\n",
 			},
@@ -450,8 +514,8 @@ func TestSyncSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules":      SimpleRule,
-				"idstools.sids.enabled":            "# " + SimpleRuleSID,
+				"idstools.rules.local__rules":      "",
+				"idstools.sids.enabled":            "",
 				"idstools.sids.disabled":           SimpleRuleSID,
 				"idstools.sids.modify":             "",
 				"suricata.thresholding.sids__yaml": "{}\n",
@@ -468,8 +532,8 @@ func TestSyncSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules":      "\n" + FlowbitsRuleA,
-				"idstools.sids.enabled":            "\n" + FlowbitsRuleASID,
+				"idstools.rules.local__rules":      FlowbitsRuleA,
+				"idstools.sids.enabled":            FlowbitsRuleASID,
 				"idstools.sids.disabled":           "",
 				"idstools.sids.modify":             "",
 				"suricata.thresholding.sids__yaml": "{}\n",
@@ -486,10 +550,10 @@ func TestSyncSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules":      "\n" + FlowbitsRuleA,
-				"idstools.sids.enabled":            "\n" + FlowbitsRuleASID,
+				"idstools.rules.local__rules":      FlowbitsRuleA,
+				"idstools.sids.enabled":            FlowbitsRuleASID,
 				"idstools.sids.disabled":           "",
-				"idstools.sids.modify":             "\n" + FlowbitsRuleASID + ` "flowbits" "noalert; flowbits"`,
+				"idstools.sids.modify":             FlowbitsRuleASID + ` "flowbits" "noalert; flowbits"`,
 				"suricata.thresholding.sids__yaml": "{}\n",
 			},
 		},
@@ -537,7 +601,7 @@ func TestSyncSuricata(t *testing.T) {
 				"idstools.rules.local__rules":      FlowbitsRuleB,
 				"idstools.sids.enabled":            FlowbitsRuleBSID,
 				"idstools.sids.disabled":           "# " + FlowbitsRuleBSID,
-				"idstools.sids.modify":             "\n" + FlowbitsRuleBSID + ` "flowbits" "noalert; flowbits"`,
+				"idstools.sids.modify":             FlowbitsRuleBSID + ` "flowbits" "noalert; flowbits"`,
 				"suricata.thresholding.sids__yaml": "{}\n",
 			},
 		},
@@ -590,11 +654,11 @@ func TestSyncSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules":      "\n" + SimpleRule,
-				"idstools.sids.enabled":            "\n" + SimpleRuleSID,
-				"idstools.sids.disabled":           "\n# " + SimpleRuleSID,
-				"idstools.sids.modify":             "",
-				"suricata.thresholding.sids__yaml": "\"10000\":\n    - modify:\n        regex: rev:7;\n        value: rev:8;\n",
+				"idstools.rules.local__rules":      SimpleRule,
+				"idstools.sids.enabled":            SimpleRuleSID,
+				"idstools.sids.disabled":           "",
+				"idstools.sids.modify":             SimpleRuleSID + ` "rev:7;" "rev:8;"`,
+				"suricata.thresholding.sids__yaml": "{}\n",
 			},
 		},
 		{
@@ -618,9 +682,9 @@ func TestSyncSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules":      "\n" + SimpleRule,
-				"idstools.sids.enabled":            "\n" + SimpleRuleSID,
-				"idstools.sids.disabled":           "\n# " + SimpleRuleSID,
+				"idstools.rules.local__rules":      SimpleRule,
+				"idstools.sids.enabled":            SimpleRuleSID,
+				"idstools.sids.disabled":           "",
 				"idstools.sids.modify":             "",
 				"suricata.thresholding.sids__yaml": "\"10000\":\n    - suppress:\n        gen_id: 1\n        track: by_src\n        ip: 0.0.0.0\n",
 			},
@@ -648,9 +712,9 @@ func TestSyncSuricata(t *testing.T) {
 				},
 			},
 			ExpectedSettings: map[string]string{
-				"idstools.rules.local__rules":      "\n" + SimpleRule,
-				"idstools.sids.enabled":            "\n" + SimpleRuleSID,
-				"idstools.sids.disabled":           "\n# " + SimpleRuleSID,
+				"idstools.rules.local__rules":      SimpleRule,
+				"idstools.sids.enabled":            SimpleRuleSID,
+				"idstools.sids.disabled":           "",
 				"idstools.sids.modify":             "",
 				"suricata.thresholding.sids__yaml": "\"10000\":\n    - threshold:\n        gen_id: 1\n        type: limit\n        track: by_src\n        count: 5\n        seconds: 60\n",
 			},
@@ -671,7 +735,106 @@ func TestSyncSuricata(t *testing.T) {
 			})
 			mod.srv.DetectionEngines[model.EngineNameSuricata] = mod
 
+			mod.isRunning = true
+
 			errMap, err := mod.SyncLocalDetections(ctx, test.Detections)
+
+			assert.Equal(t, test.ExpectedErr, err)
+			assert.Equal(t, test.ExpectedErrMap, errMap)
+
+			set, err := mCfgStore.GetSettings(ctx)
+			assert.NoError(t, err, "GetSettings should not return an error")
+
+			for id, expectedValue := range test.ExpectedSettings {
+				setting := settingByID(set, id)
+				assert.NotNil(t, setting, "Setting %s", id)
+				assert.Equal(t, expectedValue, setting.Value, "Setting %s", id)
+			}
+		})
+	}
+}
+
+func TestSyncCommunitySuricata(t *testing.T) {
+	table := []struct {
+		Name             string
+		InitialSettings  []*model.Setting
+		Detections       []*model.Detection // Content (Valid Rule), PublicID, IsEnabled
+		ChangedByUser    bool
+		InitMock         func(*servermock.MockDetectionstore)
+		ExpectedSettings map[string]string
+		ExpectedErr      error
+		ExpectedErrMap   map[string]string
+	}{
+		{
+			Name:            "Non-User Update Community Simple Rule",
+			InitialSettings: emptySettings(),
+			Detections: []*model.Detection{
+				{
+					PublicID:    SimpleRuleSID,
+					Content:     SimpleRule,
+					IsEnabled:   true,
+					IsCommunity: true,
+				},
+			},
+			InitMock: func(detStore *servermock.MockDetectionstore) {
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
+				detStore.EXPECT().CreateDetection(gomock.Any(), gomock.Any()).Return(nil, nil)
+			},
+			ExpectedSettings: map[string]string{
+				"idstools.sids.enabled":            "",
+				"idstools.sids.disabled":           "",
+				"idstools.sids.modify":             "",
+				"suricata.thresholding.sids__yaml": "{}\n",
+			},
+		},
+		{
+			Name:            "User Update Community Simple Rule",
+			InitialSettings: emptySettings(),
+			Detections: []*model.Detection{
+				{
+					PublicID:    SimpleRuleSID,
+					Content:     SimpleRule,
+					IsEnabled:   true,
+					IsCommunity: true,
+				},
+			},
+			ChangedByUser: true,
+			InitMock: func(detStore *servermock.MockDetectionstore) {
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
+				detStore.EXPECT().CreateDetection(gomock.Any(), gomock.Any()).Return(nil, nil)
+			},
+			ExpectedSettings: map[string]string{
+				"idstools.sids.enabled":            SimpleRuleSID,
+				"idstools.sids.disabled":           "",
+				"idstools.sids.modify":             "",
+				"suricata.thresholding.sids__yaml": "{}\n",
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+
+	for _, test := range table {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			detStore := servermock.NewMockDetectionstore(ctrl)
+			test.InitMock(detStore)
+
+			mCfgStore := server.NewMemConfigStore(test.InitialSettings)
+			mod := NewSuricataEngine(&server.Server{
+				Configstore:      mCfgStore,
+				DetectionEngines: map[model.EngineName]server.DetectionEngine{},
+				Detectionstore:   detStore,
+			})
+			mod.srv.DetectionEngines[model.EngineNameSuricata] = mod
+
+			mod.isRunning = true
+
+			ctx := web.MarkChangedByUser(context.Background(), test.ChangedByUser)
+
+			errMap, err := mod.syncCommunityDetections(ctx, test.Detections, false, test.InitialSettings)
 
 			assert.Equal(t, test.ExpectedErr, err)
 			assert.Equal(t, test.ExpectedErrMap, errMap)
@@ -694,6 +857,7 @@ func TestExtractDetails(t *testing.T) {
 	table := []struct {
 		Name             string
 		Input            string
+		ExpectedErr      *string
 		ExpectedTitle    string
 		ExpectedPublicID string
 		ExpectedSeverity model.Severity
@@ -706,10 +870,15 @@ func TestExtractDetails(t *testing.T) {
 			ExpectedSeverity: model.SeverityHigh,
 		},
 		{
-			Name:             "No Extracted Values",
-			Input:            `alert tls $HOME_NET any -> $EXTERNAL_NET any (flow:established,to_server; tls.sni; bsize:24; content:"nav.offlinedocument.site"; fast_pattern; reference:url,www.sentinelone.com/labs/a-glimpse-into-future-scarcruft-campaigns-attackers-gather-strategic-intelligence-and-target-cybersecurity-professionals/; classtype:trojan-activity; rev:1; metadata:affected_product Windows_XP_Vista_7_8_10_Server_32_64_Bit, attack_target Client_Endpoint, created_at 2024_01_22, deployment Perimeter, performance_impact Low, confidence Medium, tag ScarCruft, tag TA409, updated_at 2024_01_22;)`,
-			ExpectedTitle:    "Detection title not yet provided - click here to update this title",
-			ExpectedPublicID: "",
+			Name:        "Missing Public Id",
+			Input:       `alert tls $HOME_NET any -> $EXTERNAL_NET any (flow:established,to_server; tls.sni; bsize:24; content:"nav.offlinedocument.site"; fast_pattern; reference:url,www.sentinelone.com/labs/a-glimpse-into-future-scarcruft-campaigns-attackers-gather-strategic-intelligence-and-target-cybersecurity-professionals/; classtype:trojan-activity; rev:1; metadata:affected_product Windows_XP_Vista_7_8_10_Server_32_64_Bit, attack_target Client_Endpoint, created_at 2024_01_22, deployment Perimeter, performance_impact Low, confidence Medium, tag ScarCruft, tag TA409, updated_at 2024_01_22;)`,
+			ExpectedErr: util.Ptr("rule does not contain a public Id"),
+		},
+		{
+			Name:             "Minimal Extraction",
+			Input:            `alert any any <> any any (msg:"Required";sid:10000;)`,
+			ExpectedTitle:    "Required",
+			ExpectedPublicID: "10000",
 			ExpectedSeverity: model.SeverityUnknown,
 		},
 	}
@@ -726,11 +895,609 @@ func TestExtractDetails(t *testing.T) {
 			}
 
 			err := eng.ExtractDetails(detect)
-			assert.NoError(t, err)
+			if test.ExpectedErr == nil {
+				assert.NoError(t, err)
+			} else {
+				assert.Equal(t, *test.ExpectedErr, err.Error())
+			}
 
 			assert.Equal(t, test.ExpectedTitle, detect.Title)
 			assert.Equal(t, test.ExpectedPublicID, detect.PublicID)
 			assert.Equal(t, test.ExpectedSeverity, detect.Severity)
 		})
 	}
+}
+
+func TestConslidateEnabled(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		Name         string
+		Rules        []string
+		Disabled     []string
+		ExpectedSIDs []string
+	}{
+		{
+			Name:         "Empty",
+			Rules:        []string{},
+			Disabled:     []string{},
+			ExpectedSIDs: []string{},
+		},
+		{
+			Name:         "No Disabled",
+			Rules:        []string{"10000", "20000", "30000", "40000", "50000"},
+			Disabled:     []string{},
+			ExpectedSIDs: []string{"10000", "20000", "30000", "40000", "50000"},
+		},
+		{
+			Name:         "No Enabled",
+			Rules:        []string{},
+			Disabled:     []string{"10000", "20000", "30000", "40000", "50000"},
+			ExpectedSIDs: []string{},
+		},
+		{
+			Name:         "Some Enabled, Some Disabled",
+			Rules:        []string{"10000", "20000", "30000", "40000", "50000"},
+			Disabled:     []string{"20000", "40000", "60000"},
+			ExpectedSIDs: []string{"10000", "30000", "50000"},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			rulesIndex := map[string]int{}
+			for _, rule := range test.Rules {
+				rulesIndex[rule] = 0
+			}
+
+			disabledIndex := map[string]int{}
+			for _, rule := range test.Disabled {
+				disabledIndex[rule] = 0
+			}
+
+			deployed := consolidateEnabled(rulesIndex, disabledIndex)
+
+			sort.Strings(deployed)
+			sort.Strings(test.ExpectedSIDs)
+
+			assert.Equal(t, test.ExpectedSIDs, deployed)
+		})
+	}
+}
+
+func TestUpdateLocal(t *testing.T) {
+	localLines := []string{
+		"100000",
+		"200000",
+		"300000",
+	}
+
+	localIndex := map[string]int{
+		"100000": 0,
+		"200000": 1,
+		"300000": 2,
+	}
+
+	sid := "400000"
+
+	det := &model.Detection{
+		IsEnabled: true,
+		Content:   sid,
+	}
+
+	// is enabled, not present
+	localLines = updateLocal(localLines, localIndex, sid, false, det)
+
+	assert.Equal(t, 4, len(localLines))
+	assert.Equal(t, "400000", localLines[3])
+	assert.Equal(t, 4, len(localIndex))
+	assert.Equal(t, 3, localIndex["400000"])
+
+	det.Content = "400000!"
+
+	// no flowbits
+	// is enabled, present, different content
+	localLines = updateLocal(localLines, localIndex, sid, false, det)
+
+	assert.Equal(t, 4, len(localLines))
+	assert.Equal(t, "400000!", localLines[3])
+	assert.Equal(t, 4, len(localIndex))
+	assert.Equal(t, 3, localIndex["400000"])
+
+	det.IsEnabled = false
+
+	// is disabled, present, should be removed
+	localLines = updateLocal(localLines, localIndex, sid, false, det)
+
+	assert.Equal(t, 4, len(localLines))
+	assert.Equal(t, "", localLines[3])
+	assert.Equal(t, 3, len(localIndex))
+	assert.NotContains(t, localIndex, "400000")
+
+	// is disabled, not present, no change
+	localLines = updateLocal(localLines, localIndex, sid, false, det)
+
+	assert.Equal(t, 4, len(localLines))
+	assert.Equal(t, "", localLines[3])
+	assert.Equal(t, 3, len(localIndex))
+	assert.NotContains(t, localIndex, "400000")
+
+	// reset
+	localLines = localLines[:3]
+	det.Content = "400000"
+
+	// again, but with Flowbits
+	// is enabled, not present
+	localLines = updateLocal(localLines, localIndex, sid, true, det)
+
+	assert.Equal(t, 4, len(localLines))
+	assert.Equal(t, "400000", localLines[3])
+	assert.Equal(t, 4, len(localIndex))
+	assert.Equal(t, 3, localIndex["400000"])
+
+	det.Content = "400000!"
+
+	// is enabled, present, different content
+	localLines = updateLocal(localLines, localIndex, sid, true, det)
+
+	assert.Equal(t, 4, len(localLines))
+	assert.Equal(t, "400000!", localLines[3])
+	assert.Equal(t, 4, len(localIndex))
+	assert.Equal(t, 3, localIndex["400000"])
+
+	det.IsEnabled = false
+
+	// is disabled, present, should be NOT removed because Flowbits
+	localLines = updateLocal(localLines, localIndex, sid, true, det)
+
+	assert.Equal(t, 4, len(localLines))
+	assert.Equal(t, "400000!", localLines[3])
+	assert.Equal(t, 4, len(localIndex))
+	assert.Contains(t, localIndex, "400000")
+
+	det.PendingDelete = true
+
+	// PendingDelete should remove it regardless the rest of the state
+	localLines = updateLocal(localLines, localIndex, sid, true, det)
+
+	assert.Equal(t, 4, len(localLines))
+	assert.Equal(t, "", localLines[3])
+	assert.Equal(t, 3, len(localIndex))
+	assert.NotContains(t, localIndex, "400000")
+}
+
+func TestUpdateEnabled(t *testing.T) {
+	enableLines := []string{}
+	enableIndex := map[string]int{}
+
+	sid := "12345"
+	det := &model.Detection{
+		PublicID:  sid,
+		IsEnabled: false,
+	}
+
+	// no flowbits
+	// disabled, no change
+	enableLines = updateEnabled(enableLines, enableIndex, sid, false, det)
+
+	assert.Equal(t, 0, len(enableLines))
+	assert.Equal(t, 0, len(enableIndex))
+
+	det.IsEnabled = true
+
+	// enabled
+	enableLines = updateEnabled(enableLines, enableIndex, sid, false, det)
+
+	assert.Equal(t, 1, len(enableLines))
+	assert.Equal(t, sid, enableLines[0])
+	assert.Equal(t, 1, len(enableIndex))
+	assert.Equal(t, 0, enableIndex[sid])
+
+	det.IsEnabled = false
+
+	// disabled, remove entry
+	enableLines = updateEnabled(enableLines, enableIndex, sid, false, det)
+
+	assert.Equal(t, 1, len(enableLines))
+	assert.Equal(t, "", enableLines[0])
+	assert.Equal(t, 0, len(enableIndex))
+	assert.NotContains(t, enableIndex, sid)
+
+	det.IsEnabled = true
+
+	// enabled, restore entry
+	enableLines = updateEnabled(enableLines, enableIndex, sid, false, det)
+
+	assert.Equal(t, 2, len(enableLines))
+	assert.Equal(t, sid, enableLines[1])
+	assert.Equal(t, 1, len(enableIndex))
+	assert.Equal(t, 1, enableIndex[sid])
+
+	det.PendingDelete = true
+
+	// pending delete
+	enableLines = updateEnabled(enableLines, enableIndex, sid, false, det)
+
+	assert.Equal(t, 2, len(enableLines))
+	assert.Equal(t, "", enableLines[1])
+	assert.Equal(t, 0, len(enableIndex))
+	assert.NotContains(t, enableIndex, sid)
+
+	// reset for flowbits
+	enableLines = []string{}
+	enableIndex = map[string]int{}
+
+	det.IsEnabled = true
+	det.PendingDelete = false
+
+	// with flowbits
+	// enabled
+	enableLines = updateEnabled(enableLines, enableIndex, sid, true, det)
+
+	assert.Equal(t, 1, len(enableLines))
+	assert.Equal(t, sid, enableLines[0])
+	assert.Equal(t, 1, len(enableIndex))
+	assert.Equal(t, 0, enableIndex[sid])
+
+	det.IsEnabled = true
+
+	// disabled
+	enableLines = updateEnabled(enableLines, enableIndex, sid, true, det)
+
+	assert.Equal(t, 1, len(enableLines))
+	assert.Equal(t, sid, enableLines[0])
+	assert.Equal(t, 1, len(enableIndex))
+	assert.Equal(t, 0, enableIndex[sid])
+}
+
+func TestUpdateModify(t *testing.T) {
+	modifyLines := []string{}
+	modifyIndex := map[string]int{}
+
+	sid := "12345"
+
+	det := &model.Detection{
+		PublicID:  sid,
+		IsEnabled: true,
+	}
+
+	// enabled, no override
+	modifyLines = updateModify(modifyLines, modifyIndex, sid, det)
+
+	assert.Equal(t, 0, len(modifyLines))
+	assert.Equal(t, 0, len(modifyIndex))
+
+	det.IsEnabled = false
+
+	// disabled, no override
+	modifyLines = updateModify(modifyLines, modifyIndex, sid, det)
+
+	assert.Equal(t, 0, len(modifyLines))
+	assert.Equal(t, 0, len(modifyIndex))
+
+	det.Overrides = []*model.Override{
+		{
+			Type: model.OverrideTypeModify,
+			OverrideParameters: model.OverrideParameters{
+				Regex: util.Ptr("A"),
+				Value: util.Ptr("B"),
+			},
+			IsEnabled: true,
+		},
+	}
+
+	// disabled, with override
+	modifyLines = updateModify(modifyLines, modifyIndex, sid, det)
+
+	assert.Equal(t, 0, len(modifyLines))
+	assert.Equal(t, 0, len(modifyIndex))
+
+	det.IsEnabled = true
+
+	// enabled, with override
+	modifyLines = updateModify(modifyLines, modifyIndex, sid, det)
+
+	assert.Equal(t, 1, len(modifyLines))
+	assert.Equal(t, `12345 "A" "B"`, modifyLines[0])
+	assert.Equal(t, 1, len(modifyIndex))
+	assert.Equal(t, 0, modifyIndex["12345"])
+
+	det.Overrides[0].Value = util.Ptr(`"C"`)
+
+	// enabled, with override, new contents
+	modifyLines = updateModify(modifyLines, modifyIndex, sid, det)
+
+	assert.Equal(t, 1, len(modifyLines))
+	assert.Equal(t, `12345 "A" "\"C\""`, modifyLines[0])
+	assert.Equal(t, 1, len(modifyIndex))
+	assert.Equal(t, 0, modifyIndex["12345"])
+
+	det.Overrides[0].IsEnabled = false
+
+	// enabled, with disabled override
+	modifyLines = updateModify(modifyLines, modifyIndex, sid, det)
+
+	assert.Equal(t, 1, len(modifyLines))
+	assert.Equal(t, ``, modifyLines[0])
+	assert.Equal(t, 0, len(modifyIndex))
+	assert.NotContains(t, modifyIndex, "12345")
+
+	// put it back so we can take it out...
+	det.Overrides[0].IsEnabled = true
+	modifyLines = updateModify(modifyLines, modifyIndex, sid, det)
+	assert.Equal(t, 2, len(modifyLines))
+	assert.Equal(t, `12345 "A" "\"C\""`, modifyLines[1])
+	assert.Equal(t, 1, len(modifyIndex))
+	assert.Equal(t, 1, modifyIndex["12345"])
+
+	det.PendingDelete = true
+
+	// PendingDelete, remove it regardless the rest of state
+	modifyLines = updateModify(modifyLines, modifyIndex, sid, det)
+
+	assert.Equal(t, 2, len(modifyLines))
+	assert.Equal(t, ``, modifyLines[1])
+	assert.Equal(t, 0, len(modifyIndex))
+	assert.NotContains(t, modifyIndex, "12345")
+}
+
+func TestUpdateDisabled(t *testing.T) {
+	disableLines := []string{}
+	disableIndex := map[string]int{}
+
+	sid := "12345"
+	det := &model.Detection{
+		PublicID:  sid,
+		IsEnabled: true,
+	}
+
+	// no flowbits
+	// enabled, no change
+	disableLines = updateDisabled(disableLines, disableIndex, sid, false, det)
+
+	assert.Equal(t, 0, len(disableLines))
+	assert.Equal(t, 0, len(disableIndex))
+
+	det.IsEnabled = false
+
+	// disabled
+	disableLines = updateDisabled(disableLines, disableIndex, sid, false, det)
+
+	assert.Equal(t, 1, len(disableLines))
+	assert.Equal(t, sid, disableLines[0])
+	assert.Equal(t, 1, len(disableIndex))
+	assert.Equal(t, 0, disableIndex[sid])
+
+	det.IsEnabled = true
+
+	// enabled, remove disabled entry
+	disableLines = updateDisabled(disableLines, disableIndex, sid, false, det)
+
+	assert.Equal(t, 1, len(disableLines))
+	assert.Equal(t, "", disableLines[0])
+	assert.Equal(t, 0, len(disableIndex))
+	assert.NotContains(t, disableIndex, sid)
+
+	det.IsEnabled = false
+
+	// disabled
+	disableLines = updateDisabled(disableLines, disableIndex, sid, false, det)
+
+	assert.Equal(t, 2, len(disableLines))
+	assert.Equal(t, sid, disableLines[1])
+	assert.Equal(t, 1, len(disableIndex))
+	assert.Equal(t, 1, disableIndex[sid])
+
+	det.PendingDelete = true
+
+	// pending delete
+	disableLines = updateDisabled(disableLines, disableIndex, sid, false, det)
+
+	assert.Equal(t, 2, len(disableLines))
+	assert.Equal(t, "", disableLines[1])
+	assert.Equal(t, 0, len(disableIndex))
+	assert.NotContains(t, disableIndex, sid)
+
+	// reset for flowbits
+	disableLines = []string{}
+	disableIndex = map[string]int{}
+
+	det.IsEnabled = false
+	det.PendingDelete = false
+
+	// with flowbits
+	// disabled
+	disableLines = updateDisabled(disableLines, disableIndex, sid, true, det)
+
+	assert.Equal(t, 0, len(disableLines))
+	assert.Equal(t, 0, len(disableIndex))
+
+	det.IsEnabled = true
+
+	// enabled
+	disableLines = updateDisabled(disableLines, disableIndex, sid, true, det)
+
+	assert.Equal(t, 0, len(disableLines))
+	assert.Equal(t, 0, len(disableIndex))
+}
+
+func TestUpdateModifyForDisabledFlowbits(t *testing.T) {
+	modifyLines := []string{}
+	modifyIndex := map[string]int{}
+
+	sid := "12345"
+	det := &model.Detection{
+		PublicID: sid,
+	}
+
+	// not present, add
+	modifyLines = updateModifyForDisabledFlowbits(modifyLines, modifyIndex, sid, det)
+
+	assert.Equal(t, 1, len(modifyLines))
+	assert.Equal(t, sid+" "+modifyFromTo, modifyLines[0])
+	assert.Equal(t, 1, len(modifyIndex))
+	assert.Equal(t, 0, modifyIndex[sid])
+
+	// present, don't add
+	modifyLines = updateModifyForDisabledFlowbits(modifyLines, modifyIndex, sid, det)
+
+	assert.Equal(t, 1, len(modifyLines))
+	assert.Equal(t, sid+" "+modifyFromTo, modifyLines[0])
+	assert.Equal(t, 1, len(modifyIndex))
+	assert.Equal(t, 0, modifyIndex[sid])
+
+	det.PendingDelete = true
+
+	// pending delete, remove
+	modifyLines = updateModifyForDisabledFlowbits(modifyLines, modifyIndex, sid, det)
+
+	assert.Equal(t, 1, len(modifyLines))
+	assert.Equal(t, "", modifyLines[0])
+	assert.Equal(t, 0, len(modifyIndex))
+}
+
+func TestUpdateThreshold(t *testing.T) {
+	thresholdIndex := map[string][]*model.Override{}
+	genId := 1
+	sid := "12345"
+	det := &model.Detection{
+		PublicID: sid,
+	}
+
+	// no overrides, no change
+	updateThreshold(thresholdIndex, genId, det)
+
+	assert.Equal(t, 0, len(thresholdIndex))
+
+	det.Overrides = []*model.Override{
+		{
+			IsEnabled: true,
+			Type:      model.OverrideTypeThreshold,
+			OverrideParameters: model.OverrideParameters{
+				ThresholdType: util.Ptr("limit"),
+				Track:         util.Ptr("by_src"),
+				Count:         util.Ptr(5),
+				Seconds:       util.Ptr(60),
+			},
+		},
+		{
+			IsEnabled: true,
+			Type:      model.OverrideTypeSuppress,
+			OverrideParameters: model.OverrideParameters{
+				Track: util.Ptr("by_dest"),
+				IP:    util.Ptr("127.0.0.1"),
+			},
+		},
+		{
+			IsEnabled: true,
+			Type:      model.OverrideTypeModify,
+			OverrideParameters: model.OverrideParameters{
+				Regex: util.Ptr("A"),
+				Value: util.Ptr("B"),
+			},
+		},
+	}
+
+	// add two
+	updateThreshold(thresholdIndex, genId, det)
+
+	assert.Equal(t, 1, len(thresholdIndex))
+	assert.Equal(t, 2, len(thresholdIndex["12345"]))
+	assert.Equal(t, &model.Override{
+		IsEnabled: true,
+		Type:      model.OverrideTypeThreshold,
+		OverrideParameters: model.OverrideParameters{
+			GenID:         util.Ptr(genId),
+			ThresholdType: util.Ptr("limit"),
+			Track:         util.Ptr("by_src"),
+			Count:         util.Ptr(5),
+			Seconds:       util.Ptr(60),
+		},
+	}, thresholdIndex["12345"][0])
+	assert.Equal(t, &model.Override{
+		IsEnabled: true,
+		Type:      model.OverrideTypeSuppress,
+		OverrideParameters: model.OverrideParameters{
+			GenID: util.Ptr(genId),
+			Track: util.Ptr("by_dest"),
+			IP:    util.Ptr("127.0.0.1"),
+		},
+	}, thresholdIndex[sid][1])
+
+	// update
+	det.Overrides = []*model.Override{
+		{
+			IsEnabled: true,
+			Type:      model.OverrideTypeSuppress,
+			OverrideParameters: model.OverrideParameters{
+				Track: util.Ptr("by_src"),
+				IP:    util.Ptr("0.0.0.0"),
+			},
+		},
+	}
+
+	// add two
+	updateThreshold(thresholdIndex, genId, det)
+
+	assert.Equal(t, 1, len(thresholdIndex))
+	assert.Equal(t, 1, len(thresholdIndex["12345"]))
+	assert.Equal(t, &model.Override{
+		IsEnabled: true,
+		Type:      model.OverrideTypeSuppress,
+		OverrideParameters: model.OverrideParameters{
+			GenID: util.Ptr(genId),
+			Track: util.Ptr("by_src"),
+			IP:    util.Ptr("0.0.0.0"),
+		},
+	}, thresholdIndex["12345"][0])
+
+	det.PendingDelete = true
+
+	updateThreshold(thresholdIndex, genId, det)
+
+	assert.Equal(t, 0, len(thresholdIndex))
+}
+
+func TestRemoveFromIndex(t *testing.T) {
+	localLines := []string{
+		"100000",
+		"200000",
+		"300000",
+	}
+
+	localIndex := map[string]int{
+		"100000": 0,
+		"200000": 1,
+		"300000": 2,
+	}
+
+	// remove non-existent entry, no change
+	removeFromIndex(localLines, localIndex, "500000")
+
+	assert.Equal(t, []string{
+		"100000",
+		"200000",
+		"300000",
+	}, localLines)
+	assert.Equal(t, map[string]int{
+		"100000": 0,
+		"200000": 1,
+		"300000": 2,
+	}, localIndex)
+
+	// remove existing entry
+	removeFromIndex(localLines, localIndex, "200000")
+
+	assert.Equal(t, []string{
+		"100000",
+		"",
+		"300000",
+	}, localLines)
+	assert.Equal(t, map[string]int{
+		"100000": 0,
+		"300000": 2,
+	}, localIndex)
 }

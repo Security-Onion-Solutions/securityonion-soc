@@ -35,7 +35,6 @@ test('extract suricata', () => {
 	expect(comp.extractedLogic).toBe('any any <> any any');
 	expect(comp.extractedCreated).toBe('2020-01-01');
 	expect(comp.extractedUpdated).toBe('2020-01-02');
-	expect(comp.extractedAuthor).toBe('Bob');
 });
 
 test('extract strelka', () => {
@@ -59,7 +58,6 @@ test('extract strelka', () => {
 	expect(comp.extractedLogic).toBe('strings:\n$a = "test"\ncondition:\n$a');
 	expect(comp.extractedCreated).toBe('2020-01-01');
 	expect(comp.extractedUpdated).toBe('');
-	expect(comp.extractedAuthor).toBe('Bob');
 });
 
 test('extract elastalert', () => {
@@ -83,7 +81,6 @@ test('extract elastalert', () => {
 	expect(comp.extractedLogic).toBe('logsource:\n  product: windows\n  category: file_event\ndetection:\n  selection:\n    TargetFilename|contains:\n      - ds7002.lnk\n      - ds7002.pdf\n      - ds7002.zip\n    condition: selection');
 	expect(comp.extractedCreated).toBe('2018/11/20');
 	expect(comp.extractedUpdated).toBe('2023/02/20');
-	expect(comp.extractedAuthor).toBe('@41thexplorer');
 });
 
 test('fixProtocol', () => {
@@ -275,7 +272,7 @@ test('canAddOverride elastalert', () => {
 
 	comp.detect.overrides = [
 		{
-			type: 'custom filter',
+			type: 'customFilter',
 			isEnabled: 'isEnabled',
 			createdAt: 'createdAt',
 			updatedAt: 'updatedAt',
@@ -290,7 +287,7 @@ test('canAddOverride elastalert', () => {
 		},
 	];
 
-	expect(comp.canAddOverride()).toBe(false);
+	expect(comp.canAddOverride()).toBe(true);
 });
 
 test('tagOverrides', () => {
@@ -305,6 +302,104 @@ test('tagOverrides', () => {
 	comp.tagOverrides();
 
 	for (let i = 0; i < comp.detect.overrides.length; i++) {
-		expect(comp.detect.overrides[0]).toStrictEqual({ index: 0 });
+		expect(comp.detect.overrides[i]).toStrictEqual({ index: i });
 	}
 });
+
+test('deleteDetection', async () => {
+	const mock = jest.fn().mockReturnValue(Promise.resolve({ data: [] }));
+	const showErrorMock = mockShowError();
+	comp.$root.papi['delete'] = mock;
+	comp.$route.params.id = "testid"
+	await comp.confirmDeleteDetection();
+	expect(comp.confirmDeleteDialog).toBe(false);
+	expect(mock).toHaveBeenCalledTimes(1);
+	expect(mock).toHaveBeenCalledWith('/detection/testid');
+	expect(comp.$root.loading).toBe(false);
+	expect(showErrorMock).toHaveBeenCalledTimes(0);
+	expect(comp.$router.length).toBe(1);
+});
+
+test('deleteDetectionCancel', () => {
+	expect(comp.confirmDeleteDialog).toBe(false);
+	comp.deleteDetection();
+	expect(comp.confirmDeleteDialog).toBe(true);
+	comp.cancelDeleteDetection();
+	expect(comp.confirmDeleteDialog).toBe(false);
+	comp.deleteDetection();
+})
+
+test('deleteDetectionFailure', async () => {
+	resetPapi().mockPapi("delete", null, new Error("something bad"));
+	const showErrorMock = mockShowError();
+	comp.$root.papi['delete'] = mock;
+	comp.$route.params.id = "testid"
+	comp.deleteDetection();
+	await comp.confirmDeleteDetection();
+	expect(comp.confirmDeleteDialog).toBe(false);
+	expect(mock).toHaveBeenCalledTimes(1);
+	expect(mock).toHaveBeenCalledWith('/detection/testid');
+	expect(comp.$root.loading).toBe(false);
+	expect(showErrorMock).toHaveBeenCalledTimes(1);
+	expect(comp.$router.length).toBe(0);
+});
+
+test('isDetectionSourceDirty', () => {
+	comp.detect = {
+		content: 'X',
+	};
+	comp.origDetect = Object.assign({}, comp.detect);
+
+	expect(comp.isDetectionSourceDirty()).toBe(false);
+
+	comp.detect.content = 'Y';
+
+	expect(comp.isDetectionSourceDirty()).toBe(true);
+
+	comp.origDetect.content = 'Y';
+
+	expect(comp.isDetectionSourceDirty()).toBe(false);
+});
+
+test('revertEnabled', () => {
+	comp.detect = {
+		isEnabled: true,
+	};
+	comp.origDetect = Object.assign({}, comp.detect);
+
+	// both true
+	comp.revertEnabled();
+	expect(comp.detect.isEnabled).toBe(true);
+	expect(comp.origDetect.isEnabled).toBe(true);
+
+	// det false, orig true
+	comp.detect.isEnabled = false;
+	comp.revertEnabled();
+	expect(comp.detect.isEnabled).toBe(true);
+	expect(comp.origDetect.isEnabled).toBe(true);
+
+	// det true, orig false
+	comp.detect.isEnabled = true;
+	comp.origDetect.isEnabled = false;
+	comp.revertEnabled();
+	expect(comp.detect.isEnabled).toBe(false);
+	expect(comp.origDetect.isEnabled).toBe(false);
+
+	// both false
+	comp.revertEnabled();
+	expect(comp.detect.isEnabled).toBe(false);
+	expect(comp.origDetect.isEnabled).toBe(false);
+})
+
+test('isFieldValid', () => {
+	comp.$refs = {}
+	expect(comp.isFieldValid('foo')).toBe(true)
+
+	comp.$refs = {bar: { valid: false}}
+	expect(comp.isFieldValid('foo')).toBe(true)
+	expect(comp.isFieldValid('bar')).toBe(false)
+
+	comp.$refs = {bar: { valid: true}}
+	expect(comp.isFieldValid('bar')).toBe(true)
+
+})

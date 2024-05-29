@@ -723,7 +723,7 @@ func convertElasticEventToDetection(event *model.EventRecord, schemaPrefix strin
 			}
 			if value, ok := event.Payload[schemaPrefix+"detection.ruleset"]; ok {
 				if value != nil {
-					obj.Ruleset = util.Ptr(value.(string))
+					obj.Ruleset = value.(string)
 				}
 			}
 			if value, ok := event.Payload[schemaPrefix+"detection.engine"]; ok {

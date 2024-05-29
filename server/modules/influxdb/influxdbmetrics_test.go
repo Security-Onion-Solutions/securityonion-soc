@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/stretchr/testify/assert"
@@ -136,4 +137,92 @@ func TestGetOsNeedsRestart(tester *testing.T) {
 	assert.Equal(tester, 0, metrics.getOsNeedsRestart("foo"))
 	assert.Equal(tester, 1, metrics.getOsNeedsRestart("bar"))
 	assert.Equal(tester, 0, metrics.getOsNeedsRestart("missing"))
+}
+
+func DisabledDueToJobInstability_TestUpdateNodeMetricsLksUnlicensed(tester *testing.T) {
+	licensing.Test("odc", 0, 0, "", "")
+	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+
+	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
+	metrics.lastOsUpdateTime = time.Now()
+	metrics.lksEnabled = make(map[string]int)
+	metrics.lksEnabled["id1"] = 1
+	metrics.lksEnabled["id2"] = 0
+
+	node1 := model.NewNode("id1")
+	node2 := model.NewNode("id2")
+	node3 := model.NewNode("id3")
+
+	metrics.UpdateNodeMetrics(context.Background(), node3)
+	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+	metrics.UpdateNodeMetrics(context.Background(), node2)
+	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+	metrics.UpdateNodeMetrics(context.Background(), node1)
+	assert.Equal(tester, licensing.LICENSE_STATUS_EXCEEDED, licensing.GetStatus())
+}
+
+func DisabledDueToJobInstability_TestUpdateNodeMetricsLksLicensed(tester *testing.T) {
+	licensing.Test("lks", 0, 0, "", "")
+	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+
+	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
+	metrics.lastOsUpdateTime = time.Now()
+	metrics.lksEnabled = make(map[string]int)
+	metrics.lksEnabled["id1"] = 1
+	metrics.lksEnabled["id2"] = 0
+
+	node1 := model.NewNode("id1")
+	node2 := model.NewNode("id2")
+	node3 := model.NewNode("id3")
+
+	metrics.UpdateNodeMetrics(context.Background(), node3)
+	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+	metrics.UpdateNodeMetrics(context.Background(), node2)
+	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+	metrics.UpdateNodeMetrics(context.Background(), node1)
+	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+}
+
+func DisabledDueToJobInstability_TestUpdateNodeMetricsFpsUnlicensed(tester *testing.T) {
+	licensing.Test("odc", 0, 0, "", "")
+	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+
+	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
+	metrics.lastOsUpdateTime = time.Now()
+	metrics.fpsEnabled = make(map[string]int)
+	metrics.fpsEnabled["id1"] = 1
+	metrics.fpsEnabled["id2"] = 0
+
+	node1 := model.NewNode("id1")
+	node2 := model.NewNode("id2")
+	node3 := model.NewNode("id3")
+
+	metrics.UpdateNodeMetrics(context.Background(), node3)
+	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+	metrics.UpdateNodeMetrics(context.Background(), node2)
+	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+	metrics.UpdateNodeMetrics(context.Background(), node1)
+	assert.Equal(tester, licensing.LICENSE_STATUS_EXCEEDED, licensing.GetStatus())
+}
+
+func DisabledDueToJobInstability_TestUpdateNodeMetricsFpsLicensed(tester *testing.T) {
+	licensing.Test("fps", 0, 0, "", "")
+	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+
+	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
+	metrics.lastOsUpdateTime = time.Now()
+	metrics.fpsEnabled = make(map[string]int)
+	metrics.fpsEnabled["id1"] = 1
+	metrics.fpsEnabled["id2"] = 0
+
+	node1 := model.NewNode("id1")
+	node2 := model.NewNode("id2")
+	node3 := model.NewNode("id3")
+
+	metrics.UpdateNodeMetrics(context.Background(), node3)
+	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+	metrics.UpdateNodeMetrics(context.Background(), node2)
+	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+	metrics.UpdateNodeMetrics(context.Background(), node1)
+	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
 }

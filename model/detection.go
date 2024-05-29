@@ -7,8 +7,13 @@ package model
 
 import (
 	"errors"
+	"fmt"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/security-onion-solutions/securityonion-soc/util"
+	"gopkg.in/yaml.v3"
 )
 
 type ScanType string
@@ -50,6 +55,7 @@ const (
 	LicenseDRL        = "DRL"
 	LicenseCommercial = "Commercial"
 	LicenseBSD        = "BSD"
+	LicenseUnknown    = "Unknown"
 )
 
 var (
@@ -80,7 +86,8 @@ var (
 		SigLangYara:     {},
 	}
 
-	ErrUnsupportedEngine = errors.New("unsupported engine")
+	ErrUnsupportedEngine   = errors.New("unsupported engine")
+	ErrInvalidOverrideType = errors.New("invalid override type")
 )
 
 type DetectionEngine struct {
@@ -92,21 +99,27 @@ type DetectionEngine struct {
 
 type Detection struct {
 	Auditable
-	PublicID    string      `json:"publicId"`
-	Title       string      `json:"title"`
-	Severity    Severity    `json:"severity"`
-	Author      string      `json:"author"`
-	Description string      `json:"description"`
-	Content     string      `json:"content"`
-	IsEnabled   bool        `json:"isEnabled"`
-	IsReporting bool        `json:"isReporting"`
-	IsCommunity bool        `json:"isCommunity"`
-	Engine      EngineName  `json:"engine"`
-	Language    SigLanguage `json:"language"`
-	Overrides   []*Override `json:"overrides"` // Tuning
-	Tags        []string    `json:"tags"`
-	Ruleset     *string     `json:"ruleset"`
-	License     string      `json:"license"`
+	PublicID      string      `json:"publicId"`
+	Title         string      `json:"title"`
+	Severity      Severity    `json:"severity"`
+	Author        string      `json:"author"`
+	Category      string      `json:"category,omitempty"`
+	Description   string      `json:"description"`
+	Content       string      `json:"content"`
+	IsEnabled     bool        `json:"isEnabled"`
+	IsReporting   bool        `json:"isReporting"`
+	IsCommunity   bool        `json:"isCommunity"`
+	Engine        EngineName  `json:"engine"`
+	Language      SigLanguage `json:"language"`
+	Overrides     []*Override `json:"overrides"` // Tuning
+	Tags          []string    `json:"tags"`
+	Ruleset       string      `json:"ruleset"`
+	License       string      `json:"license"`
+	PendingDelete bool        `json:"-"` // this is a transient field, not stored in the database
+
+	// elastalert - sigma only
+	Product string `json:"product,omitempty"`
+	Service string `json:"service,omitempty"`
 }
 
 type DetectionComment struct {
@@ -138,7 +151,47 @@ type OverrideParameters struct {
 	Seconds       *int    `json:"seconds,omitempty" yaml:"seconds,omitempty"`    // threshold
 
 	// elastalert
-	CustomFilter *string `json:"customFilter,omitempty" yaml:"-"` // modify
+	CustomFilter *string `json:"customFilter,omitempty" yaml:"-"` // customFilter
+}
+
+func (o Override) PrepareForSigma() (map[string]interface{}, error) {
+	if o.CustomFilter == nil || !o.IsEnabled {
+		return map[string]interface{}{}, nil
+	}
+
+	mid := map[string]interface{}{}
+	out := map[string]interface{}{}
+
+	filter := util.TabsToSpaces(*o.CustomFilter, 2)
+
+	err := yaml.Unmarshal([]byte(filter), mid)
+
+	for k, v := range mid {
+		// does the property begin with sofilter?
+		if !strings.HasPrefix(k, "sofilter") {
+			// does the object already contain a property with the sofilter prefix?
+			_, exists := out["sofilter_"+k]
+			if exists {
+				// keep appending numbers until there's no collision
+				for i := 0; ; i++ {
+					num := strconv.Itoa(i)
+					_, exists = out["sofilter_"+k+num]
+					if !exists {
+						out["sofilter_"+k+num] = v
+						break
+					}
+				}
+			} else {
+				// the property doesn't begin with sofilter, but adding it isn't a collsion
+				out["sofilter_"+k] = v
+			}
+		} else {
+			// the property begins with sofilter
+			out[k] = v
+		}
+	}
+
+	return out, err
 }
 
 func (o Override) MarshalYAML() (interface{}, error) {
@@ -171,20 +224,10 @@ func (detect *Detection) Validate() error {
 		return ErrUnsupportedEngine
 	}
 
-	customs := 0
-
 	for _, o := range detect.Overrides {
 		if err := o.Validate(detect.Engine); err != nil {
 			return err
 		}
-
-		if o.Type == OverrideTypeCustomFilter {
-			customs++
-		}
-	}
-
-	if detect.Engine == EngineNameElastAlert && customs > 1 {
-		return errors.New("only one custom filter override is allowed per ElastAlert detection")
 	}
 
 	return nil
@@ -253,8 +296,54 @@ func (o *Override) Validate(engine EngineName) error {
 				o.Seconds != nil {
 				return errors.New("unnecessary fields in override")
 			}
+
+			*o.CustomFilter = util.TabsToSpaces(*o.CustomFilter, 2)
+			fauxDoc := map[string]interface{}{}
+
+			err := yaml.Unmarshal([]byte(*o.CustomFilter), fauxDoc)
+			if err != nil {
+				return fmt.Errorf("custom filter override has invalid YAML: %w", err)
+			}
+		default:
+			return ErrInvalidOverrideType
 		}
+	} else {
+		return ErrInvalidOverrideType
 	}
 
 	return nil
+}
+
+func (o *Override) Equal(other *Override) bool {
+	if o == nil && other == nil {
+		return true
+	}
+
+	if (o == nil || other == nil) ||
+		(o.Type != other.Type) ||
+		(o.IsEnabled != other.IsEnabled) ||
+		(o.CreatedAt != other.CreatedAt) ||
+		(o.UpdatedAt != other.UpdatedAt) {
+		return false
+	}
+
+	result := false
+
+	switch o.Type {
+	case OverrideTypeSuppress:
+		result = util.ComparePtrs(o.IP, other.IP) &&
+			util.ComparePtrs(o.Track, other.Track)
+	case OverrideTypeThreshold:
+		result = util.ComparePtrs(o.ThresholdType, other.ThresholdType) &&
+			util.ComparePtrs(o.Track, other.Track) &&
+			util.ComparePtrs(o.Count, other.Count) &&
+			util.ComparePtrs(o.Seconds, other.Seconds)
+	case OverrideTypeModify:
+		result = util.ComparePtrs(o.Regex, other.Regex) &&
+			util.ComparePtrs(o.Value, other.Value)
+	case OverrideTypeCustomFilter:
+		result = util.ComparePtrs(o.CustomFilter, other.CustomFilter)
+	}
+
+	return result
 }

@@ -21,6 +21,8 @@ const USER_PASSWORD_LENGTH_MIN = 8;
 const USER_PASSWORD_LENGTH_MAX = 72;
 const USER_PASSWORD_INVALID_RX = /["'$&!]/;
 
+const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
+
 if (typeof global !== 'undefined') global.routes = routes;
 
 $(document).ready(function() {
@@ -379,9 +381,24 @@ $(document).ready(function() {
                     if (u.host.toUpperCase() == window.location.host.toUpperCase()) {
                       url = u.hash;
                     }
-                    const content = this.i18n.gridMemberImportSuccess.replace('<[url]>', url);
+                    const content = this.i18n.gridMemberImportSuccess.replace('{url}', url);
                     this.showInfo(content);
                   }
+                });
+                this.subscribe('detection-sync', (report) => {
+                  const eng = this.correctCasing(report.engine);
+
+                  switch (report.status) {
+                    case 'success':
+                      this.showInfo(this.i18n.syncSuccess.replace('{engine}', eng));
+                      break;
+                    case 'partial':
+                      this.showWarning(this.i18n.syncPartialSuccess.replace('{engine}', eng));
+                      break;
+                    case 'error':
+                      this.showError(this.i18n.syncFailure.replace('{engine}', eng));
+                      break;
+                    }
                 });
               }
             } catch (error) {
@@ -612,6 +629,23 @@ $(document).ready(function() {
           }
           localized = msg;
         }
+        return localized;
+      },
+      tryLocalize(msg) {
+        const localized = this.localizeMessage(msg);
+        if (localized) {
+          return localized;
+        }
+
+        return msg;
+      },
+      correctCasing(origMsg) {
+        const msg = (origMsg+'').toLowerCase();
+        var localized = this.i18n['cc_'+msg];
+        if (!localized) {
+          return origMsg;
+        }
+
         return localized;
       },
       showError(msg) {
@@ -898,7 +932,13 @@ $(document).ready(function() {
       },
       async populateUserDetails(obj, idField, outputField) {
         if (obj[idField] && obj[idField].length > 0) {
-          const user = await this.$root.getUserById(obj[idField]);
+          const id = obj[idField];
+          if (id === SYSTEM_USER_ID || id === "agent") {
+            Vue.set(obj, outputField, this.i18n.systemUser);
+            return
+          }
+
+          const user = await this.$root.getUserById(id);
           if (user) {
             Vue.set(obj, outputField, user.email);
           }
@@ -927,6 +967,70 @@ $(document).ready(function() {
         this.updateTitle();
         this.loadServerSettings(true);
       },
+      getDetectionEngines() {
+        return ['elastalert', 'strelka', 'suricata'];
+      },
+      getDetectionEngineStatusClass(engine) {
+        switch (this.getDetectionEngineStatus(engine)) {
+          case "MigrationFailure": return "warning--text";
+          case "SyncFailure": return "warning--text";
+          case "IntegrityFailure": return "warning--text";
+          case "Healthy": return "success--text";
+        }
+        return "normal--text";
+      },
+      getDetectionEngineStatus(engine) {
+        if (!this.currentStatus || !this.currentStatus.detections || !this.currentStatus.detections[engine]) {
+          return "Unknown";
+        }
+
+        const status = this.currentStatus.detections[engine];
+
+        // Order is important in this if/else block. Certain status should take priority. For example,
+        // If a sync failure and integrity failure both occurred then show the integrity failure, because
+        // if it got to the integrity check then the sync finished but the integrity check failed.
+        if (status.migrating) {
+          return "Migrating";
+        } else if (status.importing && status.syncing) {
+          return "Importing";
+        } else if (status.migrationFailure) {
+          return "MigrationFailure";
+        } else if (status.integrityFailure) {
+          return "IntegrityFailure";
+        } else if (status.syncFailure) {
+          return "SyncFailure";
+        } else if (status.importing && !status.syncing) {
+          return "ImportPending";
+        } else if (status.syncing) {
+          return "Syncing";
+        }
+        return "Healthy";
+      },
+      isDetectionsUnhealthy() {
+        return this.currentStatus != null && this.currentStatus.detections != null &&
+          ( this.currentStatus.detections.elastalert.integrityFailure ||
+            this.currentStatus.detections.suricata.integrityFailure ||
+            this.currentStatus.detections.strelka.integrityFailure ||
+            this.currentStatus.detections.elastalert.syncFailure ||
+            this.currentStatus.detections.suricata.syncFailure ||
+            this.currentStatus.detections.strelka.syncFailure ||
+            this.currentStatus.detections.elastalert.migrationFailure ||
+            this.currentStatus.detections.suricata.migrationFailure ||
+            this.currentStatus.detections.strelka.migrationFailure );
+      },
+      isDetectionsUpdating() {
+        return this.currentStatus != null && this.currentStatus.detections != null &&
+          !this.isDetectionsUnhealthy() && 
+          ( this.currentStatus.detections.elastalert.importing === true ||
+            this.currentStatus.detections.elastalert.migrating === true ||
+            this.currentStatus.detections.elastalert.syncing === true ||
+            this.currentStatus.detections.strelka.importing === true ||
+            this.currentStatus.detections.strelka.migrating === true ||
+            this.currentStatus.detections.strelka.syncing === true ||
+            this.currentStatus.detections.suricata.importing === true ||
+            this.currentStatus.detections.suricata.migrating === true ||
+            this.currentStatus.detections.suricata.syncing === true );
+      },
       isGridUnhealthy() {
         return this.currentStatus && this.currentStatus.grid.unhealthyNodeCount > 0
       },
@@ -934,7 +1038,7 @@ $(document).ready(function() {
         return this.currentStatus && this.currentStatus.alerts.newCount  > 0
       },
       isAttentionNeeded() {
-        return this.isNewAlert() || this.isGridUnhealthy() || !this.connected || this.reconnecting;
+        return this.isNewAlert() || this.isGridUnhealthy() || this.isDetectionsUnhealthy() || !this.connected || this.reconnecting;
       },
       isMaximized() {
         return this.maximizedTarget != null;

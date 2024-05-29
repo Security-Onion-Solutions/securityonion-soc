@@ -55,8 +55,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			activeTab: '',
 			sidExtract: /\bsid: ?['"]?(.*?)['"]?;/, // option
 			severityExtract: /\bsignature_severity ['"]?(.*?)['"]?[,;]/, // metadata
-			authorExtract: /\bauthor: ?['"]?(.*?)['"]?;/, // option
-			authorMetaExtract: /\bauthor ['"]?(.*?)['"]?[,;]/, // metadata
 			sortBy: 'createdAt',
 			sortDesc: false,
 			expanded: [],
@@ -69,6 +67,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			],
 			zone: moment.tz.guess(),
 			newOverride: null,
+			newOverrideValid: false,
 			thresholdTypes: [
 				{ value: 'threshold', text: 'Threshold' },
 				{ value: 'limit', text: 'Limit' },
@@ -97,7 +96,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			history: [],
 			extractedCreated: '',
 			extractedUpdated: '',
-			extractedAuthor: '',
 			comments: [],
 			commentsTable: {
 				showAll: false,
@@ -121,6 +119,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			origComment: null,
 			showSigmaDialog: false,
 			convertedRule: '',
+			confirmDeleteDialog: false,
+			showDirtySourceDialog: false,
 	}},
 	created() {
 		this.onDetectionChange = debounce(this.onDetectionChange, 300);
@@ -177,9 +177,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			try {
 				const response = await this.$root.papi.get('detection/' + encodeURIComponent(this.$route.params.id));
-				this.detect = response.data;
-				this.tagOverrides();
-				this.loadAssociations();
+				this.extractDetection(response);
 			} catch (error) {
 				if (error.response != undefined && error.response.status == 404) {
 					this.$root.showError(this.i18n.notFound);
@@ -189,6 +187,18 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			}
 
 			this.$root.stopLoading();
+		},
+		extractDetection(response) {
+			this.detect = response.data;
+			delete this.detect.kind;
+
+			this.tagOverrides();
+			this.loadAssociations();
+			this.origDetect = Object.assign({}, this.detect);
+			// Don't await the user details -- takes too long for the task scheduler to
+			// complete all these futures when looping across hundreds of records. Let
+			// the UI update as they finish, for a better user experience.
+			this.$root.populateUserDetails(this.detect, "userId", "userName");
 		},
 		loadAssociations() {
 			this.extractSummary();
@@ -278,11 +288,11 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		isValidUrl(urlString) {
 	  	var urlPattern = new RegExp('^(https?:\\/\\/)?'+ // validate protocol
-	    '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|'+ // validate domain name
-	    '((\\d{1,3}\\.){3}\\d{1,3}))'+ // validate OR ip (v4) address
-	    '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*'+ // validate port and path
-	    '(\\?[;&a-z\\d%_.~+=-]*)?'+ // validate query string
-	    '(\\#[-a-z\\d_]*)?$','i'); // validate fragment locator
+		'((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|'+ // validate domain name
+		'((\\d{1,3}\\.){3}\\d{1,3}))'+ // validate OR ip (v4) address
+		'(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*'+ // validate port and path
+		'(\\?[;&a-z\\d%_.~+=-]*)?'+ // validate query string
+		'(\\#[-a-z\\d_]*)?$','i'); // validate fragment locator
 	  return !!urlPattern.test(urlString);
 		},
 		fixProtocol(url) {
@@ -392,7 +402,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.extractedLogic = jsyaml.dump({ logsource: logSource, detection: detection }).trim();
 		},
 		extractDetails() {
-			this.extractedAuthor = this.extractedCreated = this.extractedUpdated = '';
+			this.extractedCreated = this.extractedUpdated = '';
 
 			switch (this.detect.engine) {
 				case 'suricata':
@@ -434,22 +444,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 						this.extractedUpdated = date[0];
 					}
 				}
-
-				if (md.indexOf('author') > -1) {
-					this.extractedAuthor = md.replace('author', '').trim();
-				}
 			}
 		},
 		extractStrelkaDetails() {
-			const authorExtractor = /^\s*author\s*=\s*"(.*)"/im;
 			const dateExtractor = /^\s*date\s*=\s*"(.*)"/im;
-
-			const authorMatch = authorExtractor.exec(this.detect.content);
-
-			if (authorMatch) {
-				this.extractedAuthor = authorMatch[1];
-			}
-
 			const dateMatch = dateExtractor.exec(this.detect.content);
 
 			if (dateMatch) {
@@ -459,16 +457,19 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		extractElastAlertDetails() {
 			const yaml = jsyaml.load(this.detect.content, { schema: jsyaml.FAILSAFE_SCHEMA });
 
-			this.extractedAuthor = yaml['author'];
 			this.extractedCreated = yaml['date'];
 			this.extractedUpdated = yaml['modified'];
 		},
 		async loadHistory() {
-			const route = this;
-			const id = route.$route.params.id;
+			const id = this.$route.params.id;
+
 			const response = await this.$root.papi.get(`detection/${id}/history`);
 			if (response && response.data) {
 				this.history = response.data;
+
+				for (var i = 0; i < this.history.length; i++) {
+					this.$root.populateUserDetails(this.history[i], "userId", "owner");
+				}
 			}
 		},
 		getDefaultPreset(preset) {
@@ -486,7 +487,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					case 'severity':
 					case 'engine':
 					case 'language':
-						return this.capitalizeOptions(this.presets[kind].labels);
+						return this.translateOptions(this.presets[kind].labels);
 					default:
 						return this.presets[kind].labels;
 				}
@@ -503,14 +504,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			return [];
 		},
-		capitalizeOptions(opts) {
-			return opts.map(opt => {
-				const cap = opt.charAt(0).toUpperCase() + opt.slice(1).toLowerCase();
-				return {
-					text: cap,
-					value: opt,
-				}
-			})
+		translateOptions(opts) {
+			return opts.map(opt => this.$root.correctCasing(opt))
 		},
 		requestRules(rules) {
 			if (this.detect.isCommunity) {
@@ -528,12 +523,17 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		isNew() {
 			return this.$route.params.id === 'create';
 		},
+		isDetectionSourceDirty() {
+			return this.detect.content != this.origDetect.content;
+		},
 		cancelDetection() {
 			if (this.isNew()) {
 				this.$router.push({name: 'detections'});
 			} else {
-				this.detect = this.origDetect;
+				this.detect = Object.assign({}, this.origDetect);
 			}
+
+			this.showDirtySourceDialog = false;
 		},
 		async startEdit(target, field) {
 			if (this.curEditTarget === target) return;
@@ -571,7 +571,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		isEdit(target) {
 			return this.curEditTarget === target;
 		},
-		async stopEdit(commit) {
+		stopEdit(commit) {
 			if (!commit) {
 				this.detect[this.editField] = this.origValue;
 			}
@@ -581,27 +581,39 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.editField = null;
 
 			if (commit && !this.isNew()) {
-				this.saveDetection(false);
+					this.saveDetection(false).then(() => {
+						this.curEditTarget = null;
+					});
 			}
 		},
-		async saveDetection(createNew) {
+		revertEnabled() {
+			const route = this;
+			this.$nextTick(() => {
+				route.detect.isEnabled = route.origDetect.isEnabled;
+			});
+		},
+		async saveDetection(createNew, skipSourceCheck) {
 			if (this.curEditTarget !== null) this.stopEdit(true);
+			if (!this.isNew() && !skipSourceCheck && this.isDetectionSourceDirty()) {
+				this.showDirtySourceDialog = true;
+				this.revertEnabled();
+				return;
+			}
+
+			this.showDirtySourceDialog = false;
 
 			if (this.isNew()) {
 				this.$refs.detection.validate();
 				if (!this.editForm.valid) return;
-
-				let author = [this.$root.user.firstName, this.$root.user.lastName].filter(x => x).join(' ');
-				this.detect.author = author;
 			}
 
 			let err;
 			switch (this.detect.engine) {
-				case 'yara':
-					err = this.validateYara();
+				case 'strelka':
+					err = this.validateStrelka();
 					break;
-				case 'sigma':
-					err = this.validateSigma();
+				case 'elastalert':
+					err = this.validateElastAlert();
 					break;
 				case 'suricata':
 					err = this.validateSuricata();
@@ -610,6 +622,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			if (err) {
 				this.$root.showError(err);
+				this.revertEnabled();
+
 				return;
 			}
 
@@ -622,7 +636,9 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				if (createNew) {
 					response = await this.$root.papi.post('/detection', this.detect);
 				} else {
-					response = await this.$root.papi.put('/detection', this.detect);
+					response = await this.$root.papi.put('/detection', this.detect, {
+						validateStatus: (s) => (s >= 200 && s < 300)
+					});
 				}
 
 				// get any expanded overrides before updating this.detect
@@ -631,40 +647,81 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					index = this.expanded[0].index;
 				}
 
-				this.detect = response.data;
-				this.tagOverrides();
-				this.origDetect = Object.assign({}, this.detect);
+				this.extractDetection(response);
 
-				// reinstate expanded override
-				if (index != -1 && this.detect.overrides && this.detect.overrides.length > index) {
-					this.expand(this.detect.overrides[index]);
+				switch (response.status) {
+					case 206:
+						this.$root.showWarning(this.i18n.disabledFailedSync);
+						break;
+					default:
+						this.$root.showTip(this.i18n.saveSuccess);
+						break;
 				}
-
-				this.$root.showTip(this.i18n.saveSuccess);
 
 				if (createNew) {
 					this.$router.push({ name: 'detection', params: { id: response.data.id } });
 				}
 
+				return true;
+
 			} catch (error) {
-				this.$root.showError(error);
+				switch (error.response.status) {
+					case 409:
+						this.$root.showWarning(this.i18n.publicIdConflictErr);
+						break;
+					default:
+						this.$root.showError(error);
+						break;
+				}
+
+				this.revertEnabled();
 			} finally {
 				this.$root.stopLoading();
 			}
 		},
 		async duplicateDetection() {
 			const response = await this.$root.papi.post('/detection/' + encodeURIComponent(this.$route.params.id) + '/duplicate');
-			this.$router.push({name: 'detection', params: {id: response.data.id}});
+			this.extractDetection(response);
+
+			this.$router.push({ name: 'detection', params: { id: response.data.id } });
 		},
-		async deleteDetection() {
-			await this.$root.papi.delete('/detection/' + encodeURIComponent(this.$route.params.id));
-			this.$router.push({ name: 'detections' });
+		deleteDetection() {
+			this.confirmDeleteDialog = true;
 		},
-		validateYara() {
+		cancelDeleteDetection() {
+			this.confirmDeleteDialog = false;
+		},
+		async confirmDeleteDetection() {
+			this.cancelDeleteDetection();
+			try {
+				this.$root.startLoading();
+				await this.$root.papi.delete('/detection/' + encodeURIComponent(this.$route.params.id));
+				this.$router.push({ name: 'detections' });
+				this.$root.showTip(this.i18n.detectionDeleteSuccessful);
+			} catch (error) {
+				this.$root.showError(error);
+			} finally {
+				this.$root.stopLoading();
+			}
+		},
+		validateStrelka() {
 			return null;
 		},
-		validateSigma() {
-			return null;
+		validateElastAlert() {
+			try {
+				const id = this.extractElastAlertPublicID();
+				if (!id) {
+					throw this.i18n.idMissingErr;
+				}
+
+				if (this.detect.publicId && this.detect.publicId !== id) {
+					throw this.i18n.idMismatchErr;
+				}
+
+				return null;
+			} catch (e) {
+				return e;
+			}
 		},
 		validateSuricata() {
 			try {
@@ -720,27 +777,12 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			this.detect.severity = sev;
 		},
-		extractAuthor() {
-			let author = this.detect.author;
-			switch (this.detect.engine) {
-				case 'suricata':
-					try {
-						const a = this.extractSuricataAuthor();
-						if (a) author = a;
-					} catch {}
-					break;
-				case 'elastalert':
-					try {
-						const a = this.extractElastAlertAuthor();
-						if (a) author = a;
-					} catch {}
-					break;
-			}
-
-			this.detect.author = author;
-		},
 		extractSuricataPublicID() {
 			const results = this.sidExtract.exec(this.detect.content);
+			if (results === null || results.length < 2) {
+				throw this.i18n.sidMissingErr;
+			}
+
 			return results[1];
 		},
 		extractSuricataSeverity() {
@@ -757,17 +799,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			return sev;
 		},
-		extractSuricataAuthor() {
-			// do suricata rules even have a place for an author?
-
-			// first look for an option labeled author
-			const author = this.authorExtract.exec(this.detect.content);
-			if (author && author.length >= 2) return author[1];
-
-			// if no option, check metadata for a field labeled author
-			const authorMeta = this.authorMetaExtract.exec(this.detect.content);
-			if (authorMeta && authorMeta.length >= 2) return authorMeta[1];
-		},
 		extractElastAlertPublicID() {
 			const yaml = jsyaml.load(this.detect.content, {schema: jsyaml.FAILSAFE_SCHEMA});
 			return yaml['id'];
@@ -782,15 +813,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				}
 			}
 		},
-		extractElastAlertAuthor() {
-			const yaml = jsyaml.load(this.detect.content, {schema: jsyaml.FAILSAFE_SCHEMA});
-			return yaml['author'];
-		},
 		onDetectionChange() {
 			if (this.detect.engine) {
 				this.extractPublicID();
 				this.extractSeverity();
-				this.extractAuthor();
 			}
 		},
 		saveSetting(name, value, defaultValue = null) {
@@ -830,16 +856,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			}
 			return b < a ? -1 : 1;
 		},
-		expand(item) {
-			if (this.isExpanded(item)) {
-				this.expanded = [];
-			} else {
-				this.expanded = [item];
-			}
-		},
-		isExpanded(item) {
-			return (this.expanded.length > 0 && this.expanded[0] === item);
-		},
 		createNewOverride() {
 			this.newOverride = {
 				type: null,
@@ -864,7 +880,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					];
 				case 'elastalert':
 					return [
-						{ value: 'custom filter', text: 'Custom Filter' }
+						{ value: 'customFilter', text: 'Custom Filter' }
 					];
 			}
 
@@ -927,16 +943,21 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.$refs.OverrideCreate.reset();
 			this.newOverride = null;
 		},
-		addNewOverride() {
+		async addNewOverride() {
 			if (!this.newOverride) return;
 
 			if (!this.detect.overrides) {
 				this.detect.overrides = [];
 			}
 
+			this.newOverride.isEnabled = true;
+
 			this.detect.overrides.push(this.newOverride);
 
-			this.saveDetection(false);
+			const result = await this.saveDetection(false);
+			if (!result) {
+				this.detect.overrides.pop();
+			}
 			this.newOverride = null;
 		},
 		async startOverrideEdit(target, override, field) {
@@ -959,13 +980,16 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		isOverrideEdit(target) {
 			return this.curOverrideEditTarget === target;
 		},
-		async stopOverrideEdit(commit) {
+		stopOverrideEdit(commit) {
 			if (commit && this.$refs[this.curOverrideEditTarget].hasError) return;
 
 			if (!commit) {
 				this.editOverride[this.overrideEditField] = this.origOverrideValue;
 			} else {
-				this.saveDetection(false);
+				this.$nextTick(async () => {
+					await this.saveDetection(false);
+					this.curOverrideEditTarget = null;
+				});
 			}
 
 			this.curOverrideEditTarget = null;
@@ -978,21 +1002,11 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.saveDetection(false);
 		},
 		canAddOverride() {
-			if (this.detect.engine === 'elastalert') {
-				if (this.detect.overrides && this.detect.overrides.length > 0) {
-					for (let i = 0; i < this.detect.overrides.length; i++) {
-						if (this.detect.overrides[i].type === 'custom filter') {
-							// elastalert detections that already have a custom filter
-							// cannot have any other custom filter overrides
-							return false;
-						}
-					}
-				}
-			} else if (this.detect.engine === 'strelka') {
-				return false;
-			}
-
-			return true;
+			return this.detect.engine !== 'strelka';
+		},
+		canConvert() {
+			let lang = this.detect.language || '';
+			return lang.toLowerCase() === 'sigma';
 		},
 		tagOverrides() {
 			if (this.detect.overrides) {
@@ -1002,26 +1016,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			} else {
 				this.detect.overrides = [];
 			}
-		},
-		isExpanded(row) {
-			const expanded = this.historyTableOpts.expanded;
-			for (var i = 0; i < expanded.length; i++) {
-				if (expanded[i].id == row.id) {
-					return true;
-				}
-			}
-			return false;
-		},
-		async expandRow(row) {
-			const expanded = this.historyTableOpts.expanded;
-			for (var i = 0; i < expanded.length; i++) {
-				if (expanded[i].id == row.id) {
-					expanded.splice(i, 1);
-					return;
-				}
-			}
-
-			expanded.push(row);
 		},
 		prepareForInput(id) {
 			const el = document.getElementById(id)
@@ -1180,7 +1174,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		async convertDetection(content) {
 			this.$root.startLoading();
 			try {
-				const response = await this.$root.papi.post('detection/convert', { content: content });
+				const response = await this.$root.papi.post('detection/convert', this.detect);
 				if (response && response.data) {
 					this.convertedRule = response.data.query;
 					this.showSigmaDialog = true;
@@ -1208,6 +1202,13 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			const compress = LZString.compressToEncodedURIComponent(query);
 			const url = `/kibana/app/dev_tools#/console?load_from=data:text/plain,${compress}`;
 			window.open(url, '_blank');
-		}
+		},
+		isFieldValid(refName) {
+			const ref = this.$refs[refName];
+			if (ref) {
+				return ref.valid;
+			}
+			return true;
+		},
 	}
 }});

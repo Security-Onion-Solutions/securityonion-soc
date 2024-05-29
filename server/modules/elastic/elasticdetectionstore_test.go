@@ -3,7 +3,6 @@ package elastic
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,60 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	modmock "github.com/security-onion-solutions/securityonion-soc/server/modules/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
 	"github.com/tidwall/gjson"
 )
-
-type MockTransport struct {
-	requests    []*http.Request
-	responses   []*http.Response
-	roundTripFn func(req *http.Request) (*http.Response, error)
-}
-
-func (t *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	t.requests = append(t.requests, req)
-	return t.roundTripFn(req)
-}
-
-func (t *MockTransport) AddResponse(res *http.Response) {
-	if res.Body == nil {
-		res.Body = http.NoBody
-	}
-
-	t.responses = append(t.responses, res)
-}
-
-func (t *MockTransport) GetRequests() []*http.Request {
-	return t.requests
-}
-
-func newMockClient(t *testing.T) (*elasticsearch.Client, *MockTransport) {
-	mocktrans := MockTransport{}
-	mocktrans.roundTripFn = func(req *http.Request) (*http.Response, error) {
-		if len(mocktrans.responses) != 0 {
-			res := mocktrans.responses[0]
-			mocktrans.responses = mocktrans.responses[1:]
-
-			return res, nil
-		} else {
-			return nil, errors.New("unexpected call to client")
-		}
-	}
-
-	client, err := elasticsearch.NewClient(elasticsearch.Config{
-		Transport: &mocktrans,
-	})
-	if err != nil {
-		t.Fatalf("Error creating Elasticsearch client: %s", err)
-	}
-
-	return client, &mocktrans
-}
 
 func TestDetectionInit(t *testing.T) {
 	t.Parallel()
@@ -141,6 +94,92 @@ func TestDetectionValidateIdInvalid(t *testing.T) {
 	assert.Error(t, err)
 
 	err = store.validateId("123456789012345678901234567890123456789012345678901", "test")
+	assert.Error(t, err)
+
+	err = store.validateId("../../etc/passwd", "test")
+	assert.Error(t, err)
+
+	err = store.validateId(`..\..\etc\passwd`, "test")
+	assert.Error(t, err)
+
+	err = store.validateId("......", "test")
+	assert.Error(t, err)
+
+	err = store.validateId("//////", "test")
+	assert.Error(t, err)
+
+	err = store.validateId(`\\\\\\`, "test")
+	assert.Error(t, err)
+}
+
+func TestDetectionValidatePublicIdValid(t *testing.T) {
+	t.Parallel()
+
+	store := NewElasticDetectionstore(server.NewFakeAuthorizedServer(nil), nil, 100)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+
+	err := store.validatePublicId("12345", "test")
+	assert.NoError(t, err)
+
+	err = store.validatePublicId("123456", "test")
+	assert.NoError(t, err)
+
+	err = store.validatePublicId("1-2-A-b", "test")
+	assert.NoError(t, err)
+
+	err = store.validatePublicId("1-2-a-b_2klj", "test")
+	assert.NoError(t, err)
+
+	err = store.validatePublicId("12345678901234567890123456789012345678901234567890", "test")
+	assert.NoError(t, err)
+
+	err = store.validatePublicId(strings.Repeat("1234567890", 12), "test")
+	assert.NoError(t, err)
+}
+
+func TestDetectionValidatePublicIdInvalid(t *testing.T) {
+	t.Parallel()
+
+	store := NewElasticDetectionstore(server.NewFakeAuthorizedServer(nil), nil, 100)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+
+	err := store.validatePublicId("", "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId("1", "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId("a", "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId("this is invalid since it has spaces", "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId("'quotes'", "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId("\"dblquotes\"", "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId(strings.Repeat("1234567890", 13), "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId("../../etc/passwd", "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId(`..\..\etc\passwd`, "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId("......", "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId("//////", "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId(`\\\\\\`, "test")
+	assert.Error(t, err)
+
+	err = store.validatePublicId(`123456!`, "test")
 	assert.Error(t, err)
 }
 
@@ -253,7 +292,7 @@ func TestValidateDetectionValid(t *testing.T) {
 		Author:      "Jane Doe",
 		Content:     "myContent",
 		IsCommunity: true,
-		Ruleset:     util.Ptr("myRuleset"),
+		Ruleset:     "myRuleset",
 		Tags:        []string{"myTag"},
 		Engine:      "suricata",
 		Language:    "suricata",
@@ -290,9 +329,9 @@ func TestValidateDetectionInvalid(t *testing.T) {
 	assert.EqualError(t, err, "severity is too long (101/100)")
 	det.Severity = ""
 
-	det.Author = strings.Repeat("a", SHORT_STRING_MAX+1)
+	det.Author = strings.Repeat("a", 251)
 	err = store.validateDetection(det)
-	assert.EqualError(t, err, "author is too long (101/100)")
+	assert.EqualError(t, err, "author is too long (251/250)")
 	det.Author = ""
 
 	det.Content = strings.Repeat("a", LONG_STRING_MAX+1)
@@ -301,10 +340,10 @@ func TestValidateDetectionInvalid(t *testing.T) {
 	det.Content = ""
 
 	det.IsCommunity = true
-	det.Ruleset = util.Ptr(strings.Repeat("a", SHORT_STRING_MAX+1))
+	det.Ruleset = strings.Repeat("a", SHORT_STRING_MAX+1)
 	err = store.validateDetection(det)
 	assert.EqualError(t, err, "ruleset is too long (101/100)")
-	det.Ruleset = nil
+	det.Ruleset = ""
 	det.IsCommunity = false
 
 	for x := 1; x < 30000; x++ {
@@ -360,7 +399,7 @@ func TestValidateDetectionInvalid(t *testing.T) {
 func TestCreateDetectionValid(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 
@@ -412,7 +451,7 @@ func TestCreateDetectionValid(t *testing.T) {
 		IsEnabled:   true,
 		IsReporting: true,
 		IsCommunity: true,
-		Ruleset:     util.Ptr("myRuleset"),
+		Ruleset:     "myRuleset",
 		Engine:      "suricata",
 		Language:    "suricata",
 		License:     "DRL",
@@ -532,7 +571,7 @@ func TestCreateDetectionPublicIdCollision(t *testing.T) {
 func TestUpdateDetectionValid(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 
@@ -592,7 +631,7 @@ func TestUpdateDetectionValid(t *testing.T) {
 		Content:     "myContent",
 		IsEnabled:   true,
 		IsReporting: true,
-		Ruleset:     util.Ptr("myRuleset"),
+		Ruleset:     "myRuleset",
 		Engine:      "suricata",
 		Language:    "suricata",
 		License:     "DRL",
@@ -682,184 +721,10 @@ func TestUpdateDetectionValid(t *testing.T) {
 	assert.Equal(t, "update", op)
 }
 
-func TestUpdateDetectionValidCommunity(t *testing.T) {
-	t.Parallel()
-
-	client, mocktrans := newMockClient(t)
-	fakesrv := server.NewFakeAuthorizedServer(nil)
-	fakeStore := server.NewFakeEventstore()
-
-	fakeStore.SearchResults = []*model.EventSearchResults{
-		{
-			TotalEvents: 1,
-			Events: []*model.EventRecord{
-				{
-					Id: "hJFpC44Bm7lAWCSuSwHa",
-					Payload: map[string]interface{}{
-						"so_detection.userId":      "myRequestorId",
-						"so_detection.publicId":    "",
-						"so_detection.title":       "myTitle",
-						"so_detection.severity":    "low",
-						"so_detection.author":      "Jane Doe",
-						"so_detection.description": "myDescription",
-						"so_detection.content":     "myContent",
-						"so_detection.isEnabled":   false,
-						"so_detection.isReporting": false,
-						"so_detection.isCommunity": true,
-						"so_detection.ruleset":     "myRuleset",
-						"so_detection.engine":      "suricata",
-						"so_detection.language":    "suricata",
-						"so_detection.license":     "DRL",
-						"so_detection.tags":        []interface{}{"myTag"},
-						"so_detection.overrides": []interface{}{
-							map[string]interface{}{
-								"type":      "modify",
-								"createdAt": "2021-08-01T00:00:00Z",
-							},
-						},
-						"so_detection.createTime": "2021-08-01T00:00:00Z",
-						"so_kind":                 "detection",
-					},
-				},
-			},
-		},
-	}
-
-	fakesrv.Eventstore = fakeStore
-	store := NewElasticDetectionstore(fakesrv, client, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
-
-	det := &model.Detection{
-		Auditable: model.Auditable{
-			Id: "hJFpC44Bm7lAWCSuSwHa",
-		},
-		IsEnabled:   true,
-		IsReporting: true,
-		Engine:      "suricata",
-		Language:    "suricata",
-	}
-
-	body1 := `{"result":"updated", "_id":"ABC123"}` // create detection
-	body2 := `{"result":"created", "_id":"DEF456"}` // create audit doc
-
-	mocktrans.AddResponse(&http.Response{
-		Body: io.NopCloser(strings.NewReader(body1)),
-	})
-
-	mocktrans.AddResponse(&http.Response{
-		Body: io.NopCloser(strings.NewReader(body2)),
-	})
-
-	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-
-	_, err := store.UpdateDetection(ctx, det)
-	assert.NoError(t, err)
-
-	reqs := mocktrans.GetRequests()
-	assert.Equal(t, 2, len(reqs))
-
-	expected := &model.Detection{
-		Auditable: model.Auditable{
-			UserId:     "myRequestorId",
-			Kind:       "detection",
-			CreateTime: util.Ptr(time.Now()),
-		},
-		Title:       "myTitle",
-		Description: "myDescription",
-		Severity:    "low",
-		Author:      "Jane Doe",
-		Content:     "myContent",
-		IsEnabled:   true,
-		IsReporting: true,
-		IsCommunity: true,
-		Ruleset:     util.Ptr("myRuleset"),
-		Engine:      "suricata",
-		Language:    "suricata",
-		License:     "DRL",
-		Tags:        []string{"myTag"},
-	}
-
-	det = extractSoDetectionFromRequestBody(t, reqs[0])
-	// borrow the only value we can't accurately predict
-	expected.CreateTime = det.CreateTime
-
-	assert.Equal(t, expected, det)
-}
-
-func TestUpdateDetectionInvalidCommunity(t *testing.T) {
-	t.Parallel()
-
-	fakesrv := server.NewFakeAuthorizedServer(nil)
-	fakeStore := server.NewFakeEventstore()
-
-	// old rule that's not a community rule
-	fakeStore.SearchResults = []*model.EventSearchResults{
-		{
-			TotalEvents: 1,
-			Events: []*model.EventRecord{
-				{
-					Id: "hJFpC44Bm7lAWCSuSwHa",
-					Payload: map[string]interface{}{
-						"so_detection.userId":      "myRequestorId",
-						"so_detection.publicId":    "",
-						"so_detection.title":       "myTitle",
-						"so_detection.severity":    "low",
-						"so_detection.author":      "Jane Doe",
-						"so_detection.description": "myDescription",
-						"so_detection.content":     "myContent",
-						"so_detection.isEnabled":   true,
-						"so_detection.isReporting": true,
-						"so_detection.isCommunity": false, // important
-						"so_detection.ruleset":     "myRuleset",
-						"so_detection.engine":      "suricata",
-						"so_detection.language":    "suricata",
-						"so_detection.license":     "DRL",
-						"so_detection.tags":        []interface{}{"myTag"},
-						"so_detection.createTime":  "2021-08-01T00:00:00Z",
-						"so_kind":                  "detection",
-					},
-				},
-			},
-		},
-	}
-
-	fakesrv.Eventstore = fakeStore
-	store := NewElasticDetectionstore(fakesrv, nil, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
-
-	// updated version of detection, isCommunity is true
-	det := &model.Detection{
-		Auditable: model.Auditable{
-			Id:         "hJFpC44Bm7lAWCSuSwHa",
-			CreateTime: util.Ptr(time.Now()),
-		},
-		Title:       "myTitle",
-		Severity:    "low",
-		Author:      "Jane Doe",
-		Description: "myDescription",
-		Content:     "myContent",
-		IsEnabled:   true,
-		IsReporting: true,
-		IsCommunity: true,
-		Ruleset:     util.Ptr("myRuleset"),
-		Engine:      "suricata",
-		Language:    "suricata",
-		License:     "DRL",
-		Tags:        []string{"myTag"},
-	}
-
-	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-
-	postDet, err := store.UpdateDetection(ctx, det)
-
-	assert.Nil(t, postDet)
-	assert.ErrorContains(t, err, "existing non-community detection")
-}
-
 func TestUpdateDetectionInvalid404(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 
@@ -880,7 +745,7 @@ func TestUpdateDetectionInvalid404(t *testing.T) {
 		IsEnabled:   true,
 		IsReporting: true,
 		IsCommunity: true,
-		Ruleset:     util.Ptr("myRuleset"),
+		Ruleset:     "myRuleset",
 		Engine:      "suricata",
 		Language:    "suricata",
 		License:     "DRL",
@@ -909,7 +774,7 @@ func TestUpdateDetectionInvalid404(t *testing.T) {
 func TestDeleteDetectionValid(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 
@@ -965,7 +830,7 @@ func TestDeleteDetectionValid(t *testing.T) {
 func TestDeleteDetectionInvalid(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakesrv.Eventstore = server.NewFakeEventstore()
 	store := NewElasticDetectionstore(fakesrv, client, 100)
@@ -987,7 +852,7 @@ func TestDeleteDetectionInvalid(t *testing.T) {
 func TestDoesTemplateExistValid(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	store := NewElasticDetectionstore(fakesrv, client, 100)
 	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
@@ -1017,7 +882,7 @@ func TestDoesTemplateExistValid(t *testing.T) {
 func TestDoesTemplateExistInvalid(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	store := NewElasticDetectionstore(fakesrv, client, 100)
 	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
@@ -1047,7 +912,7 @@ func TestDoesTemplateExistInvalid(t *testing.T) {
 func TestGetDetectionById(t *testing.T) {
 	t.Parallel()
 
-	client, _ := newMockClient(t)
+	client, _ := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	store := NewElasticDetectionstore(fakesrv, client, 100)
 	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
@@ -1094,12 +959,17 @@ func TestGetDetectionById(t *testing.T) {
 
 	assert.Equal(t, 1, len(fakeStore.InputSearchCriterias))
 	assert.Contains(t, fakeStore.InputSearchCriterias[0].RawQuery, `so_detection.publicId:"123456"`)
+
+	// large (up to 128) public Ids should not cause an error
+	bigId := strings.Repeat("1234567890", 12) // length = 120
+	_, err = store.GetDetectionByPublicId(ctx, bigId)
+	assert.NoError(t, err)
 }
 
 func TestUpdateDetectionFieldValid(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 
 	store := NewElasticDetectionstore(fakesrv, client, 100)
@@ -1137,7 +1007,7 @@ func TestUpdateDetectionFieldValid(t *testing.T) {
 func TestUpdateDetectionFieldInvalid(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 
 	store := NewElasticDetectionstore(fakesrv, client, 100)
@@ -1159,7 +1029,7 @@ func TestUpdateDetectionFieldInvalid(t *testing.T) {
 func TestGetAllCommunitySIDs(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 
@@ -1221,12 +1091,12 @@ func TestGetAllCommunitySIDs(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
-	sids, err := store.GetAllCommunitySIDs(ctx, nil)
+	sids, err := store.GetAllDetections(ctx, nil, nil, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(sids))
 	assert.NotNil(t, sids["ABC123"])
 
-	sids, err = store.GetAllCommunitySIDs(ctx, util.Ptr(model.EngineName("suricata")))
+	sids, err = store.GetAllDetections(ctx, util.Ptr(model.EngineName("suricata")), nil, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(sids))
 	assert.NotNil(t, sids["ABC123"])
@@ -1243,7 +1113,7 @@ func TestGetAllCommunitySIDs(t *testing.T) {
 func TestGetDetectionHistory(t *testing.T) {
 	t.Parallel()
 
-	client, _ := newMockClient(t)
+	client, _ := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 
@@ -1305,7 +1175,7 @@ func TestGetDetectionHistory(t *testing.T) {
 func TestCreateDetectionComment(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 
@@ -1364,7 +1234,7 @@ func TestCreateDetectionComment(t *testing.T) {
 func TestGetDetectionComments(t *testing.T) {
 	t.Parallel()
 
-	client, _ := newMockClient(t)
+	client, _ := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 
@@ -1410,7 +1280,7 @@ func TestGetDetectionComments(t *testing.T) {
 func TestUpdateDetectionCommentValid(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 
@@ -1464,7 +1334,7 @@ func TestUpdateDetectionCommentValid(t *testing.T) {
 func TestUpdateDetectionCommentInvalid(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 
@@ -1502,7 +1372,7 @@ func TestUpdateDetectionCommentInvalid(t *testing.T) {
 func TestDeleteDetectionComment(t *testing.T) {
 	t.Parallel()
 
-	client, mocktrans := newMockClient(t)
+	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 
@@ -1526,9 +1396,13 @@ func TestDeleteDetectionComment(t *testing.T) {
 	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 
 	body1 := `{"result":"deleted", "_id":"ABC123"}`
+	body2 := `{"result":"created", "_id":"DEF456"}`
 
 	mocktrans.AddResponse(&http.Response{
 		Body: io.NopCloser(strings.NewReader(body1)),
+	})
+	mocktrans.AddResponse(&http.Response{
+		Body: io.NopCloser(strings.NewReader(body2)),
 	})
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
@@ -1538,7 +1412,7 @@ func TestDeleteDetectionComment(t *testing.T) {
 
 	reqs := mocktrans.GetRequests()
 
-	assert.Equal(t, 1, len(reqs))
+	assert.Equal(t, 2, len(reqs))
 	assert.Equal(t, http.MethodDelete, reqs[0].Method)
 }
 
