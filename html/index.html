@@ -1426,7 +1426,7 @@
                                 {{ i18n.save }}
                               </v-btn>
                             </div>
-                          </span>  
+                          </span>
                         </div>
                         <!-- type (threshold) -->
                         <div v-if="item.type === 'threshold'" @click="startOverrideEdit('override-threshold-type', item, 'thresholdType')" :class="{ clicktoedit: !isOverrideEdit('override-threshold-type') }" data-aid="detection_override_threshold_type_select">
@@ -1584,7 +1584,7 @@
                   <v-text-field v-model="historyTableOpts.search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="detection_history_filter_input"></v-text-field>
                   <v-data-table ref="historyTable" :sort-by.sync="historyTableOpts.sortBy" :sort-desc.sync="historyTableOpts.sortDesc" :items-per-page.sync="historyTableOpts.itemsPerPage"
                     :search="historyTableOpts.search" :footer-props="historyTableOpts.footerProps" must-sort :headers="historyTableOpts.headers"
-                    :items="history" item-key="id" :loading="historyTableOpts.loading" :expanded="historyTableOpts.expanded" class="history-table">
+                    :items="history" item-key="id" :loading="historyTableOpts.loading" :expanded="historyTableOpts.expanded" class="history-table" :custom-sort="$root.dateAwareSort">
                     <template v-slot:item="{item, index, expand, isExpanded}">
                       <tr>
                         <td class="associated actions">
@@ -3084,7 +3084,7 @@
                   <v-text-field v-model="associatedTable['evidence'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
                   <v-data-table ref="evidenceTable" :sort-by.sync="associatedTable['evidence'].sortBy" :sort-desc.sync="associatedTable['evidence'].sortDesc" :items-per-page.sync="associatedTable['evidence'].itemsPerPage"
                     :search="associatedTable['evidence'].search" :footer-props="associatedTable['evidence'].footerProps" must-sort :headers="associatedTable['evidence'].headers"
-                    :items="associations['evidence']" item-key="id" :loading="associatedTable['evidence'].loading" :expanded="associatedTable['evidence'].expanded" class="case-table">
+                    :items="associations['evidence']" item-key="id" :loading="associatedTable['evidence'].loading" :expanded="associatedTable['evidence'].expanded" class="case-table" :custom-sort="$root.dateAwareSort">
                     <template v-slot:item="props">
                       <tr>
                         <td class="association actions">
@@ -3433,7 +3433,7 @@
                   <v-text-field v-model="associatedTable['history'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="case_history_filter_input"></v-text-field>
                   <v-data-table ref="historyTable" :sort-by.sync="associatedTable['history'].sortBy" :sort-desc.sync="associatedTable['history'].sortDesc" :items-per-page.sync="associatedTable['history'].itemsPerPage"
                     :search="associatedTable['history'].search" :footer-props="associatedTable['history'].footerProps" must-sort :headers="associatedTable['history'].headers"
-                    :items="associations['history']" item-key="id" :loading="associatedTable['history'].loading" :expanded="associatedTable['history'].expanded" class="case-table">
+                    :items="associations['history']" item-key="id" :loading="associatedTable['history'].loading" :expanded="associatedTable['history'].expanded" class="case-table" :custom-sort="$root.dateAwareSort">
                     <template v-slot:item="props">
                       <tr>
                         <td class="associated actions">
