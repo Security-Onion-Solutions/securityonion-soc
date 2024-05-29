@@ -1537,6 +1537,8 @@ func wrapRule(det *model.Detection, rule string, additionalAlerters []string) (s
 	}
 
 	sevNum := severities[det.Severity]
+	realert := TimeFrame{}
+	realert.SetSeconds(0)
 
 	wrapper := &CustomWrapper{
 		DetectionTitle:    det.Title,
@@ -1551,7 +1553,7 @@ func wrapRule(det *model.Detection, rule string, additionalAlerters []string) (s
 		Alert:             []string{"modules.so.securityonion-es.SecurityOnionESAlerter"},
 		Index:             ".ds-logs-*",
 		Name:              fmt.Sprintf("%s -- %s", det.Title, det.PublicID),
-		Realert:           nil,
+		Realert:           &realert,
 		Type:              "any",
 		Filter:            []map[string]interface{}{{"eql": rule}},
 	}
