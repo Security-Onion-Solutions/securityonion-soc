@@ -1333,7 +1333,7 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 	return query, nil
 }
 
-func (e *ElastAlertEngine) generateUnusedPublicId(ctx context.Context) (string, error) {
+func (e *ElastAlertEngine) GenerateUnusedPublicId(ctx context.Context) (string, error) {
 	id := uuid.New().String()
 
 	i := 0
@@ -1359,7 +1359,7 @@ func (e *ElastAlertEngine) generateUnusedPublicId(ctx context.Context) (string, 
 }
 
 func (e *ElastAlertEngine) DuplicateDetection(ctx context.Context, detection *model.Detection) (*model.Detection, error) {
-	id, err := e.generateUnusedPublicId(ctx)
+	id, err := e.GenerateUnusedPublicId(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -19,6 +19,7 @@ type DetectionEngine interface {
 	InterruptSync(forceFull bool, notify bool)
 	DuplicateDetection(ctx context.Context, detection *model.Detection) (*model.Detection, error)
 	GetState() *model.EngineState
+	GenerateUnusedPublicId(ctx context.Context) (string, error)
 }
 
 type SyncStatus struct {

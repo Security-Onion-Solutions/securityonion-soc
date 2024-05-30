@@ -327,7 +327,7 @@ test('deleteDetectionCancel', () => {
 	comp.cancelDeleteDetection();
 	expect(comp.confirmDeleteDialog).toBe(false);
 	comp.deleteDetection();
-})
+});
 
 test('deleteDetectionFailure', async () => {
 	resetPapi().mockPapi("delete", null, new Error("something bad"));
@@ -389,17 +389,45 @@ test('revertEnabled', () => {
 	comp.revertEnabled();
 	expect(comp.detect.isEnabled).toBe(false);
 	expect(comp.origDetect.isEnabled).toBe(false);
-})
+});
 
 test('isFieldValid', () => {
 	comp.$refs = {}
 	expect(comp.isFieldValid('foo')).toBe(true)
 
-	comp.$refs = {bar: { valid: false}}
+	comp.$refs = { bar: { valid: false } }
 	expect(comp.isFieldValid('foo')).toBe(true)
 	expect(comp.isFieldValid('bar')).toBe(false)
 
-	comp.$refs = {bar: { valid: true}}
+	comp.$refs = { bar: { valid: true } }
 	expect(comp.isFieldValid('bar')).toBe(true)
+});
 
-})
+test('onNewDetectionLanguageChange', async () => {
+	comp.ruleTemplates = {
+		"suricata": 'a [publicId]',
+		"strelka": 'b [publicId]',
+		"elastalert": 'c [publicId]',
+	}
+	// no language means no engine means no request means no change
+	comp.detect = { language: '', content: 'x' };
+	await comp.onNewDetectionLanguageChange();
+	expect(comp.detect.content).toBe('x');
+
+	// yara, no publicId, results in template without publicId
+	comp.detect = { language:'yara', content: 'x' };
+	await comp.onNewDetectionLanguageChange();
+	expect(comp.detect.content).toBe('b ');
+
+	// suricata, sid, results in template with publicId
+	resetPapi().mockPapi("get", { data: { publicId: 'X' } }, null);
+	comp.detect = { language:'suricata', content: 'x' };
+	await comp.onNewDetectionLanguageChange();
+	expect(comp.detect.content).toBe('a X');
+
+	// sigma, uuid, results in template with publicId
+	resetPapi().mockPapi("get", { data: { publicId: 'X' } }, null);
+	comp.detect = { language:'sigma', content: 'x' };
+	await comp.onNewDetectionLanguageChange();
+	expect(comp.detect.content).toBe('c X');
+});

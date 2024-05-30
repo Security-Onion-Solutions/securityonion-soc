@@ -121,6 +121,12 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			convertedRule: '',
 			confirmDeleteDialog: false,
 			showDirtySourceDialog: false,
+			ruleTemplates: {},
+			languageToEngine: {
+				'suricata': 'suricata',
+				'sigma': 'elastalert',
+				'yara': 'strelka',
+			},
 	}},
 	created() {
 		this.onDetectionChange = debounce(this.onDetectionChange, 300);
@@ -141,6 +147,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.presets = params['presets'];
 			this.renderAbbreviatedCount = params["renderAbbreviatedCount"];
 			this.severityTranslations = params['severityTranslations'];
+			this.ruleTemplates = params['templateDetections'];
 
 			if (this.$route.params.id === 'create') {
 				this.detect = this.newDetection();
@@ -812,6 +819,27 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					return this.presets['severity'].labels[lvl];
 				}
 			}
+		},
+		async onNewDetectionLanguageChange() {
+			const lang = (this.detect.language || '').toLowerCase();
+			const engine = this.languageToEngine[lang];
+
+			if (engine) {
+				let publicId = '';
+
+				if (engine !== 'strelka') {
+					try {
+						const response = await this.$root.papi.get(`detection/${engine}/genpublicid`);
+						publicId = response.data.publicId;
+					} catch (error) {
+						this.$root.showError(error);
+					}
+				}
+
+				this.detect.content = this.ruleTemplates[engine].replaceAll('[publicId]', publicId);
+			}
+
+			this.onDetectionChange();
 		},
 		onDetectionChange() {
 			if (this.detect.engine) {

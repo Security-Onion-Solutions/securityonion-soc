@@ -215,7 +215,7 @@ func TestGenerateUnusedPublicId(t *testing.T) {
 		isRunning: true,
 	}
 
-	id, err := eng.generateUnusedPublicId(ctx)
+	id, err := eng.GenerateUnusedPublicId(ctx)
 
 	assert.Empty(t, id)
 	assert.Error(t, err)
