@@ -1064,7 +1064,7 @@
                   <div class="header">{{ i18n.add }} {{ i18n.detection }}</div>
                   <!-- Language -->
                   <span data-aid="detection_new_language_select">
-                    <v-select id="detection-language-create" v-model="detect.language" :items="getPresets('language')" persistent-hint :hint="i18n.language" :rules="[rules.required]" v-on:change="onDetectionChange"/>
+                    <v-select id="detection-language-create" v-model="detect.language" :items="getPresets('language')" persistent-hint :hint="i18n.language" :rules="[rules.required]" v-on:change="onNewDetectionLanguageChange"/>
                   </span>
 
                   <!-- License -->

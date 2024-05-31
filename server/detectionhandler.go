@@ -65,6 +65,8 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 
 		r.Post("/bulk/{newStatus}", h.bulkUpdateDetection)
 		r.Post("/sync/{engine}/{type}", h.syncEngineDetections)
+
+		r.Get("/{engine}/genpublicid", h.genPublicId)
 	})
 }
 
@@ -681,6 +683,32 @@ func (h *DetectionHandler) syncEngineDetections(w http.ResponseWriter, r *http.R
 	}
 
 	web.Respond(w, r, http.StatusOK, nil)
+}
+
+func (h *DetectionHandler) genPublicId(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	engine := chi.URLParam(r, "engine")
+
+	eng, ok := h.server.DetectionEngines[model.EngineName(engine)]
+	if !ok {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("unsupported engine"))
+		return
+	}
+
+	id, err := eng.GenerateUnusedPublicId(ctx)
+	if err != nil {
+		if err.Error() == "not implemented" {
+			web.Respond(w, r, http.StatusNotImplemented, nil)
+		} else {
+			web.Respond(w, r, http.StatusInternalServerError, err)
+		}
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, map[string]string{
+		"publicId": id,
+	})
 }
 
 func (h *DetectionHandler) PrepareForSave(ctx context.Context, detect *model.Detection, e DetectionEngine) error {

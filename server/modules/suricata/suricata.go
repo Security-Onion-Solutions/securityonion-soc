@@ -1506,7 +1506,7 @@ func lookupLicense(ruleset string) string {
 	return license
 }
 
-func (e *SuricataEngine) generateUnusedPublicId(ctx context.Context) (string, error) {
+func (e *SuricataEngine) GenerateUnusedPublicId(ctx context.Context) (string, error) {
 	id := strconv.Itoa(rand.IntN(1000000) + 1000000) // [1000000, 2000000)
 
 	i := 0
@@ -1532,7 +1532,7 @@ func (e *SuricataEngine) generateUnusedPublicId(ctx context.Context) (string, er
 }
 
 func (e *SuricataEngine) DuplicateDetection(ctx context.Context, detection *model.Detection) (*model.Detection, error) {
-	id, err := e.generateUnusedPublicId(ctx)
+	id, err := e.GenerateUnusedPublicId(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -1003,6 +1003,12 @@ func (e *StrelkaEngine) DuplicateDetection(ctx context.Context, detection *model
 	return det, nil
 }
 
+func (e *StrelkaEngine) GenerateUnusedPublicId(ctx context.Context) (string, error) {
+	// PublicIDs for Strelka are the rule name which should correlate with what the rule does.
+	// Cannot generate arbitrary but still useful public IDs
+	return "", fmt.Errorf("not implemented")
+}
+
 func (e *StrelkaEngine) IntegrityCheck(canInterrupt bool) error {
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
