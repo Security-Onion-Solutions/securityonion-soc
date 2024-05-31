@@ -163,7 +163,7 @@ func (node *Node) IsProcessRunning(match string) bool {
 }
 
 type NodeStatus struct {
-	StatusCode string          `json:"status_code"`
+	StatusCode int             `json:"status_code"`
 	Containers []ProcessStatus `json:"containers"`
 }
 
