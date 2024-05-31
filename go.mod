@@ -27,6 +27,7 @@ require (
 	github.com/samber/lo v1.39.0
 	github.com/tj/assert v0.0.3
 	go.uber.org/mock v0.3.0
+	golang.org/x/mod v0.14.0
 )
 
 require (
@@ -34,7 +35,7 @@ require (
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/ProtonMail/go-crypto v0.0.0-20230828082145-3c4c8a2d2371 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
-	github.com/cloudflare/circl v1.3.3 // indirect
+	github.com/cloudflare/circl v1.3.7 // indirect
 	github.com/cyphar/filepath-securejoin v0.2.4 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/elastic/elastic-transport-go/v8 v8.3.0 // indirect
@@ -55,7 +56,6 @@ require (
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	golang.org/x/exp v0.0.0-20231214170342-aacd6d4b4611 // indirect
-	golang.org/x/mod v0.14.0 // indirect
 	golang.org/x/tools v0.16.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
