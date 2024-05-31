@@ -990,7 +990,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 		return nil, err
 	}
 
-	community, err := e.srv.Detectionstore.GetAllDetections(ctx, util.Ptr(model.EngineNameElastAlert), nil, util.Ptr(true))
+	community, err := e.srv.Detectionstore.GetAllDetections(ctx, model.WithEngine(model.EngineNameElastAlert), model.WithCommunity(true))
 	if err != nil {
 		return nil, err
 	}
@@ -1601,7 +1601,7 @@ func (e *ElastAlertEngine) IntegrityCheck(canInterrupt bool) error {
 		return detections.ErrIntCheckerStopped
 	}
 
-	ret, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, util.Ptr(model.EngineNameElastAlert), util.Ptr(true), nil)
+	ret, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, model.WithEngine(model.EngineNameElastAlert), model.WithEnabled(true))
 	if err != nil {
 		logger.WithError(err).Error("unable to query for enabled detections")
 		return detections.ErrIntCheckFailed

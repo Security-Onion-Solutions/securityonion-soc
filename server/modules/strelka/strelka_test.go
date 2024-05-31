@@ -17,6 +17,7 @@ import (
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/strelka/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
+
 	"github.com/tj/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -272,14 +273,14 @@ func TestSyncStrelka(t *testing.T) {
 		{
 			Name: "Enable Simple Rules",
 			InitMock: func(mockDetStore *servermock.MockDetectionstore, mio *mock.MockIOManager) {
-				mockDetStore.EXPECT().GetAllDetections(gomock.Any(), util.Ptr(model.EngineNameStrelka), util.Ptr(true), nil).Return(map[string]*model.Detection{
-					"1": &model.Detection{
+				mockDetStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+					"1": {
 						PublicID:  "1",
 						Engine:    model.EngineNameStrelka,
 						Content:   simpleRule,
 						IsEnabled: true,
 					},
-					"2": &model.Detection{
+					"2": {
 						PublicID:  "2",
 						Engine:    model.EngineNameStrelka,
 						Content:   simpleRule,

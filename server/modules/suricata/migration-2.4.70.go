@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/util"
+
+	"github.com/apex/log"
 	"gopkg.in/yaml.v3"
 )
 
@@ -45,7 +45,7 @@ func (e *SuricataEngine) Migration2470(statePath string) error {
 	dirty := map[string]struct{}{} // map[sid]X
 
 	// retrieve all suricata rules
-	detects, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, util.Ptr(model.EngineNameSuricata), nil, nil)
+	detects, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, model.WithEngine(model.EngineNameSuricata))
 	if err != nil {
 		return err
 	}
