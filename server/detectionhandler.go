@@ -28,6 +28,7 @@ type BulkOp struct {
 	IDs       []string `json:"ids"`
 	Query     *string  `json:"query"`
 	NewStatus bool     `json:"-"`
+	Delete    bool     `json:"-"`
 }
 
 type DetectionHandler struct {
@@ -368,9 +369,12 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 	newStatus := chi.URLParam(r, "newStatus") // "enable" or "disable"
 
 	var enabled bool
+	var delete bool
 	switch strings.ToLower(newStatus) {
 	case "enable", "disable":
 		enabled = strings.ToLower(newStatus) == "enable"
+	case "delete":
+		delete = true
 	default:
 		web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("invalid status; must be 'enable' or 'disable'"))
 		return
@@ -384,6 +388,7 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 	}
 
 	body.NewStatus = enabled
+	body.Delete = delete
 
 	err = h.server.CheckAuthorized(ctx, "write", "detections")
 	if err != nil {
@@ -408,6 +413,7 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 	errMap := map[string]string{} // map[id]error
 	IDs := map[string]struct{}{}
 	modified := []*model.Detection{}
+	deleted := []*model.Detection{}
 
 	totalTimeStart := time.Now()
 
@@ -418,15 +424,22 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 			"error":      len(errMap),
 			"total":      len(IDs),
 			"modified":   len(modified),
+			"deleted":    len(deleted),
 			"updateTime": update.Seconds(),
 			"syncTime":   sync.Seconds(),
 			"totalTime":  totalTime.Seconds(),
 		}).Error("bulk update Detections finished")
 
+		verb := "update"
+		if body.Delete {
+			verb = "delete"
+		}
+
 		h.server.Host.Broadcast("detections:bulkUpdate", "detections", map[string]interface{}{
 			"error":    len(errMap),
+			"verb":     verb,
 			"total":    len(IDs),
-			"modified": len(modified),
+			"modified": len(modified) + len(deleted),
 			"time":     totalTime.Seconds(),
 		})
 	}()
@@ -457,21 +470,39 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 
 	start := time.Now()
 
-	for id := range IDs {
-		mod, err := h.server.Detectionstore.UpdateDetectionField(ctx, id, map[string]interface{}{"IsEnabled": body.NewStatus})
-		if err != nil {
-			errMap[id] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
+	if !body.Delete {
+		for id := range IDs {
+			mod, err := h.server.Detectionstore.UpdateDetectionField(ctx, id, map[string]interface{}{"IsEnabled": body.NewStatus})
+			if err != nil {
+				errMap[id] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
 
-			continue
+				continue
+			}
+
+			modified = append(modified, mod)
 		}
+	} else {
+		for id := range IDs {
+			mod, err := h.server.Detectionstore.DeleteDetection(ctx, id)
+			if err != nil {
+				errMap[id] = fmt.Sprintf("unable to delete detection; reason=%s", err.Error())
 
-		modified = append(modified, mod)
+				continue
+			}
+
+			mod.IsEnabled = false
+			mod.PendingDelete = true
+
+			deleted = append(deleted, mod)
+		}
 	}
 
 	update = time.Since(start)
 	start = time.Now()
 
-	addErrMap, err := SyncLocalDetections(ctx, h.server, modified)
+	dirty := append(modified, deleted...)
+
+	addErrMap, err := SyncLocalDetections(ctx, h.server, dirty)
 	if err != nil {
 		return
 	}
@@ -489,7 +520,7 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 	}
 
 	log.WithFields(log.Fields{
-		"modifiedCount": len(modified),
+		"modifiedCount": len(dirty),
 		"errorCount":    len(errMap),
 	}).Info("bulk update detection")
 
