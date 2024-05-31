@@ -69,6 +69,7 @@ type Node struct {
 	DiskUsedElasticGB    float64   `json:"diskUsedElasticGB"`
 	DiskUsedInfluxDbGB   float64   `json:"diskUsedInfluxDbGB"`
 	HighstateAgeSeconds  int       `json:"highstateAgeSeconds"`
+	GmdEnabled           int       `json:"gmdEnabled"`
 	LksEnabled           int       `json:"lksEnabled"`
 	FpsEnabled           int       `json:"fpsEnabled"`
 }

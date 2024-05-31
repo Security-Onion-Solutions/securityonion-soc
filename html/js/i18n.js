@@ -432,6 +432,7 @@ const i18n = {
       flags: 'Flags',
       gigabytes: 'GB',
       generate: 'Generate',
+      gmd: 'Guaranteed Message Delivery',
       go: 'GO',
       graphs: 'Graphs',
       grid: 'Grid',

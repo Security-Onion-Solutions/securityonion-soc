@@ -139,90 +139,50 @@ func TestGetOsNeedsRestart(tester *testing.T) {
 	assert.Equal(tester, 0, metrics.getOsNeedsRestart("missing"))
 }
 
-func DisabledDueToJobInstability_TestUpdateNodeMetricsLksUnlicensed(tester *testing.T) {
-	licensing.Test("odc", 0, 0, "", "")
+func updateNodeMetricsFeature(tester *testing.T, featureId string, metrics *InfluxDBMetrics, expectedStatus string) {
+	licensing.Test(featureId, 0, 0, "", "")
 	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
 
+	node1 := model.NewNode("id1")
+	node2 := model.NewNode("id2")
+	node3 := model.NewNode("id3")
+
+	metrics.UpdateNodeMetrics(context.Background(), node3)
+	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+	metrics.UpdateNodeMetrics(context.Background(), node2)
+	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+	metrics.UpdateNodeMetrics(context.Background(), node1)
+	assert.Equal(tester, expectedStatus, licensing.GetStatus())
+}
+
+/* Disabled licensing tests due to test thread instability (run locally when making changes)
+func TestUpdateNodeMetricsLksFeatures(tester *testing.T) {
 	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
 	metrics.lastOsUpdateTime = time.Now()
 	metrics.lksEnabled = make(map[string]int)
 	metrics.lksEnabled["id1"] = 1
 	metrics.lksEnabled["id2"] = 0
-
-	node1 := model.NewNode("id1")
-	node2 := model.NewNode("id2")
-	node3 := model.NewNode("id3")
-
-	metrics.UpdateNodeMetrics(context.Background(), node3)
-	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
-	metrics.UpdateNodeMetrics(context.Background(), node2)
-	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
-	metrics.UpdateNodeMetrics(context.Background(), node1)
-	assert.Equal(tester, licensing.LICENSE_STATUS_EXCEEDED, licensing.GetStatus())
+	updateNodeMetricsFeature(tester, "odc", metrics, licensing.LICENSE_STATUS_EXCEEDED)
+	updateNodeMetricsFeature(tester, "lks", metrics, licensing.LICENSE_STATUS_ACTIVE)
 }
 
-func DisabledDueToJobInstability_TestUpdateNodeMetricsLksLicensed(tester *testing.T) {
-	licensing.Test("lks", 0, 0, "", "")
-	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
-
-	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
-	metrics.lastOsUpdateTime = time.Now()
-	metrics.lksEnabled = make(map[string]int)
-	metrics.lksEnabled["id1"] = 1
-	metrics.lksEnabled["id2"] = 0
-
-	node1 := model.NewNode("id1")
-	node2 := model.NewNode("id2")
-	node3 := model.NewNode("id3")
-
-	metrics.UpdateNodeMetrics(context.Background(), node3)
-	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
-	metrics.UpdateNodeMetrics(context.Background(), node2)
-	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
-	metrics.UpdateNodeMetrics(context.Background(), node1)
-	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
-}
-
-func DisabledDueToJobInstability_TestUpdateNodeMetricsFpsUnlicensed(tester *testing.T) {
-	licensing.Test("odc", 0, 0, "", "")
-	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
-
+func TestUpdateNodeMetricsFpsFeatures(tester *testing.T) {
 	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
 	metrics.lastOsUpdateTime = time.Now()
 	metrics.fpsEnabled = make(map[string]int)
 	metrics.fpsEnabled["id1"] = 1
 	metrics.fpsEnabled["id2"] = 0
-
-	node1 := model.NewNode("id1")
-	node2 := model.NewNode("id2")
-	node3 := model.NewNode("id3")
-
-	metrics.UpdateNodeMetrics(context.Background(), node3)
-	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
-	metrics.UpdateNodeMetrics(context.Background(), node2)
-	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
-	metrics.UpdateNodeMetrics(context.Background(), node1)
-	assert.Equal(tester, licensing.LICENSE_STATUS_EXCEEDED, licensing.GetStatus())
+	updateNodeMetricsFeature(tester, "odc", metrics, licensing.LICENSE_STATUS_EXCEEDED)
+	updateNodeMetricsFeature(tester, "fps", metrics, licensing.LICENSE_STATUS_ACTIVE)
 }
 
-func DisabledDueToJobInstability_TestUpdateNodeMetricsFpsLicensed(tester *testing.T) {
-	licensing.Test("fps", 0, 0, "", "")
-	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
-
+func TestUpdateNodeMetricsGmdFeatures(tester *testing.T) {
 	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
 	metrics.lastOsUpdateTime = time.Now()
-	metrics.fpsEnabled = make(map[string]int)
-	metrics.fpsEnabled["id1"] = 1
-	metrics.fpsEnabled["id2"] = 0
-
-	node1 := model.NewNode("id1")
-	node2 := model.NewNode("id2")
-	node3 := model.NewNode("id3")
-
-	metrics.UpdateNodeMetrics(context.Background(), node3)
-	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
-	metrics.UpdateNodeMetrics(context.Background(), node2)
-	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
-	metrics.UpdateNodeMetrics(context.Background(), node1)
-	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
+	metrics.gmdEnabled = make(map[string]int)
+	metrics.gmdEnabled["id1"] = 1
+	metrics.gmdEnabled["id2"] = 0
+	updateNodeMetricsFeature(tester, "odc", metrics, licensing.LICENSE_STATUS_EXCEEDED)
+	updateNodeMetricsFeature(tester, "gmd", metrics, licensing.LICENSE_STATUS_ACTIVE)
 }
+*/
