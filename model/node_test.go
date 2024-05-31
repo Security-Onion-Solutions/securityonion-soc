@@ -204,3 +204,14 @@ func TestUpdateNodeStatusPending(tester *testing.T) {
 	testStatus(tester, true, NodeStatusOk, NodeStatusOk, NodeStatusOk, NodeStatusOk, NodeStatusOk, 1, NodeStatusRestart)
 	testStatus(tester, true, NodeStatusPending, NodeStatusFault, NodeStatusOk, NodeStatusOk, NodeStatusOk, 1, NodeStatusFault)
 }
+
+func TestIsProcessRunning(tester *testing.T) {
+	node := NewNode("")
+	assert.False(tester, node.IsProcessRunning("so-test"))
+	node.ProcessJson = "{}"
+	assert.False(tester, node.IsProcessRunning("so-test"))
+	node.ProcessJson = `{"containers":[{"Name":"so-foo", "Status":"running"}]}`
+	assert.False(tester, node.IsProcessRunning("so-test"))
+	node.ProcessJson = `{"containers":[{"Name":"so-test", "Status":"running"}]}`
+	assert.True(tester, node.IsProcessRunning("so-test"))
+}

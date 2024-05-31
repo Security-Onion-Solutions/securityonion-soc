@@ -73,7 +73,6 @@ type InfluxDBMetrics struct {
 	diskUsedInfluxDbGB       map[string]float64
 	highstateAgeSeconds      map[string]int
 	fpsEnabled               map[string]int
-	gmdEnabled               map[string]int
 	lksEnabled               map[string]int
 }
 
@@ -305,7 +304,6 @@ func (metrics *InfluxDBMetrics) updateOsStatus() {
 
 		metrics.osNeedsRestart = metrics.convertValuesToInt(metrics.fetchLatestValuesByHost("os", "restart", "", ""))
 		metrics.fpsEnabled = metrics.convertValuesToInt(metrics.fetchLatestValuesByHost("features", "fps", "", ""))
-		metrics.gmdEnabled = metrics.convertValuesToInt(metrics.fetchLatestValuesByHost("features", "gmd", "", ""))
 		metrics.lksEnabled = metrics.convertValuesToInt(metrics.fetchLatestValuesByHost("features", "lks", "", ""))
 		metrics.osUptime = metrics.convertValuesToInt(metrics.fetchLatestValuesByHost("system", "uptime", "", ""))
 		metrics.diskTotalRootGB = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("disk", "total", "", "|> filter(fn: (r) => r[\"path\"] == \"/\")"), bytesToGB)
@@ -498,14 +496,13 @@ func (metrics *InfluxDBMetrics) UpdateNodeMetrics(ctx context.Context, node *mod
 		node.DiskUsedInfluxDbGB = metrics.diskUsedInfluxDbGB[node.Id]
 		node.HighstateAgeSeconds = metrics.highstateAgeSeconds[node.Id]
 		node.FpsEnabled = metrics.fpsEnabled[node.Id]
-		node.GmdEnabled = metrics.gmdEnabled[node.Id]
 		node.LksEnabled = metrics.lksEnabled[node.Id]
 
 		enhancedStatusEnabled := (metrics.client != nil)
 		status = node.UpdateOverallStatus(enhancedStatusEnabled)
 
 		licensing.ValidateFeature(licensing.FEAT_FPS, node.FpsEnabled == 1)
-		licensing.ValidateFeature(licensing.FEAT_GMD, node.GmdEnabled == 1)
+		licensing.ValidateFeature(licensing.FEAT_GMD, node.IsProcessRunning("so-kafka"))
 		licensing.ValidateFeature(licensing.FEAT_LKS, node.LksEnabled == 1)
 	}
 	return status

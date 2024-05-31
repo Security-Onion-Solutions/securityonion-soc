@@ -159,6 +159,8 @@ func updateNodeMetricsFeature(tester *testing.T, featureId string, metrics *Infl
 func TestUpdateNodeMetricsLksFeatures(tester *testing.T) {
 	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
 	metrics.lastOsUpdateTime = time.Now()
+	metrics.lastProcessUpdateTime = time.Now()
+	metrics.cacheExpirationMs = 99999
 	metrics.lksEnabled = make(map[string]int)
 	metrics.lksEnabled["id1"] = 1
 	metrics.lksEnabled["id2"] = 0
@@ -169,6 +171,8 @@ func TestUpdateNodeMetricsLksFeatures(tester *testing.T) {
 func TestUpdateNodeMetricsFpsFeatures(tester *testing.T) {
 	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
 	metrics.lastOsUpdateTime = time.Now()
+	metrics.lastProcessUpdateTime = time.Now()
+	metrics.cacheExpirationMs = 99999
 	metrics.fpsEnabled = make(map[string]int)
 	metrics.fpsEnabled["id1"] = 1
 	metrics.fpsEnabled["id2"] = 0
@@ -179,9 +183,11 @@ func TestUpdateNodeMetricsFpsFeatures(tester *testing.T) {
 func TestUpdateNodeMetricsGmdFeatures(tester *testing.T) {
 	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
 	metrics.lastOsUpdateTime = time.Now()
-	metrics.gmdEnabled = make(map[string]int)
-	metrics.gmdEnabled["id1"] = 1
-	metrics.gmdEnabled["id2"] = 0
+	metrics.lastProcessUpdateTime = time.Now()
+	metrics.cacheExpirationMs = 99999
+	metrics.processJson = make(map[string]string)
+	metrics.processJson["id1"] = `{"containers":[{"Name":"so-kafka", "Status":"running"}]}`
+	metrics.processJson["id2"] = `{"containers":[{"Name":"so-kafka", "Status":"stopped"}]}`
 	updateNodeMetricsFeature(tester, "odc", metrics, licensing.LICENSE_STATUS_EXCEEDED)
 	updateNodeMetricsFeature(tester, "gmd", metrics, licensing.LICENSE_STATUS_ACTIVE)
 }
