@@ -2216,12 +2216,11 @@ const huntComponent = {
 
       try {
         await this.$root.papi.post('detection/bulk/' + this.selectedAction, payload);
-      } catch (e) {
-        this.$root.handleError(e);
-      } finally {
         this.selectAllState = false;
         this.selectedCount = 0;
         this.hunt(false);
+      } catch (e) {
+        this.$root.showError(e);
       }
     },
     bulkDeleteDialogCancel() {

@@ -1050,7 +1050,7 @@
           <v-card>
             <v-card-title class="text-h5" v-text="i18n.detectionDeleteConfirmationTitle" />
             <v-card-text>
-              {{ i18n.detectionDeleteConfirmationBody.replace('{count}', selectedCount) }}
+              {{ i18n.detectionDeleteConfirmationBody.replace('{count}', (selectAllState === true ? totalEvents : selectedCount).toLocaleString()) }}
             </v-card-text>
             <v-card-actions>
               <v-spacer></v-spacer>

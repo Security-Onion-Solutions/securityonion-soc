@@ -396,24 +396,72 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	IDs := []string{}
+	containsCommunity := false
+
+	if body.Query != nil {
+		query := fmt.Sprintf(`(%s) AND _index:"*:so-detection" AND so_kind:detection`, *body.Query)
+
+		var results []interface{}
+
+		results, err = h.server.Detectionstore.Query(ctx, query, -1)
+		if err != nil {
+			return
+		}
+		for _, d := range results {
+			det := d.(*model.Detection)
+			if det.IsCommunity {
+				containsCommunity = true
+				break
+			}
+
+			IDs = append(IDs, det.Id)
+		}
+	} else {
+		for _, id := range body.IDs {
+			IDs = append(IDs, id)
+			det, err := h.server.Detectionstore.GetDetection(ctx, id)
+			if err != nil {
+				web.Respond(w, r, http.StatusInternalServerError, err)
+				return
+			}
+
+			if det.IsCommunity {
+				containsCommunity = true
+				break
+			}
+		}
+	}
+
+	if containsCommunity {
+		web.Respond(w, r, http.StatusBadRequest, "ERROR_BULK_COMMUNITY")
+		return
+	}
+
 	// new context that doesn't contain a timeout or deadline, but does include
 	// the user we're making requests to ES on behalf of.
 	noTimeOutCtx := context.WithValue(context.Background(), web.ContextKeyRequestor, ctx.Value(web.ContextKeyRequestor).(*model.User))
 	noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
 	noTimeOutCtx = web.MarkChangedByUser(noTimeOutCtx, true)
 
-	go h.bulkUpdateDetectionAsync(noTimeOutCtx, body)
+	go h.bulkUpdateDetectionAsync(noTimeOutCtx, body, IDs)
 
 	web.Respond(w, r, http.StatusAccepted, nil)
 }
 
-func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *BulkOp) {
+// bulkUpdateDetectionAsync is a helper function that performs the bulk update in a separate goroutine.
+// Note that the IdList is SOC Ids, not Public Ids.
+func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *BulkOp, IdList []string) {
 	var err error
 	var update, sync time.Duration
 	errMap := map[string]string{} // map[id]error
 	IDs := map[string]struct{}{}
 	modified := []*model.Detection{}
 	deleted := []*model.Detection{}
+
+	for _, id := range IdList {
+		IDs[id] = struct{}{}
+	}
 
 	totalTimeStart := time.Now()
 
@@ -443,26 +491,6 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 			"time":     totalTime.Seconds(),
 		})
 	}()
-
-	for _, id := range body.IDs {
-		IDs[id] = struct{}{}
-	}
-
-	if body.Query != nil {
-		query := fmt.Sprintf(`(%s) AND _index:"*:so-detection" AND so_kind:detection`, *body.Query)
-
-		var results []interface{}
-
-		results, err = h.server.Detectionstore.Query(ctx, query, -1)
-		if err != nil {
-			return
-		}
-		for _, d := range results {
-			det := d.(*model.Detection)
-			id := det.Id
-			IDs[id] = struct{}{}
-		}
-	}
 
 	log.WithField("count", len(IDs)).Info("bulk update ID count")
 
