@@ -1006,16 +1006,6 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 		}
 	}
 
-	// carry forward existing overrides
-	for i := range detects {
-		det := detects[i]
-
-		comDet, exists := community[det.PublicID]
-		if exists {
-			det.Overrides = comDet.Overrides
-		}
-	}
-
 	results := struct {
 		Added     int
 		Updated   int

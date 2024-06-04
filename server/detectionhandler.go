@@ -433,7 +433,7 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	if containsCommunity {
+	if containsCommunity && body.Delete {
 		web.Respond(w, r, http.StatusBadRequest, "ERROR_BULK_COMMUNITY")
 		return
 	}
