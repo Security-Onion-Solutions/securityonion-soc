@@ -122,7 +122,8 @@ const i18n = {
       blog: 'Blog',
       bulkAction: 'Bulk Action:',
       bulkError: '',
-      bulkSuccess: 'Bulk update successfully updated {modified} of {total} events. ({time})',
+      bulkSuccessUpdate: 'Bulk update successfully updated {modified} of {total} events. ({time})',
+      bulkSuccessDelete: 'Bulk delete successfully deleted {modified} of {total} events. ({time})',
       bytes: 'Bytes',
       cancel: 'Cancel',
       captureLoss: 'Capture Loss',
@@ -291,6 +292,8 @@ const i18n = {
       detectionDefaultTitle: 'Detection title not yet provided - click here to update this title',
       detectionDefaultDescription: 'Detection description not yet provided',
       detectionDeleteSuccessful: 'Detection deleted. The deleted detection will still appear below until the list is refreshed.',
+      detectionDeleteConfirmationBody: 'Are you sure you want to delete {count} detections?',
+      detectionDeleteConfirmationTitle: 'Delete Detections',
       detectionDescription: 'Detection Description',
       detectionEnabled: 'Enabled',
       detectionEngineHealthy: 'OK',
@@ -961,6 +964,7 @@ const i18n = {
       ERROR_SALT_SEND_FILE: 'Unable to send file to minion; ensure that salt is running on the manager node and check salt logs.',
       ERROR_SALT_IMPORT: 'Unable to import file on minion; ensure that salt is running on the manager node and check salt logs.',
       ERROR_SALT_STATE: 'Unable to sync settings. Ensure that salt is running on the manager node and check salt logs.',
+      ERROR_BULK_COMMUNITY: 'Unable to complete bulk delete. Batch contains Community rules. No rules were deleted.',
 
       // correct casing
       cc_elastalert: 'ElastAlert',

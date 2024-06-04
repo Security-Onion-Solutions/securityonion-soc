@@ -146,10 +146,12 @@ const huntComponent = {
     bulkActions: [
       { text: this.$root.i18n.enable, value: 'enable' },
       { text: this.$root.i18n.disable, value: 'disable' },
+      { text: this.$root.i18n.delete, value: 'delete' },
     ],
     quickActionDetId: null,
     presets: {},
     manualSyncTargetEngine: null,
+    showBulkDeleteConfirmDialog: false,
   }},
   created() {
     this.$root.initializeCharts();
@@ -2186,8 +2188,15 @@ const huntComponent = {
 
       this.selectedCount = count;
     },
-    async bulkAction() {
+    async bulkAction(confirmed) {
       let payload = {};
+
+      if (this.selectedAction === 'delete' && !confirmed) {
+        this.showBulkDeleteConfirmDialog = true;
+        return;
+      }
+
+      this.showBulkDeleteConfirmDialog = false;
 
       switch (this.selectAllState) {
         case true:
@@ -2207,13 +2216,15 @@ const huntComponent = {
 
       try {
         await this.$root.papi.post('detection/bulk/' + this.selectedAction, payload);
-      } catch (e) {
-        this.$root.handleError(e);
-      } finally {
         this.selectAllState = false;
         this.selectedCount = 0;
         this.hunt(false);
+      } catch (e) {
+        this.$root.showError(e);
       }
+    },
+    bulkDeleteDialogCancel() {
+      this.showBulkDeleteConfirmDialog = false;
     },
     bulkUpdateReport(stats) {
       if (stats.error > 0) {
@@ -2244,7 +2255,8 @@ const huntComponent = {
 
         t += seconds.toFixed(0) + 's';
 
-        let msg = this.i18n.bulkSuccess;
+        let msg = stats.verb === 'delete' ? this.i18n.bulkSuccessDelete : this.i18n.bulkSuccessUpdate;
+
         msg = msg.replaceAll('{modified}', stats.modified.toLocaleString());
         msg = msg.replaceAll('{total}', stats.total.toLocaleString());
         msg = msg.replaceAll('{time}', t);
