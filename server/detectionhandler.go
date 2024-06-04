@@ -420,15 +420,17 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 	} else {
 		for _, id := range body.IDs {
 			IDs = append(IDs, id)
-			det, err := h.server.Detectionstore.GetDetection(ctx, id)
-			if err != nil {
-				web.Respond(w, r, http.StatusInternalServerError, err)
-				return
-			}
+			if body.Delete {
+				det, err := h.server.Detectionstore.GetDetection(ctx, id)
+				if err != nil {
+					web.Respond(w, r, http.StatusInternalServerError, err)
+					return
+				}
 
-			if det.IsCommunity {
-				containsCommunity = true
-				break
+				if det.IsCommunity {
+					containsCommunity = true
+					break
+				}
 			}
 		}
 	}
