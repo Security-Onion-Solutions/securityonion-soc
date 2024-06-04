@@ -5,6 +5,7 @@ sensoroni
 jobs/
 logs/
 nsm/
+coverage/
 .vscode/
 .DS_Store
 
