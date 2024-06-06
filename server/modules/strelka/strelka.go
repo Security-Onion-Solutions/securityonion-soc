@@ -400,7 +400,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 		upToDate := map[string]*model.RuleRepo{}
 
-		allRepos, anythingNew, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config.Proxy)
+		allRepos, anythingNew, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config)
 		if err != nil {
 			if strings.Contains(err.Error(), "module stopped") {
 				break
