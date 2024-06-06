@@ -12,6 +12,8 @@ import (
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
+
+	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/tj/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -209,6 +211,72 @@ func TestEscapeDoubleQuotes(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			escaped := EscapeDoubleQuotes(test.Input)
 			assert.Equal(t, test.ExpOutput, escaped)
+		})
+	}
+}
+
+func TestProxyToTransportOptions(t *testing.T) {
+	tests := []struct {
+		Name     string
+		Proxy    string
+		Opts     transport.ProxyOptions
+		ExpError *string
+	}{
+		{
+			Name:  "Empty",
+			Proxy: "",
+			Opts:  transport.ProxyOptions{},
+		},
+		{
+			Name:  "No Auth",
+			Proxy: "http://localhost:8080",
+			Opts: transport.ProxyOptions{
+				URL: "http://localhost:8080",
+			},
+		},
+		{
+			Name:  "No Port",
+			Proxy: "http://proxyHost",
+			Opts: transport.ProxyOptions{
+				URL: "http://proxyHost",
+			},
+		},
+		{
+			Name:  "With Auth",
+			Proxy: "http://user:pass@proxyHost:3128",
+			Opts: transport.ProxyOptions{
+				URL:      "http://proxyHost:3128",
+				Username: "user",
+				Password: "pass",
+			},
+		},
+		{
+			Name:  "Assume HTTP Schema",
+			Proxy: "proxyHost",
+			Opts: transport.ProxyOptions{
+				URL: "http://proxyHost",
+			},
+		},
+		{
+			Name:     "Invalid URL",
+			Proxy:    "%",
+			ExpError: util.Ptr(`parse "%": invalid URL escape "%"`),
+			Opts:     transport.ProxyOptions{},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			opts, err := proxyToTransportOptions(test.Proxy)
+			if test.ExpError != nil {
+				assert.Error(t, err)
+				assert.Equal(t, *test.ExpError, err.Error())
+			} else {
+				assert.NoError(t, err)
+			}
+
+			assert.Equal(t, test.Opts, opts)
 		})
 	}
 }

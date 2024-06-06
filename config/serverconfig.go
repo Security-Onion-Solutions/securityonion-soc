@@ -37,6 +37,7 @@ type ServerConfig struct {
 	IdleConnectionTimeoutMs int                    `json:"idleConnectionTimeoutMs"`
 	TimezoneScript          string                 `json:"timezoneScript"`
 	MaxUploadSizeBytes      int                    `json:"maxUploadSizeBytes"`
+	Proxy                   string                 `json:"proxy"`
 	SrvKey                  string                 `json:"srvKey"`
 	SrvKeyBytes             []byte
 	SrvExpSeconds           int `json:"srvExpSeconds"`

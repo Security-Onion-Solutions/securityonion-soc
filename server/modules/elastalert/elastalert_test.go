@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
@@ -1026,4 +1027,69 @@ func TestGetDeployedPublicIds(t *testing.T) {
 	assert.Len(t, ids, 2)
 	assert.Contains(t, ids, "00000000-0000-0000-0000-000000000000")
 	assert.Contains(t, ids, "11111111-1111-1111-1111-111111111111")
+}
+
+func TestBuildHttpClient(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		Name                 string
+		Proxy                string
+		ExpectedTransportNil bool
+		ExpProxy             *string
+	}{
+		{
+			Name:                 "Empty",
+			Proxy:                "",
+			ExpectedTransportNil: true,
+		},
+		{
+			Name:                 "Has Proxy",
+			Proxy:                "http://myProxy:3128",
+			ExpectedTransportNil: false,
+			ExpProxy:             util.Ptr("http://myProxy:3128"),
+		},
+		{
+			Name:                 "Invalid Proxy",
+			Proxy:                "%",
+			ExpectedTransportNil: true,
+		},
+	}
+
+	proxy := "http://myProxy:3128"
+
+	resman := &ResourceManager{
+		Engine: &ElastAlertEngine{
+			srv: &server.Server{
+				Config: &config.ServerConfig{
+					Proxy: "",
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			resman.Engine.srv.Config.Proxy = test.Proxy
+
+			client := resman.buildHttpClient()
+
+			if test.ExpectedTransportNil {
+				assert.Nil(t, client.Transport)
+			} else {
+				assert.NotNil(t, client.Transport)
+				assert.IsType(t, &http.Transport{}, client.Transport)
+
+				transport := client.Transport.(*http.Transport)
+				assert.NotNil(t, transport.Proxy)
+
+				proxyURL, err := transport.Proxy(nil)
+				assert.NoError(t, err)
+				assert.Equal(t, proxy, proxyURL.String())
+			}
+		})
+	}
 }
