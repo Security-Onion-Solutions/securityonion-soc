@@ -17,6 +17,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/transport"
 )
 
 var doubleQuoteEscaper = regexp.MustCompile(`\\([\s\S])|(")`)
@@ -111,7 +112,7 @@ type DirtyRepo struct {
 	Repo        *model.RuleRepo
 }
 
-func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.RuleRepo) (allRepos map[string]*DirtyRepo, anythingNew bool, err error) {
+func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.RuleRepo, proxy string) (allRepos map[string]*DirtyRepo, anythingNew bool, err error) {
 	allRepos = map[string]*DirtyRepo{} // map[repoPath]repo
 
 	// read existing repos
@@ -153,6 +154,12 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 		allRepos[repoPath] = dirty
 		reclone := false
 
+		proxyOpts, err := proxyToTransportOptions(proxy)
+		if err != nil {
+			log.WithError(err).WithField("proxy", proxy).Error("failed to parse proxy URL, not using the proxy")
+			// no return here, not a bug
+		}
+
 		_, ok := existingRepos[lastFolder]
 		if ok {
 			var work *git.Worktree
@@ -187,19 +194,19 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 			}
 
 			ctx, cancel = context.WithTimeout(context.Background(), time.Minute*5)
+			defer cancel()
 
 			err = work.PullContext(ctx, &git.PullOptions{
 				Depth:        1,
 				SingleBranch: true,
+				ProxyOptions: proxyOpts,
 			})
 			if err != nil && err != git.NoErrAlreadyUpToDate {
-				cancel()
 				log.WithError(err).WithField("repoPath", repoPath).Error("failed to pull repo, doing nothing with it")
 				reclone = true
 
 				goto skippull
 			}
-			cancel()
 
 			if err == nil {
 				anythingNew = true
@@ -227,6 +234,7 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 				Depth:        1,
 				SingleBranch: true,
 				URL:          repo.Repo,
+				ProxyOptions: proxyOpts,
 			})
 			if err != nil {
 				log.WithError(err).WithField("repoPath", repoPath).Error("failed to clone repo, doing nothing with it")
@@ -250,6 +258,32 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 	}
 
 	return allRepos, anythingNew, nil
+}
+
+func proxyToTransportOptions(proxy string) (transport.ProxyOptions, error) {
+	if proxy == "" {
+		return transport.ProxyOptions{}, nil
+	}
+
+	p, err := url.Parse(proxy)
+	if err != nil {
+		return transport.ProxyOptions{}, err
+	}
+
+	if p.Scheme == "" {
+		p.Scheme = "http"
+	}
+
+	username := p.User.Username()
+	password, _ := p.User.Password()
+
+	p.User = nil
+
+	return transport.ProxyOptions{
+		URL:      p.String(),
+		Username: username,
+		Password: password,
+	}, nil
 }
 
 func CheckWriteNoRead(ctx context.Context, DetStore GetterByPublicId, writeNoRead *string) (shouldFail bool) {

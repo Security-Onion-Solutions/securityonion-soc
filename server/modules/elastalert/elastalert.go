@@ -17,6 +17,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -126,10 +127,14 @@ func checkRulesetEnabled(e *ElastAlertEngine, det *model.Detection) {
 }
 
 func NewElastAlertEngine(srv *server.Server) *ElastAlertEngine {
-	return &ElastAlertEngine{
-		srv:       srv,
-		IOManager: &ResourceManager{},
+	engine := &ElastAlertEngine{
+		srv: srv,
 	}
+
+	resMan := &ResourceManager{Engine: engine}
+	engine.IOManager = resMan
+
+	return engine
 }
 
 func (e *ElastAlertEngine) PrerequisiteModules() []string {
@@ -612,7 +617,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 
 		var dirtyRepos map[string]*detections.DirtyRepo
 
-		dirtyRepos, repoChanges, err = detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos)
+		dirtyRepos, repoChanges, err = detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config.Proxy)
 		if err != nil {
 			if strings.Contains(err.Error(), "module stopped") {
 				break
@@ -1656,7 +1661,9 @@ func (e *ElastAlertEngine) getDeployedPublicIds() (publicIds []string, err error
 // go install go.uber.org/mock/mockgen@latest
 //go:generate mockgen -destination mock/mock_iomanager.go -package mock . IOManager
 
-type ResourceManager struct{}
+type ResourceManager struct {
+	Engine *ElastAlertEngine
+}
 
 func (_ *ResourceManager) ReadFile(path string) ([]byte, error) {
 	return os.ReadFile(path)
@@ -1674,8 +1681,23 @@ func (_ *ResourceManager) ReadDir(path string) ([]os.DirEntry, error) {
 	return os.ReadDir(path)
 }
 
-func (_ *ResourceManager) MakeRequest(req *http.Request) (*http.Response, error) {
-	return http.DefaultClient.Do(req)
+func (resman *ResourceManager) MakeRequest(req *http.Request) (*http.Response, error) {
+	var client *http.Client = http.DefaultClient
+
+	if resman.Engine.srv.Config.Proxy != "" {
+		p, err := url.Parse(resman.Engine.srv.Config.Proxy)
+		if err != nil {
+			log.WithError(err).WithField("proxy", resman.Engine.srv.Config.Proxy).Error("unable to parse proxy URL, not using proxy")
+		} else {
+			client = &http.Client{
+				Transport: &http.Transport{
+					Proxy: http.ProxyURL(p),
+				},
+			}
+		}
+	}
+
+	return client.Do(req)
 }
 
 func (_ *ResourceManager) ExecCommand(cmd *exec.Cmd) (output []byte, exitCode int, runtime time.Duration, err error) {
