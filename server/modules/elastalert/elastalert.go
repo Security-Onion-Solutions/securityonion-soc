@@ -1682,7 +1682,12 @@ func (_ *ResourceManager) ReadDir(path string) ([]os.DirEntry, error) {
 }
 
 func (resman *ResourceManager) MakeRequest(req *http.Request) (*http.Response, error) {
-	var client *http.Client = http.DefaultClient
+	client := resman.buildHttpClient()
+	return client.Do(req)
+}
+
+func (resman *ResourceManager) buildHttpClient() *http.Client {
+	client := http.DefaultClient
 
 	if resman.Engine.srv.Config.Proxy != "" {
 		p, err := url.Parse(resman.Engine.srv.Config.Proxy)
@@ -1697,7 +1702,7 @@ func (resman *ResourceManager) MakeRequest(req *http.Request) (*http.Response, e
 		}
 	}
 
-	return client.Do(req)
+	return client
 }
 
 func (_ *ResourceManager) ExecCommand(cmd *exec.Cmd) (output []byte, exitCode int, runtime time.Duration, err error) {
