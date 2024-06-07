@@ -201,7 +201,7 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 				Depth:           1,
 				SingleBranch:    true,
 				ProxyOptions:    proxyOpts,
-				CABundle:        []byte(cfg.RootCA),
+				CABundle:        []byte(cfg.AdditionalCA),
 				InsecureSkipTLS: cfg.InsecureSkipVerify,
 			})
 			if err != nil && err != git.NoErrAlreadyUpToDate {
@@ -238,7 +238,7 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 				SingleBranch:    true,
 				URL:             repo.Repo,
 				ProxyOptions:    proxyOpts,
-				CABundle:        []byte(cfg.RootCA),
+				CABundle:        []byte(cfg.AdditionalCA),
 				InsecureSkipTLS: cfg.InsecureSkipVerify,
 			})
 			if err != nil {

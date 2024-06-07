@@ -1094,7 +1094,7 @@ func TestBuildHttpClient(t *testing.T) {
 		test := test
 		t.Run(test.Name, func(t *testing.T) {
 			resman.Engine.srv.Config.Proxy = test.Proxy
-			resman.Engine.srv.Config.RootCA = test.RootCA
+			resman.Engine.srv.Config.AdditionalCA = test.RootCA
 			resman.Engine.srv.Config.InsecureSkipVerify = test.InsecureSkipVerify
 
 			client := resman.buildHttpClient()

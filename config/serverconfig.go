@@ -38,7 +38,7 @@ type ServerConfig struct {
 	TimezoneScript          string                 `json:"timezoneScript"`
 	MaxUploadSizeBytes      int                    `json:"maxUploadSizeBytes"`
 	Proxy                   string                 `json:"proxy"`
-	RootCA                  string                 `json:"rootCA"`
+	AdditionalCA            string                 `json:"additionalCA"`
 	InsecureSkipVerify      bool                   `json:"insecureSkipVerify"`
 	SrvKey                  string                 `json:"srvKey"`
 	SrvKeyBytes             []byte

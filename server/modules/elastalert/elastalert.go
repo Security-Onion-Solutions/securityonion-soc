@@ -1709,7 +1709,7 @@ func (resman *ResourceManager) buildHttpClient() *http.Client {
 		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
 
-	if resman.Engine.srv.Config.RootCA != "" {
+	if resman.Engine.srv.Config.AdditionalCA != "" {
 		if transport.TLSClientConfig == nil {
 			transport.TLSClientConfig = &tls.Config{}
 		}
@@ -1719,7 +1719,7 @@ func (resman *ResourceManager) buildHttpClient() *http.Client {
 			pool = x509.NewCertPool()
 		}
 
-		pool.AppendCertsFromPEM([]byte(resman.Engine.srv.Config.RootCA))
+		pool.AppendCertsFromPEM([]byte(resman.Engine.srv.Config.AdditionalCA))
 
 		transport.TLSClientConfig.RootCAs = pool
 	}
