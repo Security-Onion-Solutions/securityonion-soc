@@ -14,7 +14,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -60,7 +59,6 @@ type IOManager interface {
 	WriteFile(path string, contents []byte, perm fs.FileMode) error
 	DeleteFile(path string) error
 	ReadDir(path string) ([]os.DirEntry, error)
-	MakeRequest(*http.Request) (*http.Response, error)
 	ExecCommand(cmd *exec.Cmd) ([]byte, int, time.Duration, error)
 }
 
@@ -400,7 +398,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 		upToDate := map[string]*model.RuleRepo{}
 
-		allRepos, anythingNew, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config.Proxy)
+		allRepos, anythingNew, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config)
 		if err != nil {
 			if strings.Contains(err.Error(), "module stopped") {
 				break
@@ -1172,11 +1170,6 @@ func (_ *ResourceManager) DeleteFile(path string) error {
 func (_ *ResourceManager) ReadDir(path string) ([]os.DirEntry, error) {
 	return os.ReadDir(path)
 }
-
-func (_ *ResourceManager) MakeRequest(req *http.Request) (*http.Response, error) {
-	return http.DefaultClient.Do(req)
-}
-
 func (_ *ResourceManager) ExecCommand(cmd *exec.Cmd) (output []byte, exitCode int, runtime time.Duration, err error) {
 	start := time.Now()
 	output, err = cmd.CombinedOutput()

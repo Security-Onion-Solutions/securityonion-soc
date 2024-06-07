@@ -10,6 +10,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -617,7 +619,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 
 		var dirtyRepos map[string]*detections.DirtyRepo
 
-		dirtyRepos, repoChanges, err = detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config.Proxy)
+		dirtyRepos, repoChanges, err = detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config)
 		if err != nil {
 			if strings.Contains(err.Error(), "module stopped") {
 				break
@@ -1662,7 +1664,8 @@ func (e *ElastAlertEngine) getDeployedPublicIds() (publicIds []string, err error
 //go:generate mockgen -destination mock/mock_iomanager.go -package mock . IOManager
 
 type ResourceManager struct {
-	Engine *ElastAlertEngine
+	Engine  *ElastAlertEngine
+	_client *http.Client
 }
 
 func (_ *ResourceManager) ReadFile(path string) ([]byte, error) {
@@ -1682,27 +1685,46 @@ func (_ *ResourceManager) ReadDir(path string) ([]os.DirEntry, error) {
 }
 
 func (resman *ResourceManager) MakeRequest(req *http.Request) (*http.Response, error) {
-	client := resman.buildHttpClient()
-	return client.Do(req)
+	if resman._client == nil {
+		// cache for reuse, the config values can't change without a server restart
+		resman._client = resman.buildHttpClient()
+	}
+
+	return resman._client.Do(req)
 }
 
 func (resman *ResourceManager) buildHttpClient() *http.Client {
-	client := http.DefaultClient
+	transport := &http.Transport{}
 
 	if resman.Engine.srv.Config.Proxy != "" {
 		p, err := url.Parse(resman.Engine.srv.Config.Proxy)
 		if err != nil {
 			log.WithError(err).WithField("proxy", resman.Engine.srv.Config.Proxy).Error("unable to parse proxy URL, not using proxy")
 		} else {
-			client = &http.Client{
-				Transport: &http.Transport{
-					Proxy: http.ProxyURL(p),
-				},
-			}
+			transport.Proxy = http.ProxyURL(p)
 		}
 	}
 
-	return client
+	if resman.Engine.srv.Config.InsecureSkipVerify {
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
+
+	if resman.Engine.srv.Config.AdditionalCA != "" {
+		if transport.TLSClientConfig == nil {
+			transport.TLSClientConfig = &tls.Config{}
+		}
+
+		pool, err := x509.SystemCertPool()
+		if err != nil {
+			pool = x509.NewCertPool()
+		}
+
+		pool.AppendCertsFromPEM([]byte(resman.Engine.srv.Config.AdditionalCA))
+
+		transport.TLSClientConfig.RootCAs = pool
+	}
+
+	return &http.Client{Transport: transport}
 }
 
 func (_ *ResourceManager) ExecCommand(cmd *exec.Cmd) (output []byte, exitCode int, runtime time.Duration, err error) {

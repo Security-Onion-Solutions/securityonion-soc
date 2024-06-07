@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 
 	"github.com/apex/log"
@@ -112,7 +113,7 @@ type DirtyRepo struct {
 	Repo        *model.RuleRepo
 }
 
-func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.RuleRepo, proxy string) (allRepos map[string]*DirtyRepo, anythingNew bool, err error) {
+func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.RuleRepo, cfg *config.ServerConfig) (allRepos map[string]*DirtyRepo, anythingNew bool, err error) {
 	allRepos = map[string]*DirtyRepo{} // map[repoPath]repo
 
 	// read existing repos
@@ -154,9 +155,9 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 		allRepos[repoPath] = dirty
 		reclone := false
 
-		proxyOpts, err := proxyToTransportOptions(proxy)
+		proxyOpts, err := proxyToTransportOptions(cfg.Proxy)
 		if err != nil {
-			log.WithError(err).WithField("proxy", proxy).Error("failed to parse proxy URL, not using the proxy")
+			log.WithError(err).WithField("proxy", cfg.Proxy).Error("failed to parse proxy URL, not using the proxy")
 			// no return here, not a bug
 		}
 
@@ -197,9 +198,11 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 			defer cancel()
 
 			err = work.PullContext(ctx, &git.PullOptions{
-				Depth:        1,
-				SingleBranch: true,
-				ProxyOptions: proxyOpts,
+				Depth:           1,
+				SingleBranch:    true,
+				ProxyOptions:    proxyOpts,
+				CABundle:        []byte(cfg.AdditionalCA),
+				InsecureSkipTLS: cfg.InsecureSkipVerify,
 			})
 			if err != nil && err != git.NoErrAlreadyUpToDate {
 				log.WithError(err).WithField("repoPath", repoPath).Error("failed to pull repo, doing nothing with it")
@@ -231,10 +234,12 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 		if !ok || reclone {
 			// repo does not exist or was just deleted, clone
 			_, err = git.PlainClone(repoPath, false, &git.CloneOptions{
-				Depth:        1,
-				SingleBranch: true,
-				URL:          repo.Repo,
-				ProxyOptions: proxyOpts,
+				Depth:           1,
+				SingleBranch:    true,
+				URL:             repo.Repo,
+				ProxyOptions:    proxyOpts,
+				CABundle:        []byte(cfg.AdditionalCA),
+				InsecureSkipTLS: cfg.InsecureSkipVerify,
 			})
 			if err != nil {
 				log.WithError(err).WithField("repoPath", repoPath).Error("failed to clone repo, doing nothing with it")
