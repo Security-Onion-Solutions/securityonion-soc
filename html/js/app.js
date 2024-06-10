@@ -86,6 +86,7 @@ $(document).ready(function() {
       parameterCallback: null,
       parameterSection: null,
       chartsInitialized: false,
+      editorInitialized: false,
       tools: [],
       casesEnabled: false,
       detectionsEnabled: false,
@@ -683,13 +684,23 @@ $(document).ready(function() {
       saveLocalSettings() {
         localStorage['settings.app.dark'] = this.$vuetify.theme.dark;
         localStorage['settings.app.navbar'] = this.toolbar;
+        this.updateEditorTheme();
       },
       loadLocalSettings() {
         if (localStorage['settings.app.dark'] != undefined) {
           this.$vuetify.theme.dark = localStorage['settings.app.dark'] == "true";
+          this.updateEditorTheme();
         }
         if (localStorage['settings.app.navbar'] != undefined) {
           this.toolbar = localStorage['settings.app.navbar'] == "true";
+        }
+      },
+      updateEditorTheme() {
+        var link = $('link[href^="css/external/prism-custom-"]')[0];
+        if (this.$vuetify.theme.dark) {
+          link.href = "css/external/prism-custom-dark-v1.29.0.css";
+        } else {
+          link.href = "css/external/prism-custom-light-v1.29.0.css";
         }
       },
       subscribe(kind, fn) {
@@ -859,6 +870,15 @@ $(document).ready(function() {
         this.registerChart(Sankey, 'sankey-chart');
 
         this.chartsInitialized = true;
+      },
+      registerEditor() {
+        Vue.component('prism-editor', PrismEditor.component);
+      },
+      initializeEditor() {
+        if (this.editorInitialized) return;
+        this.registerEditor();
+
+        this.editorInitialized = true;
       },
       getColor(colorName, percent = 0) {
         percent = this.$root.$vuetify && this.$root.$vuetify.theme.dark ? percent * -1 : percent;

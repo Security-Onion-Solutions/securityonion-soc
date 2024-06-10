@@ -18,6 +18,8 @@
     <link rel="stylesheet" href="css/external/vuetify-v2.7.1.min.css">
     <link rel="stylesheet" href="css/external/all-6.5.1.min.css">
     <link rel="stylesheet" href="css/external/daterangepicker-3.14.1.css">
+    <link rel="stylesheet" href="css/external/vue-prism-editor-v1.3.0.min.css" />
+    <link rel="stylesheet" href="css/external/prism-custom-dark-v1.29.0.css" />
     <link rel="stylesheet" href="css/app.css?v=VERSION_PLACEHOLDER">
     <title>Security Onion</title>
     <script src="js/analytics.js?v=VERSION_PLACEHOLDER"></script>
@@ -1145,7 +1147,7 @@
                     </div>
                     <div class="header">{{i18n.detectionLogic}}</div>
                     <div class="extracted-content" data-aid="detection_logic_display">
-                      <pre>{{extractedLogic}}</pre>
+                      <pre><code :class="extractedLogicClass">{{extractedLogic}}</code></pre>
                     </div>
                   </v-col>
                 </v-row>
@@ -1277,7 +1279,10 @@
                 <v-row class="contrast-bg rounded rounded-md pa-4">
                   <v-col>
                     <!-- Signature -->
-                    <v-textarea class="config-editor" :readonly="detect.isCommunity" solo flat v-model="detect.content" auto-grow rows="15" data-aid="detection_source_input" />
+                    <span data-aid="detection_source_input">
+                      <prism-editor class="prism" :highlight="highlighter" v-model="detect.content" :readonly="detect.isCommunity"></prism-editor>
+                    </span>
+                    <!-- <v-textarea class="config-editor" :readonly="detect.isCommunity" solo flat v-model="detect.content" auto-grow rows="15" data-aid="detection_source_input" /> -->
                     <div class="d-flex align-center align-self-end justify-end text-body-2">
                       <div class="d-inline-flex justify-end">
                         <v-btn v-if="canConvert()" id="detection-convert" text small color="primary" class="align-self-end" @click="convertDetection()" data-aid="detection_source_convert">
@@ -5137,6 +5142,8 @@
     <script src="js/external/chartjs-adapter-moment-1.0.0.min.js"></script>
     <script src="js/external/js-yaml.4.1.0.min.js"></script>
     <script src="js/external/lz-string.1.5.0.min.js"></script>
+    <script src="js/external/vue-prism-editor-v1.3.0.umd.production.min.js"></script>
+    <script src="js/external/prism-custom-v1.29.0.js"></script>
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>
