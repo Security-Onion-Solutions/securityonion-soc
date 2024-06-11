@@ -1607,11 +1607,6 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool) error {
 		return err
 	}
 
-	local := settingByID(allSettings, "idstools.rules.local__rules")
-	if local == nil {
-		return fmt.Errorf("unable to find local rules setting")
-	}
-
 	disabled := settingByID(allSettings, "idstools.sids.disabled")
 	if disabled == nil {
 		return fmt.Errorf("unable to find disabled setting")
@@ -1630,8 +1625,7 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool) error {
 	// unpack settings into lines/indices
 	disabledLines := strings.Split(disabled.Value, "\n")
 	modifyLines := strings.Split(modify.Value, "\n")
-	rulesLines := strings.Split(local.Value, "\n")
-	rulesLines = append(rulesLines, strings.Split(string(allRules), "\n")...)
+	rulesLines := strings.Split(string(allRules), "\n")
 
 	disabledIndex := indexEnabled(disabledLines, true)
 	modifyIndex := indexModify(modifyLines, true, true)
