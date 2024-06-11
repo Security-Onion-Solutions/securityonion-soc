@@ -2216,6 +2216,16 @@ const huntComponent = {
 
       try {
         await this.$root.papi.post('detection/bulk/' + this.selectedAction, payload);
+
+        let msg = this.i18n.bulkActionStarted;
+        if (this.selectedAction === 'delete') {
+          msg = this.i18n.bulkActionDeleteStarted;
+        }
+
+        msg = msg.replace('{total}', this.selectedCount.toLocaleString());
+
+        this.$root.showTip(msg);
+
         this.selectAllState = false;
         this.selectedCount = 0;
         this.hunt(false);

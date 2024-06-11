@@ -121,6 +121,8 @@ const i18n = {
       betweenOp: 'Between',
       blog: 'Blog',
       bulkAction: 'Bulk Action:',
+      bulkActionStarted: 'Updating {total} detections. This may take awhile.',
+      bulkActionDeleteStarted: 'Deleting {total} detections. This may take awhile.',
       bulkError: '',
       bulkSuccessUpdate: 'Bulk update successfully updated {modified} of {total} events. ({time})',
       bulkSuccessDelete: 'Bulk delete successfully deleted {modified} of {total} events. ({time})',

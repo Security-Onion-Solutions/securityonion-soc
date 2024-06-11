@@ -697,10 +697,12 @@ $(document).ready(function() {
       },
       updateEditorTheme() {
         var link = $('link[href^="css/external/prism-custom-"]')[0];
-        if (this.$vuetify.theme.dark) {
-          link.href = "css/external/prism-custom-dark-v1.29.0.css";
-        } else {
-          link.href = "css/external/prism-custom-light-v1.29.0.css";
+        if (link) {
+          if (this.$vuetify.theme.dark) {
+            link.href = "css/external/prism-custom-dark-v1.29.0.css";
+          } else {
+            link.href = "css/external/prism-custom-light-v1.29.0.css";
+          }
         }
       },
       subscribe(kind, fn) {
