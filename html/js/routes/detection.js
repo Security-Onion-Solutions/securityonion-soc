@@ -1251,7 +1251,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			let grammar = null;
 			let language = null;
 
-			switch (this.detect.language) {
+			switch ((this.detect.language || '').toLowerCase()) {
 				case 'sigma':
 					grammar = Prism.languages.yaml;
 					language = 'yaml';

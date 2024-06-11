@@ -456,7 +456,8 @@ $(document).ready(function() {
       },
       toggleTheme() {
         this.$vuetify.theme.dark = !this.$vuetify.theme.dark
-        this.timestamp=Date.now();
+        this.timestamp = Date.now();
+        this.updateEditorTheme();
       },
       setFavicon() {
         const colorSchemeString = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -684,7 +685,6 @@ $(document).ready(function() {
       saveLocalSettings() {
         localStorage['settings.app.dark'] = this.$vuetify.theme.dark;
         localStorage['settings.app.navbar'] = this.toolbar;
-        this.updateEditorTheme();
       },
       loadLocalSettings() {
         if (localStorage['settings.app.dark'] != undefined) {
