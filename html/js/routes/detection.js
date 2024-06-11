@@ -93,6 +93,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			extractedSummary: '',
 			extractedReferences: [],
 			extractedLogic: '',
+			extractedLogicClass: '',
 			history: [],
 			extractedCreated: '',
 			extractedUpdated: '',
@@ -129,6 +130,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			},
 	}},
 	created() {
+		this.$root.initializeEditor();
 		this.onDetectionChange = debounce(this.onDetectionChange, 300);
 	},
 	watch: {
@@ -140,6 +142,9 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				this.loadData();
 			});
 		this.$root.loadParameters('detection', this.initDetection);
+	},
+	updated() {
+		Prism.highlightAll();
 	},
 	methods: {
 		async initDetection(params) {
@@ -311,16 +316,20 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		extractLogic() {
 			this.extractedLogic = '';
+			this.extractedLogicClass = '';
 
 			switch (this.detect.engine) {
 				case 'suricata':
 					this.extractSuricataLogic();
+					this.extractedLogicClass = 'language-suricata-logic';
 					break;
 				case 'strelka':
 					this.extractStrelkaLogic();
+					this.extractedLogicClass = 'language-yara';
 					break;
 				case 'elastalert':
 					this.extractElastAlertLogic();
+					this.extractedLogicClass = 'language-yaml';
 					break;
 			}
 		},
@@ -1237,6 +1246,29 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				return ref.valid;
 			}
 			return true;
+		},
+		highlighter(code) {
+			let grammar = null;
+			let language = null;
+
+			switch ((this.detect.language || '').toLowerCase()) {
+				case 'sigma':
+					grammar = Prism.languages.yaml;
+					language = 'yaml';
+					break;
+				case 'suricata':
+					grammar = Prism.languages.suricata;
+					language = 'suricata';
+					break;
+				case 'yara':
+					grammar = Prism.languages.yara;
+					language = 'yara';
+					break;
+				default:
+					return code;
+			}
+
+			return Prism.highlight(code, grammar, language);
 		},
 	}
 }});

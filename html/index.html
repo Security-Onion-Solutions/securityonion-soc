@@ -18,6 +18,8 @@
     <link rel="stylesheet" href="css/external/vuetify-v2.7.1.min.css">
     <link rel="stylesheet" href="css/external/all-6.5.1.min.css">
     <link rel="stylesheet" href="css/external/daterangepicker-3.14.1.css">
+    <link rel="stylesheet" href="css/external/vue-prism-editor-v1.3.0.min.css" />
+    <link rel="stylesheet" href="css/external/prism-custom-dark-v1.29.0.css" />
     <link rel="stylesheet" href="css/app.css?v=VERSION_PLACEHOLDER">
     <title>Security Onion</title>
     <script src="js/analytics.js?v=VERSION_PLACEHOLDER"></script>
@@ -1086,7 +1088,9 @@
 
                   <!-- Signature -->
                   <div class="font-weight-bold mb-1">{{ i18n.signature }}:</div>
-                  <v-textarea id="signature-source" class="config-editor" outlined v-model="detect.content" rows="10" :rules="[rules.required]" @input="onDetectionChange()" data-aid="detection_signature_input" />
+                  <span data-aid="detection_signature_input">
+                    <prism-editor class="prism" :highlight="highlighter" v-model="detect.content"></prism-editor>
+                  </span>
                 </div>
                 <div class="d-flex align-center align-self-end text-body-2 mt-2">
                   <div class="d-inline-flex justify-end">
@@ -1145,7 +1149,7 @@
                     </div>
                     <div class="header">{{i18n.detectionLogic}}</div>
                     <div class="extracted-content" data-aid="detection_logic_display">
-                      <pre>{{extractedLogic}}</pre>
+                      <pre><code :class="extractedLogicClass">{{extractedLogic}}</code></pre>
                     </div>
                   </v-col>
                 </v-row>
@@ -1274,25 +1278,25 @@
               </v-tab-item>
 
               <v-tab-item value="source" data-aid="detection_source">
-                <v-row class="contrast-bg rounded rounded-md pa-4">
-                  <v-col>
-                    <!-- Signature -->
-                    <v-textarea class="config-editor" :readonly="detect.isCommunity" solo flat v-model="detect.content" auto-grow rows="15" data-aid="detection_source_input" />
-                    <div class="d-flex align-center align-self-end justify-end text-body-2">
-                      <div class="d-inline-flex justify-end">
-                        <v-btn v-if="canConvert()" id="detection-convert" text small color="primary" class="align-self-end" @click="convertDetection()" data-aid="detection_source_convert">
-                          {{ i18n.convert }}
-                        </v-btn>
-                        <v-btn id="detection-cancel" v-if="!detect.isCommunity && isDetectionSourceDirty()" text small color="primary" class="align-self-end" @click="cancelDetection()" data-aid="detection_source_cancel">
-                          {{ i18n.cancel }}
-                        </v-btn>
-                        <v-btn id="detection-update" v-if="!detect.isCommunity && isDetectionSourceDirty()" text small color="primary" class="align-self-end" @click="saveDetection(false, true)" data-aid="detection_source_save">
-                          {{i18n.update}}
-                        </v-btn>
-                      </div>
+                <v-col class="contrast-bg rounded rounded-md pa-4">
+                  <!-- Signature -->
+                  <span data-aid="detection_source_input">
+                    <prism-editor class="prism" :highlight="highlighter" v-model="detect.content" :readonly="detect.isCommunity"></prism-editor>
+                  </span>
+                  <div class="d-flex align-self-end justify-end detection-source-button-row">
+                    <div class="d-inline-flex">
+                      <v-btn v-if="canConvert()" id="detection-convert" text small color="primary" class="align-self-end" @click="convertDetection()" data-aid="detection_source_convert">
+                        {{ i18n.convert }}
+                      </v-btn>
+                      <v-btn id="detection-cancel" v-if="!detect.isCommunity && isDetectionSourceDirty()" text small color="primary" class="align-self-end" @click="cancelDetection()" data-aid="detection_source_cancel">
+                        {{ i18n.cancel }}
+                      </v-btn>
+                      <v-btn id="detection-update" v-if="!detect.isCommunity && isDetectionSourceDirty()" text small color="primary" class="align-self-end" @click="saveDetection(false, true)" data-aid="detection_source_save">
+                        {{i18n.update}}
+                      </v-btn>
                     </div>
-                  </v-col>
-                </v-row>
+                  </div>
+                </v-col>
               </v-tab-item>
 
               <v-tab-item value="tuning" data-aid="detection_tuning">
@@ -5137,6 +5141,8 @@
     <script src="js/external/chartjs-adapter-moment-1.0.0.min.js"></script>
     <script src="js/external/js-yaml.4.1.0.min.js"></script>
     <script src="js/external/lz-string.1.5.0.min.js"></script>
+    <script src="js/external/vue-prism-editor-v1.3.0.umd.production.min.js"></script>
+    <script src="js/external/prism-custom-v1.29.0.js"></script>
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>

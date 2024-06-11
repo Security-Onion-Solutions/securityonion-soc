@@ -10,8 +10,9 @@ require('./detection.js');
 let comp;
 
 beforeEach(() => {
-  comp = getComponent("detection");
+	comp = getComponent("detection");
 	resetPapi();
+	comp.$root.initializeEditor = () => { };
 	comp.created();
 });
 
@@ -33,6 +34,7 @@ test('extract suricata', () => {
 		{ type: 'text', text: 'Research' },
 	]);
 	expect(comp.extractedLogic).toBe('any any <> any any');
+	expect(comp.extractedLogicClass).toBe('language-suricata-logic');
 	expect(comp.extractedCreated).toBe('2020-01-01');
 	expect(comp.extractedUpdated).toBe('2020-01-02');
 });
@@ -56,6 +58,7 @@ test('extract strelka', () => {
 		{ type: 'url', text:'example.com', link: 'http://example.com' },
 	]);
 	expect(comp.extractedLogic).toBe('strings:\n$a = "test"\ncondition:\n$a');
+	expect(comp.extractedLogicClass).toBe('language-yara');
 	expect(comp.extractedCreated).toBe('2020-01-01');
 	expect(comp.extractedUpdated).toBe('');
 });
@@ -79,6 +82,7 @@ test('extract elastalert', () => {
 		{ type: 'url', text: 'https://www.mandiant.com/resources/blog/not-so-cozy-an-uncomfortable-examination-of-a-suspected-apt29-phishing-campaign', link: 'https://www.mandiant.com/resources/blog/not-so-cozy-an-uncomfortable-examination-of-a-suspected-apt29-phishing-campaign' },
 	]);
 	expect(comp.extractedLogic).toBe('logsource:\n  product: windows\n  category: file_event\ndetection:\n  selection:\n    TargetFilename|contains:\n      - ds7002.lnk\n      - ds7002.pdf\n      - ds7002.zip\n    condition: selection');
+	expect(comp.extractedLogicClass).toBe('language-yaml');
 	expect(comp.extractedCreated).toBe('2018/11/20');
 	expect(comp.extractedUpdated).toBe('2023/02/20');
 });

@@ -534,6 +534,11 @@ td {
   margin-top: 20px;
 }
 
+.detection-source-button-row {
+  margin-top: 6px;
+  margin-bottom: -8px;
+}
+
 .header {
   font-size: 1.3em;
   font-weight: bold;
@@ -628,4 +633,27 @@ td {
 #override-filter-edit-buttons {
   display: flex;
   justify-content: end;
+}
+
+.prism {
+  /* you must provide font-family font-size line-height. Example:*/
+  font-family: Fira code, Fira Mono, Consolas, Menlo, Courier, monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 5px;
+  border: 1px solid gray;
+  border-radius: 3px;
+}
+
+.prism-editor__container {
+  min-height: 10em;
+}
+
+/* optional class for removing the outline */
+.prism-editor__textarea:focus {
+  outline: none;
+}
+
+code {
+  background-color: unset !important;
 }
