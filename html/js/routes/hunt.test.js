@@ -1200,6 +1200,7 @@ test('bulkAction - delete - pre-confirm', async () => {
 
   expect(comp.showBulkDeleteConfirmDialog).toBe(true);
   expect(comp.selectedCount).toBe(2);
+  expect(comp.$root.tip).toBe(false);
 });
 
 test('bulkAction - enable', async () => {
@@ -1219,6 +1220,8 @@ test('bulkAction - enable', async () => {
   expect(mock).toHaveBeenCalledWith('detection/bulk/enable', { ids: ["1", "3"] });
   expect(comp.hunt).toHaveBeenCalledTimes(1);
   expect(comp.hunt).toHaveBeenCalledWith(false);
+  expect(comp.$root.tip).toBe(true);
+  expect(comp.$root.tipMessage).toBe('Updating 2 detections. This may take awhile.');
 });
 
 test('bulkAction - disable', async () => {
@@ -1238,6 +1241,8 @@ test('bulkAction - disable', async () => {
   expect(mock).toHaveBeenCalledWith('detection/bulk/disable', { ids: ["1", "3"] });
   expect(comp.hunt).toHaveBeenCalledTimes(1);
   expect(comp.hunt).toHaveBeenCalledWith(false);
+  expect(comp.$root.tip).toBe(true);
+  expect(comp.$root.tipMessage).toBe('Updating 2 detections. This may take awhile.');
 });
 
 test('bulkAction - delete - confirm - success', async () => {
@@ -1258,6 +1263,8 @@ test('bulkAction - delete - confirm - success', async () => {
   expect(mock).toHaveBeenCalledWith('detection/bulk/delete', { ids: ["1", "3"] });
   expect(comp.hunt).toHaveBeenCalledTimes(1);
   expect(comp.hunt).toHaveBeenCalledWith(false);
+  expect(comp.$root.tip).toBe(true);
+  expect(comp.$root.tipMessage).toBe('Deleting 2 detections. This may take awhile.');
 });
 
 test('bulkAction - delete - confirm - failure', async () => {
