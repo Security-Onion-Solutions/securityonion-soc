@@ -47,6 +47,7 @@ var licenseBySource = map[string]string{
 
 const (
 	DEFAULT_COMMUNITY_RULES_FILE                  = "/nsm/rules/suricata/emerging-all.rules"
+	DEFAULT_ALL_RULES_FILE                        = "/opt/sensoroni/nids/all.rules"
 	DEFAULT_RULES_FINGERPRINT_FILE                = "/opt/sensoroni/fingerprints/emerging-all.fingerprint"
 	DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECS = 86400
 	DEFAULT_STATE_FILE_PATH                       = "/opt/sensoroni/fingerprints/suricataengine.state"
@@ -67,6 +68,7 @@ type IOManager interface {
 type SuricataEngine struct {
 	srv                                  *server.Server
 	communityRulesFile                   string
+	allRulesFile                         string
 	rulesFingerprintFile                 string
 	communityRulesImportFrequencySeconds int
 	communityRulesImportErrorSeconds     int
@@ -113,6 +115,7 @@ func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 	e.IntegrityCheckerData.Interrupt = make(chan bool, 1)
 
 	e.communityRulesFile = module.GetStringDefault(config, "communityRulesFile", DEFAULT_COMMUNITY_RULES_FILE)
+	e.allRulesFile = module.GetStringDefault(config, "allRulesFile", DEFAULT_ALL_RULES_FILE)
 	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", DEFAULT_RULES_FINGERPRINT_FILE)
 	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECS)
 	e.communityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
@@ -1598,9 +1601,9 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool) error {
 		return detections.ErrIntCheckerStopped
 	}
 
-	commRules, err := e.ReadFile(e.communityRulesFile)
+	allRules, err := e.ReadFile(e.allRulesFile)
 	if err != nil {
-		logger.WithError(err).WithField("path", e.communityRulesFile).Error("unable to read community rules file")
+		logger.WithError(err).WithField("path", e.allRulesFile).Error("unable to read all.rules file")
 		return err
 	}
 
@@ -1628,7 +1631,7 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool) error {
 	disabledLines := strings.Split(disabled.Value, "\n")
 	modifyLines := strings.Split(modify.Value, "\n")
 	rulesLines := strings.Split(local.Value, "\n")
-	rulesLines = append(rulesLines, strings.Split(string(commRules), "\n")...)
+	rulesLines = append(rulesLines, strings.Split(string(allRules), "\n")...)
 
 	disabledIndex := indexEnabled(disabledLines, true)
 	modifyIndex := indexModify(modifyLines, true, true)
