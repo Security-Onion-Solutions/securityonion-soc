@@ -233,6 +233,13 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					}
 
 					break;
+				case 'elastalert':
+					const yaml = jsyaml.load(this.detect.content, { schema: jsyaml.FAILSAFE_SCHEMA });
+					if (yaml.description) {
+						this.extractedSummary = yaml.description;
+						break;
+					}
+					// else fall through
 				default:
 					if (this.detect.description) {
 						this.extractedSummary = this.detect.description;
