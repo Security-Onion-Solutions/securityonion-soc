@@ -280,3 +280,56 @@ func TestProxyToTransportOptions(t *testing.T) {
 		})
 	}
 }
+
+func TestDeduplicateByPublicId(t *testing.T) {
+	tests := []struct {
+		Name      string
+		InputIds  []string
+		ExpOutput []string
+	}{
+		{
+			Name:      "Empty",
+			InputIds:  []string{},
+			ExpOutput: []string{},
+		},
+		{
+			Name:      "No Duplicates",
+			InputIds:  []string{"1", "2", "3"},
+			ExpOutput: []string{"1", "2", "3"},
+		},
+		{
+			Name:      "Only Duplicates",
+			InputIds:  []string{"1", "1", "1", "1", "1", "1", "1", "1", "1", "1"},
+			ExpOutput: []string{"1"},
+		},
+		{
+			Name:      "Mixed",
+			InputIds:  []string{"1", "2", "1", "3", "2", "4", "1", "5", "2", "6"},
+			ExpOutput: []string{"1", "2", "3", "4", "5", "6"},
+		},
+		{
+			Name:      "One Duplicate",
+			InputIds:  []string{"1", "2", "3", "4", "5", "6", "1"},
+			ExpOutput: []string{"1", "2", "3", "4", "5", "6"},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			dets := make([]*model.Detection, 0, len(test.InputIds))
+			for _, id := range test.InputIds {
+				dets = append(dets, &model.Detection{PublicID: id})
+			}
+
+			deduped := DeduplicateByPublicId(dets)
+
+			output := make([]string, 0, len(deduped))
+			for _, det := range deduped {
+				output = append(output, det.PublicID)
+			}
+
+			assert.Equal(t, test.ExpOutput, output)
+		})
+	}
+}

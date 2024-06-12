@@ -27,6 +27,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/elastalert/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
@@ -529,7 +530,8 @@ level: high
 	}
 
 	engine := ElastAlertEngine{
-		isRunning: true,
+		isRunning:         true,
+		sigmaRulePackages: []string{"all_rules"},
 	}
 	engine.allowRegex = regexp.MustCompile("00000000-0000-0000-0000-00000000")
 	engine.denyRegex = regexp.MustCompile("deny")
@@ -578,11 +580,14 @@ level: high
 license: Elastic-2.0
 `
 
-	repos := map[string]*model.RuleRepo{
-		"repo-path": {
-			Repo:      "github.com/repo-user/repo-path",
-			License:   "DRL",
-			Community: true,
+	repos := []*detections.RepoOnDisk{
+		{
+			Repo: &model.RuleRepo{
+				Repo:      "github.com/repo-user/repo-path",
+				License:   "DRL",
+				Community: true,
+			},
+			Path: "repo-path",
 		},
 	}
 

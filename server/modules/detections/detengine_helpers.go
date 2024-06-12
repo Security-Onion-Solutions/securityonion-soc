@@ -108,13 +108,14 @@ func WriteStateFile(iom IOManager, path string) {
 	}
 }
 
-type DirtyRepo struct {
-	WasModified bool
+type RepoOnDisk struct {
 	Repo        *model.RuleRepo
+	Path        string
+	WasModified bool
 }
 
-func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.RuleRepo, cfg *config.ServerConfig) (allRepos map[string]*DirtyRepo, anythingNew bool, err error) {
-	allRepos = map[string]*DirtyRepo{} // map[repoPath]repo
+func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.RuleRepo, cfg *config.ServerConfig) (allRepos []*RepoOnDisk, anythingNew bool, err error) {
+	allRepos = make([]*RepoOnDisk, 0, len(rulesRepos))
 
 	// read existing repos
 	entries, err := os.ReadDir(baseRepoFolder)
@@ -148,11 +149,12 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 		_, lastFolder := path.Split(parser.Path)
 		repoPath := filepath.Join(baseRepoFolder, lastFolder)
 
-		dirty := &DirtyRepo{
+		dirty := &RepoOnDisk{
 			Repo: repo,
+			Path: repoPath,
 		}
 
-		allRepos[repoPath] = dirty
+		allRepos = append(allRepos, dirty)
 		reclone := false
 
 		proxyOpts, err := proxyToTransportOptions(cfg.Proxy)
@@ -351,4 +353,28 @@ func AddUser(previous string, user *model.User, sep string) string {
 
 func EscapeDoubleQuotes(str string) string {
 	return doubleQuoteEscaper.ReplaceAllString(str, "\\$1$2")
+}
+
+func DeduplicateByPublicId(detects []*model.Detection) []*model.Detection {
+	set := map[string]*model.Detection{}
+	deduped := make([]*model.Detection, 0, len(detects))
+
+	for _, detect := range detects {
+		existing, inSet := set[detect.PublicID]
+		if inSet {
+			log.WithFields(log.Fields{
+				"publicId":         detect.PublicID,
+				"engine":           detect.Engine,
+				"existingRuleset":  existing.Ruleset,
+				"duplicateRuleset": detect.Ruleset,
+				"existingTitle":    existing.Title,
+				"duplicateTitle":   detect.Title,
+			}).Warn("duplicate publicId found, skipping")
+		} else {
+			set[detect.PublicID] = detect
+			deduped = append(deduped, detect)
+		}
+	}
+
+	return deduped
 }
