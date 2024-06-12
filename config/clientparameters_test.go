@@ -96,12 +96,5 @@ func TestVerifyDetectionsParams(t *testing.T) {
 	params := &DetectionsParameters{}
 	err := params.Verify()
 	assert.Nil(t, err)
-	verifyInitialDetectionsParams(t, params)
-}
-
-func verifyInitialDetectionsParams(t *testing.T, params *DetectionsParameters) {
-	assert.Equal(t, DEFAULT_GROUP_FETCH_LIMIT, params.GroupFetchLimit)
-	assert.Equal(t, DEFAULT_EVENT_FETCH_LIMIT, params.EventFetchLimit)
-	assert.Equal(t, DEFAULT_SAFE_STRING_MAX_LENGTH, params.SafeStringMaxLength)
-	assert.Equal(t, 0, params.MostRecentlyUsedLimit)
+	verifyInitialHuntingParams(t, &params.HuntingParameters)
 }

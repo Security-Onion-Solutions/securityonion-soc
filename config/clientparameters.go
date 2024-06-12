@@ -191,19 +191,8 @@ type GridParameters struct {
 }
 
 type DetectionsParameters struct {
-	Actions               []*HuntingAction            `json:"actions"`
-	Advanced              bool                        `json:"advanced"`
-	CreateLink            string                      `json:"createLink"`
-	EventFetchLimit       int                         `json:"eventFetchLimit"`
-	EventFields           map[string][]string         `json:"eventFields"`
-	EventItemsPerPage     int                         `json:"eventItemsPerPage"`
-	GroupFetchLimit       int                         `json:"groupFetchLimit"`
-	MostRecentlyUsedLimit int                         `json:"mostRecentlyUsedLimit"`
-	Presets               map[string]PresetParameters `json:"presets"`
-	Queries               []*HuntingQuery             `json:"queries"`
-	QueryBaseFilter       string                      `json:"queryBaseFilter"`
-	SafeStringMaxLength   int                         `json:"safeStringMaxLength"`
-	ViewEnabled           bool                        `json:"viewEnabled"`
+	HuntingParameters
+	Presets              map[string]PresetParameters `json:"presets"`
 }
 
 type DetectionParameters struct {
@@ -213,20 +202,9 @@ type DetectionParameters struct {
 }
 
 func (params *DetectionsParameters) Verify() error {
-	if params.GroupFetchLimit <= 0 {
-		params.GroupFetchLimit = DEFAULT_GROUP_FETCH_LIMIT
-	}
-	if params.EventFetchLimit <= 0 {
-		params.EventFetchLimit = DEFAULT_EVENT_FETCH_LIMIT
-	}
-	if params.MostRecentlyUsedLimit < 0 {
-		params.MostRecentlyUsedLimit = 0
-	}
-	if params.SafeStringMaxLength <= 0 {
-		params.SafeStringMaxLength = DEFAULT_SAFE_STRING_MAX_LENGTH
-	}
+	err := params.HuntingParameters.Verify()
 
-	return nil
+	return err
 }
 
 func (params *DetectionParameters) Verify() error {
