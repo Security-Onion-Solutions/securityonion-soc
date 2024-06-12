@@ -470,7 +470,7 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 	defer func() {
 		totalTime := time.Since(totalTimeStart)
 
-		log.WithFields(log.Fields{
+		withStats := log.WithFields(log.Fields{
 			"error":      len(errMap),
 			"total":      len(IDs),
 			"modified":   len(modified),
@@ -478,7 +478,13 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 			"updateTime": update.Seconds(),
 			"syncTime":   sync.Seconds(),
 			"totalTime":  totalTime.Seconds(),
-		}).Error("bulk update Detections finished")
+		})
+
+		if len(errMap) != 0 {
+			withStats.Error("bulk action Detections finished")
+		} else {
+			withStats.Info("bulk action Detections finished")
+		}
 
 		verb := "update"
 		if body.Delete {
