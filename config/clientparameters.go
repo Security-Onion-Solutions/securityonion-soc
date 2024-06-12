@@ -192,7 +192,7 @@ type GridParameters struct {
 
 type DetectionsParameters struct {
 	HuntingParameters
-	DetectionParameters
+	Presets              map[string]PresetParameters `json:"presets"`
 }
 
 type DetectionParameters struct {
