@@ -509,6 +509,8 @@ func (e *SuricataEngine) watchCommunityRules() {
 			continue
 		}
 
+		commDetections = detections.DeduplicateByPublicId(commDetections)
+
 		for _, d := range commDetections {
 			d.IsCommunity = true
 		}

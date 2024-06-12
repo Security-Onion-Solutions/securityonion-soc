@@ -60,6 +60,7 @@ type IOManager interface {
 	DeleteFile(path string) error
 	ReadDir(path string) ([]os.DirEntry, error)
 	ExecCommand(cmd *exec.Cmd) ([]byte, int, time.Duration, error)
+	WalkDir(root string, fn fs.WalkDirFunc) error
 }
 
 type StrelkaEngine struct {
@@ -396,8 +397,6 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			templateFound = true
 		}
 
-		upToDate := map[string]*model.RuleRepo{}
-
 		allRepos, anythingNew, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config)
 		if err != nil {
 			if strings.Contains(err.Error(), "module stopped") {
@@ -437,12 +436,6 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			continue
 		}
 
-		for k, v := range allRepos {
-			if v.WasModified || forceSync {
-				upToDate[k] = v.Repo
-			}
-		}
-
 		communityDetections, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, model.WithEngine(model.EngineNameStrelka), model.WithCommunity(true))
 		if err != nil {
 			log.WithError(err).Error("Failed to get all community SIDs")
@@ -463,20 +456,24 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 		}
 
 		et := detections.NewErrorTracker(e.failAfterConsecutiveErrorCount)
-		failSync := false
+		detects := []*model.Detection{}
 
 		// parse *.yar files in repos
-		for repopath, repo := range upToDate {
+		for repopath, repo := range allRepos {
 			if !e.isRunning {
 				return
 			}
 
-			baseDir := repopath
-			if repo.Folder != nil {
-				baseDir = filepath.Join(baseDir, *repo.Folder)
+			if !repo.WasModified && !forceSync {
+				continue
 			}
 
-			err = filepath.WalkDir(baseDir, func(path string, d fs.DirEntry, err error) error {
+			baseDir := repo.Path
+			if repo.Repo.Folder != nil {
+				baseDir = filepath.Join(baseDir, *repo.Repo.Folder)
+			}
+
+			err = e.WalkDir(baseDir, func(path string, d fs.DirEntry, err error) error {
 				if err != nil {
 					log.WithError(err).WithField("repoPath", path).Error("Failed to walk path")
 					return nil
@@ -508,81 +505,8 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 				}
 
 				for _, rule := range parsed {
-					det := rule.ToDetection(repo.License, filepath.Base(repopath), repo.Community)
-					log.WithFields(log.Fields{
-						"rule.uuid": det.PublicID,
-						"rule.name": det.Title,
-					}).Info("Strelka community sync - processing YARA rule")
-
-					comRule, exists := communityDetections[det.PublicID]
-					if exists {
-						if comRule.Content != det.Content || comRule.Ruleset != det.Ruleset || len(det.Overrides) != 0 {
-							// pre-existing detection, update it
-							det.IsEnabled = comRule.IsEnabled
-							det.Id = comRule.Id
-							det.Overrides = comRule.Overrides
-							det.CreateTime = comRule.CreateTime
-
-							log.WithFields(log.Fields{
-								"rule.uuid": det.PublicID,
-								"rule.name": det.Title,
-							}).Info("Updating Yara detection")
-
-							_, err = e.srv.Detectionstore.UpdateDetection(e.srv.Context, det)
-							if err != nil && err.Error() == "Object not found" {
-								log.WithField("publicId", det.PublicID).Error("unable to read back successful write")
-
-								writeNoRead = util.Ptr(det.PublicID)
-								failSync = true
-
-								return err
-							}
-
-							eterr := et.AddError(err)
-							if eterr != nil {
-								return eterr
-							}
-
-							if err != nil {
-								log.WithError(err).WithField("publicId", det.PublicID).Error("Failed to update detection")
-								continue
-							}
-						}
-
-						delete(toDelete, det.PublicID)
-					} else {
-						// new detection, create it
-						log.WithFields(log.Fields{
-							"rule.uuid": det.PublicID,
-							"rule.name": det.Title,
-						}).Info("Creating new Yara detection")
-
-						checkRulesetEnabled(e, det)
-
-						_, err = e.srv.Detectionstore.CreateDetection(e.srv.Context, det)
-						if err != nil && err.Error() == "Object not found" {
-							log.WithField("publicId", det.PublicID).Error("unable to read back successful write")
-
-							writeNoRead = util.Ptr(det.PublicID)
-							failSync = true
-
-							return err
-						}
-
-						eterr := et.AddError(err)
-						if eterr != nil {
-							failSync = true
-
-							return eterr
-						}
-
-						if err != nil {
-							log.WithError(err).WithField("publicId", det.PublicID).Error("Failed to create detection")
-							continue
-						}
-
-						delete(toDelete, det.PublicID)
-					}
+					det := rule.ToDetection(repo.Repo.License, filepath.Base(repo.Path), repo.Repo.Community)
+					detects = append(detects, det)
 				}
 
 				return nil
@@ -590,15 +514,99 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			if err != nil {
 				log.WithError(err).WithField("strelkaRepo", repopath).Error("failed while walking repo")
 
-				if failSync {
-					break
-				}
-
 				continue
 			}
 		}
 
-		if failSync {
+		var eterr error
+		detects = detections.DeduplicateByPublicId(detects)
+
+		for _, det := range detects {
+			log.WithFields(log.Fields{
+				"rule.uuid": det.PublicID,
+				"rule.name": det.Title,
+			}).Info("Strelka community sync - processing YARA rule")
+
+			comRule, exists := communityDetections[det.PublicID]
+			if exists {
+				if comRule.Content != det.Content || comRule.Ruleset != det.Ruleset || len(det.Overrides) != 0 {
+					// pre-existing detection, update it
+					det.IsEnabled = comRule.IsEnabled
+					det.Id = comRule.Id
+					det.Overrides = comRule.Overrides
+					det.CreateTime = comRule.CreateTime
+
+					log.WithFields(log.Fields{
+						"rule.uuid": det.PublicID,
+						"rule.name": det.Title,
+					}).Info("Updating Yara detection")
+
+					_, err = e.srv.Detectionstore.UpdateDetection(e.srv.Context, det)
+					if err != nil && err.Error() == "Object not found" {
+						writeNoRead = util.Ptr(det.PublicID)
+						log.WithField("publicId", det.PublicID).Error("unable to read back successful write")
+
+						break
+					}
+
+					eterr = et.AddError(err)
+					if eterr != nil {
+						break
+					}
+
+					if err != nil {
+						log.WithError(err).WithField("publicId", det.PublicID).Error("Failed to update detection")
+						continue
+					}
+				}
+
+				delete(toDelete, det.PublicID)
+			} else {
+				// new detection, create it
+				log.WithFields(log.Fields{
+					"rule.uuid": det.PublicID,
+					"rule.name": det.Title,
+				}).Info("Creating new Yara detection")
+
+				checkRulesetEnabled(e, det)
+
+				_, err = e.srv.Detectionstore.CreateDetection(e.srv.Context, det)
+				if err != nil && err.Error() == "Object not found" {
+					writeNoRead = util.Ptr(det.PublicID)
+					log.WithField("publicId", det.PublicID).Error("unable to read back successful write")
+
+					break
+				}
+
+				eterr = et.AddError(err)
+				if eterr != nil {
+					break
+				}
+
+				if err != nil {
+					log.WithError(err).WithField("publicId", det.PublicID).Error("Failed to create detection")
+					continue
+				}
+
+				delete(toDelete, det.PublicID)
+			}
+		}
+
+		if eterr != nil || writeNoRead != nil {
+			if eterr != nil {
+				log.WithError(eterr).Error("unable to sync YARA community detections")
+			}
+			if writeNoRead != nil {
+				log.Warn("detection was written but not read back, attempting read before continuing")
+			}
+
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+					Engine: model.EngineNameElastAlert,
+					Status: "error",
+				})
+			}
+
 			continue
 		}
 
@@ -1170,6 +1178,7 @@ func (_ *ResourceManager) DeleteFile(path string) error {
 func (_ *ResourceManager) ReadDir(path string) ([]os.DirEntry, error) {
 	return os.ReadDir(path)
 }
+
 func (_ *ResourceManager) ExecCommand(cmd *exec.Cmd) (output []byte, exitCode int, runtime time.Duration, err error) {
 	start := time.Now()
 	output, err = cmd.CombinedOutput()
@@ -1178,4 +1187,8 @@ func (_ *ResourceManager) ExecCommand(cmd *exec.Cmd) (output []byte, exitCode in
 	exitCode = cmd.ProcessState.ExitCode()
 
 	return output, exitCode, runtime, err
+}
+
+func (_ *ResourceManager) WalkDir(root string, fn fs.WalkDirFunc) error {
+	return filepath.WalkDir(root, fn)
 }

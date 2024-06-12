@@ -579,9 +579,6 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			templateFound = true
 		}
 
-		allRepos := map[string]*model.RuleRepo{}
-		var repoChanges bool
-
 		var zips map[string][]byte
 		var errMap map[string]error
 		var regenNeeded bool
@@ -617,9 +614,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			continue
 		}
 
-		var dirtyRepos map[string]*detections.DirtyRepo
-
-		dirtyRepos, repoChanges, err = detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config)
+		dirtyRepos, repoChanges, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config)
 		if err != nil {
 			if strings.Contains(err.Error(), "module stopped") {
 				break
@@ -635,10 +630,6 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			}
 
 			continue
-		}
-
-		for k, v := range dirtyRepos {
-			allRepos[k] = v.Repo
 		}
 
 		zipHashes := map[string]string{}
@@ -714,7 +705,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			break
 		}
 
-		repoDets, errMap := e.parseRepoRules(allRepos)
+		repoDets, errMap := e.parseRepoRules(dirtyRepos)
 		if errMap != nil {
 			log.WithField("sigmaParseError", errMap).Error("something went wrong while parsing sigma rule files from repos")
 		}
@@ -724,6 +715,8 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 		}
 
 		detects = append(detects, repoDets...)
+
+		detects = detections.DeduplicateByPublicId(detects)
 
 		errMap, err = e.syncCommunityDetections(ctx, detects)
 		if err != nil {
@@ -864,10 +857,12 @@ func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detections 
 		}
 	}()
 
-	for pkg, zipData := range pkgZips {
+	for _, pkg := range e.sigmaRulePackages {
 		if !e.isRunning {
 			return nil, map[string]error{"module": errModuleStopped}
 		}
+
+		zipData := pkgZips[pkg]
 
 		reader, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
 		if err != nil {
@@ -925,7 +920,7 @@ func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detections 
 	return detections, errMap
 }
 
-func (e *ElastAlertEngine) parseRepoRules(allRepos map[string]*model.RuleRepo) (detections []*model.Detection, errMap map[string]error) {
+func (e *ElastAlertEngine) parseRepoRules(allRepos []*detections.RepoOnDisk) (detections []*model.Detection, errMap map[string]error) {
 	errMap = map[string]error{} // map[repoName]error
 	defer func() {
 		if len(errMap) == 0 {
@@ -933,14 +928,14 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos map[string]*model.RuleRepo) (
 		}
 	}()
 
-	for repopath, repo := range allRepos {
+	for _, repo := range allRepos {
 		if !e.isRunning {
 			return nil, map[string]error{"module": errModuleStopped}
 		}
 
-		baseDir := repopath
-		if repo.Folder != nil {
-			baseDir = filepath.Join(baseDir, *repo.Folder)
+		baseDir := repo.Path
+		if repo.Repo.Folder != nil {
+			baseDir = filepath.Join(baseDir, *repo.Repo.Folder)
 		}
 
 		err := e.WalkDir(baseDir, func(path string, d fs.DirEntry, err error) error {
@@ -974,16 +969,16 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos map[string]*model.RuleRepo) (
 				return nil
 			}
 
-			ruleset := filepath.Base(repopath)
+			ruleset := filepath.Base(repo.Path)
 
-			det := rule.ToDetection(ruleset, repo.License, repo.Community)
+			det := rule.ToDetection(ruleset, repo.Repo.License, repo.Repo.Community)
 
 			detections = append(detections, det)
 
 			return nil
 		})
 		if err != nil {
-			log.WithError(err).WithField("elastAlertRuleRepo", repopath).Error("Failed to walk repo")
+			log.WithError(err).WithField("elastAlertRuleRepo", repo.Path).Error("Failed to walk repo")
 			continue
 		}
 	}

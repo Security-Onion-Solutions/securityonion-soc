@@ -10,7 +10,6 @@ package mock
 
 import (
 	fs "io/fs"
-	http "net/http"
 	exec "os/exec"
 	reflect "reflect"
 	time "time"
@@ -72,21 +71,6 @@ func (mr *MockIOManagerMockRecorder) ExecCommand(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecCommand", reflect.TypeOf((*MockIOManager)(nil).ExecCommand), arg0)
 }
 
-// MakeRequest mocks base method.
-func (m *MockIOManager) MakeRequest(arg0 *http.Request) (*http.Response, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MakeRequest", arg0)
-	ret0, _ := ret[0].(*http.Response)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// MakeRequest indicates an expected call of MakeRequest.
-func (mr *MockIOManagerMockRecorder) MakeRequest(arg0 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MakeRequest", reflect.TypeOf((*MockIOManager)(nil).MakeRequest), arg0)
-}
-
 // ReadDir mocks base method.
 func (m *MockIOManager) ReadDir(arg0 string) ([]fs.DirEntry, error) {
 	m.ctrl.T.Helper()
@@ -115,6 +99,20 @@ func (m *MockIOManager) ReadFile(arg0 string) ([]byte, error) {
 func (mr *MockIOManagerMockRecorder) ReadFile(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadFile", reflect.TypeOf((*MockIOManager)(nil).ReadFile), arg0)
+}
+
+// WalkDir mocks base method.
+func (m *MockIOManager) WalkDir(arg0 string, arg1 fs.WalkDirFunc) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WalkDir", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WalkDir indicates an expected call of WalkDir.
+func (mr *MockIOManagerMockRecorder) WalkDir(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WalkDir", reflect.TypeOf((*MockIOManager)(nil).WalkDir), arg0, arg1)
 }
 
 // WriteFile mocks base method.
