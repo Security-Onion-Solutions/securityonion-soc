@@ -771,6 +771,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 			InitialSettings: emptySettings(),
 			Detections: []*model.Detection{
 				{
+					Auditable:   model.Auditable{Id: "1"},
 					PublicID:    SimpleRuleSID,
 					Content:     SimpleRule,
 					IsEnabled:   true,
@@ -793,6 +794,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 			InitialSettings: emptySettings(),
 			Detections: []*model.Detection{
 				{
+					Auditable:   model.Auditable{Id: "1"},
 					PublicID:    SimpleRuleSID,
 					Content:     SimpleRule,
 					IsEnabled:   true,
@@ -807,6 +809,51 @@ func TestSyncCommunitySuricata(t *testing.T) {
 			ExpectedSettings: map[string]string{
 				"idstools.sids.enabled":            SimpleRuleSID,
 				"idstools.sids.disabled":           "",
+				"idstools.sids.modify":             "",
+				"suricata.thresholding.sids__yaml": "{}\n",
+			},
+		},
+		{
+			Name: "update existing community rule",
+			InitialSettings: []*model.Setting{
+				{Id: "idstools.rules.local__rules", Value: SimpleRule},
+				{Id: "idstools.sids.enabled"},
+				{Id: "idstools.sids.disabled"},
+				{Id: "idstools.sids.modify"},
+				{Id: "suricata.thresholding.sids__yaml"},
+			},
+			Detections: []*model.Detection{
+				{
+					Auditable:   model.Auditable{Id: "1"},
+					PublicID:    SimpleRuleSID,
+					Content:     SimpleRule,
+					IsEnabled:   false,
+					IsCommunity: true,
+				},
+			},
+			ChangedByUser: true,
+			InitMock: func(detStore *servermock.MockDetectionstore) {
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+					SimpleRuleSID: {
+						Auditable:   model.Auditable{Id: "1"},
+						PublicID:    SimpleRuleSID,
+						Content:     SimpleRule,
+						IsEnabled:   true,
+						IsCommunity: true,
+					},
+				}, nil)
+				detStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).Return(&model.Detection{
+					Auditable:   model.Auditable{Id: "1"},
+					PublicID:    SimpleRuleSID,
+					Content:     SimpleRule,
+					IsEnabled:   false,
+					IsCommunity: true,
+				}, nil)
+			},
+			ExpectedSettings: map[string]string{
+				"idstools.rules.local__rules":      SimpleRule,
+				"idstools.sids.enabled":            "",
+				"idstools.sids.disabled":           SimpleRuleSID,
 				"idstools.sids.modify":             "",
 				"suricata.thresholding.sids__yaml": "{}\n",
 			},
@@ -839,6 +886,10 @@ func TestSyncCommunitySuricata(t *testing.T) {
 
 			assert.Equal(t, test.ExpectedErr, err)
 			assert.Equal(t, test.ExpectedErrMap, errMap)
+
+			for _, det := range test.Detections {
+				assert.NotEmpty(t, det.Id)
+			}
 
 			set, err := mCfgStore.GetSettings(ctx)
 			assert.NoError(t, err, "GetSettings should not return an error")

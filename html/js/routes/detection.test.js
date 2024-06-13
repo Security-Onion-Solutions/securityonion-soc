@@ -450,3 +450,28 @@ test('onNewDetectionLanguageChange', async () => {
 	await comp.onNewDetectionLanguageChange();
 	expect(comp.detect.content).toBe('c X');
 });
+
+test('cidrFormat', () => {
+	const cidrFormat = comp.rules.cidrFormat;
+
+	expect(cidrFormat('$HOME_NET')).toBe(true);
+	expect(cidrFormat('$Home_Net')).toBe(true);
+	expect(cidrFormat('!$DNS')).toBe(true);
+	expect(cidrFormat('!$_')).toBe(true);
+	expect(cidrFormat('0.0.0.0/16')).toBe(true);
+	expect(cidrFormat('0::0/32')).toBe(true);
+	expect(cidrFormat('2001:DB88:3333:4444:CCCC:DDDD:EEEE:FFFF/64')).toBe(true);
+	expect(cidrFormat('2001:db88:3333:4444:cccc:dddd:eeee:ffff/64')).toBe(true);
+
+	expect(cidrFormat('x')).toBe(comp.i18n.invalidCidrOrVar);
+	expect(cidrFormat('#')).toBe(comp.i18n.invalidCidrOrVar);
+	expect(cidrFormat('!#')).toBe(comp.i18n.invalidCidrOrVar);
+	expect(cidrFormat('#1')).toBe(comp.i18n.invalidCidrOrVar);
+	expect(cidrFormat('!#1')).toBe(comp.i18n.invalidCidrOrVar);
+	expect(cidrFormat('_')).toBe(comp.i18n.invalidCidrOrVar);
+	expect(cidrFormat('1.2.3.4')).toBe(comp.i18n.invalidCidrOrVar);
+	expect(cidrFormat('0::0')).toBe(comp.i18n.invalidCidrOrVar);
+	expect(cidrFormat('256.256.256.256/32')).toBe(comp.i18n.invalidCidrOrVar);
+	expect(cidrFormat('0::0::0/16')).toBe(comp.i18n.invalidCidrOrVar);
+	expect(cidrFormat('google.com')).toBe(comp.i18n.invalidCidrOrVar);
+});
