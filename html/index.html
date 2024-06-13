@@ -4691,6 +4691,12 @@
                       {{i18n.configQLElasticsearchHeader}}
                       <ul>
                         <li>
+                          <router-link data-aid="config_quicklink_es_warm" :to="{ name: 'config', query: {s: 'elasticsearch.index_settings.global_overrides.policy.phases.warm.min_age'}}">{{i18n.configQLElasticsearchWarm}}</router-link>
+                        </li>
+                        <li>
+                          <router-link data-aid="config_quicklink_es_cold" :to="{ name: 'config', query: {s: 'elasticsearch.index_settings.global_overrides.policy.phases.cold.min_age'}}">{{i18n.configQLElasticsearchCold}}</router-link>
+                        </li>
+                        <li>
                           <router-link data-aid="config_quicklink_es_delete" :to="{ name: 'config', query: {s: 'elasticsearch.index_settings.global_overrides.policy.phases.delete.min_age'}}">{{i18n.configQLElasticsearchDelete}}</router-link>
                         </li>
                       </ul>
