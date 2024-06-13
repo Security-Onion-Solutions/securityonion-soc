@@ -22,7 +22,10 @@ const huntComponent = {
     params: null,
     category: '',
     advanced: false,
+    queryAltered: false,
     query: '',
+    querySearch: '',
+    queryRemainder: '',
     queries: [],
     queryBaseFilter: "",
     queryName: '',
@@ -99,6 +102,7 @@ const huntComponent = {
     mruCases: [],
 
     autohunt: true,
+    showFullQuery: true,
 
     filterRouteInclude: "",
     filterRouteExclude: "",
@@ -288,6 +292,19 @@ const huntComponent = {
       } else {
         return [];
       }
+    },
+    reconstructQuery() {
+      if (this.isAdvanced() && !this.showFullQuery) {
+        this.query = this.querySearch + " " + this.queryRemainder;
+      }
+    },
+    submitQuery() {
+      this.reconstructQuery();
+      this.hunt();
+    },
+    queryModified() {
+      this.reconstructQuery();
+      return this.notifyInputsChanged();
     },
     notifyInputsChanged(replaceHistory = false) {
       var hunted = false;
@@ -725,8 +742,21 @@ const huntComponent = {
       }
       return item;
     },
+    getDisplayedQueryVar() {
+      if (this.isAdvanced()) {
+        if (this.showFullQuery) {
+          return 'query'
+        } else {
+          return 'querySearch'
+        }
+      }
+      return 'queryName'
+    },
     obtainQueryDetails() {
+      this.queryAltered = false;
       this.queryName = "";
+      this.querySearch = "";
+      this.queryRemainder = "";
       this.queryFilters = [];
       this.queryGroupBys = [];
       this.queryGroupByOptions = [];
@@ -765,7 +795,11 @@ const huntComponent = {
         }
 
         if (segments.length > 0) {
-          var search = segments[0].trim();
+          this.querySearch = segments[0].trim();
+          if (segments.length > 1) {
+            // Used for reconstructing full query from simplified filter-only view
+            this.queryRemainder = this.query.substring(segmentDelimIdx);
+          }
           var matchingQueryName = this.i18n.custom;
           for (var i = 0; i < this.queries.length; i++) {
             if (this.query == this.queries[i].query) {
@@ -773,7 +807,7 @@ const huntComponent = {
             }
           }
           this.queryName = matchingQueryName;
-          search.split(" AND ").forEach(function(item, index) {
+          this.querySearch.split(" AND ").forEach(function(item, index) {
             item = item.trim();
             if (item.length > 0 && item != "*") {
               route.queryFilters.push(item);
