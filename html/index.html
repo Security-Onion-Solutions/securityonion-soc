@@ -1346,8 +1346,8 @@
                       <!-- ip -->
                       <v-text-field v-if="newOverride.type === 'suppress'" id="new-override-ip-edit" v-model="newOverride.ip" :rules="[rules.required, rules.cidrFormat]" persistent-hint :hint="i18n.ipCidr" data-aid="detection_new_override_suppress_ip_input">
                         <template v-slot:append-outer>
-                          <router-link :to="{ name: 'config', query: { s: 'suricata.config.vars' }}" target="_blank">
-                            <v-icon>fa-regular fa-circle-question</v-icon>
+                          <router-link :to="{ name: 'config', query: { s: 'suricata.config.vars' }}" target="_blank" data-aid="new_override_ip_edit_config_shortcut">
+                            <v-icon>fa fa-gear</v-icon>
                           </router-link>
                         </template>
                       </v-text-field>
@@ -1489,8 +1489,8 @@
                             <v-text-field id="override-ip-edit" ref="override-ip" hide-details="auto" outlined v-model="item.ip" :rules="[rules.required, rules.cidrFormat]"
                               persistent-hint :hint="i18n.ipCidr" v-on:keyup.enter="isFieldValid('override-ip') && stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)" data-aid="detection_override_suppress_ip_input">
                             <template v-slot:append-outer>
-                              <router-link :to="{ name: 'config', query: { s: 'suricata.config.vars' }}" target="_blank">
-                                <v-icon>fa-regular fa-circle-question</v-icon>
+                              <router-link :to="{ name: 'config', query: { s: 'suricata.config.vars' }}" target="_blank" data-aid="override_ip_edit_config_shortcut">
+                                <v-icon>fa fa-gear</v-icon>
                               </router-link>
                             </template>
                             </v-text-field>

@@ -61,28 +61,28 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			expanded: [],
 			overrideHeaders: {
 				'elastalert': [
-					{ text: 'Enabled', value: 'isEnabled' },
-					{ text: 'Type', value: 'type' },
-					{ text: 'Track', value: 'track' },
-					{ text: 'Created', value: 'createdAt', format: true },
-					{ text: 'Updated', value: 'updatedAt', format: true },
+					{ text: this.$root.i18n.enabled, value: 'isEnabled' },
+					{ text: this.$root.i18n.type, value: 'type' },
+					{ text: this.$root.i18n.track, value: 'track' },
+					{ text: this.$root.i18n.dateCreated, value: 'createdAt', format: true },
+					{ text: this.$root.i18n.dateModified, value: 'updatedAt', format: true },
 				],
 				'strelka': [], // no overrides
 				'suricata': [
-					{ text: 'Enabled', value: 'isEnabled' },
-					{ text: 'Type', value: 'type' },
-					{ text: 'IP/Var', value: 'ip' },
-					{ text: 'Created', value: 'createdAt', format: true },
-					{ text: 'Updated', value: 'updatedAt', format: true },
+					{ text: this.$root.i18n.enabled, value: 'isEnabled' },
+					{ text: this.$root.i18n.type, value: 'type' },
+					{ text: this.$root.i18n.ipVar, value: 'ip' },
+					{ text: this.$root.i18n.dateCreated, value: 'createdAt', format: true },
+					{ text: this.$root.i18n.dateModified, value: 'updatedAt', format: true },
 				],
 			},
 			zone: moment.tz.guess(),
 			newOverride: null,
 			newOverrideValid: false,
 			thresholdTypes: [
-				{ value: 'threshold', text: 'Threshold' },
-				{ value: 'limit', text: 'Limit' },
-				{ value: 'both', text: 'Both' }
+				{ value: 'threshold', text: this.$root.i18n.threshold },
+				{ value: 'limit', text: this.$root.i18n.limit },
+				{ value: 'both', text: this.$root.i18n.both }
 			],
 			historyTableOpts: {
 				sortBy: 'updateTime',
