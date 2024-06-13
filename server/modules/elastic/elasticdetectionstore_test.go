@@ -694,6 +694,7 @@ func TestUpdateDetectionValid(t *testing.T) {
 	reqDet.UpdateTime = nil
 	reqDet.Overrides = nil
 	detWithoutId.CreateTime = nil
+	detWithoutId.Id = ""
 	assert.Equal(t, detWithoutId, reqDet)
 
 	body, err := io.ReadAll(reqs[1].Body)
