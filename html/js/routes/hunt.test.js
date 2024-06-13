@@ -700,6 +700,8 @@ test('obtainQueryDetails_blank', () => {
   comp.query = ""
   comp.obtainQueryDetails();
   expect(comp.queryName).toBe("");
+  expect(comp.querySearch).toBe("");
+  expect(comp.queryRemainder).toBe("");
   expect(comp.queryFilters).toStrictEqual([]);
   expect(comp.queryGroupBys).toStrictEqual([]);
   expect(comp.queryGroupByOptions).toStrictEqual([]);
@@ -710,6 +712,8 @@ test('obtainQueryDetails_queryOnly', () => {
   comp.query = "foo: bar AND x:1"
   comp.obtainQueryDetails();
   expect(comp.queryName).toBe("Custom");
+  expect(comp.querySearch).toBe("foo: bar AND x:1");
+  expect(comp.queryRemainder).toBe("");
   expect(comp.queryFilters).toStrictEqual(["foo: bar", "x:1"]);
   expect(comp.queryGroupBys).toStrictEqual([]);
   expect(comp.queryGroupByOptions).toStrictEqual([]);
@@ -720,6 +724,8 @@ test('obtainQueryDetails_queryGroupedOptionsTableSorted', () => {
   comp.query = "foo: bar AND x:1 | groupby -opt1 z | groupby -optB r^ | sortby y | table x y z"
   comp.obtainQueryDetails();
   expect(comp.queryName).toBe("Custom");
+  expect(comp.querySearch).toBe("foo: bar AND x:1");
+  expect(comp.queryRemainder).toBe("| groupby -opt1 z | groupby -optB r^ | sortby y | table x y z");
   expect(comp.queryFilters).toStrictEqual(["foo: bar", "x:1"]);
   expect(comp.queryGroupBys).toStrictEqual([["z"], ["r^"]]);
   expect(comp.queryGroupByOptions).toStrictEqual([["opt1"], ["optB"]]);
@@ -731,6 +737,8 @@ test('obtainQueryDetails_queryGroupedFilterPipe', () => {
   comp.query = "foo: bar AND x:\"with | this\" | groupby z"
   comp.obtainQueryDetails();
   expect(comp.queryName).toBe("Custom");
+  expect(comp.querySearch).toBe("foo: bar AND x:\"with | this\"");
+  expect(comp.queryRemainder).toBe("| groupby z");
   expect(comp.queryFilters).toStrictEqual(["foo: bar", "x:\"with | this\""]);
   expect(comp.queryGroupBys).toStrictEqual([["z"]]);
   expect(comp.queryGroupByOptions).toStrictEqual([[]]);
@@ -741,6 +749,8 @@ test('obtainQueryDetails_trickyEscapeSequence', () => {
   comp.query = `process.working_directory:"C:\\\\Windows\\\\system32\\\\" | groupby host.name`;
   comp.obtainQueryDetails();
   expect(comp.queryName).toBe("Custom");
+  expect(comp.querySearch).toBe(`process.working_directory:"C:\\\\Windows\\\\system32\\\\"`);
+  expect(comp.queryRemainder).toBe("| groupby host.name");
   expect(comp.queryFilters).toStrictEqual([`process.working_directory:"C:\\\\Windows\\\\system32\\\\"`]);
   expect(comp.queryGroupBys).toStrictEqual([["host.name"]]);
   expect(comp.queryGroupByOptions).toStrictEqual([[]]);
@@ -1286,4 +1296,52 @@ test('bulkAction - delete - confirm - failure', async () => {
   expect(mock).toHaveBeenCalledWith('detection/bulk/delete', { ids: ["1", "3"] });
   expect(comp.$root.showError).toHaveBeenCalledTimes(1);
   expect(comp.$root.showError).toHaveBeenCalledWith(err);
+});
+
+test('reconstructQuery', () => {
+  comp.query = "bar: 'hi' | groupby x"
+  comp.obtainQueryDetails();
+  comp.reconstructQuery();
+  comp.querySearch = "foo: 1"
+
+  // Advanced mode and showFullQuery false so should reconstruct query using new custom filter
+  comp.advanced = true;
+  comp.showFullQuery = false;
+  comp.queryModified();
+  expect(comp.query).toBe("foo: 1 | groupby x");
+});
+
+test('queryModified', () => {
+  comp.$root.loading = true; // prevent any notification logic from running
+  comp.query = "bar: 'hi' | groupby x"
+  comp.obtainQueryDetails();
+  comp.querySearch = "foo: 1"
+
+  // Basic mode, should not reconstruct query
+  comp.queryModified();
+  expect(comp.query).toBe("bar: 'hi' | groupby x");
+
+  // Advanced mode, but showFullQuery is true so should not reconstruct query
+  comp.advanced = true;
+  comp.showFullQuery = true;
+  comp.queryModified();
+  expect(comp.query).toBe("bar: 'hi' | groupby x");
+
+  // Advanced mode and showFullQuery false so should reconstruct query using new custom filter
+  comp.advanced = true;
+  comp.showFullQuery = false;
+  comp.queryModified();
+  expect(comp.query).toBe("foo: 1 | groupby x");
+});
+
+test('getDisplayedQueryVar', () => {
+  expect(comp.getDisplayedQueryVar()).toBe('queryName');
+
+  comp.advanced = true;
+  comp.showFullQuery = true;
+  expect(comp.getDisplayedQueryVar()).toBe('query');
+
+  comp.advanced = true;
+  comp.showFullQuery = false;
+  expect(comp.getDisplayedQueryVar()).toBe('querySearch');
 });

@@ -414,7 +414,7 @@
         </v-row>
         <v-row align="start">
           <v-col cols="12" :md="isCategory('detections') ? 10 : 7">
-            <v-textarea :clearable="isAdvanced()" :auto-grow="isAdvanced()" :readonly="!isAdvanced()" :disabled="loading()" @change="notifyInputsChanged" class="mx-2" v-model="$data[isAdvanced() ? 'query' : 'queryName']" :hint="isAdvanced() ? i18n.queryHelp : ''" rows="1" persistent-hint prepend-icon="fa-search" @keydown.enter.prevent="hunt" id="hunt-query-input" :data-aid="'query_input_' + category">
+            <v-textarea :clearable="isAdvanced()" :auto-grow="isAdvanced()" :readonly="!isAdvanced()" :disabled="loading()" @input="queryAltered = true" @change="queryModified" class="mx-2" v-model="$data[getDisplayedQueryVar()]" :hint="isAdvanced() ? i18n.queryHelp : ''" rows="1" persistent-hint prepend-icon="fa-search" @keydown.enter.prevent="submitQuery" id="hunt-query-input" :data-aid="'query_input_' + category">
               <template v-slot:prepend-inner>
                 <v-menu dense bottom three-line offset-y>
                   <template v-slot:activator="{ on: menu }">
@@ -448,6 +448,11 @@
                     </v-list-item>
                   </v-list>
                 </v-menu>
+              </template>
+              <template v-if="isAdvanced()" v-slot:append>
+                <v-btn small icon id="toggle-full-query-button" :title="i18n.toggleFullQueryHelp" @click="showFullQuery = !showFullQuery" :disabled="queryAltered" :data-aid="'toggle_full_query_' + category">
+                  <v-icon>fa-ellipsis</v-icon>
+                </v-btn>
               </template>
               <template v-if="!isCategory('hunt')" v-slot:append-outer>
                 <v-btn small icon id="switch-to-hunt-button" :title="i18n.huntHelp" @click="switchToHunt()" :data-aid="'nav_hunt_' + category">

@@ -804,6 +804,7 @@ const i18n = {
       'so-sensor-keywords': 'Forward, Sensor, Sensoroni, Stenographer',
       'so-standalone': 'Standalone',
       'so-standalone-keywords': 'Elastic, Elasticsearch, Fleet, Forward, Ingest, Manager, Master, Search, Sensor, Sensoroni, Soc, Stenographer, Web',
+      toggleFullQueryHelp: 'Toggles between showing the full query or only the search filter. Disabled if query has been modified.',
       showPieChart: 'Show pie chart',
       showBarChart: 'Show bar chart',
       showSankeyChart: 'Show Sankey diagram',
