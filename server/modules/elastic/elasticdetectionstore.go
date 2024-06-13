@@ -516,6 +516,12 @@ func (store *ElasticDetectionstore) UpdateDetection(ctx context.Context, detect 
 		return nil, err
 	}
 
+	// prepareForSave clears Id creating a side effect for the caller
+	id := detect.Id
+	defer func() {
+		detect.Id = id
+	}()
+
 	results, err := store.save(ctx, detect, "detection", store.prepareForSave(ctx, &detect.Auditable))
 	if err != nil {
 		return nil, err

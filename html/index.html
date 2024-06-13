@@ -1344,7 +1344,13 @@
                         <v-select v-if="['threshold', 'suppress'].includes(newOverride.type)" id="new-override-track-edit" v-model="newOverride.track" :items="getTrackOptions(newOverride.type)" :rules="[rules.required]" persistent-hint :hint="i18n.track"></v-select>
                       </span>
                       <!-- ip -->
-                      <v-text-field v-if="newOverride.type === 'suppress'" id="new-override-ip-edit" v-model="newOverride.ip" :rules="[rules.required, rules.cidrFormat]" persistent-hint :hint="i18n.ipCidr" data-aid="detection_new_override_suppress_ip_input"></v-text-field>
+                      <v-text-field v-if="newOverride.type === 'suppress'" id="new-override-ip-edit" v-model="newOverride.ip" :rules="[rules.required, rules.cidrFormat]" persistent-hint :hint="i18n.ipCidr" data-aid="detection_new_override_suppress_ip_input">
+                        <template v-slot:append-outer>
+                          <router-link :to="{ name: 'config', query: { s: 'suricata.config.vars' }}" target="_blank">
+                            <v-icon>fa-regular fa-circle-question</v-icon>
+                          </router-link>
+                        </template>
+                      </v-text-field>
                       <!-- count -->
                       <v-text-field v-if="newOverride.type === 'threshold'" id="new-override-count-edit" v-model="newOverride.count" :rules="[rules.required, rules.number]" persistent-hint :hint="i18n.count" data-aid="detection_new_override_threshold_count_input"></v-text-field>
                       <!-- seconds -->
@@ -1370,7 +1376,7 @@
                     </div>
                   </v-form>
                 </div>
-                <v-data-table :sort-by.sync="sortBy" :expanded.sync="expanded" :sort-desc.sync="sortDesc" must-sort :headers="overrideHeaders"
+                <v-data-table :sort-by.sync="sortBy" :expanded.sync="expanded" :sort-desc.sync="sortDesc" must-sort :headers="overrideHeaders[detect.engine]"
                   :items="detect.overrides" item-key="index" show-expand single-expand :custom-sort="sortOverrides" hide-default-footer="true">
                   <template v-slot:item="{ item, index, expand, isExpanded }">
                     <tr>
@@ -1380,7 +1386,7 @@
                           <v-icon v-else :alt="i18n.overrideExpand" :title="i18n.eventExpandHelp" data-aid="detection_overrides_expand">fa-angle-right</v-icon>
                         </v-btn>
                       </td>
-                      <td v-for="field in overrideHeaders" :key="field.value" data-aid="detection_overrides_headers_display">
+                      <td v-for="field in overrideHeaders[detect.engine]" :key="field.value" data-aid="detection_overrides_headers_display">
                         <div class="d-inline-block">
                           <span v-if="!field.format">{{ item[field.value] }}</span>
                           <span v-else v-text="$root.formatLocalTimestamp(item[field.value], zone)"/>
@@ -1481,7 +1487,13 @@
                           </span>
                           <span v-else>
                             <v-text-field id="override-ip-edit" ref="override-ip" hide-details="auto" outlined v-model="item.ip" :rules="[rules.required, rules.cidrFormat]"
-                              persistent-hint :hint="i18n.cidr" v-on:keyup.enter="isFieldValid('override-ip') && stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)" data-aid="detection_override_suppress_ip_input"></v-text-field>
+                              persistent-hint :hint="i18n.ipCidr" v-on:keyup.enter="isFieldValid('override-ip') && stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)" data-aid="detection_override_suppress_ip_input">
+                            <template v-slot:append-outer>
+                              <router-link :to="{ name: 'config', query: { s: 'suricata.config.vars' }}" target="_blank">
+                                <v-icon>fa-regular fa-circle-question</v-icon>
+                              </router-link>
+                            </template>
+                            </v-text-field>
                             <div id="override-ip-edit-buttons">
                               <v-btn @click.stop="stopOverrideEdit(false)" text small class="align-self-end" data-aid="detection_override_ip_cancel">
                                 {{ i18n.cancel }}
