@@ -929,13 +929,13 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			switch (engine) {
 				case 'suricata':
 					return [
-						{ value: 'modify', text: 'Modify' },
-						{ value: 'suppress', text: 'Suppress' },
-						{ value: 'threshold', text: 'Threshold' }
+						{ value: 'modify', text: this.i18n.modify },
+						{ value: 'suppress', text: this.i18n.suppress },
+						{ value: 'threshold', text: this.i18n.threshold }
 					];
 				case 'elastalert':
 					return [
-						{ value: 'customFilter', text: 'Custom Filter' }
+						{ value: 'customFilter', text: this.i18n.customFilter }
 					];
 			}
 
