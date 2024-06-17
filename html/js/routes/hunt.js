@@ -2256,7 +2256,7 @@ const huntComponent = {
           msg = this.i18n.bulkActionDeleteStarted;
         }
 
-        msg = msg.replace('{total}', this.selectedCount.toLocaleString());
+        msg = msg.replace('{total}', (this.selectAllState === true ? this.totalEvents : this.selectedCount).toLocaleString());
 
         this.$root.showTip(msg);
 
