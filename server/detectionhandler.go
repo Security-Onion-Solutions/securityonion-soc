@@ -412,7 +412,9 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 			det := d.(*model.Detection)
 			if det.IsCommunity {
 				containsCommunity = true
-				break
+				if delete {
+					break
+				}
 			}
 
 			IDs = append(IDs, det.Id)
@@ -429,7 +431,9 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 
 				if det.IsCommunity {
 					containsCommunity = true
-					break
+					if delete {
+						break
+					}
 				}
 			}
 		}
@@ -448,7 +452,9 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 
 	go h.bulkUpdateDetectionAsync(noTimeOutCtx, body, IDs)
 
-	web.Respond(w, r, http.StatusAccepted, nil)
+	web.Respond(w, r, http.StatusAccepted, map[string]interface{}{
+		"count": len(IDs),
+	})
 }
 
 // bulkUpdateDetectionAsync is a helper function that performs the bulk update in a separate goroutine.
