@@ -2249,14 +2249,14 @@ const huntComponent = {
       }
 
       try {
-        await this.$root.papi.post('detection/bulk/' + this.selectedAction, payload);
+        const request = await this.$root.papi.post('detection/bulk/' + this.selectedAction, payload);
 
         let msg = this.i18n.bulkActionStarted;
         if (this.selectedAction === 'delete') {
           msg = this.i18n.bulkActionDeleteStarted;
         }
 
-        msg = msg.replace('{total}', (this.selectAllState === true ? this.totalEvents : this.selectedCount).toLocaleString());
+        msg = msg.replace('{total}', request.data.count.toLocaleString());
 
         this.$root.showTip(msg);
 

@@ -1219,7 +1219,7 @@ test('bulkAction - enable', async () => {
   comp.selectAllState = 'indeterminate';
   comp.eventData = [{ _isSelected: true, soc_id: "1" }, { _isSelected: false, soc_id: "2" }, { _isSelected: true, soc_id: "3" }];
   comp.hunt = jest.fn();
-  const mock = resetPapi().mockPapi('post', { data: {} }, null);
+  const mock = resetPapi().mockPapi('post', { data: { count: 2 }, }, null);
 
   await comp.bulkAction(true);
 
@@ -1240,7 +1240,7 @@ test('bulkAction - disable', async () => {
   comp.selectAllState = 'indeterminate';
   comp.eventData = [{ _isSelected: true, soc_id: "1" }, { _isSelected: false, soc_id: "2" }, { _isSelected: true, soc_id: "3" }];
   comp.hunt = jest.fn();
-  const mock = resetPapi().mockPapi('post', { data: {} }, null);
+  const mock = resetPapi().mockPapi('post', { data: { count: 2 } }, null);
 
   await comp.bulkAction(true);
 
@@ -1262,7 +1262,7 @@ test('bulkAction - delete - confirm - success', async () => {
   comp.selectAllState = 'indeterminate';
   comp.eventData = [{ _isSelected: true, soc_id: "1" }, { _isSelected: false, soc_id: "2" }, { _isSelected: true, soc_id: "3" }];
   comp.hunt = jest.fn();
-  const mock = resetPapi().mockPapi('post', { data: {} }, null);
+  const mock = resetPapi().mockPapi('post', { data: { count: 2 } }, null);
 
   await comp.bulkAction(true);
 
