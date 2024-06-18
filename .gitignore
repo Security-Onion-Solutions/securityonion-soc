@@ -8,6 +8,7 @@ nsm/
 coverage/
 .vscode/
 .DS_Store
+node_modules
 
 # Pytest output
 __pycache__
