@@ -1089,7 +1089,10 @@
                   </span>
 
                   <!-- License -->
-                  <v-text-field id="detection-license-create" class="mt-0" v-model="detect.license" persistent-hint :hint="i18n.license" data-aid="detection_license_input" />
+                  <span data-aid="detection_new_license_select">
+                    <v-select id="detection-license-create" v-if="!isPresetCustomEnabled('license')" v-model="detect.license" :items="getPresets('license')" persistent-hint :hint="i18n.license" :rules="[rules.required]"/>
+                    <v-combobox id="detection-license-create" v-if="isPresetCustomEnabled('license')" v-model="detect.license" :items="getPresets('license')" persistent-hint :hint="i18n.license" :rules="[rules.required]"/>
+                  </span>
 
                   <!-- Signature -->
                   <div class="font-weight-bold mb-1">{{ i18n.signature }}:</div>
