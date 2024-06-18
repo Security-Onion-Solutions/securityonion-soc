@@ -7,6 +7,7 @@ package suricata
 
 import (
 	"context"
+	"errors"
 	"regexp"
 	"sort"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/suricata/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
@@ -1552,4 +1554,167 @@ func TestRemoveFromIndex(t *testing.T) {
 		"100000": 0,
 		"300000": 2,
 	}, localIndex)
+}
+
+func TestReadCustomRulesets(t *testing.T) {
+	tests := []struct {
+		Name          string
+		Rulesets      []*model.CustomRuleset
+		InitMock      func(io *mock.MockIOManager)
+		ExpDetections []*model.Detection
+		ExpError      string
+	}{
+		{
+			Name:          "Empty",
+			Rulesets:      []*model.CustomRuleset{},
+			ExpDetections: []*model.Detection{},
+		},
+		{
+			Name: "Simple File",
+			Rulesets: []*model.CustomRuleset{
+				{
+					Community: true,
+					License:   "DRL",
+					File:      "testdata/simple.rules",
+					Ruleset:   "ruleset",
+				},
+			},
+			InitMock: func(io *mock.MockIOManager) {
+				io.EXPECT().ReadFile("testdata/simple.rules").Return([]byte(SimpleRule), nil)
+			},
+			ExpDetections: []*model.Detection{
+				{
+					PublicID: SimpleRuleSID,
+
+					Title:       "GPL ATTACK_RESPONSE id check returned root",
+					Severity:    model.SeverityUnknown,
+					Author:      "ruleset",
+					Category:    "GPL ATTACK_RESPONSE",
+					Content:     "alert http any any -> any any (msg:\"GPL ATTACK_RESPONSE id check returned root\"; content:\"uid=0|28|root|29|\"; classtype:bad-unknown; sid:10000; rev:7; metadata:created_at 2010_09_23, updated_at 2010_09_23;)",
+					IsEnabled:   true,
+					IsCommunity: true,
+					Engine:      model.EngineNameSuricata,
+					Language:    model.SigLangSuricata,
+					Ruleset:     "ruleset",
+					License:     "DRL",
+				},
+			},
+		},
+		{
+			Name: "Simple URL",
+			Rulesets: []*model.CustomRuleset{
+				{
+					Community:  true,
+					License:    "DRL",
+					Url:        "x",
+					TargetFile: "target.file",
+					Ruleset:    "ruleset",
+				},
+			},
+			InitMock: func(io *mock.MockIOManager) {
+				io.EXPECT().ReadFile("/nsm/rules/detect-suricata/custom_temp/target.file").Return([]byte(SimpleRule), nil)
+			},
+			ExpDetections: []*model.Detection{
+				{
+					PublicID: SimpleRuleSID,
+
+					Title:       "GPL ATTACK_RESPONSE id check returned root",
+					Severity:    model.SeverityUnknown,
+					Author:      "ruleset",
+					Category:    "GPL ATTACK_RESPONSE",
+					Content:     "alert http any any -> any any (msg:\"GPL ATTACK_RESPONSE id check returned root\"; content:\"uid=0|28|root|29|\"; classtype:bad-unknown; sid:10000; rev:7; metadata:created_at 2010_09_23, updated_at 2010_09_23;)",
+					IsEnabled:   true,
+					IsCommunity: true,
+					Engine:      model.EngineNameSuricata,
+					Language:    model.SigLangSuricata,
+					Ruleset:     "ruleset",
+					License:     "DRL",
+				},
+			},
+		},
+		{
+			Name: "Bad File, Good Url",
+			Rulesets: []*model.CustomRuleset{
+				{
+					Community:  true,
+					License:    "DRL",
+					Url:        "x",
+					TargetFile: "target.file",
+					Ruleset:    "ruleset",
+				},
+				{
+					Community: true,
+					License:   "DRL",
+					File:      "testdata/simple.rules",
+					Ruleset:   "ruleset",
+				},
+			},
+			InitMock: func(io *mock.MockIOManager) {
+				io.EXPECT().ReadFile("/nsm/rules/detect-suricata/custom_temp/target.file").Return([]byte(SimpleRule), nil)
+				io.EXPECT().ReadFile("testdata/simple.rules").Return(nil, errors.New("bad file"))
+			},
+			ExpError: "bad file",
+		},
+		{
+			Name: "Bad Url, Good File",
+			Rulesets: []*model.CustomRuleset{
+				{
+					Community: true,
+					License:   "DRL",
+					File:      "testdata/simple.rules",
+					Ruleset:   "ruleset",
+				},
+				{
+					Community:  true,
+					License:    "DRL",
+					Url:        "x",
+					TargetFile: "target.file",
+					Ruleset:    "ruleset",
+				},
+			},
+			InitMock: func(io *mock.MockIOManager) {
+				io.EXPECT().ReadFile("testdata/simple.rules").Return([]byte(SimpleRule), nil)
+				io.EXPECT().ReadFile("/nsm/rules/detect-suricata/custom_temp/target.file").Return(nil, errors.New("bad file"))
+			},
+			ExpError: "bad file",
+		},
+		{
+			Name: "Bad Custom Ruleset",
+			Rulesets: []*model.CustomRuleset{
+				{},
+			},
+			ExpError: "invalid custom ruleset",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			io := mock.NewMockIOManager(ctrl)
+
+			e := &SuricataEngine{
+				customRulesets: test.Rulesets,
+				IOManager:      io,
+				isRunning:      true,
+			}
+
+			if test.InitMock != nil {
+				test.InitMock(io)
+			}
+
+			detects, err := e.ReadCustomRulesets()
+
+			if test.ExpError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), test.ExpError)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			assert.Equal(t, test.ExpDetections, detects)
+		})
+	}
 }
