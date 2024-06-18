@@ -1077,16 +1077,12 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			el.scrollIntoView()
 			el.focus();
 		},
-		async reloadComments(showLoadingIndicator = false) {
+		async loadComments(showLoadingIndicator = false) {
 			if (showLoadingIndicator) this.$root.startLoading();
-			this.comments = [];
-			await this.loadComments();
-			if (showLoadingIndicator) this.$root.stopLoading();
-		},
-		async loadComments() {
 			try {
 				const response = await this.$root.papi.get(`detection/${this.detect.id}/comment`);
 				if (response && response.data) {
+					this.comments = [];
 					for (var idx = 0; idx < response.data.length; idx++) {
 						const obj = response.data[idx];
 
@@ -1107,6 +1103,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				}
 			} catch (error) {
 				this.$root.showError(error);
+			} finally {
+				if (showLoadingIndicator) this.$root.stopLoading();
 			}
 		},
 		async addComment() {
@@ -1140,7 +1138,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 				if (response && response.data) {
 					if (isUpdate) {
-						this.reloadComments();
+						this.loadComments();
 					} else {
 						await this.$root.populateUserDetails(response.data, "userId", "owner");
 						this.comments.push(response.data);

@@ -1166,7 +1166,7 @@
                       <v-btn :title="i18n.addCommentHelp" color="primary" @click.stop="prepareForInput('comment-input')" id="add-comment-button" data-aid="detection_comments_new">
                         <v-icon>fa-plus</v-icon>
                       </v-btn>
-                      <v-btn class="mx-1" :title="i18n.refreshCommentsHelp" color="secondary" @click.stop="reloadAssociation(true)" id="refresh-comments-button" data-aid="detection_comments_refresh">
+                      <v-btn class="mx-1" :title="i18n.refreshCommentsHelp" color="secondary" @click.stop="loadComments(true)" id="refresh-comments-button" data-aid="detection_comments_refresh">
                         <v-icon>fa-sync</v-icon>
                       </v-btn>
                     </v-toolbar>
