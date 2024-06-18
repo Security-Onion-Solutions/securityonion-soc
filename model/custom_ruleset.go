@@ -82,7 +82,7 @@ func GetCustomRulesetsDefault(cfg map[string]interface{}, field string, dflt []*
 		ext := filepath.Ext(file)
 		if strings.ToLower(ext) != ".rules" {
 			log.WithFields(log.Fields{
-				"file": file,
+				"customRulesetFile": file,
 			}).Warn("customRulesets file should have a .rules extension")
 		}
 

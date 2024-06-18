@@ -1614,7 +1614,7 @@ func (e *SuricataEngine) ReadCustomRulesets() (detects []*model.Detection, err e
 		if custom.File != "" {
 			content, err = e.ReadFile(custom.File)
 			if err != nil {
-				log.WithError(err).WithField("file", custom.File).Error("unable to read custom ruleset File, skipping")
+				log.WithError(err).WithField("customRulesetFilePath", custom.File).Error("unable to read custom ruleset File, skipping")
 
 				return nil, err
 			}
@@ -1623,7 +1623,7 @@ func (e *SuricataEngine) ReadCustomRulesets() (detects []*model.Detection, err e
 
 			content, err = e.ReadFile(path)
 			if err != nil {
-				log.WithError(err).WithField("file", path).Error("unable to read custom ruleset TargetFile, skipping")
+				log.WithError(err).WithField("customRulesetTargetFilePath", path).Error("unable to read custom ruleset TargetFile, skipping")
 
 				return nil, err
 			}
@@ -1637,7 +1637,7 @@ func (e *SuricataEngine) ReadCustomRulesets() (detects []*model.Detection, err e
 
 		dets, err := e.ParseRules(string(content), custom.Ruleset, false)
 		if err != nil {
-			log.WithError(err).WithField("rulesetName", custom.Ruleset).Error("unable to parse custom ruleset, skipping")
+			log.WithError(err).WithField("customRulesetName", custom.Ruleset).Error("unable to parse custom ruleset, skipping")
 
 			return nil, err
 		}
