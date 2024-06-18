@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -56,6 +57,8 @@ const (
 	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS     = 300
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT    = 10
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS     = 600
+
+	CUSTOM_RULE_LOC = "/nsm/rules/detect-suricata/custom_temp"
 )
 
 type IOManager interface {
@@ -82,6 +85,7 @@ type SuricataEngine struct {
 	notify                               bool
 	stateFilePath                        string
 	migrations                           map[string]func(string) error
+	customRulesets                       []*model.CustomRuleset
 	detections.IntegrityCheckerData
 	model.EngineState
 	IOManager
@@ -142,6 +146,10 @@ func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 	}
 
 	e.stateFilePath = module.GetStringDefault(config, "stateFilePath", DEFAULT_STATE_FILE_PATH)
+	e.customRulesets, err = model.GetCustomRulesetsDefault(config, "customRulesets", []*model.CustomRuleset{})
+	if err != nil {
+		return fmt.Errorf("unable to get custom rulesets: %w", err)
+	}
 
 	return nil
 }
@@ -509,11 +517,27 @@ func (e *SuricataEngine) watchCommunityRules() {
 			continue
 		}
 
-		commDetections = detections.DeduplicateByPublicId(commDetections)
-
 		for _, d := range commDetections {
 			d.IsCommunity = true
 		}
+
+		dets, err := e.ReadCustomRulesets()
+		if err != nil {
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+					Engine: model.EngineNameSuricata,
+					Status: "error",
+				})
+			}
+
+			log.WithError(err).Error("unable to parse custom rulesets")
+
+			continue
+		}
+
+		commDetections = append(commDetections, dets...)
+
+		commDetections = detections.DeduplicateByPublicId(commDetections)
 
 		errMap, err := e.syncCommunityDetections(ctx, commDetections, true, allSettings)
 		if err != nil {
@@ -1579,6 +1603,54 @@ func (e *SuricataEngine) DuplicateDetection(ctx context.Context, detection *mode
 	det.IsEnabled = false
 
 	return det, nil
+}
+
+func (e *SuricataEngine) ReadCustomRulesets() (detects []*model.Detection, err error) {
+	detects = []*model.Detection{}
+
+	for _, custom := range e.customRulesets {
+		var content []byte
+
+		if custom.File != "" {
+			content, err = e.ReadFile(custom.File)
+			if err != nil {
+				log.WithError(err).WithField("file", custom.File).Error("unable to read custom ruleset File, skipping")
+
+				return nil, err
+			}
+		} else if custom.Url != "" && custom.TargetFile != "" {
+			path := filepath.Join(CUSTOM_RULE_LOC, custom.TargetFile)
+
+			content, err = e.ReadFile(path)
+			if err != nil {
+				log.WithError(err).WithField("file", path).Error("unable to read custom ruleset TargetFile, skipping")
+
+				return nil, err
+			}
+		} else {
+			log.WithFields(log.Fields{
+				"rulesetName": custom.Ruleset,
+			}).Error("invalid custom ruleset, skipping")
+
+			return nil, errors.New("invalid custom ruleset")
+		}
+
+		dets, err := e.ParseRules(string(content), custom.Ruleset, false)
+		if err != nil {
+			log.WithError(err).WithField("rulesetName", custom.Ruleset).Error("unable to parse custom ruleset, skipping")
+
+			return nil, err
+		}
+
+		for _, detect := range dets {
+			detect.IsCommunity = custom.Community
+			detect.License = custom.License
+
+			detects = append(detects, detect)
+		}
+	}
+
+	return detects, nil
 }
 
 func (e *SuricataEngine) IntegrityCheck(canInterrupt bool) error {
