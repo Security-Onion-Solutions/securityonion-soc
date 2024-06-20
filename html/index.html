@@ -2253,7 +2253,7 @@
                         <v-col cols="12" lg="4">
                           <v-card>
                             <v-card-title>{{ i18n.roles }}</v-card-title>
-                            <v-card-text data-aid="'users_details_role_toggle">
+                            <v-card-text data-aid="users_details_role_toggle">
                               <v-checkbox v-for="role in roles" :key="role" :id="'role-checkbox-' + role" dense :input-value="hasRole(item, role)" :label="role" @click.stop="return toggleRole(item, role)">
                             </v-card-text>
                           </v-card>
