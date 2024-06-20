@@ -725,6 +725,15 @@ func readFingerprint(path string) (fingerprint *string, ok bool, err error) {
 }
 
 func (e *SuricataEngine) ValidateRule(rule string) (string, error) {
+	lines := strings.Split(rule, "\n")
+	nonEmpty := lo.Filter(lines, func(line string, _ int) bool {
+		return strings.TrimSpace(line) != ""
+	})
+
+	if len(nonEmpty) != 1 {
+		return "", fmt.Errorf("suricata rules must be a single line")
+	}
+
 	parsed, err := ParseSuricataRule(rule)
 	if err != nil {
 		return rule, err

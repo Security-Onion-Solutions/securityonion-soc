@@ -159,6 +159,12 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	_, err = engine.ValidateRule(detect.Content)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("invalid rule: %w", err))
+		return
+	}
+
 	err = engine.ExtractDetails(detect)
 	if err != nil {
 		if err.Error() == "rule does not contain a public Id" {
@@ -274,6 +280,12 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 	engine, ok := h.server.DetectionEngines[detect.Engine]
 	if !ok {
 		web.Respond(w, r, http.StatusBadRequest, errors.New("unsupported engine"))
+		return
+	}
+
+	_, err = engine.ValidateRule(detect.Content)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("invalid rule: %w", err))
 		return
 	}
 
