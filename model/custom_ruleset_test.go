@@ -28,7 +28,7 @@ func TestGetCustomRulesetsDefault(t *testing.T) {
 				{
 					Ruleset: "default",
 					License: "DRL",
-					File:    "default.txt",
+					File:    "default.rules",
 				},
 			},
 		},
