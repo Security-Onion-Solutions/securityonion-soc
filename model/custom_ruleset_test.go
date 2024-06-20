@@ -28,7 +28,7 @@ func TestGetCustomRulesetsDefault(t *testing.T) {
 				{
 					Ruleset: "default",
 					License: "DRL",
-					File:    "default.txt",
+					File:    "default.rules",
 				},
 			},
 		},
@@ -45,6 +45,26 @@ func TestGetCustomRulesetsDefault(t *testing.T) {
 				},
 			},
 			Expected: []*CustomRuleset{},
+		},
+		{
+			Name: "Nil",
+			Cfg: map[string]interface{}{
+				"customRulesets": nil,
+			},
+			Default: []*CustomRuleset{
+				{
+					Ruleset: "default",
+					License: "DRL",
+					File:    "default.rules",
+				},
+			},
+			Expected: []*CustomRuleset{
+				{
+					Ruleset: "default",
+					License: "DRL",
+					File:    "default.rules",
+				},
+			},
 		},
 		{
 			Name: "Valid",
