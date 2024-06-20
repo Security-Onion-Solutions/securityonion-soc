@@ -15,6 +15,8 @@ const LICENSE_STATUS_INVALID = "invalid";
 const LICENSE_STATUS_PENDING = "pending";
 const LICENSE_STATUS_UNPROVISIONED = "unprovisioned";
 
+const LICENSE_EXPIRES_SOON_DAYS = 45;
+
 const UNREALISTIC_AGE = 1700000000; // About 54 years
 
 const USER_PASSWORD_LENGTH_MIN = 8;
@@ -308,6 +310,16 @@ $(document).ready(function() {
           location.hash = '#' + redirectPage;
           this.removeSearchParam('r');
         }
+      },
+      isLicenseExpiringSoon() {
+        if (this.licenseStatus == LICENSE_STATUS_ACTIVE && this.licenseKey.expiration) {
+          const now = Date.now();
+          const exp = Date.parse(this.licenseKey.expiration);
+          const timeToExpirationMs = exp - now;
+          const minTimeToExpirationMs = LICENSE_EXPIRES_SOON_DAYS * 24 * 60 * 60 * 1000;
+          return timeToExpirationMs < minTimeToExpirationMs;
+        }
+        return false;
       },
       async loadServerSettings(background) {
         // This version element ensures we're passed the login screen.

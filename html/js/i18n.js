@@ -551,6 +551,7 @@ const i18n = {
       licensePending: 'This grid is using a license that has not yet become active. If this is unexpected, contact your Security Onion account manager for assistance. Alternatively, make sure your grid is synchronized to the correct time.',
       licenseEffective: 'Effective',
       licenseExpiration: 'Expiration',
+      licenseExpiringSoon: 'This grid\'s Security Onion Pro license expires soon.',
       licenseId: 'ID',
       licensing: 'Licensing',
       licenseKey: 'License Key',

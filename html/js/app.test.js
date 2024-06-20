@@ -754,3 +754,15 @@ test('dateAwareSort', () => {
     expect(items[i].dateOrder).toBe(items.length - i - 1);
   }
 });
+
+test('licenseExpiringSoon', () => {
+  const date = new Date();
+  app.licenseKey = { expiration: date.toISOString() };
+  expect(app.isLicenseExpiringSoon()).toBe(true);
+  
+  app.licenseKey = { expiration: "2024-01-01T01:01:01Z" };
+  expect(app.isLicenseExpiringSoon()).toBe(true);
+
+  app.licenseKey = { expiration: "2054-01-01T01:01:01Z" };
+  expect(app.isLicenseExpiringSoon()).toBe(false);
+});
