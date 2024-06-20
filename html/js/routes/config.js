@@ -63,11 +63,19 @@ routes.push({ path: '/config', name: 'config', component: {
   },
   methods: {
     processRouteParameters() {
+      if (this.$route.query.a == "1") {
+        this.advanced = true;
+      }
       if (this.$route.query.f) {
         this.search = this.$route.query.f;
       }
       if (this.$route.query.e == "1") {
         this.autoExpand = true;
+        if (this.advanced) {
+          this.$nextTick(() => {
+            this.autoExpand = true;
+          });
+        }
       }
       if (this.$route.query.s) {
         this.autoSelect = this.$route.query.s;
@@ -326,7 +334,7 @@ routes.push({ path: '/config', name: 'config', component: {
       }
       this.recomputeAvailableNodes(this.findActiveSetting());
       this.activeBackup = [...this.active];
-      this.showDuplicate = false; 
+      this.showDuplicate = false;
       this.showDefault = false;
       window.scrollTo(0,0);
     },
@@ -507,7 +515,7 @@ routes.push({ path: '/config', name: 'config', component: {
     },
     toggleDuplicate(setting) {
       this.duplicateId = this.suggestDuplicateName(setting);
-      this.showDuplicate = !this.showDuplicate; 
+      this.showDuplicate = !this.showDuplicate;
     },
     suggestDuplicateName(setting) {
       return setting.name + "_dup";

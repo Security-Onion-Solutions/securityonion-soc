@@ -9,11 +9,11 @@ require('./config.js');
 
 global.GridMemberAccepted = "accepted";
 
-const a = { 
-  category: 'general', 
-  id: 'fake.setting.foo', 
-  description: 'Nearby', 
-  title: 'Farout', 
+const a = {
+  category: 'general',
+  id: 'fake.setting.foo',
+  description: 'Nearby',
+  title: 'Farout',
   nodeValues: new Map(),
   regex: "True|False",
   regexFailureMessage: "Wrong!",
@@ -50,7 +50,7 @@ test('loadData', async () => {
   const expectedSettings = [{
       "advanced": undefined,
       "default": null,
-      "defaultAvailable": false, 
+      "defaultAvailable": false,
       "description": "Nearby",
       "duplicates": undefined,
       "file": undefined,
@@ -73,7 +73,7 @@ test('loadData', async () => {
     {
       "advanced": undefined,
       "default": undefined,
-      "defaultAvailable": undefined, 
+      "defaultAvailable": undefined,
       "description": "NADA",
       "duplicates": undefined,
       "file": undefined,
@@ -96,7 +96,7 @@ test('loadData', async () => {
     {
       "advanced": undefined,
       "default": undefined,
-      "defaultAvailable": undefined, 
+      "defaultAvailable": undefined,
       "description": "Cocoa",
       "duplicates": undefined,
       "file": undefined,
@@ -125,79 +125,79 @@ test('loadData', async () => {
           "children": [
             {
               "advanced": undefined,
-              "default": null, 
-              "defaultAvailable": false, 
-              "description": "Nearby", 
+              "default": null,
+              "defaultAvailable": false,
+              "description": "Nearby",
               "duplicates": undefined,
               "file": undefined,
-              "global": false, 
+              "global": false,
               "helpLink": undefined,
-              "id": "fake.setting.foo", 
-              "multiline": undefined, 
-              "name": "foo", 
-              "node": undefined, 
-              "nodeValues": m1, 
-              "readonly": undefined, 
+              "id": "fake.setting.foo",
+              "multiline": undefined,
+              "name": "foo",
+              "node": undefined,
+              "nodeValues": m1,
+              "readonly": undefined,
               "readonlyUi": undefined,
               "regex": "True|False",
               "regexFailureMessage": "Wrong!",
-              "sensitive": undefined, 
+              "sensitive": undefined,
               "syntax": undefined,
-              "title": "Farout", 
+              "title": "Farout",
               "value": null
-            }, 
+            },
             {
               "advanced": undefined,
               "default": undefined,
-              "defaultAvailable": undefined, 
-              "description": "Cocoa", 
+              "defaultAvailable": undefined,
+              "description": "Cocoa",
               "duplicates": undefined,
               "file": undefined,
-              "global": undefined, 
+              "global": undefined,
               "helpLink": undefined,
-              "id": "fake.setting.bar", 
-              "multiline": undefined, 
-              "name": "bar", 
-              "node": false, 
-              "nodeValues": new Map(), 
-              "readonly": undefined, 
+              "id": "fake.setting.bar",
+              "multiline": undefined,
+              "name": "bar",
+              "node": false,
+              "nodeValues": new Map(),
+              "readonly": undefined,
               "readonlyUi": undefined,
               "regex": undefined,
               "regexFailureMessage": undefined,
-              "sensitive": undefined, 
+              "sensitive": undefined,
               "syntax": undefined,
-              "title": "Barley", 
+              "title": "Barley",
               "value": undefined
             }
-          ], 
-          "id": "fake.setting", 
+          ],
+          "id": "fake.setting",
           "name": "setting"
         }
-      ], 
-      "id": "fake", 
+      ],
+      "id": "fake",
       "name": "fake"
-    }, 
+    },
     {
       "advanced": undefined,
       "default": undefined,
-      "defaultAvailable": undefined, 
-      "description": "NADA", 
+      "defaultAvailable": undefined,
+      "description": "NADA",
       "duplicates": undefined,
       "file": undefined,
-      "global": undefined, 
+      "global": undefined,
       "helpLink": undefined,
-      "id": "car", 
-      "multiline": undefined, 
-      "name": "car", 
-      "node": false, 
-      "nodeValues": new Map(), 
-      "readonly": undefined, 
+      "id": "car",
+      "multiline": undefined,
+      "name": "car",
+      "node": false,
+      "nodeValues": new Map(),
+      "readonly": undefined,
       "readonlyUi": undefined,
       "regex": undefined,
       "regexFailureMessage": undefined,
-      "sensitive": undefined, 
+      "sensitive": undefined,
       "syntax": undefined,
-      "title": "CCA", 
+      "title": "CCA",
       "value": undefined
     }
   ];
@@ -258,7 +258,7 @@ test('isPendingSave', () => {
   const values = new Map();
   values.set('bar', '123');
   const setting = { id: 'foo', value: "something", nodeValues: values};
-  
+
   // Form key is null, nothing pending
   var nodeId = null;
   expect(comp.isPendingSave(setting, nodeId)).toBe(false);
@@ -294,7 +294,7 @@ test('reset', () => {
 
 setupSettings = () => {
   comp.cancelDialog = true;
-  comp.nodes = [{id: "n1", status: GridMemberAccepted }, {id: "n1a", status: GridMemberAccepted }, 
+  comp.nodes = [{id: "n1", status: GridMemberAccepted }, {id: "n1a", status: GridMemberAccepted },
                 {id: "n2", name: "node2", role: "standalone", status: "accepted" }, {id:"n3", status: "pending" }];
 
   const nodeValues = new Map();
@@ -555,7 +555,7 @@ test('addNode', () => {
   expect(comp.settings[0].nodeValues.get('n2')).toBe(undefined);
   expect(comp.form.key).toBe("n1");
   expect(comp.form.value).toBe("touched-value");
-  expect(comp.cancelDialog).toBe(true);  
+  expect(comp.cancelDialog).toBe(true);
 });
 
 test('addToNode_Malformed', () => {
@@ -622,4 +622,65 @@ test('isReadOnly', () => {
   expect(comp.isReadOnly(setting)).toBe(true);
   setting.readonly = true;
   expect(comp.isReadOnly(setting)).toBe(true);
+});
+
+test('processRouteParameters', () => {
+  comp.$route.query = {
+    f: 'search',
+  };
+  comp.$nextTick = jest.fn();
+
+  comp.processRouteParameters();
+
+  expect(comp.search).toBe('search');
+  expect(comp.autoSelect).toBe('');
+  expect(comp.autoExpand).toBe(false);
+  expect(comp.searchFilter).toBe('search');
+  expect(comp.advanced).toBe(false);
+  expect(comp.$nextTick).toHaveBeenCalledTimes(0);
+
+  comp.search = '';
+  comp.searchFilter = '';
+  comp.$route.query = {
+    e: '1',
+  };
+
+  comp.processRouteParameters();
+
+  expect(comp.search).toBe('');
+  expect(comp.autoSelect).toBe('');
+  expect(comp.autoExpand).toBe(true);
+  expect(comp.searchFilter).toBe('');
+  expect(comp.advanced).toBe(false);
+  expect(comp.$nextTick).toHaveBeenCalledTimes(0);
+
+  comp.autoExpand = false;
+  comp.$route.query = {
+    a: '1',
+  };
+
+  comp.processRouteParameters();
+
+  expect(comp.search).toBe('');
+  expect(comp.autoSelect).toBe('');
+  expect(comp.autoExpand).toBe(false);
+  expect(comp.searchFilter).toBe('');
+  expect(comp.advanced).toBe(true);
+  expect(comp.$nextTick).toHaveBeenCalledTimes(0);
+
+  comp.advanced = false
+  comp.$route.query = {
+    a: '1',
+    e: '1',
+    f: 'search',
+  };
+
+  comp.processRouteParameters();
+
+  expect(comp.search).toBe('search');
+  expect(comp.autoSelect).toBe('');
+  expect(comp.autoExpand).toBe(true);
+  expect(comp.searchFilter).toBe('search');
+  expect(comp.advanced).toBe(true);
+  expect(comp.$nextTick).toHaveBeenCalledTimes(1);
 });
