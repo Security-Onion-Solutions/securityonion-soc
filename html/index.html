@@ -167,8 +167,12 @@
         <v-spacer></v-spacer>
         <div id="connection-indicator" v-if="!connected || reconnecting">
           <v-icon class="mr-2" color="warning">fa-satellite-dish</v-icon>
-          <span v-if="reconnecting" v-text="i18n.reconnecting"></span>
-          <span v-if="!reconnecting" v-text="i18n.disconnected"></span>
+          <span v-if="reconnecting" v-text="i18n.reconnecting" class="d-none d-md-inline" data-aid="reconnecting_notice"></span>
+          <span v-if="!reconnecting" v-text="i18n.disconnected" class="d-none d-md-inline" data-aid="disconnected_notice"></span>
+        </div>
+        <div id="license-indicator" v-else-if="isLicenseExpiringSoon()">
+          <v-icon class="mr-2" color="warning">fa-key</v-icon>
+          <span v-text="i18n.licenseExpiringSoon" class="d-none d-md-inline" data-aid="license_expiring_notice"></span>
         </div>
         <v-spacer></v-spacer>
         <v-menu bottom left offset-y>
