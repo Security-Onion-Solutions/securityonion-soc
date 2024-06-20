@@ -43,7 +43,7 @@ const i18n = {
       actionProcessChildInfo: 'Process and Child Info',
       actionProcessChildInfoHelp: 'Show all logs that include this process\'s entity_id in either the process.entity_id or process.parent.entity_id fields',
       actionProcessInfo: 'Process Info',
-      actionProcessInfoHelp: 'Show all logs that include this process\'s entity_id in the entity_id field',
+      actionProcessInfoHelp: 'Show all logs that include this process\'s entity_id in the process.entity_id field',
       actionRelatedAlerts: 'Related Alerts',
       actionRelatedAlertsHelp: 'Find alerts related to this detection',
       actionSublime: 'Sublime Platform Email Review',
