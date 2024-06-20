@@ -20,7 +20,7 @@ type CustomRuleset struct {
 
 func GetCustomRulesetsDefault(cfg map[string]interface{}, field string, dflt []*CustomRuleset) ([]*CustomRuleset, error) {
 	cfgInter, ok := cfg[field]
-	if !ok {
+	if !ok || cfgInter == nil {
 		// config doesn't have any customRulesets, no error, return defaults
 		return dflt, nil
 	}

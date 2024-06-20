@@ -47,6 +47,26 @@ func TestGetCustomRulesetsDefault(t *testing.T) {
 			Expected: []*CustomRuleset{},
 		},
 		{
+			Name: "Nil",
+			Cfg: map[string]interface{}{
+				"customRulesets": nil,
+			},
+			Default: []*CustomRuleset{
+				{
+					Ruleset: "default",
+					License: "DRL",
+					File:    "default.rules",
+				},
+			},
+			Expected: []*CustomRuleset{
+				{
+					Ruleset: "default",
+					License: "DRL",
+					File:    "default.rules",
+				},
+			},
+		},
+		{
 			Name: "Valid",
 			Cfg: map[string]interface{}{
 				"customRulesets": []interface{}{
