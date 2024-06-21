@@ -293,7 +293,7 @@ func TestValidate(t *testing.T) {
 	table := []struct {
 		Name        string
 		Input       string
-		ExpectedErr *string
+		ExpectedErr string
 	}{
 		{
 			Name:  "Valid Rule",
@@ -310,17 +310,17 @@ func TestValidate(t *testing.T) {
 		{
 			Name:        "Invalid Direction",
 			Input:       `alert http any any <-> any any (msg:"This rule has an invalid direction";)`,
-			ExpectedErr: util.Ptr("invalid direction, must be '<>' or '->', got <->"),
+			ExpectedErr: "invalid direction, must be '<>' or '->', got <->",
 		},
 		{
 			Name:        "Unexpected Suffix",
 			Input:       SimpleRule + "x",
-			ExpectedErr: util.Ptr("invalid rule, expected end of rule, got 1 more bytes"),
+			ExpectedErr: "invalid rule, expected end of rule, got 1 more bytes",
 		},
 		{
 			Name:        "Unexpected End of Rule",
 			Input:       "x",
-			ExpectedErr: util.Ptr("invalid rule, unexpected end of rule"),
+			ExpectedErr: "invalid rule, unexpected end of rule",
 		},
 		{
 			Name:  "Parentheses in Unquoted Option",
@@ -329,6 +329,29 @@ func TestValidate(t *testing.T) {
 		{
 			Name:  "Unescaped Double Quote in PCRE Option",
 			Input: `alert http $EXTERNAL_NET any -> $HOME_NET any (msg:"ET PHISHING Common Unhidebody Function Observed in Phishing Landing"; flow:established,to_client; file.data; content:"function unhideBody()"; nocase; fast_pattern; content:"var bodyElems = document.getElementsByTagName(|22|body|22|)|3b|"; nocase; content:"bodyElems[0].style.visibility =|20 22|visible|22 3b|"; nocase; distance:0; content:"onload=|22|unhideBody()|22|"; content:"method="; nocase; pcre:"/^["']?post/Ri"; classtype:social-engineering; sid:2029732; rev:2; metadata:affected_product Web_Browsers, attack_target Client_Endpoint, created_at 2020_03_24, deployment Perimeter, signature_severity Minor, tag Phishing, updated_at 2020_03_24;)`,
+		},
+		{
+			Name:  "Accidental Whitespace",
+			Input: SimpleRule + "\n",
+		},
+		{
+			Name:  "Excessive Whitespace",
+			Input: "\n\n" + SimpleRule + "\n\n",
+		},
+		{
+			Name:        "Rule w/ Comment",
+			Input:       "# This rule does X, Y, and Z\n" + SimpleRule,
+			ExpectedErr: "suricata rules must be a single line",
+		},
+		{
+			Name:        "Multiple Rules",
+			Input:       FlowbitsRuleA + "\n" + FlowbitsRuleB,
+			ExpectedErr: "suricata rules must be a single line",
+		},
+		{
+			Name:        "Multiple Rules, One Line",
+			Input:       FlowbitsRuleA + " " + FlowbitsRuleB,
+			ExpectedErr: "invalid rule, expected end of rule, got 126 more bytes",
 		},
 	}
 
@@ -340,7 +363,7 @@ func TestValidate(t *testing.T) {
 			mod := NewSuricataEngine(&server.Server{})
 
 			_, err := mod.ValidateRule(test.Input)
-			if test.ExpectedErr == nil {
+			if test.ExpectedErr == "" {
 				assert.NoError(t, err)
 
 				// this rule seems valid, attempt to parse, serialize, re-parse
@@ -350,7 +373,7 @@ func TestValidate(t *testing.T) {
 				_, err = ParseSuricataRule(parsed.String())
 				assert.NoError(t, err)
 			} else {
-				assert.Equal(t, *test.ExpectedErr, err.Error())
+				assert.Equal(t, test.ExpectedErr, err.Error())
 			}
 		})
 	}
