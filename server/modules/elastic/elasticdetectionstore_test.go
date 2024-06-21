@@ -122,6 +122,9 @@ func TestDetectionValidatePublicIdValid(t *testing.T) {
 	err := store.validatePublicId("12345", "test")
 	assert.NoError(t, err)
 
+	err = store.validatePublicId("123", "test")
+	assert.NoError(t, err)
+
 	err = store.validatePublicId("123456", "test")
 	assert.NoError(t, err)
 

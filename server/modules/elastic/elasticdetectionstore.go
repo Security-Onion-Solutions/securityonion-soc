@@ -68,7 +68,7 @@ func (store *ElasticDetectionstore) validateId(id string, label string) error {
 func (store *ElasticDetectionstore) validatePublicId(id string, label string) error {
 	var err error
 
-	isValidId := regexp.MustCompile(`^[A-Za-z0-9-_]{5,128}$`).MatchString
+	isValidId := regexp.MustCompile(`^[A-Za-z0-9-_]{3,128}$`).MatchString
 	if !isValidId(id) {
 		err = fmt.Errorf("invalid ID for %s", label)
 	}
