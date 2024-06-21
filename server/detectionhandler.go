@@ -277,6 +277,12 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	err = engine.ExtractDetails(detect)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
 	err = h.PrepareForSave(ctx, detect, engine)
 	if err != nil {
 		if err.Error() == "Object not found" {

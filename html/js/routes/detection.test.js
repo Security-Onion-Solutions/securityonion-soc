@@ -4,6 +4,8 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
+const { default: expect } = require('expect');
+
 require('../test_common.js');
 require('./detection.js');
 
@@ -474,4 +476,68 @@ test('cidrFormat', () => {
 	expect(cidrFormat('256.256.256.256/32')).toBe(comp.i18n.invalidCidrOrVar);
 	expect(cidrFormat('0::0::0/16')).toBe(comp.i18n.invalidCidrOrVar);
 	expect(cidrFormat('google.com')).toBe(comp.i18n.invalidCidrOrVar);
+});
+
+test('findHistoryChange', () => {
+	comp.history = [
+		{
+			"id": "oHypPJABXppUUuo3IHDO",
+			"createTime": "2024-06-21T17:17:14.951585268-04:00",
+			"updateTime": "2024-06-21T17:17:14.951616529-04:00",
+			"userId": "5ac4acbe-6299-463d-9449-9a728ec48ab8",
+			"kind": "detection",
+			"operation": "create",
+			"publicId": "aaca8e61-0365-4e50-8cee-6f7102a46b08",
+			"title": "test history",
+			"severity": "high",
+			"author": "matthew.wright@securityonionsolutions.com",
+			"description": "This should be a detailed description of what this Detection focuses on: what we are trying to find and why we are trying to find it.\n",
+			"content": "title: 'test history'\nid: aaca8e61-0365-4e50-8cee-6f7102a46b08\nstatus: 'experimental'\ndescription: |\n    This should be a detailed description of what this Detection focuses on: what we are trying to find and why we are trying to find it.\nreferences:\n  - 'https://local.invalid'\nauthor: '@SecurityOnion'\ndate: 'YYYY/MM/DD'\ntags:\n  - detection.threat_hunting\n  - attack.technique_id\nlogsource:\n  category: process_creation\n  product: windows\ndetection:\n  selection:\n    Image: 'whoami.exe'\n    User: 'backup'\n  condition: selection\nlevel: 'high'",
+			"isEnabled": false,
+			"isReporting": false,
+			"isCommunity": false,
+			"engine": "elastalert",
+			"language": "sigma",
+			"overrides": null,
+			"tags": null,
+			"ruleset": "__custom__",
+			"license": "Apache-2.0"
+		},
+		{
+			"id": "BHypPJABXppUUuo3UnEl",
+			"createTime": "2024-06-21T17:17:14.951585268-04:00",
+			"updateTime": "2024-06-21T17:17:27.563141416-04:00",
+			"userId": "5ac4acbe-6299-463d-9449-9a728ec48ab8",
+			"kind": "detection",
+			"operation": "update",
+			"publicId": "aaca8e61-0365-4e50-8cee-6f7102a46b08",
+			"title": "test history updated",
+			"severity": "high",
+			"author": "matthew.wright@securityonionsolutions.com",
+			"description": "This should be a detailed description of what this Detection focuses on: what we are trying to find and why we are trying to find it.\n",
+			"content": "title: 'test history updated'\nid: aaca8e61-0365-4e50-8cee-6f7102a46b08\nstatus: 'experimental'\ndescription: |\n    This should be a detailed description of what this Detection focuses on: what we are trying to find and why we are trying to find it.\nreferences:\n  - 'https://local.invalid'\nauthor: '@SecurityOnion'\ndate: 'YYYY/MM/DD'\ntags:\n  - detection.threat_hunting\n  - attack.technique_id\nlogsource:\n  category: process_creation\n  product: windows\ndetection:\n  selection:\n    Image: 'whoami.exe'\n    User: 'backup'\n  condition: selection\nlevel: 'high'",
+			"isEnabled": false,
+			"isReporting": false,
+			"isCommunity": false,
+			"engine": "elastalert",
+			"language": "sigma",
+			"overrides": [],
+			"tags": null,
+			"ruleset": "__custom__",
+			"license": "Apache-2.0"
+		}
+	];
+	expect(Object.keys(comp.changedKeys).length).toBe(0);
+	id = comp.history[1]['id'];
+	comp.findHistoryChange(id);
+	expect(comp.changedKeys[id]).toStrictEqual(['title']);
+});
+
+test('checkChangedKey', () => {
+	expect(Object.keys(comp.changedKeys).length).toBe(0);
+	let id = "BHypPJABXppUUuo3UnEl";
+	comp.changedKeys[id] = ['title', 'content'];
+	expect(comp.checkChangedKey(id, 'title')).toBe(true);
+	expect(comp.checkChangedKey(id, 'content')).toBe(true);
+	expect(comp.checkChangedKey(id, 'severity')).toBe(false);
 });

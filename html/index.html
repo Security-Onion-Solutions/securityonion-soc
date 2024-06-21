@@ -1612,7 +1612,7 @@
                 <v-row>
                   <v-col>
                     <v-toolbar class="elevation-0" fixed>
-                      <v-btn :title="i18n.refreshDetectionHistoryHelp" color="secondary" @click.stop="loadHistory()" id="refresh-history-button" data-aid="detection_history_refresh">
+                      <v-btn :title="i18n.refreshDetectionHistoryHelp" color="secondary" @click.stop="loadHistory(true)" id="refresh-history-button" data-aid="detection_history_refresh">
                         <v-icon>fa-sync</v-icon>
                       </v-btn>
                     </v-toolbar>
@@ -1626,7 +1626,7 @@
                     <template v-slot:item="{item, index, expand, isExpanded}">
                       <tr>
                         <td class="associated actions">
-                          <v-btn :id="`history-${index}-expand`" icon small @click="expand(!isExpanded)">
+                          <v-btn :id="`history-${index}-expand`" icon small @click="expand(!isExpanded); findHistoryChange(item.id)">
                             <v-icon v-if="isExpanded" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="detection_history_collapse">fa-angle-down</v-icon>
                             <v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="detection_history_expand">fa-angle-right</v-icon>
                           </v-btn>
@@ -1687,14 +1687,14 @@
                           </div>
                           <div>
                             <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label">{{ i18n.title }}:</span></v-col>
-                              <v-col cols="8"><span class="case">{{ props.item.title }}</span></v-col>
+                              <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'title') ? 'key-changed' : ''">{{ i18n.title }}:</span></v-col>
+                              <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'title') ? 'key-changed' : ''">{{ props.item.title }}</span></v-col>
                             </v-row>
                           </div>
                           <div>
                             <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label">{{ i18n.description }}:</span></v-col>
-                              <v-col cols="8"><span class="case">{{ props.item.description }}</span></v-col>
+                              <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'description') ? 'key-changed' : ''">{{ i18n.description }}:</span></v-col>
+                              <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'description') ? 'key-changed' : ''">{{ props.item.description }}</span></v-col>
                             </v-row>
                           </div>
                           <div>
@@ -1705,8 +1705,8 @@
                           </div>
                           <div>
                             <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label">{{ i18n.enabled }}:</span></v-col>
-                              <v-col cols="8"><span class="case">{{ props.item.isEnabled ? 'True' : 'False' }}</span></v-col>
+                              <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'isEnabled') ? 'key-changed' : ''">{{ i18n.enabled }}:</span></v-col>
+                              <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'isEnabled') ? 'key-changed' : ''">{{ props.item.isEnabled ? 'True' : 'False' }}</span></v-col>
                             </v-row>
                           </div>
                           <div>
@@ -1723,8 +1723,8 @@
                           </div>
                           <div>
                             <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label">{{ i18n.severity }}:</span></v-col>
-                              <v-col cols="8"><span class="case">{{ $root.correctCasing(props.item.severity) }}</span></v-col>
+                              <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'severity') ? 'key-changed' : ''">{{ i18n.severity }}:</span></v-col>
+                              <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'severity') ? 'key-changed' : ''">{{ $root.correctCasing(props.item.severity) }}</span></v-col>
                             </v-row>
                           </div>
                           <div>
@@ -1735,8 +1735,8 @@
                           </div>
                           <div>
                             <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label">{{ i18n.content }}:</span></v-col>
-                              <v-col cols="8"><span class="case">{{ props.item.content }}</span></v-col>
+                              <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'content') ? 'key-changed' : ''">{{ i18n.content }}:</span></v-col>
+                              <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'content') ? 'key-changed' : ''">{{ props.item.content }}</span></v-col>
                             </v-row>
                           </div>
 

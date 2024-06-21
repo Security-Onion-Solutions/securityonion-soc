@@ -139,6 +139,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				'sigma': 'elastalert',
 				'yara': 'strelka',
 			},
+			changedKeys: {},
 	}},
 	created() {
 		this.$root.initializeEditor();
@@ -494,17 +495,62 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.extractedCreated = yaml['date'];
 			this.extractedUpdated = yaml['modified'];
 		},
-		async loadHistory() {
+		async loadHistory(showLoadingIndicator = false) {
+			if (showLoadingIndicator) this.$root.startLoading();
+			
 			const id = this.$route.params.id;
 
 			const response = await this.$root.papi.get(`detection/${id}/history`);
 			if (response && response.data) {
 				this.history = response.data;
+				
+				//this.changedKeys[this.history[this.history.length - 1]['id']] = this.findHistoryChange(this.history);
 
 				for (var i = 0; i < this.history.length; i++) {
 					this.$root.populateUserDetails(this.history[i], "userId", "owner");
 				}
 			}
+			if (showLoadingIndicator) this.$root.stopLoading();
+		},
+		findHistoryChange(id) {
+			let retList = [];
+			
+			let index = this.history.findIndex((row) => row.id === id);
+
+			if (this.history.length > 1 && index !== 0) {	
+				let oldDict = JSON.parse(JSON.stringify(this.history[index - 1]));
+				let newDict = JSON.parse(JSON.stringify(this.history[index]));
+				let releventKeys = ['title', 'description', 'isEnabled', 'severity', 'content'];
+
+				if (oldDict['engine'] === 'elastalert') {
+					contentJsonOld = jsyaml.load(oldDict['content'], { schema: jsyaml.FAILSAFE_SCHEMA });
+					contentJsonNew = jsyaml.load(newDict['content'], { schema: jsyaml.FAILSAFE_SCHEMA });
+					
+					delete contentJsonOld['title'];
+					delete contentJsonOld['description'];
+					delete contentJsonOld['level'];
+					delete contentJsonNew['title'];
+					delete contentJsonNew['description'];
+					delete contentJsonNew['level'];
+					
+					oldDict['content'] = JSON.stringify(contentJsonOld);
+					newDict['content'] = JSON.stringify(contentJsonNew);
+				
+				} else if (oldDict['engine'] === 'suricata'){
+					oldDict['content'] = oldDict['content'].replaceAll(/\s/g,'').replaceAll('msg:"' + oldDict['title'].replaceAll(/\s/g,'') + '"', '').replaceAll('signature_severity' + oldDict['severity'].replaceAll(/\s/g,''), '');
+					newDict['content'] = newDict['content'].replaceAll(/\s/g,'').replaceAll('msg:"' + newDict['title'].replaceAll(/\s/g,'') + '"', '').replaceAll('signature_severity' + newDict['severity'].replaceAll(/\s/g,''), '');
+				} else {
+					oldDict['content'] = oldDict['content'].replaceAll(/\s/g,'').replaceAll('rule' + oldDict['title'].replaceAll(/\s/g,''), '').replaceAll('description="' + oldDict['description'].replaceAll(/\s/g,'') + '"', '');
+					newDict['content'] = newDict['content'].replaceAll(/\s/g,'').replaceAll('rule' + newDict['title'].replaceAll(/\s/g,''), '').replaceAll('description="' + newDict['description'].replaceAll(/\s/g,'') + '"', '');
+				}
+
+				for (let key of releventKeys) {
+					if (oldDict[key] !== newDict[key]) {
+						retList.push(key);
+					}
+				}
+			}
+			this.changedKeys[id] = retList;
 		},
 		getDefaultPreset(preset) {
 			if (this.presets) {
@@ -1286,5 +1332,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			return Prism.highlight(code, grammar, language);
 		},
+		checkChangedKey(id, key) {
+			return this.changedKeys[id]?.includes(key);
+		}
 	}
 }});
