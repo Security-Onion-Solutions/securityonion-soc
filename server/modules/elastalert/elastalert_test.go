@@ -28,6 +28,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/handmock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/elastalert/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
@@ -593,8 +594,8 @@ license: Elastic-2.0
 
 	mio := mock.NewMockIOManager(gomock.NewController(t))
 	mio.EXPECT().WalkDir(gomock.Eq("repo-path"), gomock.Any()).DoAndReturn(func(path string, fn fs.WalkDirFunc) error {
-		return fn("rules/so_soc_failed_login.yml", &MockDirEntry{
-			name: "so_soc_failed_login.yml",
+		return fn("rules/so_soc_failed_login.yml", &handmock.MockDirEntry{
+			Filename: "so_soc_failed_login.yml",
 		}, nil)
 	})
 	mio.EXPECT().ReadFile(gomock.Eq("rules/so_soc_failed_login.yml")).Return([]byte(data), nil)
@@ -783,44 +784,6 @@ falsepositives:
   - Unlikely`
 )
 
-type MockDirEntry struct {
-	name  string
-	isDir bool
-	typ   fs.FileMode
-}
-
-func (mde *MockDirEntry) Name() string {
-	return mde.name
-}
-
-func (mde *MockDirEntry) IsDir() bool {
-	return mde.isDir
-}
-
-func (mde *MockDirEntry) Type() fs.FileMode {
-	return mde.typ
-}
-
-func (mde *MockDirEntry) ModTime() time.Time {
-	return time.Now()
-}
-
-func (mde *MockDirEntry) Mode() fs.FileMode {
-	return mde.typ
-}
-
-func (mde *MockDirEntry) Size() int64 {
-	return 100
-}
-
-func (mde *MockDirEntry) Sys() any {
-	return nil
-}
-
-func (mde *MockDirEntry) Info() (fs.FileInfo, error) {
-	return mde, nil
-}
-
 func TestSyncElastAlert(t *testing.T) {
 	t.Parallel()
 
@@ -863,15 +826,15 @@ func TestSyncElastAlert(t *testing.T) {
 				// IndexExistingRules
 				filename := SimpleRuleSID + ".yml"
 				m.EXPECT().ReadDir(mod.elastAlertRulesFolder).Return([]fs.DirEntry{
-					&MockDirEntry{
-						name: filename,
+					&handmock.MockDirEntry{
+						Filename: filename,
 					},
-					&MockDirEntry{
-						name:  "ignored_dir",
-						isDir: true,
+					&handmock.MockDirEntry{
+						Filename: "ignored_dir",
+						Dir:      true,
 					},
-					&MockDirEntry{
-						name: "ignored.txt",
+					&handmock.MockDirEntry{
+						Filename: "ignored.txt",
 					},
 				}, nil)
 				// DeleteFile when disabling
@@ -1006,18 +969,18 @@ func TestGetDeployedPublicIds(t *testing.T) {
 	path := "path"
 
 	mio.EXPECT().ReadDir(path).Return([]fs.DirEntry{
-		&MockDirEntry{
-			name: "00000000-0000-0000-0000-000000000000.yml",
+		&handmock.MockDirEntry{
+			Filename: "00000000-0000-0000-0000-000000000000.yml",
 		},
-		&MockDirEntry{
-			name: "11111111-1111-1111-1111-111111111111.yaml",
+		&handmock.MockDirEntry{
+			Filename: "11111111-1111-1111-1111-111111111111.yaml",
 		},
-		&MockDirEntry{
-			name:  "ignored_dir",
-			isDir: true,
+		&handmock.MockDirEntry{
+			Filename: "ignored_dir",
+			Dir:      true,
 		},
-		&MockDirEntry{
-			name: "ignored.txt",
+		&handmock.MockDirEntry{
+			Filename: "ignored.txt",
 		},
 	}, nil)
 

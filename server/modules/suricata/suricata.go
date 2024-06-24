@@ -11,7 +11,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"math/rand/v2"
 	"os"
@@ -427,7 +426,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 			templateFound = true
 		}
 
-		rules, hash, err := readAndHash(e.communityRulesFile)
+		rules, hash, err := e.readAndHash(e.communityRulesFile)
 		if err != nil {
 			if e.notify {
 				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
@@ -447,7 +446,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 		}
 
 		if !forceSync {
-			fingerprint, haveFP, err := readFingerprint(e.rulesFingerprintFile)
+			fingerprint, haveFP, err := e.readFingerprint(e.rulesFingerprintFile)
 			if err != nil {
 				log.WithError(err).Error("unable to read rules fingerprint file")
 				continue
@@ -686,36 +685,25 @@ func (e *SuricataEngine) checkForMigrations() {
 	log.Info("done checking for suricata migrations")
 }
 
-func readAndHash(path string) (content string, sha256Hash string, err error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", "", err
-	}
-	defer f.Close()
-
-	hasher := sha256.New()
-	data := io.TeeReader(f, hasher)
-
-	raw, err := io.ReadAll(data)
+func (e *SuricataEngine) readAndHash(path string) (content string, sha256Hash string, err error) {
+	raw, err := e.ReadFile(path)
 	if err != nil {
 		return "", "", err
 	}
 
-	return string(raw), hex.EncodeToString(hasher.Sum(nil)), nil
+	rawHash := sha256.Sum256(raw)
+	hexHash := hex.EncodeToString(rawHash[:])
+
+	return string(raw), hexHash, nil
 }
 
-func readFingerprint(path string) (fingerprint *string, ok bool, err error) {
-	_, err = os.Stat(path)
+func (e *SuricataEngine) readFingerprint(path string) (fingerprint *string, ok bool, err error) {
+	raw, err := e.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, false, nil
 		}
 
-		return nil, false, err
-	}
-
-	raw, err := os.ReadFile(path)
-	if err != nil {
 		return nil, false, err
 	}
 
