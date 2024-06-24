@@ -17,6 +17,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/suricata/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -1738,6 +1739,152 @@ func TestReadCustomRulesets(t *testing.T) {
 			}
 
 			assert.Equal(t, test.ExpDetections, detects)
+		})
+	}
+}
+
+func TestIntegrityCheck(t *testing.T) {
+	// the configstore only needs to specify disabled and modify
+	tests := []struct {
+		Name     string
+		InitMock func(*mock.MockIOManager, *servermock.MockDetectionstore) (cfgStore *server.MemConfigStore)
+		DbnE     []string
+		EbnD     []string
+		ExpError error
+	}{
+		{
+			Name: "No Rules",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) (cfgStore *server.MemConfigStore) {
+				iom.EXPECT().ReadFile("allrules").Return([]byte{}, nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, opts ...model.GetAllOption) (map[string]*model.Detection, error) {
+					expected := []string{
+						`query AND so_detection.engine:"suricata"`,
+						`query AND so_detection.isEnabled:"true"`,
+					}
+
+					for i, opt := range opts {
+						value := opt("query", "so_")
+						assert.Equal(t, expected[i], value)
+					}
+
+					return map[string]*model.Detection{}, nil
+				})
+
+				return server.NewMemConfigStore(emptySettings())
+			},
+			DbnE: []string{},
+			EbnD: []string{},
+		},
+		{
+			Name: "1 Deployed, 0 Enabled",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) (cfgStore *server.MemConfigStore) {
+				iom.EXPECT().ReadFile("allrules").Return([]byte(SimpleRule), nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
+
+				return server.NewMemConfigStore(emptySettings())
+			},
+			DbnE:     []string{SimpleRuleSID},
+			EbnD:     []string{},
+			ExpError: detections.ErrIntCheckFailed,
+		},
+		{
+			Name: "0 Deployed, 1 Enabled",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) (cfgStore *server.MemConfigStore) {
+				iom.EXPECT().ReadFile("allrules").Return([]byte{}, nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+					SimpleRuleSID: {},
+				}, nil)
+
+				return server.NewMemConfigStore(emptySettings())
+			},
+			DbnE:     []string{},
+			EbnD:     []string{SimpleRuleSID},
+			ExpError: detections.ErrIntCheckFailed,
+		},
+		{
+			Name: "Deployed As Disabled",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) (cfgStore *server.MemConfigStore) {
+				iom.EXPECT().ReadFile("allrules").Return([]byte(SimpleRule+"\n"+FlowbitsRuleA), nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
+
+				return server.NewMemConfigStore([]*model.Setting{
+					{Id: "idstools.sids.disabled", Value: SimpleRuleSID},
+					{Id: "idstools.sids.modify", Value: FlowbitsRuleASID + " " + modifyFromTo},
+				})
+			},
+			DbnE: []string{},
+			EbnD: []string{},
+		},
+		{
+			Name: "Mix and Match Fail",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) (cfgStore *server.MemConfigStore) {
+				iom.EXPECT().ReadFile("allrules").Return([]byte(SimpleRule+"\n"+FlowbitsRuleA), nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+					SimpleRuleSID:    {},
+					FlowbitsRuleBSID: {},
+				}, nil)
+
+				return server.NewMemConfigStore(emptySettings())
+			},
+			DbnE:     []string{FlowbitsRuleASID},
+			EbnD:     []string{FlowbitsRuleBSID},
+			ExpError: detections.ErrIntCheckFailed,
+		},
+		{
+			Name: "Mix and Match Success",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) (cfgStore *server.MemConfigStore) {
+				iom.EXPECT().ReadFile("allrules").Return([]byte(SimpleRule+"\n"+FlowbitsRuleA+"\n"+FlowbitsRuleB), nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+					SimpleRuleSID:    {},
+					FlowbitsRuleASID: {},
+				}, nil)
+
+				return server.NewMemConfigStore([]*model.Setting{
+					{Id: "idstools.sids.disabled"},
+					{Id: "idstools.sids.modify", Value: FlowbitsRuleBSID + " " + modifyFromTo},
+				})
+			},
+			DbnE: []string{},
+			EbnD: []string{},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			detStore := servermock.NewMockDetectionstore(ctrl)
+			iom := mock.NewMockIOManager(ctrl)
+			cfgStore := test.InitMock(iom, detStore)
+
+			e := &SuricataEngine{
+				srv: &server.Server{
+					Configstore:    cfgStore,
+					Detectionstore: detStore,
+				},
+				allRulesFile: "allrules",
+				IOManager:    iom,
+			}
+
+			DbnE, EbnD, err := e.IntegrityCheck(false)
+
+			if test.ExpError != nil {
+				assert.Error(t, err)
+				assert.Equal(t, err, test.ExpError)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			assert.Equal(t, test.DbnE, DbnE)
+			assert.Equal(t, test.EbnD, EbnD)
 		})
 	}
 }
