@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
+	"github.com/apex/log"
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 )

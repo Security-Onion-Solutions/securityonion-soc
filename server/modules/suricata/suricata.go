@@ -315,7 +315,6 @@ func (e *SuricataEngine) watchCommunityRules() {
 	var writeNoRead *string
 
 	ctx := e.srv.Context
-	templateFound := false
 	checkMigrationsOnce := sync.OnceFunc(e.checkForMigrations)
 
 	lastImport, timerDur := detections.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Second*time.Duration(e.communityRulesImportFrequencySeconds))
@@ -395,35 +394,16 @@ func (e *SuricataEngine) watchCommunityRules() {
 
 		start := time.Now()
 
-		if !templateFound {
-			exists, err := e.srv.Detectionstore.DoesTemplateExist(ctx, "so-detection")
-			if err != nil {
-				log.WithError(err).Error("unable to check for detection index template")
-
-				if e.notify {
-					e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-						Engine: model.EngineNameSuricata,
-						Status: "error",
-					})
-				}
-
-				continue
+		tmplExists := detections.CheckTemplate(e.srv.Context, e.srv.Detectionstore)
+		if !tmplExists {
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+					Engine: model.EngineNameSuricata,
+					Status: "error",
+				})
 			}
 
-			if !exists {
-				log.Warn("detection index template does not exist, skipping import")
-
-				if e.notify {
-					e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-						Engine: model.EngineNameSuricata,
-						Status: "error",
-					})
-				}
-
-				continue
-			}
-
-			templateFound = true
+			continue
 		}
 
 		rules, hash, err := e.readAndHash(e.communityRulesFile)

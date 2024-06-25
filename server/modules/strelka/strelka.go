@@ -287,8 +287,6 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 	// publicId of a detection that was written but not read back
 	var writeNoRead *string
 
-	templateFound := false
-
 	lastImport, timerDur := detections.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Second*time.Duration(e.communityRulesImportFrequencySeconds))
 
 	for e.isRunning {
@@ -366,35 +364,16 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 
 		start := time.Now()
 
-		if !templateFound {
-			exists, err := e.srv.Detectionstore.DoesTemplateExist(e.srv.Context, "so-detection")
-			if err != nil {
-				log.WithError(err).Error("unable to check for detection index template")
-
-				if e.notify {
-					e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-						Engine: model.EngineNameStrelka,
-						Status: "error",
-					})
-				}
-
-				continue
+		tmplExists := detections.CheckTemplate(e.srv.Context, e.srv.Detectionstore)
+		if !tmplExists {
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+					Engine: model.EngineNameStrelka,
+					Status: "error",
+				})
 			}
 
-			if !exists {
-				log.Warn("detection index template does not exist, skipping import")
-
-				if e.notify {
-					e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-						Engine: model.EngineNameStrelka,
-						Status: "error",
-					})
-				}
-
-				continue
-			}
-
-			templateFound = true
+			continue
 		}
 
 		allRepos, anythingNew, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config)

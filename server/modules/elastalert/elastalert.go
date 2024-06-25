@@ -467,7 +467,6 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 	var writeNoRead *string
 
 	ctx := e.srv.Context
-	templateFound := false
 
 	lastImport, timerDur := detections.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Duration(e.communityRulesImportFrequencySeconds)*time.Second)
 
@@ -548,35 +547,16 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 
 		start := time.Now()
 
-		if !templateFound {
-			exists, err := e.srv.Detectionstore.DoesTemplateExist(ctx, "so-detection")
-			if err != nil {
-				log.WithError(err).Error("unable to check for detection index template")
-
-				if e.notify {
-					e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-						Engine: model.EngineNameElastAlert,
-						Status: "error",
-					})
-				}
-
-				continue
+		tmplExists := detections.CheckTemplate(e.srv.Context, e.srv.Detectionstore)
+		if !tmplExists {
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+					Engine: model.EngineNameElastAlert,
+					Status: "error",
+				})
 			}
 
-			if !exists {
-				log.Warn("detection index template does not exist, skipping import")
-
-				if e.notify {
-					e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-						Engine: model.EngineNameElastAlert,
-						Status: "error",
-					})
-				}
-
-				continue
-			}
-
-			templateFound = true
+			continue
 		}
 
 		var zips map[string][]byte
