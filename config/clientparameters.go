@@ -16,27 +16,27 @@ const DEFAULT_CHART_LABEL_OTHER_LIMIT = 10
 const DEFAULT_CHART_LABEL_FIELD_SEPARATOR = ", "
 
 type ClientParameters struct {
-	HuntingParams       HuntingParameters   `json:"hunt"`
-	AlertingParams      HuntingParameters   `json:"alerts"`
-	CasesParams         HuntingParameters   `json:"cases"`
-	CaseParams          CaseParameters      `json:"case"`
-	DashboardsParams    HuntingParameters   `json:"dashboards"`
-	JobParams           HuntingParameters   `json:"job"`
-	DetectionsParams    DetectionParameters `json:"detections"`
-	DetectionParams     DetectionParameters `json:"detection"`
-	DocsUrl             string              `json:"docsUrl"`
-	CheatsheetUrl       string              `json:"cheatsheetUrl"`
-	ReleaseNotesUrl     string              `json:"releaseNotesUrl"`
-	GridParams          GridParameters      `json:"grid"`
-	WebSocketTimeoutMs  int                 `json:"webSocketTimeoutMs"`
-	TipTimeoutMs        int                 `json:"tipTimeoutMs"`
-	ApiTimeoutMs        int                 `json:"apiTimeoutMs"`
-	CacheExpirationMs   int                 `json:"cacheExpirationMs"`
-	InactiveTools       []string            `json:"inactiveTools"`
-	Tools               []ClientTool        `json:"tools"`
-	CasesEnabled        bool                `json:"casesEnabled"`
-	EnableReverseLookup bool                `json:"enableReverseLookup"`
-	DetectionsEnabled   bool                `json:"detectionsEnabled"`
+	HuntingParams       HuntingParameters    `json:"hunt"`
+	AlertingParams      HuntingParameters    `json:"alerts"`
+	CasesParams         HuntingParameters    `json:"cases"`
+	CaseParams          CaseParameters       `json:"case"`
+	DashboardsParams    HuntingParameters    `json:"dashboards"`
+	JobParams           HuntingParameters    `json:"job"`
+	DetectionsParams    DetectionsParameters `json:"detections"`
+	DetectionParams     DetectionParameters  `json:"detection"`
+	DocsUrl             string               `json:"docsUrl"`
+	CheatsheetUrl       string               `json:"cheatsheetUrl"`
+	ReleaseNotesUrl     string               `json:"releaseNotesUrl"`
+	GridParams          GridParameters       `json:"grid"`
+	WebSocketTimeoutMs  int                  `json:"webSocketTimeoutMs"`
+	TipTimeoutMs        int                  `json:"tipTimeoutMs"`
+	ApiTimeoutMs        int                  `json:"apiTimeoutMs"`
+	CacheExpirationMs   int                  `json:"cacheExpirationMs"`
+	InactiveTools       []string             `json:"inactiveTools"`
+	Tools               []ClientTool         `json:"tools"`
+	CasesEnabled        bool                 `json:"casesEnabled"`
+	EnableReverseLookup bool                 `json:"enableReverseLookup"`
+	DetectionsEnabled   bool                 `json:"detectionsEnabled"`
 }
 
 func (config *ClientParameters) Verify() error {
@@ -190,15 +190,23 @@ type GridParameters struct {
 	StaleMetricsMs uint64 `json:"staleMetricsMs,omitempty"`
 }
 
-type DetectionParameters struct {
+type DetectionsParameters struct {
 	HuntingParameters
 	Presets              map[string]PresetParameters `json:"presets"`
-	SeverityTranslations map[string]string           `json:"severityTranslations"`
 }
 
-func (params *DetectionParameters) Verify() error {
+type DetectionParameters struct {
+	Presets              map[string]PresetParameters `json:"presets"`
+	SeverityTranslations map[string]string           `json:"severityTranslations"`
+	TemplateDetections   map[string]string           `json:"templateDetections"`
+}
+
+func (params *DetectionsParameters) Verify() error {
 	err := params.HuntingParameters.Verify()
 
 	return err
+}
 
+func (params *DetectionParameters) Verify() error {
+	return nil
 }

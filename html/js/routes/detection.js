@@ -47,9 +47,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				fileNotEmpty: value => (value == null || value.size > 0) || this.$root.i18n.fileEmpty,
 				fileRequired: value => (value != null) || this.$root.i18n.required,
 				cidrFormat: value => (!value ||
+					/^!?\$[a-z_][a-z0-9_]*$/i.test(value) || // Suricata variable
 					/^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\/(3[0-2]|[12]\d|\d)$/.test(value) || // IPv4 CIDR
-					/^((([0-9A-Fa-f]{1,4}:){7}([0-9A-Fa-f]{1,4}|:))|(([0-9A-Fa-f]{1,4}:){6}(:[0-9A-Fa-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){5}(((:[0-9A-Fa-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){4}(((:[0-9A-Fa-f]{1,4}){1,3})|((:[0-9A-Fa-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){3}(((:[0-9A-Fa-f]{1,4}){1,4})|((:[0-9A-Fa-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){2}(((:[0-9A-Fa-f]{1,4}){1,5})|((:[0-9A-Fa-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){1}(((:[0-9A-Fa-f]{1,4}){1,6})|((:[0-9A-Fa-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9A-Fa-f]{1,4}){1,7})|((:[0-9A-Fa-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(%.+)?\s*(\/([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8]))$/.test(value) // IPv6 CIDR
-				) || this.i18n.invalidCidr,
+					/^((([0-9a-f]{1,4}:){7}([0-9a-f]{1,4}|:))|(([0-9a-f]{1,4}:){6}(:[0-9a-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){5}(((:[0-9a-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){4}(((:[0-9a-f]{1,4}){1,3})|((:[0-9a-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){3}(((:[0-9a-f]{1,4}){1,4})|((:[0-9a-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){2}(((:[0-9a-f]{1,4}){1,5})|((:[0-9a-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){1}(((:[0-9a-f]{1,4}){1,6})|((:[0-9a-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9a-f]{1,4}){1,7})|((:[0-9a-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(%.+)?\s*(\/([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8]))$/i.test(value) // IPv6 CIDR
+				) || this.i18n.invalidCidrOrVar,
 			},
 			panel: [0, 1, 2],
 			activeTab: '',
@@ -58,20 +59,30 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			sortBy: 'createdAt',
 			sortDesc: false,
 			expanded: [],
-			overrideHeaders: [
-				{ text: 'Enabled', value: 'isEnabled' },
-				{ text: 'Type', value: 'type' },
-				{ text: 'Track', value: 'track' },
-				{ text: 'Created', value: 'createdAt', format: true },
-				{ text: 'Updated', value: 'updatedAt', format: true },
-			],
+			overrideHeaders: {
+				'elastalert': [
+					{ text: this.$root.i18n.enabled, value: 'isEnabled' },
+					{ text: this.$root.i18n.type, value: 'type' },
+					{ text: this.$root.i18n.track, value: 'track' },
+					{ text: this.$root.i18n.dateCreated, value: 'createdAt', format: true },
+					{ text: this.$root.i18n.dateModified, value: 'updatedAt', format: true },
+				],
+				'strelka': [], // no overrides
+				'suricata': [
+					{ text: this.$root.i18n.enabled, value: 'isEnabled' },
+					{ text: this.$root.i18n.type, value: 'type' },
+					{ text: this.$root.i18n.ipVar, value: 'ip' },
+					{ text: this.$root.i18n.dateCreated, value: 'createdAt', format: true },
+					{ text: this.$root.i18n.dateModified, value: 'updatedAt', format: true },
+				],
+			},
 			zone: moment.tz.guess(),
 			newOverride: null,
 			newOverrideValid: false,
 			thresholdTypes: [
-				{ value: 'threshold', text: 'Threshold' },
-				{ value: 'limit', text: 'Limit' },
-				{ value: 'both', text: 'Both' }
+				{ value: 'threshold', text: this.$root.i18n.threshold },
+				{ value: 'limit', text: this.$root.i18n.limit },
+				{ value: 'both', text: this.$root.i18n.both }
 			],
 			historyTableOpts: {
 				sortBy: 'updateTime',
@@ -93,6 +104,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			extractedSummary: '',
 			extractedReferences: [],
 			extractedLogic: '',
+			extractedLogicClass: '',
 			history: [],
 			extractedCreated: '',
 			extractedUpdated: '',
@@ -121,8 +133,15 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			convertedRule: '',
 			confirmDeleteDialog: false,
 			showDirtySourceDialog: false,
+			ruleTemplates: {},
+			languageToEngine: {
+				'suricata': 'suricata',
+				'sigma': 'elastalert',
+				'yara': 'strelka',
+			},
 	}},
 	created() {
+		this.$root.initializeEditor();
 		this.onDetectionChange = debounce(this.onDetectionChange, 300);
 	},
 	watch: {
@@ -135,12 +154,16 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			});
 		this.$root.loadParameters('detection', this.initDetection);
 	},
+	updated() {
+		Prism.highlightAll();
+	},
 	methods: {
 		async initDetection(params) {
 			this.params = params;
 			this.presets = params['presets'];
 			this.renderAbbreviatedCount = params["renderAbbreviatedCount"];
 			this.severityTranslations = params['severityTranslations'];
+			this.ruleTemplates = params['templateDetections'];
 
 			if (this.$route.params.id === 'create') {
 				this.detect = this.newDetection();
@@ -221,6 +244,13 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					}
 
 					break;
+				case 'elastalert':
+					const yaml = jsyaml.load(this.detect.content, { schema: jsyaml.FAILSAFE_SCHEMA });
+					if (yaml.description) {
+						this.extractedSummary = yaml.description;
+						break;
+					}
+					// else fall through
 				default:
 					if (this.detect.description) {
 						this.extractedSummary = this.detect.description;
@@ -304,16 +334,20 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		extractLogic() {
 			this.extractedLogic = '';
+			this.extractedLogicClass = '';
 
 			switch (this.detect.engine) {
 				case 'suricata':
 					this.extractSuricataLogic();
+					this.extractedLogicClass = 'language-suricata-logic';
 					break;
 				case 'strelka':
 					this.extractStrelkaLogic();
+					this.extractedLogicClass = 'language-yara';
 					break;
 				case 'elastalert':
 					this.extractElastAlertLogic();
+					this.extractedLogicClass = 'language-yaml';
 					break;
 			}
 		},
@@ -813,6 +847,27 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				}
 			}
 		},
+		async onNewDetectionLanguageChange() {
+			const lang = (this.detect.language || '').toLowerCase();
+			const engine = this.languageToEngine[lang];
+
+			if (engine) {
+				let publicId = '';
+
+				if (engine !== 'strelka') {
+					try {
+						const response = await this.$root.papi.get(`detection/${engine}/genpublicid`);
+						publicId = response.data.publicId;
+					} catch (error) {
+						this.$root.showError(error);
+					}
+				}
+
+				this.detect.content = this.ruleTemplates[engine].replaceAll('[publicId]', publicId);
+			}
+
+			this.onDetectionChange();
+		},
 		onDetectionChange() {
 			if (this.detect.engine) {
 				this.extractPublicID();
@@ -874,13 +929,13 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			switch (engine) {
 				case 'suricata':
 					return [
-						{ value: 'modify', text: 'Modify' },
-						{ value: 'suppress', text: 'Suppress' },
-						{ value: 'threshold', text: 'Threshold' }
+						{ value: 'modify', text: this.i18n.modify },
+						{ value: 'suppress', text: this.i18n.suppress },
+						{ value: 'threshold', text: this.i18n.threshold }
 					];
 				case 'elastalert':
 					return [
-						{ value: 'customFilter', text: 'Custom Filter' }
+						{ value: 'customFilter', text: this.i18n.customFilter }
 					];
 			}
 
@@ -1022,16 +1077,12 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			el.scrollIntoView()
 			el.focus();
 		},
-		async reloadComments(showLoadingIndicator = false) {
+		async loadComments(showLoadingIndicator = false) {
 			if (showLoadingIndicator) this.$root.startLoading();
-			this.comments = [];
-			await this.loadComments();
-			if (showLoadingIndicator) this.$root.stopLoading();
-		},
-		async loadComments() {
 			try {
 				const response = await this.$root.papi.get(`detection/${this.detect.id}/comment`);
 				if (response && response.data) {
+					this.comments = [];
 					for (var idx = 0; idx < response.data.length; idx++) {
 						const obj = response.data[idx];
 
@@ -1052,6 +1103,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				}
 			} catch (error) {
 				this.$root.showError(error);
+			} finally {
+				if (showLoadingIndicator) this.$root.stopLoading();
 			}
 		},
 		async addComment() {
@@ -1085,7 +1138,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 				if (response && response.data) {
 					if (isUpdate) {
-						this.reloadComments();
+						this.loadComments();
 					} else {
 						await this.$root.populateUserDetails(response.data, "userId", "owner");
 						this.comments.push(response.data);
@@ -1209,6 +1262,29 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				return ref.valid;
 			}
 			return true;
+		},
+		highlighter(code) {
+			let grammar = null;
+			let language = null;
+
+			switch ((this.detect.language || '').toLowerCase()) {
+				case 'sigma':
+					grammar = Prism.languages.yaml;
+					language = 'yaml';
+					break;
+				case 'suricata':
+					grammar = Prism.languages.suricata;
+					language = 'suricata';
+					break;
+				case 'yara':
+					grammar = Prism.languages.yara;
+					language = 'yara';
+					break;
+				default:
+					return code;
+			}
+
+			return Prism.highlight(code, grammar, language);
 		},
 	}
 }});

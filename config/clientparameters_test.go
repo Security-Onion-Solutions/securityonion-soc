@@ -91,3 +91,10 @@ func TestVerifyCaseParams(tester *testing.T) {
 	assert.Nil(tester, err)
 	assert.Equal(tester, params.MostRecentlyUsedLimit, 0)
 }
+
+func TestVerifyDetectionsParams(t *testing.T) {
+	params := &DetectionsParameters{}
+	err := params.Verify()
+	assert.Nil(t, err)
+	verifyInitialHuntingParams(t, &params.HuntingParameters)
+}

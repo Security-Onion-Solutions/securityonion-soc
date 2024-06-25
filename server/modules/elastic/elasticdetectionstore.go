@@ -68,7 +68,7 @@ func (store *ElasticDetectionstore) validateId(id string, label string) error {
 func (store *ElasticDetectionstore) validatePublicId(id string, label string) error {
 	var err error
 
-	isValidId := regexp.MustCompile(`^[A-Za-z0-9-_]{5,128}$`).MatchString
+	isValidId := regexp.MustCompile(`^[A-Za-z0-9-_]{3,128}$`).MatchString
 	if !isValidId(id) {
 		err = fmt.Errorf("invalid ID for %s", label)
 	}
@@ -516,6 +516,12 @@ func (store *ElasticDetectionstore) UpdateDetection(ctx context.Context, detect 
 		return nil, err
 	}
 
+	// prepareForSave clears Id creating a side effect for the caller
+	id := detect.Id
+	defer func() {
+		detect.Id = id
+	}()
+
 	results, err := store.save(ctx, detect, "detection", store.prepareForSave(ctx, &detect.Auditable))
 	if err != nil {
 		return nil, err
@@ -619,19 +625,11 @@ func (store *ElasticDetectionstore) DeleteDetection(ctx context.Context, id stri
 	return detect, err
 }
 
-func (store *ElasticDetectionstore) GetAllDetections(ctx context.Context, engine *model.EngineName, isEnabled *bool, isCommunity *bool) (map[string]*model.Detection, error) {
+func (store *ElasticDetectionstore) GetAllDetections(ctx context.Context, opts ...model.GetAllOption) (map[string]*model.Detection, error) {
 	query := fmt.Sprintf(`_index:"%s" AND %skind:"%s"`, store.index, store.schemaPrefix, "detection")
 
-	if engine != nil {
-		query += fmt.Sprintf(` AND %sdetection.engine:"%s"`, store.schemaPrefix, *engine)
-	}
-
-	if isEnabled != nil {
-		query += fmt.Sprintf(` AND %sdetection.isEnabled:%t`, store.schemaPrefix, *isEnabled)
-	}
-
-	if isCommunity != nil {
-		query += fmt.Sprintf(` AND %sdetection.isCommunity:%t`, store.schemaPrefix, *isCommunity)
+	for _, opt := range opts {
+		query = opt(query, store.schemaPrefix)
 	}
 
 	all, err := store.Query(ctx, query, -1)

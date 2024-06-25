@@ -534,7 +534,7 @@ test('isDetectionsUnhealthy', () => {
   verifyEngineFailureStates(false, false, false, false, false, false, true, true, true, true);
   verifyEngineFailureStates(false, false, false, false, false, false, false, true, true, true);
   verifyEngineFailureStates(false, false, false, false, false, false, false, false, true, true);
-  
+
   // Healthy
   verifyEngineFailureStates(false, false, false, false, false, false, false, false, false, false);
 
@@ -658,7 +658,7 @@ test('getDetectionEngineStatus', () => {
 
 test('isAttentionNeeded', () => {
   app.connected =  true;
-  app.currentStatus = { 
+  app.currentStatus = {
     detections: {
       elastalert: {
         integrityFailure: false,
@@ -708,3 +708,61 @@ test('isAttentionNeeded', () => {
   // Back to normal
   expect(app.isAttentionNeeded()).toBe(false);
 })
+
+test('dateAwareSort', () => {
+  let items = [
+    { string: 'May 28, 2024 10:00:00 AM', createTime: 'May 28, 2024 10:00:00 AM', strOrder: 1, dateOrder: 0 },
+    { string: 'May 28, 2024 11:00:00 AM', createTime: 'May 28, 2024 11:00:00 AM', strOrder: 2, dateOrder: 1 },
+    { string: 'May 28, 2024 12:00:00 PM', createTime: 'May 28, 2024 12:00:00 PM', strOrder: 3, dateOrder: 2 },
+    { string: 'May 28, 2024 1:00:00 PM', createTime: 'May 28, 2024 1:00:00 PM', strOrder: 0, dateOrder: 3 },
+    { string: 'May 28, 2024 2:00:00 PM', createTime: 'May 28, 2024 2:00:00 PM', strOrder: 4, dateOrder: 4 },
+  ];
+  let index = ["string"];
+  let isDesc = [false];
+
+  app.dateAwareSort(items, index, isDesc);
+
+  for (let i = 0; i < items.length; i++) {
+    expect(items[i].strOrder).toBe(i);
+  }
+
+  // Reverse the sort
+  isDesc = [true];
+
+  app.dateAwareSort(items, index, isDesc);
+
+  for (let i = 0; i < items.length; i++) {
+    expect(items[i].strOrder).toBe(items.length - i - 1);
+  }
+
+  // revert order, change sortby
+  index = ["createTime"];
+  isDesc = [false];
+
+  app.dateAwareSort(items, index, isDesc);
+
+  for (let i = 0; i < items.length; i++) {
+    expect(items[i].dateOrder).toBe(i);
+  }
+
+  // Reverse the sort
+  isDesc = [true];
+
+  app.dateAwareSort(items, index, isDesc);
+
+  for (let i = 0; i < items.length; i++) {
+    expect(items[i].dateOrder).toBe(items.length - i - 1);
+  }
+});
+
+test('licenseExpiringSoon', () => {
+  const date = new Date();
+  app.licenseKey = { expiration: date.toISOString() };
+  expect(app.isLicenseExpiringSoon()).toBe(true);
+  
+  app.licenseKey = { expiration: "2024-01-01T01:01:01Z" };
+  expect(app.isLicenseExpiringSoon()).toBe(true);
+
+  app.licenseKey = { expiration: "2054-01-01T01:01:01Z" };
+  expect(app.isLicenseExpiringSoon()).toBe(false);
+});

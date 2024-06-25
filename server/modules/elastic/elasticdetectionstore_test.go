@@ -15,6 +15,7 @@ import (
 	modmock "github.com/security-onion-solutions/securityonion-soc/server/modules/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/tidwall/gjson"
 )
@@ -119,6 +120,9 @@ func TestDetectionValidatePublicIdValid(t *testing.T) {
 	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
 
 	err := store.validatePublicId("12345", "test")
+	assert.NoError(t, err)
+
+	err = store.validatePublicId("123", "test")
 	assert.NoError(t, err)
 
 	err = store.validatePublicId("123456", "test")
@@ -693,6 +697,7 @@ func TestUpdateDetectionValid(t *testing.T) {
 	reqDet.UpdateTime = nil
 	reqDet.Overrides = nil
 	detWithoutId.CreateTime = nil
+	detWithoutId.Id = ""
 	assert.Equal(t, detWithoutId, reqDet)
 
 	body, err := io.ReadAll(reqs[1].Body)
@@ -1091,12 +1096,12 @@ func TestGetAllCommunitySIDs(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
-	sids, err := store.GetAllDetections(ctx, nil, nil, nil)
+	sids, err := store.GetAllDetections(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(sids))
 	assert.NotNil(t, sids["ABC123"])
 
-	sids, err = store.GetAllDetections(ctx, util.Ptr(model.EngineName("suricata")), nil, nil)
+	sids, err = store.GetAllDetections(ctx, model.WithEngine(model.EngineNameSuricata))
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(sids))
 	assert.NotNil(t, sids["ABC123"])

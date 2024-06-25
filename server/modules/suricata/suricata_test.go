@@ -7,6 +7,7 @@ package suricata
 
 import (
 	"context"
+	"errors"
 	"regexp"
 	"sort"
 	"strings"
@@ -16,8 +17,10 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/suricata/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -290,7 +293,7 @@ func TestValidate(t *testing.T) {
 	table := []struct {
 		Name        string
 		Input       string
-		ExpectedErr *string
+		ExpectedErr string
 	}{
 		{
 			Name:  "Valid Rule",
@@ -307,17 +310,17 @@ func TestValidate(t *testing.T) {
 		{
 			Name:        "Invalid Direction",
 			Input:       `alert http any any <-> any any (msg:"This rule has an invalid direction";)`,
-			ExpectedErr: util.Ptr("invalid direction, must be '<>' or '->', got <->"),
+			ExpectedErr: "invalid direction, must be '<>' or '->', got <->",
 		},
 		{
 			Name:        "Unexpected Suffix",
 			Input:       SimpleRule + "x",
-			ExpectedErr: util.Ptr("invalid rule, expected end of rule, got 1 more bytes"),
+			ExpectedErr: "invalid rule, expected end of rule, got 1 more bytes",
 		},
 		{
 			Name:        "Unexpected End of Rule",
 			Input:       "x",
-			ExpectedErr: util.Ptr("invalid rule, unexpected end of rule"),
+			ExpectedErr: "invalid rule, unexpected end of rule",
 		},
 		{
 			Name:  "Parentheses in Unquoted Option",
@@ -326,6 +329,29 @@ func TestValidate(t *testing.T) {
 		{
 			Name:  "Unescaped Double Quote in PCRE Option",
 			Input: `alert http $EXTERNAL_NET any -> $HOME_NET any (msg:"ET PHISHING Common Unhidebody Function Observed in Phishing Landing"; flow:established,to_client; file.data; content:"function unhideBody()"; nocase; fast_pattern; content:"var bodyElems = document.getElementsByTagName(|22|body|22|)|3b|"; nocase; content:"bodyElems[0].style.visibility =|20 22|visible|22 3b|"; nocase; distance:0; content:"onload=|22|unhideBody()|22|"; content:"method="; nocase; pcre:"/^["']?post/Ri"; classtype:social-engineering; sid:2029732; rev:2; metadata:affected_product Web_Browsers, attack_target Client_Endpoint, created_at 2020_03_24, deployment Perimeter, signature_severity Minor, tag Phishing, updated_at 2020_03_24;)`,
+		},
+		{
+			Name:  "Accidental Whitespace",
+			Input: SimpleRule + "\n",
+		},
+		{
+			Name:  "Excessive Whitespace",
+			Input: "\n\n" + SimpleRule + "\n\n",
+		},
+		{
+			Name:        "Rule w/ Comment",
+			Input:       "# This rule does X, Y, and Z\n" + SimpleRule,
+			ExpectedErr: "suricata rules must be a single line",
+		},
+		{
+			Name:        "Multiple Rules",
+			Input:       FlowbitsRuleA + "\n" + FlowbitsRuleB,
+			ExpectedErr: "suricata rules must be a single line",
+		},
+		{
+			Name:        "Multiple Rules, One Line",
+			Input:       FlowbitsRuleA + " " + FlowbitsRuleB,
+			ExpectedErr: "invalid rule, expected end of rule, got 126 more bytes",
 		},
 	}
 
@@ -337,7 +363,7 @@ func TestValidate(t *testing.T) {
 			mod := NewSuricataEngine(&server.Server{})
 
 			_, err := mod.ValidateRule(test.Input)
-			if test.ExpectedErr == nil {
+			if test.ExpectedErr == "" {
 				assert.NoError(t, err)
 
 				// this rule seems valid, attempt to parse, serialize, re-parse
@@ -347,7 +373,7 @@ func TestValidate(t *testing.T) {
 				_, err = ParseSuricataRule(parsed.String())
 				assert.NoError(t, err)
 			} else {
-				assert.Equal(t, *test.ExpectedErr, err.Error())
+				assert.Equal(t, test.ExpectedErr, err.Error())
 			}
 		})
 	}
@@ -770,6 +796,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 			InitialSettings: emptySettings(),
 			Detections: []*model.Detection{
 				{
+					Auditable:   model.Auditable{Id: "1"},
 					PublicID:    SimpleRuleSID,
 					Content:     SimpleRule,
 					IsEnabled:   true,
@@ -777,7 +804,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 				},
 			},
 			InitMock: func(detStore *servermock.MockDetectionstore) {
-				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
 				detStore.EXPECT().CreateDetection(gomock.Any(), gomock.Any()).Return(nil, nil)
 			},
 			ExpectedSettings: map[string]string{
@@ -792,6 +819,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 			InitialSettings: emptySettings(),
 			Detections: []*model.Detection{
 				{
+					Auditable:   model.Auditable{Id: "1"},
 					PublicID:    SimpleRuleSID,
 					Content:     SimpleRule,
 					IsEnabled:   true,
@@ -800,12 +828,57 @@ func TestSyncCommunitySuricata(t *testing.T) {
 			},
 			ChangedByUser: true,
 			InitMock: func(detStore *servermock.MockDetectionstore) {
-				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
 				detStore.EXPECT().CreateDetection(gomock.Any(), gomock.Any()).Return(nil, nil)
 			},
 			ExpectedSettings: map[string]string{
 				"idstools.sids.enabled":            SimpleRuleSID,
 				"idstools.sids.disabled":           "",
+				"idstools.sids.modify":             "",
+				"suricata.thresholding.sids__yaml": "{}\n",
+			},
+		},
+		{
+			Name: "update existing community rule",
+			InitialSettings: []*model.Setting{
+				{Id: "idstools.rules.local__rules", Value: SimpleRule},
+				{Id: "idstools.sids.enabled"},
+				{Id: "idstools.sids.disabled"},
+				{Id: "idstools.sids.modify"},
+				{Id: "suricata.thresholding.sids__yaml"},
+			},
+			Detections: []*model.Detection{
+				{
+					Auditable:   model.Auditable{Id: "1"},
+					PublicID:    SimpleRuleSID,
+					Content:     SimpleRule,
+					IsEnabled:   false,
+					IsCommunity: true,
+				},
+			},
+			ChangedByUser: true,
+			InitMock: func(detStore *servermock.MockDetectionstore) {
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+					SimpleRuleSID: {
+						Auditable:   model.Auditable{Id: "1"},
+						PublicID:    SimpleRuleSID,
+						Content:     SimpleRule,
+						IsEnabled:   true,
+						IsCommunity: true,
+					},
+				}, nil)
+				detStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).Return(&model.Detection{
+					Auditable:   model.Auditable{Id: "1"},
+					PublicID:    SimpleRuleSID,
+					Content:     SimpleRule,
+					IsEnabled:   false,
+					IsCommunity: true,
+				}, nil)
+			},
+			ExpectedSettings: map[string]string{
+				"idstools.rules.local__rules":      SimpleRule,
+				"idstools.sids.enabled":            "",
+				"idstools.sids.disabled":           SimpleRuleSID,
 				"idstools.sids.modify":             "",
 				"suricata.thresholding.sids__yaml": "{}\n",
 			},
@@ -838,6 +911,10 @@ func TestSyncCommunitySuricata(t *testing.T) {
 
 			assert.Equal(t, test.ExpectedErr, err)
 			assert.Equal(t, test.ExpectedErrMap, errMap)
+
+			for _, det := range test.Detections {
+				assert.NotEmpty(t, det.Id)
+			}
 
 			set, err := mCfgStore.GetSettings(ctx)
 			assert.NoError(t, err, "GetSettings should not return an error")
@@ -1500,4 +1577,167 @@ func TestRemoveFromIndex(t *testing.T) {
 		"100000": 0,
 		"300000": 2,
 	}, localIndex)
+}
+
+func TestReadCustomRulesets(t *testing.T) {
+	tests := []struct {
+		Name          string
+		Rulesets      []*model.CustomRuleset
+		InitMock      func(io *mock.MockIOManager)
+		ExpDetections []*model.Detection
+		ExpError      string
+	}{
+		{
+			Name:          "Empty",
+			Rulesets:      []*model.CustomRuleset{},
+			ExpDetections: []*model.Detection{},
+		},
+		{
+			Name: "Simple File",
+			Rulesets: []*model.CustomRuleset{
+				{
+					Community: true,
+					License:   "DRL",
+					File:      "testdata/simple.rules",
+					Ruleset:   "ruleset",
+				},
+			},
+			InitMock: func(io *mock.MockIOManager) {
+				io.EXPECT().ReadFile("testdata/simple.rules").Return([]byte(SimpleRule), nil)
+			},
+			ExpDetections: []*model.Detection{
+				{
+					PublicID: SimpleRuleSID,
+
+					Title:       "GPL ATTACK_RESPONSE id check returned root",
+					Severity:    model.SeverityUnknown,
+					Author:      "ruleset",
+					Category:    "GPL ATTACK_RESPONSE",
+					Content:     "alert http any any -> any any (msg:\"GPL ATTACK_RESPONSE id check returned root\"; content:\"uid=0|28|root|29|\"; classtype:bad-unknown; sid:10000; rev:7; metadata:created_at 2010_09_23, updated_at 2010_09_23;)",
+					IsEnabled:   true,
+					IsCommunity: true,
+					Engine:      model.EngineNameSuricata,
+					Language:    model.SigLangSuricata,
+					Ruleset:     "ruleset",
+					License:     "DRL",
+				},
+			},
+		},
+		{
+			Name: "Simple URL",
+			Rulesets: []*model.CustomRuleset{
+				{
+					Community:  true,
+					License:    "DRL",
+					Url:        "x",
+					TargetFile: "target.file",
+					Ruleset:    "ruleset",
+				},
+			},
+			InitMock: func(io *mock.MockIOManager) {
+				io.EXPECT().ReadFile("/nsm/rules/detect-suricata/custom_temp/target.file").Return([]byte(SimpleRule), nil)
+			},
+			ExpDetections: []*model.Detection{
+				{
+					PublicID: SimpleRuleSID,
+
+					Title:       "GPL ATTACK_RESPONSE id check returned root",
+					Severity:    model.SeverityUnknown,
+					Author:      "ruleset",
+					Category:    "GPL ATTACK_RESPONSE",
+					Content:     "alert http any any -> any any (msg:\"GPL ATTACK_RESPONSE id check returned root\"; content:\"uid=0|28|root|29|\"; classtype:bad-unknown; sid:10000; rev:7; metadata:created_at 2010_09_23, updated_at 2010_09_23;)",
+					IsEnabled:   true,
+					IsCommunity: true,
+					Engine:      model.EngineNameSuricata,
+					Language:    model.SigLangSuricata,
+					Ruleset:     "ruleset",
+					License:     "DRL",
+				},
+			},
+		},
+		{
+			Name: "Bad File, Good Url",
+			Rulesets: []*model.CustomRuleset{
+				{
+					Community:  true,
+					License:    "DRL",
+					Url:        "x",
+					TargetFile: "target.file",
+					Ruleset:    "ruleset",
+				},
+				{
+					Community: true,
+					License:   "DRL",
+					File:      "testdata/simple.rules",
+					Ruleset:   "ruleset",
+				},
+			},
+			InitMock: func(io *mock.MockIOManager) {
+				io.EXPECT().ReadFile("/nsm/rules/detect-suricata/custom_temp/target.file").Return([]byte(SimpleRule), nil)
+				io.EXPECT().ReadFile("testdata/simple.rules").Return(nil, errors.New("bad file"))
+			},
+			ExpError: "bad file",
+		},
+		{
+			Name: "Bad Url, Good File",
+			Rulesets: []*model.CustomRuleset{
+				{
+					Community: true,
+					License:   "DRL",
+					File:      "testdata/simple.rules",
+					Ruleset:   "ruleset",
+				},
+				{
+					Community:  true,
+					License:    "DRL",
+					Url:        "x",
+					TargetFile: "target.file",
+					Ruleset:    "ruleset",
+				},
+			},
+			InitMock: func(io *mock.MockIOManager) {
+				io.EXPECT().ReadFile("testdata/simple.rules").Return([]byte(SimpleRule), nil)
+				io.EXPECT().ReadFile("/nsm/rules/detect-suricata/custom_temp/target.file").Return(nil, errors.New("bad file"))
+			},
+			ExpError: "bad file",
+		},
+		{
+			Name: "Bad Custom Ruleset",
+			Rulesets: []*model.CustomRuleset{
+				{},
+			},
+			ExpError: "invalid custom ruleset",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			io := mock.NewMockIOManager(ctrl)
+
+			e := &SuricataEngine{
+				customRulesets: test.Rulesets,
+				IOManager:      io,
+				isRunning:      true,
+			}
+
+			if test.InitMock != nil {
+				test.InitMock(io)
+			}
+
+			detects, err := e.ReadCustomRulesets()
+
+			if test.ExpError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), test.ExpError)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			assert.Equal(t, test.ExpDetections, detects)
+		})
+	}
 }

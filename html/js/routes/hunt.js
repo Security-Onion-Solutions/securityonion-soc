@@ -22,7 +22,10 @@ const huntComponent = {
     params: null,
     category: '',
     advanced: false,
+    queryAltered: false,
     query: '',
+    querySearch: '',
+    queryRemainder: '',
     queries: [],
     queryBaseFilter: "",
     queryName: '',
@@ -99,6 +102,7 @@ const huntComponent = {
     mruCases: [],
 
     autohunt: true,
+    showFullQuery: true,
 
     filterRouteInclude: "",
     filterRouteExclude: "",
@@ -146,10 +150,12 @@ const huntComponent = {
     bulkActions: [
       { text: this.$root.i18n.enable, value: 'enable' },
       { text: this.$root.i18n.disable, value: 'disable' },
+      { text: this.$root.i18n.delete, value: 'delete' },
     ],
     quickActionDetId: null,
     presets: {},
     manualSyncTargetEngine: null,
+    showBulkDeleteConfirmDialog: false,
   }},
   created() {
     this.$root.initializeCharts();
@@ -286,6 +292,19 @@ const huntComponent = {
       } else {
         return [];
       }
+    },
+    reconstructQuery() {
+      if (this.isAdvanced() && !this.showFullQuery) {
+        this.query = this.querySearch + " " + this.queryRemainder;
+      }
+    },
+    submitQuery() {
+      this.reconstructQuery();
+      this.hunt();
+    },
+    queryModified() {
+      this.reconstructQuery();
+      return this.notifyInputsChanged();
     },
     notifyInputsChanged(replaceHistory = false) {
       var hunted = false;
@@ -723,8 +742,21 @@ const huntComponent = {
       }
       return item;
     },
+    getDisplayedQueryVar() {
+      if (this.isAdvanced()) {
+        if (this.showFullQuery) {
+          return 'query'
+        } else {
+          return 'querySearch'
+        }
+      }
+      return 'queryName'
+    },
     obtainQueryDetails() {
+      this.queryAltered = false;
       this.queryName = "";
+      this.querySearch = "";
+      this.queryRemainder = "";
       this.queryFilters = [];
       this.queryGroupBys = [];
       this.queryGroupByOptions = [];
@@ -763,7 +795,11 @@ const huntComponent = {
         }
 
         if (segments.length > 0) {
-          var search = segments[0].trim();
+          this.querySearch = segments[0].trim();
+          if (segments.length > 1) {
+            // Used for reconstructing full query from simplified filter-only view
+            this.queryRemainder = this.query.substring(segmentDelimIdx);
+          }
           var matchingQueryName = this.i18n.custom;
           for (var i = 0; i < this.queries.length; i++) {
             if (this.query == this.queries[i].query) {
@@ -771,7 +807,7 @@ const huntComponent = {
             }
           }
           this.queryName = matchingQueryName;
-          search.split(" AND ").forEach(function(item, index) {
+          this.querySearch.split(" AND ").forEach(function(item, index) {
             item = item.trim();
             if (item.length > 0 && item != "*") {
               route.queryFilters.push(item);
@@ -2186,8 +2222,15 @@ const huntComponent = {
 
       this.selectedCount = count;
     },
-    async bulkAction() {
+    async bulkAction(confirmed) {
       let payload = {};
+
+      if (this.selectedAction === 'delete' && !confirmed) {
+        this.showBulkDeleteConfirmDialog = true;
+        return;
+      }
+
+      this.showBulkDeleteConfirmDialog = false;
 
       switch (this.selectAllState) {
         case true:
@@ -2206,14 +2249,26 @@ const huntComponent = {
       }
 
       try {
-        await this.$root.papi.post('detection/bulk/' + this.selectedAction, payload);
-      } catch (e) {
-        this.$root.handleError(e);
-      } finally {
+        const request = await this.$root.papi.post('detection/bulk/' + this.selectedAction, payload);
+
+        let msg = this.i18n.bulkActionStarted;
+        if (this.selectedAction === 'delete') {
+          msg = this.i18n.bulkActionDeleteStarted;
+        }
+
+        msg = msg.replace('{total}', request.data.count.toLocaleString());
+
+        this.$root.showTip(msg);
+
         this.selectAllState = false;
         this.selectedCount = 0;
         this.hunt(false);
+      } catch (e) {
+        this.$root.showError(e);
       }
+    },
+    bulkDeleteDialogCancel() {
+      this.showBulkDeleteConfirmDialog = false;
     },
     bulkUpdateReport(stats) {
       if (stats.error > 0) {
@@ -2244,7 +2299,8 @@ const huntComponent = {
 
         t += seconds.toFixed(0) + 's';
 
-        let msg = this.i18n.bulkSuccess;
+        let msg = stats.verb === 'delete' ? this.i18n.bulkSuccessDelete : this.i18n.bulkSuccessUpdate;
+
         msg = msg.replaceAll('{modified}', stats.modified.toLocaleString());
         msg = msg.replaceAll('{total}', stats.total.toLocaleString());
         msg = msg.replaceAll('{time}', t);

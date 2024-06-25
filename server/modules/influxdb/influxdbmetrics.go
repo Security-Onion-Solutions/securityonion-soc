@@ -72,8 +72,8 @@ type InfluxDBMetrics struct {
 	diskUsedElasticGB        map[string]float64
 	diskUsedInfluxDbGB       map[string]float64
 	highstateAgeSeconds      map[string]int
-	lksEnabled               map[string]int
 	fpsEnabled               map[string]int
+	lksEnabled               map[string]int
 }
 
 func NewInfluxDBMetrics(srv *server.Server) *InfluxDBMetrics {
@@ -303,8 +303,8 @@ func (metrics *InfluxDBMetrics) updateOsStatus() {
 		identity := 1.0
 
 		metrics.osNeedsRestart = metrics.convertValuesToInt(metrics.fetchLatestValuesByHost("os", "restart", "", ""))
-		metrics.lksEnabled = metrics.convertValuesToInt(metrics.fetchLatestValuesByHost("features", "lks", "", ""))
 		metrics.fpsEnabled = metrics.convertValuesToInt(metrics.fetchLatestValuesByHost("features", "fps", "", ""))
+		metrics.lksEnabled = metrics.convertValuesToInt(metrics.fetchLatestValuesByHost("features", "lks", "", ""))
 		metrics.osUptime = metrics.convertValuesToInt(metrics.fetchLatestValuesByHost("system", "uptime", "", ""))
 		metrics.diskTotalRootGB = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("disk", "total", "", "|> filter(fn: (r) => r[\"path\"] == \"/\")"), bytesToGB)
 		metrics.diskUsedRootPct = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("disk", "used_percent", "", "|> filter(fn: (r) => r[\"path\"] == \"/\")"), identity)
@@ -495,13 +495,14 @@ func (metrics *InfluxDBMetrics) UpdateNodeMetrics(ctx context.Context, node *mod
 		node.DiskUsedElasticGB = metrics.diskUsedElasticGB[node.Id]
 		node.DiskUsedInfluxDbGB = metrics.diskUsedInfluxDbGB[node.Id]
 		node.HighstateAgeSeconds = metrics.highstateAgeSeconds[node.Id]
-		node.LksEnabled = metrics.lksEnabled[node.Id]
 		node.FpsEnabled = metrics.fpsEnabled[node.Id]
+		node.LksEnabled = metrics.lksEnabled[node.Id]
 
 		enhancedStatusEnabled := (metrics.client != nil)
 		status = node.UpdateOverallStatus(enhancedStatusEnabled)
 
 		licensing.ValidateFeature(licensing.FEAT_FPS, node.FpsEnabled == 1)
+		licensing.ValidateFeature(licensing.FEAT_GMD, node.IsProcessRunning("so-kafka"))
 		licensing.ValidateFeature(licensing.FEAT_LKS, node.LksEnabled == 1)
 	}
 	return status

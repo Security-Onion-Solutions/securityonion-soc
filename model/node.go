@@ -8,6 +8,8 @@ package model
 
 import (
 	"time"
+
+	"github.com/security-onion-solutions/securityonion-soc/json"
 )
 
 const NodeRoleDesktop = "so-desktop"
@@ -69,6 +71,7 @@ type Node struct {
 	DiskUsedElasticGB    float64   `json:"diskUsedElasticGB"`
 	DiskUsedInfluxDbGB   float64   `json:"diskUsedInfluxDbGB"`
 	HighstateAgeSeconds  int       `json:"highstateAgeSeconds"`
+	GmdEnabled           int       `json:"gmdEnabled"`
 	LksEnabled           int       `json:"lksEnabled"`
 	FpsEnabled           int       `json:"fpsEnabled"`
 }
@@ -143,4 +146,29 @@ func (node *Node) UpdateOverallStatus(enhancedStatusEnabled bool) bool {
 	node.Status = newStatus
 	node.MetricsEnabled = enhancedStatusEnabled
 	return oldStatus != node.Status
+}
+
+func (node *Node) IsProcessRunning(match string) bool {
+	nodeStatus := NodeStatus{}
+	err := json.LoadJson([]byte(node.ProcessJson), &nodeStatus)
+	if err != nil {
+		return false
+	}
+	for _, process := range nodeStatus.Containers {
+		if process.Name == match {
+			return process.Status == "running"
+		}
+	}
+	return false
+}
+
+type NodeStatus struct {
+	StatusCode int             `json:"status_code"`
+	Containers []ProcessStatus `json:"containers"`
+}
+
+type ProcessStatus struct {
+	Name    string `json:"Name"`
+	Status  string `json:"Status"`
+	Details string `json:"Details"`
 }

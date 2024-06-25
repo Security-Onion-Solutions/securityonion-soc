@@ -10,6 +10,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -17,6 +19,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -126,10 +129,14 @@ func checkRulesetEnabled(e *ElastAlertEngine, det *model.Detection) {
 }
 
 func NewElastAlertEngine(srv *server.Server) *ElastAlertEngine {
-	return &ElastAlertEngine{
-		srv:       srv,
-		IOManager: &ResourceManager{},
+	engine := &ElastAlertEngine{
+		srv: srv,
 	}
+
+	resMan := &ResourceManager{Engine: engine}
+	engine.IOManager = resMan
+
+	return engine
 }
 
 func (e *ElastAlertEngine) PrerequisiteModules() []string {
@@ -572,9 +579,6 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			templateFound = true
 		}
 
-		allRepos := map[string]*model.RuleRepo{}
-		var repoChanges bool
-
 		var zips map[string][]byte
 		var errMap map[string]error
 		var regenNeeded bool
@@ -610,9 +614,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			continue
 		}
 
-		var dirtyRepos map[string]*detections.DirtyRepo
-
-		dirtyRepos, repoChanges, err = detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos)
+		dirtyRepos, repoChanges, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config)
 		if err != nil {
 			if strings.Contains(err.Error(), "module stopped") {
 				break
@@ -628,10 +630,6 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			}
 
 			continue
-		}
-
-		for k, v := range dirtyRepos {
-			allRepos[k] = v.Repo
 		}
 
 		zipHashes := map[string]string{}
@@ -707,7 +705,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			break
 		}
 
-		repoDets, errMap := e.parseRepoRules(allRepos)
+		repoDets, errMap := e.parseRepoRules(dirtyRepos)
 		if errMap != nil {
 			log.WithField("sigmaParseError", errMap).Error("something went wrong while parsing sigma rule files from repos")
 		}
@@ -717,6 +715,8 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 		}
 
 		detects = append(detects, repoDets...)
+
+		detects = detections.DeduplicateByPublicId(detects)
 
 		errMap, err = e.syncCommunityDetections(ctx, detects)
 		if err != nil {
@@ -857,10 +857,12 @@ func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detections 
 		}
 	}()
 
-	for pkg, zipData := range pkgZips {
+	for _, pkg := range e.sigmaRulePackages {
 		if !e.isRunning {
 			return nil, map[string]error{"module": errModuleStopped}
 		}
+
+		zipData := pkgZips[pkg]
 
 		reader, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
 		if err != nil {
@@ -918,7 +920,7 @@ func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detections 
 	return detections, errMap
 }
 
-func (e *ElastAlertEngine) parseRepoRules(allRepos map[string]*model.RuleRepo) (detections []*model.Detection, errMap map[string]error) {
+func (e *ElastAlertEngine) parseRepoRules(allRepos []*detections.RepoOnDisk) (detections []*model.Detection, errMap map[string]error) {
 	errMap = map[string]error{} // map[repoName]error
 	defer func() {
 		if len(errMap) == 0 {
@@ -926,14 +928,14 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos map[string]*model.RuleRepo) (
 		}
 	}()
 
-	for repopath, repo := range allRepos {
+	for _, repo := range allRepos {
 		if !e.isRunning {
 			return nil, map[string]error{"module": errModuleStopped}
 		}
 
-		baseDir := repopath
-		if repo.Folder != nil {
-			baseDir = filepath.Join(baseDir, *repo.Folder)
+		baseDir := repo.Path
+		if repo.Repo.Folder != nil {
+			baseDir = filepath.Join(baseDir, *repo.Repo.Folder)
 		}
 
 		err := e.WalkDir(baseDir, func(path string, d fs.DirEntry, err error) error {
@@ -967,16 +969,16 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos map[string]*model.RuleRepo) (
 				return nil
 			}
 
-			ruleset := filepath.Base(repopath)
+			ruleset := filepath.Base(repo.Path)
 
-			det := rule.ToDetection(ruleset, repo.License, repo.Community)
+			det := rule.ToDetection(ruleset, repo.Repo.License, repo.Repo.Community)
 
 			detections = append(detections, det)
 
 			return nil
 		})
 		if err != nil {
-			log.WithError(err).WithField("elastAlertRuleRepo", repopath).Error("Failed to walk repo")
+			log.WithError(err).WithField("elastAlertRuleRepo", repo.Path).Error("Failed to walk repo")
 			continue
 		}
 	}
@@ -990,7 +992,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 		return nil, err
 	}
 
-	community, err := e.srv.Detectionstore.GetAllDetections(ctx, util.Ptr(model.EngineNameElastAlert), nil, util.Ptr(true))
+	community, err := e.srv.Detectionstore.GetAllDetections(ctx, model.WithEngine(model.EngineNameElastAlert), model.WithCommunity(true))
 	if err != nil {
 		return nil, err
 	}
@@ -1003,16 +1005,6 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 		path, ok := existing[det.PublicID]
 		if ok {
 			index[det.PublicID] = path
-		}
-	}
-
-	// carry forward existing overrides
-	for i := range detects {
-		det := detects[i]
-
-		comDet, exists := community[det.PublicID]
-		if exists {
-			det.Overrides = comDet.Overrides
 		}
 	}
 
@@ -1333,7 +1325,7 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 	return query, nil
 }
 
-func (e *ElastAlertEngine) generateUnusedPublicId(ctx context.Context) (string, error) {
+func (e *ElastAlertEngine) GenerateUnusedPublicId(ctx context.Context) (string, error) {
 	id := uuid.New().String()
 
 	i := 0
@@ -1359,7 +1351,7 @@ func (e *ElastAlertEngine) generateUnusedPublicId(ctx context.Context) (string, 
 }
 
 func (e *ElastAlertEngine) DuplicateDetection(ctx context.Context, detection *model.Detection) (*model.Detection, error) {
-	id, err := e.generateUnusedPublicId(ctx)
+	id, err := e.GenerateUnusedPublicId(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1601,7 +1593,7 @@ func (e *ElastAlertEngine) IntegrityCheck(canInterrupt bool) error {
 		return detections.ErrIntCheckerStopped
 	}
 
-	ret, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, util.Ptr(model.EngineNameElastAlert), util.Ptr(true), nil)
+	ret, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, model.WithEngine(model.EngineNameElastAlert), model.WithEnabled(true))
 	if err != nil {
 		logger.WithError(err).Error("unable to query for enabled detections")
 		return detections.ErrIntCheckFailed
@@ -1666,7 +1658,10 @@ func (e *ElastAlertEngine) getDeployedPublicIds() (publicIds []string, err error
 // go install go.uber.org/mock/mockgen@latest
 //go:generate mockgen -destination mock/mock_iomanager.go -package mock . IOManager
 
-type ResourceManager struct{}
+type ResourceManager struct {
+	Engine  *ElastAlertEngine
+	_client *http.Client
+}
 
 func (_ *ResourceManager) ReadFile(path string) ([]byte, error) {
 	return os.ReadFile(path)
@@ -1684,8 +1679,47 @@ func (_ *ResourceManager) ReadDir(path string) ([]os.DirEntry, error) {
 	return os.ReadDir(path)
 }
 
-func (_ *ResourceManager) MakeRequest(req *http.Request) (*http.Response, error) {
-	return http.DefaultClient.Do(req)
+func (resman *ResourceManager) MakeRequest(req *http.Request) (*http.Response, error) {
+	if resman._client == nil {
+		// cache for reuse, the config values can't change without a server restart
+		resman._client = resman.buildHttpClient()
+	}
+
+	return resman._client.Do(req)
+}
+
+func (resman *ResourceManager) buildHttpClient() *http.Client {
+	transport := &http.Transport{}
+
+	if resman.Engine.srv.Config.Proxy != "" {
+		p, err := url.Parse(resman.Engine.srv.Config.Proxy)
+		if err != nil {
+			log.WithError(err).WithField("proxy", resman.Engine.srv.Config.Proxy).Error("unable to parse proxy URL, not using proxy")
+		} else {
+			transport.Proxy = http.ProxyURL(p)
+		}
+	}
+
+	if resman.Engine.srv.Config.InsecureSkipVerify {
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
+
+	if resman.Engine.srv.Config.AdditionalCA != "" {
+		if transport.TLSClientConfig == nil {
+			transport.TLSClientConfig = &tls.Config{}
+		}
+
+		pool, err := x509.SystemCertPool()
+		if err != nil {
+			pool = x509.NewCertPool()
+		}
+
+		pool.AppendCertsFromPEM([]byte(resman.Engine.srv.Config.AdditionalCA))
+
+		transport.TLSClientConfig.RootCAs = pool
+	}
+
+	return &http.Client{Transport: transport}
 }
 
 func (_ *ResourceManager) ExecCommand(cmd *exec.Cmd) (output []byte, exitCode int, runtime time.Duration, err error) {

@@ -13,10 +13,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 
 	"github.com/apex/log"
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/transport"
 )
 
 var doubleQuoteEscaper = regexp.MustCompile(`\\([\s\S])|(")`)
@@ -106,13 +108,14 @@ func WriteStateFile(iom IOManager, path string) {
 	}
 }
 
-type DirtyRepo struct {
-	WasModified bool
+type RepoOnDisk struct {
 	Repo        *model.RuleRepo
+	Path        string
+	WasModified bool
 }
 
-func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.RuleRepo) (allRepos map[string]*DirtyRepo, anythingNew bool, err error) {
-	allRepos = map[string]*DirtyRepo{} // map[repoPath]repo
+func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.RuleRepo, cfg *config.ServerConfig) (allRepos []*RepoOnDisk, anythingNew bool, err error) {
+	allRepos = make([]*RepoOnDisk, 0, len(rulesRepos))
 
 	// read existing repos
 	entries, err := os.ReadDir(baseRepoFolder)
@@ -146,12 +149,19 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 		_, lastFolder := path.Split(parser.Path)
 		repoPath := filepath.Join(baseRepoFolder, lastFolder)
 
-		dirty := &DirtyRepo{
+		dirty := &RepoOnDisk{
 			Repo: repo,
+			Path: repoPath,
 		}
 
-		allRepos[repoPath] = dirty
+		allRepos = append(allRepos, dirty)
 		reclone := false
+
+		proxyOpts, err := proxyToTransportOptions(cfg.Proxy)
+		if err != nil {
+			log.WithError(err).WithField("proxy", cfg.Proxy).Error("failed to parse proxy URL, not using the proxy")
+			// no return here, not a bug
+		}
 
 		_, ok := existingRepos[lastFolder]
 		if ok {
@@ -187,19 +197,21 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 			}
 
 			ctx, cancel = context.WithTimeout(context.Background(), time.Minute*5)
+			defer cancel()
 
 			err = work.PullContext(ctx, &git.PullOptions{
-				Depth:        1,
-				SingleBranch: true,
+				Depth:           1,
+				SingleBranch:    true,
+				ProxyOptions:    proxyOpts,
+				CABundle:        []byte(cfg.AdditionalCA),
+				InsecureSkipTLS: cfg.InsecureSkipVerify,
 			})
 			if err != nil && err != git.NoErrAlreadyUpToDate {
-				cancel()
 				log.WithError(err).WithField("repoPath", repoPath).Error("failed to pull repo, doing nothing with it")
 				reclone = true
 
 				goto skippull
 			}
-			cancel()
 
 			if err == nil {
 				anythingNew = true
@@ -224,9 +236,12 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 		if !ok || reclone {
 			// repo does not exist or was just deleted, clone
 			_, err = git.PlainClone(repoPath, false, &git.CloneOptions{
-				Depth:        1,
-				SingleBranch: true,
-				URL:          repo.Repo,
+				Depth:           1,
+				SingleBranch:    true,
+				URL:             repo.Repo,
+				ProxyOptions:    proxyOpts,
+				CABundle:        []byte(cfg.AdditionalCA),
+				InsecureSkipTLS: cfg.InsecureSkipVerify,
 			})
 			if err != nil {
 				log.WithError(err).WithField("repoPath", repoPath).Error("failed to clone repo, doing nothing with it")
@@ -250,6 +265,32 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 	}
 
 	return allRepos, anythingNew, nil
+}
+
+func proxyToTransportOptions(proxy string) (transport.ProxyOptions, error) {
+	if proxy == "" {
+		return transport.ProxyOptions{}, nil
+	}
+
+	p, err := url.Parse(proxy)
+	if err != nil {
+		return transport.ProxyOptions{}, err
+	}
+
+	if p.Scheme == "" {
+		p.Scheme = "http"
+	}
+
+	username := p.User.Username()
+	password, _ := p.User.Password()
+
+	p.User = nil
+
+	return transport.ProxyOptions{
+		URL:      p.String(),
+		Username: username,
+		Password: password,
+	}, nil
 }
 
 func CheckWriteNoRead(ctx context.Context, DetStore GetterByPublicId, writeNoRead *string) (shouldFail bool) {
@@ -312,4 +353,28 @@ func AddUser(previous string, user *model.User, sep string) string {
 
 func EscapeDoubleQuotes(str string) string {
 	return doubleQuoteEscaper.ReplaceAllString(str, "\\$1$2")
+}
+
+func DeduplicateByPublicId(detects []*model.Detection) []*model.Detection {
+	set := map[string]*model.Detection{}
+	deduped := make([]*model.Detection, 0, len(detects))
+
+	for _, detect := range detects {
+		existing, inSet := set[detect.PublicID]
+		if inSet {
+			log.WithFields(log.Fields{
+				"publicId":         detect.PublicID,
+				"engine":           detect.Engine,
+				"existingRuleset":  existing.Ruleset,
+				"duplicateRuleset": detect.Ruleset,
+				"existingTitle":    existing.Title,
+				"duplicateTitle":   detect.Title,
+			}).Warn("duplicate publicId found, skipping")
+		} else {
+			set[detect.PublicID] = detect
+			deduped = append(deduped, detect)
+		}
+	}
+
+	return deduped
 }

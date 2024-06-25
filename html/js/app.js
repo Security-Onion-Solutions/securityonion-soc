@@ -15,6 +15,8 @@ const LICENSE_STATUS_INVALID = "invalid";
 const LICENSE_STATUS_PENDING = "pending";
 const LICENSE_STATUS_UNPROVISIONED = "unprovisioned";
 
+const LICENSE_EXPIRES_SOON_DAYS = 45;
+
 const UNREALISTIC_AGE = 1700000000; // About 54 years
 
 const USER_PASSWORD_LENGTH_MIN = 8;
@@ -86,6 +88,7 @@ $(document).ready(function() {
       parameterCallback: null,
       parameterSection: null,
       chartsInitialized: false,
+      editorInitialized: false,
       tools: [],
       casesEnabled: false,
       detectionsEnabled: false,
@@ -308,6 +311,16 @@ $(document).ready(function() {
           this.removeSearchParam('r');
         }
       },
+      isLicenseExpiringSoon() {
+        if (this.licenseStatus == LICENSE_STATUS_ACTIVE && this.licenseKey.expiration) {
+          const now = Date.now();
+          const exp = Date.parse(this.licenseKey.expiration);
+          const timeToExpirationMs = exp - now;
+          const minTimeToExpirationMs = LICENSE_EXPIRES_SOON_DAYS * 24 * 60 * 60 * 1000;
+          return timeToExpirationMs < minTimeToExpirationMs;
+        }
+        return false;
+      },
       async loadServerSettings(background) {
         // This version element ensures we're passed the login screen.
         if (document.getElementById("version")) {
@@ -455,7 +468,8 @@ $(document).ready(function() {
       },
       toggleTheme() {
         this.$vuetify.theme.dark = !this.$vuetify.theme.dark
-        this.timestamp=Date.now();
+        this.timestamp = Date.now();
+        this.updateEditorTheme();
       },
       setFavicon() {
         const colorSchemeString = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -687,9 +701,20 @@ $(document).ready(function() {
       loadLocalSettings() {
         if (localStorage['settings.app.dark'] != undefined) {
           this.$vuetify.theme.dark = localStorage['settings.app.dark'] == "true";
+          this.updateEditorTheme();
         }
         if (localStorage['settings.app.navbar'] != undefined) {
           this.toolbar = localStorage['settings.app.navbar'] == "true";
+        }
+      },
+      updateEditorTheme() {
+        var link = $('link[href^="css/external/prism-custom-"]')[0];
+        if (link) {
+          if (this.$vuetify.theme.dark) {
+            link.href = "css/external/prism-custom-dark-v1.29.0.css";
+          } else {
+            link.href = "css/external/prism-custom-light-v1.29.0.css";
+          }
         }
       },
       subscribe(kind, fn) {
@@ -860,6 +885,15 @@ $(document).ready(function() {
 
         this.chartsInitialized = true;
       },
+      registerEditor() {
+        Vue.component('prism-editor', PrismEditor.component);
+      },
+      initializeEditor() {
+        if (this.editorInitialized) return;
+        this.registerEditor();
+
+        this.editorInitialized = true;
+      },
       getColor(colorName, percent = 0) {
         percent = this.$root.$vuetify && this.$root.$vuetify.theme.dark ? percent * -1 : percent;
         var color = colorName;
@@ -1020,7 +1054,7 @@ $(document).ready(function() {
       },
       isDetectionsUpdating() {
         return this.currentStatus != null && this.currentStatus.detections != null &&
-          !this.isDetectionsUnhealthy() && 
+          !this.isDetectionsUnhealthy() &&
           ( this.currentStatus.detections.elastalert.importing === true ||
             this.currentStatus.detections.elastalert.migrating === true ||
             this.currentStatus.detections.elastalert.syncing === true ||
@@ -1141,6 +1175,27 @@ $(document).ready(function() {
         }
 
         return '';
+      },
+      dateAwareSort(items, index, isDesc) {
+        items.sort((a, b) => {
+          if (index[0] === 'createTime' || index[0] === 'updateTime') {
+            if (!isDesc[0]) {
+              return new Date(a[index]) - new Date(b[index]);
+            }
+
+            return new Date(b[index]) - new Date(a[index]);
+          }
+
+          if (typeof a[index] !== 'undefined') {
+            if (!isDesc[0]) {
+              return a[index].toLowerCase().localeCompare(b[index].toLowerCase());
+            }
+
+            return b[index].toLowerCase().localeCompare(a[index].toLowerCase());
+          }
+        });
+
+        return items;
       },
     },
     created() {

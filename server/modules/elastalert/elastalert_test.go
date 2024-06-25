@@ -22,10 +22,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/elastalert/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
@@ -528,7 +530,8 @@ level: high
 	}
 
 	engine := ElastAlertEngine{
-		isRunning: true,
+		isRunning:         true,
+		sigmaRulePackages: []string{"all_rules"},
 	}
 	engine.allowRegex = regexp.MustCompile("00000000-0000-0000-0000-00000000")
 	engine.denyRegex = regexp.MustCompile("deny")
@@ -577,11 +580,14 @@ level: high
 license: Elastic-2.0
 `
 
-	repos := map[string]*model.RuleRepo{
-		"repo-path": {
-			Repo:      "github.com/repo-user/repo-path",
-			License:   "DRL",
-			Community: true,
+	repos := []*detections.RepoOnDisk{
+		{
+			Repo: &model.RuleRepo{
+				Repo:      "github.com/repo-user/repo-path",
+				License:   "DRL",
+				Community: true,
+			},
+			Path: "repo-path",
 		},
 	}
 
@@ -1026,4 +1032,109 @@ func TestGetDeployedPublicIds(t *testing.T) {
 	assert.Len(t, ids, 2)
 	assert.Contains(t, ids, "00000000-0000-0000-0000-000000000000")
 	assert.Contains(t, ids, "11111111-1111-1111-1111-111111111111")
+}
+
+func TestBuildHttpClient(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		Name                 string
+		Proxy                string
+		RootCA               string
+		InsecureSkipVerify   bool
+		ExpectEmptyTransport bool
+	}{
+		{
+			Name:                 "Empty",
+			ExpectEmptyTransport: true,
+		},
+		{
+			Name:  "Has Proxy",
+			Proxy: "http://myProxy:3128",
+		},
+		{
+			Name:   "Has Root CA",
+			RootCA: "pubkey",
+		},
+		{
+			Name:               "InvalidSkipVerify",
+			InsecureSkipVerify: true,
+		},
+		{
+			Name:   "Proxy + Root CA",
+			Proxy:  "http://myProxy:3128",
+			RootCA: "pubkey",
+		},
+		{
+			Name:               "Proxy + InsecureSkipVerify",
+			Proxy:              "http://myProxy:3128",
+			InsecureSkipVerify: true,
+		},
+		{
+			Name:               "Proxy + Root CA + InsecureSkipVerify",
+			Proxy:              "http://myProxy:3128",
+			RootCA:             "pubkey",
+			InsecureSkipVerify: true,
+		},
+		{
+			Name:                 "Invalid Proxy",
+			Proxy:                "%",
+			ExpectEmptyTransport: true,
+		},
+	}
+
+	proxy := "http://myProxy:3128"
+
+	resman := &ResourceManager{
+		Engine: &ElastAlertEngine{
+			srv: &server.Server{
+				Config: &config.ServerConfig{
+					Proxy: "",
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			resman.Engine.srv.Config.Proxy = test.Proxy
+			resman.Engine.srv.Config.AdditionalCA = test.RootCA
+			resman.Engine.srv.Config.InsecureSkipVerify = test.InsecureSkipVerify
+
+			client := resman.buildHttpClient()
+			transport := client.Transport.(*http.Transport)
+
+			if test.ExpectEmptyTransport {
+				assert.Equal(t, &http.Transport{}, transport)
+				return
+			}
+
+			if test.Proxy != "" {
+				assert.NotNil(t, transport)
+				assert.NotNil(t, transport.Proxy)
+
+				proxyURL, err := transport.Proxy(nil)
+				assert.NoError(t, err)
+				assert.Equal(t, proxy, proxyURL.String())
+			}
+
+			if test.RootCA != "" {
+				assert.NotNil(t, transport.TLSClientConfig)
+				assert.NotNil(t, transport.TLSClientConfig.RootCAs)
+			} else {
+				if transport.TLSClientConfig != nil {
+					assert.Nil(t, transport.TLSClientConfig.RootCAs)
+				}
+			}
+
+			if test.InsecureSkipVerify {
+				assert.True(t, transport.TLSClientConfig.InsecureSkipVerify)
+			} else {
+				if transport.TLSClientConfig != nil {
+					assert.False(t, transport.TLSClientConfig.InsecureSkipVerify)
+				}
+			}
+		})
+	}
 }

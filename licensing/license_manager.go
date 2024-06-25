@@ -40,10 +40,11 @@ const LICENSE_STATUS_PENDING = "pending"
 const LICENSE_STATUS_UNPROVISIONED = "unprovisioned"
 
 const FEAT_FPS = "fps"
-const FEAT_ODC = "odc"
-const FEAT_NTF = "ntf"
-const FEAT_STG = "stg"
+const FEAT_GMD = "gmd"
 const FEAT_LKS = "lks"
+const FEAT_NTF = "ntf"
+const FEAT_ODC = "odc"
+const FEAT_STG = "stg"
 const FEAT_TTR = "ttr"
 
 const PUBLIC_KEY = `
@@ -166,11 +167,12 @@ func verify(key string) (*LicenseKey, error) {
 func CreateAvailableFeatureList() []string {
 	available := make([]string, 0, 0)
 	available = append(available, FEAT_FPS)
+	available = append(available, FEAT_GMD)
 	available = append(available, FEAT_LKS)
+	available = append(available, FEAT_NTF)
 	available = append(available, FEAT_ODC)
 	available = append(available, FEAT_STG)
 	available = append(available, FEAT_TTR)
-	available = append(available, FEAT_NTF)
 	return available
 }
 
