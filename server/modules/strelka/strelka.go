@@ -54,15 +54,6 @@ var errModuleStopped = fmt.Errorf("strelka module has stopped running")
 var titleUpdater = regexp.MustCompile(`(?i)rule\s+(\w+)(\s+:(\s*[^{]+))?(\s+){`)
 var nameValidator = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]{0,127}$`) // alphanumeric + underscore, can't start with a number
 
-type IOManager interface {
-	ReadFile(path string) ([]byte, error)
-	WriteFile(path string, contents []byte, perm fs.FileMode) error
-	DeleteFile(path string) error
-	ReadDir(path string) ([]os.DirEntry, error)
-	ExecCommand(cmd *exec.Cmd) ([]byte, int, time.Duration, error)
-	WalkDir(root string, fn fs.WalkDirFunc) error
-}
-
 type StrelkaEngine struct {
 	srv                                  *server.Server
 	isRunning                            bool
@@ -83,7 +74,7 @@ type StrelkaEngine struct {
 	stateFilePath                        string
 	detections.IntegrityCheckerData
 	model.EngineState
-	IOManager
+	detections.IOManager
 }
 
 func checkRulesetEnabled(e *StrelkaEngine, det *model.Detection) {
@@ -100,7 +91,7 @@ func checkRulesetEnabled(e *StrelkaEngine, det *model.Detection) {
 func NewStrelkaEngine(srv *server.Server) *StrelkaEngine {
 	return &StrelkaEngine{
 		srv:       srv,
-		IOManager: &ResourceManager{},
+		IOManager: &detections.ResourceManager{Config: srv.Config},
 	}
 }
 
@@ -1135,39 +1126,4 @@ func (e *StrelkaEngine) verifyCompiledHash(hash string) error {
 
 func getDeployed(report *model.CompilationReport) []string {
 	return append(report.Success, report.Failure...)
-}
-
-// go install go.uber.org/mock/mockgen@latest
-//go:generate mockgen -destination mock/mock_iomanager.go -package mock . IOManager
-
-type ResourceManager struct{}
-
-func (_ *ResourceManager) ReadFile(path string) ([]byte, error) {
-	return os.ReadFile(path)
-}
-
-func (_ *ResourceManager) WriteFile(path string, contents []byte, perm fs.FileMode) error {
-	return os.WriteFile(path, contents, perm)
-}
-
-func (_ *ResourceManager) DeleteFile(path string) error {
-	return os.Remove(path)
-}
-
-func (_ *ResourceManager) ReadDir(path string) ([]os.DirEntry, error) {
-	return os.ReadDir(path)
-}
-
-func (_ *ResourceManager) ExecCommand(cmd *exec.Cmd) (output []byte, exitCode int, runtime time.Duration, err error) {
-	start := time.Now()
-	output, err = cmd.CombinedOutput()
-	runtime = time.Since(start)
-
-	exitCode = cmd.ProcessState.ExitCode()
-
-	return output, exitCode, runtime, err
-}
-
-func (_ *ResourceManager) WalkDir(root string, fn fs.WalkDirFunc) error {
-	return filepath.WalkDir(root, fn)
 }

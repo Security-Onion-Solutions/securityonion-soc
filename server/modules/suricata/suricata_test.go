@@ -21,7 +21,7 @@ import (
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/handmock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
-	"github.com/security-onion-solutions/securityonion-soc/server/modules/suricata/mock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 

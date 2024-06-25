@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/server/modules/suricata/mock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
 	"github.com/tj/assert"

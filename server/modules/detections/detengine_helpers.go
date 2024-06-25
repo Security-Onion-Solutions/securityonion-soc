@@ -8,7 +8,6 @@ package detections
 import (
 	"context"
 	"fmt"
-	"io/fs"
 	"net/url"
 	"os"
 	"path"
@@ -33,12 +32,6 @@ var templateFound = false
 
 type GetterByPublicId interface {
 	GetDetectionByPublicId(ctx context.Context, publicId string) (*model.Detection, error)
-}
-
-type IOManager interface {
-	ReadFile(path string) ([]byte, error)
-	WriteFile(path string, contents []byte, perm fs.FileMode) error
-	DeleteFile(path string) error
 }
 
 // go install go.uber.org/mock/mockgen@latest

@@ -10,8 +10,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -19,7 +17,6 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -71,16 +68,6 @@ var acceptedExtensions = map[string]bool{
 	".yaml": true,
 }
 
-type IOManager interface {
-	ReadFile(path string) ([]byte, error)
-	WriteFile(path string, contents []byte, perm fs.FileMode) error
-	DeleteFile(path string) error
-	ReadDir(path string) ([]os.DirEntry, error)
-	MakeRequest(*http.Request) (*http.Response, error)
-	ExecCommand(cmd *exec.Cmd) ([]byte, int, time.Duration, error)
-	WalkDir(root string, fn fs.WalkDirFunc) error
-}
-
 type ElastAlertEngine struct {
 	srv                                  *server.Server
 	airgapBasePath                       string
@@ -109,7 +96,7 @@ type ElastAlertEngine struct {
 	stateFilePath                        string
 	detections.IntegrityCheckerData
 	model.EngineState
-	IOManager
+	detections.IOManager
 }
 
 func checkRulesetEnabled(e *ElastAlertEngine, det *model.Detection) {
@@ -133,7 +120,7 @@ func NewElastAlertEngine(srv *server.Server) *ElastAlertEngine {
 		srv: srv,
 	}
 
-	resMan := &ResourceManager{Engine: engine}
+	resMan := &detections.ResourceManager{Config: srv.Config}
 	engine.IOManager = resMan
 
 	return engine
@@ -1633,85 +1620,4 @@ func (e *ElastAlertEngine) getDeployedPublicIds() (publicIds []string, err error
 	}
 
 	return publicIds, nil
-}
-
-// go install go.uber.org/mock/mockgen@latest
-//go:generate mockgen -destination mock/mock_iomanager.go -package mock . IOManager
-
-type ResourceManager struct {
-	Engine  *ElastAlertEngine
-	_client *http.Client
-}
-
-func (_ *ResourceManager) ReadFile(path string) ([]byte, error) {
-	return os.ReadFile(path)
-}
-
-func (_ *ResourceManager) WriteFile(path string, contents []byte, perm fs.FileMode) error {
-	return os.WriteFile(path, contents, perm)
-}
-
-func (_ *ResourceManager) DeleteFile(path string) error {
-	return os.Remove(path)
-}
-
-func (_ *ResourceManager) ReadDir(path string) ([]os.DirEntry, error) {
-	return os.ReadDir(path)
-}
-
-func (resman *ResourceManager) MakeRequest(req *http.Request) (*http.Response, error) {
-	if resman._client == nil {
-		// cache for reuse, the config values can't change without a server restart
-		resman._client = resman.buildHttpClient()
-	}
-
-	return resman._client.Do(req)
-}
-
-func (resman *ResourceManager) buildHttpClient() *http.Client {
-	transport := &http.Transport{}
-
-	if resman.Engine.srv.Config.Proxy != "" {
-		p, err := url.Parse(resman.Engine.srv.Config.Proxy)
-		if err != nil {
-			log.WithError(err).WithField("proxy", resman.Engine.srv.Config.Proxy).Error("unable to parse proxy URL, not using proxy")
-		} else {
-			transport.Proxy = http.ProxyURL(p)
-		}
-	}
-
-	if resman.Engine.srv.Config.InsecureSkipVerify {
-		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-	}
-
-	if resman.Engine.srv.Config.AdditionalCA != "" {
-		if transport.TLSClientConfig == nil {
-			transport.TLSClientConfig = &tls.Config{}
-		}
-
-		pool, err := x509.SystemCertPool()
-		if err != nil {
-			pool = x509.NewCertPool()
-		}
-
-		pool.AppendCertsFromPEM([]byte(resman.Engine.srv.Config.AdditionalCA))
-
-		transport.TLSClientConfig.RootCAs = pool
-	}
-
-	return &http.Client{Transport: transport}
-}
-
-func (_ *ResourceManager) ExecCommand(cmd *exec.Cmd) (output []byte, exitCode int, runtime time.Duration, err error) {
-	start := time.Now()
-	output, err = cmd.CombinedOutput()
-	runtime = time.Since(start)
-
-	exitCode = cmd.ProcessState.ExitCode()
-
-	return output, exitCode, runtime, err
-}
-
-func (_ *ResourceManager) WalkDir(root string, fn fs.WalkDirFunc) error {
-	return filepath.WalkDir(root, fn)
 }

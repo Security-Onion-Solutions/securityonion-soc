@@ -22,7 +22,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
-	"github.com/security-onion-solutions/securityonion-soc/server/modules/strelka/mock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
 	"github.com/tj/assert"
