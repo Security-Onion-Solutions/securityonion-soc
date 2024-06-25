@@ -1,6 +1,7 @@
 package detections
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"io/fs"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/apex/log"
+	"github.com/go-git/go-git/v5"
 	"github.com/security-onion-solutions/securityonion-soc/config"
 )
 
@@ -26,6 +28,8 @@ type IOManager interface {
 	MakeRequest(*http.Request) (*http.Response, error)
 	ExecCommand(cmd *exec.Cmd) ([]byte, int, time.Duration, error)
 	WalkDir(root string, fn fs.WalkDirFunc) error
+	CloneRepo(ctx context.Context, path string, repo string) (err error)
+	PullRepo(ctx context.Context, path string) (pulled bool, reclone bool)
 }
 
 type ResourceManager struct {
@@ -104,4 +108,67 @@ func (_ *ResourceManager) ExecCommand(cmd *exec.Cmd) (output []byte, exitCode in
 
 func (_ *ResourceManager) WalkDir(root string, fn fs.WalkDirFunc) error {
 	return filepath.WalkDir(root, fn)
+}
+
+func (rm *ResourceManager) CloneRepo(ctx context.Context, path string, repo string) (err error) {
+	proxyOpts, err := proxyToTransportOptions(rm.Config.Proxy)
+	if err != nil {
+		return err
+	}
+
+	_, err = git.PlainCloneContext(ctx, path, false, &git.CloneOptions{
+		Depth:           1,
+		SingleBranch:    true,
+		URL:             repo,
+		ProxyOptions:    proxyOpts,
+		CABundle:        []byte(rm.Config.AdditionalCA),
+		InsecureSkipTLS: rm.Config.InsecureSkipVerify,
+	})
+
+	return err
+}
+
+func (rm *ResourceManager) PullRepo(ctx context.Context, path string) (pulled bool, reclone bool) {
+	gitrepo, err := git.PlainOpen(path)
+	if err != nil {
+		log.WithError(err).WithField("repoPath", path).Error("failed to open repo, doing nothing with it")
+
+		return false, true
+	}
+
+	work, err := gitrepo.Worktree()
+	if err != nil {
+		log.WithError(err).WithField("repoPath", path).Error("failed to get worktree, doing nothing with it")
+
+		return false, true
+	}
+
+	err = work.Reset(&git.ResetOptions{
+		Mode: git.HardReset,
+	})
+	if err != nil {
+		log.WithError(err).WithField("repoPath", path).Error("failed to reset worktree, doing nothing with it")
+
+		return false, true
+	}
+
+	proxyOpts, err := proxyToTransportOptions(rm.Config.Proxy)
+	if err != nil {
+		log.WithError(err).WithField("proxy", rm.Config.Proxy).Error("unable to parse proxy url, ignoring proxy")
+	}
+
+	err = work.PullContext(ctx, &git.PullOptions{
+		Depth:           1,
+		SingleBranch:    true,
+		ProxyOptions:    proxyOpts,
+		CABundle:        []byte(rm.Config.AdditionalCA),
+		InsecureSkipTLS: rm.Config.InsecureSkipVerify,
+	})
+	if err != nil && err != git.NoErrAlreadyUpToDate {
+		log.WithError(err).WithField("repoPath", path).Error("failed to pull repo, doing nothing with it")
+
+		return false, true
+	}
+
+	return err == nil, false
 }

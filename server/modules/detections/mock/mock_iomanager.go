@@ -9,6 +9,7 @@
 package mock
 
 import (
+	context "context"
 	fs "io/fs"
 	http "net/http"
 	exec "os/exec"
@@ -39,6 +40,20 @@ func NewMockIOManager(ctrl *gomock.Controller) *MockIOManager {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockIOManager) EXPECT() *MockIOManagerMockRecorder {
 	return m.recorder
+}
+
+// CloneRepo mocks base method.
+func (m *MockIOManager) CloneRepo(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CloneRepo", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CloneRepo indicates an expected call of CloneRepo.
+func (mr *MockIOManagerMockRecorder) CloneRepo(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CloneRepo", reflect.TypeOf((*MockIOManager)(nil).CloneRepo), arg0, arg1, arg2)
 }
 
 // DeleteFile mocks base method.
@@ -85,6 +100,21 @@ func (m *MockIOManager) MakeRequest(arg0 *http.Request) (*http.Response, error) 
 func (mr *MockIOManagerMockRecorder) MakeRequest(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MakeRequest", reflect.TypeOf((*MockIOManager)(nil).MakeRequest), arg0)
+}
+
+// PullRepo mocks base method.
+func (m *MockIOManager) PullRepo(arg0 context.Context, arg1 string) (bool, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PullRepo", arg0, arg1)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// PullRepo indicates an expected call of PullRepo.
+func (mr *MockIOManagerMockRecorder) PullRepo(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PullRepo", reflect.TypeOf((*MockIOManager)(nil).PullRepo), arg0, arg1)
 }
 
 // ReadDir mocks base method.

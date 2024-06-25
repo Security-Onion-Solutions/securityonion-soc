@@ -367,7 +367,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			continue
 		}
 
-		allRepos, anythingNew, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config)
+		allRepos, anythingNew, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config, e.IOManager)
 		if err != nil {
 			if strings.Contains(err.Error(), "module stopped") {
 				break

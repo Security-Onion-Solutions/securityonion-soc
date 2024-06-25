@@ -581,7 +581,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 			continue
 		}
 
-		dirtyRepos, repoChanges, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config)
+		dirtyRepos, repoChanges, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config, e.IOManager)
 		if err != nil {
 			if strings.Contains(err.Error(), "module stopped") {
 				break
