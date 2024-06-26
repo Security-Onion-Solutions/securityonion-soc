@@ -1137,8 +1137,8 @@ func TestIntegrityCheck(t *testing.T) {
 			Name: "1 Deployed, 0 Enabled",
 			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) {
 				iom.EXPECT().ReadDir("rules/folder").Return([]fs.DirEntry{
-					&MockDirEntry{
-						name: "00000000-0000-0000-0000-000000000000.yml",
+					&handmock.MockDirEntry{
+						Filename: "00000000-0000-0000-0000-000000000000.yml",
 					},
 				}, nil)
 
@@ -1165,11 +1165,11 @@ func TestIntegrityCheck(t *testing.T) {
 			Name: "Multiple Fail",
 			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) {
 				iom.EXPECT().ReadDir("rules/folder").Return([]fs.DirEntry{
-					&MockDirEntry{
-						name: "00000000-0000-0000-0000-000000000000.yml",
+					&handmock.MockDirEntry{
+						Filename: "00000000-0000-0000-0000-000000000000.yml",
 					},
-					&MockDirEntry{
-						name: "11111111-1111-1111-1111-111111111111.yml",
+					&handmock.MockDirEntry{
+						Filename: "11111111-1111-1111-1111-111111111111.yml",
 					},
 				}, nil)
 
@@ -1186,11 +1186,11 @@ func TestIntegrityCheck(t *testing.T) {
 			Name: "Multiple Success",
 			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) {
 				iom.EXPECT().ReadDir("rules/folder").Return([]fs.DirEntry{
-					&MockDirEntry{
-						name: "00000000-0000-0000-0000-000000000000.yml",
+					&handmock.MockDirEntry{
+						Filename: "00000000-0000-0000-0000-000000000000.yml",
 					},
-					&MockDirEntry{
-						name: "11111111-1111-1111-1111-111111111111.yml",
+					&handmock.MockDirEntry{
+						Filename: "11111111-1111-1111-1111-111111111111.yml",
 					},
 				}, nil)
 
