@@ -147,6 +147,20 @@ func (mr *MockIOManagerMockRecorder) ReadFile(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadFile", reflect.TypeOf((*MockIOManager)(nil).ReadFile), arg0)
 }
 
+// RemoveAll mocks base method.
+func (m *MockIOManager) RemoveAll(arg0 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveAll", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveAll indicates an expected call of RemoveAll.
+func (mr *MockIOManagerMockRecorder) RemoveAll(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveAll", reflect.TypeOf((*MockIOManager)(nil).RemoveAll), arg0)
+}
+
 // WalkDir mocks base method.
 func (m *MockIOManager) WalkDir(arg0 string, arg1 fs.WalkDirFunc) error {
 	m.ctrl.T.Helper()

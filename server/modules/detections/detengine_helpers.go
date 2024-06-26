@@ -186,7 +186,7 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 			defer cancel()
 
-			iom.CloneRepo(ctx, repoPath, repo.Repo)
+			err = iom.CloneRepo(ctx, repoPath, repo.Repo)
 			if err != nil {
 				log.WithError(err).WithField("repoPath", repoPath).Error("failed to clone repo, doing nothing with it")
 				continue
@@ -201,7 +201,7 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 		// remove any repos that are no longer in the list
 		repoPath := filepath.Join(baseRepoFolder, repo)
 
-		err = os.RemoveAll(repoPath)
+		err = iom.RemoveAll(repoPath)
 		if err != nil {
 			log.WithError(err).WithField("repoPath", repoPath).Error("failed to remove repo, doing nothing with it")
 			continue

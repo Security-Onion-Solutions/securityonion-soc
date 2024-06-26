@@ -13,8 +13,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/handmock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
@@ -358,4 +360,50 @@ func TestCheckTemplate(t *testing.T) {
 	}
 
 	assert.Equal(t, []bool{false, true, true, true, true, true, true, true, true, true}, results)
+}
+
+func TestUpdateRepos(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+	iom.EXPECT().ReadDir("baseRepoFolder").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: "repo1",
+			Dir:      true,
+		},
+		&handmock.MockDirEntry{
+			Filename: "repo3",
+			Dir:      true,
+		},
+	}, nil)
+	iom.EXPECT().PullRepo(gomock.Any(), "baseRepoFolder/repo1").Return(false, false)
+	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo2", "http://github.com/user/repo2").Return(nil)
+	iom.EXPECT().RemoveAll("baseRepoFolder/repo3").Return(nil)
+
+	isRunning := true
+
+	repos := []*model.RuleRepo{
+		{
+			Repo: "http://github.com/user/repo1",
+		},
+		{
+			Repo: "http://github.com/user/repo2",
+		},
+	}
+	cfg := &config.ServerConfig{}
+
+	allRepos, anythingNew, err := UpdateRepos(&isRunning, "baseRepoFolder", repos, cfg, iom)
+	assert.NoError(t, err)
+	assert.Len(t, allRepos, len(repos))
+	assert.Equal(t, &RepoOnDisk{
+		Repo: repos[0],
+		Path: "baseRepoFolder/repo1",
+	}, allRepos[0])
+	assert.Equal(t, &RepoOnDisk{
+		Repo:        repos[1],
+		Path:        "baseRepoFolder/repo2",
+		WasModified: true,
+	}, allRepos[1])
+	assert.True(t, anythingNew)
 }
