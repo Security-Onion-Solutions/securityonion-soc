@@ -1,4 +1,4 @@
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -234,35 +234,46 @@ func TestUpdateForDuplication(t *testing.T) {
 	}{
 		{
 			Name:          "Normal Options",
-			Input:         `alert any any <> any any (msg:"test"; sid:1; rev:1;)`,
+			Input:         `alert http any any <> any any (msg:"test"; sid:1; rev:1;)`,
 			OptionsBefore: 3,
 			OptionsAfter:  3,
 			ExpectedOptions: []*RuleOption{
-				{Name: "msg", Value: util.Ptr("test (copy)")},
+				{Name: "msg", Value: util.Ptr(`"test (copy)"`)},
 				{Name: "sid", Value: util.Ptr(publicId)},
 				{Name: "rev", Value: util.Ptr("1")},
 			},
 		},
 		{
 			Name:          "Present but Empty Options",
-			Input:         `alert any any <> any any (msg; sid; rev;)`,
+			Input:         `alert http any any <> any any (msg; sid; rev;)`,
 			OptionsBefore: 3,
 			OptionsAfter:  3,
 			ExpectedOptions: []*RuleOption{
-				{Name: "msg", Value: util.Ptr("(copy)")},
+				{Name: "msg", Value: util.Ptr(`"(copy)"`)},
 				{Name: "sid", Value: util.Ptr(publicId)},
 				{Name: "rev", Value: nil},
 			},
 		},
 		{
 			Name:          "Missing Options",
-			Input:         `alert any any <> any any (rev;)`,
+			Input:         `alert http any any <> any any (rev;)`,
 			OptionsBefore: 1,
 			OptionsAfter:  3,
 			ExpectedOptions: []*RuleOption{
-				{Name: "msg", Value: util.Ptr("(copy)")},
+				{Name: "msg", Value: util.Ptr(`"(copy)"`)},
 				{Name: "sid", Value: util.Ptr(publicId)},
 				{Name: "rev", Value: nil},
+			},
+		},
+		{
+			Name:          "Double Quotes in Title",
+			Input:         `alert http any any <> any any (msg:"\"test\""; sid:1; rev:1;)`,
+			OptionsBefore: 3,
+			OptionsAfter:  3,
+			ExpectedOptions: []*RuleOption{
+				{Name: "msg", Value: util.Ptr(`"\"test\" (copy)"`)},
+				{Name: "sid", Value: util.Ptr(publicId)},
+				{Name: "rev", Value: util.Ptr("1")},
 			},
 		},
 	}
@@ -291,41 +302,4 @@ func TestUpdateForDuplication(t *testing.T) {
 			}
 		})
 	}
-
-	// rule, err = ParseSuricataRule(`alert any any <> any any (rev:1;)`)
-	// assert.NoError(t, err)
-	// assert.NotNil(t, rule)
-	//
-	// assert.Equal(t, len(rule.Options), 1)
-	// rev, ok = rule.GetOption("rev")
-	// assert.True(t, ok)
-	// assert.NotNil(t, rev)
-	// assert.Equal(t, "1", *rev)
-	//
-	// sid, ok = rule.GetOption("sid")
-	// assert.False(t, ok)
-	// assert.Nil(t, sid)
-	//
-	// msg, ok = rule.GetOption("msg")
-	// assert.False(t, ok)
-	// assert.Nil(t, msg)
-	//
-	// rule.UpdateForDuplication("1")
-	//
-	// assert.Equal(t, len(rule.Options), 3)
-	//
-	// sid, ok = rule.GetOption("sid")
-	// assert.True(t, ok)
-	// assert.NotNil(t, sid)
-	// assert.Equal(t, "1", *sid)
-	//
-	// msg, ok = rule.GetOption("msg")
-	// assert.True(t, ok)
-	// assert.NotNil(t, msg)
-	// assert.Equal(t, "(copy)", *msg)
-	//
-	// rev, ok = rule.GetOption("rev")
-	// assert.True(t, ok)
-	// assert.NotNil(t, rev)
-	// assert.Equal(t, "1", *rev)
 }

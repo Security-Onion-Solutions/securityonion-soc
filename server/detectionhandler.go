@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -159,6 +159,12 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	_, err = engine.ValidateRule(detect.Content)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("invalid rule: %w", err))
+		return
+	}
+
 	err = engine.ExtractDetails(detect)
 	if err != nil {
 		if err.Error() == "rule does not contain a public Id" {
@@ -277,9 +283,9 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	err = engine.ExtractDetails(detect)
+	_, err = engine.ValidateRule(detect.Content)
 	if err != nil {
-		web.Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("invalid rule: %w", err))
 		return
 	}
 

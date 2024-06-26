@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -167,8 +167,12 @@
         <v-spacer></v-spacer>
         <div id="connection-indicator" v-if="!connected || reconnecting">
           <v-icon class="mr-2" color="warning">fa-satellite-dish</v-icon>
-          <span v-if="reconnecting" v-text="i18n.reconnecting"></span>
-          <span v-if="!reconnecting" v-text="i18n.disconnected"></span>
+          <span v-if="reconnecting" v-text="i18n.reconnecting" class="d-none d-md-inline" data-aid="reconnecting_notice"></span>
+          <span v-if="!reconnecting" v-text="i18n.disconnected" class="d-none d-md-inline" data-aid="disconnected_notice"></span>
+        </div>
+        <div id="license-indicator" v-else-if="isLicenseExpiringSoon()">
+          <v-icon class="mr-2" color="warning">fa-key</v-icon>
+          <span v-text="i18n.licenseExpiringSoon" class="d-none d-md-inline" data-aid="license_expiring_notice"></span>
         </div>
         <v-spacer></v-spacer>
         <v-menu bottom left offset-y>
@@ -1349,7 +1353,7 @@
                       <!-- ip -->
                       <v-text-field v-if="newOverride.type === 'suppress'" id="new-override-ip-edit" v-model="newOverride.ip" :rules="[rules.required, rules.cidrFormat]" persistent-hint :hint="i18n.ipCidr" data-aid="detection_new_override_suppress_ip_input">
                         <template v-slot:append-outer>
-                          <router-link :to="{ name: 'config', query: { s: 'suricata.config.vars' }}" target="_blank" data-aid="new_override_ip_edit_config_shortcut">
+                          <router-link :to="{ name: 'config', query: { s: 'suricata.config.vars', a: '1', e: '1' }}" target="_blank" data-aid="new_override_ip_edit_config_shortcut">
                             <v-icon>fa fa-gear</v-icon>
                           </router-link>
                         </template>
@@ -1492,7 +1496,7 @@
                             <v-text-field id="override-ip-edit" ref="override-ip" hide-details="auto" outlined v-model="item.ip" :rules="[rules.required, rules.cidrFormat]"
                               persistent-hint :hint="i18n.ipCidr" v-on:keyup.enter="isFieldValid('override-ip') && stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)" data-aid="detection_override_suppress_ip_input">
                             <template v-slot:append-outer>
-                              <router-link :to="{ name: 'config', query: { s: 'suricata.config.vars' }}" target="_blank" data-aid="override_ip_edit_config_shortcut">
+                              <router-link :to="{ name: 'config', query: { s: 'suricata.config.vars', a: '1', e: '1' }}" target="_blank" data-aid="override_ip_edit_config_shortcut">
                                 <v-icon>fa fa-gear</v-icon>
                               </router-link>
                             </template>

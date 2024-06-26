@@ -1,4 +1,4 @@
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -7,6 +7,7 @@ package suricata
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
@@ -44,6 +45,8 @@ const (
 	stateDestination
 	stateOptions
 )
+
+var unescaper = regexp.MustCompile(`\\(.)`)
 
 func ParseSuricataRule(rule string) (*SuricataRule, error) {
 	rule = strings.TrimSpace(rule)
@@ -239,9 +242,13 @@ func (rule *SuricataRule) UpdateForDuplication(publicId string) {
 			setPublicId = true
 		} else if strings.EqualFold(opt.Name, "msg") {
 			if opt.Value != nil {
-				*opt.Value = util.Unquote(*opt.Value) + " (copy)"
+				v := util.Unquote(*opt.Value)
+				v += " (copy)"
+				v = strconv.Quote(v)
+				v = unescaper.ReplaceAllString(v, `$1`)
+				*opt.Value = v
 			} else {
-				opt.Value = util.Ptr("(copy)")
+				opt.Value = util.Ptr(`"(copy)"`)
 			}
 
 			setTitle = true
@@ -249,7 +256,7 @@ func (rule *SuricataRule) UpdateForDuplication(publicId string) {
 	}
 
 	if !setTitle {
-		rule.Options = append([]*RuleOption{{Name: "msg", Value: util.Ptr("(copy)")}}, rule.Options...)
+		rule.Options = append([]*RuleOption{{Name: "msg", Value: util.Ptr(`"(copy)"`)}}, rule.Options...)
 	}
 
 	if !setPublicId {
