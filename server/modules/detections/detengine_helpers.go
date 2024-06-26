@@ -8,7 +8,6 @@ package detections
 import (
 	"context"
 	"fmt"
-	"io/fs"
 	"net/url"
 	"os"
 	"path"
@@ -23,7 +22,6 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 
 	"github.com/apex/log"
-	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 )
 
@@ -33,12 +31,6 @@ var templateFound = false
 
 type GetterByPublicId interface {
 	GetDetectionByPublicId(ctx context.Context, publicId string) (*model.Detection, error)
-}
-
-type IOManager interface {
-	ReadFile(path string) ([]byte, error)
-	WriteFile(path string, contents []byte, perm fs.FileMode) error
-	DeleteFile(path string) error
 }
 
 // go install go.uber.org/mock/mockgen@latest
@@ -122,11 +114,11 @@ type RepoOnDisk struct {
 	WasModified bool
 }
 
-func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.RuleRepo, cfg *config.ServerConfig) (allRepos []*RepoOnDisk, anythingNew bool, err error) {
+func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.RuleRepo, cfg *config.ServerConfig, iom IOManager) (allRepos []*RepoOnDisk, anythingNew bool, err error) {
 	allRepos = make([]*RepoOnDisk, 0, len(rulesRepos))
 
 	// read existing repos
-	entries, err := os.ReadDir(baseRepoFolder)
+	entries, err := iom.ReadDir(baseRepoFolder)
 	if err != nil {
 		log.WithError(err).WithField("reposFolder", baseRepoFolder).Error("Failed to read repos folder")
 		return nil, false, err
@@ -165,70 +157,18 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 		allRepos = append(allRepos, dirty)
 		reclone := false
 
-		proxyOpts, err := proxyToTransportOptions(cfg.Proxy)
-		if err != nil {
-			log.WithError(err).WithField("proxy", cfg.Proxy).Error("failed to parse proxy URL, not using the proxy")
-			// no return here, not a bug
-		}
-
 		_, ok := existingRepos[lastFolder]
 		if ok {
-			var work *git.Worktree
-			var ctx context.Context
-			var cancel context.CancelFunc
-
-			// repo already exists, pull
-			gitrepo, err := git.PlainOpen(repoPath)
-			if err != nil {
-				log.WithError(err).WithField("repoPath", repoPath).Error("failed to open repo, doing nothing with it")
-				reclone = true
-
-				goto skippull
-			}
-
-			work, err = gitrepo.Worktree()
-			if err != nil {
-				log.WithError(err).WithField("repoPath", repoPath).Error("failed to get worktree, doing nothing with it")
-				reclone = true
-
-				goto skippull
-			}
-
-			err = work.Reset(&git.ResetOptions{
-				Mode: git.HardReset,
-			})
-			if err != nil {
-				log.WithError(err).WithField("repoPath", repoPath).Error("failed to reset worktree, doing nothing with it")
-				reclone = true
-
-				goto skippull
-			}
-
-			ctx, cancel = context.WithTimeout(context.Background(), time.Minute*5)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 			defer cancel()
 
-			err = work.PullContext(ctx, &git.PullOptions{
-				Depth:           1,
-				SingleBranch:    true,
-				ProxyOptions:    proxyOpts,
-				CABundle:        []byte(cfg.AdditionalCA),
-				InsecureSkipTLS: cfg.InsecureSkipVerify,
-			})
-			if err != nil && err != git.NoErrAlreadyUpToDate {
-				log.WithError(err).WithField("repoPath", repoPath).Error("failed to pull repo, doing nothing with it")
-				reclone = true
-
-				goto skippull
-			}
-
-			if err == nil {
+			// repo already exists, pull
+			dirty.WasModified, reclone = iom.PullRepo(ctx, repoPath)
+			if dirty.WasModified {
 				anythingNew = true
-				dirty.WasModified = true
 			}
 
 			delete(existingRepos, lastFolder)
-
-		skippull:
 		}
 
 		if reclone {
@@ -243,14 +183,10 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 
 		if !ok || reclone {
 			// repo does not exist or was just deleted, clone
-			_, err = git.PlainClone(repoPath, false, &git.CloneOptions{
-				Depth:           1,
-				SingleBranch:    true,
-				URL:             repo.Repo,
-				ProxyOptions:    proxyOpts,
-				CABundle:        []byte(cfg.AdditionalCA),
-				InsecureSkipTLS: cfg.InsecureSkipVerify,
-			})
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
+			defer cancel()
+
+			err = iom.CloneRepo(ctx, repoPath, repo.Repo)
 			if err != nil {
 				log.WithError(err).WithField("repoPath", repoPath).Error("failed to clone repo, doing nothing with it")
 				continue
@@ -265,7 +201,7 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 		// remove any repos that are no longer in the list
 		repoPath := filepath.Join(baseRepoFolder, repo)
 
-		err = os.RemoveAll(repoPath)
+		err = iom.RemoveAll(repoPath)
 		if err != nil {
 			log.WithError(err).WithField("repoPath", repoPath).Error("failed to remove repo, doing nothing with it")
 			continue

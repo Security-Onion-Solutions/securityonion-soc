@@ -11,7 +11,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/fs"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
@@ -60,13 +59,6 @@ const (
 	CUSTOM_RULE_LOC = "/nsm/rules/detect-suricata/custom_temp"
 )
 
-type IOManager interface {
-	ReadFile(path string) ([]byte, error)
-	WriteFile(path string, contents []byte, perm fs.FileMode) error
-	DeleteFile(path string) error
-	ReadDir(path string) ([]os.DirEntry, error)
-}
-
 type SuricataEngine struct {
 	srv                                  *server.Server
 	communityRulesFile                   string
@@ -87,13 +79,13 @@ type SuricataEngine struct {
 	customRulesets                       []*model.CustomRuleset
 	detections.IntegrityCheckerData
 	model.EngineState
-	IOManager
+	detections.IOManager
 }
 
 func NewSuricataEngine(srv *server.Server) *SuricataEngine {
 	e := &SuricataEngine{
 		srv:       srv,
-		IOManager: &ResourceManager{},
+		IOManager: &detections.ResourceManager{Config: srv.Config},
 	}
 
 	e.migrations = map[string]func(string) error{
@@ -1754,25 +1746,4 @@ func consolidateEnabled(rulesIndex map[string]int, disabledIndex map[string]int)
 	}
 
 	return pids
-}
-
-// go install go.uber.org/mock/mockgen@latest
-//go:generate mockgen -destination mock/mock_iomanager.go -package mock . IOManager
-
-type ResourceManager struct{}
-
-func (_ *ResourceManager) ReadFile(path string) ([]byte, error) {
-	return os.ReadFile(path)
-}
-
-func (_ *ResourceManager) WriteFile(path string, contents []byte, perm fs.FileMode) error {
-	return os.WriteFile(path, contents, perm)
-}
-
-func (_ *ResourceManager) DeleteFile(path string) error {
-	return os.Remove(path)
-}
-
-func (_ *ResourceManager) ReadDir(path string) ([]os.DirEntry, error) {
-	return os.ReadDir(path)
 }

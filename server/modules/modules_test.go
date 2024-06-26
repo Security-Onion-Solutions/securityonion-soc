@@ -10,11 +10,12 @@ import (
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestBuildModuleMap(t *testing.T) {
-	mm := BuildModuleMap(nil)
+	mm := BuildModuleMap(&server.Server{})
 	findModule(t, mm, "elastic")
 	findModule(t, mm, "elasticcases")
 	findModule(t, mm, "filedatastore")
