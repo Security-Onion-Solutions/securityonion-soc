@@ -1,4 +1,4 @@
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -27,6 +27,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/handmock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/elastalert/mock"
@@ -1098,6 +1099,140 @@ func TestBuildHttpClient(t *testing.T) {
 					assert.False(t, transport.TLSClientConfig.InsecureSkipVerify)
 				}
 			}
+		})
+	}
+}
+
+func TestIntegrityCheck(t *testing.T) {
+	tests := []struct {
+		Name     string
+		InitMock func(*mock.MockIOManager, *servermock.MockDetectionstore)
+		DbnE     []string
+		EbnD     []string
+		ExpError error
+	}{
+		{
+			Name: "No Rules",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) {
+				iom.EXPECT().ReadDir("rules/folder").Return([]fs.DirEntry{}, nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, opts ...model.GetAllOption) (map[string]*model.Detection, error) {
+					expected := []string{
+						`query AND so_detection.engine:"elastalert"`,
+						`query AND so_detection.isEnabled:"true"`,
+					}
+
+					for i, opt := range opts {
+						value := opt("query", "so_")
+						assert.Equal(t, expected[i], value)
+					}
+
+					return map[string]*model.Detection{}, nil
+				})
+			},
+			DbnE: []string{},
+			EbnD: []string{},
+		},
+		{
+			Name: "1 Deployed, 0 Enabled",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) {
+				iom.EXPECT().ReadDir("rules/folder").Return([]fs.DirEntry{
+					&MockDirEntry{
+						name: "00000000-0000-0000-0000-000000000000.yml",
+					},
+				}, nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
+			},
+			DbnE:     []string{"00000000-0000-0000-0000-000000000000"},
+			EbnD:     []string{},
+			ExpError: detections.ErrIntCheckFailed,
+		},
+		{
+			Name: "0 Deployed, 1 Enabled",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) {
+				iom.EXPECT().ReadDir("rules/folder").Return([]fs.DirEntry{}, nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+					"00000000-0000-0000-0000-000000000000": {},
+				}, nil)
+			},
+			DbnE:     []string{},
+			EbnD:     []string{"00000000-0000-0000-0000-000000000000"},
+			ExpError: detections.ErrIntCheckFailed,
+		},
+		{
+			Name: "Multiple Fail",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) {
+				iom.EXPECT().ReadDir("rules/folder").Return([]fs.DirEntry{
+					&MockDirEntry{
+						name: "00000000-0000-0000-0000-000000000000.yml",
+					},
+					&MockDirEntry{
+						name: "11111111-1111-1111-1111-111111111111.yml",
+					},
+				}, nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+					"00000000-0000-0000-0000-000000000000": {},
+					"22222222-2222-2222-2222-222222222222": {},
+				}, nil)
+			},
+			DbnE:     []string{"11111111-1111-1111-1111-111111111111"},
+			EbnD:     []string{"22222222-2222-2222-2222-222222222222"},
+			ExpError: detections.ErrIntCheckFailed,
+		},
+		{
+			Name: "Multiple Success",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) {
+				iom.EXPECT().ReadDir("rules/folder").Return([]fs.DirEntry{
+					&MockDirEntry{
+						name: "00000000-0000-0000-0000-000000000000.yml",
+					},
+					&MockDirEntry{
+						name: "11111111-1111-1111-1111-111111111111.yml",
+					},
+				}, nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+					"00000000-0000-0000-0000-000000000000": {},
+					"11111111-1111-1111-1111-111111111111": {},
+				}, nil)
+			},
+			DbnE: []string{},
+			EbnD: []string{},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			detStore := servermock.NewMockDetectionstore(ctrl)
+			iom := mock.NewMockIOManager(ctrl)
+			test.InitMock(iom, detStore)
+
+			e := &ElastAlertEngine{
+				srv: &server.Server{
+					Detectionstore: detStore,
+				},
+				elastAlertRulesFolder: "rules/folder",
+				IOManager:             iom,
+			}
+
+			DbnE, EbnD, err := e.IntegrityCheck(false)
+
+			if test.ExpError != nil {
+				assert.Error(t, err)
+				assert.Equal(t, err, test.ExpError)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			assert.Equal(t, test.DbnE, DbnE)
+			assert.Equal(t, test.EbnD, EbnD)
 		})
 	}
 }

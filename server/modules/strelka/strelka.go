@@ -1,4 +1,4 @@
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -422,7 +422,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 				})
 			}
 
-			err = e.IntegrityCheck(false)
+			_, _, err = e.IntegrityCheck(false)
 
 			e.EngineState.IntegrityFailure = err != nil
 			lastSyncSuccess = util.Ptr(err == nil)
@@ -656,7 +656,7 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 			}
 		}
 
-		err = e.IntegrityCheck(false)
+		_, _, err = e.IntegrityCheck(false)
 
 		e.EngineState.IntegrityFailure = err != nil
 		lastSyncSuccess = util.Ptr(err == nil)
@@ -1015,10 +1015,10 @@ func (e *StrelkaEngine) GenerateUnusedPublicId(ctx context.Context) (string, err
 	return "", fmt.Errorf("not implemented")
 }
 
-func (e *StrelkaEngine) IntegrityCheck(canInterrupt bool) error {
+func (e *StrelkaEngine) IntegrityCheck(canInterrupt bool) (deployedButNotEnabled []string, enabledButNotDeployed []string, err error) {
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
-		return detections.ErrIntCheckerStopped
+		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
 	logger := log.WithFields(log.Fields{
@@ -1030,13 +1030,13 @@ func (e *StrelkaEngine) IntegrityCheck(canInterrupt bool) error {
 	report, err := e.getCompilationReport()
 	if err != nil {
 		logger.WithError(err).Error("unable to get compilation report")
-		return detections.ErrIntCheckFailed
+		return nil, nil, detections.ErrIntCheckFailed
 	}
 
 	err = e.verifyCompiledHash(report.CompiledRulesHash)
 	if err != nil {
 		logger.WithError(err).Error("compiled rules hash mismatch, this report is not for the latest compiled rules")
-		return detections.ErrIntCheckFailed
+		return nil, nil, detections.ErrIntCheckFailed
 	}
 
 	logger.WithFields(log.Fields{
@@ -1055,35 +1055,35 @@ func (e *StrelkaEngine) IntegrityCheck(canInterrupt bool) error {
 
 		logger.WithField("failedPublicIDs", problemSample).Error("integrity check failed because some rules failed to deploy")
 
-		return detections.ErrIntCheckFailed
+		return nil, nil, detections.ErrIntCheckFailed
 	}
 
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
-		return detections.ErrIntCheckerStopped
+		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
 	deployed := getDeployed(report)
 
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
-		return detections.ErrIntCheckerStopped
+		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
 	ret, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, model.WithEngine(model.EngineNameStrelka), model.WithEnabled(true))
 	if err != nil {
 		logger.WithError(err).Error("unable to query for enabled detections")
-		return detections.ErrIntCheckFailed
+		return nil, nil, detections.ErrIntCheckFailed
 	}
 
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
-		return detections.ErrIntCheckerStopped
+		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
 	enabled := make([]string, 0, len(ret))
-	for _, d := range ret {
-		enabled = append(enabled, d.PublicID)
+	for pid := range ret {
+		enabled = append(enabled, pid)
 	}
 
 	logger.WithField("enabledDetectionsCount", len(enabled)).Debug("enabled detections")
@@ -1091,10 +1091,10 @@ func (e *StrelkaEngine) IntegrityCheck(canInterrupt bool) error {
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		logger.Info("integrity checker stopped")
-		return detections.ErrIntCheckerStopped
+		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
-	deployedButNotEnabled, enabledButNotDeployed, _ := detections.DiffLists(deployed, enabled)
+	deployedButNotEnabled, enabledButNotDeployed, _ = detections.DiffLists(deployed, enabled)
 
 	logger.WithFields(log.Fields{
 		"deployedButNotEnabled": deployedButNotEnabled,
@@ -1103,12 +1103,12 @@ func (e *StrelkaEngine) IntegrityCheck(canInterrupt bool) error {
 
 	if len(deployedButNotEnabled) > 0 || len(enabledButNotDeployed) > 0 {
 		logger.Info("integrity check failed")
-		return detections.ErrIntCheckFailed
+		return deployedButNotEnabled, enabledButNotDeployed, detections.ErrIntCheckFailed
 	}
 
 	logger.Info("integrity check passed")
 
-	return nil
+	return deployedButNotEnabled, enabledButNotDeployed, nil
 }
 
 func (e *StrelkaEngine) getCompilationReport() (*model.CompilationReport, error) {

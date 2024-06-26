@@ -1,4 +1,4 @@
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -467,7 +467,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 
 				checkMigrationsOnce()
 
-				err = e.IntegrityCheck(false)
+				_, _, err = e.IntegrityCheck(false)
 
 				e.EngineState.IntegrityFailure = err != nil
 				lastSyncSuccess = util.Ptr(err == nil)
@@ -594,7 +594,7 @@ func (e *SuricataEngine) watchCommunityRules() {
 				})
 			}
 
-			err = e.IntegrityCheck(false)
+			_, _, err = e.IntegrityCheck(false)
 
 			e.EngineState.IntegrityFailure = err != nil
 			lastSyncSuccess = util.Ptr(err == nil)
@@ -1650,10 +1650,10 @@ func (e *SuricataEngine) ReadCustomRulesets() (detects []*model.Detection, err e
 	return detects, nil
 }
 
-func (e *SuricataEngine) IntegrityCheck(canInterrupt bool) error {
+func (e *SuricataEngine) IntegrityCheck(canInterrupt bool) (deployedButNotEnabled []string, enabledButNotDeployed []string, err error) {
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
-		return detections.ErrIntCheckerStopped
+		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
 	logger := log.WithFields(log.Fields{
@@ -1663,34 +1663,34 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool) error {
 
 	allSettings, err := e.srv.Configstore.GetSettings(e.srv.Context)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		logger.Info("integrity checker stopped")
-		return detections.ErrIntCheckerStopped
+		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
 	allRules, err := e.ReadFile(e.allRulesFile)
 	if err != nil {
 		logger.WithError(err).WithField("path", e.allRulesFile).Error("unable to read all.rules file")
-		return err
+		return nil, nil, err
 	}
 
 	disabled := settingByID(allSettings, "idstools.sids.disabled")
 	if disabled == nil {
-		return fmt.Errorf("unable to find disabled setting")
+		return nil, nil, fmt.Errorf("unable to find disabled setting")
 	}
 
 	modify := settingByID(allSettings, "idstools.sids.modify")
 	if modify == nil {
-		return fmt.Errorf("unable to find modify setting")
+		return nil, nil, fmt.Errorf("unable to find modify setting")
 	}
 
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
-		return detections.ErrIntCheckerStopped
+		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
 	// unpack settings into lines/indices
@@ -1710,7 +1710,7 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool) error {
 
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
-		return detections.ErrIntCheckerStopped
+		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
 	deployed := consolidateEnabled(rulesIndex, disabledIndex)
@@ -1719,23 +1719,23 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool) error {
 
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
-		return detections.ErrIntCheckerStopped
+		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
 	ret, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, model.WithEngine(model.EngineNameSuricata), model.WithEnabled(true))
 	if err != nil {
 		logger.WithError(err).Error("unable to query for enabled detections")
-		return detections.ErrIntCheckFailed
+		return nil, nil, detections.ErrIntCheckFailed
 	}
 
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
-		return detections.ErrIntCheckerStopped
+		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
 	enabled := make([]string, 0, len(ret))
-	for _, d := range ret {
-		enabled = append(enabled, d.PublicID)
+	for pid := range ret {
+		enabled = append(enabled, pid)
 	}
 
 	logger.WithField("enabledDetectionsCount", len(enabled)).Debug("enabled detections")
@@ -1743,10 +1743,10 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool) error {
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		logger.Info("integrity checker stopped")
-		return detections.ErrIntCheckerStopped
+		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
-	deployedButNotEnabled, enabledButNotDeployed, _ := detections.DiffLists(deployed, enabled)
+	deployedButNotEnabled, enabledButNotDeployed, _ = detections.DiffLists(deployed, enabled)
 
 	logger.WithFields(log.Fields{
 		"deployedButNotEnabled": deployedButNotEnabled,
@@ -1755,12 +1755,12 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool) error {
 
 	if len(deployedButNotEnabled) > 0 || len(enabledButNotDeployed) > 0 {
 		logger.Info("integrity check failed")
-		return detections.ErrIntCheckFailed
+		return deployedButNotEnabled, enabledButNotDeployed, detections.ErrIntCheckFailed
 	}
 
 	logger.Info("integrity check passed")
 
-	return nil
+	return deployedButNotEnabled, enabledButNotDeployed, nil
 }
 
 func consolidateEnabled(rulesIndex map[string]int, disabledIndex map[string]int) (pids []string) {
