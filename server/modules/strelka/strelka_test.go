@@ -7,6 +7,7 @@ package strelka
 
 import (
 	"context"
+	"encoding/json"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -20,6 +21,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/strelka/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
@@ -787,4 +789,184 @@ func TestVerifyCompiledHash(t *testing.T) {
 	// no hash is only allowed if the file is explicitly missing
 	err = eng.verifyCompiledHash("")
 	assert.NoError(t, err)
+}
+
+func TestIntegrityCheck(t *testing.T) {
+	tests := []struct {
+		Name     string
+		InitMock func(*mock.MockIOManager, *servermock.MockDetectionstore)
+		DbnE     []string
+		EbnD     []string
+		ExpError error
+	}{
+		{
+			Name: "No Rules",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) {
+				report := model.CompilationReport{}
+
+				jsonReport, _ := json.Marshal(report)
+				iom.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return(jsonReport, nil)
+
+				iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return(nil, os.ErrNotExist)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, opts ...model.GetAllOption) (map[string]*model.Detection, error) {
+					expected := []string{
+						`query AND so_detection.engine:"strelka"`,
+						`query AND so_detection.isEnabled:"true"`,
+					}
+
+					for i, opt := range opts {
+						value := opt("query", "so_")
+						assert.Equal(t, expected[i], value)
+					}
+
+					return map[string]*model.Detection{}, nil
+				})
+			},
+			DbnE: []string{},
+			EbnD: []string{},
+		},
+		{
+			Name: "Bad Compilation Report Hash",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) {
+				report := model.CompilationReport{
+					CompiledRulesHash: "bad hash",
+				}
+
+				jsonReport, _ := json.Marshal(report)
+				iom.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return(jsonReport, nil)
+
+				iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return([]byte("abc"), nil)
+			},
+			ExpError: detections.ErrIntCheckFailed,
+		},
+		{
+			Name: "Compilation Report Failures",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) {
+				report := model.CompilationReport{
+					CompiledRulesHash: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+					Failure:           []string{"MyYARARule1", "MyYARARule2", "MyYARARule3", "MyYARARule4", "MyYARARule5", "MyYARARule6"},
+				}
+
+				jsonReport, _ := json.Marshal(report)
+				iom.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return(jsonReport, nil)
+
+				iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return([]byte("abc"), nil)
+			},
+			ExpError: detections.ErrIntCheckFailed,
+		},
+		{
+			Name: "1 Deployed, 0 Enabled",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) {
+				report := model.CompilationReport{
+					CompiledRulesHash: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+					Success:           []string{"MyYARARule"},
+				}
+
+				jsonReport, _ := json.Marshal(report)
+				iom.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return(jsonReport, nil)
+
+				iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return([]byte("abc"), nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
+			},
+			DbnE:     []string{"MyYARARule"},
+			EbnD:     []string{},
+			ExpError: detections.ErrIntCheckFailed,
+		},
+		{
+			Name: "0 Deployed, 1 Enabled",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) {
+				report := model.CompilationReport{
+					CompiledRulesHash: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+				}
+
+				jsonReport, _ := json.Marshal(report)
+				iom.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return(jsonReport, nil)
+
+				iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return([]byte("abc"), nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+					"MyYARARule": {},
+				}, nil)
+			},
+			DbnE:     []string{},
+			EbnD:     []string{"MyYARARule"},
+			ExpError: detections.ErrIntCheckFailed,
+		},
+		{
+			Name: "Mix and Match Fail",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) {
+				report := model.CompilationReport{
+					CompiledRulesHash: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+					Success:           []string{"MyYARARule", "MyOtherYARARule"},
+				}
+
+				jsonReport, _ := json.Marshal(report)
+				iom.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return(jsonReport, nil)
+
+				iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return([]byte("abc"), nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+					"MyYARARule":     {},
+					"AThirdYARARule": {},
+				}, nil)
+			},
+			DbnE:     []string{"MyOtherYARARule"},
+			EbnD:     []string{"AThirdYARARule"},
+			ExpError: detections.ErrIntCheckFailed,
+		},
+		{
+			Name: "Mix and Match Fail",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) {
+				report := model.CompilationReport{
+					CompiledRulesHash: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+					Success:           []string{"MyYARARule", "MyOtherYARARule"},
+				}
+
+				jsonReport, _ := json.Marshal(report)
+				iom.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return(jsonReport, nil)
+
+				iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return([]byte("abc"), nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+					"MyYARARule":      {},
+					"MyOtherYARARule": {},
+				}, nil)
+			},
+			DbnE: []string{},
+			EbnD: []string{},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			detStore := servermock.NewMockDetectionstore(ctrl)
+			iom := mock.NewMockIOManager(ctrl)
+			test.InitMock(iom, detStore)
+
+			e := &StrelkaEngine{
+				srv: &server.Server{
+					Detectionstore: detStore,
+				},
+				IOManager: iom,
+			}
+
+			DbnE, EbnD, err := e.IntegrityCheck(false)
+
+			if test.ExpError != nil {
+				assert.Error(t, err)
+				assert.Equal(t, err, test.ExpError)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			assert.Equal(t, test.DbnE, DbnE)
+			assert.Equal(t, test.EbnD, EbnD)
+		})
+	}
 }

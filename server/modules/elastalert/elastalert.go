@@ -676,7 +676,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 						})
 					}
 
-					err = e.IntegrityCheck(false)
+					_, _, err = e.IntegrityCheck(false)
 
 					e.EngineState.IntegrityFailure = err != nil
 					lastSyncSuccess = util.Ptr(err == nil)
@@ -790,7 +790,7 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 				})
 			}
 
-			err = e.IntegrityCheck(false)
+			_, _, err = e.IntegrityCheck(false)
 
 			e.EngineState.IntegrityFailure = err != nil
 			lastSyncSuccess = util.Ptr(err == nil)
@@ -1568,10 +1568,10 @@ func wrapRule(det *model.Detection, rule string, additionalAlerters []string) (s
 	return string(rawYaml), nil
 }
 
-func (e *ElastAlertEngine) IntegrityCheck(canInterrupt bool) error {
+func (e *ElastAlertEngine) IntegrityCheck(canInterrupt bool) (deployedButNotEnabled []string, enabledButNotDeployed []string, err error) {
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
-		return detections.ErrIntCheckerStopped
+		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
 	logger := log.WithFields(log.Fields{
@@ -1582,7 +1582,7 @@ func (e *ElastAlertEngine) IntegrityCheck(canInterrupt bool) error {
 	deployed, err := e.getDeployedPublicIds()
 	if err != nil {
 		logger.WithError(err).Error("unable to get deployed publicIds")
-		return detections.ErrIntCheckFailed
+		return nil, nil, detections.ErrIntCheckFailed
 	}
 
 	logger.WithField("deployedPublicIdsCount", len(deployed)).Debug("deployed publicIds")
@@ -1590,18 +1590,18 @@ func (e *ElastAlertEngine) IntegrityCheck(canInterrupt bool) error {
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		logger.Info("integrity checker stopped")
-		return detections.ErrIntCheckerStopped
+		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
 	ret, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, model.WithEngine(model.EngineNameElastAlert), model.WithEnabled(true))
 	if err != nil {
 		logger.WithError(err).Error("unable to query for enabled detections")
-		return detections.ErrIntCheckFailed
+		return nil, nil, detections.ErrIntCheckFailed
 	}
 
 	enabled := make([]string, 0, len(ret))
-	for _, d := range ret {
-		enabled = append(enabled, d.PublicID)
+	for pid := range ret {
+		enabled = append(enabled, pid)
 	}
 
 	logger.WithField("enabledDetectionsCount", len(enabled)).Debug("enabled detections")
@@ -1609,10 +1609,10 @@ func (e *ElastAlertEngine) IntegrityCheck(canInterrupt bool) error {
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		logger.Info("integrity checker stopped")
-		return detections.ErrIntCheckerStopped
+		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
-	deployedButNotEnabled, enabledButNotDeployed, _ := detections.DiffLists(deployed, enabled)
+	deployedButNotEnabled, enabledButNotDeployed, _ = detections.DiffLists(deployed, enabled)
 
 	logger.WithFields(log.Fields{
 		"deployedButNotEnabled": deployedButNotEnabled,
@@ -1621,12 +1621,12 @@ func (e *ElastAlertEngine) IntegrityCheck(canInterrupt bool) error {
 
 	if len(deployedButNotEnabled) > 0 || len(enabledButNotDeployed) > 0 {
 		logger.Info("integrity check failed")
-		return detections.ErrIntCheckFailed
+		return deployedButNotEnabled, enabledButNotDeployed, detections.ErrIntCheckFailed
 	}
 
 	logger.Info("integrity check passed")
 
-	return nil
+	return deployedButNotEnabled, enabledButNotDeployed, nil
 }
 
 func (e *ElastAlertEngine) getDeployedPublicIds() (publicIds []string, err error) {
