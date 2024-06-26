@@ -19,6 +19,20 @@ beforeEach(() => {
 test('extract suricata', () => {
 	comp.detect = {
 		engine: 'suricata',
+		content: '(reference:url,example.com; reference:text,Research;)',
+		title: 'test',
+	};
+
+	comp.extractSummary();
+	expect(comp.extractedSummary).toBe('test');
+	comp.extractLogic();
+	expect(comp.extractedLogic).toBe('');
+	comp.extractDetails();
+	expect(comp.extractedCreated).toBe('');
+	expect(comp.extractedUpdated).toBe('');
+	
+	comp.detect = {
+		engine: 'suricata',
 		content: 'alert any any <> any any (classtype:Summary; reference:url,example.com; reference:text,Research; metadata: created_at 2020-01-01, updated_at 2020-01-02, author Bob;)',
 	};
 	comp.$route = { params: { id: '123' } };
@@ -42,7 +56,27 @@ test('extract suricata', () => {
 test('extract strelka', () => {
 	comp.detect = {
 		engine: 'strelka',
-		content: 'rule Test {\nmeta:\nreference1="example.com"\ndate = "2020-01-01";\nauthor = "Bob";\nstrings:\n$a = "test"\ncondition:\n$a\n}',
+		content: 'rule Test {\n meta:\n reference1="example.com"\n reference2="example_text"\n date = "2020-01-01";\n author = "Bob";\n condition:\n $a\n }',
+		title: 'Test',
+		description: 'Example Rule',
+	};
+
+	comp.extractLogic();
+	expect(comp.extractedLogic).toBe('condition:\n$a\n');
+
+	comp.detect = {
+		engine: 'strelka',
+		content: 'rule Test {\nmeta:\nreference1="example.com"\nreference2="example_text"\ndate = "2020-01-01";\nauthor = "Bob";\n condition:\n$a\n }',
+		title: 'Test',
+		description: 'Example Rule',
+	};
+
+	comp.extractLogic();
+	expect(comp.extractedLogic).toBe('condition:\n$a');
+	
+	comp.detect = {
+		engine: 'strelka',
+		content: 'rule Test {\nmeta:\nreference1="example.com"\nreference2="example_text"\ndate = "2020-01-01";\nauthor = "Bob";\nstrings:\n$a = "test"\ncondition:\n$a\n}',
 		title: 'Test',
 		description: 'Example Rule',
 	};
@@ -55,7 +89,8 @@ test('extract strelka', () => {
 
 	expect(comp.extractedSummary).toBe('Example Rule');
 	expect(comp.extractedReferences).toEqual([
-		{ type: 'url', text:'example.com', link: 'http://example.com' },
+		{ type: 'url', text: 'example.com', link: 'http://example.com' },
+		{ type: 'text', text: 'example_text'},
 	]);
 	expect(comp.extractedLogic).toBe('strings:\n$a = "test"\ncondition:\n$a');
 	expect(comp.extractedLogicClass).toBe('language-yara');
@@ -66,7 +101,16 @@ test('extract strelka', () => {
 test('extract elastalert', () => {
 	comp.detect = {
 		engine: 'elastalert',
-		content: `title: APT29 2018 Phishing Campaign File Indicators\nid: 3a3f81ca-652c-482b-adeb-b1c804727f74\nrelated:\n  - id: 7453575c-a747-40b9-839b-125a0aae324b # ProcessCreation\n    type: derived\nstatus: stable\ndescription: Detects indicators of APT 29 (Cozy Bear) phishing-campaign as reported by mandiant\nreferences:\n  - https://twitter.com/DrunkBinary/status/1063075530180886529\n  - https://www.mandiant.com/resources/blog/not-so-cozy-an-uncomfortable-examination-of-a-suspected-apt29-phishing-campaign\nauthor: '@41thexplorer'\ndate: 2018/11/20\nmodified: 2023/02/20\ntags:\n  - attack.defense_evasion\n  - attack.t1218.011\n  - detection.emerging_threats\nlogsource:\n  product: windows\n  category: file_event\ndetection:\n  selection:\n    TargetFilename|contains:\n      - 'ds7002.lnk'\n      - 'ds7002.pdf'\n      - 'ds7002.zip'\n    condition: selection\nfalsepositives:\n  - Unlikely\nlevel: critical`,
+		content: `title: APT29 2018 Phishing Campaign File Indicators\nid: 3a3f81ca-652c-482b-adeb-b1c804727f74\nrelated:\n  - id: 7453575c-a747-40b9-839b-125a0aae324b # ProcessCreation\n    type: derived\nstatus: stable\ndescription: Detects indicators of APT 29 (Cozy Bear) phishing-campaign as reported by mandiant\nreferences:\nauthor: '@41thexplorer'\ndate: 2018/11/20\nmodified: 2023/02/20\ntags:\n  - attack.defense_evasion\n  - attack.t1218.011\n  - detection.emerging_threats\nlogsource:\n  product: windows\n  category: file_event\ndetection:\n  selection:\n    TargetFilename|contains:\n      - 'ds7002.lnk'\n      - 'ds7002.pdf'\n      - 'ds7002.zip'\n    condition: selection\nfalsepositives:\n  - Unlikely\nlevel: critical`,
+		title: 'Title',
+	};
+
+	comp.extractReferences();
+	expect(comp.extractedReferences).toEqual([]);
+
+	comp.detect = {
+		engine: 'elastalert',
+		content: `title: APT29 2018 Phishing Campaign File Indicators\nid: 3a3f81ca-652c-482b-adeb-b1c804727f74\nrelated:\n  - id: 7453575c-a747-40b9-839b-125a0aae324b # ProcessCreation\n    type: derived\nstatus: stable\ndescription: Detects indicators of APT 29 (Cozy Bear) phishing-campaign as reported by mandiant\nreferences:\n  - https://twitter.com/DrunkBinary/status/1063075530180886529\n  - test_text \nauthor: '@41thexplorer'\ndate: 2018/11/20\nmodified: 2023/02/20\ntags:\n  - attack.defense_evasion\n  - attack.t1218.011\n  - detection.emerging_threats\nlogsource:\n  product: windows\n  category: file_event\ndetection:\n  selection:\n    TargetFilename|contains:\n      - 'ds7002.lnk'\n      - 'ds7002.pdf'\n      - 'ds7002.zip'\n    condition: selection\nfalsepositives:\n  - Unlikely\nlevel: critical`,
 		title: 'Title',
 	};
 	comp.$route = { params: { id: '123' } };
@@ -79,7 +123,7 @@ test('extract elastalert', () => {
 	expect(comp.extractedSummary).toBe('Detects indicators of APT 29 (Cozy Bear) phishing-campaign as reported by mandiant');
 	expect(comp.extractedReferences).toEqual([
 		{ type: 'url', text: 'https://twitter.com/DrunkBinary/status/1063075530180886529', link: 'https://twitter.com/DrunkBinary/status/1063075530180886529' },
-		{ type: 'url', text: 'https://www.mandiant.com/resources/blog/not-so-cozy-an-uncomfortable-examination-of-a-suspected-apt29-phishing-campaign', link: 'https://www.mandiant.com/resources/blog/not-so-cozy-an-uncomfortable-examination-of-a-suspected-apt29-phishing-campaign' },
+		{ type: 'text', text: 'test_text' },
 	]);
 	expect(comp.extractedLogic).toBe('logsource:\n  product: windows\n  category: file_event\ndetection:\n  selection:\n    TargetFilename|contains:\n      - ds7002.lnk\n      - ds7002.pdf\n      - ds7002.zip\n    condition: selection');
 	expect(comp.extractedLogicClass).toBe('language-yaml');
@@ -474,4 +518,314 @@ test('cidrFormat', () => {
 	expect(cidrFormat('256.256.256.256/32')).toBe(comp.i18n.invalidCidrOrVar);
 	expect(cidrFormat('0::0::0/16')).toBe(comp.i18n.invalidCidrOrVar);
 	expect(cidrFormat('google.com')).toBe(comp.i18n.invalidCidrOrVar);
+});
+
+test('rule: required', () => {
+	const required = comp.rules.required;
+
+	expect(required('')).toBe(comp.$root.i18n.required);
+	expect(required('a')).toBe(true);
+});
+
+test('rule: number', () => {
+	const number = comp.rules.number;
+	
+	expect(number('a')).toBe(comp.$root.i18n.required);
+	expect(number('1')).toBe(true);
+	expect(number(1)).toBe(true);
+	expect(number(1.0)).toBe(true);
+	expect(number('1.0')).toBe(true);
+	expect(number(1.1)).toBe(comp.$root.i18n.required);
+	expect(number('1.1')).toBe(comp.$root.i18n.required);
+});
+
+test('rule: hours', () => {
+	const hours = comp.rules.hours;
+
+	expect(hours('a')).toBe(comp.$root.i18n.invalidHours);
+	expect(hours('11111')).toBe(comp.$root.i18n.invalidHours);
+	expect(hours('0.11111')).toBe(comp.$root.i18n.invalidHours);
+	expect(hours('1.1.1')).toBe(comp.$root.i18n.invalidHours);
+	expect(hours('1')).toBe(true);
+	expect(hours('1111.1111')).toBe(true);
+});
+
+test('rule: minLength', () => {
+	const minLength = comp.rules.minLength;
+	const withLimit = minLength(1);
+
+	expect(withLimit('')).toBe(comp.$root.i18n.ruleMinLen);
+	expect(withLimit('a')).toBe(true);
+	expect(withLimit('aa')).toBe(true);
+});
+
+test('rule: shortLengthLimit', () => {
+	const shortLengthLimit = comp.rules.shortLengthLimit;
+	const valLen99 = 'a'.repeat(99);
+	const valLen100 = 'a'.repeat(100);
+
+	expect(shortLengthLimit('a')).toBe(true);
+	expect(shortLengthLimit(valLen99)).toBe(true);
+	expect(shortLengthLimit(valLen100)).toBe(comp.$root.i18n.required);
+});
+
+test('getDefaultPreset', () => {
+	comp.presets = {
+		"language": {
+		"customEnabled": false,
+		"labels": [
+			"suricata",
+			"sigma",
+			"yara"
+		]
+		},
+		"license": {
+		"customEnabled": true,
+		"labels": [
+			"Apache-2.0",
+			"AGPL-3.0-only",
+			"BSD-3-Clause",
+			"DRL-1.1",
+			"GPL-2.0-only",
+			"GPL-3.0-only",
+			"MIT"
+		]
+		},
+		"severity": {
+		"customEnabled": false,
+		"labels": [
+			"unknown",
+			"informational",
+			"low",
+			"medium",
+			"high",
+			"critical"
+		]
+		}
+	}
+
+	expect(comp.getDefaultPreset('language')).toBe('suricata');
+	expect(comp.getDefaultPreset('license')).toBe('Apache-2.0');
+	expect(comp.getDefaultPreset('severity')).toBe('unknown');
+    expect(comp.getDefaultPreset('test')).toBe('');    
+});
+
+test('getPresets', () => {
+	comp.presets = {
+		"language": {
+		"customEnabled": false,
+		"labels": [
+			"suricata",
+			"sigma",
+			"yara"
+		]
+		},
+		"license": {
+		"customEnabled": true,
+		"labels": [
+			"Apache-2.0",
+			"AGPL-3.0-only",
+			"BSD-3-Clause",
+			"DRL-1.1",
+			"GPL-2.0-only",
+			"GPL-3.0-only",
+			"MIT"
+		]
+		},
+		"severity": {
+		"customEnabled": false,
+		"labels": [
+			"unknown",
+			"informational",
+			"low",
+			"medium",
+			"high",
+			"critical"
+		]
+		}
+	}
+
+	expect(comp.getPresets('language')).toEqual(['Suricata', 'Sigma', 'YARA']);
+	expect(comp.getPresets('license')).toEqual([
+		"Apache-2.0",
+		"AGPL-3.0-only",
+		"BSD-3-Clause",
+		"DRL-1.1",
+		"GPL-2.0-only",
+		"GPL-3.0-only",
+		"MIT"
+	])
+	expect(comp.getPresets('test')).toEqual([]);
+});
+
+test('findHistoryChange', () => {
+	
+	// elastalert
+	comp.history = [
+		{
+			"id": "oHypPJABXppUUuo3IHDO",
+			"createTime": "2024-06-21T17:17:14.951585268-04:00",
+			"updateTime": "2024-06-21T17:17:14.951616529-04:00",
+			"userId": "5ac4acbe-6299-463d-9449-9a728ec48ab8",
+			"kind": "detection",
+			"operation": "create",
+			"publicId": "aaca8e61-0365-4e50-8cee-6f7102a46b08",
+			"title": "test history",
+			"severity": "high",
+			"author": "matthew.wright@securityonionsolutions.com",
+			"description": "This should be a detailed description of what this Detection focuses on: what we are trying to find and why we are trying to find it.\n",
+			"content": "title: 'test history'\nid: aaca8e61-0365-4e50-8cee-6f7102a46b08\nstatus: 'experimental'\ndescription: |\n    This should be a detailed description of what this Detection focuses on: what we are trying to find and why we are trying to find it.\nreferences:\n  - 'https://local.invalid'\nauthor: '@SecurityOnion'\ndate: 'YYYY/MM/DD'\ntags:\n  - detection.threat_hunting\n  - attack.technique_id\nlogsource:\n  category: process_creation\n  product: windows\ndetection:\n  selection:\n    Image: 'whoami.exe'\n    User: 'backup'\n  condition: selection\nlevel: 'high'",
+			"isEnabled": false,
+			"isReporting": false,
+			"isCommunity": false,
+			"engine": "elastalert",
+			"language": "sigma",
+			"overrides": null,
+			"tags": null,
+			"ruleset": "__custom__",
+			"license": "Apache-2.0"
+		},
+		{
+			"id": "BHypPJABXppUUuo3UnEl",
+			"createTime": "2024-06-21T17:17:14.951585268-04:00",
+			"updateTime": "2024-06-21T17:17:27.563141416-04:00",
+			"userId": "5ac4acbe-6299-463d-9449-9a728ec48ab8",
+			"kind": "detection",
+			"operation": "update",
+			"publicId": "aaca8e61-0365-4e50-8cee-6f7102a46b08",
+			"title": "test history updated",
+			"severity": "high",
+			"author": "matthew.wright@securityonionsolutions.com",
+			"description": "This should be a detailed description of what this Detection focuses on: what we are trying to find and why we are trying to find it.\n",
+			"content": "title: 'test history updated'\nid: aaca8e61-0365-4e50-8cee-6f7102a46b08\nstatus: 'experimental'\ndescription: |\n    This should be a detailed description of what this Detection focuses on: what we are trying to find and why we are trying to find it.\nreferences:\n  - 'https://local.invalid'\nauthor: '@SecurityOnion'\ndate: 'YYYY/MM/DD'\ntags:\n  - detection.threat_hunting\n  - attack.technique_id\nlogsource:\n  category: process_creation\n  product: windows\ndetection:\n  selection:\n    Image: 'whoami.exe'\n    User: 'backup'\n  condition: selection\nlevel: 'high'",
+			"isEnabled": false,
+			"isReporting": false,
+			"isCommunity": false,
+			"engine": "elastalert",
+			"language": "sigma",
+			"overrides": [],
+			"tags": null,
+			"ruleset": "__custom__",
+			"license": "Apache-2.0"
+		}
+	];
+	expect(Object.keys(comp.changedKeys).length).toBe(0);
+	id = comp.history[1]['id'];
+	comp.findHistoryChange(id);
+	expect(comp.changedKeys[id]).toStrictEqual(['title']);
+
+	// suricata
+	comp.history = [
+		{
+			"id": "ftBXVpABn3BnwwVaSfjx",
+			"createTime": "2024-06-26T16:57:58.910704718-04:00",
+			"updateTime": "2024-06-26T16:57:58.910735621-04:00",
+			"userId": "5ac4acbe-6299-463d-9449-9a728ec48ab8",
+			"kind": "detection",
+			"operation": "create",
+			"publicId": "1997691",
+			"title": "test rule",
+			"severity": "unknown",
+			"author": "matthew.wright@securityonionsolutions.com",
+			"description": "Detection description not yet provided",
+			"content": "alert http $EXTERNAL_NET any -> $HOME_NET any (msg:\"test rule\"; content:\"example\"; sid:1997691; rev:1;)\n",
+			"isEnabled": false,
+			"isReporting": false,
+			"isCommunity": false,
+			"engine": "suricata",
+			"language": "suricata",
+			"overrides": null,
+			"tags": null,
+			"ruleset": "__custom__",
+			"license": "Apache-2.0"
+		},
+		{
+			"id": "oNBXVpABn3BnwwVa_vmG",
+			"createTime": "2024-06-26T16:57:58.910704718-04:00",
+			"updateTime": "2024-06-26T16:58:45.341119411-04:00",
+			"userId": "5ac4acbe-6299-463d-9449-9a728ec48ab8",
+			"kind": "detection",
+			"operation": "update",
+			"publicId": "1997691",
+			"title": "test rule updated",
+			"severity": "unknown",
+			"author": "matthew.wright@securityonionsolutions.com",
+			"description": "Detection description not yet provided",
+			"content": "alert http $EXTERNAL_NET any -> $HOME_NET any (msg:\"test rule updated\"; content:\"example\"; sid:1997691; rev:1;)\n",
+			"isEnabled": false,
+			"isReporting": false,
+			"isCommunity": false,
+			"engine": "suricata",
+			"language": "suricata",
+			"overrides": [],
+			"tags": null,
+			"ruleset": "__custom__",
+			"license": "Apache-2.0"
+		}
+	];
+	id = comp.history[1]['id'];
+	comp.findHistoryChange(id);
+	expect(comp.changedKeys[id]).toStrictEqual(['title']);
+
+	// strelka
+	comp.history = [
+		{
+			"id": "xtBaVpABn3BnwwVaKv0Z",
+			"createTime": "2024-06-26T17:01:07.363478251-04:00",
+			"updateTime": "2024-06-26T17:01:07.3635097-04:00",
+			"userId": "5ac4acbe-6299-463d-9449-9a728ec48ab8",
+			"kind": "detection",
+			"operation": "create",
+			"publicId": "testRuleStrelka",
+			"title": "testRuleStrelka",
+			"severity": "unknown",
+			"author": "matthew.wright@securityonionsolutions.com",
+			"description": "Generic YARA Rule",
+			"content": "rule testRuleStrelka // This identifier _must_ be unique\n{\n    meta:\n        description=\"Generic YARA Rule\"\n        author = \"@SecurityOnion\"\n        date = \"YYYY-MM-DD\"\n        reference = \"https://local.invalid\"\n    strings:\n        $my_text_string = \"text here\"\n        $my_hex_string = { E2 34 A1 C8 23 FB }\n    condition:\n        filesize < 3MB and ($my_text_string or $my_hex_string)\n}\n",
+			"isEnabled": false,
+			"isReporting": false,
+			"isCommunity": false,
+			"engine": "strelka",
+			"language": "yara",
+			"overrides": null,
+			"tags": null,
+			"ruleset": "__custom__",
+			"license": "Apache-2.0"
+		},
+		{
+			"id": "8tBbVpABn3BnwwVaAP5P",
+			"createTime": "2024-06-26T17:01:07.363478251-04:00",
+			"updateTime": "2024-06-26T17:02:02.362314808-04:00",
+			"userId": "5ac4acbe-6299-463d-9449-9a728ec48ab8",
+			"kind": "detection",
+			"operation": "update",
+			"publicId": "testRuleStrelka2",
+			"title": "testRuleStrelka2",
+			"severity": "unknown",
+			"author": "matthew.wright@securityonionsolutions.com",
+			"description": "Generic YARA Rule",
+			"content": "rule testRuleStrelka2 // This identifier _must_ be unique\n{\n    meta:\n        description=\"Generic YARA Rule\"\n        author = \"@SecurityOnion\"\n        date = \"YYYY-MM-DD\"\n        reference = \"https://local.invalid\"\n    strings:\n        $my_text_string = \"text here\"\n        $my_hex_string = { E2 34 A1 C8 23 FB }\n    condition:\n        filesize < 3MB and ($my_text_string or $my_hex_string)\n}\n",
+			"isEnabled": false,
+			"isReporting": false,
+			"isCommunity": false,
+			"engine": "strelka",
+			"language": "yara",
+			"overrides": [],
+			"tags": null,
+			"ruleset": "__custom__",
+			"license": "Apache-2.0"
+		}
+	];
+	id = comp.history[1]['id'];
+	comp.findHistoryChange(id);
+	expect(comp.changedKeys[id]).toStrictEqual(['title']);
+});
+
+test('checkChangedKey', () => {
+	expect(Object.keys(comp.changedKeys).length).toBe(0);
+	let id = "BHypPJABXppUUuo3UnEl";
+	comp.changedKeys[id] = ['title', 'content'];
+	expect(comp.checkChangedKey(id, 'title')).toBe(true);
+	expect(comp.checkChangedKey(id, 'content')).toBe(true);
+	expect(comp.checkChangedKey(id, 'severity')).toBe(false);
 });

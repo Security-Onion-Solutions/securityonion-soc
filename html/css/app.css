@@ -657,3 +657,11 @@ td {
 code {
   background-color: unset !important;
 }
+
+.theme--light .key-changed {
+  color: rgb(102, 153, 0)
+}
+
+.theme--dark .key-changed {
+  color: rgb(204, 153, 205)
+}
