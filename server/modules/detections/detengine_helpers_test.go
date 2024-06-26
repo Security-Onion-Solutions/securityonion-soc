@@ -338,3 +338,24 @@ func TestDeduplicateByPublicId(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckTemplate(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	detStore := servermock.NewMockDetectionstore(ctrl)
+
+	// note: after the first time DoesTemplateExist returns true, it will not be called
+	// again no matter how many times CheckTemplate is called.
+	detStore.EXPECT().DoesTemplateExist(ctx, "so-detection").Return(false, nil)
+	detStore.EXPECT().DoesTemplateExist(ctx, "so-detection").Return(true, nil).Times(1)
+
+	results := []bool{}
+	for i := 0; i < 10; i++ {
+		result := CheckTemplate(ctx, detStore)
+		results = append(results, result)
+	}
+
+	assert.Equal(t, []bool{false, true, true, true, true, true, true, true, true, true}, results)
+}

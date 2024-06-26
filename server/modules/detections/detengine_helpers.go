@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/config"
@@ -27,6 +28,8 @@ import (
 )
 
 var doubleQuoteEscaper = regexp.MustCompile(`\\([\s\S])|(")`)
+var templateMutex = &sync.Mutex{}
+var templateFound = false
 
 type GetterByPublicId interface {
 	GetDetectionByPublicId(ctx context.Context, publicId string) (*model.Detection, error)
@@ -382,4 +385,28 @@ func DeduplicateByPublicId(detects []*model.Detection) []*model.Detection {
 	}
 
 	return deduped
+}
+
+type TemplateChecker interface {
+	DoesTemplateExist(ctx context.Context, tmpl string) (bool, error)
+}
+
+func CheckTemplate(ctx context.Context, detStore TemplateChecker) (haveTemplate bool) {
+	templateMutex.Lock()
+	defer templateMutex.Unlock()
+
+	if templateFound {
+		return true
+	}
+
+	exists, err := detStore.DoesTemplateExist(ctx, "so-detection")
+	if err != nil {
+		log.WithError(err).Error("failed to check for so-detection template")
+		return false
+	}
+
+	templateFound = exists
+	log.WithField("templateExists", exists).Info("checked for so-detection template")
+
+	return exists
 }
