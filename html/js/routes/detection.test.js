@@ -659,6 +659,8 @@ test('getPresets', () => {
 });
 
 test('findHistoryChange', () => {
+	
+	// elastalert
 	comp.history = [
 		{
 			"id": "oHypPJABXppUUuo3IHDO",
@@ -708,6 +710,112 @@ test('findHistoryChange', () => {
 		}
 	];
 	expect(Object.keys(comp.changedKeys).length).toBe(0);
+	id = comp.history[1]['id'];
+	comp.findHistoryChange(id);
+	expect(comp.changedKeys[id]).toStrictEqual(['title']);
+
+	// suricata
+	comp.history = [
+		{
+			"id": "ftBXVpABn3BnwwVaSfjx",
+			"createTime": "2024-06-26T16:57:58.910704718-04:00",
+			"updateTime": "2024-06-26T16:57:58.910735621-04:00",
+			"userId": "5ac4acbe-6299-463d-9449-9a728ec48ab8",
+			"kind": "detection",
+			"operation": "create",
+			"publicId": "1997691",
+			"title": "test rule",
+			"severity": "unknown",
+			"author": "matthew.wright@securityonionsolutions.com",
+			"description": "Detection description not yet provided",
+			"content": "alert http $EXTERNAL_NET any -> $HOME_NET any (msg:\"test rule\"; content:\"example\"; sid:1997691; rev:1;)\n",
+			"isEnabled": false,
+			"isReporting": false,
+			"isCommunity": false,
+			"engine": "suricata",
+			"language": "suricata",
+			"overrides": null,
+			"tags": null,
+			"ruleset": "__custom__",
+			"license": "Apache-2.0"
+		},
+		{
+			"id": "oNBXVpABn3BnwwVa_vmG",
+			"createTime": "2024-06-26T16:57:58.910704718-04:00",
+			"updateTime": "2024-06-26T16:58:45.341119411-04:00",
+			"userId": "5ac4acbe-6299-463d-9449-9a728ec48ab8",
+			"kind": "detection",
+			"operation": "update",
+			"publicId": "1997691",
+			"title": "test rule updated",
+			"severity": "unknown",
+			"author": "matthew.wright@securityonionsolutions.com",
+			"description": "Detection description not yet provided",
+			"content": "alert http $EXTERNAL_NET any -> $HOME_NET any (msg:\"test rule updated\"; content:\"example\"; sid:1997691; rev:1;)\n",
+			"isEnabled": false,
+			"isReporting": false,
+			"isCommunity": false,
+			"engine": "suricata",
+			"language": "suricata",
+			"overrides": [],
+			"tags": null,
+			"ruleset": "__custom__",
+			"license": "Apache-2.0"
+		}
+	];
+	id = comp.history[1]['id'];
+	comp.findHistoryChange(id);
+	expect(comp.changedKeys[id]).toStrictEqual(['title']);
+
+	// strelka
+	comp.history = [
+		{
+			"id": "xtBaVpABn3BnwwVaKv0Z",
+			"createTime": "2024-06-26T17:01:07.363478251-04:00",
+			"updateTime": "2024-06-26T17:01:07.3635097-04:00",
+			"userId": "5ac4acbe-6299-463d-9449-9a728ec48ab8",
+			"kind": "detection",
+			"operation": "create",
+			"publicId": "testRuleStrelka",
+			"title": "testRuleStrelka",
+			"severity": "unknown",
+			"author": "matthew.wright@securityonionsolutions.com",
+			"description": "Generic YARA Rule",
+			"content": "rule testRuleStrelka // This identifier _must_ be unique\n{\n    meta:\n        description=\"Generic YARA Rule\"\n        author = \"@SecurityOnion\"\n        date = \"YYYY-MM-DD\"\n        reference = \"https://local.invalid\"\n    strings:\n        $my_text_string = \"text here\"\n        $my_hex_string = { E2 34 A1 C8 23 FB }\n    condition:\n        filesize < 3MB and ($my_text_string or $my_hex_string)\n}\n",
+			"isEnabled": false,
+			"isReporting": false,
+			"isCommunity": false,
+			"engine": "strelka",
+			"language": "yara",
+			"overrides": null,
+			"tags": null,
+			"ruleset": "__custom__",
+			"license": "Apache-2.0"
+		},
+		{
+			"id": "8tBbVpABn3BnwwVaAP5P",
+			"createTime": "2024-06-26T17:01:07.363478251-04:00",
+			"updateTime": "2024-06-26T17:02:02.362314808-04:00",
+			"userId": "5ac4acbe-6299-463d-9449-9a728ec48ab8",
+			"kind": "detection",
+			"operation": "update",
+			"publicId": "testRuleStrelka2",
+			"title": "testRuleStrelka2",
+			"severity": "unknown",
+			"author": "matthew.wright@securityonionsolutions.com",
+			"description": "Generic YARA Rule",
+			"content": "rule testRuleStrelka2 // This identifier _must_ be unique\n{\n    meta:\n        description=\"Generic YARA Rule\"\n        author = \"@SecurityOnion\"\n        date = \"YYYY-MM-DD\"\n        reference = \"https://local.invalid\"\n    strings:\n        $my_text_string = \"text here\"\n        $my_hex_string = { E2 34 A1 C8 23 FB }\n    condition:\n        filesize < 3MB and ($my_text_string or $my_hex_string)\n}\n",
+			"isEnabled": false,
+			"isReporting": false,
+			"isCommunity": false,
+			"engine": "strelka",
+			"language": "yara",
+			"overrides": [],
+			"tags": null,
+			"ruleset": "__custom__",
+			"license": "Apache-2.0"
+		}
+	];
 	id = comp.history[1]['id'];
 	comp.findHistoryChange(id);
 	expect(comp.changedKeys[id]).toStrictEqual(['title']);
