@@ -8,6 +8,8 @@ package suricata
 import (
 	"context"
 	"errors"
+	"io/fs"
+	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -17,6 +19,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/handmock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/suricata/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
@@ -106,6 +109,87 @@ func TestSettingByID(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestReadAndHash(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	content := "content"
+
+	iom := mock.NewMockIOManager(ctrl)
+	iom.EXPECT().ReadFile("file").Return([]byte(content), nil)
+
+	e := &SuricataEngine{
+		srv:       &server.Server{},
+		IOManager: iom,
+	}
+
+	fileContent, sha256Hash, err := e.readAndHash("file")
+
+	assert.NoError(t, err)
+	assert.Equal(t, content, fileContent)
+	assert.Equal(t, "ed7002b439e9ac845f22357d822bac1444730fbdb6016d3ec9432297b9ec9f73", sha256Hash)
+}
+
+func TestReadFingerprint(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	content := " fingerprint\n\t"
+
+	iom := mock.NewMockIOManager(ctrl)
+	iom.EXPECT().ReadFile("file").Return([]byte(content), nil)
+
+	e := &SuricataEngine{
+		srv:       &server.Server{},
+		IOManager: iom,
+	}
+
+	fingerprint, ok, err := e.readFingerprint("file")
+
+	assert.NoError(t, err)
+	assert.True(t, ok)
+	assert.NotNil(t, fingerprint)
+	assert.Equal(t, "fingerprint", *fingerprint)
+}
+
+func TestReadFingerprintDoesNotExist(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+	iom.EXPECT().ReadFile("file").Return(nil, os.ErrNotExist)
+
+	e := &SuricataEngine{
+		srv:       &server.Server{},
+		IOManager: iom,
+	}
+
+	fingerprint, ok, err := e.readFingerprint("file")
+
+	assert.NoError(t, err)
+	assert.False(t, ok)
+	assert.Nil(t, fingerprint)
+}
+
+func TestReadFingerprintError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+	iom.EXPECT().ReadFile("file").Return(nil, errors.New("error"))
+
+	e := &SuricataEngine{
+		srv:       &server.Server{},
+		IOManager: iom,
+	}
+
+	fingerprint, ok, err := e.readFingerprint("file")
+
+	assert.Error(t, err)
+	assert.False(t, ok)
+	assert.Nil(t, fingerprint)
 }
 
 func TestExtractSID(t *testing.T) {
@@ -1741,6 +1825,53 @@ func TestReadCustomRulesets(t *testing.T) {
 			assert.Equal(t, test.ExpDetections, detects)
 		})
 	}
+}
+
+func TestCheckForMigrations(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+
+	iom.EXPECT().ReadDir("/opt/so/conf/soc/migrations/").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: "suricata-migration-2.4.70",
+		},
+		&handmock.MockDirEntry{
+			Filename: "etc",
+			Dir:      true,
+		},
+		&handmock.MockDirEntry{
+			Filename: "not-a-migration",
+		},
+	}, nil)
+
+	m2470 := 0
+	m2471 := 0
+
+	e := &SuricataEngine{
+		migrations: map[string]func(string) error{
+			"2.4.70": func(string) error {
+				m2470++
+
+				return nil
+			},
+			"2.4.71": func(string) error {
+				// shouldn't be called
+				m2471++
+
+				return nil
+			},
+		},
+		IOManager: iom,
+	}
+
+	e.checkForMigrations()
+
+	assert.Equal(t, m2470, 1)
+	assert.Equal(t, m2471, 0)
+	assert.False(t, e.EngineState.MigrationFailure)
+	assert.False(t, e.EngineState.Migrating)
 }
 
 func TestIntegrityCheck(t *testing.T) {
