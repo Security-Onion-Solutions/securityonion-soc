@@ -725,10 +725,10 @@ test('findHistoryChange', () => {
 			"operation": "create",
 			"publicId": "1997691",
 			"title": "test rule",
-			"severity": "unknown",
+			"severity": "low",
 			"author": "matthew.wright@securityonionsolutions.com",
 			"description": "Detection description not yet provided",
-			"content": "alert http $EXTERNAL_NET any -> $HOME_NET any (msg:\"test rule\"; content:\"example\"; sid:1997691; rev:1;)\n",
+			"content": "alert http $EXTERNAL_NET any -> $HOME_NET any (msg:\"test rule\"; content:\"example\"; sid:1997691; rev:1; metadata:signature_severity Minor;)\n",
 			"isEnabled": false,
 			"isReporting": false,
 			"isCommunity": false,
@@ -747,11 +747,11 @@ test('findHistoryChange', () => {
 			"kind": "detection",
 			"operation": "update",
 			"publicId": "1997691",
-			"title": "test rule updated",
-			"severity": "unknown",
+			"title": "test rule",
+			"severity": "high",
 			"author": "matthew.wright@securityonionsolutions.com",
 			"description": "Detection description not yet provided",
-			"content": "alert http $EXTERNAL_NET any -> $HOME_NET any (msg:\"test rule updated\"; content:\"example\"; sid:1997691; rev:1;)\n",
+			"content": "alert http $EXTERNAL_NET any -> $HOME_NET any (msg:\"test rule\"; content:\"example\"; sid:1997691; rev:1; metadata:signature_severity Major;)\n",
 			"isEnabled": false,
 			"isReporting": false,
 			"isCommunity": false,
@@ -763,9 +763,10 @@ test('findHistoryChange', () => {
 			"license": "Apache-2.0"
 		}
 	];
+	comp.severityTranslations = { "major" : "high", "minor" : "low" };
 	id = comp.history[1]['id'];
 	comp.findHistoryChange(id);
-	expect(comp.changedKeys[id]).toStrictEqual(['title']);
+	expect(comp.changedKeys[id]).toStrictEqual(['severity']);
 
 	// strelka
 	comp.history = [
@@ -799,12 +800,12 @@ test('findHistoryChange', () => {
 			"userId": "5ac4acbe-6299-463d-9449-9a728ec48ab8",
 			"kind": "detection",
 			"operation": "update",
-			"publicId": "testRuleStrelka2",
-			"title": "testRuleStrelka2",
+			"publicId": "testRuleStrelka",
+			"title": "testRuleStrelka",
 			"severity": "unknown",
 			"author": "matthew.wright@securityonionsolutions.com",
-			"description": "Generic YARA Rule",
-			"content": "rule testRuleStrelka2 // This identifier _must_ be unique\n{\n    meta:\n        description=\"Generic YARA Rule\"\n        author = \"@SecurityOnion\"\n        date = \"YYYY-MM-DD\"\n        reference = \"https://local.invalid\"\n    strings:\n        $my_text_string = \"text here\"\n        $my_hex_string = { E2 34 A1 C8 23 FB }\n    condition:\n        filesize < 3MB and ($my_text_string or $my_hex_string)\n}\n",
+			"description": "Generic YARA Rule updated",
+			"content": "rule testRuleStrelka // This identifier _must_ be unique\n{\n    meta:\n        description=\"Generic YARA Rule updated\"\n        author = \"@SecurityOnion\"\n        date = \"YYYY-MM-DD\"\n        reference = \"https://local.invalid\"\n    strings:\n        $my_text_string = \"text here\"\n        $my_hex_string = { E2 34 A1 C8 23 FB }\n    condition:\n        filesize < 3MB and ($my_text_string or $my_hex_string)\n}\n",
 			"isEnabled": false,
 			"isReporting": false,
 			"isCommunity": false,
@@ -818,7 +819,7 @@ test('findHistoryChange', () => {
 	];
 	id = comp.history[1]['id'];
 	comp.findHistoryChange(id);
-	expect(comp.changedKeys[id]).toStrictEqual(['title']);
+	expect(comp.changedKeys[id]).toStrictEqual(['description']);
 });
 
 test('checkChangedKey', () => {
