@@ -30,7 +30,7 @@ test('extract suricata', () => {
 	comp.extractDetails();
 	expect(comp.extractedCreated).toBe('');
 	expect(comp.extractedUpdated).toBe('');
-	
+
 	comp.detect = {
 		engine: 'suricata',
 		content: 'alert any any <> any any (classtype:Summary; reference:url,example.com; reference:text,Research; metadata: created_at 2020-01-01, updated_at 2020-01-02, author Bob;)',
@@ -73,7 +73,7 @@ test('extract strelka', () => {
 
 	comp.extractLogic();
 	expect(comp.extractedLogic).toBe('condition:\n$a');
-	
+
 	comp.detect = {
 		engine: 'strelka',
 		content: 'rule Test {\nmeta:\nreference1="example.com"\nreference2="example_text"\ndate = "2020-01-01";\nauthor = "Bob";\nstrings:\n$a = "test"\ncondition:\n$a\n}',
@@ -529,7 +529,7 @@ test('rule: required', () => {
 
 test('rule: number', () => {
 	const number = comp.rules.number;
-	
+
 	expect(number('a')).toBe(comp.$root.i18n.required);
 	expect(number('1')).toBe(true);
 	expect(number(1)).toBe(true);
@@ -607,7 +607,7 @@ test('getDefaultPreset', () => {
 	expect(comp.getDefaultPreset('language')).toBe('suricata');
 	expect(comp.getDefaultPreset('license')).toBe('Apache-2.0');
 	expect(comp.getDefaultPreset('severity')).toBe('unknown');
-    expect(comp.getDefaultPreset('test')).toBe('');    
+    expect(comp.getDefaultPreset('test')).toBe('');
 });
 
 test('getPresets', () => {
@@ -659,7 +659,7 @@ test('getPresets', () => {
 });
 
 test('findHistoryChange', () => {
-	
+
 	// elastalert
 	comp.history = [
 		{
@@ -828,4 +828,42 @@ test('checkChangedKey', () => {
 	expect(comp.checkChangedKey(id, 'title')).toBe(true);
 	expect(comp.checkChangedKey(id, 'content')).toBe(true);
 	expect(comp.checkChangedKey(id, 'severity')).toBe(false);
+});
+
+test('loadUrlParameters', () => {
+	let nextTickCalled = 0;
+	comp.$nextTick = (f) => {
+		// can't use jest.fn, need to actually call the arg passed in
+		nextTickCalled++;
+		f();
+	};
+
+	comp.$route.query = {
+		tab: 'tab',
+	};
+
+	comp.loadUrlParameters();
+
+	expect(comp.activeTab).toBe('tab');
+	expect(nextTickCalled).toBe(1);
+});
+
+test('extractDetection', () => {
+	let response = {
+		data: {
+			kind: 'kind',
+			id: 'id',
+		},
+	};
+
+	comp.tagOverrides = jest.fn();
+	comp.loadAssociations = jest.fn();
+	comp.$root.populateUserDetails = jest.fn();
+
+	comp.extractDetection(response);
+
+	expect(comp.detect).toStrictEqual({ id: 'id' });
+	expect(comp.tagOverrides).toHaveBeenCalledTimes(1);
+	expect(comp.loadAssociations).toHaveBeenCalledTimes(1);
+	expect(comp.$root.populateUserDetails).toHaveBeenCalledTimes(1);
 });
