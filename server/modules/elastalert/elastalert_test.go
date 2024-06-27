@@ -27,8 +27,8 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
-	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/handmock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
 	"github.com/stretchr/testify/assert"
@@ -239,13 +239,16 @@ func TestTimeFrame(t *testing.T) {
 func TestCheckSigmaPipelines(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockIO := mock.NewMockIOManager(ctrl)
+
+	iom := mock.NewMockIOManager(ctrl)
 
 	e := &ElastAlertEngine{
 		sigmaPipelineFinal:            "/opt/sensoroni/sigma_final_pipeline.yaml",
 		sigmaPipelineSO:               "/opt/sensoroni/sigma_so_pipeline.yaml",
 		sigmaPipelinesFingerprintFile: "/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint",
-		IOManager:                     mockIO,
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			IOManager: iom,
+		},
 	}
 
 	testList := []struct {
@@ -259,10 +262,10 @@ func TestCheckSigmaPipelines(t *testing.T) {
 			name: "No changes in pipelines",
 			setupMock: func() {
 				// Setup the hash values to be the same
-				mockIO.EXPECT().ReadFile("/opt/sensoroni/sigma_final_pipeline.yaml").Return([]byte("data"), nil)
-				mockIO.EXPECT().ReadFile("/opt/sensoroni/sigma_so_pipeline.yaml").Return([]byte("data"), nil)
+				iom.EXPECT().ReadFile("/opt/sensoroni/sigma_final_pipeline.yaml").Return([]byte("data"), nil)
+				iom.EXPECT().ReadFile("/opt/sensoroni/sigma_so_pipeline.yaml").Return([]byte("data"), nil)
 				hash := "3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7-3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7"
-				mockIO.EXPECT().ReadFile("/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint").Return([]byte(hash), nil)
+				iom.EXPECT().ReadFile("/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint").Return([]byte(hash), nil)
 			},
 			expectedChange: false,
 			expectedHash:   "",
@@ -272,10 +275,10 @@ func TestCheckSigmaPipelines(t *testing.T) {
 			name: "Changes detected in pipelines",
 			setupMock: func() {
 				// Setup the hash values to be different
-				mockIO.EXPECT().ReadFile("/opt/sensoroni/sigma_final_pipeline.yaml").Return([]byte("data1"), nil)
-				mockIO.EXPECT().ReadFile("/opt/sensoroni/sigma_so_pipeline.yaml").Return([]byte("data2"), nil)
+				iom.EXPECT().ReadFile("/opt/sensoroni/sigma_final_pipeline.yaml").Return([]byte("data1"), nil)
+				iom.EXPECT().ReadFile("/opt/sensoroni/sigma_so_pipeline.yaml").Return([]byte("data2"), nil)
 				hash := "7c563a27ed29beba2a5e9fd515c0b4435065d7c90af52b29a7f96f1ba2f00d7b-6d8758d5149c097c5131dd1355b7b8891b2b207384ff8f66a650537c3d2ffd6f"
-				mockIO.EXPECT().ReadFile("/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint").Return([]byte(hash), nil)
+				iom.EXPECT().ReadFile("/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint").Return([]byte(hash), nil)
 			},
 			expectedChange: true,
 			expectedHash:   "5b41362bc82b7f3d56edc5a306db22105707d01ff4819e26faef9724a2d406c9-d98cf53e0c8b77c14a96358d5b69584225b4bb9026423cbc2f7b0161894c402c",
@@ -284,7 +287,7 @@ func TestCheckSigmaPipelines(t *testing.T) {
 		{
 			name: "Error reading final pipeline file",
 			setupMock: func() {
-				mockIO.EXPECT().ReadFile("/opt/sensoroni/sigma_final_pipeline.yaml").Return(nil, errors.New("file read error"))
+				iom.EXPECT().ReadFile("/opt/sensoroni/sigma_final_pipeline.yaml").Return(nil, errors.New("file read error"))
 			},
 			expectedChange: false,
 			expectedHash:   "",
@@ -310,9 +313,11 @@ func TestCheckSigmaPipelines(t *testing.T) {
 
 func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	mio := mock.NewMockIOManager(ctrl)
+	defer ctrl.Finish()
 
-	mio.EXPECT().ExecCommand(gomock.Cond(func(x any) bool {
+	iom := mock.NewMockIOManager(ctrl)
+
+	iom.EXPECT().ExecCommand(gomock.Cond(func(x any) bool {
 		cmd := x.(*exec.Cmd)
 
 		if !strings.HasSuffix(cmd.Path, "sigma") {
@@ -331,7 +336,9 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 	})).Return([]byte("<eql>"), 0, time.Duration(0), nil)
 
 	engine := ElastAlertEngine{
-		IOManager: mio,
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			IOManager: iom,
+		},
 	}
 
 	det := &model.Detection{
@@ -369,9 +376,11 @@ filter:
 
 func TestSigmaToElastAlertSunnyDayLicensed(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	mio := mock.NewMockIOManager(ctrl)
+	defer ctrl.Finish()
 
-	mio.EXPECT().ExecCommand(gomock.Cond(func(x any) bool {
+	iom := mock.NewMockIOManager(ctrl)
+
+	iom.EXPECT().ExecCommand(gomock.Cond(func(x any) bool {
 		cmd := x.(*exec.Cmd)
 
 		if !strings.HasSuffix(cmd.Path, "sigma") {
@@ -390,7 +399,9 @@ func TestSigmaToElastAlertSunnyDayLicensed(t *testing.T) {
 	})).Return([]byte("<eql>"), 0, time.Duration(0), nil)
 
 	engine := ElastAlertEngine{
-		IOManager: mio,
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			IOManager: iom,
+		},
 	}
 
 	det := &model.Detection{
@@ -431,9 +442,11 @@ filter:
 
 func TestSigmaToElastAlertError(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	mio := mock.NewMockIOManager(ctrl)
+	defer ctrl.Finish()
 
-	mio.EXPECT().ExecCommand(gomock.Cond(func(x any) bool {
+	iom := mock.NewMockIOManager(ctrl)
+
+	iom.EXPECT().ExecCommand(gomock.Cond(func(x any) bool {
 		cmd := x.(*exec.Cmd)
 
 		if !strings.HasSuffix(cmd.Path, "sigma") {
@@ -452,7 +465,9 @@ func TestSigmaToElastAlertError(t *testing.T) {
 	})).Return([]byte("Error: something went wrong"), 1, time.Duration(0), errors.New("non-zero return"))
 
 	engine := ElastAlertEngine{
-		IOManager: mio,
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			IOManager: iom,
+		},
 	}
 
 	det := &model.Detection{
@@ -591,17 +606,19 @@ license: Elastic-2.0
 		},
 	}
 
-	mio := mock.NewMockIOManager(gomock.NewController(t))
-	mio.EXPECT().WalkDir(gomock.Eq("repo-path"), gomock.Any()).DoAndReturn(func(path string, fn fs.WalkDirFunc) error {
+	iom := mock.NewMockIOManager(gomock.NewController(t))
+	iom.EXPECT().WalkDir(gomock.Eq("repo-path"), gomock.Any()).DoAndReturn(func(path string, fn fs.WalkDirFunc) error {
 		return fn("rules/so_soc_failed_login.yml", &handmock.MockDirEntry{
 			Filename: "so_soc_failed_login.yml",
 		}, nil)
 	})
-	mio.EXPECT().ReadFile(gomock.Eq("rules/so_soc_failed_login.yml")).Return([]byte(data), nil)
+	iom.EXPECT().ReadFile(gomock.Eq("rules/so_soc_failed_login.yml")).Return([]byte(data), nil)
 
 	engine := ElastAlertEngine{
 		isRunning: true,
-		IOManager: mio,
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			IOManager: iom,
+		},
 	}
 	engine.allowRegex = regexp.MustCompile("bf86ef21-41e6-417b-9a05-b9ea6bf28a38")
 	engine.denyRegex = regexp.MustCompile("deny")
@@ -632,21 +649,22 @@ func TestDownloadSigmaPackages(t *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	mio := mock.NewMockIOManager(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
 	body := "data"
 
 	for i := 0; i < 5; i++ {
 		// can't use mock's Times(x) because the first response's body
 		// closing will result in remaining requests getting 0 data
-		mio.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+		iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
 			StatusCode:    http.StatusOK,
 			Body:          io.NopCloser(strings.NewReader(body)),
 			ContentLength: int64(len(body)),
 		}, nil)
 	}
 
-	mio.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+	iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
 		StatusCode: http.StatusNotFound,
 	}, nil)
 
@@ -655,7 +673,9 @@ func TestDownloadSigmaPackages(t *testing.T) {
 	engine := ElastAlertEngine{
 		sigmaRulePackages:            pkgs,
 		sigmaPackageDownloadTemplate: "localhost:3000/%s.zip",
-		IOManager:                    mio,
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			IOManager: iom,
+		},
 	}
 
 	pkgZips, errMap := engine.downloadSigmaPackages()
@@ -672,7 +692,7 @@ func TestLoadSigmaPackagesFromDisks(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mio := mock.NewMockIOManager(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
 	airgapBasePath := "/nsm/rules/detect-sigma/rulesets/"
 
 	// List of packages to be loaded from disk
@@ -681,17 +701,19 @@ func TestLoadSigmaPackagesFromDisks(t *testing.T) {
 	// Setting up mocks for each expected file read, except for the "fake" package to simulate an error
 	for _, pkg := range pkgs[:len(pkgs)-1] {
 		expectedFilePath := airgapBasePath + "sigma_" + pkg + ".zip"
-		mio.EXPECT().ReadFile(expectedFilePath).Return([]byte("mocked data for "+pkg), nil)
+		iom.EXPECT().ReadFile(expectedFilePath).Return([]byte("mocked data for "+pkg), nil)
 	}
 
 	// Simulating an error for the 'fake' package
 	fakeFilePath := airgapBasePath + "sigma_fake.zip"
-	mio.EXPECT().ReadFile(fakeFilePath).Return(nil, errors.New("file not found"))
+	iom.EXPECT().ReadFile(fakeFilePath).Return(nil, errors.New("file not found"))
 
 	engine := ElastAlertEngine{
 		sigmaRulePackages: pkgs,
 		airgapBasePath:    airgapBasePath,
-		IOManager:         mio,
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			IOManager: iom,
+		},
 	}
 
 	zipData, errMap := engine.loadSigmaPackagesFromDisk()
@@ -882,7 +904,9 @@ sofilter_hosts:
 		test := test
 		t.Run(test.Name, func(t *testing.T) {
 			t.Parallel()
+
 			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
 			mockIO := mock.NewMockIOManager(ctrl)
 
@@ -964,10 +988,12 @@ func TestExtractDetails(t *testing.T) {
 
 func TestGetDeployedPublicIds(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	mio := mock.NewMockIOManager(ctrl)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
 	path := "path"
 
-	mio.EXPECT().ReadDir(path).Return([]fs.DirEntry{
+	iom.EXPECT().ReadDir(path).Return([]fs.DirEntry{
 		&handmock.MockDirEntry{
 			Filename: "00000000-0000-0000-0000-000000000000.yml",
 		},
@@ -985,7 +1011,9 @@ func TestGetDeployedPublicIds(t *testing.T) {
 
 	eng := &ElastAlertEngine{
 		elastAlertRulesFolder: path,
-		IOManager:             mio,
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			IOManager: iom,
+		},
 	}
 
 	ids, err := eng.getDeployedPublicIds()
