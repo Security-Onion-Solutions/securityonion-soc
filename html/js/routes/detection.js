@@ -537,8 +537,21 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					newDict['content'] = JSON.stringify(contentJsonNew);
 				
 				} else if (oldDict['engine'] === 'suricata'){
-					oldDict['content'] = oldDict['content'].replaceAll(/\s/g,'').replaceAll('msg:"' + oldDict['title'].replaceAll(/\s/g,'') + '"', '').replaceAll('signature_severity' + oldDict['severity'].replaceAll(/\s/g,''), '');
-					newDict['content'] = newDict['content'].replaceAll(/\s/g,'').replaceAll('msg:"' + newDict['title'].replaceAll(/\s/g,'') + '"', '').replaceAll('signature_severity' + newDict['severity'].replaceAll(/\s/g,''), '');
+					let sev1 = oldDict['severity'];
+					let sev2 = newDict['severity'];			
+					let reversedSevTranslations = Object.fromEntries(
+						Object.entries(this.severityTranslations).map(([k, v]) => [v, k])
+					);
+
+					if (reversedSevTranslations.hasOwnProperty(sev1)) sev1 = reversedSevTranslations[sev1];
+					if (reversedSevTranslations.hasOwnProperty(sev2)) sev2 = reversedSevTranslations[sev2];
+
+					regex1 = new RegExp('signature_severity' + sev1, 'ig');
+					regex2 = new RegExp('signature_severity' + sev2, 'ig');
+
+					oldDict['content'] = oldDict['content'].replaceAll(/\s/g,'').replaceAll('msg:"' + oldDict['title'].replaceAll(/\s/g,'') + '"', '').replaceAll(regex1, '');
+					newDict['content'] = newDict['content'].replaceAll(/\s/g,'').replaceAll('msg:"' + newDict['title'].replaceAll(/\s/g,'') + '"', '').replaceAll(regex2, '');
+					
 				} else {
 					oldDict['content'] = oldDict['content'].replaceAll(/\s/g,'').replaceAll('rule' + oldDict['title'].replaceAll(/\s/g,''), '').replaceAll('description="' + oldDict['description'].replaceAll(/\s/g,'') + '"', '');
 					newDict['content'] = newDict['content'].replaceAll(/\s/g,'').replaceAll('rule' + newDict['title'].replaceAll(/\s/g,''), '').replaceAll('description="' + newDict['description'].replaceAll(/\s/g,'') + '"', '');
