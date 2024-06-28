@@ -42,6 +42,7 @@ routes.push({ path: '/config', name: 'config', component: {
     resetSetting: null,
     resetNodeId: null,
     confirmResetDialog: false,
+    treeVisible: true,
   }},
   mounted() {
     this.processRouteParameters();

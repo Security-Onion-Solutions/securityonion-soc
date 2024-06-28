@@ -665,3 +665,7 @@ code {
 .theme--dark .key-changed {
   color: rgb(204, 153, 205)
 }
+
+.resize {
+  cursor: ew-resize;
+}

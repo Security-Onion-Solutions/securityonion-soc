@@ -4656,7 +4656,7 @@
         <v-row>
         </v-row>
         <v-row>
-          <v-col cols="12" lg="4">
+          <v-col cols="12" lg="4" :class="treeVisible ? 'd-block' : 'd-none'">
             <v-container fluid>
               <v-row>
                 <v-col>
@@ -4704,7 +4704,7 @@
             </v-treeview>
           </v-col>
           <v-divider vertical />
-          <v-col cols="12" lg="8">
+          <v-col cols="12" :lg="treeVisible ? 8 : 12">
             <v-fade-transition mode="out-in" duration="100">
               <div v-if="!selected" id="config-quick-links">
                 <v-alert v-text="i18n.settingSelect" type="info" />
@@ -4836,8 +4836,14 @@
                   </ul>
                 </div>
               </div>
-              <v-card v-else :key="selected.id" class="pt-6 mx-auto config-setting" flat>
+              <v-card v-else :key="selected.id" class="mx-auto config-setting" flat>
                 <v-card-text>
+                  <div class="d-inline-flex justify-end" style="width: 100%">
+                    <v-btn icon small class="mb-4" :title="i18n.toggleFullsizeHelp" @click="treeVisible = !treeVisible" data-aid="config_toggle_treeview">
+                      <v-icon v-if="treeVisible">fa-up-right-and-down-left-from-center</v-icon>
+                      <v-icon v-else color="primary">fa-down-left-and-up-right-to-center</v-icon>
+                    </v-btn>
+                  </div>
                   <div class="text-subtitle-1 mb-4" data-aid="config_item_help" >
                     {{ getSettingDescription(selected) }}
                     <a v-if="selected.helpLink" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + selected.helpLink" style="text-decoration: none; cursor: 'pointer'" :title="i18n.settingHelp">
