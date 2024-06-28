@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/apex/log"
+	"github.com/google/uuid"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 )
@@ -25,7 +26,7 @@ var (
 type DetailedDetectionEngine interface {
 	ResumeIntegrityChecker()
 	PauseIntegrityChecker()
-	Sync(bool) error
+	Sync(*log.Entry, bool) error
 	IOManager
 }
 
@@ -46,10 +47,7 @@ func SyncScheduler(e DetailedDetectionEngine, syncParams *SyncSchedulerParams, e
 	}()
 
 	var lastSyncSuccess *bool
-
 	lastImport, timerDur := DetermineWaitTime(e, syncParams.StateFilePath, time.Duration(syncParams.CommunityRulesImportFrequencySeconds)*time.Second)
-
-	logger := log.WithField("detectionEngineName", engName)
 
 	for *isRunning {
 		if lastImport == nil && lastSyncSuccess != nil && *lastSyncSuccess {
@@ -79,11 +77,12 @@ func SyncScheduler(e DetailedDetectionEngine, syncParams *SyncSchedulerParams, e
 			lastSyncStatus = strconv.FormatBool(*lastSyncSuccess)
 		}
 
-		logger.WithFields(log.Fields{
-			"waitTimeSeconds":   timerDur.Seconds(),
-			"forceSync":         forceSync,
-			"lastSyncSuccess":   lastSyncStatus,
-			"expectedStartTime": time.Now().Add(timerDur).Format(time.RFC3339),
+		log.WithFields(log.Fields{
+			"detectionEngineName": engName,
+			"waitTimeSeconds":     timerDur.Seconds(),
+			"forceSync":           forceSync,
+			"lastSyncSuccess":     lastSyncStatus,
+			"expectedStartTime":   time.Now().Add(timerDur).Format(time.RFC3339),
 		}).Info("waiting for next community rules sync")
 
 		e.ResumeIntegrityChecker()
@@ -106,7 +105,19 @@ func SyncScheduler(e DetailedDetectionEngine, syncParams *SyncSchedulerParams, e
 
 		lastSyncSuccess = util.Ptr(false)
 
-		err := e.Sync(forceSync)
+		syncId := uuid.New().String()
+		logger := log.WithFields(log.Fields{
+			"detectionEngineName": engName,
+			"syncId":              syncId,
+		})
+
+		startTime := time.Now()
+		logger.WithField("forceSync", forceSync).Info("starting sync")
+
+		err := e.Sync(logger, forceSync)
+
+		logger.WithField("syncDuration", time.Since(startTime).Seconds()).WithError(err).Info("sync completed")
+
 		if err != nil {
 			if strings.Contains(err.Error(), "module stopped") {
 				logger.Info("module stopped, exiting sync scheduler loop")
@@ -114,6 +125,7 @@ func SyncScheduler(e DetailedDetectionEngine, syncParams *SyncSchedulerParams, e
 			}
 			logger.WithError(err).Error("failed to sync community rules")
 		} else {
+			logger.Info("sync successful")
 			*lastSyncSuccess = true
 		}
 	}

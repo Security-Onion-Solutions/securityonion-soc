@@ -25,7 +25,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -426,7 +425,7 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 	return errMap, nil
 }
 
-func (e *ElastAlertEngine) Sync(forceSync bool) error {
+func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 	defer func() {
 		e.resetInterruptSync()
 	}()
@@ -447,16 +446,7 @@ func (e *ElastAlertEngine) Sync(forceSync bool) error {
 
 	e.writeNoRead = nil
 
-	// setup logger
-	syncId := uuid.New().String()
-	logger := log.WithFields(log.Fields{
-		"detectionEngineName": model.EngineNameElastAlert,
-		"syncId":              syncId,
-	})
-
 	// announce the beginning of the sync
-	start := time.Now()
-	logger.WithField("forceSync", forceSync).Info("syncing elastalert community rules")
 	e.EngineState.Syncing = true
 
 	// Check to see if the sigma processing pipelines have changed.
@@ -598,7 +588,7 @@ func (e *ElastAlertEngine) Sync(forceSync bool) error {
 
 	detects = detections.DeduplicateByPublicId(detects)
 
-	errMap, err = e.syncCommunityDetections(e.srv.Context, detects)
+	errMap, err = e.syncCommunityDetections(e.srv.Context, logger, detects)
 	if err != nil {
 		if errors.Is(err, detections.ErrModuleStopped) {
 			logger.Info("incomplete sync of elastalert community detections due to module stopping")
@@ -676,12 +666,6 @@ func (e *ElastAlertEngine) Sync(forceSync bool) error {
 			logger.Info("post-sync integrity check passed")
 		}
 	}
-
-	dur := time.Since(start)
-
-	logger.WithFields(log.Fields{
-		"durationSeconds": dur.Seconds(),
-	}).Info("elastalert community rules sync finished")
 
 	return nil
 }
@@ -862,7 +846,7 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos []*detections.RepoOnDisk) (de
 	return detects, errMap
 }
 
-func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects []*model.Detection) (errMap map[string]error, err error) {
+func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *log.Entry, detects []*model.Detection) (errMap map[string]error, err error) {
 	existing, err := e.IndexExistingRules()
 	if err != nil {
 		return nil, err
@@ -899,6 +883,11 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 			return nil, detections.ErrModuleStopped
 		}
 
+		logger.WithFields(log.Fields{
+			"rule.uuid": det.PublicID,
+			"rule.name": det.Title,
+		}).Info("syncing rule")
+
 		path, ok := index[det.PublicID]
 		if !ok {
 			path = index[det.Title]
@@ -911,6 +900,11 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 			det.Id = oldDet.Id
 			det.Overrides = oldDet.Overrides
 			det.CreateTime = oldDet.CreateTime
+
+			logger.WithFields(log.Fields{
+				"rule.uuid": det.PublicID,
+				"rule.name": det.Title,
+			}).Info("updating Sigma detection")
 
 			if oldDet.Content != det.Content || oldDet.Ruleset != det.Ruleset || len(det.Overrides) != 0 {
 				_, err = e.srv.Detectionstore.UpdateDetection(ctx, det)
@@ -939,6 +933,12 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 
 			delete(toDelete, det.PublicID)
 		} else {
+			// new detection, create it
+			logger.WithFields(log.Fields{
+				"rule.uuid": det.PublicID,
+				"rule.name": det.Title,
+			}).Info("creating new Sigma detection")
+
 			checkRulesetEnabled(e, det)
 
 			_, err = e.srv.Detectionstore.CreateDetection(ctx, det)
@@ -1012,7 +1012,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 		results.Removed++
 	}
 
-	log.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"elastAlertSyncadded":     results.Added,
 		"elastAlertSyncupdated":   results.Updated,
 		"elastAlertSyncremoved":   results.Removed,
