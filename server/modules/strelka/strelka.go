@@ -67,6 +67,7 @@ type StrelkaEngine struct {
 	writeNoRead                    *string
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
+	detections.IOManager
 	model.EngineState
 }
 
@@ -83,10 +84,8 @@ func checkRulesetEnabled(e *StrelkaEngine, det *model.Detection) {
 
 func NewStrelkaEngine(srv *server.Server) *StrelkaEngine {
 	return &StrelkaEngine{
-		srv: srv,
-		SyncSchedulerParams: detections.SyncSchedulerParams{
-			IOManager: &detections.ResourceManager{Config: srv.Config},
-		},
+		srv:       srv,
+		IOManager: &detections.ResourceManager{Config: srv.Config},
 	}
 }
 
@@ -150,7 +149,7 @@ func (e *StrelkaEngine) Start() error {
 	e.srv.DetectionEngines[model.EngineNameStrelka] = e
 	e.isRunning = true
 
-	go detections.SyncScheduler(e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameStrelka, &e.isRunning)
+	go detections.SyncScheduler(e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameStrelka, &e.isRunning, e.IOManager)
 	go detections.IntegrityChecker(model.EngineNameStrelka, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
 
 	return nil
@@ -563,11 +562,11 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 		logger.Info("post-sync integrity check passed")
 	}
 
-	log.WithFields(log.Fields{
-		"strelkaSyncadded":     results.Added,
-		"strelkaSyncupdated":   results.Updated,
-		"strelkaSyncremoved":   results.Removed,
-		"strelkaSyncunchanged": results.Unchanged,
+	logger.WithFields(log.Fields{
+		"syncAdded":     results.Added,
+		"syncUpdated":   results.Updated,
+		"syncRemoved":   results.Removed,
+		"syncUnchanged": results.Unchanged,
 	}).Info("strelka community diff")
 
 	return nil

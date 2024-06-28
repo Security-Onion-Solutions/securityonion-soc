@@ -992,7 +992,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 
 			ctx := web.MarkChangedByUser(context.Background(), test.ChangedByUser)
 
-			errMap, err := mod.syncCommunityDetections(ctx, test.Detections, false, test.InitialSettings)
+			errMap, err := mod.syncCommunityDetections(ctx, nil, test.Detections, false, test.InitialSettings)
 
 			assert.Equal(t, test.ExpectedErr, err)
 			assert.Equal(t, test.ExpectedErrMap, errMap)

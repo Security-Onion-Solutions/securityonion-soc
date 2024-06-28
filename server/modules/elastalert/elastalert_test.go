@@ -246,9 +246,7 @@ func TestCheckSigmaPipelines(t *testing.T) {
 		sigmaPipelineFinal:            "/opt/sensoroni/sigma_final_pipeline.yaml",
 		sigmaPipelineSO:               "/opt/sensoroni/sigma_so_pipeline.yaml",
 		sigmaPipelinesFingerprintFile: "/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint",
-		SyncSchedulerParams: detections.SyncSchedulerParams{
-			IOManager: iom,
-		},
+		IOManager:                     iom,
 	}
 
 	testList := []struct {
@@ -336,9 +334,7 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 	})).Return([]byte("<eql>"), 0, time.Duration(0), nil)
 
 	engine := ElastAlertEngine{
-		SyncSchedulerParams: detections.SyncSchedulerParams{
-			IOManager: iom,
-		},
+		IOManager: iom,
 	}
 
 	det := &model.Detection{
@@ -399,9 +395,7 @@ func TestSigmaToElastAlertSunnyDayLicensed(t *testing.T) {
 	})).Return([]byte("<eql>"), 0, time.Duration(0), nil)
 
 	engine := ElastAlertEngine{
-		SyncSchedulerParams: detections.SyncSchedulerParams{
-			IOManager: iom,
-		},
+		IOManager: iom,
 	}
 
 	det := &model.Detection{
@@ -465,9 +459,7 @@ func TestSigmaToElastAlertError(t *testing.T) {
 	})).Return([]byte("Error: something went wrong"), 1, time.Duration(0), errors.New("non-zero return"))
 
 	engine := ElastAlertEngine{
-		SyncSchedulerParams: detections.SyncSchedulerParams{
-			IOManager: iom,
-		},
+		IOManager: iom,
 	}
 
 	det := &model.Detection{
@@ -616,9 +608,7 @@ license: Elastic-2.0
 
 	engine := ElastAlertEngine{
 		isRunning: true,
-		SyncSchedulerParams: detections.SyncSchedulerParams{
-			IOManager: iom,
-		},
+		IOManager: iom,
 	}
 	engine.allowRegex = regexp.MustCompile("bf86ef21-41e6-417b-9a05-b9ea6bf28a38")
 	engine.denyRegex = regexp.MustCompile("deny")
@@ -673,9 +663,7 @@ func TestDownloadSigmaPackages(t *testing.T) {
 	engine := ElastAlertEngine{
 		sigmaRulePackages:            pkgs,
 		sigmaPackageDownloadTemplate: "localhost:3000/%s.zip",
-		SyncSchedulerParams: detections.SyncSchedulerParams{
-			IOManager: iom,
-		},
+		IOManager:                    iom,
 	}
 
 	pkgZips, errMap := engine.downloadSigmaPackages()
@@ -711,9 +699,7 @@ func TestLoadSigmaPackagesFromDisks(t *testing.T) {
 	engine := ElastAlertEngine{
 		sigmaRulePackages: pkgs,
 		airgapBasePath:    airgapBasePath,
-		SyncSchedulerParams: detections.SyncSchedulerParams{
-			IOManager: iom,
-		},
+		IOManager:         iom,
 	}
 
 	zipData, errMap := engine.loadSigmaPackagesFromDisk()
@@ -1011,9 +997,7 @@ func TestGetDeployedPublicIds(t *testing.T) {
 
 	eng := &ElastAlertEngine{
 		elastAlertRulesFolder: path,
-		SyncSchedulerParams: detections.SyncSchedulerParams{
-			IOManager: iom,
-		},
+		IOManager:             iom,
 	}
 
 	ids, err := eng.getDeployedPublicIds()

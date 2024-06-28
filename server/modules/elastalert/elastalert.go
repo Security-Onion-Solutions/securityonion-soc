@@ -89,6 +89,7 @@ type ElastAlertEngine struct {
 	writeNoRead                    *string
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
+	detections.IOManager
 	model.EngineState
 }
 
@@ -197,7 +198,7 @@ func (e *ElastAlertEngine) Start() error {
 	e.isRunning = true
 	e.IntegrityCheckerData.IsRunning = true
 
-	go detections.SyncScheduler(e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameElastAlert, &e.isRunning)
+	go detections.SyncScheduler(e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameElastAlert, &e.isRunning, e.IOManager)
 	go detections.IntegrityChecker(model.EngineNameElastAlert, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
 
 	return nil
@@ -1013,11 +1014,11 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 	}
 
 	logger.WithFields(log.Fields{
-		"elastAlertSyncadded":     results.Added,
-		"elastAlertSyncupdated":   results.Updated,
-		"elastAlertSyncremoved":   results.Removed,
-		"elastAlertSyncunchanged": results.Unchanged,
-		"elastAlertSyncerrors":    detections.TruncateMap(errMap, 5),
+		"syncAdded":     results.Added,
+		"syncUpdated":   results.Updated,
+		"syncRemoved":   results.Removed,
+		"syncUnchanged": results.Unchanged,
+		"syncErrors":    detections.TruncateMap(errMap, 5),
 	}).Info("elastalert community diff")
 
 	return errMap, nil

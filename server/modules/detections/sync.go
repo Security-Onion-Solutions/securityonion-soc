@@ -36,10 +36,9 @@ type SyncSchedulerParams struct {
 	StateFilePath                        string
 	CommunityRulesImportFrequencySeconds int
 	CommunityRulesImportErrorSeconds     int
-	IOManager
 }
 
-func SyncScheduler(e DetailedDetectionEngine, syncParams *SyncSchedulerParams, engineState *model.EngineState, engName model.EngineName, isRunning *bool) {
+func SyncScheduler(e DetailedDetectionEngine, syncParams *SyncSchedulerParams, engineState *model.EngineState, engName model.EngineName, isRunning *bool, iom IOManager) {
 	syncParams.SyncThread.Add(1)
 	defer func() {
 		syncParams.SyncThread.Done()

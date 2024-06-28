@@ -731,8 +731,8 @@ func TestGetCompilationResult(t *testing.T) {
 	mio.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return([]byte(jsn), nil)
 
 	eng := &StrelkaEngine{
-		IOManager:       mio,
 		yaraRulesFolder: "/opt/so/conf/strelka/rules",
+		IOManager:       mio,
 	}
 
 	report, err := eng.getCompilationReport()
