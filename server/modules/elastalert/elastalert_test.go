@@ -22,10 +22,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/handmock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
@@ -789,6 +791,31 @@ detection:
   condition: selection
 falsepositives:
   - Unlikely`
+	SimpleRule2SID = "19aa1142-94dc-43ef-af58-9b31406dcdc9"
+	SimpleRule2    = `title: Griffon Malware Attack Pattern
+id: 19aa1142-94dc-43ef-af58-9b31406dcdc9
+status: experimental
+description: Detects process execution patterns related to Griffon malware as reported by Kaspersky
+references:
+  - https://securelist.com/fin7-5-the-infamous-cybercrime-rig-fin7-continues-its-activities/90703/
+author: Nasreddine Bencherchali (Nextron Systems)
+date: 2023/03/09
+tags:
+  - attack.execution
+  - detection.emerging_threats
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+      - '\local\temp\'
+      - '//b /e:jscript'
+      - '.txt'
+  condition: selection
+falsepositives:
+  - Unlikely
+level: critical`
 )
 
 func TestSyncElastAlert(t *testing.T) {
@@ -1006,4 +1033,270 @@ func TestGetDeployedPublicIds(t *testing.T) {
 	assert.Len(t, ids, 2)
 	assert.Contains(t, ids, "00000000-0000-0000-0000-000000000000")
 	assert.Contains(t, ids, "11111111-1111-1111-1111-111111111111")
+}
+
+func TestSyncWriteNoReadFail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	detStore.EXPECT().GetDetectionByPublicId(gomock.Any(), "123").Return(nil, errors.New("Object not found"))
+
+	wnr := util.Ptr("123")
+
+	eng := &ElastAlertEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+		},
+		writeNoRead: wnr,
+	}
+
+	logger := log.WithField("detectionEngineName", "test")
+
+	err := eng.Sync(logger, false)
+	assert.Equal(t, detections.ErrSyncFailed, err)
+	assert.Equal(t, wnr, eng.writeNoRead)
+}
+
+func TestSyncIncrementalNoChanges(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	buf := bytes.NewBuffer([]byte{})
+
+	writer := zip.NewWriter(buf)
+	sr, err := writer.Create("rules/simple_rule.yml")
+	assert.NoError(t, err)
+
+	_, err = sr.Write([]byte(SimpleRule))
+	assert.NoError(t, err)
+
+	assert.NoError(t, writer.Close())
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+
+	eng := &ElastAlertEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+		},
+		isRunning:                     true,
+		sigmaPipelineFinal:            "sigmaPipelineFinal",
+		sigmaPipelineSO:               "sigmaPipelineSO",
+		sigmaPipelinesFingerprintFile: "sigmaPipelinesFingerprintFile",
+		sigmaRulePackages:             []string{"core+"},
+		sigmaPackageDownloadTemplate:  "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip",
+		reposFolder:                   "repos",
+		rulesFingerprintFile:          "rulesFingerprintFile",
+		elastAlertRulesFolder:         "elastAlertRulesFolder",
+		rulesRepos: []*model.RuleRepo{
+			{
+				Repo:      "https://github.com/user/repo",
+				Community: true,
+			},
+		},
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			StateFilePath: "stateFilePath",
+		},
+		IntegrityCheckerData: detections.IntegrityCheckerData{
+			IsRunning: true,
+		},
+		IOManager: iom,
+	}
+
+	logger := log.WithField("detectionEngineName", "test-elastalert")
+
+	// checkSigmaPipelines
+	iom.EXPECT().ReadFile("sigmaPipelineFinal").Return([]byte("data"), nil)
+	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
+	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7-3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7"), nil)
+	// downloadSigmaPackages
+	iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(buf),
+	}, nil)
+	// UpdateRepos
+	iom.EXPECT().ReadDir("repos").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: "repo",
+			Dir:      true,
+		},
+	}, nil)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo").Return(false, false)
+	// check for changes before sync
+	iom.EXPECT().ReadFile("rulesFingerprintFile").Return([]byte(`{"core+": "c6OTI9nTQxGEeeNkSZZB9+OESMNvfMXrb+XLtMiVhf0="}`), nil)
+	// WriteStateFile
+	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	// IntegrityCheck
+	iom.EXPECT().ReadDir("elastAlertRulesFolder").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: SimpleRuleSID + ".yml",
+		},
+	}, nil) // getDeployedPublicIds
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		SimpleRuleSID: nil,
+	}, nil)
+
+	err = eng.Sync(logger, false)
+	assert.NoError(t, err)
+
+	assert.True(t, eng.EngineState.Syncing) // stays true until the SyncScheduler resets it
+	assert.False(t, eng.EngineState.IntegrityFailure)
+	assert.False(t, eng.EngineState.Migrating)
+	assert.False(t, eng.EngineState.MigrationFailure)
+	assert.False(t, eng.EngineState.Importing)
+	assert.False(t, eng.EngineState.SyncFailure)
+}
+
+func TestSyncChanges(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	buf := bytes.NewBuffer([]byte{})
+
+	writer := zip.NewWriter(buf)
+	sr, err := writer.Create("rules/simple_rule.yml")
+	assert.NoError(t, err)
+
+	_, err = sr.Write([]byte(SimpleRule))
+	assert.NoError(t, err)
+
+	assert.NoError(t, writer.Close())
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+
+	eng := &ElastAlertEngine{
+		srv: &server.Server{
+			Context:        context.Background(),
+			Detectionstore: detStore,
+		},
+		isRunning:                     true,
+		sigmaPipelineFinal:            "sigmaPipelineFinal",
+		sigmaPipelineSO:               "sigmaPipelineSO",
+		sigmaPipelinesFingerprintFile: "sigmaPipelinesFingerprintFile",
+		sigmaRulePackages:             []string{"core+"},
+		sigmaPackageDownloadTemplate:  "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip",
+		reposFolder:                   "repos",
+		rulesFingerprintFile:          "rulesFingerprintFile",
+		elastAlertRulesFolder:         "elastAlertRulesFolder",
+		rulesRepos: []*model.RuleRepo{
+			{
+				Repo:      "https://github.com/user/repo",
+				Community: true,
+			},
+		},
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			StateFilePath: "stateFilePath",
+		},
+		IntegrityCheckerData: detections.IntegrityCheckerData{
+			IsRunning: true,
+		},
+		IOManager: iom,
+	}
+
+	logger := log.WithField("detectionEngineName", "test-elastalert")
+
+	// checkSigmaPipelines
+	iom.EXPECT().ReadFile("sigmaPipelineFinal").Return([]byte("data"), nil)
+	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
+	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("a different hash"), nil)
+	// downloadSigmaPackages
+	iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(buf),
+	}, nil)
+	// UpdateRepos
+	iom.EXPECT().ReadDir("repos").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: "repo",
+			Dir:      true,
+		},
+	}, nil)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo").Return(false, false)
+	// parseRepoRules
+	iom.EXPECT().WalkDir("repos/repo", gomock.Any()).DoAndReturn(func(path string, fn fs.WalkDirFunc) error {
+		files := []fs.DirEntry{
+			&handmock.MockDirEntry{
+				Filename: "rules/123.yml",
+			},
+			&handmock.MockDirEntry{
+				Filename: "rules/456.yml",
+			},
+		}
+
+		for _, file := range files {
+			err := fn(file.Name(), file, nil)
+			assert.NoError(t, err)
+		}
+
+		return nil
+	})
+	iom.EXPECT().ReadFile("rules/123.yml").Return([]byte(SimpleRule), nil)
+	iom.EXPECT().ReadFile("rules/456.yml").Return([]byte(SimpleRule2), nil)
+	// syncCommunityDetections
+	iom.EXPECT().ReadDir("elastAlertRulesFolder").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: SimpleRuleSID + ".yml",
+		},
+		&handmock.MockDirEntry{
+			Filename: "00000000-0000-0000-0000-000000000000.yml",
+		},
+	}, nil) // IndexExistingRules
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		SimpleRuleSID: {
+			Auditable: model.Auditable{
+				Id:         "abc",
+				CreateTime: util.Ptr(time.Now()),
+			},
+			PublicID:  SimpleRuleSID,
+			IsEnabled: true,
+		},
+		"00000000-0000-0000-0000-000000000000": {
+			Auditable: model.Auditable{
+				Id: "delete",
+			},
+			PublicID: "00000000-0000-0000-0000-000000000000",
+		},
+	}, nil)
+	detStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, det *model.Detection) (*model.Detection, error) {
+		assert.Equal(t, "abc", det.Id)
+		assert.Equal(t, SimpleRuleSID, det.PublicID)
+		assert.True(t, det.IsEnabled)
+		assert.NotEmpty(t, det.Content)
+
+		return nil, nil
+	})
+	detStore.EXPECT().CreateDetection(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, det *model.Detection) (*model.Detection, error) {
+		assert.Equal(t, SimpleRule2SID, det.PublicID)
+		assert.False(t, det.IsEnabled)
+		assert.NotEmpty(t, det.Content)
+
+		return nil, nil
+	})
+	iom.EXPECT().ExecCommand(gomock.Any()).Return([]byte("\n[query]"), 0, time.Duration(time.Second), nil) // sigmaToElastAlert
+	iom.EXPECT().WriteFile("elastAlertRulesFolder/bcc6f179-11cd-4111-a9a6-0fab68515cf7.yml", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	detStore.EXPECT().DeleteDetection(gomock.Any(), "delete").Return(nil, nil)                  // DeleteDetection
+	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)        // WriteStateFile
+	iom.EXPECT().WriteFile("rulesFingerprintFile", gomock.Any(), fs.FileMode(0644)).Return(nil) // WriteFingerprintFile
+	// regenNeeded
+	iom.EXPECT().WriteFile("sigmaPipelinesFingerprintFile", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	// IntegrityCheck
+	iom.EXPECT().ReadDir("elastAlertRulesFolder").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: SimpleRuleSID + ".yml",
+		},
+	}, nil) // getDeployedPublicIds
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		SimpleRuleSID: nil,
+	}, nil)
+
+	err = eng.Sync(logger, true)
+	assert.NoError(t, err)
+
+	assert.False(t, eng.EngineState.IntegrityFailure)
+	assert.False(t, eng.EngineState.Migrating)
+	assert.False(t, eng.EngineState.MigrationFailure)
+	assert.False(t, eng.EngineState.Importing)
+	assert.False(t, eng.EngineState.SyncFailure)
 }
