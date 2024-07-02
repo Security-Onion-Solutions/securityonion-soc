@@ -2008,7 +2008,7 @@ func TestIntegrityCheck(t *testing.T) {
 				IOManager:    iom,
 			}
 
-			DbnE, EbnD, err := e.IntegrityCheck(false)
+			DbnE, EbnD, err := e.IntegrityCheck(false, nil)
 
 			if test.ExpError != nil {
 				assert.Error(t, err)

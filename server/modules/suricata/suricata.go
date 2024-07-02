@@ -341,7 +341,7 @@ func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 			e.checkMigrationsOnce()
 
-			_, _, err = e.IntegrityCheck(false)
+			_, _, err = e.IntegrityCheck(false, logger)
 
 			e.EngineState.IntegrityFailure = err != nil
 
@@ -465,7 +465,7 @@ func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 			})
 		}
 
-		_, _, err = e.IntegrityCheck(false)
+		_, _, err = e.IntegrityCheck(false, logger)
 
 		e.EngineState.IntegrityFailure = err != nil
 
@@ -1535,16 +1535,19 @@ func (e *SuricataEngine) ReadCustomRulesets() (detects []*model.Detection, err e
 	return detects, nil
 }
 
-func (e *SuricataEngine) IntegrityCheck(canInterrupt bool) (deployedButNotEnabled []string, enabledButNotDeployed []string, err error) {
+func (e *SuricataEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (deployedButNotEnabled []string, enabledButNotDeployed []string, err error) {
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
-	logger := log.WithFields(log.Fields{
-		"detectionEngine": model.EngineNameSuricata,
-		"intCheckId":      uuid.New().String(),
-	})
+	if logger == nil {
+		logger = log.WithFields(log.Fields{
+			"detectionEngine": model.EngineNameSuricata,
+		})
+	}
+
+	logger = logger.WithField("intCheckId", uuid.New().String())
 
 	allSettings, err := e.srv.Configstore.GetSettings(e.srv.Context)
 	if err != nil {
@@ -1633,17 +1636,17 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool) (deployedButNotEnable
 
 	deployedButNotEnabled, enabledButNotDeployed, _ = detections.DiffLists(deployed, enabled)
 
-	logger.WithFields(log.Fields{
+	report := logger.WithFields(log.Fields{
 		"deployedButNotEnabled": deployedButNotEnabled,
 		"enabledButNotDeployed": enabledButNotDeployed,
-	}).Info("integrity check report")
+	})
 
 	if len(deployedButNotEnabled) > 0 || len(enabledButNotDeployed) > 0 {
-		logger.Info("integrity check failed")
+		report.Warn("integrity check failed")
 		return deployedButNotEnabled, enabledButNotDeployed, detections.ErrIntCheckFailed
 	}
 
-	logger.Info("integrity check passed")
+	report.Info("integrity check passed")
 
 	return deployedButNotEnabled, enabledButNotDeployed, nil
 }
