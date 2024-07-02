@@ -1198,7 +1198,7 @@ func TestSyncChanges(t *testing.T) {
 		"ExampleRule": nil,
 	}, nil)
 
-	err := eng.Sync(logger, false)
+	err := eng.Sync(logger, true)
 	assert.NoError(t, err)
 
 	assert.True(t, eng.EngineState.Syncing) // stays true until the SyncScheduler resets it

@@ -341,9 +341,18 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 
 	det := &model.Detection{
 		PublicID: "00000000-0000-0000-0000-000000000000",
-		Content:  "totally good sigma",
+		Content:  `{"detection": {"condition": "*"}}`,
 		Title:    "Test Detection",
 		Severity: model.SeverityHigh,
+		Overrides: []*model.Override{
+			{
+				Type:      model.OverrideTypeCustomFilter,
+				IsEnabled: true,
+				OverrideParameters: model.OverrideParameters{
+					CustomFilter: util.Ptr(`{"this": ["that"]}`),
+				},
+			},
+		},
 	}
 
 	query, err := engine.sigmaToElastAlert(context.Background(), det)
