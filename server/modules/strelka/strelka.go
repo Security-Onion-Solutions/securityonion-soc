@@ -331,8 +331,8 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 	}
 
 	toDelete := map[string]struct{}{}
-	for _, det := range communityDetections {
-		toDelete[det.PublicID] = struct{}{}
+	for pid := range communityDetections {
+		toDelete[pid] = struct{}{}
 	}
 
 	et := detections.NewErrorTracker(e.failAfterConsecutiveErrorCount)
