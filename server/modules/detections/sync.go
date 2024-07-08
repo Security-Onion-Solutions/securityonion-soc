@@ -77,7 +77,7 @@ func SyncScheduler(e DetailedDetectionEngine, syncParams *SyncSchedulerParams, e
 		}
 
 		log.WithFields(log.Fields{
-			"detectionEngineName": engName,
+			"detectionEngine": engName,
 			"waitTimeSeconds":     timerDur.Seconds(),
 			"forceSync":           forceSync,
 			"lastSyncSuccess":     lastSyncStatus,
@@ -106,7 +106,7 @@ func SyncScheduler(e DetailedDetectionEngine, syncParams *SyncSchedulerParams, e
 
 		syncId := uuid.New().String()
 		logger := log.WithFields(log.Fields{
-			"detectionEngineName": engName,
+			"detectionEngine": engName,
 			"syncId":              syncId,
 		})
 

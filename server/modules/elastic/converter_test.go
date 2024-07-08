@@ -301,7 +301,7 @@ func TestMapSearch(t *testing.T) {
 
 func TestConvertObjectToDocumentMap(t *testing.T) {
 	caseObj := model.NewCase()
-	actual := convertObjectToDocumentMap("test", caseObj, DEFAULT_CASE_SCHEMA_PREFIX)
+	actual := ConvertObjectToDocumentMap("test", caseObj, DEFAULT_CASE_SCHEMA_PREFIX)
 	assert.NotNil(t, actual)
 	assert.Equal(t, caseObj, actual["so_test"])
 	assert.NotNil(t, actual["@timestamp"])

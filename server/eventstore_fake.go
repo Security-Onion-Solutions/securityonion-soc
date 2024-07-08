@@ -20,13 +20,16 @@ type FakeEventstore struct {
 	InputSearchCriterias []*model.EventSearchCriteria
 	InputUpdateCriterias []*model.EventUpdateCriteria
 	InputAckCriterias    []*model.EventAckCriteria
+	InputScrollCriterias []*model.EventScrollCriteria
 	Err                  error
 	SearchResults        []*model.EventSearchResults
 	IndexResults         []*model.EventIndexResults
 	UpdateResults        []*model.EventUpdateResults
+	ScrollResults        []*model.EventScrollResults
 	searchCount          int
 	indexCount           int
 	updateCount          int
+	scrollCount          int
 }
 
 func NewFakeEventstore() *FakeEventstore {
@@ -38,12 +41,15 @@ func NewFakeEventstore() *FakeEventstore {
 	store.InputSearchCriterias = make([]*model.EventSearchCriteria, 0)
 	store.InputUpdateCriterias = make([]*model.EventUpdateCriteria, 0)
 	store.InputAckCriterias = make([]*model.EventAckCriteria, 0)
+	store.InputScrollCriterias = make([]*model.EventScrollCriteria, 0)
 	store.SearchResults = make([]*model.EventSearchResults, 0)
 	store.SearchResults = append(store.SearchResults, model.NewEventSearchResults())
 	store.IndexResults = make([]*model.EventIndexResults, 0)
 	store.IndexResults = append(store.IndexResults, model.NewEventIndexResults())
 	store.UpdateResults = make([]*model.EventUpdateResults, 0)
 	store.UpdateResults = append(store.UpdateResults, model.NewEventUpdateResults())
+	store.ScrollResults = make([]*model.EventScrollResults, 0)
+	store.ScrollResults = append(store.ScrollResults, model.NewEventScrollResults())
 	return store
 }
 
@@ -108,5 +114,16 @@ func (store *FakeEventstore) Acknowledge(context context.Context, criteria *mode
 	}
 	result := store.UpdateResults[store.updateCount]
 	store.updateCount += 1
+	return result, store.Err
+}
+
+func (store *FakeEventstore) Scroll(context context.Context, criteria *model.EventScrollCriteria) (*model.EventScrollResults, error) {
+	store.InputContexts = append(store.InputContexts, context)
+	store.InputScrollCriterias = append(store.InputScrollCriterias, criteria)
+	if store.scrollCount >= len(store.ScrollResults) {
+		store.scrollCount = len(store.ScrollResults) - 1
+	}
+	result := store.ScrollResults[store.scrollCount]
+	store.scrollCount += 1
 	return result, store.Err
 }

@@ -990,7 +990,7 @@ func TestSyncWriteNoReadFail(t *testing.T) {
 		writeNoRead: wnr,
 	}
 
-	logger := log.WithField("detectionEngineName", "test")
+	logger := log.WithField("detectionEngine", "test-strelka")
 
 	err := eng.Sync(logger, false)
 	assert.Equal(t, detections.ErrSyncFailed, err)
@@ -1042,7 +1042,7 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 		IOManager: iom,
 	}
 
-	logger := log.WithField("detectionEngineName", "test-strelka")
+	logger := log.WithField("detectionEngine", "test-strelka")
 
 	err := eng.Sync(logger, false)
 	assert.NoError(t, err)
@@ -1089,7 +1089,7 @@ func TestSyncChanges(t *testing.T) {
 		IOManager: iom,
 	}
 
-	logger := log.WithField("detectionEngineName", "test-strelka")
+	logger := log.WithField("detectionEngine", "test-strelka")
 
 	// UpdateRepos
 	iom.EXPECT().ReadDir("repos").Return([]fs.DirEntry{

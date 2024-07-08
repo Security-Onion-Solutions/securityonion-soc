@@ -1060,7 +1060,7 @@ func TestSyncWriteNoReadFail(t *testing.T) {
 		writeNoRead: wnr,
 	}
 
-	logger := log.WithField("detectionEngineName", "test")
+	logger := log.WithField("detectionEngine", "test-elastalert")
 
 	err := eng.Sync(logger, false)
 	assert.Equal(t, detections.ErrSyncFailed, err)
@@ -1113,7 +1113,7 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 		IOManager: iom,
 	}
 
-	logger := log.WithField("detectionEngineName", "test-elastalert")
+	logger := log.WithField("detectionEngine", "test-elastalert")
 
 	// checkSigmaPipelines
 	iom.EXPECT().ReadFile("sigmaPipelineFinal").Return([]byte("data"), nil)
@@ -1204,7 +1204,7 @@ func TestSyncChanges(t *testing.T) {
 		IOManager: iom,
 	}
 
-	logger := log.WithField("detectionEngineName", "test-elastalert")
+	logger := log.WithField("detectionEngine", "test-elastalert")
 
 	// checkSigmaPipelines
 	iom.EXPECT().ReadFile("sigmaPipelineFinal").Return([]byte("data"), nil)

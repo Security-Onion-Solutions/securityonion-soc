@@ -1043,7 +1043,7 @@ func TestGetAllCommunitySIDs(t *testing.T) {
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 
-	fakeStore.SearchResults = []*model.EventSearchResults{
+	fakeStore.ScrollResults = []*model.EventScrollResults{
 		{
 			TotalEvents: 1,
 			Events: []*model.EventRecord{
@@ -1076,10 +1076,6 @@ func TestGetAllCommunitySIDs(t *testing.T) {
 				},
 			},
 		},
-		{ // When querying for unlimited things, we need one search request that returns 0 results
-			// or we get an infinite loop
-			TotalEvents: 0,
-		},
 	}
 
 	// double up the results, we're calling the function twice
@@ -1111,11 +1107,11 @@ func TestGetAllCommunitySIDs(t *testing.T) {
 	assert.Equal(t, 1, len(sids))
 	assert.NotNil(t, sids["ABC123"])
 
-	criteria := fakeStore.InputSearchCriterias[0].RawQuery
+	criteria := fakeStore.InputScrollCriterias[0].RawQuery
 	assert.Contains(t, criteria, `_index:"myIndex" AND so_kind:"detection"`)
 	assert.NotContains(t, criteria, "detection.engine")
 
-	criteria = fakeStore.InputSearchCriterias[2].RawQuery
+	criteria = fakeStore.InputScrollCriterias[1].RawQuery
 	assert.Contains(t, criteria, `_index:"myIndex" AND so_kind:"detection" AND so_detection.engine:"suricata"`)
 	assert.Contains(t, criteria, "detection.engine")
 }

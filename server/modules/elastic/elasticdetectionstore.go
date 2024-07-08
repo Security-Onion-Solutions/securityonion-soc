@@ -24,6 +24,7 @@ import (
 	"github.com/apex/log"
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/elastic/go-elasticsearch/v8/esapi"
+	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/tidwall/gjson"
 )
 
@@ -182,7 +183,7 @@ func (store *ElasticDetectionstore) save(ctx context.Context, obj interface{}, k
 		return nil, err
 	}
 
-	document := convertObjectToDocumentMap(kind, obj, store.schemaPrefix)
+	document := ConvertObjectToDocumentMap(kind, obj, store.schemaPrefix)
 	document[store.schemaPrefix+"kind"] = kind
 
 	results, err := store.Index(ctx, store.index, document, id)
@@ -253,7 +254,7 @@ func (store *ElasticDetectionstore) deleteDocument(ctx context.Context, index st
 	}
 	defer res.Body.Close()
 
-	document := convertObjectToDocumentMap(kind, obj, store.schemaPrefix)
+	document := ConvertObjectToDocumentMap(kind, obj, store.schemaPrefix)
 	document[store.schemaPrefix+AUDIT_DOC_ID] = id
 	document[store.schemaPrefix+"kind"] = kind
 	document[store.schemaPrefix+"operation"] = "delete"
@@ -339,7 +340,6 @@ func (store *ElasticDetectionstore) Query(ctx context.Context, query string, max
 		return nil, err
 	}
 
-	criteria := model.NewEventSearchCriteria()
 	format := "2006-01-02 3:04:05 PM"
 
 	var zeroTime time.Time
@@ -355,9 +355,24 @@ func (store *ElasticDetectionstore) Query(ctx context.Context, query string, max
 		unlimited = true
 	}
 
-	sort := []interface{}{}
+	var results *model.EventSearchResults
 
-	for {
+	if unlimited {
+		criteria := model.NewEventScrollCriteria()
+		criteria.EventLimit = max
+		criteria.RawQuery = query
+		criteria.ParsedQuery.Parse(query)
+
+		scrollResults, err := store.DetectionScroll(ctx, criteria)
+		if err != nil {
+			return nil, err
+		}
+
+		results = &model.EventSearchResults{
+			Events: scrollResults.Events,
+		}
+	} else {
+		criteria := model.NewEventSearchCriteria()
 		err = criteria.Populate(query,
 			zeroTimeStr+" - "+endTime, // timeframe range
 			format,                    // timeframe format
@@ -369,43 +384,21 @@ func (store *ElasticDetectionstore) Query(ctx context.Context, query string, max
 			return nil, err
 		}
 
-		if unlimited {
-			// need a deterministic sort order for paging
-			criteria.SortFields = []*model.SortCriteria{
-				{
-					Field: "@timestamp",
-					Order: "desc",
-				},
-			}
-
-			if len(sort) != 0 {
-				criteria.SearchAfter = sort
-			}
-		}
-
-		var results *model.EventSearchResults
-
 		results, err = store.DetectionSearch(ctx, criteria)
 		if err != nil {
 			return nil, err
 		}
+	}
 
-		for _, event := range results.Events {
-			var obj interface{}
+	for _, event := range results.Events {
+		var obj interface{}
 
-			obj, err = convertElasticEventToObject(event, store.schemaPrefix)
-			if err == nil {
-				objects = append(objects, obj)
-			} else {
-				log.WithField("returnedEvent", event).WithError(err).Error("Unable to convert case object")
-			}
+		obj, err = convertElasticEventToObject(event, store.schemaPrefix)
+		if err == nil {
+			objects = append(objects, obj)
+		} else {
+			log.WithField("returnedEvent", event).WithError(err).Error("Unable to convert case object")
 		}
-
-		if !unlimited || len(results.Events) == 0 {
-			break
-		}
-
-		sort = results.Events[len(results.Events)-1].Sort
 	}
 
 	return objects, err
@@ -420,8 +413,17 @@ func (store *ElasticDetectionstore) DetectionSearch(ctx context.Context, criteri
 	return store.server.Eventstore.Search(ctx, criteria)
 }
 
+func (store *ElasticDetectionstore) DetectionScroll(ctx context.Context, criteria *model.EventScrollCriteria) (*model.EventScrollResults, error) {
+	err := store.server.CheckAuthorized(ctx, "read", "detections")
+	if err != nil {
+		return nil, err
+	}
+
+	return store.server.Eventstore.Scroll(ctx, criteria)
+}
+
 func (store *ElasticDetectionstore) prepareForSave(ctx context.Context, obj *model.Auditable) string {
-	obj.UserId = ctx.Value(web.ContextKeyRequestorId).(string)
+	obj.UserId, _ = ctx.Value(web.ContextKeyRequestorId).(string)
 
 	// Don't waste space by saving the these values which are already part of ES documents
 	id := obj.Id
@@ -588,7 +590,7 @@ func (store *ElasticDetectionstore) UpdateDetectionField(ctx context.Context, id
 		return nil, err
 	}
 
-	document := convertObjectToDocumentMap("detection", json.RawMessage(rawDet), store.schemaPrefix)
+	document := ConvertObjectToDocumentMap("detection", json.RawMessage(rawDet), store.schemaPrefix)
 	document[store.schemaPrefix+AUDIT_DOC_ID] = id
 	document[store.schemaPrefix+"kind"] = "detection"
 	document[store.schemaPrefix+"operation"] = "update"
@@ -843,4 +845,37 @@ func (store *ElasticDetectionstore) DeleteComment(ctx context.Context, id string
 
 	_, err = store.deleteDocument(ctx, store.disableCrossClusterIndex(store.index), dc, "detectioncomment", id)
 	return err
+}
+
+func (store *ElasticDetectionstore) BuildBulkIndexer(ctx context.Context) (esutil.BulkIndexer, error) {
+	bulk, err := esutil.NewBulkIndexer(esutil.BulkIndexerConfig{
+		Client: store.esClient,
+	})
+
+	return bulk, err
+}
+
+func (store *ElasticDetectionstore) ConvertObjectToDocument(ctx context.Context, kind string, obj any, auditable *model.Auditable, auditDocId *string, op *string) (doc []byte, index string, err error) {
+	switch kind {
+	case "detection":
+		if auditDocId == nil {
+			index = "so-detection"
+		} else {
+			index = "so-detectionhistory"
+		}
+	}
+	store.prepareForSave(ctx, auditable)
+	document := ConvertObjectToDocumentMap(kind, obj, store.schemaPrefix)
+
+	document[store.schemaPrefix+"kind"] = kind
+	if auditDocId != nil {
+		document[store.schemaPrefix+AUDIT_DOC_ID] = *auditDocId
+		if op != nil {
+			document[store.schemaPrefix+"operation"] = *op
+		}
+	}
+
+	rawDoc, err := json.Marshal(document)
+
+	return rawDoc, index, err
 }

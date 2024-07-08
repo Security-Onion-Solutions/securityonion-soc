@@ -9,6 +9,7 @@ package server
 import (
 	"context"
 
+	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
@@ -30,6 +31,9 @@ type Detectionstore interface {
 	DeleteComment(ctx context.Context, id string) error
 
 	DoesTemplateExist(ctx context.Context, tmpl string) (bool, error)
+	BuildBulkIndexer(ctx context.Context) (esutil.BulkIndexer, error)
+	ConvertObjectToDocument(ctx context.Context, kind string, obj any, auditable *model.Auditable, auditDocId *string, op *string) (doc []byte, index string, err error)
 }
 
 //go:generate mockgen -destination mock/mock_detectionstore.go -package mock . Detectionstore
+//go:generate mockgen -destination mock/mock_bulkindexer.go -package mock github.com/elastic/go-elasticsearch/v8/esutil BulkIndexer
