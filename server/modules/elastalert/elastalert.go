@@ -25,7 +25,10 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
+	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
@@ -870,14 +873,23 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 	}
 
 	results := struct {
-		Added     int
-		Updated   int
-		Removed   int
-		Unchanged int
+		Added     int32
+		Updated   int32
+		Removed   int32
+		Unchanged int32
+		Audited   int32
 	}{}
 
 	errMap = map[string]error{} // map[publicID]error
 	et := detections.NewErrorTracker(e.failAfterConsecutiveErrorCount)
+
+	bulk, err := e.srv.Detectionstore.BuildBulkIndexer(e.srv.Context)
+	if err != nil {
+		return nil, err
+	}
+
+	createAudit := make([]detections.AuditInfo, 0, len(detects))
+	auditMut := sync.Mutex{}
 
 	for _, det := range detects {
 		if !e.isRunning {
@@ -896,6 +908,16 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 
 		// 1. Save sigma Detection to ElasticSearch
 		oldDet, exists := community[det.PublicID]
+		if !exists {
+			det.CreateTime = util.Ptr(time.Now())
+		}
+
+		document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", det, &det.Auditable, nil, nil)
+		if err != nil {
+			errMap[det.PublicID] = err
+			continue
+		}
+
 		if exists {
 			det.IsEnabled = oldDet.IsEnabled
 			det.Id = oldDet.Id
@@ -908,7 +930,29 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 			}).Info("updating Sigma detection")
 
 			if oldDet.Content != det.Content || oldDet.Ruleset != det.Ruleset || len(det.Overrides) != 0 {
-				_, err = e.srv.Detectionstore.UpdateDetection(ctx, det)
+				err = bulk.Add(ctx, esutil.BulkIndexerItem{
+					Index:      index,
+					Action:     "update",
+					DocumentID: det.Id,
+					Body:       bytes.NewReader(document),
+					OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+						auditMut.Lock()
+						defer auditMut.Unlock()
+
+						results.Updated++
+
+						createAudit = append(createAudit, detections.AuditInfo{
+							Detection: det,
+							DocId:     resp.DocumentID,
+							Op:        "update",
+						})
+					},
+					OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+						if err != nil {
+							errMap[det.PublicID] = err
+						}
+					},
+				})
 				if err != nil && err.Error() == "Object not found" {
 					errMap = map[string]error{
 						det.PublicID: err,
@@ -926,8 +970,6 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 					errMap[det.PublicID] = fmt.Errorf("unable to update detection: %s", err)
 					continue
 				}
-
-				results.Updated++
 			} else {
 				results.Unchanged++
 			}
@@ -942,7 +984,28 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 
 			checkRulesetEnabled(e, det)
 
-			_, err = e.srv.Detectionstore.CreateDetection(ctx, det)
+			err = bulk.Add(ctx, esutil.BulkIndexerItem{
+				Index:  index,
+				Action: "create",
+				Body:   bytes.NewReader(document),
+				OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+					auditMut.Lock()
+					defer auditMut.Unlock()
+
+					results.Added++
+
+					createAudit = append(createAudit, detections.AuditInfo{
+						Detection: det,
+						DocId:     resp.DocumentID,
+						Op:        "create",
+					})
+				},
+				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+					if err != nil {
+						errMap[det.PublicID] = err
+					}
+				},
+			})
 			if err != nil && err.Error() == "Object not found" {
 				errMap = map[string]error{
 					det.PublicID: err,
@@ -962,7 +1025,6 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 			}
 
 			delete(toDelete, det.PublicID)
-			results.Added++
 		}
 
 		if det.IsEnabled {
@@ -1004,16 +1066,84 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 			return nil, detections.ErrModuleStopped
 		}
 
-		_, err = e.srv.Detectionstore.DeleteDetection(ctx, community[publicId].Id)
+		_, index, _ := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", community[publicId], &community[publicId].Auditable, nil, nil)
+
+		err = bulk.Add(ctx, esutil.BulkIndexerItem{
+			Index:      index,
+			Action:     "delete",
+			DocumentID: community[publicId].Id,
+			OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+				auditMut.Lock()
+				defer auditMut.Unlock()
+
+				results.Removed++
+
+				createAudit = append(createAudit, detections.AuditInfo{
+					Detection: community[publicId],
+					DocId:     resp.DocumentID,
+					Op:        "delete",
+				})
+			},
+			OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+				if err != nil {
+					errMap[publicId] = err
+				}
+			},
+		})
 		if err != nil {
 			errMap[publicId] = fmt.Errorf("unable to delete detection: %s", err)
 			continue
 		}
+	}
 
-		results.Removed++
+	err = bulk.Close(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(createAudit) != 0 {
+		bulk, err = e.srv.Detectionstore.BuildBulkIndexer(e.srv.Context)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, audit := range createAudit {
+			// prepare audit doc
+			document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", audit.Detection, &audit.Detection.Auditable, &audit.DocId, &audit.Op)
+			if err != nil {
+				errMap[audit.Detection.PublicID] = err
+				continue
+			}
+
+			// create audit doc
+			err = bulk.Add(ctx, esutil.BulkIndexerItem{
+				Index:      index,
+				Action:     "create",
+				DocumentID: audit.DocId,
+				Body:       bytes.NewReader(document),
+				OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+					atomic.AddInt32(&results.Audited, 1)
+				},
+				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+					if err != nil {
+						errMap[audit.Detection.PublicID] = err
+					}
+				},
+			})
+			if err != nil {
+				errMap[audit.Detection.PublicID] = err
+				continue
+			}
+		}
+
+		err = bulk.Close(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	logger.WithFields(log.Fields{
+		"syncAudited":   results.Audited,
 		"syncAdded":     results.Added,
 		"syncUpdated":   results.Updated,
 		"syncRemoved":   results.Removed,

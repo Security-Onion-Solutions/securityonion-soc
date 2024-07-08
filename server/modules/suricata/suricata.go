@@ -1207,10 +1207,10 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 					DocumentID: detect.Id,
 					Body:       bytes.NewReader(document),
 					OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
-						atomic.AddInt32(&results.Updated, 1)
-
 						auditMut.Lock()
 						defer auditMut.Unlock()
+
+						results.Updated++
 
 						createAudit = append(createAudit, detections.AuditInfo{
 							Detection: detect,
@@ -1257,10 +1257,10 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 				Action: "create",
 				Body:   bytes.NewReader(document),
 				OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
-					atomic.AddInt32(&results.Added, 1)
-
 					auditMut.Lock()
 					defer auditMut.Unlock()
+
+					results.Added++
 
 					createAudit = append(createAudit, detections.AuditInfo{
 						Detection: detect,
@@ -1311,10 +1311,10 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 				Index:      index,
 				DocumentID: commSIDs[sid].Id,
 				OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
-					atomic.AddInt32(&results.Removed, 1)
-
 					auditMut.Lock()
 					defer auditMut.Unlock()
+
+					results.Removed++
 
 					createAudit = append(createAudit, detections.AuditInfo{
 						Detection: commSIDs[sid],
@@ -1350,12 +1350,13 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 			document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", audit.Detection, &audit.Detection.Auditable, &audit.DocId, &audit.Op)
 			if err != nil {
 				errMap[audit.Detection.PublicID] = fmt.Sprintf("unable to convert detection to document map for creating an audit doc; reason=%s", err.Error())
+				continue
 			}
 
 			// create audit doc
 			err = bulk.Add(ctx, esutil.BulkIndexerItem{
 				Index:  index,
-				Action: audit.Op,
+				Action: "create",
 				Body:   bytes.NewReader(document),
 				OnSuccess: func(ctx context.Context, bii esutil.BulkIndexerItem, biri esutil.BulkIndexerResponseItem) {
 					atomic.AddInt32(&results.Audited, 1)
@@ -1368,6 +1369,7 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 			})
 			if err != nil {
 				errMap[audit.Detection.PublicID] = fmt.Sprintf("unable to add audit doc to bulk indexer; reason=%s", err.Error())
+				continue
 			}
 		}
 

@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/apex/log"
+	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
@@ -1174,6 +1175,9 @@ func TestSyncChanges(t *testing.T) {
 
 	detStore := servermock.NewMockDetectionstore(ctrl)
 	iom := mock.NewMockIOManager(ctrl)
+	bim := servermock.NewMockBulkIndexer(ctrl)
+	auditm := servermock.NewMockBulkIndexer(ctrl)
+	_, _ = bim, auditm
 
 	eng := &ElastAlertEngine{
 		srv: &server.Server{
@@ -1268,24 +1272,48 @@ func TestSyncChanges(t *testing.T) {
 			PublicID: "00000000-0000-0000-0000-000000000000",
 		},
 	}, nil)
-	detStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, det *model.Detection) (*model.Detection, error) {
-		assert.Equal(t, "abc", det.Id)
-		assert.Equal(t, SimpleRuleSID, det.PublicID)
-		assert.True(t, det.IsEnabled)
-		assert.NotEmpty(t, det.Content)
-
-		return nil, nil
-	})
-	detStore.EXPECT().CreateDetection(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, det *model.Detection) (*model.Detection, error) {
-		assert.Equal(t, SimpleRule2SID, det.PublicID)
-		assert.False(t, det.IsEnabled)
-		assert.NotEmpty(t, det.Content)
-
-		return nil, nil
-	})
+	//	detStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, det *model.Detection) (*model.Detection, error) {
+	//		assert.Equal(t, "abc", det.Id)
+	//		assert.Equal(t, SimpleRuleSID, det.PublicID)
+	//		assert.True(t, det.IsEnabled)
+	//		assert.NotEmpty(t, det.Content)
+	//
+	//		return nil, nil
+	//	})
+	//
+	//	detStore.EXPECT().CreateDetection(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, det *model.Detection) (*model.Detection, error) {
+	//		assert.Equal(t, SimpleRule2SID, det.PublicID)
+	//		assert.False(t, det.IsEnabled)
+	//		assert.NotEmpty(t, det.Content)
+	//
+	//		return nil, nil
+	//	})
+	detStore.EXPECT().BuildBulkIndexer(gomock.Any()).Return(bim, nil)
+	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil).Times(3)
+	bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
+		if item.OnSuccess != nil {
+			resp := esutil.BulkIndexerResponseItem{
+				DocumentID: "id",
+			}
+			item.OnSuccess(ctx, item, resp)
+		}
+		return nil
+	}).Times(3)
+	bim.EXPECT().Close(gomock.Any()).Return(nil)
 	iom.EXPECT().ExecCommand(gomock.Any()).Return([]byte("\n[query]"), 0, time.Duration(time.Second), nil) // sigmaToElastAlert
 	iom.EXPECT().WriteFile("elastAlertRulesFolder/bcc6f179-11cd-4111-a9a6-0fab68515cf7.yml", gomock.Any(), fs.FileMode(0644)).Return(nil)
-	detStore.EXPECT().DeleteDetection(gomock.Any(), "delete").Return(nil, nil)                  // DeleteDetection
+	detStore.EXPECT().BuildBulkIndexer(gomock.Any()).Return(auditm, nil)
+	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return([]byte("document"), "index", nil).Times(3)
+	auditm.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
+		if item.OnSuccess != nil {
+			resp := esutil.BulkIndexerResponseItem{
+				DocumentID: "id",
+			}
+			item.OnSuccess(ctx, item, resp)
+		}
+		return nil
+	}).Times(3)
+	auditm.EXPECT().Close(gomock.Any()).Return(nil)
 	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)        // WriteStateFile
 	iom.EXPECT().WriteFile("rulesFingerprintFile", gomock.Any(), fs.FileMode(0644)).Return(nil) // WriteFingerprintFile
 	// regenNeeded

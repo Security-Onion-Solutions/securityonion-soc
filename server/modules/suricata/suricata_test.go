@@ -2267,9 +2267,6 @@ func TestSyncChanges(t *testing.T) {
 		}
 		return nil
 	}).Times(3)
-	// detStore.EXPECT().UpdateDetection(ctx, gomock.Any()).Return(nil, nil)
-	// detStore.EXPECT().CreateDetection(ctx, gomock.Any()).Return(nil, nil)
-	// detStore.EXPECT().DeleteDetection(ctx, "deleteme").Return(nil, nil)
 	bim.EXPECT().Close(gomock.Any()).Return(nil)
 	detStore.EXPECT().BuildBulkIndexer(gomock.Any()).Return(auditm, nil)
 	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), util.Ptr("id"), gomock.Any()).Return([]byte("document"), "index", nil).Times(3)
