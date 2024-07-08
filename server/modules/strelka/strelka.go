@@ -19,10 +19,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
@@ -50,31 +48,27 @@ const (
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS        = 600
 )
 
-var errModuleStopped = fmt.Errorf("strelka module has stopped running")
 var titleUpdater = regexp.MustCompile(`(?i)rule\s+(\w+)(\s+:(\s*[^{]+))?(\s+){`)
 var nameValidator = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]{0,127}$`) // alphanumeric + underscore, can't start with a number
 
 type StrelkaEngine struct {
-	srv                                  *server.Server
-	isRunning                            bool
-	syncThread                           *sync.WaitGroup
-	interruptSync                        chan bool
-	interm                               sync.Mutex
-	communityRulesImportFrequencySeconds int
-	communityRulesImportErrorSeconds     int
-	failAfterConsecutiveErrorCount       int
-	yaraRulesFolder                      string
-	reposFolder                          string
-	autoEnabledYaraRules                 []string
-	rulesRepos                           []*model.RuleRepo
-	compileYaraPythonScriptPath          string
-	allowRegex                           *regexp.Regexp
-	denyRegex                            *regexp.Regexp
-	notify                               bool
-	stateFilePath                        string
+	srv                            *server.Server
+	isRunning                      bool
+	interm                         sync.Mutex
+	failAfterConsecutiveErrorCount int
+	yaraRulesFolder                string
+	reposFolder                    string
+	autoEnabledYaraRules           []string
+	rulesRepos                     []*model.RuleRepo
+	compileYaraPythonScriptPath    string
+	allowRegex                     *regexp.Regexp
+	denyRegex                      *regexp.Regexp
+	notify                         bool
+	writeNoRead                    *string
+	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
-	model.EngineState
 	detections.IOManager
+	model.EngineState
 }
 
 func checkRulesetEnabled(e *StrelkaEngine, det *model.Detection) {
@@ -104,17 +98,17 @@ func (e *StrelkaEngine) GetState() *model.EngineState {
 }
 
 func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
-	e.syncThread = &sync.WaitGroup{}
-	e.interruptSync = make(chan bool, 1)
+	e.SyncThread = &sync.WaitGroup{}
+	e.InterruptChan = make(chan bool, 1)
 	e.IntegrityCheckerData.Thread = &sync.WaitGroup{}
 	e.IntegrityCheckerData.Interrupt = make(chan bool, 1)
 
-	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECONDS)
+	e.CommunityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECONDS)
 	e.yaraRulesFolder = module.GetStringDefault(config, "yaraRulesFolder", DEFAULT_YARA_RULES_FOLDER)
 	e.reposFolder = module.GetStringDefault(config, "reposFolder", DEFAULT_REPOS_FOLDER)
 	e.compileYaraPythonScriptPath = module.GetStringDefault(config, "compileYaraPythonScriptPath", DEFAULT_COMPILE_YARA_PYTHON_SCRIPT_PATH)
 	e.autoEnabledYaraRules = module.GetStringArrayDefault(config, "autoEnabledYaraRules", []string{DEFAULT_AUTO_ENABLED_YARA_RULES})
-	e.communityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
+	e.CommunityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS)
 
@@ -146,7 +140,7 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 		}
 	}
 
-	e.stateFilePath = module.GetStringDefault(config, "stateFilePath", DEFAULT_STATE_FILE_PATH)
+	e.StateFilePath = module.GetStringDefault(config, "stateFilePath", DEFAULT_STATE_FILE_PATH)
 
 	return nil
 }
@@ -155,7 +149,7 @@ func (e *StrelkaEngine) Start() error {
 	e.srv.DetectionEngines[model.EngineNameStrelka] = e
 	e.isRunning = true
 
-	go e.startCommunityRuleImport()
+	go detections.SyncScheduler(e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameStrelka, &e.isRunning, e.IOManager)
 	go detections.IntegrityChecker(model.EngineNameStrelka, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
 
 	return nil
@@ -164,8 +158,8 @@ func (e *StrelkaEngine) Start() error {
 func (e *StrelkaEngine) Stop() error {
 	e.isRunning = false
 	e.InterruptSync(false, false)
-	e.syncThread.Wait()
-	e.pauseIntegrityChecker()
+	e.SyncThread.Wait()
+	e.PauseIntegrityChecker()
 	e.interruptIntegrityCheck()
 	e.IntegrityCheckerData.Thread.Wait()
 
@@ -178,8 +172,8 @@ func (e *StrelkaEngine) InterruptSync(fullUpgrade bool, notify bool) {
 
 	e.notify = notify
 
-	if len(e.interruptSync) == 0 {
-		e.interruptSync <- fullUpgrade
+	if len(e.InterruptChan) == 0 {
+		e.InterruptChan <- fullUpgrade
 	}
 }
 
@@ -189,8 +183,8 @@ func (e *StrelkaEngine) resetInterrupt() {
 
 	e.notify = false
 
-	if len(e.interruptSync) != 0 {
-		<-e.interruptSync
+	if len(e.InterruptChan) != 0 {
+		<-e.InterruptChan
 	}
 }
 
@@ -203,11 +197,11 @@ func (e *StrelkaEngine) interruptIntegrityCheck() {
 	}
 }
 
-func (e *StrelkaEngine) pauseIntegrityChecker() {
+func (e *StrelkaEngine) PauseIntegrityChecker() {
 	e.IntegrityCheckerData.IsRunning = false
 }
 
-func (e *StrelkaEngine) resumeIntegrityChecker() {
+func (e *StrelkaEngine) ResumeIntegrityChecker() {
 	e.IntegrityCheckerData.IsRunning = true
 }
 
@@ -256,294 +250,196 @@ func (s *StrelkaEngine) ExtractDetails(detect *model.Detection) error {
 }
 
 func (e *StrelkaEngine) SyncLocalDetections(ctx context.Context, _ []*model.Detection) (errMap map[string]string, err error) {
-	return e.syncDetections(ctx)
+	return nil, e.syncDetections(ctx)
 }
 
-func (e *StrelkaEngine) startCommunityRuleImport() {
-	e.syncThread.Add(1)
+func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 	defer func() {
-		e.syncThread.Done()
-		e.isRunning = false
+		e.resetInterrupt()
 	}()
 
-	// |> nil: no import has been completed, it's this way during the first sync
-	// so that the timerDur returned by DetermineWaitTime is used. After first sync,
-	// the pointer should always have a value
-	// |> false: the last sync was not successful, the timer for the next sync should use
-	// the shorter communityRulesImportErrorSeconds timer.
-	// |> true: the last sync was successful, the timer for the next sync should use
-	// the normal communityRulesImportFrequencySeconds timer.
-	var lastSyncSuccess *bool
-
-	// publicId of a detection that was written but not read back
-	var writeNoRead *string
-
-	lastImport, timerDur := detections.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Second*time.Duration(e.communityRulesImportFrequencySeconds))
-
-	for e.isRunning {
-		if lastImport == nil && lastSyncSuccess != nil && *lastSyncSuccess {
-			now := uint64(time.Now().UnixMilli())
-			lastImport = &now
-		}
-
-		e.EngineState.Syncing = false
-		e.EngineState.Importing = lastImport == nil
-		e.EngineState.Migrating = false
-		e.EngineState.SyncFailure = lastSyncSuccess != nil && !*lastSyncSuccess
-
-		e.resetInterrupt()
-
-		var forceSync bool
-
-		if lastSyncSuccess != nil {
-			if *lastSyncSuccess {
-				timerDur = time.Second * time.Duration(e.communityRulesImportFrequencySeconds)
-			} else {
-				timerDur = time.Second * time.Duration(e.communityRulesImportErrorSeconds)
-				forceSync = true
-			}
-		}
-
-		timer := time.NewTimer(timerDur)
-
-		lastSyncStatus := "nil"
-		if lastSyncSuccess != nil {
-			lastSyncStatus = strconv.FormatBool(*lastSyncSuccess)
-		}
-
-		log.WithFields(log.Fields{
-			"waitTimeSeconds":   timerDur.Seconds(),
-			"forceSync":         forceSync,
-			"lastSyncSuccess":   lastSyncStatus,
-			"expectedStartTime": time.Now().Add(timerDur).Format(time.RFC3339),
-		}).Info("waiting for next Strelka community rules sync")
-
-		e.resumeIntegrityChecker()
-
-		select {
-		case <-timer.C:
-		case typ := <-e.interruptSync:
-			forceSync = forceSync || typ
-		}
-
-		e.pauseIntegrityChecker()
-
-		if !e.isRunning {
-			break
-		}
-
-		lastSyncSuccess = util.Ptr(false)
-
-		if detections.CheckWriteNoRead(e.srv.Context, e.srv.Detectionstore, writeNoRead) {
-			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-					Engine: model.EngineNameStrelka,
-					Status: "error",
-				})
-			}
-
-			continue
-		}
-
-		writeNoRead = nil
-
-		log.WithFields(log.Fields{
-			"forceSync": forceSync,
-		}).Info("syncing Strelka community rules")
-
-		e.EngineState.Syncing = true
-
-		start := time.Now()
-
-		tmplExists := detections.CheckTemplate(e.srv.Context, e.srv.Detectionstore)
-		if !tmplExists {
-			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-					Engine: model.EngineNameStrelka,
-					Status: "error",
-				})
-			}
-
-			continue
-		}
-
-		allRepos, anythingNew, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config, e.IOManager)
-		if err != nil {
-			if strings.Contains(err.Error(), "module stopped") {
-				break
-			}
-		}
-
-		// If no import has been completed, then do a full sync
-		if lastImport == nil {
-			forceSync = true
-		}
-
-		if !anythingNew && !forceSync {
-			// no updates, skip
-			log.Info("Strelka sync found no changes")
-
-			detections.WriteStateFile(e.IOManager, e.stateFilePath)
-
-			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-					Engine: model.EngineNameStrelka,
-					Status: "success",
-				})
-			}
-
-			_, _, err = e.IntegrityCheck(false)
-
-			e.EngineState.IntegrityFailure = err != nil
-			lastSyncSuccess = util.Ptr(err == nil)
-
-			if err != nil {
-				log.WithError(err).Error("post-sync integrity check failed")
-			} else {
-				log.Info("post-sync integrity check passed")
-			}
-
-			continue
-		}
-
-		communityDetections, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, model.WithEngine(model.EngineNameStrelka), model.WithCommunity(true))
-		if err != nil {
-			log.WithError(err).Error("Failed to get all community SIDs")
-
-			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-					Engine: model.EngineNameStrelka,
-					Status: "error",
-				})
-			}
-
-			continue
-		}
-
-		toDelete := map[string]struct{}{}
-		for _, det := range communityDetections {
-			toDelete[det.PublicID] = struct{}{}
-		}
-
-		et := detections.NewErrorTracker(e.failAfterConsecutiveErrorCount)
-		detects := []*model.Detection{}
-
-		// parse *.yar files in repos
-		for repopath, repo := range allRepos {
-			if !e.isRunning {
-				return
-			}
-
-			if !repo.WasModified && !forceSync {
-				continue
-			}
-
-			baseDir := repo.Path
-			if repo.Repo.Folder != nil {
-				baseDir = filepath.Join(baseDir, *repo.Repo.Folder)
-			}
-
-			err = e.WalkDir(baseDir, func(path string, d fs.DirEntry, err error) error {
-				if err != nil {
-					log.WithError(err).WithField("repoPath", path).Error("Failed to walk path")
-					return nil
-				}
-
-				if !e.isRunning {
-					return errModuleStopped
-				}
-
-				if d.IsDir() {
-					return nil
-				}
-
-				ext := filepath.Ext(d.Name())
-				if strings.ToLower(ext) != ".yar" {
-					return nil
-				}
-
-				raw, err := e.ReadFile(path)
-				if err != nil {
-					log.WithError(err).WithField("yaraRuleFile", path).Error("failed to read yara rule file")
-					return nil
-				}
-
-				parsed, err := e.parseYaraRules(raw, true)
-				if err != nil {
-					log.WithError(err).WithField("yaraRuleFile", path).Error("failed to parse yara rule file")
-					return nil
-				}
-
-				for _, rule := range parsed {
-					det := rule.ToDetection(repo.Repo.License, filepath.Base(repo.Path), repo.Repo.Community)
-					detects = append(detects, det)
-				}
-
-				return nil
+	if detections.CheckWriteNoRead(e.srv.Context, e.srv.Detectionstore, e.writeNoRead) {
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameStrelka,
+				Status: "error",
 			})
-			if err != nil {
-				log.WithError(err).WithField("strelkaRepo", repopath).Error("failed while walking repo")
-
-				continue
-			}
 		}
 
-		var eterr error
-		detects = detections.DeduplicateByPublicId(detects)
+		return detections.ErrSyncFailed
+	}
 
-		for _, det := range detects {
-			log.WithFields(log.Fields{
-				"rule.uuid": det.PublicID,
-				"rule.name": det.Title,
-			}).Info("Strelka community sync - processing YARA rule")
+	e.writeNoRead = nil
 
-			comRule, exists := communityDetections[det.PublicID]
-			if exists {
-				if comRule.Content != det.Content || comRule.Ruleset != det.Ruleset || len(det.Overrides) != 0 {
-					// pre-existing detection, update it
-					det.IsEnabled = comRule.IsEnabled
-					det.Id = comRule.Id
-					det.Overrides = comRule.Overrides
-					det.CreateTime = comRule.CreateTime
+	e.EngineState.Syncing = true
 
-					log.WithFields(log.Fields{
-						"rule.uuid": det.PublicID,
-						"rule.name": det.Title,
-					}).Info("Updating Yara detection")
+	// ensure repos are up to date
+	allRepos, anythingNew, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config, e.IOManager)
+	if err != nil {
+		if errors.Is(err, detections.ErrModuleStopped) {
+			return err
+		}
+	}
 
-					_, err = e.srv.Detectionstore.UpdateDetection(e.srv.Context, det)
-					if err != nil && err.Error() == "Object not found" {
-						writeNoRead = util.Ptr(det.PublicID)
-						log.WithField("publicId", det.PublicID).Error("unable to read back successful write")
+	if !anythingNew && !forceSync {
+		// no updates, skip
+		logger.Info("community rule sync found no changes")
 
-						break
-					}
+		detections.WriteStateFile(e.IOManager, e.StateFilePath)
 
-					eterr = et.AddError(err)
-					if eterr != nil {
-						break
-					}
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameStrelka,
+				Status: "success",
+			})
+		}
 
-					if err != nil {
-						log.WithError(err).WithField("publicId", det.PublicID).Error("Failed to update detection")
-						continue
-					}
-				}
+		_, _, err = e.IntegrityCheck(false, logger)
 
-				delete(toDelete, det.PublicID)
-			} else {
-				// new detection, create it
-				log.WithFields(log.Fields{
+		e.EngineState.IntegrityFailure = err != nil
+
+		if err != nil {
+			logger.WithError(err).Error("post-sync integrity check failed")
+		} else {
+			logger.Info("post-sync integrity check passed")
+		}
+
+		// a non-forceSync sync that found no changes is a success
+		return nil
+	}
+
+	if !e.isRunning {
+		return detections.ErrModuleStopped
+	}
+
+	communityDetections, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, model.WithEngine(model.EngineNameStrelka), model.WithCommunity(true))
+	if err != nil {
+		logger.WithError(err).Error("failed to get all community SIDs")
+
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameStrelka,
+				Status: "error",
+			})
+		}
+
+		return detections.ErrSyncFailed
+	}
+
+	if !e.isRunning {
+		return detections.ErrModuleStopped
+	}
+
+	toDelete := map[string]struct{}{}
+	for pid := range communityDetections {
+		toDelete[pid] = struct{}{}
+	}
+
+	et := detections.NewErrorTracker(e.failAfterConsecutiveErrorCount)
+	detects := []*model.Detection{}
+
+	// parse *.yar files in repos
+	for repopath, repo := range allRepos {
+		if !e.isRunning {
+			return detections.ErrModuleStopped
+		}
+
+		if !repo.WasModified && !forceSync {
+			continue
+		}
+
+		baseDir := repo.Path
+		if repo.Repo.Folder != nil {
+			baseDir = filepath.Join(baseDir, *repo.Repo.Folder)
+		}
+
+		err = e.WalkDir(baseDir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				logger.WithError(err).WithField("repoPath", path).Error("failed to walk path")
+				return nil
+			}
+
+			if !e.isRunning {
+				return detections.ErrModuleStopped
+			}
+
+			if d.IsDir() {
+				return nil
+			}
+
+			ext := filepath.Ext(d.Name())
+			if strings.ToLower(ext) != ".yar" {
+				return nil
+			}
+
+			raw, err := e.ReadFile(path)
+			if err != nil {
+				logger.WithError(err).WithField("yaraRuleFile", path).Error("failed to read yara rule file")
+				return nil
+			}
+
+			parsed, err := e.parseYaraRules(raw, true)
+			if err != nil {
+				logger.WithError(err).WithField("yaraRuleFile", path).Error("failed to parse yara rule file")
+				return nil
+			}
+
+			for _, rule := range parsed {
+				det := rule.ToDetection(repo.Repo.License, filepath.Base(repo.Path), repo.Repo.Community)
+				detects = append(detects, det)
+			}
+
+			return nil
+		})
+		if err != nil {
+			logger.WithError(err).WithField("strelkaRepo", repopath).Error("failed while walking repo")
+
+			continue
+		}
+	}
+
+	if !e.isRunning {
+		return detections.ErrModuleStopped
+	}
+
+	var eterr error
+	detects = detections.DeduplicateByPublicId(detects)
+
+	results := struct {
+		Added     int
+		Updated   int
+		Removed   int
+		Unchanged int
+	}{}
+
+	for _, det := range detects {
+		if !e.isRunning {
+			return detections.ErrModuleStopped
+		}
+
+		logger.WithFields(log.Fields{
+			"rule.uuid": det.PublicID,
+			"rule.name": det.Title,
+		}).Info("syncing YARA detection")
+
+		comRule, exists := communityDetections[det.PublicID]
+		if exists {
+			if comRule.Content != det.Content || comRule.Ruleset != det.Ruleset || len(det.Overrides) != 0 {
+				// pre-existing detection, update it
+				det.IsEnabled = comRule.IsEnabled
+				det.Id = comRule.Id
+				det.Overrides = comRule.Overrides
+				det.CreateTime = comRule.CreateTime
+
+				logger.WithFields(log.Fields{
 					"rule.uuid": det.PublicID,
 					"rule.name": det.Title,
-				}).Info("Creating new Yara detection")
+				}).Info("updating YARA detection")
 
-				checkRulesetEnabled(e, det)
-
-				_, err = e.srv.Detectionstore.CreateDetection(e.srv.Context, det)
+				_, err = e.srv.Detectionstore.UpdateDetection(e.srv.Context, det)
 				if err != nil && err.Error() == "Object not found" {
-					writeNoRead = util.Ptr(det.PublicID)
-					log.WithField("publicId", det.PublicID).Error("unable to read back successful write")
+					e.writeNoRead = util.Ptr(det.PublicID)
+					logger.WithField("publicId", det.PublicID).Error("unable to read back successful write")
 
 					break
 				}
@@ -554,94 +450,126 @@ func (e *StrelkaEngine) startCommunityRuleImport() {
 				}
 
 				if err != nil {
-					log.WithError(err).WithField("publicId", det.PublicID).Error("Failed to create detection")
+					logger.WithError(err).WithField("publicId", det.PublicID).Error("failed to update detection")
 					continue
 				}
 
-				delete(toDelete, det.PublicID)
-			}
-		}
-
-		if eterr != nil || writeNoRead != nil {
-			if eterr != nil {
-				log.WithError(eterr).Error("unable to sync YARA community detections")
-			}
-			if writeNoRead != nil {
-				log.Warn("detection was written but not read back, attempting read before continuing")
+				results.Updated++
+			} else {
+				results.Unchanged++
 			}
 
-			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-					Engine: model.EngineNameElastAlert,
-					Status: "error",
-				})
-			}
+			delete(toDelete, det.PublicID)
+		} else {
+			// new detection, create it
+			logger.WithFields(log.Fields{
+				"rule.uuid": det.PublicID,
+				"rule.name": det.Title,
+			}).Info("creating new YARA detection")
 
-			continue
-		}
+			checkRulesetEnabled(e, det)
 
-		for publicId := range toDelete {
-			if !e.isRunning {
+			_, err = e.srv.Detectionstore.CreateDetection(e.srv.Context, det)
+			if err != nil && err.Error() == "Object not found" {
+				e.writeNoRead = util.Ptr(det.PublicID)
+				logger.WithField("publicId", det.PublicID).Error("unable to read back successful write")
+
 				break
 			}
 
-			_, err = e.srv.Detectionstore.DeleteDetection(e.srv.Context, communityDetections[publicId].Id)
-			if err != nil {
-				log.WithError(err).WithField("publicId", publicId).Error("Failed to delete unreferenced community detection")
+			eterr = et.AddError(err)
+			if eterr != nil {
+				break
 			}
+
+			if err != nil {
+				logger.WithError(err).WithField("publicId", det.PublicID).Error("failed to create detection")
+				continue
+			}
+
+			delete(toDelete, det.PublicID)
+			results.Added++
+		}
+	}
+
+	if eterr != nil || e.writeNoRead != nil {
+		if eterr != nil {
+			logger.WithError(eterr).Error("unable to sync YARA community detections")
+		}
+		if e.writeNoRead != nil {
+			logger.Warn("detection was written but not read back, attempting read before continuing")
 		}
 
-		errMap, err := e.syncDetections(e.srv.Context)
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameElastAlert,
+				Status: "error",
+			})
+		}
+
+		return detections.ErrSyncFailed
+	}
+
+	for publicId := range toDelete {
+		if !e.isRunning {
+			break
+		}
+
+		_, err = e.srv.Detectionstore.DeleteDetection(e.srv.Context, communityDetections[publicId].Id)
 		if err != nil {
-			if err == errModuleStopped {
-				log.Info("incomplete sync of YARA community detections due to module stopping")
-				return
-			}
-
-			log.WithError(err).Error("unable to sync YARA community detections")
-
-			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-					Engine: model.EngineNameStrelka,
-					Status: "error",
-				})
-			}
-
+			logger.WithError(err).WithField("publicId", publicId).Error("Failed to delete unreferenced community detection")
 			continue
 		}
 
-		detections.WriteStateFile(e.IOManager, e.stateFilePath)
+		results.Removed++
+	}
+
+	err = e.syncDetections(e.srv.Context)
+	if err != nil {
+		if errors.Is(err, detections.ErrModuleStopped) {
+			logger.Info("incomplete sync of YARA community detections due to module stopping")
+			return err
+		}
+
+		log.WithError(err).Error("unable to sync YARA community detections")
 
 		if e.notify {
-			if len(errMap) > 0 {
-				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-					Engine: model.EngineNameStrelka,
-					Status: "partial",
-				})
-			} else {
-				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-					Engine: model.EngineNameStrelka,
-					Status: "success",
-				})
-			}
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameStrelka,
+				Status: "error",
+			})
 		}
 
-		_, _, err = e.IntegrityCheck(false)
-
-		e.EngineState.IntegrityFailure = err != nil
-		lastSyncSuccess = util.Ptr(err == nil)
-
-		if err != nil {
-			log.WithError(err).Error("post-sync integrity check failed")
-		} else {
-			log.Info("post-sync integrity check passed")
-		}
-
-		log.WithFields(log.Fields{
-			"errMap":        errMap,
-			"syncStartTime": time.Since(start).Seconds(),
-		}).Info("Strelka community rules sync finished")
+		return detections.ErrSyncFailed
 	}
+
+	detections.WriteStateFile(e.IOManager, e.StateFilePath)
+
+	if e.notify {
+		e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+			Engine: model.EngineNameStrelka,
+			Status: "success",
+		})
+	}
+
+	_, _, err = e.IntegrityCheck(false, logger)
+
+	e.EngineState.IntegrityFailure = err != nil
+
+	if err != nil {
+		logger.WithError(err).Error("post-sync integrity check failed")
+	} else {
+		logger.Info("post-sync integrity check passed")
+	}
+
+	logger.WithFields(log.Fields{
+		"syncAdded":     results.Added,
+		"syncUpdated":   results.Updated,
+		"syncRemoved":   results.Removed,
+		"syncUnchanged": results.Unchanged,
+	}).Info("strelka community diff")
+
+	return nil
 }
 
 func (e *StrelkaEngine) parseYaraRules(data []byte, filter bool) ([]*YaraRule, error) {
@@ -877,21 +805,21 @@ func buildImportChecker(pkg string) *regexp.Regexp {
 	return regexp.MustCompile(fmt.Sprintf(`[^"]\b%s\b[^"]`, pkg))
 }
 
-func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]string, err error) {
+func (e *StrelkaEngine) syncDetections(ctx context.Context) (err error) {
 	results, err := e.srv.Detectionstore.GetAllDetections(ctx, model.WithEngine(model.EngineNameStrelka), model.WithEnabled(true))
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	enabledDetections := map[string]*model.Detection{}
 	for pid, det := range results {
 		if !e.isRunning {
-			return nil, errModuleStopped
+			return detections.ErrModuleStopped
 		}
 
 		_, exists := enabledDetections[pid]
 		if exists {
-			return nil, fmt.Errorf("duplicate detection with public ID %s", pid)
+			return fmt.Errorf("duplicate detection with public ID %s", pid)
 		}
 		enabledDetections[pid] = det
 	}
@@ -899,7 +827,7 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]s
 	// Clear existing .yar files in the directory
 	files, err := e.ReadDir(e.yaraRulesFolder)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read directory: %v", err)
+		return fmt.Errorf("failed to read directory: %v", err)
 	}
 
 	deleteByExt := map[string]struct{}{
@@ -912,7 +840,7 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]s
 		if ok {
 			err := e.DeleteFile(filepath.Join(e.yaraRulesFolder, file.Name()))
 			if err != nil {
-				return nil, fmt.Errorf("failed to delete existing .yar file %s: %v", file.Name(), err)
+				return fmt.Errorf("failed to delete existing .yar file %s: %v", file.Name(), err)
 			}
 		}
 	}
@@ -923,7 +851,7 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]s
 
 		err := e.WriteFile(filename, []byte(det.Content), 0644)
 		if err != nil {
-			return nil, fmt.Errorf("failed to write file for detection %s: %v", publicId, err)
+			return fmt.Errorf("failed to write file for detection %s: %v", publicId, err)
 		}
 	}
 
@@ -941,10 +869,10 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (errMap map[string]s
 	}).Info("yara compilation results")
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return nil, nil
+	return nil
 }
 
 func (e *StrelkaEngine) DuplicateDetection(ctx context.Context, detection *model.Detection) (*model.Detection, error) {
@@ -985,16 +913,19 @@ func (e *StrelkaEngine) GenerateUnusedPublicId(ctx context.Context) (string, err
 	return "", fmt.Errorf("not implemented")
 }
 
-func (e *StrelkaEngine) IntegrityCheck(canInterrupt bool) (deployedButNotEnabled []string, enabledButNotDeployed []string, err error) {
+func (e *StrelkaEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (deployedButNotEnabled []string, enabledButNotDeployed []string, err error) {
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
-	logger := log.WithFields(log.Fields{
-		"detectionEngine": model.EngineNameStrelka,
-		"intCheckId":      uuid.New().String(),
-	})
+	if logger == nil {
+		logger = log.WithFields(log.Fields{
+			"detectionEngine": model.EngineNameSuricata,
+		})
+	}
+
+	logger = logger.WithField("intCheckId", uuid.New().String())
 
 	// get deployed
 	report, err := e.getCompilationReport()
@@ -1066,17 +997,17 @@ func (e *StrelkaEngine) IntegrityCheck(canInterrupt bool) (deployedButNotEnabled
 
 	deployedButNotEnabled, enabledButNotDeployed, _ = detections.DiffLists(deployed, enabled)
 
-	logger.WithFields(log.Fields{
+	intCheckReport := logger.WithFields(log.Fields{
 		"deployedButNotEnabled": deployedButNotEnabled,
 		"enabledButNotDeployed": enabledButNotDeployed,
-	}).Info("integrity check report")
+	})
 
 	if len(deployedButNotEnabled) > 0 || len(enabledButNotDeployed) > 0 {
-		logger.Info("integrity check failed")
+		intCheckReport.Warn("integrity check failed")
 		return deployedButNotEnabled, enabledButNotDeployed, detections.ErrIntCheckFailed
 	}
 
-	logger.Info("integrity check passed")
+	intCheckReport.Info("integrity check passed")
 
 	return deployedButNotEnabled, enabledButNotDeployed, nil
 }

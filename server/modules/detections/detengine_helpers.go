@@ -137,7 +137,7 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 	// pull or clone repos
 	for _, repo := range rulesRepos {
 		if !*isRunning {
-			return nil, false, fmt.Errorf("module has stopped running")
+			return nil, false, ErrModuleStopped
 		}
 
 		parser, err := url.Parse(repo.Repo)

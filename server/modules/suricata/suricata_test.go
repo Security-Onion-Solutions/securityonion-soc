@@ -13,14 +13,17 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
-	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/handmock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/handmock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -992,7 +995,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 
 			ctx := web.MarkChangedByUser(context.Background(), test.ChangedByUser)
 
-			errMap, err := mod.syncCommunityDetections(ctx, test.Detections, false, test.InitialSettings)
+			errMap, err := mod.syncCommunityDetections(ctx, nil, test.Detections, false, test.InitialSettings)
 
 			assert.Equal(t, test.ExpectedErr, err)
 			assert.Equal(t, test.ExpectedErrMap, errMap)
@@ -2005,7 +2008,7 @@ func TestIntegrityCheck(t *testing.T) {
 				IOManager:    iom,
 			}
 
-			DbnE, EbnD, err := e.IntegrityCheck(false)
+			DbnE, EbnD, err := e.IntegrityCheck(false, nil)
 
 			if test.ExpError != nil {
 				assert.Error(t, err)
@@ -2018,4 +2021,196 @@ func TestIntegrityCheck(t *testing.T) {
 			assert.Equal(t, test.EbnD, EbnD)
 		})
 	}
+}
+
+func TestSyncWriteNoReadFail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	detStore.EXPECT().GetDetectionByPublicId(gomock.Any(), "123").Return(nil, errors.New("Object not found"))
+
+	wnr := util.Ptr("123")
+
+	eng := &SuricataEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+		},
+		writeNoRead: wnr,
+	}
+
+	logger := log.WithField("detectionEngineName", "test-suricata")
+
+	err := eng.Sync(logger, false)
+	assert.Equal(t, detections.ErrSyncFailed, err)
+	assert.Equal(t, wnr, eng.writeNoRead)
+}
+
+func TestSyncIncrementalNoChanges(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+	cfgStore := server.NewMemConfigStore([]*model.Setting{
+		{Id: "idstools.rules.local__rules"},
+		{Id: "idstools.sids.enabled"},
+		{Id: "idstools.sids.disabled"},
+		{Id: "idstools.sids.modify"},
+		{Id: "suricata.thresholding.sids__yaml"},
+	})
+
+	migrationChecked := false
+	checkMigration := func() {
+		migrationChecked = true
+	}
+
+	eng := &SuricataEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+			Configstore:    cfgStore,
+		},
+		isRunning:            true,
+		communityRulesFile:   "communityRulesFile",
+		rulesFingerprintFile: "rulesFingerprintFile",
+		checkMigrationsOnce:  sync.OnceFunc(checkMigration),
+		allRulesFile:         "allRulesFile",
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			StateFilePath: "stateFilePath",
+		},
+		IntegrityCheckerData: detections.IntegrityCheckerData{
+			IsRunning: true,
+		},
+		IOManager: iom,
+	}
+
+	logger := log.WithField("detectionEngineName", "test-suricata")
+
+	// readAndHash
+	iom.EXPECT().ReadFile("communityRulesFile").Return([]byte(SimpleRule), nil)
+	// readFingerprint
+	iom.EXPECT().ReadFile("rulesFingerprintFile").Return([]byte("2a4374cf63736ccbaf7a58aedf2282cb21afebf82120e29e4cbcc459516852f2"), nil)
+	// WriteStateFile
+	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	// IntegrityCheck
+	iom.EXPECT().ReadFile("allRulesFile").Return([]byte(SimpleRule), nil)
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		"10000": nil,
+	}, nil)
+
+	err := eng.Sync(logger, false)
+	assert.NoError(t, err)
+
+	assert.True(t, eng.EngineState.Syncing) // stays true until the SyncScheduler resets it
+	assert.False(t, eng.EngineState.IntegrityFailure)
+	assert.False(t, eng.EngineState.Migrating)
+	assert.False(t, eng.EngineState.MigrationFailure)
+	assert.False(t, eng.EngineState.Importing)
+	assert.False(t, eng.EngineState.SyncFailure)
+	assert.True(t, migrationChecked)
+}
+
+func TestSyncChanges(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+	cfgStore := server.NewMemConfigStore([]*model.Setting{
+		{Id: "idstools.rules.local__rules", Value: FlowbitsRuleA},
+		{Id: "idstools.sids.enabled", Value: SimpleRuleSID + "\n99999"},
+		{Id: "idstools.sids.disabled"},
+		{Id: "idstools.sids.modify", Value: FlowbitsRuleASID + " " + modifyFromTo}, // used to be disabled, will be enabled
+		{Id: "suricata.thresholding.sids__yaml"},
+		{Id: "idstools.config.ruleset", Value: "repo"},
+	})
+
+	migrationChecked := false
+	checkMigration := func() {
+		migrationChecked = true
+	}
+
+	eng := &SuricataEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+			Configstore:    cfgStore,
+			Context:        ctx,
+		},
+		isRunning:            true,
+		communityRulesFile:   "communityRulesFile",
+		rulesFingerprintFile: "rulesFingerprintFile",
+		checkMigrationsOnce:  sync.OnceFunc(checkMigration),
+		allRulesFile:         "allRulesFile",
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			StateFilePath: "stateFilePath",
+		},
+		IntegrityCheckerData: detections.IntegrityCheckerData{
+			IsRunning: true,
+		},
+		IOManager: iom,
+	}
+
+	logger := log.WithField("detectionEngineName", "test-suricata")
+
+	// readAndHash
+	iom.EXPECT().ReadFile("communityRulesFile").Return([]byte(SimpleRule+"\n"+FlowbitsRuleA), nil)
+	// syncCommunityDetections
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		SimpleRuleSID: {
+			Auditable: model.Auditable{
+				Id:         "abc",
+				CreateTime: util.Ptr(time.Now()),
+			},
+			IsEnabled: true,
+		},
+		"99999": {
+			Auditable: model.Auditable{
+				Id: "deleteme",
+			},
+		}, // to be deleted
+	}, nil)
+	detStore.EXPECT().UpdateDetection(ctx, gomock.Any()).Return(nil, nil)
+	detStore.EXPECT().CreateDetection(ctx, gomock.Any()).Return(nil, nil)
+	detStore.EXPECT().DeleteDetection(ctx, "deleteme").Return(nil, nil)
+	// WriteStateFile
+	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	iom.EXPECT().WriteFile("rulesFingerprintFile", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	// IntegrityCheck
+	iom.EXPECT().ReadFile("allRulesFile").Return([]byte(SimpleRule+"\n"+FlowbitsRuleA), nil)
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		"10000": nil,
+		"50000": nil,
+	}, nil)
+
+	err := eng.Sync(logger, true)
+	assert.NoError(t, err)
+
+	assert.True(t, eng.EngineState.Syncing) // stays true until the SyncScheduler resets it
+	assert.False(t, eng.EngineState.IntegrityFailure)
+	assert.False(t, eng.EngineState.Migrating)
+	assert.False(t, eng.EngineState.MigrationFailure)
+	assert.False(t, eng.EngineState.Importing)
+	assert.False(t, eng.EngineState.SyncFailure)
+	assert.True(t, migrationChecked)
+
+	allSettings, err := cfgStore.GetSettings(ctx)
+	assert.NoError(t, err)
+
+	enabled := settingByID(allSettings, "idstools.sids.enabled")
+	assert.NotNil(t, enabled)
+	assert.Equal(t, SimpleRuleSID, enabled.Value)
+
+	disabled := settingByID(allSettings, "idstools.sids.disabled")
+	assert.NotNil(t, disabled)
+	assert.Equal(t, "", disabled.Value)
+
+	modify := settingByID(allSettings, "idstools.sids.modify")
+	assert.NotNil(t, modify)
+	assert.Equal(t, "", modify.Value)
+
+	threshold := settingByID(allSettings, "suricata.thresholding.sids__yaml")
+	assert.NotNil(t, threshold)
+	assert.Equal(t, "{}\n", threshold.Value)
 }

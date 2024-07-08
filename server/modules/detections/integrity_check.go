@@ -18,7 +18,7 @@ var ErrIntCheckerStopped = fmt.Errorf("integrity checker has stopped running")
 var ErrIntCheckFailed = fmt.Errorf("integrity check failed; discrepancies found")
 
 type IntegrityChecked interface {
-	IntegrityCheck(bool) ([]string, []string, error)
+	IntegrityCheck(bool, *log.Entry) ([]string, []string, error)
 	InterruptSync(forceFull bool, notify bool)
 	IsRunning() bool
 }
@@ -37,7 +37,7 @@ func IntegrityChecker(engName model.EngineName, eng IntegrityChecked, data *Inte
 		data.IsRunning = false
 	}()
 
-	logger := log.WithField("engineName", engName)
+	logger := log.WithField("detectionEngine", engName)
 	failCount := uint(0)
 
 	for {
@@ -56,7 +56,7 @@ func IntegrityChecker(engName model.EngineName, eng IntegrityChecked, data *Inte
 			continue
 		}
 
-		_, _, err := eng.IntegrityCheck(true)
+		_, _, err := eng.IntegrityCheck(true, logger)
 		if err != nil {
 			if err != ErrIntCheckerStopped {
 				failCount++

@@ -13,6 +13,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -22,10 +23,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -41,8 +40,6 @@ import (
 	"github.com/samber/lo"
 	"gopkg.in/yaml.v3"
 )
-
-var errModuleStopped = fmt.Errorf("elastalert module has stopped running")
 
 const (
 	DEFAULT_AIRGAP_BASE_PATH                         = "/nsm/rules/detect-sigma/rulesets/"
@@ -69,34 +66,31 @@ var acceptedExtensions = map[string]bool{
 }
 
 type ElastAlertEngine struct {
-	srv                                  *server.Server
-	airgapBasePath                       string
-	communityRulesImportFrequencySeconds int
-	communityRulesImportErrorSeconds     int
-	failAfterConsecutiveErrorCount       int
-	sigmaPackageDownloadTemplate         string
-	elastAlertRulesFolder                string
-	rulesFingerprintFile                 string
-	sigmaPipelineFinal                   string
-	sigmaPipelineSO                      string
-	sigmaPipelinesFingerprintFile        string
-	sigmaRulePackages                    []string
-	autoEnabledSigmaRules                []string
-	additionalAlerters                   []string
-	rulesRepos                           []*model.RuleRepo
-	reposFolder                          string
-	isRunning                            bool
-	syncThread                           *sync.WaitGroup
-	interruptSync                        chan bool
-	interm                               sync.Mutex
-	allowRegex                           *regexp.Regexp
-	denyRegex                            *regexp.Regexp
-	airgapEnabled                        bool
-	notify                               bool
-	stateFilePath                        string
+	srv                            *server.Server
+	airgapBasePath                 string
+	failAfterConsecutiveErrorCount int
+	sigmaPackageDownloadTemplate   string
+	elastAlertRulesFolder          string
+	rulesFingerprintFile           string
+	sigmaPipelineFinal             string
+	sigmaPipelineSO                string
+	sigmaPipelinesFingerprintFile  string
+	sigmaRulePackages              []string
+	autoEnabledSigmaRules          []string
+	additionalAlerters             []string
+	rulesRepos                     []*model.RuleRepo
+	reposFolder                    string
+	isRunning                      bool
+	interm                         sync.Mutex
+	allowRegex                     *regexp.Regexp
+	denyRegex                      *regexp.Regexp
+	airgapEnabled                  bool
+	notify                         bool
+	writeNoRead                    *string
+	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
-	model.EngineState
 	detections.IOManager
+	model.EngineState
 }
 
 func checkRulesetEnabled(e *ElastAlertEngine, det *model.Detection) {
@@ -135,13 +129,13 @@ func (e *ElastAlertEngine) GetState() *model.EngineState {
 }
 
 func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
-	e.syncThread = &sync.WaitGroup{}
-	e.interruptSync = make(chan bool, 1)
+	e.SyncThread = &sync.WaitGroup{}
+	e.InterruptChan = make(chan bool, 1)
 	e.IntegrityCheckerData.Thread = &sync.WaitGroup{}
 	e.IntegrityCheckerData.Interrupt = make(chan bool, 1)
 
 	e.airgapBasePath = module.GetStringDefault(config, "airgapBasePath", DEFAULT_AIRGAP_BASE_PATH)
-	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECONDS)
+	e.CommunityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECONDS)
 	e.sigmaPackageDownloadTemplate = module.GetStringDefault(config, "sigmaPackageDownloadTemplate", DEFAULT_SIGMA_PACKAGE_DOWNLOAD_TEMPLATE)
 	e.elastAlertRulesFolder = module.GetStringDefault(config, "elastAlertRulesFolder", DEFAULT_ELASTALERT_RULES_FOLDER)
 	e.sigmaPipelineFinal = module.GetStringDefault(config, "sigmaPipelineFinal", DEFAULT_SIGMA_PIPELINE_FINAL_FILE)
@@ -149,7 +143,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.sigmaPipelinesFingerprintFile = module.GetStringDefault(config, "sigmaPipelinesFingerprintFile", DEFAULT_SIGMA_PIPELINES_FINGERPRINT_FILE)
 	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", DEFAULT_RULES_FINGERPRINT_FILE)
 	e.autoEnabledSigmaRules = module.GetStringArrayDefault(config, "autoEnabledSigmaRules", []string{"securityonion-resources+critical", "securityonion-resources+high"})
-	e.communityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
+	e.CommunityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 	e.additionalAlerters = module.GetStringArrayDefault(config, "additionalAlerters", []string{})
 	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS)
@@ -194,7 +188,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 		}
 	}
 
-	e.stateFilePath = module.GetStringDefault(config, "stateFilePath", DEFAULT_STATE_FILE_PATH)
+	e.SyncSchedulerParams.StateFilePath = module.GetStringDefault(config, "stateFilePath", DEFAULT_STATE_FILE_PATH)
 
 	return nil
 }
@@ -204,7 +198,7 @@ func (e *ElastAlertEngine) Start() error {
 	e.isRunning = true
 	e.IntegrityCheckerData.IsRunning = true
 
-	go e.startCommunityRuleImport()
+	go detections.SyncScheduler(e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameElastAlert, &e.isRunning, e.IOManager)
 	go detections.IntegrityChecker(model.EngineNameElastAlert, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
 
 	return nil
@@ -214,8 +208,8 @@ func (e *ElastAlertEngine) Stop() error {
 	e.isRunning = false
 
 	e.InterruptSync(false, false)
-	e.syncThread.Wait()
-	e.pauseIntegrityChecker()
+	e.SyncSchedulerParams.SyncThread.Wait()
+	e.PauseIntegrityChecker()
 	e.interruptIntegrityCheck()
 	e.IntegrityCheckerData.Thread.Wait()
 
@@ -228,8 +222,8 @@ func (e *ElastAlertEngine) InterruptSync(fullUpgrade bool, notify bool) {
 
 	e.notify = notify
 
-	if len(e.interruptSync) == 0 {
-		e.interruptSync <- fullUpgrade
+	if len(e.InterruptChan) == 0 {
+		e.InterruptChan <- fullUpgrade
 	}
 }
 
@@ -239,8 +233,8 @@ func (e *ElastAlertEngine) resetInterruptSync() {
 
 	e.notify = false
 
-	if len(e.interruptSync) != 0 {
-		<-e.interruptSync
+	if len(e.InterruptChan) != 0 {
+		<-e.InterruptChan
 	}
 }
 
@@ -253,11 +247,11 @@ func (e *ElastAlertEngine) interruptIntegrityCheck() {
 	}
 }
 
-func (e *ElastAlertEngine) pauseIntegrityChecker() {
+func (e *ElastAlertEngine) PauseIntegrityChecker() {
 	e.IntegrityCheckerData.IsRunning = false
 }
 
-func (e *ElastAlertEngine) resumeIntegrityChecker() {
+func (e *ElastAlertEngine) ResumeIntegrityChecker() {
 	e.IntegrityCheckerData.IsRunning = true
 }
 
@@ -432,110 +426,14 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 	return errMap, nil
 }
 
-func (e *ElastAlertEngine) startCommunityRuleImport() {
-	e.syncThread.Add(1)
+func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 	defer func() {
-		e.syncThread.Done()
-		e.isRunning = false
+		e.resetInterruptSync()
 	}()
 
-	var err error
-
-	// |> nil: no import has been completed, it's this way during the first sync
-	// so that the timerDur returned by DetermineWaitTime is used. After first sync,
-	// the pointer should always have a value
-	// |> false: the last sync was not successful, the timer for the next sync should use
-	// the shorter communityRulesImportErrorSeconds timer.
-	// |> true: the last sync was successful, the timer for the next sync should use
-	// the normal communityRulesImportFrequencySeconds timer.
-	var lastSyncSuccess *bool
-
-	// publicId of a detection that was written but not read back
-	var writeNoRead *string
-
-	ctx := e.srv.Context
-
-	lastImport, timerDur := detections.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Duration(e.communityRulesImportFrequencySeconds)*time.Second)
-
-	for e.isRunning {
-		if lastImport == nil && lastSyncSuccess != nil && *lastSyncSuccess {
-			now := uint64(time.Now().UnixMilli())
-			lastImport = &now
-		}
-
-		e.EngineState.Syncing = false
-		e.EngineState.Importing = lastImport == nil
-		e.EngineState.Migrating = false
-		e.EngineState.SyncFailure = lastSyncSuccess != nil && !*lastSyncSuccess
-
-		e.resetInterruptSync()
-
-		var forceSync bool
-
-		if lastSyncSuccess != nil {
-			if *lastSyncSuccess {
-				timerDur = time.Second * time.Duration(e.communityRulesImportFrequencySeconds)
-			} else {
-				timerDur = time.Second * time.Duration(e.communityRulesImportErrorSeconds)
-				forceSync = true
-			}
-		}
-
-		timer := time.NewTimer(timerDur)
-
-		lastSyncStatus := "nil"
-		if lastSyncSuccess != nil {
-			lastSyncStatus = strconv.FormatBool(*lastSyncSuccess)
-		}
-
-		log.WithFields(log.Fields{
-			"waitTimeSeconds":   timerDur.Seconds(),
-			"forceSync":         forceSync,
-			"lastSyncSuccess":   lastSyncStatus,
-			"expectedStartTime": time.Now().Add(timerDur).Format(time.RFC3339),
-		}).Info("waiting for next elastalert community rules sync")
-
-		e.resumeIntegrityChecker()
-
-		select {
-		case <-timer.C:
-		case typ := <-e.interruptSync:
-			forceSync = forceSync || typ
-		}
-
-		e.pauseIntegrityChecker()
-
-		if !e.isRunning {
-			break
-		}
-
-		lastSyncSuccess = util.Ptr(false)
-
-		if detections.CheckWriteNoRead(e.srv.Context, e.srv.Detectionstore, writeNoRead) {
-			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-					Engine: model.EngineNameStrelka,
-					Status: "error",
-				})
-			}
-
-			continue
-		}
-
-		writeNoRead = nil
-
-		timerDur = time.Second * time.Duration(e.communityRulesImportFrequencySeconds)
-
-		log.WithFields(log.Fields{
-			"forceSync": forceSync,
-		}).Info("syncing elastalert community rules")
-
-		e.EngineState.Syncing = true
-
-		start := time.Now()
-
-		tmplExists := detections.CheckTemplate(e.srv.Context, e.srv.Detectionstore)
-		if !tmplExists {
+	// handle write/no-read
+	if e.writeNoRead != nil {
+		if detections.CheckWriteNoRead(e.srv.Context, e.srv.Detectionstore, e.writeNoRead) {
 			if e.notify {
 				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
 					Engine: model.EngineNameElastAlert,
@@ -543,212 +441,105 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 				})
 			}
 
-			continue
+			return detections.ErrSyncFailed
+		}
+	}
+
+	e.writeNoRead = nil
+
+	// announce the beginning of the sync
+	e.EngineState.Syncing = true
+
+	// Check to see if the sigma processing pipelines have changed.
+	// If they have, set forceSync to true to regenerate the elastalert rule files.
+	regenNeeded, sigmaPipelineNewHash, err := e.checkSigmaPipelines()
+	if err != nil {
+		logger.WithField("sigmaPipelineError", err).Error("failed to check the sigma processing pipelines")
+	} else {
+		logger.Info("successfully checked the sigma processing pipelines")
+	}
+
+	if regenNeeded {
+		forceSync = true
+	}
+
+	var zips map[string][]byte
+	var errMap map[string]error
+
+	// If the system is Airgap, load the sigma packages from disk.
+	// else, not Airgap, downoad the sigma packages.
+	if e.airgapEnabled {
+		zips, errMap = e.loadSigmaPackagesFromDisk()
+	} else {
+		zips, errMap = e.downloadSigmaPackages()
+	}
+
+	if len(errMap) != 0 {
+		logger.WithField("sigmaPackageErrors", errMap).Error("something went wrong loading sigma packages")
+
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameElastAlert,
+				Status: "error",
+			})
 		}
 
-		var zips map[string][]byte
-		var errMap map[string]error
-		var regenNeeded bool
-		var sigmaPipelineNewHash string
+		return detections.ErrSyncFailed
+	}
 
-		// Check to see if the sigma processing pipelines have changed.
-		// If they have, (later) set forceSync to true to regenerate the elastalert rule files.
-		regenNeeded, sigmaPipelineNewHash, err = e.checkSigmaPipelines()
+	// ensure repos are up to date
+	dirtyRepos, repoChanges, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config, e.IOManager)
+	if err != nil {
+		if errors.Is(err, detections.ErrModuleStopped) {
+			return err
+		}
+
+		logger.WithError(err).Error("unable to update Sigma repos")
+
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameElastAlert,
+				Status: "error",
+			})
+		}
+
+		return detections.ErrSyncFailed
+	}
+
+	zipHashes := map[string]string{}
+	for pkg, data := range zips {
+		h := sha256.Sum256(data)
+		zipHashes[pkg] = base64.StdEncoding.EncodeToString(h[:])
+	}
+
+	if !forceSync {
+		// if we're not forcing a sync, check to see if anything has changed
+		// if nothing has changed, the sync is finished
+		raw, err := e.ReadFile(e.rulesFingerprintFile)
+		if err != nil && !os.IsNotExist(err) {
+			logger.WithError(err).WithField("fingerprintPath", e.rulesFingerprintFile).Error("unable to read rules fingerprint file")
+
+			return detections.ErrSyncFailed
+		}
+
+		oldHashes := map[string]string{}
+
+		err = json.Unmarshal(raw, &oldHashes)
 		if err != nil {
-			log.WithField("sigmaPipelineError", err).Error("failed to check the sigma processing pipelines")
-		} else {
-			log.Info("successfully checked the sigma processing pipelines")
+			logger.WithError(err).Error("unable to unmarshal rules fingerprint file")
+
+			return detections.ErrSyncFailed
 		}
 
-		// If the system is Airgap, load the sigma packages from disk.
-		// else, not Airgap, downoad the sigma packages.
-		if e.airgapEnabled {
-			zips, errMap = e.loadSigmaPackagesFromDisk()
-		} else {
-			zips, errMap = e.downloadSigmaPackages()
-		}
+		if reflect.DeepEqual(oldHashes, zipHashes) && !repoChanges {
+			// only an exact match means no work needs to be done.
+			// If there's extra hashes in the old file, we need to remove them.
+			// If there's extra hashes in the new file, we need to add them.
+			// If there's a mix of new and old hashes, we need to include them all
+			// or the old ones would be removed.
+			logger.Info("community rule sync found no changes")
 
-		if len(errMap) != 0 {
-			log.WithField("sigmaPackageErrors", errMap).Error("something went wrong loading sigma packages")
-
-			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-					Engine: model.EngineNameElastAlert,
-					Status: "error",
-				})
-			}
-
-			continue
-		}
-
-		dirtyRepos, repoChanges, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config, e.IOManager)
-		if err != nil {
-			if strings.Contains(err.Error(), "module stopped") {
-				break
-			}
-
-			log.WithError(err).Error("unable to update Sigma repos")
-
-			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-					Engine: model.EngineNameElastAlert,
-					Status: "error",
-				})
-			}
-
-			continue
-		}
-
-		zipHashes := map[string]string{}
-		for pkg, data := range zips {
-			h := sha256.Sum256(data)
-			zipHashes[pkg] = base64.StdEncoding.EncodeToString(h[:])
-		}
-
-		// If no import has been completed, or
-		// elastalert rule files need to be regenerated -
-		// then do a full sync.
-		if lastImport == nil || regenNeeded {
-			forceSync = true
-		}
-
-		if !forceSync {
-			raw, err := e.ReadFile(e.rulesFingerprintFile)
-			if err != nil && !os.IsNotExist(err) {
-				log.WithError(err).WithField("fingerprintPath", e.rulesFingerprintFile).Error("unable to read rules fingerprint file")
-				continue
-			} else if err == nil {
-				oldHashes := map[string]string{}
-
-				err = json.Unmarshal(raw, &oldHashes)
-				if err != nil {
-					log.WithError(err).Error("unable to unmarshal rules fingerprint file")
-					continue
-				}
-
-				if reflect.DeepEqual(oldHashes, zipHashes) && !repoChanges {
-					// only an exact match means no work needs to be done.
-					// If there's extra hashes in the old file, we need to remove them.
-					// If there's extra hashes in the new file, we need to add them.
-					// If there's a mix of new and old hashes, we need to include them all
-					// or the old ones would be removed.
-					log.Info("elastalert sync found no changes")
-
-					detections.WriteStateFile(e.IOManager, e.stateFilePath)
-
-					if e.notify {
-						e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-							Engine: model.EngineNameElastAlert,
-							Status: "success",
-						})
-					}
-
-					_, _, err = e.IntegrityCheck(false)
-
-					e.EngineState.IntegrityFailure = err != nil
-					lastSyncSuccess = util.Ptr(err == nil)
-
-					if err != nil {
-						log.WithError(err).Error("post-sync integrity check failed")
-					} else {
-						log.Info("post-sync integrity check passed")
-					}
-
-					continue
-				}
-			}
-		}
-
-		if !e.isRunning {
-			break
-		}
-
-		detects, errMap := e.parseZipRules(zips)
-		if errMap != nil {
-			log.WithField("sigmaParseError", errMap).Error("something went wrong while parsing sigma rule files from zips")
-		}
-
-		if errMap["module"] == errModuleStopped || !e.isRunning {
-			break
-		}
-
-		repoDets, errMap := e.parseRepoRules(dirtyRepos)
-		if errMap != nil {
-			log.WithField("sigmaParseError", errMap).Error("something went wrong while parsing sigma rule files from repos")
-		}
-
-		if errMap["module"] == errModuleStopped || !e.isRunning {
-			break
-		}
-
-		detects = append(detects, repoDets...)
-
-		detects = detections.DeduplicateByPublicId(detects)
-
-		errMap, err = e.syncCommunityDetections(ctx, detects)
-		if err != nil {
-			if err == errModuleStopped {
-				log.Info("incomplete sync of elastalert community detections due to module stopping")
-				return
-			}
-
-			if err.Error() == "Object not found" {
-				// errMap contains exactly 1 error: the publicId of the detection that
-				// was written to but not read back
-				for publicId := range errMap {
-					writeNoRead = util.Ptr(publicId)
-				}
-			}
-
-			log.WithError(err).Error("unable to sync elastalert community detections")
-
-			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-					Engine: model.EngineNameElastAlert,
-					Status: "error",
-				})
-			}
-
-			continue
-		}
-
-		detections.WriteStateFile(e.IOManager, e.stateFilePath)
-		lastSyncSuccess = util.Ptr(true)
-
-		if len(errMap) > 0 {
-			// there were errors, don't save the fingerprint.
-			// idempotency means we might fix it if we try again later.
-			log.WithFields(log.Fields{
-				"elastAlertSyncErrors": detections.TruncateMap(errMap, 5),
-			}).Error("unable to sync all ElastAlert community detections")
-
-			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-					Engine: model.EngineNameElastAlert,
-					Status: "partial",
-				})
-			}
-		} else {
-			fingerprints, err := json.Marshal(zipHashes)
-			if err != nil {
-				log.WithError(err).Error("unable to marshal rules fingerprints")
-			} else {
-				err = e.WriteFile(e.rulesFingerprintFile, fingerprints, 0644)
-				if err != nil {
-					log.WithError(err).WithField("fingerprintPath", e.rulesFingerprintFile).Error("unable to write rules fingerprint file")
-				}
-			}
-
-			// Now that a successful sync completed - if the sigma pipelines changed, write out the new sigma pipelines hash .
-			if regenNeeded {
-				err = e.WriteFile(e.sigmaPipelinesFingerprintFile, []byte(sigmaPipelineNewHash), 0644)
-				if err != nil {
-					log.WithError(err).WithField("fingerprintPath", e.sigmaPipelinesFingerprintFile).Error("unable to write sigma pipelines fingerprint file")
-				} else {
-					log.WithField("fingerprintPath", e.sigmaPipelinesFingerprintFile).Info("updated sigma pipelines fingerprint file")
-				}
-
-			}
+			detections.WriteStateFile(e.IOManager, e.StateFilePath)
 
 			if e.notify {
 				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
@@ -757,24 +548,127 @@ func (e *ElastAlertEngine) startCommunityRuleImport() {
 				})
 			}
 
-			_, _, err = e.IntegrityCheck(false)
+			_, _, err = e.IntegrityCheck(false, logger)
 
 			e.EngineState.IntegrityFailure = err != nil
-			lastSyncSuccess = util.Ptr(err == nil)
 
 			if err != nil {
-				log.WithError(err).Error("post-sync integrity check failed")
+				logger.WithError(err).Error("post-sync integrity check failed")
 			} else {
-				log.Info("post-sync integrity check passed")
+				logger.Info("post-sync integrity check passed")
+			}
+
+			// a non-forceSync sync that found no changes is a success
+			return nil
+		}
+	}
+
+	if !e.isRunning {
+		return detections.ErrModuleStopped
+	}
+
+	detects, errMap := e.parseZipRules(zips)
+	if errMap != nil {
+		logger.WithField("sigmaParseError", errMap).Error("something went wrong while parsing sigma rule files from zips")
+	}
+
+	if errors.Is(errMap["module"], detections.ErrModuleStopped) || !e.isRunning {
+		return detections.ErrModuleStopped
+	}
+
+	repoDets, errMap := e.parseRepoRules(dirtyRepos)
+	if errMap != nil {
+		logger.WithField("sigmaParseError", errMap).Error("something went wrong while parsing sigma rule files from repos")
+	}
+
+	if errors.Is(errMap["module"], detections.ErrModuleStopped) || !e.isRunning {
+		return detections.ErrModuleStopped
+	}
+
+	detects = append(detects, repoDets...)
+
+	detects = detections.DeduplicateByPublicId(detects)
+
+	errMap, err = e.syncCommunityDetections(e.srv.Context, logger, detects)
+	if err != nil {
+		if errors.Is(err, detections.ErrModuleStopped) {
+			logger.Info("incomplete sync of elastalert community detections due to module stopping")
+			return err
+		}
+
+		if err.Error() == "Object not found" {
+			// errMap contains exactly 1 error: the publicId of the detection that
+			// was written to but not read back
+			for publicId := range errMap {
+				e.writeNoRead = util.Ptr(publicId)
 			}
 		}
 
-		dur := time.Since(start)
+		logger.WithError(err).Error("unable to sync elastalert community detections")
 
-		log.WithFields(log.Fields{
-			"durationSeconds": dur.Seconds(),
-		}).Info("elastalert community rules sync finished")
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameElastAlert,
+				Status: "error",
+			})
+		}
+
+		return detections.ErrSyncFailed
 	}
+
+	detections.WriteStateFile(e.IOManager, e.StateFilePath)
+
+	if len(errMap) > 0 {
+		// there were errors, don't save the fingerprint.
+		// idempotency means we might fix it if we try again later.
+		logger.WithField("elastAlertSyncErrors", detections.TruncateMap(errMap, 5)).Error("unable to sync all ElastAlert community detections")
+
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameElastAlert,
+				Status: "partial",
+			})
+		}
+	} else {
+		fingerprints, err := json.Marshal(zipHashes)
+		if err != nil {
+			logger.WithError(err).Error("unable to marshal rules fingerprints")
+		} else {
+			err = e.WriteFile(e.rulesFingerprintFile, fingerprints, 0644)
+			if err != nil {
+				logger.WithError(err).WithField("fingerprintPath", e.rulesFingerprintFile).Error("unable to write rules fingerprint file")
+			}
+		}
+
+		// Now that a successful sync completed - if the sigma pipelines changed, write out the new sigma pipelines hash .
+		if regenNeeded {
+			err = e.WriteFile(e.sigmaPipelinesFingerprintFile, []byte(sigmaPipelineNewHash), 0644)
+			if err != nil {
+				logger.WithError(err).WithField("fingerprintPath", e.sigmaPipelinesFingerprintFile).Error("unable to write sigma pipelines fingerprint file")
+			} else {
+				logger.WithField("fingerprintPath", e.sigmaPipelinesFingerprintFile).Info("updated sigma pipelines fingerprint file")
+			}
+		}
+
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameElastAlert,
+				Status: "success",
+			})
+		}
+
+		_, _, err = e.IntegrityCheck(false, logger)
+
+		e.EngineState.IntegrityFailure = err != nil
+
+		if err != nil {
+			logger.WithError(err).Error("post-sync integrity check failed")
+		} else {
+			logger.Info("post-sync integrity check passed")
+		}
+	}
+
+	return nil
 }
 
 func (e *ElastAlertEngine) checkSigmaPipelines() (bool, string, error) {
@@ -816,7 +710,7 @@ func (e *ElastAlertEngine) hashFile(filePath string) (string, error) {
 	return hex.EncodeToString(hash[:]), nil
 }
 
-func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detections []*model.Detection, errMap map[string]error) {
+func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detects []*model.Detection, errMap map[string]error) {
 	errMap = map[string]error{} // map[pkgName|fileName]error
 	defer func() {
 		if len(errMap) == 0 {
@@ -826,7 +720,7 @@ func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detections 
 
 	for _, pkg := range e.sigmaRulePackages {
 		if !e.isRunning {
-			return nil, map[string]error{"module": errModuleStopped}
+			return nil, map[string]error{"module": detections.ErrModuleStopped}
 		}
 
 		zipData := pkgZips[pkg]
@@ -839,7 +733,7 @@ func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detections 
 
 		for _, file := range reader.File {
 			if !e.isRunning {
-				return nil, map[string]error{"module": errModuleStopped}
+				return nil, map[string]error{"module": detections.ErrModuleStopped}
 			}
 
 			if file.FileInfo().IsDir() || !acceptedExtensions[strings.ToLower(filepath.Ext(file.Name))] {
@@ -880,14 +774,14 @@ func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detections 
 
 			det := rule.ToDetection(pkg, model.LicenseDRL, true)
 
-			detections = append(detections, det)
+			detects = append(detects, det)
 		}
 	}
 
-	return detections, errMap
+	return detects, errMap
 }
 
-func (e *ElastAlertEngine) parseRepoRules(allRepos []*detections.RepoOnDisk) (detections []*model.Detection, errMap map[string]error) {
+func (e *ElastAlertEngine) parseRepoRules(allRepos []*detections.RepoOnDisk) (detects []*model.Detection, errMap map[string]error) {
 	errMap = map[string]error{} // map[repoName]error
 	defer func() {
 		if len(errMap) == 0 {
@@ -897,7 +791,7 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos []*detections.RepoOnDisk) (de
 
 	for _, repo := range allRepos {
 		if !e.isRunning {
-			return nil, map[string]error{"module": errModuleStopped}
+			return nil, map[string]error{"module": detections.ErrModuleStopped}
 		}
 
 		baseDir := repo.Path
@@ -912,7 +806,7 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos []*detections.RepoOnDisk) (de
 			}
 
 			if !e.isRunning {
-				return errModuleStopped
+				return detections.ErrModuleStopped
 			}
 
 			if d.IsDir() {
@@ -940,7 +834,7 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos []*detections.RepoOnDisk) (de
 
 			det := rule.ToDetection(ruleset, repo.Repo.License, repo.Repo.Community)
 
-			detections = append(detections, det)
+			detects = append(detects, det)
 
 			return nil
 		})
@@ -950,10 +844,10 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos []*detections.RepoOnDisk) (de
 		}
 	}
 
-	return detections, errMap
+	return detects, errMap
 }
 
-func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects []*model.Detection) (errMap map[string]error, err error) {
+func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *log.Entry, detects []*model.Detection) (errMap map[string]error, err error) {
 	existing, err := e.IndexExistingRules()
 	if err != nil {
 		return nil, err
@@ -987,8 +881,13 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 
 	for _, det := range detects {
 		if !e.isRunning {
-			return nil, errModuleStopped
+			return nil, detections.ErrModuleStopped
 		}
+
+		logger.WithFields(log.Fields{
+			"rule.uuid": det.PublicID,
+			"rule.name": det.Title,
+		}).Info("syncing rule")
 
 		path, ok := index[det.PublicID]
 		if !ok {
@@ -1002,6 +901,11 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 			det.Id = oldDet.Id
 			det.Overrides = oldDet.Overrides
 			det.CreateTime = oldDet.CreateTime
+
+			logger.WithFields(log.Fields{
+				"rule.uuid": det.PublicID,
+				"rule.name": det.Title,
+			}).Info("updating Sigma detection")
 
 			if oldDet.Content != det.Content || oldDet.Ruleset != det.Ruleset || len(det.Overrides) != 0 {
 				_, err = e.srv.Detectionstore.UpdateDetection(ctx, det)
@@ -1030,6 +934,12 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 
 			delete(toDelete, det.PublicID)
 		} else {
+			// new detection, create it
+			logger.WithFields(log.Fields{
+				"rule.uuid": det.PublicID,
+				"rule.name": det.Title,
+			}).Info("creating new Sigma detection")
+
 			checkRulesetEnabled(e, det)
 
 			_, err = e.srv.Detectionstore.CreateDetection(ctx, det)
@@ -1091,7 +1001,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 
 	for publicId := range toDelete {
 		if !e.isRunning {
-			return nil, errModuleStopped
+			return nil, detections.ErrModuleStopped
 		}
 
 		_, err = e.srv.Detectionstore.DeleteDetection(ctx, community[publicId].Id)
@@ -1103,12 +1013,12 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, detects 
 		results.Removed++
 	}
 
-	log.WithFields(log.Fields{
-		"elastAlertSyncadded":     results.Added,
-		"elastAlertSyncupdated":   results.Updated,
-		"elastAlertSyncremoved":   results.Removed,
-		"elastAlertSyncunchanged": results.Unchanged,
-		"elastAlertSyncerrors":    detections.TruncateMap(errMap, 5),
+	logger.WithFields(log.Fields{
+		"syncAdded":     results.Added,
+		"syncUpdated":   results.Updated,
+		"syncRemoved":   results.Removed,
+		"syncUnchanged": results.Unchanged,
+		"syncErrors":    detections.TruncateMap(errMap, 5),
 	}).Info("elastalert community diff")
 
 	return errMap, nil
@@ -1535,16 +1445,19 @@ func wrapRule(det *model.Detection, rule string, additionalAlerters []string) (s
 	return string(rawYaml), nil
 }
 
-func (e *ElastAlertEngine) IntegrityCheck(canInterrupt bool) (deployedButNotEnabled []string, enabledButNotDeployed []string, err error) {
+func (e *ElastAlertEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (deployedButNotEnabled []string, enabledButNotDeployed []string, err error) {
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
-	logger := log.WithFields(log.Fields{
-		"detectionEngine": model.EngineNameElastAlert,
-		"intCheckId":      uuid.New().String(),
-	})
+	if logger == nil {
+		logger = log.WithFields(log.Fields{
+			"detectionEngine": model.EngineNameSuricata,
+		})
+	}
+
+	logger = logger.WithField("intCheckId", uuid.New().String())
 
 	deployed, err := e.getDeployedPublicIds()
 	if err != nil {
@@ -1581,17 +1494,17 @@ func (e *ElastAlertEngine) IntegrityCheck(canInterrupt bool) (deployedButNotEnab
 
 	deployedButNotEnabled, enabledButNotDeployed, _ = detections.DiffLists(deployed, enabled)
 
-	logger.WithFields(log.Fields{
+	report := logger.WithFields(log.Fields{
 		"deployedButNotEnabled": deployedButNotEnabled,
 		"enabledButNotDeployed": enabledButNotDeployed,
-	}).Info("integrity check report")
+	})
 
 	if len(deployedButNotEnabled) > 0 || len(enabledButNotDeployed) > 0 {
-		logger.Info("integrity check failed")
+		report.Warn("integrity check failed")
 		return deployedButNotEnabled, enabledButNotDeployed, detections.ErrIntCheckFailed
 	}
 
-	logger.Info("integrity check passed")
+	report.Info("integrity check passed")
 
 	return deployedButNotEnabled, enabledButNotDeployed, nil
 }
