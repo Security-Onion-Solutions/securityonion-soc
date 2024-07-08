@@ -896,6 +896,8 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 			return nil, detections.ErrModuleStopped
 		}
 
+		delete(toDelete, det.PublicID)
+
 		logger.WithFields(log.Fields{
 			"rule.uuid": det.PublicID,
 			"rule.name": det.Title,
@@ -973,8 +975,6 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 			} else {
 				results.Unchanged++
 			}
-
-			delete(toDelete, det.PublicID)
 		} else {
 			// new detection, create it
 			logger.WithFields(log.Fields{
@@ -1023,8 +1023,6 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 				errMap[det.PublicID] = fmt.Errorf("unable to create detection: %s", err)
 				continue
 			}
-
-			delete(toDelete, det.PublicID)
 		}
 
 		if det.IsEnabled {

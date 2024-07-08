@@ -1133,6 +1133,8 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 			return nil, detections.ErrModuleStopped
 		}
 
+		delete(toDelete, detect.PublicID)
+
 		logger.WithFields(log.Fields{
 			"rule.uuid": detect.PublicID,
 			"rule.name": detect.Title,
@@ -1234,8 +1236,6 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 					}
 
 					errMap[detect.PublicID] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
-				} else {
-					delete(toDelete, detect.PublicID)
 				}
 
 				err = et.AddError(err)
@@ -1244,7 +1244,6 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 				}
 			} else {
 				results.Unchanged++
-				delete(toDelete, detect.PublicID)
 			}
 		} else {
 			logger.WithFields(log.Fields{

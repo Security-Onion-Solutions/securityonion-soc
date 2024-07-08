@@ -1177,7 +1177,6 @@ func TestSyncChanges(t *testing.T) {
 	iom := mock.NewMockIOManager(ctrl)
 	bim := servermock.NewMockBulkIndexer(ctrl)
 	auditm := servermock.NewMockBulkIndexer(ctrl)
-	_, _ = bim, auditm
 
 	eng := &ElastAlertEngine{
 		srv: &server.Server{
@@ -1272,22 +1271,6 @@ func TestSyncChanges(t *testing.T) {
 			PublicID: "00000000-0000-0000-0000-000000000000",
 		},
 	}, nil)
-	//	detStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, det *model.Detection) (*model.Detection, error) {
-	//		assert.Equal(t, "abc", det.Id)
-	//		assert.Equal(t, SimpleRuleSID, det.PublicID)
-	//		assert.True(t, det.IsEnabled)
-	//		assert.NotEmpty(t, det.Content)
-	//
-	//		return nil, nil
-	//	})
-	//
-	//	detStore.EXPECT().CreateDetection(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, det *model.Detection) (*model.Detection, error) {
-	//		assert.Equal(t, SimpleRule2SID, det.PublicID)
-	//		assert.False(t, det.IsEnabled)
-	//		assert.NotEmpty(t, det.Content)
-	//
-	//		return nil, nil
-	//	})
 	detStore.EXPECT().BuildBulkIndexer(gomock.Any()).Return(bim, nil)
 	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil).Times(3)
 	bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {

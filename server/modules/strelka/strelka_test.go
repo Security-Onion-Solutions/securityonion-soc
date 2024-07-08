@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/apex/log"
+	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -1063,6 +1064,8 @@ func TestSyncChanges(t *testing.T) {
 
 	detStore := servermock.NewMockDetectionstore(ctrl)
 	iom := mock.NewMockIOManager(ctrl)
+	bim := servermock.NewMockBulkIndexer(ctrl)
+	auditm := servermock.NewMockBulkIndexer(ctrl)
 
 	eng := &StrelkaEngine{
 		srv: &server.Server{
@@ -1133,26 +1136,51 @@ func TestSyncChanges(t *testing.T) {
 	})
 	iom.EXPECT().ReadFile("rule1.yar").Return([]byte(simpleRule), nil)
 	iom.EXPECT().ReadFile("rule2.yar").Return([]byte(MyBasicRule), nil)
-	// UpdateDetection
-	detStore.EXPECT().UpdateDetection(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, det *model.Detection) (*model.Detection, error) {
-		assert.Equal(t, "abc", det.Id)
-		assert.Equal(t, "dummy", det.PublicID)
-		assert.True(t, det.IsEnabled)
-		assert.NotEmpty(t, det.Content)
 
-		return nil, nil
-	})
-	// CreateDetection
-	detStore.EXPECT().CreateDetection(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, det *model.Detection) (*model.Detection, error) {
-		assert.Equal(t, "ExampleRule", det.PublicID)
-		assert.True(t, det.IsEnabled)
-		assert.True(t, det.IsCommunity)
-		assert.NotEmpty(t, det.Content)
-
-		return nil, nil
-	})
-	// DeleteDetection
-	detStore.EXPECT().DeleteDetection(ctx, "delete").Return(nil, nil)
+	// 	// UpdateDetection
+	// 	detStore.EXPECT().UpdateDetection(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, det *model.Detection) (*model.Detection, error) {
+	// 		assert.Equal(t, "abc", det.Id)
+	// 		assert.Equal(t, "dummy", det.PublicID)
+	// 		assert.True(t, det.IsEnabled)
+	// 		assert.NotEmpty(t, det.Content)
+	//
+	// 		return nil, nil
+	// 	})
+	// 	// CreateDetection
+	// 	detStore.EXPECT().CreateDetection(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, det *model.Detection) (*model.Detection, error) {
+	// 		assert.Equal(t, "ExampleRule", det.PublicID)
+	// 		assert.True(t, det.IsEnabled)
+	// 		assert.True(t, det.IsCommunity)
+	// 		assert.NotEmpty(t, det.Content)
+	//
+	// 		return nil, nil
+	// 	})
+	// 	// DeleteDetection
+	// 	detStore.EXPECT().DeleteDetection(ctx, "delete").Return(nil, nil)
+	detStore.EXPECT().BuildBulkIndexer(gomock.Any()).Return(bim, nil)
+	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil).Times(3)
+	bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
+		if item.OnSuccess != nil {
+			resp := esutil.BulkIndexerResponseItem{
+				DocumentID: "id",
+			}
+			item.OnSuccess(ctx, item, resp)
+		}
+		return nil
+	}).Times(3)
+	bim.EXPECT().Close(gomock.Any()).Return(nil)
+	detStore.EXPECT().BuildBulkIndexer(gomock.Any()).Return(auditm, nil)
+	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return([]byte("document"), "index", nil).Times(3)
+	auditm.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
+		if item.OnSuccess != nil {
+			resp := esutil.BulkIndexerResponseItem{
+				DocumentID: "id",
+			}
+			item.OnSuccess(ctx, item, resp)
+		}
+		return nil
+	}).Times(3)
+	auditm.EXPECT().Close(gomock.Any()).Return(nil)
 	// syncDetections
 	detStore.EXPECT().GetAllDetections(ctx, gomock.Any()).Return(map[string]*model.Detection{
 		"dummy": {
