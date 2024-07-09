@@ -855,10 +855,13 @@ func (store *ElasticDetectionstore) DeleteComment(ctx context.Context, id string
 	return err
 }
 
-func (store *ElasticDetectionstore) BuildBulkIndexer(ctx context.Context) (esutil.BulkIndexer, error) {
+func (store *ElasticDetectionstore) BuildBulkIndexer(ctx context.Context, logger *log.Entry) (esutil.BulkIndexer, error) {
 	bulk, err := esutil.NewBulkIndexer(esutil.BulkIndexerConfig{
 		Client:  store.esClient,
 		Refresh: "true",
+		OnError: func(ctx context.Context, err error) {
+			logger.WithError(err).Error("error during bulk import")
+		},
 	})
 
 	return bulk, err

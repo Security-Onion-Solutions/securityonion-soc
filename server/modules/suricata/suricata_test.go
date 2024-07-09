@@ -900,7 +900,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 				auditm := servermock.NewMockBulkIndexer(ctrl)
 
 				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
-				detStore.EXPECT().BuildBulkIndexer(gomock.Any()).Return(bim, nil)
+				detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil)
 				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil)
 				bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 					if item.OnSuccess != nil {
@@ -912,8 +912,9 @@ func TestSyncCommunitySuricata(t *testing.T) {
 					return nil
 				})
 				bim.EXPECT().Close(gomock.Any()).Return(nil)
+				bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
 
-				detStore.EXPECT().BuildBulkIndexer(gomock.Any()).Return(auditm, nil)
+				detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(auditm, nil)
 				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), util.Ptr("id"), util.Ptr("create")).Return([]byte("document"), "index", nil)
 				auditm.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 					if item.OnSuccess != nil {
@@ -925,6 +926,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 					return nil
 				})
 				auditm.EXPECT().Close(gomock.Any()).Return(nil)
+				auditm.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
 			},
 			ExpectedSettings: map[string]string{
 				"idstools.sids.enabled":            "",
@@ -951,7 +953,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 				auditm := servermock.NewMockBulkIndexer(ctrl)
 
 				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
-				detStore.EXPECT().BuildBulkIndexer(gomock.Any()).Return(bim, nil)
+				detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil)
 				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil)
 				bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 					if item.OnSuccess != nil {
@@ -963,8 +965,9 @@ func TestSyncCommunitySuricata(t *testing.T) {
 					return nil
 				})
 				bim.EXPECT().Close(gomock.Any()).Return(nil)
+				bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
 
-				detStore.EXPECT().BuildBulkIndexer(gomock.Any()).Return(auditm, nil)
+				detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(auditm, nil)
 				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), util.Ptr("id"), util.Ptr("create")).Return([]byte("document"), "index", nil)
 				auditm.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 					if item.OnSuccess != nil {
@@ -976,6 +979,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 					return nil
 				})
 				auditm.EXPECT().Close(gomock.Any()).Return(nil)
+				auditm.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
 			},
 			ExpectedSettings: map[string]string{
 				"idstools.sids.enabled":            SimpleRuleSID,
@@ -1016,14 +1020,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 						IsCommunity: true,
 					},
 				}, nil)
-				// detStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).Return(&model.Detection{
-				// 	Auditable:   model.Auditable{Id: "1"},
-				// 	PublicID:    SimpleRuleSID,
-				// 	Content:     SimpleRule,
-				// 	IsEnabled:   false,
-				// 	IsCommunity: true,
-				// }, nil)
-				detStore.EXPECT().BuildBulkIndexer(gomock.Any()).Return(bim, nil)
+				detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil)
 				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil)
 				bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 					if item.OnSuccess != nil {
@@ -1035,8 +1032,9 @@ func TestSyncCommunitySuricata(t *testing.T) {
 					return nil
 				})
 				bim.EXPECT().Close(gomock.Any()).Return(nil)
+				bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
 
-				detStore.EXPECT().BuildBulkIndexer(gomock.Any()).Return(auditm, nil)
+				detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(auditm, nil)
 				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), util.Ptr("id"), util.Ptr("update")).Return([]byte("document"), "index", nil)
 				auditm.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 					if item.OnSuccess != nil {
@@ -1048,6 +1046,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 					return nil
 				})
 				auditm.EXPECT().Close(gomock.Any()).Return(nil)
+				auditm.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
 			},
 			ExpectedSettings: map[string]string{
 				"idstools.rules.local__rules":      SimpleRule,
@@ -2260,7 +2259,7 @@ func TestSyncChanges(t *testing.T) {
 			},
 		}, // to be deleted
 	}, nil)
-	detStore.EXPECT().BuildBulkIndexer(gomock.Any()).Return(bim, nil)
+	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil)
 	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil).Times(3)
 	bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 		if item.OnSuccess != nil {
@@ -2275,7 +2274,8 @@ func TestSyncChanges(t *testing.T) {
 		return nil
 	}).Times(3)
 	bim.EXPECT().Close(gomock.Any()).Return(nil)
-	detStore.EXPECT().BuildBulkIndexer(gomock.Any()).Return(auditm, nil)
+	bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
+	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(auditm, nil)
 	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), util.Ptr("id"), gomock.Any()).Return([]byte("document"), "index", nil).Times(3)
 	auditm.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 		if item.OnSuccess != nil {
@@ -2290,6 +2290,7 @@ func TestSyncChanges(t *testing.T) {
 		return nil
 	}).Times(3)
 	auditm.EXPECT().Close(gomock.Any()).Return(nil)
+	auditm.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
 
 	// WriteStateFile
 	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)

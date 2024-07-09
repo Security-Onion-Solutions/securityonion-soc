@@ -357,6 +357,17 @@ func (h *DetectionHandler) deleteDetection(w http.ResponseWriter, r *http.Reques
 
 	id := chi.URLParam(r, "id")
 
+	det, err := h.server.Detectionstore.GetDetection(ctx, id)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	if det.IsCommunity {
+		web.Respond(w, r, http.StatusBadRequest, "ERROR_DELETE_COMMUNITY")
+		return
+	}
+
 	old, err := h.server.Detectionstore.DeleteDetection(ctx, id)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)

@@ -984,6 +984,7 @@ const i18n = {
       ERROR_SALT_IMPORT: 'Unable to import file on minion; ensure that salt is running on the manager node and check salt logs.',
       ERROR_SALT_STATE: 'Unable to sync settings. Ensure that salt is running on the manager node and check salt logs.',
       ERROR_BULK_COMMUNITY: 'Unable to complete bulk delete. Batch contains Community rules. No rules were deleted.',
+      ERROR_DELETE_COMMUNITY: 'Unable to delete Community rule.',
 
       // correct casing
       cc_elastalert: 'ElastAlert',

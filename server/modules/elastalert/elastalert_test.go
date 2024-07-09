@@ -1275,7 +1275,7 @@ func TestSyncChanges(t *testing.T) {
 			PublicID: "00000000-0000-0000-0000-000000000000",
 		},
 	}, nil)
-	detStore.EXPECT().BuildBulkIndexer(gomock.Any()).Return(bim, nil)
+	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil)
 	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil).Times(3)
 	bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 		if item.OnSuccess != nil {
@@ -1290,9 +1290,10 @@ func TestSyncChanges(t *testing.T) {
 		return nil
 	}).Times(3)
 	bim.EXPECT().Close(gomock.Any()).Return(nil)
+	bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
 	iom.EXPECT().ExecCommand(gomock.Any()).Return([]byte("\n[query]"), 0, time.Duration(time.Second), nil) // sigmaToElastAlert
 	iom.EXPECT().WriteFile("elastAlertRulesFolder/bcc6f179-11cd-4111-a9a6-0fab68515cf7.yml", gomock.Any(), fs.FileMode(0644)).Return(nil)
-	detStore.EXPECT().BuildBulkIndexer(gomock.Any()).Return(auditm, nil)
+	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(auditm, nil)
 	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return([]byte("document"), "index", nil).Times(3)
 	auditm.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 		if item.OnSuccess != nil {
@@ -1307,6 +1308,7 @@ func TestSyncChanges(t *testing.T) {
 		return nil
 	}).Times(3)
 	auditm.EXPECT().Close(gomock.Any()).Return(nil)
+	auditm.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
 	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)        // WriteStateFile
 	iom.EXPECT().WriteFile("rulesFingerprintFile", gomock.Any(), fs.FileMode(0644)).Return(nil) // WriteFingerprintFile
 	// regenNeeded
