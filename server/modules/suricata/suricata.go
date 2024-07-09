@@ -1188,6 +1188,8 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 			modifyLines = updateModifyForDisabledFlowbits(modifyLines, modifyIndex, sid, detect)
 		}
 
+		detect.Kind = ""
+
 		document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", detect, &detect.Auditable, nil, nil)
 		if err != nil {
 			errMap[detect.PublicID] = fmt.Sprintf("unable to convert detection to document map; reason=%s", err.Error())
@@ -1196,8 +1198,6 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 
 		if exists {
 			if orig.Content != detect.Content || orig.Ruleset != detect.Ruleset || len(detect.Overrides) != 0 || orig.IsEnabled != detect.IsEnabled {
-				detect.Kind = ""
-
 				logger.WithFields(log.Fields{
 					"rule.uuid": detect.PublicID,
 					"rule.name": detect.Title,

@@ -22,8 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/apex/log"
-	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
@@ -34,6 +32,9 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
+	"github.com/apex/log"
+	"github.com/elastic/go-elasticsearch/v8/esutil"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	"gopkg.in/yaml.v3"
@@ -1209,6 +1210,9 @@ func TestSyncChanges(t *testing.T) {
 
 	logger := log.WithField("detectionEngine", "test-elastalert")
 
+	workItems := []esutil.BulkIndexerItem{}
+	auditItems := []esutil.BulkIndexerItem{}
+
 	// checkSigmaPipelines
 	iom.EXPECT().ReadFile("sigmaPipelineFinal").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
@@ -1266,7 +1270,7 @@ func TestSyncChanges(t *testing.T) {
 		},
 		"00000000-0000-0000-0000-000000000000": {
 			Auditable: model.Auditable{
-				Id: "delete",
+				Id: "deleteme",
 			},
 			PublicID: "00000000-0000-0000-0000-000000000000",
 		},
@@ -1280,6 +1284,9 @@ func TestSyncChanges(t *testing.T) {
 			}
 			item.OnSuccess(ctx, item, resp)
 		}
+
+		workItems = append(workItems, item)
+
 		return nil
 	}).Times(3)
 	bim.EXPECT().Close(gomock.Any()).Return(nil)
@@ -1294,6 +1301,9 @@ func TestSyncChanges(t *testing.T) {
 			}
 			item.OnSuccess(ctx, item, resp)
 		}
+
+		auditItems = append(auditItems, item)
+
 		return nil
 	}).Times(3)
 	auditm.EXPECT().Close(gomock.Any()).Return(nil)
@@ -1319,4 +1329,24 @@ func TestSyncChanges(t *testing.T) {
 	assert.False(t, eng.EngineState.MigrationFailure)
 	assert.False(t, eng.EngineState.Importing)
 	assert.False(t, eng.EngineState.SyncFailure)
+
+	assert.Len(t, workItems, 3)
+	assert.Len(t, auditItems, 3)
+
+	workActions := lo.Map(workItems, func(item esutil.BulkIndexerItem, _ int) string {
+		return item.Action
+	})
+
+	auditActions := lo.Map(auditItems, func(item esutil.BulkIndexerItem, _ int) string {
+		return item.Action
+	})
+
+	assert.Equal(t, []string{"update", "create", "delete"}, workActions)
+	assert.Equal(t, []string{"create", "create", "create"}, auditActions)
+
+	workDocIds := lo.Map(workItems, func(item esutil.BulkIndexerItem, _ int) string {
+		return item.DocumentID
+	})
+
+	assert.Equal(t, []string{"abc", "", "deleteme"}, workDocIds) // update has an id, create does not, delete does
 }

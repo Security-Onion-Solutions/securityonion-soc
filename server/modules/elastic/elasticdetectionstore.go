@@ -634,6 +634,14 @@ func (store *ElasticDetectionstore) GetAllDetections(ctx context.Context, opts .
 		query = opt(query, store.schemaPrefix)
 	}
 
+	_, err := store.esClient.Indices.Refresh(
+		store.esClient.Indices.Refresh.WithContext(ctx),
+		store.esClient.Indices.Refresh.WithIndex(store.index),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	all, err := store.Query(ctx, query, -1)
 	if err != nil {
 		return nil, err
@@ -849,7 +857,8 @@ func (store *ElasticDetectionstore) DeleteComment(ctx context.Context, id string
 
 func (store *ElasticDetectionstore) BuildBulkIndexer(ctx context.Context) (esutil.BulkIndexer, error) {
 	bulk, err := esutil.NewBulkIndexer(esutil.BulkIndexerConfig{
-		Client: store.esClient,
+		Client:  store.esClient,
+		Refresh: "true",
 	})
 
 	return bulk, err

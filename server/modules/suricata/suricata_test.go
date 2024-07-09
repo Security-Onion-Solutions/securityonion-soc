@@ -17,8 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/apex/log"
-	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -29,6 +27,9 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
+	"github.com/apex/log"
+	"github.com/elastic/go-elasticsearch/v8/esutil"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -2239,6 +2240,9 @@ func TestSyncChanges(t *testing.T) {
 
 	logger := log.WithField("detectionEngine", "test-suricata")
 
+	workItems := []esutil.BulkIndexerItem{}
+	auditItems := []esutil.BulkIndexerItem{}
+
 	// readAndHash
 	iom.EXPECT().ReadFile("communityRulesFile").Return([]byte(SimpleRule+"\n"+FlowbitsRuleA), nil)
 	// syncCommunityDetections
@@ -2265,6 +2269,9 @@ func TestSyncChanges(t *testing.T) {
 			}
 			item.OnSuccess(ctx, item, resp)
 		}
+
+		workItems = append(workItems, item)
+
 		return nil
 	}).Times(3)
 	bim.EXPECT().Close(gomock.Any()).Return(nil)
@@ -2277,6 +2284,9 @@ func TestSyncChanges(t *testing.T) {
 			}
 			item.OnSuccess(ctx, item, resp)
 		}
+
+		auditItems = append(auditItems, item)
+
 		return nil
 	}).Times(3)
 	auditm.EXPECT().Close(gomock.Any()).Return(nil)
@@ -2320,4 +2330,24 @@ func TestSyncChanges(t *testing.T) {
 	threshold := settingByID(allSettings, "suricata.thresholding.sids__yaml")
 	assert.NotNil(t, threshold)
 	assert.Equal(t, "{}\n", threshold.Value)
+
+	assert.Len(t, workItems, 3)
+	assert.Len(t, auditItems, 3)
+
+	workActions := lo.Map(workItems, func(item esutil.BulkIndexerItem, _ int) string {
+		return item.Action
+	})
+
+	auditActions := lo.Map(auditItems, func(item esutil.BulkIndexerItem, _ int) string {
+		return item.Action
+	})
+
+	assert.Equal(t, []string{"update", "create", "delete"}, workActions)
+	assert.Equal(t, []string{"create", "create", "create"}, auditActions)
+
+	workDocIds := lo.Map(workItems, func(item esutil.BulkIndexerItem, _ int) string {
+		return item.DocumentID
+	})
+
+	assert.Equal(t, []string{"abc", "", "deleteme"}, workDocIds) // update has an id, create does not, delete does
 }

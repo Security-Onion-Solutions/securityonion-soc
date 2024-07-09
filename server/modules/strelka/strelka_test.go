@@ -18,8 +18,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/apex/log"
-	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -29,6 +27,9 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
+	"github.com/apex/log"
+	"github.com/elastic/go-elasticsearch/v8/esutil"
+	"github.com/samber/lo"
 	"github.com/tj/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -1094,6 +1095,9 @@ func TestSyncChanges(t *testing.T) {
 
 	logger := log.WithField("detectionEngine", "test-strelka")
 
+	workItems := []esutil.BulkIndexerItem{}
+	auditItems := []esutil.BulkIndexerItem{}
+
 	// UpdateRepos
 	iom.EXPECT().ReadDir("repos").Return([]fs.DirEntry{
 		&handmock.MockDirEntry{
@@ -1102,6 +1106,7 @@ func TestSyncChanges(t *testing.T) {
 		},
 	}, nil)
 	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo").Return(true, false)
+	// Sync
 	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
 		"dummy": {
 			Auditable: model.Auditable{
@@ -1111,11 +1116,11 @@ func TestSyncChanges(t *testing.T) {
 			PublicID:  "dummy",
 			IsEnabled: true,
 		},
-		"deleteme": {
+		"delete": {
 			Auditable: model.Auditable{
-				Id: "delete",
+				Id: "deleteme",
 			},
-			PublicID: "deleteme",
+			PublicID: "delete",
 		},
 	}, nil)
 	iom.EXPECT().WalkDir("repos/repo", gomock.Any()).DoAndReturn(func(path string, walkFn fs.WalkDirFunc) error {
@@ -1136,27 +1141,6 @@ func TestSyncChanges(t *testing.T) {
 	})
 	iom.EXPECT().ReadFile("rule1.yar").Return([]byte(simpleRule), nil)
 	iom.EXPECT().ReadFile("rule2.yar").Return([]byte(MyBasicRule), nil)
-
-	// 	// UpdateDetection
-	// 	detStore.EXPECT().UpdateDetection(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, det *model.Detection) (*model.Detection, error) {
-	// 		assert.Equal(t, "abc", det.Id)
-	// 		assert.Equal(t, "dummy", det.PublicID)
-	// 		assert.True(t, det.IsEnabled)
-	// 		assert.NotEmpty(t, det.Content)
-	//
-	// 		return nil, nil
-	// 	})
-	// 	// CreateDetection
-	// 	detStore.EXPECT().CreateDetection(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, det *model.Detection) (*model.Detection, error) {
-	// 		assert.Equal(t, "ExampleRule", det.PublicID)
-	// 		assert.True(t, det.IsEnabled)
-	// 		assert.True(t, det.IsCommunity)
-	// 		assert.NotEmpty(t, det.Content)
-	//
-	// 		return nil, nil
-	// 	})
-	// 	// DeleteDetection
-	// 	detStore.EXPECT().DeleteDetection(ctx, "delete").Return(nil, nil)
 	detStore.EXPECT().BuildBulkIndexer(gomock.Any()).Return(bim, nil)
 	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil).Times(3)
 	bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
@@ -1166,6 +1150,9 @@ func TestSyncChanges(t *testing.T) {
 			}
 			item.OnSuccess(ctx, item, resp)
 		}
+
+		workItems = append(workItems, item)
+
 		return nil
 	}).Times(3)
 	bim.EXPECT().Close(gomock.Any()).Return(nil)
@@ -1178,6 +1165,9 @@ func TestSyncChanges(t *testing.T) {
 			}
 			item.OnSuccess(ctx, item, resp)
 		}
+
+		auditItems = append(auditItems, item)
+
 		return nil
 	}).Times(3)
 	auditm.EXPECT().Close(gomock.Any()).Return(nil)
@@ -1215,7 +1205,6 @@ func TestSyncChanges(t *testing.T) {
 		assert.Equal(t, "yaraRulesFolder", cmd.Args[2])
 		return []byte("Compiled Successfully"), 0, time.Duration(time.Second), nil
 	})
-
 	// WriteStateFile
 	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)
 	// IntegrityCheck
@@ -1235,4 +1224,24 @@ func TestSyncChanges(t *testing.T) {
 	assert.False(t, eng.EngineState.MigrationFailure)
 	assert.False(t, eng.EngineState.Importing)
 	assert.False(t, eng.EngineState.SyncFailure)
+
+	assert.Len(t, workItems, 3)
+	assert.Len(t, auditItems, 3)
+
+	workActions := lo.Map(workItems, func(item esutil.BulkIndexerItem, _ int) string {
+		return item.Action
+	})
+
+	auditActions := lo.Map(auditItems, func(item esutil.BulkIndexerItem, _ int) string {
+		return item.Action
+	})
+
+	assert.Equal(t, []string{"update", "create", "delete"}, workActions)
+	assert.Equal(t, []string{"create", "create", "create"}, auditActions)
+
+	workDocIds := lo.Map(workItems, func(item esutil.BulkIndexerItem, _ int) string {
+		return item.DocumentID
+	})
+
+	assert.Equal(t, []string{"abc", "", "deleteme"}, workDocIds) // update has an id, create does not, delete does
 }

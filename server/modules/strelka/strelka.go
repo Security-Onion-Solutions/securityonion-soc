@@ -439,8 +439,15 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 		}).Info("syncing YARA detection")
 
 		comRule, exists := communityDetections[det.PublicID]
-		if !exists {
+		if exists {
+			// pre-existing detection, update it
+			det.IsEnabled = comRule.IsEnabled
+			det.Id = comRule.Id
+			det.Overrides = comRule.Overrides
+			det.CreateTime = comRule.CreateTime
+		} else {
 			det.CreateTime = util.Ptr(time.Now())
+			checkRulesetEnabled(e, det)
 		}
 
 		document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(e.srv.Context, "detection", det, &det.Auditable, nil, nil)
@@ -451,12 +458,6 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 		if exists {
 			if comRule.Content != det.Content || comRule.Ruleset != det.Ruleset || len(det.Overrides) != 0 {
-				// pre-existing detection, update it
-				det.IsEnabled = comRule.IsEnabled
-				det.Id = comRule.Id
-				det.Overrides = comRule.Overrides
-				det.CreateTime = comRule.CreateTime
-
 				logger.WithFields(log.Fields{
 					"rule.uuid": det.PublicID,
 					"rule.name": det.Title,
@@ -510,8 +511,6 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 				"rule.uuid": det.PublicID,
 				"rule.name": det.Title,
 			}).Info("creating new YARA detection")
-
-			checkRulesetEnabled(e, det)
 
 			err = bulk.Add(e.srv.Context, esutil.BulkIndexerItem{
 				Index:  index,

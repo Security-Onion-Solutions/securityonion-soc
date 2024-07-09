@@ -910,8 +910,14 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 
 		// 1. Save sigma Detection to ElasticSearch
 		oldDet, exists := community[det.PublicID]
-		if !exists {
+		if exists {
+			det.IsEnabled = oldDet.IsEnabled
+			det.Id = oldDet.Id
+			det.Overrides = oldDet.Overrides
+			det.CreateTime = oldDet.CreateTime
+		} else {
 			det.CreateTime = util.Ptr(time.Now())
+			checkRulesetEnabled(e, det)
 		}
 
 		document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", det, &det.Auditable, nil, nil)
@@ -921,11 +927,6 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 		}
 
 		if exists {
-			det.IsEnabled = oldDet.IsEnabled
-			det.Id = oldDet.Id
-			det.Overrides = oldDet.Overrides
-			det.CreateTime = oldDet.CreateTime
-
 			logger.WithFields(log.Fields{
 				"rule.uuid": det.PublicID,
 				"rule.name": det.Title,
@@ -981,8 +982,6 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 				"rule.uuid": det.PublicID,
 				"rule.name": det.Title,
 			}).Info("creating new Sigma detection")
-
-			checkRulesetEnabled(e, det)
 
 			err = bulk.Add(ctx, esutil.BulkIndexerItem{
 				Index:  index,
