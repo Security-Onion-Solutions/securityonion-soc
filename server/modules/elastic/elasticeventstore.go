@@ -230,7 +230,7 @@ func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.Even
 			store.esClient.Search.WithBody(strings.NewReader(query)),
 			store.esClient.Search.WithTrackTotalHits(true),
 			store.esClient.Search.WithPretty(),
-			store.esClient.Search.WithScroll(time.Second*30),
+			store.esClient.Search.WithScroll(time.Minute),
 		)
 		if err == nil {
 			defer res.Body.Close()
