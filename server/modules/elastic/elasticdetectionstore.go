@@ -867,7 +867,7 @@ func (store *ElasticDetectionstore) BuildBulkIndexer(ctx context.Context, logger
 	return bulk, err
 }
 
-func (store *ElasticDetectionstore) ConvertObjectToDocument(ctx context.Context, kind string, obj any, auditable *model.Auditable, auditDocId *string, op *string) (doc []byte, index string, err error) {
+func (store *ElasticDetectionstore) ConvertObjectToDocument(ctx context.Context, kind string, obj any, auditable *model.Auditable, isEdit bool, auditDocId *string, op *string) (doc []byte, index string, err error) {
 	switch kind {
 	case "detection":
 		if auditDocId == nil {
@@ -884,6 +884,12 @@ func (store *ElasticDetectionstore) ConvertObjectToDocument(ctx context.Context,
 		document[store.schemaPrefix+AUDIT_DOC_ID] = *auditDocId
 		if op != nil {
 			document[store.schemaPrefix+"operation"] = *op
+		}
+	}
+
+	if isEdit {
+		document = map[string]interface{}{
+			"doc": document,
 		}
 	}
 

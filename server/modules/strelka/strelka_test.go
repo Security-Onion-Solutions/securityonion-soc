@@ -1142,7 +1142,7 @@ func TestSyncChanges(t *testing.T) {
 	iom.EXPECT().ReadFile("rule1.yar").Return([]byte(simpleRule), nil)
 	iom.EXPECT().ReadFile("rule2.yar").Return([]byte(MyBasicRule), nil)
 	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil)
-	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil).Times(3)
+	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil).Times(3)
 	bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 		if item.OnSuccess != nil {
 			resp := esutil.BulkIndexerResponseItem{
@@ -1158,7 +1158,7 @@ func TestSyncChanges(t *testing.T) {
 	bim.EXPECT().Close(gomock.Any()).Return(nil)
 	bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
 	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(auditm, nil)
-	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return([]byte("document"), "index", nil).Times(3)
+	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return([]byte("document"), "index", nil).Times(3)
 	auditm.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 		if item.OnSuccess != nil {
 			resp := esutil.BulkIndexerResponseItem{

@@ -57,9 +57,9 @@ func (mr *MockDetectionstoreMockRecorder) BuildBulkIndexer(arg0, arg1 any) *gomo
 }
 
 // ConvertObjectToDocument mocks base method.
-func (m *MockDetectionstore) ConvertObjectToDocument(arg0 context.Context, arg1 string, arg2 any, arg3 *model.Auditable, arg4, arg5 *string) ([]byte, string, error) {
+func (m *MockDetectionstore) ConvertObjectToDocument(arg0 context.Context, arg1 string, arg2 any, arg3 *model.Auditable, arg4 bool, arg5, arg6 *string) ([]byte, string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ConvertObjectToDocument", arg0, arg1, arg2, arg3, arg4, arg5)
+	ret := m.ctrl.Call(m, "ConvertObjectToDocument", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(string)
 	ret2, _ := ret[2].(error)
@@ -67,9 +67,9 @@ func (m *MockDetectionstore) ConvertObjectToDocument(arg0 context.Context, arg1 
 }
 
 // ConvertObjectToDocument indicates an expected call of ConvertObjectToDocument.
-func (mr *MockDetectionstoreMockRecorder) ConvertObjectToDocument(arg0, arg1, arg2, arg3, arg4, arg5 any) *gomock.Call {
+func (mr *MockDetectionstoreMockRecorder) ConvertObjectToDocument(arg0, arg1, arg2, arg3, arg4, arg5, arg6 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConvertObjectToDocument", reflect.TypeOf((*MockDetectionstore)(nil).ConvertObjectToDocument), arg0, arg1, arg2, arg3, arg4, arg5)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConvertObjectToDocument", reflect.TypeOf((*MockDetectionstore)(nil).ConvertObjectToDocument), arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 }
 
 // CreateComment mocks base method.

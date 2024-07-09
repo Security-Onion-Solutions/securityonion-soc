@@ -1193,7 +1193,7 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 
 		detect.Kind = ""
 
-		document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", detect, &detect.Auditable, nil, nil)
+		document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", detect, &detect.Auditable, exists, nil, nil)
 		if err != nil {
 			errMap[detect.PublicID] = fmt.Sprintf("unable to convert detection to document map; reason=%s", err.Error())
 			continue
@@ -1206,13 +1206,11 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 					"rule.name": detect.Title,
 				}).Info("updating Suricata detection")
 
-				doc := fmt.Sprintf(`{"doc":%s}`, document)
-
 				err = bulk.Add(ctx, esutil.BulkIndexerItem{
 					Index:      index,
 					Action:     "update",
 					DocumentID: orig.Id,
-					Body:       bytes.NewReader([]byte(doc)),
+					Body:       bytes.NewReader(document),
 					OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
 						auditMut.Lock()
 						defer auditMut.Unlock()
@@ -1320,7 +1318,7 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 
 			id := commSIDs[sid].Id
 
-			_, index, _ := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", commSIDs[sid], &commSIDs[sid].Auditable, nil, nil)
+			_, index, _ := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", commSIDs[sid], &commSIDs[sid].Auditable, false, nil, nil)
 
 			err = bulk.Add(ctx, esutil.BulkIndexerItem{
 				Action:     "delete",
@@ -1380,7 +1378,7 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 
 		for _, audit := range createAudit {
 			// prepare audit doc
-			document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", audit.Detection, &audit.Detection.Auditable, &audit.DocId, &audit.Op)
+			document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", audit.Detection, &audit.Detection.Auditable, false, &audit.DocId, &audit.Op)
 			if err != nil {
 				errMap[audit.Detection.PublicID] = fmt.Sprintf("unable to convert detection to document map for creating an audit doc; reason=%s", err.Error())
 				continue

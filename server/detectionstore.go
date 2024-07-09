@@ -33,7 +33,7 @@ type Detectionstore interface {
 
 	DoesTemplateExist(ctx context.Context, tmpl string) (bool, error)
 	BuildBulkIndexer(ctx context.Context, logger *log.Entry) (esutil.BulkIndexer, error)
-	ConvertObjectToDocument(ctx context.Context, kind string, obj any, auditable *model.Auditable, auditDocId *string, op *string) (doc []byte, index string, err error)
+	ConvertObjectToDocument(ctx context.Context, kind string, obj any, auditable *model.Auditable, isEdit bool, auditDocId *string, op *string) (doc []byte, index string, err error)
 }
 
 //go:generate mockgen -destination mock/mock_detectionstore.go -package mock . Detectionstore

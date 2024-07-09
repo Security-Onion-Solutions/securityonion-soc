@@ -901,7 +901,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 
 				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
 				detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil)
-				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil)
+				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil)
 				bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 					if item.OnSuccess != nil {
 						resp := esutil.BulkIndexerResponseItem{
@@ -915,7 +915,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 				bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
 
 				detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(auditm, nil)
-				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), util.Ptr("id"), util.Ptr("create")).Return([]byte("document"), "index", nil)
+				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), util.Ptr("id"), util.Ptr("create")).Return([]byte("document"), "index", nil)
 				auditm.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 					if item.OnSuccess != nil {
 						resp := esutil.BulkIndexerResponseItem{
@@ -954,7 +954,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 
 				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
 				detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil)
-				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil)
+				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil)
 				bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 					if item.OnSuccess != nil {
 						resp := esutil.BulkIndexerResponseItem{
@@ -968,7 +968,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 				bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
 
 				detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(auditm, nil)
-				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), util.Ptr("id"), util.Ptr("create")).Return([]byte("document"), "index", nil)
+				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), util.Ptr("id"), util.Ptr("create")).Return([]byte("document"), "index", nil)
 				auditm.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 					if item.OnSuccess != nil {
 						resp := esutil.BulkIndexerResponseItem{
@@ -1021,7 +1021,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 					},
 				}, nil)
 				detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil)
-				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil)
+				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil)
 				bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 					if item.OnSuccess != nil {
 						resp := esutil.BulkIndexerResponseItem{
@@ -1035,7 +1035,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 				bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
 
 				detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(auditm, nil)
-				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), util.Ptr("id"), util.Ptr("update")).Return([]byte("document"), "index", nil)
+				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), util.Ptr("id"), util.Ptr("update")).Return([]byte("document"), "index", nil)
 				auditm.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 					if item.OnSuccess != nil {
 						resp := esutil.BulkIndexerResponseItem{
@@ -2260,7 +2260,7 @@ func TestSyncChanges(t *testing.T) {
 		}, // to be deleted
 	}, nil)
 	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil)
-	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil).Times(3)
+	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil).Times(3)
 	bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 		if item.OnSuccess != nil {
 			resp := esutil.BulkIndexerResponseItem{
@@ -2276,7 +2276,7 @@ func TestSyncChanges(t *testing.T) {
 	bim.EXPECT().Close(gomock.Any()).Return(nil)
 	bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
 	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(auditm, nil)
-	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), util.Ptr("id"), gomock.Any()).Return([]byte("document"), "index", nil).Times(3)
+	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), util.Ptr("id"), gomock.Any()).Return([]byte("document"), "index", nil).Times(3)
 	auditm.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
 		if item.OnSuccess != nil {
 			resp := esutil.BulkIndexerResponseItem{

@@ -923,7 +923,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 			checkRulesetEnabled(e, detect)
 		}
 
-		document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", detect, &detect.Auditable, nil, nil)
+		document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", detect, &detect.Auditable, exists, nil, nil)
 		if err != nil {
 			errMap[detect.PublicID] = err
 			continue
@@ -936,13 +936,11 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 					"rule.name": detect.Title,
 				}).Info("updating Sigma detection")
 
-				doc := fmt.Sprintf(`{"doc":%s}`, document)
-
 				err = bulk.Add(ctx, esutil.BulkIndexerItem{
 					Index:      index,
 					Action:     "update",
 					DocumentID: detect.Id,
-					Body:       bytes.NewReader([]byte(doc)),
+					Body:       bytes.NewReader(document),
 					OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
 						auditMut.Lock()
 						defer auditMut.Unlock()
@@ -1080,7 +1078,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 
 		id := community[publicId].Id
 
-		_, index, _ := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", community[publicId], &community[publicId].Auditable, nil, nil)
+		_, index, _ := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", community[publicId], &community[publicId].Auditable, false, nil, nil)
 
 		err = bulk.Add(ctx, esutil.BulkIndexerItem{
 			Index:      index,
@@ -1140,7 +1138,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 
 		for _, audit := range createAudit {
 			// prepare audit doc
-			document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", audit.Detection, &audit.Detection.Auditable, &audit.DocId, &audit.Op)
+			document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", audit.Detection, &audit.Detection.Auditable, false, &audit.DocId, &audit.Op)
 			if err != nil {
 				errMap[audit.Detection.PublicID] = err
 				continue

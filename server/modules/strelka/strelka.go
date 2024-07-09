@@ -452,7 +452,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 			checkRulesetEnabled(e, detect)
 		}
 
-		document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(e.srv.Context, "detection", detect, &detect.Auditable, nil, nil)
+		document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(e.srv.Context, "detection", detect, &detect.Auditable, exists, nil, nil)
 		if err != nil {
 			logger.WithError(err).WithField("rule.uuid", detect.PublicID).Error("failed to convert detection to document")
 			continue
@@ -465,13 +465,11 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 					"rule.name": detect.Title,
 				}).Info("updating YARA detection")
 
-				doc := fmt.Sprintf(`{"doc":%s}`, document)
-
 				err = bulk.Add(e.srv.Context, esutil.BulkIndexerItem{
 					Index:      index,
 					Action:     "update",
 					DocumentID: orig.Id,
-					Body:       bytes.NewReader([]byte(doc)),
+					Body:       bytes.NewReader(document),
 					OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
 						auditMut.Lock()
 						defer auditMut.Unlock()
@@ -592,7 +590,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 		id := communityDetections[publicId].Id
 
-		_, index, _ := e.srv.Detectionstore.ConvertObjectToDocument(e.srv.Context, "detection", communityDetections[publicId], &communityDetections[publicId].Auditable, nil, nil)
+		_, index, _ := e.srv.Detectionstore.ConvertObjectToDocument(e.srv.Context, "detection", communityDetections[publicId], &communityDetections[publicId].Auditable, false, nil, nil)
 
 		err = bulk.Add(e.srv.Context, esutil.BulkIndexerItem{
 			Index:      index,
@@ -652,7 +650,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 		for _, audit := range createAudit {
 			// prepare audit doc
-			document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(e.srv.Context, "detection", audit.Detection, &audit.Detection.Auditable, &audit.DocId, &audit.Op)
+			document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(e.srv.Context, "detection", audit.Detection, &audit.Detection.Auditable, false, &audit.DocId, &audit.Op)
 			if err != nil {
 				errMap[audit.Detection.PublicID] = err
 				continue
