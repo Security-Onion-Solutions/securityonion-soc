@@ -213,6 +213,7 @@ func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.Even
 
 	store.refreshCache(ctx)
 
+	var scrollId string
 	var query string
 	query, err = convertToElasticScrollRequest(store.fieldDefs, store.intervals, criteria)
 	if err == nil {
@@ -251,7 +252,7 @@ func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.Even
 					"requestId": ctx.Value(web.ContextKeyRequestId),
 				}).Debug("scroll progress")
 
-				scrollId := gjson.Get(json, "_scroll_id").String()
+				scrollId = gjson.Get(json, "_scroll_id").String()
 				batchNum := 0
 
 				for {
@@ -297,6 +298,13 @@ func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.Even
 	}
 
 	finalResults.Complete()
+
+	if scrollId != "" {
+		_, err = store.esClient.ClearScroll(
+			store.esClient.ClearScroll.WithContext(ctx),
+			store.esClient.ClearScroll.WithScrollID(scrollId),
+		)
+	}
 
 	return finalResults, err
 }
