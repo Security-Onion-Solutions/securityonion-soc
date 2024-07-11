@@ -1010,7 +1010,7 @@ func convertFromElasticUpdateResults(store *ElasticEventstore, esJson string, re
 	err := json.LoadJson([]byte(esJson), &esResults)
 	if esResults["took"] == nil || esResults["timed_out"] == nil || esResults["updated"] == nil || esResults["noops"] == nil {
 		return errors.New("Elasticsearch response is not a valid JSON updated result")
-	}
+}
 	results.ElapsedMs = int(esResults["took"].(float64))
 	timedOut := esResults["timed_out"].(bool)
 	if timedOut {

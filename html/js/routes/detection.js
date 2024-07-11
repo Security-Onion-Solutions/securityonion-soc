@@ -497,13 +497,13 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		async loadHistory(showLoadingIndicator = false) {
 			if (showLoadingIndicator) this.$root.startLoading();
-			
+
 			const id = this.$route.params.id;
 
 			const response = await this.$root.papi.get(`detection/${id}/history`);
 			if (response && response.data) {
 				this.history = response.data;
-				
+
 				//this.changedKeys[this.history[this.history.length - 1]['id']] = this.findHistoryChange(this.history);
 
 				for (var i = 0; i < this.history.length; i++) {
@@ -514,10 +514,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		findHistoryChange(id) {
 			let retList = [];
-			
+
 			let index = this.history.findIndex((row) => row.id === id);
 
-			if (this.history.length > 1 && index !== 0) {	
+			if (this.history.length > 1 && index !== 0) {
 				let oldDict = JSON.parse(JSON.stringify(this.history[index - 1]));
 				let newDict = JSON.parse(JSON.stringify(this.history[index]));
 				let releventKeys = ['title', 'description', 'isEnabled', 'severity', 'content'];
@@ -525,20 +525,20 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				if (oldDict['engine'] === 'elastalert') {
 					contentJsonOld = jsyaml.load(oldDict['content'], { schema: jsyaml.FAILSAFE_SCHEMA });
 					contentJsonNew = jsyaml.load(newDict['content'], { schema: jsyaml.FAILSAFE_SCHEMA });
-					
+
 					delete contentJsonOld['title'];
 					delete contentJsonOld['description'];
 					delete contentJsonOld['level'];
 					delete contentJsonNew['title'];
 					delete contentJsonNew['description'];
 					delete contentJsonNew['level'];
-					
+
 					oldDict['content'] = JSON.stringify(contentJsonOld);
 					newDict['content'] = JSON.stringify(contentJsonNew);
-				
+
 				} else if (oldDict['engine'] === 'suricata'){
 					let sev1 = oldDict['severity'];
-					let sev2 = newDict['severity'];			
+					let sev2 = newDict['severity'];
 					let reversedSevTranslations = Object.fromEntries(
 						Object.entries(this.severityTranslations).map(([k, v]) => [v, k])
 					);
@@ -551,7 +551,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 					oldDict['content'] = oldDict['content'].replaceAll(/\s/g,'').replaceAll('msg:"' + oldDict['title'].replaceAll(/\s/g,'') + '"', '').replaceAll(regex1, '');
 					newDict['content'] = newDict['content'].replaceAll(/\s/g,'').replaceAll('msg:"' + newDict['title'].replaceAll(/\s/g,'') + '"', '').replaceAll(regex2, '');
-					
+
 				} else {
 					oldDict['content'] = oldDict['content'].replaceAll(/\s/g,'').replaceAll('rule' + oldDict['title'].replaceAll(/\s/g,''), '').replaceAll('description="' + oldDict['description'].replaceAll(/\s/g,'') + '"', '');
 					newDict['content'] = newDict['content'].replaceAll(/\s/g,'').replaceAll('rule' + newDict['title'].replaceAll(/\s/g,''), '').replaceAll('description="' + newDict['description'].replaceAll(/\s/g,'') + '"', '');

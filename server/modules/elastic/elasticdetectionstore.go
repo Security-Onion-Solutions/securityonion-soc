@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"regexp"
 	"strconv"
 	"strings"
@@ -23,9 +22,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/elastic/go-elasticsearch/v8"
-	"github.com/elastic/go-elasticsearch/v8/esapi"
 	"github.com/elastic/go-elasticsearch/v8/esutil"
-	"github.com/tidwall/gjson"
 )
 
 type ElasticDetectionstore struct {
@@ -533,79 +530,6 @@ func (store *ElasticDetectionstore) UpdateDetection(ctx context.Context, detect 
 	return store.GetDetection(ctx, results.DocumentId)
 }
 
-func (store *ElasticDetectionstore) UpdateDetectionField(ctx context.Context, id string, fields map[string]interface{}) (*model.Detection, error) {
-	err := store.server.CheckAuthorized(ctx, "write", "detections")
-	if err != nil {
-		return nil, err
-	}
-
-	if len(fields) == 0 {
-		return nil, errors.New("no fields to update")
-	}
-
-	unQtemplate := `ctx._source.%s=%v`
-	Qtemplate := `ctx._source.%s='%v'`
-
-	lines := make([]string, 0, len(fields)+1)
-
-	for field, value := range fields {
-		switch strings.ToLower(field) {
-		case "isenabled":
-			newField := store.schemaPrefix + "detection.isEnabled"
-			lines = append(lines, fmt.Sprintf(unQtemplate, newField, value))
-		default:
-			return nil, fmt.Errorf("unsupported field: %s", field)
-		}
-	}
-
-	lines = append(lines, fmt.Sprintf(Qtemplate, store.schemaPrefix+"detection.userId", ctx.Value(web.ContextKeyRequestorId).(string)))
-
-	opts := []func(*esapi.UpdateRequest){
-		store.esClient.Update.WithContext(ctx),
-		store.esClient.Update.WithSource("true"),
-	}
-
-	script := strings.Join(lines, "; ")
-
-	res, err := store.esClient.Update("so-detection", id, strings.NewReader(fmt.Sprintf(`{"script": "%s"}`, script)), opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	if res.IsError() {
-		return nil, fmt.Errorf("update error: %s", res.String())
-	}
-
-	raw, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	det := &model.Detection{}
-
-	rawDet := gjson.Get(string(raw), "get._source.so_detection").Raw
-
-	err = json.Unmarshal([]byte(rawDet), det)
-	if err != nil {
-		return nil, err
-	}
-
-	document := ConvertObjectToDocumentMap("detection", json.RawMessage(rawDet), store.schemaPrefix)
-	document[store.schemaPrefix+AUDIT_DOC_ID] = id
-	document[store.schemaPrefix+"kind"] = "detection"
-	document[store.schemaPrefix+"operation"] = "update"
-
-	err = store.audit(ctx, document, id)
-	if err != nil {
-		log.WithFields(log.Fields{
-			"documentId":   id,
-			"documentKind": "detection",
-		}).WithError(err).Error("Detection updated successfully however audit record failed to index")
-	}
-
-	return det, nil
-}
-
 func (store *ElasticDetectionstore) DeleteDetection(ctx context.Context, id string) (*model.Detection, error) {
 	detect, err := store.GetDetection(ctx, id)
 	if err != nil {
@@ -876,6 +800,9 @@ func (store *ElasticDetectionstore) ConvertObjectToDocument(ctx context.Context,
 			index = "so-detectionhistory"
 		}
 	}
+
+	id := auditable.Id
+
 	store.prepareForSave(ctx, auditable)
 	document := ConvertObjectToDocumentMap(kind, obj, store.schemaPrefix)
 
@@ -894,6 +821,8 @@ func (store *ElasticDetectionstore) ConvertObjectToDocument(ctx context.Context,
 	}
 
 	rawDoc, err := json.Marshal(document)
+
+	auditable.Id = id
 
 	return rawDoc, index, err
 }

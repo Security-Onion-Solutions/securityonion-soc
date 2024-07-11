@@ -1146,10 +1146,9 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 
 			// create audit doc
 			err = bulk.Add(ctx, esutil.BulkIndexerItem{
-				Index:      index,
-				Action:     "create",
-				DocumentID: audit.DocId,
-				Body:       bytes.NewReader(document),
+				Index:  index,
+				Action: "create",
+				Body:   bytes.NewReader(document),
 				OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
 					atomic.AddInt32(&results.Audited, 1)
 				},

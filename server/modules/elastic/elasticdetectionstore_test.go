@@ -8,7 +8,6 @@ package elastic
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -974,66 +973,6 @@ func TestGetDetectionById(t *testing.T) {
 	bigId := strings.Repeat("1234567890", 12) // length = 120
 	_, err = store.GetDetectionByPublicId(ctx, bigId)
 	assert.NoError(t, err)
-}
-
-func TestUpdateDetectionFieldValid(t *testing.T) {
-	t.Parallel()
-
-	client, mocktrans := modmock.NewMockClient(t)
-	fakesrv := server.NewFakeAuthorizedServer(nil)
-
-	store := NewElasticDetectionstore(fakesrv, client, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
-
-	id := "ABC123"
-	body1 := fmt.Sprintf(`{"get": {"_source":{"so_detection": {"id": "%s"}}}}`, id)
-	body2 := `{"result":"updated", "_id":"DEF456"}`
-
-	mocktrans.AddResponse(&http.Response{
-		Body: io.NopCloser(strings.NewReader(body1)),
-	})
-	mocktrans.AddResponse(&http.Response{
-		Body: io.NopCloser(strings.NewReader(body2)),
-	})
-
-	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-
-	det, err := store.UpdateDetectionField(ctx, id, map[string]interface{}{
-		"isEnabled": true,
-	})
-	assert.NoError(t, err)
-	assert.Equal(t, id, det.Id)
-
-	reqs := mocktrans.GetRequests()
-	assert.Equal(t, 2, len(reqs))
-
-	m := map[string]interface{}{}
-	err = json.NewDecoder(reqs[0].Body).Decode(&m)
-
-	assert.NoError(t, err)
-	assert.Equal(t, `ctx._source.so_detection.isEnabled=true; ctx._source.so_detection.userId='myRequestorId'`, m["script"])
-}
-
-func TestUpdateDetectionFieldInvalid(t *testing.T) {
-	t.Parallel()
-
-	client, mocktrans := modmock.NewMockClient(t)
-	fakesrv := server.NewFakeAuthorizedServer(nil)
-
-	store := NewElasticDetectionstore(fakesrv, client, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
-
-	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-
-	det, err := store.UpdateDetectionField(ctx, "ABC123", map[string]interface{}{
-		"isCommunity": true,
-	})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "unsupported field: isCommunity")
-	assert.Nil(t, det)
-
-	reqs := mocktrans.GetRequests()
-	assert.Equal(t, 0, len(reqs))
 }
 
 func TestGetAllCommunitySIDs(t *testing.T) {
