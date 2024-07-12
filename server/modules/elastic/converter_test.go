@@ -605,3 +605,28 @@ func TestConvertSeverity(t *testing.T) {
 	assert.Equal(t, "critical", convertSeverity("4"))
 	assert.Equal(t, "critical", convertSeverity("Critical"))
 }
+
+func TestConvertToElasticScrollRequestEmpty(t *testing.T) {
+	criteria := model.NewEventScrollCriteria()
+	teststore := NewTestStore()
+	actualJson, err := convertToElasticScrollRequest(teststore.fieldDefs, teststore.intervals, criteria)
+	assert.Nil(t, err)
+
+	expectedJson := `{"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"*"}}],"must_not":[],"should":[]}},"size":10000}`
+	assert.Equal(t, expectedJson, actualJson)
+}
+
+func TestConvertToElasticScrollRequestWithQuery(t *testing.T) {
+	criteria := model.NewEventScrollCriteria()
+	query := `_index:"*:so-detection" AND so_kind:"detection" AND so_detection.engine:"strelka" AND so_detection.isEnabled:"true"`
+	criteria.RawQuery = query
+	err := criteria.ParsedQuery.Parse(query)
+	assert.NoError(t, err)
+
+	teststore := NewTestStore()
+	actualJson, err := convertToElasticScrollRequest(teststore.fieldDefs, teststore.intervals, criteria)
+	assert.Nil(t, err)
+
+	expectedJson := `{"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"_index: \"*:so-detection\" AND so_kind: \"detection\" AND so_detection.engine: \"strelka\" AND so_detection.isEnabled: \"true\""}}],"must_not":[],"should":[]}},"size":10000}`
+	assert.Equal(t, expectedJson, actualJson)
+}

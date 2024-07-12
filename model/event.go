@@ -193,15 +193,10 @@ func NewEventIndexResults() *EventIndexResults {
 
 type EventScrollCriteria struct {
 	RawQuery    string `json:"query"`
-	DateRange   string `json:"dateRange"`
-	MetricLimit int    `json:"metricLimit"`
-	EventLimit  int    `json:"eventLimit"`
 	BeginTime   time.Time
 	EndTime     time.Time
 	CreateTime  time.Time
 	ParsedQuery *Query
-	SortFields  []*SortCriteria
-	SearchAfter []interface{}
 }
 
 type EventScrollResults struct {
@@ -222,7 +217,6 @@ func NewEventScrollResults() *EventScrollResults {
 func (criteria *EventScrollCriteria) initScrollCriteria() {
 	criteria.CreateTime = time.Now()
 	criteria.ParsedQuery = NewQuery()
-	criteria.EventLimit = 25
 }
 
 func NewEventScrollCriteria() *EventScrollCriteria {

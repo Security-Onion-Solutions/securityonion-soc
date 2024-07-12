@@ -356,7 +356,6 @@ func (store *ElasticDetectionstore) Query(ctx context.Context, query string, max
 
 	if unlimited {
 		criteria := model.NewEventScrollCriteria()
-		criteria.EventLimit = max
 		criteria.RawQuery = query
 		criteria.ParsedQuery.Parse(query)
 

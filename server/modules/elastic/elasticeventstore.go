@@ -283,8 +283,8 @@ func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.Even
 					scrollId = gjson.Get(json, "_scroll_id").String()
 
 					// Break out of the loop when there are no results or we have all the results
-					if len(results.Events) == 0 || len(finalResults.Events) == finalResults.TotalEvents {
-						log.Debug("Finished scrolling")
+					if len(results.Events) == 0 || len(finalResults.Events) >= finalResults.TotalEvents {
+						log.Debug("finished scrolling")
 						break
 					} else {
 						log.WithFields(log.Fields{

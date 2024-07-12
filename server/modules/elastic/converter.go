@@ -276,74 +276,8 @@ func convertToElasticScrollRequest(fieldDefs map[string]*FieldDefinition, interv
 	var esJson string
 
 	esMap := make(map[string]interface{})
-	esMap["size"] = criteria.EventLimit
+	esMap["size"] = 10000
 	esMap["query"] = makeQuery(fieldDefs, criteria.ParsedQuery, criteria.BeginTime, criteria.EndTime)
-
-	if len(criteria.SearchAfter) != 0 {
-		esMap["search_after"] = criteria.SearchAfter
-	}
-
-	aggregations := make(map[string]interface{})
-
-	if criteria.MetricLimit > 0 {
-		if !criteria.EndTime.IsZero() {
-			aggregations["timeline"] = makeTimeline(calcTimelineInterval(intervals, criteria.BeginTime, criteria.EndTime))
-		}
-		segments := criteria.ParsedQuery.NamedSegments(model.SegmentKind_GroupBy)
-		for idx, segment := range segments {
-			groupBySegment := segment.(*model.GroupBySegment)
-			fields := groupBySegment.RawFields()
-			fields = stripSegmentOptions(fields)
-			if len(fields) > 0 {
-				prefix := fmt.Sprintf("groupby_%d", idx)
-				agg, name := makeAggregation(fieldDefs, prefix, fields, criteria.MetricLimit, false)
-				aggregations[name] = agg
-				if aggregations["bottom"] == nil {
-					aggregations["bottom"], _ = makeAggregation(fieldDefs, "", fields[0:1], criteria.MetricLimit, true)
-				}
-			}
-		}
-	}
-
-	if len(aggregations) > 0 {
-		esMap["aggs"] = aggregations
-	}
-
-	segment := criteria.ParsedQuery.NamedSegment(model.SegmentKind_SortBy)
-	if segment != nil {
-		sortBySegment := segment.(*model.SortBySegment)
-		fields := sortBySegment.RawFields()
-		if len(fields) > 0 {
-			sorting := []map[string]map[string]string{}
-			for _, field := range fields {
-				newSort := make(map[string]map[string]string)
-				order := "desc"
-				if strings.HasSuffix(field, "^") {
-					field = strings.TrimSuffix(field, "^")
-					order = "asc"
-				}
-				sortParams := make(map[string]string)
-				sortParams["order"] = order
-				sortParams["missing"] = "_last"
-				sortParams["unmapped_type"] = "date"
-				newSort[field] = sortParams
-				sorting = append(sorting, newSort)
-			}
-
-			if len(sorting) != 0 {
-				esMap["sort"] = sorting
-			}
-		}
-	} else {
-		sort := map[string]string{}
-		for _, field := range criteria.SortFields {
-			sort[field.Field] = field.Order
-		}
-
-		if len(sort) != 0 {
-			esMap["sort"] = sort
-		}
-	}
 
 	bytes, err := json.WriteJson(esMap)
 	if err == nil {
@@ -1010,7 +944,7 @@ func convertFromElasticUpdateResults(store *ElasticEventstore, esJson string, re
 	err := json.LoadJson([]byte(esJson), &esResults)
 	if esResults["took"] == nil || esResults["timed_out"] == nil || esResults["updated"] == nil || esResults["noops"] == nil {
 		return errors.New("Elasticsearch response is not a valid JSON updated result")
-}
+	}
 	results.ElapsedMs = int(esResults["took"].(float64))
 	timedOut := esResults["timed_out"].(bool)
 	if timedOut {
