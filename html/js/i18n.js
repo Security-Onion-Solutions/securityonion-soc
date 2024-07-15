@@ -21,6 +21,8 @@ const i18n = {
       ackUndoMultipleTip: 'Reverting acknowledgment on groups of alerts may take a while and will continue in the background.',
       ackUndoSingleTip: 'Reverted acknowledgement and removed from view.',
       actions: 'Actions',
+      actionAdd: 'Add New Action',
+      actionAddHelp: 'Add new action to this list of actions',
       actionAddToCase: 'Add to Case',
       actionAddToCaseHelp: 'Add to a new or existing case',
       actionAlert: 'Alert',
