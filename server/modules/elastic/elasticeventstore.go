@@ -55,6 +55,7 @@ type ElasticEventstore struct {
 	asyncThreshold     int
 	maxLogLength       int
 	lookupTunnelParent bool
+	maxScrollSize      int
 }
 
 func NewElasticEventstore(srv *server.Server) *ElasticEventstore {
@@ -80,7 +81,8 @@ func (store *ElasticEventstore) Init(hostUrl string,
 	asyncThreshold int,
 	intervals int,
 	maxLogLength int,
-	lookupTunnelParent bool) error {
+	lookupTunnelParent bool,
+	maxScrollSize int) error {
 	store.timeShiftMs = timeShiftMs
 	store.defaultDurationMs = defaultDurationMs
 	store.esSearchOffsetMs = esSearchOffsetMs
@@ -91,6 +93,7 @@ func (store *ElasticEventstore) Init(hostUrl string,
 	store.intervals = intervals
 	store.maxLogLength = maxLogLength
 	store.lookupTunnelParent = lookupTunnelParent
+	store.maxScrollSize = maxScrollSize
 
 	var err error
 	store.esClient, err = store.makeEsClient(hostUrl, user, pass, verifyCert)
@@ -215,11 +218,11 @@ func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.Even
 
 	var scrollId string
 	var query string
-	query, err = convertToElasticScrollRequest(store.fieldDefs, store.intervals, criteria)
+	query, err = convertToElasticScrollRequest(store.fieldDefs, criteria, store.maxScrollSize)
 	if err == nil {
 		log.WithFields(log.Fields{
-			"query":     store.truncate(query),
-			"requestId": ctx.Value(web.ContextKeyRequestId),
+			"scrollQuery": store.truncate(query),
+			"requestId":   ctx.Value(web.ContextKeyRequestId),
 		}).Info("scrolling Elasticsearch")
 
 		var json string

@@ -423,7 +423,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 		return err
 	}
 
-	createAudit := make([]detections.AuditInfo, 0, len(detects))
+	createAudit := make([]model.AuditInfo, 0, len(detects))
 	auditMut := sync.Mutex{}
 	errMut := sync.Mutex{}
 
@@ -476,7 +476,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 						results.Updated++
 
-						createAudit = append(createAudit, detections.AuditInfo{
+						createAudit = append(createAudit, model.AuditInfo{
 							Detection: detect,
 							DocId:     resp.DocumentID,
 							Op:        "update",
@@ -529,7 +529,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 					results.Added++
 
-					createAudit = append(createAudit, detections.AuditInfo{
+					createAudit = append(createAudit, model.AuditInfo{
 						Detection: detect,
 						DocId:     resp.DocumentID,
 						Op:        "create",
@@ -602,7 +602,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 				results.Removed++
 
-				createAudit = append(createAudit, detections.AuditInfo{
+				createAudit = append(createAudit, model.AuditInfo{
 					Detection: communityDetections[publicId],
 					DocId:     resp.DocumentID,
 					Op:        "delete",

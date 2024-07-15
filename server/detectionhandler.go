@@ -538,7 +538,7 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 		action = "delete"
 	}
 
-	createAudit := []detections.AuditInfo{}
+	createAudit := []model.AuditInfo{}
 	auditMut := sync.Mutex{}
 	errMut := sync.Mutex{}
 
@@ -570,7 +570,7 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 					updated++
 				}
 
-				createAudit = append(createAudit, detections.AuditInfo{
+				createAudit = append(createAudit, model.AuditInfo{
 					DocId:     resp.DocumentID,
 					Op:        action,
 					Detection: detect,
@@ -601,13 +601,13 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 
 	err = bulk.Close(ctx)
 	if err != nil {
-		// web.Respond(w, r, http.StatusInternalServerError, err)
+		logger.WithError(err).Error("unable to close bulk indexer for detection changes")
 		return
 	}
 
 	bulk, err = h.server.Detectionstore.BuildBulkIndexer(ctx, logger)
 	if err != nil {
-		// web.Respond(w, r, http.StatusInternalServerError, err)
+		logger.WithError(err).Error("unable to create audit bulk indexer")
 		return
 	}
 
@@ -635,9 +635,9 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 				defer errMut.Unlock()
 
 				if err != nil {
-					errMap[audit.Detection.PublicID] = err.Error()
+					errMap[audit.Detection.PublicID] = fmt.Sprintf("AUDIT: %s", err.Error())
 				} else {
-					errMap[audit.Detection.PublicID] = resp.Error.Reason
+					errMap[audit.Detection.PublicID] = fmt.Sprintf("AUDIT: %s", resp.Error.Reason)
 				}
 			},
 		})
@@ -658,7 +658,7 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 
 	err = bulk.Close(ctx)
 	if err != nil {
-		// web.Respond(w, r, http.StatusInternalServerError, err)
+		logger.WithError(err).Error("unable to close bulk indexer for audit history")
 		return
 	}
 
@@ -674,7 +674,7 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 
 	errMap, err = SyncLocalDetections(ctx, h.server, dirty)
 	if err != nil {
-		// web.Respond(w, r, http.StatusInternalServerError, err)
+		logger.WithError(err).WithField("errMap", detections.TruncateMap(errMap, 5)).Error("unable to sync detections after bulk update")
 		return
 	}
 

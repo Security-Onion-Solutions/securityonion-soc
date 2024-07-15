@@ -271,12 +271,12 @@ func convertToElasticRequest(fieldDefs map[string]*FieldDefinition, intervals in
 	return esJson, err
 }
 
-func convertToElasticScrollRequest(fieldDefs map[string]*FieldDefinition, intervals int, criteria *model.EventScrollCriteria) (string, error) {
+func convertToElasticScrollRequest(fieldDefs map[string]*FieldDefinition, criteria *model.EventScrollCriteria, maxScrollSize int) (string, error) {
 	var err error
 	var esJson string
 
 	esMap := make(map[string]interface{})
-	esMap["size"] = 10000
+	esMap["size"] = maxScrollSize
 	esMap["query"] = makeQuery(fieldDefs, criteria.ParsedQuery, criteria.BeginTime, criteria.EndTime)
 
 	bytes, err := json.WriteJson(esMap)
@@ -485,8 +485,8 @@ func convertFromElasticScrollResults(fieldDefs map[string]*FieldDefinition, esJs
 				reasonDetails = reason["reason"].(string)
 			}
 			log.WithFields(log.Fields{
-				"reasonType": reasonType,
-				"reason":     reasonDetails,
+				"shardFailureReasonType": reasonType,
+				"shardFailureReason":     reasonDetails,
 			}).Warn("Shard failure")
 			err = errors.New("ERROR_QUERY_FAILED_ELASTICSEARCH")
 		}

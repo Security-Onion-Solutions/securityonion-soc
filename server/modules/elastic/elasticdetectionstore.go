@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -26,13 +27,14 @@ import (
 )
 
 type ElasticDetectionstore struct {
-	server          *server.Server
-	esClient        *elasticsearch.Client
-	index           string
-	auditIndex      string
-	maxAssociations int
-	schemaPrefix    string
-	maxLogLength    int
+	server                 *server.Server
+	esClient               *elasticsearch.Client
+	index                  string
+	auditIndex             string
+	maxAssociations        int
+	schemaPrefix           string
+	maxLogLength           int
+	bulkIndexerWorkerCount int
 }
 
 func NewElasticDetectionstore(srv *server.Server, client *elasticsearch.Client, maxLogLength int) *ElasticDetectionstore {
@@ -43,11 +45,16 @@ func NewElasticDetectionstore(srv *server.Server, client *elasticsearch.Client, 
 	}
 }
 
-func (store *ElasticDetectionstore) Init(index string, auditIndex string, maxAssociations int, schemaPrefix string) error {
+func (store *ElasticDetectionstore) Init(index string, auditIndex string, maxAssociations int, schemaPrefix string, bulkIndexerWorkerCount int) error {
 	store.index = index
 	store.auditIndex = auditIndex
 	store.maxAssociations = maxAssociations
 	store.schemaPrefix = schemaPrefix
+	if bulkIndexerWorkerCount > 0 {
+		store.bulkIndexerWorkerCount = bulkIndexerWorkerCount
+	} else {
+		store.bulkIndexerWorkerCount = runtime.NumCPU()
+	}
 
 	return nil
 }
@@ -780,8 +787,9 @@ func (store *ElasticDetectionstore) DeleteComment(ctx context.Context, id string
 
 func (store *ElasticDetectionstore) BuildBulkIndexer(ctx context.Context, logger *log.Entry) (esutil.BulkIndexer, error) {
 	bulk, err := esutil.NewBulkIndexer(esutil.BulkIndexerConfig{
-		Client:  store.esClient,
-		Refresh: "true",
+		Client:     store.esClient,
+		Refresh:    "true",
+		NumWorkers: store.bulkIndexerWorkerCount,
 		OnError: func(ctx context.Context, err error) {
 			logger.WithError(err).Error("error during bulk import")
 		},
@@ -791,13 +799,10 @@ func (store *ElasticDetectionstore) BuildBulkIndexer(ctx context.Context, logger
 }
 
 func (store *ElasticDetectionstore) ConvertObjectToDocument(ctx context.Context, kind string, obj any, auditable *model.Auditable, isEdit bool, auditDocId *string, op *string) (doc []byte, index string, err error) {
-	switch kind {
-	case "detection":
-		if auditDocId == nil {
-			index = "so-detection"
-		} else {
-			index = "so-detectionhistory"
-		}
+	if auditDocId == nil {
+		index = "so-detection"
+	} else {
+		index = "so-detectionhistory"
 	}
 
 	id := auditable.Id
