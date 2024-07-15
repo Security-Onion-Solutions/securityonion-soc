@@ -6,6 +6,7 @@
 package elastic
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -57,7 +58,7 @@ func TestDetectionValidateIdValid(t *testing.T) {
 	t.Parallel()
 
 	store := NewElasticDetectionstore(server.NewFakeAuthorizedServer(nil), nil, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	err := store.validateId("12345", "test")
 	assert.NoError(t, err)
@@ -79,7 +80,7 @@ func TestDetectionValidateIdInvalid(t *testing.T) {
 	t.Parallel()
 
 	store := NewElasticDetectionstore(server.NewFakeAuthorizedServer(nil), nil, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	err := store.validateId("", "test")
 	assert.Error(t, err)
@@ -122,7 +123,7 @@ func TestDetectionValidatePublicIdValid(t *testing.T) {
 	t.Parallel()
 
 	store := NewElasticDetectionstore(server.NewFakeAuthorizedServer(nil), nil, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	err := store.validatePublicId("12345", "test")
 	assert.NoError(t, err)
@@ -150,7 +151,7 @@ func TestDetectionValidatePublicIdInvalid(t *testing.T) {
 	t.Parallel()
 
 	store := NewElasticDetectionstore(server.NewFakeAuthorizedServer(nil), nil, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	err := store.validatePublicId("", "test")
 	assert.Error(t, err)
@@ -196,7 +197,7 @@ func TestDetectionValidateStringValid(t *testing.T) {
 	t.Parallel()
 
 	store := NewElasticDetectionstore(server.NewFakeAuthorizedServer(nil), nil, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	err := store.validateString("12345", 6, "test")
 	assert.NoError(t, err)
@@ -212,7 +213,7 @@ func TestDetectionValidateStringInvalid(t *testing.T) {
 	t.Parallel()
 
 	store := NewElasticDetectionstore(server.NewFakeAuthorizedServer(nil), nil, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	err := store.validateString("1234567", 6, "test")
 	assert.Error(t, err)
@@ -225,7 +226,7 @@ func TestDetectionValidateCommentValid(t *testing.T) {
 	t.Parallel()
 
 	store := NewElasticDetectionstore(server.NewFakeAuthorizedServer(nil), nil, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	comment := &model.DetectionComment{}
 	comment.Value = "myVal"
@@ -246,7 +247,7 @@ func TestDetectionValidateCommentInvalid(t *testing.T) {
 	t.Parallel()
 
 	store := NewElasticDetectionstore(server.NewFakeAuthorizedServer(nil), nil, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	comment := &model.DetectionComment{}
 
@@ -288,7 +289,7 @@ func TestValidateDetectionValid(t *testing.T) {
 	t.Parallel()
 
 	store := NewElasticDetectionstore(server.NewFakeAuthorizedServer(nil), nil, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	det := &model.Detection{
 		Auditable: model.Auditable{
@@ -314,7 +315,7 @@ func TestValidateDetectionInvalid(t *testing.T) {
 	t.Parallel()
 
 	store := NewElasticDetectionstore(server.NewFakeAuthorizedServer(nil), nil, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	det := &model.Detection{}
 
@@ -449,7 +450,7 @@ func TestCreateDetectionValid(t *testing.T) {
 
 	fakesrv.Eventstore = fakeStore
 	store := NewElasticDetectionstore(fakesrv, client, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	det := &model.Detection{
 		Title:       "myTitle",
@@ -562,7 +563,7 @@ func TestCreateDetectionPublicIdCollision(t *testing.T) {
 
 	fakesrv.Eventstore = fakeStore
 	store := NewElasticDetectionstore(fakesrv, nil, 100) // client, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	det := &model.Detection{
 		PublicID: "123456",
@@ -626,7 +627,7 @@ func TestUpdateDetectionValid(t *testing.T) {
 
 	fakesrv.Eventstore = fakeStore
 	store := NewElasticDetectionstore(fakesrv, client, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	det := &model.Detection{
 		Auditable: model.Auditable{
@@ -740,7 +741,7 @@ func TestUpdateDetectionInvalid404(t *testing.T) {
 
 	fakesrv.Eventstore = fakeStore
 	store := NewElasticDetectionstore(fakesrv, client, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	det := &model.Detection{
 		Auditable: model.Auditable{
@@ -820,7 +821,7 @@ func TestDeleteDetectionValid(t *testing.T) {
 
 	fakesrv.Eventstore = fakeStore
 	store := NewElasticDetectionstore(fakesrv, client, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	body1 := `{"result":"updated", "_id":"hJFpC44Bm7lAWCSuSwHa"}`
 
@@ -844,7 +845,7 @@ func TestDeleteDetectionInvalid(t *testing.T) {
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakesrv.Eventstore = server.NewFakeEventstore()
 	store := NewElasticDetectionstore(fakesrv, client, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	body1 := `{"result":"updated", "_id":"hJFpC44Bm7lAWCSuSwHa"}`
 
@@ -865,7 +866,7 @@ func TestDoesTemplateExistValid(t *testing.T) {
 	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	store := NewElasticDetectionstore(fakesrv, client, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	mocktrans.AddResponse(&http.Response{
 		StatusCode: 200,
@@ -895,7 +896,7 @@ func TestDoesTemplateExistInvalid(t *testing.T) {
 	client, mocktrans := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	store := NewElasticDetectionstore(fakesrv, client, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	mocktrans.AddResponse(&http.Response{
 		StatusCode: 404,
@@ -925,7 +926,7 @@ func TestGetDetectionById(t *testing.T) {
 	client, _ := modmock.NewMockClient(t)
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	store := NewElasticDetectionstore(fakesrv, client, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	fakeStore := server.NewFakeEventstore()
 
@@ -976,66 +977,6 @@ func TestGetDetectionById(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestUpdateDetectionFieldValid(t *testing.T) {
-	t.Parallel()
-
-	client, mocktrans := modmock.NewMockClient(t)
-	fakesrv := server.NewFakeAuthorizedServer(nil)
-
-	store := NewElasticDetectionstore(fakesrv, client, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
-
-	id := "ABC123"
-	body1 := fmt.Sprintf(`{"get": {"_source":{"so_detection": {"id": "%s"}}}}`, id)
-	body2 := `{"result":"updated", "_id":"DEF456"}`
-
-	mocktrans.AddResponse(&http.Response{
-		Body: io.NopCloser(strings.NewReader(body1)),
-	})
-	mocktrans.AddResponse(&http.Response{
-		Body: io.NopCloser(strings.NewReader(body2)),
-	})
-
-	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-
-	det, err := store.UpdateDetectionField(ctx, id, map[string]interface{}{
-		"isEnabled": true,
-	})
-	assert.NoError(t, err)
-	assert.Equal(t, id, det.Id)
-
-	reqs := mocktrans.GetRequests()
-	assert.Equal(t, 2, len(reqs))
-
-	m := map[string]interface{}{}
-	err = json.NewDecoder(reqs[0].Body).Decode(&m)
-
-	assert.NoError(t, err)
-	assert.Equal(t, `ctx._source.so_detection.isEnabled=true; ctx._source.so_detection.userId='myRequestorId'`, m["script"])
-}
-
-func TestUpdateDetectionFieldInvalid(t *testing.T) {
-	t.Parallel()
-
-	client, mocktrans := modmock.NewMockClient(t)
-	fakesrv := server.NewFakeAuthorizedServer(nil)
-
-	store := NewElasticDetectionstore(fakesrv, client, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
-
-	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
-
-	det, err := store.UpdateDetectionField(ctx, "ABC123", map[string]interface{}{
-		"isCommunity": true,
-	})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "unsupported field: isCommunity")
-	assert.Nil(t, det)
-
-	reqs := mocktrans.GetRequests()
-	assert.Equal(t, 0, len(reqs))
-}
-
 func TestGetAllCommunitySIDs(t *testing.T) {
 	t.Parallel()
 
@@ -1043,7 +984,7 @@ func TestGetAllCommunitySIDs(t *testing.T) {
 	fakesrv := server.NewFakeAuthorizedServer(nil)
 	fakeStore := server.NewFakeEventstore()
 
-	fakeStore.SearchResults = []*model.EventSearchResults{
+	fakeStore.ScrollResults = []*model.EventScrollResults{
 		{
 			TotalEvents: 1,
 			Events: []*model.EventRecord{
@@ -1076,10 +1017,6 @@ func TestGetAllCommunitySIDs(t *testing.T) {
 				},
 			},
 		},
-		{ // When querying for unlimited things, we need one search request that returns 0 results
-			// or we get an infinite loop
-			TotalEvents: 0,
-		},
 	}
 
 	// double up the results, we're calling the function twice
@@ -1087,7 +1024,7 @@ func TestGetAllCommunitySIDs(t *testing.T) {
 
 	fakesrv.Eventstore = fakeStore
 	store := NewElasticDetectionstore(fakesrv, client, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	body := `{"hits": {"hits": [{"_source": {"so_detection": {"id": "ABC123"}}}]}}`
 
@@ -1111,11 +1048,11 @@ func TestGetAllCommunitySIDs(t *testing.T) {
 	assert.Equal(t, 1, len(sids))
 	assert.NotNil(t, sids["ABC123"])
 
-	criteria := fakeStore.InputSearchCriterias[0].RawQuery
+	criteria := fakeStore.InputScrollCriterias[0].RawQuery
 	assert.Contains(t, criteria, `_index:"myIndex" AND so_kind:"detection"`)
 	assert.NotContains(t, criteria, "detection.engine")
 
-	criteria = fakeStore.InputSearchCriterias[2].RawQuery
+	criteria = fakeStore.InputScrollCriterias[1].RawQuery
 	assert.Contains(t, criteria, `_index:"myIndex" AND so_kind:"detection" AND so_detection.engine:"suricata"`)
 	assert.Contains(t, criteria, "detection.engine")
 }
@@ -1165,7 +1102,7 @@ func TestGetDetectionHistory(t *testing.T) {
 
 	fakesrv.Eventstore = fakeStore
 	store := NewElasticDetectionstore(fakesrv, client, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
@@ -1216,7 +1153,7 @@ func TestCreateDetectionComment(t *testing.T) {
 
 	fakesrv.Eventstore = fakeStore
 	store := NewElasticDetectionstore(fakesrv, client, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	comment := &model.DetectionComment{
 		Value:       "First!",
@@ -1270,7 +1207,7 @@ func TestGetDetectionComments(t *testing.T) {
 
 	fakesrv.Eventstore = fakeStore
 	store := NewElasticDetectionstore(fakesrv, client, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
@@ -1311,7 +1248,7 @@ func TestUpdateDetectionCommentValid(t *testing.T) {
 
 	fakesrv.Eventstore = fakeStore
 	store := NewElasticDetectionstore(fakesrv, client, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	body1 := `{"result":"updated", "_id":"ABC123"}`
 	body2 := `{"result":"created", "_id":"DEF456"}`
@@ -1356,7 +1293,7 @@ func TestUpdateDetectionCommentInvalid(t *testing.T) {
 
 	fakesrv.Eventstore = fakeStore
 	store := NewElasticDetectionstore(fakesrv, client, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
@@ -1403,7 +1340,7 @@ func TestDeleteDetectionComment(t *testing.T) {
 
 	fakesrv.Eventstore = fakeStore
 	store := NewElasticDetectionstore(fakesrv, client, 100)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	body1 := `{"result":"deleted", "_id":"ABC123"}`
 	body2 := `{"result":"created", "_id":"DEF456"}`
@@ -1438,4 +1375,169 @@ func extractSoDetectionFromRequestBody(t *testing.T, req *http.Request) *model.D
 	assert.NoError(t, err)
 
 	return reqDet
+}
+
+func TestConvertObjectToDocument(t *testing.T) {
+	t.Parallel()
+
+	specificTime, err := time.Parse(time.RFC3339Nano, "2024-07-15T13:22:46.318510436-06:00")
+	assert.NoError(t, err)
+	_ = specificTime
+
+	tests := []struct {
+		Name       string
+		Kind       string
+		Object     *model.Detection
+		AuditObj   model.Auditable
+		IsEdit     bool
+		AuditDocID *string
+		Op         *string
+		ExpDoc     []byte
+		ExpIndex   string
+		ExpErr     string
+	}{
+		{
+			Name:     "Empty Detection",
+			Kind:     "detection",
+			Object:   &model.Detection{},
+			AuditObj: model.Auditable{},
+			ExpDoc:   []byte(`{"@timestamp":"","schemaPrefixdetection":{"createTime":null,"userId":"","publicId":"","title":"","severity":"","author":"","description":"","content":"","isEnabled":false,"isReporting":false,"isCommunity":false,"engine":"","language":"","overrides":null,"tags":null,"ruleset":"","license":""},"schemaPrefixkind":"detection"}`),
+			ExpIndex: "so-detection",
+		},
+		{
+			Name:     "Empty Detection, IsEdit=true",
+			Kind:     "detection",
+			Object:   &model.Detection{},
+			AuditObj: model.Auditable{},
+			IsEdit:   true,
+			ExpDoc:   []byte(`{"doc":{"@timestamp":"","schemaPrefixdetection":{"createTime":null,"userId":"","publicId":"","title":"","severity":"","author":"","description":"","content":"","isEnabled":false,"isReporting":false,"isCommunity":false,"engine":"","language":"","overrides":null,"tags":null,"ruleset":"","license":""},"schemaPrefixkind":"detection"}}`),
+			ExpIndex: "so-detection",
+		},
+		{
+			Name:       "Audit",
+			Kind:       "detection",
+			Object:     &model.Detection{},
+			AuditObj:   model.Auditable{},
+			IsEdit:     false, // audits are only ever "create"
+			AuditDocID: util.Ptr("id"),
+			Op:         util.Ptr("operation"),
+			ExpDoc:     []byte(`{"@timestamp":"","schemaPrefixaudit_doc_id":"id","schemaPrefixdetection":{"createTime":null,"userId":"","publicId":"","title":"","severity":"","author":"","description":"","content":"","isEnabled":false,"isReporting":false,"isCommunity":false,"engine":"","language":"","overrides":null,"tags":null,"ruleset":"","license":""},"schemaPrefixkind":"detection","schemaPrefixoperation":"operation"}`),
+			ExpIndex:   "so-detectionhistory",
+		},
+		{
+			Name: "Full Detection",
+			Kind: "detection",
+			Object: &model.Detection{
+				PublicID:      "publicId",
+				Title:         "title",
+				Severity:      model.SeverityCritical,
+				Author:        "author",
+				Category:      "category",
+				Description:   "description",
+				Content:       "content",
+				IsEnabled:     true,
+				IsReporting:   true,
+				IsCommunity:   true,
+				Engine:        "engine",
+				Language:      "language",
+				Overrides:     []*model.Override{},
+				Tags:          []string{"tag1", "tag2"},
+				Ruleset:       "ruleset",
+				License:       "license",
+				PendingDelete: true, // shouldn't show up in doc
+				Product:       "product",
+				Service:       "service",
+			},
+			AuditObj: model.Auditable{
+				Id:         "id",
+				CreateTime: util.Ptr(specificTime),
+				UpdateTime: util.Ptr(specificTime),
+				UserId:     "178f8ab1-a5f3-470f-9e8c-85445405220e",
+				Kind:       "detection",
+				Operation:  "operation",
+			},
+			ExpDoc:   []byte(`{"@timestamp":"","schemaPrefixdetection":{"id":"id","createTime":"2024-07-15T13:22:46.318510436-06:00","updateTime":"2024-07-15T13:22:46.318510436-06:00","userId":"178f8ab1-a5f3-470f-9e8c-85445405220e","kind":"detection","operation":"operation","publicId":"publicId","title":"title","severity":"critical","author":"author","category":"category","description":"description","content":"content","isEnabled":true,"isReporting":true,"isCommunity":true,"engine":"engine","language":"language","overrides":[],"tags":["tag1","tag2"],"ruleset":"ruleset","license":"license","product":"product","service":"service"},"schemaPrefixkind":"detection"}`),
+			ExpIndex: "so-detection",
+		},
+		{
+			Name: "Full Detection, IsEdit=true",
+			Kind: "detection",
+			Object: &model.Detection{
+				PublicID:      "publicId",
+				Title:         "title",
+				Severity:      model.SeverityCritical,
+				Author:        "author",
+				Category:      "category",
+				Description:   "description",
+				Content:       "content",
+				IsEnabled:     true,
+				IsReporting:   true,
+				IsCommunity:   true,
+				Engine:        "engine",
+				Language:      "language",
+				Overrides:     []*model.Override{},
+				Tags:          []string{"tag1", "tag2"},
+				Ruleset:       "ruleset",
+				License:       "license",
+				PendingDelete: true, // shouldn't show up in doc
+				Product:       "product",
+				Service:       "service",
+			},
+			AuditObj: model.Auditable{
+				Id:         "id",
+				CreateTime: util.Ptr(specificTime),
+				UpdateTime: util.Ptr(specificTime),
+				UserId:     "178f8ab1-a5f3-470f-9e8c-85445405220e",
+				Kind:       "detection",
+				Operation:  "operation",
+			},
+			IsEdit:   true,
+			ExpDoc:   []byte(`{"doc":{"@timestamp":"","schemaPrefixdetection":{"id":"id","createTime":"2024-07-15T13:22:46.318510436-06:00","updateTime":"2024-07-15T13:22:46.318510436-06:00","userId":"178f8ab1-a5f3-470f-9e8c-85445405220e","kind":"detection","operation":"operation","publicId":"publicId","title":"title","severity":"critical","author":"author","category":"category","description":"description","content":"content","isEnabled":true,"isReporting":true,"isCommunity":true,"engine":"engine","language":"language","overrides":[],"tags":["tag1","tag2"],"ruleset":"ruleset","license":"license","product":"product","service":"service"},"schemaPrefixkind":"detection"}}`),
+			ExpIndex: "so-detection",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			store := NewElasticDetectionstore(nil, nil, 100)
+			store.schemaPrefix = "schemaPrefix"
+
+			test.Object.Auditable = test.AuditObj
+
+			doc, index, err := store.ConvertObjectToDocument(context.Background(), test.Kind, test.Object, &test.AuditObj, test.IsEdit, test.AuditDocID, test.Op)
+
+			fmt.Println(string(doc))
+			fmt.Println(string(test.ExpDoc))
+
+			// timestamp is close to time.Now(), so we need to remove it for comparison
+			var timestamp string
+			if !test.IsEdit {
+				timestamp = gjson.Get(string(doc), "@timestamp").Str
+			} else {
+				timestamp = gjson.Get(string(doc), "doc.@timestamp").Str
+			}
+
+			ts, tsErr := time.Parse(time.RFC3339Nano, timestamp)
+			assert.NoError(t, tsErr)
+			assert.WithinDuration(t, time.Now(), ts, time.Second)
+
+			doc = bytes.Replace(doc, []byte(timestamp), []byte(""), 1) // remove timestamp
+
+			assert.Equal(t, test.ExpDoc, doc)
+			assert.Equal(t, test.ExpIndex, index)
+			if test.ExpErr == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.Equal(t, test.ExpErr, err.Error())
+			}
+
+			docField := gjson.Get(string(doc), "doc").Raw
+			if test.IsEdit {
+				assert.NotEmpty(t, docField)
+			} else {
+				assert.Empty(t, docField)
+			}
+		})
+	}
 }

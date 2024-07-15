@@ -9,6 +9,8 @@ package server
 import (
 	"context"
 
+	"github.com/apex/log"
+	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
@@ -17,7 +19,6 @@ type Detectionstore interface {
 	GetDetection(ctx context.Context, detectId string) (*model.Detection, error)
 	GetDetectionByPublicId(ctx context.Context, publicId string) (*model.Detection, error)
 	UpdateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error)
-	UpdateDetectionField(ctx context.Context, id string, fields map[string]interface{}) (*model.Detection, error)
 	DeleteDetection(ctx context.Context, detectID string) (*model.Detection, error)
 	GetAllDetections(ctx context.Context, opts ...model.GetAllOption) (map[string]*model.Detection, error) // map[detection.PublicId]detection
 	Query(ctx context.Context, query string, max int) ([]interface{}, error)
@@ -30,6 +31,9 @@ type Detectionstore interface {
 	DeleteComment(ctx context.Context, id string) error
 
 	DoesTemplateExist(ctx context.Context, tmpl string) (bool, error)
+	BuildBulkIndexer(ctx context.Context, logger *log.Entry) (esutil.BulkIndexer, error)
+	ConvertObjectToDocument(ctx context.Context, kind string, obj any, auditable *model.Auditable, isEdit bool, auditDocId *string, op *string) (doc []byte, index string, err error)
 }
 
 //go:generate mockgen -destination mock/mock_detectionstore.go -package mock . Detectionstore
+//go:generate mockgen -destination mock/mock_bulkindexer.go -package mock github.com/elastic/go-elasticsearch/v8/esutil BulkIndexer

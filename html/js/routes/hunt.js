@@ -2232,6 +2232,8 @@ const huntComponent = {
 
       this.showBulkDeleteConfirmDialog = false;
 
+      this.$root.startLoading();
+
       switch (this.selectAllState) {
         case true:
           payload.query = this.query;
@@ -2265,6 +2267,8 @@ const huntComponent = {
         this.hunt(false);
       } catch (e) {
         this.$root.showError(e);
+      } finally {
+        this.$root.stopLoading();
       }
     },
     bulkDeleteDialogCancel() {

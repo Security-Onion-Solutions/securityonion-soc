@@ -347,3 +347,9 @@ func (o *Override) Equal(other *Override) bool {
 
 	return result
 }
+
+type AuditInfo struct {
+	DocId     string
+	Op        string
+	Detection *Detection
+}

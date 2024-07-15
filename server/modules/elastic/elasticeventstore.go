@@ -55,6 +55,7 @@ type ElasticEventstore struct {
 	asyncThreshold     int
 	maxLogLength       int
 	lookupTunnelParent bool
+	maxScrollSize      int
 }
 
 func NewElasticEventstore(srv *server.Server) *ElasticEventstore {
@@ -80,7 +81,8 @@ func (store *ElasticEventstore) Init(hostUrl string,
 	asyncThreshold int,
 	intervals int,
 	maxLogLength int,
-	lookupTunnelParent bool) error {
+	lookupTunnelParent bool,
+	maxScrollSize int) error {
 	store.timeShiftMs = timeShiftMs
 	store.defaultDurationMs = defaultDurationMs
 	store.esSearchOffsetMs = esSearchOffsetMs
@@ -91,6 +93,7 @@ func (store *ElasticEventstore) Init(hostUrl string,
 	store.intervals = intervals
 	store.maxLogLength = maxLogLength
 	store.lookupTunnelParent = lookupTunnelParent
+	store.maxScrollSize = maxScrollSize
 
 	var err error
 	store.esClient, err = store.makeEsClient(hostUrl, user, pass, verifyCert)
@@ -205,6 +208,108 @@ func (store *ElasticEventstore) Search(ctx context.Context, criteria *model.Even
 	results.Complete()
 
 	return results, err
+}
+
+func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.EventScrollCriteria) (*model.EventScrollResults, error) {
+	var err error
+	finalResults := model.NewEventScrollResults()
+
+	store.refreshCache(ctx)
+
+	var scrollId string
+	var query string
+	query, err = convertToElasticScrollRequest(store.fieldDefs, criteria, store.maxScrollSize)
+	if err == nil {
+		log.WithFields(log.Fields{
+			"scrollQuery": store.truncate(query),
+			"requestId":   ctx.Value(web.ContextKeyRequestId),
+		}).Info("scrolling Elasticsearch")
+
+		var json string
+		indexes := strings.Split(store.index, ",")
+
+		res, err := store.esClient.Search(
+			store.esClient.Search.WithContext(ctx),
+			store.esClient.Search.WithIndex(indexes...),
+			store.esClient.Search.WithBody(strings.NewReader(query)),
+			store.esClient.Search.WithTrackTotalHits(true),
+			store.esClient.Search.WithPretty(),
+			store.esClient.Search.WithScroll(time.Minute),
+		)
+		if err == nil {
+			defer res.Body.Close()
+			json, err = readJsonFromResponse(res)
+
+			if err == nil {
+				err = convertFromElasticScrollResults(store.fieldDefs, json, finalResults)
+				finalResults.Criteria = criteria
+				if err != nil {
+					finalResults.Complete()
+
+					return finalResults, err
+				}
+
+				log.WithFields(log.Fields{
+					"batchNum":  0,
+					"hitCount":  len(finalResults.Events),
+					"requestId": ctx.Value(web.ContextKeyRequestId),
+				}).Debug("scroll progress")
+
+				scrollId = gjson.Get(json, "_scroll_id").String()
+				batchNum := 0
+
+				for {
+					batchNum++
+					results := model.NewEventSearchResults()
+
+					res, err = store.esClient.Scroll(
+						store.esClient.Scroll.WithContext(ctx),
+						store.esClient.Scroll.WithScrollID(scrollId),
+						store.esClient.Scroll.WithScroll(time.Minute),
+					)
+					if err == nil {
+						defer res.Body.Close()
+
+						json, err = readJsonFromResponse(res)
+						if err == nil {
+							err = convertFromElasticResults(store.fieldDefs, json, results)
+						}
+
+						finalResults.ElapsedMs += results.ElapsedMs
+						finalResults.Events = append(finalResults.Events, results.Events...)
+					}
+
+					if err != nil {
+						break
+					}
+
+					scrollId = gjson.Get(json, "_scroll_id").String()
+
+					// Break out of the loop when there are no results or we have all the results
+					if len(results.Events) == 0 || len(finalResults.Events) >= finalResults.TotalEvents {
+						log.Debug("finished scrolling")
+						break
+					} else {
+						log.WithFields(log.Fields{
+							"batchNum": batchNum,
+							"hitCount": len(results.Events),
+						}).Debug("scroll progress")
+					}
+				}
+			}
+		}
+	}
+
+	finalResults.Complete()
+
+	if scrollId != "" {
+		_, err = store.esClient.ClearScroll(
+			store.esClient.ClearScroll.WithContext(ctx),
+			store.esClient.ClearScroll.WithScrollID(scrollId),
+		)
+	}
+
+	return finalResults, err
 }
 
 func (store *ElasticEventstore) disableCrossClusterIndex(index string) string {

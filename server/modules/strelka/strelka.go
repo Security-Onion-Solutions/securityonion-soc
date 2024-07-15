@@ -21,7 +21,10 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
+	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -402,44 +405,97 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 		return detections.ErrModuleStopped
 	}
 
-	var eterr error
 	detects = detections.DeduplicateByPublicId(detects)
 
 	results := struct {
-		Added     int
-		Updated   int
-		Removed   int
-		Unchanged int
+		Added     int32
+		Updated   int32
+		Removed   int32
+		Unchanged int32
+		Audited   int32
 	}{}
 
-	for _, det := range detects {
+	var eterr error
+	errMap := map[string]error{}
+
+	bulk, err := e.srv.Detectionstore.BuildBulkIndexer(e.srv.Context, logger)
+	if err != nil {
+		return err
+	}
+
+	createAudit := make([]model.AuditInfo, 0, len(detects))
+	auditMut := sync.Mutex{}
+	errMut := sync.Mutex{}
+
+	for i := range detects {
+		detect := detects[i]
 		if !e.isRunning {
 			return detections.ErrModuleStopped
 		}
 
+		delete(toDelete, detect.PublicID)
+
 		logger.WithFields(log.Fields{
-			"rule.uuid": det.PublicID,
-			"rule.name": det.Title,
+			"rule.uuid": detect.PublicID,
+			"rule.name": detect.Title,
 		}).Info("syncing YARA detection")
 
-		comRule, exists := communityDetections[det.PublicID]
+		orig, exists := communityDetections[detect.PublicID]
 		if exists {
-			if comRule.Content != det.Content || comRule.Ruleset != det.Ruleset || len(det.Overrides) != 0 {
-				// pre-existing detection, update it
-				det.IsEnabled = comRule.IsEnabled
-				det.Id = comRule.Id
-				det.Overrides = comRule.Overrides
-				det.CreateTime = comRule.CreateTime
+			// pre-existing detection, update it
+			detect.IsEnabled = orig.IsEnabled
+			detect.Id = orig.Id
+			detect.Overrides = orig.Overrides
+			detect.CreateTime = orig.CreateTime
+		} else {
+			detect.CreateTime = util.Ptr(time.Now())
+			checkRulesetEnabled(e, detect)
+		}
 
+		document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(e.srv.Context, "detection", detect, &detect.Auditable, exists, nil, nil)
+		if err != nil {
+			logger.WithError(err).WithField("rule.uuid", detect.PublicID).Error("failed to convert detection to document")
+			continue
+		}
+
+		if exists {
+			if orig.Content != detect.Content || orig.Ruleset != detect.Ruleset || len(detect.Overrides) != 0 {
 				logger.WithFields(log.Fields{
-					"rule.uuid": det.PublicID,
-					"rule.name": det.Title,
+					"rule.uuid": detect.PublicID,
+					"rule.name": detect.Title,
 				}).Info("updating YARA detection")
 
-				_, err = e.srv.Detectionstore.UpdateDetection(e.srv.Context, det)
+				err = bulk.Add(e.srv.Context, esutil.BulkIndexerItem{
+					Index:      index,
+					Action:     "update",
+					DocumentID: orig.Id,
+					Body:       bytes.NewReader(document),
+					OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+						auditMut.Lock()
+						defer auditMut.Unlock()
+
+						results.Updated++
+
+						createAudit = append(createAudit, model.AuditInfo{
+							Detection: detect,
+							DocId:     resp.DocumentID,
+							Op:        "update",
+						})
+					},
+					OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+						errMut.Lock()
+						defer errMut.Unlock()
+
+						if err != nil {
+							errMap[detect.PublicID] = err
+						} else {
+							errMap[detect.PublicID] = errors.New(resp.Error.Reason)
+						}
+					},
+				})
 				if err != nil && err.Error() == "Object not found" {
-					e.writeNoRead = util.Ptr(det.PublicID)
-					logger.WithField("publicId", det.PublicID).Error("unable to read back successful write")
+					e.writeNoRead = util.Ptr(detect.PublicID)
+					logger.WithField("publicId", detect.PublicID).Error("unable to read back successful write")
 
 					break
 				}
@@ -450,29 +506,49 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 				}
 
 				if err != nil {
-					logger.WithError(err).WithField("publicId", det.PublicID).Error("failed to update detection")
+					logger.WithError(err).WithField("publicId", detect.PublicID).Error("failed to update detection")
 					continue
 				}
-
-				results.Updated++
 			} else {
 				results.Unchanged++
 			}
-
-			delete(toDelete, det.PublicID)
 		} else {
 			// new detection, create it
 			logger.WithFields(log.Fields{
-				"rule.uuid": det.PublicID,
-				"rule.name": det.Title,
+				"rule.uuid": detect.PublicID,
+				"rule.name": detect.Title,
 			}).Info("creating new YARA detection")
 
-			checkRulesetEnabled(e, det)
+			err = bulk.Add(e.srv.Context, esutil.BulkIndexerItem{
+				Index:  index,
+				Action: "create",
+				Body:   bytes.NewReader(document),
+				OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+					auditMut.Lock()
+					defer auditMut.Unlock()
 
-			_, err = e.srv.Detectionstore.CreateDetection(e.srv.Context, det)
+					results.Added++
+
+					createAudit = append(createAudit, model.AuditInfo{
+						Detection: detect,
+						DocId:     resp.DocumentID,
+						Op:        "create",
+					})
+				},
+				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+					errMut.Lock()
+					defer errMut.Unlock()
+
+					if err != nil {
+						errMap[detect.PublicID] = err
+					} else {
+						errMap[detect.PublicID] = errors.New(resp.Error.Reason)
+					}
+				},
+			})
 			if err != nil && err.Error() == "Object not found" {
-				e.writeNoRead = util.Ptr(det.PublicID)
-				logger.WithField("publicId", det.PublicID).Error("unable to read back successful write")
+				e.writeNoRead = util.Ptr(detect.PublicID)
+				logger.WithField("publicId", detect.PublicID).Error("unable to read back successful write")
 
 				break
 			}
@@ -483,12 +559,9 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 			}
 
 			if err != nil {
-				logger.WithError(err).WithField("publicId", det.PublicID).Error("failed to create detection")
+				logger.WithError(err).WithField("publicId", detect.PublicID).Error("failed to create detection")
 				continue
 			}
-
-			delete(toDelete, det.PublicID)
-			results.Added++
 		}
 	}
 
@@ -515,14 +588,125 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 			break
 		}
 
-		_, err = e.srv.Detectionstore.DeleteDetection(e.srv.Context, communityDetections[publicId].Id)
+		id := communityDetections[publicId].Id
+
+		_, index, _ := e.srv.Detectionstore.ConvertObjectToDocument(e.srv.Context, "detection", communityDetections[publicId], &communityDetections[publicId].Auditable, false, nil, nil)
+
+		err = bulk.Add(e.srv.Context, esutil.BulkIndexerItem{
+			Index:      index,
+			Action:     "delete",
+			DocumentID: id,
+			OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+				auditMut.Lock()
+				defer auditMut.Unlock()
+
+				results.Removed++
+
+				createAudit = append(createAudit, model.AuditInfo{
+					Detection: communityDetections[publicId],
+					DocId:     resp.DocumentID,
+					Op:        "delete",
+				})
+			},
+			OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+				errMut.Lock()
+				defer errMut.Unlock()
+
+				if err != nil {
+					errMap[publicId] = err
+				} else {
+					errMap[publicId] = errors.New(resp.Error.Reason)
+				}
+			},
+		})
 		if err != nil {
 			logger.WithError(err).WithField("publicId", publicId).Error("Failed to delete unreferenced community detection")
 			continue
 		}
-
-		results.Removed++
 	}
+
+	err = bulk.Close(e.srv.Context)
+	if err != nil {
+		return err
+	}
+
+	stats := bulk.Stats()
+	logger.WithFields(log.Fields{
+		"NumAdded":    stats.NumAdded,
+		"NumCreated":  stats.NumCreated,
+		"NumDeleted":  stats.NumDeleted,
+		"NumFailed":   stats.NumFailed,
+		"NumFlushed":  stats.NumFlushed,
+		"NumIndexed":  stats.NumIndexed,
+		"NumRequests": stats.NumRequests,
+		"NumUpdated":  stats.NumUpdated,
+	}).Debug("detections bulk audit sync stats")
+
+	if len(createAudit) != 0 {
+		bulk, err = e.srv.Detectionstore.BuildBulkIndexer(e.srv.Context, logger)
+		if err != nil {
+			return err
+		}
+
+		for _, audit := range createAudit {
+			// prepare audit doc
+			document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(e.srv.Context, "detection", audit.Detection, &audit.Detection.Auditable, false, &audit.DocId, &audit.Op)
+			if err != nil {
+				errMap[audit.Detection.PublicID] = err
+				continue
+			}
+
+			// create audit doc
+			err = bulk.Add(e.srv.Context, esutil.BulkIndexerItem{
+				Index:      index,
+				Action:     "create",
+				DocumentID: audit.DocId,
+				Body:       bytes.NewReader(document),
+				OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+					atomic.AddInt32(&results.Audited, 1)
+				},
+				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+					errMut.Lock()
+					defer errMut.Unlock()
+
+					if err != nil {
+						errMap[audit.Detection.PublicID] = err
+					} else {
+						errMap[audit.Detection.PublicID] = errors.New(resp.Error.Reason)
+					}
+				},
+			})
+			if err != nil {
+				errMap[audit.Detection.PublicID] = err
+				continue
+			}
+		}
+
+		err = bulk.Close(e.srv.Context)
+		if err != nil {
+			return err
+		}
+
+		stats := bulk.Stats()
+		logger.WithFields(log.Fields{
+			"NumAdded":    stats.NumAdded,
+			"NumCreated":  stats.NumCreated,
+			"NumDeleted":  stats.NumDeleted,
+			"NumFailed":   stats.NumFailed,
+			"NumFlushed":  stats.NumFlushed,
+			"NumIndexed":  stats.NumIndexed,
+			"NumRequests": stats.NumRequests,
+			"NumUpdated":  stats.NumUpdated,
+		}).Debug("detections bulk audit sync stats")
+	}
+
+	logger.WithFields(log.Fields{
+		"syncAdded":     results.Added,
+		"syncUpdated":   results.Updated,
+		"syncRemoved":   results.Removed,
+		"syncUnchanged": results.Unchanged,
+		"syncErrors":    detections.TruncateMap(errMap, 5),
+	}).Info("strelka community diff")
 
 	err = e.syncDetections(e.srv.Context)
 	if err != nil {
@@ -561,13 +745,6 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 	} else {
 		logger.Info("post-sync integrity check passed")
 	}
-
-	logger.WithFields(log.Fields{
-		"syncAdded":     results.Added,
-		"syncUpdated":   results.Updated,
-		"syncRemoved":   results.Removed,
-		"syncUnchanged": results.Unchanged,
-	}).Info("strelka community diff")
 
 	return nil
 }

@@ -290,7 +290,7 @@ func (store *ElasticCasestore) save(ctx context.Context, obj interface{}, kind s
 	var err error
 
 	if err = store.server.CheckAuthorized(ctx, "write", "cases"); err == nil {
-		document := convertObjectToDocumentMap(kind, obj, store.schemaPrefix)
+		document := ConvertObjectToDocumentMap(kind, obj, store.schemaPrefix)
 		document[store.schemaPrefix+"kind"] = kind
 		results, err = store.server.Eventstore.Index(ctx, store.index, document, id)
 		if err == nil {
@@ -319,7 +319,7 @@ func (store *ElasticCasestore) delete(ctx context.Context, obj interface{}, kind
 	if err = store.server.CheckAuthorized(ctx, "write", "cases"); err == nil {
 		err = store.server.Eventstore.Delete(ctx, store.index, id)
 		if err == nil {
-			document := convertObjectToDocumentMap(kind, obj, store.schemaPrefix)
+			document := ConvertObjectToDocumentMap(kind, obj, store.schemaPrefix)
 			document[store.schemaPrefix+AUDIT_DOC_ID] = id
 			document[store.schemaPrefix+"kind"] = kind
 			document[store.schemaPrefix+"operation"] = "delete"

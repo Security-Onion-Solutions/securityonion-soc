@@ -6,6 +6,7 @@
 package suricata
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -18,7 +19,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
+	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -1059,14 +1063,15 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 	changedByUser := web.IsChangedByUser(ctx)
 
 	if logger == nil {
-		logger = log.WithField("detectionEngineName", model.EngineNameSuricata)
+		logger = log.WithField("detectionEngine", model.EngineNameSuricata)
 	}
 
 	results := struct {
-		Added     int
-		Updated   int
-		Removed   int
-		Unchanged int
+		Added     int32
+		Updated   int32
+		Removed   int32
+		Unchanged int32
+		Audited   int32
 	}{}
 
 	enabled := settingByID(allSettings, "idstools.sids.enabled")
@@ -1115,10 +1120,23 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 
 	et := detections.NewErrorTracker(e.failAfterConsecutiveErrorCount)
 
-	for _, detect := range detects {
+	bulk, err := e.srv.Detectionstore.BuildBulkIndexer(e.srv.Context, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	createAudit := make([]model.AuditInfo, 0, len(detects))
+	auditMut := sync.Mutex{}
+	errMut := sync.Mutex{}
+
+	for i := range detects {
+		detect := detects[i]
+
 		if !e.isRunning {
 			return nil, detections.ErrModuleStopped
 		}
+
+		delete(toDelete, detect.PublicID)
 
 		logger.WithFields(log.Fields{
 			"rule.uuid": detect.PublicID,
@@ -1135,6 +1153,8 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 			detect.Id = orig.Id
 			detect.Overrides = orig.Overrides
 			detect.CreateTime = orig.CreateTime
+		} else {
+			detect.CreateTime = util.Ptr(time.Now())
 		}
 
 		parsedRule, err := ParseSuricataRule(detect.Content)
@@ -1171,16 +1191,49 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 			modifyLines = updateModifyForDisabledFlowbits(modifyLines, modifyIndex, sid, detect)
 		}
 
+		detect.Kind = ""
+
+		document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", detect, &detect.Auditable, exists, nil, nil)
+		if err != nil {
+			errMap[detect.PublicID] = fmt.Sprintf("unable to convert detection to document map; reason=%s", err.Error())
+			continue
+		}
+
 		if exists {
 			if orig.Content != detect.Content || orig.Ruleset != detect.Ruleset || len(detect.Overrides) != 0 || orig.IsEnabled != detect.IsEnabled {
-				detect.Kind = ""
-
 				logger.WithFields(log.Fields{
 					"rule.uuid": detect.PublicID,
 					"rule.name": detect.Title,
 				}).Info("updating Suricata detection")
 
-				_, err = e.srv.Detectionstore.UpdateDetection(ctx, detect)
+				err = bulk.Add(ctx, esutil.BulkIndexerItem{
+					Index:      index,
+					Action:     "update",
+					DocumentID: orig.Id,
+					Body:       bytes.NewReader(document),
+					OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+						auditMut.Lock()
+						defer auditMut.Unlock()
+
+						results.Updated++
+
+						createAudit = append(createAudit, model.AuditInfo{
+							Detection: detect,
+							DocId:     resp.DocumentID,
+							Op:        "update",
+						})
+					},
+					OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+						errMut.Lock()
+						defer errMut.Unlock()
+
+						if err != nil {
+							errMap[detect.PublicID] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
+						} else {
+							errMap[detect.PublicID] = fmt.Sprintf("unable to update detection; reason=%s", resp.Error.Reason)
+						}
+					},
+				})
 				if err != nil {
 					if err.Error() == "Object not found" {
 						errMap = map[string]string{
@@ -1191,9 +1244,6 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 					}
 
 					errMap[detect.PublicID] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
-				} else {
-					results.Updated++
-					delete(toDelete, detect.PublicID)
 				}
 
 				err = et.AddError(err)
@@ -1202,7 +1252,6 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 				}
 			} else {
 				results.Unchanged++
-				delete(toDelete, detect.PublicID)
 			}
 		} else {
 			logger.WithFields(log.Fields{
@@ -1210,7 +1259,33 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 				"rule.name": detect.Title,
 			}).Info("creating new Suricata detection")
 
-			_, err = e.srv.Detectionstore.CreateDetection(ctx, detect)
+			err = bulk.Add(ctx, esutil.BulkIndexerItem{
+				Index:  index,
+				Action: "create",
+				Body:   bytes.NewReader(document),
+				OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+					auditMut.Lock()
+					defer auditMut.Unlock()
+
+					results.Added++
+
+					createAudit = append(createAudit, model.AuditInfo{
+						Detection: detect,
+						DocId:     resp.DocumentID,
+						Op:        "create",
+					})
+				},
+				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+					errMut.Lock()
+					defer errMut.Unlock()
+
+					if err != nil {
+						errMap[detect.PublicID] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
+					} else {
+						errMap[detect.PublicID] = fmt.Sprintf("unable to update detection; reason=%s", resp.Error.Reason)
+					}
+				},
+			})
 			if err != nil {
 				if err.Error() == "Object not found" {
 					errMap = map[string]string{
@@ -1221,8 +1296,6 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 				}
 
 				errMap[detect.PublicID] = fmt.Sprintf("unable to create detection; reason=%s", err.Error())
-			} else {
-				results.Added++
 			}
 
 			err = et.AddError(err)
@@ -1243,13 +1316,115 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 			removeFromIndex(modifyLines, modifyIndex, sid)
 			delete(thresholdIndex, sid)
 
-			_, err = e.srv.Detectionstore.DeleteDetection(ctx, commSIDs[sid].Id)
+			id := commSIDs[sid].Id
+
+			_, index, _ := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", commSIDs[sid], &commSIDs[sid].Auditable, false, nil, nil)
+
+			err = bulk.Add(ctx, esutil.BulkIndexerItem{
+				Action:     "delete",
+				Index:      index,
+				DocumentID: id,
+				OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+					auditMut.Lock()
+					defer auditMut.Unlock()
+
+					results.Removed++
+
+					createAudit = append(createAudit, model.AuditInfo{
+						Detection: commSIDs[sid],
+						DocId:     resp.DocumentID,
+						Op:        "delete",
+					})
+				},
+				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+					errMut.Lock()
+					defer errMut.Unlock()
+
+					if err != nil {
+						errMap[commSIDs[sid].PublicID] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
+					} else {
+						errMap[commSIDs[sid].PublicID] = fmt.Sprintf("unable to update detection; reason=%s", resp.Error.Reason)
+					}
+				},
+			})
 			if err != nil {
-				errMap[sid] = fmt.Sprintf("unable to delete detection; reason=%s", err.Error())
-			} else {
-				results.Removed++
+				errMap[sid] = fmt.Sprintf("unable to add to bulk indexer; reason=%s", err.Error())
 			}
 		}
+	}
+
+	err = bulk.Close(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	stats := bulk.Stats()
+	logger.WithFields(log.Fields{
+		"NumAdded":    stats.NumAdded,
+		"NumCreated":  stats.NumCreated,
+		"NumDeleted":  stats.NumDeleted,
+		"NumFailed":   stats.NumFailed,
+		"NumFlushed":  stats.NumFlushed,
+		"NumIndexed":  stats.NumIndexed,
+		"NumRequests": stats.NumRequests,
+		"NumUpdated":  stats.NumUpdated,
+	}).Debug("detections bulk audit sync stats")
+
+	if len(createAudit) != 0 {
+		bulk, err = e.srv.Detectionstore.BuildBulkIndexer(e.srv.Context, logger)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, audit := range createAudit {
+			// prepare audit doc
+			document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", audit.Detection, &audit.Detection.Auditable, false, &audit.DocId, &audit.Op)
+			if err != nil {
+				errMap[audit.Detection.PublicID] = fmt.Sprintf("unable to convert detection to document map for creating an audit doc; reason=%s", err.Error())
+				continue
+			}
+
+			// create audit doc
+			err = bulk.Add(ctx, esutil.BulkIndexerItem{
+				Index:  index,
+				Action: "create",
+				Body:   bytes.NewReader(document),
+				OnSuccess: func(ctx context.Context, bii esutil.BulkIndexerItem, biri esutil.BulkIndexerResponseItem) {
+					atomic.AddInt32(&results.Audited, 1)
+				},
+				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+					errMut.Lock()
+					defer errMut.Unlock()
+
+					if err != nil {
+						errMap[audit.Detection.PublicID] = fmt.Sprintf("unable to create audit doc; reason=%s", err.Error())
+					} else {
+						errMap[audit.Detection.PublicID] = fmt.Sprintf("unable to create audit doc; reason=%s", resp.Error.Reason)
+					}
+				},
+			})
+			if err != nil {
+				errMap[audit.Detection.PublicID] = fmt.Sprintf("unable to add audit doc to bulk indexer; reason=%s", err.Error())
+				continue
+			}
+		}
+
+		err = bulk.Close(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		stats := bulk.Stats()
+		logger.WithFields(log.Fields{
+			"NumAdded":    stats.NumAdded,
+			"NumCreated":  stats.NumCreated,
+			"NumDeleted":  stats.NumDeleted,
+			"NumFailed":   stats.NumFailed,
+			"NumFlushed":  stats.NumFlushed,
+			"NumIndexed":  stats.NumIndexed,
+			"NumRequests": stats.NumRequests,
+			"NumUpdated":  stats.NumUpdated,
+		}).Debug("detections bulk audit sync stats")
 	}
 
 	enabledLines = removeBlankLines(enabledLines)
@@ -1288,16 +1463,16 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 		return errMap, err
 	}
 
-	if logger != nil {
-		logger.WithFields(log.Fields{
-			"syncAdded":              results.Added,
-			"syncUpdated":            results.Updated,
-			"syncRemoved":            results.Removed,
-			"syncUnchanged":          results.Unchanged,
-			"syncErrors":             errMap,
-			"syncDeleteUnreferenced": deleteUnreferenced,
-		}).Info("suricata community diff")
-	}
+	logger.WithFields(log.Fields{
+		"syncAudited":            results.Audited,
+		"syncAdded":              results.Added,
+		"syncUpdated":            results.Updated,
+		"syncRemoved":            results.Removed,
+		"syncUnchanged":          results.Unchanged,
+		"syncErrors":             errMap,
+		"syncDeleteUnreferenced": deleteUnreferenced,
+	}).Info("suricata community diff")
+
 	return errMap, nil
 }
 

@@ -81,12 +81,12 @@ func readStateFile(iom IOManager, path string) (lastImport *uint64, err error) {
 	return &unix, nil
 }
 
-func TruncateMap(originalMap map[string]error, limit int) map[string]error {
+func TruncateMap[K comparable, V any](originalMap map[K]V, limit int) map[K]V {
 	if len(originalMap) <= limit {
 		return originalMap // Return the original map if it's already within the limit
 	}
 
-	truncatedMap := make(map[string]error, limit)
+	truncatedMap := make(map[K]V, limit)
 	count := 0
 	for key, value := range originalMap {
 		if count >= limit {

@@ -7,16 +7,12 @@
 package model
 
 import (
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/apex/log"
 )
-
-var indexExtractor = regexp.MustCompile(`_index:[ \t]?"([^ \t]+)"`)
-var kindExtractor = regexp.MustCompile(`so_kind:[ \t]?"([^ \t]+)"`)
 
 type EventResults struct {
 	CreateTime   time.Time `json:"createTime"`
@@ -193,4 +189,38 @@ type EventIndexResults struct {
 func NewEventIndexResults() *EventIndexResults {
 	results := &EventIndexResults{}
 	return results
+}
+
+type EventScrollCriteria struct {
+	RawQuery    string `json:"query"`
+	BeginTime   time.Time
+	EndTime     time.Time
+	CreateTime  time.Time
+	ParsedQuery *Query
+}
+
+type EventScrollResults struct {
+	EventResults
+	Criteria    *EventScrollCriteria `json:"criteria"`
+	TotalEvents int                  `json:"totalEvents"`
+	Events      []*EventRecord       `json:"events"`
+}
+
+func NewEventScrollResults() *EventScrollResults {
+	results := &EventScrollResults{
+		Events: make([]*EventRecord, 0),
+	}
+	results.initEventResults()
+	return results
+}
+
+func (criteria *EventScrollCriteria) initScrollCriteria() {
+	criteria.CreateTime = time.Now()
+	criteria.ParsedQuery = NewQuery()
+}
+
+func NewEventScrollCriteria() *EventScrollCriteria {
+	criteria := &EventScrollCriteria{}
+	criteria.initScrollCriteria()
+	return criteria
 }
