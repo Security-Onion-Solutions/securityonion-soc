@@ -665,3 +665,11 @@ code {
 .theme--dark .key-changed {
   color: rgb(204, 153, 205)
 }
+
+.warning-message a {
+  color: white;
+}
+
+.warning-message a:visited {
+  color: white;
+}

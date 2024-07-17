@@ -179,6 +179,12 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	_, err = engine.ApplyFilters(detect)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
 	// Don't trust the client to send the correct author, grab it from the context
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 	user, err := h.server.Userstore.GetUserById(ctx, userID)
@@ -186,6 +192,16 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	detect.Author = detections.MakeUser(user)
+
+	specifiedStatus := detect.IsEnabled
+
+	_, err = engine.ApplyFilters(detect)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	statusModifiedByFilter := detect.IsEnabled != specifiedStatus
 
 	detect, err = h.server.Detectionstore.CreateDetection(ctx, detect)
 	if err != nil {
@@ -206,6 +222,13 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 
 	if len(errMap) != 0 {
 		web.Respond(w, r, http.StatusInternalServerError, errMap)
+		return
+	}
+
+	if statusModifiedByFilter {
+		// success, but the status was modified by a filter to not be what the user
+		// submitted, send a unique code so the UI can display a message
+		web.Respond(w, r, http.StatusResetContent, detect)
 		return
 	}
 
@@ -292,6 +315,16 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	specifiedStatus := detect.IsEnabled
+
+	filterApplied, err := engine.ApplyFilters(detect)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	statusModifiedByFilter := detect.IsEnabled != specifiedStatus
+
 	err = h.PrepareForSave(ctx, detect, engine)
 	if err != nil {
 		if err.Error() == "Object not found" {
@@ -323,7 +356,7 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 	errMap, err := SyncLocalDetections(ctx, h.server, []*model.Detection{detect})
 	if err != nil {
 		fixed := false
-		if detect.IsEnabled {
+		if detect.IsEnabled && !filterApplied {
 			var uerr error
 			log.WithError(err).WithField("detection", detect).Error("unable to sync detection; attempting to disable and resync")
 
@@ -348,6 +381,13 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 
 	if len(errMap) != 0 {
 		web.Respond(w, r, http.StatusInternalServerError, errMap)
+		return
+	}
+
+	if statusModifiedByFilter {
+		// success, but the status was modified by a filter to not be what the user
+		// submitted, send a unique code so the UI can display a message
+		web.Respond(w, r, http.StatusResetContent, detect)
 		return
 	}
 
@@ -488,6 +528,7 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 	updated := 0
 	audited := 0
 	deleted := 0
+	filtered := 0
 
 	updateDur := time.Duration(0)
 	syncDur := time.Duration(0)
@@ -500,6 +541,7 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 			"total":      len(detects),
 			"modified":   updated,
 			"deleted":    deleted,
+			"filtered":   filtered,
 			"updateTime": updateDur.Seconds(),
 			"syncTime":   syncDur.Seconds(),
 			"totalTime":  totalTime.Seconds(),
@@ -520,6 +562,7 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 			"error":    len(errMap),
 			"verb":     verb,
 			"total":    len(detects),
+			"filtered": filtered,
 			"modified": updated + deleted,
 			"time":     totalTime.Seconds(),
 		})
@@ -548,6 +591,22 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 
 		if !body.Delete {
 			detect.IsEnabled = body.NewStatus
+
+			engine := h.server.DetectionEngines[detect.Engine]
+
+			filterApplied, err := engine.ApplyFilters(detect)
+			if err != nil {
+				logger.WithError(err).WithFields(log.Fields{
+					"publicId": detect.PublicID,
+					"engine":   detect.Engine,
+				}).Error("unable to apply engine filters to detection")
+
+				return
+			}
+
+			if filterApplied && detect.IsEnabled != body.NewStatus {
+				filtered++
+			}
 		}
 
 		document, index, err := h.server.Detectionstore.ConvertObjectToDocument(ctx, "detection", detect, &detect.Auditable, !body.Delete, nil, nil)

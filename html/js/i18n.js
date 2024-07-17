@@ -131,6 +131,7 @@ const i18n = {
       bulkActionStarted: 'Updating {total} detections. This may take awhile.',
       bulkActionDeleteStarted: 'Deleting {total} detections. This may take awhile.',
       bulkError: '',
+      bulkSuccessFiltered: `Bulk update successfully updated {modified} of {total} events. However, the statuses of {filtered} of the updated detections are controlled by the current regex filter settings and were reverted. <a href="/#/config?s=soc.config.server.modules.suricataengine" data-aid="warning_bulk_update_configure_filters">Click here to configure those filters.</a> ({time})`,
       bulkSuccessUpdate: 'Bulk update successfully updated {modified} of {total} events. ({time})',
       bulkSuccessDelete: 'Bulk delete successfully deleted {modified} of {total} events. ({time})',
       bytes: 'Bytes',
@@ -961,6 +962,8 @@ const i18n = {
       yes: 'Yes',
       zeekLoss: 'Zeek Loss',
       zeekLossAbbr: 'Zeek Loss',
+
+      WARN_STATUS_EFFECTED_BY_FILTER: 'Saved successfully but the status of this detection is controlled by the current regex filter settings and was reverted. <a href="/#/config?s=soc.config.server.modules.suricataengine" data-aid="warning_update_configure_filters">Click here to configure those filters.</a>',
 
       ERROR_CASE_EVENT_ALREADY_ATTACHED: 'The event is already attached to the selected case.',
       ERROR_CASE_MODULE_NOT_ENABLED: 'A case module has not been configured for this installation. Unable to proceed with request.',

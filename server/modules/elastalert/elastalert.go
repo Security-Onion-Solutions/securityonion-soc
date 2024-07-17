@@ -271,6 +271,10 @@ func (e *ElastAlertEngine) ValidateRule(data string) (string, error) {
 	return string(data), nil
 }
 
+func (e *ElastAlertEngine) ApplyFilters(detect *model.Detection) (bool, error) {
+	return false, nil
+}
+
 func (e *ElastAlertEngine) ConvertRule(ctx context.Context, detect *model.Detection) (string, error) {
 	return e.sigmaToElastAlert(ctx, detect)
 }
@@ -921,6 +925,12 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 		} else {
 			detect.CreateTime = util.Ptr(time.Now())
 			checkRulesetEnabled(e, detect)
+		}
+
+		_, err = e.ApplyFilters(detect)
+		if err != nil {
+			errMap[detect.PublicID] = err
+			continue
 		}
 
 		document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", detect, &detect.Auditable, exists, nil, nil)
