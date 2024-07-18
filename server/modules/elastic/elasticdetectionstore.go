@@ -422,7 +422,7 @@ func (store *ElasticDetectionstore) DetectionScroll(ctx context.Context, criteri
 		return nil, err
 	}
 
-	return store.server.Eventstore.Scroll(ctx, criteria)
+	return store.server.Eventstore.Scroll(ctx, criteria, []string{store.index})
 }
 
 func (store *ElasticDetectionstore) prepareForSave(ctx context.Context, obj *model.Auditable) string {
