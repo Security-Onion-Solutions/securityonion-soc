@@ -1669,17 +1669,29 @@ func (e *ElastAlertEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) 
 
 	deployedButNotEnabled, enabledButNotDeployed, _ = detections.DiffLists(deployed, enabled)
 
-	report := logger.WithFields(log.Fields{
+	deployedButNotEnabledCount := len(deployedButNotEnabled)
+	if len(deployedButNotEnabled) > 20 {
+		deployedButNotEnabled = deployedButNotEnabled[:20]
+	}
+
+	enabledButNotDeployedCount := len(enabledButNotDeployed)
+	if len(enabledButNotDeployed) > 20 {
+		enabledButNotDeployed = enabledButNotDeployed[:20]
+	}
+
+	intCheckReport := logger.WithFields(log.Fields{
 		"deployedButNotEnabled": deployedButNotEnabled,
 		"enabledButNotDeployed": enabledButNotDeployed,
+		"deployedButNotEnabledCount": deployedButNotEnabledCount,
+		"enabledButNotDeployedCount": enabledButNotDeployedCount,
 	})
 
 	if len(deployedButNotEnabled) > 0 || len(enabledButNotDeployed) > 0 {
-		report.Warn("integrity check failed")
+		intCheckReport.Warn("integrity check failed")
 		return deployedButNotEnabled, enabledButNotDeployed, detections.ErrIntCheckFailed
 	}
 
-	report.Info("integrity check passed")
+	intCheckReport.Info("integrity check passed")
 
 	return deployedButNotEnabled, enabledButNotDeployed, nil
 }
