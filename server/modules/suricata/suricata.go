@@ -1811,17 +1811,19 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (d
 
 	deployedButNotEnabled, enabledButNotDeployed, _ = detections.DiffLists(deployed, enabled)
 
-	report := logger.WithFields(log.Fields{
-		"deployedButNotEnabled": deployedButNotEnabled,
-		"enabledButNotDeployed": enabledButNotDeployed,
+	intCheckReport := logger.WithFields(log.Fields{
+		"deployedButNotEnabled":      detections.TruncateList(deployedButNotEnabled, 20),
+		"enabledButNotDeployed":      detections.TruncateList(enabledButNotDeployed, 20),
+		"deployedButNotEnabledCount": len(deployedButNotEnabled),
+		"enabledButNotDeployedCount": len(enabledButNotDeployed),
 	})
 
 	if len(deployedButNotEnabled) > 0 || len(enabledButNotDeployed) > 0 {
-		report.Warn("integrity check failed")
+		intCheckReport.Warn("integrity check failed")
 		return deployedButNotEnabled, enabledButNotDeployed, detections.ErrIntCheckFailed
 	}
 
-	report.Info("integrity check passed")
+	intCheckReport.Info("integrity check passed")
 
 	return deployedButNotEnabled, enabledButNotDeployed, nil
 }

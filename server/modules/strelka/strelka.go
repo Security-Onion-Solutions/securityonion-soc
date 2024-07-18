@@ -1175,8 +1175,10 @@ func (e *StrelkaEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (de
 	deployedButNotEnabled, enabledButNotDeployed, _ = detections.DiffLists(deployed, enabled)
 
 	intCheckReport := logger.WithFields(log.Fields{
-		"deployedButNotEnabled": deployedButNotEnabled,
-		"enabledButNotDeployed": enabledButNotDeployed,
+		"deployedButNotEnabled":      detections.TruncateList(deployedButNotEnabled, 20),
+		"enabledButNotDeployed":      detections.TruncateList(enabledButNotDeployed, 20),
+		"deployedButNotEnabledCount": len(deployedButNotEnabled),
+		"enabledButNotDeployedCount": len(enabledButNotDeployed),
 	})
 
 	if len(deployedButNotEnabled) > 0 || len(enabledButNotDeployed) > 0 {

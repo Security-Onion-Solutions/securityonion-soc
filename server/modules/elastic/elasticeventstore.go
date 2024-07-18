@@ -264,8 +264,8 @@ func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.Even
 
 					res, err = store.esClient.Scroll(
 						store.esClient.Scroll.WithContext(ctx),
-						store.esClient.Scroll.WithScrollID(scrollId),
 						store.esClient.Scroll.WithScroll(time.Minute),
+						store.esClient.Scroll.WithBody(strings.NewReader(fmt.Sprintf(`{"scroll_id":"%s"}`, scrollId))),
 					)
 					if err == nil {
 						defer res.Body.Close()
@@ -303,10 +303,14 @@ func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.Even
 	finalResults.Complete()
 
 	if scrollId != "" {
-		_, err = store.esClient.ClearScroll(
+		_, scrollErr := store.esClient.ClearScroll(
 			store.esClient.ClearScroll.WithContext(ctx),
-			store.esClient.ClearScroll.WithScrollID(scrollId),
+			store.esClient.ClearScroll.WithBody(strings.NewReader(fmt.Sprintf(`{"scroll_id":"%s"}`, scrollId))),
 		)
+
+		if scrollErr != nil {
+			log.WithError(scrollErr).Warn("call to close scroll failed, scroll should self-close in 1 minute")
+		}
 	}
 
 	return finalResults, err
