@@ -210,7 +210,7 @@ func (store *ElasticEventstore) Search(ctx context.Context, criteria *model.Even
 	return results, err
 }
 
-func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.EventScrollCriteria) (*model.EventScrollResults, error) {
+func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.EventScrollCriteria, indexes []string) (*model.EventScrollResults, error) {
 	var err error
 	finalResults := model.NewEventScrollResults()
 
@@ -226,7 +226,10 @@ func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.Even
 		}).Info("scrolling Elasticsearch")
 
 		var json string
-		indexes := strings.Split(store.index, ",")
+
+		if len(indexes) == 0 {
+			indexes = strings.Split(store.index, ",")
+		}
 
 		res, err := store.esClient.Search(
 			store.esClient.Search.WithContext(ctx),
