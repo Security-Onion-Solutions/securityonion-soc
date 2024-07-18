@@ -744,7 +744,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 				switch (response.status) {
 					case 205:
-						this.$root.showWarning(this.WARN_STATUS_EFFECTED_BY_FILTER, true);
+						this.$root.showWarning(this.i18n.WARN_STATUS_EFFECTED_BY_FILTER, true);
 						break;
 					case 206:
 						this.$root.showWarning(this.i18n.disabledFailedSync);

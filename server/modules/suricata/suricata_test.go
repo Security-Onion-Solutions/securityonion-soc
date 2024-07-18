@@ -2440,6 +2440,16 @@ func TestApplyFilters(t *testing.T) {
 			ExpStatus:        false,
 			ExpFilterApplied: true,
 		},
+		{
+			Name:         "Prioritize EnableRegex",
+			EnableRegex:  toRegex(`alert`),
+			DisableRegex: toRegex(`alert`),
+			Detection: &model.Detection{
+				Content: "alert",
+			},
+			ExpStatus:        true,
+			ExpFilterApplied: true,
+		},
 	}
 
 	for _, test := range tests {

@@ -1510,16 +1510,16 @@ func extractSID(rule string) *string {
 }
 
 func (e *SuricataEngine) applyStatusRegexes(detect *model.Detection) (affectedByFilter bool) {
-	for _, disable := range e.disableRegex {
-		if disable.MatchString(detect.Content) {
-			detect.IsEnabled = false
+	for _, enable := range e.enableRegex {
+		if enable.MatchString(detect.Content) {
+			detect.IsEnabled = true
 			return true
 		}
 	}
 
-	for _, enable := range e.enableRegex {
-		if enable.MatchString(detect.Content) {
-			detect.IsEnabled = true
+	for _, disable := range e.disableRegex {
+		if disable.MatchString(detect.Content) {
+			detect.IsEnabled = false
 			return true
 		}
 	}
