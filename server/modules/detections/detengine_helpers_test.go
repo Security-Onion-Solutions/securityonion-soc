@@ -51,6 +51,48 @@ func TestTruncateMap(t *testing.T) {
 	assert.Equal(t, 0, len(truncatedErrMap), "Truncated map should have no elements when limit is 0.")
 }
 
+func TestTruncateList(t *testing.T) {
+	tests := []struct {
+		Name       string
+		Array      []int
+		TruncateTo uint
+		ExpArray   []int
+	}{
+		{
+			Name:       "Empty",
+			Array:      []int{},
+			TruncateTo: 10,
+			ExpArray:   []int{},
+		},
+		{
+			Name:       "Below Limit",
+			Array:      []int{0},
+			TruncateTo: 10,
+			ExpArray:   []int{0},
+		},
+		{
+			Name:       "At Limit",
+			Array:      []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+			TruncateTo: 10,
+			ExpArray:   []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+		},
+		{
+			Name:       "Above Limit",
+			Array:      []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+			TruncateTo: 5,
+			ExpArray:   []int{0, 1, 2, 3, 4},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			truncated := TruncateList(test.Array, test.TruncateTo)
+			assert.Equal(t, test.ExpArray, truncated)
+		})
+	}
+}
+
 func TestDetermineWaitTimeNoState(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mio := mock.NewMockIOManager(ctrl)

@@ -1669,21 +1669,11 @@ func (e *ElastAlertEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) 
 
 	deployedButNotEnabled, enabledButNotDeployed, _ = detections.DiffLists(deployed, enabled)
 
-	deployedButNotEnabledCount := len(deployedButNotEnabled)
-	if len(deployedButNotEnabled) > 20 {
-		deployedButNotEnabled = deployedButNotEnabled[:20]
-	}
-
-	enabledButNotDeployedCount := len(enabledButNotDeployed)
-	if len(enabledButNotDeployed) > 20 {
-		enabledButNotDeployed = enabledButNotDeployed[:20]
-	}
-
 	intCheckReport := logger.WithFields(log.Fields{
-		"deployedButNotEnabled": deployedButNotEnabled,
-		"enabledButNotDeployed": enabledButNotDeployed,
-		"deployedButNotEnabledCount": deployedButNotEnabledCount,
-		"enabledButNotDeployedCount": enabledButNotDeployedCount,
+		"deployedButNotEnabled":      detections.TruncateList(deployedButNotEnabled, 20),
+		"enabledButNotDeployed":      detections.TruncateList(enabledButNotDeployed, 20),
+		"deployedButNotEnabledCount": len(deployedButNotEnabled),
+		"enabledButNotDeployedCount": len(enabledButNotDeployed),
 	})
 
 	if len(deployedButNotEnabled) > 0 || len(enabledButNotDeployed) > 0 {

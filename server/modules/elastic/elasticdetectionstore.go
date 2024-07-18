@@ -788,7 +788,7 @@ func (store *ElasticDetectionstore) DeleteComment(ctx context.Context, id string
 func (store *ElasticDetectionstore) BuildBulkIndexer(ctx context.Context, logger *log.Entry) (esutil.BulkIndexer, error) {
 	bulk, err := esutil.NewBulkIndexer(esutil.BulkIndexerConfig{
 		Client:     store.esClient,
-		Refresh:    "true",
+		Refresh:    "wait_for",
 		NumWorkers: store.bulkIndexerWorkerCount,
 		OnError: func(ctx context.Context, err error) {
 			logger.WithError(err).Error("error during bulk import")
