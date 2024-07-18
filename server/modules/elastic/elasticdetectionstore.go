@@ -564,14 +564,6 @@ func (store *ElasticDetectionstore) GetAllDetections(ctx context.Context, opts .
 		query = opt(query, store.schemaPrefix)
 	}
 
-	_, err := store.esClient.Indices.Refresh(
-		store.esClient.Indices.Refresh.WithContext(ctx),
-		store.esClient.Indices.Refresh.WithIndex(store.disableCrossClusterIndex(store.index)),
-	)
-	if err != nil {
-		return nil, err
-	}
-
 	all, err := store.Query(ctx, query, -1)
 	if err != nil {
 		return nil, err
