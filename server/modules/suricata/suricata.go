@@ -52,13 +52,16 @@ const (
 	DEFAULT_RULES_FINGERPRINT_FILE                = "/opt/sensoroni/fingerprints/emerging-all.fingerprint"
 	DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECS = 86400
 	DEFAULT_STATE_FILE_PATH                       = "/opt/sensoroni/fingerprints/suricataengine.state"
-	DEFAULT_ALLOW_REGEX                           = ""
-	DEFAULT_DENY_REGEX                            = ""
 	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS     = 300
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT    = 10
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS     = 600
 
 	CUSTOM_RULE_LOC = "/nsm/rules/detect-suricata/custom_temp"
+)
+
+var ( // treat as constants
+	DEFAULT_ENABLE_REGEX  = []string{}
+	DEFAULT_DISABLE_REGEX = []string{}
 )
 
 type SuricataEngine struct {
@@ -69,13 +72,13 @@ type SuricataEngine struct {
 	failAfterConsecutiveErrorCount int
 	isRunning                      bool
 	interm                         sync.Mutex
-	allowRegex                     *regexp.Regexp
-	denyRegex                      *regexp.Regexp
 	notify                         bool
 	migrations                     map[string]func(string) error
 	customRulesets                 []*model.CustomRuleset
 	writeNoRead                    *string
 	checkMigrationsOnce            func()
+	enableRegex                    []*regexp.Regexp
+	disableRegex                   []*regexp.Regexp
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
 	detections.IOManager
@@ -119,22 +122,30 @@ func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS)
 
-	allow := module.GetStringDefault(config, "allowRegex", DEFAULT_ALLOW_REGEX)
-	deny := module.GetStringDefault(config, "denyRegex", DEFAULT_DENY_REGEX)
+	enable := module.GetStringArrayDefault(config, "enableRegex", DEFAULT_ENABLE_REGEX)
+	disable := module.GetStringArrayDefault(config, "disableRegex", DEFAULT_DISABLE_REGEX)
 
-	if allow != "" {
-		var err error
-		e.allowRegex, err = regexp.Compile(allow)
-		if err != nil {
-			return fmt.Errorf("unable to compile Suricata's allowRegex: %w", err)
+	if len(enable) != 0 {
+		e.enableRegex = make([]*regexp.Regexp, 0, len(enable))
+		for _, str := range enable {
+			re, err := regexp.Compile(str)
+			if err != nil {
+				return fmt.Errorf("unable to compile Suricata's enableRegex: %s - %w", str, err)
+			}
+
+			e.enableRegex = append(e.enableRegex, re)
 		}
 	}
 
-	if deny != "" {
-		var err error
-		e.denyRegex, err = regexp.Compile(deny)
-		if err != nil {
-			return fmt.Errorf("unable to compile Suricata's denyRegex: %w", err)
+	if len(disable) != 0 {
+		e.disableRegex = make([]*regexp.Regexp, 0, len(disable))
+		for _, str := range disable {
+			re, err := regexp.Compile(str)
+			if err != nil {
+				return fmt.Errorf("unable to compile Suricata's disableRegex: %s - %w", str, err)
+			}
+
+			e.disableRegex = append(e.disableRegex, re)
 		}
 	}
 
@@ -380,7 +391,7 @@ func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 	ruleset := settingByID(allSettings, "idstools.config.ruleset")
 
-	commDetections, err := e.ParseRules(rules, ruleset.Value, true)
+	commDetections, err := e.ParseRules(rules, ruleset.Value)
 	if err != nil {
 		if e.notify {
 			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
@@ -599,7 +610,13 @@ func (e *SuricataEngine) ValidateRule(rule string) (string, error) {
 	return parsed.String(), nil
 }
 
-func (e *SuricataEngine) ParseRules(content string, ruleset string, applyFilters bool) ([]*model.Detection, error) {
+func (e *SuricataEngine) ApplyFilters(detect *model.Detection) (bool, error) {
+	modified := e.applyStatusRegexes(detect)
+
+	return modified, nil
+}
+
+func (e *SuricataEngine) ParseRules(content string, ruleset string) ([]*model.Detection, error) {
 	// expecting one rule per line
 	lines := strings.Split(content, "\n")
 	dets := []*model.Detection{}
@@ -627,18 +644,6 @@ func (e *SuricataEngine) ParseRules(content string, ruleset string, applyFilters
 				wasCommented = true
 			} else {
 				// actual comment, skip line
-				continue
-			}
-		}
-
-		if applyFilters {
-			if e.denyRegex != nil && e.denyRegex.MatchString(line) {
-				log.WithField("suricataDenyRegex", line).Debug("content matched suricata's denyRegex")
-				continue
-			}
-
-			if e.allowRegex != nil && !e.allowRegex.MatchString(line) {
-				log.WithField("suricataAllowRegex", line).Debug("content didn't match suricata's allowRegex")
 				continue
 			}
 		}
@@ -796,6 +801,12 @@ func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detects []*mod
 	for _, detect := range localDets {
 		if !e.isRunning {
 			return nil, detections.ErrModuleStopped
+		}
+
+		_, err = e.ApplyFilters(detect)
+		if err != nil {
+			errMap[detect.PublicID] = fmt.Sprintf("unable to apply filters; reason=%s", err.Error())
+			continue
 		}
 
 		parsedRule, err := ParseSuricataRule(detect.Content)
@@ -1172,10 +1183,12 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 		sid := *opt
 		_, isFlowbits := parsedRule.GetOption("flowbits")
 
+		modifiedByFilter := e.applyStatusRegexes(detect)
+
 		_, inEnabled := enabledIndex[sid]
 		_, inDisabled := disabledIndex[sid]
 
-		if changedByUser || inEnabled || inDisabled {
+		if changedByUser || inEnabled || inDisabled || modifiedByFilter {
 			// update enabled
 			enabledLines = updateEnabled(enabledLines, enabledIndex, sid, isFlowbits, detect)
 
@@ -1496,6 +1509,24 @@ func extractSID(rule string) *string {
 	return util.Ptr(strings.TrimSpace(sids[0][1]))
 }
 
+func (e *SuricataEngine) applyStatusRegexes(detect *model.Detection) (affectedByFilter bool) {
+	for _, enable := range e.enableRegex {
+		if enable.MatchString(detect.Content) {
+			detect.IsEnabled = true
+			return true
+		}
+	}
+
+	for _, disable := range e.disableRegex {
+		if disable.MatchString(detect.Content) {
+			detect.IsEnabled = false
+			return true
+		}
+	}
+
+	return false
+}
+
 func indexLocal(lines []string) map[string]int {
 	index := map[string]int{}
 
@@ -1630,7 +1661,7 @@ func (e *SuricataEngine) DuplicateDetection(ctx context.Context, detection *mode
 
 	rule.UpdateForDuplication(id)
 
-	dets, err := e.ParseRules(rule.String(), detections.RULESET_CUSTOM, false)
+	dets, err := e.ParseRules(rule.String(), detections.RULESET_CUSTOM)
 	if err != nil {
 		return nil, err
 	}
@@ -1692,7 +1723,7 @@ func (e *SuricataEngine) ReadCustomRulesets() (detects []*model.Detection, err e
 			return nil, errors.New("invalid custom ruleset")
 		}
 
-		dets, err := e.ParseRules(string(content), custom.Ruleset, false)
+		dets, err := e.ParseRules(string(content), custom.Ruleset)
 		if err != nil {
 			log.WithError(err).WithField("customRulesetName", custom.Ruleset).Error("unable to parse custom ruleset, skipping")
 

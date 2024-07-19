@@ -278,7 +278,7 @@
               <v-icon>fa-times</v-icon>
             </v-btn>
           </template>
-          {{ warningMessage }}
+          <div class="warning-message" v-html="warningMessage"></div>
         </v-snackbar>
         <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" v-html="infoMessage" data-aid="banner_info"></v-alert>
         <v-snackbar id="tip" top centered rounded close :timeout="tipTimeout" v-model="tip" color="info" data-aid="banner_tip">

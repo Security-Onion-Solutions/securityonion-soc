@@ -482,12 +482,11 @@ func TestParse(t *testing.T) {
 			Name: "Sunny Day Path with Edge Cases",
 			Lines: []string{
 				"# Comment",
-				SimpleRule, // allowRegex has the SID, should allow
+				SimpleRule,
 				"",
 				`# alert  http any any  <>   any any (metadata:signature_severity   Informational; sid: "20000"; msg:"a \\\"tricky\"\;\\ msg";)`, // allowRegex has the SID, should allow
 				" # " + FlowbitsRuleA,
-				FlowbitsRuleB, // denyRegex will prevent this from being parsed
-				"alert http any any -> any any (msg:\"This rule doesn't have a SID\";)", // doesn't match either regex, will be left out
+				FlowbitsRuleB,
 			},
 			ExpectedDetections: []*model.Detection{
 				{
@@ -515,13 +514,34 @@ func TestParse(t *testing.T) {
 					Ruleset:  ruleset,
 					License:  "Unknown",
 				},
+				{
+					Author:   ruleset,
+					PublicID: FlowbitsRuleASID,
+					Title:    "RULE A",
+					Severity: model.SeverityUnknown,
+					Content:  FlowbitsRuleA,
+					Engine:   model.EngineNameSuricata,
+					Language: model.SigLangSuricata,
+					Ruleset:  ruleset,
+					License:  "Unknown",
+				},
+				{
+					Author:    ruleset,
+					PublicID:  FlowbitsRuleBSID,
+					Title:     "RULE B",
+					Severity:  model.SeverityUnknown,
+					Content:   FlowbitsRuleB,
+					IsEnabled: true,
+					Engine:    model.EngineNameSuricata,
+					Language:  model.SigLangSuricata,
+					Ruleset:   ruleset,
+					License:   "Unknown",
+				},
 			},
 		},
 	}
 
 	mod := NewSuricataEngine(&server.Server{})
-	mod.allowRegex = regexp.MustCompile("[12]0000")
-	mod.denyRegex = regexp.MustCompile("flowbits")
 
 	mod.isRunning = true
 
@@ -532,7 +552,7 @@ func TestParse(t *testing.T) {
 
 			data := strings.Join(test.Lines, "\n")
 
-			detections, err := mod.ParseRules(data, ruleset, true)
+			detections, err := mod.ParseRules(data, ruleset)
 			if test.ExpectedError == nil {
 				assert.NoError(t, err)
 				assert.Equal(t, test.ExpectedDetections, detections)
@@ -2351,4 +2371,116 @@ func TestSyncChanges(t *testing.T) {
 	})
 
 	assert.Equal(t, []string{"abc", "", "deleteme"}, workDocIds) // update has an id, create does not, delete does
+}
+
+func TestApplyFilters(t *testing.T) {
+	tests := []struct {
+		Name             string
+		EnableRegex      []*regexp.Regexp
+		DisableRegex     []*regexp.Regexp
+		Detection        *model.Detection
+		ExpStatus        bool
+		ExpFilterApplied bool
+		ExpError         string
+	}{
+		{
+			Name:             "No Filters, Disabled",
+			Detection:        &model.Detection{},
+			ExpStatus:        false,
+			ExpFilterApplied: false,
+		},
+		{
+			Name: "No Filters, Enabled",
+			Detection: &model.Detection{
+				IsEnabled: true,
+			},
+			ExpStatus:        true,
+			ExpFilterApplied: false,
+		},
+		{
+			Name:         "Unmodified, Disabled",
+			EnableRegex:  toRegex(`alert`),
+			DisableRegex: toRegex(`drop`),
+			Detection: &model.Detection{
+				Content: "Hello World",
+			},
+			ExpStatus:        false,
+			ExpFilterApplied: false,
+		},
+		{
+			Name:         "Unmodified, Enabled",
+			EnableRegex:  toRegex(`alert`),
+			DisableRegex: toRegex(`drop`),
+			Detection: &model.Detection{
+				Content:   "Hello World",
+				IsEnabled: true,
+			},
+			ExpStatus:        true,
+			ExpFilterApplied: false,
+		},
+		{
+			Name:         "From Disabled to Enabled",
+			EnableRegex:  toRegex(`alert`),
+			DisableRegex: toRegex(`drop`),
+			Detection: &model.Detection{
+				Content:   "alert",
+				IsEnabled: false,
+			},
+			ExpStatus:        true,
+			ExpFilterApplied: true,
+		},
+		{
+			Name:         "From Enabled to Disabled",
+			EnableRegex:  toRegex(`alert`),
+			DisableRegex: toRegex(`drop`),
+			Detection: &model.Detection{
+				Content:   "drop",
+				IsEnabled: true,
+			},
+			ExpStatus:        false,
+			ExpFilterApplied: true,
+		},
+		{
+			Name:         "Prioritize EnableRegex",
+			EnableRegex:  toRegex(`alert`),
+			DisableRegex: toRegex(`alert`),
+			Detection: &model.Detection{
+				Content: "alert",
+			},
+			ExpStatus:        true,
+			ExpFilterApplied: true,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			eng := &SuricataEngine{
+				enableRegex:  test.EnableRegex,
+				disableRegex: test.DisableRegex,
+			}
+
+			applied, err := eng.ApplyFilters(test.Detection)
+
+			if test.ExpError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), test.ExpError)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			assert.Equal(t, test.ExpFilterApplied, applied)
+			assert.Equal(t, test.ExpStatus, test.Detection.IsEnabled)
+		})
+	}
+}
+
+func toRegex(s ...string) []*regexp.Regexp {
+	r := make([]*regexp.Regexp, len(s))
+
+	for i, v := range s {
+		r[i] = regexp.MustCompile(v)
+	}
+
+	return r
 }

@@ -221,6 +221,10 @@ func (e *StrelkaEngine) ValidateRule(data string) (string, error) {
 	return string(data), nil
 }
 
+func (e *StrelkaEngine) ApplyFilters(detect *model.Detection) (bool, error) {
+	return false, nil
+}
+
 func (e *StrelkaEngine) ConvertRule(ctx context.Context, detect *model.Detection) (string, error) {
 	return "", fmt.Errorf("not implemented")
 }
@@ -450,6 +454,12 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 		} else {
 			detect.CreateTime = util.Ptr(time.Now())
 			checkRulesetEnabled(e, detect)
+		}
+
+		_, err = e.ApplyFilters(detect)
+		if err != nil {
+			errMap[detect.PublicID] = err
+			continue
 		}
 
 		document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(e.srv.Context, "detection", detect, &detect.Auditable, exists, nil, nil)

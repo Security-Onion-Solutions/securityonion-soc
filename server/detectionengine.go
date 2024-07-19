@@ -20,6 +20,7 @@ type DetectionEngine interface {
 	DuplicateDetection(ctx context.Context, detection *model.Detection) (*model.Detection, error)
 	GetState() *model.EngineState
 	GenerateUnusedPublicId(ctx context.Context) (string, error)
+	ApplyFilters(detect *model.Detection) (didFilterAct bool, err error)
 }
 
 type SyncStatus struct {

@@ -2276,9 +2276,7 @@ const huntComponent = {
     },
     bulkUpdateReport(stats) {
       if (stats.error > 0) {
-        let msg = this.i18n.bulkError;
-        msg += ' ' + stats.error.toLocaleString() + ' ' + (stats.error == 1 ? this.i18n.errorSingular : this.i18n.errorPlural) + '.';
-
+        let msg = this.i18n.bulkError.replace('{error}', stats.error.toLocaleString());
         this.$root.showError(msg);
       } else {
         let seconds = Math.floor(stats.time);
@@ -2303,13 +2301,23 @@ const huntComponent = {
 
         t += seconds.toFixed(0) + 's';
 
-        let msg = stats.verb === 'delete' ? this.i18n.bulkSuccessDelete : this.i18n.bulkSuccessUpdate;
+        if (stats.filtered) {
+          let msg = this.i18n.bulkSuccessFiltered;
+          msg = msg.replaceAll('{filtered}', stats.filtered.toLocaleString());
+          msg = msg.replaceAll('{modified}', stats.modified.toLocaleString());
+          msg = msg.replaceAll('{total}', stats.total.toLocaleString());
+          msg = msg.replaceAll('{time}', t);
 
-        msg = msg.replaceAll('{modified}', stats.modified.toLocaleString());
-        msg = msg.replaceAll('{total}', stats.total.toLocaleString());
-        msg = msg.replaceAll('{time}', t);
+          this.$root.showWarning(msg, true);
+        } else {
+          let msg = stats.verb === 'delete' ? this.i18n.bulkSuccessDelete : this.i18n.bulkSuccessUpdate;
 
-        this.$root.showInfo(msg);
+          msg = msg.replaceAll('{modified}', stats.modified.toLocaleString());
+          msg = msg.replaceAll('{total}', stats.total.toLocaleString());
+          msg = msg.replaceAll('{time}', t);
+
+          this.$root.showInfo(msg, true);
+        }
       }
     },
     startManualSync(engine, type) {
