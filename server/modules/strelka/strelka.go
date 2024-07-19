@@ -51,7 +51,7 @@ const (
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS        = 600
 )
 
-var titleUpdater = regexp.MustCompile(`(?i)rule\s+(\w+)(\s+:(\s*[^{]+))?(\s+){`)
+var titleUpdater = regexp.MustCompile(`(?im)rule\s+(\w+)(\s+:(\s*[^{]+))?(\s+)(//.*$)?(\n?){`)
 var nameValidator = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]{0,127}$`) // alphanumeric + underscore, can't start with a number
 
 type StrelkaEngine struct {
@@ -1074,9 +1074,32 @@ func (e *StrelkaEngine) DuplicateDetection(ctx context.Context, detection *model
 
 	rule := rules[0]
 
-	rule.Src = titleUpdater.ReplaceAllString(rule.Src, "rule ${1}_copy${2}${4}{")
+	newID := detection.PublicID + "_copy"
 
-	det := rule.ToDetection(detection.License, detections.RULESET_CUSTOM, false)
+	det, err := e.srv.Detectionstore.GetDetectionByPublicId(ctx, newID)
+	if err != nil {
+		return nil, err
+	}
+
+	if det != nil {
+		for i := 1; i < 10 && det != nil; i++ {
+			newID = fmt.Sprintf("%s_copy%d", detection.PublicID, i)
+
+			det, err = e.srv.Detectionstore.GetDetectionByPublicId(ctx, newID)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if det != nil {
+			// never found a non-duplicate name, giving up
+			return nil, fmt.Errorf("exhausted hunt for new, unused publicId")
+		}
+	}
+
+	rule.Src = titleUpdater.ReplaceAllString(rule.Src, "rule "+newID+"${2}${4}${5}${6}{")
+
+	det = rule.ToDetection(detection.License, detections.RULESET_CUSTOM, false)
 
 	err = e.ExtractDetails(det)
 	if err != nil {

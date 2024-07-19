@@ -776,10 +776,14 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			}
 		},
 		async duplicateDetection() {
-			const response = await this.$root.papi.post('/detection/' + encodeURIComponent(this.$route.params.id) + '/duplicate');
-			this.extractDetection(response);
+			try {
+				const response = await this.$root.papi.post('/detection/' + encodeURIComponent(this.$route.params.id) + '/duplicate');
+				this.extractDetection(response);
 
-			this.$router.push({ name: 'detection', params: { id: response.data.id } });
+				this.$router.push({ name: 'detection', params: { id: response.data.id } });
+			} catch (error) {
+				this.$root.showError(error);
+			}
 		},
 		deleteDetection() {
 			this.confirmDeleteDialog = true;

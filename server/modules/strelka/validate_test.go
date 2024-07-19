@@ -132,9 +132,14 @@ func TestDuplicateDetection(t *testing.T) {
 		LastName:  "Levinson",
 	}, nil)
 
+	detStore := mock.NewMockDetectionstore(ctrl)
+	detStore.EXPECT().GetDetectionByPublicId(ctx, "mimikatz_kirbi_ticket_copy").Return(det, nil)
+	detStore.EXPECT().GetDetectionByPublicId(ctx, "mimikatz_kirbi_ticket_copy1").Return(nil, nil)
+
 	eng := StrelkaEngine{
 		srv: &server.Server{
-			Userstore: mUser,
+			Userstore:      mUser,
+			Detectionstore: detStore,
 		},
 		isRunning: true,
 	}
@@ -148,7 +153,7 @@ func TestDuplicateDetection(t *testing.T) {
 
 	// expected differences
 	assert.NotEqual(t, det.Title, dupe.Title)
-	assert.Equal(t, det.Title, dupe.Title[:len(dupe.Title)-len("_copy")])
+	assert.Equal(t, dupe.Title, "mimikatz_kirbi_ticket_copy1")
 	assert.NotEqual(t, det.PublicID, dupe.PublicID)
 	assert.NotEmpty(t, dupe.PublicID)
 	assert.NotEqual(t, det.IsCommunity, dupe.IsCommunity)
