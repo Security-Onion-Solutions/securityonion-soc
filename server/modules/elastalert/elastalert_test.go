@@ -1289,6 +1289,7 @@ func TestSyncChanges(t *testing.T) {
 
 		return nil
 	}).Times(3)
+	iom.EXPECT().DeleteFile("elastAlertRulesFolder/00000000-0000-0000-0000-000000000000.yml").Return(nil)
 	bim.EXPECT().Close(gomock.Any()).Return(nil)
 	bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
 	iom.EXPECT().ExecCommand(gomock.Any()).Return([]byte("\n[query]"), 0, time.Duration(time.Second), nil) // sigmaToElastAlert

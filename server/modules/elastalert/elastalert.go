@@ -1118,8 +1118,17 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 			},
 		})
 		if err != nil {
-			errMap[publicId] = fmt.Errorf("unable to delete detection: %s", err)
+			errMap[publicId] = fmt.Errorf("unable to delete unreferenced detection: %s", err)
 			continue
+		}
+
+		path, ok := existing[publicId]
+		if ok {
+			err = e.DeleteFile(path)
+			if err != nil && !os.IsNotExist(err) {
+				errMap[publicId] = fmt.Errorf("unable to remove deleted detection file: %s", err)
+				continue
+			}
 		}
 	}
 
