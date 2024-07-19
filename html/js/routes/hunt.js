@@ -2276,9 +2276,7 @@ const huntComponent = {
     },
     bulkUpdateReport(stats) {
       if (stats.error > 0) {
-        let msg = this.i18n.bulkError;
-        msg += ' ' + stats.error.toLocaleString() + ' ' + (stats.error == 1 ? this.i18n.errorSingular : this.i18n.errorPlural) + '.';
-
+        let msg = this.i18n.bulkError.replace('{error}', stats.error.toLocaleString());
         this.$root.showError(msg);
       } else {
         let seconds = Math.floor(stats.time);
