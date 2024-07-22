@@ -231,7 +231,9 @@ func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.Even
 			indexes = strings.Split(store.index, ",")
 		}
 
-		res, err := store.esClient.Search(
+		var res *esapi.Response
+
+		res, err = store.esClient.Search(
 			store.esClient.Search.WithContext(ctx),
 			store.esClient.Search.WithIndex(indexes...),
 			store.esClient.Search.WithBody(strings.NewReader(query)),
