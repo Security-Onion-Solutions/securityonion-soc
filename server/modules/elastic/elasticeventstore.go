@@ -212,109 +212,124 @@ func (store *ElasticEventstore) Search(ctx context.Context, criteria *model.Even
 
 func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.EventScrollCriteria, indexes []string) (*model.EventScrollResults, error) {
 	var err error
+	var query, scrollId, json string
 	finalResults := model.NewEventScrollResults()
+	finalResults.Criteria = criteria
 
 	store.refreshCache(ctx)
 
-	var scrollId string
-	var query string
+	logger := log.WithField("requestId", ctx.Value(web.ContextKeyRequestId))
+
 	query, err = convertToElasticScrollRequest(store.fieldDefs, criteria, store.maxScrollSize)
+	if err != nil {
+		return nil, err
+	}
+
+	logger.WithFields(log.Fields{
+		"scrollQuery": store.truncate(query),
+	}).Info("scrolling Elasticsearch")
+
+	if len(indexes) == 0 {
+		indexes = strings.Split(store.index, ",")
+	}
+
+	var res *esapi.Response
+
+	res, err = store.esClient.Search(
+		store.esClient.Search.WithContext(ctx),
+		store.esClient.Search.WithIndex(indexes...),
+		store.esClient.Search.WithBody(strings.NewReader(query)),
+		store.esClient.Search.WithTrackTotalHits(true),
+		store.esClient.Search.WithPretty(),
+		store.esClient.Search.WithScroll(time.Minute),
+	)
+
+	defer res.Body.Close()
+
+	if err != nil {
+		return nil, err
+	}
+
+	json, err = readJsonFromResponse(res)
 	if err == nil {
-		log.WithFields(log.Fields{
-			"scrollQuery": store.truncate(query),
-			"requestId":   ctx.Value(web.ContextKeyRequestId),
-		}).Info("scrolling Elasticsearch")
+		batchNum := 0
 
-		var json string
+		err = convertFromElasticScrollResults(store.fieldDefs, json, finalResults)
+		if err != nil {
+			finalResults.Complete()
 
-		if len(indexes) == 0 {
-			indexes = strings.Split(store.index, ",")
+			return finalResults, err
 		}
 
-		var res *esapi.Response
+		logger.WithFields(log.Fields{
+			"batchNum": batchNum,
+			"hitCount": len(finalResults.Events),
+		}).Debug("scroll progress")
 
-		res, err = store.esClient.Search(
-			store.esClient.Search.WithContext(ctx),
-			store.esClient.Search.WithIndex(indexes...),
-			store.esClient.Search.WithBody(strings.NewReader(query)),
-			store.esClient.Search.WithTrackTotalHits(true),
-			store.esClient.Search.WithPretty(),
-			store.esClient.Search.WithScroll(time.Minute),
-		)
-		if err == nil {
-			defer res.Body.Close()
-			json, err = readJsonFromResponse(res)
+		scrollId = gjson.Get(json, "_scroll_id").String()
 
-			if err == nil {
-				err = convertFromElasticScrollResults(store.fieldDefs, json, finalResults)
-				finalResults.Criteria = criteria
-				if err != nil {
-					finalResults.Complete()
+		lastPageCount := len(finalResults.Events)
 
-					return finalResults, err
-				}
-
-				log.WithFields(log.Fields{
-					"batchNum":  0,
-					"hitCount":  len(finalResults.Events),
-					"requestId": ctx.Value(web.ContextKeyRequestId),
-				}).Debug("scroll progress")
-
-				scrollId = gjson.Get(json, "_scroll_id").String()
-				batchNum := 0
-
-				for {
-					batchNum++
-					results := model.NewEventSearchResults()
-
-					res, err = store.esClient.Scroll(
-						store.esClient.Scroll.WithContext(ctx),
-						store.esClient.Scroll.WithScroll(time.Minute),
-						store.esClient.Scroll.WithBody(strings.NewReader(fmt.Sprintf(`{"scroll_id":"%s"}`, scrollId))),
-					)
-					if err == nil {
-						defer res.Body.Close()
-
-						json, err = readJsonFromResponse(res)
-						if err == nil {
-							err = convertFromElasticResults(store.fieldDefs, json, results)
-						}
-
-						finalResults.ElapsedMs += results.ElapsedMs
-						finalResults.Events = append(finalResults.Events, results.Events...)
-					}
-
-					if err != nil {
-						break
-					}
-
-					scrollId = gjson.Get(json, "_scroll_id").String()
-
-					// Break out of the loop when there are no results or we have all the results
-					if len(results.Events) == 0 || len(finalResults.Events) >= finalResults.TotalEvents {
-						log.Debug("finished scrolling")
-						break
-					} else {
-						log.WithFields(log.Fields{
-							"batchNum": batchNum,
-							"hitCount": len(results.Events),
-						}).Debug("scroll progress")
-					}
-				}
+		for {
+			// Break out of the loop when there are no results or we have all the results
+			if lastPageCount == 0 || len(finalResults.Events) >= finalResults.TotalEvents {
+				logger.Debug("finished scrolling")
+				break
 			}
+
+			batchNum++
+			results := model.NewEventSearchResults()
+
+			res, err = store.esClient.Scroll(
+				store.esClient.Scroll.WithContext(ctx),
+				store.esClient.Scroll.WithScroll(time.Minute),
+				store.esClient.Scroll.WithBody(strings.NewReader(fmt.Sprintf(`{"scroll_id":"%s"}`, scrollId))),
+			)
+			if err != nil {
+				break
+			}
+
+			defer res.Body.Close()
+
+			json, err = readJsonFromResponse(res)
+			if err != nil {
+				break
+			}
+
+			err = convertFromElasticResults(store.fieldDefs, json, results)
+			if err != nil {
+				break
+			}
+
+			finalResults.ElapsedMs += results.ElapsedMs
+			finalResults.Events = append(finalResults.Events, results.Events...)
+
+			scrollId = gjson.Get(json, "_scroll_id").String()
+			lastPageCount = len(results.Events)
+
+			logger.WithFields(log.Fields{
+				"batchNum": batchNum,
+				"hitCount": lastPageCount,
+			}).Debug("scroll progress")
 		}
 	}
 
 	finalResults.Complete()
 
 	if scrollId != "" {
-		_, scrollErr := store.esClient.ClearScroll(
+		res, scrollErr := store.esClient.ClearScroll(
 			store.esClient.ClearScroll.WithContext(ctx),
 			store.esClient.ClearScroll.WithBody(strings.NewReader(fmt.Sprintf(`{"scroll_id":"%s"}`, scrollId))),
 		)
-
 		if scrollErr != nil {
-			log.WithError(scrollErr).Warn("call to close scroll failed, scroll should self-close in 1 minute")
+			logger.WithError(scrollErr).Warn("call to close scroll failed, scroll should self-close shortly")
+		}
+
+		if res != nil {
+			_, respErr := readJsonFromResponse(res)
+			if respErr != nil {
+				logger.WithError(respErr).Warn("error closing scroll, scroll should self-close shortly")
+			}
 		}
 	}
 
