@@ -243,12 +243,11 @@ func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.Even
 		store.esClient.Search.WithPretty(),
 		store.esClient.Search.WithScroll(time.Minute),
 	)
-
-	defer res.Body.Close()
-
 	if err != nil {
 		return nil, err
 	}
+
+	defer res.Body.Close()
 
 	json, err = readJsonFromResponse(res)
 	if err == nil {
@@ -272,13 +271,12 @@ func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.Even
 
 		for {
 			// Break out of the loop when there are no results or we have all the results
-			if lastPageCount == 0 || len(finalResults.Events) >= finalResults.TotalEvents {
+			if lastPageCount == 0 || lastPageCount >= finalResults.TotalEvents {
 				logger.Debug("finished scrolling")
 				break
 			}
 
 			batchNum++
-			results := model.NewEventSearchResults()
 
 			res, err = store.esClient.Scroll(
 				store.esClient.Scroll.WithContext(ctx),
@@ -295,6 +293,8 @@ func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.Even
 			if err != nil {
 				break
 			}
+
+			results := model.NewEventSearchResults()
 
 			err = convertFromElasticResults(store.fieldDefs, json, results)
 			if err != nil {
@@ -326,6 +326,8 @@ func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.Even
 		}
 
 		if res != nil {
+			defer res.Body.Close()
+
 			_, respErr := readJsonFromResponse(res)
 			if respErr != nil {
 				logger.WithError(respErr).Warn("error closing scroll, scroll should self-close shortly")
