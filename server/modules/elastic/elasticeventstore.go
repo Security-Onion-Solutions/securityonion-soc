@@ -271,7 +271,7 @@ func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.Even
 
 		for {
 			// Break out of the loop when there are no results or we have all the results
-			if lastPageCount == 0 || lastPageCount >= finalResults.TotalEvents {
+			if lastPageCount == 0 || len(finalResults.Events) >= finalResults.TotalEvents {
 				logger.Debug("finished scrolling")
 				break
 			}
@@ -294,9 +294,9 @@ func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.Even
 				break
 			}
 
-			results := model.NewEventSearchResults()
+			results := model.NewEventScrollResults()
 
-			err = convertFromElasticResults(store.fieldDefs, json, results)
+			err = convertFromElasticScrollResults(store.fieldDefs, json, results)
 			if err != nil {
 				break
 			}
