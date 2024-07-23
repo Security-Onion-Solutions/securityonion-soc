@@ -550,23 +550,13 @@ func TestParseRule(t *testing.T) {
 			ExpectedError: util.Ptr("unexpected end of rule"),
 		},
 		{
-			Name: "Filter Out",
-			// BasicRule doesn't match either filter and will be left out,
-			// DeniedRule will be filtered out by the denyRegex.
-			Input:         BasicRule + "\n\n" + DeniedRule,
-			ExpectedRules: []*YaraRule{},
-		},
-		{
 			Name:          "Space in Identifier",
 			Input:         MyBasic_Rule,
 			ExpectedError: util.Ptr("unexpected character in rule identifier around 18"),
 		},
 	}
 
-	e := &StrelkaEngine{
-		allowRegex: regexp.MustCompile("my"),
-		denyRegex:  regexp.MustCompile("Deny"), // case sensitive
-	}
+	e := &StrelkaEngine{}
 
 	for _, test := range table {
 		test := test

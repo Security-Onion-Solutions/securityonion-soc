@@ -484,7 +484,7 @@ func TestParse(t *testing.T) {
 				"# Comment",
 				SimpleRule,
 				"",
-				`# alert  http any any  <>   any any (metadata:signature_severity   Informational; sid: "20000"; msg:"a \\\"tricky\"\;\\ msg";)`, // allowRegex has the SID, should allow
+				`# alert  http any any  <>   any any (metadata:signature_severity   Informational; sid: "20000"; msg:"a \\\"tricky\"\;\\ msg";)`,
 				" # " + FlowbitsRuleA,
 				FlowbitsRuleB,
 			},

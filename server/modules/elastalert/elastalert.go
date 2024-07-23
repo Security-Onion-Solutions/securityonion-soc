@@ -22,7 +22,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -85,8 +84,6 @@ type ElastAlertEngine struct {
 	reposFolder                    string
 	isRunning                      bool
 	interm                         sync.Mutex
-	allowRegex                     *regexp.Regexp
-	denyRegex                      *regexp.Regexp
 	airgapEnabled                  bool
 	notify                         bool
 	writeNoRead                    *string
@@ -170,25 +167,6 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 		e.airgapEnabled = e.srv.Config.AirgapEnabled
 	} else {
 		e.airgapEnabled = DEFAULT_AIRGAP_ENABLED
-	}
-
-	allow := module.GetStringDefault(config, "allowRegex", DEFAULT_ALLOW_REGEX)
-	deny := module.GetStringDefault(config, "denyRegex", DEFAULT_DENY_REGEX)
-
-	if allow != "" {
-		var err error
-		e.allowRegex, err = regexp.Compile(allow)
-		if err != nil {
-			return fmt.Errorf("unable to compile ElastAlert's allowRegex: %w", err)
-		}
-	}
-
-	if deny != "" {
-		var err error
-		e.denyRegex, err = regexp.Compile(deny)
-		if err != nil {
-			return fmt.Errorf("unable to compile ElastAlert's denyRegex: %w", err)
-		}
 	}
 
 	e.SyncSchedulerParams.StateFilePath = module.GetStringDefault(config, "stateFilePath", DEFAULT_STATE_FILE_PATH)
@@ -766,16 +744,6 @@ func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detects []*
 			rule, err := ParseElastAlertRule(data)
 			if err != nil {
 				errMap[file.Name] = err
-				continue
-			}
-
-			if e.denyRegex != nil && e.denyRegex.MatchString(string(data)) {
-				log.WithField("elastAlertRuleFile", file.Name).Debug("content matched elastalert's denyRegex")
-				continue
-			}
-
-			if e.allowRegex != nil && !e.allowRegex.MatchString(string(data)) {
-				log.WithField("elastAlertRuleFile", file.Name).Debug("content didn't match elastalert's allowRegex")
 				continue
 			}
 
