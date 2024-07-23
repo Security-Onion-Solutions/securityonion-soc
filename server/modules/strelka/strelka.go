@@ -64,8 +64,6 @@ type StrelkaEngine struct {
 	autoEnabledYaraRules           []string
 	rulesRepos                     []*model.RuleRepo
 	compileYaraPythonScriptPath    string
-	allowRegex                     *regexp.Regexp
-	denyRegex                      *regexp.Regexp
 	notify                         bool
 	writeNoRead                    *string
 	detections.SyncSchedulerParams
@@ -123,24 +121,6 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 	})
 	if err != nil {
 		return fmt.Errorf("unable to parse Strelka's rulesRepos: %w", err)
-	}
-
-	allow := module.GetStringDefault(config, "allowRegex", DEFAULT_ALLOW_REGEX)
-	deny := module.GetStringDefault(config, "denyRegex", DEFAULT_DENY_REGEX)
-
-	if allow != "" {
-		e.allowRegex, err = regexp.Compile(allow)
-		if err != nil {
-			return fmt.Errorf("unable to compile Strelka's allowRegex: %w", err)
-		}
-	}
-
-	if deny != "" {
-		var err error
-		e.denyRegex, err = regexp.Compile(deny)
-		if err != nil {
-			return fmt.Errorf("unable to compile Strelka's denyRegex: %w", err)
-		}
 	}
 
 	e.StateFilePath = module.GetStringDefault(config, "stateFilePath", DEFAULT_STATE_FILE_PATH)
@@ -910,22 +890,9 @@ func (e *StrelkaEngine) parseYaraRules(data []byte, filter bool) ([]*YaraRule, e
 			} else if r == '}' && len(strings.TrimSpace(buffer.String())) == 0 && curQuotes != '}' {
 				// end of rule
 				rule.Src = strings.TrimSpace(rule.Src)
-				keep := true
 
-				if filter && e.denyRegex != nil && e.denyRegex.MatchString(rule.Src) {
-					log.WithField("ruleIdentifier", rule.Identifier).Debug("content matched Strelka's denyRegex")
-					keep = false
-				}
-
-				if filter && e.allowRegex != nil && !e.allowRegex.MatchString(rule.Src) {
-					log.WithField("ruleIdentifier", rule.Identifier).Debug("content didn't match Strelka's allowRegex")
-					keep = false
-				}
-
-				if keep {
-					addMissingImports(rule, fileImports)
-					rules = append(rules, rule)
-				}
+				addMissingImports(rule, fileImports)
+				rules = append(rules, rule)
 
 				buffer.Reset()
 
