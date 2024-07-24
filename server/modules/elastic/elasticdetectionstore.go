@@ -566,13 +566,6 @@ func (store *ElasticDetectionstore) GetAllDetections(ctx context.Context, opts .
 
 	all, err := store.Query(ctx, query, -1)
 	if err != nil {
-		if strings.Contains(err.Error(), "index_not_found_exception") {
-			// the index doesn't exist yet, so we can't have any detections
-			// return as empty set without error
-			log.Info("index not found during call to GetAllDetections, returning empty set")
-			return map[string]*model.Detection{}, nil
-		}
-
 		return nil, err
 	}
 
