@@ -1026,7 +1026,7 @@ func TestGetAllCommunitySIDs(t *testing.T) {
 
 	fakesrv.Eventstore = fakeStore
 	store := NewElasticDetectionstore(fakesrv, client, 100)
-	store.Init("*:myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	body := `{"hits": {"hits": [{"_source": {"so_detection": {"id": "ABC123"}}}]}}`
 
