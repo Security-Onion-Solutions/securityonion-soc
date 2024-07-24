@@ -445,6 +445,7 @@ const i18n = {
       fps: 'Fed Info Proc Stds',
       firstName: 'First Name',
       flags: 'Flags',
+      forceUserOtp: 'For improved security, the grid administrator has required all users to setup a Time-based One Time Password (TOTP). This setting is located on the Security tab.',
       gigabytes: 'GB',
       generate: 'Generate',
       gmd: 'Guaranteed Message Delivery',

@@ -31,3 +31,30 @@ func TestUnauthorized(tester *testing.T) {
 	assert.Nil(tester, err)
 	assert.Nil(tester, user)
 }
+
+func TestShouldNotPopulateUserDetails(t *testing.T) {
+	userStore := NewKratosUserstore(server.NewFakeUnauthorizedServer())
+	kratosUser := &KratosUser{
+		Id: "id0",
+	}
+	actual := userStore.shouldPopulateUserDetails(context.Background(), kratosUser, "id1")
+	assert.False(t, actual)
+}
+
+func TestShouldPopulateUserDetailsSelf(t *testing.T) {
+	userStore := NewKratosUserstore(server.NewFakeUnauthorizedServer())
+	kratosUser := &KratosUser{
+		Id: "id0",
+	}
+	actual := userStore.shouldPopulateUserDetails(context.Background(), kratosUser, "id0")
+	assert.True(t, actual)
+}
+
+func TestShouldPopulateUserDetailsAdmin(t *testing.T) {
+	userStore := NewKratosUserstore(server.NewFakeAuthorizedServer(nil))
+	kratosUser := &KratosUser{
+		Id: "id0",
+	}
+	actual := userStore.shouldPopulateUserDetails(context.Background(), kratosUser, "id1")
+	assert.True(t, actual)
+}

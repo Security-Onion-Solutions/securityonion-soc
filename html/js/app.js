@@ -110,6 +110,8 @@ $(document).ready(function() {
       licenseStatus: null,
       enableReverseLookup: false,
       ip2host: {},
+      securitySettingsAlreadyChecked: false,
+      forceUserOtp: false,
     },
     watch: {
       '$vuetify.theme.dark': 'saveLocalSettings',
@@ -385,6 +387,8 @@ $(document).ready(function() {
                 this.casesEnabled = this.parameters.casesEnabled;
                 this.detectionsEnabled = this.parameters.detectionsEnabled;
 
+                this.checkUserSecuritySettings(response.data);
+
                 this.subscribe("status", this.updateStatus);
                 this.subscribe('import', (url) => {
                   if (url === 'no-changes') {
@@ -424,6 +428,28 @@ $(document).ready(function() {
               }
             }
           }
+        }
+      },
+      checkUserSecuritySettings(infoResponse) {
+        // Only force OTP on initial login, otherwise risk user losing data 
+        // on a case comment, etc. This only applies if the ForceUserOtp 
+        // setting was enabled after a user had already been logged in. Users 
+        // that login after that setting is enabled will repeatedly be taken 
+        // back to the settings until the user complies.
+        if (this.securitySettingsAlreadyChecked) return;
+
+        this.forceUserOtp = infoResponse.forceUserOtp;
+        if (this.forceUserOtp) {
+          // Check if already on settings screen
+          if (location.hash.indexOf("/settings") == -1) {
+            location.hash = "/settings?tab=security";
+
+            // Do not set the securitySettingsAlreadyChecked here because we need it to continue
+            // redirecting the user until they comply.
+          }
+        } else {
+          // Do not attempt to force security settings for the remainder of this session.
+          this.securitySettingsAlreadyChecked = true;
         }
       },
       getAuthFlowId() {

@@ -49,6 +49,8 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	forceUserOtp := user.TotpStatus != "enabled" && h.server.Config.ForceUserOtp
+
 	info := &model.Info{
 		Version:        h.server.Host.Version,
 		License:        "Elastic License 2.0 (ELv2)",
@@ -59,6 +61,7 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 		UserId:         user.Id,
 		Timezones:      h.timezones,
 		SrvToken:       srvToken,
+		ForceUserOtp:   forceUserOtp,
 	}
 
 	web.Respond(w, r, http.StatusOK, info)

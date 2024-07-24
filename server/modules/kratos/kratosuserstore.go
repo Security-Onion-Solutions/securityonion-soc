@@ -96,7 +96,7 @@ func (kratos *KratosUserstore) GetUsers(ctx context.Context) ([]*model.User, err
 
 			// If the requesting user has write access to all users, then also fetch the detailed
 			// data about each user.
-			if err := kratos.server.CheckAuthorized(ctx, "write", "users"); err == nil {
+			if kratos.shouldPopulateUserDetails(ctx, kratosUser, requestorId) {
 				kratos.populateUserDetails(ctx, kratosUser)
 			}
 
@@ -123,6 +123,15 @@ func (kratos *KratosUserstore) GetUsers(ctx context.Context) ([]*model.User, err
 	}
 
 	return users, nil
+}
+
+func (kratos *KratosUserstore) shouldPopulateUserDetails(ctx context.Context, kratosUser *KratosUser, requestorId string) bool {
+	isAdmin := false
+	err := kratos.server.CheckAuthorized(ctx, "write", "users")
+	if err == nil {
+		isAdmin = true
+	}
+	return kratosUser.Id == requestorId || isAdmin
 }
 
 func (kratos *KratosUserstore) populateUserDetails(ctx context.Context, kratosUser *KratosUser) {

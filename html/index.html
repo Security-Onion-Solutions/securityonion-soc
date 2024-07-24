@@ -27,7 +27,7 @@
   <body style="background-color: #242424;">
     <v-app id="app" style="display:none" :key="timestamp">
       <v-navigation-drawer v-model="toolbar" width="200" clipped overflow app>
-        <v-list dense>
+        <v-list dense :disabled="forceUserOtp">
           <v-list-item data-aid="nav_overview" @click="" to="/">
             <v-list-item-action>
               <v-icon>fa-home</v-icon>
@@ -143,7 +143,7 @@
           </v-list-item-group>
         </v-list>
         <v-divider></v-divider>
-        <v-list subheader dense id="external-tools-list">
+        <v-list subheader dense id="external-tools-list" :disabled="forceUserOtp">
           <v-subheader>Tools</v-subheader>
           <v-list-item v-for="tool in tools" v-if="tool.enabled" :key="tool.name" :id="tool.name" :target="$root.target(tool.target)" :href="tool.link" :title="$root.localizeMessage(tool.description)" :data-aid="'nav_tool_' + tool.name">
             <v-list-item-action>
@@ -4479,22 +4479,25 @@
         </v-row>
         <v-row>
           <v-col>
-            <v-tabs grow>
+            <v-alert v-if="$root.forceUserOtp" class="mt-2" type="error" icon="fa-shield-halved"  border="left" colored-border text dense>
+              {{ i18n.forceUserOtp }}
+            </v-alert>
+            <v-tabs grow v-model="activeTab">
 
-              <v-tab id="userSettings_generalTab" data-aid="user_settings_general_tab">
+              <v-tab id="userSettings_generalTab" href="#general" data-aid="user_settings_general_tab">
                 <v-icon left>fa-cogs</v-icon>
                 {{ i18n.settings }}
               </v-tab>
-              <v-tab id="userSettings_profileTab" data-aid="user_settings_profile_tab">
+              <v-tab id="userSettings_profileTab" href="#profile" data-aid="user_settings_profile_tab">
                 <v-icon left>fa-id-card</v-icon>
                 {{ i18n.profile }}
               </v-tab>
-              <v-tab id="userSettings_securityTab" data-aid="user_settings_security_tab">
+              <v-tab id="userSettings_securityTab" href="#security" data-aid="user_settings_security_tab">
                 <v-icon left>fa-shield-halved</v-icon>
                 {{ i18n.security }}
               </v-tab>
 
-              <v-tab-item data-aid="user_settings_general">
+              <v-tab-item value="general" data-aid="user_settings_general">
                 <v-card outlined class="my-4">
                   <v-card-title>{{ i18n.defaults }}</v-card-title>
                   <v-card-text>
@@ -4505,7 +4508,7 @@
                 </v-card>
               </v-tab-item>
 
-              <v-tab-item data-aid="user_settings_profile">
+              <v-tab-item value="profile" data-aid="user_settings_profile">
                 <v-alert class="mt-2" type="warning" icon="fa-shield-halved" text dense>
                   {{ i18n.profileInstructions }}
                 </v-alert>
@@ -4525,7 +4528,7 @@
                 </v-card>
               </v-tab-item>
 
-              <v-tab-item data-aid="user_settings_security">
+              <v-tab-item value="security" data-aid="user_settings_security">
                 <v-alert class="mt-2" type="warning" icon="fa-shield-halved" text dense>
                   {{ i18n.securityInstructions }}
                 </v-alert>
@@ -4559,7 +4562,7 @@
                 </v-card>
 
                 <v-card v-if="passwordEnabled && passwordSet" outlined class="my-4" v-if="totpForm.qr && totpForm.secret">
-                  <v-alert type="error" border="bottom" colored-border text dense>
+                  <v-alert type="error" border="left" colored-border text dense>
                     {{ i18n.securityInstructionsTotp }}
                   </v-alert>
                   <v-card-title>{{ i18n.totp }}</v-card-title>

@@ -766,3 +766,32 @@ test('licenseExpiringSoon', () => {
   app.licenseKey = { expiration: "2054-01-01T01:01:01Z" };
   expect(app.isLicenseExpiringSoon()).toBe(false);
 });
+
+test('checkUserSecuritySettings', () => {
+  app.securitySettingsAlreadyChecked = false;
+  app.forceUserOtp = false;
+  const data = { forceUserOtp: false };
+  app.checkUserSecuritySettings(data);
+  expect(app.securitySettingsAlreadyChecked).toBe(true);
+  expect(app.forceUserOtp).toBe(false);
+  expect(location.hash).toBe("");
+
+  data.forceUserOtp = true;
+  app.checkUserSecuritySettings(data);
+  expect(app.securitySettingsAlreadyChecked).toBe(true);
+  expect(app.forceUserOtp).toBe(false);
+  expect(location.hash).toBe("");
+
+  app.securitySettingsAlreadyChecked = false;
+  app.checkUserSecuritySettings(data);
+  expect(app.securitySettingsAlreadyChecked).toBe(false);
+  expect(app.forceUserOtp).toBe(true);
+  expect(location.hash).toBe("#/settings?tab=security");
+
+  location.hash = "#/settings?alreadyhere";
+  app.securitySettingsAlreadyChecked = false;
+  app.checkUserSecuritySettings(data);
+  expect(app.securitySettingsAlreadyChecked).toBe(false);
+  expect(app.forceUserOtp).toBe(true);
+  expect(location.hash).toBe("#/settings?alreadyhere");
+});
