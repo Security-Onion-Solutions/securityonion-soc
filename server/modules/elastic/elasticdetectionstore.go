@@ -422,7 +422,7 @@ func (store *ElasticDetectionstore) DetectionScroll(ctx context.Context, criteri
 		return nil, err
 	}
 
-	return store.server.Eventstore.Scroll(ctx, criteria, []string{store.disableCrossClusterIndex(store.index)})
+	return store.server.Eventstore.Scroll(ctx, criteria, []string{store.index})
 }
 
 func (store *ElasticDetectionstore) prepareForSave(ctx context.Context, obj *model.Auditable) string {
@@ -558,7 +558,7 @@ func (store *ElasticDetectionstore) DeleteDetection(ctx context.Context, id stri
 }
 
 func (store *ElasticDetectionstore) GetAllDetections(ctx context.Context, opts ...model.GetAllOption) (map[string]*model.Detection, error) {
-	query := fmt.Sprintf(`_index:"%s" AND %skind:"%s"`, store.disableCrossClusterIndex(store.index), store.schemaPrefix, "detection")
+	query := fmt.Sprintf(`_index:"%s" AND %skind:"%s"`, store.index, store.schemaPrefix, "detection")
 
 	for _, opt := range opts {
 		query = opt(query, store.schemaPrefix)
@@ -566,13 +566,6 @@ func (store *ElasticDetectionstore) GetAllDetections(ctx context.Context, opts .
 
 	all, err := store.Query(ctx, query, -1)
 	if err != nil {
-		if strings.Contains(err.Error(), "index_not_found_exception") {
-			// the index doesn't exist yet, so we can't have any detections
-			// return as empty set without error
-			log.Info("index not found during call to GetAllDetections, returning empty set")
-			return map[string]*model.Detection{}, nil
-		}
-
 		return nil, err
 	}
 

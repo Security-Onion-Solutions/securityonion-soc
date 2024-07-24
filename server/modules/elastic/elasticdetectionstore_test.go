@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -1021,12 +1020,11 @@ func TestGetAllCommunitySIDs(t *testing.T) {
 	}
 
 	// double up the results, we're calling the function twice
-	fakeStore.ScrollResults = append(fakeStore.ScrollResults, fakeStore.ScrollResults...)
-	fakeStore.ScrollResults = append(fakeStore.ScrollResults, nil) // empty one for error case
+	fakeStore.SearchResults = append(fakeStore.SearchResults, fakeStore.SearchResults...)
 
 	fakesrv.Eventstore = fakeStore
 	store := NewElasticDetectionstore(fakesrv, client, 100)
-	store.Init("*:myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
 
 	body := `{"hits": {"hits": [{"_source": {"so_detection": {"id": "ABC123"}}}]}}`
 
@@ -1057,13 +1055,6 @@ func TestGetAllCommunitySIDs(t *testing.T) {
 	criteria = fakeStore.InputScrollCriterias[1].RawQuery
 	assert.Contains(t, criteria, `_index:"myIndex" AND so_kind:"detection" AND so_detection.engine:"suricata"`)
 	assert.Contains(t, criteria, "detection.engine")
-
-	fakeStore.Err = errors.New("index_not_found_exception")
-
-	sids, err = store.GetAllDetections(ctx)
-	assert.Nil(t, err)
-	assert.NotNil(t, sids)
-	assert.Empty(t, sids)
 }
 
 func TestGetDetectionHistory(t *testing.T) {
