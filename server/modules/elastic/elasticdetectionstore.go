@@ -220,7 +220,7 @@ func (store *ElasticDetectionstore) Index(ctx context.Context, index string, doc
 		var response string
 
 		log.Debug("Sending index request to primary Elasticsearch client")
-		response, err = store.indexDocument(ctx, store.disableCrossClusterIndex(index), request, id)
+		response, err = store.indexDocument(ctx, index, request, id)
 		if err == nil {
 			err = convertFromElasticIndexResults(response, results)
 			if err != nil {
@@ -422,7 +422,7 @@ func (store *ElasticDetectionstore) DetectionScroll(ctx context.Context, criteri
 		return nil, err
 	}
 
-	return store.server.Eventstore.Scroll(ctx, criteria, []string{store.disableCrossClusterIndex(store.index)})
+	return store.server.Eventstore.Scroll(ctx, criteria, []string{store.index})
 }
 
 func (store *ElasticDetectionstore) prepareForSave(ctx context.Context, obj *model.Auditable) string {
@@ -542,7 +542,7 @@ func (store *ElasticDetectionstore) DeleteDetection(ctx context.Context, id stri
 		return nil, err
 	}
 
-	_, err = store.deleteDocument(ctx, store.disableCrossClusterIndex(store.index), detect, "detection", id)
+	_, err = store.deleteDocument(ctx, store.index, detect, "detection", id)
 
 	if err == nil {
 		log.WithFields(log.Fields{
@@ -558,7 +558,7 @@ func (store *ElasticDetectionstore) DeleteDetection(ctx context.Context, id stri
 }
 
 func (store *ElasticDetectionstore) GetAllDetections(ctx context.Context, opts ...model.GetAllOption) (map[string]*model.Detection, error) {
-	query := fmt.Sprintf(`_index:"%s" AND %skind:"%s"`, store.disableCrossClusterIndex(store.index), store.schemaPrefix, "detection")
+	query := fmt.Sprintf(`_index:"%s" AND %skind:"%s"`, store.index, store.schemaPrefix, "detection")
 
 	for _, opt := range opts {
 		query = opt(query, store.schemaPrefix)
@@ -596,7 +596,7 @@ func (store *ElasticDetectionstore) audit(ctx context.Context, document map[stri
 	request, err := convertToElasticIndexRequest(document)
 	if err == nil {
 		log.Debug("Sending index request to primary Elasticsearch client")
-		_, err = store.indexDocument(ctx, store.disableCrossClusterIndex(store.auditIndex), request, id)
+		_, err = store.indexDocument(ctx, store.auditIndex, request, id)
 		if err != nil {
 			log.WithError(err).Error("Encountered error while indexing document into elasticsearch")
 		}
@@ -644,14 +644,6 @@ func (store *ElasticDetectionstore) truncate(input string) string {
 		return input[:store.maxLogLength] + "..."
 	}
 	return input
-}
-
-func (store *ElasticDetectionstore) disableCrossClusterIndex(index string) string {
-	pieces := strings.SplitN(index, ":", 2)
-	if len(pieces) == 2 {
-		index = pieces[1]
-	}
-	return index
 }
 
 func (store *ElasticDetectionstore) validateComment(comment *model.DetectionComment) error {
@@ -780,7 +772,7 @@ func (store *ElasticDetectionstore) DeleteComment(ctx context.Context, id string
 		return err
 	}
 
-	_, err = store.deleteDocument(ctx, store.disableCrossClusterIndex(store.index), dc, "detectioncomment", id)
+	_, err = store.deleteDocument(ctx, store.index, dc, "detectioncomment", id)
 	return err
 }
 
