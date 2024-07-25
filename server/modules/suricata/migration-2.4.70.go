@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
 	"gopkg.in/yaml.v3"
@@ -36,6 +37,8 @@ func (e *SuricataEngine) Migration2470(statePath string) error {
 
 	log.Info("suricata is now migrating to 2.4.70") // for support
 
+	ctx := web.MarkChangedByUser(e.srv.Context, true)
+
 	// read in idstools.yaml
 	enabled, disabled, err := e.m2470LoadEnabledDisabled()
 	if err != nil {
@@ -50,7 +53,7 @@ func (e *SuricataEngine) Migration2470(statePath string) error {
 	dirty := map[string]struct{}{} // map[sid]X
 
 	// retrieve all suricata rules
-	detects, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, model.WithEngine(model.EngineNameSuricata))
+	detects, err := e.srv.Detectionstore.GetAllDetections(ctx, model.WithEngine(model.EngineNameSuricata))
 	if err != nil {
 		return err
 	}
@@ -105,7 +108,7 @@ func (e *SuricataEngine) Migration2470(statePath string) error {
 
 		det.Kind = ""
 
-		_, err := e.srv.Detectionstore.UpdateDetection(e.srv.Context, det)
+		_, err := e.srv.Detectionstore.UpdateDetection(ctx, det)
 		if err != nil {
 			return err
 		}
@@ -114,7 +117,7 @@ func (e *SuricataEngine) Migration2470(statePath string) error {
 	}
 
 	// sync suricata
-	errMap, err := e.srv.DetectionEngines[model.EngineNameSuricata].SyncLocalDetections(e.srv.Context, dirtyDets)
+	errMap, err := e.srv.DetectionEngines[model.EngineNameSuricata].SyncLocalDetections(ctx, dirtyDets)
 	if err != nil {
 		return err
 	}
