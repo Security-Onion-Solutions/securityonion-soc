@@ -22,7 +22,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -85,8 +84,6 @@ type ElastAlertEngine struct {
 	reposFolder                    string
 	isRunning                      bool
 	interm                         sync.Mutex
-	allowRegex                     *regexp.Regexp
-	denyRegex                      *regexp.Regexp
 	airgapEnabled                  bool
 	notify                         bool
 	writeNoRead                    *string
@@ -172,25 +169,6 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 		e.airgapEnabled = DEFAULT_AIRGAP_ENABLED
 	}
 
-	allow := module.GetStringDefault(config, "allowRegex", DEFAULT_ALLOW_REGEX)
-	deny := module.GetStringDefault(config, "denyRegex", DEFAULT_DENY_REGEX)
-
-	if allow != "" {
-		var err error
-		e.allowRegex, err = regexp.Compile(allow)
-		if err != nil {
-			return fmt.Errorf("unable to compile ElastAlert's allowRegex: %w", err)
-		}
-	}
-
-	if deny != "" {
-		var err error
-		e.denyRegex, err = regexp.Compile(deny)
-		if err != nil {
-			return fmt.Errorf("unable to compile ElastAlert's denyRegex: %w", err)
-		}
-	}
-
 	e.SyncSchedulerParams.StateFilePath = module.GetStringDefault(config, "stateFilePath", DEFAULT_STATE_FILE_PATH)
 
 	return nil
@@ -269,6 +247,10 @@ func (e *ElastAlertEngine) ValidateRule(data string) (string, error) {
 	}
 
 	return string(data), nil
+}
+
+func (e *ElastAlertEngine) ApplyFilters(detect *model.Detection) (bool, error) {
+	return false, nil
 }
 
 func (e *ElastAlertEngine) ConvertRule(ctx context.Context, detect *model.Detection) (string, error) {
@@ -765,16 +747,6 @@ func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detects []*
 				continue
 			}
 
-			if e.denyRegex != nil && e.denyRegex.MatchString(string(data)) {
-				log.WithField("elastAlertRuleFile", file.Name).Debug("content matched elastalert's denyRegex")
-				continue
-			}
-
-			if e.allowRegex != nil && !e.allowRegex.MatchString(string(data)) {
-				log.WithField("elastAlertRuleFile", file.Name).Debug("content didn't match elastalert's allowRegex")
-				continue
-			}
-
 			det := rule.ToDetection(pkg, model.LicenseDRL, true)
 
 			detects = append(detects, det)
@@ -921,6 +893,12 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 		} else {
 			detect.CreateTime = util.Ptr(time.Now())
 			checkRulesetEnabled(e, detect)
+		}
+
+		_, err = e.ApplyFilters(detect)
+		if err != nil {
+			errMap[detect.PublicID] = err
+			continue
 		}
 
 		document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", detect, &detect.Auditable, exists, nil, nil)
@@ -1108,8 +1086,17 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 			},
 		})
 		if err != nil {
-			errMap[publicId] = fmt.Errorf("unable to delete detection: %s", err)
+			errMap[publicId] = fmt.Errorf("unable to delete unreferenced detection: %s", err)
 			continue
+		}
+
+		path, ok := existing[publicId]
+		if ok {
+			err = e.DeleteFile(path)
+			if err != nil && !os.IsNotExist(err) {
+				errMap[publicId] = fmt.Errorf("unable to remove deleted detection file: %s", err)
+				continue
+			}
 		}
 	}
 
@@ -1669,17 +1656,19 @@ func (e *ElastAlertEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) 
 
 	deployedButNotEnabled, enabledButNotDeployed, _ = detections.DiffLists(deployed, enabled)
 
-	report := logger.WithFields(log.Fields{
-		"deployedButNotEnabled": deployedButNotEnabled,
-		"enabledButNotDeployed": enabledButNotDeployed,
+	intCheckReport := logger.WithFields(log.Fields{
+		"deployedButNotEnabled":      detections.TruncateList(deployedButNotEnabled, 20),
+		"enabledButNotDeployed":      detections.TruncateList(enabledButNotDeployed, 20),
+		"deployedButNotEnabledCount": len(deployedButNotEnabled),
+		"enabledButNotDeployedCount": len(enabledButNotDeployed),
 	})
 
 	if len(deployedButNotEnabled) > 0 || len(enabledButNotDeployed) > 0 {
-		report.Warn("integrity check failed")
+		intCheckReport.Warn("integrity check failed")
 		return deployedButNotEnabled, enabledButNotDeployed, detections.ErrIntCheckFailed
 	}
 
-	report.Info("integrity check passed")
+	intCheckReport.Info("integrity check passed")
 
 	return deployedButNotEnabled, enabledButNotDeployed, nil
 }

@@ -15,7 +15,6 @@ import (
 	"io/fs"
 	"net/http"
 	"os/exec"
-	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -553,8 +552,6 @@ level: high
 		isRunning:         true,
 		sigmaRulePackages: []string{"all_rules"},
 	}
-	engine.allowRegex = regexp.MustCompile("00000000-0000-0000-0000-00000000")
-	engine.denyRegex = regexp.MustCompile("deny")
 
 	expected := &model.Detection{
 		Author:      "Corey Ogburn",
@@ -623,8 +620,6 @@ license: Elastic-2.0
 		isRunning: true,
 		IOManager: iom,
 	}
-	engine.allowRegex = regexp.MustCompile("bf86ef21-41e6-417b-9a05-b9ea6bf28a38")
-	engine.denyRegex = regexp.MustCompile("deny")
 
 	expected := &model.Detection{
 		Author:      "Security Onion Solutions",
@@ -1289,6 +1284,7 @@ func TestSyncChanges(t *testing.T) {
 
 		return nil
 	}).Times(3)
+	iom.EXPECT().DeleteFile("elastAlertRulesFolder/00000000-0000-0000-0000-000000000000.yml").Return(nil)
 	bim.EXPECT().Close(gomock.Any()).Return(nil)
 	bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
 	iom.EXPECT().ExecCommand(gomock.Any()).Return([]byte("\n[query]"), 0, time.Duration(time.Second), nil) // sigmaToElastAlert

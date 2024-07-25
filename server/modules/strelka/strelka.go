@@ -51,7 +51,7 @@ const (
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS        = 600
 )
 
-var titleUpdater = regexp.MustCompile(`(?i)rule\s+(\w+)(\s+:(\s*[^{]+))?(\s+){`)
+var titleUpdater = regexp.MustCompile(`(?im)rule\s+(\w+)(\s+:(\s*[^{]+))?(\s+)(//.*$)?(\n?){`)
 var nameValidator = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]{0,127}$`) // alphanumeric + underscore, can't start with a number
 
 type StrelkaEngine struct {
@@ -64,8 +64,6 @@ type StrelkaEngine struct {
 	autoEnabledYaraRules           []string
 	rulesRepos                     []*model.RuleRepo
 	compileYaraPythonScriptPath    string
-	allowRegex                     *regexp.Regexp
-	denyRegex                      *regexp.Regexp
 	notify                         bool
 	writeNoRead                    *string
 	detections.SyncSchedulerParams
@@ -123,24 +121,6 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 	})
 	if err != nil {
 		return fmt.Errorf("unable to parse Strelka's rulesRepos: %w", err)
-	}
-
-	allow := module.GetStringDefault(config, "allowRegex", DEFAULT_ALLOW_REGEX)
-	deny := module.GetStringDefault(config, "denyRegex", DEFAULT_DENY_REGEX)
-
-	if allow != "" {
-		e.allowRegex, err = regexp.Compile(allow)
-		if err != nil {
-			return fmt.Errorf("unable to compile Strelka's allowRegex: %w", err)
-		}
-	}
-
-	if deny != "" {
-		var err error
-		e.denyRegex, err = regexp.Compile(deny)
-		if err != nil {
-			return fmt.Errorf("unable to compile Strelka's denyRegex: %w", err)
-		}
 	}
 
 	e.StateFilePath = module.GetStringDefault(config, "stateFilePath", DEFAULT_STATE_FILE_PATH)
@@ -219,6 +199,10 @@ func (e *StrelkaEngine) ValidateRule(data string) (string, error) {
 	}
 
 	return string(data), nil
+}
+
+func (e *StrelkaEngine) ApplyFilters(detect *model.Detection) (bool, error) {
+	return false, nil
 }
 
 func (e *StrelkaEngine) ConvertRule(ctx context.Context, detect *model.Detection) (string, error) {
@@ -450,6 +434,12 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 		} else {
 			detect.CreateTime = util.Ptr(time.Now())
 			checkRulesetEnabled(e, detect)
+		}
+
+		_, err = e.ApplyFilters(detect)
+		if err != nil {
+			errMap[detect.PublicID] = err
+			continue
 		}
 
 		document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(e.srv.Context, "detection", detect, &detect.Auditable, exists, nil, nil)
@@ -900,22 +890,9 @@ func (e *StrelkaEngine) parseYaraRules(data []byte, filter bool) ([]*YaraRule, e
 			} else if r == '}' && len(strings.TrimSpace(buffer.String())) == 0 && curQuotes != '}' {
 				// end of rule
 				rule.Src = strings.TrimSpace(rule.Src)
-				keep := true
 
-				if filter && e.denyRegex != nil && e.denyRegex.MatchString(rule.Src) {
-					log.WithField("ruleIdentifier", rule.Identifier).Debug("content matched Strelka's denyRegex")
-					keep = false
-				}
-
-				if filter && e.allowRegex != nil && !e.allowRegex.MatchString(rule.Src) {
-					log.WithField("ruleIdentifier", rule.Identifier).Debug("content didn't match Strelka's allowRegex")
-					keep = false
-				}
-
-				if keep {
-					addMissingImports(rule, fileImports)
-					rules = append(rules, rule)
-				}
+				addMissingImports(rule, fileImports)
+				rules = append(rules, rule)
 
 				buffer.Reset()
 
@@ -1064,9 +1041,32 @@ func (e *StrelkaEngine) DuplicateDetection(ctx context.Context, detection *model
 
 	rule := rules[0]
 
-	rule.Src = titleUpdater.ReplaceAllString(rule.Src, "rule ${1}_copy${2}${4}{")
+	newID := detection.PublicID + "_copy"
 
-	det := rule.ToDetection(detection.License, detections.RULESET_CUSTOM, false)
+	det, err := e.srv.Detectionstore.GetDetectionByPublicId(ctx, newID)
+	if err != nil {
+		return nil, err
+	}
+
+	if det != nil {
+		for i := 1; i < 10 && det != nil; i++ {
+			newID = fmt.Sprintf("%s_copy%d", detection.PublicID, i)
+
+			det, err = e.srv.Detectionstore.GetDetectionByPublicId(ctx, newID)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if det != nil {
+			// never found a non-duplicate name, giving up
+			return nil, fmt.Errorf("exhausted hunt for new, unused publicId")
+		}
+	}
+
+	rule.Src = titleUpdater.ReplaceAllString(rule.Src, "rule "+newID+"${2}${4}${5}${6}{")
+
+	det = rule.ToDetection(detection.License, detections.RULESET_CUSTOM, false)
 
 	err = e.ExtractDetails(det)
 	if err != nil {
@@ -1175,8 +1175,10 @@ func (e *StrelkaEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (de
 	deployedButNotEnabled, enabledButNotDeployed, _ = detections.DiffLists(deployed, enabled)
 
 	intCheckReport := logger.WithFields(log.Fields{
-		"deployedButNotEnabled": deployedButNotEnabled,
-		"enabledButNotDeployed": enabledButNotDeployed,
+		"deployedButNotEnabled":      detections.TruncateList(deployedButNotEnabled, 20),
+		"enabledButNotDeployed":      detections.TruncateList(enabledButNotDeployed, 20),
+		"deployedButNotEnabledCount": len(deployedButNotEnabled),
+		"enabledButNotDeployedCount": len(enabledButNotDeployed),
 	})
 
 	if len(deployedButNotEnabled) > 0 || len(enabledButNotDeployed) > 0 {

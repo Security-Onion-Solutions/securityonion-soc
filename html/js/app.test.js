@@ -759,7 +759,7 @@ test('licenseExpiringSoon', () => {
   const date = new Date();
   app.licenseKey = { expiration: date.toISOString() };
   expect(app.isLicenseExpiringSoon()).toBe(true);
-  
+
   app.licenseKey = { expiration: "2024-01-01T01:01:01Z" };
   expect(app.isLicenseExpiringSoon()).toBe(true);
 
@@ -794,4 +794,21 @@ test('checkUserSecuritySettings', () => {
   expect(app.securitySettingsAlreadyChecked).toBe(false);
   expect(app.forceUserOtp).toBe(true);
   expect(location.hash).toBe("#/settings?alreadyhere");
+});
+
+test('showWarning', () => {
+  var longString = 'x';
+  for (var i = 0; i < 8; i++) {
+    longString += longString;
+  }
+
+  app.showWarning(longString);
+
+  expect(app.warning).toBe(true);
+  expect(app.warningMessage.length).toBe(203); // truncate to 200, add "..."
+
+  app.showWarning(longString, true);
+
+  expect(app.warning).toBe(true);
+  expect(app.warningMessage.length).toBe(longString.length);
 });

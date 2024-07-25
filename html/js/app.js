@@ -695,9 +695,13 @@ $(document).ready(function() {
           console.log(msg.stack);
         }
       },
-      showWarning(msg) {
+      showWarning(msg, skipLocalization) {
         this.warning = true;
-        this.warningMessage = this.localizeMessage(msg);
+        if (skipLocalization) {
+          this.warningMessage = msg;
+        } else {
+          this.warningMessage = this.localizeMessage(msg);
+        }
       },
       showInfo(msg) {
         this.info = true;

@@ -476,11 +476,11 @@ func TestCreateDetectionValid(t *testing.T) {
 
 	mocktrans.AddResponse(&http.Response{
 		Body: io.NopCloser(strings.NewReader(body1)),
-	})
+	}, nil)
 
 	mocktrans.AddResponse(&http.Response{
 		Body: io.NopCloser(strings.NewReader(body2)),
-	})
+	}, nil)
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
@@ -659,11 +659,11 @@ func TestUpdateDetectionValid(t *testing.T) {
 
 	mocktrans.AddResponse(&http.Response{
 		Body: io.NopCloser(strings.NewReader(body1)),
-	})
+	}, nil)
 
 	mocktrans.AddResponse(&http.Response{
 		Body: io.NopCloser(strings.NewReader(body2)),
-	})
+	}, nil)
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
@@ -768,11 +768,11 @@ func TestUpdateDetectionInvalid404(t *testing.T) {
 
 	mocktrans.AddResponse(&http.Response{
 		Body: io.NopCloser(strings.NewReader(body1)),
-	})
+	}, nil)
 
 	mocktrans.AddResponse(&http.Response{
 		Body: io.NopCloser(strings.NewReader(body2)),
-	})
+	}, nil)
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
@@ -827,7 +827,7 @@ func TestDeleteDetectionValid(t *testing.T) {
 
 	mocktrans.AddResponse(&http.Response{
 		Body: io.NopCloser(strings.NewReader(body1)),
-	})
+	}, nil)
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
@@ -851,7 +851,7 @@ func TestDeleteDetectionInvalid(t *testing.T) {
 
 	mocktrans.AddResponse(&http.Response{
 		Body: io.NopCloser(strings.NewReader(body1)),
-	})
+	}, nil)
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
@@ -873,7 +873,7 @@ func TestDoesTemplateExistValid(t *testing.T) {
 		Header: http.Header{
 			"X-Elastic-Product": []string{"Elasticsearch"},
 		},
-	})
+	}, nil)
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
@@ -903,7 +903,7 @@ func TestDoesTemplateExistInvalid(t *testing.T) {
 		Header: http.Header{
 			"X-Elastic-Product": []string{"Elasticsearch"},
 		},
-	})
+	}, nil)
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
@@ -1031,10 +1031,10 @@ func TestGetAllCommunitySIDs(t *testing.T) {
 	// also twice
 	mocktrans.AddResponse(&http.Response{
 		Body: io.NopCloser(strings.NewReader(body)),
-	})
+	}, nil)
 	mocktrans.AddResponse(&http.Response{
 		Body: io.NopCloser(strings.NewReader(body)),
-	})
+	}, nil)
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
@@ -1165,10 +1165,10 @@ func TestCreateDetectionComment(t *testing.T) {
 
 	mocktrans.AddResponse(&http.Response{
 		Body: io.NopCloser(strings.NewReader(body1)),
-	})
+	}, nil)
 	mocktrans.AddResponse(&http.Response{
 		Body: io.NopCloser(strings.NewReader(body2)),
-	})
+	}, nil)
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
@@ -1255,10 +1255,10 @@ func TestUpdateDetectionCommentValid(t *testing.T) {
 
 	mocktrans.AddResponse(&http.Response{
 		Body: io.NopCloser(strings.NewReader(body1)),
-	})
+	}, nil)
 	mocktrans.AddResponse(&http.Response{
 		Body: io.NopCloser(strings.NewReader(body2)),
-	})
+	}, nil)
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
@@ -1347,10 +1347,10 @@ func TestDeleteDetectionComment(t *testing.T) {
 
 	mocktrans.AddResponse(&http.Response{
 		Body: io.NopCloser(strings.NewReader(body1)),
-	})
+	}, nil)
 	mocktrans.AddResponse(&http.Response{
 		Body: io.NopCloser(strings.NewReader(body2)),
-	})
+	}, nil)
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 

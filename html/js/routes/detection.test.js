@@ -868,3 +868,16 @@ test('extractDetection', () => {
 	expect(comp.loadAssociations).toHaveBeenCalledTimes(1);
 	expect(comp.$root.populateUserDetails).toHaveBeenCalledTimes(1);
 });
+
+test('saveDetection - statusEffectedByFilter', async () => {
+	resetPapi().mockPapi('put', {status:205}, null);
+	comp.detect = { content: "" };
+	comp.origDetect = { content: "" };
+	comp.extractDetection = jest.fn();
+
+	await comp.saveDetection(false, false);
+
+	expect(comp.$root.warning).toBe(true);
+	expect(comp.$root.warningMessage).toBe(comp.i18n.WARN_STATUS_EFFECTED_BY_FILTER);
+	expect(comp.extractDetection).toHaveBeenCalledTimes(1);
+});

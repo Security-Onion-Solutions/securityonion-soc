@@ -21,6 +21,7 @@ type FakeEventstore struct {
 	InputUpdateCriterias []*model.EventUpdateCriteria
 	InputAckCriterias    []*model.EventAckCriteria
 	InputScrollCriterias []*model.EventScrollCriteria
+	InputScrollIndexes   [][]string
 	Err                  error
 	SearchResults        []*model.EventSearchResults
 	IndexResults         []*model.EventIndexResults
@@ -117,9 +118,10 @@ func (store *FakeEventstore) Acknowledge(context context.Context, criteria *mode
 	return result, store.Err
 }
 
-func (store *FakeEventstore) Scroll(context context.Context, criteria *model.EventScrollCriteria) (*model.EventScrollResults, error) {
+func (store *FakeEventstore) Scroll(context context.Context, criteria *model.EventScrollCriteria, indexes []string) (*model.EventScrollResults, error) {
 	store.InputContexts = append(store.InputContexts, context)
 	store.InputScrollCriterias = append(store.InputScrollCriterias, criteria)
+	store.InputScrollIndexes = append(store.InputScrollIndexes, indexes)
 	if store.scrollCount >= len(store.ScrollResults) {
 		store.scrollCount = len(store.ScrollResults) - 1
 	}
