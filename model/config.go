@@ -8,6 +8,7 @@ package model
 
 import (
 	"regexp"
+	"strings"
 )
 
 type Setting struct {
@@ -32,12 +33,22 @@ type Setting struct {
 	Syntax              string `json:"syntax"`
 	ForcedType          string `json:"forcedType"`
 	Duplicates          bool   `json:"duplicates"`
+	Extended            bool   `json:"extended"`
 }
 
-func NewSetting(Id string) *Setting {
-	return &Setting{
-		Id: Id,
-	}
+func NewSetting(id string) *Setting {
+	setting := &Setting{}
+	setting.SetId(id)
+	return setting
+}
+
+func (setting *Setting) SetId(id string) {
+	setting.Id = id
+	setting.Extended = IsExtendedSetting(setting)
+}
+
+func IsExtendedSetting(setting *Setting) bool {
+	return strings.HasPrefix(setting.Id, "elasticsearch.index_settings.")
 }
 
 func IsValidMinionId(id string) bool {

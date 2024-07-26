@@ -12,9 +12,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestString(tester *testing.T) {
+func TestStringId(tester *testing.T) {
 	setting := NewSetting("MyId")
 	assert.Equal(tester, "MyId", setting.Id)
+	assert.False(tester, setting.Extended)
+}
+
+func TestExtendedSetting(tester *testing.T) {
+	setting := NewSetting("elasticsearch.index_settings.foo")
+	assert.True(tester, setting.Extended)
 }
 
 func TestIsValidMinionId(tester *testing.T) {

@@ -878,7 +878,7 @@ func TestSyncLocalSuricata(t *testing.T) {
 			assert.Equal(t, test.ExpectedErr, err)
 			assert.Equal(t, test.ExpectedErrMap, errMap)
 
-			set, err := mCfgStore.GetSettings(ctx)
+			set, err := mCfgStore.GetSettings(ctx, false)
 			assert.NoError(t, err, "GetSettings should not return an error")
 
 			for id, expectedValue := range test.ExpectedSettings {
@@ -1107,7 +1107,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 				assert.NotEmpty(t, det.Id)
 			}
 
-			set, err := mCfgStore.GetSettings(ctx)
+			set, err := mCfgStore.GetSettings(ctx, false)
 			assert.NoError(t, err, "GetSettings should not return an error")
 
 			for id, expectedValue := range test.ExpectedSettings {
@@ -2333,7 +2333,7 @@ func TestSyncChanges(t *testing.T) {
 	assert.False(t, eng.EngineState.SyncFailure)
 	assert.True(t, migrationChecked)
 
-	allSettings, err := cfgStore.GetSettings(ctx)
+	allSettings, err := cfgStore.GetSettings(ctx, false)
 	assert.NoError(t, err)
 
 	enabled := settingByID(allSettings, "idstools.sids.enabled")

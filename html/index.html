@@ -4642,6 +4642,7 @@
               <v-expansion-panel>
                 <v-expansion-panel-header id="configOptionsHeader">{{i18n.options}}</v-expansion-panel-header>
                 <v-expansion-panel-content>
+                  <v-switch id="option-extended" :disabled="$root.loading" v-model="extended" dense class="my-0" :label="i18n.settingsExtended" :hint="i18n.settingsExtendedHelp" persistent-hint data-aid="config_option_extended_toggle"></v-switch>
                   <v-switch id="option-advanced" :disabled="$root.loading" v-model="advanced" dense class="my-0" :label="i18n.settingsAdvanced" :hint="i18n.settingsAdvancedHelp" persistent-hint data-aid="config_option_advanced_toggle"></v-switch>
                   <v-btn id="option-synchronize" @click.stop="sync()" class="mt-6 mb-1" data-aid="config_option_synchronize_toggle">
                     {{ i18n.settingsSynchronize }}
@@ -4841,11 +4842,20 @@
               </div>
               <v-card v-else :key="selected.id" class="mx-auto config-setting" flat>
                 <v-card-text>
-                  <div class="d-inline-flex justify-end" style="width: 100%">
-                    <v-btn icon small class="mb-4" :title="i18n.toggleFullsizeHelp" @click="treeVisible = !treeVisible" data-aid="config_toggle_treeview">
-                      <v-icon v-if="treeVisible">fa-up-right-and-down-left-from-center</v-icon>
-                      <v-icon v-else color="primary">fa-down-left-and-up-right-to-center</v-icon>
-                    </v-btn>
+                  <div class="d-inline-flex mb-4 " style="width: 100%">
+                    <span class="text-caption font-weight-thin">
+                      {{ getSettingBreadcrumbs(selected) }}
+                      <v-btn icon small @click.stop="$root.copyToClipboard(getSettingBreadcrumb(selected))" :title="i18n.copyToClipboard" data-aid="config_breadcrumb_copy">
+                        <v-icon>fa-copy</v-icon>
+                      </a>
+                    </span>
+                    <v-spacer/>
+                    <span class="justify-end">
+                      <v-btn icon small :title="i18n.toggleFullsizeHelp" @click="treeVisible = !treeVisible" data-aid="config_toggle_treeview">
+                        <v-icon v-if="treeVisible">fa-up-right-and-down-left-from-center</v-icon>
+                        <v-icon v-else color="primary">fa-down-left-and-up-right-to-center</v-icon>
+                      </v-btn>
+                    </span>
                   </div>
                   <div class="text-subtitle-1 mb-4" data-aid="config_item_help" >
                     {{ getSettingDescription(selected) }}
