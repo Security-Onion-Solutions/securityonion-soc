@@ -1,4 +1,4 @@
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -15,22 +15,25 @@ import (
 	"io/fs"
 	"net/http"
 	"os/exec"
-	"regexp"
 	"slices"
 	"sort"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
-	"github.com/security-onion-solutions/securityonion-soc/server/modules/elastalert/mock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/handmock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
+	"github.com/apex/log"
+	"github.com/elastic/go-elasticsearch/v8/esutil"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	"gopkg.in/yaml.v3"
@@ -239,13 +242,14 @@ func TestTimeFrame(t *testing.T) {
 func TestCheckSigmaPipelines(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockIO := mock.NewMockIOManager(ctrl)
+
+	iom := mock.NewMockIOManager(ctrl)
 
 	e := &ElastAlertEngine{
 		sigmaPipelineFinal:            "/opt/sensoroni/sigma_final_pipeline.yaml",
 		sigmaPipelineSO:               "/opt/sensoroni/sigma_so_pipeline.yaml",
 		sigmaPipelinesFingerprintFile: "/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint",
-		IOManager:                     mockIO,
+		IOManager:                     iom,
 	}
 
 	testList := []struct {
@@ -259,10 +263,10 @@ func TestCheckSigmaPipelines(t *testing.T) {
 			name: "No changes in pipelines",
 			setupMock: func() {
 				// Setup the hash values to be the same
-				mockIO.EXPECT().ReadFile("/opt/sensoroni/sigma_final_pipeline.yaml").Return([]byte("data"), nil)
-				mockIO.EXPECT().ReadFile("/opt/sensoroni/sigma_so_pipeline.yaml").Return([]byte("data"), nil)
+				iom.EXPECT().ReadFile("/opt/sensoroni/sigma_final_pipeline.yaml").Return([]byte("data"), nil)
+				iom.EXPECT().ReadFile("/opt/sensoroni/sigma_so_pipeline.yaml").Return([]byte("data"), nil)
 				hash := "3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7-3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7"
-				mockIO.EXPECT().ReadFile("/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint").Return([]byte(hash), nil)
+				iom.EXPECT().ReadFile("/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint").Return([]byte(hash), nil)
 			},
 			expectedChange: false,
 			expectedHash:   "",
@@ -272,10 +276,10 @@ func TestCheckSigmaPipelines(t *testing.T) {
 			name: "Changes detected in pipelines",
 			setupMock: func() {
 				// Setup the hash values to be different
-				mockIO.EXPECT().ReadFile("/opt/sensoroni/sigma_final_pipeline.yaml").Return([]byte("data1"), nil)
-				mockIO.EXPECT().ReadFile("/opt/sensoroni/sigma_so_pipeline.yaml").Return([]byte("data2"), nil)
+				iom.EXPECT().ReadFile("/opt/sensoroni/sigma_final_pipeline.yaml").Return([]byte("data1"), nil)
+				iom.EXPECT().ReadFile("/opt/sensoroni/sigma_so_pipeline.yaml").Return([]byte("data2"), nil)
 				hash := "7c563a27ed29beba2a5e9fd515c0b4435065d7c90af52b29a7f96f1ba2f00d7b-6d8758d5149c097c5131dd1355b7b8891b2b207384ff8f66a650537c3d2ffd6f"
-				mockIO.EXPECT().ReadFile("/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint").Return([]byte(hash), nil)
+				iom.EXPECT().ReadFile("/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint").Return([]byte(hash), nil)
 			},
 			expectedChange: true,
 			expectedHash:   "5b41362bc82b7f3d56edc5a306db22105707d01ff4819e26faef9724a2d406c9-d98cf53e0c8b77c14a96358d5b69584225b4bb9026423cbc2f7b0161894c402c",
@@ -284,7 +288,7 @@ func TestCheckSigmaPipelines(t *testing.T) {
 		{
 			name: "Error reading final pipeline file",
 			setupMock: func() {
-				mockIO.EXPECT().ReadFile("/opt/sensoroni/sigma_final_pipeline.yaml").Return(nil, errors.New("file read error"))
+				iom.EXPECT().ReadFile("/opt/sensoroni/sigma_final_pipeline.yaml").Return(nil, errors.New("file read error"))
 			},
 			expectedChange: false,
 			expectedHash:   "",
@@ -310,9 +314,11 @@ func TestCheckSigmaPipelines(t *testing.T) {
 
 func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	mio := mock.NewMockIOManager(ctrl)
+	defer ctrl.Finish()
 
-	mio.EXPECT().ExecCommand(gomock.Cond(func(x any) bool {
+	iom := mock.NewMockIOManager(ctrl)
+
+	iom.EXPECT().ExecCommand(gomock.Cond(func(x any) bool {
 		cmd := x.(*exec.Cmd)
 
 		if !strings.HasSuffix(cmd.Path, "sigma") {
@@ -331,14 +337,23 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 	})).Return([]byte("<eql>"), 0, time.Duration(0), nil)
 
 	engine := ElastAlertEngine{
-		IOManager: mio,
+		IOManager: iom,
 	}
 
 	det := &model.Detection{
 		PublicID: "00000000-0000-0000-0000-000000000000",
-		Content:  "totally good sigma",
+		Content:  `{"detection": {"condition": "*"}}`,
 		Title:    "Test Detection",
 		Severity: model.SeverityHigh,
+		Overrides: []*model.Override{
+			{
+				Type:      model.OverrideTypeCustomFilter,
+				IsEnabled: true,
+				OverrideParameters: model.OverrideParameters{
+					CustomFilter: util.Ptr(`{"this": ["that"]}`),
+				},
+			},
+		},
 	}
 
 	query, err := engine.sigmaToElastAlert(context.Background(), det)
@@ -369,9 +384,11 @@ filter:
 
 func TestSigmaToElastAlertSunnyDayLicensed(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	mio := mock.NewMockIOManager(ctrl)
+	defer ctrl.Finish()
 
-	mio.EXPECT().ExecCommand(gomock.Cond(func(x any) bool {
+	iom := mock.NewMockIOManager(ctrl)
+
+	iom.EXPECT().ExecCommand(gomock.Cond(func(x any) bool {
 		cmd := x.(*exec.Cmd)
 
 		if !strings.HasSuffix(cmd.Path, "sigma") {
@@ -390,7 +407,7 @@ func TestSigmaToElastAlertSunnyDayLicensed(t *testing.T) {
 	})).Return([]byte("<eql>"), 0, time.Duration(0), nil)
 
 	engine := ElastAlertEngine{
-		IOManager: mio,
+		IOManager: iom,
 	}
 
 	det := &model.Detection{
@@ -431,9 +448,11 @@ filter:
 
 func TestSigmaToElastAlertError(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	mio := mock.NewMockIOManager(ctrl)
+	defer ctrl.Finish()
 
-	mio.EXPECT().ExecCommand(gomock.Cond(func(x any) bool {
+	iom := mock.NewMockIOManager(ctrl)
+
+	iom.EXPECT().ExecCommand(gomock.Cond(func(x any) bool {
 		cmd := x.(*exec.Cmd)
 
 		if !strings.HasSuffix(cmd.Path, "sigma") {
@@ -452,7 +471,7 @@ func TestSigmaToElastAlertError(t *testing.T) {
 	})).Return([]byte("Error: something went wrong"), 1, time.Duration(0), errors.New("non-zero return"))
 
 	engine := ElastAlertEngine{
-		IOManager: mio,
+		IOManager: iom,
 	}
 
 	det := &model.Detection{
@@ -533,8 +552,6 @@ level: high
 		isRunning:         true,
 		sigmaRulePackages: []string{"all_rules"},
 	}
-	engine.allowRegex = regexp.MustCompile("00000000-0000-0000-0000-00000000")
-	engine.denyRegex = regexp.MustCompile("deny")
 
 	expected := &model.Detection{
 		Author:      "Corey Ogburn",
@@ -591,20 +608,18 @@ license: Elastic-2.0
 		},
 	}
 
-	mio := mock.NewMockIOManager(gomock.NewController(t))
-	mio.EXPECT().WalkDir(gomock.Eq("repo-path"), gomock.Any()).DoAndReturn(func(path string, fn fs.WalkDirFunc) error {
-		return fn("rules/so_soc_failed_login.yml", &MockDirEntry{
-			name: "so_soc_failed_login.yml",
+	iom := mock.NewMockIOManager(gomock.NewController(t))
+	iom.EXPECT().WalkDir(gomock.Eq("repo-path"), gomock.Any()).DoAndReturn(func(path string, fn fs.WalkDirFunc) error {
+		return fn("rules/so_soc_failed_login.yml", &handmock.MockDirEntry{
+			Filename: "so_soc_failed_login.yml",
 		}, nil)
 	})
-	mio.EXPECT().ReadFile(gomock.Eq("rules/so_soc_failed_login.yml")).Return([]byte(data), nil)
+	iom.EXPECT().ReadFile(gomock.Eq("rules/so_soc_failed_login.yml")).Return([]byte(data), nil)
 
 	engine := ElastAlertEngine{
 		isRunning: true,
-		IOManager: mio,
+		IOManager: iom,
 	}
-	engine.allowRegex = regexp.MustCompile("bf86ef21-41e6-417b-9a05-b9ea6bf28a38")
-	engine.denyRegex = regexp.MustCompile("deny")
 
 	expected := &model.Detection{
 		Author:      "Security Onion Solutions",
@@ -632,21 +647,22 @@ func TestDownloadSigmaPackages(t *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	mio := mock.NewMockIOManager(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
 	body := "data"
 
 	for i := 0; i < 5; i++ {
 		// can't use mock's Times(x) because the first response's body
 		// closing will result in remaining requests getting 0 data
-		mio.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+		iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
 			StatusCode:    http.StatusOK,
 			Body:          io.NopCloser(strings.NewReader(body)),
 			ContentLength: int64(len(body)),
 		}, nil)
 	}
 
-	mio.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+	iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
 		StatusCode: http.StatusNotFound,
 	}, nil)
 
@@ -655,7 +671,7 @@ func TestDownloadSigmaPackages(t *testing.T) {
 	engine := ElastAlertEngine{
 		sigmaRulePackages:            pkgs,
 		sigmaPackageDownloadTemplate: "localhost:3000/%s.zip",
-		IOManager:                    mio,
+		IOManager:                    iom,
 	}
 
 	pkgZips, errMap := engine.downloadSigmaPackages()
@@ -672,7 +688,7 @@ func TestLoadSigmaPackagesFromDisks(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mio := mock.NewMockIOManager(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
 	airgapBasePath := "/nsm/rules/detect-sigma/rulesets/"
 
 	// List of packages to be loaded from disk
@@ -681,17 +697,17 @@ func TestLoadSigmaPackagesFromDisks(t *testing.T) {
 	// Setting up mocks for each expected file read, except for the "fake" package to simulate an error
 	for _, pkg := range pkgs[:len(pkgs)-1] {
 		expectedFilePath := airgapBasePath + "sigma_" + pkg + ".zip"
-		mio.EXPECT().ReadFile(expectedFilePath).Return([]byte("mocked data for "+pkg), nil)
+		iom.EXPECT().ReadFile(expectedFilePath).Return([]byte("mocked data for "+pkg), nil)
 	}
 
 	// Simulating an error for the 'fake' package
 	fakeFilePath := airgapBasePath + "sigma_fake.zip"
-	mio.EXPECT().ReadFile(fakeFilePath).Return(nil, errors.New("file not found"))
+	iom.EXPECT().ReadFile(fakeFilePath).Return(nil, errors.New("file not found"))
 
 	engine := ElastAlertEngine{
 		sigmaRulePackages: pkgs,
 		airgapBasePath:    airgapBasePath,
-		IOManager:         mio,
+		IOManager:         iom,
 	}
 
 	zipData, errMap := engine.loadSigmaPackagesFromDisk()
@@ -781,45 +797,32 @@ detection:
   condition: selection
 falsepositives:
   - Unlikely`
+	SimpleRule2SID = "19aa1142-94dc-43ef-af58-9b31406dcdc9"
+	SimpleRule2    = `title: Griffon Malware Attack Pattern
+id: 19aa1142-94dc-43ef-af58-9b31406dcdc9
+status: experimental
+description: Detects process execution patterns related to Griffon malware as reported by Kaspersky
+references:
+  - https://securelist.com/fin7-5-the-infamous-cybercrime-rig-fin7-continues-its-activities/90703/
+author: Nasreddine Bencherchali (Nextron Systems)
+date: 2023/03/09
+tags:
+  - attack.execution
+  - detection.emerging_threats
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+      - '\local\temp\'
+      - '//b /e:jscript'
+      - '.txt'
+  condition: selection
+falsepositives:
+  - Unlikely
+level: critical`
 )
-
-type MockDirEntry struct {
-	name  string
-	isDir bool
-	typ   fs.FileMode
-}
-
-func (mde *MockDirEntry) Name() string {
-	return mde.name
-}
-
-func (mde *MockDirEntry) IsDir() bool {
-	return mde.isDir
-}
-
-func (mde *MockDirEntry) Type() fs.FileMode {
-	return mde.typ
-}
-
-func (mde *MockDirEntry) ModTime() time.Time {
-	return time.Now()
-}
-
-func (mde *MockDirEntry) Mode() fs.FileMode {
-	return mde.typ
-}
-
-func (mde *MockDirEntry) Size() int64 {
-	return 100
-}
-
-func (mde *MockDirEntry) Sys() any {
-	return nil
-}
-
-func (mde *MockDirEntry) Info() (fs.FileInfo, error) {
-	return mde, nil
-}
 
 func TestSyncElastAlert(t *testing.T) {
 	t.Parallel()
@@ -863,15 +866,15 @@ func TestSyncElastAlert(t *testing.T) {
 				// IndexExistingRules
 				filename := SimpleRuleSID + ".yml"
 				m.EXPECT().ReadDir(mod.elastAlertRulesFolder).Return([]fs.DirEntry{
-					&MockDirEntry{
-						name: filename,
+					&handmock.MockDirEntry{
+						Filename: filename,
 					},
-					&MockDirEntry{
-						name:  "ignored_dir",
-						isDir: true,
+					&handmock.MockDirEntry{
+						Filename: "ignored_dir",
+						Dir:      true,
 					},
-					&MockDirEntry{
-						name: "ignored.txt",
+					&handmock.MockDirEntry{
+						Filename: "ignored.txt",
 					},
 				}, nil)
 				// DeleteFile when disabling
@@ -920,7 +923,9 @@ sofilter_hosts:
 		test := test
 		t.Run(test.Name, func(t *testing.T) {
 			t.Parallel()
+
 			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
 			mockIO := mock.NewMockIOManager(ctrl)
 
@@ -1002,28 +1007,30 @@ func TestExtractDetails(t *testing.T) {
 
 func TestGetDeployedPublicIds(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	mio := mock.NewMockIOManager(ctrl)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
 	path := "path"
 
-	mio.EXPECT().ReadDir(path).Return([]fs.DirEntry{
-		&MockDirEntry{
-			name: "00000000-0000-0000-0000-000000000000.yml",
+	iom.EXPECT().ReadDir(path).Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: "00000000-0000-0000-0000-000000000000.yml",
 		},
-		&MockDirEntry{
-			name: "11111111-1111-1111-1111-111111111111.yaml",
+		&handmock.MockDirEntry{
+			Filename: "11111111-1111-1111-1111-111111111111.yaml",
 		},
-		&MockDirEntry{
-			name:  "ignored_dir",
-			isDir: true,
+		&handmock.MockDirEntry{
+			Filename: "ignored_dir",
+			Dir:      true,
 		},
-		&MockDirEntry{
-			name: "ignored.txt",
+		&handmock.MockDirEntry{
+			Filename: "ignored.txt",
 		},
 	}, nil)
 
 	eng := &ElastAlertEngine{
 		elastAlertRulesFolder: path,
-		IOManager:             mio,
+		IOManager:             iom,
 	}
 
 	ids, err := eng.getDeployedPublicIds()
@@ -1034,107 +1041,310 @@ func TestGetDeployedPublicIds(t *testing.T) {
 	assert.Contains(t, ids, "11111111-1111-1111-1111-111111111111")
 }
 
-func TestBuildHttpClient(t *testing.T) {
-	t.Parallel()
+func TestSyncWriteNoReadFail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	tests := []struct {
-		Name                 string
-		Proxy                string
-		RootCA               string
-		InsecureSkipVerify   bool
-		ExpectEmptyTransport bool
-	}{
-		{
-			Name:                 "Empty",
-			ExpectEmptyTransport: true,
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	detStore.EXPECT().GetDetectionByPublicId(gomock.Any(), "123").Return(nil, errors.New("Object not found"))
+
+	wnr := util.Ptr("123")
+
+	eng := &ElastAlertEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
 		},
-		{
-			Name:  "Has Proxy",
-			Proxy: "http://myProxy:3128",
-		},
-		{
-			Name:   "Has Root CA",
-			RootCA: "pubkey",
-		},
-		{
-			Name:               "InvalidSkipVerify",
-			InsecureSkipVerify: true,
-		},
-		{
-			Name:   "Proxy + Root CA",
-			Proxy:  "http://myProxy:3128",
-			RootCA: "pubkey",
-		},
-		{
-			Name:               "Proxy + InsecureSkipVerify",
-			Proxy:              "http://myProxy:3128",
-			InsecureSkipVerify: true,
-		},
-		{
-			Name:               "Proxy + Root CA + InsecureSkipVerify",
-			Proxy:              "http://myProxy:3128",
-			RootCA:             "pubkey",
-			InsecureSkipVerify: true,
-		},
-		{
-			Name:                 "Invalid Proxy",
-			Proxy:                "%",
-			ExpectEmptyTransport: true,
-		},
+		writeNoRead: wnr,
 	}
 
-	proxy := "http://myProxy:3128"
+	logger := log.WithField("detectionEngine", "test-elastalert")
 
-	resman := &ResourceManager{
-		Engine: &ElastAlertEngine{
-			srv: &server.Server{
-				Config: &config.ServerConfig{
-					Proxy: "",
-				},
+	err := eng.Sync(logger, false)
+	assert.Equal(t, detections.ErrSyncFailed, err)
+	assert.Equal(t, wnr, eng.writeNoRead)
+}
+
+func TestSyncIncrementalNoChanges(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	buf := bytes.NewBuffer([]byte{})
+
+	writer := zip.NewWriter(buf)
+	sr, err := writer.Create("rules/simple_rule.yml")
+	assert.NoError(t, err)
+
+	_, err = sr.Write([]byte(SimpleRule))
+	assert.NoError(t, err)
+
+	assert.NoError(t, writer.Close())
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+
+	eng := &ElastAlertEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+		},
+		isRunning:                     true,
+		sigmaPipelineFinal:            "sigmaPipelineFinal",
+		sigmaPipelineSO:               "sigmaPipelineSO",
+		sigmaPipelinesFingerprintFile: "sigmaPipelinesFingerprintFile",
+		sigmaRulePackages:             []string{"core+"},
+		sigmaPackageDownloadTemplate:  "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip",
+		reposFolder:                   "repos",
+		rulesFingerprintFile:          "rulesFingerprintFile",
+		elastAlertRulesFolder:         "elastAlertRulesFolder",
+		rulesRepos: []*model.RuleRepo{
+			{
+				Repo:      "https://github.com/user/repo",
+				Community: true,
 			},
 		},
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			StateFilePath: "stateFilePath",
+		},
+		IntegrityCheckerData: detections.IntegrityCheckerData{
+			IsRunning: true,
+		},
+		IOManager: iom,
 	}
 
-	for _, test := range tests {
-		test := test
-		t.Run(test.Name, func(t *testing.T) {
-			resman.Engine.srv.Config.Proxy = test.Proxy
-			resman.Engine.srv.Config.AdditionalCA = test.RootCA
-			resman.Engine.srv.Config.InsecureSkipVerify = test.InsecureSkipVerify
+	logger := log.WithField("detectionEngine", "test-elastalert")
 
-			client := resman.buildHttpClient()
-			transport := client.Transport.(*http.Transport)
+	// checkSigmaPipelines
+	iom.EXPECT().ReadFile("sigmaPipelineFinal").Return([]byte("data"), nil)
+	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
+	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7-3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7"), nil)
+	// downloadSigmaPackages
+	iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(buf),
+	}, nil)
+	// UpdateRepos
+	iom.EXPECT().ReadDir("repos").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: "repo",
+			Dir:      true,
+		},
+	}, nil)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo").Return(false, false)
+	// check for changes before sync
+	iom.EXPECT().ReadFile("rulesFingerprintFile").Return([]byte(`{"core+": "c6OTI9nTQxGEeeNkSZZB9+OESMNvfMXrb+XLtMiVhf0="}`), nil)
+	// WriteStateFile
+	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	// IntegrityCheck
+	iom.EXPECT().ReadDir("elastAlertRulesFolder").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: SimpleRuleSID + ".yml",
+		},
+	}, nil) // getDeployedPublicIds
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		SimpleRuleSID: nil,
+	}, nil)
 
-			if test.ExpectEmptyTransport {
-				assert.Equal(t, &http.Transport{}, transport)
-				return
-			}
+	err = eng.Sync(logger, false)
+	assert.NoError(t, err)
 
-			if test.Proxy != "" {
-				assert.NotNil(t, transport)
-				assert.NotNil(t, transport.Proxy)
+	assert.True(t, eng.EngineState.Syncing) // stays true until the SyncScheduler resets it
+	assert.False(t, eng.EngineState.IntegrityFailure)
+	assert.False(t, eng.EngineState.Migrating)
+	assert.False(t, eng.EngineState.MigrationFailure)
+	assert.False(t, eng.EngineState.Importing)
+	assert.False(t, eng.EngineState.SyncFailure)
+}
 
-				proxyURL, err := transport.Proxy(nil)
-				assert.NoError(t, err)
-				assert.Equal(t, proxy, proxyURL.String())
-			}
+func TestSyncChanges(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-			if test.RootCA != "" {
-				assert.NotNil(t, transport.TLSClientConfig)
-				assert.NotNil(t, transport.TLSClientConfig.RootCAs)
-			} else {
-				if transport.TLSClientConfig != nil {
-					assert.Nil(t, transport.TLSClientConfig.RootCAs)
-				}
-			}
+	buf := bytes.NewBuffer([]byte{})
 
-			if test.InsecureSkipVerify {
-				assert.True(t, transport.TLSClientConfig.InsecureSkipVerify)
-			} else {
-				if transport.TLSClientConfig != nil {
-					assert.False(t, transport.TLSClientConfig.InsecureSkipVerify)
-				}
-			}
-		})
+	writer := zip.NewWriter(buf)
+	sr, err := writer.Create("rules/simple_rule.yml")
+	assert.NoError(t, err)
+
+	_, err = sr.Write([]byte(SimpleRule))
+	assert.NoError(t, err)
+
+	assert.NoError(t, writer.Close())
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+	bim := servermock.NewMockBulkIndexer(ctrl)
+	auditm := servermock.NewMockBulkIndexer(ctrl)
+
+	eng := &ElastAlertEngine{
+		srv: &server.Server{
+			Context:        context.Background(),
+			Detectionstore: detStore,
+		},
+		isRunning:                     true,
+		sigmaPipelineFinal:            "sigmaPipelineFinal",
+		sigmaPipelineSO:               "sigmaPipelineSO",
+		sigmaPipelinesFingerprintFile: "sigmaPipelinesFingerprintFile",
+		sigmaRulePackages:             []string{"core+"},
+		sigmaPackageDownloadTemplate:  "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip",
+		reposFolder:                   "repos",
+		rulesFingerprintFile:          "rulesFingerprintFile",
+		elastAlertRulesFolder:         "elastAlertRulesFolder",
+		rulesRepos: []*model.RuleRepo{
+			{
+				Repo:      "https://github.com/user/repo",
+				Community: true,
+			},
+		},
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			StateFilePath: "stateFilePath",
+		},
+		IntegrityCheckerData: detections.IntegrityCheckerData{
+			IsRunning: true,
+		},
+		IOManager: iom,
 	}
+
+	logger := log.WithField("detectionEngine", "test-elastalert")
+
+	workItems := []esutil.BulkIndexerItem{}
+	auditItems := []esutil.BulkIndexerItem{}
+
+	// checkSigmaPipelines
+	iom.EXPECT().ReadFile("sigmaPipelineFinal").Return([]byte("data"), nil)
+	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
+	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("a different hash"), nil)
+	// downloadSigmaPackages
+	iom.EXPECT().MakeRequest(gomock.Any()).Return(&http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(buf),
+	}, nil)
+	// UpdateRepos
+	iom.EXPECT().ReadDir("repos").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: "repo",
+			Dir:      true,
+		},
+	}, nil)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo").Return(false, false)
+	// parseRepoRules
+	iom.EXPECT().WalkDir("repos/repo", gomock.Any()).DoAndReturn(func(path string, fn fs.WalkDirFunc) error {
+		files := []fs.DirEntry{
+			&handmock.MockDirEntry{
+				Filename: "rules/123.yml",
+			},
+			&handmock.MockDirEntry{
+				Filename: "rules/456.yml",
+			},
+		}
+
+		for _, file := range files {
+			err := fn(file.Name(), file, nil)
+			assert.NoError(t, err)
+		}
+
+		return nil
+	})
+	iom.EXPECT().ReadFile("rules/123.yml").Return([]byte(SimpleRule), nil)
+	iom.EXPECT().ReadFile("rules/456.yml").Return([]byte(SimpleRule2), nil)
+	// syncCommunityDetections
+	iom.EXPECT().ReadDir("elastAlertRulesFolder").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: SimpleRuleSID + ".yml",
+		},
+		&handmock.MockDirEntry{
+			Filename: "00000000-0000-0000-0000-000000000000.yml",
+		},
+	}, nil) // IndexExistingRules
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		SimpleRuleSID: {
+			Auditable: model.Auditable{
+				Id:         "abc",
+				CreateTime: util.Ptr(time.Now()),
+			},
+			PublicID:  SimpleRuleSID,
+			IsEnabled: true,
+		},
+		"00000000-0000-0000-0000-000000000000": {
+			Auditable: model.Auditable{
+				Id: "deleteme",
+			},
+			PublicID: "00000000-0000-0000-0000-000000000000",
+		},
+	}, nil)
+	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil)
+	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil).Times(3)
+	bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
+		if item.OnSuccess != nil {
+			resp := esutil.BulkIndexerResponseItem{
+				DocumentID: "id",
+			}
+			item.OnSuccess(ctx, item, resp)
+		}
+
+		workItems = append(workItems, item)
+
+		return nil
+	}).Times(3)
+	iom.EXPECT().DeleteFile("elastAlertRulesFolder/00000000-0000-0000-0000-000000000000.yml").Return(nil)
+	bim.EXPECT().Close(gomock.Any()).Return(nil)
+	bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
+	iom.EXPECT().ExecCommand(gomock.Any()).Return([]byte("\n[query]"), 0, time.Duration(time.Second), nil) // sigmaToElastAlert
+	iom.EXPECT().WriteFile("elastAlertRulesFolder/bcc6f179-11cd-4111-a9a6-0fab68515cf7.yml", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(auditm, nil)
+	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return([]byte("document"), "index", nil).Times(3)
+	auditm.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
+		if item.OnSuccess != nil {
+			resp := esutil.BulkIndexerResponseItem{
+				DocumentID: "id",
+			}
+			item.OnSuccess(ctx, item, resp)
+		}
+
+		auditItems = append(auditItems, item)
+
+		return nil
+	}).Times(3)
+	auditm.EXPECT().Close(gomock.Any()).Return(nil)
+	auditm.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
+	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)        // WriteStateFile
+	iom.EXPECT().WriteFile("rulesFingerprintFile", gomock.Any(), fs.FileMode(0644)).Return(nil) // WriteFingerprintFile
+	// regenNeeded
+	iom.EXPECT().WriteFile("sigmaPipelinesFingerprintFile", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	// IntegrityCheck
+	iom.EXPECT().ReadDir("elastAlertRulesFolder").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: SimpleRuleSID + ".yml",
+		},
+	}, nil) // getDeployedPublicIds
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		SimpleRuleSID: nil,
+	}, nil)
+
+	err = eng.Sync(logger, true)
+	assert.NoError(t, err)
+
+	assert.False(t, eng.EngineState.IntegrityFailure)
+	assert.False(t, eng.EngineState.Migrating)
+	assert.False(t, eng.EngineState.MigrationFailure)
+	assert.False(t, eng.EngineState.Importing)
+	assert.False(t, eng.EngineState.SyncFailure)
+
+	assert.Len(t, workItems, 3)
+	assert.Len(t, auditItems, 3)
+
+	workActions := lo.Map(workItems, func(item esutil.BulkIndexerItem, _ int) string {
+		return item.Action
+	})
+
+	auditActions := lo.Map(auditItems, func(item esutil.BulkIndexerItem, _ int) string {
+		return item.Action
+	})
+
+	assert.Equal(t, []string{"update", "create", "delete"}, workActions)
+	assert.Equal(t, []string{"create", "create", "create"}, auditActions)
+
+	workDocIds := lo.Map(workItems, func(item esutil.BulkIndexerItem, _ int) string {
+		return item.DocumentID
+	})
+
+	assert.Equal(t, []string{"abc", "", "deleteme"}, workDocIds) // update has an id, create does not, delete does
 }

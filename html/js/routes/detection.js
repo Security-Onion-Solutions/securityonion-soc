@@ -1,4 +1,4 @@
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -139,6 +139,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				'sigma': 'elastalert',
 				'yara': 'strelka',
 			},
+			changedKeys: {},
 	}},
 	created() {
 		this.$root.initializeEditor();
@@ -494,17 +495,75 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.extractedCreated = yaml['date'];
 			this.extractedUpdated = yaml['modified'];
 		},
-		async loadHistory() {
+		async loadHistory(showLoadingIndicator = false) {
+			if (showLoadingIndicator) this.$root.startLoading();
+
 			const id = this.$route.params.id;
 
 			const response = await this.$root.papi.get(`detection/${id}/history`);
 			if (response && response.data) {
 				this.history = response.data;
 
+				//this.changedKeys[this.history[this.history.length - 1]['id']] = this.findHistoryChange(this.history);
+
 				for (var i = 0; i < this.history.length; i++) {
 					this.$root.populateUserDetails(this.history[i], "userId", "owner");
 				}
 			}
+			if (showLoadingIndicator) this.$root.stopLoading();
+		},
+		findHistoryChange(id) {
+			let retList = [];
+
+			let index = this.history.findIndex((row) => row.id === id);
+
+			if (this.history.length > 1 && index !== 0) {
+				let oldDict = JSON.parse(JSON.stringify(this.history[index - 1]));
+				let newDict = JSON.parse(JSON.stringify(this.history[index]));
+				let releventKeys = ['title', 'description', 'isEnabled', 'severity', 'content'];
+
+				if (oldDict['engine'] === 'elastalert') {
+					contentJsonOld = jsyaml.load(oldDict['content'], { schema: jsyaml.FAILSAFE_SCHEMA });
+					contentJsonNew = jsyaml.load(newDict['content'], { schema: jsyaml.FAILSAFE_SCHEMA });
+
+					delete contentJsonOld['title'];
+					delete contentJsonOld['description'];
+					delete contentJsonOld['level'];
+					delete contentJsonNew['title'];
+					delete contentJsonNew['description'];
+					delete contentJsonNew['level'];
+
+					oldDict['content'] = JSON.stringify(contentJsonOld);
+					newDict['content'] = JSON.stringify(contentJsonNew);
+
+				} else if (oldDict['engine'] === 'suricata'){
+					let sev1 = oldDict['severity'];
+					let sev2 = newDict['severity'];
+					let reversedSevTranslations = Object.fromEntries(
+						Object.entries(this.severityTranslations).map(([k, v]) => [v, k])
+					);
+
+					if (reversedSevTranslations.hasOwnProperty(sev1)) sev1 = reversedSevTranslations[sev1];
+					if (reversedSevTranslations.hasOwnProperty(sev2)) sev2 = reversedSevTranslations[sev2];
+
+					regex1 = new RegExp('signature_severity' + sev1, 'ig');
+					regex2 = new RegExp('signature_severity' + sev2, 'ig');
+
+					oldDict['content'] = oldDict['content'].replaceAll(/\s/g,'').replaceAll('msg:"' + oldDict['title'].replaceAll(/\s/g,'') + '"', '').replaceAll(regex1, '');
+					newDict['content'] = newDict['content'].replaceAll(/\s/g,'').replaceAll('msg:"' + newDict['title'].replaceAll(/\s/g,'') + '"', '').replaceAll(regex2, '');
+
+				} else {
+					oldDict['content'] = oldDict['content'].replaceAll(/\s/g,'').replaceAll('rule' + oldDict['title'].replaceAll(/\s/g,''), '').replaceAll('description="' + oldDict['description'].replaceAll(/\s/g,'') + '"', '');
+					newDict['content'] = newDict['content'].replaceAll(/\s/g,'').replaceAll('rule' + newDict['title'].replaceAll(/\s/g,''), '').replaceAll('description="' + newDict['description'].replaceAll(/\s/g,'') + '"', '');
+				}
+
+				for (let key of releventKeys) {
+					if (oldDict[key] !== newDict[key]) {
+						retList.push(key);
+					}
+				}
+			}
+			this.changedKeys[id] = retList;
 		},
 		getDefaultPreset(preset) {
 			if (this.presets) {
@@ -684,6 +743,9 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				this.extractDetection(response);
 
 				switch (response.status) {
+					case 205:
+						this.$root.showWarning(this.i18n.WARN_STATUS_EFFECTED_BY_FILTER, true);
+						break;
 					case 206:
 						this.$root.showWarning(this.i18n.disabledFailedSync);
 						break;
@@ -714,10 +776,14 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			}
 		},
 		async duplicateDetection() {
-			const response = await this.$root.papi.post('/detection/' + encodeURIComponent(this.$route.params.id) + '/duplicate');
-			this.extractDetection(response);
+			try {
+				const response = await this.$root.papi.post('/detection/' + encodeURIComponent(this.$route.params.id) + '/duplicate');
+				this.extractDetection(response);
 
-			this.$router.push({ name: 'detection', params: { id: response.data.id } });
+				this.$router.push({ name: 'detection', params: { id: response.data.id } });
+			} catch (error) {
+				this.$root.showError(error);
+			}
 		},
 		deleteDetection() {
 			this.confirmDeleteDialog = true;
@@ -1286,5 +1352,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			return Prism.highlight(code, grammar, language);
 		},
+		checkChangedKey(id, key) {
+			return this.changedKeys[id]?.includes(key);
+		}
 	}
 }});

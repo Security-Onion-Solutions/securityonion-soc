@@ -12,6 +12,8 @@ import (
 	context "context"
 	reflect "reflect"
 
+	log "github.com/apex/log"
+	esutil "github.com/elastic/go-elasticsearch/v8/esutil"
 	model "github.com/security-onion-solutions/securityonion-soc/model"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -37,6 +39,37 @@ func NewMockDetectionstore(ctrl *gomock.Controller) *MockDetectionstore {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockDetectionstore) EXPECT() *MockDetectionstoreMockRecorder {
 	return m.recorder
+}
+
+// BuildBulkIndexer mocks base method.
+func (m *MockDetectionstore) BuildBulkIndexer(arg0 context.Context, arg1 *log.Entry) (esutil.BulkIndexer, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BuildBulkIndexer", arg0, arg1)
+	ret0, _ := ret[0].(esutil.BulkIndexer)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// BuildBulkIndexer indicates an expected call of BuildBulkIndexer.
+func (mr *MockDetectionstoreMockRecorder) BuildBulkIndexer(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildBulkIndexer", reflect.TypeOf((*MockDetectionstore)(nil).BuildBulkIndexer), arg0, arg1)
+}
+
+// ConvertObjectToDocument mocks base method.
+func (m *MockDetectionstore) ConvertObjectToDocument(arg0 context.Context, arg1 string, arg2 any, arg3 *model.Auditable, arg4 bool, arg5, arg6 *string) ([]byte, string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ConvertObjectToDocument", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(string)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// ConvertObjectToDocument indicates an expected call of ConvertObjectToDocument.
+func (mr *MockDetectionstoreMockRecorder) ConvertObjectToDocument(arg0, arg1, arg2, arg3, arg4, arg5, arg6 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConvertObjectToDocument", reflect.TypeOf((*MockDetectionstore)(nil).ConvertObjectToDocument), arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 }
 
 // CreateComment mocks base method.
@@ -251,19 +284,4 @@ func (m *MockDetectionstore) UpdateDetection(arg0 context.Context, arg1 *model.D
 func (mr *MockDetectionstoreMockRecorder) UpdateDetection(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDetection", reflect.TypeOf((*MockDetectionstore)(nil).UpdateDetection), arg0, arg1)
-}
-
-// UpdateDetectionField mocks base method.
-func (m *MockDetectionstore) UpdateDetectionField(arg0 context.Context, arg1 string, arg2 map[string]any) (*model.Detection, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateDetectionField", arg0, arg1, arg2)
-	ret0, _ := ret[0].(*model.Detection)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// UpdateDetectionField indicates an expected call of UpdateDetectionField.
-func (mr *MockDetectionstoreMockRecorder) UpdateDetectionField(arg0, arg1, arg2 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDetectionField", reflect.TypeOf((*MockDetectionstore)(nil).UpdateDetectionField), arg0, arg1, arg2)
 }

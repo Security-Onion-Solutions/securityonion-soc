@@ -1,3 +1,8 @@
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
+
 package detections
 
 import (
@@ -8,8 +13,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/handmock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
@@ -42,6 +49,48 @@ func TestTruncateMap(t *testing.T) {
 	// Test truncating to zero elements
 	truncatedErrMap = TruncateMap(errMap, 0)
 	assert.Equal(t, 0, len(truncatedErrMap), "Truncated map should have no elements when limit is 0.")
+}
+
+func TestTruncateList(t *testing.T) {
+	tests := []struct {
+		Name       string
+		Array      []int
+		TruncateTo uint
+		ExpArray   []int
+	}{
+		{
+			Name:       "Empty",
+			Array:      []int{},
+			TruncateTo: 10,
+			ExpArray:   []int{},
+		},
+		{
+			Name:       "Below Limit",
+			Array:      []int{0},
+			TruncateTo: 10,
+			ExpArray:   []int{0},
+		},
+		{
+			Name:       "At Limit",
+			Array:      []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+			TruncateTo: 10,
+			ExpArray:   []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+		},
+		{
+			Name:       "Above Limit",
+			Array:      []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+			TruncateTo: 5,
+			ExpArray:   []int{0, 1, 2, 3, 4},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			truncated := TruncateList(test.Array, test.TruncateTo)
+			assert.Equal(t, test.ExpArray, truncated)
+		})
+	}
 }
 
 func TestDetermineWaitTimeNoState(t *testing.T) {
@@ -332,4 +381,71 @@ func TestDeduplicateByPublicId(t *testing.T) {
 			assert.Equal(t, test.ExpOutput, output)
 		})
 	}
+}
+
+func TestCheckTemplate(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	detStore := servermock.NewMockDetectionstore(ctrl)
+
+	// note: after the first time DoesTemplateExist returns true, it will not be called
+	// again no matter how many times CheckTemplate is called.
+	detStore.EXPECT().DoesTemplateExist(ctx, "so-detection").Return(false, nil)
+	detStore.EXPECT().DoesTemplateExist(ctx, "so-detection").Return(true, nil).Times(1)
+
+	results := []bool{}
+	for i := 0; i < 10; i++ {
+		result := CheckTemplate(ctx, detStore)
+		results = append(results, result)
+	}
+
+	assert.Equal(t, []bool{false, true, true, true, true, true, true, true, true, true}, results)
+}
+
+func TestUpdateRepos(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+	iom.EXPECT().ReadDir("baseRepoFolder").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: "repo1",
+			Dir:      true,
+		},
+		&handmock.MockDirEntry{
+			Filename: "repo3",
+			Dir:      true,
+		},
+	}, nil)
+	iom.EXPECT().PullRepo(gomock.Any(), "baseRepoFolder/repo1").Return(false, false)
+	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo2", "http://github.com/user/repo2").Return(nil)
+	iom.EXPECT().RemoveAll("baseRepoFolder/repo3").Return(nil)
+
+	isRunning := true
+
+	repos := []*model.RuleRepo{
+		{
+			Repo: "http://github.com/user/repo1",
+		},
+		{
+			Repo: "http://github.com/user/repo2",
+		},
+	}
+	cfg := &config.ServerConfig{}
+
+	allRepos, anythingNew, err := UpdateRepos(&isRunning, "baseRepoFolder", repos, cfg, iom)
+	assert.NoError(t, err)
+	assert.Len(t, allRepos, len(repos))
+	assert.Equal(t, &RepoOnDisk{
+		Repo: repos[0],
+		Path: "baseRepoFolder/repo1",
+	}, allRepos[0])
+	assert.Equal(t, &RepoOnDisk{
+		Repo:        repos[1],
+		Path:        "baseRepoFolder/repo2",
+		WasModified: true,
+	}, allRepos[1])
+	assert.True(t, anythingNew)
 }

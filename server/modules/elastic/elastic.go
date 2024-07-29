@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -73,8 +73,10 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
 	casesEnabled := module.GetBoolDefault(cfg, "casesEnabled", true)
 	lookupTunnelParent := module.GetBoolDefault(cfg, "lookupTunnelParent", true)
 	detectionsEnabled := module.GetBoolDefault(cfg, "detectionsEnabled", true)
+	maxScrollSize := module.GetIntDefault(cfg, "maxScrollSize", 10000)
 	err := elastic.store.Init(host, remoteHosts, username, password, verifyCert, timeShiftMs, defaultDurationMs,
-		esSearchOffsetMs, timeoutMs, cacheMs, index, asyncThreshold, intervals, maxLogLength, lookupTunnelParent)
+		esSearchOffsetMs, timeoutMs, cacheMs, index, asyncThreshold, intervals, maxLogLength, lookupTunnelParent,
+		maxScrollSize)
 	if err == nil && elastic.server != nil {
 		elastic.server.Eventstore = elastic.store
 		if casesEnabled {
@@ -102,8 +104,9 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
 				maxDetAssociations := module.GetIntDefault(cfg, "maxDetectionAssociations", DEFAULT_DETECTION_ASSOCIATIONS_MAX)
 				schemaPrefix := module.GetStringDefault(cfg, "schemaPrefix", DEFAULT_DETECTION_SCHEMA_PREFIX)
 				detstore := NewElasticDetectionstore(elastic.server, elastic.store.esClient, maxLogLength)
+				bulkIndexerWorkerCount := module.GetIntDefault(cfg, "bulkIndexerWorkerCount", -1)
 
-				err = detstore.Init(detIndex, detAuditIndex, maxDetAssociations, schemaPrefix)
+				err = detstore.Init(detIndex, detAuditIndex, maxDetAssociations, schemaPrefix, bulkIndexerWorkerCount)
 				if err == nil {
 					elastic.server.Detectionstore = detstore
 				}

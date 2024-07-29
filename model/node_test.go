@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -34,6 +34,14 @@ func TestSetModel(tester *testing.T) {
 	testModel(tester, "SO2AMI01", "SO2AMI01", "so-cloud-aws.jpg", "")
 	testModel(tester, "SO2AZI01", "SO2AZI01", "so-cloud-azure.jpg", "")
 	testModel(tester, "SO2GCI01", "SO2GCI01", "so-cloud-gcp.jpg", "")
+	testModel(tester, "500-DE02", "500-DE02", "500v2_front_thumb.jpg", "500v2_back_thumb.jpg")
+	testModel(tester, "MN-DE02", "MN-DE02", "MNv2_front_thumb.jpg", "MNv2_back_thumb.jpg")
+	testModel(tester, "1000-DE02", "1000-DE02", "MNv2_front_thumb.jpg", "MNv2_back_thumb.jpg")
+	testModel(tester, "2000-DE02", "2000-DE02", "MNv2_front_thumb.jpg", "MNv2_back_thumb.jpg")
+	testModel(tester, "5000-DE02", "5000-DE02", "5000v2_front_thumb.jpg", "5000v2_back_thumb.jpg")
+	testModel(tester, "SN7200-DE02", "SN7200-DE02", "5000v2_front_thumb.jpg", "5000v2_back_thumb.jpg")
+	testModel(tester, "10K-DE02", "10K-DE02", "NVv2_front_thumb.jpg", "NVv2_back_thumb.jpg")
+	testModel(tester, "SNNV-DE02", "SNNV-DE02", "NVv2_front_thumb.jpg", "NVv2_back_thumb.jpg")
 }
 
 func testStatus(tester *testing.T,

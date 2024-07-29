@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -759,10 +759,27 @@ test('licenseExpiringSoon', () => {
   const date = new Date();
   app.licenseKey = { expiration: date.toISOString() };
   expect(app.isLicenseExpiringSoon()).toBe(true);
-  
+
   app.licenseKey = { expiration: "2024-01-01T01:01:01Z" };
   expect(app.isLicenseExpiringSoon()).toBe(true);
 
   app.licenseKey = { expiration: "2054-01-01T01:01:01Z" };
   expect(app.isLicenseExpiringSoon()).toBe(false);
+});
+
+test('showWarning', () => {
+  var longString = 'x';
+  for (var i = 0; i < 8; i++) {
+    longString += longString;
+  }
+
+  app.showWarning(longString);
+
+  expect(app.warning).toBe(true);
+  expect(app.warningMessage.length).toBe(203); // truncate to 200, add "..."
+
+  app.showWarning(longString, true);
+
+  expect(app.warning).toBe(true);
+  expect(app.warningMessage.length).toBe(longString.length);
 });

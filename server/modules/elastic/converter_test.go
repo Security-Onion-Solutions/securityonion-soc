@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -301,7 +301,7 @@ func TestMapSearch(t *testing.T) {
 
 func TestConvertObjectToDocumentMap(t *testing.T) {
 	caseObj := model.NewCase()
-	actual := convertObjectToDocumentMap("test", caseObj, DEFAULT_CASE_SCHEMA_PREFIX)
+	actual := ConvertObjectToDocumentMap("test", caseObj, DEFAULT_CASE_SCHEMA_PREFIX)
 	assert.NotNil(t, actual)
 	assert.Equal(t, caseObj, actual["so_test"])
 	assert.NotNil(t, actual["@timestamp"])
@@ -604,4 +604,29 @@ func TestConvertSeverity(t *testing.T) {
 	assert.Equal(t, "critical", convertSeverity("critical"))
 	assert.Equal(t, "critical", convertSeverity("4"))
 	assert.Equal(t, "critical", convertSeverity("Critical"))
+}
+
+func TestConvertToElasticScrollRequestEmpty(t *testing.T) {
+	criteria := model.NewEventScrollCriteria()
+	teststore := NewTestStore()
+	actualJson, err := convertToElasticScrollRequest(teststore.fieldDefs, criteria, 10000)
+	assert.Nil(t, err)
+
+	expectedJson := `{"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"*"}}],"must_not":[],"should":[]}},"size":10000}`
+	assert.Equal(t, expectedJson, actualJson)
+}
+
+func TestConvertToElasticScrollRequestWithQuery(t *testing.T) {
+	criteria := model.NewEventScrollCriteria()
+	query := `_index:"*:so-detection" AND so_kind:"detection" AND so_detection.engine:"strelka" AND so_detection.isEnabled:"true"`
+	criteria.RawQuery = query
+	err := criteria.ParsedQuery.Parse(query)
+	assert.NoError(t, err)
+
+	teststore := NewTestStore()
+	actualJson, err := convertToElasticScrollRequest(teststore.fieldDefs, criteria, 5000)
+	assert.Nil(t, err)
+
+	expectedJson := `{"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"_index: \"*:so-detection\" AND so_kind: \"detection\" AND so_detection.engine: \"strelka\" AND so_detection.isEnabled: \"true\""}}],"must_not":[],"should":[]}},"size":5000}`
+	assert.Equal(t, expectedJson, actualJson)
 }

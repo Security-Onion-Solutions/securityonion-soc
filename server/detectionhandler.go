@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -7,17 +7,20 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
+	"github.com/apex/log"
+	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 )
@@ -176,6 +179,12 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	_, err = engine.ApplyFilters(detect)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
 	// Don't trust the client to send the correct author, grab it from the context
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 	user, err := h.server.Userstore.GetUserById(ctx, userID)
@@ -183,6 +192,16 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	detect.Author = detections.MakeUser(user)
+
+	specifiedStatus := detect.IsEnabled
+
+	_, err = engine.ApplyFilters(detect)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	statusModifiedByFilter := detect.IsEnabled != specifiedStatus
 
 	detect, err = h.server.Detectionstore.CreateDetection(ctx, detect)
 	if err != nil {
@@ -203,6 +222,13 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 
 	if len(errMap) != 0 {
 		web.Respond(w, r, http.StatusInternalServerError, errMap)
+		return
+	}
+
+	if statusModifiedByFilter {
+		// success, but the status was modified by a filter to not be what the user
+		// submitted, send a unique code so the UI can display a message
+		web.Respond(w, r, http.StatusResetContent, detect)
 		return
 	}
 
@@ -289,6 +315,16 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	specifiedStatus := detect.IsEnabled
+
+	filterApplied, err := engine.ApplyFilters(detect)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	statusModifiedByFilter := detect.IsEnabled != specifiedStatus
+
 	err = h.PrepareForSave(ctx, detect, engine)
 	if err != nil {
 		if err.Error() == "Object not found" {
@@ -320,7 +356,7 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 	errMap, err := SyncLocalDetections(ctx, h.server, []*model.Detection{detect})
 	if err != nil {
 		fixed := false
-		if detect.IsEnabled {
+		if detect.IsEnabled && !filterApplied {
 			var uerr error
 			log.WithError(err).WithField("detection", detect).Error("unable to sync detection; attempting to disable and resync")
 
@@ -348,6 +384,13 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if statusModifiedByFilter {
+		// success, but the status was modified by a filter to not be what the user
+		// submitted, send a unique code so the UI can display a message
+		web.Respond(w, r, http.StatusResetContent, detect)
+		return
+	}
+
 	web.Respond(w, r, http.StatusOK, detect)
 }
 
@@ -356,6 +399,17 @@ func (h *DetectionHandler) deleteDetection(w http.ResponseWriter, r *http.Reques
 	ctx = web.MarkChangedByUser(ctx, true)
 
 	id := chi.URLParam(r, "id")
+
+	det, err := h.server.Detectionstore.GetDetection(ctx, id)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	if det.IsCommunity {
+		web.Respond(w, r, http.StatusBadRequest, "ERROR_DELETE_COMMUNITY")
+		return
+	}
 
 	old, err := h.server.Detectionstore.DeleteDetection(ctx, id)
 	if err != nil {
@@ -408,7 +462,9 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	IDs := []string{}
+	logger := log.WithField("bulkUpdate", true)
+
+	detects := []*model.Detection{}
 	containsCommunity := false
 
 	if body.Query != nil {
@@ -429,25 +485,24 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 				}
 			}
 
-			IDs = append(IDs, det.Id)
+			detects = append(detects, det)
 		}
 	} else {
 		for _, id := range body.IDs {
-			IDs = append(IDs, id)
-			if body.Delete {
-				det, err := h.server.Detectionstore.GetDetection(ctx, id)
-				if err != nil {
-					web.Respond(w, r, http.StatusInternalServerError, err)
-					return
-				}
+			det, err := h.server.Detectionstore.GetDetection(ctx, id)
+			if err != nil {
+				web.Respond(w, r, http.StatusInternalServerError, err)
+				return
+			}
 
-				if det.IsCommunity {
-					containsCommunity = true
-					if delete {
-						break
-					}
+			if det.IsCommunity {
+				containsCommunity = true
+				if delete {
+					break
 				}
 			}
+
+			detects = append(detects, det)
 		}
 	}
 
@@ -456,45 +511,39 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// new context that doesn't contain a timeout or deadline, but does include
-	// the user we're making requests to ES on behalf of.
 	noTimeOutCtx := context.WithValue(context.Background(), web.ContextKeyRequestor, ctx.Value(web.ContextKeyRequestor).(*model.User))
 	noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
 	noTimeOutCtx = web.MarkChangedByUser(noTimeOutCtx, true)
 
-	go h.bulkUpdateDetectionAsync(noTimeOutCtx, body, IDs)
+	go h.bulkUpdateDetectionAsync(noTimeOutCtx, body, detects, logger)
 
 	web.Respond(w, r, http.StatusAccepted, map[string]interface{}{
-		"count": len(IDs),
+		"count": len(detects),
 	})
 }
 
-// bulkUpdateDetectionAsync is a helper function that performs the bulk update in a separate goroutine.
-// Note that the IdList is SOC Ids, not Public Ids.
-func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *BulkOp, IdList []string) {
-	var err error
-	var update, sync time.Duration
-	errMap := map[string]string{} // map[id]error
-	IDs := map[string]struct{}{}
-	modified := []*model.Detection{}
-	deleted := []*model.Detection{}
-
-	for _, id := range IdList {
-		IDs[id] = struct{}{}
-	}
-
+func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *BulkOp, detects []*model.Detection, logger *log.Entry) {
 	totalTimeStart := time.Now()
+	errMap := map[string]string{}
+	updated := 0
+	audited := 0
+	deleted := 0
+	filtered := 0
+
+	updateDur := time.Duration(0)
+	syncDur := time.Duration(0)
 
 	defer func() {
 		totalTime := time.Since(totalTimeStart)
 
 		withStats := log.WithFields(log.Fields{
-			"error":      len(errMap),
-			"total":      len(IDs),
-			"modified":   len(modified),
-			"deleted":    len(deleted),
-			"updateTime": update.Seconds(),
-			"syncTime":   sync.Seconds(),
+			"errMap":     detections.TruncateMap(errMap, 5),
+			"total":      len(detects),
+			"modified":   updated,
+			"deleted":    deleted,
+			"filtered":   filtered,
+			"updateTime": updateDur.Seconds(),
+			"syncTime":   syncDur.Seconds(),
 			"totalTime":  totalTime.Seconds(),
 		})
 
@@ -512,83 +561,191 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 		h.server.Host.Broadcast("detections:bulkUpdate", "detections", map[string]interface{}{
 			"error":    len(errMap),
 			"verb":     verb,
-			"total":    len(IDs),
-			"modified": len(modified) + len(deleted),
+			"total":    len(detects),
+			"filtered": filtered,
+			"modified": updated + deleted,
 			"time":     totalTime.Seconds(),
 		})
 	}()
 
-	log.WithField("count", len(IDs)).Info("bulk update ID count")
-
-	modified = make([]*model.Detection, 0, len(IDs))
-
 	start := time.Now()
 
-	if !body.Delete {
-		for id := range IDs {
-			mod, err := h.server.Detectionstore.UpdateDetectionField(ctx, id, map[string]interface{}{"IsEnabled": body.NewStatus})
-			if err != nil {
-				errMap[id] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
-
-				continue
-			}
-
-			modified = append(modified, mod)
-		}
-	} else {
-		for id := range IDs {
-			mod, err := h.server.Detectionstore.DeleteDetection(ctx, id)
-			if err != nil {
-				errMap[id] = fmt.Sprintf("unable to delete detection; reason=%s", err.Error())
-
-				continue
-			}
-
-			mod.IsEnabled = false
-			mod.PendingDelete = true
-
-			deleted = append(deleted, mod)
-		}
-	}
-
-	update = time.Since(start)
-	start = time.Now()
-
-	dirty := append(modified, deleted...)
-
-	addErrMap, err := SyncLocalDetections(ctx, h.server, dirty)
+	bulk, err := h.server.Detectionstore.BuildBulkIndexer(ctx, logger)
 	if err != nil {
+		logger.WithError(err).Error("failed to create bulk indexer")
 		return
 	}
 
-	sync = time.Since(start)
-
-	// merge error maps
-	for k, v := range addErrMap {
-		origK, hasK := errMap[k]
-		if hasK {
-			errMap[k] = fmt.Sprintf("%s; %s", origK, v)
-		} else {
-			errMap[k] = v
-		}
+	action := "update"
+	if body.Delete {
+		action = "delete"
 	}
 
-	log.WithFields(log.Fields{
-		"modifiedCount": len(dirty),
-		"errorCount":    len(errMap),
-	}).Info("bulk update detection")
+	createAudit := []model.AuditInfo{}
+	auditMut := sync.Mutex{}
+	errMut := sync.Mutex{}
 
-	if len(errMap) != 0 {
-		fields := log.Fields{}
-		for k, v := range errMap {
-			fields[k] = v
-			if len(fields) == 10 {
-				break
+	for i := range detects {
+		detect := detects[i]
+		id := detect.Id
+
+		if !body.Delete {
+			detect.IsEnabled = body.NewStatus
+
+			engine := h.server.DetectionEngines[detect.Engine]
+
+			filterApplied, err := engine.ApplyFilters(detect)
+			if err != nil {
+				logger.WithError(err).WithFields(log.Fields{
+					"publicId": detect.PublicID,
+					"engine":   detect.Engine,
+				}).Error("unable to apply engine filters to detection")
+
+				return
+			}
+
+			if filterApplied && detect.IsEnabled != body.NewStatus {
+				filtered++
 			}
 		}
 
-		log.WithFields(fields).Error("sample of bulk update detection errors")
+		document, index, err := h.server.Detectionstore.ConvertObjectToDocument(ctx, "detection", detect, &detect.Auditable, !body.Delete, nil, nil)
+		if err != nil {
+			errMap[detect.PublicID] = err.Error()
+			continue
+		}
+
+		work := esutil.BulkIndexerItem{
+			Index:      index,
+			Action:     action,
+			DocumentID: id,
+			OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+				auditMut.Lock()
+				defer auditMut.Unlock()
+
+				if action == "delete" {
+					deleted++
+				} else {
+					updated++
+				}
+
+				createAudit = append(createAudit, model.AuditInfo{
+					DocId:     resp.DocumentID,
+					Op:        action,
+					Detection: detect,
+				})
+			},
+			OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+				errMut.Lock()
+				defer errMut.Unlock()
+
+				if err != nil {
+					errMap[detect.PublicID] = err.Error()
+				} else {
+					errMap[detect.PublicID] = resp.Error.Reason
+				}
+			},
+		}
+
+		if !body.Delete {
+			work.Body = bytes.NewReader(document)
+		}
+
+		err = bulk.Add(ctx, work)
+		if err != nil {
+			errMap[detect.PublicID] = err.Error()
+			continue
+		}
 	}
+
+	err = bulk.Close(ctx)
+	if err != nil {
+		logger.WithError(err).Error("unable to close bulk indexer for detection changes")
+		return
+	}
+
+	bulk, err = h.server.Detectionstore.BuildBulkIndexer(ctx, logger)
+	if err != nil {
+		logger.WithError(err).Error("unable to create audit bulk indexer")
+		return
+	}
+
+	dirty := make([]*model.Detection, 0, len(createAudit))
+
+	for _, audit := range createAudit {
+		document, index, err := h.server.Detectionstore.ConvertObjectToDocument(ctx, "detection", audit.Detection, &audit.Detection.Auditable, false, &audit.DocId, &audit.Op)
+		if err != nil {
+			errMap[audit.Detection.PublicID] = err.Error()
+			continue
+		}
+
+		err = bulk.Add(ctx, esutil.BulkIndexerItem{
+			Index:  index,
+			Action: "create",
+			Body:   bytes.NewReader(document),
+			OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+				auditMut.Lock()
+				defer auditMut.Unlock()
+
+				audited++
+			},
+			OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+				errMut.Lock()
+				defer errMut.Unlock()
+
+				if err != nil {
+					errMap[audit.Detection.PublicID] = fmt.Sprintf("AUDIT: %s", err.Error())
+				} else {
+					errMap[audit.Detection.PublicID] = fmt.Sprintf("AUDIT: %s", resp.Error.Reason)
+				}
+			},
+		})
+		if err != nil {
+			errMap[audit.Detection.PublicID] = err.Error()
+			continue
+		}
+
+		det := audit.Detection
+
+		if audit.Op == "delete" {
+			det.IsEnabled = false
+			det.PendingDelete = true
+		}
+
+		dirty = append(dirty, det)
+	}
+
+	err = bulk.Close(ctx)
+	if err != nil {
+		logger.WithError(err).Error("unable to close bulk indexer for audit history")
+		return
+	}
+
+	updateDur = time.Since(start)
+
+	logger.WithFields(log.Fields{
+		"bulkUpdated": updated,
+		"bulkAudited": audited,
+		"errMap":      detections.TruncateMap(errMap, 5),
+	}).Info("bulk operation complete")
+
+	start = time.Now()
+
+	errMap, err = SyncLocalDetections(ctx, h.server, dirty)
+	if err != nil {
+		logger.WithError(err).WithField("errMap", detections.TruncateMap(errMap, 5)).Error("unable to sync detections after bulk update")
+		return
+	}
+
+	postSync := logger.WithField("errMap", detections.TruncateMap(errMap, 5))
+
+	if len(errMap) == 0 {
+		postSync.Info("post-bulk sync finished")
+	} else {
+		postSync.Warn("post-bulk sync finished")
+	}
+
+	syncDur = time.Since(start)
 }
 
 func SyncLocalDetections(ctx context.Context, srv *Server, detections []*model.Detection) (errMap map[string]string, err error) {

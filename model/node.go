@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -107,6 +107,18 @@ func (node *Node) SetModel(model string) {
 		node.ImageFront = "so-cloud-azure.jpg"
 	case "SO2GCI01":
 		node.ImageFront = "so-cloud-gcp.jpg"
+	case "500-DE02":
+		node.ImageFront = "500v2_front_thumb.jpg"
+		node.ImageBack = "500v2_back_thumb.jpg"
+	case "MN-DE02", "1000-DE02", "2000-DE02":
+		node.ImageFront = "MNv2_front_thumb.jpg"
+		node.ImageBack = "MNv2_back_thumb.jpg"
+	case "5000-DE02", "SN7200-DE02":
+		node.ImageFront = "5000v2_front_thumb.jpg"
+		node.ImageBack = "5000v2_back_thumb.jpg"
+	case "SNNV-DE02", "10K-DE02":
+		node.ImageFront = "NVv2_front_thumb.jpg"
+		node.ImageBack = "NVv2_back_thumb.jpg"
 	default:
 		node.Model = "N/A"
 	}

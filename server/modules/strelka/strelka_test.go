@@ -1,7 +1,14 @@
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
+
 package strelka
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -15,9 +22,14 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
-	"github.com/security-onion-solutions/securityonion-soc/server/modules/strelka/mock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/handmock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
+	"github.com/apex/log"
+	"github.com/elastic/go-elasticsearch/v8/esutil"
+	"github.com/samber/lo"
 	"github.com/tj/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -538,23 +550,13 @@ func TestParseRule(t *testing.T) {
 			ExpectedError: util.Ptr("unexpected end of rule"),
 		},
 		{
-			Name: "Filter Out",
-			// BasicRule doesn't match either filter and will be left out,
-			// DeniedRule will be filtered out by the denyRegex.
-			Input:         BasicRule + "\n\n" + DeniedRule,
-			ExpectedRules: []*YaraRule{},
-		},
-		{
 			Name:          "Space in Identifier",
 			Input:         MyBasic_Rule,
 			ExpectedError: util.Ptr("unexpected character in rule identifier around 18"),
 		},
 	}
 
-	e := &StrelkaEngine{
-		allowRegex: regexp.MustCompile("my"),
-		denyRegex:  regexp.MustCompile("Deny"), // case sensitive
-	}
+	e := &StrelkaEngine{}
 
 	for _, test := range table {
 		test := test
@@ -724,8 +726,8 @@ func TestGetCompilationResult(t *testing.T) {
 	mio.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return([]byte(jsn), nil)
 
 	eng := &StrelkaEngine{
-		IOManager:       mio,
 		yaraRulesFolder: "/opt/so/conf/strelka/rules",
+		IOManager:       mio,
 	}
 
 	report, err := eng.getCompilationReport()
@@ -782,4 +784,456 @@ func TestVerifyCompiledHash(t *testing.T) {
 	// no hash is only allowed if the file is explicitly missing
 	err = eng.verifyCompiledHash("")
 	assert.NoError(t, err)
+}
+
+func TestIntegrityCheck(t *testing.T) {
+	tests := []struct {
+		Name     string
+		InitMock func(*mock.MockIOManager, *servermock.MockDetectionstore)
+		DbnE     []string
+		EbnD     []string
+		ExpError error
+	}{
+		{
+			Name: "No Rules",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) {
+				report := model.CompilationReport{}
+
+				jsonReport, _ := json.Marshal(report)
+				iom.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return(jsonReport, nil)
+
+				iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return(nil, os.ErrNotExist)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, opts ...model.GetAllOption) (map[string]*model.Detection, error) {
+					expected := []string{
+						`query AND so_detection.engine:"strelka"`,
+						`query AND so_detection.isEnabled:"true"`,
+					}
+
+					for i, opt := range opts {
+						value := opt("query", "so_")
+						assert.Equal(t, expected[i], value)
+					}
+
+					return map[string]*model.Detection{}, nil
+				})
+			},
+			DbnE: []string{},
+			EbnD: []string{},
+		},
+		{
+			Name: "Bad Compilation Report Hash",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) {
+				report := model.CompilationReport{
+					CompiledRulesHash: "bad hash",
+				}
+
+				jsonReport, _ := json.Marshal(report)
+				iom.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return(jsonReport, nil)
+
+				iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return([]byte("abc"), nil)
+			},
+			ExpError: detections.ErrIntCheckFailed,
+		},
+		{
+			Name: "Compilation Report Failures",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) {
+				report := model.CompilationReport{
+					CompiledRulesHash: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+					Failure:           []string{"MyYARARule1", "MyYARARule2", "MyYARARule3", "MyYARARule4", "MyYARARule5", "MyYARARule6"},
+				}
+
+				jsonReport, _ := json.Marshal(report)
+				iom.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return(jsonReport, nil)
+
+				iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return([]byte("abc"), nil)
+			},
+			ExpError: detections.ErrIntCheckFailed,
+		},
+		{
+			Name: "1 Deployed, 0 Enabled",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) {
+				report := model.CompilationReport{
+					CompiledRulesHash: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+					Success:           []string{"MyYARARule"},
+				}
+
+				jsonReport, _ := json.Marshal(report)
+				iom.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return(jsonReport, nil)
+
+				iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return([]byte("abc"), nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
+			},
+			DbnE:     []string{"MyYARARule"},
+			EbnD:     []string{},
+			ExpError: detections.ErrIntCheckFailed,
+		},
+		{
+			Name: "0 Deployed, 1 Enabled",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) {
+				report := model.CompilationReport{
+					CompiledRulesHash: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+				}
+
+				jsonReport, _ := json.Marshal(report)
+				iom.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return(jsonReport, nil)
+
+				iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return([]byte("abc"), nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+					"MyYARARule": {},
+				}, nil)
+			},
+			DbnE:     []string{},
+			EbnD:     []string{"MyYARARule"},
+			ExpError: detections.ErrIntCheckFailed,
+		},
+		{
+			Name: "Mix and Match Fail",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) {
+				report := model.CompilationReport{
+					CompiledRulesHash: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+					Success:           []string{"MyYARARule", "MyOtherYARARule"},
+				}
+
+				jsonReport, _ := json.Marshal(report)
+				iom.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return(jsonReport, nil)
+
+				iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return([]byte("abc"), nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+					"MyYARARule":     {},
+					"AThirdYARARule": {},
+				}, nil)
+			},
+			DbnE:     []string{"MyOtherYARARule"},
+			EbnD:     []string{"AThirdYARARule"},
+			ExpError: detections.ErrIntCheckFailed,
+		},
+		{
+			Name: "Mix and Match Fail",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) {
+				report := model.CompilationReport{
+					CompiledRulesHash: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+					Success:           []string{"MyYARARule", "MyOtherYARARule"},
+				}
+
+				jsonReport, _ := json.Marshal(report)
+				iom.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return(jsonReport, nil)
+
+				iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return([]byte("abc"), nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+					"MyYARARule":      {},
+					"MyOtherYARARule": {},
+				}, nil)
+			},
+			DbnE: []string{},
+			EbnD: []string{},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			detStore := servermock.NewMockDetectionstore(ctrl)
+			iom := mock.NewMockIOManager(ctrl)
+			test.InitMock(iom, detStore)
+
+			e := &StrelkaEngine{
+				srv: &server.Server{
+					Detectionstore: detStore,
+				},
+				IOManager: iom,
+			}
+
+			DbnE, EbnD, err := e.IntegrityCheck(false, nil)
+
+			if test.ExpError != nil {
+				assert.Error(t, err)
+				assert.Equal(t, err, test.ExpError)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			assert.Equal(t, test.DbnE, DbnE)
+			assert.Equal(t, test.EbnD, EbnD)
+		})
+	}
+}
+
+func TestSyncWriteNoReadFail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	detStore.EXPECT().GetDetectionByPublicId(gomock.Any(), "123").Return(nil, errors.New("Object not found"))
+
+	wnr := util.Ptr("123")
+
+	eng := &StrelkaEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+		},
+		writeNoRead: wnr,
+	}
+
+	logger := log.WithField("detectionEngine", "test-strelka")
+
+	err := eng.Sync(logger, false)
+	assert.Equal(t, detections.ErrSyncFailed, err)
+	assert.Equal(t, wnr, eng.writeNoRead)
+}
+
+func TestSyncIncrementalNoChanges(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+
+	// UpdateRepos
+	iom.EXPECT().ReadDir("repos").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: "repo",
+			Dir:      true,
+		},
+	}, nil)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo").Return(false, false)
+	// WriteStateFile
+	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	// IntegrityCheck
+	iom.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return([]byte(`{"timestamp": "now", "success": ["publicId"], "failure": [], "compiled_sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"}`), nil) // getCompilationReport
+	iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return([]byte("abc"), nil)                                                                                                                                  // verifyCompiledHash
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		"publicId": nil,
+	}, nil)
+
+	eng := &StrelkaEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+		},
+		isRunning:   true,
+		reposFolder: "repos",
+		rulesRepos: []*model.RuleRepo{
+			{
+				Repo:      "https://github.com/user/repo",
+				Community: true,
+			},
+		},
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			StateFilePath: "stateFilePath",
+		},
+		IntegrityCheckerData: detections.IntegrityCheckerData{
+			IsRunning: true,
+		},
+		IOManager: iom,
+	}
+
+	logger := log.WithField("detectionEngine", "test-strelka")
+
+	err := eng.Sync(logger, false)
+	assert.NoError(t, err)
+
+	assert.True(t, eng.EngineState.Syncing) // stays true until the SyncScheduler resets it
+	assert.False(t, eng.EngineState.IntegrityFailure)
+	assert.False(t, eng.EngineState.Migrating)
+	assert.False(t, eng.EngineState.MigrationFailure)
+	assert.False(t, eng.EngineState.Importing)
+	assert.False(t, eng.EngineState.SyncFailure)
+}
+
+func TestSyncChanges(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+	bim := servermock.NewMockBulkIndexer(ctrl)
+	auditm := servermock.NewMockBulkIndexer(ctrl)
+
+	eng := &StrelkaEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+			Context:        ctx,
+		},
+		isRunning:   true,
+		reposFolder: "repos",
+		rulesRepos: []*model.RuleRepo{
+			{
+				Repo:      "https://github.com/user/repo",
+				Community: true,
+			},
+		},
+		autoEnabledYaraRules:        []string{"repo"},
+		yaraRulesFolder:             "yaraRulesFolder",
+		compileYaraPythonScriptPath: "compile_yara.py",
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			StateFilePath: "stateFilePath",
+		},
+		IntegrityCheckerData: detections.IntegrityCheckerData{
+			IsRunning: true,
+		},
+		IOManager: iom,
+	}
+
+	logger := log.WithField("detectionEngine", "test-strelka")
+
+	workItems := []esutil.BulkIndexerItem{}
+	auditItems := []esutil.BulkIndexerItem{}
+
+	// UpdateRepos
+	iom.EXPECT().ReadDir("repos").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: "repo",
+			Dir:      true,
+		},
+	}, nil)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo").Return(true, false)
+	// Sync
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		"dummy": {
+			Auditable: model.Auditable{
+				Id:         "abc",
+				CreateTime: util.Ptr(time.Now()),
+			},
+			PublicID:  "dummy",
+			IsEnabled: true,
+		},
+		"delete": {
+			Auditable: model.Auditable{
+				Id: "deleteme",
+			},
+			PublicID: "delete",
+		},
+	}, nil)
+	iom.EXPECT().WalkDir("repos/repo", gomock.Any()).DoAndReturn(func(path string, walkFn fs.WalkDirFunc) error {
+		files := []fs.DirEntry{
+			&handmock.MockDirEntry{
+				Filename: "rule1.yar",
+			},
+			&handmock.MockDirEntry{
+				Filename: "rule2.yar",
+			},
+		}
+
+		for _, f := range files {
+			err := walkFn(f.Name(), f, nil)
+			assert.NoError(t, err)
+		}
+		return nil
+	})
+	iom.EXPECT().ReadFile("rule1.yar").Return([]byte(simpleRule), nil)
+	iom.EXPECT().ReadFile("rule2.yar").Return([]byte(MyBasicRule), nil)
+	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil)
+	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil).Times(3)
+	bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
+		if item.OnSuccess != nil {
+			resp := esutil.BulkIndexerResponseItem{
+				DocumentID: "id",
+			}
+			item.OnSuccess(ctx, item, resp)
+		}
+
+		workItems = append(workItems, item)
+
+		return nil
+	}).Times(3)
+	bim.EXPECT().Close(gomock.Any()).Return(nil)
+	bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
+	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(auditm, nil)
+	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return([]byte("document"), "index", nil).Times(3)
+	auditm.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
+		if item.OnSuccess != nil {
+			resp := esutil.BulkIndexerResponseItem{
+				DocumentID: "id",
+			}
+			item.OnSuccess(ctx, item, resp)
+		}
+
+		auditItems = append(auditItems, item)
+
+		return nil
+	}).Times(3)
+	auditm.EXPECT().Close(gomock.Any()).Return(nil)
+	auditm.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
+	// syncDetections
+	detStore.EXPECT().GetAllDetections(ctx, gomock.Any()).Return(map[string]*model.Detection{
+		"dummy": {
+			Auditable: model.Auditable{
+				Id:         "abc",
+				CreateTime: util.Ptr(time.Now()),
+			},
+			PublicID:  "dummy",
+			IsEnabled: true,
+		},
+		"ExampleRule": {
+			Auditable: model.Auditable{
+				Id:         "new",
+				CreateTime: util.Ptr(time.Now()),
+			},
+			PublicID: "ExampleRule",
+		},
+	}, nil)
+	iom.EXPECT().ReadDir("yaraRulesFolder").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: "pre-existing-rule.compiled",
+		},
+	}, nil)
+	iom.EXPECT().DeleteFile("yaraRulesFolder/pre-existing-rule.compiled").Return(nil)
+	iom.EXPECT().WriteFile("yaraRulesFolder/dummy.yar", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	iom.EXPECT().WriteFile("yaraRulesFolder/ExampleRule.yar", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	iom.EXPECT().ExecCommand(gomock.Any()).DoAndReturn(func(cmd *exec.Cmd) ([]byte, int, time.Duration, error) {
+		assert.Contains(t, cmd.Args, "python3")
+		assert.Len(t, cmd.Args, 3)
+		assert.Equal(t, "python3", cmd.Args[0])
+		assert.Equal(t, "compile_yara.py", cmd.Args[1])
+		assert.Equal(t, "yaraRulesFolder", cmd.Args[2])
+		return []byte("Compiled Successfully"), 0, time.Duration(time.Second), nil
+	})
+	// WriteStateFile
+	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	// IntegrityCheck
+	iom.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return([]byte(`{"timestamp": "now", "success": ["dummy", "ExampleRule"], "failure": [], "compiled_sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"}`), nil) // getCompilationReport
+	iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return([]byte("abc"), nil)                                                                                                                                              // verifyCompiledHash
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		"dummy":       nil,
+		"ExampleRule": nil,
+	}, nil)
+
+	err := eng.Sync(logger, true)
+	assert.NoError(t, err)
+
+	assert.True(t, eng.EngineState.Syncing) // stays true until the SyncScheduler resets it
+	assert.False(t, eng.EngineState.IntegrityFailure)
+	assert.False(t, eng.EngineState.Migrating)
+	assert.False(t, eng.EngineState.MigrationFailure)
+	assert.False(t, eng.EngineState.Importing)
+	assert.False(t, eng.EngineState.SyncFailure)
+
+	assert.Len(t, workItems, 3)
+	assert.Len(t, auditItems, 3)
+
+	workActions := lo.Map(workItems, func(item esutil.BulkIndexerItem, _ int) string {
+		return item.Action
+	})
+
+	auditActions := lo.Map(auditItems, func(item esutil.BulkIndexerItem, _ int) string {
+		return item.Action
+	})
+
+	assert.Equal(t, []string{"update", "create", "delete"}, workActions)
+	assert.Equal(t, []string{"create", "create", "create"}, auditActions)
+
+	workDocIds := lo.Map(workItems, func(item esutil.BulkIndexerItem, _ int) string {
+		return item.DocumentID
+	})
+
+	assert.Equal(t, []string{"abc", "", "deleteme"}, workDocIds) // update has an id, create does not, delete does
 }

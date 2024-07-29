@@ -1,4 +1,4 @@
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -8,19 +8,28 @@ package suricata
 import (
 	"context"
 	"errors"
+	"io/fs"
+	"os"
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
-	"github.com/security-onion-solutions/securityonion-soc/server/modules/suricata/mock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/handmock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
+	"github.com/apex/log"
+	"github.com/elastic/go-elasticsearch/v8/esutil"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -105,6 +114,87 @@ func TestSettingByID(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestReadAndHash(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	content := "content"
+
+	iom := mock.NewMockIOManager(ctrl)
+	iom.EXPECT().ReadFile("file").Return([]byte(content), nil)
+
+	e := &SuricataEngine{
+		srv:       &server.Server{},
+		IOManager: iom,
+	}
+
+	fileContent, sha256Hash, err := e.readAndHash("file")
+
+	assert.NoError(t, err)
+	assert.Equal(t, content, fileContent)
+	assert.Equal(t, "ed7002b439e9ac845f22357d822bac1444730fbdb6016d3ec9432297b9ec9f73", sha256Hash)
+}
+
+func TestReadFingerprint(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	content := " fingerprint\n\t"
+
+	iom := mock.NewMockIOManager(ctrl)
+	iom.EXPECT().ReadFile("file").Return([]byte(content), nil)
+
+	e := &SuricataEngine{
+		srv:       &server.Server{},
+		IOManager: iom,
+	}
+
+	fingerprint, ok, err := e.readFingerprint("file")
+
+	assert.NoError(t, err)
+	assert.True(t, ok)
+	assert.NotNil(t, fingerprint)
+	assert.Equal(t, "fingerprint", *fingerprint)
+}
+
+func TestReadFingerprintDoesNotExist(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+	iom.EXPECT().ReadFile("file").Return(nil, os.ErrNotExist)
+
+	e := &SuricataEngine{
+		srv:       &server.Server{},
+		IOManager: iom,
+	}
+
+	fingerprint, ok, err := e.readFingerprint("file")
+
+	assert.NoError(t, err)
+	assert.False(t, ok)
+	assert.Nil(t, fingerprint)
+}
+
+func TestReadFingerprintError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+	iom.EXPECT().ReadFile("file").Return(nil, errors.New("error"))
+
+	e := &SuricataEngine{
+		srv:       &server.Server{},
+		IOManager: iom,
+	}
+
+	fingerprint, ok, err := e.readFingerprint("file")
+
+	assert.Error(t, err)
+	assert.False(t, ok)
+	assert.Nil(t, fingerprint)
 }
 
 func TestExtractSID(t *testing.T) {
@@ -392,12 +482,11 @@ func TestParse(t *testing.T) {
 			Name: "Sunny Day Path with Edge Cases",
 			Lines: []string{
 				"# Comment",
-				SimpleRule, // allowRegex has the SID, should allow
+				SimpleRule,
 				"",
-				`# alert  http any any  <>   any any (metadata:signature_severity   Informational; sid: "20000"; msg:"a \\\"tricky\"\;\\ msg";)`, // allowRegex has the SID, should allow
+				`# alert  http any any  <>   any any (metadata:signature_severity   Informational; sid: "20000"; msg:"a \\\"tricky\"\;\\ msg";)`,
 				" # " + FlowbitsRuleA,
-				FlowbitsRuleB, // denyRegex will prevent this from being parsed
-				"alert http any any -> any any (msg:\"This rule doesn't have a SID\";)", // doesn't match either regex, will be left out
+				FlowbitsRuleB,
 			},
 			ExpectedDetections: []*model.Detection{
 				{
@@ -425,13 +514,34 @@ func TestParse(t *testing.T) {
 					Ruleset:  ruleset,
 					License:  "Unknown",
 				},
+				{
+					Author:   ruleset,
+					PublicID: FlowbitsRuleASID,
+					Title:    "RULE A",
+					Severity: model.SeverityUnknown,
+					Content:  FlowbitsRuleA,
+					Engine:   model.EngineNameSuricata,
+					Language: model.SigLangSuricata,
+					Ruleset:  ruleset,
+					License:  "Unknown",
+				},
+				{
+					Author:    ruleset,
+					PublicID:  FlowbitsRuleBSID,
+					Title:     "RULE B",
+					Severity:  model.SeverityUnknown,
+					Content:   FlowbitsRuleB,
+					IsEnabled: true,
+					Engine:    model.EngineNameSuricata,
+					Language:  model.SigLangSuricata,
+					Ruleset:   ruleset,
+					License:   "Unknown",
+				},
 			},
 		},
 	}
 
 	mod := NewSuricataEngine(&server.Server{})
-	mod.allowRegex = regexp.MustCompile("[12]0000")
-	mod.denyRegex = regexp.MustCompile("flowbits")
 
 	mod.isRunning = true
 
@@ -442,7 +552,7 @@ func TestParse(t *testing.T) {
 
 			data := strings.Join(test.Lines, "\n")
 
-			detections, err := mod.ParseRules(data, ruleset, true)
+			detections, err := mod.ParseRules(data, ruleset)
 			if test.ExpectedError == nil {
 				assert.NoError(t, err)
 				assert.Equal(t, test.ExpectedDetections, detections)
@@ -781,6 +891,8 @@ func TestSyncLocalSuricata(t *testing.T) {
 }
 
 func TestSyncCommunitySuricata(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
 	table := []struct {
 		Name             string
 		InitialSettings  []*model.Setting
@@ -804,8 +916,37 @@ func TestSyncCommunitySuricata(t *testing.T) {
 				},
 			},
 			InitMock: func(detStore *servermock.MockDetectionstore) {
+				bim := servermock.NewMockBulkIndexer(ctrl)
+				auditm := servermock.NewMockBulkIndexer(ctrl)
+
 				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
-				detStore.EXPECT().CreateDetection(gomock.Any(), gomock.Any()).Return(nil, nil)
+				detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil)
+				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil)
+				bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
+					if item.OnSuccess != nil {
+						resp := esutil.BulkIndexerResponseItem{
+							DocumentID: "id",
+						}
+						item.OnSuccess(context.Background(), item, resp)
+					}
+					return nil
+				})
+				bim.EXPECT().Close(gomock.Any()).Return(nil)
+				bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
+
+				detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(auditm, nil)
+				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), util.Ptr("id"), util.Ptr("create")).Return([]byte("document"), "index", nil)
+				auditm.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
+					if item.OnSuccess != nil {
+						resp := esutil.BulkIndexerResponseItem{
+							DocumentID: "id",
+						}
+						item.OnSuccess(context.Background(), item, resp)
+					}
+					return nil
+				})
+				auditm.EXPECT().Close(gomock.Any()).Return(nil)
+				auditm.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
 			},
 			ExpectedSettings: map[string]string{
 				"idstools.sids.enabled":            "",
@@ -828,8 +969,37 @@ func TestSyncCommunitySuricata(t *testing.T) {
 			},
 			ChangedByUser: true,
 			InitMock: func(detStore *servermock.MockDetectionstore) {
+				bim := servermock.NewMockBulkIndexer(ctrl)
+				auditm := servermock.NewMockBulkIndexer(ctrl)
+
 				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
-				detStore.EXPECT().CreateDetection(gomock.Any(), gomock.Any()).Return(nil, nil)
+				detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil)
+				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil)
+				bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
+					if item.OnSuccess != nil {
+						resp := esutil.BulkIndexerResponseItem{
+							DocumentID: "id",
+						}
+						item.OnSuccess(context.Background(), item, resp)
+					}
+					return nil
+				})
+				bim.EXPECT().Close(gomock.Any()).Return(nil)
+				bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
+
+				detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(auditm, nil)
+				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), util.Ptr("id"), util.Ptr("create")).Return([]byte("document"), "index", nil)
+				auditm.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
+					if item.OnSuccess != nil {
+						resp := esutil.BulkIndexerResponseItem{
+							DocumentID: "id",
+						}
+						item.OnSuccess(context.Background(), item, resp)
+					}
+					return nil
+				})
+				auditm.EXPECT().Close(gomock.Any()).Return(nil)
+				auditm.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
 			},
 			ExpectedSettings: map[string]string{
 				"idstools.sids.enabled":            SimpleRuleSID,
@@ -858,6 +1028,9 @@ func TestSyncCommunitySuricata(t *testing.T) {
 			},
 			ChangedByUser: true,
 			InitMock: func(detStore *servermock.MockDetectionstore) {
+				bim := servermock.NewMockBulkIndexer(ctrl)
+				auditm := servermock.NewMockBulkIndexer(ctrl)
+
 				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
 					SimpleRuleSID: {
 						Auditable:   model.Auditable{Id: "1"},
@@ -867,13 +1040,33 @@ func TestSyncCommunitySuricata(t *testing.T) {
 						IsCommunity: true,
 					},
 				}, nil)
-				detStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).Return(&model.Detection{
-					Auditable:   model.Auditable{Id: "1"},
-					PublicID:    SimpleRuleSID,
-					Content:     SimpleRule,
-					IsEnabled:   false,
-					IsCommunity: true,
-				}, nil)
+				detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil)
+				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil)
+				bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
+					if item.OnSuccess != nil {
+						resp := esutil.BulkIndexerResponseItem{
+							DocumentID: "id",
+						}
+						item.OnSuccess(context.Background(), item, resp)
+					}
+					return nil
+				})
+				bim.EXPECT().Close(gomock.Any()).Return(nil)
+				bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
+
+				detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(auditm, nil)
+				detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), util.Ptr("id"), util.Ptr("update")).Return([]byte("document"), "index", nil)
+				auditm.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
+					if item.OnSuccess != nil {
+						resp := esutil.BulkIndexerResponseItem{
+							DocumentID: "id",
+						}
+						item.OnSuccess(context.Background(), item, resp)
+					}
+					return nil
+				})
+				auditm.EXPECT().Close(gomock.Any()).Return(nil)
+				auditm.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
 			},
 			ExpectedSettings: map[string]string{
 				"idstools.rules.local__rules":      SimpleRule,
@@ -884,8 +1077,6 @@ func TestSyncCommunitySuricata(t *testing.T) {
 			},
 		},
 	}
-
-	ctrl := gomock.NewController(t)
 
 	for _, test := range table {
 		test := test
@@ -907,7 +1098,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 
 			ctx := web.MarkChangedByUser(context.Background(), test.ChangedByUser)
 
-			errMap, err := mod.syncCommunityDetections(ctx, test.Detections, false, test.InitialSettings)
+			errMap, err := mod.syncCommunityDetections(ctx, nil, test.Detections, false, test.InitialSettings)
 
 			assert.Equal(t, test.ExpectedErr, err)
 			assert.Equal(t, test.ExpectedErrMap, errMap)
@@ -1740,4 +1931,556 @@ func TestReadCustomRulesets(t *testing.T) {
 			assert.Equal(t, test.ExpDetections, detects)
 		})
 	}
+}
+
+func TestCheckForMigrations(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+
+	iom.EXPECT().ReadDir("/opt/so/conf/soc/migrations/").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: "suricata-migration-2.4.70",
+		},
+		&handmock.MockDirEntry{
+			Filename: "etc",
+			Dir:      true,
+		},
+		&handmock.MockDirEntry{
+			Filename: "not-a-migration",
+		},
+	}, nil)
+
+	m2470 := 0
+	m2471 := 0
+
+	e := &SuricataEngine{
+		migrations: map[string]func(string) error{
+			"2.4.70": func(string) error {
+				m2470++
+
+				return nil
+			},
+			"2.4.71": func(string) error {
+				// shouldn't be called
+				m2471++
+
+				return nil
+			},
+		},
+		IOManager: iom,
+	}
+
+	e.checkForMigrations()
+
+	assert.Equal(t, m2470, 1)
+	assert.Equal(t, m2471, 0)
+	assert.False(t, e.EngineState.MigrationFailure)
+	assert.False(t, e.EngineState.Migrating)
+}
+
+func TestIntegrityCheck(t *testing.T) {
+	// the configstore only needs to specify disabled and modify
+	tests := []struct {
+		Name     string
+		InitMock func(*mock.MockIOManager, *servermock.MockDetectionstore) (cfgStore *server.MemConfigStore)
+		DbnE     []string
+		EbnD     []string
+		ExpError error
+	}{
+		{
+			Name: "No Rules",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) (cfgStore *server.MemConfigStore) {
+				iom.EXPECT().ReadFile("allrules").Return([]byte{}, nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, opts ...model.GetAllOption) (map[string]*model.Detection, error) {
+					expected := []string{
+						`query AND so_detection.engine:"suricata"`,
+						`query AND so_detection.isEnabled:"true"`,
+					}
+
+					for i, opt := range opts {
+						value := opt("query", "so_")
+						assert.Equal(t, expected[i], value)
+					}
+
+					return map[string]*model.Detection{}, nil
+				})
+
+				return server.NewMemConfigStore(emptySettings())
+			},
+			DbnE: []string{},
+			EbnD: []string{},
+		},
+		{
+			Name: "1 Deployed, 0 Enabled",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) (cfgStore *server.MemConfigStore) {
+				iom.EXPECT().ReadFile("allrules").Return([]byte(SimpleRule), nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
+
+				return server.NewMemConfigStore(emptySettings())
+			},
+			DbnE:     []string{SimpleRuleSID},
+			EbnD:     []string{},
+			ExpError: detections.ErrIntCheckFailed,
+		},
+		{
+			Name: "0 Deployed, 1 Enabled",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) (cfgStore *server.MemConfigStore) {
+				iom.EXPECT().ReadFile("allrules").Return([]byte{}, nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+					SimpleRuleSID: {},
+				}, nil)
+
+				return server.NewMemConfigStore(emptySettings())
+			},
+			DbnE:     []string{},
+			EbnD:     []string{SimpleRuleSID},
+			ExpError: detections.ErrIntCheckFailed,
+		},
+		{
+			Name: "Deployed As Disabled",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) (cfgStore *server.MemConfigStore) {
+				iom.EXPECT().ReadFile("allrules").Return([]byte(SimpleRule+"\n"+FlowbitsRuleA), nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
+
+				return server.NewMemConfigStore([]*model.Setting{
+					{Id: "idstools.sids.disabled", Value: SimpleRuleSID},
+					{Id: "idstools.sids.modify", Value: FlowbitsRuleASID + " " + modifyFromTo},
+				})
+			},
+			DbnE: []string{},
+			EbnD: []string{},
+		},
+		{
+			Name: "Mix and Match Fail",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) (cfgStore *server.MemConfigStore) {
+				iom.EXPECT().ReadFile("allrules").Return([]byte(SimpleRule+"\n"+FlowbitsRuleA), nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+					SimpleRuleSID:    {},
+					FlowbitsRuleBSID: {},
+				}, nil)
+
+				return server.NewMemConfigStore(emptySettings())
+			},
+			DbnE:     []string{FlowbitsRuleASID},
+			EbnD:     []string{FlowbitsRuleBSID},
+			ExpError: detections.ErrIntCheckFailed,
+		},
+		{
+			Name: "Mix and Match Success",
+			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) (cfgStore *server.MemConfigStore) {
+				iom.EXPECT().ReadFile("allrules").Return([]byte(SimpleRule+"\n"+FlowbitsRuleA+"\n"+FlowbitsRuleB), nil)
+
+				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+					SimpleRuleSID:    {},
+					FlowbitsRuleASID: {},
+				}, nil)
+
+				return server.NewMemConfigStore([]*model.Setting{
+					{Id: "idstools.sids.disabled"},
+					{Id: "idstools.sids.modify", Value: FlowbitsRuleBSID + " " + modifyFromTo},
+				})
+			},
+			DbnE: []string{},
+			EbnD: []string{},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			detStore := servermock.NewMockDetectionstore(ctrl)
+			iom := mock.NewMockIOManager(ctrl)
+			cfgStore := test.InitMock(iom, detStore)
+
+			e := &SuricataEngine{
+				srv: &server.Server{
+					Configstore:    cfgStore,
+					Detectionstore: detStore,
+				},
+				allRulesFile: "allrules",
+				IOManager:    iom,
+			}
+
+			DbnE, EbnD, err := e.IntegrityCheck(false, nil)
+
+			if test.ExpError != nil {
+				assert.Error(t, err)
+				assert.Equal(t, err, test.ExpError)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			assert.Equal(t, test.DbnE, DbnE)
+			assert.Equal(t, test.EbnD, EbnD)
+		})
+	}
+}
+
+func TestSyncWriteNoReadFail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	detStore.EXPECT().GetDetectionByPublicId(gomock.Any(), "123").Return(nil, errors.New("Object not found"))
+
+	wnr := util.Ptr("123")
+
+	eng := &SuricataEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+		},
+		writeNoRead: wnr,
+	}
+
+	logger := log.WithField("detectionEngine", "test-suricata")
+
+	err := eng.Sync(logger, false)
+	assert.Equal(t, detections.ErrSyncFailed, err)
+	assert.Equal(t, wnr, eng.writeNoRead)
+}
+
+func TestSyncIncrementalNoChanges(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+	cfgStore := server.NewMemConfigStore([]*model.Setting{
+		{Id: "idstools.rules.local__rules"},
+		{Id: "idstools.sids.enabled"},
+		{Id: "idstools.sids.disabled"},
+		{Id: "idstools.sids.modify"},
+		{Id: "suricata.thresholding.sids__yaml"},
+	})
+
+	migrationChecked := false
+	checkMigration := func() {
+		migrationChecked = true
+	}
+
+	eng := &SuricataEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+			Configstore:    cfgStore,
+		},
+		isRunning:            true,
+		communityRulesFile:   "communityRulesFile",
+		rulesFingerprintFile: "rulesFingerprintFile",
+		checkMigrationsOnce:  sync.OnceFunc(checkMigration),
+		allRulesFile:         "allRulesFile",
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			StateFilePath: "stateFilePath",
+		},
+		IntegrityCheckerData: detections.IntegrityCheckerData{
+			IsRunning: true,
+		},
+		IOManager: iom,
+	}
+
+	logger := log.WithField("detectionEngine", "test-suricata")
+
+	// readAndHash
+	iom.EXPECT().ReadFile("communityRulesFile").Return([]byte(SimpleRule), nil)
+	// readFingerprint
+	iom.EXPECT().ReadFile("rulesFingerprintFile").Return([]byte("2a4374cf63736ccbaf7a58aedf2282cb21afebf82120e29e4cbcc459516852f2"), nil)
+	// WriteStateFile
+	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	// IntegrityCheck
+	iom.EXPECT().ReadFile("allRulesFile").Return([]byte(SimpleRule), nil)
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		"10000": nil,
+	}, nil)
+
+	err := eng.Sync(logger, false)
+	assert.NoError(t, err)
+
+	assert.True(t, eng.EngineState.Syncing) // stays true until the SyncScheduler resets it
+	assert.False(t, eng.EngineState.IntegrityFailure)
+	assert.False(t, eng.EngineState.Migrating)
+	assert.False(t, eng.EngineState.MigrationFailure)
+	assert.False(t, eng.EngineState.Importing)
+	assert.False(t, eng.EngineState.SyncFailure)
+	assert.True(t, migrationChecked)
+}
+
+func TestSyncChanges(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+	bim := servermock.NewMockBulkIndexer(ctrl)
+	auditm := servermock.NewMockBulkIndexer(ctrl)
+	cfgStore := server.NewMemConfigStore([]*model.Setting{
+		{Id: "idstools.rules.local__rules", Value: FlowbitsRuleA},
+		{Id: "idstools.sids.enabled", Value: SimpleRuleSID + "\n99999"},
+		{Id: "idstools.sids.disabled"},
+		{Id: "idstools.sids.modify", Value: FlowbitsRuleASID + " " + modifyFromTo}, // used to be disabled, will be enabled
+		{Id: "suricata.thresholding.sids__yaml"},
+		{Id: "idstools.config.ruleset", Value: "repo"},
+	})
+
+	migrationChecked := false
+	checkMigration := func() {
+		migrationChecked = true
+	}
+
+	eng := &SuricataEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+			Configstore:    cfgStore,
+			Context:        ctx,
+		},
+		isRunning:            true,
+		communityRulesFile:   "communityRulesFile",
+		rulesFingerprintFile: "rulesFingerprintFile",
+		checkMigrationsOnce:  sync.OnceFunc(checkMigration),
+		allRulesFile:         "allRulesFile",
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			StateFilePath: "stateFilePath",
+		},
+		IntegrityCheckerData: detections.IntegrityCheckerData{
+			IsRunning: true,
+		},
+		IOManager: iom,
+	}
+
+	logger := log.WithField("detectionEngine", "test-suricata")
+
+	workItems := []esutil.BulkIndexerItem{}
+	auditItems := []esutil.BulkIndexerItem{}
+
+	// readAndHash
+	iom.EXPECT().ReadFile("communityRulesFile").Return([]byte(SimpleRule+"\n"+FlowbitsRuleA), nil)
+	// syncCommunityDetections
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		SimpleRuleSID: {
+			Auditable: model.Auditable{
+				Id:         "abc",
+				CreateTime: util.Ptr(time.Now()),
+			},
+			IsEnabled: true,
+		},
+		"99999": {
+			Auditable: model.Auditable{
+				Id: "deleteme",
+			},
+		}, // to be deleted
+	}, nil)
+	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil)
+	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), nil, nil).Return([]byte("document"), "index", nil).Times(3)
+	bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
+		if item.OnSuccess != nil {
+			resp := esutil.BulkIndexerResponseItem{
+				DocumentID: "id",
+			}
+			item.OnSuccess(ctx, item, resp)
+		}
+
+		workItems = append(workItems, item)
+
+		return nil
+	}).Times(3)
+	bim.EXPECT().Close(gomock.Any()).Return(nil)
+	bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
+	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(auditm, nil)
+	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), gomock.Any(), util.Ptr("id"), gomock.Any()).Return([]byte("document"), "index", nil).Times(3)
+	auditm.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
+		if item.OnSuccess != nil {
+			resp := esutil.BulkIndexerResponseItem{
+				DocumentID: "id",
+			}
+			item.OnSuccess(ctx, item, resp)
+		}
+
+		auditItems = append(auditItems, item)
+
+		return nil
+	}).Times(3)
+	auditm.EXPECT().Close(gomock.Any()).Return(nil)
+	auditm.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
+
+	// WriteStateFile
+	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	iom.EXPECT().WriteFile("rulesFingerprintFile", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	// IntegrityCheck
+	iom.EXPECT().ReadFile("allRulesFile").Return([]byte(SimpleRule+"\n"+FlowbitsRuleA), nil)
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		"10000": nil,
+		"50000": nil,
+	}, nil)
+
+	err := eng.Sync(logger, true)
+	assert.NoError(t, err)
+
+	assert.True(t, eng.EngineState.Syncing) // stays true until the SyncScheduler resets it
+	assert.False(t, eng.EngineState.IntegrityFailure)
+	assert.False(t, eng.EngineState.Migrating)
+	assert.False(t, eng.EngineState.MigrationFailure)
+	assert.False(t, eng.EngineState.Importing)
+	assert.False(t, eng.EngineState.SyncFailure)
+	assert.True(t, migrationChecked)
+
+	allSettings, err := cfgStore.GetSettings(ctx)
+	assert.NoError(t, err)
+
+	enabled := settingByID(allSettings, "idstools.sids.enabled")
+	assert.NotNil(t, enabled)
+	assert.Equal(t, SimpleRuleSID, enabled.Value)
+
+	disabled := settingByID(allSettings, "idstools.sids.disabled")
+	assert.NotNil(t, disabled)
+	assert.Equal(t, "", disabled.Value)
+
+	modify := settingByID(allSettings, "idstools.sids.modify")
+	assert.NotNil(t, modify)
+	assert.Equal(t, "", modify.Value)
+
+	threshold := settingByID(allSettings, "suricata.thresholding.sids__yaml")
+	assert.NotNil(t, threshold)
+	assert.Equal(t, "{}\n", threshold.Value)
+
+	assert.Len(t, workItems, 3)
+	assert.Len(t, auditItems, 3)
+
+	workActions := lo.Map(workItems, func(item esutil.BulkIndexerItem, _ int) string {
+		return item.Action
+	})
+
+	auditActions := lo.Map(auditItems, func(item esutil.BulkIndexerItem, _ int) string {
+		return item.Action
+	})
+
+	assert.Equal(t, []string{"update", "create", "delete"}, workActions)
+	assert.Equal(t, []string{"create", "create", "create"}, auditActions)
+
+	workDocIds := lo.Map(workItems, func(item esutil.BulkIndexerItem, _ int) string {
+		return item.DocumentID
+	})
+
+	assert.Equal(t, []string{"abc", "", "deleteme"}, workDocIds) // update has an id, create does not, delete does
+}
+
+func TestApplyFilters(t *testing.T) {
+	tests := []struct {
+		Name             string
+		EnableRegex      []*regexp.Regexp
+		DisableRegex     []*regexp.Regexp
+		Detection        *model.Detection
+		ExpStatus        bool
+		ExpFilterApplied bool
+		ExpError         string
+	}{
+		{
+			Name:             "No Filters, Disabled",
+			Detection:        &model.Detection{},
+			ExpStatus:        false,
+			ExpFilterApplied: false,
+		},
+		{
+			Name: "No Filters, Enabled",
+			Detection: &model.Detection{
+				IsEnabled: true,
+			},
+			ExpStatus:        true,
+			ExpFilterApplied: false,
+		},
+		{
+			Name:         "Unmodified, Disabled",
+			EnableRegex:  toRegex(`alert`),
+			DisableRegex: toRegex(`drop`),
+			Detection: &model.Detection{
+				Content: "Hello World",
+			},
+			ExpStatus:        false,
+			ExpFilterApplied: false,
+		},
+		{
+			Name:         "Unmodified, Enabled",
+			EnableRegex:  toRegex(`alert`),
+			DisableRegex: toRegex(`drop`),
+			Detection: &model.Detection{
+				Content:   "Hello World",
+				IsEnabled: true,
+			},
+			ExpStatus:        true,
+			ExpFilterApplied: false,
+		},
+		{
+			Name:         "From Disabled to Enabled",
+			EnableRegex:  toRegex(`alert`),
+			DisableRegex: toRegex(`drop`),
+			Detection: &model.Detection{
+				Content:   "alert",
+				IsEnabled: false,
+			},
+			ExpStatus:        true,
+			ExpFilterApplied: true,
+		},
+		{
+			Name:         "From Enabled to Disabled",
+			EnableRegex:  toRegex(`alert`),
+			DisableRegex: toRegex(`drop`),
+			Detection: &model.Detection{
+				Content:   "drop",
+				IsEnabled: true,
+			},
+			ExpStatus:        false,
+			ExpFilterApplied: true,
+		},
+		{
+			Name:         "Prioritize EnableRegex",
+			EnableRegex:  toRegex(`alert`),
+			DisableRegex: toRegex(`alert`),
+			Detection: &model.Detection{
+				Content: "alert",
+			},
+			ExpStatus:        true,
+			ExpFilterApplied: true,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			eng := &SuricataEngine{
+				enableRegex:  test.EnableRegex,
+				disableRegex: test.DisableRegex,
+			}
+
+			applied, err := eng.ApplyFilters(test.Detection)
+
+			if test.ExpError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), test.ExpError)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			assert.Equal(t, test.ExpFilterApplied, applied)
+			assert.Equal(t, test.ExpStatus, test.Detection.IsEnabled)
+		})
+	}
+}
+
+func toRegex(s ...string) []*regexp.Regexp {
+	r := make([]*regexp.Regexp, len(s))
+
+	for i, v := range s {
+		r[i] = regexp.MustCompile(v)
+	}
+
+	return r
 }

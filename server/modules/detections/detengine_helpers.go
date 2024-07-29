@@ -1,9 +1,13 @@
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
+
 package detections
 
 import (
 	"context"
 	"fmt"
-	"io/fs"
 	"net/url"
 	"os"
 	"path"
@@ -11,26 +15,22 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 
 	"github.com/apex/log"
-	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 )
 
 var doubleQuoteEscaper = regexp.MustCompile(`\\([\s\S])|(")`)
+var templateMutex = &sync.Mutex{}
+var templateFound = false
 
 type GetterByPublicId interface {
 	GetDetectionByPublicId(ctx context.Context, publicId string) (*model.Detection, error)
-}
-
-type IOManager interface {
-	ReadFile(path string) ([]byte, error)
-	WriteFile(path string, contents []byte, perm fs.FileMode) error
-	DeleteFile(path string) error
 }
 
 // go install go.uber.org/mock/mockgen@latest
@@ -81,13 +81,13 @@ func readStateFile(iom IOManager, path string) (lastImport *uint64, err error) {
 	return &unix, nil
 }
 
-func TruncateMap(originalMap map[string]error, limit int) map[string]error {
-	if len(originalMap) <= limit {
+func TruncateMap[K comparable, V any](originalMap map[K]V, limit uint) map[K]V {
+	if uint(len(originalMap)) <= limit {
 		return originalMap // Return the original map if it's already within the limit
 	}
 
-	truncatedMap := make(map[string]error, limit)
-	count := 0
+	truncatedMap := make(map[K]V, limit)
+	count := uint(0)
 	for key, value := range originalMap {
 		if count >= limit {
 			break
@@ -96,6 +96,14 @@ func TruncateMap(originalMap map[string]error, limit int) map[string]error {
 		count++
 	}
 	return truncatedMap
+}
+
+func TruncateList[T any](originalList []T, limit uint) []T {
+	if uint(len(originalList)) <= limit {
+		return originalList // Return the original list if it's already within the limit
+	}
+
+	return originalList[:limit]
 }
 
 func WriteStateFile(iom IOManager, path string) {
@@ -114,11 +122,11 @@ type RepoOnDisk struct {
 	WasModified bool
 }
 
-func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.RuleRepo, cfg *config.ServerConfig) (allRepos []*RepoOnDisk, anythingNew bool, err error) {
+func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.RuleRepo, cfg *config.ServerConfig, iom IOManager) (allRepos []*RepoOnDisk, anythingNew bool, err error) {
 	allRepos = make([]*RepoOnDisk, 0, len(rulesRepos))
 
 	// read existing repos
-	entries, err := os.ReadDir(baseRepoFolder)
+	entries, err := iom.ReadDir(baseRepoFolder)
 	if err != nil {
 		log.WithError(err).WithField("reposFolder", baseRepoFolder).Error("Failed to read repos folder")
 		return nil, false, err
@@ -137,7 +145,7 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 	// pull or clone repos
 	for _, repo := range rulesRepos {
 		if !*isRunning {
-			return nil, false, fmt.Errorf("module has stopped running")
+			return nil, false, ErrModuleStopped
 		}
 
 		parser, err := url.Parse(repo.Repo)
@@ -157,70 +165,18 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 		allRepos = append(allRepos, dirty)
 		reclone := false
 
-		proxyOpts, err := proxyToTransportOptions(cfg.Proxy)
-		if err != nil {
-			log.WithError(err).WithField("proxy", cfg.Proxy).Error("failed to parse proxy URL, not using the proxy")
-			// no return here, not a bug
-		}
-
 		_, ok := existingRepos[lastFolder]
 		if ok {
-			var work *git.Worktree
-			var ctx context.Context
-			var cancel context.CancelFunc
-
-			// repo already exists, pull
-			gitrepo, err := git.PlainOpen(repoPath)
-			if err != nil {
-				log.WithError(err).WithField("repoPath", repoPath).Error("failed to open repo, doing nothing with it")
-				reclone = true
-
-				goto skippull
-			}
-
-			work, err = gitrepo.Worktree()
-			if err != nil {
-				log.WithError(err).WithField("repoPath", repoPath).Error("failed to get worktree, doing nothing with it")
-				reclone = true
-
-				goto skippull
-			}
-
-			err = work.Reset(&git.ResetOptions{
-				Mode: git.HardReset,
-			})
-			if err != nil {
-				log.WithError(err).WithField("repoPath", repoPath).Error("failed to reset worktree, doing nothing with it")
-				reclone = true
-
-				goto skippull
-			}
-
-			ctx, cancel = context.WithTimeout(context.Background(), time.Minute*5)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 			defer cancel()
 
-			err = work.PullContext(ctx, &git.PullOptions{
-				Depth:           1,
-				SingleBranch:    true,
-				ProxyOptions:    proxyOpts,
-				CABundle:        []byte(cfg.AdditionalCA),
-				InsecureSkipTLS: cfg.InsecureSkipVerify,
-			})
-			if err != nil && err != git.NoErrAlreadyUpToDate {
-				log.WithError(err).WithField("repoPath", repoPath).Error("failed to pull repo, doing nothing with it")
-				reclone = true
-
-				goto skippull
-			}
-
-			if err == nil {
+			// repo already exists, pull
+			dirty.WasModified, reclone = iom.PullRepo(ctx, repoPath)
+			if dirty.WasModified {
 				anythingNew = true
-				dirty.WasModified = true
 			}
 
 			delete(existingRepos, lastFolder)
-
-		skippull:
 		}
 
 		if reclone {
@@ -235,14 +191,10 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 
 		if !ok || reclone {
 			// repo does not exist or was just deleted, clone
-			_, err = git.PlainClone(repoPath, false, &git.CloneOptions{
-				Depth:           1,
-				SingleBranch:    true,
-				URL:             repo.Repo,
-				ProxyOptions:    proxyOpts,
-				CABundle:        []byte(cfg.AdditionalCA),
-				InsecureSkipTLS: cfg.InsecureSkipVerify,
-			})
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
+			defer cancel()
+
+			err = iom.CloneRepo(ctx, repoPath, repo.Repo)
 			if err != nil {
 				log.WithError(err).WithField("repoPath", repoPath).Error("failed to clone repo, doing nothing with it")
 				continue
@@ -257,7 +209,7 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 		// remove any repos that are no longer in the list
 		repoPath := filepath.Join(baseRepoFolder, repo)
 
-		err = os.RemoveAll(repoPath)
+		err = iom.RemoveAll(repoPath)
 		if err != nil {
 			log.WithError(err).WithField("repoPath", repoPath).Error("failed to remove repo, doing nothing with it")
 			continue
@@ -377,4 +329,28 @@ func DeduplicateByPublicId(detects []*model.Detection) []*model.Detection {
 	}
 
 	return deduped
+}
+
+type TemplateChecker interface {
+	DoesTemplateExist(ctx context.Context, tmpl string) (bool, error)
+}
+
+func CheckTemplate(ctx context.Context, detStore TemplateChecker) (haveTemplate bool) {
+	templateMutex.Lock()
+	defer templateMutex.Unlock()
+
+	if templateFound {
+		return true
+	}
+
+	exists, err := detStore.DoesTemplateExist(ctx, "so-detection")
+	if err != nil {
+		log.WithError(err).Error("failed to check for so-detection template")
+		return false
+	}
+
+	templateFound = exists
+	log.WithField("templateExists", exists).Info("checked for so-detection template")
+
+	return exists
 }

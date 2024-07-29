@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -1283,7 +1283,6 @@ test('bulkAction - delete - confirm - failure', async () => {
   comp.selectedCount = 2;
   comp.selectAllState = 'indeterminate';
   comp.eventData = [{ _isSelected: true, soc_id: "1" }, { _isSelected: false, soc_id: "2" }, { _isSelected: true, soc_id: "3" }];
-  comp.$root.showError = jest.fn();
   const err = { response: { data: "ERROR_BULK_COMMUNITY" } }
   const mock = resetPapi().mockPapi('post', null, err);
 
@@ -1294,8 +1293,8 @@ test('bulkAction - delete - confirm - failure', async () => {
   expect(comp.selectedCount).toBe(2);
   expect(mock).toHaveBeenCalledTimes(1);
   expect(mock).toHaveBeenCalledWith('detection/bulk/delete', { ids: ["1", "3"] });
-  expect(comp.$root.showError).toHaveBeenCalledTimes(1);
-  expect(comp.$root.showError).toHaveBeenCalledWith(err);
+  expect(comp.$root.error).toBe(true);
+  expect(comp.$root.errorMessage).toBe(comp.i18n.ERROR_BULK_COMMUNITY);
 });
 
 test('reconstructQuery', () => {
@@ -1344,4 +1343,61 @@ test('getDisplayedQueryVar', () => {
   comp.advanced = true;
   comp.showFullQuery = false;
   expect(comp.getDisplayedQueryVar()).toBe('querySearch');
+});
+
+test('bulkUpdateReport - error', () => {
+  let stats = {
+    error: 1,
+  };
+
+  comp.bulkUpdateReport(stats)
+
+  expect(comp.$root.error).toBe(true);
+  expect(comp.$root.errorMessage).toBe('1 of the detections during the last bulk update failed. Please check the SOC logs for more information.');
+});
+
+test('bulkUpdateReport - update success', () => {
+  let stats = {
+    time: 10,
+    filtered: 0,
+    verb: 'update',
+    modified: 2,
+    total: 2,
+  };
+
+  comp.bulkUpdateReport(stats)
+
+  expect(comp.$root.info).toBe(true);
+  expect(comp.$root.infoMessage).toBe('Bulk update successfully updated 2 of 2 events. (10s)');
+});
+
+test('bulkUpdateReport - delete success', () => {
+  let stats = {
+    time: 1000,
+    filtered: 0,
+    verb: 'delete',
+    modified: 200,
+    total: 200,
+  };
+
+  comp.bulkUpdateReport(stats)
+
+  expect(comp.$root.info).toBe(true);
+  expect(comp.$root.infoMessage).toBe('Bulk delete successfully deleted 200 of 200 events. (16m 40s)');
+});
+
+test('bulkUpdateReport - filtered success', () => {
+  let stats = {
+    time: 200,
+    filtered: 1,
+    verb: 'update',
+    modified: 20,
+    total: 20,
+  };
+
+  comp.bulkUpdateReport(stats)
+
+  expect(comp.$root.warning).toBe(true);
+  expect(comp.$root.warningMessage).toBe('Bulk update successfully updated 20 of 20 events. However, the statuses of 1 of the updated detections are controlled by the current regex filter settings and were reverted. <a href="/#/config?s=soc.config.server.modules.suricataengine" data-aid="warning_bulk_update_configure_filters">Click here to configure those filters.</a> (3m 20s)'
+);
 });

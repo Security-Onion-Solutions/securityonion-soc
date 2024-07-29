@@ -1,4 +1,4 @@
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -15,9 +15,14 @@ import (
 	"github.com/elastic/go-elasticsearch/v8"
 )
 
+type ResultSet struct {
+	Response *http.Response
+	Err      error
+}
+
 type MockTransport struct {
 	requests    []*http.Request
-	responses   []*http.Response
+	responses   []*ResultSet
 	roundTripFn func(req *http.Request) (*http.Response, error)
 }
 
@@ -26,12 +31,15 @@ func (t *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return t.roundTripFn(req)
 }
 
-func (t *MockTransport) AddResponse(res *http.Response) {
-	if res.Body == nil {
+func (t *MockTransport) AddResponse(res *http.Response, err error) {
+	if res != nil && res.Body == nil {
 		res.Body = http.NoBody
 	}
 
-	t.responses = append(t.responses, res)
+	t.responses = append(t.responses, &ResultSet{
+		Response: res,
+		Err:      err,
+	})
 }
 
 func (t *MockTransport) GetRequests() []*http.Request {
@@ -39,13 +47,15 @@ func (t *MockTransport) GetRequests() []*http.Request {
 }
 
 func NewMockClient(t *testing.T) (*elasticsearch.Client, *MockTransport) {
-	mocktrans := MockTransport{}
+	mocktrans := MockTransport{
+		responses: []*ResultSet{},
+	}
 	mocktrans.roundTripFn = func(req *http.Request) (*http.Response, error) {
 		if len(mocktrans.responses) != 0 {
 			res := mocktrans.responses[0]
 			mocktrans.responses = mocktrans.responses[1:]
 
-			return res, nil
+			return res.Response, res.Err
 		} else {
 			return nil, errors.New("unexpected call to client")
 		}

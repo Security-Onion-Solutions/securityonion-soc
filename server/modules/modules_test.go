@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -10,11 +10,12 @@ import (
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestBuildModuleMap(t *testing.T) {
-	mm := BuildModuleMap(nil)
+	mm := BuildModuleMap(&server.Server{})
 	findModule(t, mm, "elastic")
 	findModule(t, mm, "elasticcases")
 	findModule(t, mm, "filedatastore")

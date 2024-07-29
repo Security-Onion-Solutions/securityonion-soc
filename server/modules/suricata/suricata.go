@@ -1,4 +1,4 @@
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -6,13 +6,12 @@
 package suricata
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
-	"io/fs"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
@@ -20,8 +19,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -36,7 +37,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var errModuleStopped = fmt.Errorf("suricata module has stopped running")
 var sidExtracter = regexp.MustCompile(`(?i)\bsid: ?['"]?(.*?)['"]?;`)
 
 const modifyFromTo = `"flowbits" "noalert; flowbits"`
@@ -52,8 +52,6 @@ const (
 	DEFAULT_RULES_FINGERPRINT_FILE                = "/opt/sensoroni/fingerprints/emerging-all.fingerprint"
 	DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECS = 86400
 	DEFAULT_STATE_FILE_PATH                       = "/opt/sensoroni/fingerprints/suricataengine.state"
-	DEFAULT_ALLOW_REGEX                           = ""
-	DEFAULT_DENY_REGEX                            = ""
 	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS     = 300
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT    = 10
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS     = 600
@@ -61,41 +59,39 @@ const (
 	CUSTOM_RULE_LOC = "/nsm/rules/detect-suricata/custom_temp"
 )
 
-type IOManager interface {
-	ReadFile(path string) ([]byte, error)
-	WriteFile(path string, contents []byte, perm fs.FileMode) error
-	DeleteFile(path string) error
-	ReadDir(path string) ([]os.DirEntry, error)
-}
+var ( // treat as constants
+	DEFAULT_ENABLE_REGEX  = []string{}
+	DEFAULT_DISABLE_REGEX = []string{}
+)
 
 type SuricataEngine struct {
-	srv                                  *server.Server
-	communityRulesFile                   string
-	allRulesFile                         string
-	rulesFingerprintFile                 string
-	communityRulesImportFrequencySeconds int
-	communityRulesImportErrorSeconds     int
-	failAfterConsecutiveErrorCount       int
-	isRunning                            bool
-	syncThread                           *sync.WaitGroup
-	interruptSync                        chan bool
-	interm                               sync.Mutex
-	allowRegex                           *regexp.Regexp
-	denyRegex                            *regexp.Regexp
-	notify                               bool
-	stateFilePath                        string
-	migrations                           map[string]func(string) error
-	customRulesets                       []*model.CustomRuleset
+	srv                            *server.Server
+	communityRulesFile             string
+	allRulesFile                   string
+	rulesFingerprintFile           string
+	failAfterConsecutiveErrorCount int
+	isRunning                      bool
+	interm                         sync.Mutex
+	notify                         bool
+	migrations                     map[string]func(string) error
+	customRulesets                 []*model.CustomRuleset
+	writeNoRead                    *string
+	checkMigrationsOnce            func()
+	enableRegex                    []*regexp.Regexp
+	disableRegex                   []*regexp.Regexp
+	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
+	detections.IOManager
 	model.EngineState
-	IOManager
 }
 
 func NewSuricataEngine(srv *server.Server) *SuricataEngine {
 	e := &SuricataEngine{
 		srv:       srv,
-		IOManager: &ResourceManager{},
+		IOManager: &detections.ResourceManager{Config: srv.Config},
 	}
+
+	e.checkMigrationsOnce = sync.OnceFunc(e.checkForMigrations)
 
 	e.migrations = map[string]func(string) error{
 		"2.4.70": e.Migration2470,
@@ -113,39 +109,47 @@ func (e *SuricataEngine) GetState() *model.EngineState {
 }
 
 func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
-	e.syncThread = &sync.WaitGroup{}
-	e.interruptSync = make(chan bool, 1)
+	e.SyncThread = &sync.WaitGroup{}
+	e.InterruptChan = make(chan bool, 1)
 	e.IntegrityCheckerData.Thread = &sync.WaitGroup{}
 	e.IntegrityCheckerData.Interrupt = make(chan bool, 1)
 
 	e.communityRulesFile = module.GetStringDefault(config, "communityRulesFile", DEFAULT_COMMUNITY_RULES_FILE)
 	e.allRulesFile = module.GetStringDefault(config, "allRulesFile", DEFAULT_ALL_RULES_FILE)
 	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", DEFAULT_RULES_FINGERPRINT_FILE)
-	e.communityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECS)
-	e.communityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
+	e.CommunityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECS)
+	e.CommunityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS)
 
-	allow := module.GetStringDefault(config, "allowRegex", DEFAULT_ALLOW_REGEX)
-	deny := module.GetStringDefault(config, "denyRegex", DEFAULT_DENY_REGEX)
+	enable := module.GetStringArrayDefault(config, "enableRegex", DEFAULT_ENABLE_REGEX)
+	disable := module.GetStringArrayDefault(config, "disableRegex", DEFAULT_DISABLE_REGEX)
 
-	if allow != "" {
-		var err error
-		e.allowRegex, err = regexp.Compile(allow)
-		if err != nil {
-			return fmt.Errorf("unable to compile Suricata's allowRegex: %w", err)
+	if len(enable) != 0 {
+		e.enableRegex = make([]*regexp.Regexp, 0, len(enable))
+		for _, str := range enable {
+			re, err := regexp.Compile(str)
+			if err != nil {
+				return fmt.Errorf("unable to compile Suricata's enableRegex: %s - %w", str, err)
+			}
+
+			e.enableRegex = append(e.enableRegex, re)
 		}
 	}
 
-	if deny != "" {
-		var err error
-		e.denyRegex, err = regexp.Compile(deny)
-		if err != nil {
-			return fmt.Errorf("unable to compile Suricata's denyRegex: %w", err)
+	if len(disable) != 0 {
+		e.disableRegex = make([]*regexp.Regexp, 0, len(disable))
+		for _, str := range disable {
+			re, err := regexp.Compile(str)
+			if err != nil {
+				return fmt.Errorf("unable to compile Suricata's disableRegex: %s - %w", str, err)
+			}
+
+			e.disableRegex = append(e.disableRegex, re)
 		}
 	}
 
-	e.stateFilePath = module.GetStringDefault(config, "stateFilePath", DEFAULT_STATE_FILE_PATH)
+	e.StateFilePath = module.GetStringDefault(config, "stateFilePath", DEFAULT_STATE_FILE_PATH)
 	e.customRulesets, err = model.GetCustomRulesetsDefault(config, "customRulesets", []*model.CustomRuleset{})
 	if err != nil {
 		return fmt.Errorf("unable to get custom rulesets: %w", err)
@@ -159,7 +163,7 @@ func (e *SuricataEngine) Start() error {
 	e.isRunning = true
 	e.IntegrityCheckerData.IsRunning = true
 
-	go e.watchCommunityRules()
+	go detections.SyncScheduler(e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameSuricata, &e.isRunning, e.IOManager)
 	go detections.IntegrityChecker(model.EngineNameSuricata, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
 
 	return nil
@@ -168,8 +172,8 @@ func (e *SuricataEngine) Start() error {
 func (e *SuricataEngine) Stop() error {
 	e.isRunning = false
 	e.InterruptSync(false, false)
-	e.syncThread.Wait()
-	e.pauseIntegrityChecker()
+	e.SyncThread.Wait()
+	e.PauseIntegrityChecker()
 	e.interruptIntegrityCheck()
 	e.IntegrityCheckerData.Thread.Wait()
 
@@ -182,19 +186,19 @@ func (e *SuricataEngine) InterruptSync(fullUpgrade bool, notify bool) {
 
 	e.notify = notify
 
-	if len(e.interruptSync) == 0 {
-		e.interruptSync <- fullUpgrade
+	if len(e.InterruptChan) == 0 {
+		e.InterruptChan <- fullUpgrade
 	}
 }
 
-func (e *SuricataEngine) resetInterrupt() {
+func (e *SuricataEngine) resetInterruptSync() {
 	e.interm.Lock()
 	defer e.interm.Unlock()
 
 	e.notify = false
 
-	if len(e.interruptSync) != 0 {
-		<-e.interruptSync
+	if len(e.InterruptChan) != 0 {
+		<-e.InterruptChan
 	}
 }
 
@@ -207,11 +211,11 @@ func (e *SuricataEngine) interruptIntegrityCheck() {
 	}
 }
 
-func (e *SuricataEngine) pauseIntegrityChecker() {
+func (e *SuricataEngine) PauseIntegrityChecker() {
 	e.IntegrityCheckerData.IsRunning = false
 }
 
-func (e *SuricataEngine) resumeIntegrityChecker() {
+func (e *SuricataEngine) ResumeIntegrityChecker() {
 	e.IntegrityCheckerData.IsRunning = true
 }
 
@@ -296,297 +300,52 @@ func (e *SuricataEngine) ExtractDetails(detect *model.Detection) error {
 	return nil
 }
 
-func (e *SuricataEngine) watchCommunityRules() {
-	e.syncThread.Add(1)
+func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 	defer func() {
-		e.syncThread.Done()
-		e.isRunning = false
+		e.resetInterruptSync()
 	}()
 
-	// |> nil: no import has been completed, it's this way during the first sync
-	// so that the timerDur returned by DetermineWaitTime is used. After first sync,
-	// the pointer should always have a value
-	// |> false: the last sync was not successful, the timer for the next sync should use
-	// the shorter communityRulesImportErrorSeconds timer.
-	// |> true: the last sync was successful, the timer for the next sync should use
-	// the normal communityRulesImportFrequencySeconds timer.
-	var lastSyncSuccess *bool
-
-	// publicId of a detection that was written but not read back
-	var writeNoRead *string
-
-	ctx := e.srv.Context
-	templateFound := false
-	checkMigrationsOnce := sync.OnceFunc(e.checkForMigrations)
-
-	lastImport, timerDur := detections.DetermineWaitTime(e.IOManager, e.stateFilePath, time.Second*time.Duration(e.communityRulesImportFrequencySeconds))
-
-	for e.isRunning {
-		if lastImport == nil && lastSyncSuccess != nil && *lastSyncSuccess {
-			now := uint64(time.Now().UnixMilli())
-			lastImport = &now
+	if detections.CheckWriteNoRead(e.srv.Context, e.srv.Detectionstore, e.writeNoRead) {
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameStrelka,
+				Status: "error",
+			})
 		}
 
-		e.EngineState.Syncing = false
-		e.EngineState.Importing = lastImport == nil
-		e.EngineState.Migrating = false
-		e.EngineState.SyncFailure = lastSyncSuccess != nil && !*lastSyncSuccess
+		return detections.ErrSyncFailed
+	}
 
-		e.resetInterrupt()
+	e.writeNoRead = nil
 
-		var forceSync bool
+	e.EngineState.Syncing = true
 
-		if lastSyncSuccess != nil {
-			if *lastSyncSuccess {
-				timerDur = time.Second * time.Duration(e.communityRulesImportFrequencySeconds)
-			} else {
-				timerDur = time.Second * time.Duration(e.communityRulesImportErrorSeconds)
-				forceSync = true
-			}
+	rules, hash, err := e.readAndHash(e.communityRulesFile)
+	if err != nil {
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameSuricata,
+				Status: "error",
+			})
 		}
 
-		timer := time.NewTimer(timerDur)
+		logger.WithError(err).Error("unable to read community rules file")
 
-		lastSyncStatus := "nil"
-		if lastSyncSuccess != nil {
-			lastSyncStatus = strconv.FormatBool(*lastSyncSuccess)
-		}
+		return detections.ErrSyncFailed
+	}
 
-		log.WithFields(log.Fields{
-			"waitTimeSeconds":   timerDur.Seconds(),
-			"forceSync":         forceSync,
-			"lastSyncSuccess":   lastSyncStatus,
-			"expectedStartTime": time.Now().Add(timerDur).Format(time.RFC3339),
-		}).Info("waiting for next suricata community rules sync")
-
-		e.resumeIntegrityChecker()
-
-		select {
-		case <-timer.C:
-		case typ := <-e.interruptSync:
-			forceSync = forceSync || typ
-		}
-
-		e.pauseIntegrityChecker()
-
-		if !e.isRunning {
-			break
-		}
-
-		lastSyncSuccess = util.Ptr(false)
-
-		if detections.CheckWriteNoRead(e.srv.Context, e.srv.Detectionstore, writeNoRead) {
-			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-					Engine: model.EngineNameStrelka,
-					Status: "error",
-				})
-			}
-
-			continue
-		}
-
-		writeNoRead = nil
-
-		log.WithFields(log.Fields{
-			"forceSync": forceSync,
-		}).Info("syncing suricata community rules")
-
-		e.EngineState.Syncing = true
-
-		start := time.Now()
-
-		if !templateFound {
-			exists, err := e.srv.Detectionstore.DoesTemplateExist(ctx, "so-detection")
-			if err != nil {
-				log.WithError(err).Error("unable to check for detection index template")
-
-				if e.notify {
-					e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-						Engine: model.EngineNameSuricata,
-						Status: "error",
-					})
-				}
-
-				continue
-			}
-
-			if !exists {
-				log.Warn("detection index template does not exist, skipping import")
-
-				if e.notify {
-					e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-						Engine: model.EngineNameSuricata,
-						Status: "error",
-					})
-				}
-
-				continue
-			}
-
-			templateFound = true
-		}
-
-		rules, hash, err := readAndHash(e.communityRulesFile)
+	if !forceSync {
+		fingerprint, haveFP, err := e.readFingerprint(e.rulesFingerprintFile)
 		if err != nil {
-			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-					Engine: model.EngineNameSuricata,
-					Status: "error",
-				})
-			}
-
-			log.WithError(err).Error("unable to read community rules file")
-
-			continue
+			logger.WithError(err).Error("unable to read rules fingerprint file")
+			return detections.ErrSyncFailed
 		}
 
-		// If no import has been completed, then do a full sync
-		if lastImport == nil {
-			forceSync = true
-		}
+		if haveFP && strings.EqualFold(*fingerprint, hash) {
+			// if we have a fingerprint and the hashes are equal, there's nothing to do
+			logger.Info("community rule sync found no changes")
 
-		if !forceSync {
-			fingerprint, haveFP, err := readFingerprint(e.rulesFingerprintFile)
-			if err != nil {
-				log.WithError(err).Error("unable to read rules fingerprint file")
-				continue
-			}
-
-			if haveFP && strings.EqualFold(*fingerprint, hash) {
-				// if we have a fingerprint and the hashes are equal, there's nothing to do
-				log.Info("suricata sync found no changes")
-
-				detections.WriteStateFile(e.IOManager, e.stateFilePath)
-
-				if e.notify {
-					e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-						Engine: model.EngineNameSuricata,
-						Status: "success",
-					})
-				}
-
-				checkMigrationsOnce()
-
-				err = e.IntegrityCheck(false)
-
-				e.EngineState.IntegrityFailure = err != nil
-				lastSyncSuccess = util.Ptr(err == nil)
-
-				if err != nil {
-					log.WithError(err).Error("post-sync integrity check failed")
-				} else {
-					log.Info("post-sync integrity check passed")
-				}
-
-				continue
-			}
-		}
-
-		allSettings, err := e.srv.Configstore.GetSettings(ctx)
-		if err != nil {
-			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-					Engine: model.EngineNameSuricata,
-					Status: "error",
-				})
-			}
-
-			log.WithError(err).Error("unable to get settings")
-
-			continue
-		}
-
-		if !e.isRunning {
-			break
-		}
-
-		ruleset := settingByID(allSettings, "idstools.config.ruleset")
-
-		commDetections, err := e.ParseRules(rules, ruleset.Value, true)
-		if err != nil {
-			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-					Engine: model.EngineNameSuricata,
-					Status: "error",
-				})
-			}
-
-			log.WithError(err).Error("unable to parse community rules")
-
-			continue
-		}
-
-		for _, d := range commDetections {
-			d.IsCommunity = true
-		}
-
-		dets, err := e.ReadCustomRulesets()
-		if err != nil {
-			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-					Engine: model.EngineNameSuricata,
-					Status: "error",
-				})
-			}
-
-			log.WithError(err).Error("unable to parse custom rulesets")
-
-			continue
-		}
-
-		commDetections = append(commDetections, dets...)
-
-		commDetections = detections.DeduplicateByPublicId(commDetections)
-
-		errMap, err := e.syncCommunityDetections(ctx, commDetections, true, allSettings)
-		if err != nil {
-			if err == errModuleStopped {
-				log.Info("incomplete sync of suricata community detections due to module stopping")
-				break
-			}
-
-			if err.Error() == "Object not found" {
-				// errMap contains exactly 1 error: the publicId of the detection that
-				// was written to but not read back
-				for publicId := range errMap {
-					writeNoRead = util.Ptr(publicId)
-				}
-			}
-
-			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-					Engine: model.EngineNameSuricata,
-					Status: "error",
-				})
-			}
-
-			log.WithError(err).Error("unable to sync suricata community detections")
-
-			continue
-		}
-
-		detections.WriteStateFile(e.IOManager, e.stateFilePath)
-		lastSyncSuccess = util.Ptr(true)
-
-		if len(errMap) > 0 {
-			// there were errors, don't save the fingerprint.
-			// idempotency means we might fix it if we try again later.
-			log.WithFields(log.Fields{
-				"suricataSyncErrors": errMap,
-			}).Error("unable to sync all community detections")
-
-			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-					Engine: model.EngineNameSuricata,
-					Status: "partial",
-				})
-			}
-		} else {
-			err = os.WriteFile(e.rulesFingerprintFile, []byte(hash), 0644)
-			if err != nil {
-				log.WithError(err).WithField("repoPath", e.rulesFingerprintFile).Error("unable to write rules fingerprint file")
-			}
+			detections.WriteStateFile(e.IOManager, e.StateFilePath)
 
 			if e.notify {
 				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
@@ -595,26 +354,146 @@ func (e *SuricataEngine) watchCommunityRules() {
 				})
 			}
 
-			err = e.IntegrityCheck(false)
+			e.checkMigrationsOnce()
+
+			_, _, err = e.IntegrityCheck(false, logger)
 
 			e.EngineState.IntegrityFailure = err != nil
-			lastSyncSuccess = util.Ptr(err == nil)
 
 			if err != nil {
-				log.WithError(err).Error("post-sync integrity check failed")
+				logger.WithError(err).Error("post-sync integrity check failed")
 			} else {
-				log.Info("post-sync integrity check passed")
+				logger.Info("post-sync integrity check passed")
+			}
+
+			// a non-forceSync sync that found no changes is a success
+			return nil
+		}
+	}
+
+	allSettings, err := e.srv.Configstore.GetSettings(e.srv.Context)
+	if err != nil {
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameSuricata,
+				Status: "error",
+			})
+		}
+
+		logger.WithError(err).Error("unable to get settings")
+
+		return detections.ErrSyncFailed
+	}
+
+	if !e.isRunning {
+		return detections.ErrModuleStopped
+	}
+
+	ruleset := settingByID(allSettings, "idstools.config.ruleset")
+
+	commDetections, err := e.ParseRules(rules, ruleset.Value)
+	if err != nil {
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameSuricata,
+				Status: "error",
+			})
+		}
+
+		logger.WithError(err).Error("unable to parse community rules")
+
+		return detections.ErrSyncFailed
+	}
+
+	for _, d := range commDetections {
+		d.IsCommunity = true
+	}
+
+	dets, err := e.ReadCustomRulesets()
+	if err != nil {
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameSuricata,
+				Status: "error",
+			})
+		}
+
+		logger.WithError(err).Error("unable to parse custom rulesets")
+
+		return detections.ErrSyncFailed
+	}
+
+	commDetections = append(commDetections, dets...)
+
+	commDetections = detections.DeduplicateByPublicId(commDetections)
+
+	errMap, err := e.syncCommunityDetections(e.srv.Context, logger, commDetections, true, allSettings)
+	if err != nil {
+		if errors.Is(err, detections.ErrModuleStopped) {
+			logger.Info("incomplete sync of suricata community detections due to module stopping")
+			return err
+		}
+
+		if err.Error() == "Object not found" {
+			// errMap contains exactly 1 error: the publicId of the detection that
+			// was written to but not read back
+			for publicId := range errMap {
+				e.writeNoRead = util.Ptr(publicId)
 			}
 		}
 
-		dur := time.Since(start)
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameSuricata,
+				Status: "error",
+			})
+		}
 
-		log.WithFields(log.Fields{
-			"durationSeconds": dur.Seconds(),
-		}).Info("suricata community rules sync finished")
+		logger.WithError(err).Error("unable to sync suricata community detections")
 
-		checkMigrationsOnce()
+		return detections.ErrSyncFailed
 	}
+
+	detections.WriteStateFile(e.IOManager, e.StateFilePath)
+
+	if len(errMap) > 0 {
+		// there were errors, don't save the fingerprint.
+		// idempotency means we might fix it if we try again later.
+		logger.WithField("suricataSyncErrors", errMap).Error("unable to sync all community detections")
+
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameSuricata,
+				Status: "partial",
+			})
+		}
+	} else {
+		err = e.WriteFile(e.rulesFingerprintFile, []byte(hash), 0644)
+		if err != nil {
+			logger.WithError(err).WithField("repoPath", e.rulesFingerprintFile).Error("unable to write rules fingerprint file")
+		}
+
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameSuricata,
+				Status: "success",
+			})
+		}
+
+		_, _, err = e.IntegrityCheck(false, logger)
+
+		e.EngineState.IntegrityFailure = err != nil
+
+		if err != nil {
+			logger.WithError(err).Error("post-sync integrity check failed")
+		} else {
+			logger.Info("post-sync integrity check passed")
+		}
+	}
+
+	e.checkMigrationsOnce()
+
+	return nil
 }
 
 func (e *SuricataEngine) checkForMigrations() {
@@ -686,36 +565,25 @@ func (e *SuricataEngine) checkForMigrations() {
 	log.Info("done checking for suricata migrations")
 }
 
-func readAndHash(path string) (content string, sha256Hash string, err error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", "", err
-	}
-	defer f.Close()
-
-	hasher := sha256.New()
-	data := io.TeeReader(f, hasher)
-
-	raw, err := io.ReadAll(data)
+func (e *SuricataEngine) readAndHash(path string) (content string, sha256Hash string, err error) {
+	raw, err := e.ReadFile(path)
 	if err != nil {
 		return "", "", err
 	}
 
-	return string(raw), hex.EncodeToString(hasher.Sum(nil)), nil
+	rawHash := sha256.Sum256(raw)
+	hexHash := hex.EncodeToString(rawHash[:])
+
+	return string(raw), hexHash, nil
 }
 
-func readFingerprint(path string) (fingerprint *string, ok bool, err error) {
-	_, err = os.Stat(path)
+func (e *SuricataEngine) readFingerprint(path string) (fingerprint *string, ok bool, err error) {
+	raw, err := e.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, false, nil
 		}
 
-		return nil, false, err
-	}
-
-	raw, err := os.ReadFile(path)
-	if err != nil {
 		return nil, false, err
 	}
 
@@ -742,14 +610,20 @@ func (e *SuricataEngine) ValidateRule(rule string) (string, error) {
 	return parsed.String(), nil
 }
 
-func (e *SuricataEngine) ParseRules(content string, ruleset string, applyFilters bool) ([]*model.Detection, error) {
+func (e *SuricataEngine) ApplyFilters(detect *model.Detection) (bool, error) {
+	modified := e.applyStatusRegexes(detect)
+
+	return modified, nil
+}
+
+func (e *SuricataEngine) ParseRules(content string, ruleset string) ([]*model.Detection, error) {
 	// expecting one rule per line
 	lines := strings.Split(content, "\n")
 	dets := []*model.Detection{}
 
 	for i, line := range lines {
 		if !e.isRunning {
-			return nil, errModuleStopped
+			return nil, detections.ErrModuleStopped
 		}
 
 		line = strings.TrimSpace(line)
@@ -770,18 +644,6 @@ func (e *SuricataEngine) ParseRules(content string, ruleset string, applyFilters
 				wasCommented = true
 			} else {
 				// actual comment, skip line
-				continue
-			}
-		}
-
-		if applyFilters {
-			if e.denyRegex != nil && e.denyRegex.MatchString(line) {
-				log.WithField("suricataDenyRegex", line).Debug("content matched suricata's denyRegex")
-				continue
-			}
-
-			if e.allowRegex != nil && !e.allowRegex.MatchString(line) {
-				log.WithField("suricataAllowRegex", line).Debug("content didn't match suricata's allowRegex")
 				continue
 			}
 		}
@@ -859,7 +721,7 @@ func (e *SuricataEngine) ParseRules(content string, ruleset string, applyFilters
 	return dets, nil
 }
 
-func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*model.Detection) (errMap map[string]string, err error) {
+func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detects []*model.Detection) (errMap map[string]string, err error) {
 	defer func() {
 		if len(errMap) == 0 {
 			errMap = nil
@@ -874,7 +736,7 @@ func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*
 	localDets := []*model.Detection{}
 	communityDets := []*model.Detection{}
 
-	for _, detect := range detections {
+	for _, detect := range detects {
 		if detect.IsCommunity {
 			communityDets = append(communityDets, detect)
 		} else {
@@ -885,7 +747,7 @@ func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*
 	errMap = map[string]string{} // map[sid]error
 
 	if len(communityDets) != 0 {
-		eMap, err := e.syncCommunityDetections(ctx, communityDets, false, allSettings)
+		eMap, err := e.syncCommunityDetections(ctx, nil, communityDets, false, allSettings)
 		if err != nil {
 			return eMap, err
 		}
@@ -938,7 +800,13 @@ func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*
 
 	for _, detect := range localDets {
 		if !e.isRunning {
-			return nil, errModuleStopped
+			return nil, detections.ErrModuleStopped
+		}
+
+		_, err = e.ApplyFilters(detect)
+		if err != nil {
+			errMap[detect.PublicID] = fmt.Sprintf("unable to apply filters; reason=%s", err.Error())
+			continue
 		}
 
 		parsedRule, err := ParseSuricataRule(detect.Content)
@@ -1195,7 +1063,7 @@ func removeFromIndex(lines []string, index map[string]int, sid string) {
 	}
 }
 
-func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detects []*model.Detection, deleteUnreferenced bool, allSettings []*model.Setting) (errMap map[string]string, err error) {
+func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *log.Entry, detects []*model.Detection, deleteUnreferenced bool, allSettings []*model.Setting) (errMap map[string]string, err error) {
 	defer func() {
 		if len(errMap) == 0 {
 			errMap = nil
@@ -1205,11 +1073,16 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detects []
 
 	changedByUser := web.IsChangedByUser(ctx)
 
+	if logger == nil {
+		logger = log.WithField("detectionEngine", model.EngineNameSuricata)
+	}
+
 	results := struct {
-		Added     int
-		Updated   int
-		Removed   int
-		Unchanged int
+		Added     int32
+		Updated   int32
+		Removed   int32
+		Unchanged int32
+		Audited   int32
 	}{}
 
 	enabled := settingByID(allSettings, "idstools.sids.enabled")
@@ -1258,10 +1131,28 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detects []
 
 	et := detections.NewErrorTracker(e.failAfterConsecutiveErrorCount)
 
-	for _, detect := range detects {
+	bulk, err := e.srv.Detectionstore.BuildBulkIndexer(e.srv.Context, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	createAudit := make([]model.AuditInfo, 0, len(detects))
+	auditMut := sync.Mutex{}
+	errMut := sync.Mutex{}
+
+	for i := range detects {
+		detect := detects[i]
+
 		if !e.isRunning {
-			return nil, errModuleStopped
+			return nil, detections.ErrModuleStopped
 		}
+
+		delete(toDelete, detect.PublicID)
+
+		logger.WithFields(log.Fields{
+			"rule.uuid": detect.PublicID,
+			"rule.name": detect.Title,
+		}).Info("syncing rule")
 
 		orig, exists := commSIDs[detect.PublicID]
 		if exists {
@@ -1273,6 +1164,8 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detects []
 			detect.Id = orig.Id
 			detect.Overrides = orig.Overrides
 			detect.CreateTime = orig.CreateTime
+		} else {
+			detect.CreateTime = util.Ptr(time.Now())
 		}
 
 		parsedRule, err := ParseSuricataRule(detect.Content)
@@ -1290,10 +1183,12 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detects []
 		sid := *opt
 		_, isFlowbits := parsedRule.GetOption("flowbits")
 
+		modifiedByFilter := e.applyStatusRegexes(detect)
+
 		_, inEnabled := enabledIndex[sid]
 		_, inDisabled := disabledIndex[sid]
 
-		if changedByUser || inEnabled || inDisabled {
+		if changedByUser || inEnabled || inDisabled || modifiedByFilter {
 			// update enabled
 			enabledLines = updateEnabled(enabledLines, enabledIndex, sid, isFlowbits, detect)
 
@@ -1309,11 +1204,49 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detects []
 			modifyLines = updateModifyForDisabledFlowbits(modifyLines, modifyIndex, sid, detect)
 		}
 
+		detect.Kind = ""
+
+		document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", detect, &detect.Auditable, exists, nil, nil)
+		if err != nil {
+			errMap[detect.PublicID] = fmt.Sprintf("unable to convert detection to document map; reason=%s", err.Error())
+			continue
+		}
+
 		if exists {
 			if orig.Content != detect.Content || orig.Ruleset != detect.Ruleset || len(detect.Overrides) != 0 || orig.IsEnabled != detect.IsEnabled {
-				detect.Kind = ""
+				logger.WithFields(log.Fields{
+					"rule.uuid": detect.PublicID,
+					"rule.name": detect.Title,
+				}).Info("updating Suricata detection")
 
-				_, err = e.srv.Detectionstore.UpdateDetection(ctx, detect)
+				err = bulk.Add(ctx, esutil.BulkIndexerItem{
+					Index:      index,
+					Action:     "update",
+					DocumentID: orig.Id,
+					Body:       bytes.NewReader(document),
+					OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+						auditMut.Lock()
+						defer auditMut.Unlock()
+
+						results.Updated++
+
+						createAudit = append(createAudit, model.AuditInfo{
+							Detection: detect,
+							DocId:     resp.DocumentID,
+							Op:        "update",
+						})
+					},
+					OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+						errMut.Lock()
+						defer errMut.Unlock()
+
+						if err != nil {
+							errMap[detect.PublicID] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
+						} else {
+							errMap[detect.PublicID] = fmt.Sprintf("unable to update detection; reason=%s", resp.Error.Reason)
+						}
+					},
+				})
 				if err != nil {
 					if err.Error() == "Object not found" {
 						errMap = map[string]string{
@@ -1324,9 +1257,6 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detects []
 					}
 
 					errMap[detect.PublicID] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
-				} else {
-					results.Updated++
-					delete(toDelete, detect.PublicID)
 				}
 
 				err = et.AddError(err)
@@ -1335,10 +1265,40 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detects []
 				}
 			} else {
 				results.Unchanged++
-				delete(toDelete, detect.PublicID)
 			}
 		} else {
-			_, err = e.srv.Detectionstore.CreateDetection(ctx, detect)
+			logger.WithFields(log.Fields{
+				"rule.uuid": detect.PublicID,
+				"rule.name": detect.Title,
+			}).Info("creating new Suricata detection")
+
+			err = bulk.Add(ctx, esutil.BulkIndexerItem{
+				Index:  index,
+				Action: "create",
+				Body:   bytes.NewReader(document),
+				OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+					auditMut.Lock()
+					defer auditMut.Unlock()
+
+					results.Added++
+
+					createAudit = append(createAudit, model.AuditInfo{
+						Detection: detect,
+						DocId:     resp.DocumentID,
+						Op:        "create",
+					})
+				},
+				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+					errMut.Lock()
+					defer errMut.Unlock()
+
+					if err != nil {
+						errMap[detect.PublicID] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
+					} else {
+						errMap[detect.PublicID] = fmt.Sprintf("unable to update detection; reason=%s", resp.Error.Reason)
+					}
+				},
+			})
 			if err != nil {
 				if err.Error() == "Object not found" {
 					errMap = map[string]string{
@@ -1349,8 +1309,6 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detects []
 				}
 
 				errMap[detect.PublicID] = fmt.Sprintf("unable to create detection; reason=%s", err.Error())
-			} else {
-				results.Added++
 			}
 
 			err = et.AddError(err)
@@ -1363,7 +1321,7 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detects []
 	if deleteUnreferenced {
 		for sid := range toDelete {
 			if !e.isRunning {
-				return nil, errModuleStopped
+				return nil, detections.ErrModuleStopped
 			}
 
 			removeFromIndex(enabledLines, enabledIndex, sid)
@@ -1371,13 +1329,115 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detects []
 			removeFromIndex(modifyLines, modifyIndex, sid)
 			delete(thresholdIndex, sid)
 
-			_, err = e.srv.Detectionstore.DeleteDetection(ctx, commSIDs[sid].Id)
+			id := commSIDs[sid].Id
+
+			_, index, _ := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", commSIDs[sid], &commSIDs[sid].Auditable, false, nil, nil)
+
+			err = bulk.Add(ctx, esutil.BulkIndexerItem{
+				Action:     "delete",
+				Index:      index,
+				DocumentID: id,
+				OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
+					auditMut.Lock()
+					defer auditMut.Unlock()
+
+					results.Removed++
+
+					createAudit = append(createAudit, model.AuditInfo{
+						Detection: commSIDs[sid],
+						DocId:     resp.DocumentID,
+						Op:        "delete",
+					})
+				},
+				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+					errMut.Lock()
+					defer errMut.Unlock()
+
+					if err != nil {
+						errMap[commSIDs[sid].PublicID] = fmt.Sprintf("unable to update detection; reason=%s", err.Error())
+					} else {
+						errMap[commSIDs[sid].PublicID] = fmt.Sprintf("unable to update detection; reason=%s", resp.Error.Reason)
+					}
+				},
+			})
 			if err != nil {
-				errMap[sid] = fmt.Sprintf("unable to delete detection; reason=%s", err.Error())
-			} else {
-				results.Removed++
+				errMap[sid] = fmt.Sprintf("unable to add to bulk indexer; reason=%s", err.Error())
 			}
 		}
+	}
+
+	err = bulk.Close(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	stats := bulk.Stats()
+	logger.WithFields(log.Fields{
+		"NumAdded":    stats.NumAdded,
+		"NumCreated":  stats.NumCreated,
+		"NumDeleted":  stats.NumDeleted,
+		"NumFailed":   stats.NumFailed,
+		"NumFlushed":  stats.NumFlushed,
+		"NumIndexed":  stats.NumIndexed,
+		"NumRequests": stats.NumRequests,
+		"NumUpdated":  stats.NumUpdated,
+	}).Debug("detections bulk audit sync stats")
+
+	if len(createAudit) != 0 {
+		bulk, err = e.srv.Detectionstore.BuildBulkIndexer(e.srv.Context, logger)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, audit := range createAudit {
+			// prepare audit doc
+			document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", audit.Detection, &audit.Detection.Auditable, false, &audit.DocId, &audit.Op)
+			if err != nil {
+				errMap[audit.Detection.PublicID] = fmt.Sprintf("unable to convert detection to document map for creating an audit doc; reason=%s", err.Error())
+				continue
+			}
+
+			// create audit doc
+			err = bulk.Add(ctx, esutil.BulkIndexerItem{
+				Index:  index,
+				Action: "create",
+				Body:   bytes.NewReader(document),
+				OnSuccess: func(ctx context.Context, bii esutil.BulkIndexerItem, biri esutil.BulkIndexerResponseItem) {
+					atomic.AddInt32(&results.Audited, 1)
+				},
+				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
+					errMut.Lock()
+					defer errMut.Unlock()
+
+					if err != nil {
+						errMap[audit.Detection.PublicID] = fmt.Sprintf("unable to create audit doc; reason=%s", err.Error())
+					} else {
+						errMap[audit.Detection.PublicID] = fmt.Sprintf("unable to create audit doc; reason=%s", resp.Error.Reason)
+					}
+				},
+			})
+			if err != nil {
+				errMap[audit.Detection.PublicID] = fmt.Sprintf("unable to add audit doc to bulk indexer; reason=%s", err.Error())
+				continue
+			}
+		}
+
+		err = bulk.Close(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		stats := bulk.Stats()
+		logger.WithFields(log.Fields{
+			"NumAdded":    stats.NumAdded,
+			"NumCreated":  stats.NumCreated,
+			"NumDeleted":  stats.NumDeleted,
+			"NumFailed":   stats.NumFailed,
+			"NumFlushed":  stats.NumFlushed,
+			"NumIndexed":  stats.NumIndexed,
+			"NumRequests": stats.NumRequests,
+			"NumUpdated":  stats.NumUpdated,
+		}).Debug("detections bulk audit sync stats")
 	}
 
 	enabledLines = removeBlankLines(enabledLines)
@@ -1416,7 +1476,8 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, detects []
 		return errMap, err
 	}
 
-	log.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
+		"syncAudited":            results.Audited,
 		"syncAdded":              results.Added,
 		"syncUpdated":            results.Updated,
 		"syncRemoved":            results.Removed,
@@ -1446,6 +1507,24 @@ func extractSID(rule string) *string {
 	}
 
 	return util.Ptr(strings.TrimSpace(sids[0][1]))
+}
+
+func (e *SuricataEngine) applyStatusRegexes(detect *model.Detection) (affectedByFilter bool) {
+	for _, enable := range e.enableRegex {
+		if enable.MatchString(detect.Content) {
+			detect.IsEnabled = true
+			return true
+		}
+	}
+
+	for _, disable := range e.disableRegex {
+		if disable.MatchString(detect.Content) {
+			detect.IsEnabled = false
+			return true
+		}
+	}
+
+	return false
 }
 
 func indexLocal(lines []string) map[string]int {
@@ -1582,7 +1661,7 @@ func (e *SuricataEngine) DuplicateDetection(ctx context.Context, detection *mode
 
 	rule.UpdateForDuplication(id)
 
-	dets, err := e.ParseRules(rule.String(), detections.RULESET_CUSTOM, false)
+	dets, err := e.ParseRules(rule.String(), detections.RULESET_CUSTOM)
 	if err != nil {
 		return nil, err
 	}
@@ -1644,7 +1723,7 @@ func (e *SuricataEngine) ReadCustomRulesets() (detects []*model.Detection, err e
 			return nil, errors.New("invalid custom ruleset")
 		}
 
-		dets, err := e.ParseRules(string(content), custom.Ruleset, false)
+		dets, err := e.ParseRules(string(content), custom.Ruleset)
 		if err != nil {
 			log.WithError(err).WithField("customRulesetName", custom.Ruleset).Error("unable to parse custom ruleset, skipping")
 
@@ -1662,47 +1741,50 @@ func (e *SuricataEngine) ReadCustomRulesets() (detects []*model.Detection, err e
 	return detects, nil
 }
 
-func (e *SuricataEngine) IntegrityCheck(canInterrupt bool) error {
+func (e *SuricataEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (deployedButNotEnabled []string, enabledButNotDeployed []string, err error) {
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
-		return detections.ErrIntCheckerStopped
+		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
-	logger := log.WithFields(log.Fields{
-		"detectionEngine": model.EngineNameSuricata,
-		"intCheckId":      uuid.New().String(),
-	})
+	if logger == nil {
+		logger = log.WithFields(log.Fields{
+			"detectionEngine": model.EngineNameSuricata,
+		})
+	}
+
+	logger = logger.WithField("intCheckId", uuid.New().String())
 
 	allSettings, err := e.srv.Configstore.GetSettings(e.srv.Context)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		logger.Info("integrity checker stopped")
-		return detections.ErrIntCheckerStopped
+		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
 	allRules, err := e.ReadFile(e.allRulesFile)
 	if err != nil {
 		logger.WithError(err).WithField("path", e.allRulesFile).Error("unable to read all.rules file")
-		return err
+		return nil, nil, err
 	}
 
 	disabled := settingByID(allSettings, "idstools.sids.disabled")
 	if disabled == nil {
-		return fmt.Errorf("unable to find disabled setting")
+		return nil, nil, fmt.Errorf("unable to find disabled setting")
 	}
 
 	modify := settingByID(allSettings, "idstools.sids.modify")
 	if modify == nil {
-		return fmt.Errorf("unable to find modify setting")
+		return nil, nil, fmt.Errorf("unable to find modify setting")
 	}
 
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
-		return detections.ErrIntCheckerStopped
+		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
 	// unpack settings into lines/indices
@@ -1722,7 +1804,7 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool) error {
 
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
-		return detections.ErrIntCheckerStopped
+		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
 	deployed := consolidateEnabled(rulesIndex, disabledIndex)
@@ -1731,23 +1813,23 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool) error {
 
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
-		return detections.ErrIntCheckerStopped
+		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
 	ret, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, model.WithEngine(model.EngineNameSuricata), model.WithEnabled(true))
 	if err != nil {
 		logger.WithError(err).Error("unable to query for enabled detections")
-		return detections.ErrIntCheckFailed
+		return nil, nil, detections.ErrIntCheckFailed
 	}
 
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
-		return detections.ErrIntCheckerStopped
+		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
 	enabled := make([]string, 0, len(ret))
-	for _, d := range ret {
-		enabled = append(enabled, d.PublicID)
+	for pid := range ret {
+		enabled = append(enabled, pid)
 	}
 
 	logger.WithField("enabledDetectionsCount", len(enabled)).Debug("enabled detections")
@@ -1755,24 +1837,26 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool) error {
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		logger.Info("integrity checker stopped")
-		return detections.ErrIntCheckerStopped
+		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
-	deployedButNotEnabled, enabledButNotDeployed, _ := detections.DiffLists(deployed, enabled)
+	deployedButNotEnabled, enabledButNotDeployed, _ = detections.DiffLists(deployed, enabled)
 
-	logger.WithFields(log.Fields{
-		"deployedButNotEnabled": deployedButNotEnabled,
-		"enabledButNotDeployed": enabledButNotDeployed,
-	}).Info("integrity check report")
+	intCheckReport := logger.WithFields(log.Fields{
+		"deployedButNotEnabled":      detections.TruncateList(deployedButNotEnabled, 20),
+		"enabledButNotDeployed":      detections.TruncateList(enabledButNotDeployed, 20),
+		"deployedButNotEnabledCount": len(deployedButNotEnabled),
+		"enabledButNotDeployedCount": len(enabledButNotDeployed),
+	})
 
 	if len(deployedButNotEnabled) > 0 || len(enabledButNotDeployed) > 0 {
-		logger.Info("integrity check failed")
-		return detections.ErrIntCheckFailed
+		intCheckReport.Warn("integrity check failed")
+		return deployedButNotEnabled, enabledButNotDeployed, detections.ErrIntCheckFailed
 	}
 
-	logger.Info("integrity check passed")
+	intCheckReport.Info("integrity check passed")
 
-	return nil
+	return deployedButNotEnabled, enabledButNotDeployed, nil
 }
 
 func consolidateEnabled(rulesIndex map[string]int, disabledIndex map[string]int) (pids []string) {
@@ -1786,25 +1870,4 @@ func consolidateEnabled(rulesIndex map[string]int, disabledIndex map[string]int)
 	}
 
 	return pids
-}
-
-// go install go.uber.org/mock/mockgen@latest
-//go:generate mockgen -destination mock/mock_iomanager.go -package mock . IOManager
-
-type ResourceManager struct{}
-
-func (_ *ResourceManager) ReadFile(path string) ([]byte, error) {
-	return os.ReadFile(path)
-}
-
-func (_ *ResourceManager) WriteFile(path string, contents []byte, perm fs.FileMode) error {
-	return os.WriteFile(path, contents, perm)
-}
-
-func (_ *ResourceManager) DeleteFile(path string) error {
-	return os.Remove(path)
-}
-
-func (_ *ResourceManager) ReadDir(path string) ([]os.DirEntry, error) {
-	return os.ReadDir(path)
 }

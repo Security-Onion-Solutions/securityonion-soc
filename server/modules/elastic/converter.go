@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -271,6 +271,22 @@ func convertToElasticRequest(fieldDefs map[string]*FieldDefinition, intervals in
 	return esJson, err
 }
 
+func convertToElasticScrollRequest(fieldDefs map[string]*FieldDefinition, criteria *model.EventScrollCriteria, maxScrollSize int) (string, error) {
+	var err error
+	var esJson string
+
+	esMap := make(map[string]interface{})
+	esMap["size"] = maxScrollSize
+	esMap["query"] = makeQuery(fieldDefs, criteria.ParsedQuery, criteria.BeginTime, criteria.EndTime)
+
+	bytes, err := json.WriteJson(esMap)
+	if err == nil {
+		esJson = string(bytes)
+	}
+
+	return esJson, err
+}
+
 func parseAggregation(name string, aggObj interface{}, keys []interface{}, results *model.EventSearchResults) {
 	agg := aggObj.(map[string]interface{})
 	buckets := agg["buckets"]
@@ -398,6 +414,79 @@ func convertFromElasticResults(fieldDefs map[string]*FieldDefinition, esJson str
 			log.WithFields(log.Fields{
 				"reasonType": reasonType,
 				"reason":     reasonDetails,
+			}).Warn("Shard failure")
+			err = errors.New("ERROR_QUERY_FAILED_ELASTICSEARCH")
+		}
+	}
+
+	return err
+}
+
+func convertFromElasticScrollResults(fieldDefs map[string]*FieldDefinition, esJson string, results *model.EventScrollResults) error {
+	esResults := make(map[string]interface{})
+	err := json.LoadJson([]byte(esJson), &esResults)
+	if esResults["took"] == nil || esResults["timed_out"] == nil || esResults["hits"] == nil {
+		return errors.New("Elasticsearch response is not a valid JSON search result")
+	}
+	results.ElapsedMs = int(esResults["took"].(float64))
+	timedOut := esResults["timed_out"].(bool)
+	if timedOut {
+		return errors.New("Timeout while fetching results from Elasticsearch")
+	}
+
+	hits := esResults["hits"].(map[string]interface{})
+	switch hits["total"].(type) {
+	case float64:
+		results.TotalEvents = int(hits["total"].(float64))
+	default:
+		total := hits["total"].(map[string]interface{})
+		results.TotalEvents = int(total["value"].(float64))
+	}
+
+	records := hits["hits"].([]interface{})
+	for _, record := range records {
+		event := &model.EventRecord{}
+		esRecord := record.(map[string]interface{})
+		event.Source = esRecord["_index"].(string)
+		event.Id = esRecord["_id"].(string)
+		if esRecord["_type"] != nil {
+			event.Type = esRecord["_type"].(string)
+		}
+		if esRecord["_score"] != nil {
+			event.Score = esRecord["_score"].(float64)
+		}
+		event.Payload = flatten(fieldDefs, esRecord["_source"].(map[string]interface{}))
+		if esRecord["sort"] != nil {
+			event.Sort = esRecord["sort"].([]interface{})
+		}
+
+		if event.Payload["@timestamp"] != nil {
+			event.Time, _ = time.Parse(time.RFC3339, event.Payload["@timestamp"].(string))
+		} else if event.Payload["timestamp"] != nil {
+			event.Time, _ = time.Parse(time.RFC3339, event.Payload["timestamp"].(string))
+		}
+		event.Timestamp = event.Time.Format("2006-01-02T15:04:05.000Z")
+		results.Events = append(results.Events, event)
+	}
+
+	shards := esResults["_shards"].(map[string]interface{})
+	failed := shards["failed"].(float64)
+	if failed > 0 {
+		failures := shards["failures"].([]interface{})
+		for _, failureGeneric := range failures {
+			failure := failureGeneric.(map[string]interface{})
+			reason := failure["reason"].(map[string]interface{})
+			reasonType := ""
+			if reason["type"] != nil {
+				reasonType = reason["type"].(string)
+			}
+			reasonDetails := "N/A"
+			if reason["reason"] != nil {
+				reasonDetails = reason["reason"].(string)
+			}
+			log.WithFields(log.Fields{
+				"shardFailureReasonType": reasonType,
+				"shardFailureReason":     reasonDetails,
 			}).Warn("Shard failure")
 			err = errors.New("ERROR_QUERY_FAILED_ELASTICSEARCH")
 		}
@@ -868,7 +957,7 @@ func convertFromElasticUpdateResults(store *ElasticEventstore, esJson string, re
 	return err
 }
 
-func convertObjectToDocumentMap(name string, obj interface{}, schemaPrefix string) map[string]interface{} {
+func ConvertObjectToDocumentMap(name string, obj interface{}, schemaPrefix string) map[string]interface{} {
 	doc := make(map[string]interface{})
 	doc[schemaPrefix+name] = obj
 	doc["@timestamp"] = time.Now()

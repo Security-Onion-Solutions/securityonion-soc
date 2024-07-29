@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -278,7 +278,7 @@
               <v-icon>fa-times</v-icon>
             </v-btn>
           </template>
-          {{ warningMessage }}
+          <div class="warning-message" v-html="warningMessage"></div>
         </v-snackbar>
         <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" v-html="infoMessage" data-aid="banner_info"></v-alert>
         <v-snackbar id="tip" top centered rounded close :timeout="tipTimeout" v-model="tip" color="info" data-aid="banner_tip">
@@ -1616,7 +1616,7 @@
                 <v-row>
                   <v-col>
                     <v-toolbar class="elevation-0" fixed>
-                      <v-btn :title="i18n.refreshDetectionHistoryHelp" color="secondary" @click.stop="loadHistory()" id="refresh-history-button" data-aid="detection_history_refresh">
+                      <v-btn :title="i18n.refreshDetectionHistoryHelp" color="secondary" @click.stop="loadHistory(true)" id="refresh-history-button" data-aid="detection_history_refresh">
                         <v-icon>fa-sync</v-icon>
                       </v-btn>
                     </v-toolbar>
@@ -1630,7 +1630,7 @@
                     <template v-slot:item="{item, index, expand, isExpanded}">
                       <tr>
                         <td class="associated actions">
-                          <v-btn :id="`history-${index}-expand`" icon small @click="expand(!isExpanded)">
+                          <v-btn :id="`history-${index}-expand`" icon small @click="expand(!isExpanded); findHistoryChange(item.id)">
                             <v-icon v-if="isExpanded" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="detection_history_collapse">fa-angle-down</v-icon>
                             <v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="detection_history_expand">fa-angle-right</v-icon>
                           </v-btn>
@@ -1691,14 +1691,14 @@
                           </div>
                           <div>
                             <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label">{{ i18n.title }}:</span></v-col>
-                              <v-col cols="8"><span class="case">{{ props.item.title }}</span></v-col>
+                              <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'title') ? 'key-changed' : ''">{{ i18n.title }}:</span></v-col>
+                              <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'title') ? 'key-changed' : ''">{{ props.item.title }}</span></v-col>
                             </v-row>
                           </div>
                           <div>
                             <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label">{{ i18n.description }}:</span></v-col>
-                              <v-col cols="8"><span class="case">{{ props.item.description }}</span></v-col>
+                              <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'description') ? 'key-changed' : ''">{{ i18n.description }}:</span></v-col>
+                              <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'description') ? 'key-changed' : ''">{{ props.item.description }}</span></v-col>
                             </v-row>
                           </div>
                           <div>
@@ -1709,8 +1709,8 @@
                           </div>
                           <div>
                             <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label">{{ i18n.enabled }}:</span></v-col>
-                              <v-col cols="8"><span class="case">{{ props.item.isEnabled ? 'True' : 'False' }}</span></v-col>
+                              <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'isEnabled') ? 'key-changed' : ''">{{ i18n.enabled }}:</span></v-col>
+                              <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'isEnabled') ? 'key-changed' : ''">{{ props.item.isEnabled ? 'True' : 'False' }}</span></v-col>
                             </v-row>
                           </div>
                           <div>
@@ -1727,8 +1727,8 @@
                           </div>
                           <div>
                             <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label">{{ i18n.severity }}:</span></v-col>
-                              <v-col cols="8"><span class="case">{{ $root.correctCasing(props.item.severity) }}</span></v-col>
+                              <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'severity') ? 'key-changed' : ''">{{ i18n.severity }}:</span></v-col>
+                              <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'severity') ? 'key-changed' : ''">{{ $root.correctCasing(props.item.severity) }}</span></v-col>
                             </v-row>
                           </div>
                           <div>
@@ -1739,8 +1739,8 @@
                           </div>
                           <div>
                             <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label">{{ i18n.content }}:</span></v-col>
-                              <v-col cols="8"><span class="case">{{ props.item.content }}</span></v-col>
+                              <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'content') ? 'key-changed' : ''">{{ i18n.content }}:</span></v-col>
+                              <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'content') ? 'key-changed' : ''">{{ props.item.content }}</span></v-col>
                             </v-row>
                           </div>
 
@@ -4656,7 +4656,7 @@
         <v-row>
         </v-row>
         <v-row>
-          <v-col cols="12" lg="4">
+          <v-col cols="12" lg="4" :class="treeVisible ? 'd-block' : 'd-none'">
             <v-container fluid>
               <v-row>
                 <v-col>
@@ -4704,7 +4704,7 @@
             </v-treeview>
           </v-col>
           <v-divider vertical />
-          <v-col cols="12" lg="8">
+          <v-col cols="12" :lg="treeVisible ? 8 : 12">
             <v-fade-transition mode="out-in" duration="100">
               <div v-if="!selected" id="config-quick-links">
                 <v-alert v-text="i18n.settingSelect" type="info" />
@@ -4836,8 +4836,14 @@
                   </ul>
                 </div>
               </div>
-              <v-card v-else :key="selected.id" class="pt-6 mx-auto config-setting" flat>
+              <v-card v-else :key="selected.id" class="mx-auto config-setting" flat>
                 <v-card-text>
+                  <div class="d-inline-flex justify-end" style="width: 100%">
+                    <v-btn icon small class="mb-4" :title="i18n.toggleFullsizeHelp" @click="treeVisible = !treeVisible" data-aid="config_toggle_treeview">
+                      <v-icon v-if="treeVisible">fa-up-right-and-down-left-from-center</v-icon>
+                      <v-icon v-else color="primary">fa-down-left-and-up-right-to-center</v-icon>
+                    </v-btn>
+                  </div>
                   <div class="text-subtitle-1 mb-4" data-aid="config_item_help" >
                     {{ getSettingDescription(selected) }}
                     <a v-if="selected.helpLink" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + selected.helpLink" style="text-decoration: none; cursor: 'pointer'" :title="i18n.settingHelp">

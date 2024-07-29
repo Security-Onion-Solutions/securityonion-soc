@@ -1,4 +1,4 @@
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -132,9 +132,14 @@ func TestDuplicateDetection(t *testing.T) {
 		LastName:  "Levinson",
 	}, nil)
 
+	detStore := mock.NewMockDetectionstore(ctrl)
+	detStore.EXPECT().GetDetectionByPublicId(ctx, "mimikatz_kirbi_ticket_copy").Return(det, nil)
+	detStore.EXPECT().GetDetectionByPublicId(ctx, "mimikatz_kirbi_ticket_copy1").Return(nil, nil)
+
 	eng := StrelkaEngine{
 		srv: &server.Server{
-			Userstore: mUser,
+			Userstore:      mUser,
+			Detectionstore: detStore,
 		},
 		isRunning: true,
 	}
@@ -148,7 +153,7 @@ func TestDuplicateDetection(t *testing.T) {
 
 	// expected differences
 	assert.NotEqual(t, det.Title, dupe.Title)
-	assert.Equal(t, det.Title, dupe.Title[:len(dupe.Title)-len("_copy")])
+	assert.Equal(t, dupe.Title, "mimikatz_kirbi_ticket_copy1")
 	assert.NotEqual(t, det.PublicID, dupe.PublicID)
 	assert.NotEmpty(t, dupe.PublicID)
 	assert.NotEqual(t, det.IsCommunity, dupe.IsCommunity)

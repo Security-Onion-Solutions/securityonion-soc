@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -7,16 +7,12 @@
 package model
 
 import (
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/apex/log"
 )
-
-var indexExtractor = regexp.MustCompile(`_index:[ \t]?"([^ \t]+)"`)
-var kindExtractor = regexp.MustCompile(`so_kind:[ \t]?"([^ \t]+)"`)
 
 type EventResults struct {
 	CreateTime   time.Time `json:"createTime"`
@@ -193,4 +189,38 @@ type EventIndexResults struct {
 func NewEventIndexResults() *EventIndexResults {
 	results := &EventIndexResults{}
 	return results
+}
+
+type EventScrollCriteria struct {
+	RawQuery    string `json:"query"`
+	BeginTime   time.Time
+	EndTime     time.Time
+	CreateTime  time.Time
+	ParsedQuery *Query
+}
+
+type EventScrollResults struct {
+	EventResults
+	Criteria    *EventScrollCriteria `json:"criteria"`
+	TotalEvents int                  `json:"totalEvents"`
+	Events      []*EventRecord       `json:"events"`
+}
+
+func NewEventScrollResults() *EventScrollResults {
+	results := &EventScrollResults{
+		Events: make([]*EventRecord, 0),
+	}
+	results.initEventResults()
+	return results
+}
+
+func (criteria *EventScrollCriteria) initScrollCriteria() {
+	criteria.CreateTime = time.Now()
+	criteria.ParsedQuery = NewQuery()
+}
+
+func NewEventScrollCriteria() *EventScrollCriteria {
+	criteria := &EventScrollCriteria{}
+	criteria.initScrollCriteria()
+	return criteria
 }

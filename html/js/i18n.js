@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2023 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -21,6 +21,8 @@ const i18n = {
       ackUndoMultipleTip: 'Reverting acknowledgment on groups of alerts may take a while and will continue in the background.',
       ackUndoSingleTip: 'Reverted acknowledgement and removed from view.',
       actions: 'Actions',
+      actionAdd: 'Add New Action',
+      actionAddHelp: 'Add new action to this list of actions',
       actionAddToCase: 'Add to Case',
       actionAddToCaseHelp: 'Add to a new or existing case',
       actionAlert: 'Alert',
@@ -128,7 +130,8 @@ const i18n = {
       bulkAction: 'Bulk Action:',
       bulkActionStarted: 'Updating {total} detections. This may take awhile.',
       bulkActionDeleteStarted: 'Deleting {total} detections. This may take awhile.',
-      bulkError: '',
+      bulkError: '{error} of the detections during the last bulk update failed. Please check the SOC logs for more information.',
+      bulkSuccessFiltered: `Bulk update successfully updated {modified} of {total} events. However, the statuses of {filtered} of the updated detections are controlled by the current regex filter settings and were reverted. <a href="/#/config?s=soc.config.server.modules.suricataengine" data-aid="warning_bulk_update_configure_filters">Click here to configure those filters.</a> ({time})`,
       bulkSuccessUpdate: 'Bulk update successfully updated {modified} of {total} events. ({time})',
       bulkSuccessDelete: 'Bulk delete successfully deleted {modified} of {total} events. ({time})',
       bytes: 'Bytes',
@@ -869,6 +872,7 @@ const i18n = {
       timezoneHelp: 'Time Zone',
       title: 'Title',
       toggleLegend: 'Toggle Legend',
+      toggleFullsizeHelp: 'Toggle between normal size and maximized size',
       toolCyberchef: 'CyberChef',
       toolCyberchefHelp: 'Data decoding and transformation tools',
       toolElasticFleet: 'Elastic Fleet',
@@ -959,6 +963,8 @@ const i18n = {
       zeekLoss: 'Zeek Loss',
       zeekLossAbbr: 'Zeek Loss',
 
+      WARN_STATUS_EFFECTED_BY_FILTER: 'Saved successfully but the status of this detection is controlled by the current regex filter settings and was reverted. <a href="/#/config?s=soc.config.server.modules.suricataengine" data-aid="warning_update_configure_filters">Click here to configure those filters.</a>',
+
       ERROR_CASE_EVENT_ALREADY_ATTACHED: 'The event is already attached to the selected case.',
       ERROR_CASE_MODULE_NOT_ENABLED: 'A case module has not been configured for this installation. Unable to proceed with request.',
       ERROR_JINJA_NOT_SUPPORTED: 'For security reasons Jinja syntax cannot be specified in configuration values.',
@@ -981,6 +987,7 @@ const i18n = {
       ERROR_SALT_IMPORT: 'Unable to import file on minion; ensure that salt is running on the manager node and check salt logs.',
       ERROR_SALT_STATE: 'Unable to sync settings. Ensure that salt is running on the manager node and check salt logs.',
       ERROR_BULK_COMMUNITY: 'Unable to complete bulk delete. Batch contains Community rules. No rules were deleted.',
+      ERROR_DELETE_COMMUNITY: 'Unable to delete Community rule.',
 
       // correct casing
       cc_elastalert: 'ElastAlert',
