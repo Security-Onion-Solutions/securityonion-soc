@@ -39,7 +39,8 @@ ARG ELASTIC_VERSION=0.0.0
 ARG WAZUH_VERSION=0.0.0
 
 RUN apt update -y
-RUN apt install -y bash tzdata ca-certificates wget curl tcpdump unzip git
+RUN apt install -y --no-install-recommends bash tzdata ca-certificates wget curl tcpdump unzip git && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 RUN update-ca-certificates
 RUN addgroup --gid "$GID" socore
 RUN adduser --disabled-password --uid "$UID" --ingroup socore --gecos '' socore
