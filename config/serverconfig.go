@@ -40,9 +40,10 @@ type ServerConfig struct {
 	Proxy                   string                 `json:"proxy"`
 	AdditionalCA            string                 `json:"additionalCA"`
 	InsecureSkipVerify      bool                   `json:"insecureSkipVerify"`
+	ForceUserOtp            bool                   `json:"forceUserOtp"`
 	SrvKey                  string                 `json:"srvKey"`
+	SrvExpSeconds           int                    `json:"srvExpSeconds"`
 	SrvKeyBytes             []byte
-	SrvExpSeconds           int `json:"srvExpSeconds"`
 }
 
 func (config *ServerConfig) Verify() error {

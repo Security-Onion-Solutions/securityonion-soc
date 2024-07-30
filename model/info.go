@@ -21,4 +21,5 @@ type Info struct {
 	SrvToken       string                   `json:"srvToken"`
 	LicenseKey     *licensing.LicenseKey    `json:"licenseKey"`
 	LicenseStatus  string                   `json:"licenseStatus"`
+	ForceUserOtp   bool                     `json:"forceUserOtp"`
 }

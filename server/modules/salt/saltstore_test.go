@@ -191,7 +191,7 @@ func TestManageMember_Failure(tester *testing.T) {
 func TestGetSettings_BadSaltstackPath(tester *testing.T) {
 	srv := server.NewFakeAuthorizedServer(nil)
 	salt := NewSaltstore(srv)
-	_, err := salt.GetSettings(ctx())
+	_, err := salt.GetSettings(ctx(), false)
 	assert.EqualError(tester, err, "lstat /default: no such file or directory")
 }
 
@@ -199,7 +199,7 @@ func TestGetSettings(tester *testing.T) {
 	defer Cleanup()
 
 	salt := NewTestSalt()
-	settings, err := salt.GetSettings(ctx())
+	settings, err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, err)
 
 	count := 0
@@ -373,7 +373,7 @@ func TestUpdateSetting_OverrideDefault(tester *testing.T) {
 	assert.NoError(tester, err)
 
 	// Ensure there's an additional setting listed
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 
 	new_setting := findSetting(settings, "myapp.my_def", "")
@@ -391,7 +391,7 @@ func TestUpdateSetting_AddGlobal(tester *testing.T) {
 	assert.NoError(tester, err)
 
 	// Ensure there's an additional setting listed
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	assert.Equal(tester, TEST_SETTINGS_COUNT+1, len(settings))
 
@@ -414,7 +414,7 @@ func TestUpdateSetting_AddToNode(tester *testing.T) {
 	assert.NoError(tester, err)
 
 	// Ensure there's an additional setting listed
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	assert.Equal(tester, TEST_SETTINGS_COUNT+1, len(settings))
 
@@ -436,7 +436,7 @@ func TestUpdateSetting_DeleteGlobal(tester *testing.T) {
 	err := salt.UpdateSetting(ctx(), setting, true)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	assert.Equal(tester, TEST_SETTINGS_COUNT-1, len(settings))
 	delete_setting := findSetting(settings, "myapp.str", "")
@@ -453,7 +453,7 @@ func TestUpdateSetting_DeleteFromNode(tester *testing.T) {
 	err := salt.UpdateSetting(ctx(), setting, true)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	assert.Equal(tester, TEST_SETTINGS_COUNT-1, len(settings))
 	delete_setting := findSetting(settings, "myapp.foo", "normal_import")
@@ -469,7 +469,7 @@ func TestUpdateSetting_DeleteAdvanced(tester *testing.T) {
 	err := salt.UpdateSetting(ctx(), setting, true)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	assert.Equal(tester, TEST_SETTINGS_COUNT, len(settings))
 	deleted_setting := findSetting(settings, "myapp.advanced", "")
@@ -487,7 +487,7 @@ func TestUpdateSetting_UpdateGlobal(tester *testing.T) {
 	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	assert.Equal(tester, TEST_SETTINGS_COUNT, len(settings))
 	updated_setting := findSetting(settings, "myapp.str", "")
@@ -506,7 +506,7 @@ func TestUpdateSetting_UpdateForNode(tester *testing.T) {
 	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.foo", "normal_import")
 	assert.Equal(tester, "new value", updated_setting.Value)
@@ -523,7 +523,7 @@ func TestUpdateSetting_UpdateAdvanced(tester *testing.T) {
 	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.advanced", "")
 	assert.Equal(tester, "something: new", updated_setting.Value)
@@ -541,7 +541,7 @@ func TestUpdateSetting_UpdateFile(tester *testing.T) {
 	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.foo__txt", "")
 	assert.Equal(tester, "anything", updated_setting.Default)
@@ -551,7 +551,7 @@ func TestUpdateSetting_UpdateFile(tester *testing.T) {
 	err = salt.UpdateSetting(ctx(), setting, true)
 	assert.NoError(tester, err)
 
-	settings, get_err = salt.GetSettings(ctx())
+	settings, get_err = salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting = findSetting(settings, "myapp.foo__txt", "")
 	assert.Equal(tester, "anything", updated_setting.Default)
@@ -582,7 +582,7 @@ func TestUpdateSetting_AlignIntType(tester *testing.T) {
 	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.int", "")
 	assert.Equal(tester, "44", updated_setting.Value)
@@ -609,7 +609,7 @@ func TestUpdateSetting_AlignIntListType(tester *testing.T) {
 	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.lists.list_int", "")
 	assert.Equal(tester, "44\n2\n1\n", updated_setting.Value)
@@ -642,7 +642,7 @@ func TestUpdateSetting_AlignEmptyListIntType(tester *testing.T) {
 	err = salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.empty_lists.list_int", "")
 	assert.Equal(tester, "123\n456\n23\n", updated_setting.Value)
@@ -664,7 +664,7 @@ func TestUpdateSetting_ForceIntType(tester *testing.T) {
 	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.int_nodefault", "")
 	assert.Equal(tester, "44", updated_setting.Value)
@@ -680,7 +680,7 @@ func TestUpdateSetting_ForceListIntType(tester *testing.T) {
 	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.int_list_nodefault", "")
 	assert.Equal(tester, "44\n55\n", updated_setting.Value)
@@ -698,7 +698,7 @@ func TestUpdateSetting_AlignFloatType(tester *testing.T) {
 	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.float", "")
 	assert.Equal(tester, "44.2", updated_setting.Value)
@@ -725,7 +725,7 @@ func TestUpdateSetting_AlignFloatListType(tester *testing.T) {
 	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.lists.list_float", "")
 	assert.Equal(tester, "44.3\n2.1\n1.2\n", updated_setting.Value)
@@ -758,7 +758,7 @@ func TestUpdateSetting_AlignEmptyListFloatType(tester *testing.T) {
 	err = salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.empty_lists.list_float", "")
 	assert.Equal(tester, "1.23\n4.56\n2.3\n", updated_setting.Value)
@@ -782,7 +782,7 @@ func TestUpdateSetting_AlignBoolType(tester *testing.T) {
 	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.bool", "")
 	assert.Equal(tester, "false", updated_setting.Value)
@@ -809,7 +809,7 @@ func TestUpdateSetting_AlignBoolListType(tester *testing.T) {
 	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.lists.list_bool", "")
 	assert.Equal(tester, "true\nfalse\ntrue\n", updated_setting.Value)
@@ -842,7 +842,7 @@ func TestUpdateSetting_AlignEmptyListBoolType(tester *testing.T) {
 	err = salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.empty_lists.list_bool", "")
 	assert.Equal(tester, "true\ntrue\nfalse\n", updated_setting.Value)
@@ -867,7 +867,7 @@ func TestUpdateSetting_AlignListListType(tester *testing.T) {
 	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.lists.list_list_str", "")
 	assert.Equal(tester, expected, updated_setting.Value)
@@ -901,7 +901,7 @@ func TestUpdateSetting_AlignEmptyListListType(tester *testing.T) {
 	err = salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.empty_lists.list_list_str", "")
 	assert.Equal(tester, expected, updated_setting.Value)
@@ -926,7 +926,7 @@ func TestUpdateSetting_AlignMapListType(tester *testing.T) {
 	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.lists.list_map_str", "")
 	assert.Equal(tester, expected, updated_setting.Value)
@@ -960,7 +960,7 @@ func TestUpdateSetting_AlignEmptyListMapType(tester *testing.T) {
 	err = salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.empty_lists.list_map_str", "")
 	assert.Equal(tester, expected, updated_setting.Value)
@@ -984,7 +984,7 @@ func TestUpdateSetting_AlignNonStringType(tester *testing.T) {
 	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.str", "")
 	assert.Equal(tester, "123", updated_setting.Value)
@@ -1000,7 +1000,7 @@ func TestUpdateSetting_AlignNonStringListType(tester *testing.T) {
 	err := salt.UpdateSetting(ctx(), setting, false)
 	assert.NoError(tester, err)
 
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.lists.list_str", "")
 	assert.Equal(tester, "123\n456\n", updated_setting.Value)
@@ -1011,7 +1011,7 @@ func TestUpdateSetting_AlignBlankStringListType(tester *testing.T) {
 	salt := NewTestSalt()
 
 	// default should be an empty list
-	settings, get_err := salt.GetSettings(ctx())
+	settings, get_err := salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting := findSetting(settings, "myapp.empty_lists.list_str", "")
 	assert.Equal(tester, "", updated_setting.Value)
@@ -1023,7 +1023,7 @@ func TestUpdateSetting_AlignBlankStringListType(tester *testing.T) {
 	assert.NoError(tester, err)
 
 	// should now contain non-blank value
-	settings, get_err = salt.GetSettings(ctx())
+	settings, get_err = salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting = findSetting(settings, "myapp.empty_lists.list_str", "")
 	assert.Equal(tester, "foo\n", updated_setting.Value)
@@ -1035,7 +1035,7 @@ func TestUpdateSetting_AlignBlankStringListType(tester *testing.T) {
 	assert.NoError(tester, err)
 
 	// should be an empty list again
-	settings, get_err = salt.GetSettings(ctx())
+	settings, get_err = salt.GetSettings(ctx(), false)
 	assert.NoError(tester, get_err)
 	updated_setting = findSetting(settings, "myapp.empty_lists.list_str", "")
 	assert.Equal(tester, "", updated_setting.Value)

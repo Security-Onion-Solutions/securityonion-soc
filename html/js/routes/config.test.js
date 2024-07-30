@@ -41,7 +41,7 @@ test('loadData', async () => {
   comp.settings = [];
   await comp.loadData();
   expect(loadmock).toHaveBeenCalledWith('gridmembers/');
-  expect(mock).toHaveBeenCalledWith('config/');
+  expect(mock).toHaveBeenCalledWith('config/', {params: { extended: false }});
 
   expect(comp.nodes).toBe(loaddata);
 
@@ -683,4 +683,19 @@ test('processRouteParameters', () => {
   expect(comp.searchFilter).toBe('search');
   expect(comp.advanced).toBe(true);
   expect(comp.$nextTick).toHaveBeenCalledTimes(1);
+});
+
+test('getSettingBreadcrumbs', () => {
+  setting = { id: "foo.bar.car", advanced: false, extended: false };
+  expect(comp.getSettingBreadcrumbs(setting)).toBe("foo > bar > car");
+
+  setting = { id: "foo.bar.car", advanced: false, extended: true };
+  expect(comp.getSettingBreadcrumbs(setting)).toBe("foo > bar > car [ext]");
+
+  setting = { id: "foo.bar.car", advanced: true, extended: false };
+  expect(comp.getSettingBreadcrumbs(setting)).toBe("foo > bar > car [adv]");
+
+  var setting = { id: "foo.bar.car", advanced: true, extended: true };
+  expect(comp.getSettingBreadcrumbs(setting)).toBe("foo > bar > car [adv, ext]");
+
 });

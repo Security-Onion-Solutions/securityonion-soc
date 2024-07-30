@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -130,7 +131,7 @@ func (store *Saltstore) GetSetting(settings []*model.Setting, id string) *model.
 	return nil
 }
 
-func (store *Saltstore) GetSettings(ctx context.Context) ([]*model.Setting, error) {
+func (store *Saltstore) GetSettings(ctx context.Context, extended bool) ([]*model.Setting, error) {
 	var err error
 	if err = store.server.CheckAuthorized(ctx, "read", "config"); err != nil {
 		return nil, err
@@ -226,7 +227,16 @@ func (store *Saltstore) GetSettings(ctx context.Context) ([]*model.Setting, erro
 		})
 	}
 
-	return store.sortSettings(settings), err
+	return store.sortSettings(store.filterExtended(settings, extended)), err
+}
+
+func (store *Saltstore) filterExtended(settings []*model.Setting, extended bool) []*model.Setting {
+	if !extended {
+		settings = slices.DeleteFunc(settings, func(setting *model.Setting) bool {
+			return setting.Extended
+		})
+	}
+	return settings
 }
 
 func (store *Saltstore) sortSettings(settings []*model.Setting) []*model.Setting {
@@ -624,7 +634,7 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 		return errors.New("Invalid setting id: " + setting.Id)
 	}
 
-	settings, err := store.GetSettings(ctx)
+	settings, err := store.GetSettings(ctx, model.IsExtendedSetting(setting))
 	if err != nil {
 		return err
 	} else {

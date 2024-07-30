@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -56,7 +57,11 @@ func (h *ConfigHandler) configEnabled(next http.Handler) http.Handler {
 func (h *ConfigHandler) getConfig(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	settings, err := h.server.Configstore.GetSettings(ctx)
+	extended, err := strconv.ParseBool(r.URL.Query().Get("extended"))
+	if err != nil {
+		extended = false
+	}
+	settings, err := h.server.Configstore.GetSettings(ctx, extended)
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
 		return
