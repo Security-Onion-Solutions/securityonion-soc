@@ -4479,7 +4479,7 @@
         </v-row>
         <v-row>
           <v-col>
-            <v-alert v-if="$root.forceUserOtp" class="mt-2" type="error" icon="fa-shield-halved"  border="left" colored-border text dense>
+            <v-alert v-if="$root.forceUserOtp" class="mt-2" type="error" icon="fa-shield-halved"  border="left" colored-border text dense data-aid="user_settings_force_otp_alert">
               {{ i18n.forceUserOtp }}
             </v-alert>
             <v-tabs grow v-model="activeTab">
@@ -4843,7 +4843,7 @@
               <v-card v-else :key="selected.id" class="mx-auto config-setting" flat>
                 <v-card-text>
                   <div class="d-inline-flex mb-4 " style="width: 100%">
-                    <span class="text-caption font-weight-thin">
+                    <span class="text-caption font-weight-thin" data-aid="config_breadcrumbs">
                       {{ getSettingBreadcrumbs(selected) }}
                       <v-btn icon small @click.stop="$root.copyToClipboard(getSettingBreadcrumb(selected))" :title="i18n.copyToClipboard" data-aid="config_breadcrumb_copy">
                         <v-icon>fa-copy</v-icon>
