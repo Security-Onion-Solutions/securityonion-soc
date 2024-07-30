@@ -4845,7 +4845,7 @@
                   <div class="d-inline-flex mb-4 " style="width: 100%">
                     <span class="text-caption font-weight-thin" data-aid="config_breadcrumbs">
                       {{ getSettingBreadcrumbs(selected) }}
-                      <v-btn icon small @click.stop="$root.copyToClipboard(getSettingBreadcrumb(selected))" :title="i18n.copyToClipboard" data-aid="config_breadcrumb_copy">
+                      <v-btn icon small @click.stop="$root.copyToClipboard(getSettingBreadcrumbs(selected))" :title="i18n.copyToClipboard" data-aid="config_breadcrumb_copy">
                         <v-icon>fa-copy</v-icon>
                       </a>
                     </span>

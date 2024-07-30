@@ -306,6 +306,9 @@ routes.push({ path: '/config', name: 'config', component: {
     },
     getSettingBreadcrumbs(setting) {
       var breadcrumbs = setting.id.replaceAll(".", " > ");
+      if (setting.title) {
+        breadcrumbs = breadcrumbs.replace(/\s>\s[^>]+$/, " > " + setting.title);
+      }
       var modifiers = []
       if (setting.advanced) {
         modifiers.push(this.i18n.configAdvancedTag);
