@@ -1141,7 +1141,6 @@
                 <v-icon left>fa-history</v-icon>
                 <div class="d-none d-lg-block">{{ i18n.history }}</div>
               </v-tab>
-
               <v-tab-item value="summary" data-aid="detection_summary">
                 <v-row class="contrast-bg rounded rounded-md pa-4">
                   <v-col>
@@ -1288,7 +1287,6 @@
                   </v-col>
                 </div>
               </v-tab-item>
-
               <v-tab-item value="source" data-aid="detection_source">
                 <v-col class="contrast-bg rounded rounded-md pa-4">
                   <!-- Signature -->
@@ -1310,7 +1308,6 @@
                   </div>
                 </v-col>
               </v-tab-item>
-
               <v-tab-item value="tuning" data-aid="detection_tuning">
                 <v-row v-if="canAddOverride()">
                   <v-col>
@@ -1395,8 +1392,9 @@
                       </td>
                       <td v-for="field in overrideHeaders[detect.engine]" :key="field.value" data-aid="detection_overrides_headers_display">
                         <div class="d-inline-block">
-                          <span v-if="!field.format">{{ item[field.value] }}</span>
-                          <span v-else v-text="$root.formatLocalTimestamp(item[field.value], zone)"/>
+                          <span v-if="field.format" v-text="$root.formatLocalTimestamp(item[field.value], zone)"/>
+                          <span v-else-if="field.localize">{{ $root.tryLocalize(item[field.value]) }}</span>
+                          <span v-else>{{ item[field.value] }}</span>
                         </div>
                       </td>
                     </tr>
@@ -1487,7 +1485,7 @@
                         <!-- ip -->
                         <div v-if="item.type === 'suppress'" @click="startOverrideEdit('override-ip', item, 'ip')" :class="{ clicktoedit: !isOverrideEdit('override-ip') }">
                           <div class="font-weight-bold mt-4">
-                            IP:
+                            {{i18n.ip}}:
                           </div>
                           <span id="override-ip" v-if="!isOverrideEdit('override-ip')">
                             {{item.ip}}
@@ -1622,158 +1620,257 @@
                     </v-toolbar>
                   </v-col>
                 </v-row>
-                <!-- <div class="col" style="background-color: rgb(53, 53, 53); border-radius: 4px;"> -->
-                  <v-text-field v-model="historyTableOpts.search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="detection_history_filter_input"></v-text-field>
-                  <v-data-table ref="historyTable" :sort-by.sync="historyTableOpts.sortBy" :sort-desc.sync="historyTableOpts.sortDesc" :items-per-page.sync="historyTableOpts.itemsPerPage"
-                    :search="historyTableOpts.search" :footer-props="historyTableOpts.footerProps" must-sort :headers="historyTableOpts.headers"
-                    :items="history" item-key="id" :loading="historyTableOpts.loading" :expanded="historyTableOpts.expanded" class="history-table" :custom-sort="$root.dateAwareSort">
-                    <template v-slot:item="{item, index, expand, isExpanded}">
-                      <tr>
-                        <td class="associated actions">
-                          <v-btn :id="`history-${index}-expand`" icon small @click="expand(!isExpanded); findHistoryChange(item.id)">
-                            <v-icon v-if="isExpanded" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="detection_history_collapse">fa-angle-down</v-icon>
-                            <v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="detection_history_expand">fa-angle-right</v-icon>
-                          </v-btn>
-                        </td>
-                        <td class="associated" data-aid="detection_history_owner_display">
-                          <v-avatar color="primary" class="mr-2 white--text" size="28" data-aid="detection_history_avatar_display">
-                            <div class="font-weight-bold" :title="item.owner">
-                              {{ $root.getAvatar(item.owner) }}
+                <v-text-field v-model="historyTableOpts.search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="detection_history_filter_input"></v-text-field>
+                <v-data-table ref="historyTable" :sort-by.sync="historyTableOpts.sortBy" :sort-desc.sync="historyTableOpts.sortDesc" :items-per-page.sync="historyTableOpts.itemsPerPage"
+                  :search="historyTableOpts.search" :footer-props="historyTableOpts.footerProps" must-sort :headers="historyTableOpts.headers"
+                  :items="history" item-key="id" :loading="historyTableOpts.loading" :expanded="historyTableOpts.expanded" class="history-table" :custom-sort="$root.dateAwareSort">
+                  <template v-slot:item="{item, index, expand, isExpanded}">
+                    <tr>
+                      <td class="associated actions">
+                        <v-btn :id="`history-${index}-expand`" icon small @click="expand(!isExpanded); findHistoryChange(item.id);">
+                          <v-icon v-if="isExpanded" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="detection_history_collapse">fa-angle-down</v-icon>
+                          <v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="detection_history_expand">fa-angle-right</v-icon>
+                        </v-btn>
+                      </td>
+                      <td class="associated" data-aid="detection_history_owner_display">
+                        <v-avatar color="primary" class="mr-2 white--text" size="28" data-aid="detection_history_avatar_display">
+                          <div class="font-weight-bold" :title="item.owner">
+                            {{ $root.getAvatar(item.owner) }}
+                          </div>
+                        </v-avatar>
+                        {{ item.owner }}
+                      </td>
+                      <td class="associated" data-aid="detection_history_timestamp_display">{{ item.updateTime | formatDateTime }}</td>
+                      <td class="associated" data-aid="detection_history_kind_display">
+                        <v-icon>fa-magnifying-glass</v-icon>
+                        <span class="rounded ml-2">{{ item.kind }}</span>
+                      </td>
+                      <td class="associated" data-aid="detection_history_operation_display">
+                        <v-icon v-if="item.operation.toLowerCase() == i18n.create.toLowerCase()">fa-plus</v-icon>
+                        <v-icon v-if="item.operation.toLowerCase() == i18n.delete.toLowerCase()">fa-circle-xmark</v-icon>
+                        <v-icon v-if="item.operation.toLowerCase() == i18n.update.toLowerCase()">fa-pencil-alt</v-icon>
+                        <span class="rounded ml-2">{{ item.operation }}</span>
+                      </td>
+                    </tr>
+                  </template>
+                  <template v-slot:expanded-item="props">
+                    <tr>
+                      <td colspan="5" class="case">
+                        <div class="mt-2">
+                          <v-row no-gutters class="py-1 case tabular-row">
+                            <v-col cols="4"><span class="case tabular-label">{{ i18n.id }}:</span></v-col>
+                            <v-col cols="8"><span class="case">{{ props.item.id }}</span></v-col>
+                          </v-row>
+                        </div>
+                        <div>
+                          <v-row no-gutters class="py-1 case tabular-row">
+                            <v-col cols="4"><span class="case tabular-label">{{ i18n.kind }}:</span></v-col>
+                            <v-col cols="8"><span class="case">{{ props.item.kind }}</span></v-col>
+                          </v-row>
+                        </div>
+                        <div>
+                          <v-row no-gutters class="py-1 case tabular-row">
+                            <v-col cols="4"><span class="case tabular-label">{{ i18n.operation }}:</span></v-col>
+                            <v-col cols="8"><span class="case">{{ props.item.operation }}</span></v-col>
+                          </v-row>
+                        </div>
+                        <div>
+                          <v-row no-gutters class="py-1 case tabular-row">
+                            <v-col cols="4"><span class="case tabular-label">{{ i18n.dateCreated }}:</span></v-col>
+                            <v-col cols="8"><span class="case">{{ props.item.createTime | formatDateTime }}</span></v-col>
+                          </v-row>
+                        </div>
+                        <div>
+                          <v-row no-gutters class="py-1 case tabular-row">
+                            <v-col cols="4"><span class="case tabular-label">{{ i18n.dateModified }}:</span></v-col>
+                            <v-col cols="8"><span class="case">{{ props.item.updateTime | formatDateTime }}</span></v-col>
+                          </v-row>
+                        </div>
+                        <div>
+                          <v-row no-gutters class="py-1 case tabular-row">
+                            <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'title') ? 'key-changed' : ''">{{ i18n.title }}:</span></v-col>
+                            <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'title') ? 'key-changed' : ''">{{ props.item.title }}</span></v-col>
+                          </v-row>
+                        </div>
+                        <div>
+                          <v-row no-gutters class="py-1 case tabular-row">
+                            <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'description') ? 'key-changed' : ''">{{ i18n.description }}:</span></v-col>
+                            <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'description') ? 'key-changed' : ''">{{ props.item.description }}</span></v-col>
+                          </v-row>
+                        </div>
+                        <div>
+                          <v-row no-gutters class="py-1 case tabular-row">
+                            <v-col cols="4"><span class="case tabular-label">{{ i18n.author }}:</span></v-col>
+                            <v-col cols="8"><span class="case">{{ $root.tryLocalize(props.item.author) }}</span></v-col>
+                          </v-row>
+                        </div>
+                        <div>
+                          <v-row no-gutters class="py-1 case tabular-row">
+                            <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'isEnabled') ? 'key-changed' : ''">{{ i18n.enabled }}:</span></v-col>
+                            <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'isEnabled') ? 'key-changed' : ''">{{ props.item.isEnabled ? 'True' : 'False' }}</span></v-col>
+                          </v-row>
+                        </div>
+                        <div>
+                          <v-row no-gutters class="py-1 case tabular-row">
+                            <v-col cols="4"><span class="case tabular-label">{{ i18n.community }}:</span></v-col>
+                            <v-col cols="8"><span class="case">{{ props.item.isCommunity ? 'True' : 'False' }}</span></v-col>
+                          </v-row>
+                        </div>
+                        <div>
+                          <v-row no-gutters class="py-1 case tabular-row">
+                            <v-col cols="4"><span class="case tabular-label">{{ i18n.reporting }}:</span></v-col>
+                            <v-col cols="8"><span class="case">{{ props.item.isReporting ? 'True' : 'False' }}</span></v-col>
+                          </v-row>
+                        </div>
+                        <div>
+                          <v-row no-gutters class="py-1 case tabular-row">
+                            <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'severity') ? 'key-changed' : ''">{{ i18n.severity }}:</span></v-col>
+                            <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'severity') ? 'key-changed' : ''">{{ $root.correctCasing(props.item.severity) }}</span></v-col>
+                          </v-row>
+                        </div>
+                        <div>
+                          <v-row no-gutters class="py-1 case tabular-row">
+                            <v-col cols="4"><span class="case tabular-label">{{ i18n.engine }}:</span></v-col>
+                            <v-col cols="8"><span class="case">{{ $root.correctCasing(props.item.engine) }}</span></v-col>
+                          </v-row>
+                        </div>
+                        <div>
+                          <v-row no-gutters class="py-1 case tabular-row">
+                            <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'content') ? 'key-changed' : ''">{{ i18n.content }}:</span></v-col>
+                            <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'content') ? 'key-changed' : ''">{{ props.item.content }}</span></v-col>
+                          </v-row>
+                        </div>
+                        <div v-if="detect.engine !== 'strelka'">
+                          <v-row no-gutters class="py-1 case tabular-row">
+                            <v-col cols="4"><span class="case tabular-label">{{ i18n.overrides }}:</span></v-col>
+                            <v-col cols="8"><span class="case">{{ props.item.overrides.length }}</span></v-col>
+                          </v-row>
+                        </div>
+
+                        <v-data-table v-if="detect.engine !== 'strelka' && props.item && props.item.overrides.length" ref="historyOverridesTable" :sort-by.sync="historyOverrideTableOpts[props.item.engine].sortBy" :sort-desc.sync="historyOverrideTableOpts[props.item.engine].sortDesc"
+                          :items-per-page.sync="historyOverrideTableOpts[props.item.engine].itemsPerPage" :footer-props="historyOverrideTableOpts[props.item.engine].footerProps" must-sort :headers="historyOverrideTableOpts[props.item.engine].headers"
+                          :items="props.item.overrides || []" item-key="updatedAt" :expanded="historyOverrideTableOpts[props.item.engine].expanded" class="history-override-table" :custom-sort="$root.dateAwareSort">
+                          <template v-slot:item="overrideProps">
+                            <tr>
+                              <td class="associated actions">
+                                <v-btn :id="`history-${overrideProps.index}-expand`" icon small @click="overrideProps.expand(!overrideProps.isExpanded);">
+                                  <v-icon v-if="overrideProps.isExpanded" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="detection_override_history_collapse">fa-angle-down</v-icon>
+                                  <v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="detection_override_history_expand">fa-angle-right</v-icon>
+                                </v-btn>
+                              </td>
+                              <td class="associated" data-aid="detection_override_history_type">
+                                {{ i18n[overrideProps.item.type] }}
+                              </td>
+                              <td class="associated" data-aid="detection_override_history_timestamp_display">{{ overrideProps.item.updatedAt | formatDateTime }}</td>
+                              <td class="associated" data-aid="detection_override_history_operation_display">
+                                <v-icon v-if="overrideProps.item.isEnabled">fa-check</v-icon>
+                                <v-icon v-else>fa-xmark</v-icon>
+                              </td>
+                            </tr>
+                          </template>
+                          <template v-slot:expanded-item="overrideProps">
+                            <tr>
+                              <td colspan="5" class="case">
+                                <div class="mt-2">
+                                  <v-row no-gutters class="py-1 case tabular-row">
+                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'isEnabled') ? 'key-changed' : ''">{{ i18n.enabled }}:</span></v-col>
+                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'isEnabled') ? 'key-changed' : ''">{{ overrideProps.item.isEnabled ? 'True' : 'False' }}</pre></v-col>
+                                  </v-row>
+                                </div>
+                                <div>
+                                  <v-row no-gutters class="py-1 case tabular-row">
+                                    <v-col cols="4"><span class="case tabular-label">{{ i18n.dateCreated }}:</span></v-col>
+                                    <v-col cols="8"><span class="case">{{ overrideProps.item.createdAt | formatDateTime }}</span></v-col>
+                                  </v-row>
+                                </div>
+                                <div>
+                                  <v-row no-gutters class="py-1 case tabular-row">
+                                    <v-col cols="4"><span class="case tabular-label">{{ i18n.dateModified }}:</span></v-col>
+                                    <v-col cols="8"><span class="case">{{ overrideProps.item.updatedAt | formatDateTime }}</span></v-col>
+                                  </v-row>
+                                </div>
+                                <div>
+                                  <v-row no-gutters class="py-1 case tabular-row">
+                                    <v-col cols="4"><span class="case tabular-label">{{ i18n.kind }}:</span></v-col>
+                                    <v-col cols="8"><span class="case">{{ i18n[overrideProps.item.type] }}</span></v-col>
+                                  </v-row>
+                                </div>
+                                <div v-if="overrideProps.item.type === 'customFilter'">
+                                  <v-row no-gutters class="py-1 case tabular-row">
+                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'customFilter') ? 'key-changed' : ''">{{ i18n.customFilter }}:</span></v-col>
+                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'customFilter') ? 'key-changed' : ''">{{ overrideProps.item.customFilter }}</pre></v-col>
+                                  </v-row>
+                                </div>
+                                <div v-if="overrideProps.item.type === 'modify'">
+                                  <v-row no-gutters class="py-1 case tabular-row">
+                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'regex') ? 'key-changed' : ''">{{ i18n.regex }}:</span></v-col>
+                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'regex') ? 'key-changed' : ''">{{ overrideProps.item.regex }}</pre></v-col>
+                                  </v-row>
+                                </div>
+                                <div v-if="overrideProps.item.type === 'modify'">
+                                  <v-row no-gutters class="py-1 case tabular-row">
+                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'value') ? 'key-changed' : ''">{{ i18n.value }}:</span></v-col>
+                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'value') ? 'key-changed' : ''">{{ overrideProps.item.value }}</pre></v-col>
+                                  </v-row>
+                                </div>
+                                <div v-if="['suppress', 'threshold'].includes(overrideProps.item.type)">
+                                  <v-row no-gutters class="py-1 case tabular-row">
+                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'track') ? 'key-changed' : ''">{{ i18n.track }}:</span></v-col>
+                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'track') ? 'key-changed' : ''">{{ overrideProps.item.track }}</pre></v-col>
+                                  </v-row>
+                                </div>
+                                <div v-if="overrideProps.item.type === 'suppress'">
+                                  <v-row no-gutters class="py-1 case tabular-row">
+                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'ip') ? 'key-changed' : ''">{{ i18n.ip }}:</span></v-col>
+                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'ip') ? 'key-changed' : ''">{{ overrideProps.item.ip }}</pre></v-col>
+                                  </v-row>
+                                </div>
+                                <div v-if="overrideProps.item.type === 'threshold'">
+                                  <v-row no-gutters class="py-1 case tabular-row">
+                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'count') ? 'key-changed' : ''">{{ i18n.count }}:</span></v-col>
+                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'count') ? 'key-changed' : ''">{{ overrideProps.item.count }}</pre></v-col>
+                                  </v-row>
+                                </div>
+                                <div v-if="overrideProps.item.type === 'threshold'">
+                                  <v-row no-gutters class="py-1 case tabular-row">
+                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'seconds') ? 'key-changed' : ''">{{ i18n.secondsLabel }}:</span></v-col>
+                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'seconds') ? 'key-changed' : ''">{{ overrideProps.item.seconds }}</pre></v-col>
+                                  </v-row>
+                                </div>
+                              </td>
+                            </tr>
+                          </template>
+                        </v-data-table>
+
+                        <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
+                          <v-spacer/>
+                          <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text" data-aid="detection_history_record_avatar_display">
+                            <div class="case avatar-font" :title="props.item.owner">
+                              {{ $root.getAvatar(props.item.owner) }}
                             </div>
                           </v-avatar>
-                          {{ item.owner }}
-                        </td>
-                        <td class="associated" data-aid="detection_history_timestamp_display">{{ item.updateTime | formatDateTime }}</td>
-                        <td class="associated" data-aid="detection_history_kind_display">
-                          <v-icon>fa-magnifying-glass</v-icon>
-                          <span class="rounded ml-2">{{ item.kind }}</span>
-                        </td>
-                        <td class="associated" data-aid="detection_history_operation_display">
-                          <v-icon v-if="item.operation.toLowerCase() == i18n.create.toLowerCase()">fa-plus</v-icon>
-                          <v-icon v-if="item.operation.toLowerCase() == i18n.delete.toLowerCase()">fa-circle-xmark</v-icon>
-                          <v-icon v-if="item.operation.toLowerCase() == i18n.update.toLowerCase()">fa-pencil-alt</v-icon>
-                          <span class="rounded ml-2">{{ item.operation }}</span>
-                        </td>
-                      </tr>
-                    </template>
-                    <template v-slot:expanded-item="props">
-                      <tr>
-                        <td colspan="5" class="case">
-                          <div class="mt-2">
-                            <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label">{{ i18n.id }}:</span></v-col>
-                              <v-col cols="8"><span class="case">{{ props.item.id }}</span></v-col>
-                            </v-row>
+                          <div class="mr-1" data-aid="detection_history_record_owner_display">
+                            {{ props.item.owner }}
                           </div>
-                          <div>
-                            <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label">{{ i18n.kind }}:</span></v-col>
-                              <v-col cols="8"><span class="case">{{ props.item.kind }}</span></v-col>
-                            </v-row>
+                          <div class="mr-1 d-none d-sm-block">
+                            &bull;
                           </div>
-                          <div>
-                            <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label">{{ i18n.operation }}:</span></v-col>
-                              <v-col cols="8"><span class="case">{{ props.item.operation }}</span></v-col>
-                            </v-row>
+                          <div data-aid="detection_history_timestamp_display">
+                            {{ props.item.updateTime | formatDateTime }}
                           </div>
-                          <div>
-                            <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label">{{ i18n.dateCreated }}:</span></v-col>
-                              <v-col cols="8"><span class="case">{{ props.item.createTime | formatDateTime }}</span></v-col>
-                            </v-row>
-                          </div>
-                          <div>
-                            <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label">{{ i18n.dateModified }}:</span></v-col>
-                              <v-col cols="8"><span class="case">{{ props.item.updateTime | formatDateTime }}</span></v-col>
-                            </v-row>
-                          </div>
-                          <div>
-                            <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'title') ? 'key-changed' : ''">{{ i18n.title }}:</span></v-col>
-                              <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'title') ? 'key-changed' : ''">{{ props.item.title }}</span></v-col>
-                            </v-row>
-                          </div>
-                          <div>
-                            <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'description') ? 'key-changed' : ''">{{ i18n.description }}:</span></v-col>
-                              <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'description') ? 'key-changed' : ''">{{ props.item.description }}</span></v-col>
-                            </v-row>
-                          </div>
-                          <div>
-                            <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label">{{ i18n.author }}:</span></v-col>
-                              <v-col cols="8"><span class="case">{{ $root.tryLocalize(props.item.author) }}</span></v-col>
-                            </v-row>
-                          </div>
-                          <div>
-                            <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'isEnabled') ? 'key-changed' : ''">{{ i18n.enabled }}:</span></v-col>
-                              <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'isEnabled') ? 'key-changed' : ''">{{ props.item.isEnabled ? 'True' : 'False' }}</span></v-col>
-                            </v-row>
-                          </div>
-                          <div>
-                            <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label">{{ i18n.community }}:</span></v-col>
-                              <v-col cols="8"><span class="case">{{ props.item.isCommunity ? 'True' : 'False' }}</span></v-col>
-                            </v-row>
-                          </div>
-                          <div>
-                            <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label">{{ i18n.reporting }}:</span></v-col>
-                              <v-col cols="8"><span class="case">{{ props.item.isReporting ? 'True' : 'False' }}</span></v-col>
-                            </v-row>
-                          </div>
-                          <div>
-                            <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'severity') ? 'key-changed' : ''">{{ i18n.severity }}:</span></v-col>
-                              <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'severity') ? 'key-changed' : ''">{{ $root.correctCasing(props.item.severity) }}</span></v-col>
-                            </v-row>
-                          </div>
-                          <div>
-                            <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label">{{ i18n.engine }}:</span></v-col>
-                              <v-col cols="8"><span class="case">{{ $root.correctCasing(props.item.engine) }}</span></v-col>
-                            </v-row>
-                          </div>
-                          <div>
-                            <v-row no-gutters class="py-1 case tabular-row">
-                              <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'content') ? 'key-changed' : ''">{{ i18n.content }}:</span></v-col>
-                              <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'content') ? 'key-changed' : ''">{{ props.item.content }}</span></v-col>
-                            </v-row>
-                          </div>
-
-                          <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
-                            <v-spacer/>
-                            <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text" data-aid="detection_history_record_avatar_display">
-                              <div class="case avatar-font" :title="props.item.owner">
-                                {{ $root.getAvatar(props.item.owner) }}
-                              </div>
-                            </v-avatar>
-                            <div class="mr-1" data-aid="detection_history_record_owner_display">
-                              {{ props.item.owner }}
-                            </div>
-                            <div class="mr-1 d-none d-sm-block">
-                              &bull;
-                            </div>
-                            <div data-aid="detection_history_timestamp_display">
-                              {{ props.item.updateTime | formatDateTime }}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    </template>
-                    <template v-slot:no-results>
-                      <v-alert :value="true" color="info" icon="fa-info" data-aid="detection_history_no_results_display">
-                        {{ i18n.noSearchResults }}
-                      </v-alert>
-                    </template>
-                  </v-data-table>
-                  <div class="text-xs-center pt-2 d-none">
-                      <v-btn v-text="i18n.loadMore" @click="loadHistory()" data-aid="detection_history_load_more"></v-btn>
-                  </div>
-                <!-- </div> -->
+                        </div>
+                      </td>
+                    </tr>
+                  </template>
+                  <template v-slot:no-results>
+                    <v-alert :value="true" color="info" icon="fa-info" data-aid="detection_history_no_results_display">
+                      {{ i18n.noSearchResults }}
+                    </v-alert>
+                  </template>
+                </v-data-table>
+                <div class="text-xs-center pt-2 d-none">
+                    <v-btn v-text="i18n.loadMore" @click="loadHistory()" data-aid="detection_history_load_more"></v-btn>
+                </div>
               </v-tab-item>
             </v-tabs>
             <v-dialog v-model="showSigmaDialog" persistent width="800px" data-aid="detection_sigma_dialog">
