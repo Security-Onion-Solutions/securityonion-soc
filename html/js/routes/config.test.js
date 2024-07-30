@@ -689,6 +689,9 @@ test('getSettingBreadcrumbs', () => {
   setting = { id: "foo.bar.car", advanced: false, extended: false };
   expect(comp.getSettingBreadcrumbs(setting)).toBe("foo > bar > car");
 
+  setting = { id: "foo.bar.car", advanced: false, extended: false, title: "Carbine" };
+  expect(comp.getSettingBreadcrumbs(setting)).toBe("foo > bar > Carbine");
+
   setting = { id: "foo.bar.car", advanced: false, extended: true };
   expect(comp.getSettingBreadcrumbs(setting)).toBe("foo > bar > car [ext]");
 
