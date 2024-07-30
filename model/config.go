@@ -48,7 +48,13 @@ func (setting *Setting) SetId(id string) {
 }
 
 func IsExtendedSetting(setting *Setting) bool {
-	return strings.HasPrefix(setting.Id, "elasticsearch.index_settings.")
+	extended := false
+	extended = extended || strings.HasPrefix(setting.Id, "elasticsearch.index_settings.")
+	extended = extended || strings.HasPrefix(setting.Id, "docker.containers.")
+	extended = extended || strings.HasPrefix(setting.Id, "firewall.role.")
+	extended = extended || strings.HasPrefix(setting.Id, "strelka.backend.")
+	extended = extended || strings.HasPrefix(setting.Id, "suricata.config.")
+	return extended
 }
 
 func IsValidMinionId(id string) bool {
