@@ -53,7 +53,6 @@ func IsExtendedSetting(setting *Setting) bool {
 	extended = extended || strings.HasPrefix(setting.Id, "docker.containers.")
 	extended = extended || strings.HasPrefix(setting.Id, "firewall.role.")
 	extended = extended || strings.HasPrefix(setting.Id, "strelka.backend.")
-	extended = extended || strings.HasPrefix(setting.Id, "suricata.config.")
 	return extended
 }
 
