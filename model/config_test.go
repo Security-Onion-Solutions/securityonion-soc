@@ -15,15 +15,7 @@ import (
 func TestStringId(tester *testing.T) {
 	setting := NewSetting("MyId")
 	assert.Equal(tester, "MyId", setting.Id)
-	assert.False(tester, setting.Extended)
-}
-
-func TestExtendedSetting(tester *testing.T) {
-	assert.True(tester, NewSetting("elasticsearch.index_settings.foo").Extended)
-	assert.True(tester, NewSetting("docker.containers.foo").Extended)
-	assert.True(tester, NewSetting("firewall.role.foo").Extended)
-	assert.True(tester, NewSetting("strelka.backend.foo").Extended)
-	assert.False(tester, NewSetting("something.else.foo").Extended)
+	assert.False(tester, setting.Advanced)
 }
 
 func TestIsValidMinionId(tester *testing.T) {

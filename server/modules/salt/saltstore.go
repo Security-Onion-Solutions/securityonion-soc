@@ -131,7 +131,7 @@ func (store *Saltstore) GetSetting(settings []*model.Setting, id string) *model.
 	return nil
 }
 
-func (store *Saltstore) GetSettings(ctx context.Context, extended bool) ([]*model.Setting, error) {
+func (store *Saltstore) GetSettings(ctx context.Context, advanced bool) ([]*model.Setting, error) {
 	var err error
 	if err = store.server.CheckAuthorized(ctx, "read", "config"); err != nil {
 		return nil, err
@@ -227,16 +227,28 @@ func (store *Saltstore) GetSettings(ctx context.Context, extended bool) ([]*mode
 		})
 	}
 
-	return store.sortSettings(store.filterExtended(settings, extended)), err
+	store.markAdvanced(settings)
+
+	return store.sortSettings(store.filter(settings, advanced)), err
 }
 
-func (store *Saltstore) filterExtended(settings []*model.Setting, extended bool) []*model.Setting {
-	if !extended {
-		settings = slices.DeleteFunc(settings, func(setting *model.Setting) bool {
-			return setting.Extended
-		})
+func (store *Saltstore) markAdvanced(settings []*model.Setting) {
+	// Mark all settings missing descriptions as advanced
+	for _, setting := range settings {
+		if len(setting.Description) == 0 {
+			setting.Advanced = true
+		}
 	}
-	return settings
+}
+
+func (store *Saltstore) filter(settings []*model.Setting, advanced bool) []*model.Setting {
+	if advanced {
+		// No need to filter anything, caller wants everything
+		return settings
+	}
+	return slices.DeleteFunc(settings, func(setting *model.Setting) bool {
+		return setting.Advanced
+	})
 }
 
 func (store *Saltstore) sortSettings(settings []*model.Setting) []*model.Setting {
@@ -634,7 +646,9 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 		return errors.New("Invalid setting id: " + setting.Id)
 	}
 
-	settings, err := store.GetSettings(ctx, model.IsExtendedSetting(setting))
+	// always pull advanced settings on update since incoming setting may not be properly flagged as advanced
+	advanced := true
+	settings, err := store.GetSettings(ctx, advanced)
 	if err != nil {
 		return err
 	} else {

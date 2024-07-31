@@ -4642,7 +4642,6 @@
               <v-expansion-panel>
                 <v-expansion-panel-header id="configOptionsHeader">{{i18n.options}}</v-expansion-panel-header>
                 <v-expansion-panel-content>
-                  <v-switch id="option-extended" :disabled="$root.loading" v-model="extended" dense class="my-0" :label="i18n.settingsExtended" :hint="i18n.settingsExtendedHelp" persistent-hint data-aid="config_option_extended_toggle"></v-switch>
                   <v-switch id="option-advanced" :disabled="$root.loading" v-model="advanced" dense class="my-0" :label="i18n.settingsAdvanced" :hint="i18n.settingsAdvancedHelp" persistent-hint data-aid="config_option_advanced_toggle"></v-switch>
                   <v-btn id="option-synchronize" @click.stop="sync()" class="mt-6 mb-1" data-aid="config_option_synchronize_toggle">
                     {{ i18n.settingsSynchronize }}

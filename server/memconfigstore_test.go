@@ -26,7 +26,7 @@ func TestMemConfigStoreNew(t *testing.T) {
 
 	ctx := context.Background()
 
-	set, err := mCfgStore.GetSettings(ctx, false)
+	set, err := mCfgStore.GetSettings(ctx, true)
 	assert.NoError(t, err)
 	assert.Same(t, &origSettings[0], &set[0])
 }
@@ -44,7 +44,7 @@ func TestMemConfigStoreUpdate(t *testing.T) {
 	err := mCfgStore.UpdateSetting(ctx, &model.Setting{Id: "1", Value: "new"}, false)
 	assert.NoError(t, err)
 
-	set, err := mCfgStore.GetSettings(ctx, false)
+	set, err := mCfgStore.GetSettings(ctx, true)
 	assert.NoError(t, err)
 	assert.Len(t, set, 3)
 
@@ -68,7 +68,7 @@ func TestMemConfigStoreUpdateAdd(t *testing.T) {
 	err := mCfgStore.UpdateSetting(ctx, &model.Setting{Id: "4", Value: "four"}, false)
 	assert.NoError(t, err)
 
-	set, err := mCfgStore.GetSettings(ctx, false)
+	set, err := mCfgStore.GetSettings(ctx, true)
 	assert.NoError(t, err)
 	assert.Len(t, set, 4)
 
@@ -92,14 +92,14 @@ func TestMemConfigStoreUpdateRemove(t *testing.T) {
 	err := mCfgStore.UpdateSetting(ctx, &model.Setting{Id: "4"}, true)
 	assert.NoError(t, err)
 
-	set, err := mCfgStore.GetSettings(ctx, false)
+	set, err := mCfgStore.GetSettings(ctx, true)
 	assert.NoError(t, err)
 	assert.Len(t, set, 3)
 
 	err = mCfgStore.UpdateSetting(ctx, &model.Setting{Id: "2"}, true)
 	assert.NoError(t, err)
 
-	set, err = mCfgStore.GetSettings(ctx, false)
+	set, err = mCfgStore.GetSettings(ctx, true)
 	assert.NoError(t, err)
 	assert.Len(t, set, 2)
 
