@@ -371,7 +371,7 @@ func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 		}
 	}
 
-	allSettings, err := e.srv.Configstore.GetSettings(e.srv.Context, false)
+	allSettings, err := e.srv.Configstore.GetSettings(e.srv.Context, true)
 	if err != nil {
 		if e.notify {
 			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
@@ -728,7 +728,7 @@ func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detects []*mod
 		}
 	}()
 
-	allSettings, err := e.srv.Configstore.GetSettings(ctx, false)
+	allSettings, err := e.srv.Configstore.GetSettings(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -1755,7 +1755,7 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (d
 
 	logger = logger.WithField("intCheckId", uuid.New().String())
 
-	allSettings, err := e.srv.Configstore.GetSettings(e.srv.Context, false)
+	allSettings, err := e.srv.Configstore.GetSettings(e.srv.Context, true)
 	if err != nil {
 		return nil, nil, err
 	}

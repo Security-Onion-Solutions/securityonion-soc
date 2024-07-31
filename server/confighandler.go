@@ -57,11 +57,11 @@ func (h *ConfigHandler) configEnabled(next http.Handler) http.Handler {
 func (h *ConfigHandler) getConfig(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	extended, err := strconv.ParseBool(r.URL.Query().Get("extended"))
+	advanced, err := strconv.ParseBool(r.URL.Query().Get("advanced"))
 	if err != nil {
-		extended = false
+		advanced = false
 	}
-	settings, err := h.server.Configstore.GetSettings(ctx, extended)
+	settings, err := h.server.Configstore.GetSettings(ctx, advanced)
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
 		return

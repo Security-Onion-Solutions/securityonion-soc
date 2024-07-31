@@ -41,7 +41,7 @@ test('loadData', async () => {
   comp.settings = [];
   await comp.loadData();
   expect(loadmock).toHaveBeenCalledWith('gridmembers/');
-  expect(mock).toHaveBeenCalledWith('config/', {params: { extended: false }});
+  expect(mock).toHaveBeenCalledWith('config/', {params: { advanced: false }});
 
   expect(comp.nodes).toBe(loaddata);
 
@@ -686,19 +686,13 @@ test('processRouteParameters', () => {
 });
 
 test('getSettingBreadcrumbs', () => {
-  setting = { id: "foo.bar.car", advanced: false, extended: false };
+  setting = { id: "foo.bar.car", advanced: false };
   expect(comp.getSettingBreadcrumbs(setting)).toBe("foo > bar > car");
 
-  setting = { id: "foo.bar.car", advanced: false, extended: false, title: "Carbine" };
+  setting = { id: "foo.bar.car", advanced: false, title: "Carbine" };
   expect(comp.getSettingBreadcrumbs(setting)).toBe("foo > bar > Carbine");
 
-  setting = { id: "foo.bar.car", advanced: false, extended: true };
-  expect(comp.getSettingBreadcrumbs(setting)).toBe("foo > bar > car [ext]");
-
-  setting = { id: "foo.bar.car", advanced: true, extended: false };
+  setting = { id: "foo.bar.car", advanced: true };
   expect(comp.getSettingBreadcrumbs(setting)).toBe("foo > bar > car [adv]");
-
-  var setting = { id: "foo.bar.car", advanced: true, extended: true };
-  expect(comp.getSettingBreadcrumbs(setting)).toBe("foo > bar > car [adv, ext]");
 
 });
