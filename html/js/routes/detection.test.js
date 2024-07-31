@@ -659,7 +659,6 @@ test('getPresets', () => {
 });
 
 test('findHistoryChange', () => {
-
 	// elastalert
 	comp.history = [
 		{
@@ -829,6 +828,183 @@ test('checkChangedKey', () => {
 	expect(comp.checkChangedKey(id, 'title')).toBe(true);
 	expect(comp.checkChangedKey(id, 'content')).toBe(true);
 	expect(comp.checkChangedKey(id, 'severity')).toBe(false);
+});
+
+test('findOverrideHistoryChange', () => {
+	// elastalert
+	comp.history = [
+		{
+			id: '1',
+			overrides: [
+				{
+					type: "customFilter",
+					isEnabled: true,
+					createdAt: "2024-07-29T10:29:32.421321098-06:00",
+					updatedAt: "2024-07-29T10:29:32.421321098-06:00",
+					customFilter: "this:\n    that"
+				},
+				{
+					type: "customFilter",
+					isEnabled: false,
+					createdAt: "2024-07-29T11:54:34.569557439-06:00",
+					updatedAt: "2024-07-29T11:54:49.086205751-06:00",
+					customFilter: "another:\n    one"
+				}
+			],
+		},
+		{
+			id: '2',
+			overrides: [
+				{
+					type: "customFilter",
+					isEnabled: true,
+					createdAt: "2024-07-29T10:29:32.421321098-06:00",
+					updatedAt: "2024-07-29T10:29:32.421321098-06:00",
+					customFilter: "this:\n    that"
+				},
+				{
+					type: "customFilter",
+					isEnabled: false,
+					createdAt: "2024-07-29T11:54:34.569557439-06:00",
+					updatedAt: "2024-07-29T13:55:29.197427405-06:00",
+					customFilter: "another:\n    two"
+				}
+			],
+		}
+	];
+
+	id = '2';
+	comp.changedOverrideKeys = {};
+	comp.findOverrideHistoryChange(id);
+	expect(Object.keys(comp.changedOverrideKeys).length).toBe(1);
+
+	let overrideKeys = comp.changedOverrideKeys[id];
+	expect(overrideKeys.length).toBe(2);
+	expect(overrideKeys[0].length).toBe(0);
+	expect(overrideKeys[1].length).toBe(1);
+	expect(overrideKeys[1][0]).toBe('customFilter');
+
+	// suricata
+	comp.history = [
+		{
+			id: '1',
+			overrides: [
+				{
+					type: "modify",
+					isEnabled: false,
+					createdAt: "2024-07-29T14:39:09.544042454-06:00",
+					updatedAt: "2024-07-29T14:39:21.947393163-06:00",
+					regex: "rev: 2",
+					value: "rev: 3"
+				},
+				{
+					type: "suppress",
+					isEnabled: false,
+					createdAt: "2024-07-29T14:39:44.312946909-06:00",
+					updatedAt: "2024-07-29T14:57:49.637548072-06:00",
+					track: "by_either",
+					ip: "0.0.0.0/0"
+				},
+				{
+					type: "threshold",
+					isEnabled: true,
+					createdAt: "2024-07-29T14:40:17.043093339-06:00",
+					updatedAt: "2024-07-29T14:40:17.043093339-06:00",
+					thresholdType: "both",
+					track: "by_src",
+					count: 10,
+					seconds: 60
+				}
+			]
+		},
+		{
+			id: '2',
+			overrides: [
+				{
+					type: "modify",
+					isEnabled: true,
+					createdAt: "2024-07-29T14:39:09.544042454-06:00",
+					updatedAt: "2024-07-29T14:39:20.947393160-06:00",
+					regex: "rev: 2",
+					value: "rev: 3"
+				},
+				{
+					type: "suppress",
+					isEnabled: false,
+					createdAt: "2024-07-29T14:39:44.312946909-06:00",
+					updatedAt: "2024-07-29T14:57:50.637548070-06:00",
+					track: "by_src",
+					ip: "0.0.0.0/1"
+				},
+				{
+					type: "threshold",
+					isEnabled: true,
+					createdAt: "2024-07-29T14:40:17.043093339-06:00",
+					updatedAt: "2024-07-29T14:40:17.043093339-06:00",
+					thresholdType: "both",
+					track: "by_src",
+					"count": 10,
+					"seconds": 60
+				}
+			],
+		}
+	];
+
+	id = '2';
+	comp.changedOverrideKeys = {};
+	comp.findOverrideHistoryChange(id);
+	expect(Object.keys(comp.changedOverrideKeys).length).toBe(1);
+
+	overrideKeys = comp.changedOverrideKeys[id];
+	expect(overrideKeys.length).toBe(3);
+	expect(overrideKeys[0].length).toBe(1);
+	expect(overrideKeys[0][0]).toBe('isEnabled');
+	expect(overrideKeys[1].length).toBe(2);
+	expect(overrideKeys[1][0]).toBe('track');
+	expect(overrideKeys[1][1]).toBe('ip');
+	expect(overrideKeys[2].length).toBe(0);
+
+	id = '1';
+	comp.changedOverrideKeys = {};
+	comp.findOverrideHistoryChange(id);
+	expect(Object.keys(comp.changedOverrideKeys).length).toBe(0);
+
+	// elastalert, nothing to diff
+	comp.history = [
+		{
+			id: '1',
+			overrides: [],
+		},
+		{
+			id: '2',
+			overrides: [
+				{
+					type: "customFilter",
+					isEnabled: true,
+					createdAt: "2024-07-29T10:29:32.421321098-06:00",
+					updatedAt: "2024-07-29T10:29:32.421321098-06:00",
+					customFilter: "this:\n    that"
+				},
+			],
+		}
+	];
+
+	id = '2';
+	comp.changedOverrideKeys = {};
+	comp.findOverrideHistoryChange(id);
+	expect(Object.keys(comp.changedOverrideKeys).length).toBe(0);
+});
+
+test('checkOverrideChangedKey', () => {
+	expect(Object.keys(comp.changedKeys).length).toBe(0);
+	let id = "BHypPJABXppUUuo3UnEl";
+	comp.changedOverrideKeys[id] = [[], ['track', 'ip']];
+	expect(comp.checkOverrideChangedKey(id, 0, 'track')).toBe(false);
+	expect(comp.checkOverrideChangedKey(id, 1, 'track')).toBe(true);
+	expect(comp.checkOverrideChangedKey(id, 0, 'ip')).toBe(false);
+	expect(comp.checkOverrideChangedKey(id, 1, 'ip')).toBe(true);
+	expect(comp.checkOverrideChangedKey(id, 0, 'seconds')).toBe(false);
+	expect(comp.checkOverrideChangedKey(id, 1, 'seconds')).toBe(false);
 });
 
 test('loadUrlParameters', () => {

@@ -1208,7 +1208,7 @@ $(document).ready(function() {
       },
       dateAwareSort(items, index, isDesc) {
         items.sort((a, b) => {
-          if (index[0] === 'createTime' || index[0] === 'updateTime') {
+          if (index[0] === 'createTime' || index[0] === 'updateTime' || index[0] === 'createdAt' || index[0] === 'updatedAt') {
             if (!isDesc[0]) {
               return new Date(a[index]) - new Date(b[index]);
             }
@@ -1218,10 +1218,10 @@ $(document).ready(function() {
 
           if (typeof a[index] !== 'undefined') {
             if (!isDesc[0]) {
-              return a[index].toLowerCase().localeCompare(b[index].toLowerCase());
+              return (a[index]+'').toLowerCase().localeCompare((b[index]+'').toLowerCase());
             }
 
-            return b[index].toLowerCase().localeCompare(a[index].toLowerCase());
+            return (b[index]+'').toLowerCase().localeCompare((a[index]+'').toLowerCase());
           }
         });
 

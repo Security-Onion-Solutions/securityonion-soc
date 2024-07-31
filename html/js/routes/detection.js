@@ -62,7 +62,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			overrideHeaders: {
 				'elastalert': [
 					{ text: this.$root.i18n.enabled, value: 'isEnabled' },
-					{ text: this.$root.i18n.type, value: 'type' },
+					{ text: this.$root.i18n.type, value: 'type', localize: true },
 					{ text: this.$root.i18n.track, value: 'track' },
 					{ text: this.$root.i18n.dateCreated, value: 'createdAt', format: true },
 					{ text: this.$root.i18n.dateModified, value: 'updatedAt', format: true },
@@ -70,7 +70,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				'strelka': [], // no overrides
 				'suricata': [
 					{ text: this.$root.i18n.enabled, value: 'isEnabled' },
-					{ text: this.$root.i18n.type, value: 'type' },
+					{ text: this.$root.i18n.type, value: 'type', localize: true },
 					{ text: this.$root.i18n.ipVar, value: 'ip' },
 					{ text: this.$root.i18n.dateCreated, value: 'createdAt', format: true },
 					{ text: this.$root.i18n.dateModified, value: 'updatedAt', format: true },
@@ -100,6 +100,38 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				count: 500,
 				expanded: [],
 				loading: false,
+			},
+			historyOverrideTableOpts: {
+				"elastalert": {
+					sortBy: 'updatedAt',
+					sortDesc: false,
+					headers: [
+						{ text: this.$root.i18n.actions, width: '10.0em' },
+						{ text: this.$root.i18n.kind, value: 'type' },
+						{ text: this.$root.i18n.time, value: 'updatedAt' },
+						{ text: this.$root.i18n.enabled, value: 'isEnabled' },
+					],
+					itemsPerPage: 10,
+					footerProps: { 'items-per-page-options': [10, 50, 250, 1000] },
+					count: 500,
+					expanded: [],
+					loading: false,
+				},
+				"suricata": {
+					sortBy: 'updatedAt',
+					sortDesc: false,
+					headers: [
+						{ text: this.$root.i18n.actions, width: '10.0em' },
+						{ text: this.$root.i18n.kind, value: 'type' },
+						{ text: this.$root.i18n.time, value: 'updatedAt' },
+						{ text: this.$root.i18n.enabled, value: 'isEnabled' },
+					],
+					itemsPerPage: 10,
+					footerProps: { 'items-per-page-options': [10, 50, 250, 1000] },
+					count: 500,
+					expanded: [],
+					loading: false,
+				},
 			},
 			extractedSummary: '',
 			extractedReferences: [],
@@ -140,6 +172,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				'yara': 'strelka',
 			},
 			changedKeys: {},
+			changedOverrideKeys: {},
 	}},
 	created() {
 		this.$root.initializeEditor();
@@ -504,10 +537,9 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			if (response && response.data) {
 				this.history = response.data;
 
-				//this.changedKeys[this.history[this.history.length - 1]['id']] = this.findHistoryChange(this.history);
-
 				for (var i = 0; i < this.history.length; i++) {
 					this.$root.populateUserDetails(this.history[i], "userId", "owner");
+					this.history[i].overrides = this.history[i].overrides || [];
 				}
 			}
 			if (showLoadingIndicator) this.$root.stopLoading();
@@ -563,7 +595,40 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					}
 				}
 			}
+
 			this.changedKeys[id] = retList;
+
+			this.findOverrideHistoryChange(id);
+		},
+		findOverrideHistoryChange(historyID) {
+			let index = this.history.findIndex((row) => row.id === historyID);
+
+			if (index <= 0) return;
+
+			let prev = this.history[index - 1];
+			let parent = this.history[index];
+			let releventKeys = ['isEnabled', 'customFilter', 'regex', 'value', 'track', 'ip', 'count', 'seconds'];
+			let overrideRetList = [];
+
+			for (let i = 0; i < parent.overrides.length; i++) {
+				let retList = [];
+				let newOverride = parent.overrides[i];
+				let oldOverride = prev.overrides.find(o => o.createdAt === newOverride.createdAt);
+
+				if (oldOverride == null) {
+					return;
+				}
+
+				for (let key of releventKeys) {
+					if (oldOverride[key] !== newOverride[key]) {
+						retList.push(key);
+					}
+				}
+
+				overrideRetList.push(retList);
+			}
+
+			this.changedOverrideKeys[historyID] = overrideRetList;
 		},
 		getDefaultPreset(preset) {
 			if (this.presets) {
@@ -1354,6 +1419,9 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		checkChangedKey(id, key) {
 			return this.changedKeys[id]?.includes(key);
+		},
+		checkOverrideChangedKey(id, index, key) {
+			return this.changedOverrideKeys?.[id]?.[index]?.includes(key);
 		}
 	}
 }});
