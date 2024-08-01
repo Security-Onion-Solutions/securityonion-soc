@@ -206,6 +206,7 @@ const i18n = {
       configQLNTPHeader: 'NTP',
       configQLFirewallHeader: 'Firewall',
       configQLFirewallWebInterface: 'Allow web browsers to login to Security Onion Console',
+      configQLFirewallDesktop: 'Allow Security Onion Desktop Nodes to connect to Manager',
       configQLFirewallElastic: 'Allow Elastic Agent endpoints to send logs',
       configQLFirewallFleet: 'Allow Elastic Fleet Nodes to connect to Manager',
       configQLFirewallIDH: 'Allow IDH Nodes to connect to Manager',
