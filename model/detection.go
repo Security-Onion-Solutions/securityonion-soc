@@ -120,6 +120,14 @@ type Detection struct {
 	// elastalert - sigma only
 	Product string `json:"product,omitempty"`
 	Service string `json:"service,omitempty"`
+
+	// AI Description fields
+	*AiFields `json:",omitempty"`
+}
+
+type AiFields struct {
+	AiSummary         string `json:"aiSummary"`
+	AiSummaryReviewed bool   `json:"aiSummaryReviewed"`
 }
 
 type DetectionComment struct {

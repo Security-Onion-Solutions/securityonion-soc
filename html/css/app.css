@@ -685,3 +685,7 @@ tbody tr:hover {
 .theme--light tbody tr:hover:nth-of-type(even) {
   background-color: rgba(230, 230, 230, 0.25) !important;
 }
+
+.unset-vertical-align {
+  vertical-align: unset !important;
+}

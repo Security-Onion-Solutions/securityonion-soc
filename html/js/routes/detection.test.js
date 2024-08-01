@@ -1180,3 +1180,20 @@ test('validateSuricata', () => {
 	msg = comp.validateSuricata();
 	expect(msg).toBe(null);
 });
+
+test('showAiSummary', () => {
+	comp.detect = null;
+	expect(comp.showAiSummary()).toBe(false);
+
+	comp.detect = { engine: 'strelka' };
+	expect(comp.showAiSummary()).toBe(false);
+
+	comp.detect.aiSummary = 'aiSummary';
+	expect(comp.showAiSummary()).toBe(false);
+
+	comp.detect.aiSummaryReviewed = true;
+	expect(comp.showAiSummary()).toBe(true);
+
+	comp.detect.aiSummary = '';
+	expect(comp.showAiSummary()).toBe(false);
+});

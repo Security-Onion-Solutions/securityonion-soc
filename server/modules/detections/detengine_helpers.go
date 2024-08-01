@@ -18,7 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 
 	"github.com/apex/log"
@@ -122,7 +121,7 @@ type RepoOnDisk struct {
 	WasModified bool
 }
 
-func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.RuleRepo, cfg *config.ServerConfig, iom IOManager) (allRepos []*RepoOnDisk, anythingNew bool, err error) {
+func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.RuleRepo, iom IOManager) (allRepos []*RepoOnDisk, anythingNew bool, err error) {
 	allRepos = make([]*RepoOnDisk, 0, len(rulesRepos))
 
 	// read existing repos

@@ -1469,6 +1469,11 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		checkOverrideChangedKey(id, index, key) {
 			return this.changedOverrideKeys?.[id]?.[index]?.includes(key);
+		},
+		showAiSummary() {
+			if (!this.detect) return false;
+
+			return !!(this.detect.aiSummary && this.detect.aiSummaryReviewed);
 		}
 	}
 }});

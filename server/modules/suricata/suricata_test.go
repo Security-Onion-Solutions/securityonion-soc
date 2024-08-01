@@ -2184,11 +2184,16 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 		IntegrityCheckerData: detections.IntegrityCheckerData{
 			IsRunning: true,
 		},
-		IOManager: iom,
+		IOManager:  iom,
+		aiRepoUrl:  "aiRepoUrl",
+		aiRepoPath: "aiRepoPath",
 	}
 
 	logger := log.WithField("detectionEngine", "test-suricata")
 
+	// RefreshAiSummaries
+	iom.EXPECT().ReadDir("aiRepoPath").Return([]fs.DirEntry{}, nil)
+	iom.EXPECT().CloneRepo(gomock.Any(), "aiRepoPath/aiRepoUrl", "aiRepoUrl").Return(nil)
 	// readAndHash
 	iom.EXPECT().ReadFile("communityRulesFile").Return([]byte(SimpleRule), nil)
 	// readFingerprint
@@ -2254,7 +2259,9 @@ func TestSyncChanges(t *testing.T) {
 		IntegrityCheckerData: detections.IntegrityCheckerData{
 			IsRunning: true,
 		},
-		IOManager: iom,
+		IOManager:  iom,
+		aiRepoUrl:  "aiRepoUrl",
+		aiRepoPath: "aiRepoPath",
 	}
 
 	logger := log.WithField("detectionEngine", "test-suricata")
@@ -2262,6 +2269,9 @@ func TestSyncChanges(t *testing.T) {
 	workItems := []esutil.BulkIndexerItem{}
 	auditItems := []esutil.BulkIndexerItem{}
 
+	// RefreshAiSummaries
+	iom.EXPECT().ReadDir("aiRepoPath").Return([]fs.DirEntry{}, nil)
+	iom.EXPECT().CloneRepo(gomock.Any(), "aiRepoPath/aiRepoUrl", "aiRepoUrl").Return(nil)
 	// readAndHash
 	iom.EXPECT().ReadFile("communityRulesFile").Return([]byte(SimpleRule+"\n"+FlowbitsRuleA), nil)
 	// syncCommunityDetections
@@ -2483,4 +2493,67 @@ func toRegex(s ...string) []*regexp.Regexp {
 	}
 
 	return r
+}
+
+func TestLoadAndMergeAuxilleryData(t *testing.T) {
+	tests := []struct {
+		Name              string
+		PublicId          string
+		ExpectedAiFields  bool
+		ExpectedAiSummary string
+		ExpectedReviewed  bool
+	}{
+		{
+			Name:             "No Auxillery Data",
+			PublicId:         "100000",
+			ExpectedAiFields: false,
+		},
+		{
+			Name:              "Data, Unreviewed",
+			PublicId:          "100002",
+			ExpectedAiFields:  true,
+			ExpectedAiSummary: "Summary for 100002",
+			ExpectedReviewed:  false,
+		},
+		{
+			Name:              "Data, Reviewed",
+			PublicId:          "100001",
+			ExpectedAiFields:  true,
+			ExpectedAiSummary: "Summary for 100001",
+			ExpectedReviewed:  true,
+		},
+	}
+
+	e := SuricataEngine{}
+	e.LoadAuxilleryData([]*detections.AiSummary{
+		{
+			PublicId: "100001",
+			Summary:  "Summary for 100001",
+			Reviewed: true,
+		},
+		{
+			PublicId: "100002",
+			Summary:  "Summary for 100002",
+			Reviewed: false,
+		},
+	})
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			det := &model.Detection{
+				PublicID: test.PublicId,
+			}
+
+			err := e.MergeAuxilleryData(det)
+			assert.NoError(t, err)
+			if test.ExpectedAiFields {
+				assert.NotNil(t, det.AiFields)
+				assert.Equal(t, test.ExpectedAiSummary, det.AiSummary)
+				assert.Equal(t, test.ExpectedReviewed, det.AiSummaryReviewed)
+			} else {
+				assert.Nil(t, det.AiFields)
+			}
+		})
+	}
 }

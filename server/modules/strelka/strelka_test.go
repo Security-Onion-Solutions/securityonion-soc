@@ -563,7 +563,7 @@ func TestParseRule(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			t.Parallel()
 
-			rules, err := e.parseYaraRules([]byte(test.Input), true)
+			rules, err := e.parseYaraRules([]byte(test.Input))
 			if test.ExpectedError == nil {
 				assert.NoError(t, err)
 				assert.NotNil(t, rules)
@@ -643,7 +643,7 @@ func TestToDetection(t *testing.T) {
 		License:     "license",
 	}
 
-	rules, err := e.parseYaraRules([]byte(BasicRuleWMeta), false)
+	rules, err := e.parseYaraRules([]byte(BasicRuleWMeta))
 	assert.NoError(t, err)
 	assert.NotEmpty(t, rules)
 	assert.Equal(t, 1, len(rules))
@@ -996,6 +996,9 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 	detStore := servermock.NewMockDetectionstore(ctrl)
 	iom := mock.NewMockIOManager(ctrl)
 
+	// RefreshAiSummaries
+	iom.EXPECT().ReadDir("aiRepoPath").Return([]fs.DirEntry{}, nil)
+	iom.EXPECT().CloneRepo(gomock.Any(), "aiRepoPath/aiRepoUrl", "aiRepoUrl").Return(nil)
 	// UpdateRepos
 	iom.EXPECT().ReadDir("repos").Return([]fs.DirEntry{
 		&handmock.MockDirEntry{
@@ -1031,7 +1034,9 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 		IntegrityCheckerData: detections.IntegrityCheckerData{
 			IsRunning: true,
 		},
-		IOManager: iom,
+		IOManager:  iom,
+		aiRepoUrl:  "aiRepoUrl",
+		aiRepoPath: "aiRepoPath",
 	}
 
 	logger := log.WithField("detectionEngine", "test-strelka")
@@ -1080,7 +1085,9 @@ func TestSyncChanges(t *testing.T) {
 		IntegrityCheckerData: detections.IntegrityCheckerData{
 			IsRunning: true,
 		},
-		IOManager: iom,
+		IOManager:  iom,
+		aiRepoUrl:  "aiRepoUrl",
+		aiRepoPath: "aiRepoPath",
 	}
 
 	logger := log.WithField("detectionEngine", "test-strelka")
@@ -1088,6 +1095,9 @@ func TestSyncChanges(t *testing.T) {
 	workItems := []esutil.BulkIndexerItem{}
 	auditItems := []esutil.BulkIndexerItem{}
 
+	// RefreshAiSummaries
+	iom.EXPECT().ReadDir("aiRepoPath").Return([]fs.DirEntry{}, nil)
+	iom.EXPECT().CloneRepo(gomock.Any(), "aiRepoPath/aiRepoUrl", "aiRepoUrl").Return(nil)
 	// UpdateRepos
 	iom.EXPECT().ReadDir("repos").Return([]fs.DirEntry{
 		&handmock.MockDirEntry{
@@ -1236,4 +1246,67 @@ func TestSyncChanges(t *testing.T) {
 	})
 
 	assert.Equal(t, []string{"abc", "", "deleteme"}, workDocIds) // update has an id, create does not, delete does
+}
+
+func TestLoadAndMergeAuxilleryData(t *testing.T) {
+	tests := []struct {
+		Name              string
+		PublicId          string
+		ExpectedAiFields  bool
+		ExpectedAiSummary string
+		ExpectedReviewed  bool
+	}{
+		{
+			Name:             "No Auxillery Data",
+			PublicId:         "Webshell_FOPO_Obfuscation_APT_ON_Nov17_1",
+			ExpectedAiFields: false,
+		},
+		{
+			Name:              "Data, Unreviewed",
+			PublicId:          "Webshell_acid_FaTaLisTiCz_Fx_fx_p0isoN_sh3ll_x0rg_byp4ss_256",
+			ExpectedAiFields:  true,
+			ExpectedAiSummary: "Summary for Webshell_acid_FaTaLisTiCz_Fx_fx_p0isoN_sh3ll_x0rg_byp4ss_256",
+			ExpectedReviewed:  false,
+		},
+		{
+			Name:              "Data, Reviewed",
+			PublicId:          "_root_040_zip_Folder_deploy",
+			ExpectedAiFields:  true,
+			ExpectedAiSummary: "Summary for _root_040_zip_Folder_deploy",
+			ExpectedReviewed:  true,
+		},
+	}
+
+	e := StrelkaEngine{}
+	e.LoadAuxilleryData([]*detections.AiSummary{
+		{
+			PublicId: "_root_040_zip_Folder_deploy",
+			Summary:  "Summary for _root_040_zip_Folder_deploy",
+			Reviewed: true,
+		},
+		{
+			PublicId: "Webshell_acid_FaTaLisTiCz_Fx_fx_p0isoN_sh3ll_x0rg_byp4ss_256",
+			Summary:  "Summary for Webshell_acid_FaTaLisTiCz_Fx_fx_p0isoN_sh3ll_x0rg_byp4ss_256",
+			Reviewed: false,
+		},
+	})
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			det := &model.Detection{
+				PublicID: test.PublicId,
+			}
+
+			err := e.MergeAuxilleryData(det)
+			assert.NoError(t, err)
+			if test.ExpectedAiFields {
+				assert.NotNil(t, det.AiFields)
+				assert.Equal(t, test.ExpectedAiSummary, det.AiSummary)
+				assert.Equal(t, test.ExpectedReviewed, det.AiSummaryReviewed)
+			} else {
+				assert.Nil(t, det.AiFields)
+			}
+		})
+	}
 }

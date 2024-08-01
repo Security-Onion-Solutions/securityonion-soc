@@ -66,6 +66,7 @@ const i18n = {
       address: 'Address',
       advanced: 'Temporarily enable advanced interface features',
       ago: 'ago',
+      aiSummary: 'AI Summary',
       alertAcknowledge: 'Acknowledge',
       alertEscalated: 'This alert has already been escalated',
       alertUndoAcknowledge: 'Undo Acknowledge',

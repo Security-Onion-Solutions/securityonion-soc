@@ -60,6 +60,18 @@ const (
 	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS        = 300
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT       = 10
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS        = 600
+	DEFAULT_AI_REPO                                  = "https://github.com/Security-Onion-Solutions/securityonion-resources"
+	DEFAULT_AI_REPO_LOC                              = "/opt/sensoroni/repos"
+)
+
+var ( // treat as constant
+	DEFAULT_RULES_REPOS = []*model.RuleRepo{
+		{
+			Repo:    "https://github.com/Security-Onion-Solutions/securityonion-resources",
+			License: "DRL",
+			Folder:  util.Ptr("sigma/stable"),
+		},
+	}
 )
 
 var acceptedExtensions = map[string]bool{
@@ -87,6 +99,9 @@ type ElastAlertEngine struct {
 	airgapEnabled                  bool
 	notify                         bool
 	writeNoRead                    *string
+	aiSummaries                    *sync.Map // map[string]*detections.AiSummary{}
+	aiRepoUrl                      string
+	aiRepoPath                     string
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
 	detections.IOManager
@@ -133,6 +148,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.InterruptChan = make(chan bool, 1)
 	e.IntegrityCheckerData.Thread = &sync.WaitGroup{}
 	e.IntegrityCheckerData.Interrupt = make(chan bool, 1)
+	e.aiSummaries = &sync.Map{}
 
 	e.airgapBasePath = module.GetStringDefault(config, "airgapBasePath", DEFAULT_AIRGAP_BASE_PATH)
 	e.CommunityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECONDS)
@@ -152,13 +168,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.parseSigmaPackages(pkgs)
 
 	e.reposFolder = module.GetStringDefault(config, "reposFolder", DEFAULT_REPOS_FOLDER)
-	e.rulesRepos, err = model.GetReposDefault(config, "rulesRepos", []*model.RuleRepo{
-		{
-			Repo:    "https://github.com/Security-Onion-Solutions/securityonion-resources",
-			License: "DRL",
-			Folder:  util.Ptr("sigma/stable"),
-		},
-	})
+	e.rulesRepos, err = model.GetReposDefault(config, "rulesRepos", DEFAULT_RULES_REPOS)
 	if err != nil {
 		return fmt.Errorf("unable to parse ElastAlert's rulesRepos: %w", err)
 	}
@@ -171,6 +181,9 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 
 	e.SyncSchedulerParams.StateFilePath = module.GetStringDefault(config, "stateFilePath", DEFAULT_STATE_FILE_PATH)
 
+	e.aiRepoUrl = module.GetStringDefault(config, "aiRepoUrl", DEFAULT_AI_REPO)
+	e.aiRepoPath = module.GetStringDefault(config, "aiRepoPath", DEFAULT_AI_REPO_LOC)
+
 	return nil
 }
 
@@ -179,8 +192,25 @@ func (e *ElastAlertEngine) Start() error {
 	e.isRunning = true
 	e.IntegrityCheckerData.IsRunning = true
 
+	// start long running processes
 	go detections.SyncScheduler(e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameElastAlert, &e.isRunning, e.IOManager)
 	go detections.IntegrityChecker(model.EngineNameElastAlert, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
+
+	// update Ai Summaries once and don't block
+	go func() {
+		logger := log.WithField("detectionEngine", model.EngineNameElastAlert)
+
+		err := detections.RefreshAiSummaries(e, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+		if err != nil {
+			if errors.Is(err, detections.ErrModuleStopped) {
+				return
+			}
+
+			logger.WithError(err).Error("unable to refresh AI summaries")
+		} else {
+			logger.Info("successfully refreshed AI summaries")
+		}
+	}()
 
 	return nil
 }
@@ -432,6 +462,17 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 	e.writeNoRead = nil
 
+	err := detections.RefreshAiSummaries(e, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+	if err != nil {
+		if errors.Is(err, detections.ErrModuleStopped) {
+			return err
+		}
+
+		logger.WithError(err).Error("unable to refresh AI summaries")
+	} else {
+		logger.Info("successfully refreshed AI summaries")
+	}
+
 	// announce the beginning of the sync
 	e.EngineState.Syncing = true
 
@@ -473,7 +514,7 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 	}
 
 	// ensure repos are up to date
-	dirtyRepos, repoChanges, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config, e.IOManager)
+	dirtyRepos, repoChanges, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.IOManager)
 	if err != nil {
 		if errors.Is(err, detections.ErrModuleStopped) {
 			return err
@@ -1419,6 +1460,30 @@ func (e *ElastAlertEngine) DuplicateDetection(ctx context.Context, detection *mo
 	det.Author = detections.AddUser(det.Author, user, ", ")
 
 	return det, nil
+}
+
+func (e *ElastAlertEngine) LoadAuxilleryData(summaries []*detections.AiSummary) error {
+	sum := &sync.Map{}
+	for _, summary := range summaries {
+		sum.Store(summary.PublicId, summary)
+	}
+
+	e.aiSummaries = sum
+
+	return nil
+}
+
+func (e *ElastAlertEngine) MergeAuxilleryData(detect *model.Detection) error {
+	obj, ok := e.aiSummaries.Load(detect.PublicID)
+	if ok {
+		summary := obj.(*detections.AiSummary)
+		detect.AiFields = &model.AiFields{
+			AiSummary:         summary.Summary,
+			AiSummaryReviewed: summary.Reviewed,
+		}
+	}
+
+	return nil
 }
 
 type CustomWrapper struct {

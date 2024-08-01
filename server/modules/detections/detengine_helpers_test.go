@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/handmock"
@@ -433,9 +432,8 @@ func TestUpdateRepos(t *testing.T) {
 			Repo: "http://github.com/user/repo2",
 		},
 	}
-	cfg := &config.ServerConfig{}
 
-	allRepos, anythingNew, err := UpdateRepos(&isRunning, "baseRepoFolder", repos, cfg, iom)
+	allRepos, anythingNew, err := UpdateRepos(&isRunning, "baseRepoFolder", repos, iom)
 	assert.NoError(t, err)
 	assert.Len(t, allRepos, len(repos))
 	assert.Equal(t, &RepoOnDisk{

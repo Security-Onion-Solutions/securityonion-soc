@@ -49,6 +49,8 @@ const (
 	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS        = 300
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT       = 10
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS        = 600
+	DEFAULT_AI_REPO                                  = "https://github.com/Security-Onion-Solutions/securityonion-resources"
+	DEFAULT_AI_REPO_LOC                              = "/opt/sensoroni/repos"
 )
 
 var titleUpdater = regexp.MustCompile(`(?im)rule\s+(\w+)(\s+:(\s*[^{]+))?(\s+)(//.*$)?(\n?){`)
@@ -66,6 +68,9 @@ type StrelkaEngine struct {
 	compileYaraPythonScriptPath    string
 	notify                         bool
 	writeNoRead                    *string
+	aiSummaries                    *sync.Map // map[string]*detections.AiSummary{}
+	aiRepoUrl                      string
+	aiRepoPath                     string
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
 	detections.IOManager
@@ -103,6 +108,7 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 	e.InterruptChan = make(chan bool, 1)
 	e.IntegrityCheckerData.Thread = &sync.WaitGroup{}
 	e.IntegrityCheckerData.Interrupt = make(chan bool, 1)
+	e.aiSummaries = &sync.Map{}
 
 	e.CommunityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECONDS)
 	e.yaraRulesFolder = module.GetStringDefault(config, "yaraRulesFolder", DEFAULT_YARA_RULES_FOLDER)
@@ -125,6 +131,9 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 
 	e.StateFilePath = module.GetStringDefault(config, "stateFilePath", DEFAULT_STATE_FILE_PATH)
 
+	e.aiRepoUrl = module.GetStringDefault(config, "aiRepoUrl", DEFAULT_AI_REPO)
+	e.aiRepoPath = module.GetStringDefault(config, "aiRepoPath", DEFAULT_AI_REPO_LOC)
+
 	return nil
 }
 
@@ -132,8 +141,25 @@ func (e *StrelkaEngine) Start() error {
 	e.srv.DetectionEngines[model.EngineNameStrelka] = e
 	e.isRunning = true
 
+	// start long running processes
 	go detections.SyncScheduler(e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameStrelka, &e.isRunning, e.IOManager)
 	go detections.IntegrityChecker(model.EngineNameStrelka, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
+
+	// update Ai Summaries once and don't block
+	go func() {
+		logger := log.WithField("detectionEngine", model.EngineNameStrelka)
+
+		err := detections.RefreshAiSummaries(e, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+		if err != nil {
+			if errors.Is(err, detections.ErrModuleStopped) {
+				return
+			}
+
+			logger.WithError(err).Error("unable to refresh AI summaries")
+		} else {
+			logger.Info("successfully refreshed AI summaries")
+		}
+	}()
 
 	return nil
 }
@@ -193,7 +219,7 @@ func (e *StrelkaEngine) IsRunning() bool {
 }
 
 func (e *StrelkaEngine) ValidateRule(data string) (string, error) {
-	_, err := e.parseYaraRules([]byte(data), false)
+	_, err := e.parseYaraRules([]byte(data))
 	if err != nil {
 		return "", err
 	}
@@ -210,7 +236,7 @@ func (e *StrelkaEngine) ConvertRule(ctx context.Context, detect *model.Detection
 }
 
 func (s *StrelkaEngine) ExtractDetails(detect *model.Detection) error {
-	rules, err := s.parseYaraRules([]byte(detect.Content), false)
+	rules, err := s.parseYaraRules([]byte(detect.Content))
 	if err != nil {
 		return err
 	}
@@ -258,10 +284,21 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 	e.writeNoRead = nil
 
+	err := detections.RefreshAiSummaries(e, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+	if err != nil {
+		if errors.Is(err, detections.ErrModuleStopped) {
+			return err
+		}
+
+		logger.WithError(err).Error("unable to refresh AI summaries")
+	} else {
+		logger.Info("successfully refreshed AI summaries")
+	}
+
 	e.EngineState.Syncing = true
 
 	// ensure repos are up to date
-	allRepos, anythingNew, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config, e.IOManager)
+	allRepos, anythingNew, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.IOManager)
 	if err != nil {
 		if errors.Is(err, detections.ErrModuleStopped) {
 			return err
@@ -365,7 +402,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 				return nil
 			}
 
-			parsed, err := e.parseYaraRules(raw, true)
+			parsed, err := e.parseYaraRules(raw)
 			if err != nil {
 				logger.WithError(err).WithField("yaraRuleFile", path).Error("failed to parse yara rule file")
 				return nil
@@ -739,7 +776,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 	return nil
 }
 
-func (e *StrelkaEngine) parseYaraRules(data []byte, filter bool) ([]*YaraRule, error) {
+func (e *StrelkaEngine) parseYaraRules(data []byte) ([]*YaraRule, error) {
 	rules := []*YaraRule{}
 	rule := &YaraRule{}
 
@@ -1030,7 +1067,7 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (err error) {
 }
 
 func (e *StrelkaEngine) DuplicateDetection(ctx context.Context, detection *model.Detection) (*model.Detection, error) {
-	rules, err := e.parseYaraRules([]byte(detection.Content), false)
+	rules, err := e.parseYaraRules([]byte(detection.Content))
 	if err != nil {
 		return nil, err
 	}
@@ -1084,6 +1121,29 @@ func (e *StrelkaEngine) DuplicateDetection(ctx context.Context, detection *model
 	return det, nil
 }
 
+func (e *StrelkaEngine) LoadAuxilleryData(summaries []*detections.AiSummary) error {
+	sum := &sync.Map{}
+	for _, summary := range summaries {
+		sum.Store(summary.PublicId, summary)
+	}
+
+	e.aiSummaries = sum
+
+	return nil
+}
+
+func (e *StrelkaEngine) MergeAuxilleryData(detect *model.Detection) error {
+	obj, ok := e.aiSummaries.Load(detect.PublicID)
+	if ok {
+		summary := obj.(*detections.AiSummary)
+		detect.AiFields = &model.AiFields{
+			AiSummary:         summary.Summary,
+			AiSummaryReviewed: summary.Reviewed,
+		}
+	}
+
+	return nil
+}
 func (e *StrelkaEngine) GenerateUnusedPublicId(ctx context.Context) (string, error) {
 	// PublicIDs for Strelka are the rule name which should correlate with what the rule does.
 	// Cannot generate arbitrary but still useful public IDs
