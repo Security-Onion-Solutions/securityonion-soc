@@ -534,7 +534,7 @@ const i18n = {
       interval10h: "10 hours",
       interval24h: "24 hours",
       invalid: 'Invalid',
-      invalidDetectionElastAlertMissingDetectionLogic: `This ElastAlert rule is missing it's detection logic. A "detection" field is required.`,
+      invalidDetectionElastAlertMissingDetectionLogic: `This ElastAlert rule is missing its detection logic. A "detection" field is required.`,
       invalidDetectionElastAlertMissingID: 'This ElastAlert rule is missing its ID. An "id" field is required.',
       invalidDetectionStrelkaMissingCondition: 'This Strelka rule is missing its condition. A "condition" section is required.',
       invalidDetectionStrelkaMissingRuleName: 'This Strelka rule is missing its identifier. An identifier is required.',
