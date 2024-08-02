@@ -477,10 +477,10 @@ test('onNewDetectionLanguageChange', async () => {
 	await comp.onNewDetectionLanguageChange();
 	expect(comp.detect.content).toBe('x');
 
-	// yara, no publicId, results in template without publicId
+	// yara, no publicId, results in template without publicId, note that the template is trimmed and there is no [publicId]
 	comp.detect = { language:'yara', content: 'x' };
 	await comp.onNewDetectionLanguageChange();
-	expect(comp.detect.content).toBe('b ');
+	expect(comp.detect.content).toBe('b');
 
 	// suricata, sid, results in template with publicId
 	resetPapi().mockPapi("get", { data: { publicId: 'X' } }, null);
@@ -1047,7 +1047,7 @@ test('extractDetection', () => {
 
 test('saveDetection - statusEffectedByFilter', async () => {
 	resetPapi().mockPapi('put', {status:205}, null);
-	comp.detect = { content: "" };
+	comp.detect = { content: "", language: '' };
 	comp.origDetect = { content: "" };
 	comp.extractDetection = jest.fn();
 
@@ -1056,4 +1056,127 @@ test('saveDetection - statusEffectedByFilter', async () => {
 	expect(comp.$root.warning).toBe(true);
 	expect(comp.$root.warningMessage).toBe(comp.i18n.WARN_STATUS_EFFECTED_BY_FILTER);
 	expect(comp.extractDetection).toHaveBeenCalledTimes(1);
+});
+
+test('verifyRuleSyntax - implementation', () => {
+	comp.ruleValidators = {
+		engine: [
+			{ pattern: /1/m, message: 'should not have 1', match: true },
+			{ pattern: /2/m, message: 'should have 2', match: false },
+			{ pattern: /3/m, message: 'should not have 3', match: true },
+		],
+	};
+
+	comp.detect = {
+		content: '1',
+		language: 'engine',
+	};
+	let msg = comp.verifyRuleSyntax();
+	expect(msg).toBe('should not have 1');
+
+	comp.detect.content = '2';
+	msg = comp.verifyRuleSyntax();
+	expect(msg).toBe(null);
+
+	comp.detect.content = '3';
+	msg = comp.verifyRuleSyntax();
+	expect(msg).toBe('should have 2');
+
+	comp.detect.content = '23';
+	msg = comp.verifyRuleSyntax();
+	expect(msg).toBe('should not have 3');
+
+	comp.detect.content = '123';
+	msg = comp.verifyRuleSyntax();
+	expect(msg).toBe('should not have 1');
+
+	comp.detect.content = '321';
+	msg = comp.verifyRuleSyntax();
+	expect(msg).toBe('should not have 1');
+
+	comp.detect.content = '24';
+	msg = comp.verifyRuleSyntax();
+	expect(msg).toBe(null);
+});
+
+test('verifyRuleSyntax - Sigma', () => {
+	comp.detect = {
+		language: 'sigma',
+		content: ''
+	};
+
+	let msg = comp.verifyRuleSyntax();
+	expect(msg).toBe(comp.i18n.invalidDetectionElastAlertMissingID);
+
+	comp.detect.content = 'id: 123\n';
+	msg = comp.verifyRuleSyntax();
+	expect(msg).toBe(null);
+});
+
+test('verifyRuleSyntax - Suricata', () => {
+	comp.detect = {
+		language: 'suricata',
+		content: '\n',
+	};
+
+	let msg = comp.verifyRuleSyntax();
+	expect(msg).toBe(comp.i18n.invalidDetectionSuricataNewLine);
+
+	comp.detect.content = '';
+	msg = comp.verifyRuleSyntax();
+	expect(msg).toBe(comp.i18n.invalidDetectionSuricataMissingSID);
+
+	comp.detect.content = 'sid: 123;';
+	msg = comp.verifyRuleSyntax();
+	expect(msg).toBe(null);
+});
+
+test('verifyRuleSyntax - YARA', () => {
+	comp.detect = {
+		language: 'yara',
+		content: '',
+	};
+
+	let msg = comp.verifyRuleSyntax();
+	expect(msg).toBe(comp.i18n.invalidDetectionStrelkaMissingRuleName);
+
+	comp.detect.content = 'rule X {}';
+	msg = comp.verifyRuleSyntax();
+	expect(msg).toBe(comp.i18n.invalidDetectionStrelkaMissingCondition);
+
+	comp.detect.content = 'rule X { condition: }';
+	msg = comp.verifyRuleSyntax();
+	expect(msg).toBe(null);
+});
+
+test('validateElastAlert', () => {
+	comp.detect = {
+		publicId: 'A',
+		content: 'id: B',
+		language: 'sigma',
+	};
+	let msg = comp.validateElastAlert();
+	expect(msg).toBe(comp.i18n.idMismatchErr);
+
+	comp.detect.content = 'id: A';
+	msg = comp.validateElastAlert();
+	expect(msg).toBe(comp.i18n.invalidDetectionElastAlertMissingDetectionLogic);
+
+	comp.detect.content += '\ndetection: {}'
+	msg = comp.validateElastAlert();
+	expect(msg).toBe(null);
+});
+
+test('validateSuricata', () => {
+	comp.detect = {
+		publicId: '100000',
+		content: 'alert http any any <> any any (sid: 999999;)',
+		language: 'suricata',
+	};
+	let msg = comp.validateSuricata();
+	expect(msg).toBe(comp.i18n.invalidDetectionSuricataSIDMismatch);
+
+	comp.detect.publicId = '999999';
+	msg = comp.validateSuricata();
+	expect(msg).toBe(null);
 });
