@@ -173,6 +173,19 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			},
 			changedKeys: {},
 			changedOverrideKeys: {},
+			ruleValidators: {
+				sigma: [
+					{ pattern: /^id:\s*[^$]+?$/m, message: this.$root.i18n.invalidDetectionElastAlertMissingID, match: false },
+				],
+				suricata: [
+					{ pattern: /\n/, message: this.$root.i18n.invalidDetectionSuricataNewLine, match: true },
+					{ pattern: /sid:\s?(["']?)\d+\1;/, message: this.$root.i18n.invalidDetectionSuricataMissingSID, match: false },
+				],
+				yara: [
+					{ pattern: /rule\s+[a-zA-Z0-9][a-zA-Z0-9_]*/, message: this.$root.i18n.invalidDetectionStrelkaMissingRuleName, match: false },
+					{ pattern: /condition:/m, message: this.$root.i18n.invalidDetectionStrelkaMissingCondition, match: false },
+				],
+			},
 	}},
 	created() {
 		this.$root.initializeEditor();
@@ -766,11 +779,11 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			}
 
 			let err;
-			switch (this.detect.engine) {
-				case 'strelka':
+			switch (this.detect.language.toLowerCase()) {
+				case 'yara':
 					err = this.validateStrelka();
 					break;
-				case 'elastalert':
+				case 'sigma':
 					err = this.validateElastAlert();
 					break;
 				case 'suricata':
@@ -869,18 +882,43 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				this.$root.stopLoading();
 			}
 		},
-		validateStrelka() {
+		verifyRuleSyntax() {
+			const rules = this.ruleValidators[this.detect.language.toLowerCase()];
+			for (let i = 0; i < rules.length; i++) {
+				if (rules[i].pattern.test(this.detect.content) === rules[i].match) {
+					return rules[i].message;
+				}
+			}
+
 			return null;
+		},
+		validateStrelka() {
+			try {
+				let err = this.verifyRuleSyntax();
+				if (err) {
+					return err;
+				}
+
+				return null;
+			} catch (e) {
+				return e;
+			}
 		},
 		validateElastAlert() {
 			try {
-				const id = this.extractElastAlertPublicID();
-				if (!id) {
-					throw this.i18n.idMissingErr;
+				let err = this.verifyRuleSyntax();
+				if (err) {
+					return err;
 				}
 
+				const id = this.extractElastAlertPublicID();
 				if (this.detect.publicId && this.detect.publicId !== id) {
 					throw this.i18n.idMismatchErr;
+				}
+
+				const detLogic = this.extractElastAlertDetection();
+				if (!detLogic) {
+					throw this.i18n.invalidDetectionElastAlertMissingDetectionLogic;
 				}
 
 				return null;
@@ -890,11 +928,16 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		validateSuricata() {
 			try {
+				let err = this.verifyRuleSyntax();
+				if (err) {
+					return err;
+				}
+
 				const sid = this.extractSuricataPublicID();
 
-				if (this.detect.publicId !== sid) {
+				if (!this.isNew() && this.detect.publicId !== sid) {
 					// sid doesn't match metadata
-					return this.i18n.sidMismatchErr;
+					return this.i18n.invalidDetectionSuricataSIDMismatch;
 				}
 			} catch (e) {
 				return e;
@@ -968,6 +1011,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			const yaml = jsyaml.load(this.detect.content, {schema: jsyaml.FAILSAFE_SCHEMA});
 			return yaml['id'];
 		},
+		extractElastAlertDetection() {
+			const yaml = jsyaml.load(this.detect.content, {schema: jsyaml.FAILSAFE_SCHEMA});
+			return yaml['detection'];
+		},
 		extractElastAlertSeverity() {
 			const yaml = jsyaml.load(this.detect.content, {schema: jsyaml.FAILSAFE_SCHEMA});
 			const level = yaml['level'];
@@ -994,7 +1041,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					}
 				}
 
-				this.detect.content = this.ruleTemplates[engine].replaceAll('[publicId]', publicId);
+				this.detect.content = this.ruleTemplates[engine].replaceAll('[publicId]', publicId).trim();
 			}
 
 			this.onDetectionChange();
