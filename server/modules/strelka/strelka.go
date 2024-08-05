@@ -233,6 +233,10 @@ func (e *StrelkaEngine) ValidateRule(data string) (string, error) {
 		return "", err
 	}
 
+	if len(rules) != 1 {
+		return "", fmt.Errorf("expected exactly 1 rule, got %d", len(rules))
+	}
+
 	return string(data), nil
 }
 

@@ -135,6 +135,10 @@ func (e *SigmaRule) Validate() error {
 	// check required fields
 	requiredFields := []string{}
 
+	if e.ID == nil || len(*e.ID) == 0 {
+		requiredFields = append(requiredFields, "id")
+	}
+
 	if len(e.Title) == 0 {
 		requiredFields = append(requiredFields, "title")
 	}
