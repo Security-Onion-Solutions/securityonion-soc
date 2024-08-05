@@ -149,7 +149,7 @@ func (e *StrelkaEngine) Start() error {
 	go func() {
 		logger := log.WithField("detectionEngine", model.EngineNameStrelka)
 
-		err := detections.RefreshAiSummaries(e, model.EngineNameStrelka, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+		err := detections.RefreshAiSummaries(e, model.SigLangYara, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
 		if err != nil {
 			if errors.Is(err, detections.ErrModuleStopped) {
 				return
@@ -284,7 +284,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 	e.writeNoRead = nil
 
-	err := detections.RefreshAiSummaries(e, model.EngineNameStrelka, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+	err := detections.RefreshAiSummaries(e, model.SigLangYara, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
 	if err != nil {
 		if errors.Is(err, detections.ErrModuleStopped) {
 			return err

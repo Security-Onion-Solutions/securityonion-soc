@@ -25,7 +25,7 @@ func TestRefreshAiSummaries(t *testing.T) {
 
 	iom.EXPECT().ReadDir("baseRepoFolder").Return([]fs.DirEntry{}, nil)
 	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo1", repo).Return(nil)
-	iom.EXPECT().ReadFile("baseRepoFolder/repo1/detections-ai/detections-ai-elastalert.yml").Return([]byte(summaries), nil)
+	iom.EXPECT().ReadFile("baseRepoFolder/repo1/detections-ai/elastalert_summaries.yml").Return([]byte(summaries), nil)
 	loader.EXPECT().LoadAuxilleryData([]*model.AiSummary{
 		{
 			PublicId: "87e55c67-46f0-4a7b-a3c6-d473ab7e8392",
@@ -40,6 +40,6 @@ func TestRefreshAiSummaries(t *testing.T) {
 
 	logger := log.WithField("test", true)
 
-	err := RefreshAiSummaries(loader, model.EngineNameElastAlert, &isRunning, "baseRepoFolder", repo, iom, logger)
+	err := RefreshAiSummaries(loader, model.SigLangSigma, &isRunning, "baseRepoFolder", repo, iom, logger)
 	assert.NoError(t, err)
 }

@@ -180,7 +180,7 @@ func (e *SuricataEngine) Start() error {
 	go func() {
 		logger := log.WithField("detectionEngine", model.EngineNameSuricata)
 
-		err := detections.RefreshAiSummaries(e, model.EngineNameSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+		err := detections.RefreshAiSummaries(e, model.SigLangSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
 		if err != nil {
 			if errors.Is(err, detections.ErrModuleStopped) {
 				return
@@ -344,7 +344,7 @@ func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 	e.writeNoRead = nil
 
-	err := detections.RefreshAiSummaries(e, model.EngineNameSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+	err := detections.RefreshAiSummaries(e, model.SigLangSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
 	if err != nil {
 		if errors.Is(err, detections.ErrModuleStopped) {
 			return err

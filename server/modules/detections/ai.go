@@ -21,7 +21,7 @@ type AiLoader interface {
 
 //go:generate mockgen -destination mock/mock_ailoader.go -package mock . AiLoader
 
-func RefreshAiSummaries(eng AiLoader, engName model.EngineName, isRunning *bool, aiRepoPath string, aiRepoUrl string, iom IOManager, logger *log.Entry) error {
+func RefreshAiSummaries(eng AiLoader, lang model.SigLanguage, isRunning *bool, aiRepoPath string, aiRepoUrl string, iom IOManager, logger *log.Entry) error {
 	err := updateAiRepo(isRunning, aiRepoPath, aiRepoUrl, iom)
 	if err != nil {
 		if errors.Is(err, ErrModuleStopped) {
@@ -41,7 +41,7 @@ func RefreshAiSummaries(eng AiLoader, engName model.EngineName, isRunning *bool,
 		_, lastFolder := path.Split(parser.Path)
 		repoPath := filepath.Join(aiRepoPath, lastFolder)
 
-		sums, err := readAiSummary(repoPath, engName, iom)
+		sums, err := readAiSummary(repoPath, lang, iom)
 		if err != nil {
 			logger.WithError(err).WithField("repoPath", repoPath).Error("unable to read AI summary")
 		} else {
@@ -70,11 +70,11 @@ func updateAiRepo(isRunning *bool, baseRepoFolder string, repoUrl string, iom IO
 	return err
 }
 
-func readAiSummary(repoRoot string, engine model.EngineName, iom IOManager) (sums []*model.AiSummary, err error) {
+func readAiSummary(repoRoot string, lang model.SigLanguage, iom IOManager) (sums []*model.AiSummary, err error) {
 	aiRepoMutex.Lock()
 	defer aiRepoMutex.Unlock()
 
-	filename := fmt.Sprintf("detections-ai-%s.yml", engine)
+	filename := fmt.Sprintf("%s_summaries.yaml", lang)
 	targetFile := filepath.Join(repoRoot, "detections-ai/", filename)
 
 	raw, err := iom.ReadFile(targetFile)

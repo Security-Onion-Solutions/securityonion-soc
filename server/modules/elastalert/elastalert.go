@@ -200,7 +200,7 @@ func (e *ElastAlertEngine) Start() error {
 	go func() {
 		logger := log.WithField("detectionEngine", model.EngineNameElastAlert)
 
-		err := detections.RefreshAiSummaries(e, model.EngineNameElastAlert, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+		err := detections.RefreshAiSummaries(e, model.SigLangSigma, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
 		if err != nil {
 			if errors.Is(err, detections.ErrModuleStopped) {
 				return
@@ -462,7 +462,7 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 	e.writeNoRead = nil
 
-	err := detections.RefreshAiSummaries(e, model.EngineNameElastAlert, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+	err := detections.RefreshAiSummaries(e, model.SigLangSigma, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
 	if err != nil {
 		if errors.Is(err, detections.ErrModuleStopped) {
 			return err
