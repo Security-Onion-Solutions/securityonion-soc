@@ -180,7 +180,7 @@ func (e *SuricataEngine) Start() error {
 	go func() {
 		logger := log.WithField("detectionEngine", model.EngineNameSuricata)
 
-		err := detections.RefreshAiSummaries(e, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+		err := detections.RefreshAiSummaries(e, model.EngineNameSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
 		if err != nil {
 			if errors.Is(err, detections.ErrModuleStopped) {
 				return
@@ -344,7 +344,7 @@ func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 	e.writeNoRead = nil
 
-	err := detections.RefreshAiSummaries(e, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+	err := detections.RefreshAiSummaries(e, model.EngineNameSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
 	if err != nil {
 		if errors.Is(err, detections.ErrModuleStopped) {
 			return err
@@ -1730,7 +1730,7 @@ func (e *SuricataEngine) DuplicateDetection(ctx context.Context, detection *mode
 	return det, nil
 }
 
-func (e *SuricataEngine) LoadAuxilleryData(summaries []*detections.AiSummary) error {
+func (e *SuricataEngine) LoadAuxilleryData(summaries []*model.AiSummary) error {
 	sum := &sync.Map{}
 	for _, summary := range summaries {
 		sum.Store(summary.PublicId, summary)
@@ -1744,7 +1744,7 @@ func (e *SuricataEngine) LoadAuxilleryData(summaries []*detections.AiSummary) er
 func (e *SuricataEngine) MergeAuxilleryData(detect *model.Detection) error {
 	obj, ok := e.aiSummaries.Load(detect.PublicID)
 	if ok {
-		summary := obj.(*detections.AiSummary)
+		summary := obj.(*model.AiSummary)
 		detect.AiFields = &model.AiFields{
 			AiSummary:         summary.Summary,
 			AiSummaryReviewed: summary.Reviewed,

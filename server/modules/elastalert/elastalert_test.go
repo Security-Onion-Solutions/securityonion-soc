@@ -1389,7 +1389,7 @@ func TestLoadAndMergeAuxilleryData(t *testing.T) {
 	}
 
 	e := ElastAlertEngine{}
-	e.LoadAuxilleryData([]*detections.AiSummary{
+	e.LoadAuxilleryData([]*model.AiSummary{
 		{
 			PublicId: "83b3a29f-3009-4884-86c6-b6c3973788fa",
 			Summary:  "Summary for 83b3a29f-3009-4884-86c6-b6c3973788fa",

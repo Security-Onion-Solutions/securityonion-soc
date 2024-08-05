@@ -200,7 +200,7 @@ func (e *ElastAlertEngine) Start() error {
 	go func() {
 		logger := log.WithField("detectionEngine", model.EngineNameElastAlert)
 
-		err := detections.RefreshAiSummaries(e, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+		err := detections.RefreshAiSummaries(e, model.EngineNameElastAlert, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
 		if err != nil {
 			if errors.Is(err, detections.ErrModuleStopped) {
 				return
@@ -462,7 +462,7 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 	e.writeNoRead = nil
 
-	err := detections.RefreshAiSummaries(e, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+	err := detections.RefreshAiSummaries(e, model.EngineNameElastAlert, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
 	if err != nil {
 		if errors.Is(err, detections.ErrModuleStopped) {
 			return err
@@ -1462,7 +1462,7 @@ func (e *ElastAlertEngine) DuplicateDetection(ctx context.Context, detection *mo
 	return det, nil
 }
 
-func (e *ElastAlertEngine) LoadAuxilleryData(summaries []*detections.AiSummary) error {
+func (e *ElastAlertEngine) LoadAuxilleryData(summaries []*model.AiSummary) error {
 	sum := &sync.Map{}
 	for _, summary := range summaries {
 		sum.Store(summary.PublicId, summary)
@@ -1476,7 +1476,7 @@ func (e *ElastAlertEngine) LoadAuxilleryData(summaries []*detections.AiSummary) 
 func (e *ElastAlertEngine) MergeAuxilleryData(detect *model.Detection) error {
 	obj, ok := e.aiSummaries.Load(detect.PublicID)
 	if ok {
-		summary := obj.(*detections.AiSummary)
+		summary := obj.(*model.AiSummary)
 		detect.AiFields = &model.AiFields{
 			AiSummary:         summary.Summary,
 			AiSummaryReviewed: summary.Reviewed,

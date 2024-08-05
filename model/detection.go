@@ -361,3 +361,9 @@ type AuditInfo struct {
 	Op        string
 	Detection *Detection
 }
+
+type AiSummary struct {
+	PublicId string `yaml:"public_id"`
+	Reviewed bool   `yaml:"reviewed"`
+	Summary  string `yaml:"summary"`
+}

@@ -1278,7 +1278,7 @@ func TestLoadAndMergeAuxilleryData(t *testing.T) {
 	}
 
 	e := StrelkaEngine{}
-	e.LoadAuxilleryData([]*detections.AiSummary{
+	e.LoadAuxilleryData([]*model.AiSummary{
 		{
 			PublicId: "_root_040_zip_Folder_deploy",
 			Summary:  "Summary for _root_040_zip_Folder_deploy",

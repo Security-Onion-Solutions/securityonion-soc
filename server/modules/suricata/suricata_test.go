@@ -2525,7 +2525,7 @@ func TestLoadAndMergeAuxilleryData(t *testing.T) {
 	}
 
 	e := SuricataEngine{}
-	e.LoadAuxilleryData([]*detections.AiSummary{
+	e.LoadAuxilleryData([]*model.AiSummary{
 		{
 			PublicId: "100001",
 			Summary:  "Summary for 100001",
