@@ -25,7 +25,6 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/handmock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
 	"github.com/elastic/go-elasticsearch/v8/esutil"
@@ -1078,6 +1077,8 @@ func TestSyncCommunitySuricata(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, test := range table {
 		test := test
 		t.Run(test.Name, func(t *testing.T) {
@@ -1096,7 +1097,11 @@ func TestSyncCommunitySuricata(t *testing.T) {
 
 			mod.isRunning = true
 
-			ctx := web.MarkChangedByUser(context.Background(), test.ChangedByUser)
+			if test.ChangedByUser {
+				for _, detect := range test.Detections {
+					detect.PersistChange = true
+				}
+			}
 
 			errMap, err := mod.syncCommunityDetections(ctx, nil, test.Detections, false, test.InitialSettings)
 

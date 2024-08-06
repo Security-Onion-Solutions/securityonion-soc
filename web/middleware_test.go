@@ -187,22 +187,8 @@ func compareJSON(jsn1 []byte, jsn2 []byte) (success bool, err error) {
 	var two interface{}
 
 	// this is guarded by prettyPrint
-	json.Unmarshal(jsn1, &one)
-	json.Unmarshal(jsn2, &two)
+	_ = json.Unmarshal(jsn1, &one)
+	_ = json.Unmarshal(jsn2, &two)
 
 	return reflect.DeepEqual(one, two), nil
-}
-
-func TestChangedByUser(t *testing.T) {
-	t.Parallel()
-
-	assert.False(t, IsChangedByUser(nil))
-
-	assert.False(t, IsChangedByUser(context.Background()))
-
-	ctx := MarkChangedByUser(context.Background(), true)
-	assert.True(t, IsChangedByUser(ctx))
-
-	ctx = MarkChangedByUser(context.Background(), false)
-	assert.False(t, IsChangedByUser(ctx))
 }

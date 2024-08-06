@@ -1124,8 +1124,6 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 	}()
 	errMap = map[string]string{}
 
-	changedByUser := web.IsChangedByUser(ctx)
-
 	if logger == nil {
 		logger = log.WithField("detectionEngine", model.EngineNameSuricata)
 	}
@@ -1241,7 +1239,7 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 		_, inEnabled := enabledIndex[sid]
 		_, inDisabled := disabledIndex[sid]
 
-		if changedByUser || inEnabled || inDisabled || modifiedByFilter {
+		if detect.PersistChange || inEnabled || inDisabled || modifiedByFilter {
 			// update enabled
 			enabledLines = updateEnabled(enabledLines, enabledIndex, sid, isFlowbits, detect)
 

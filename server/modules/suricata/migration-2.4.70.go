@@ -6,6 +6,7 @@
 package suricata
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"regexp"
@@ -13,7 +14,6 @@ import (
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
 	"gopkg.in/yaml.v3"
@@ -37,7 +37,7 @@ func (e *SuricataEngine) Migration2470(statePath string) error {
 
 	log.Info("suricata is now migrating to 2.4.70") // for support
 
-	ctx := web.MarkChangedByUser(e.srv.Context, true)
+	ctx := context.Background()
 
 	// read in idstools.yaml
 	enabled, disabled, err := e.m2470LoadEnabledDisabled()
@@ -106,6 +106,7 @@ func (e *SuricataEngine) Migration2470(statePath string) error {
 			continue
 		}
 
+		det.PersistChange = true
 		det.Kind = ""
 
 		_, err := e.srv.Detectionstore.UpdateDetection(ctx, det)
