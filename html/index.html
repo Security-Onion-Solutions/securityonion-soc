@@ -1144,20 +1144,16 @@
               <v-tab-item value="summary" data-aid="detection_summary">
                 <v-row class="contrast-bg rounded rounded-md pa-4">
                   <v-col>
-                    <template v-if="showAiSummary()">
-                      <div class="header">{{i18n.aiSummary}} <v-icon class="unset-vertical-align">fa-flask</v-icon></div>
-                      <div class="summary" data-aid="detection_summary_display">
-                        {{ detect.aiSummary }}
-                      </div>
-                      <div class="stale-summary" v-if="detect.isAiSummaryStale">
-                        ({{ i18n.aiSummaryStale }})
-                      </div>
-                    </template>
-                    <template v-else>
-                      <div class="header">{{i18n.summary}}</div>
-                      <div class="summary" data-aid="detection_summary_display">
-                        {{ extractedSummary }}
-                      </div>
+                    <div class="header">{{i18n.summary}} <v-icon v-if="showAiSummary()" :title="i18n.aiGenSummary" class="unset-vertical-align">fa-flask</v-icon></div>
+                    <div class="summary" data-aid="detection_ai_summary_display" v-if="showAiSummary()">
+                      {{ detect.aiSummary }}
+                    </div>
+                    <div class="stale-summary" v-if="showAiSummary() && detect.isAiSummaryStale">
+                      ({{ i18n.aiSummaryStale }})
+                    </div>
+                    <div class="summary" v-else data-aid="detection_summary_display">
+                      {{ extractedSummary }}
+                    </div>
                     </template>
                     <div class="header">{{i18n.references}}</div>
                     <div class="reference-links" data-aid="detection_references_display">
