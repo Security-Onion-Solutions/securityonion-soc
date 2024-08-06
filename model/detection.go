@@ -363,7 +363,7 @@ type AuditInfo struct {
 }
 
 type AiSummary struct {
-	PublicId string `yaml:"public_id"`
-	Reviewed bool   `yaml:"reviewed"`
-	Summary  string `yaml:"summary"`
+	PublicId string
+	Reviewed bool   `yaml:"Reviewed"`
+	Summary  string `yaml:"Summary"`
 }

@@ -82,9 +82,16 @@ func readAiSummary(repoRoot string, lang model.SigLanguage, iom IOManager) (sums
 		return nil, err
 	}
 
-	err = yaml.Unmarshal(raw, &sums)
+	data := map[string]*model.AiSummary{}
+
+	err = yaml.Unmarshal(raw, data)
 	if err != nil {
 		return nil, err
+	}
+
+	for pid, sum := range data {
+		sum.PublicId = pid
+		sums = append(sums, sum)
 	}
 
 	return sums, nil
