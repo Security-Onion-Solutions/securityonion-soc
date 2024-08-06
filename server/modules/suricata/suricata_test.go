@@ -2184,9 +2184,10 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 		IntegrityCheckerData: detections.IntegrityCheckerData{
 			IsRunning: true,
 		},
-		IOManager:  iom,
-		aiRepoUrl:  "aiRepoUrl",
-		aiRepoPath: "aiRepoPath",
+		IOManager:       iom,
+		showAiSummaries: true,
+		aiRepoUrl:       "aiRepoUrl",
+		aiRepoPath:      "aiRepoPath",
 	}
 
 	logger := log.WithField("detectionEngine", "test-suricata")
@@ -2194,6 +2195,7 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 	// RefreshAiSummaries
 	iom.EXPECT().ReadDir("aiRepoPath").Return([]fs.DirEntry{}, nil)
 	iom.EXPECT().CloneRepo(gomock.Any(), "aiRepoPath/aiRepoUrl", "aiRepoUrl").Return(nil)
+	iom.EXPECT().ReadFile("aiRepoPath/aiRepoUrl/detections-ai/suricata_summaries.yaml").Return([]byte("{}"), nil)
 	// readAndHash
 	iom.EXPECT().ReadFile("communityRulesFile").Return([]byte(SimpleRule), nil)
 	// readFingerprint
@@ -2259,9 +2261,10 @@ func TestSyncChanges(t *testing.T) {
 		IntegrityCheckerData: detections.IntegrityCheckerData{
 			IsRunning: true,
 		},
-		IOManager:  iom,
-		aiRepoUrl:  "aiRepoUrl",
-		aiRepoPath: "aiRepoPath",
+		IOManager:       iom,
+		showAiSummaries: true,
+		aiRepoUrl:       "aiRepoUrl",
+		aiRepoPath:      "aiRepoPath",
 	}
 
 	logger := log.WithField("detectionEngine", "test-suricata")
@@ -2272,6 +2275,7 @@ func TestSyncChanges(t *testing.T) {
 	// RefreshAiSummaries
 	iom.EXPECT().ReadDir("aiRepoPath").Return([]fs.DirEntry{}, nil)
 	iom.EXPECT().CloneRepo(gomock.Any(), "aiRepoPath/aiRepoUrl", "aiRepoUrl").Return(nil)
+	iom.EXPECT().ReadFile("aiRepoPath/aiRepoUrl/detections-ai/suricata_summaries.yaml").Return([]byte("{}"), nil)
 	// readAndHash
 	iom.EXPECT().ReadFile("communityRulesFile").Return([]byte(SimpleRule+"\n"+FlowbitsRuleA), nil)
 	// syncCommunityDetections
@@ -2499,42 +2503,52 @@ func TestLoadAndMergeAuxilleryData(t *testing.T) {
 	tests := []struct {
 		Name              string
 		PublicId          string
+		Content           string
 		ExpectedAiFields  bool
 		ExpectedAiSummary string
 		ExpectedReviewed  bool
+		ExpectedStale     bool
 	}{
 		{
 			Name:             "No Auxillery Data",
 			PublicId:         "100000",
+			Content:          "alert",
 			ExpectedAiFields: false,
 		},
 		{
 			Name:              "Data, Unreviewed",
 			PublicId:          "100002",
+			Content:           "no-alert",
 			ExpectedAiFields:  true,
 			ExpectedAiSummary: "Summary for 100002",
 			ExpectedReviewed:  false,
+			ExpectedStale:     true,
 		},
 		{
 			Name:              "Data, Reviewed",
 			PublicId:          "100001",
+			Content:           "alert",
 			ExpectedAiFields:  true,
 			ExpectedAiSummary: "Summary for 100001",
 			ExpectedReviewed:  true,
 		},
 	}
 
-	e := SuricataEngine{}
+	e := SuricataEngine{
+		showAiSummaries: true,
+	}
 	e.LoadAuxilleryData([]*model.AiSummary{
 		{
-			PublicId: "100001",
-			Summary:  "Summary for 100001",
-			Reviewed: true,
+			PublicId:     "100001",
+			Summary:      "Summary for 100001",
+			RuleBodyHash: "7ed21143076d0cca420653d4345baa2f",
+			Reviewed:     true,
 		},
 		{
-			PublicId: "100002",
-			Summary:  "Summary for 100002",
-			Reviewed: false,
+			PublicId:     "100002",
+			Summary:      "Summary for 100002",
+			RuleBodyHash: "7ed21143076d0cca420653d4345baa2f",
+			Reviewed:     false,
 		},
 	})
 
@@ -2543,17 +2557,27 @@ func TestLoadAndMergeAuxilleryData(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			det := &model.Detection{
 				PublicID: test.PublicId,
+				Content:  test.Content,
 			}
 
+			e.showAiSummaries = true
 			err := e.MergeAuxilleryData(det)
 			assert.NoError(t, err)
 			if test.ExpectedAiFields {
 				assert.NotNil(t, det.AiFields)
 				assert.Equal(t, test.ExpectedAiSummary, det.AiSummary)
 				assert.Equal(t, test.ExpectedReviewed, det.AiSummaryReviewed)
+				assert.Equal(t, test.ExpectedStale, det.IsAiSummaryStale)
 			} else {
 				assert.Nil(t, det.AiFields)
 			}
+
+			e.showAiSummaries = false
+			det.AiFields = nil
+
+			err = e.MergeAuxilleryData(det)
+			assert.NoError(t, err)
+			assert.Nil(t, det.AiFields)
 		})
 	}
 }

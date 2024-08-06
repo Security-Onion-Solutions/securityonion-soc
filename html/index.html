@@ -1149,6 +1149,9 @@
                       <div class="summary" data-aid="detection_summary_display">
                         {{ detect.aiSummary }}
                       </div>
+                      <div class="stale-summary" v-if="detect.isAiSummaryStale">
+                        ({{ i18n.aiSummaryStale }})
+                      </div>
                     </template>
                     <template v-else>
                       <div class="header">{{i18n.summary}}</div>

@@ -9,6 +9,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/md5"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -61,7 +62,8 @@ const (
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT       = 10
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS        = 600
 	DEFAULT_AI_REPO                                  = "https://github.com/Security-Onion-Solutions/securityonion-resources"
-	DEFAULT_AI_REPO_LOC                              = "/opt/sensoroni/repos"
+	DEFAULT_AI_REPO_PATH                             = "/opt/sensoroni/repos"
+	DEFAULT_SHOW_AI_SUMMARIES                        = true
 )
 
 var ( // treat as constant
@@ -100,6 +102,7 @@ type ElastAlertEngine struct {
 	notify                         bool
 	writeNoRead                    *string
 	aiSummaries                    *sync.Map // map[string]*detections.AiSummary{}
+	showAiSummaries                bool
 	aiRepoUrl                      string
 	aiRepoPath                     string
 	detections.SyncSchedulerParams
@@ -181,8 +184,9 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 
 	e.SyncSchedulerParams.StateFilePath = module.GetStringDefault(config, "stateFilePath", DEFAULT_STATE_FILE_PATH)
 
+	e.showAiSummaries = module.GetBoolDefault(config, "showAiSummaries", DEFAULT_SHOW_AI_SUMMARIES)
 	e.aiRepoUrl = module.GetStringDefault(config, "aiRepoUrl", DEFAULT_AI_REPO)
-	e.aiRepoPath = module.GetStringDefault(config, "aiRepoPath", DEFAULT_AI_REPO_LOC)
+	e.aiRepoPath = module.GetStringDefault(config, "aiRepoPath", DEFAULT_AI_REPO_PATH)
 
 	return nil
 }
@@ -197,20 +201,22 @@ func (e *ElastAlertEngine) Start() error {
 	go detections.IntegrityChecker(model.EngineNameElastAlert, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
 
 	// update Ai Summaries once and don't block
-	go func() {
-		logger := log.WithField("detectionEngine", model.EngineNameElastAlert)
+	if e.showAiSummaries {
+		go func() {
+			logger := log.WithField("detectionEngine", model.EngineNameElastAlert)
 
-		err := detections.RefreshAiSummaries(e, model.SigLangSigma, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
-		if err != nil {
-			if errors.Is(err, detections.ErrModuleStopped) {
-				return
+			err := detections.RefreshAiSummaries(e, model.SigLangSigma, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+			if err != nil {
+				if errors.Is(err, detections.ErrModuleStopped) {
+					return
+				}
+
+				logger.WithError(err).Error("unable to refresh AI summaries")
+			} else {
+				logger.Info("successfully refreshed AI summaries")
 			}
-
-			logger.WithError(err).Error("unable to refresh AI summaries")
-		} else {
-			logger.Info("successfully refreshed AI summaries")
-		}
-	}()
+		}()
+	}
 
 	return nil
 }
@@ -462,15 +468,17 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 	e.writeNoRead = nil
 
-	err := detections.RefreshAiSummaries(e, model.SigLangSigma, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
-	if err != nil {
-		if errors.Is(err, detections.ErrModuleStopped) {
-			return err
-		}
+	if e.showAiSummaries {
+		err := detections.RefreshAiSummaries(e, model.SigLangSigma, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+		if err != nil {
+			if errors.Is(err, detections.ErrModuleStopped) {
+				return err
+			}
 
-		logger.WithError(err).Error("unable to refresh AI summaries")
-	} else {
-		logger.Info("successfully refreshed AI summaries")
+			logger.WithError(err).Error("unable to refresh AI summaries")
+		} else {
+			logger.Info("successfully refreshed AI summaries")
+		}
 	}
 
 	// announce the beginning of the sync
@@ -1474,12 +1482,18 @@ func (e *ElastAlertEngine) LoadAuxilleryData(summaries []*model.AiSummary) error
 }
 
 func (e *ElastAlertEngine) MergeAuxilleryData(detect *model.Detection) error {
-	obj, ok := e.aiSummaries.Load(detect.PublicID)
-	if ok {
-		summary := obj.(*model.AiSummary)
-		detect.AiFields = &model.AiFields{
-			AiSummary:         summary.Summary,
-			AiSummaryReviewed: summary.Reviewed,
+	if e.showAiSummaries {
+		obj, ok := e.aiSummaries.Load(detect.PublicID)
+		if ok {
+			sig := md5.Sum([]byte(detect.Content))
+			hexSig := hex.EncodeToString(sig[:])
+
+			summary := obj.(*model.AiSummary)
+			detect.AiFields = &model.AiFields{
+				AiSummary:         summary.Summary,
+				AiSummaryReviewed: summary.Reviewed,
+				IsAiSummaryStale:  !strings.EqualFold(summary.RuleBodyHash, hexSig),
+			}
 		}
 	}
 

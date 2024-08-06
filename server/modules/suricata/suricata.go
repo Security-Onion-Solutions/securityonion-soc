@@ -8,6 +8,7 @@ package suricata
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -56,7 +57,8 @@ const (
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT    = 10
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS     = 600
 	DEFAULT_AI_REPO                               = "https://github.com/Security-Onion-Solutions/securityonion-resources"
-	DEFAULT_AI_REPO_LOC                           = "/opt/sensoroni/repos"
+	DEFAULT_AI_REPO_PATH                          = "/opt/sensoroni/repos"
+	DEFAULT_SHOW_AI_SUMMARIES                     = true
 
 	CUSTOM_RULE_LOC = "/nsm/rules/detect-suricata/custom_temp"
 )
@@ -82,6 +84,7 @@ type SuricataEngine struct {
 	enableRegex                    []*regexp.Regexp
 	disableRegex                   []*regexp.Regexp
 	aiSummaries                    *sync.Map // map[string]*detections.AiSummary{}
+	showAiSummaries                bool
 	aiRepoUrl                      string
 	aiRepoPath                     string
 	detections.SyncSchedulerParams
@@ -161,8 +164,9 @@ func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 		return fmt.Errorf("unable to get custom rulesets: %w", err)
 	}
 
+	e.showAiSummaries = module.GetBoolDefault(config, "showAiSummaries", DEFAULT_SHOW_AI_SUMMARIES)
 	e.aiRepoUrl = module.GetStringDefault(config, "aiRepoUrl", DEFAULT_AI_REPO)
-	e.aiRepoPath = module.GetStringDefault(config, "aiRepoPath", DEFAULT_AI_REPO_LOC)
+	e.aiRepoPath = module.GetStringDefault(config, "aiRepoPath", DEFAULT_AI_REPO_PATH)
 
 	return nil
 }
@@ -177,20 +181,22 @@ func (e *SuricataEngine) Start() error {
 	go detections.IntegrityChecker(model.EngineNameSuricata, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
 
 	// update Ai Summaries once and don't block
-	go func() {
-		logger := log.WithField("detectionEngine", model.EngineNameSuricata)
+	if e.showAiSummaries {
+		go func() {
+			logger := log.WithField("detectionEngine", model.EngineNameSuricata)
 
-		err := detections.RefreshAiSummaries(e, model.SigLangSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
-		if err != nil {
-			if errors.Is(err, detections.ErrModuleStopped) {
-				return
+			err := detections.RefreshAiSummaries(e, model.SigLangSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+			if err != nil {
+				if errors.Is(err, detections.ErrModuleStopped) {
+					return
+				}
+
+				logger.WithError(err).Error("unable to refresh AI summaries")
+			} else {
+				logger.Info("successfully refreshed AI summaries")
 			}
-
-			logger.WithError(err).Error("unable to refresh AI summaries")
-		} else {
-			logger.Info("successfully refreshed AI summaries")
-		}
-	}()
+		}()
+	}
 
 	return nil
 }
@@ -344,15 +350,17 @@ func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 	e.writeNoRead = nil
 
-	err := detections.RefreshAiSummaries(e, model.SigLangSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
-	if err != nil {
-		if errors.Is(err, detections.ErrModuleStopped) {
-			return err
-		}
+	if e.showAiSummaries {
+		err := detections.RefreshAiSummaries(e, model.SigLangSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+		if err != nil {
+			if errors.Is(err, detections.ErrModuleStopped) {
+				return err
+			}
 
-		logger.WithError(err).Error("unable to refresh AI summaries")
-	} else {
-		logger.Info("successfully refreshed AI summaries")
+			logger.WithError(err).Error("unable to refresh AI summaries")
+		} else {
+			logger.Info("successfully refreshed AI summaries")
+		}
 	}
 
 	e.EngineState.Syncing = true
@@ -1742,12 +1750,18 @@ func (e *SuricataEngine) LoadAuxilleryData(summaries []*model.AiSummary) error {
 }
 
 func (e *SuricataEngine) MergeAuxilleryData(detect *model.Detection) error {
-	obj, ok := e.aiSummaries.Load(detect.PublicID)
-	if ok {
-		summary := obj.(*model.AiSummary)
-		detect.AiFields = &model.AiFields{
-			AiSummary:         summary.Summary,
-			AiSummaryReviewed: summary.Reviewed,
+	if e.showAiSummaries {
+		obj, ok := e.aiSummaries.Load(detect.PublicID)
+		if ok {
+			sig := md5.Sum([]byte(detect.Content))
+			hexSig := hex.EncodeToString(sig[:])
+
+			summary := obj.(*model.AiSummary)
+			detect.AiFields = &model.AiFields{
+				AiSummary:         summary.Summary,
+				AiSummaryReviewed: summary.Reviewed,
+				IsAiSummaryStale:  !strings.EqualFold(summary.RuleBodyHash, hexSig),
+			}
 		}
 	}
 

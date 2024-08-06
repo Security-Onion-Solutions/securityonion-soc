@@ -67,6 +67,7 @@ const i18n = {
       advanced: 'Temporarily enable advanced interface features',
       ago: 'ago',
       aiSummary: 'AI Summary',
+      aiSummaryStale: 'This AI summary was generated for a previous version of the detection and may not be accurate.',
       alertAcknowledge: 'Acknowledge',
       alertEscalated: 'This alert has already been escalated',
       alertUndoAcknowledge: 'Undo Acknowledge',

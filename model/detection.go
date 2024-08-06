@@ -128,6 +128,7 @@ type Detection struct {
 type AiFields struct {
 	AiSummary         string `json:"aiSummary"`
 	AiSummaryReviewed bool   `json:"aiSummaryReviewed"`
+	IsAiSummaryStale  bool   `json:"isSummaryStale"`
 }
 
 type DetectionComment struct {
@@ -363,7 +364,8 @@ type AuditInfo struct {
 }
 
 type AiSummary struct {
-	PublicId string
-	Reviewed bool   `yaml:"Reviewed"`
-	Summary  string `yaml:"Summary"`
+	PublicId     string
+	Reviewed     bool   `yaml:"Reviewed"`
+	Summary      string `yaml:"Summary"`
+	RuleBodyHash string `yaml:"Rule-Body-Hash"`
 }

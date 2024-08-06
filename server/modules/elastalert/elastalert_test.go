@@ -1107,9 +1107,10 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 		IntegrityCheckerData: detections.IntegrityCheckerData{
 			IsRunning: true,
 		},
-		IOManager:  iom,
-		aiRepoUrl:  "aiRepoUrl",
-		aiRepoPath: "aiRepoPath",
+		IOManager:       iom,
+		showAiSummaries: true,
+		aiRepoUrl:       "aiRepoUrl",
+		aiRepoPath:      "aiRepoPath",
 	}
 
 	logger := log.WithField("detectionEngine", "test-elastalert")
@@ -1117,6 +1118,7 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 	// RefreshAiSummaries
 	iom.EXPECT().ReadDir("aiRepoPath").Return([]fs.DirEntry{}, nil)
 	iom.EXPECT().CloneRepo(gomock.Any(), "aiRepoPath/aiRepoUrl", "aiRepoUrl").Return(nil)
+	iom.EXPECT().ReadFile("aiRepoPath/aiRepoUrl/detections-ai/sigma_summaries.yaml").Return([]byte("{}"), nil)
 	// checkSigmaPipelines
 	iom.EXPECT().ReadFile("sigmaPipelineFinal").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
@@ -1205,9 +1207,10 @@ func TestSyncChanges(t *testing.T) {
 		IntegrityCheckerData: detections.IntegrityCheckerData{
 			IsRunning: true,
 		},
-		IOManager:  iom,
-		aiRepoUrl:  "aiRepoUrl",
-		aiRepoPath: "aiRepoPath",
+		IOManager:       iom,
+		showAiSummaries: true,
+		aiRepoUrl:       "aiRepoUrl",
+		aiRepoPath:      "aiRepoPath",
 	}
 
 	logger := log.WithField("detectionEngine", "test-elastalert")
@@ -1218,6 +1221,7 @@ func TestSyncChanges(t *testing.T) {
 	// RefreshAiSummaries
 	iom.EXPECT().ReadDir("aiRepoPath").Return([]fs.DirEntry{}, nil)
 	iom.EXPECT().CloneRepo(gomock.Any(), "aiRepoPath/aiRepoUrl", "aiRepoUrl").Return(nil)
+	iom.EXPECT().ReadFile("aiRepoPath/aiRepoUrl/detections-ai/sigma_summaries.yaml").Return([]byte("{}"), nil)
 	// checkSigmaPipelines
 	iom.EXPECT().ReadFile("sigmaPipelineFinal").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
@@ -1363,9 +1367,11 @@ func TestLoadAndMergeAuxilleryData(t *testing.T) {
 	tests := []struct {
 		Name              string
 		PublicId          string
+		Content           string
 		ExpectedAiFields  bool
 		ExpectedAiSummary string
 		ExpectedReviewed  bool
+		ExpectedStale     bool
 	}{
 		{
 			Name:             "No Auxillery Data",
@@ -1375,30 +1381,38 @@ func TestLoadAndMergeAuxilleryData(t *testing.T) {
 		{
 			Name:              "Data, Unreviewed",
 			PublicId:          "67ee455d-099f-4048-b021-43bb91af9298",
+			Content:           "alert",
 			ExpectedAiFields:  true,
 			ExpectedAiSummary: "Summary for 67ee455d-099f-4048-b021-43bb91af9298",
 			ExpectedReviewed:  false,
+			ExpectedStale:     false,
 		},
 		{
 			Name:              "Data, Reviewed",
 			PublicId:          "83b3a29f-3009-4884-86c6-b6c3973788fa",
+			Content:           "no-alert",
 			ExpectedAiFields:  true,
 			ExpectedAiSummary: "Summary for 83b3a29f-3009-4884-86c6-b6c3973788fa",
 			ExpectedReviewed:  true,
+			ExpectedStale:     true,
 		},
 	}
 
-	e := ElastAlertEngine{}
+	e := ElastAlertEngine{
+		showAiSummaries: true,
+	}
 	e.LoadAuxilleryData([]*model.AiSummary{
 		{
-			PublicId: "83b3a29f-3009-4884-86c6-b6c3973788fa",
-			Summary:  "Summary for 83b3a29f-3009-4884-86c6-b6c3973788fa",
-			Reviewed: true,
+			PublicId:     "83b3a29f-3009-4884-86c6-b6c3973788fa",
+			Summary:      "Summary for 83b3a29f-3009-4884-86c6-b6c3973788fa",
+			Reviewed:     true,
+			RuleBodyHash: "7ed21143076d0cca420653d4345baa2f",
 		},
 		{
-			PublicId: "67ee455d-099f-4048-b021-43bb91af9298",
-			Summary:  "Summary for 67ee455d-099f-4048-b021-43bb91af9298",
-			Reviewed: false,
+			PublicId:     "67ee455d-099f-4048-b021-43bb91af9298",
+			Summary:      "Summary for 67ee455d-099f-4048-b021-43bb91af9298",
+			Reviewed:     false,
+			RuleBodyHash: "7ed21143076d0cca420653d4345baa2f",
 		},
 	})
 
@@ -1407,17 +1421,27 @@ func TestLoadAndMergeAuxilleryData(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			det := &model.Detection{
 				PublicID: test.PublicId,
+				Content:  test.Content,
 			}
 
+			e.showAiSummaries = true
 			err := e.MergeAuxilleryData(det)
 			assert.NoError(t, err)
 			if test.ExpectedAiFields {
 				assert.NotNil(t, det.AiFields)
 				assert.Equal(t, test.ExpectedAiSummary, det.AiSummary)
 				assert.Equal(t, test.ExpectedReviewed, det.AiSummaryReviewed)
+				assert.Equal(t, test.ExpectedStale, det.IsAiSummaryStale)
 			} else {
 				assert.Nil(t, det.AiFields)
 			}
+
+			e.showAiSummaries = false
+			det.AiFields = nil
+
+			err = e.MergeAuxilleryData(det)
+			assert.NoError(t, err)
+			assert.Nil(t, det.AiFields)
 		})
 	}
 }
