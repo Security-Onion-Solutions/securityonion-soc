@@ -40,6 +40,6 @@ func TestRefreshAiSummaries(t *testing.T) {
 
 	logger := log.WithField("test", true)
 
-	err := RefreshAiSummaries(loader, model.SigLangSigma, &isRunning, "baseRepoFolder", repo, iom, logger)
+	err := RefreshAiSummaries(loader, model.SigLangSigma, &isRunning, "baseRepoFolder", repo, logger, iom)
 	assert.NoError(t, err)
 }

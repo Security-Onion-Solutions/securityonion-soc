@@ -205,7 +205,7 @@ func (e *ElastAlertEngine) Start() error {
 		go func() {
 			logger := log.WithField("detectionEngine", model.EngineNameElastAlert)
 
-			err := detections.RefreshAiSummaries(e, model.SigLangSigma, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+			err := detections.RefreshAiSummaries(e, model.SigLangSigma, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, logger, e.IOManager)
 			if err != nil {
 				if errors.Is(err, detections.ErrModuleStopped) {
 					return
@@ -469,7 +469,7 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 	e.writeNoRead = nil
 
 	if e.showAiSummaries {
-		err := detections.RefreshAiSummaries(e, model.SigLangSigma, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+		err := detections.RefreshAiSummaries(e, model.SigLangSigma, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, logger, e.IOManager)
 		if err != nil {
 			if errors.Is(err, detections.ErrModuleStopped) {
 				return err
@@ -1477,6 +1477,11 @@ func (e *ElastAlertEngine) LoadAuxilleryData(summaries []*model.AiSummary) error
 	}
 
 	e.aiSummaries = sum
+
+	log.WithFields(log.Fields{
+		"detectionEngine": model.EngineNameElastAlert,
+		"aiSummaryCount":  len(summaries),
+	}).Info("loaded AI summaries")
 
 	return nil
 }

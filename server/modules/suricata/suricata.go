@@ -185,7 +185,7 @@ func (e *SuricataEngine) Start() error {
 		go func() {
 			logger := log.WithField("detectionEngine", model.EngineNameSuricata)
 
-			err := detections.RefreshAiSummaries(e, model.SigLangSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+			err := detections.RefreshAiSummaries(e, model.SigLangSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, logger, e.IOManager)
 			if err != nil {
 				if errors.Is(err, detections.ErrModuleStopped) {
 					return
@@ -351,7 +351,7 @@ func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 	e.writeNoRead = nil
 
 	if e.showAiSummaries {
-		err := detections.RefreshAiSummaries(e, model.SigLangSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+		err := detections.RefreshAiSummaries(e, model.SigLangSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, logger, e.IOManager)
 		if err != nil {
 			if errors.Is(err, detections.ErrModuleStopped) {
 				return err
@@ -1745,6 +1745,11 @@ func (e *SuricataEngine) LoadAuxilleryData(summaries []*model.AiSummary) error {
 	}
 
 	e.aiSummaries = sum
+
+	log.WithFields(log.Fields{
+		"detectionEngine": model.EngineNameSuricata,
+		"aiSummaryCount":  len(summaries),
+	}).Info("loaded AI summaries")
 
 	return nil
 }

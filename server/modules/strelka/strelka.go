@@ -51,7 +51,7 @@ const (
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT       = 10
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS        = 600
 	DEFAULT_AI_REPO                                  = "https://github.com/Security-Onion-Solutions/securityonion-resources"
-	DEFAULT_AI_REPO_PATH                              = "/opt/sensoroni/repos"
+	DEFAULT_AI_REPO_PATH                             = "/opt/sensoroni/repos"
 	DEFAULT_SHOW_AI_SUMMARIES                        = true
 )
 
@@ -154,7 +154,7 @@ func (e *StrelkaEngine) Start() error {
 		go func() {
 			logger := log.WithField("detectionEngine", model.EngineNameStrelka)
 
-			err := detections.RefreshAiSummaries(e, model.SigLangYara, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+			err := detections.RefreshAiSummaries(e, model.SigLangYara, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, logger, e.IOManager)
 			if err != nil {
 				if errors.Is(err, detections.ErrModuleStopped) {
 					return
@@ -291,7 +291,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 	e.writeNoRead = nil
 
 	if e.showAiSummaries {
-		err := detections.RefreshAiSummaries(e, model.SigLangYara, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.IOManager, logger)
+		err := detections.RefreshAiSummaries(e, model.SigLangYara, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, logger, e.IOManager)
 		if err != nil {
 			if errors.Is(err, detections.ErrModuleStopped) {
 				return err
@@ -1136,6 +1136,11 @@ func (e *StrelkaEngine) LoadAuxilleryData(summaries []*model.AiSummary) error {
 	}
 
 	e.aiSummaries = sum
+
+	log.WithFields(log.Fields{
+		"detectionEngine": model.EngineNameStrelka,
+		"aiSummaryCount":  len(summaries),
+	}).Info("loaded AI summaries")
 
 	return nil
 }

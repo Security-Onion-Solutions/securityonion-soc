@@ -21,7 +21,7 @@ type AiLoader interface {
 
 //go:generate mockgen -destination mock/mock_ailoader.go -package mock . AiLoader
 
-func RefreshAiSummaries(eng AiLoader, lang model.SigLanguage, isRunning *bool, aiRepoPath string, aiRepoUrl string, iom IOManager, logger *log.Entry) error {
+func RefreshAiSummaries(eng AiLoader, lang model.SigLanguage, isRunning *bool, aiRepoPath string, aiRepoUrl string, logger *log.Entry, iom IOManager) error {
 	err := updateAiRepo(isRunning, aiRepoPath, aiRepoUrl, iom)
 	if err != nil {
 		if errors.Is(err, ErrModuleStopped) {
@@ -36,14 +36,14 @@ func RefreshAiSummaries(eng AiLoader, lang model.SigLanguage, isRunning *bool, a
 
 	parser, err := url.Parse(aiRepoUrl)
 	if err != nil {
-		log.WithError(err).WithField("aiRepoUrl", aiRepoUrl).Error("Failed to parse repo URL, doing nothing with it")
+		log.WithError(err).WithField("aiRepoUrl", aiRepoUrl).Error("failed to parse repo URL, doing nothing with it")
 	} else {
 		_, lastFolder := path.Split(parser.Path)
 		repoPath := filepath.Join(aiRepoPath, lastFolder)
 
-		sums, err := readAiSummary(repoPath, lang, iom)
+		sums, err := readAiSummary(repoPath, lang, logger, iom)
 		if err != nil {
-			logger.WithError(err).WithField("repoPath", repoPath).Error("unable to read AI summary")
+			logger.WithError(err).WithField("repoPath", repoPath).Error("unable to read AI summaries")
 		} else {
 			err = eng.LoadAuxilleryData(sums)
 			if err != nil {
@@ -70,12 +70,14 @@ func updateAiRepo(isRunning *bool, baseRepoFolder string, repoUrl string, iom IO
 	return err
 }
 
-func readAiSummary(repoRoot string, lang model.SigLanguage, iom IOManager) (sums []*model.AiSummary, err error) {
+func readAiSummary(repoRoot string, lang model.SigLanguage, logger *log.Entry, iom IOManager) (sums []*model.AiSummary, err error) {
 	aiRepoMutex.Lock()
 	defer aiRepoMutex.Unlock()
 
 	filename := fmt.Sprintf("%s_summaries.yaml", lang)
 	targetFile := filepath.Join(repoRoot, "detections-ai/", filename)
+
+	logger.WithField("targetFile", targetFile).Info("reading AI summaries")
 
 	raw, err := iom.ReadFile(targetFile)
 	if err != nil {
@@ -93,6 +95,8 @@ func readAiSummary(repoRoot string, lang model.SigLanguage, iom IOManager) (sums
 		sum.PublicId = pid
 		sums = append(sums, sum)
 	}
+
+	logger.WithField("aiSummaryCount", len(sums)).Info("successfully read AI summary")
 
 	return sums, nil
 }
