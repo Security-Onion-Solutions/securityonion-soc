@@ -284,7 +284,7 @@ func TestSyncStrelka(t *testing.T) {
 	}{
 		{
 			Name: "Enable Simple Rules",
-			InitMock: func(mockDetStore *servermock.MockDetectionstore, mio *mock.MockIOManager) {
+			InitMock: func(mockDetStore *servermock.MockDetectionstore, iom *mock.MockIOManager) {
 				mockDetStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
 					"1": {
 						PublicID:  "1",
@@ -300,11 +300,11 @@ func TestSyncStrelka(t *testing.T) {
 					},
 				}, nil)
 
-				mio.EXPECT().ReadDir("yaraRulesFolder").Return(nil, nil)
+				iom.EXPECT().ReadDir("yaraRulesFolder").Return(nil, nil)
 
-				mio.EXPECT().WriteFile(gomock.Any(), []byte(simpleRule), fs.FileMode(0644)).Return(nil).MaxTimes(2)
+				iom.EXPECT().WriteFile(gomock.Any(), []byte(simpleRule), fs.FileMode(0644)).Return(nil).MaxTimes(2)
 
-				mio.EXPECT().ExecCommand(gomock.Cond(func(c any) bool {
+				iom.EXPECT().ExecCommand(gomock.Cond(func(c any) bool {
 					cmd := c.(*exec.Cmd)
 
 					if !strings.HasSuffix(cmd.Path, "python3") {
@@ -330,7 +330,7 @@ func TestSyncStrelka(t *testing.T) {
 
 			ctrl := gomock.NewController(t)
 			mockDetStore := servermock.NewMockDetectionstore(ctrl)
-			mio := mock.NewMockIOManager(ctrl)
+			iom := mock.NewMockIOManager(ctrl)
 
 			mod := NewStrelkaEngine(&server.Server{
 				DetectionEngines: map[model.EngineName]server.DetectionEngine{},
@@ -338,12 +338,12 @@ func TestSyncStrelka(t *testing.T) {
 			})
 			mod.isRunning = true
 			mod.srv.DetectionEngines[model.EngineNameSuricata] = mod
-			mod.IOManager = mio
+			mod.IOManager = iom
 
 			mod.compileYaraPythonScriptPath = "compileYaraPythonScriptPath"
 			mod.yaraRulesFolder = "yaraRulesFolder"
 
-			test.InitMock(mockDetStore, mio)
+			test.InitMock(mockDetStore, iom)
 
 			errMap, err := mod.SyncLocalDetections(ctx, nil)
 
@@ -722,12 +722,12 @@ func TestGetCompilationResult(t *testing.T) {
 		"compiled_sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
 }`
 
-	mio := mock.NewMockIOManager(ctrl)
-	mio.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return([]byte(jsn), nil)
+	iom := mock.NewMockIOManager(ctrl)
+	iom.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return([]byte(jsn), nil)
 
 	eng := &StrelkaEngine{
 		yaraRulesFolder: "/opt/so/conf/strelka/rules",
-		IOManager:       mio,
+		IOManager:       iom,
 	}
 
 	report, err := eng.getCompilationReport()
@@ -755,12 +755,12 @@ func TestVerifyCompiledHash(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mio := mock.NewMockIOManager(ctrl)
-	mio.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return([]byte("abc"), nil).Times(3)
-	mio.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return(nil, os.ErrNotExist).Times(2)
+	iom := mock.NewMockIOManager(ctrl)
+	iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return([]byte("abc"), nil).Times(3)
+	iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return(nil, os.ErrNotExist).Times(2)
 
 	eng := &StrelkaEngine{
-		IOManager:       mio,
+		IOManager:       iom,
 		yaraRulesFolder: "/opt/so/conf/strelka/rules",
 	}
 
@@ -1034,7 +1034,7 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 			Dir:      true,
 		},
 	}, nil)
-	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo").Return(false, false)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(false, false)
 	// WriteStateFile
 	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)
 	// IntegrityCheck
@@ -1111,7 +1111,7 @@ func TestSyncChanges(t *testing.T) {
 			Dir:      true,
 		},
 	}, nil)
-	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo").Return(true, false)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(true, false)
 	// Sync
 	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
 		"dummy": {
@@ -1291,7 +1291,7 @@ func TestLoadAndMergeAuxilleryData(t *testing.T) {
 	e := StrelkaEngine{
 		showAiSummaries: true,
 	}
-	e.LoadAuxilleryData([]*model.AiSummary{
+	err := e.LoadAuxilleryData([]*model.AiSummary{
 		{
 			PublicId:     "_root_040_zip_Folder_deploy",
 			Summary:      "Summary for _root_040_zip_Folder_deploy",
@@ -1305,6 +1305,7 @@ func TestLoadAndMergeAuxilleryData(t *testing.T) {
 			RuleBodyHash: "7ed21143076d0cca420653d4345baa2f",
 		},
 	})
+	assert.NoError(t, err)
 
 	for _, test := range tests {
 		test := test

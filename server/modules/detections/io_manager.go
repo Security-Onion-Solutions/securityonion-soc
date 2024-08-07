@@ -37,7 +37,7 @@ type IOManager interface {
 	ExecCommand(cmd *exec.Cmd) ([]byte, int, time.Duration, error)
 	WalkDir(root string, fn fs.WalkDirFunc) error
 	CloneRepo(ctx context.Context, path string, repo string, branch *string) (err error)
-	PullRepo(ctx context.Context, path string) (pulled bool, reclone bool)
+	PullRepo(ctx context.Context, path string, branch *string) (pulled bool, reclone bool)
 }
 
 type ResourceManager struct {
@@ -146,7 +146,7 @@ func (rm *ResourceManager) CloneRepo(ctx context.Context, path string, repo stri
 	return err
 }
 
-func (rm *ResourceManager) PullRepo(ctx context.Context, path string) (pulled bool, reclone bool) {
+func (rm *ResourceManager) PullRepo(ctx context.Context, path string, branch *string) (pulled bool, reclone bool) {
 	gitrepo, err := git.PlainOpen(path)
 	if err != nil {
 		log.WithError(err).WithField("repoPath", path).Error("failed to open repo, doing nothing with it")
@@ -175,13 +175,20 @@ func (rm *ResourceManager) PullRepo(ctx context.Context, path string) (pulled bo
 		log.WithError(err).WithField("proxy", rm.Config.Proxy).Error("unable to parse proxy url, ignoring proxy")
 	}
 
-	err = work.PullContext(ctx, &git.PullOptions{
+	opts := &git.PullOptions{
 		Depth:           1,
 		SingleBranch:    true,
 		ProxyOptions:    proxyOpts,
+		ReferenceName:   plumbing.ReferenceName("refs/heads/generated-summaries"),
 		CABundle:        []byte(rm.Config.AdditionalCA),
 		InsecureSkipTLS: rm.Config.InsecureSkipVerify,
-	})
+	}
+
+	if branch != nil && *branch != "" {
+		opts.ReferenceName = plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", *branch))
+	}
+
+	err = work.PullContext(ctx, opts)
 	if err != nil && err != git.NoErrAlreadyUpToDate {
 		log.WithError(err).WithField("repoPath", path).Error("failed to pull repo, doing nothing with it")
 

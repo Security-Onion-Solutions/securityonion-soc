@@ -1136,7 +1136,7 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 			Dir:      true,
 		},
 	}, nil)
-	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo").Return(false, false)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(false, false)
 	// check for changes before sync
 	iom.EXPECT().ReadFile("rulesFingerprintFile").Return([]byte(`{"core+": "c6OTI9nTQxGEeeNkSZZB9+OESMNvfMXrb+XLtMiVhf0="}`), nil)
 	// WriteStateFile
@@ -1240,7 +1240,7 @@ func TestSyncChanges(t *testing.T) {
 			Dir:      true,
 		},
 	}, nil)
-	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo").Return(false, false)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(false, false)
 	// parseRepoRules
 	iom.EXPECT().WalkDir("repos/repo", gomock.Any()).DoAndReturn(func(path string, fn fs.WalkDirFunc) error {
 		files := []fs.DirEntry{
@@ -1403,7 +1403,7 @@ func TestLoadAndMergeAuxilleryData(t *testing.T) {
 	e := ElastAlertEngine{
 		showAiSummaries: true,
 	}
-	e.LoadAuxilleryData([]*model.AiSummary{
+	err := e.LoadAuxilleryData([]*model.AiSummary{
 		{
 			PublicId:     "83b3a29f-3009-4884-86c6-b6c3973788fa",
 			Summary:      "Summary for 83b3a29f-3009-4884-86c6-b6c3973788fa",
@@ -1417,6 +1417,7 @@ func TestLoadAndMergeAuxilleryData(t *testing.T) {
 			RuleBodyHash: "7ed21143076d0cca420653d4345baa2f",
 		},
 	})
+	assert.NoError(t, err)
 
 	for _, test := range tests {
 		test := test

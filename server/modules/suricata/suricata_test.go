@@ -2539,7 +2539,7 @@ func TestLoadAndMergeAuxilleryData(t *testing.T) {
 	e := SuricataEngine{
 		showAiSummaries: true,
 	}
-	e.LoadAuxilleryData([]*model.AiSummary{
+	err := e.LoadAuxilleryData([]*model.AiSummary{
 		{
 			PublicId:     "100001",
 			Summary:      "Summary for 100001",
@@ -2553,6 +2553,7 @@ func TestLoadAndMergeAuxilleryData(t *testing.T) {
 			Reviewed:     false,
 		},
 	})
+	assert.NoError(t, err)
 
 	for _, test := range tests {
 		test := test

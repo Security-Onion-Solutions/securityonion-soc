@@ -170,7 +170,7 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 			defer cancel()
 
 			// repo already exists, pull
-			dirty.WasModified, reclone = iom.PullRepo(ctx, repoPath)
+			dirty.WasModified, reclone = iom.PullRepo(ctx, repoPath, repo.Branch)
 			if dirty.WasModified {
 				anythingNew = true
 			}

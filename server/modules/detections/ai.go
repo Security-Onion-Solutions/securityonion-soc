@@ -7,9 +7,11 @@ import (
 	"path"
 	"path/filepath"
 	"sync"
+	"time"
+
+	"github.com/security-onion-solutions/securityonion-soc/model"
 
 	"github.com/apex/log"
-	"github.com/security-onion-solutions/securityonion-soc/model"
 	"gopkg.in/yaml.v3"
 )
 
@@ -41,7 +43,7 @@ func RefreshAiSummaries(eng AiLoader, lang model.SigLanguage, isRunning *bool, a
 		_, lastFolder := path.Split(parser.Path)
 		repoPath := filepath.Join(aiRepoPath, lastFolder)
 
-		sums, err := readAiSummary(repoPath, lang, logger, iom)
+		sums, err := readAiSummary(isRunning, repoPath, lang, logger, iom)
 		if err != nil {
 			logger.WithError(err).WithField("repoPath", repoPath).Error("unable to read AI summaries")
 		} else {
@@ -76,7 +78,7 @@ func updateAiRepo(isRunning *bool, baseRepoFolder string, repoUrl string, branch
 	return err
 }
 
-func readAiSummary(repoRoot string, lang model.SigLanguage, logger *log.Entry, iom IOManager) (sums []*model.AiSummary, err error) {
+func readAiSummary(isRunning *bool, repoRoot string, lang model.SigLanguage, logger *log.Entry, iom IOManager) (sums []*model.AiSummary, err error) {
 	aiRepoMutex.Lock()
 	defer aiRepoMutex.Unlock()
 
@@ -90,19 +92,40 @@ func readAiSummary(repoRoot string, lang model.SigLanguage, logger *log.Entry, i
 		return nil, err
 	}
 
+	// large yaml files take 30+ seconds to unmarshal, so we need to check if the
+	// module has stopped or risk becoming unresponsive when sent a signal to stop
+	done := false
 	data := map[string]*model.AiSummary{}
 
-	err = yaml.Unmarshal(raw, data)
+	go func() {
+		err = yaml.Unmarshal(raw, data)
+		done = true
+	}()
+
+	for !done {
+		if !*isRunning {
+			return nil, ErrModuleStopped
+		}
+
+		time.Sleep(time.Millisecond * 200)
+	}
+
 	if err != nil {
 		return nil, err
 	}
 
+	logger.Info("successfully unmarshalled AI summaries, parsing...")
+
 	for pid, sum := range data {
+		if !*isRunning {
+			return nil, ErrModuleStopped
+		}
+
 		sum.PublicId = pid
 		sums = append(sums, sum)
 	}
 
-	logger.WithField("aiSummaryCount", len(sums)).Info("successfully read AI summary")
+	logger.WithField("aiSummaryCount", len(sums)).Info("successfully parsed AI summaries")
 
 	return sums, nil
 }
