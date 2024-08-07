@@ -419,7 +419,7 @@ func TestUpdateRepos(t *testing.T) {
 		},
 	}, nil)
 	iom.EXPECT().PullRepo(gomock.Any(), "baseRepoFolder/repo1").Return(false, false)
-	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo2", "http://github.com/user/repo2").Return(nil)
+	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo2", "http://github.com/user/repo2", util.Ptr("branch")).Return(nil)
 	iom.EXPECT().RemoveAll("baseRepoFolder/repo3").Return(nil)
 
 	isRunning := true
@@ -429,7 +429,8 @@ func TestUpdateRepos(t *testing.T) {
 			Repo: "http://github.com/user/repo1",
 		},
 		{
-			Repo: "http://github.com/user/repo2",
+			Repo:   "http://github.com/user/repo2",
+			Branch: util.Ptr("branch"),
 		},
 	}
 

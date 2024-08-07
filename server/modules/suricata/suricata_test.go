@@ -2187,6 +2187,7 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 		IOManager:       iom,
 		showAiSummaries: true,
 		aiRepoUrl:       "aiRepoUrl",
+		aiRepoBranch:    "aiRepoBranch",
 		aiRepoPath:      "aiRepoPath",
 	}
 
@@ -2194,7 +2195,7 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 
 	// RefreshAiSummaries
 	iom.EXPECT().ReadDir("aiRepoPath").Return([]fs.DirEntry{}, nil)
-	iom.EXPECT().CloneRepo(gomock.Any(), "aiRepoPath/aiRepoUrl", "aiRepoUrl").Return(nil)
+	iom.EXPECT().CloneRepo(gomock.Any(), "aiRepoPath/aiRepoUrl", "aiRepoUrl", util.Ptr("aiRepoBranch")).Return(nil)
 	iom.EXPECT().ReadFile("aiRepoPath/aiRepoUrl/detections-ai/suricata_summaries.yaml").Return([]byte("{}"), nil)
 	// readAndHash
 	iom.EXPECT().ReadFile("communityRulesFile").Return([]byte(SimpleRule), nil)
@@ -2264,6 +2265,7 @@ func TestSyncChanges(t *testing.T) {
 		IOManager:       iom,
 		showAiSummaries: true,
 		aiRepoUrl:       "aiRepoUrl",
+		aiRepoBranch:    "aiRepoBranch",
 		aiRepoPath:      "aiRepoPath",
 	}
 
@@ -2274,7 +2276,7 @@ func TestSyncChanges(t *testing.T) {
 
 	// RefreshAiSummaries
 	iom.EXPECT().ReadDir("aiRepoPath").Return([]fs.DirEntry{}, nil)
-	iom.EXPECT().CloneRepo(gomock.Any(), "aiRepoPath/aiRepoUrl", "aiRepoUrl").Return(nil)
+	iom.EXPECT().CloneRepo(gomock.Any(), "aiRepoPath/aiRepoUrl", "aiRepoUrl", util.Ptr("aiRepoBranch")).Return(nil)
 	iom.EXPECT().ReadFile("aiRepoPath/aiRepoUrl/detections-ai/suricata_summaries.yaml").Return([]byte("{}"), nil)
 	// readAndHash
 	iom.EXPECT().ReadFile("communityRulesFile").Return([]byte(SimpleRule+"\n"+FlowbitsRuleA), nil)

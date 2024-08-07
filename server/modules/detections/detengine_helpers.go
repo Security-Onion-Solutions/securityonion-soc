@@ -193,7 +193,7 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 			defer cancel()
 
-			err = iom.CloneRepo(ctx, repoPath, repo.Repo)
+			err = iom.CloneRepo(ctx, repoPath, repo.Repo, repo.Branch)
 			if err != nil {
 				log.WithError(err).WithField("repoPath", repoPath).Error("failed to clone repo, doing nothing with it")
 				continue

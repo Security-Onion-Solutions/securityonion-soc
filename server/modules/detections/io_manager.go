@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"io/fs"
 	"net/http"
 	"net/url"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/security-onion-solutions/securityonion-soc/config"
 )
 
@@ -34,7 +36,7 @@ type IOManager interface {
 	MakeRequest(*http.Request) (*http.Response, error)
 	ExecCommand(cmd *exec.Cmd) ([]byte, int, time.Duration, error)
 	WalkDir(root string, fn fs.WalkDirFunc) error
-	CloneRepo(ctx context.Context, path string, repo string) (err error)
+	CloneRepo(ctx context.Context, path string, repo string, branch *string) (err error)
 	PullRepo(ctx context.Context, path string) (pulled bool, reclone bool)
 }
 
@@ -120,20 +122,26 @@ func (_ *ResourceManager) WalkDir(root string, fn fs.WalkDirFunc) error {
 	return filepath.WalkDir(root, fn)
 }
 
-func (rm *ResourceManager) CloneRepo(ctx context.Context, path string, repo string) (err error) {
+func (rm *ResourceManager) CloneRepo(ctx context.Context, path string, repo string, branch *string) (err error) {
 	proxyOpts, err := proxyToTransportOptions(rm.Config.Proxy)
 	if err != nil {
 		return err
 	}
 
-	_, err = git.PlainCloneContext(ctx, path, false, &git.CloneOptions{
+	opts := &git.CloneOptions{
 		Depth:           1,
 		SingleBranch:    true,
 		URL:             repo,
 		ProxyOptions:    proxyOpts,
 		CABundle:        []byte(rm.Config.AdditionalCA),
 		InsecureSkipTLS: rm.Config.InsecureSkipVerify,
-	})
+	}
+
+	if branch != nil && *branch != "" {
+		opts.ReferenceName = plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", *branch))
+	}
+
+	_, err = git.PlainCloneContext(ctx, path, false, opts)
 
 	return err
 }

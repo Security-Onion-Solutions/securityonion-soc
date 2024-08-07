@@ -996,27 +996,6 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 	detStore := servermock.NewMockDetectionstore(ctrl)
 	iom := mock.NewMockIOManager(ctrl)
 
-	// RefreshAiSummaries
-	iom.EXPECT().ReadDir("aiRepoPath").Return([]fs.DirEntry{}, nil)
-	iom.EXPECT().CloneRepo(gomock.Any(), "aiRepoPath/aiRepoUrl", "aiRepoUrl").Return(nil)
-	iom.EXPECT().ReadFile("aiRepoPath/aiRepoUrl/detections-ai/yara_summaries.yaml").Return([]byte("{}"), nil)
-	// UpdateRepos
-	iom.EXPECT().ReadDir("repos").Return([]fs.DirEntry{
-		&handmock.MockDirEntry{
-			Filename: "repo",
-			Dir:      true,
-		},
-	}, nil)
-	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo").Return(false, false)
-	// WriteStateFile
-	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)
-	// IntegrityCheck
-	iom.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return([]byte(`{"timestamp": "now", "success": ["publicId"], "failure": [], "compiled_sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"}`), nil) // getCompilationReport
-	iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return([]byte("abc"), nil)                                                                                                                                  // verifyCompiledHash
-	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
-		"publicId": nil,
-	}, nil)
-
 	eng := &StrelkaEngine{
 		srv: &server.Server{
 			Detectionstore: detStore,
@@ -1038,10 +1017,32 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 		IOManager:       iom,
 		showAiSummaries: true,
 		aiRepoUrl:       "aiRepoUrl",
+		aiRepoBranch:    "aiRepoBranch",
 		aiRepoPath:      "aiRepoPath",
 	}
 
 	logger := log.WithField("detectionEngine", "test-strelka")
+
+	// RefreshAiSummaries
+	iom.EXPECT().ReadDir("aiRepoPath").Return([]fs.DirEntry{}, nil)
+	iom.EXPECT().CloneRepo(gomock.Any(), "aiRepoPath/aiRepoUrl", "aiRepoUrl", util.Ptr("aiRepoBranch")).Return(nil)
+	iom.EXPECT().ReadFile("aiRepoPath/aiRepoUrl/detections-ai/yara_summaries.yaml").Return([]byte("{}"), nil)
+	// UpdateRepos
+	iom.EXPECT().ReadDir("repos").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: "repo",
+			Dir:      true,
+		},
+	}, nil)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo").Return(false, false)
+	// WriteStateFile
+	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	// IntegrityCheck
+	iom.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return([]byte(`{"timestamp": "now", "success": ["publicId"], "failure": [], "compiled_sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"}`), nil) // getCompilationReport
+	iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return([]byte("abc"), nil)                                                                                                                                  // verifyCompiledHash
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		"publicId": nil,
+	}, nil)
 
 	err := eng.Sync(logger, false)
 	assert.NoError(t, err)
@@ -1090,6 +1091,7 @@ func TestSyncChanges(t *testing.T) {
 		IOManager:       iom,
 		showAiSummaries: true,
 		aiRepoUrl:       "aiRepoUrl",
+		aiRepoBranch:    "aiRepoBranch",
 		aiRepoPath:      "aiRepoPath",
 	}
 
@@ -1100,7 +1102,7 @@ func TestSyncChanges(t *testing.T) {
 
 	// RefreshAiSummaries
 	iom.EXPECT().ReadDir("aiRepoPath").Return([]fs.DirEntry{}, nil)
-	iom.EXPECT().CloneRepo(gomock.Any(), "aiRepoPath/aiRepoUrl", "aiRepoUrl").Return(nil)
+	iom.EXPECT().CloneRepo(gomock.Any(), "aiRepoPath/aiRepoUrl", "aiRepoUrl", util.Ptr("aiRepoBranch")).Return(nil)
 	iom.EXPECT().ReadFile("aiRepoPath/aiRepoUrl/detections-ai/yara_summaries.yaml").Return([]byte("{}"), nil)
 	// UpdateRepos
 	iom.EXPECT().ReadDir("repos").Return([]fs.DirEntry{

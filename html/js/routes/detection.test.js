@@ -1196,4 +1196,21 @@ test('showAiSummary', () => {
 
 	comp.detect.aiSummary = '';
 	expect(comp.showAiSummary()).toBe(false);
+
+	comp.showUnreviewedAiSummaries = true;
+
+	comp.detect = null;
+	expect(comp.showAiSummary()).toBe(false);
+
+	comp.detect = { engine: 'elastalert' };
+	expect(comp.showAiSummary()).toBe(false);
+
+	comp.detect.aiSummary = 'aiSummary';
+	expect(comp.showAiSummary()).toBe(true);
+
+	comp.detect.aiSummaryReviewed = true;
+	expect(comp.showAiSummary()).toBe(true);
+
+	comp.detect.aiSummary = '';
+	expect(comp.showAiSummary()).toBe(false);
 });

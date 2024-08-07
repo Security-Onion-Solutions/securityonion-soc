@@ -21,8 +21,8 @@ type AiLoader interface {
 
 //go:generate mockgen -destination mock/mock_ailoader.go -package mock . AiLoader
 
-func RefreshAiSummaries(eng AiLoader, lang model.SigLanguage, isRunning *bool, aiRepoPath string, aiRepoUrl string, logger *log.Entry, iom IOManager) error {
-	err := updateAiRepo(isRunning, aiRepoPath, aiRepoUrl, iom)
+func RefreshAiSummaries(eng AiLoader, lang model.SigLanguage, isRunning *bool, aiRepoPath string, aiRepoUrl string, aiRepoBranch string, logger *log.Entry, iom IOManager) error {
+	err := updateAiRepo(isRunning, aiRepoPath, aiRepoUrl, aiRepoBranch, iom)
 	if err != nil {
 		if errors.Is(err, ErrModuleStopped) {
 			return err
@@ -57,13 +57,19 @@ func RefreshAiSummaries(eng AiLoader, lang model.SigLanguage, isRunning *bool, a
 	return nil
 }
 
-func updateAiRepo(isRunning *bool, baseRepoFolder string, repoUrl string, iom IOManager) error {
+func updateAiRepo(isRunning *bool, baseRepoFolder string, repoUrl string, branch string, iom IOManager) error {
 	aiRepoMutex.Lock()
 	defer aiRepoMutex.Unlock()
 
+	var branchPtr *string
+	if branch != "" {
+		branchPtr = &branch
+	}
+
 	_, _, err := UpdateRepos(isRunning, baseRepoFolder, []*model.RuleRepo{
 		{
-			Repo: repoUrl,
+			Repo:   repoUrl,
+			Branch: branchPtr,
 		},
 	}, iom)
 

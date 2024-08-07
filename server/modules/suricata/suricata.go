@@ -57,6 +57,7 @@ const (
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT    = 10
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS     = 600
 	DEFAULT_AI_REPO                               = "https://github.com/Security-Onion-Solutions/securityonion-resources"
+	DEFAULT_AI_REPO_BRANCH                        = "generated-summaries"
 	DEFAULT_AI_REPO_PATH                          = "/opt/sensoroni/repos"
 	DEFAULT_SHOW_AI_SUMMARIES                     = true
 
@@ -86,6 +87,7 @@ type SuricataEngine struct {
 	aiSummaries                    *sync.Map // map[string]*detections.AiSummary{}
 	showAiSummaries                bool
 	aiRepoUrl                      string
+	aiRepoBranch                   string
 	aiRepoPath                     string
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
@@ -166,6 +168,7 @@ func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 
 	e.showAiSummaries = module.GetBoolDefault(config, "showAiSummaries", DEFAULT_SHOW_AI_SUMMARIES)
 	e.aiRepoUrl = module.GetStringDefault(config, "aiRepoUrl", DEFAULT_AI_REPO)
+	e.aiRepoBranch = module.GetStringDefault(config, "aiRepoBranch", DEFAULT_AI_REPO_BRANCH)
 	e.aiRepoPath = module.GetStringDefault(config, "aiRepoPath", DEFAULT_AI_REPO_PATH)
 
 	return nil
@@ -185,7 +188,7 @@ func (e *SuricataEngine) Start() error {
 		go func() {
 			logger := log.WithField("detectionEngine", model.EngineNameSuricata)
 
-			err := detections.RefreshAiSummaries(e, model.SigLangSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, logger, e.IOManager)
+			err := detections.RefreshAiSummaries(e, model.SigLangSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.aiRepoBranch, logger, e.IOManager)
 			if err != nil {
 				if errors.Is(err, detections.ErrModuleStopped) {
 					return
@@ -351,7 +354,7 @@ func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 	e.writeNoRead = nil
 
 	if e.showAiSummaries {
-		err := detections.RefreshAiSummaries(e, model.SigLangSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, logger, e.IOManager)
+		err := detections.RefreshAiSummaries(e, model.SigLangSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.aiRepoBranch, logger, e.IOManager)
 		if err != nil {
 			if errors.Is(err, detections.ErrModuleStopped) {
 				return err

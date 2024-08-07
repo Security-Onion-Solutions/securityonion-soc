@@ -186,6 +186,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					{ pattern: /condition:/m, message: this.$root.i18n.invalidDetectionStrelkaMissingCondition, match: false },
 				],
 			},
+			showUnreviewedAiSummaries: false,
 	}},
 	created() {
 		this.$root.initializeEditor();
@@ -211,6 +212,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.renderAbbreviatedCount = params["renderAbbreviatedCount"];
 			this.severityTranslations = params['severityTranslations'];
 			this.ruleTemplates = params['templateDetections'];
+			this.showUnreviewedAiSummaries = params['showUnreviewedAiSummaries'];
 
 			if (this.$route.params.id === 'create') {
 				this.detect = this.newDetection();
@@ -1471,9 +1473,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			return this.changedOverrideKeys?.[id]?.[index]?.includes(key);
 		},
 		showAiSummary() {
-			if (!this.detect) return false;
-
-			return !!(this.detect.aiSummary && this.detect.aiSummaryReviewed);
+			return !!(this?.detect?.aiSummary && (this.detect.aiSummaryReviewed || this.showUnreviewedAiSummaries));
 		}
 	}
 }});
