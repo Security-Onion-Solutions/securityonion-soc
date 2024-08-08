@@ -15,7 +15,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var aiRepoMutex = sync.Mutex{}
+var aiRepoMutex = sync.RWMutex{}
+var lastSuccessfulAiUpdate time.Time
 
 type AiLoader interface {
 	LoadAuxilleryData(summaries []*model.AiSummary) error
@@ -60,8 +61,18 @@ func RefreshAiSummaries(eng AiLoader, lang model.SigLanguage, isRunning *bool, a
 }
 
 func updateAiRepo(isRunning *bool, baseRepoFolder string, repoUrl string, branch string, iom IOManager) error {
+	if time.Since(lastSuccessfulAiUpdate) < time.Second*5 {
+		log.Info("AI summary repo was updated recently, skipping update")
+		return nil
+	}
+
 	aiRepoMutex.Lock()
 	defer aiRepoMutex.Unlock()
+
+	if time.Since(lastSuccessfulAiUpdate) < time.Second*5 {
+		log.Info("AI summary repo was updated recently, skipping update")
+		return nil
+	}
 
 	var branchPtr *string
 	if branch != "" {
@@ -75,12 +86,16 @@ func updateAiRepo(isRunning *bool, baseRepoFolder string, repoUrl string, branch
 		},
 	}, iom)
 
+	if err == nil {
+		lastSuccessfulAiUpdate = time.Now()
+	}
+
 	return err
 }
 
 func readAiSummary(isRunning *bool, repoRoot string, lang model.SigLanguage, logger *log.Entry, iom IOManager) (sums []*model.AiSummary, err error) {
-	aiRepoMutex.Lock()
-	defer aiRepoMutex.Unlock()
+	aiRepoMutex.RLock()
+	defer aiRepoMutex.RUnlock()
 
 	filename := fmt.Sprintf("%s_summaries.yaml", lang)
 	targetFile := filepath.Join(repoRoot, "detections-ai/", filename)
