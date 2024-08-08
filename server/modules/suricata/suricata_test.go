@@ -2263,10 +2263,7 @@ func TestSyncChanges(t *testing.T) {
 			IsRunning: true,
 		},
 		IOManager:       iom,
-		showAiSummaries: true,
-		aiRepoUrl:       "aiRepoUrl",
-		aiRepoBranch:    "aiRepoBranch",
-		aiRepoPath:      "aiRepoPath",
+		showAiSummaries: false,
 	}
 
 	logger := log.WithField("detectionEngine", "test-suricata")
@@ -2274,10 +2271,6 @@ func TestSyncChanges(t *testing.T) {
 	workItems := []esutil.BulkIndexerItem{}
 	auditItems := []esutil.BulkIndexerItem{}
 
-	// RefreshAiSummaries
-	iom.EXPECT().ReadDir("aiRepoPath").Return([]fs.DirEntry{}, nil)
-	iom.EXPECT().CloneRepo(gomock.Any(), "aiRepoPath/aiRepoUrl", "aiRepoUrl", util.Ptr("aiRepoBranch")).Return(nil)
-	iom.EXPECT().ReadFile("aiRepoPath/aiRepoUrl/detections-ai/suricata_summaries.yaml").Return([]byte("{}"), nil)
 	// readAndHash
 	iom.EXPECT().ReadFile("communityRulesFile").Return([]byte(SimpleRule+"\n"+FlowbitsRuleA), nil)
 	// syncCommunityDetections

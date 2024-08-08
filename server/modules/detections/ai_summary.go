@@ -35,6 +35,8 @@ func RefreshAiSummaries(eng AiLoader, lang model.SigLanguage, isRunning *bool, a
 			"aiRepoUrl":  aiRepoUrl,
 			"aiRepoPath": aiRepoPath,
 		}).Error("unable to update AI repo")
+
+		return err
 	}
 
 	parser, err := url.Parse(aiRepoUrl)

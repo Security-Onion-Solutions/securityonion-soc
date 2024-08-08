@@ -195,8 +195,8 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 
 			err = iom.CloneRepo(ctx, repoPath, repo.Repo, repo.Branch)
 			if err != nil {
-				log.WithError(err).WithField("repoPath", repoPath).Error("failed to clone repo, doing nothing with it")
-				continue
+				log.WithError(err).WithField("repoPath", repoPath).Error("failed to clone repo")
+				return nil, false, err
 			}
 
 			anythingNew = true

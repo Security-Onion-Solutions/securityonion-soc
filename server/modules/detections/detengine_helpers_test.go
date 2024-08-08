@@ -450,3 +450,40 @@ func TestUpdateRepos(t *testing.T) {
 	}, allRepos[1])
 	assert.True(t, anythingNew)
 }
+
+func TestUpdateReposFailToClone(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	branch := "branch"
+
+	iom := mock.NewMockIOManager(ctrl)
+	iom.EXPECT().ReadDir("baseRepoFolder").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: "repo1",
+			Dir:      true,
+		},
+		&handmock.MockDirEntry{
+			Filename: "repo3",
+			Dir:      true,
+		},
+	}, nil)
+	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo2", "http://github.com/user/repo2", &branch).Return(errors.New("unexpected error"))
+
+	isRunning := true
+
+	repos := []*model.RuleRepo{
+		{
+			Repo:   "http://github.com/user/repo2",
+			Branch: &branch,
+		},
+		{
+			Repo: "http://github.com/user/repo1",
+		},
+	}
+
+	allRepos, anythingNew, err := UpdateRepos(&isRunning, "baseRepoFolder", repos, iom)
+	assert.Error(t, err)
+	assert.Nil(t, allRepos)
+	assert.False(t, anythingNew)
+}
