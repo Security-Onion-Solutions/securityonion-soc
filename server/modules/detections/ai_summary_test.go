@@ -18,7 +18,7 @@ func TestRefreshAiSummaries(t *testing.T) {
 
 	isRunning := true
 	repo := "http://github.com/user/repo1"
-	branch := "generated-summaries"
+	branch := "generated-summaries-stable"
 	summaries := `{"87e55c67-46f0-4a7b-a3c6-d473ab7e8392": { "Reviewed": false, "Summary": "ai text goes here"}, "a23077fc-a5ef-427f-92ab-d3de7f56834d": { "Reviewed": true, "Summary": "ai text goes here" } }`
 
 	iom := mock.NewMockIOManager(ctrl)

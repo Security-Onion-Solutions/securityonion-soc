@@ -66,7 +66,7 @@ const i18n = {
       address: 'Address',
       advanced: 'Temporarily enable advanced interface features',
       ago: 'ago',
-      aiGenSummary: 'AI Generated Summary',
+      aiGenSummary: 'AI-Generated Summary',
       aiSummaryStale: 'This AI summary was generated for a previous version of the detection and may not be accurate.',
       alertAcknowledge: 'Acknowledge',
       alertEscalated: 'This alert has already been escalated',

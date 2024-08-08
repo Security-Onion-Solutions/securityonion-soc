@@ -179,7 +179,6 @@ func (rm *ResourceManager) PullRepo(ctx context.Context, path string, branch *st
 		Depth:           1,
 		SingleBranch:    true,
 		ProxyOptions:    proxyOpts,
-		ReferenceName:   plumbing.ReferenceName("refs/heads/generated-summaries"),
 		CABundle:        []byte(rm.Config.AdditionalCA),
 		InsecureSkipTLS: rm.Config.InsecureSkipVerify,
 	}

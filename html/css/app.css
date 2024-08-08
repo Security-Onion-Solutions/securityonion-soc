@@ -689,8 +689,3 @@ tbody tr:hover {
 .unset-vertical-align {
   vertical-align: unset !important;
 }
-
-.stale-summary {
-  font-size: 75%;
-  margin-top: 16px;
-}

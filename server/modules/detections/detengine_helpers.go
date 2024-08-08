@@ -249,18 +249,18 @@ func CheckWriteNoRead(ctx context.Context, DetStore GetterByPublicId, writeNoRea
 		return false
 	}
 
-	log.WithField("publicId", *writeNoRead).Error("detection was written but not read back, attempting read before continuing")
+	log.WithField("detectionPublicId", *writeNoRead).Error("detection was written but not read back, attempting read before continuing")
 
 	// det, err := e.srv.Detectionstore.GetDetectionByPublicId(e.srv.Context, *writeNoRead)
 	det, err := DetStore.GetDetectionByPublicId(ctx, *writeNoRead)
 	if err != nil {
-		log.WithError(err).WithField("publicId", *writeNoRead).Error("failed to read back detection")
+		log.WithError(err).WithField("detectionPublicId", *writeNoRead).Error("failed to read back detection")
 
 		return true
 	}
 
 	if det == nil {
-		log.WithField("publicId", *writeNoRead).Error("detection still not found")
+		log.WithField("detectionPublicId", *writeNoRead).Error("detection still not found")
 
 		return true
 	}
@@ -314,12 +314,12 @@ func DeduplicateByPublicId(detects []*model.Detection) []*model.Detection {
 		existing, inSet := set[detect.PublicID]
 		if inSet {
 			log.WithFields(log.Fields{
-				"publicId":         detect.PublicID,
-				"engine":           detect.Engine,
-				"existingRuleset":  existing.Ruleset,
-				"duplicateRuleset": detect.Ruleset,
-				"existingTitle":    existing.Title,
-				"duplicateTitle":   detect.Title,
+				"detectionPublicId": detect.PublicID,
+				"detectionEngine":   detect.Engine,
+				"existingRuleset":   existing.Ruleset,
+				"duplicateRuleset":  detect.Ruleset,
+				"existingTitle":     existing.Title,
+				"duplicateTitle":    detect.Title,
 			}).Warn("duplicate publicId found, skipping")
 		} else {
 			set[detect.PublicID] = detect

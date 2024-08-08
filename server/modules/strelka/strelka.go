@@ -51,7 +51,7 @@ const (
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT       = 10
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS        = 600
 	DEFAULT_AI_REPO                                  = "https://github.com/Security-Onion-Solutions/securityonion-resources"
-	DEFAULT_AI_REPO_BRANCH                           = "generated-summaries"
+	DEFAULT_AI_REPO_BRANCH                           = "generated-summaries-stable"
 	DEFAULT_AI_REPO_PATH                             = "/opt/sensoroni/repos"
 	DEFAULT_SHOW_AI_SUMMARIES                        = true
 )
@@ -533,7 +533,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 				})
 				if err != nil && err.Error() == "Object not found" {
 					e.writeNoRead = util.Ptr(detect.PublicID)
-					logger.WithField("publicId", detect.PublicID).Error("unable to read back successful write")
+					logger.WithField("detectionPublicId", detect.PublicID).Error("unable to read back successful write")
 
 					break
 				}
@@ -544,7 +544,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 				}
 
 				if err != nil {
-					logger.WithError(err).WithField("publicId", detect.PublicID).Error("failed to update detection")
+					logger.WithError(err).WithField("detectionPublicId", detect.PublicID).Error("failed to update detection")
 					continue
 				}
 			} else {
@@ -586,7 +586,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 			})
 			if err != nil && err.Error() == "Object not found" {
 				e.writeNoRead = util.Ptr(detect.PublicID)
-				logger.WithField("publicId", detect.PublicID).Error("unable to read back successful write")
+				logger.WithField("detectionPublicId", detect.PublicID).Error("unable to read back successful write")
 
 				break
 			}
@@ -597,7 +597,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 			}
 
 			if err != nil {
-				logger.WithError(err).WithField("publicId", detect.PublicID).Error("failed to create detection")
+				logger.WithError(err).WithField("detectionPublicId", detect.PublicID).Error("failed to create detection")
 				continue
 			}
 		}
@@ -658,7 +658,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 			},
 		})
 		if err != nil {
-			logger.WithError(err).WithField("publicId", publicId).Error("Failed to delete unreferenced community detection")
+			logger.WithError(err).WithField("detectionPublicId", publicId).Error("Failed to delete unreferenced community detection")
 			continue
 		}
 	}
