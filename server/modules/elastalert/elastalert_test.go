@@ -1108,18 +1108,11 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 			IsRunning: true,
 		},
 		IOManager:       iom,
-		showAiSummaries: true,
-		aiRepoUrl:       "aiRepoUrl",
-		aiRepoBranch:    "aiRepoBranch",
-		aiRepoPath:      "aiRepoPath",
+		showAiSummaries: false,
 	}
 
 	logger := log.WithField("detectionEngine", "test-elastalert")
 
-	// RefreshAiSummaries
-	iom.EXPECT().ReadDir("aiRepoPath").Return([]fs.DirEntry{}, nil)
-	iom.EXPECT().CloneRepo(gomock.Any(), "aiRepoPath/aiRepoUrl", "aiRepoUrl", util.Ptr("aiRepoBranch")).Return(nil)
-	iom.EXPECT().ReadFile("aiRepoPath/aiRepoUrl/detections-ai/sigma_summaries.yaml").Return([]byte("{}"), nil)
 	// checkSigmaPipelines
 	iom.EXPECT().ReadFile("sigmaPipelineFinal").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
