@@ -97,12 +97,12 @@ func (h *DetectionHandler) getDetection(w http.ResponseWriter, r *http.Request) 
 			"detectionPublicId": detectId,
 		}).Error("retrieved detection with unsupported engine")
 	} else {
-		err = eng.MergeAuxilleryData(detect)
+		err = eng.MergeAuxiliaryData(detect)
 		if err != nil {
 			log.WithError(err).WithFields(log.Fields{
 				"detectionEngine":   detect.Engine,
 				"detectionPublicId": detectId,
-			}).Error("unable to merge auxillery data into detection")
+			}).Error("unable to merge auxiliary data into detection")
 		}
 	}
 

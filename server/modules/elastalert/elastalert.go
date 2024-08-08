@@ -1473,7 +1473,7 @@ func (e *ElastAlertEngine) DuplicateDetection(ctx context.Context, detection *mo
 	return det, nil
 }
 
-func (e *ElastAlertEngine) LoadAuxilleryData(summaries []*model.AiSummary) error {
+func (e *ElastAlertEngine) LoadAuxiliaryData(summaries []*model.AiSummary) error {
 	sum := &sync.Map{}
 	for _, summary := range summaries {
 		sum.Store(summary.PublicId, summary)
@@ -1489,7 +1489,7 @@ func (e *ElastAlertEngine) LoadAuxilleryData(summaries []*model.AiSummary) error
 	return nil
 }
 
-func (e *ElastAlertEngine) MergeAuxilleryData(detect *model.Detection) error {
+func (e *ElastAlertEngine) MergeAuxiliaryData(detect *model.Detection) error {
 	if e.showAiSummaries {
 		obj, ok := e.aiSummaries.Load(detect.PublicID)
 		if ok {

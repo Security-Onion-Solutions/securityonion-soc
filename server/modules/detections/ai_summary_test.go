@@ -27,7 +27,7 @@ func TestRefreshAiSummaries(t *testing.T) {
 	iom.EXPECT().ReadDir("baseRepoFolder").Return([]fs.DirEntry{}, nil)
 	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo1", repo, &branch).Return(nil)
 	iom.EXPECT().ReadFile("baseRepoFolder/repo1/detections-ai/sigma_summaries.yaml").Return([]byte(summaries), nil)
-	loader.EXPECT().LoadAuxilleryData([]*model.AiSummary{
+	loader.EXPECT().LoadAuxiliaryData([]*model.AiSummary{
 		{
 			PublicId: "87e55c67-46f0-4a7b-a3c6-d473ab7e8392",
 			Summary:  "ai text goes here",

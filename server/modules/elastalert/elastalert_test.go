@@ -1365,7 +1365,7 @@ func TestSyncChanges(t *testing.T) {
 	assert.Equal(t, []string{"abc", "", "deleteme"}, workDocIds) // update has an id, create does not, delete does
 }
 
-func TestLoadAndMergeAuxilleryData(t *testing.T) {
+func TestLoadAndMergeAuxiliaryData(t *testing.T) {
 	tests := []struct {
 		Name              string
 		PublicId          string
@@ -1376,7 +1376,7 @@ func TestLoadAndMergeAuxilleryData(t *testing.T) {
 		ExpectedStale     bool
 	}{
 		{
-			Name:             "No Auxillery Data",
+			Name:             "No Auxiliary Data",
 			PublicId:         "bd82a1a6-7bac-401e-afcf-5adf07c0c035",
 			ExpectedAiFields: false,
 		},
@@ -1403,7 +1403,7 @@ func TestLoadAndMergeAuxilleryData(t *testing.T) {
 	e := ElastAlertEngine{
 		showAiSummaries: true,
 	}
-	err := e.LoadAuxilleryData([]*model.AiSummary{
+	err := e.LoadAuxiliaryData([]*model.AiSummary{
 		{
 			PublicId:     "83b3a29f-3009-4884-86c6-b6c3973788fa",
 			Summary:      "Summary for 83b3a29f-3009-4884-86c6-b6c3973788fa",
@@ -1428,7 +1428,7 @@ func TestLoadAndMergeAuxilleryData(t *testing.T) {
 			}
 
 			e.showAiSummaries = true
-			err := e.MergeAuxilleryData(det)
+			err := e.MergeAuxiliaryData(det)
 			assert.NoError(t, err)
 			if test.ExpectedAiFields {
 				assert.NotNil(t, det.AiFields)
@@ -1442,7 +1442,7 @@ func TestLoadAndMergeAuxilleryData(t *testing.T) {
 			e.showAiSummaries = false
 			det.AiFields = nil
 
-			err = e.MergeAuxilleryData(det)
+			err = e.MergeAuxiliaryData(det)
 			assert.NoError(t, err)
 			assert.Nil(t, det.AiFields)
 		})

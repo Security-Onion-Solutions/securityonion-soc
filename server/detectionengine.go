@@ -21,7 +21,7 @@ type DetectionEngine interface {
 	GetState() *model.EngineState
 	GenerateUnusedPublicId(ctx context.Context) (string, error)
 	ApplyFilters(detect *model.Detection) (didFilterAct bool, err error)
-	MergeAuxilleryData(detect *model.Detection) error
+	MergeAuxiliaryData(detect *model.Detection) error
 }
 
 type SyncStatus struct {

@@ -38,16 +38,16 @@ func (m *MockAiLoader) EXPECT() *MockAiLoaderMockRecorder {
 	return m.recorder
 }
 
-// LoadAuxilleryData mocks base method.
-func (m *MockAiLoader) LoadAuxilleryData(arg0 []*model.AiSummary) error {
+// LoadAuxiliaryData mocks base method.
+func (m *MockAiLoader) LoadAuxiliaryData(arg0 []*model.AiSummary) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LoadAuxilleryData", arg0)
+	ret := m.ctrl.Call(m, "LoadAuxiliaryData", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// LoadAuxilleryData indicates an expected call of LoadAuxilleryData.
-func (mr *MockAiLoaderMockRecorder) LoadAuxilleryData(arg0 any) *gomock.Call {
+// LoadAuxiliaryData indicates an expected call of LoadAuxiliaryData.
+func (mr *MockAiLoaderMockRecorder) LoadAuxiliaryData(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadAuxilleryData", reflect.TypeOf((*MockAiLoader)(nil).LoadAuxilleryData), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadAuxiliaryData", reflect.TypeOf((*MockAiLoader)(nil).LoadAuxiliaryData), arg0)
 }

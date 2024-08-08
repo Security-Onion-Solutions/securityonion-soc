@@ -19,7 +19,7 @@ var aiRepoMutex = sync.RWMutex{}
 var lastSuccessfulAiUpdate time.Time
 
 type AiLoader interface {
-	LoadAuxilleryData(summaries []*model.AiSummary) error
+	LoadAuxiliaryData(summaries []*model.AiSummary) error
 }
 
 //go:generate mockgen -destination mock/mock_ailoader.go -package mock . AiLoader
@@ -48,7 +48,7 @@ func RefreshAiSummaries(eng AiLoader, lang model.SigLanguage, isRunning *bool, a
 		if err != nil {
 			logger.WithError(err).WithField("repoPath", repoPath).Error("unable to read AI summaries")
 		} else {
-			err = eng.LoadAuxilleryData(sums)
+			err = eng.LoadAuxiliaryData(sums)
 			if err != nil {
 				logger.WithError(err).Error("unable to load AI summaries")
 			} else {

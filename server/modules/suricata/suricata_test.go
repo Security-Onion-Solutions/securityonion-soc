@@ -2501,7 +2501,7 @@ func toRegex(s ...string) []*regexp.Regexp {
 	return r
 }
 
-func TestLoadAndMergeAuxilleryData(t *testing.T) {
+func TestLoadAndMergeAuxiliaryData(t *testing.T) {
 	tests := []struct {
 		Name              string
 		PublicId          string
@@ -2512,7 +2512,7 @@ func TestLoadAndMergeAuxilleryData(t *testing.T) {
 		ExpectedStale     bool
 	}{
 		{
-			Name:             "No Auxillery Data",
+			Name:             "No Auxiliary Data",
 			PublicId:         "100000",
 			Content:          "alert",
 			ExpectedAiFields: false,
@@ -2539,7 +2539,7 @@ func TestLoadAndMergeAuxilleryData(t *testing.T) {
 	e := SuricataEngine{
 		showAiSummaries: true,
 	}
-	err := e.LoadAuxilleryData([]*model.AiSummary{
+	err := e.LoadAuxiliaryData([]*model.AiSummary{
 		{
 			PublicId:     "100001",
 			Summary:      "Summary for 100001",
@@ -2564,7 +2564,7 @@ func TestLoadAndMergeAuxilleryData(t *testing.T) {
 			}
 
 			e.showAiSummaries = true
-			err := e.MergeAuxilleryData(det)
+			err := e.MergeAuxiliaryData(det)
 			assert.NoError(t, err)
 			if test.ExpectedAiFields {
 				assert.NotNil(t, det.AiFields)
@@ -2578,7 +2578,7 @@ func TestLoadAndMergeAuxilleryData(t *testing.T) {
 			e.showAiSummaries = false
 			det.AiFields = nil
 
-			err = e.MergeAuxilleryData(det)
+			err = e.MergeAuxiliaryData(det)
 			assert.NoError(t, err)
 			assert.Nil(t, det.AiFields)
 		})

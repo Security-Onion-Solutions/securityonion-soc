@@ -1132,7 +1132,7 @@ func (e *StrelkaEngine) DuplicateDetection(ctx context.Context, detection *model
 	return det, nil
 }
 
-func (e *StrelkaEngine) LoadAuxilleryData(summaries []*model.AiSummary) error {
+func (e *StrelkaEngine) LoadAuxiliaryData(summaries []*model.AiSummary) error {
 	sum := &sync.Map{}
 	for _, summary := range summaries {
 		sum.Store(summary.PublicId, summary)
@@ -1148,7 +1148,7 @@ func (e *StrelkaEngine) LoadAuxilleryData(summaries []*model.AiSummary) error {
 	return nil
 }
 
-func (e *StrelkaEngine) MergeAuxilleryData(detect *model.Detection) error {
+func (e *StrelkaEngine) MergeAuxiliaryData(detect *model.Detection) error {
 	if e.showAiSummaries {
 		obj, ok := e.aiSummaries.Load(detect.PublicID)
 		if ok {
