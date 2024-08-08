@@ -120,6 +120,15 @@ type Detection struct {
 	// elastalert - sigma only
 	Product string `json:"product,omitempty"`
 	Service string `json:"service,omitempty"`
+
+	// AI Description fields
+	*AiFields `json:",omitempty"`
+}
+
+type AiFields struct {
+	AiSummary         string `json:"aiSummary"`
+	AiSummaryReviewed bool   `json:"aiSummaryReviewed"`
+	IsAiSummaryStale  bool   `json:"isSummaryStale"`
 }
 
 type DetectionComment struct {
@@ -352,4 +361,11 @@ type AuditInfo struct {
 	DocId     string
 	Op        string
 	Detection *Detection
+}
+
+type AiSummary struct {
+	PublicId     string
+	Reviewed     bool   `yaml:"Reviewed"`
+	Summary      string `yaml:"Summary"`
+	RuleBodyHash string `yaml:"Rule-Body-Hash"`
 }

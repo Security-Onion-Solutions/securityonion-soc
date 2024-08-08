@@ -77,11 +77,11 @@ func SyncScheduler(e DetailedDetectionEngine, syncParams *SyncSchedulerParams, e
 		}
 
 		log.WithFields(log.Fields{
-			"detectionEngine": engName,
-			"waitTimeSeconds":     timerDur.Seconds(),
-			"forceSync":           forceSync,
-			"lastSyncSuccess":     lastSyncStatus,
-			"expectedStartTime":   time.Now().Add(timerDur).Format(time.RFC3339),
+			"detectionEngine":   engName,
+			"waitTimeSeconds":   timerDur.Seconds(),
+			"forceSync":         forceSync,
+			"lastSyncSuccess":   lastSyncStatus,
+			"expectedStartTime": time.Now().Add(timerDur).Format(time.RFC3339),
 		}).Info("waiting for next community rules sync")
 
 		e.ResumeIntegrityChecker()
@@ -107,7 +107,7 @@ func SyncScheduler(e DetailedDetectionEngine, syncParams *SyncSchedulerParams, e
 		syncId := uuid.New().String()
 		logger := log.WithFields(log.Fields{
 			"detectionEngine": engName,
-			"syncId":              syncId,
+			"syncId":          syncId,
 		})
 
 		startTime := time.Now()

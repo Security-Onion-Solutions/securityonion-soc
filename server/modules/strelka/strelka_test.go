@@ -284,7 +284,7 @@ func TestSyncStrelka(t *testing.T) {
 	}{
 		{
 			Name: "Enable Simple Rules",
-			InitMock: func(mockDetStore *servermock.MockDetectionstore, mio *mock.MockIOManager) {
+			InitMock: func(mockDetStore *servermock.MockDetectionstore, iom *mock.MockIOManager) {
 				mockDetStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
 					"1": {
 						PublicID:  "1",
@@ -300,11 +300,11 @@ func TestSyncStrelka(t *testing.T) {
 					},
 				}, nil)
 
-				mio.EXPECT().ReadDir("yaraRulesFolder").Return(nil, nil)
+				iom.EXPECT().ReadDir("yaraRulesFolder").Return(nil, nil)
 
-				mio.EXPECT().WriteFile(gomock.Any(), []byte(simpleRule), fs.FileMode(0644)).Return(nil).MaxTimes(2)
+				iom.EXPECT().WriteFile(gomock.Any(), []byte(simpleRule), fs.FileMode(0644)).Return(nil).MaxTimes(2)
 
-				mio.EXPECT().ExecCommand(gomock.Cond(func(c any) bool {
+				iom.EXPECT().ExecCommand(gomock.Cond(func(c any) bool {
 					cmd := c.(*exec.Cmd)
 
 					if !strings.HasSuffix(cmd.Path, "python3") {
@@ -330,7 +330,7 @@ func TestSyncStrelka(t *testing.T) {
 
 			ctrl := gomock.NewController(t)
 			mockDetStore := servermock.NewMockDetectionstore(ctrl)
-			mio := mock.NewMockIOManager(ctrl)
+			iom := mock.NewMockIOManager(ctrl)
 
 			mod := NewStrelkaEngine(&server.Server{
 				DetectionEngines: map[model.EngineName]server.DetectionEngine{},
@@ -338,12 +338,12 @@ func TestSyncStrelka(t *testing.T) {
 			})
 			mod.isRunning = true
 			mod.srv.DetectionEngines[model.EngineNameSuricata] = mod
-			mod.IOManager = mio
+			mod.IOManager = iom
 
 			mod.compileYaraPythonScriptPath = "compileYaraPythonScriptPath"
 			mod.yaraRulesFolder = "yaraRulesFolder"
 
-			test.InitMock(mockDetStore, mio)
+			test.InitMock(mockDetStore, iom)
 
 			errMap, err := mod.SyncLocalDetections(ctx, nil)
 
@@ -563,7 +563,7 @@ func TestParseRule(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			t.Parallel()
 
-			rules, err := e.parseYaraRules([]byte(test.Input), true)
+			rules, err := e.parseYaraRules([]byte(test.Input))
 			if test.ExpectedError == nil {
 				assert.NoError(t, err)
 				assert.NotNil(t, rules)
@@ -643,7 +643,7 @@ func TestToDetection(t *testing.T) {
 		License:     "license",
 	}
 
-	rules, err := e.parseYaraRules([]byte(BasicRuleWMeta), false)
+	rules, err := e.parseYaraRules([]byte(BasicRuleWMeta))
 	assert.NoError(t, err)
 	assert.NotEmpty(t, rules)
 	assert.Equal(t, 1, len(rules))
@@ -722,12 +722,12 @@ func TestGetCompilationResult(t *testing.T) {
 		"compiled_sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
 }`
 
-	mio := mock.NewMockIOManager(ctrl)
-	mio.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return([]byte(jsn), nil)
+	iom := mock.NewMockIOManager(ctrl)
+	iom.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return([]byte(jsn), nil)
 
 	eng := &StrelkaEngine{
 		yaraRulesFolder: "/opt/so/conf/strelka/rules",
-		IOManager:       mio,
+		IOManager:       iom,
 	}
 
 	report, err := eng.getCompilationReport()
@@ -755,12 +755,12 @@ func TestVerifyCompiledHash(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mio := mock.NewMockIOManager(ctrl)
-	mio.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return([]byte("abc"), nil).Times(3)
-	mio.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return(nil, os.ErrNotExist).Times(2)
+	iom := mock.NewMockIOManager(ctrl)
+	iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return([]byte("abc"), nil).Times(3)
+	iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return(nil, os.ErrNotExist).Times(2)
 
 	eng := &StrelkaEngine{
-		IOManager:       mio,
+		IOManager:       iom,
 		yaraRulesFolder: "/opt/so/conf/strelka/rules",
 	}
 
@@ -996,23 +996,6 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 	detStore := servermock.NewMockDetectionstore(ctrl)
 	iom := mock.NewMockIOManager(ctrl)
 
-	// UpdateRepos
-	iom.EXPECT().ReadDir("repos").Return([]fs.DirEntry{
-		&handmock.MockDirEntry{
-			Filename: "repo",
-			Dir:      true,
-		},
-	}, nil)
-	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo").Return(false, false)
-	// WriteStateFile
-	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)
-	// IntegrityCheck
-	iom.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return([]byte(`{"timestamp": "now", "success": ["publicId"], "failure": [], "compiled_sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"}`), nil) // getCompilationReport
-	iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return([]byte("abc"), nil)                                                                                                                                  // verifyCompiledHash
-	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
-		"publicId": nil,
-	}, nil)
-
 	eng := &StrelkaEngine{
 		srv: &server.Server{
 			Detectionstore: detStore,
@@ -1031,10 +1014,35 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 		IntegrityCheckerData: detections.IntegrityCheckerData{
 			IsRunning: true,
 		},
-		IOManager: iom,
+		IOManager:       iom,
+		showAiSummaries: true,
+		aiRepoUrl:       "aiRepoUrl",
+		aiRepoBranch:    "aiRepoBranch",
+		aiRepoPath:      "aiRepoPath",
 	}
 
 	logger := log.WithField("detectionEngine", "test-strelka")
+
+	// RefreshAiSummaries
+	iom.EXPECT().ReadDir("aiRepoPath").Return([]fs.DirEntry{}, nil)
+	iom.EXPECT().CloneRepo(gomock.Any(), "aiRepoPath/aiRepoUrl", "aiRepoUrl", util.Ptr("aiRepoBranch")).Return(nil)
+	iom.EXPECT().ReadFile("aiRepoPath/aiRepoUrl/detections-ai/yara_summaries.yaml").Return([]byte("{}"), nil)
+	// UpdateRepos
+	iom.EXPECT().ReadDir("repos").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: "repo",
+			Dir:      true,
+		},
+	}, nil)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(false, false)
+	// WriteStateFile
+	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)
+	// IntegrityCheck
+	iom.EXPECT().ReadFile("/opt/so/state/detections_yara_compilation-total.log").Return([]byte(`{"timestamp": "now", "success": ["publicId"], "failure": [], "compiled_sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"}`), nil) // getCompilationReport
+	iom.EXPECT().ReadFile("/opt/so/saltstack/local/salt/strelka/rules/compiled/rules.compiled").Return([]byte("abc"), nil)                                                                                                                                  // verifyCompiledHash
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		"publicId": nil,
+	}, nil)
 
 	err := eng.Sync(logger, false)
 	assert.NoError(t, err)
@@ -1080,7 +1088,11 @@ func TestSyncChanges(t *testing.T) {
 		IntegrityCheckerData: detections.IntegrityCheckerData{
 			IsRunning: true,
 		},
-		IOManager: iom,
+		IOManager:       iom,
+		showAiSummaries: true,
+		aiRepoUrl:       "aiRepoUrl",
+		aiRepoBranch:    "aiRepoBranch",
+		aiRepoPath:      "aiRepoPath",
 	}
 
 	logger := log.WithField("detectionEngine", "test-strelka")
@@ -1088,6 +1100,10 @@ func TestSyncChanges(t *testing.T) {
 	workItems := []esutil.BulkIndexerItem{}
 	auditItems := []esutil.BulkIndexerItem{}
 
+	// RefreshAiSummaries
+	iom.EXPECT().ReadDir("aiRepoPath").Return([]fs.DirEntry{}, nil)
+	iom.EXPECT().CloneRepo(gomock.Any(), "aiRepoPath/aiRepoUrl", "aiRepoUrl", util.Ptr("aiRepoBranch")).Return(nil)
+	iom.EXPECT().ReadFile("aiRepoPath/aiRepoUrl/detections-ai/yara_summaries.yaml").Return([]byte("{}"), nil)
 	// UpdateRepos
 	iom.EXPECT().ReadDir("repos").Return([]fs.DirEntry{
 		&handmock.MockDirEntry{
@@ -1095,7 +1111,7 @@ func TestSyncChanges(t *testing.T) {
 			Dir:      true,
 		},
 	}, nil)
-	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo").Return(true, false)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(true, false)
 	// Sync
 	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
 		"dummy": {
@@ -1236,4 +1252,87 @@ func TestSyncChanges(t *testing.T) {
 	})
 
 	assert.Equal(t, []string{"abc", "", "deleteme"}, workDocIds) // update has an id, create does not, delete does
+}
+
+func TestLoadAndMergeAuxiliaryData(t *testing.T) {
+	tests := []struct {
+		Name              string
+		PublicId          string
+		Content           string
+		ExpectedAiFields  bool
+		ExpectedAiSummary string
+		ExpectedReviewed  bool
+		ExpectedStale     bool
+	}{
+		{
+			Name:             "No Auxiliary Data",
+			PublicId:         "Webshell_FOPO_Obfuscation_APT_ON_Nov17_1",
+			ExpectedAiFields: false,
+		},
+		{
+			Name:              "Data, Unreviewed",
+			PublicId:          "Webshell_acid_FaTaLisTiCz_Fx_fx_p0isoN_sh3ll_x0rg_byp4ss_256",
+			Content:           "no-alert",
+			ExpectedAiFields:  true,
+			ExpectedAiSummary: "Summary for Webshell_acid_FaTaLisTiCz_Fx_fx_p0isoN_sh3ll_x0rg_byp4ss_256",
+			ExpectedReviewed:  false,
+			ExpectedStale:     true,
+		},
+		{
+			Name:              "Data, Reviewed",
+			PublicId:          "_root_040_zip_Folder_deploy",
+			Content:           "alert",
+			ExpectedAiFields:  true,
+			ExpectedAiSummary: "Summary for _root_040_zip_Folder_deploy",
+			ExpectedReviewed:  true,
+		},
+	}
+
+	e := StrelkaEngine{
+		showAiSummaries: true,
+	}
+	err := e.LoadAuxiliaryData([]*model.AiSummary{
+		{
+			PublicId:     "_root_040_zip_Folder_deploy",
+			Summary:      "Summary for _root_040_zip_Folder_deploy",
+			Reviewed:     true,
+			RuleBodyHash: "7ed21143076d0cca420653d4345baa2f",
+		},
+		{
+			PublicId:     "Webshell_acid_FaTaLisTiCz_Fx_fx_p0isoN_sh3ll_x0rg_byp4ss_256",
+			Summary:      "Summary for Webshell_acid_FaTaLisTiCz_Fx_fx_p0isoN_sh3ll_x0rg_byp4ss_256",
+			Reviewed:     false,
+			RuleBodyHash: "7ed21143076d0cca420653d4345baa2f",
+		},
+	})
+	assert.NoError(t, err)
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			det := &model.Detection{
+				PublicID: test.PublicId,
+				Content:  test.Content,
+			}
+
+			e.showAiSummaries = true
+			err := e.MergeAuxiliaryData(det)
+			assert.NoError(t, err)
+			if test.ExpectedAiFields {
+				assert.NotNil(t, det.AiFields)
+				assert.Equal(t, test.ExpectedAiSummary, det.AiSummary)
+				assert.Equal(t, test.ExpectedReviewed, det.AiSummaryReviewed)
+				assert.Equal(t, test.ExpectedStale, det.IsAiSummaryStale)
+			} else {
+				assert.Nil(t, det.AiFields)
+			}
+
+			e.showAiSummaries = false
+			det.AiFields = nil
+
+			err = e.MergeAuxiliaryData(det)
+			assert.NoError(t, err)
+			assert.Nil(t, det.AiFields)
+		})
+	}
 }

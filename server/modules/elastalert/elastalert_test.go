@@ -1107,11 +1107,19 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 		IntegrityCheckerData: detections.IntegrityCheckerData{
 			IsRunning: true,
 		},
-		IOManager: iom,
+		IOManager:       iom,
+		showAiSummaries: true,
+		aiRepoUrl:       "aiRepoUrl",
+		aiRepoBranch:    "aiRepoBranch",
+		aiRepoPath:      "aiRepoPath",
 	}
 
 	logger := log.WithField("detectionEngine", "test-elastalert")
 
+	// RefreshAiSummaries
+	iom.EXPECT().ReadDir("aiRepoPath").Return([]fs.DirEntry{}, nil)
+	iom.EXPECT().CloneRepo(gomock.Any(), "aiRepoPath/aiRepoUrl", "aiRepoUrl", util.Ptr("aiRepoBranch")).Return(nil)
+	iom.EXPECT().ReadFile("aiRepoPath/aiRepoUrl/detections-ai/sigma_summaries.yaml").Return([]byte("{}"), nil)
 	// checkSigmaPipelines
 	iom.EXPECT().ReadFile("sigmaPipelineFinal").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
@@ -1128,7 +1136,7 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 			Dir:      true,
 		},
 	}, nil)
-	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo").Return(false, false)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(false, false)
 	// check for changes before sync
 	iom.EXPECT().ReadFile("rulesFingerprintFile").Return([]byte(`{"core+": "c6OTI9nTQxGEeeNkSZZB9+OESMNvfMXrb+XLtMiVhf0="}`), nil)
 	// WriteStateFile
@@ -1200,7 +1208,11 @@ func TestSyncChanges(t *testing.T) {
 		IntegrityCheckerData: detections.IntegrityCheckerData{
 			IsRunning: true,
 		},
-		IOManager: iom,
+		IOManager:       iom,
+		showAiSummaries: true,
+		aiRepoUrl:       "aiRepoUrl",
+		aiRepoBranch:    "aiRepoBranch",
+		aiRepoPath:      "aiRepoPath",
 	}
 
 	logger := log.WithField("detectionEngine", "test-elastalert")
@@ -1208,6 +1220,10 @@ func TestSyncChanges(t *testing.T) {
 	workItems := []esutil.BulkIndexerItem{}
 	auditItems := []esutil.BulkIndexerItem{}
 
+	// RefreshAiSummaries
+	iom.EXPECT().ReadDir("aiRepoPath").Return([]fs.DirEntry{}, nil)
+	iom.EXPECT().CloneRepo(gomock.Any(), "aiRepoPath/aiRepoUrl", "aiRepoUrl", util.Ptr("aiRepoBranch")).Return(nil)
+	iom.EXPECT().ReadFile("aiRepoPath/aiRepoUrl/detections-ai/sigma_summaries.yaml").Return([]byte("{}"), nil)
 	// checkSigmaPipelines
 	iom.EXPECT().ReadFile("sigmaPipelineFinal").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
@@ -1224,7 +1240,7 @@ func TestSyncChanges(t *testing.T) {
 			Dir:      true,
 		},
 	}, nil)
-	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo").Return(false, false)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(false, false)
 	// parseRepoRules
 	iom.EXPECT().WalkDir("repos/repo", gomock.Any()).DoAndReturn(func(path string, fn fs.WalkDirFunc) error {
 		files := []fs.DirEntry{
@@ -1347,4 +1363,88 @@ func TestSyncChanges(t *testing.T) {
 	})
 
 	assert.Equal(t, []string{"abc", "", "deleteme"}, workDocIds) // update has an id, create does not, delete does
+}
+
+func TestLoadAndMergeAuxiliaryData(t *testing.T) {
+	tests := []struct {
+		Name              string
+		PublicId          string
+		Content           string
+		ExpectedAiFields  bool
+		ExpectedAiSummary string
+		ExpectedReviewed  bool
+		ExpectedStale     bool
+	}{
+		{
+			Name:             "No Auxiliary Data",
+			PublicId:         "bd82a1a6-7bac-401e-afcf-5adf07c0c035",
+			ExpectedAiFields: false,
+		},
+		{
+			Name:              "Data, Unreviewed",
+			PublicId:          "67ee455d-099f-4048-b021-43bb91af9298",
+			Content:           "alert",
+			ExpectedAiFields:  true,
+			ExpectedAiSummary: "Summary for 67ee455d-099f-4048-b021-43bb91af9298",
+			ExpectedReviewed:  false,
+			ExpectedStale:     false,
+		},
+		{
+			Name:              "Data, Reviewed",
+			PublicId:          "83b3a29f-3009-4884-86c6-b6c3973788fa",
+			Content:           "no-alert",
+			ExpectedAiFields:  true,
+			ExpectedAiSummary: "Summary for 83b3a29f-3009-4884-86c6-b6c3973788fa",
+			ExpectedReviewed:  true,
+			ExpectedStale:     true,
+		},
+	}
+
+	e := ElastAlertEngine{
+		showAiSummaries: true,
+	}
+	err := e.LoadAuxiliaryData([]*model.AiSummary{
+		{
+			PublicId:     "83b3a29f-3009-4884-86c6-b6c3973788fa",
+			Summary:      "Summary for 83b3a29f-3009-4884-86c6-b6c3973788fa",
+			Reviewed:     true,
+			RuleBodyHash: "7ed21143076d0cca420653d4345baa2f",
+		},
+		{
+			PublicId:     "67ee455d-099f-4048-b021-43bb91af9298",
+			Summary:      "Summary for 67ee455d-099f-4048-b021-43bb91af9298",
+			Reviewed:     false,
+			RuleBodyHash: "7ed21143076d0cca420653d4345baa2f",
+		},
+	})
+	assert.NoError(t, err)
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			det := &model.Detection{
+				PublicID: test.PublicId,
+				Content:  test.Content,
+			}
+
+			e.showAiSummaries = true
+			err := e.MergeAuxiliaryData(det)
+			assert.NoError(t, err)
+			if test.ExpectedAiFields {
+				assert.NotNil(t, det.AiFields)
+				assert.Equal(t, test.ExpectedAiSummary, det.AiSummary)
+				assert.Equal(t, test.ExpectedReviewed, det.AiSummaryReviewed)
+				assert.Equal(t, test.ExpectedStale, det.IsAiSummaryStale)
+			} else {
+				assert.Nil(t, det.AiFields)
+			}
+
+			e.showAiSummaries = false
+			det.AiFields = nil
+
+			err = e.MergeAuxiliaryData(det)
+			assert.NoError(t, err)
+			assert.Nil(t, det.AiFields)
+		})
+	}
 }

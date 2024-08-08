@@ -53,11 +53,11 @@ func TestM2470ReadStateFile(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.Name, func(t *testing.T) {
-			mio := mock.NewMockIOManager(ctrl)
-			mio.EXPECT().ReadFile(idstoolsYaml).Return([]byte(test.Contents), nil)
+			iom := mock.NewMockIOManager(ctrl)
+			iom.EXPECT().ReadFile(idstoolsYaml).Return([]byte(test.Contents), nil)
 
 			e := &SuricataEngine{
-				IOManager: mio,
+				IOManager: iom,
 			}
 
 			shouldMigrate, err := e.m2470ReadStateFile(idstoolsYaml)
@@ -71,11 +71,11 @@ func TestM2470WriteStateFileSuccess(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mio := mock.NewMockIOManager(ctrl)
-	mio.EXPECT().WriteFile("stateFile", []byte("1"), fs.FileMode(0644)).Return(nil)
+	iom := mock.NewMockIOManager(ctrl)
+	iom.EXPECT().WriteFile("stateFile", []byte("1"), fs.FileMode(0644)).Return(nil)
 
 	e := &SuricataEngine{
-		IOManager: mio,
+		IOManager: iom,
 	}
 
 	err := e.m2470WriteStateFileSuccess("stateFile")
@@ -86,11 +86,11 @@ func TestM2470LoadEnabledDisabled(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mio := mock.NewMockIOManager(ctrl)
-	mio.EXPECT().ReadFile(idstoolsYaml).Return([]byte(`{ "idstools": { "sids": {"enabled": ["1", "2", "3"], "disabled": ["4", "5", "6"]} }}`), nil)
+	iom := mock.NewMockIOManager(ctrl)
+	iom.EXPECT().ReadFile(idstoolsYaml).Return([]byte(`{ "idstools": { "sids": {"enabled": ["1", "2", "3"], "disabled": ["4", "5", "6"]} }}`), nil)
 
 	e := &SuricataEngine{
-		IOManager: mio,
+		IOManager: iom,
 	}
 
 	enabled, disabled, err := e.m2470LoadEnabledDisabled()
@@ -99,7 +99,7 @@ func TestM2470LoadEnabledDisabled(t *testing.T) {
 	assert.Equal(t, []string{"1", "2", "3"}, enabled)
 	assert.Equal(t, []string{"4", "5", "6"}, disabled)
 
-	mio.EXPECT().ReadFile(idstoolsYaml).Return([]byte(`{}`), nil)
+	iom.EXPECT().ReadFile(idstoolsYaml).Return([]byte(`{}`), nil)
 
 	enabled, disabled, err = e.m2470LoadEnabledDisabled()
 	assert.NoError(t, err)
@@ -107,7 +107,7 @@ func TestM2470LoadEnabledDisabled(t *testing.T) {
 	assert.Equal(t, 0, len(enabled))
 	assert.Equal(t, 0, len(disabled))
 
-	mio.EXPECT().ReadFile(idstoolsYaml).Return([]byte(`{ "idstools": {}}`), nil)
+	iom.EXPECT().ReadFile(idstoolsYaml).Return([]byte(`{ "idstools": {}}`), nil)
 
 	enabled, disabled, err = e.m2470LoadEnabledDisabled()
 	assert.NoError(t, err)
@@ -314,13 +314,13 @@ func TestM2470LoadOverrides(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mio := mock.NewMockIOManager(ctrl)
-	mio.EXPECT().ReadFile(sidsYaml).Return([]byte(`{ "2013030": [ "suppress": {"gen_id": 1, "track": "by_src", "ip": "10.10.3.0/24"} ]}`), nil) // success
-	mio.EXPECT().ReadFile(sidsYaml).Return(nil, errors.New("bad"))                                                                              // bad error
-	mio.EXPECT().ReadFile(sidsYaml).Return(nil, fs.ErrNotExist)                                                                                 // good error
+	iom := mock.NewMockIOManager(ctrl)
+	iom.EXPECT().ReadFile(sidsYaml).Return([]byte(`{ "2013030": [ "suppress": {"gen_id": 1, "track": "by_src", "ip": "10.10.3.0/24"} ]}`), nil) // success
+	iom.EXPECT().ReadFile(sidsYaml).Return(nil, errors.New("bad"))                                                                              // bad error
+	iom.EXPECT().ReadFile(sidsYaml).Return(nil, fs.ErrNotExist)                                                                                 // good error
 
 	e := &SuricataEngine{
-		IOManager: mio,
+		IOManager: iom,
 	}
 
 	// file is present and contains data

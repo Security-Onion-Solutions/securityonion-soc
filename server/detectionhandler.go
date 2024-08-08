@@ -90,6 +90,22 @@ func (h *DetectionHandler) getDetection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	eng, ok := h.server.DetectionEngines[detect.Engine]
+	if !ok {
+		log.WithFields(log.Fields{
+			"detectionEngine":   detect.Engine,
+			"detectionPublicId": detectId,
+		}).Error("retrieved detection with unsupported engine")
+	} else {
+		err = eng.MergeAuxiliaryData(detect)
+		if err != nil {
+			log.WithError(err).WithFields(log.Fields{
+				"detectionEngine":   detect.Engine,
+				"detectionPublicId": detectId,
+			}).Error("unable to merge auxiliary data into detection")
+		}
+	}
+
 	web.Respond(w, r, http.StatusOK, detect)
 }
 
@@ -597,8 +613,8 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 			filterApplied, err := engine.ApplyFilters(detect)
 			if err != nil {
 				logger.WithError(err).WithFields(log.Fields{
-					"publicId": detect.PublicID,
-					"engine":   detect.Engine,
+					"detectionPublicId": detect.PublicID,
+					"detectionEngine":   detect.Engine,
 				}).Error("unable to apply engine filters to detection")
 
 				return

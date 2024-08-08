@@ -8,6 +8,7 @@ package strelka
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -49,6 +50,10 @@ const (
 	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS        = 300
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT       = 10
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS        = 600
+	DEFAULT_AI_REPO                                  = "https://github.com/Security-Onion-Solutions/securityonion-resources"
+	DEFAULT_AI_REPO_BRANCH                           = "generated-summaries-stable"
+	DEFAULT_AI_REPO_PATH                             = "/opt/sensoroni/repos"
+	DEFAULT_SHOW_AI_SUMMARIES                        = true
 )
 
 var titleUpdater = regexp.MustCompile(`(?im)rule\s+(\w+)(\s+:(\s*[^{]+))?(\s+)(//.*$)?(\n?){`)
@@ -66,6 +71,11 @@ type StrelkaEngine struct {
 	compileYaraPythonScriptPath    string
 	notify                         bool
 	writeNoRead                    *string
+	aiSummaries                    *sync.Map // map[string]*detections.AiSummary{}
+	showAiSummaries                bool
+	aiRepoUrl                      string
+	aiRepoBranch                   string
+	aiRepoPath                     string
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
 	detections.IOManager
@@ -103,6 +113,7 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 	e.InterruptChan = make(chan bool, 1)
 	e.IntegrityCheckerData.Thread = &sync.WaitGroup{}
 	e.IntegrityCheckerData.Interrupt = make(chan bool, 1)
+	e.aiSummaries = &sync.Map{}
 
 	e.CommunityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECONDS)
 	e.yaraRulesFolder = module.GetStringDefault(config, "yaraRulesFolder", DEFAULT_YARA_RULES_FOLDER)
@@ -125,6 +136,11 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 
 	e.StateFilePath = module.GetStringDefault(config, "stateFilePath", DEFAULT_STATE_FILE_PATH)
 
+	e.showAiSummaries = module.GetBoolDefault(config, "showAiSummaries", DEFAULT_SHOW_AI_SUMMARIES)
+	e.aiRepoUrl = module.GetStringDefault(config, "aiRepoUrl", DEFAULT_AI_REPO)
+	e.aiRepoBranch = module.GetStringDefault(config, "aiRepoBranch", DEFAULT_AI_REPO_BRANCH)
+	e.aiRepoPath = module.GetStringDefault(config, "aiRepoPath", DEFAULT_AI_REPO_PATH)
+
 	return nil
 }
 
@@ -132,8 +148,27 @@ func (e *StrelkaEngine) Start() error {
 	e.srv.DetectionEngines[model.EngineNameStrelka] = e
 	e.isRunning = true
 
+	// start long running processes
 	go detections.SyncScheduler(e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameStrelka, &e.isRunning, e.IOManager)
 	go detections.IntegrityChecker(model.EngineNameStrelka, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
+
+	// update Ai Summaries once and don't block
+	if e.showAiSummaries {
+		go func() {
+			logger := log.WithField("detectionEngine", model.EngineNameStrelka)
+
+			err := detections.RefreshAiSummaries(e, model.SigLangYara, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.aiRepoBranch, logger, e.IOManager)
+			if err != nil {
+				if errors.Is(err, detections.ErrModuleStopped) {
+					return
+				}
+
+				logger.WithError(err).Error("unable to refresh AI summaries")
+			} else {
+				logger.Info("successfully refreshed AI summaries")
+			}
+		}()
+	}
 
 	return nil
 }
@@ -193,7 +228,7 @@ func (e *StrelkaEngine) IsRunning() bool {
 }
 
 func (e *StrelkaEngine) ValidateRule(data string) (string, error) {
-	_, err := e.parseYaraRules([]byte(data), false)
+	_, err := e.parseYaraRules([]byte(data))
 	if err != nil {
 		return "", err
 	}
@@ -210,7 +245,7 @@ func (e *StrelkaEngine) ConvertRule(ctx context.Context, detect *model.Detection
 }
 
 func (s *StrelkaEngine) ExtractDetails(detect *model.Detection) error {
-	rules, err := s.parseYaraRules([]byte(detect.Content), false)
+	rules, err := s.parseYaraRules([]byte(detect.Content))
 	if err != nil {
 		return err
 	}
@@ -258,10 +293,23 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 	e.writeNoRead = nil
 
+	if e.showAiSummaries {
+		err := detections.RefreshAiSummaries(e, model.SigLangYara, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.aiRepoBranch, logger, e.IOManager)
+		if err != nil {
+			if errors.Is(err, detections.ErrModuleStopped) {
+				return err
+			}
+
+			logger.WithError(err).Error("unable to refresh AI summaries")
+		} else {
+			logger.Info("successfully refreshed AI summaries")
+		}
+	}
+
 	e.EngineState.Syncing = true
 
 	// ensure repos are up to date
-	allRepos, anythingNew, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config, e.IOManager)
+	allRepos, anythingNew, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.IOManager)
 	if err != nil {
 		if errors.Is(err, detections.ErrModuleStopped) {
 			return err
@@ -365,7 +413,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 				return nil
 			}
 
-			parsed, err := e.parseYaraRules(raw, true)
+			parsed, err := e.parseYaraRules(raw)
 			if err != nil {
 				logger.WithError(err).WithField("yaraRuleFile", path).Error("failed to parse yara rule file")
 				return nil
@@ -485,7 +533,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 				})
 				if err != nil && err.Error() == "Object not found" {
 					e.writeNoRead = util.Ptr(detect.PublicID)
-					logger.WithField("publicId", detect.PublicID).Error("unable to read back successful write")
+					logger.WithField("detectionPublicId", detect.PublicID).Error("unable to read back successful write")
 
 					break
 				}
@@ -496,7 +544,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 				}
 
 				if err != nil {
-					logger.WithError(err).WithField("publicId", detect.PublicID).Error("failed to update detection")
+					logger.WithError(err).WithField("detectionPublicId", detect.PublicID).Error("failed to update detection")
 					continue
 				}
 			} else {
@@ -538,7 +586,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 			})
 			if err != nil && err.Error() == "Object not found" {
 				e.writeNoRead = util.Ptr(detect.PublicID)
-				logger.WithField("publicId", detect.PublicID).Error("unable to read back successful write")
+				logger.WithField("detectionPublicId", detect.PublicID).Error("unable to read back successful write")
 
 				break
 			}
@@ -549,7 +597,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 			}
 
 			if err != nil {
-				logger.WithError(err).WithField("publicId", detect.PublicID).Error("failed to create detection")
+				logger.WithError(err).WithField("detectionPublicId", detect.PublicID).Error("failed to create detection")
 				continue
 			}
 		}
@@ -610,7 +658,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 			},
 		})
 		if err != nil {
-			logger.WithError(err).WithField("publicId", publicId).Error("Failed to delete unreferenced community detection")
+			logger.WithError(err).WithField("detectionPublicId", publicId).Error("Failed to delete unreferenced community detection")
 			continue
 		}
 	}
@@ -739,7 +787,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 	return nil
 }
 
-func (e *StrelkaEngine) parseYaraRules(data []byte, filter bool) ([]*YaraRule, error) {
+func (e *StrelkaEngine) parseYaraRules(data []byte) ([]*YaraRule, error) {
 	rules := []*YaraRule{}
 	rule := &YaraRule{}
 
@@ -1030,7 +1078,7 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (err error) {
 }
 
 func (e *StrelkaEngine) DuplicateDetection(ctx context.Context, detection *model.Detection) (*model.Detection, error) {
-	rules, err := e.parseYaraRules([]byte(detection.Content), false)
+	rules, err := e.parseYaraRules([]byte(detection.Content))
 	if err != nil {
 		return nil, err
 	}
@@ -1084,6 +1132,40 @@ func (e *StrelkaEngine) DuplicateDetection(ctx context.Context, detection *model
 	return det, nil
 }
 
+func (e *StrelkaEngine) LoadAuxiliaryData(summaries []*model.AiSummary) error {
+	sum := &sync.Map{}
+	for _, summary := range summaries {
+		sum.Store(summary.PublicId, summary)
+	}
+
+	e.aiSummaries = sum
+
+	log.WithFields(log.Fields{
+		"detectionEngine": model.EngineNameStrelka,
+		"aiSummaryCount":  len(summaries),
+	}).Info("loaded AI summaries")
+
+	return nil
+}
+
+func (e *StrelkaEngine) MergeAuxiliaryData(detect *model.Detection) error {
+	if e.showAiSummaries {
+		obj, ok := e.aiSummaries.Load(detect.PublicID)
+		if ok {
+			sig := md5.Sum([]byte(detect.Content))
+			hexSig := hex.EncodeToString(sig[:])
+
+			summary := obj.(*model.AiSummary)
+			detect.AiFields = &model.AiFields{
+				AiSummary:         summary.Summary,
+				AiSummaryReviewed: summary.Reviewed,
+				IsAiSummaryStale:  !strings.EqualFold(summary.RuleBodyHash, hexSig),
+			}
+		}
+	}
+
+	return nil
+}
 func (e *StrelkaEngine) GenerateUnusedPublicId(ctx context.Context) (string, error) {
 	// PublicIDs for Strelka are the rule name which should correlate with what the rule does.
 	// Cannot generate arbitrary but still useful public IDs
