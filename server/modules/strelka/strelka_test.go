@@ -1322,3 +1322,46 @@ func TestLoadAndMergeAuxiliaryData(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateRule(t *testing.T) {
+	tests := []struct {
+		Name          string
+		Input         string
+		ExpectedError string
+	}{
+		{
+			Name:  "Valid Rule",
+			Input: MyBasicRule,
+		},
+		{
+			Name:          "Empty Rule",
+			Input:         "",
+			ExpectedError: "expected exactly 1 rule, got 0",
+		},
+		{
+			Name:          "Empty Rule",
+			Input:         MyBasicRule + "\n" + MyBasicRule,
+			ExpectedError: "expected exactly 1 rule, got 2",
+		},
+		{
+			Name:          "Missing ID",
+			Input:         strings.ReplaceAll(MyBasicRule, "ExampleRule", ""),
+			ExpectedError: "unexpected character in rule identifier around 6",
+		},
+	}
+
+	e := &StrelkaEngine{}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			_, err := e.ValidateRule(test.Input)
+			if test.ExpectedError != "" {
+				assert.Error(t, err)
+				assert.Equal(t, test.ExpectedError, err.Error())
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

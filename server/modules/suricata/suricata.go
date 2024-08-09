@@ -655,6 +655,11 @@ func (e *SuricataEngine) ValidateRule(rule string) (string, error) {
 		return rule, err
 	}
 
+	_, ok := parsed.GetOption("sid")
+	if !ok {
+		return rule, fmt.Errorf("rule does not contain a SID")
+	}
+
 	return parsed.String(), nil
 }
 

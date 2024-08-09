@@ -395,7 +395,7 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			Name:  "Valid Rule with Escaped Quotes",
-			Input: `alert http any any -> any any (msg:"This rule has \"escaped quotes\"";)`,
+			Input: `alert http any any -> any any (msg:"This rule has \"escaped quotes\""; sid: 200000;)`,
 		},
 		{
 			Name:        "Invalid Direction",

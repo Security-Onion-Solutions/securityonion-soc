@@ -969,7 +969,7 @@ func TestExtractDetails(t *testing.T) {
 		{
 			Name:        "No Public Id",
 			Input:       SimpleRuleNoId,
-			ExpectedErr: util.Ptr("rule does not contain a public Id"),
+			ExpectedErr: util.Ptr("missing required fields: id"),
 		},
 		{
 			Name:             "Minimal Extracted Values, No Error",
