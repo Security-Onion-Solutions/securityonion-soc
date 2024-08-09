@@ -337,7 +337,6 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 	}
 
 	statusModifiedByFilter := detect.IsEnabled != specifiedStatus
-	detect.PersistChange = true
 
 	err = h.PrepareForSave(ctx, detect, engine)
 	if err != nil {
@@ -366,6 +365,8 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 
 		return
 	}
+
+	detect.PersistChange = true
 
 	errMap, err := SyncLocalDetections(ctx, h.server, []*model.Detection{detect})
 	if err != nil {

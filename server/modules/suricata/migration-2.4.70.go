@@ -6,7 +6,6 @@
 package suricata
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"regexp"
@@ -37,7 +36,7 @@ func (e *SuricataEngine) Migration2470(statePath string) error {
 
 	log.Info("suricata is now migrating to 2.4.70") // for support
 
-	ctx := context.Background()
+	ctx := e.srv.Context
 
 	// read in idstools.yaml
 	enabled, disabled, err := e.m2470LoadEnabledDisabled()
