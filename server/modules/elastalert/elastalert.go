@@ -63,7 +63,7 @@ const (
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS        = 600
 	DEFAULT_AI_REPO                                  = "https://github.com/Security-Onion-Solutions/securityonion-resources"
 	DEFAULT_AI_REPO_BRANCH                           = "generated-summaries-stable"
-	DEFAULT_AI_REPO_PATH                             = "/opt/sensoroni/repos"
+	DEFAULT_AI_REPO_PATH                             = "/opt/sensoroni/ai_summary_repos"
 	DEFAULT_SHOW_AI_SUMMARIES                        = true
 )
 

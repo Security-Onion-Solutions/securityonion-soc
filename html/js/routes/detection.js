@@ -998,7 +998,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		extractSuricataSeverity() {
 			const results = this.severityExtract.exec(this.detect.content);
 
-			let sev = (results[1] || '').toLowerCase();
+			let sev = (results && results[1] || '').toLowerCase();
 			if (this.severityTranslations[sev]) {
 				sev = this.severityTranslations[sev]
 			}
@@ -1404,7 +1404,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				this.$root.stopLoading();
 			}
 		},
-		async convertDetection(content) {
+		async convertDetection() {
 			this.$root.startLoading();
 			try {
 				const response = await this.$root.papi.post('detection/convert', this.detect);
