@@ -66,7 +66,7 @@ test('extract strelka', () => {
 
 	comp.detect = {
 		engine: 'strelka',
-		content: 'rule Test {\nmeta:\nreference1="example.com"\nreference2="example_text"\ndate = "2020-01-01";\nauthor = "Bob";\n condition:\n$a\n }',
+		content: 'rule Test {\nmeta:\nreference1="example.com"\nreference2="example_text"\ndate = "2020-01-01";\nauthor = "Bob";\n condition:\n$a\n\n }',
 		title: 'Test',
 		description: 'Example Rule',
 	};
@@ -1213,4 +1213,66 @@ test('showAiSummary', () => {
 
 	comp.detect.aiSummary = '';
 	expect(comp.showAiSummary()).toBe(false);
+});
+
+test('isPresetCustomEnabled', () => {
+	comp.presets = {
+		"language": {
+			"labels": ["suricata", "sigma", "yara"],
+			"customEnabled": false
+		},
+		"license": {
+			"labels": ["None", "Apache-2.0", "AGPL-3.0-only", "BSD-3-Clause", "DRL-1.1", "GPL-2.0-only", "GPL-3.0-only", "MIT"],
+			"customEnabled": true
+		}
+	};
+
+	let customEnabled = comp.isPresetCustomEnabled('language');
+	expect(customEnabled).toBe(false);
+
+	customEnabled = comp.isPresetCustomEnabled('license');
+	expect(customEnabled).toBe(true);
+
+	customEnabled = comp.isPresetCustomEnabled('severity');
+	expect(customEnabled).toBe(false);
+});
+
+test('extractSuricataSeverity', () => {
+	comp.severityTranslations = {
+		major: "high",
+		minor: "low"
+	},
+	comp.presets = {
+		severity: {
+			labels: ["unknown", "informational", "low", "medium", "high", "critical"],
+			customEnabled: false
+		}
+	};
+	comp.detect = {
+		content: 'alert http any any <> any any (sid: 999999; rev: 1; metadata: signature_severity Major;)',
+	};
+
+	let sev = comp.extractSuricataSeverity();
+	expect(sev).toBe('high');
+
+	comp.detect = {
+		content: 'alert http any any <> any any (sid: 999999; rev: 1; metadata: signature_severity Minor;)',
+	};
+	sev = comp.extractSuricataSeverity();
+	expect(sev).toBe('low');
+
+	comp.detect = {
+		content: 'alert http any any <> any any (sid: 999999; rev: 1;)',
+	};
+	sev = comp.extractSuricataSeverity();
+	expect(sev).toBe('unknown');
+});
+
+test('loadHistory', async () => {
+	resetPapi().mockPapi("get", { data: [{}] }, null);
+	comp.$root.populateUserDetails = jest.fn();
+	await comp.loadHistory(true);
+
+	expect(comp.$root.populateUserDetails).toHaveBeenCalledTimes(1);
+	expect(comp.history).toStrictEqual([{overrides: []}]);
 });
