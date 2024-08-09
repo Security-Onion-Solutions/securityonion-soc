@@ -64,6 +64,8 @@ func TestSuricataModule(t *testing.T) {
 	err := mod.Init(nil)
 	assert.NoError(t, err)
 
+	mod.showAiSummaries = false
+
 	err = mod.Start()
 	assert.NoError(t, err)
 
