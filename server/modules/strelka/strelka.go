@@ -228,7 +228,7 @@ func (e *StrelkaEngine) IsRunning() bool {
 }
 
 func (e *StrelkaEngine) ValidateRule(data string) (string, error) {
-	_, err := e.parseYaraRules([]byte(data))
+	rules, err := e.parseYaraRules([]byte(data))
 	if err != nil {
 		return "", err
 	}
