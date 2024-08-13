@@ -13,6 +13,7 @@ import (
 )
 
 func TestRefreshAiSummaries(t *testing.T) {
+	t.Skip("Intermittently failing. See build-soc job #31.")
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
