@@ -4,7 +4,7 @@
 # https://securityonion.net/license; you may not use this file except in compliance with the
 # Elastic License 2.0.
 
-FROM ghcr.io/security-onion-solutions/golang:1.22 AS builder
+FROM ghcr.io/security-onion-solutions/golang:1.22.6 AS builder
 
 ARG OWNER=ory
 ARG VERSION=v1.2.0
@@ -32,7 +32,9 @@ RUN go mod download
 RUN go build -tags sqlite -ldflags="-X 'github.com/ory/kratos/driver/config.Version=${VERSION}' -X 'github.com/ory/kratos/driver/config.Date=$(date -I)' -X 'github.com/ory/kratos/driver/config.Commit=$(git rev-parse --short HEAD)'"
 
 
-FROM ghcr.io/security-onion-solutions/ubuntu:23.04
+FROM ghcr.io/security-onion-solutions/ubuntu:24.10
+
+RUN apt-get update && apt-get upgrade -y
 
 ENV DSN=sqlite:///kratos-data/db.sqlite?_fk=true
 

@@ -1727,7 +1727,7 @@ const huntComponent = {
         }
       };
       options.scales = {
-        yAxes: {
+        y: {
           grid: {
             color: gridColor,
           },
@@ -1737,7 +1737,7 @@ const huntComponent = {
             precision: 0,
           }
         },
-        xAxes: {
+        x: {
           gridLines: {
             color: gridColor,
           },
@@ -1760,7 +1760,7 @@ const huntComponent = {
     setupTimelineChart(options, data, title) {
       this.setupBarChart(options, data, title);
       options.onClick = null;
-      options.scales.xAxes.type = 'timeseries';
+      options.scales.x.type = 'timeseries';
     },
     setupPieChart(options, data, title) {
       options.responsive = true;
