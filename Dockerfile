@@ -37,7 +37,6 @@ RUN apt install -y --no-install-recommends bash tzdata ca-certificates wget curl
 RUN pip3 install sigma-cli pysigma-backend-elasticsearch pysigma-pipeline-windows --break-system-packages
 RUN pip3 install yara-python==4.3.1
 RUN apt-get -y remove gcc python3-dev libssl-dev && apt-get -y autoremove
-#RUN sed -i 's/#!\/usr\/bin\/python3/#!\/usr\/bin\/env python/g' /usr/bin/sigma
 	
 RUN update-ca-certificates
 RUN addgroup --gid "$GID" socore
