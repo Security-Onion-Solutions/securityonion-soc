@@ -2,6 +2,7 @@ package detections
 
 import (
 	"io/fs"
+	"sort"
 	"testing"
 
 	"github.com/apex/log"
@@ -13,7 +14,6 @@ import (
 )
 
 func TestRefreshAiSummaries(t *testing.T) {
-	t.Skip("Intermittently failing. See build-soc job #31.")
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -28,17 +28,30 @@ func TestRefreshAiSummaries(t *testing.T) {
 	iom.EXPECT().ReadDir("baseRepoFolder").Return([]fs.DirEntry{}, nil)
 	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo1", repo, &branch).Return(nil)
 	iom.EXPECT().ReadFile("baseRepoFolder/repo1/detections-ai/sigma_summaries.yaml").Return([]byte(summaries), nil)
-	loader.EXPECT().LoadAuxiliaryData([]*model.AiSummary{
-		{
-			PublicId: "87e55c67-46f0-4a7b-a3c6-d473ab7e8392",
-			Summary:  "ai text goes here",
-		},
-		{
-			PublicId: "a23077fc-a5ef-427f-92ab-d3de7f56834d",
-			Reviewed: true,
-			Summary:  "ai text goes here",
-		},
-	}).Return(nil)
+	loader.EXPECT().LoadAuxiliaryData(gomock.Any()).DoAndReturn(func(sums []*model.AiSummary) error {
+		expected := []*model.AiSummary{
+			{
+				PublicId: "87e55c67-46f0-4a7b-a3c6-d473ab7e8392",
+				Summary:  "ai text goes here",
+			},
+			{
+				PublicId: "a23077fc-a5ef-427f-92ab-d3de7f56834d",
+				Reviewed: true,
+				Summary:  "ai text goes here",
+			},
+		}
+
+		sort.Slice(sums, func(i, j int) bool {
+			return sums[i].PublicId < sums[j].PublicId
+		})
+
+		assert.Equal(t, len(expected), len(sums))
+		for i := range sums {
+			assert.Equal(t, *expected[i], *sums[i])
+		}
+
+		return nil
+	})
 
 	logger := log.WithField("test", true)
 
