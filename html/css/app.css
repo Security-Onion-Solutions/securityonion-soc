@@ -7,33 +7,57 @@
 */
 /* Vuetify theme overrides */
 .v-application {
-  background-color: var(--v-background-base) !important;
+  background-color: rgb(var(--v-theme-background)) !important;
+}
+
+.theme-background {
+  background-color: rgb(var(--v-theme-background)) !important;
+}
+
+.card-shadow {
+  box-shadow: 0 3px 1px -2px rgba(0, 0, 0, .2), 0 2px 2px 0 rgba(0, 0, 0, .14), 0 1px 5px 0 rgba(0, 0, 0, .12);
 }
 
 .v-app-bar {
-  background-color: var(--v-nav_background-base) !important;
+  background-color: rgb(var(--v-theme-nav_background)) !important;
 }
 
 .v-app-bar .v-icon {
-  color: var(--v-nav-base) !important;
+  color: rgb(var(--v-theme-nav)) !important;
+}
+
+.v-main {
+  height: 100vh;
 }
 
 .v-navigation-drawer {
-  background-color: var(--v-drawer_background-base) !important;
+  background-color: rgb(var(--v-theme-drawer_background)) !important;
 }
 
 .v-footer {
-  background-color: var(--v-nav_background-base) !important;
-  color: var(--v-nav-base) !important;
+  background-color: rgb(var(--v-theme-nav_background)) !important;
+  color: rgb(var(--v-theme-nav)) !important;
 }
 
 .v-footer a {
   text-decoration: none;
-  color: var(--v-primary-lighten1) !important;
+  color: rgb(var(--v-theme-primary-lighten-1)) !important;
 }
 
 .v-icon {
   font-size: 18px !important;
+}
+
+.v-card {
+  opacity: 1 !important;
+}
+
+.v-card .v-card-subtitle {
+  opacity: 1 !important;
+}
+
+.v-card-subtitle+.v-card-text {
+  padding-top: 0;
 }
 
 .v-list-item__action, .v-list-item__icon:first-child {
@@ -58,7 +82,7 @@
 }
 
 .contrast-bg {
-  background-color: var(--v-drawer_background-base) !important;
+  background-color: rgb(var(--v-theme-drawer_background)) !important;
 }
 
 .v-otp-input {
@@ -108,7 +132,7 @@
   }
 }
 
-.theme--dark.v-data-table tr:nth-of-type(even) {
+.v-theme--dark.v-data-table tr:nth-of-type(even) {
   background-color: rgba(45, 45, 45, 0.25);
  }
 
@@ -158,12 +182,12 @@ a#title, a#title:visited, a#title:active, a#title:hover {
 }
 
 .src {
-  border-left: 3px solid var(--v-info-base);
+  border-left: 3px solid var(--v-theme-info);
   font-weight: bold;
 }
 
 .dst {
-  border-left: 3px solid var(--v-error-base);
+  border-left: 3px solid var(--v-theme-error);
   font-weight: bold;
 }
 
@@ -208,7 +232,7 @@ a#title, a#title:visited, a#title:active, a#title:hover {
   border-bottom: 1px dotted rgba(0,0,0,.05);
 }
 
-.theme--dark.v-application .case.tabular-row {
+.v-theme--dark.v-application .case.tabular-row {
   border-bottom: 1px dotted hsla(0,0%,100%,.05);
 }
 
@@ -248,7 +272,7 @@ a#title, a#title:visited, a#title:active, a#title:hover {
 
 .clicktoedit:hover {
   cursor: pointer;
-  color: var(--v-primary-lighten1) !important;
+  color: rgb(var(--v-theme-primary-lighten-1)) !important;
 }
 
 td.associated {
@@ -330,8 +354,8 @@ td {
   margin: 8px 0 8px 0;
 }
 
-.theme--dark.v-application .markdown-body td,
-.theme--dark.v-application  .markdown-body th {
+.v-theme--dark.v-application .markdown-body td,
+.v-theme--dark.v-application  .markdown-body th {
   border: 1px solid hsla(0,0%,100%,.1);
 }
 
@@ -340,7 +364,7 @@ td {
   border: 1px solid rgba(0,0,0,.2);
 }
 
-.theme--dark.v-application .markdown-body tr:nth-child(even) {
+.v-theme--dark.v-application .markdown-body tr:nth-child(even) {
   background-color: hsla(0,0%,100%,.05);
 }
 
@@ -353,7 +377,7 @@ td {
 }
 
 /* motd background is darker, so some markdown table colors need to be different */
-.theme--dark.v-application #motd.markdown-body th {
+.v-theme--dark.v-application #motd.markdown-body th {
   background-color: rgba(0,0,0,.25);
 }
 
@@ -362,7 +386,7 @@ td {
 }
 
 
-.theme--dark.v-application .comment-body .markdown-body {
+.v-theme--dark.v-application .comment-body .markdown-body {
   background-color: rgba(0,0,0,.2);
 }
 
@@ -386,7 +410,7 @@ td {
   border-radius: 0.25em;
 }
 
-.theme--dark.v-application .markdown-body pre {
+.v-theme--dark.v-application .markdown-body pre {
   background-color: hsla(0,0%,100%,.1);
   border-radius: 0.25em;
 }
@@ -400,11 +424,11 @@ td {
 }
 
 .case.markdown-icon i {
-  color: var(--v-secondary-lighten3);
+  color: rgb(var(--v-theme-secondary-lighten-3));
 }
 
 .case.markdown-icon:hover i {
-  color: var(--v-primary-base);
+  color: rgb(var(--v-theme-primary));
 }
 
 .maximized {
@@ -413,7 +437,7 @@ td {
   top: 0px;
   width: 100%;
   height: calc(100vh - 100px);
-  background-color: var(--v-background-base);
+  background-color: rgb(var(--v-theme-background));
   z-index: 1;
 }
 
@@ -421,20 +445,20 @@ td {
   overflow: hidden;
 }
 
-.theme--dark.v-card.config-setting {
-  background-color: var(--v-drawer_background-base);
+.v-theme--dark.v-card.config-setting {
+  background-color: rgb(var(--v-theme-drawer_background));
 }
 
 .theme--light.v-card.config-setting {
-  background-color: var(--v-drawer_background-base);
+  background-color: rgb(var(--v-theme-drawer_background));
 }
 
-.theme--dark.editing .v-input__slot {
-  background-color: var(--v-drawer_background-lighten1);
+.v-theme--dark.editing .v-input__slot {
+  background-color: rgb(var(--v-theme-drawer_background-lighten-1));
 }
 
 .theme--light.editing .v-input__slot {
-  background-color: var(--v-drawer_background-lighten1);
+  background-color: rgb(var(--v-theme-drawer_background-lighten-1));
 }
 
 #config-tree {
@@ -662,7 +686,7 @@ code {
   color: rgb(102, 153, 0)
 }
 
-.theme--dark .key-changed {
+.v-theme--dark .key-changed {
   color: rgb(204, 153, 205)
 }
 
@@ -678,7 +702,7 @@ tbody tr:hover {
   background-color: transparent !important;
 }
 
-.theme--dark tbody tr:hover:nth-of-type(even) {
+.v-theme--dark tbody tr:hover:nth-of-type(even) {
   background-color: rgba(45, 45, 45, 0.25) !important;
 }
 

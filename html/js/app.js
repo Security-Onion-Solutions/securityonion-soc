@@ -27,26 +27,40 @@ const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
 
 if (typeof global !== 'undefined') global.routes = routes;
 
-$(document).ready(function() {
-  new Vue({
-    el: '#app',
-    vuetify: new Vuetify({
-      icons: {
-        iconfont: 'fa',
+$(document).ready(function () {
+  const vuetify = Vuetify.createVuetify({
+    icons: {
+      iconfont: 'fa',
+    },
+    theme: {
+      defaultTheme: 'dark',
+      options: {
+        customProperties: true,
       },
-      theme: {
-        dark: true,
-        options: {
-          customProperties: true,
-        },
-        themes: {
-          light: {
+      variations: {
+        colors: ['primary', 'secondary', 'drawer_background'],
+        lighten: 3,
+        darken: 2,
+      },
+      themes: {
+        light: {
+          colors: {
+            primary: '#2196f3',
+            secondary: '#424242',
+            info: '#2196f3',
+            error: '#ff5252',
             nav_background: '#12110d',
             nav: '#ffffff',
             drawer_background: '#f4f4f4',
             background: '#ffffff',
           },
-          dark: {
+        },
+        dark: {
+          colors: {
+            primary: '#2196f3',
+            secondary: '#424242',
+            info: '#2196f3',
+            error: '#ff5252',
             nav_background: '#12110d',
             nav: '#ffffff',
             drawer_background: '#353535',
@@ -54,64 +68,74 @@ $(document).ready(function() {
           },
         },
       },
-    }),
-    router: new VueRouter({ routes }),
-    data: {
-      timestamp: Date.now(),
-      i18n: i18n.getLocalizedTranslations(navigator.language),
-      loading: false,
-      error: false,
-      warning: false,
-      info: false,
-      tip: false,
-      errorMessage: "",
-      warningMessage: "",
-      infoMessage: "",
-      tipMessage: "",
-      tipTimeout: 6000,
-      warningTimeout: 30000,
-      errorTimeout: 120000,
-      toolbar: null,
-      wsUrl: (location.protocol == 'https:' ?  'wss://' : 'ws://') + location.host + location.pathname + 'ws',
-      apiUrl: location.origin + location.pathname + 'api/',
-      authUrl: '/auth/self-service/',
-      settingsUrl: null,
-      version: '0.0.0',
-      elasticVersion: '0.0.0',
-      papi: null,
-      connectionTimeout: 300000,
-      wsConnectionTimeout: 15000,
-      socket: null,
-      subscriptions: [],
-      parameters: {},
-      parametersLoaded: false,
-      parameterCallback: null,
-      parameterSection: null,
-      chartsInitialized: false,
-      editorInitialized: false,
-      tools: [],
-      casesEnabled: false,
-      detectionsEnabled: false,
-      subtitle: '',
-      currentStatus: null,
-      connected: false,
-      reconnecting: false,
-      users: [],
-      usersLoadedDate: null,
-      cacheRefreshIntervalMs: 300000,
-      loadServerSettingsTime: 0,
-      user: null,
-      username: '',
-      maximizedParent: null,
-      maximizedOrigWidth: null,
-      maximizedOrigHeight: null,
-      maximizedCancelFn: null,
-      licenseKey: null,
-      licenseStatus: null,
-      enableReverseLookup: false,
-      ip2host: {},
-      securitySettingsAlreadyChecked: false,
-      forceUserOtp: false,
+    },
+    components: Vuetify.components,
+    directives: Vuetify.directives,
+  });
+
+  const router = VueRouter.createRouter({ routes, history: VueRouter.createWebHistory() })
+
+  const comp = {
+    el: '#app',
+    router: router,
+    data: () => {
+      return {
+        timestamp: Date.now(),
+        i18n: i18n.getLocalizedTranslations(navigator.language),
+        loading: false,
+        error: false,
+        warning: false,
+        info: false,
+        tip: false,
+        errorMessage: "",
+        warningMessage: "",
+        infoMessage: "",
+        tipMessage: "",
+        tipTimeout: 6000,
+        warningTimeout: 30000,
+        errorTimeout: 120000,
+        toolbar: null,
+        wsUrl: (location.protocol == 'https:' ? 'wss://' : 'ws://') + location.host + location.pathname + 'ws',
+        apiUrl: location.origin + location.pathname + 'api/',
+        authUrl: '/auth/self-service/',
+        settingsUrl: null,
+        version: '0.0.0',
+        elasticVersion: '0.0.0',
+        papi: null,
+        connectionTimeout: 300000,
+        wsConnectionTimeout: 15000,
+        socket: null,
+        subscriptions: [],
+        parameters: {},
+        parametersLoaded: false,
+        parameterCallback: null,
+        parameterSection: null,
+        chartsInitialized: false,
+        editorInitialized: false,
+        tools: [],
+        casesEnabled: false,
+        detectionsEnabled: false,
+        subtitle: '',
+        currentStatus: null,
+        connected: false,
+        reconnecting: false,
+        users: [],
+        usersLoadedDate: null,
+        cacheRefreshIntervalMs: 300000,
+        loadServerSettingsTime: 0,
+        user: null,
+        username: '',
+        maximizedParent: null,
+        maximizedOrigWidth: null,
+        maximizedOrigHeight: null,
+        maximizedCancelFn: null,
+        licenseKey: null,
+        licenseStatus: null,
+        enableReverseLookup: false,
+        ip2host: {},
+        securitySettingsAlreadyChecked: false,
+        forceUserOtp: false,
+      }
     },
     watch: {
       '$vuetify.theme.dark': 'saveLocalSettings',
@@ -431,10 +455,10 @@ $(document).ready(function() {
         }
       },
       checkUserSecuritySettings(infoResponse) {
-        // Only force OTP on initial login, otherwise risk user losing data 
-        // on a case comment, etc. This only applies if the ForceUserOtp 
-        // setting was enabled after a user had already been logged in. Users 
-        // that login after that setting is enabled will repeatedly be taken 
+        // Only force OTP on initial login, otherwise risk user losing data
+        // on a case comment, etc. This only applies if the ForceUserOtp
+        // setting was enabled after a user had already been logged in. Users
+        // that login after that setting is enabled will repeatedly be taken
         // back to the settings until the user complies.
         if (this.securitySettingsAlreadyChecked) return;
 
@@ -1236,14 +1260,6 @@ $(document).ready(function() {
       this.setupAuth();
       this.loadServerSettings(false);
       this.loadLocalSettings();
-      Vue.filter('formatDateTime', this.formatDateTime);
-      Vue.filter('formatDuration', this.formatDuration);
-      Vue.filter('formatHours', this.formatHours);
-      Vue.filter('formatDecimal1', this.formatDecimal1);
-      Vue.filter('formatDecimal2', this.formatDecimal2);
-      Vue.filter('formatCount', this.formatCount);
-      Vue.filter('formatMarkdown', this.formatMarkdown);
-      Vue.filter('formatTimestamp', this.formatTimestamp);
       $('#app')[0].style.display = "block";
       this.log("Initialization complete");
     },
@@ -1251,5 +1267,27 @@ $(document).ready(function() {
       this.setFavicon();
       window.matchMedia('(prefers-color-scheme: dark)').addListener(() => this.setFavicon());
     },
+  };
+
+  const filters = {
+    formatDateTime: comp.methods.formatDateTime,
+    formatDuration: comp.methods.formatDuration,
+    formatHours: comp.methods.formatHours,
+    formatDecimal1: comp.methods.formatDecimal1,
+    formatDecimal2: comp.methods.formatDecimal2,
+    formatCount: comp.methods.formatCount,
+    formatMarkdown: comp.methods.formatMarkdown,
+    formatTimestamp: comp.methods.formatTimestamp,
+  };
+
+  const app = Vue.createApp(comp);
+  app.use(vuetify);
+  app.use(router);
+
+  // Register filters globally
+  Object.keys(filters).forEach(key => {
+    app.config.globalProperties[key] = filters[key];
   });
+
+  app.mount('#app');
 });

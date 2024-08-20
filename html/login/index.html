@@ -16,37 +16,41 @@
     <link rel="mask-icon" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
     <link rel="alternate icon" class="so-favicon" type="image/png" href="images/favicon/onion.png?v=VERSION_PLACEHOLDER">
     <link rel="icon" class="so-favicon" type="image/svg+xml" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
-    <link rel="stylesheet" href="css/external/vuetify-v2.7.2.min.css">
+    <link rel="stylesheet" href="css/external/vuetify-v3.7.0.min.css">
     <link rel="stylesheet" href="css/external/all-6.6.0.min.css">
     <link rel="stylesheet" href="css/app.css?v=VERSION_PLACEHOLDER">
     <script src="js/analytics.js?v=VERSION_PLACEHOLDER"></script>
     <title>Security Onion</title>
   </head>
   <body style="background-color: #242424;">
-    <v-app id="app" style="display:none" data-aid="login_app">
-      <v-app-bar clipped-left app >
-        <router-link id="title" to="/" data-aid="login_home">
-          <img class="pt-1" :title="i18n.product" :alt="i18n.product" height="45" src="images/so-logo.svg"></v-img>
-        </router-link>
-      </v-app-bar>
-      <v-main>
-        <v-progress-linear v-if="loading" :active="loading" indeterminate></v-progress-linear>
-        <v-alert dismissible type="error" icon="fa-exclamation-triangle" v-model="error" transition="scale-transition" v-text="errorMessage" data-aid="login_banner_error"></v-alert>
-        <v-alert dismissible type="warning" icon="fa-exclamation" v-model="warning" transition="scale-transition" v-text="warningMessage" data-aid="login_banner_warning"></v-alert>
-        <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" data-aid="login_banner_info">{{ infoMessage }}</v-alert>
-        <router-view></router-view>
-      </v-main>
-      <v-footer app inset>
-        <v-spacer></v-spacer>
-        <span class="center text-no-wrap">
-          &copy; {{ new Date().getFullYear() }} <a class="footer" target="sos" href="https://securityonionsolutions.com/" data-aid="login_nav_sos">Security Onion Solutions, LLC</a>
-        </span>
-        <v-spacer></v-spacer>
-      </v-footer>
+    <v-app id="app" class="v-application" style="display:none" data-aid="login_app">
+      <v-layout>
+        <v-app-bar clipped-left app>
+          <v-app-bar-title>
+            <router-link id="title" to="/" data-aid="login_home">
+              <img class="pt-1" :title="i18n.product" :alt="i18n.product" height="45" src="images/so-logo.svg">
+            </router-link>
+          </v-app-bar-title>
+        </v-app-bar>
+        <v-main>
+          <v-progress-linear v-if="loading" :active="loading" indeterminate></v-progress-linear>
+          <v-alert dismissible type="error" icon="fa-exclamation-triangle" v-model="error" transition="scale-transition" v-text="errorMessage" data-aid="login_banner_error"></v-alert>
+          <v-alert dismissible type="warning" icon="fa-exclamation" v-model="warning" transition="scale-transition" v-text="warningMessage" data-aid="login_banner_warning"></v-alert>
+          <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" data-aid="login_banner_info">{{ infoMessage }}</v-alert>
+          <router-view></router-view>
+        </v-main>
+        <v-footer app inset>
+          <v-spacer></v-spacer>
+          <span class="center text-no-wrap">
+            &copy; {{ new Date().getFullYear() }} <a class="footer" target="sos" href="https://securityonionsolutions.com/" data-aid="login_nav_sos">Security Onion Solutions, LLC</a>
+          </span>
+          <v-spacer></v-spacer>
+        </v-footer>
+      </v-layout>
     </v-app>
 
     <script type="text/x-template" id="page-login" data-aid="login_screen">
-      <v-card class="mt-12 mx-auto" max-width="600">
+      <v-card class="mt-12 mx-auto theme-background card-shadow" variant="plain" max-width="600">
         <v-card-title class="lighten-4 py-4 title" v-text="i18n.loginTitle"></v-card-title>
 
         <v-container v-if="showLoginForm" grid-list-sm class="pa-4">
@@ -72,10 +76,10 @@
               </div>
 
               <v-form v-if="!webauthnForm.continue && passwordEnabled" id="loginForm" v-model="form.valid" method="post" :action="authLoginUrl">
-                <v-card-subtitle v-text="i18n.passwordLoginMethod"></v-card-subtitle>
+                <v-card-subtitle class="py-4" v-text="i18n.passwordLoginMethod"></v-card-subtitle>
                 <v-card-text>
-                  <v-text-field id="password_identifier" name="identifier" v-model="form.email" :placeholder="i18n.email" :hint="i18n.emailHelp" autofocus="true" :rules="[rules.required]" data-aid="login_email_input"></v-text-field>
-                  <v-text-field name="password" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required]" data-aid="login_password_input"></v-text-field>
+                  <v-text-field id="password_identifier" name="identifier" v-model="form.email" :placeholder="i18n.email" :hint="i18n.emailHelp" :autofocus="true" :rules="[rules.required]" variant="underlined" data-aid="login_email_input"></v-text-field>
+                  <v-text-field name="password" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" :rules="[rules.required]" variant="underlined" :append-inner-icon="showPassword ? 'fa fa-eye-slash' : 'fa fa-eye'" @click:append-inner="showPassword = !showPassword" data-aid="login_password_input"></v-text-field>
                   <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
                   <v-text-field name="method" value="password" class="d-none"></v-text-field>
                 </v-card-text>
@@ -86,7 +90,7 @@
               </v-form>
 
               <v-form v-if="!webauthnForm.continue && !passwordEnabled && totpEnabled" id="loginForm" v-model="form.valid" method="post" :action="authLoginUrl">
-                <v-card-subtitle v-text="i18n.totp"></v-card-subtitle>
+                <v-card-subtitle class="py-4" v-text="i18n.totp"></v-card-subtitle>
                 <v-card-text>
                   <div class="mb-4">{{ i18n.totpCodeHelp }}</div>
                   <v-otp-input id="totp" autocomplete="off" v-model="form.totpCode" :length="totpCodeLength" @finish="submitTotp" data-aid="login_totp_input"></v-otp-input>
@@ -101,9 +105,9 @@
               </v-form>
 
               <v-form v-if="webauthnForm.enabled && !webauthnForm.continue" id="loginWebAuthnForm" v-model="webauthnForm.valid" method="post" :action="authLoginUrl">
-                <v-card-subtitle v-text="i18n.webauthnLoginMethod"></v-card-subtitle>
+                <v-card-subtitle class="py-4" v-text="i18n.webauthnLoginMethod"></v-card-subtitle>
                 <v-card-text>
-                  <v-text-field id="webauthn_identifier" name="identifier" v-model="webauthnForm.email" :placeholder="i18n.email" :hint="i18n.emailHelp" :rules="[rules.required]"></v-text-field>
+                  <v-text-field id="webauthn_identifier" name="identifier" v-model="webauthnForm.email" :placeholder="i18n.email" :hint="i18n.emailHelp" :rules="[rules.required]" variant="underlined"></v-text-field>
                   <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
                   <v-text-field name="method" value="webauthn" class="d-none"></v-text-field>
                 </v-card-text>
@@ -145,9 +149,9 @@
     </script>
 
     <script src="js/external/jquery-3.7.1.min.js"></script>
-    <script src="js/external/vue-2.7.16.min.js"></script>
-    <script src="js/external/vue-router-3.6.5.min.js"></script>
-    <script src="js/external/vuetify-v2.7.2.min.js"></script>
+    <script src="js/external/vue-3.4.38.min.js"></script>
+    <script src="js/external/vue-router-4.4.3.min.js"></script>
+    <script src="js/external/vuetify-v3.7.0.min.js"></script>
     <script src="js/external/axios-1.7.4.min.js"></script>
     <script src="js/external/moment-2.30.1.min.js"></script>
     <script src="js/external/marked-14.0.0.min.js"></script>
