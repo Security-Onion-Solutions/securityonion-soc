@@ -339,7 +339,8 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 	})).Return([]byte("<eql>"), 0, time.Duration(0), nil)
 
 	engine := ElastAlertEngine{
-		IOManager: iom,
+		IOManager:          iom,
+		additionalAlerters: []string{"email", "slack"},
 	}
 
 	det := &model.Detection{
@@ -362,7 +363,7 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 	assert.NoError(t, err)
 
 	// No license
-	wrappedRule, err := wrapRule(det, query, []string{"email", "slack"})
+	wrappedRule, err := engine.wrapRule(det, query)
 	assert.NoError(t, err)
 
 	expected := `detection_title: Test Detection
@@ -409,7 +410,9 @@ func TestSigmaToElastAlertSunnyDayLicensed(t *testing.T) {
 	})).Return([]byte("<eql>"), 0, time.Duration(0), nil)
 
 	engine := ElastAlertEngine{
-		IOManager: iom,
+		IOManager:               iom,
+		additionalAlerters:      []string{"email", "slack"},
+		additionalAlerterParams: "foo: bar",
 	}
 
 	det := &model.Detection{
@@ -424,7 +427,7 @@ func TestSigmaToElastAlertSunnyDayLicensed(t *testing.T) {
 
 	// License
 	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
-	wrappedRule, err := wrapRule(det, query, []string{"email", "slack"})
+	wrappedRule, err := engine.wrapRule(det, query)
 	assert.NoError(t, err)
 
 	expected := `detection_title: Test Detection
@@ -444,8 +447,62 @@ realert:
     seconds: 0
 filter:
     - eql: <eql>
+foo: bar
 `
 	assert.YAMLEq(t, expected, wrappedRule)
+}
+
+func TestAdditionalAlertersSev0(t *testing.T) {
+	engine := ElastAlertEngine{
+		additionalAlerters:      []string{"email", "slack"},
+		additionalAlerterParams: "foo: bar",
+	}
+
+	for sev := range 6 {
+		alerters, params := engine.getAdditionalAlerters(sev)
+		assert.Equal(t, []string{"email", "slack"}, alerters)
+		assert.Equal(t, "foo: bar", params)
+	}
+}
+
+func TestAdditionalAlertersSev0Sev3(t *testing.T) {
+	engine := ElastAlertEngine{
+		additionalAlerters:          []string{"email", "slack"},
+		additionalAlerterParams:     "foo: bar",
+		mediumSeverityAlerters:      []string{"teams"},
+		mediumSeverityAlerterParams: "foo: boo",
+	}
+
+	for sev := range 6 {
+		alerters, params := engine.getAdditionalAlerters(sev)
+		if sev < 3 {
+			assert.Equal(t, []string{"email", "slack"}, alerters)
+			assert.Equal(t, "foo: bar", params)
+		} else {
+			assert.Equal(t, []string{"teams"}, alerters)
+			assert.Equal(t, "foo: boo", params)
+		}
+	}
+}
+
+func TestAdditionalAlertersSev0Sev5(t *testing.T) {
+	engine := ElastAlertEngine{
+		additionalAlerters:            []string{"email", "slack"},
+		additionalAlerterParams:       "foo: bar",
+		criticalSeverityAlerters:      []string{"teams"},
+		criticalSeverityAlerterParams: "foo: boo",
+	}
+
+	for sev := range 6 {
+		alerters, params := engine.getAdditionalAlerters(sev)
+		if sev < 5 {
+			assert.Equal(t, []string{"email", "slack"}, alerters)
+			assert.Equal(t, "foo: bar", params)
+		} else {
+			assert.Equal(t, []string{"teams"}, alerters)
+			assert.Equal(t, "foo: boo", params)
+		}
+	}
 }
 
 func TestSigmaToElastAlertError(t *testing.T) {

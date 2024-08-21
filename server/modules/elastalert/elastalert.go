@@ -83,30 +83,41 @@ var acceptedExtensions = map[string]bool{
 }
 
 type ElastAlertEngine struct {
-	srv                            *server.Server
-	airgapBasePath                 string
-	failAfterConsecutiveErrorCount int
-	sigmaPackageDownloadTemplate   string
-	elastAlertRulesFolder          string
-	rulesFingerprintFile           string
-	sigmaPipelineFinal             string
-	sigmaPipelineSO                string
-	sigmaPipelinesFingerprintFile  string
-	sigmaRulePackages              []string
-	autoEnabledSigmaRules          []string
-	additionalAlerters             []string
-	rulesRepos                     []*model.RuleRepo
-	reposFolder                    string
-	isRunning                      bool
-	interm                         sync.Mutex
-	airgapEnabled                  bool
-	notify                         bool
-	writeNoRead                    *string
-	aiSummaries                    *sync.Map // map[string]*detections.AiSummary{}
-	showAiSummaries                bool
-	aiRepoUrl                      string
-	aiRepoBranch                   string
-	aiRepoPath                     string
+	srv                                *server.Server
+	airgapBasePath                     string
+	failAfterConsecutiveErrorCount     int
+	sigmaPackageDownloadTemplate       string
+	elastAlertRulesFolder              string
+	rulesFingerprintFile               string
+	sigmaPipelineFinal                 string
+	sigmaPipelineSO                    string
+	sigmaPipelinesFingerprintFile      string
+	sigmaRulePackages                  []string
+	autoEnabledSigmaRules              []string
+	additionalAlerters                 []string
+	additionalAlerterParams            string
+	informationalSeverityAlerters      []string
+	informationalSeverityAlerterParams string
+	lowSeverityAlerters                []string
+	lowSeverityAlerterParams           string
+	mediumSeverityAlerters             []string
+	mediumSeverityAlerterParams        string
+	highSeverityAlerters               []string
+	highSeverityAlerterParams          string
+	criticalSeverityAlerters           []string
+	criticalSeverityAlerterParams      string
+	rulesRepos                         []*model.RuleRepo
+	reposFolder                        string
+	isRunning                          bool
+	interm                             sync.Mutex
+	airgapEnabled                      bool
+	notify                             bool
+	writeNoRead                        *string
+	aiSummaries                        *sync.Map // map[string]*detections.AiSummary{}
+	showAiSummaries                    bool
+	aiRepoUrl                          string
+	aiRepoBranch                       string
+	aiRepoPath                         string
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
 	detections.IOManager
@@ -167,6 +178,17 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.CommunityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 	e.additionalAlerters = module.GetStringArrayDefault(config, "additionalAlerters", []string{})
+	e.additionalAlerterParams = module.GetStringDefault(config, "additionalSev0AlertersParams", "")
+	e.informationalSeverityAlerters = module.GetStringArrayDefault(config, "additionalSev1Alerters", []string{})
+	e.informationalSeverityAlerterParams = module.GetStringDefault(config, "additionalSev1AlertersParams", "")
+	e.lowSeverityAlerters = module.GetStringArrayDefault(config, "additionalSev2Alerters", []string{})
+	e.lowSeverityAlerterParams = module.GetStringDefault(config, "additionalSev2AlertersParams", "")
+	e.mediumSeverityAlerters = module.GetStringArrayDefault(config, "additionalSev3Alerters", []string{})
+	e.mediumSeverityAlerterParams = module.GetStringDefault(config, "additionalSev3AlertersParams", "")
+	e.highSeverityAlerters = module.GetStringArrayDefault(config, "additionalSev4Alerters", []string{})
+	e.highSeverityAlerterParams = module.GetStringDefault(config, "additionalSev4AlertersParams", "")
+	e.criticalSeverityAlerters = module.GetStringArrayDefault(config, "additionalSev5Alerters", []string{})
+	e.criticalSeverityAlerterParams = module.GetStringDefault(config, "additionalSev5AlertersParams", "")
 	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS)
 
 	pkgs := module.GetStringArrayDefault(config, "sigmaRulePackages", []string{"core", "emerging_threats_addon"})
@@ -427,7 +449,7 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 				continue
 			}
 
-			wrapped, err := wrapRule(det, eaRule, e.additionalAlerters)
+			wrapped, err := e.wrapRule(det, eaRule)
 			if err != nil {
 				continue
 			}
@@ -1075,7 +1097,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 				continue
 			}
 
-			rule, err = wrapRule(detect, rule, e.additionalAlerters)
+			rule, err = e.wrapRule(detect, rule)
 			if err != nil {
 				continue
 			}
@@ -1508,6 +1530,64 @@ func (e *ElastAlertEngine) MergeAuxiliaryData(detect *model.Detection) error {
 	return nil
 }
 
+func (e *ElastAlertEngine) getAdditionalAlerters(severity int) ([]string, string) {
+	// Start with default alerters
+	alerters := e.additionalAlerters
+	params := e.additionalAlerterParams
+
+	// Override if info or above severity
+	if severity > 0 {
+		if len(e.informationalSeverityAlerters) > 0 {
+			alerters = e.informationalSeverityAlerters
+		}
+		if len(e.informationalSeverityAlerterParams) > 0 {
+			params = e.informationalSeverityAlerterParams
+		}
+	}
+
+	// Override if low or above severity
+	if severity > 1 {
+		if len(e.lowSeverityAlerters) > 0 {
+			alerters = e.lowSeverityAlerters
+		}
+		if len(e.lowSeverityAlerterParams) > 0 {
+			params = e.lowSeverityAlerterParams
+		}
+	}
+
+	// Override if med or above severity
+	if severity > 2 {
+		if len(e.mediumSeverityAlerters) > 0 {
+			alerters = e.mediumSeverityAlerters
+		}
+		if len(e.mediumSeverityAlerterParams) > 0 {
+			params = e.mediumSeverityAlerterParams
+		}
+	}
+
+	// Override if high or crit severity
+	if severity > 3 {
+		if len(e.highSeverityAlerters) > 0 {
+			alerters = e.highSeverityAlerters
+		}
+		if len(e.highSeverityAlerterParams) > 0 {
+			params = e.highSeverityAlerterParams
+		}
+	}
+
+	// Override if crit severity
+	if severity > 4 {
+		if len(e.criticalSeverityAlerters) > 0 {
+			alerters = e.criticalSeverityAlerters
+		}
+		if len(e.criticalSeverityAlerterParams) > 0 {
+			params = e.criticalSeverityAlerterParams
+		}
+	}
+
+	return alerters, params
+}
+
 type CustomWrapper struct {
 	DetectionTitle    string   `yaml:"detection_title"`
 	DetectionPublicId string   `yaml:"detection_public_id"`
@@ -1644,7 +1724,7 @@ func (dur *TimeFrame) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return err
 }
 
-func wrapRule(det *model.Detection, rule string, additionalAlerters []string) (string, error) {
+func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, error) {
 	severities := map[model.Severity]int{
 		model.SeverityUnknown:       0,
 		model.SeverityInformational: 1,
@@ -1653,6 +1733,13 @@ func wrapRule(det *model.Detection, rule string, additionalAlerters []string) (s
 		model.SeverityHigh:          4,
 		model.SeverityCritical:      5,
 	}
+
+	alerters, params := e.getAdditionalAlerters(severities[det.Severity])
+	log.WithFields(log.Fields{
+		"sevNum": severities[det.Severity],
+		"sev":    det.Severity,
+		"params": params,
+	}).Error("********** Got params")
 
 	sevNum := severities[det.Severity]
 	realert := TimeFrame{}
@@ -1678,7 +1765,7 @@ func wrapRule(det *model.Detection, rule string, additionalAlerters []string) (s
 
 	if licensing.IsEnabled(licensing.FEAT_NTF) {
 		// Add any custom alerters to the rule.
-		for _, alerter := range additionalAlerters {
+		for _, alerter := range alerters {
 			alerter = strings.TrimSpace(alerter)
 			if len(alerter) > 0 {
 				wrapper.Alert = append(wrapper.Alert, alerter)
@@ -1690,8 +1777,15 @@ func wrapRule(det *model.Detection, rule string, additionalAlerters []string) (s
 	if err != nil {
 		return "", err
 	}
+	strYaml := string(rawYaml)
 
-	return string(rawYaml), nil
+	if licensing.IsEnabled(licensing.FEAT_NTF) {
+		if len(params) > 0 {
+			strYaml += "\n" + params + "\n"
+		}
+	}
+
+	return strYaml, nil
 }
 
 func (e *ElastAlertEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (deployedButNotEnabled []string, enabledButNotDeployed []string, err error) {
