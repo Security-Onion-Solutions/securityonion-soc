@@ -10,6 +10,14 @@
   background-color: rgb(var(--v-theme-background)) !important;
 }
 
+.v-application p {
+  margin-bottom: 16px;
+}
+
+.v-application a {
+  color: rgb(var(--v-theme-primary));
+}
+
 .theme-background {
   background-color: rgb(var(--v-theme-background)) !important;
 }
@@ -22,16 +30,16 @@
   background-color: rgb(var(--v-theme-nav_background)) !important;
 }
 
-.v-app-bar .v-icon {
-  color: rgb(var(--v-theme-nav)) !important;
-}
-
 .v-main {
-  height: 100vh;
+  min-height: 100vh;
 }
 
 .v-navigation-drawer {
   background-color: rgb(var(--v-theme-drawer_background)) !important;
+}
+
+.v-toolbar-title {
+  flex: unset !important;
 }
 
 .v-footer {
@@ -60,19 +68,34 @@
   padding-top: 0;
 }
 
-.v-list-item__action, .v-list-item__icon:first-child {
-  margin-right: 10px !important;
+a.v-list-item.v-theme--dark {
+  color: white;
 }
 
-.v-navigation-drawer .v-list-group__header__append-icon {
+a.v-list-item.v-theme--light {
+  color: black;
+}
+
+.v-list-item > .v-list-item__prepend > i.fa {
+  margin-right: 16px !important;
+}
+
+.v-navigation-drawer__content .v-list-item--active {
+  color: rgb(var(--v-theme-primary));
+}
+
+.v-navigation-drawer__content .v-list-group__header > .v-list-item__append,
+.v-navigation-drawer__content .v-list-item__prepend > .v-list-item__spacer,
+#top-menu .v-list-item__prepend > .v-list-item__spacer {
   display: none;
 }
 
 .v-list-group__items .v-list-item {
   margin-left: 20px !important;
+  padding-inline-start: 20px !important;
 }
 
-.v-list-item__title {
+.v-list-item-title {
   font-size: 15px !important;
   min-width: 7ch;
 }

@@ -27,10 +27,21 @@ const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
 
 if (typeof global !== 'undefined') global.routes = routes;
 
-$(document).ready(function () {
+// $(document).ready(function () {
+window.onload = (function() {
   const vuetify = Vuetify.createVuetify({
+    defaults: {
+      'VIcon': {
+        class: 'fa',
+      },
+    },
     icons: {
-      iconfont: 'fa',
+      defaultSet: 'fa',
+      sets: {
+        fa: {
+          component: Vuetify.components.VClassIcon,
+        }
+      }
     },
     theme: {
       defaultTheme: 'dark',
@@ -56,6 +67,7 @@ $(document).ready(function () {
           },
         },
         dark: {
+          dark: true,
           colors: {
             primary: '#2196f3',
             secondary: '#424242',
@@ -69,11 +81,8 @@ $(document).ready(function () {
         },
       },
     },
-    components: Vuetify.components,
-    directives: Vuetify.directives,
   });
-
-  const router = VueRouter.createRouter({ routes, history: VueRouter.createWebHistory() })
+  const router = VueRouter.createRouter({ routes, history: VueRouter.createWebHashHistory() })
 
   const comp = {
     el: '#app',
@@ -81,6 +90,7 @@ $(document).ready(function () {
     data: () => {
       return {
         timestamp: Date.now(),
+        theme: Vuetify.useTheme(),
         i18n: i18n.getLocalizedTranslations(navigator.language),
         loading: false,
         error: false,
@@ -138,8 +148,8 @@ $(document).ready(function () {
       }
     },
     watch: {
-      '$vuetify.theme.dark': 'saveLocalSettings',
-      'toolbar': 'saveLocalSettings',
+      '$vuetify.theme.current.dark': 'saveTheme',
+      'toolbar': 'saveToolbar',
     },
     methods: {
       getMetricsUrl() {
@@ -517,7 +527,7 @@ $(document).ready(function () {
         }
       },
       toggleTheme() {
-        this.$vuetify.theme.dark = !this.$vuetify.theme.dark
+        this.theme.global.name = this.theme.global.current.dark ? 'light' : 'dark';
         this.timestamp = Date.now();
         this.updateEditorTheme();
       },
@@ -748,13 +758,15 @@ $(document).ready(function () {
       stopLoading() {
         this.loading = false;
       },
-      saveLocalSettings() {
-        localStorage['settings.app.dark'] = this.$vuetify.theme.dark;
+      saveToolbar() {
         localStorage['settings.app.navbar'] = this.toolbar;
+      },
+      saveTheme() {
+        localStorage['settings.app.dark'] = this.$vuetify.theme.current.dark;
       },
       loadLocalSettings() {
         if (localStorage['settings.app.dark'] != undefined) {
-          this.$vuetify.theme.dark = localStorage['settings.app.dark'] == "true";
+          this.theme.global.name = localStorage['settings.app.dark'] == 'true' ? 'dark' : 'light';
           this.updateEditorTheme();
         }
         if (localStorage['settings.app.navbar'] != undefined) {
@@ -764,7 +776,7 @@ $(document).ready(function () {
       updateEditorTheme() {
         var link = $('link[href^="css/external/prism-custom-"]')[0];
         if (link) {
-          if (this.$vuetify.theme.dark) {
+          if (this.$vuetify.theme.current.dark) {
             link.href = "css/external/prism-custom-dark-v1.29.0.css";
           } else {
             link.href = "css/external/prism-custom-light-v1.29.0.css";
@@ -949,10 +961,10 @@ $(document).ready(function () {
         this.editorInitialized = true;
       },
       getColor(colorName, percent = 0) {
-        percent = this.$root.$vuetify && this.$root.$vuetify.theme.dark ? percent * -1 : percent;
+        percent = this.$root.$vuetify && this.$root.$vuetify.theme.current.dark ? percent * -1 : percent;
         var color = colorName;
-        if (this.$root.$vuetify && this.$root.$vuetify.theme.currentTheme[colorName]) {
-          color = this.$root.$vuetify.theme.currentTheme[colorName];
+        if (this.$root.$vuetify && this.$root.$vuetify.theme.current.colors[colorName]) {
+          color = this.$root.$vuetify.theme.current.colors[colorName];
         }
         var R = parseInt(color.substring(1,3),16);
         var G = parseInt(color.substring(3,5),16);
@@ -1258,14 +1270,14 @@ $(document).ready(function () {
       if (this.redirectRoute()) return;
       this.setupApi();
       this.setupAuth();
-      this.loadServerSettings(false);
-      this.loadLocalSettings();
-      $('#app')[0].style.display = "block";
       this.log("Initialization complete");
     },
     mounted() {
       this.setFavicon();
       window.matchMedia('(prefers-color-scheme: dark)').addListener(() => this.setFavicon());
+      this.loadServerSettings(false);
+      this.loadLocalSettings();
+      $('#app')[0].style.display = "block";
     },
   };
 

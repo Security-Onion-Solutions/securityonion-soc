@@ -79,7 +79,7 @@
                 <v-card-subtitle class="py-4" v-text="i18n.passwordLoginMethod"></v-card-subtitle>
                 <v-card-text>
                   <v-text-field id="password_identifier" name="identifier" v-model="form.email" :placeholder="i18n.email" :hint="i18n.emailHelp" :autofocus="true" :rules="[rules.required]" variant="underlined" data-aid="login_email_input"></v-text-field>
-                  <v-text-field name="password" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" :rules="[rules.required]" variant="underlined" :append-inner-icon="showPassword ? 'fa fa-eye-slash' : 'fa fa-eye'" @click:append-inner="showPassword = !showPassword" data-aid="login_password_input"></v-text-field>
+                  <v-text-field name="password" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" :rules="[rules.required]" variant="underlined" :append-inner-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" @click:append-inner="showPassword = !showPassword" data-aid="login_password_input"></v-text-field>
                   <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
                   <v-text-field name="method" value="password" class="d-none"></v-text-field>
                 </v-card-text>

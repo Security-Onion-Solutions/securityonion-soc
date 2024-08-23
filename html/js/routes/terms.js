@@ -17,7 +17,7 @@ const termsComponent = {
   },
   watch: {
   },
-  methods: {  
+  methods: {
   }
 };
 

@@ -15,7 +15,7 @@
     <link rel="mask-icon" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
     <link rel="alternate icon" class="so-favicon" type="image/png" href="images/favicon/onion.png?v=VERSION_PLACEHOLDER">
     <link rel="icon" class="so-favicon" type="image/svg+xml" href="images/favicon/onion.svg?v=VERSION_PLACEHOLDER">
-    <link rel="stylesheet" href="css/external/vuetify-v2.7.2.min.css">
+    <link rel="stylesheet" href="css/external/vuetify-v3.7.0.min.css">
     <link rel="stylesheet" href="css/external/all-6.6.0.min.css">
     <link rel="stylesheet" href="css/external/daterangepicker-3.1.css">
     <link rel="stylesheet" href="css/external/vue-prism-editor-v1.3.0.min.css" />
@@ -25,298 +25,271 @@
     <script src="js/analytics.js?v=VERSION_PLACEHOLDER"></script>
   </head>
   <body style="background-color: #242424;">
-    <v-app id="app" style="display:none" :key="timestamp">
-      <v-navigation-drawer v-model="toolbar" width="200" clipped overflow app>
-        <v-list dense :disabled="forceUserOtp">
-          <v-list-item data-aid="nav_overview" @click="" to="/">
-            <v-list-item-action>
-              <v-icon>fa-home</v-icon>
-            </v-list-item-action>
-            <v-list-item-content>
-              <v-list-item-title v-text="i18n.home"></v-list-item-title>
-            </v-list-item-content>
-          </v-list-item>
-          <v-list-item data-aid="nav_alerts" @click="" to="/alerts">
-            <v-list-item-action>
-              <v-icon>fa-bell</v-icon>
-            </v-list-item-action>
-            <v-list-item-content>
-              <v-list-item-title v-text="i18n.alerts"></v-list-item-title>
-            </v-list-item-content>
-            <v-list-item-icon v-if="isNewAlert()">
-              <v-icon color="warning">fa-exclamation</v-icon>
-            </v-list-item-icon>
-          </v-list-item>
-          <v-list-item data-aid="nav_dashboards" @click="" to="/dashboards">
-            <v-list-item-action>
-              <v-icon>fa-chart-pie</v-icon>
-            </v-list-item-action>
-            <v-list-item-content>
-              <v-list-item-title v-text="i18n.dashboards"></v-list-item-title>
-            </v-list-item-content>
-          </v-list-item>
-          <v-list-item data-aid="nav_hunt" @click="" to="/hunt">
-            <v-list-item-action>
-              <v-icon>fa-crosshairs</v-icon>
-            </v-list-item-action>
-            <v-list-item-content>
-              <v-list-item-title v-text="i18n.hunt"></v-list-item-title>
-            </v-list-item-content>
-          </v-list-item>
-          <v-list-item data-aid="nav_cases" @click="" to="/cases" v-if="casesEnabled">
-            <v-list-item-action>
-              <v-icon>fa-briefcase</v-icon>
-            </v-list-item-action>
-            <v-list-item-content>
-              <v-list-item-title v-text="i18n.cases"></v-list-item-title>
-            </v-list-item-content>
-          </v-list-item>
-          <v-list-item data-aid="nav_detections" @click="" to="/detections" v-if="detectionsEnabled">
-            <v-list-item-action>
-              <v-icon>fa-magnifying-glass</v-icon>
-            </v-list-item-action>
-            <v-list-item-content>
-              <v-list-item-title v-text="i18n.detections"></v-list-item-title>
-            </v-list-item-content>
-            <v-list-item-icon v-if="isDetectionsUnhealthy()">
-              <v-icon color="warning">fa-exclamation</v-icon>
-            </v-list-item-icon>
-            <v-list-item-icon v-else-if="isDetectionsUpdating()">
-              <v-icon color="info">fa-hourglass-half</v-icon>
-            </v-list-item-icon>
-          </v-list-item>
-          <v-list-item data-aid="nav_jobs" @click="" to="/jobs">
-            <v-list-item-action>
-              <v-icon>fa-stream</v-icon>
-            </v-list-item-action>
-            <v-list-item-content>
-              <v-list-item-title v-text="i18n.jobs"></v-list-item-title>
-            </v-list-item-content>
-          </v-list-item>
-          <v-list-item data-aid="nav_grid" @click="" to="/grid">
-            <v-list-item-action>
-              <v-icon>fa-network-wired</v-icon>
-            </v-list-item-action>
-            <v-list-item-content>
-              <v-list-item-title v-text="i18n.grid"></v-list-item-title>
-            </v-list-item-content>
-            <v-list-item-icon v-if="isGridUnhealthy()">
-              <v-icon color="warning">fa-exclamation</v-icon>
-            </v-list-item-icon>
-          </v-list-item>
-          <v-list-item data-aid="nav_downloads" @click="" to="/downloads">
-            <v-list-item-action>
-              <v-icon>fa-download</v-icon>
-            </v-list-item-action>
-            <v-list-item-content>
-              <v-list-item-title v-text="i18n.downloads"></v-list-item-title>
-            </v-list-item-content>
-          </v-list-item>
-          <v-list-group data-aid="nav_admin" :value="false" prepend-icon="fa-screwdriver-wrench">
-            <template v-slot:activator>
-              <v-list-item-title v-text="i18n.admin"></v-list-item-title>
-            </template>
-            <v-list-item data-aid="nav_admin_users" @click="" to="/users">
-              <v-list-item-icon>
-                <v-icon>fa-users</v-icon>
-              </v-list-item-icon>
-              <v-list-item-title v-text="i18n.users"></v-list-item-title>
-            </v-list-item>
-            <v-list-item data-aid="nav_admin_members" v-if="$root.isUserAdmin()" @click="" to="/gridmembers">
-              <v-list-item-icon>
-                <v-icon>fa-circle-nodes</v-icon>
-              </v-list-item-icon>
-              <v-list-item-title v-text="i18n.gridMembers"></v-list-item-title>
-            </v-list-item>
-            <v-list-item data-aid="nav_admin_config" v-if="$root.isUserAdmin()"  @click="" to="/config">
-              <v-list-item-icon>
-                <v-icon>fa-gear</v-icon>
-              </v-list-item-icon>
-              <v-list-item-title v-text="i18n.config"></v-list-item-title>
-            </v-list-item>
-            <v-list-item data-aid="nav_admin_license" v-if="$root.isUserAdmin()"  @click="" to="/licensekey">
-              <v-list-item-icon>
-                <v-icon>fa-key</v-icon>
-              </v-list-item-icon>
-              <v-list-item-title v-text="i18n.licenseKey"></v-list-item-title>
-            </v-list-item>
-          </v-list-item-group>
-        </v-list>
-        <v-divider></v-divider>
-        <v-list subheader dense id="external-tools-list" :disabled="forceUserOtp">
-          <v-subheader>Tools</v-subheader>
-          <v-list-item v-for="tool in tools" v-if="tool.enabled" :key="tool.name" :id="tool.name" :target="$root.target(tool.target)" :href="tool.link" :title="$root.localizeMessage(tool.description)" :data-aid="'nav_tool_' + tool.name">
-            <v-list-item-action>
-              <v-icon>{{ tool.icon }}</v-icon>
-            </v-list-item-action>
-            <v-list-item-content>
-              <v-list-item-title v-text="$root.localizeMessage(tool.name)"></v-list-item-title>
-            </v-list-item-content>
-          </v-list-item>
-        </v-list>
-      </v-navigation-drawer>
-      <v-app-bar clipped-left app >
-        <v-app-bar-nav-icon data-aid="nav_toggle" @click.stop="toolbar = !toolbar">
-          <v-icon>fa-bars</v-icon>
-        </v-app-bar-nav-icon>
-        <v-toolbar-title>
-          <a href="/" id="title" data-aid="nav_overview">
-            <img class="pt-1" :title="i18n.product" :alt="i18n.product" height="45" src="images/so-logo.svg"></v-img>
-          </a>
-        </v-toolbar-title>
-        <v-spacer></v-spacer>
-        <div id="connection-indicator" v-if="!connected || reconnecting">
-          <v-icon class="mr-2" color="warning">fa-satellite-dish</v-icon>
-          <span v-if="reconnecting" v-text="i18n.reconnecting" class="d-none d-md-inline" data-aid="reconnecting_notice"></span>
-          <span v-if="!reconnecting" v-text="i18n.disconnected" class="d-none d-md-inline" data-aid="disconnected_notice"></span>
-        </div>
-        <div id="license-indicator" v-else-if="isLicenseExpiringSoon()">
-          <v-icon class="mr-2" color="warning">fa-key</v-icon>
-          <span v-text="i18n.licenseExpiringSoon" class="d-none d-md-inline" data-aid="license_expiring_notice"></span>
-        </div>
-        <v-spacer></v-spacer>
-        <v-menu bottom left offset-y>
-          <template v-slot:activator="{ on }">
-            <v-btn icon v-on="on" data-aid="nav_profile">
-              <v-icon>fa-user</v-icon>
-            </v-btn>
-          </template>
-          <v-list id="top-menu">
-            <v-list-item data-aid="logged_in_username_display">
-              <v-list-item-content>
-                <v-list-item-title v-text="username"></v-list-item-title>
-              </v-list-item-content>
-            </v-list-item>
-            <v-divider></v-divider>
-            <v-list-item @click.stop="toggleTheme" data-aid="theme_toggle">
-              <v-list-item-action>
-                <v-icon class="mx-auto">fa-adjust</v-icon>
-              </v-list-item-action>
-              <v-list-item-content>
-                <v-list-item-title v-text="i18n.darkMode"></v-list-item-title>
-              </v-list-item-content>
-            </v-list-item>
-            <v-list-item :target="$root.target('so-help')" :href="parameters.releaseNotesUrl" data-aid="nav_release_notes">
-              <v-list-item-action>
-                <v-icon class="mx-auto">fa-gift</v-icon>
-              </v-list-item-action>
-              <v-list-item-content>
-                <v-list-item-title v-text="i18n.whatsnew"></v-list-item-title>
-              </v-list-item-content>
-            </v-list-item>
-            <v-list-item :target="$root.target('so-help')" :href="parameters.docsUrl" data-aid="nav_docs">
-              <v-list-item-action>
-                <v-icon class="mx-auto">fa-question</v-icon>
-              </v-list-item-action>
-              <v-list-item-content>
-                <v-list-item-title v-text="i18n.help"></v-list-item-title>
-              </v-list-item-content>
-            </v-list-item>
-            <v-list-item :target="$root.target('so-cheatsheet')" :href="parameters.cheatsheetUrl" data-aid="nav_cheatsheet">
-              <v-list-item-action>
-                <v-icon class="mx-auto">fa-scroll</v-icon>
-              </v-list-item-action>
-              <v-list-item-content>
-                <v-list-item-title v-text="i18n.cheatsheet"></v-list-item-title>
-              </v-list-item-content>
-            </v-list-item>
-            <v-list-item :target="$root.target('so-blog')" href="https://blog.securityonion.net/" data-aid="nav_blog">
-              <v-list-item-action>
-                <v-icon class="mx-auto">fa-info</v-icon>
-              </v-list-item-action>
-              <v-list-item-content>
-                <v-list-item-title v-text="i18n.blog"></v-list-item-title>
-              </v-list-item-content>
-            </v-list-item>
-            <v-divider></v-divider>
-            <v-list-item :href="settingsUrl" data-aid="nav_profile_settings">
-              <v-list-item-action>
-                <v-icon class="mx-auto">fa-user-edit</v-icon>
-              </v-list-item-action>
-              <v-list-item-content>
-                <v-list-item-title v-text="i18n.settings"></v-list-item-title>
-              </v-list-item-content>
-            </v-list-item>
-            <v-list-item @click.stop="logout" data-aid="nav_logout">
-              <v-list-item-action>
-                <v-icon class="mx-auto">fa-sign-out-alt</v-icon>
-              </v-list-item-action>
-              <v-list-item-content>
-                <v-list-item-title v-text="i18n.logout"></v-list-item-title>
-              </v-list-item-content>
-            </v-list-item>
-          </v-list>
-        </v-menu>
-      </v-app-bar>
-      <v-main>
-        <v-overlay id="loading" :value="loading" data-aid="overlay_loading">
-          <v-progress-circular indeterminate color="primary" width="2" size="64"></v-progress-circular>
-        </v-overlay>
-        <v-snackbar id="error" top centered rounded close :timeout="errorTimeout" v-model="error" color="error" data-aid="banner_error">
-          <template v-slot:action="{ attrs }">
-            <v-btn icon small v-bind="attrs" @click="error = false" data-aid="banner_error_close">
-              <v-icon>fa-times</v-icon>
-            </v-btn>
-          </template>
-          {{ errorMessage }}
-          <div class="mt-2 no-underline">
-            {{ i18n.errorHelp }}
-            <a :target="$root.target('so-help')" :href="parameters.docsUrl + 'help.html'" class="text-decoration-none" data-aid="nav_docs_error">
-              <v-icon>fa-life-ring</v-icon>
+    <v-app id="app" class="v-application" style="display:none" :key="timestamp">
+      <v-layout>
+        <v-app-bar clipped-left app>
+          <v-app-bar-nav-icon data-aid="nav_toggle" @click.stop="toolbar = !toolbar">
+            <v-icon>fa-bars</v-icon>
+          </v-app-bar-nav-icon>
+          <v-toolbar-title>
+            <a href="/" id="title" data-aid="nav_overview">
+              <img class="pt-1" :title="i18n.product" :alt="i18n.product" height="45" src="images/so-logo.svg"></v-img>
             </a>
+          </v-toolbar-title>
+          <v-spacer></v-spacer>
+          <div id="connection-indicator" v-if="!connected || reconnecting">
+            <v-icon class="mr-2" color="warning">fa-satellite-dish</v-icon>
+            <span v-if="reconnecting" v-text="i18n.reconnecting" class="d-none d-md-inline" data-aid="reconnecting_notice"></span>
+            <span v-if="!reconnecting" v-text="i18n.disconnected" class="d-none d-md-inline" data-aid="disconnected_notice"></span>
           </div>
-          <div class="mt-2 no-underline">
-            {{ i18n.huntForError }}
-            <router-link :to="{ name: 'hunt', query: {q: i18n.huntForErrorQuery, rt: 5, rtu: 'minutes', socExcludeToggle: false }}" class="text-decoration-none error-hunt" data-aid="nav_hunt_error">
-              <v-icon :title="i18n.huntForError">fa-crosshairs</v-icon>
+          <div id="license-indicator" v-else-if="isLicenseExpiringSoon()">
+            <v-icon class="mr-2" color="warning">fa-key</v-icon>
+            <span v-text="i18n.licenseExpiringSoon" class="d-none d-md-inline" data-aid="license_expiring_notice"></span>
+          </div>
+          <v-spacer></v-spacer>
+          <v-menu bottom left offset-y>
+            <template v-slot:activator="{ props }">
+              <v-btn icon v-bind="props" data-aid="nav_profile">
+                <v-icon>fa-user</v-icon>
+              </v-btn>
+            </template>
+            <v-list id="top-menu">
+              <v-list-item data-aid="logged_in_username_display">
+                <v-list-item-title v-text="username"></v-list-item-title>
+              </v-list-item>
+              <v-divider></v-divider>
+              <v-list-item @click.stop="toggleTheme" data-aid="theme_toggle">
+                <template v-slot:prepend>
+                  <v-icon class="mx-auto">fa-adjust</v-icon>
+                </template>
+                <v-list-item-title v-text="i18n.darkMode"></v-list-item-title>
+              </v-list-item>
+              <v-list-item :target="$root.target('so-help')" :href="parameters.releaseNotesUrl" data-aid="nav_release_notes">
+                <template v-slot:prepend>
+                  <v-icon class="mx-auto">fa-gift</v-icon>
+                </template>
+                <v-list-item-title v-text="i18n.whatsnew"></v-list-item-title>
+              </v-list-item>
+              <v-list-item :target="$root.target('so-help')" :href="parameters.docsUrl" data-aid="nav_docs">
+                <template v-slot:prepend>
+                  <v-icon class="mx-auto">fa-question</v-icon>
+                </template>
+                <v-list-item-title v-text="i18n.help"></v-list-item-title>
+              </v-list-item>
+              <v-list-item :target="$root.target('so-cheatsheet')" :href="parameters.cheatsheetUrl" data-aid="nav_cheatsheet">
+                <template v-slot:prepend>
+                  <v-icon class="mx-auto">fa-scroll</v-icon>
+                </template>
+                <v-list-item-title v-text="i18n.cheatsheet"></v-list-item-title>
+              </v-list-item>
+              <v-list-item :target="$root.target('so-blog')" href="https://blog.securityonion.net/" data-aid="nav_blog">
+                <template v-slot:prepend>
+                  <v-icon class="mx-auto">fa-info</v-icon>
+                </template>
+                <v-list-item-title v-text="i18n.blog"></v-list-item-title>
+              </v-list-item>
+              <v-divider></v-divider>
+              <v-list-item :href="settingsUrl" data-aid="nav_profile_settings">
+                <template v-slot:prepend>
+                  <v-icon class="mx-auto">fa-user-edit</v-icon>
+                </template>
+                <v-list-item-title v-text="i18n.settings"></v-list-item-title>
+              </v-list-item>
+              <v-list-item @click.stop="logout" data-aid="nav_logout">
+                <template v-slot:prepend>
+                  <v-icon class="mx-auto">fa-sign-out-alt</v-icon>
+                </template>
+                <v-list-item-title v-text="i18n.logout"></v-list-item-title>
+              </v-list-item>
+            </v-list>
+          </v-menu>
+        </v-app-bar>
+        <v-main>
+          <v-overlay id="loading" :value="loading" data-aid="overlay_loading">
+            <v-progress-circular indeterminate color="primary" width="2" size="64"></v-progress-circular>
+          </v-overlay>
+          <v-snackbar id="error" location="top centered" :timeout="errorTimeout" v-model="error" color="error" data-aid="banner_error">
+            <template v-slot:actions>
+              <v-btn icon small @click="error = false" data-aid="banner_error_close">
+                <v-icon>fa-times</v-icon>
+              </v-btn>
+            </template>
+            {{ errorMessage }}
+            <div class="mt-2 no-underline">
+              {{ i18n.errorHelp }}
+              <a :target="$root.target('so-help')" :href="parameters.docsUrl + 'help.html'" class="text-decoration-none" data-aid="nav_docs_error">
+                <v-icon color="white">fa-life-ring</v-icon>
+              </a>
+            </div>
+            <div class="mt-2 no-underline">
+              {{ i18n.huntForError }}
+              <router-link :to="{ name: 'hunt', query: {q: i18n.huntForErrorQuery, rt: 5, rtu: 'minutes', socExcludeToggle: false }}" class="text-decoration-none error-hunt" data-aid="nav_hunt_error">
+                <v-icon :title="i18n.huntForError" color="white">fa-crosshairs</v-icon>
+              </router-link>
+            </div>
+          </v-snackbar>
+          <v-snackbar id="warning" location="center top" rounded="pill" :timeout="warningTimeout" v-model="warning" color="warning" data-aid="banner_warning">
+            <template v-slot:actions>
+              <v-btn icon small @click="warning = false" data-aid="banner_warning_close">
+                <v-icon>fa-times</v-icon>
+              </v-btn>
+            </template>
+            <div class="warning-message" v-html="warningMessage"></div>
+          </v-snackbar>
+          <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" v-html="infoMessage" data-aid="banner_info"></v-alert>
+          <v-snackbar id="tip" top centered rounded close :timeout="tipTimeout" v-model="tip" color="info" data-aid="banner_tip">
+            <template v-slot:action="{ attrs }">
+              <v-btn icon small v-bind="attrs" @click="tip = false" data-aid="banner_tip_close">
+                <v-icon>fa-times</v-icon>
+              </v-btn>
+            </template>
+            {{ tipMessage }}
+          </v-snackbar>
+          <router-view id="main-view"></router-view>
+        </v-main>
+        <v-footer app>
+          <span id="version" class="text-no-wrap" data-aid="version_display">
+            {{ i18n.version }}: {{ version }}
+          </span>
+          <v-spacer></v-spacer>
+          <span class="text-no-wrap d-none d-md-flex" data-aid="copyright_display">
+            &copy; {{ new Date().getFullYear() }}
+            <a class="footer mx-1" :target="$root.target('sos')" href="https://securityonionsolutions.com/" data-aid="nav_sos">
+              Security Onion Solutions, LLC
+            </a>
+          </span>
+          <span class="text-no-wrap d-md-none" data-aid="copyright_display">
+            &copy; {{ new Date().getFullYear() }}
+            <a class="footer mx-1" :target="$root.target('sos')" href="https://securityonionsolutions.com/" data-aid="nav_sos">
+              SOS
+            </a>
+          </span>
+          <v-spacer></v-spacer>
+          <span class="text-no-wrap" data-aid="nav_terms">
+            <router-link id="termsLink" to="/terms" class="footer">
+              <span class="d-lg-inline">{{ i18n.license }}:</span>
+              <span v-if="isLicenseUnprovisioned()" data-aid="license_unprovisioned"> {{ i18n.licenseShort }}</span>
+              <v-chip v-else x-small :color="colorLicenseStatus(licenseStatus)" :data-aid="'license_status_' + licenseStatus">{{ localizeMessage(licenseStatus) }}</v-chip>
             </router-link>
-          </div>
-        </v-snackbar>
-        <v-snackbar id="warning" top centered rounded close :timeout="warningTimeout" v-model="warning" color="warning" data-aid="banner_warning">
-          <template v-slot:action="{ attrs }">
-            <v-btn icon small v-bind="attrs" @click="warning = false" data-aid="banner_warning_close">
-              <v-icon>fa-times</v-icon>
-            </v-btn>
-          </template>
-          <div class="warning-message" v-html="warningMessage"></div>
-        </v-snackbar>
-        <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" v-html="infoMessage" data-aid="banner_info"></v-alert>
-        <v-snackbar id="tip" top centered rounded close :timeout="tipTimeout" v-model="tip" color="info" data-aid="banner_tip">
-          <template v-slot:action="{ attrs }">
-            <v-btn icon small v-bind="attrs" @click="tip = false" data-aid="banner_tip_close">
-              <v-icon>fa-times</v-icon>
-            </v-btn>
-          </template>
-          {{ tipMessage }}
-        </v-snackbar>
-        <router-view id="main-view"></router-view>
-      </v-main>
-      <v-footer app>
-        <span id="version" class="text-no-wrap" data-aid="version_display">
-          {{ i18n.version }}: {{ version }}
-        </span>
-        <v-spacer></v-spacer>
-        <span class="text-no-wrap d-none d-md-flex" data-aid="copyright_display">
-          &copy; {{ new Date().getFullYear() }}
-          <a class="footer mx-1" :target="$root.target('sos')" href="https://securityonionsolutions.com/" data-aid="nav_sos">
-            Security Onion Solutions, LLC
-          </a>
-        </span>
-        <span class="text-no-wrap d-md-none" data-aid="copyright_display">
-          &copy; {{ new Date().getFullYear() }}
-          <a class="footer mx-1" :target="$root.target('sos')" href="https://securityonionsolutions.com/" data-aid="nav_sos">
-            SOS
-          </a>
-        </span>
-        <v-spacer></v-spacer>
-        <span class="text-no-wrap" data-aid="nav_terms">
-          <router-link id="termsLink" to="/terms" class="footer">
-            <span class="d-lg-inline">{{ i18n.license }}:</span>
-            <span v-if="isLicenseUnprovisioned()" data-aid="license_unprovisioned"> {{ i18n.licenseShort }}</span>
-            <v-chip v-else x-small :color="colorLicenseStatus(licenseStatus)" :data-aid="'license_status_' + licenseStatus">{{ localizeMessage(licenseStatus) }}</v-chip>
-          </router-link>
-        </span>
-      </v-footer>
+          </span>
+        </v-footer>
+        <v-navigation-drawer v-model="toolbar" width="200" clipped overflow app>
+          <v-list dense :disabled="forceUserOtp">
+            <v-list-item data-aid="nav_overview" @click="" to="/">
+              <template v-slot:prepend>
+                <v-icon>fa-home</v-icon>
+              </template>
+              <v-list-item-title v-text="i18n.home"></v-list-item-title>
+            </v-list-item>
+            <v-list-item data-aid="nav_alerts" @click="" to="/alerts">
+              <template v-slot:prepend>
+                <v-icon>fa-bell</v-icon>
+              </template>
+              <template v-slot:append v-if="isNewAlert()">
+                <v-icon color="warning">fa-exclamation</v-icon>
+              </template>
+              <v-list-item-title v-text="i18n.alerts"></v-list-item-title>
+            </v-list-item>
+            <v-list-item data-aid="nav_dashboards" @click="" to="/dashboards">
+              <template v-slot:prepend>
+                <v-icon>fa-chart-pie</v-icon>
+              </template>
+              <v-list-item-title v-text="i18n.dashboards"></v-list-item-title>
+            </v-list-item>
+            <v-list-item data-aid="nav_hunt" @click="" to="/hunt">
+              <template v-slot:prepend>
+                <v-icon>fa-crosshairs</v-icon>
+              </template>
+              <v-list-item-title v-text="i18n.hunt"></v-list-item-title>
+            </v-list-item>
+            <v-list-item data-aid="nav_cases" @click="" to="/cases" v-if="casesEnabled">
+              <template v-slot:prepend>
+                <v-icon>fa-briefcase</v-icon>
+              </template>
+              <v-list-item-title v-text="i18n.cases"></v-list-item-title>
+            </v-list-item>
+            <v-list-item data-aid="nav_detections" @click="" to="/detections" v-if="detectionsEnabled">
+              <template v-slot:prepend>
+                <v-icon>fa-magnifying-glass</v-icon>
+              </template>
+              <template v-slot:append v-if="isDetectionsUnhealthy()">
+                <v-icon color="warning">fa-exclamation</v-icon>
+              </template>
+              <template v-slot:append v-else-if="isDetectionsUpdating()">
+                <v-icon color="info">fa-hourglass-half</v-icon>
+              </template>
+              <v-list-item-title v-text="i18n.detections"></v-list-item-title>
+            </v-list-item>
+            <v-list-item data-aid="nav_jobs" @click="" to="/jobs">
+              <template v-slot:prepend>
+                <v-icon>fa-stream</v-icon>
+              </template>
+              <v-list-item-title v-text="i18n.jobs"></v-list-item-title>
+            </v-list-item>
+            <v-list-item data-aid="nav_grid" @click="" to="/grid">
+              <template v-slot:prepend>
+                <v-icon>fa-network-wired</v-icon>
+              </template>
+              <template v-slot:append v-if="isGridUnhealthy()">
+                <v-icon color="warning">fa-exclamation</v-icon>
+              </template>
+              <v-list-item-title v-text="i18n.grid"></v-list-item-title>
+            </v-list-item>
+            <v-list-item data-aid="nav_downloads" @click="" to="/downloads">
+              <template v-slot:prepend>
+                <v-icon>fa-download</v-icon>
+              </template>
+              <v-list-item-title v-text="i18n.downloads"></v-list-item-title>
+            </v-list-item>
+            <v-list-group data-aid="nav_admin" :value="false">
+              <template v-slot:activator="{ props }">
+                <v-list-item v-bind="props">
+                  <template v-slot:prepend>
+                    <v-icon>fa-screwdriver-wrench</v-icon>
+                  </template>
+                  <v-list-item-title v-text="i18n.admin"></v-list-item-title>
+                </v-list-item>
+              </template>
+              <v-list-item data-aid="nav_admin_users" @click="" to="/users">
+                <template v-slot:prepend>
+                  <v-icon>fa-users</v-icon>
+                </template>
+                <v-list-item-title v-text="i18n.users"></v-list-item-title>
+              </v-list-item>
+              <v-list-item data-aid="nav_admin_members" v-if="$root.isUserAdmin()" @click="" to="/gridmembers">
+                <template v-slot:prepend>
+                  <v-icon>fa-circle-nodes</v-icon>
+                </template>
+                <v-list-item-title v-text="i18n.gridMembers"></v-list-item-title>
+              </v-list-item>
+              <v-list-item data-aid="nav_admin_config" v-if="$root.isUserAdmin()" @click="" to="/config">
+                <template v-slot:prepend>
+                  <v-icon>fa-gear</v-icon>
+                </template>
+                <v-list-item-title v-text="i18n.config"></v-list-item-title>
+              </v-list-item>
+              <v-list-item data-aid="nav_admin_license" v-if="$root.isUserAdmin()" @click="" to="/licensekey">
+                <template v-slot:prepend>
+                  <v-icon>fa-key</v-icon>
+                </template>
+                <v-list-item-title v-text="i18n.licenseKey"></v-list-item-title>
+              </v-list-item>
+            </v-list-item-group>
+          </v-list>
+          <v-divider></v-divider>
+          <v-list subheader dense id="external-tools-list" :disabled="forceUserOtp">
+            <v-list-subheader>Tools</v-list-subheader>
+            <template v-for="tool in tools">
+              <v-list-item v-if="tool.enabled" :key="tool.name" :id="tool.name" :target="$root.target(tool.target)" :href="tool.link" v-bind:title.attr="$root.localizeMessage(tool.description)" :data-aid="'nav_tool_' + tool.name">
+                <template v-slot:prepend>
+                  <v-icon>{{tool.icon}}</v-icon>
+                </template>
+                <v-list-item-title v-text="$root.localizeMessage(tool.name)"></v-list-item-title>
+              </v-list-item>
+            </template>
+          </v-list>
+        </v-navigation-drawer>
+      </v-layout>
     </v-app>
 
     <script type="text/x-template" id="page-home">
@@ -328,20 +301,20 @@
         </v-row>
         <v-row>
           <v-col cols="12" lg="6" class="mx-auto px-12" data-aid="overview_motd_display">
-            <div id="motd" class="markdown-body" :inner-html.prop="motd | formatMarkdown"></div>
+            <div id="motd" class="markdown-body" v-html="formatMarkdown(motd)"></div>
           </v-col>
           <v-col cols="12" lg="6" class="mx-auto text-center" data-aid="sponsors_display">
             <div v-html="i18n.sponsorsIntro" class="mb-6"></div>
             <a :target="$root.target('sos')" href="https://securityonionsolutions.com/" class="text-decoration-none" data-aid="nav_sos">
-              <img v-if="!$vuetify.theme.dark" height="100" src="images/sos-logo.svg">
-              <img v-if="$vuetify.theme.dark" height="100" src="images/sos-logo-white.svg">
+              <img v-if="!$vuetify.theme.current.dark" height="100" src="images/sos-logo.svg">
+              <img v-if="$vuetify.theme.current.dark" height="100" src="images/sos-logo-white.svg">
             </a>
           </v-col>
         </v-row>
       </v-container>
     </script>
 
-    <script type="text/x-template" id="page-hunt">
+    <!-- <script type="text/x-template" id="page-hunt">
       <v-container fluid data-aid="hunt_screen">
         <v-row>
           <v-col cols="12" lg="3">
@@ -906,7 +879,7 @@
                   &le;
                 </v-list-item-title>
               </v-list-item>
-              <div class="flex-break"></div> <!-- line break -->
+              <div class="flex-break"></div>
               <v-list-item dense id="filterGreaterThan" class="half-width" :to="filterRouteGreaterThan" :data-aid="'context_menu_gt_' + category">
                 <v-list-item-title class="white--text">
                   &gt;
@@ -1071,34 +1044,34 @@
           </v-card>
         </v-dialog>
       </v-container>
-    </script>
+    </script> -->
 
-    <script type="text/x-template" id="page-detection">
+    <!-- <script type="text/x-template" id="page-detection">
       <v-container fluid v-if="detect" data-aid="detections_screen">
         <div v-if="!isNew()" class="mx-sm-12 mx-lg-6 mt-2 mb-6 mb-md-1" data-aid="detection_title_input">
-          <!-- Title -->
+          <!-- Title ->
           <h2 id="detection-title">{{ detect.title }}</h2>
         </div>
 
         <div class="row mx-sm-8 mx-md-12 mx-lg-4 flex-column flex-md-row">
           <div class="main col-md-9 order-md-1 col-12 order-2">
             <div v-if="isNew()">
-              <!-- Create View -->
+              <!-- Create View ->
               <v-form ref="detection" v-model="editForm.valid">
                 <div class="col pt-5 contrast-bg rounded rounded-md">
                   <div class="header">{{ i18n.add }} {{ i18n.detection }}</div>
-                  <!-- Language -->
+                  <!-- Language ->
                   <span data-aid="detection_new_language_select">
                     <v-select id="detection-language-create" v-model="detect.language" :items="getPresets('language')" persistent-hint :hint="i18n.language" :rules="[rules.required]" v-on:change="onNewDetectionLanguageChange"/>
                   </span>
 
-                  <!-- License -->
+                  <!-- License ->
                   <span data-aid="detection_new_license_select">
                     <v-select id="detection-license-create" v-if="!isPresetCustomEnabled('license')" v-model="detect.license" :items="getPresets('license')" persistent-hint :hint="i18n.license" :rules="[rules.required]"/>
                     <v-combobox id="detection-license-create" v-if="isPresetCustomEnabled('license')" v-model="detect.license" :items="getPresets('license')" persistent-hint :hint="i18n.license" :rules="[rules.required]"/>
                   </span>
 
-                  <!-- Signature -->
+                  <!-- Signature ->
                   <div class="font-weight-bold mb-1">{{ i18n.signature }}:</div>
                   <span data-aid="detection_signature_input">
                     <prism-editor class="prism" :highlight="highlighter" v-model="detect.content"></prism-editor>
@@ -1296,7 +1269,7 @@
               </v-tab-item>
               <v-tab-item value="source" data-aid="detection_source">
                 <v-col class="contrast-bg rounded rounded-md pa-4">
-                  <!-- Signature -->
+                  <!-- Signature ->
                   <span data-aid="detection_source_input">
                     <prism-editor class="prism" :highlight="highlighter" v-model="detect.content" :readonly="detect.isCommunity"></prism-editor>
                   </span>
@@ -1339,22 +1312,22 @@
                       5. Count   - threshold
                       6. Seconds - threshold
                       7. Custom Filter - engine:elastalert
-                    -->
-                    <!-- Suricata -->
+                    ->
+                    <!-- Suricata ->
                     <div v-if="!!newOverride.type && detect.engine === 'suricata'">
-                      <!-- regex -->
+                      <!-- regex ->
                       <v-text-field v-if="newOverride.type === 'modify'" id="new-override-regex-edit" v-model="newOverride.regex" :rules="[rules.required]" persistent-hint :hint="i18n.regex" data-aid="detection_new_override_regex_input"></v-text-field>
-                      <!-- value -->
+                      <!-- value ->
                       <v-text-field v-if="newOverride.type === 'modify'" id="new-override-value-edit" v-model="newOverride.value" :rules="[rules.required]" persistent-hint :hint="i18n.value" data-aid="detection_new_override_value_input"></v-text-field>
-                      <!-- (threshold) type -->
+                      <!-- (threshold) type ->
                       <span data-aid="detection_new_override_threshold_type_select">
                         <v-select v-if="newOverride.type === 'threshold'" id="new-override-threshold-type-edit" v-model="newOverride.thresholdType" :items="thresholdTypes" :rules="[rules.required]" persistent-hint :hint="i18n.thresholdType"></v-select>
                       </span>
-                      <!-- track -->
+                      <!-- track ->
                       <span data-aid="detection_new_override_track_type_select">
                         <v-select v-if="['threshold', 'suppress'].includes(newOverride.type)" id="new-override-track-edit" v-model="newOverride.track" :items="getTrackOptions(newOverride.type)" :rules="[rules.required]" persistent-hint :hint="i18n.track"></v-select>
                       </span>
-                      <!-- ip -->
+                      <!-- ip ->
                       <v-text-field v-if="newOverride.type === 'suppress'" id="new-override-ip-edit" v-model="newOverride.ip" :rules="[rules.required, rules.cidrFormat]" persistent-hint :hint="i18n.ipCidr" data-aid="detection_new_override_suppress_ip_input">
                         <template v-slot:append-outer>
                           <router-link :to="{ name: 'config', query: { s: 'suricata.config.vars', a: '1', e: '1' }}" target="_blank" data-aid="new_override_ip_edit_config_shortcut">
@@ -1362,14 +1335,14 @@
                           </router-link>
                         </template>
                       </v-text-field>
-                      <!-- count -->
+                      <!-- count ->
                       <v-text-field v-if="newOverride.type === 'threshold'" id="new-override-count-edit" v-model="newOverride.count" :rules="[rules.required, rules.number]" persistent-hint :hint="i18n.count" data-aid="detection_new_override_threshold_count_input"></v-text-field>
-                      <!-- seconds -->
+                      <!-- seconds ->
                       <v-text-field v-if="newOverride.type === 'threshold'" id="new-override-seconds-edit" v-model="newOverride.seconds" :rules="[rules.required, rules.number]" persistent-hint :hint="i18n.secondsLabel" data-aid="detection_new_override_threshold_seconds_input"></v-text-field>
                     </div>
-                    <!-- ElastAlert -->
+                    <!-- ElastAlert ->
                     <div v-if="!!newOverride.type && detect.engine === 'elastalert'">
-                      <!-- custom filter -->
+                      <!-- custom filter ->
                       <v-textarea v-if="newOverride.type === 'customFilter'" id="new-override-custom-filter-edit" v-model="newOverride.customFilter" :rules="[rules.required]" auto-grow rows="2" persistent-hint :hint="i18n.customFilter" data-aid="detection_new_override_filter_input"></v-textarea>
                     </div>
                     <div v-if="newOverride" class="d-flex align-center align-self-end text-body-2 mt-2">
@@ -1418,8 +1391,8 @@
                           5. Count   - threshold
                           6. Seconds - threshold
                           7. Custom Filter - engine:elastalert
-                        -->
-                        <!-- isEnabled -->
+                        ->
+                        <!-- isEnabled ->
                         <div data-aid="detection_override_enabled_toggle">
                           <div class="font-weight-bold mt-4">
                             {{i18n.enabled}}: {{item.isEnabled}}
@@ -1427,7 +1400,7 @@
                           <v-switch id="override-enabled-edit" ref="override-enabled" hide-details="auto" v-model="item.isEnabled"
                             inset @change="saveDetection(false)"></v-switch>
                         </div>
-                        <!-- regex -->
+                        <!-- regex ->
                         <div v-if="item.type === 'modify'" @click="startOverrideEdit('override-regex', item, 'regex')" :class="{ clicktoedit: !isOverrideEdit('override-regex') }">
                           <div class="font-weight-bold mt-4">
                             Regex:
@@ -1448,7 +1421,7 @@
                             </div>
                           </span>
                         </div>
-                        <!-- value -->
+                        <!-- value ->
                         <div v-if="item.type === 'modify'" @click="startOverrideEdit('override-value', item, 'value')" :class="{ clicktoedit: !isOverrideEdit('override-value') }">
                           <div class="font-weight-bold mt-4">
                             Value:
@@ -1469,7 +1442,7 @@
                             </div>
                           </span>
                         </div>
-                        <!-- type (threshold) -->
+                        <!-- type (threshold) ->
                         <div v-if="item.type === 'threshold'" @click="startOverrideEdit('override-threshold-type', item, 'thresholdType')" :class="{ clicktoedit: !isOverrideEdit('override-threshold-type') }" data-aid="detection_override_threshold_type_select">
                           <div class="font-weight-bold mt-4">
                             Type:
@@ -1479,7 +1452,7 @@
                           </span>
                           <v-select v-else id="override-threshold-type-edit" ref="override-threshold-type" v-model="item.thresholdType" :items="thresholdTypes" :rules="[rules.required]" persistent-hint :hint="i18n.type" @change="stopOverrideEdit(true)"></v-select>
                         </div>
-                        <!-- track -->
+                        <!-- track ->
                         <div v-if="['suppress', 'threshold'].includes(item.type)" @click="startOverrideEdit('override-track', item, 'track')" :class="{ clicktoedit: !isOverrideEdit('override-track') }" data-aid="detection_override_threshold_track_select">
                           <div class="font-weight-bold mt-4">
                             Track:
@@ -1489,7 +1462,7 @@
                           </span>
                           <v-select v-else id="override-track-edit" ref="override-track" v-model="item.track" :items="getTrackOptions(item.type)" :rules="[rules.required]" persistent-hint :hint="i18n.type" @change="stopOverrideEdit(true)"></v-select>
                         </div>
-                        <!-- ip -->
+                        <!-- ip ->
                         <div v-if="item.type === 'suppress'" @click="startOverrideEdit('override-ip', item, 'ip')" :class="{ clicktoedit: !isOverrideEdit('override-ip') }">
                           <div class="font-weight-bold mt-4">
                             {{i18n.ip}}:
@@ -1516,7 +1489,7 @@
                             </div>
                           </span>
                         </div>
-                        <!-- count -->
+                        <!-- count ->
                         <div v-if="item.type === 'threshold'" @click="startOverrideEdit('override-count', item, 'count')" :class="{ clicktoedit: !isOverrideEdit('override-count') }">
                           <div class="font-weight-bold mt-4">
                             Count:
@@ -1537,7 +1510,7 @@
                             </div>
                           </span>
                         </div>
-                        <!-- seconds -->
+                        <!-- seconds ->
                         <div v-if="item.type === 'threshold'" @click="startOverrideEdit('override-seconds', item, 'seconds')" :class="{ clicktoedit: !isOverrideEdit('override-seconds') }">
                           <div class="font-weight-bold mt-4">
                             Seconds:
@@ -1570,7 +1543,7 @@
                         </div>
                       </td>
                       <td :colspan="headers.length" class="pa-4" v-else-if="detect.engine === 'elastalert'">
-                        <!-- isEnabled -->
+                        <!-- isEnabled ->
                         <div @click="startOverrideEdit('override-enabled', item, 'isEnabled')" :class="{ clicktoedit: !isOverrideEdit('override-enabled') }" data-aid="detection_override_enabled_toggle">
                           <div class="font-weight-bold mt-2">
                             {{i18n.enabled}}: {{item.isEnabled}}
@@ -1578,7 +1551,7 @@
                           <v-switch id="override-enabled-edit" ref="override-enabled" hide-details="auto" v-model="item.isEnabled"
                             inset @change="saveDetection(false)"></v-switch>
                         </div>
-                        <!-- custom filter -->
+                        <!-- custom filter ->
                         <div @click="startOverrideEdit('override-custom-filter', item, 'customFilter')" :class="{ clicktoedit: !isOverrideEdit('override-custom-filter') }">
                           <div class="font-weight-bold mt-2">
                             {{i18n.customFilter}}:
@@ -2014,7 +1987,7 @@
                       <v-chip class="mx-1" v-for="tag in detect.tags" color="primary">{{ tag }}</v-chip>
                       <span v-if="detect.tags === null || detect.tags.length === 0">None</span>
                     </div>
-                  </div> -->
+                  </div> ->
                 </v-expansion-panel-content>
               </v-expansion-panel>
             </v-expansion-panels>
@@ -2040,9 +2013,9 @@
           </div>
         </div>
       </v-container>
-    </script>
+    </script> -->
 
-    <script type="text/x-template" id="page-terms">
+    <!-- <script type="text/x-template" id="page-terms">
       <v-container fluid data-aid="terms_screen">
         <v-row>
           <v-col>
@@ -2216,9 +2189,9 @@
           </v-col>
         </v-row>
       </v-container>
-    </script>
+    </script> -->
 
-    <script type="text/x-template" id="page-downloads">
+    <!-- <script type="text/x-template" id="page-downloads">
       <v-container fluid data-aid="downloads_screen">
         <v-row>
           <v-col>
@@ -2241,9 +2214,9 @@
           </v-col>
         </v-row>
       </v-container>
-    </script>
+    </script> -->
 
-    <script type="text/x-template" id="page-users">
+    <!-- <script type="text/x-template" id="page-users">
       <v-container fluid data-aid="users_screen">
         <v-row>
           <v-col cols="12" lg="3">
@@ -2394,9 +2367,9 @@
           </v-col>
         </v-row>
       </v-container>
-    </script>
+    </script> -->
 
-    <script type="text/x-template" id="page-jobs">
+    <!-- <script type="text/x-template" id="page-jobs">
       <v-container fluid data-aid="jobs_screen">
         <v-row>
           <v-col>
@@ -2465,9 +2438,9 @@
           </v-col>
         </v-row>
       </v-container>
-    </script>
+    </script> -->
 
-    <script type="text/x-template" id="page-job">
+    <!-- <script type="text/x-template" id="page-job">
       <v-container fluid @click="jobClickHandler()" data-aid="job_screen">
         <v-row>
           <v-col>
@@ -2686,9 +2659,9 @@
           </v-list>
         </v-menu>
       </v-container>
-    </script>
+    </script> -->
 
-    <script type="text/x-template" id="page-case">
+    <!-- <script type="text/x-template" id="page-case">
       <v-container fluid data-aid="case_screen">
         <div class="mx-sm-12 mx-lg-6 mt-2 mb-6 mb-md-1" data-aid="case_title_input">
           <div tabindex="0" class="case detail-field clicktoedit d-flex align-start pa-2" v-if="!isEdit('case-title')"
@@ -4096,9 +4069,9 @@
           </v-col>
         </v-row>
       </v-container>
-    </script>
+    </script> -->
 
-    <script type="text/x-template" id="page-grid">
+    <!-- <script type="text/x-template" id="page-grid">
       <v-container fluid data-aid="grid_screen">
         <v-row>
           <v-col cols="4">
@@ -4572,9 +4545,9 @@
           </v-card>
         </v-dialog>
       </v-container>
-    </script>
+    </script> -->
 
-    <script type="text/x-template" id="page-settings">
+    <!-- <script type="text/x-template" id="page-settings">
       <v-container v-if="showSettingsForm" fluid data-aid="user_settings_screen">
         <v-row>
           <v-col>
@@ -4733,9 +4706,9 @@
           </v-col>
         </v-row>
       </v-container>
-    </script>
+    </script> -->
 
-    <script type="text/x-template" id="page-config">
+    <!-- <script type="text/x-template" id="page-config">
       <v-container fluid data-aid="grid_config_screen">
         <v-row>
           <v-col cols="12" lg="3">
@@ -5076,9 +5049,9 @@
           </v-card>
         </v-dialog>
       </v-container>
-    </script>
+    </script> -->
 
-    <script type="text/x-template" id="page-gridmembers">
+    <!-- <script type="text/x-template" id="page-gridmembers">
       <v-container fluid data-aid="grid_members_screen">
         <v-row>
           <v-col>
@@ -5281,17 +5254,17 @@
           </v-card>
         </v-dialog>
       </v-container>
-    </script>
+    </script> -->
 
     <script src="js/external/jquery-3.7.1.min.js"></script>
-    <script src="js/external/vue-2.7.16.min.js"></script>
-    <script src="js/external/vue-router-3.6.5.min.js"></script>
-    <script src="js/external/vuetify-v2.7.2.min.js"></script>
+    <script src="js/external/vue-3.4.38.min.js"></script>
+    <script src="js/external/vue-router-4.4.3.min.js"></script>
+    <script src="js/external/vuetify-v3.7.0.min.js"></script>
     <script src="js/external/axios-1.7.4.min.js"></script>
     <script src="js/external/moment-2.30.1.min.js"></script>
     <script src="js/external/moment-timezone-with-data-0.5.45.min.js"></script>
     <script src="js/external/chart-4.4.3.min.js"></script>
-    <script src="js/external/vue-chartjs-3.5.1.min.js"></script>
+    <script type="module" src="js/external/vue-chartjs-5.3.1.min.js"></script>
     <script src="js/external/daterangepicker-3.1.min.js"></script>
     <script src="js/external/marked-14.0.0.min.js"></script>
     <script src="js/external/purify-3.1.6.min.js"></script>
@@ -5299,7 +5272,7 @@
     <script src="js/external/chartjs-adapter-moment-1.0.1.min.js"></script>
     <script src="js/external/js-yaml.4.1.0.min.js"></script>
     <script src="js/external/lz-string.1.5.0.min.js"></script>
-    <script src="js/external/vue-prism-editor-v1.3.0.umd.production.min.js"></script>
+    <script type="module" src="js/external/vue-prism-editor-v2.0.0-alpha-2.umd.production.min.js"></script>
     <script src="js/external/prism-custom-v1.29.0.js"></script>
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
