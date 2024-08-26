@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1806,6 +1807,11 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 	}
 
 	if licensing.IsEnabled(licensing.FEAT_NTF) {
+		if slices.Contains(det.Tags, "so.notification") {
+			// This is a detection for sending notifications only, do not add a new alert to Security Onion.
+			wrapper.Alert = nil
+		}
+
 		// Add any custom alerters to the rule.
 		for _, alerter := range alerters {
 			alerter = strings.TrimSpace(alerter)
