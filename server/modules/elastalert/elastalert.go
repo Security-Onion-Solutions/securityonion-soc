@@ -1735,11 +1735,6 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 	}
 
 	alerters, params := e.getAdditionalAlerters(severities[det.Severity])
-	log.WithFields(log.Fields{
-		"sevNum": severities[det.Severity],
-		"sev":    det.Severity,
-		"params": params,
-	}).Error("********** Got params")
 
 	sevNum := severities[det.Severity]
 	realert := TimeFrame{}
