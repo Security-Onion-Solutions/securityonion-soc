@@ -526,7 +526,7 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 	var errMap map[string]error
 
 	// If the system is Airgap, load the sigma packages from disk.
-	// else, not Airgap, downoad the sigma packages.
+	// else, not Airgap, download the sigma packages.
 	if e.airgapEnabled {
 		zips, errMap = e.loadSigmaPackagesFromDisk()
 	} else {
@@ -673,6 +673,53 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 		}
 
 		return detections.ErrSyncFailed
+	}
+
+	localrules, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, model.WithEngine(model.EngineNameElastAlert), model.WithCommunity(false))
+	if err != nil {
+		if errors.Is(err, detections.ErrModuleStopped) {
+			return err
+		}
+
+		logger.WithError(err).Error("unable to get local detections")
+
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameElastAlert,
+				Status: "error",
+			})
+		}
+
+		return detections.ErrSyncFailed
+	}
+
+	if len(localrules) > 0 {
+		local := make([]*model.Detection, 0, len(localrules))
+		for _, det := range localrules {
+			local = append(local, det)
+		}
+
+		errMapLocal, err := e.SyncLocalDetections(e.srv.Context, local)
+		if err != nil {
+			if errors.Is(err, detections.ErrModuleStopped) {
+				return err
+			}
+
+			logger.WithError(err).Error("unable to sync local detections")
+
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+					Engine: model.EngineNameElastAlert,
+					Status: "error",
+				})
+			}
+
+			return detections.ErrSyncFailed
+		}
+
+		for publicID, err := range errMapLocal {
+			errMap[publicID] = errors.New(err)
+		}
 	}
 
 	detections.WriteStateFile(e.IOManager, e.StateFilePath)

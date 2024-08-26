@@ -1366,6 +1366,18 @@ func TestSyncChanges(t *testing.T) {
 	}).Times(3)
 	auditm.EXPECT().Close(gomock.Any()).Return(nil)
 	auditm.EXPECT().Stats().Return(esutil.BulkIndexerStats{})
+	// SyncLocalDetections
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		SimpleRule2SID: {
+			PublicID: SimpleRule2SID,
+		},
+	}, nil)
+	iom.EXPECT().ReadDir("elastAlertRulesFolder").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: SimpleRule2SID + ".yml",
+		},
+	}, nil) // IndexExistingRules
+	iom.EXPECT().DeleteFile("elastAlertRulesFolder/" + SimpleRule2SID + ".yml").Return(nil)
 	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)        // WriteStateFile
 	iom.EXPECT().WriteFile("rulesFingerprintFile", gomock.Any(), fs.FileMode(0644)).Return(nil) // WriteFingerprintFile
 	// regenNeeded
