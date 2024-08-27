@@ -1821,14 +1821,6 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 		}
 	}
 
-	if len(wrapper.Alert) == 0 {
-		log.WithFields(log.Fields{
-			"detectionPublicId": det.PublicID,
-			"severity":          string(det.Severity),
-		}).Debug("Skipping ElastAlert rule due to no valid alerters")
-		return "", errors.New("rule has no alerters; discarding")
-	}
-
 	rawYaml, err := yaml.Marshal(wrapper)
 	if err != nil {
 		return "", err
@@ -1839,6 +1831,14 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 		if len(params) > 0 {
 			strYaml += "\n" + params + "\n"
 		}
+	}
+
+	if len(wrapper.Alert) == 0 {
+		log.WithFields(log.Fields{
+			"detectionPublicId": det.PublicID,
+			"severity":          string(det.Severity),
+		}).Debug("Disabling ElastAlert rule due to no valid alerters")
+		strYaml += "\nis_enabled: False\n"
 	}
 
 	return strYaml, nil

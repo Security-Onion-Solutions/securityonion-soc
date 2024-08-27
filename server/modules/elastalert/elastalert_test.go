@@ -562,9 +562,25 @@ func TestSigmaToElastAlertNotificationOnlyUnlicensed(t *testing.T) {
 	assert.NoError(t, err)
 
 	wrappedRule, err := engine.wrapRule(det, query)
-	assert.ErrorContains(t, err, "rule has no alerters; discarding")
+	assert.NoError(t, err)
 
-	assert.Empty(t, wrappedRule)
+	expected := `detection_title: Test Detection
+detection_public_id: 00000000-0000-0000-0000-000000000000
+event.module: sigma
+event.dataset: sigma.alert
+event.severity: 4
+sigma_level: high
+alert: []
+index: .ds-logs-*
+name: Test Detection -- 00000000-0000-0000-0000-000000000000
+type: any
+realert:
+    seconds: 0
+filter:
+    - eql: <eql>
+is_enabled: False
+`
+	assert.YAMLEq(t, expected, wrappedRule)
 }
 
 func TestAdditionalAlertersSev0(t *testing.T) {
