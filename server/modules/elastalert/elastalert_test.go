@@ -492,7 +492,24 @@ func TestSigmaToElastAlertCustomNotificationLicensed(t *testing.T) {
 
 	det := &model.Detection{
 		PublicID: "00000000-0000-0000-0000-000000000000",
-		Content:  "totally good sigma",
+		Content: `
+title: Test Detection
+id: 00000000-0000-0000-0000-000000000000
+logsource:
+    product: linux
+    service: auth
+detection:
+    selection:
+        event.outcome: failure
+        process.name: sshd
+        tags|contains: so-grid-node
+    filter:
+        system.auth.ssh.method: '*'
+    condition: selection and not filter
+tags:
+- so.alerters.MyAlerters
+- so.params.MyParams
+`,
 		Title:    "Test Detection",
 		Tags:     []string{"so.alerters.MyAlerters", "so.params.MyParams"},
 		Severity: model.SeverityHigh,
@@ -568,9 +585,25 @@ func TestSigmaToElastAlertCustomNotificationUnlicensed(t *testing.T) {
 
 	det := &model.Detection{
 		PublicID: "00000000-0000-0000-0000-000000000000",
-		Content:  "totally good sigma",
+		Content: `
+title: Test Detection
+id: 00000000-0000-0000-0000-000000000000
+logsource:
+    product: linux
+    service: auth
+detection:
+    selection:
+        event.outcome: failure
+        process.name: sshd
+        tags|contains: so-grid-node
+    filter:
+        system.auth.ssh.method: '*'
+    condition: selection and not filter
+tags:
+- so.alerters.MyAlerters
+- so.params.MyParams
+`,
 		Title:    "Test Detection",
-		Tags:     []string{"so.alerters.MyAlerters", "so.params.MyParams"},
 		Severity: model.SeverityHigh,
 	}
 
@@ -633,7 +666,23 @@ func TestSigmaToElastAlertNotificationOnlyLicensed(t *testing.T) {
 
 	det := &model.Detection{
 		PublicID: "00000000-0000-0000-0000-000000000000",
-		Content:  "totally good sigma",
+		Content: `
+title: Test Detection
+id: 00000000-0000-0000-0000-000000000000
+logsource:
+    product: linux
+    service: auth
+detection:
+    selection:
+        event.outcome: failure
+        process.name: sshd
+        tags|contains: so-grid-node
+    filter:
+        system.auth.ssh.method: '*'
+    condition: selection and not filter
+tags:
+- so.notification
+`,
 		Title:    "Test Detection",
 		Tags:     []string{"so.notification"},
 		Severity: model.SeverityHigh,
@@ -700,7 +749,23 @@ func TestSigmaToElastAlertNotificationOnlyUnlicensed(t *testing.T) {
 
 	det := &model.Detection{
 		PublicID: "00000000-0000-0000-0000-000000000000",
-		Content:  "totally good sigma",
+		Content: `
+title: Test Detection
+id: 00000000-0000-0000-0000-000000000000
+logsource:
+    product: linux
+    service: auth
+detection:
+    selection:
+        event.outcome: failure
+        process.name: sshd
+        tags|contains: so-grid-node
+    filter:
+        system.auth.ssh.method: '*'
+    condition: selection and not filter
+tags:
+- so.notification
+`,
 		Title:    "Test Detection",
 		Tags:     []string{"so.notification"},
 		Severity: model.SeverityHigh,
