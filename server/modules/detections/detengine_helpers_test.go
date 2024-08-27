@@ -394,6 +394,8 @@ func TestCheckTemplate(t *testing.T) {
 	detStore.EXPECT().DoesTemplateExist(ctx, "so-detection").Return(false, nil)
 	detStore.EXPECT().DoesTemplateExist(ctx, "so-detection").Return(true, nil).Times(1)
 
+	templateFound = false
+
 	results := []bool{}
 	for i := 0; i < 10; i++ {
 		result := CheckTemplate(ctx, detStore)
@@ -401,6 +403,7 @@ func TestCheckTemplate(t *testing.T) {
 	}
 
 	assert.Equal(t, []bool{false, true, true, true, true, true, true, true, true, true}, results)
+	assert.Equal(t, true, templateFound)
 }
 
 func TestUpdateRepos(t *testing.T) {
