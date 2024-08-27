@@ -519,6 +519,54 @@ foo: bar
 	assert.YAMLEq(t, expected, wrappedRule)
 }
 
+func TestSigmaToElastAlertNotificationOnlyUnlicensed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+
+	iom.EXPECT().ExecCommand(gomock.Cond(func(x any) bool {
+		cmd := x.(*exec.Cmd)
+
+		if !strings.HasSuffix(cmd.Path, "sigma") {
+			return false
+		}
+
+		if !slices.Contains(cmd.Args, "convert") {
+			return false
+		}
+
+		if cmd.Stdin == nil {
+			return false
+		}
+
+		return true
+	})).Return([]byte("<eql>"), 0, time.Duration(0), nil)
+
+	engine := ElastAlertEngine{
+		IOManager:               iom,
+		additionalAlerters:      []string{"email", "slack"},
+		additionalAlerterParams: "foo: bar",
+	}
+
+	det := &model.Detection{
+		PublicID: "00000000-0000-0000-0000-000000000000",
+		Content:  "totally good sigma",
+		Title:    "Test Detection",
+		Tags:     []string{"so.notification"},
+		Severity: model.SeverityHigh,
+	}
+
+	licensing.Shutdown()
+	query, err := engine.sigmaToElastAlert(context.Background(), det)
+	assert.NoError(t, err)
+
+	wrappedRule, err := engine.wrapRule(det, query)
+	assert.ErrorContains(t, err, "rule has no alerters; discarding")
+
+	assert.Empty(t, wrappedRule)
+}
+
 func TestAdditionalAlertersSev0(t *testing.T) {
 	engine := ElastAlertEngine{
 		additionalAlerters:      []string{"email", "slack"},

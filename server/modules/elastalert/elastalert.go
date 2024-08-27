@@ -1806,12 +1806,12 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 		Filter:            []map[string]interface{}{{"eql": rule}},
 	}
 
-	if licensing.IsEnabled(licensing.FEAT_NTF) {
-		if slices.Contains(det.Tags, "so.notification") {
-			// This is a detection for sending notifications only, do not add a new alert to Security Onion.
-			wrapper.Alert = nil
-		}
+	if slices.Contains(det.Tags, "so.notification") {
+		// This is a detection for sending notifications only, do not add a new alert to Security Onion.
+		wrapper.Alert = nil
+	}
 
+	if licensing.IsEnabled(licensing.FEAT_NTF) {
 		// Add any custom alerters to the rule.
 		for _, alerter := range alerters {
 			alerter = strings.TrimSpace(alerter)
@@ -1819,6 +1819,14 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 				wrapper.Alert = append(wrapper.Alert, alerter)
 			}
 		}
+	}
+
+	if len(wrapper.Alert) == 0 {
+		log.WithFields(log.Fields{
+			"detectionPublicId": det.PublicID,
+			"severity":          string(det.Severity),
+		}).Debug("Skipping ElastAlert rule due to no valid alerters")
+		return "", errors.New("rule has no alerters; discarding")
 	}
 
 	rawYaml, err := yaml.Marshal(wrapper)
