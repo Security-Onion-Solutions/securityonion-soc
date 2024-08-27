@@ -119,6 +119,7 @@ type ElastAlertEngine struct {
 	aiRepoUrl                          string
 	aiRepoBranch                       string
 	aiRepoPath                         string
+	moduleConfig                       *module.ModuleConfig
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
 	detections.IOManager
@@ -190,6 +191,8 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.highSeverityAlerterParams = module.GetStringDefault(config, "additionalSev4AlertersParams", "")
 	e.criticalSeverityAlerters = module.GetStringArrayDefault(config, "additionalSev5Alerters", []string{})
 	e.criticalSeverityAlerterParams = module.GetStringDefault(config, "additionalSev5AlertersParams", "")
+	e.moduleConfig = &config
+
 	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS)
 
 	pkgs := module.GetStringArrayDefault(config, "sigmaRulePackages", []string{"core", "emerging_threats_addon"})
@@ -1578,6 +1581,25 @@ func (e *ElastAlertEngine) MergeAuxiliaryData(detect *model.Detection) error {
 	return nil
 }
 
+func (e *ElastAlertEngine) getCustomAlerters(tags []string) ([]string, string) {
+	alertersKey := ""
+	paramsKey := ""
+	if e.moduleConfig != nil {
+		for _, tag := range tags {
+			if strings.HasPrefix(tag, "so.alerters.") {
+				alertersKey = strings.TrimPrefix(tag, "so.alerters.")
+			}
+			if strings.HasPrefix(tag, "so.params.") {
+				paramsKey = strings.TrimPrefix(tag, "so.params.")
+			}
+		}
+		alerters := module.GetStringArrayDefault(*e.moduleConfig, alertersKey, []string{})
+		params := module.GetStringDefault(*e.moduleConfig, paramsKey, "")
+		return alerters, params
+	}
+	return []string{}, ""
+}
+
 func (e *ElastAlertEngine) getAdditionalAlerters(severity int) ([]string, string) {
 	// Start with default alerters
 	alerters := e.additionalAlerters
@@ -1782,7 +1804,10 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 		model.SeverityCritical:      5,
 	}
 
-	alerters, params := e.getAdditionalAlerters(severities[det.Severity])
+	alerters, params := e.getCustomAlerters(det.Tags)
+	if len(alerters) == 0 {
+		alerters, params = e.getAdditionalAlerters(severities[det.Severity])
+	}
 
 	sevNum := severities[det.Severity]
 	realert := TimeFrame{}
