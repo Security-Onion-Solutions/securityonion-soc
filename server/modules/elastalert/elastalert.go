@@ -1582,9 +1582,9 @@ func (e *ElastAlertEngine) MergeAuxiliaryData(detect *model.Detection) error {
 }
 
 func (e *ElastAlertEngine) getCustomAlerters(tags []string) ([]string, string) {
-	alertersKey := ""
-	paramsKey := ""
 	if e.moduleConfig != nil {
+		alertersKey := ""
+		paramsKey := ""
 		for _, tag := range tags {
 			if strings.HasPrefix(tag, "so.alerters.") {
 				alertersKey = strings.TrimPrefix(tag, "so.alerters.")
@@ -1804,7 +1804,14 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 		model.SeverityCritical:      5,
 	}
 
-	alerters, params := e.getCustomAlerters(det.Tags)
+	var sigmaTags []string
+	sigmaRule, err := ParseElastAlertRule([]byte(det.Content))
+	if err != nil {
+		log.WithError(err).WithField("detectionPublicId", det.PublicID).Error("failed to parse Sigma rule content")
+	} else {
+		sigmaTags = sigmaRule.Tags
+	}
+	alerters, params := e.getCustomAlerters(sigmaTags)
 	if len(alerters) == 0 {
 		alerters, params = e.getAdditionalAlerters(severities[det.Severity])
 	}
@@ -1831,7 +1838,7 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 		Filter:            []map[string]interface{}{{"eql": rule}},
 	}
 
-	if slices.Contains(det.Tags, "so.notification") {
+	if slices.Contains(sigmaTags, "so.notification") {
 		// This is a detection for sending notifications only, do not add a new alert to Security Onion.
 		wrapper.Alert = nil
 	}
