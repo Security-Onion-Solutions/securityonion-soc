@@ -318,6 +318,10 @@ func startEffectiveMonitor() {
 }
 
 func startPillarMonitor() {
+	if manager == nil {
+		log.Error("Unable to start pillar monitor due to uninitialized manager")
+		return
+	}
 	log.Info("Starting pillar monitor")
 
 	contents := `
