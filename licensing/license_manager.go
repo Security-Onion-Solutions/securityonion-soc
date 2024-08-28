@@ -397,8 +397,8 @@ func stopMonitor() {
 			}
 			time.Sleep(100)
 		}
+		manager.status = LICENSE_STATUS_INVALID
 	}
-	manager = nil
 }
 
 func IsEnabled(feat string) bool {
