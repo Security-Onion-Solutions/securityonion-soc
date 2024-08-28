@@ -426,6 +426,7 @@ func TestSigmaToElastAlertSunnyDayLicensed(t *testing.T) {
 	assert.NoError(t, err)
 
 	// License
+	defer licensing.Shutdown()
 	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
 	wrappedRule, err := engine.wrapRule(det, query)
 	assert.NoError(t, err)
@@ -477,10 +478,7 @@ func TestSigmaToElastAlertCustomNotificationLicensed(t *testing.T) {
 	})).Return([]byte("<eql>"), 0, time.Duration(0), nil)
 
 	config := make(module.ModuleConfig)
-	alerters := make([]interface{}, 0)
-	alerters = append(alerters, "post2")
-	alerters = append(alerters, "pagerduty")
-	config["MyAlerters"] = alerters
+	config["MyAlerters"] = "post2"
 	config["MyParams"] = "foo: car"
 
 	engine := ElastAlertEngine{
@@ -511,7 +509,6 @@ tags:
 - so.params.MyParams
 `,
 		Title:    "Test Detection",
-		Tags:     []string{"so.alerters.MyAlerters", "so.params.MyParams"},
 		Severity: model.SeverityHigh,
 	}
 
@@ -519,6 +516,7 @@ tags:
 	assert.NoError(t, err)
 
 	// License
+	defer licensing.Shutdown()
 	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
 	wrappedRule, err := engine.wrapRule(det, query)
 	assert.NoError(t, err)
@@ -532,7 +530,6 @@ sigma_level: high
 alert:
     - modules.so.securityonion-es.SecurityOnionESAlerter
     - post2
-    - pagerduty
 index: .ds-logs-*
 name: Test Detection -- 00000000-0000-0000-0000-000000000000
 type: any
@@ -570,10 +567,7 @@ func TestSigmaToElastAlertCustomNotificationUnlicensed(t *testing.T) {
 	})).Return([]byte("<eql>"), 0, time.Duration(0), nil)
 
 	config := make(module.ModuleConfig)
-	alerters := make([]interface{}, 0)
-	alerters = append(alerters, "post2")
-	alerters = append(alerters, "pagerduty")
-	config["MyAlerters"] = alerters
+	config["MyAlerters"] = "post2"
 	config["MyParams"] = "foo: car"
 
 	engine := ElastAlertEngine{
@@ -610,8 +604,6 @@ tags:
 	query, err := engine.sigmaToElastAlert(context.Background(), det)
 	assert.NoError(t, err)
 
-	// License
-	licensing.Shutdown()
 	wrappedRule, err := engine.wrapRule(det, query)
 	assert.NoError(t, err)
 
@@ -684,7 +676,6 @@ tags:
 - so.notification
 `,
 		Title:    "Test Detection",
-		Tags:     []string{"so.notification"},
 		Severity: model.SeverityHigh,
 	}
 
@@ -692,6 +683,7 @@ tags:
 	assert.NoError(t, err)
 
 	// License
+	defer licensing.Shutdown()
 	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
 	wrappedRule, err := engine.wrapRule(det, query)
 	assert.NoError(t, err)
@@ -767,11 +759,9 @@ tags:
 - so.notification
 `,
 		Title:    "Test Detection",
-		Tags:     []string{"so.notification"},
 		Severity: model.SeverityHigh,
 	}
 
-	licensing.Shutdown()
 	query, err := engine.sigmaToElastAlert(context.Background(), det)
 	assert.NoError(t, err)
 

@@ -103,3 +103,14 @@ func TestGetStringArrayDefault(tester *testing.T) {
 	assert.Equal(tester, "MyValue1", actual[0])
 	assert.Equal(tester, "MyValue2", actual[1])
 }
+
+func TestGetStringArrayFromString(tester *testing.T) {
+	options := make(map[string]interface{})
+	_, err := GetStringArray(options, "MyKey")
+	assert.Error(tester, err)
+	options["MyKey"] = "single_line"
+	actual, err := GetStringArray(options, "MyKey")
+	if assert.Nil(tester, err) {
+		assert.Equal(tester, "single_line", actual[0])
+	}
+}
