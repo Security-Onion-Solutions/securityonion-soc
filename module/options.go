@@ -78,8 +78,13 @@ func GetStringArray(options map[string]interface{}, key string) ([]string, error
 	var value []string
 	if gen, ok := options[key]; ok {
 		value = make([]string, 0)
-		for _, iface := range gen.([]interface{}) {
-			value = append(value, iface.(string))
+		switch gen.(type) {
+		case []interface{}:
+			for _, iface := range gen.([]interface{}) {
+				value = append(value, iface.(string))
+			}
+		case interface{}:
+			value = append(value, gen.(string))
 		}
 	} else {
 		err = errors.New("Required option is missing: " + key + " ([]string)")
