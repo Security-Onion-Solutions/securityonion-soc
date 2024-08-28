@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -54,6 +55,8 @@ func TestRefreshAiSummaries(t *testing.T) {
 	})
 
 	logger := log.WithField("test", true)
+
+	lastSuccessfulAiUpdate = time.Time{}
 
 	err := RefreshAiSummaries(loader, model.SigLangSigma, &isRunning, "baseRepoFolder", repo, branch, logger, iom)
 	assert.NoError(t, err)
