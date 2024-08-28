@@ -312,7 +312,7 @@ routes.push({ path: '/config', name: 'config', component: {
       return breadcrumbs;
     },
     isMultiline(setting) {
-      return setting.multiline === true;
+      return setting.multiline === true || (setting.advanced === true && !setting.description);
     },
     isPendingSave(setting, nodeId) {
       if (this.form.key != null) {

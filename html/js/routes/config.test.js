@@ -250,6 +250,14 @@ test('isMultiline', () => {
 
   setting.multiline = true;
   expect(comp.isMultiline(setting)).toBe(true);
+
+  setting.multiline = false;
+  expect(comp.isMultiline(setting)).toBe(false);
+
+  setting.multiline = false;
+  setting.advanced = true;
+  setting.description = "";
+  expect(comp.isMultiline(setting)).toBe(true);
 });
 
 test('isPendingSave', () => {
