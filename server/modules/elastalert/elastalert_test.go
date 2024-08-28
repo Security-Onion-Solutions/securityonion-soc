@@ -477,7 +477,7 @@ func TestSigmaToElastAlertCustomNotificationLicensed(t *testing.T) {
 		return true
 	})).Return([]byte("<eql>"), 0, time.Duration(0), nil)
 
-	config := make(module.ModuleConfig)
+	config := make(map[string]interface{})
 	config["MyAlerters"] = "post2"
 	config["MyParams"] = "foo: car"
 
@@ -485,7 +485,7 @@ func TestSigmaToElastAlertCustomNotificationLicensed(t *testing.T) {
 		IOManager:               iom,
 		additionalAlerters:      []string{"email", "slack"},
 		additionalAlerterParams: "foo: bar",
-		moduleConfig:            &config,
+		customAlerters:          &config,
 	}
 
 	det := &model.Detection{
@@ -566,7 +566,7 @@ func TestSigmaToElastAlertCustomNotificationUnlicensed(t *testing.T) {
 		return true
 	})).Return([]byte("<eql>"), 0, time.Duration(0), nil)
 
-	config := make(module.ModuleConfig)
+	config := make(map[string]interface{})
 	config["MyAlerters"] = "post2"
 	config["MyParams"] = "foo: car"
 
@@ -574,7 +574,7 @@ func TestSigmaToElastAlertCustomNotificationUnlicensed(t *testing.T) {
 		IOManager:               iom,
 		additionalAlerters:      []string{"email", "slack"},
 		additionalAlerterParams: "foo: bar",
-		moduleConfig:            &config,
+		customAlerters:          &config,
 	}
 
 	det := &model.Detection{

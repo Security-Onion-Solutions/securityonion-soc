@@ -119,7 +119,7 @@ type ElastAlertEngine struct {
 	aiRepoUrl                          string
 	aiRepoBranch                       string
 	aiRepoPath                         string
-	moduleConfig                       *module.ModuleConfig
+	customAlerters                     *map[string]interface{}
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
 	detections.IOManager
@@ -191,7 +191,17 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.highSeverityAlerterParams = module.GetStringDefault(config, "additionalSev4AlertersParams", "")
 	e.criticalSeverityAlerters = module.GetStringArrayDefault(config, "additionalSev5Alerters", []string{})
 	e.criticalSeverityAlerterParams = module.GetStringDefault(config, "additionalSev5AlertersParams", "")
-	e.moduleConfig = &config
+
+	if custom, ok := config["additionalUserDefinedNotifications"]; ok {
+		switch ct := custom.(type) {
+		case map[string]interface{}:
+			customAlerters := custom.(map[string]interface{})
+			e.customAlerters = &customAlerters
+			log.WithField("custom", e.customAlerters).Debug("Found additional user defined notifications settings")
+		default:
+			log.WithField("castedType", ct).Error("additional user defined notifications cast error")
+		}
+	}
 
 	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS)
 
@@ -1582,7 +1592,7 @@ func (e *ElastAlertEngine) MergeAuxiliaryData(detect *model.Detection) error {
 }
 
 func (e *ElastAlertEngine) getCustomAlerters(tags []string) ([]string, string) {
-	if e.moduleConfig != nil {
+	if e.customAlerters != nil {
 		alertersKey := ""
 		paramsKey := ""
 		for _, tag := range tags {
@@ -1593,8 +1603,8 @@ func (e *ElastAlertEngine) getCustomAlerters(tags []string) ([]string, string) {
 				paramsKey = strings.TrimPrefix(tag, "so.params.")
 			}
 		}
-		alerters := module.GetStringArrayDefault(*e.moduleConfig, alertersKey, []string{})
-		params := module.GetStringDefault(*e.moduleConfig, paramsKey, "")
+		alerters := module.GetStringArrayDefault(*e.customAlerters, alertersKey, []string{})
+		params := module.GetStringDefault(*e.customAlerters, paramsKey, "")
 		return alerters, params
 	}
 	return []string{}, ""
