@@ -27,8 +27,7 @@ const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
 
 if (typeof global !== 'undefined') global.routes = routes;
 
-// $(document).ready(function () {
-window.onload = (function() {
+$(document).ready(function () {
   const vuetify = Vuetify.createVuetify({
     defaults: {
       'VIcon': {
@@ -64,6 +63,7 @@ window.onload = (function() {
             nav: '#ffffff',
             drawer_background: '#f4f4f4',
             background: '#ffffff',
+            text: '#000000',
           },
         },
         dark: {
@@ -77,6 +77,7 @@ window.onload = (function() {
             nav: '#ffffff',
             drawer_background: '#353535',
             background: '#1e1e1e',
+            text: '#ffffff',
           },
         },
       },
@@ -666,6 +667,13 @@ window.onload = (function() {
         }
         return md;
       },
+      colorSeverity(value) {
+        if (value == "low_false") return "yellow";
+        if (value == "medium_false") return "amber darken-1";
+        if (value == "high_false") return "red darken-1";
+        if (value == "critical_false") return "red darken-4";
+        return "secondary";
+      },
       generateDatePickerPreselects() {
         var preselects = {};
         preselects[this.i18n.datePreselectToday] = [moment().startOf('day'), moment().endOf('day')];
@@ -926,16 +934,24 @@ window.onload = (function() {
         this.setCookie(name, "", -1);
       },
       registerChart(chartType, chartName) {
-        var app = this;
-        Vue.component(chartName, {
+        const app = Vue.getCurrentInstance().appContext.app;
+        app.component(chartName, {
           extends: chartType,
           props: {
-            chartdata: { type: Object },
+            data: { type: Object },
             options: { type: Object }
           },
+          data() {
+            return {
+              chartData: this.data,
+              chartOptions: this.options,
+            };
+          },
+          setup(props, context) {
+            return chartType.setup(props, context);
+          },
           mounted () {
-            this.renderChart(this.chartdata, this.options)
-            this.chartdata.obj = this;
+            this.data.obj = this;
           }
         })
       },
@@ -946,7 +962,7 @@ window.onload = (function() {
         this.registerChart(VueChartJs.Pie, 'pie-chart');
 
         // Sankey is a separate third-party lib, so use the VueChartJs helper to add the custom chart
-        const Sankey = VueChartJs.generateChart('sankey-chart', 'sankey', Chart.controllers['sankey']);
+        const Sankey = VueChartJs.createTypedChart('sankey-chart', 'sankey', Chart.controllers['sankey']);
         this.registerChart(Sankey, 'sankey-chart');
 
         this.chartsInitialized = true;
@@ -1290,6 +1306,7 @@ window.onload = (function() {
     formatCount: comp.methods.formatCount,
     formatMarkdown: comp.methods.formatMarkdown,
     formatTimestamp: comp.methods.formatTimestamp,
+    colorSeverity: comp.methods.colorSeverity,
   };
 
   const app = Vue.createApp(comp);
