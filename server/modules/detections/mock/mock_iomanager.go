@@ -43,17 +43,17 @@ func (m *MockIOManager) EXPECT() *MockIOManagerMockRecorder {
 }
 
 // CloneRepo mocks base method.
-func (m *MockIOManager) CloneRepo(arg0 context.Context, arg1, arg2 string) error {
+func (m *MockIOManager) CloneRepo(arg0 context.Context, arg1, arg2 string, arg3 *string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CloneRepo", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "CloneRepo", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CloneRepo indicates an expected call of CloneRepo.
-func (mr *MockIOManagerMockRecorder) CloneRepo(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockIOManagerMockRecorder) CloneRepo(arg0, arg1, arg2, arg3 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CloneRepo", reflect.TypeOf((*MockIOManager)(nil).CloneRepo), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CloneRepo", reflect.TypeOf((*MockIOManager)(nil).CloneRepo), arg0, arg1, arg2, arg3)
 }
 
 // DeleteFile mocks base method.
@@ -103,18 +103,18 @@ func (mr *MockIOManagerMockRecorder) MakeRequest(arg0 any) *gomock.Call {
 }
 
 // PullRepo mocks base method.
-func (m *MockIOManager) PullRepo(arg0 context.Context, arg1 string) (bool, bool) {
+func (m *MockIOManager) PullRepo(arg0 context.Context, arg1 string, arg2 *string) (bool, bool) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PullRepo", arg0, arg1)
+	ret := m.ctrl.Call(m, "PullRepo", arg0, arg1, arg2)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(bool)
 	return ret0, ret1
 }
 
 // PullRepo indicates an expected call of PullRepo.
-func (mr *MockIOManagerMockRecorder) PullRepo(arg0, arg1 any) *gomock.Call {
+func (mr *MockIOManagerMockRecorder) PullRepo(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PullRepo", reflect.TypeOf((*MockIOManager)(nil).PullRepo), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PullRepo", reflect.TypeOf((*MockIOManager)(nil).PullRepo), arg0, arg1, arg2)
 }
 
 // ReadDir mocks base method.

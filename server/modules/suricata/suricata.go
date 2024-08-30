@@ -8,6 +8,7 @@ package suricata
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -55,6 +56,10 @@ const (
 	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS     = 300
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT    = 10
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS     = 600
+	DEFAULT_AI_REPO                               = "https://github.com/Security-Onion-Solutions/securityonion-resources"
+	DEFAULT_AI_REPO_BRANCH                        = "generated-summaries-stable"
+	DEFAULT_AI_REPO_PATH                          = "/opt/sensoroni/ai_summary_repos"
+	DEFAULT_SHOW_AI_SUMMARIES                     = true
 
 	CUSTOM_RULE_LOC = "/nsm/rules/detect-suricata/custom_temp"
 )
@@ -79,6 +84,11 @@ type SuricataEngine struct {
 	checkMigrationsOnce            func()
 	enableRegex                    []*regexp.Regexp
 	disableRegex                   []*regexp.Regexp
+	aiSummaries                    *sync.Map // map[string]*detections.AiSummary{}
+	showAiSummaries                bool
+	aiRepoUrl                      string
+	aiRepoBranch                   string
+	aiRepoPath                     string
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
 	detections.IOManager
@@ -113,6 +123,7 @@ func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 	e.InterruptChan = make(chan bool, 1)
 	e.IntegrityCheckerData.Thread = &sync.WaitGroup{}
 	e.IntegrityCheckerData.Interrupt = make(chan bool, 1)
+	e.aiSummaries = &sync.Map{}
 
 	e.communityRulesFile = module.GetStringDefault(config, "communityRulesFile", DEFAULT_COMMUNITY_RULES_FILE)
 	e.allRulesFile = module.GetStringDefault(config, "allRulesFile", DEFAULT_ALL_RULES_FILE)
@@ -155,6 +166,11 @@ func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 		return fmt.Errorf("unable to get custom rulesets: %w", err)
 	}
 
+	e.showAiSummaries = module.GetBoolDefault(config, "showAiSummaries", DEFAULT_SHOW_AI_SUMMARIES)
+	e.aiRepoUrl = module.GetStringDefault(config, "aiRepoUrl", DEFAULT_AI_REPO)
+	e.aiRepoBranch = module.GetStringDefault(config, "aiRepoBranch", DEFAULT_AI_REPO_BRANCH)
+	e.aiRepoPath = module.GetStringDefault(config, "aiRepoPath", DEFAULT_AI_REPO_PATH)
+
 	return nil
 }
 
@@ -163,8 +179,27 @@ func (e *SuricataEngine) Start() error {
 	e.isRunning = true
 	e.IntegrityCheckerData.IsRunning = true
 
+	// start long running processes
 	go detections.SyncScheduler(e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameSuricata, &e.isRunning, e.IOManager)
 	go detections.IntegrityChecker(model.EngineNameSuricata, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
+
+	// update Ai Summaries once and don't block
+	if e.showAiSummaries {
+		go func() {
+			logger := log.WithField("detectionEngine", model.EngineNameSuricata)
+
+			err := detections.RefreshAiSummaries(e, model.SigLangSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.aiRepoBranch, logger, e.IOManager)
+			if err != nil {
+				if errors.Is(err, detections.ErrModuleStopped) {
+					return
+				}
+
+				logger.WithError(err).Error("unable to refresh AI summaries")
+			} else {
+				logger.Info("successfully refreshed AI summaries")
+			}
+		}()
+	}
 
 	return nil
 }
@@ -318,6 +353,19 @@ func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 	e.writeNoRead = nil
 
+	if e.showAiSummaries {
+		err := detections.RefreshAiSummaries(e, model.SigLangSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.aiRepoBranch, logger, e.IOManager)
+		if err != nil {
+			if errors.Is(err, detections.ErrModuleStopped) {
+				return err
+			}
+
+			logger.WithError(err).Error("unable to refresh AI summaries")
+		} else {
+			logger.Info("successfully refreshed AI summaries")
+		}
+	}
+
 	e.EngineState.Syncing = true
 
 	rules, hash, err := e.readAndHash(e.communityRulesFile)
@@ -371,7 +419,7 @@ func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 		}
 	}
 
-	allSettings, err := e.srv.Configstore.GetSettings(e.srv.Context)
+	allSettings, err := e.srv.Configstore.GetSettings(e.srv.Context, true)
 	if err != nil {
 		if e.notify {
 			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
@@ -607,6 +655,11 @@ func (e *SuricataEngine) ValidateRule(rule string) (string, error) {
 		return rule, err
 	}
 
+	_, ok := parsed.GetOption("sid")
+	if !ok {
+		return rule, fmt.Errorf("rule does not contain a SID")
+	}
+
 	return parsed.String(), nil
 }
 
@@ -728,7 +781,7 @@ func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detects []*mod
 		}
 	}()
 
-	allSettings, err := e.srv.Configstore.GetSettings(ctx)
+	allSettings, err := e.srv.Configstore.GetSettings(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -1071,8 +1124,6 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 	}()
 	errMap = map[string]string{}
 
-	changedByUser := web.IsChangedByUser(ctx)
-
 	if logger == nil {
 		logger = log.WithField("detectionEngine", model.EngineNameSuricata)
 	}
@@ -1188,7 +1239,7 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 		_, inEnabled := enabledIndex[sid]
 		_, inDisabled := disabledIndex[sid]
 
-		if changedByUser || inEnabled || inDisabled || modifiedByFilter {
+		if detect.PersistChange || inEnabled || inDisabled || modifiedByFilter {
 			// update enabled
 			enabledLines = updateEnabled(enabledLines, enabledIndex, sid, isFlowbits, detect)
 
@@ -1693,6 +1744,41 @@ func (e *SuricataEngine) DuplicateDetection(ctx context.Context, detection *mode
 	return det, nil
 }
 
+func (e *SuricataEngine) LoadAuxiliaryData(summaries []*model.AiSummary) error {
+	sum := &sync.Map{}
+	for _, summary := range summaries {
+		sum.Store(summary.PublicId, summary)
+	}
+
+	e.aiSummaries = sum
+
+	log.WithFields(log.Fields{
+		"detectionEngine": model.EngineNameSuricata,
+		"aiSummaryCount":  len(summaries),
+	}).Info("loaded AI summaries")
+
+	return nil
+}
+
+func (e *SuricataEngine) MergeAuxiliaryData(detect *model.Detection) error {
+	if e.showAiSummaries {
+		obj, ok := e.aiSummaries.Load(detect.PublicID)
+		if ok {
+			sig := md5.Sum([]byte(detect.Content))
+			hexSig := hex.EncodeToString(sig[:])
+
+			summary := obj.(*model.AiSummary)
+			detect.AiFields = &model.AiFields{
+				AiSummary:         summary.Summary,
+				AiSummaryReviewed: summary.Reviewed,
+				IsAiSummaryStale:  !strings.EqualFold(summary.RuleBodyHash, hexSig),
+			}
+		}
+	}
+
+	return nil
+}
+
 func (e *SuricataEngine) ReadCustomRulesets() (detects []*model.Detection, err error) {
 	detects = []*model.Detection{}
 
@@ -1755,7 +1841,7 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (d
 
 	logger = logger.WithField("intCheckId", uuid.New().String())
 
-	allSettings, err := e.srv.Configstore.GetSettings(e.srv.Context)
+	allSettings, err := e.srv.Configstore.GetSettings(e.srv.Context, true)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -34,10 +34,14 @@ type Setting struct {
 	Duplicates          bool   `json:"duplicates"`
 }
 
-func NewSetting(Id string) *Setting {
-	return &Setting{
-		Id: Id,
-	}
+func NewSetting(id string) *Setting {
+	setting := &Setting{}
+	setting.SetId(id)
+	return setting
+}
+
+func (setting *Setting) SetId(id string) {
+	setting.Id = id
 }
 
 func IsValidMinionId(id string) bool {

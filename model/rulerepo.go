@@ -12,6 +12,7 @@ import (
 
 type RuleRepo struct {
 	Repo      string
+	Branch    *string
 	License   string
 	Folder    *string
 	Community bool

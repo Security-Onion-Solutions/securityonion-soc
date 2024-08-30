@@ -50,7 +50,7 @@ routes.push({ path: '/config', name: 'config', component: {
   },
   watch: {
     "active": "selectSetting",
-    "advanced": "refreshTree",
+    "advanced": "loadData",
   },
   computed: {
     selected() {
@@ -151,10 +151,8 @@ routes.push({ path: '/config', name: 'config', component: {
       settings.forEach((setting) => {
         try {
           path = setting.id.split(".");
-          if ((setting.description && !setting.advanced) || this.advanced) {
-            this.addToNode(root, "", path, setting);
-            this.settingsAvailable++;
-          }
+          this.addToNode(root, "", path, setting);
+          this.settingsAvailable++;
         } catch(e) {
           route.$root.showError(route.i18n.settingMalformed + " (" + setting.id + "): " + e);
         }
@@ -250,7 +248,7 @@ routes.push({ path: '/config', name: 'config', component: {
         var response = await this.$root.papi.get('gridmembers/');
         this.nodes = response.data;
 
-        response = await this.$root.papi.get('config/');
+        response = await this.$root.papi.get('config/', {params: { advanced: this.advanced }});
         this.settings = [];
         response.data.forEach((setting) => {
           const existing = this.settings.find(s => s.id == setting.id);
@@ -299,8 +297,22 @@ routes.push({ path: '/config', name: 'config', component: {
       }
       return desc;
     },
+    getSettingBreadcrumbs(setting) {
+      var breadcrumbs = setting.id.replaceAll(".", " > ");
+      if (setting.title) {
+        breadcrumbs = breadcrumbs.replace(/\s>\s[^>]+$/, " > " + setting.title);
+      }
+      var modifiers = []
+      if (setting.advanced) {
+        modifiers.push(this.i18n.configAdvancedTag);
+      }
+      if (modifiers.length > 0) {
+        breadcrumbs = breadcrumbs + " [" + modifiers.join(", ") + "]";
+      }
+      return breadcrumbs;
+    },
     isMultiline(setting) {
-      return setting.multiline === true;
+      return setting.multiline === true || (setting.advanced === true && !setting.description);
     },
     isPendingSave(setting, nodeId) {
       if (this.form.key != null) {

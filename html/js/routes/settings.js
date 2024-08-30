@@ -16,6 +16,7 @@ routes.push({ path: '/settings', name: 'settings', component: {
     showPassword: false,
     usingDefaults: false,
     csrfToken: null,
+    activeTab: '',
     profileForm: {
       valid: false,
       email: null,
@@ -92,7 +93,10 @@ routes.push({ path: '/settings', name: 'settings', component: {
         this.extractTotpData(response);
         this.extractWebauthnData(response);
         this.extractOidcData(response);
-
+        if (this.$route.query.tab) {
+          this.activeTab = this.$route.query.tab;
+        }
+  
         var errorsMessage = null;
         if (response.data.ui.messages && response.data.ui.messages.length > 0) {
           const error = response.data.ui.messages.find(item => item.type == "error");
@@ -128,6 +132,11 @@ routes.push({ path: '/settings', name: 'settings', component: {
         this.totpForm.secret = response.data.ui.nodes.find(item => item.attributes && item.attributes.id == 'totp_secret_key' && item.attributes.text).attributes.text.text;
       }
       this.unlink_totp_available = response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'totp_unlink') != null;
+
+      // Check if we can unlock the rest of the app
+      if (this.unlink_totp_available) {
+        this.$root.forceUserOtp = false;
+      }
     },
     extractWebauthnData(response) {
       if (response.data.ui.nodes.find(item => item.attributes && item.attributes.name == 'webauthn_register_trigger')) {

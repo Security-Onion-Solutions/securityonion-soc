@@ -67,6 +67,7 @@ func NewFakeDatastore() *FakeDatastore {
 	nodes := make([]*model.Node, 0)
 	nodes = append(nodes, &model.Node{})
 	nodes = append(nodes, &model.Node{Status: model.NodeStatusRestart})
+	nodes = append(nodes, &model.Node{NonCriticalNode: false})
 
 	jobs := make([]*model.Job, 0)
 	jobs = append(jobs, &model.Job{})

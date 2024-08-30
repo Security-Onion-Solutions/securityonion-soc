@@ -40,7 +40,7 @@ func TestRefreshGrid_LicensedNodes(tester *testing.T) {
 	status.refreshGrid(context.Background())
 	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
 
-	// FakeServer has 2 fake nodes, since 2 > 1 the license will be exceeded
+	// FakeServer has 2 fake critical nodes, since 2 > 1 the license will be exceeded
 	licensing.Test("foo", 0, 1, "", "")
 	status.refreshGrid(context.Background())
 	assert.Equal(tester, licensing.LICENSE_STATUS_EXCEEDED, licensing.GetStatus())
@@ -50,7 +50,7 @@ func TestRefreshGrid(tester *testing.T) {
 	status, _ := NewTestStatus()
 
 	status.refreshGrid(context.Background())
-	assert.Equal(tester, 1, status.currentStatus.Grid.UnhealthyNodeCount)
-	assert.Equal(tester, 2, status.currentStatus.Grid.TotalNodeCount)
+	assert.Equal(tester, 2, status.currentStatus.Grid.UnhealthyNodeCount)
+	assert.Equal(tester, 3, status.currentStatus.Grid.TotalNodeCount)
 	assert.Equal(tester, 12, status.currentStatus.Grid.Eps)
 }

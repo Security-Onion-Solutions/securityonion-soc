@@ -18,7 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 
 	"github.com/apex/log"
@@ -122,7 +121,7 @@ type RepoOnDisk struct {
 	WasModified bool
 }
 
-func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.RuleRepo, cfg *config.ServerConfig, iom IOManager) (allRepos []*RepoOnDisk, anythingNew bool, err error) {
+func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.RuleRepo, iom IOManager) (allRepos []*RepoOnDisk, anythingNew bool, err error) {
 	allRepos = make([]*RepoOnDisk, 0, len(rulesRepos))
 
 	// read existing repos
@@ -171,7 +170,7 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 			defer cancel()
 
 			// repo already exists, pull
-			dirty.WasModified, reclone = iom.PullRepo(ctx, repoPath)
+			dirty.WasModified, reclone = iom.PullRepo(ctx, repoPath, repo.Branch)
 			if dirty.WasModified {
 				anythingNew = true
 			}
@@ -194,10 +193,10 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 			defer cancel()
 
-			err = iom.CloneRepo(ctx, repoPath, repo.Repo)
+			err = iom.CloneRepo(ctx, repoPath, repo.Repo, repo.Branch)
 			if err != nil {
-				log.WithError(err).WithField("repoPath", repoPath).Error("failed to clone repo, doing nothing with it")
-				continue
+				log.WithError(err).WithField("repoPath", repoPath).Error("failed to clone repo")
+				return nil, false, err
 			}
 
 			anythingNew = true
@@ -250,18 +249,18 @@ func CheckWriteNoRead(ctx context.Context, DetStore GetterByPublicId, writeNoRea
 		return false
 	}
 
-	log.WithField("publicId", *writeNoRead).Error("detection was written but not read back, attempting read before continuing")
+	log.WithField("detectionPublicId", *writeNoRead).Error("detection was written but not read back, attempting read before continuing")
 
 	// det, err := e.srv.Detectionstore.GetDetectionByPublicId(e.srv.Context, *writeNoRead)
 	det, err := DetStore.GetDetectionByPublicId(ctx, *writeNoRead)
 	if err != nil {
-		log.WithError(err).WithField("publicId", *writeNoRead).Error("failed to read back detection")
+		log.WithError(err).WithField("detectionPublicId", *writeNoRead).Error("failed to read back detection")
 
 		return true
 	}
 
 	if det == nil {
-		log.WithField("publicId", *writeNoRead).Error("detection still not found")
+		log.WithField("detectionPublicId", *writeNoRead).Error("detection still not found")
 
 		return true
 	}
@@ -315,12 +314,12 @@ func DeduplicateByPublicId(detects []*model.Detection) []*model.Detection {
 		existing, inSet := set[detect.PublicID]
 		if inSet {
 			log.WithFields(log.Fields{
-				"publicId":         detect.PublicID,
-				"engine":           detect.Engine,
-				"existingRuleset":  existing.Ruleset,
-				"duplicateRuleset": detect.Ruleset,
-				"existingTitle":    existing.Title,
-				"duplicateTitle":   detect.Title,
+				"detectionPublicId": detect.PublicID,
+				"detectionEngine":   detect.Engine,
+				"existingRuleset":   existing.Ruleset,
+				"duplicateRuleset":  detect.Ruleset,
+				"existingTitle":     existing.Title,
+				"duplicateTitle":    detect.Title,
 			}).Warn("duplicate publicId found, skipping")
 		} else {
 			set[detect.PublicID] = detect

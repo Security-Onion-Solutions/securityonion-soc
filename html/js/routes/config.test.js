@@ -41,7 +41,7 @@ test('loadData', async () => {
   comp.settings = [];
   await comp.loadData();
   expect(loadmock).toHaveBeenCalledWith('gridmembers/');
-  expect(mock).toHaveBeenCalledWith('config/');
+  expect(mock).toHaveBeenCalledWith('config/', {params: { advanced: false }});
 
   expect(comp.nodes).toBe(loaddata);
 
@@ -249,6 +249,14 @@ test('isMultiline', () => {
   expect(comp.isMultiline(setting)).toBe(false);
 
   setting.multiline = true;
+  expect(comp.isMultiline(setting)).toBe(true);
+
+  setting.multiline = false;
+  expect(comp.isMultiline(setting)).toBe(false);
+
+  setting.multiline = false;
+  setting.advanced = true;
+  setting.description = "";
   expect(comp.isMultiline(setting)).toBe(true);
 });
 
@@ -683,4 +691,16 @@ test('processRouteParameters', () => {
   expect(comp.searchFilter).toBe('search');
   expect(comp.advanced).toBe(true);
   expect(comp.$nextTick).toHaveBeenCalledTimes(1);
+});
+
+test('getSettingBreadcrumbs', () => {
+  setting = { id: "foo.bar.car", advanced: false };
+  expect(comp.getSettingBreadcrumbs(setting)).toBe("foo > bar > car");
+
+  setting = { id: "foo.bar.car", advanced: false, title: "Carbine" };
+  expect(comp.getSettingBreadcrumbs(setting)).toBe("foo > bar > Carbine");
+
+  setting = { id: "foo.bar.car", advanced: true };
+  expect(comp.getSettingBreadcrumbs(setting)).toBe("foo > bar > car [adv]");
+
 });

@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/handmock"
@@ -95,11 +94,11 @@ func TestTruncateList(t *testing.T) {
 
 func TestDetermineWaitTimeNoState(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	mio := mock.NewMockIOManager(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
 
-	mio.EXPECT().ReadFile("state").Return(nil, fs.ErrNotExist)
+	iom.EXPECT().ReadFile("state").Return(nil, fs.ErrNotExist)
 
-	lastImport, dur := DetermineWaitTime(mio, "state", time.Minute)
+	lastImport, dur := DetermineWaitTime(iom, "state", time.Minute)
 
 	assert.Nil(t, lastImport, "Expected lastImport to be nil")
 	assert.Equal(t, time.Minute*20, dur, "Expected duration to be 20 minutes")
@@ -107,47 +106,47 @@ func TestDetermineWaitTimeNoState(t *testing.T) {
 
 func TestDetermineWaitTime(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	mio := mock.NewMockIOManager(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
 
 	tenSecAgo := time.Now().Unix() - 10
 	tenSecAgoStr := strconv.FormatInt(tenSecAgo, 10)
 
-	mio.EXPECT().ReadFile("state").Return([]byte(tenSecAgoStr), nil)
+	iom.EXPECT().ReadFile("state").Return([]byte(tenSecAgoStr), nil)
 
-	lastImport, dur := DetermineWaitTime(mio, "state", time.Minute)
+	lastImport, dur := DetermineWaitTime(iom, "state", time.Minute)
 	assert.NotNil(t, lastImport, "Expected lastImport not to be nil")
 	assert.InEpsilon(t, time.Duration(time.Second*50), dur, 1)
 }
 
 func TestDetermineWaitTimeBadRead(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	mio := mock.NewMockIOManager(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
 
-	mio.EXPECT().ReadFile("state").Return(nil, errors.New("bad read"))
-	mio.EXPECT().DeleteFile("state").Return(nil)
+	iom.EXPECT().ReadFile("state").Return(nil, errors.New("bad read"))
+	iom.EXPECT().DeleteFile("state").Return(nil)
 
-	lastImport, dur := DetermineWaitTime(mio, "state", time.Minute)
+	lastImport, dur := DetermineWaitTime(iom, "state", time.Minute)
 	assert.Nil(t, lastImport, "Expected lastImport to be nil")
 	assert.Equal(t, time.Duration(time.Minute*20), dur)
 }
 
 func TestDetermineWaitTimeBadValue(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	mio := mock.NewMockIOManager(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
 
-	mio.EXPECT().ReadFile("state").Return([]byte("bad"), nil)
-	mio.EXPECT().DeleteFile("state").Return(nil)
+	iom.EXPECT().ReadFile("state").Return([]byte("bad"), nil)
+	iom.EXPECT().DeleteFile("state").Return(nil)
 
-	lastImport, dur := DetermineWaitTime(mio, "state", time.Minute)
+	lastImport, dur := DetermineWaitTime(iom, "state", time.Minute)
 	assert.Nil(t, lastImport, "Expected lastImport to be nil")
 	assert.Equal(t, time.Duration(time.Minute*20), dur)
 }
 
 func TestWriteStateFile(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	mio := mock.NewMockIOManager(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
 
-	mio.EXPECT().WriteFile("state", gomock.Any(), fs.FileMode(0644)).DoAndReturn(func(path string, contents []byte, perm fs.FileMode) error {
+	iom.EXPECT().WriteFile("state", gomock.Any(), fs.FileMode(0644)).DoAndReturn(func(path string, contents []byte, perm fs.FileMode) error {
 		unix, err := strconv.ParseInt(string(contents), 10, 64)
 		assert.NoError(t, err)
 		assert.InEpsilon(t, time.Now().Unix(), unix, 2)
@@ -155,7 +154,7 @@ func TestWriteStateFile(t *testing.T) {
 		return nil
 	})
 
-	WriteStateFile(mio, "state")
+	WriteStateFile(iom, "state")
 }
 
 func TestCheckWriteNoRead(t *testing.T) {
@@ -167,28 +166,28 @@ func TestCheckWriteNoRead(t *testing.T) {
 	id := util.Ptr("99999")
 	ctx := context.Background()
 
-	mio := servermock.NewMockDetectionstore(ctrl)
+	iom := servermock.NewMockDetectionstore(ctrl)
 
 	// No pending ID to read
-	shouldFail := CheckWriteNoRead(ctx, mio, nil)
+	shouldFail := CheckWriteNoRead(ctx, iom, nil)
 	assert.False(t, shouldFail)
 
 	// Error querying ES
-	mio.EXPECT().GetDetectionByPublicId(gomock.Any(), *id).Return(nil, errors.New("connection error"))
+	iom.EXPECT().GetDetectionByPublicId(gomock.Any(), *id).Return(nil, errors.New("connection error"))
 
-	shouldFail = CheckWriteNoRead(ctx, mio, id)
+	shouldFail = CheckWriteNoRead(ctx, iom, id)
 	assert.True(t, shouldFail)
 
 	// Detection still not found
-	mio.EXPECT().GetDetectionByPublicId(gomock.Any(), *id).Return(nil, nil)
+	iom.EXPECT().GetDetectionByPublicId(gomock.Any(), *id).Return(nil, nil)
 
-	shouldFail = CheckWriteNoRead(ctx, mio, id)
+	shouldFail = CheckWriteNoRead(ctx, iom, id)
 	assert.True(t, shouldFail)
 
 	// Successfully read back the missing ID
-	mio.EXPECT().GetDetectionByPublicId(gomock.Any(), *id).Return(&model.Detection{}, nil)
+	iom.EXPECT().GetDetectionByPublicId(gomock.Any(), *id).Return(&model.Detection{}, nil)
 
-	shouldFail = CheckWriteNoRead(ctx, mio, id)
+	shouldFail = CheckWriteNoRead(ctx, iom, id)
 	assert.False(t, shouldFail)
 }
 
@@ -395,6 +394,8 @@ func TestCheckTemplate(t *testing.T) {
 	detStore.EXPECT().DoesTemplateExist(ctx, "so-detection").Return(false, nil)
 	detStore.EXPECT().DoesTemplateExist(ctx, "so-detection").Return(true, nil).Times(1)
 
+	templateFound = false
+
 	results := []bool{}
 	for i := 0; i < 10; i++ {
 		result := CheckTemplate(ctx, detStore)
@@ -402,11 +403,14 @@ func TestCheckTemplate(t *testing.T) {
 	}
 
 	assert.Equal(t, []bool{false, true, true, true, true, true, true, true, true, true}, results)
+	assert.Equal(t, true, templateFound)
 }
 
 func TestUpdateRepos(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
+	branch := "branch"
 
 	iom := mock.NewMockIOManager(ctrl)
 	iom.EXPECT().ReadDir("baseRepoFolder").Return([]fs.DirEntry{
@@ -419,8 +423,8 @@ func TestUpdateRepos(t *testing.T) {
 			Dir:      true,
 		},
 	}, nil)
-	iom.EXPECT().PullRepo(gomock.Any(), "baseRepoFolder/repo1").Return(false, false)
-	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo2", "http://github.com/user/repo2").Return(nil)
+	iom.EXPECT().PullRepo(gomock.Any(), "baseRepoFolder/repo1", nil).Return(false, false)
+	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo2", "http://github.com/user/repo2", &branch).Return(nil)
 	iom.EXPECT().RemoveAll("baseRepoFolder/repo3").Return(nil)
 
 	isRunning := true
@@ -430,12 +434,12 @@ func TestUpdateRepos(t *testing.T) {
 			Repo: "http://github.com/user/repo1",
 		},
 		{
-			Repo: "http://github.com/user/repo2",
+			Repo:   "http://github.com/user/repo2",
+			Branch: &branch,
 		},
 	}
-	cfg := &config.ServerConfig{}
 
-	allRepos, anythingNew, err := UpdateRepos(&isRunning, "baseRepoFolder", repos, cfg, iom)
+	allRepos, anythingNew, err := UpdateRepos(&isRunning, "baseRepoFolder", repos, iom)
 	assert.NoError(t, err)
 	assert.Len(t, allRepos, len(repos))
 	assert.Equal(t, &RepoOnDisk{
@@ -448,4 +452,41 @@ func TestUpdateRepos(t *testing.T) {
 		WasModified: true,
 	}, allRepos[1])
 	assert.True(t, anythingNew)
+}
+
+func TestUpdateReposFailToClone(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	branch := "branch"
+
+	iom := mock.NewMockIOManager(ctrl)
+	iom.EXPECT().ReadDir("baseRepoFolder").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: "repo1",
+			Dir:      true,
+		},
+		&handmock.MockDirEntry{
+			Filename: "repo3",
+			Dir:      true,
+		},
+	}, nil)
+	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo2", "http://github.com/user/repo2", &branch).Return(errors.New("unexpected error"))
+
+	isRunning := true
+
+	repos := []*model.RuleRepo{
+		{
+			Repo:   "http://github.com/user/repo2",
+			Branch: &branch,
+		},
+		{
+			Repo: "http://github.com/user/repo1",
+		},
+	}
+
+	allRepos, anythingNew, err := UpdateRepos(&isRunning, "baseRepoFolder", repos, iom)
+	assert.Error(t, err)
+	assert.Nil(t, allRepos)
+	assert.False(t, anythingNew)
 }

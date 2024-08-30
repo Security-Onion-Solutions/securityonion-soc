@@ -12,9 +12,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestString(tester *testing.T) {
+func TestStringId(tester *testing.T) {
 	setting := NewSetting("MyId")
 	assert.Equal(tester, "MyId", setting.Id)
+	assert.False(tester, setting.Advanced)
 }
 
 func TestIsValidMinionId(tester *testing.T) {

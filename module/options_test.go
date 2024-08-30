@@ -22,7 +22,19 @@ func TestGetString(tester *testing.T) {
 	if assert.Nil(tester, err) {
 		assert.Equal(tester, "MyValue", actual)
 	}
+}
 
+func TestGetStringFromArray(tester *testing.T) {
+	options := make(map[string]interface{})
+	_, err := GetString(options, "MyKey")
+	assert.Error(tester, err)
+
+	arr := []string{"MyValue", "Another"}
+	options["MyKey"] = arr
+	actual, err := GetString(options, "MyKey")
+	if assert.Nil(tester, err) {
+		assert.Equal(tester, "MyValue\nAnother", actual)
+	}
 }
 
 func TestGetStringDefault(tester *testing.T) {
@@ -102,4 +114,15 @@ func TestGetStringArrayDefault(tester *testing.T) {
 	actual = GetStringArrayDefault(options, "MyKey", make([]string, 0, 0))
 	assert.Equal(tester, "MyValue1", actual[0])
 	assert.Equal(tester, "MyValue2", actual[1])
+}
+
+func TestGetStringArrayFromString(tester *testing.T) {
+	options := make(map[string]interface{})
+	_, err := GetStringArray(options, "MyKey")
+	assert.Error(tester, err)
+	options["MyKey"] = "single_line"
+	actual, err := GetStringArray(options, "MyKey")
+	if assert.Nil(tester, err) {
+		assert.Equal(tester, "single_line", actual[0])
+	}
 }

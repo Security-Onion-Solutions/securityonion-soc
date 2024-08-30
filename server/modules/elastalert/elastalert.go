@@ -9,6 +9,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/md5"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -22,6 +23,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -60,6 +62,20 @@ const (
 	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS        = 300
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT       = 10
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS        = 600
+	DEFAULT_AI_REPO                                  = "https://github.com/Security-Onion-Solutions/securityonion-resources"
+	DEFAULT_AI_REPO_BRANCH                           = "generated-summaries-stable"
+	DEFAULT_AI_REPO_PATH                             = "/opt/sensoroni/ai_summary_repos"
+	DEFAULT_SHOW_AI_SUMMARIES                        = true
+)
+
+var ( // treat as constant
+	DEFAULT_RULES_REPOS = []*model.RuleRepo{
+		{
+			Repo:    "https://github.com/Security-Onion-Solutions/securityonion-resources",
+			License: "DRL",
+			Folder:  util.Ptr("sigma/stable"),
+		},
+	}
 )
 
 var acceptedExtensions = map[string]bool{
@@ -68,25 +84,42 @@ var acceptedExtensions = map[string]bool{
 }
 
 type ElastAlertEngine struct {
-	srv                            *server.Server
-	airgapBasePath                 string
-	failAfterConsecutiveErrorCount int
-	sigmaPackageDownloadTemplate   string
-	elastAlertRulesFolder          string
-	rulesFingerprintFile           string
-	sigmaPipelineFinal             string
-	sigmaPipelineSO                string
-	sigmaPipelinesFingerprintFile  string
-	sigmaRulePackages              []string
-	autoEnabledSigmaRules          []string
-	additionalAlerters             []string
-	rulesRepos                     []*model.RuleRepo
-	reposFolder                    string
-	isRunning                      bool
-	interm                         sync.Mutex
-	airgapEnabled                  bool
-	notify                         bool
-	writeNoRead                    *string
+	srv                                *server.Server
+	airgapBasePath                     string
+	failAfterConsecutiveErrorCount     int
+	sigmaPackageDownloadTemplate       string
+	elastAlertRulesFolder              string
+	rulesFingerprintFile               string
+	sigmaPipelineFinal                 string
+	sigmaPipelineSO                    string
+	sigmaPipelinesFingerprintFile      string
+	sigmaRulePackages                  []string
+	autoEnabledSigmaRules              []string
+	additionalAlerters                 []string
+	additionalAlerterParams            string
+	informationalSeverityAlerters      []string
+	informationalSeverityAlerterParams string
+	lowSeverityAlerters                []string
+	lowSeverityAlerterParams           string
+	mediumSeverityAlerters             []string
+	mediumSeverityAlerterParams        string
+	highSeverityAlerters               []string
+	highSeverityAlerterParams          string
+	criticalSeverityAlerters           []string
+	criticalSeverityAlerterParams      string
+	rulesRepos                         []*model.RuleRepo
+	reposFolder                        string
+	isRunning                          bool
+	interm                             sync.Mutex
+	airgapEnabled                      bool
+	notify                             bool
+	writeNoRead                        *string
+	aiSummaries                        *sync.Map // map[string]*detections.AiSummary{}
+	showAiSummaries                    bool
+	aiRepoUrl                          string
+	aiRepoBranch                       string
+	aiRepoPath                         string
+	customAlerters                     *map[string]interface{}
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
 	detections.IOManager
@@ -133,6 +166,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.InterruptChan = make(chan bool, 1)
 	e.IntegrityCheckerData.Thread = &sync.WaitGroup{}
 	e.IntegrityCheckerData.Interrupt = make(chan bool, 1)
+	e.aiSummaries = &sync.Map{}
 
 	e.airgapBasePath = module.GetStringDefault(config, "airgapBasePath", DEFAULT_AIRGAP_BASE_PATH)
 	e.CommunityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECONDS)
@@ -146,19 +180,36 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.CommunityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 	e.additionalAlerters = module.GetStringArrayDefault(config, "additionalAlerters", []string{})
+	e.additionalAlerterParams = module.GetStringDefault(config, "additionalSev0AlertersParams", "")
+	e.informationalSeverityAlerters = module.GetStringArrayDefault(config, "additionalSev1Alerters", []string{})
+	e.informationalSeverityAlerterParams = module.GetStringDefault(config, "additionalSev1AlertersParams", "")
+	e.lowSeverityAlerters = module.GetStringArrayDefault(config, "additionalSev2Alerters", []string{})
+	e.lowSeverityAlerterParams = module.GetStringDefault(config, "additionalSev2AlertersParams", "")
+	e.mediumSeverityAlerters = module.GetStringArrayDefault(config, "additionalSev3Alerters", []string{})
+	e.mediumSeverityAlerterParams = module.GetStringDefault(config, "additionalSev3AlertersParams", "")
+	e.highSeverityAlerters = module.GetStringArrayDefault(config, "additionalSev4Alerters", []string{})
+	e.highSeverityAlerterParams = module.GetStringDefault(config, "additionalSev4AlertersParams", "")
+	e.criticalSeverityAlerters = module.GetStringArrayDefault(config, "additionalSev5Alerters", []string{})
+	e.criticalSeverityAlerterParams = module.GetStringDefault(config, "additionalSev5AlertersParams", "")
+
+	if custom, ok := config["additionalUserDefinedNotifications"]; ok {
+		switch ct := custom.(type) {
+		case map[string]interface{}:
+			customAlerters := custom.(map[string]interface{})
+			e.customAlerters = &customAlerters
+			log.WithField("custom", e.customAlerters).Debug("Found additional user defined notifications settings")
+		default:
+			log.WithField("castedType", ct).Error("additional user defined notifications cast error")
+		}
+	}
+
 	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS)
 
 	pkgs := module.GetStringArrayDefault(config, "sigmaRulePackages", []string{"core", "emerging_threats_addon"})
 	e.parseSigmaPackages(pkgs)
 
 	e.reposFolder = module.GetStringDefault(config, "reposFolder", DEFAULT_REPOS_FOLDER)
-	e.rulesRepos, err = model.GetReposDefault(config, "rulesRepos", []*model.RuleRepo{
-		{
-			Repo:    "https://github.com/Security-Onion-Solutions/securityonion-resources",
-			License: "DRL",
-			Folder:  util.Ptr("sigma/stable"),
-		},
-	})
+	e.rulesRepos, err = model.GetReposDefault(config, "rulesRepos", DEFAULT_RULES_REPOS)
 	if err != nil {
 		return fmt.Errorf("unable to parse ElastAlert's rulesRepos: %w", err)
 	}
@@ -171,6 +222,11 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 
 	e.SyncSchedulerParams.StateFilePath = module.GetStringDefault(config, "stateFilePath", DEFAULT_STATE_FILE_PATH)
 
+	e.showAiSummaries = module.GetBoolDefault(config, "showAiSummaries", DEFAULT_SHOW_AI_SUMMARIES)
+	e.aiRepoUrl = module.GetStringDefault(config, "aiRepoUrl", DEFAULT_AI_REPO)
+	e.aiRepoBranch = module.GetStringDefault(config, "aiRepoBranch", DEFAULT_AI_REPO_BRANCH)
+	e.aiRepoPath = module.GetStringDefault(config, "aiRepoPath", DEFAULT_AI_REPO_PATH)
+
 	return nil
 }
 
@@ -179,8 +235,27 @@ func (e *ElastAlertEngine) Start() error {
 	e.isRunning = true
 	e.IntegrityCheckerData.IsRunning = true
 
+	// start long running processes
 	go detections.SyncScheduler(e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameElastAlert, &e.isRunning, e.IOManager)
 	go detections.IntegrityChecker(model.EngineNameElastAlert, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
+
+	// update Ai Summaries once and don't block
+	if e.showAiSummaries {
+		go func() {
+			logger := log.WithField("detectionEngine", model.EngineNameElastAlert)
+
+			err := detections.RefreshAiSummaries(e, model.SigLangSigma, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.aiRepoBranch, logger, e.IOManager)
+			if err != nil {
+				if errors.Is(err, detections.ErrModuleStopped) {
+					return
+				}
+
+				logger.WithError(err).Error("unable to refresh AI summaries")
+			} else {
+				logger.Info("successfully refreshed AI summaries")
+			}
+		}()
+	}
 
 	return nil
 }
@@ -388,7 +463,7 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 				continue
 			}
 
-			wrapped, err := wrapRule(det, eaRule, e.additionalAlerters)
+			wrapped, err := e.wrapRule(det, eaRule)
 			if err != nil {
 				continue
 			}
@@ -432,6 +507,19 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 	e.writeNoRead = nil
 
+	if e.showAiSummaries {
+		err := detections.RefreshAiSummaries(e, model.SigLangSigma, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.aiRepoBranch, logger, e.IOManager)
+		if err != nil {
+			if errors.Is(err, detections.ErrModuleStopped) {
+				return err
+			}
+
+			logger.WithError(err).Error("unable to refresh AI summaries")
+		} else {
+			logger.Info("successfully refreshed AI summaries")
+		}
+	}
+
 	// announce the beginning of the sync
 	e.EngineState.Syncing = true
 
@@ -452,7 +540,7 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 	var errMap map[string]error
 
 	// If the system is Airgap, load the sigma packages from disk.
-	// else, not Airgap, downoad the sigma packages.
+	// else, not Airgap, download the sigma packages.
 	if e.airgapEnabled {
 		zips, errMap = e.loadSigmaPackagesFromDisk()
 	} else {
@@ -473,7 +561,7 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 	}
 
 	// ensure repos are up to date
-	dirtyRepos, repoChanges, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.srv.Config, e.IOManager)
+	dirtyRepos, repoChanges, err := detections.UpdateRepos(&e.isRunning, e.reposFolder, e.rulesRepos, e.IOManager)
 	if err != nil {
 		if errors.Is(err, detections.ErrModuleStopped) {
 			return err
@@ -599,6 +687,53 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 		}
 
 		return detections.ErrSyncFailed
+	}
+
+	localrules, err := e.srv.Detectionstore.GetAllDetections(e.srv.Context, model.WithEngine(model.EngineNameElastAlert), model.WithCommunity(false))
+	if err != nil {
+		if errors.Is(err, detections.ErrModuleStopped) {
+			return err
+		}
+
+		logger.WithError(err).Error("unable to get local detections")
+
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameElastAlert,
+				Status: "error",
+			})
+		}
+
+		return detections.ErrSyncFailed
+	}
+
+	if len(localrules) > 0 {
+		local := make([]*model.Detection, 0, len(localrules))
+		for _, det := range localrules {
+			local = append(local, det)
+		}
+
+		errMapLocal, err := e.SyncLocalDetections(e.srv.Context, local)
+		if err != nil {
+			if errors.Is(err, detections.ErrModuleStopped) {
+				return err
+			}
+
+			logger.WithError(err).Error("unable to sync local detections")
+
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+					Engine: model.EngineNameElastAlert,
+					Status: "error",
+				})
+			}
+
+			return detections.ErrSyncFailed
+		}
+
+		for publicID, err := range errMapLocal {
+			errMap[publicID] = errors.New(err)
+		}
 	}
 
 	detections.WriteStateFile(e.IOManager, e.StateFilePath)
@@ -1023,7 +1158,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 				continue
 			}
 
-			rule, err = wrapRule(detect, rule, e.additionalAlerters)
+			rule, err = e.wrapRule(detect, rule)
 			if err != nil {
 				continue
 			}
@@ -1421,6 +1556,118 @@ func (e *ElastAlertEngine) DuplicateDetection(ctx context.Context, detection *mo
 	return det, nil
 }
 
+func (e *ElastAlertEngine) LoadAuxiliaryData(summaries []*model.AiSummary) error {
+	sum := &sync.Map{}
+	for _, summary := range summaries {
+		sum.Store(summary.PublicId, summary)
+	}
+
+	e.aiSummaries = sum
+
+	log.WithFields(log.Fields{
+		"detectionEngine": model.EngineNameElastAlert,
+		"aiSummaryCount":  len(summaries),
+	}).Info("loaded AI summaries")
+
+	return nil
+}
+
+func (e *ElastAlertEngine) MergeAuxiliaryData(detect *model.Detection) error {
+	if e.showAiSummaries {
+		obj, ok := e.aiSummaries.Load(detect.PublicID)
+		if ok {
+			sig := md5.Sum([]byte(detect.Content))
+			hexSig := hex.EncodeToString(sig[:])
+
+			summary := obj.(*model.AiSummary)
+			detect.AiFields = &model.AiFields{
+				AiSummary:         summary.Summary,
+				AiSummaryReviewed: summary.Reviewed,
+				IsAiSummaryStale:  !strings.EqualFold(summary.RuleBodyHash, hexSig),
+			}
+		}
+	}
+
+	return nil
+}
+
+func (e *ElastAlertEngine) getCustomAlerters(tags []string) ([]string, string) {
+	if e.customAlerters != nil {
+		alertersKey := ""
+		paramsKey := ""
+		for _, tag := range tags {
+			if strings.HasPrefix(tag, "so.alerters.") {
+				alertersKey = strings.TrimPrefix(tag, "so.alerters.")
+			}
+			if strings.HasPrefix(tag, "so.params.") {
+				paramsKey = strings.TrimPrefix(tag, "so.params.")
+			}
+		}
+		alerters := module.GetStringArrayDefault(*e.customAlerters, alertersKey, []string{})
+		params := module.GetStringDefault(*e.customAlerters, paramsKey, "")
+		return alerters, params
+	}
+	return []string{}, ""
+}
+
+func (e *ElastAlertEngine) getAdditionalAlerters(severity int) ([]string, string) {
+	// Start with default alerters
+	alerters := e.additionalAlerters
+	params := e.additionalAlerterParams
+
+	// Override if info or above severity
+	if severity > 0 {
+		if len(e.informationalSeverityAlerters) > 0 {
+			alerters = e.informationalSeverityAlerters
+		}
+		if len(e.informationalSeverityAlerterParams) > 0 {
+			params = e.informationalSeverityAlerterParams
+		}
+	}
+
+	// Override if low or above severity
+	if severity > 1 {
+		if len(e.lowSeverityAlerters) > 0 {
+			alerters = e.lowSeverityAlerters
+		}
+		if len(e.lowSeverityAlerterParams) > 0 {
+			params = e.lowSeverityAlerterParams
+		}
+	}
+
+	// Override if med or above severity
+	if severity > 2 {
+		if len(e.mediumSeverityAlerters) > 0 {
+			alerters = e.mediumSeverityAlerters
+		}
+		if len(e.mediumSeverityAlerterParams) > 0 {
+			params = e.mediumSeverityAlerterParams
+		}
+	}
+
+	// Override if high or crit severity
+	if severity > 3 {
+		if len(e.highSeverityAlerters) > 0 {
+			alerters = e.highSeverityAlerters
+		}
+		if len(e.highSeverityAlerterParams) > 0 {
+			params = e.highSeverityAlerterParams
+		}
+	}
+
+	// Override if crit severity
+	if severity > 4 {
+		if len(e.criticalSeverityAlerters) > 0 {
+			alerters = e.criticalSeverityAlerters
+		}
+		if len(e.criticalSeverityAlerterParams) > 0 {
+			params = e.criticalSeverityAlerterParams
+		}
+	}
+
+	return alerters, params
+}
+
 type CustomWrapper struct {
 	DetectionTitle    string   `yaml:"detection_title"`
 	DetectionPublicId string   `yaml:"detection_public_id"`
@@ -1557,7 +1804,7 @@ func (dur *TimeFrame) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return err
 }
 
-func wrapRule(det *model.Detection, rule string, additionalAlerters []string) (string, error) {
+func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, error) {
 	severities := map[model.Severity]int{
 		model.SeverityUnknown:       0,
 		model.SeverityInformational: 1,
@@ -1565,6 +1812,18 @@ func wrapRule(det *model.Detection, rule string, additionalAlerters []string) (s
 		model.SeverityMedium:        3,
 		model.SeverityHigh:          4,
 		model.SeverityCritical:      5,
+	}
+
+	var sigmaTags []string
+	sigmaRule, err := ParseElastAlertRule([]byte(det.Content))
+	if err != nil {
+		log.WithError(err).WithField("detectionPublicId", det.PublicID).Error("failed to parse Sigma rule content")
+	} else {
+		sigmaTags = sigmaRule.Tags
+	}
+	alerters, params := e.getCustomAlerters(sigmaTags)
+	if len(alerters) == 0 {
+		alerters, params = e.getAdditionalAlerters(severities[det.Severity])
 	}
 
 	sevNum := severities[det.Severity]
@@ -1589,9 +1848,14 @@ func wrapRule(det *model.Detection, rule string, additionalAlerters []string) (s
 		Filter:            []map[string]interface{}{{"eql": rule}},
 	}
 
+	if slices.Contains(sigmaTags, "so.notification") {
+		// This is a detection for sending notifications only, do not add a new alert to Security Onion.
+		wrapper.Alert = nil
+	}
+
 	if licensing.IsEnabled(licensing.FEAT_NTF) {
 		// Add any custom alerters to the rule.
-		for _, alerter := range additionalAlerters {
+		for _, alerter := range alerters {
 			alerter = strings.TrimSpace(alerter)
 			if len(alerter) > 0 {
 				wrapper.Alert = append(wrapper.Alert, alerter)
@@ -1603,8 +1867,23 @@ func wrapRule(det *model.Detection, rule string, additionalAlerters []string) (s
 	if err != nil {
 		return "", err
 	}
+	strYaml := string(rawYaml)
 
-	return string(rawYaml), nil
+	if licensing.IsEnabled(licensing.FEAT_NTF) {
+		if len(params) > 0 {
+			strYaml += "\n" + params + "\n"
+		}
+	}
+
+	if len(wrapper.Alert) == 0 {
+		log.WithFields(log.Fields{
+			"detectionPublicId": det.PublicID,
+			"severity":          string(det.Severity),
+		}).Debug("Disabling ElastAlert rule due to no valid alerters")
+		strYaml += "\nis_enabled: False\n"
+	}
+
+	return strYaml, nil
 }
 
 func (e *ElastAlertEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (deployedButNotEnabled []string, enabledButNotDeployed []string, err error) {

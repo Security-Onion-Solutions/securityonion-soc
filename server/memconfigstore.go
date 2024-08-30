@@ -22,7 +22,7 @@ func NewMemConfigStore(settings []*model.Setting) *MemConfigStore {
 	}
 }
 
-func (m *MemConfigStore) GetSettings(ctx context.Context) ([]*model.Setting, error) {
+func (m *MemConfigStore) GetSettings(ctx context.Context, advanced bool) ([]*model.Setting, error) {
 	return m.settings, nil
 }
 

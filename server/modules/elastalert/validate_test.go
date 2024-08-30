@@ -51,20 +51,20 @@ func TestParseRule(t *testing.T) {
 		{
 			Name:          "Empty Rule",
 			Input:         `{}`,
-			ExpectedError: util.Ptr("missing required fields: title, logsource, detection.condition"),
+			ExpectedError: util.Ptr("missing required fields: id, title, logsource, detection.condition"),
 		},
 		{
 			Name:          "Detection but No Condition",
-			Input:         `{ title: "title", logsource: { category: "test" }, detection: {}}`,
+			Input:         `{ id: "x", title: "title", logsource: { category: "test" }, detection: {}}`,
 			ExpectedError: util.Ptr("missing required fields: detection.condition"),
 		},
 		{
 			Name:  "Minimal Rule With Single Detection Condition",
-			Input: `{ title: "title", logsource: { category: "test" }, detection: { condition: "condition" }}`,
+			Input: `{ id: "x", title: "title", logsource: { category: "test" }, detection: { condition: "condition" }}`,
 		},
 		{
 			Name:  "Minimal Rule With Multiple Detection Condition",
-			Input: `{ title: "title", logsource: { category: "test" }, detection: { condition: [ "conditionOne", "conditionTwo" ] }}`,
+			Input: `{ id: "x", title: "title", logsource: { category: "test" }, detection: { condition: [ "conditionOne", "conditionTwo" ] }}`,
 		},
 	}
 

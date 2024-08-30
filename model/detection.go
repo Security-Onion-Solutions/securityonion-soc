@@ -99,27 +99,39 @@ type DetectionEngine struct {
 
 type Detection struct {
 	Auditable
-	PublicID      string      `json:"publicId"`
-	Title         string      `json:"title"`
-	Severity      Severity    `json:"severity"`
-	Author        string      `json:"author"`
-	Category      string      `json:"category,omitempty"`
-	Description   string      `json:"description"`
-	Content       string      `json:"content"`
-	IsEnabled     bool        `json:"isEnabled"`
-	IsReporting   bool        `json:"isReporting"`
-	IsCommunity   bool        `json:"isCommunity"`
-	Engine        EngineName  `json:"engine"`
-	Language      SigLanguage `json:"language"`
-	Overrides     []*Override `json:"overrides"` // Tuning
-	Tags          []string    `json:"tags"`
-	Ruleset       string      `json:"ruleset"`
-	License       string      `json:"license"`
-	PendingDelete bool        `json:"-"` // this is a transient field, not stored in the database
+	PublicID    string      `json:"publicId"`
+	Title       string      `json:"title"`
+	Severity    Severity    `json:"severity"`
+	Author      string      `json:"author"`
+	Category    string      `json:"category,omitempty"`
+	Description string      `json:"description"`
+	Content     string      `json:"content"`
+	IsEnabled   bool        `json:"isEnabled"`
+	IsReporting bool        `json:"isReporting"`
+	IsCommunity bool        `json:"isCommunity"`
+	Engine      EngineName  `json:"engine"`
+	Language    SigLanguage `json:"language"`
+	Overrides   []*Override `json:"overrides"` // Tuning
+	Tags        []string    `json:"tags"`
+	Ruleset     string      `json:"ruleset"`
+	License     string      `json:"license"`
+
+	// these are transient fields, not stored in the database
+	PendingDelete bool `json:"-"`
+	PersistChange bool `json:"-"`
 
 	// elastalert - sigma only
 	Product string `json:"product,omitempty"`
 	Service string `json:"service,omitempty"`
+
+	// AI Description fields
+	*AiFields `json:",omitempty"`
+}
+
+type AiFields struct {
+	AiSummary         string `json:"aiSummary"`
+	AiSummaryReviewed bool   `json:"aiSummaryReviewed"`
+	IsAiSummaryStale  bool   `json:"isSummaryStale"`
 }
 
 type DetectionComment struct {
@@ -352,4 +364,11 @@ type AuditInfo struct {
 	DocId     string
 	Op        string
 	Detection *Detection
+}
+
+type AiSummary struct {
+	PublicId     string
+	Reviewed     bool   `yaml:"Reviewed"`
+	Summary      string `yaml:"Summary"`
+	RuleBodyHash string `yaml:"Rule-Body-Hash"`
 }

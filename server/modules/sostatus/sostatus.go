@@ -95,6 +95,7 @@ func (status *SoStatus) Refresh(ctx context.Context) {
 
 func (status *SoStatus) refreshGrid(ctx context.Context) {
 	unhealthyNodes := 0
+	nonCriticalNodes := 0
 
 	nodes := status.server.Datastore.GetNodes(ctx)
 	for _, node := range nodes {
@@ -129,12 +130,16 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 		if node.Status != model.NodeStatusOk && node.Status != model.NodeStatusRestart && !node.NonCriticalNode {
 			unhealthyNodes++
 		}
+
+		if node.NonCriticalNode {
+			nonCriticalNodes++
+		}
 	}
 	status.currentStatus.Grid.TotalNodeCount = len(nodes)
 	status.currentStatus.Grid.UnhealthyNodeCount = unhealthyNodes
 	status.currentStatus.Grid.Eps = status.server.Metrics.GetGridEps(ctx)
 
-	licensing.ValidateNodeCount(len(nodes))
+	licensing.ValidateNodeCount(status.currentStatus.Grid.TotalNodeCount - nonCriticalNodes)
 }
 
 func (status *SoStatus) refreshDetections(ctx context.Context) {

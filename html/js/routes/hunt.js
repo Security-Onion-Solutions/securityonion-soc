@@ -156,6 +156,7 @@ const huntComponent = {
     presets: {},
     manualSyncTargetEngine: null,
     showBulkDeleteConfirmDialog: false,
+    tuneDetectionTabTarget: null,
   }},
   created() {
     this.$root.initializeCharts();
@@ -1062,11 +1063,16 @@ const huntComponent = {
       if (this.isCategory('alerts')) {
         const id = event["rule.uuid"];
         this.quickActionDetId = null;
+        this.tuneDetectionTabTarget = null;
 
         // don't slow down the UI with this call
         if (id) {
           this.$root.papi.get(`detection/public/${id}`).then(response => {
             this.quickActionDetId = response.data.id;
+            this.tuneDetectionTabTarget = 'tuning';
+            if (response.data.engine === 'strelka') {
+              this.tuneDetectionTabTarget = 'source';
+            }
           });
         }
       }
@@ -1721,7 +1727,7 @@ const huntComponent = {
         }
       };
       options.scales = {
-        yAxes: {
+        y: {
           grid: {
             color: gridColor,
           },
@@ -1731,7 +1737,7 @@ const huntComponent = {
             precision: 0,
           }
         },
-        xAxes: {
+        x: {
           gridLines: {
             color: gridColor,
           },
@@ -1754,7 +1760,7 @@ const huntComponent = {
     setupTimelineChart(options, data, title) {
       this.setupBarChart(options, data, title);
       options.onClick = null;
-      options.scales.xAxes.type = 'timeseries';
+      options.scales.x.type = 'timeseries';
     },
     setupPieChart(options, data, title) {
       options.responsive = true;

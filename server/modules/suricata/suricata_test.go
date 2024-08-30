@@ -25,7 +25,6 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/handmock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
 	"github.com/elastic/go-elasticsearch/v8/esutil"
@@ -64,6 +63,8 @@ func TestSuricataModule(t *testing.T) {
 
 	err := mod.Init(nil)
 	assert.NoError(t, err)
+
+	mod.showAiSummaries = false
 
 	err = mod.Start()
 	assert.NoError(t, err)
@@ -395,7 +396,7 @@ func TestValidate(t *testing.T) {
 		},
 		{
 			Name:  "Valid Rule with Escaped Quotes",
-			Input: `alert http any any -> any any (msg:"This rule has \"escaped quotes\"";)`,
+			Input: `alert http any any -> any any (msg:"This rule has \"escaped quotes\""; sid: 200000;)`,
 		},
 		{
 			Name:        "Invalid Direction",
@@ -878,7 +879,7 @@ func TestSyncLocalSuricata(t *testing.T) {
 			assert.Equal(t, test.ExpectedErr, err)
 			assert.Equal(t, test.ExpectedErrMap, errMap)
 
-			set, err := mCfgStore.GetSettings(ctx)
+			set, err := mCfgStore.GetSettings(ctx, true)
 			assert.NoError(t, err, "GetSettings should not return an error")
 
 			for id, expectedValue := range test.ExpectedSettings {
@@ -1078,6 +1079,8 @@ func TestSyncCommunitySuricata(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, test := range table {
 		test := test
 		t.Run(test.Name, func(t *testing.T) {
@@ -1096,7 +1099,11 @@ func TestSyncCommunitySuricata(t *testing.T) {
 
 			mod.isRunning = true
 
-			ctx := web.MarkChangedByUser(context.Background(), test.ChangedByUser)
+			if test.ChangedByUser {
+				for _, detect := range test.Detections {
+					detect.PersistChange = true
+				}
+			}
 
 			errMap, err := mod.syncCommunityDetections(ctx, nil, test.Detections, false, test.InitialSettings)
 
@@ -1107,7 +1114,7 @@ func TestSyncCommunitySuricata(t *testing.T) {
 				assert.NotEmpty(t, det.Id)
 			}
 
-			set, err := mCfgStore.GetSettings(ctx)
+			set, err := mCfgStore.GetSettings(ctx, true)
 			assert.NoError(t, err, "GetSettings should not return an error")
 
 			for id, expectedValue := range test.ExpectedSettings {
@@ -2184,7 +2191,8 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 		IntegrityCheckerData: detections.IntegrityCheckerData{
 			IsRunning: true,
 		},
-		IOManager: iom,
+		IOManager:       iom,
+		showAiSummaries: false,
 	}
 
 	logger := log.WithField("detectionEngine", "test-suricata")
@@ -2254,7 +2262,8 @@ func TestSyncChanges(t *testing.T) {
 		IntegrityCheckerData: detections.IntegrityCheckerData{
 			IsRunning: true,
 		},
-		IOManager: iom,
+		IOManager:       iom,
+		showAiSummaries: false,
 	}
 
 	logger := log.WithField("detectionEngine", "test-suricata")
@@ -2333,7 +2342,7 @@ func TestSyncChanges(t *testing.T) {
 	assert.False(t, eng.EngineState.SyncFailure)
 	assert.True(t, migrationChecked)
 
-	allSettings, err := cfgStore.GetSettings(ctx)
+	allSettings, err := cfgStore.GetSettings(ctx, true)
 	assert.NoError(t, err)
 
 	enabled := settingByID(allSettings, "idstools.sids.enabled")
@@ -2483,4 +2492,88 @@ func toRegex(s ...string) []*regexp.Regexp {
 	}
 
 	return r
+}
+
+func TestLoadAndMergeAuxiliaryData(t *testing.T) {
+	tests := []struct {
+		Name              string
+		PublicId          string
+		Content           string
+		ExpectedAiFields  bool
+		ExpectedAiSummary string
+		ExpectedReviewed  bool
+		ExpectedStale     bool
+	}{
+		{
+			Name:             "No Auxiliary Data",
+			PublicId:         "100000",
+			Content:          "alert",
+			ExpectedAiFields: false,
+		},
+		{
+			Name:              "Data, Unreviewed",
+			PublicId:          "100002",
+			Content:           "no-alert",
+			ExpectedAiFields:  true,
+			ExpectedAiSummary: "Summary for 100002",
+			ExpectedReviewed:  false,
+			ExpectedStale:     true,
+		},
+		{
+			Name:              "Data, Reviewed",
+			PublicId:          "100001",
+			Content:           "alert",
+			ExpectedAiFields:  true,
+			ExpectedAiSummary: "Summary for 100001",
+			ExpectedReviewed:  true,
+		},
+	}
+
+	e := SuricataEngine{
+		showAiSummaries: true,
+	}
+	err := e.LoadAuxiliaryData([]*model.AiSummary{
+		{
+			PublicId:     "100001",
+			Summary:      "Summary for 100001",
+			RuleBodyHash: "7ed21143076d0cca420653d4345baa2f",
+			Reviewed:     true,
+		},
+		{
+			PublicId:     "100002",
+			Summary:      "Summary for 100002",
+			RuleBodyHash: "7ed21143076d0cca420653d4345baa2f",
+			Reviewed:     false,
+		},
+	})
+	assert.NoError(t, err)
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			det := &model.Detection{
+				PublicID: test.PublicId,
+				Content:  test.Content,
+			}
+
+			e.showAiSummaries = true
+			err := e.MergeAuxiliaryData(det)
+			assert.NoError(t, err)
+			if test.ExpectedAiFields {
+				assert.NotNil(t, det.AiFields)
+				assert.Equal(t, test.ExpectedAiSummary, det.AiSummary)
+				assert.Equal(t, test.ExpectedReviewed, det.AiSummaryReviewed)
+				assert.Equal(t, test.ExpectedStale, det.IsAiSummaryStale)
+			} else {
+				assert.Nil(t, det.AiFields)
+			}
+
+			e.showAiSummaries = false
+			det.AiFields = nil
+
+			err = e.MergeAuxiliaryData(det)
+			assert.NoError(t, err)
+			assert.Nil(t, det.AiFields)
+		})
+	}
 }

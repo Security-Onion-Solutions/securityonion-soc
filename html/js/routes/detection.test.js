@@ -66,7 +66,7 @@ test('extract strelka', () => {
 
 	comp.detect = {
 		engine: 'strelka',
-		content: 'rule Test {\nmeta:\nreference1="example.com"\nreference2="example_text"\ndate = "2020-01-01";\nauthor = "Bob";\n condition:\n$a\n }',
+		content: 'rule Test {\nmeta:\nreference1="example.com"\nreference2="example_text"\ndate = "2020-01-01";\nauthor = "Bob";\n condition:\n$a\n\n }',
 		title: 'Test',
 		description: 'Example Rule',
 	};
@@ -477,10 +477,10 @@ test('onNewDetectionLanguageChange', async () => {
 	await comp.onNewDetectionLanguageChange();
 	expect(comp.detect.content).toBe('x');
 
-	// yara, no publicId, results in template without publicId
+	// yara, no publicId, results in template without publicId, note that the template is trimmed and there is no [publicId]
 	comp.detect = { language:'yara', content: 'x' };
 	await comp.onNewDetectionLanguageChange();
-	expect(comp.detect.content).toBe('b ');
+	expect(comp.detect.content).toBe('b');
 
 	// suricata, sid, results in template with publicId
 	resetPapi().mockPapi("get", { data: { publicId: 'X' } }, null);
@@ -659,7 +659,6 @@ test('getPresets', () => {
 });
 
 test('findHistoryChange', () => {
-
 	// elastalert
 	comp.history = [
 		{
@@ -831,6 +830,183 @@ test('checkChangedKey', () => {
 	expect(comp.checkChangedKey(id, 'severity')).toBe(false);
 });
 
+test('findOverrideHistoryChange', () => {
+	// elastalert
+	comp.history = [
+		{
+			id: '1',
+			overrides: [
+				{
+					type: "customFilter",
+					isEnabled: true,
+					createdAt: "2024-07-29T10:29:32.421321098-06:00",
+					updatedAt: "2024-07-29T10:29:32.421321098-06:00",
+					customFilter: "this:\n    that"
+				},
+				{
+					type: "customFilter",
+					isEnabled: false,
+					createdAt: "2024-07-29T11:54:34.569557439-06:00",
+					updatedAt: "2024-07-29T11:54:49.086205751-06:00",
+					customFilter: "another:\n    one"
+				}
+			],
+		},
+		{
+			id: '2',
+			overrides: [
+				{
+					type: "customFilter",
+					isEnabled: true,
+					createdAt: "2024-07-29T10:29:32.421321098-06:00",
+					updatedAt: "2024-07-29T10:29:32.421321098-06:00",
+					customFilter: "this:\n    that"
+				},
+				{
+					type: "customFilter",
+					isEnabled: false,
+					createdAt: "2024-07-29T11:54:34.569557439-06:00",
+					updatedAt: "2024-07-29T13:55:29.197427405-06:00",
+					customFilter: "another:\n    two"
+				}
+			],
+		}
+	];
+
+	id = '2';
+	comp.changedOverrideKeys = {};
+	comp.findOverrideHistoryChange(id);
+	expect(Object.keys(comp.changedOverrideKeys).length).toBe(1);
+
+	let overrideKeys = comp.changedOverrideKeys[id];
+	expect(overrideKeys.length).toBe(2);
+	expect(overrideKeys[0].length).toBe(0);
+	expect(overrideKeys[1].length).toBe(1);
+	expect(overrideKeys[1][0]).toBe('customFilter');
+
+	// suricata
+	comp.history = [
+		{
+			id: '1',
+			overrides: [
+				{
+					type: "modify",
+					isEnabled: false,
+					createdAt: "2024-07-29T14:39:09.544042454-06:00",
+					updatedAt: "2024-07-29T14:39:21.947393163-06:00",
+					regex: "rev: 2",
+					value: "rev: 3"
+				},
+				{
+					type: "suppress",
+					isEnabled: false,
+					createdAt: "2024-07-29T14:39:44.312946909-06:00",
+					updatedAt: "2024-07-29T14:57:49.637548072-06:00",
+					track: "by_either",
+					ip: "0.0.0.0/0"
+				},
+				{
+					type: "threshold",
+					isEnabled: true,
+					createdAt: "2024-07-29T14:40:17.043093339-06:00",
+					updatedAt: "2024-07-29T14:40:17.043093339-06:00",
+					thresholdType: "both",
+					track: "by_src",
+					count: 10,
+					seconds: 60
+				}
+			]
+		},
+		{
+			id: '2',
+			overrides: [
+				{
+					type: "modify",
+					isEnabled: true,
+					createdAt: "2024-07-29T14:39:09.544042454-06:00",
+					updatedAt: "2024-07-29T14:39:20.947393160-06:00",
+					regex: "rev: 2",
+					value: "rev: 3"
+				},
+				{
+					type: "suppress",
+					isEnabled: false,
+					createdAt: "2024-07-29T14:39:44.312946909-06:00",
+					updatedAt: "2024-07-29T14:57:50.637548070-06:00",
+					track: "by_src",
+					ip: "0.0.0.0/1"
+				},
+				{
+					type: "threshold",
+					isEnabled: true,
+					createdAt: "2024-07-29T14:40:17.043093339-06:00",
+					updatedAt: "2024-07-29T14:40:17.043093339-06:00",
+					thresholdType: "both",
+					track: "by_src",
+					"count": 10,
+					"seconds": 60
+				}
+			],
+		}
+	];
+
+	id = '2';
+	comp.changedOverrideKeys = {};
+	comp.findOverrideHistoryChange(id);
+	expect(Object.keys(comp.changedOverrideKeys).length).toBe(1);
+
+	overrideKeys = comp.changedOverrideKeys[id];
+	expect(overrideKeys.length).toBe(3);
+	expect(overrideKeys[0].length).toBe(1);
+	expect(overrideKeys[0][0]).toBe('isEnabled');
+	expect(overrideKeys[1].length).toBe(2);
+	expect(overrideKeys[1][0]).toBe('track');
+	expect(overrideKeys[1][1]).toBe('ip');
+	expect(overrideKeys[2].length).toBe(0);
+
+	id = '1';
+	comp.changedOverrideKeys = {};
+	comp.findOverrideHistoryChange(id);
+	expect(Object.keys(comp.changedOverrideKeys).length).toBe(0);
+
+	// elastalert, nothing to diff
+	comp.history = [
+		{
+			id: '1',
+			overrides: [],
+		},
+		{
+			id: '2',
+			overrides: [
+				{
+					type: "customFilter",
+					isEnabled: true,
+					createdAt: "2024-07-29T10:29:32.421321098-06:00",
+					updatedAt: "2024-07-29T10:29:32.421321098-06:00",
+					customFilter: "this:\n    that"
+				},
+			],
+		}
+	];
+
+	id = '2';
+	comp.changedOverrideKeys = {};
+	comp.findOverrideHistoryChange(id);
+	expect(Object.keys(comp.changedOverrideKeys).length).toBe(0);
+});
+
+test('checkOverrideChangedKey', () => {
+	expect(Object.keys(comp.changedKeys).length).toBe(0);
+	let id = "BHypPJABXppUUuo3UnEl";
+	comp.changedOverrideKeys[id] = [[], ['track', 'ip']];
+	expect(comp.checkOverrideChangedKey(id, 0, 'track')).toBe(false);
+	expect(comp.checkOverrideChangedKey(id, 1, 'track')).toBe(true);
+	expect(comp.checkOverrideChangedKey(id, 0, 'ip')).toBe(false);
+	expect(comp.checkOverrideChangedKey(id, 1, 'ip')).toBe(true);
+	expect(comp.checkOverrideChangedKey(id, 0, 'seconds')).toBe(false);
+	expect(comp.checkOverrideChangedKey(id, 1, 'seconds')).toBe(false);
+});
+
 test('loadUrlParameters', () => {
 	let nextTickCalled = 0;
 	comp.$nextTick = (f) => {
@@ -871,7 +1047,7 @@ test('extractDetection', () => {
 
 test('saveDetection - statusEffectedByFilter', async () => {
 	resetPapi().mockPapi('put', {status:205}, null);
-	comp.detect = { content: "" };
+	comp.detect = { content: "", language: '' };
 	comp.origDetect = { content: "" };
 	comp.extractDetection = jest.fn();
 
@@ -880,4 +1056,223 @@ test('saveDetection - statusEffectedByFilter', async () => {
 	expect(comp.$root.warning).toBe(true);
 	expect(comp.$root.warningMessage).toBe(comp.i18n.WARN_STATUS_EFFECTED_BY_FILTER);
 	expect(comp.extractDetection).toHaveBeenCalledTimes(1);
+});
+
+test('verifyRuleSyntax - implementation', () => {
+	comp.ruleValidators = {
+		engine: [
+			{ pattern: /1/m, message: 'should not have 1', match: true },
+			{ pattern: /2/m, message: 'should have 2', match: false },
+			{ pattern: /3/m, message: 'should not have 3', match: true },
+		],
+	};
+
+	comp.detect = {
+		content: '1',
+		language: 'engine',
+	};
+	let msg = comp.verifyRuleSyntax();
+	expect(msg).toBe('should not have 1');
+
+	comp.detect.content = '2';
+	msg = comp.verifyRuleSyntax();
+	expect(msg).toBe(null);
+
+	comp.detect.content = '3';
+	msg = comp.verifyRuleSyntax();
+	expect(msg).toBe('should have 2');
+
+	comp.detect.content = '23';
+	msg = comp.verifyRuleSyntax();
+	expect(msg).toBe('should not have 3');
+
+	comp.detect.content = '123';
+	msg = comp.verifyRuleSyntax();
+	expect(msg).toBe('should not have 1');
+
+	comp.detect.content = '321';
+	msg = comp.verifyRuleSyntax();
+	expect(msg).toBe('should not have 1');
+
+	comp.detect.content = '24';
+	msg = comp.verifyRuleSyntax();
+	expect(msg).toBe(null);
+});
+
+test('verifyRuleSyntax - Sigma', () => {
+	comp.detect = {
+		language: 'sigma',
+		content: ''
+	};
+
+	let msg = comp.verifyRuleSyntax();
+	expect(msg).toBe(comp.i18n.invalidDetectionElastAlertMissingID);
+
+	comp.detect.content = 'id: 123\n';
+	msg = comp.verifyRuleSyntax();
+	expect(msg).toBe(null);
+});
+
+test('verifyRuleSyntax - Suricata', () => {
+	comp.detect = {
+		language: 'suricata',
+		content: '\n',
+	};
+
+	let msg = comp.verifyRuleSyntax();
+	expect(msg).toBe(comp.i18n.invalidDetectionSuricataNewLine);
+
+	comp.detect.content = '';
+	msg = comp.verifyRuleSyntax();
+	expect(msg).toBe(comp.i18n.invalidDetectionSuricataMissingSID);
+
+	comp.detect.content = 'sid: 123;';
+	msg = comp.verifyRuleSyntax();
+	expect(msg).toBe(null);
+});
+
+test('verifyRuleSyntax - YARA', () => {
+	comp.detect = {
+		language: 'yara',
+		content: '',
+	};
+
+	let msg = comp.verifyRuleSyntax();
+	expect(msg).toBe(comp.i18n.invalidDetectionStrelkaMissingRuleName);
+
+	comp.detect.content = 'rule X {}';
+	msg = comp.verifyRuleSyntax();
+	expect(msg).toBe(comp.i18n.invalidDetectionStrelkaMissingCondition);
+
+	comp.detect.content = 'rule X { condition: }';
+	msg = comp.verifyRuleSyntax();
+	expect(msg).toBe(null);
+});
+
+test('validateElastAlert', () => {
+	comp.detect = {
+		publicId: 'A',
+		content: 'id: B',
+		language: 'sigma',
+	};
+	let msg = comp.validateElastAlert();
+	expect(msg).toBe(comp.i18n.idMismatchErr);
+
+	comp.detect.content = 'id: A';
+	msg = comp.validateElastAlert();
+	expect(msg).toBe(comp.i18n.invalidDetectionElastAlertMissingDetectionLogic);
+
+	comp.detect.content += '\ndetection: {}'
+	msg = comp.validateElastAlert();
+	expect(msg).toBe(null);
+});
+
+test('validateSuricata', () => {
+	comp.detect = {
+		publicId: '100000',
+		content: 'alert http any any <> any any (sid: 999999;)',
+		language: 'suricata',
+	};
+	let msg = comp.validateSuricata();
+	expect(msg).toBe(comp.i18n.invalidDetectionSuricataSIDMismatch);
+
+	comp.detect.publicId = '999999';
+	msg = comp.validateSuricata();
+	expect(msg).toBe(null);
+});
+
+test('showAiSummary', () => {
+	comp.detect = null;
+	expect(comp.showAiSummary()).toBe(false);
+
+	comp.detect = { engine: 'strelka' };
+	expect(comp.showAiSummary()).toBe(false);
+
+	comp.detect.aiSummary = 'aiSummary';
+	expect(comp.showAiSummary()).toBe(false);
+
+	comp.detect.aiSummaryReviewed = true;
+	expect(comp.showAiSummary()).toBe(true);
+
+	comp.detect.aiSummary = '';
+	expect(comp.showAiSummary()).toBe(false);
+
+	comp.showUnreviewedAiSummaries = true;
+
+	comp.detect = null;
+	expect(comp.showAiSummary()).toBe(false);
+
+	comp.detect = { engine: 'elastalert' };
+	expect(comp.showAiSummary()).toBe(false);
+
+	comp.detect.aiSummary = 'aiSummary';
+	expect(comp.showAiSummary()).toBe(true);
+
+	comp.detect.aiSummaryReviewed = true;
+	expect(comp.showAiSummary()).toBe(true);
+
+	comp.detect.aiSummary = '';
+	expect(comp.showAiSummary()).toBe(false);
+});
+
+test('isPresetCustomEnabled', () => {
+	comp.presets = {
+		"language": {
+			"labels": ["suricata", "sigma", "yara"],
+			"customEnabled": false
+		},
+		"license": {
+			"labels": ["None", "Apache-2.0", "AGPL-3.0-only", "BSD-3-Clause", "DRL-1.1", "GPL-2.0-only", "GPL-3.0-only", "MIT"],
+			"customEnabled": true
+		}
+	};
+
+	let customEnabled = comp.isPresetCustomEnabled('language');
+	expect(customEnabled).toBe(false);
+
+	customEnabled = comp.isPresetCustomEnabled('license');
+	expect(customEnabled).toBe(true);
+
+	customEnabled = comp.isPresetCustomEnabled('severity');
+	expect(customEnabled).toBe(false);
+});
+
+test('extractSuricataSeverity', () => {
+	comp.severityTranslations = {
+		major: "high",
+		minor: "low"
+	},
+	comp.presets = {
+		severity: {
+			labels: ["unknown", "informational", "low", "medium", "high", "critical"],
+			customEnabled: false
+		}
+	};
+	comp.detect = {
+		content: 'alert http any any <> any any (sid: 999999; rev: 1; metadata: signature_severity Major;)',
+	};
+
+	let sev = comp.extractSuricataSeverity();
+	expect(sev).toBe('high');
+
+	comp.detect = {
+		content: 'alert http any any <> any any (sid: 999999; rev: 1; metadata: signature_severity Minor;)',
+	};
+	sev = comp.extractSuricataSeverity();
+	expect(sev).toBe('low');
+
+	comp.detect = {
+		content: 'alert http any any <> any any (sid: 999999; rev: 1;)',
+	};
+	sev = comp.extractSuricataSeverity();
+	expect(sev).toBe('unknown');
+});
+
+test('loadHistory', async () => {
+	resetPapi().mockPapi("get", { data: [{}] }, null);
+	comp.$root.populateUserDetails = jest.fn();
+	await comp.loadHistory(true);
+
+	expect(comp.$root.populateUserDetails).toHaveBeenCalledTimes(1);
+	expect(comp.history).toStrictEqual([{overrides: []}]);
 });

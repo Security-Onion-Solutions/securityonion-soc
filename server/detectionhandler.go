@@ -90,6 +90,22 @@ func (h *DetectionHandler) getDetection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	eng, ok := h.server.DetectionEngines[detect.Engine]
+	if !ok {
+		log.WithFields(log.Fields{
+			"detectionEngine":   detect.Engine,
+			"detectionPublicId": detectId,
+		}).Error("retrieved detection with unsupported engine")
+	} else {
+		err = eng.MergeAuxiliaryData(detect)
+		if err != nil {
+			log.WithError(err).WithFields(log.Fields{
+				"detectionEngine":   detect.Engine,
+				"detectionPublicId": detectId,
+			}).Error("unable to merge auxiliary data into detection")
+		}
+	}
+
 	web.Respond(w, r, http.StatusOK, detect)
 }
 
@@ -119,7 +135,6 @@ func (h *DetectionHandler) getByPublicId(w http.ResponseWriter, r *http.Request)
 
 func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	ctx = web.MarkChangedByUser(ctx, true)
 
 	detect := &model.Detection{}
 
@@ -254,7 +269,6 @@ func (h *DetectionHandler) getDetectionHistory(w http.ResponseWriter, r *http.Re
 
 func (h *DetectionHandler) duplicateDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	ctx = web.MarkChangedByUser(ctx, true)
 
 	detectId := chi.URLParam(r, "id")
 
@@ -287,7 +301,6 @@ func (h *DetectionHandler) duplicateDetection(w http.ResponseWriter, r *http.Req
 
 func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	ctx = web.MarkChangedByUser(ctx, true)
 
 	detect := &model.Detection{}
 
@@ -353,6 +366,8 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	detect.PersistChange = true
+
 	errMap, err := SyncLocalDetections(ctx, h.server, []*model.Detection{detect})
 	if err != nil {
 		fixed := false
@@ -396,7 +411,6 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 
 func (h *DetectionHandler) deleteDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	ctx = web.MarkChangedByUser(ctx, true)
 
 	id := chi.URLParam(r, "id")
 
@@ -513,7 +527,6 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 
 	noTimeOutCtx := context.WithValue(context.Background(), web.ContextKeyRequestor, ctx.Value(web.ContextKeyRequestor).(*model.User))
 	noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
-	noTimeOutCtx = web.MarkChangedByUser(noTimeOutCtx, true)
 
 	go h.bulkUpdateDetectionAsync(noTimeOutCtx, body, detects, logger)
 
@@ -597,8 +610,8 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 			filterApplied, err := engine.ApplyFilters(detect)
 			if err != nil {
 				logger.WithError(err).WithFields(log.Fields{
-					"publicId": detect.PublicID,
-					"engine":   detect.Engine,
+					"detectionPublicId": detect.PublicID,
+					"detectionEngine":   detect.Engine,
 				}).Error("unable to apply engine filters to detection")
 
 				return
@@ -712,6 +725,8 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 			det.PendingDelete = true
 		}
 
+		det.PersistChange = true
+
 		dirty = append(dirty, det)
 	}
 
@@ -778,7 +793,6 @@ func SyncLocalDetections(ctx context.Context, srv *Server, detections []*model.D
 
 func (h *DetectionHandler) createComment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	ctx = web.MarkChangedByUser(ctx, true)
 
 	detectId := chi.URLParam(r, "id")
 
@@ -817,7 +831,6 @@ func (h *DetectionHandler) getDetectionComment(w http.ResponseWriter, r *http.Re
 
 func (h *DetectionHandler) updateComment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	ctx = web.MarkChangedByUser(ctx, true)
 
 	commentId := chi.URLParam(r, "id")
 
@@ -842,7 +855,6 @@ func (h *DetectionHandler) updateComment(w http.ResponseWriter, r *http.Request)
 
 func (h *DetectionHandler) deleteComment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	ctx = web.MarkChangedByUser(ctx, true)
 
 	commentId := chi.URLParam(r, "id")
 

@@ -673,3 +673,19 @@ code {
 .warning-message a:visited {
   color: white;
 }
+
+tbody tr:hover {
+  background-color: transparent !important;
+}
+
+.theme--dark tbody tr:hover:nth-of-type(even) {
+  background-color: rgba(45, 45, 45, 0.25) !important;
+}
+
+.theme--light tbody tr:hover:nth-of-type(even) {
+  background-color: rgba(230, 230, 230, 0.25) !important;
+}
+
+.unset-vertical-align {
+  vertical-align: unset !important;
+}

@@ -767,6 +767,35 @@ test('licenseExpiringSoon', () => {
   expect(app.isLicenseExpiringSoon()).toBe(false);
 });
 
+test('checkUserSecuritySettings', () => {
+  app.securitySettingsAlreadyChecked = false;
+  app.forceUserOtp = false;
+  const data = { forceUserOtp: false };
+  app.checkUserSecuritySettings(data);
+  expect(app.securitySettingsAlreadyChecked).toBe(true);
+  expect(app.forceUserOtp).toBe(false);
+  expect(location.hash).toBe("");
+
+  data.forceUserOtp = true;
+  app.checkUserSecuritySettings(data);
+  expect(app.securitySettingsAlreadyChecked).toBe(true);
+  expect(app.forceUserOtp).toBe(false);
+  expect(location.hash).toBe("");
+
+  app.securitySettingsAlreadyChecked = false;
+  app.checkUserSecuritySettings(data);
+  expect(app.securitySettingsAlreadyChecked).toBe(false);
+  expect(app.forceUserOtp).toBe(true);
+  expect(location.hash).toBe("#/settings?tab=security");
+
+  location.hash = "#/settings?alreadyhere";
+  app.securitySettingsAlreadyChecked = false;
+  app.checkUserSecuritySettings(data);
+  expect(app.securitySettingsAlreadyChecked).toBe(false);
+  expect(app.forceUserOtp).toBe(true);
+  expect(location.hash).toBe("#/settings?alreadyhere");
+});
+
 test('showWarning', () => {
   var longString = 'x';
   for (var i = 0; i < 8; i++) {

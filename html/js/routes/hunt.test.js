@@ -1401,3 +1401,42 @@ test('bulkUpdateReport - filtered success', () => {
   expect(comp.$root.warningMessage).toBe('Bulk update successfully updated 20 of 20 events. However, the statuses of 1 of the updated detections are controlled by the current regex filter settings and were reverted. <a href="/#/config?s=soc.config.server.modules.suricataengine" data-aid="warning_bulk_update_configure_filters">Click here to configure those filters.</a> (3m 20s)'
 );
 });
+
+test('toggleQuickAction - Tune Detection, Yara => Source Tab, Other Engines => Tuning Tab', () => {
+  comp.category = 'alerts';
+  comp.escalationMenuVisible = comp.quickActionVisible = false;
+  let event = { "rule.uuid": 'id' }
+
+  let mockPromise = {
+    then: (f) => {
+      f({ data: { id: 'onionId', engine: 'elastalert' } });
+    }
+  };
+  resetPapi().mockPapi('get', mockPromise, null);
+
+  comp.toggleQuickAction({}, event, null, null);
+  expect(comp.quickActionDetId).toBe('onionId');
+  expect(comp.tuneDetectionTabTarget).toBe('tuning');
+
+  mockPromise = {
+    then: (f) => {
+      f({ data: { id: 'onionId', engine: 'suricata' } });
+    }
+  };
+  resetPapi().mockPapi('get', mockPromise, null);
+
+  comp.toggleQuickAction({}, event, null, null);
+  expect(comp.quickActionDetId).toBe('onionId');
+  expect(comp.tuneDetectionTabTarget).toBe('tuning');
+
+  mockPromise = {
+    then: (f) => {
+      f({ data: { id: 'onionId', engine: 'strelka' } });
+    }
+  };
+  resetPapi().mockPapi('get', mockPromise, null);
+
+  comp.toggleQuickAction({}, event, null, null);
+  expect(comp.quickActionDetId).toBe('onionId');
+  expect(comp.tuneDetectionTabTarget).toBe('source');
+});

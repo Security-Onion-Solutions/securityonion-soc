@@ -318,6 +318,10 @@ func startEffectiveMonitor() {
 }
 
 func startPillarMonitor() {
+	if manager == nil {
+		log.Error("Unable to start pillar monitor due to uninitialized manager")
+		return
+	}
 	log.Info("Starting pillar monitor")
 
 	contents := `
@@ -393,8 +397,8 @@ func stopMonitor() {
 			}
 			time.Sleep(100)
 		}
+		manager.status = LICENSE_STATUS_INVALID
 	}
-	manager = nil
 }
 
 func IsEnabled(feat string) bool {

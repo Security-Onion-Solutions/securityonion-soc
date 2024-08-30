@@ -62,7 +62,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			overrideHeaders: {
 				'elastalert': [
 					{ text: this.$root.i18n.enabled, value: 'isEnabled' },
-					{ text: this.$root.i18n.type, value: 'type' },
+					{ text: this.$root.i18n.type, value: 'type', localize: true },
 					{ text: this.$root.i18n.track, value: 'track' },
 					{ text: this.$root.i18n.dateCreated, value: 'createdAt', format: true },
 					{ text: this.$root.i18n.dateModified, value: 'updatedAt', format: true },
@@ -70,7 +70,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				'strelka': [], // no overrides
 				'suricata': [
 					{ text: this.$root.i18n.enabled, value: 'isEnabled' },
-					{ text: this.$root.i18n.type, value: 'type' },
+					{ text: this.$root.i18n.type, value: 'type', localize: true },
 					{ text: this.$root.i18n.ipVar, value: 'ip' },
 					{ text: this.$root.i18n.dateCreated, value: 'createdAt', format: true },
 					{ text: this.$root.i18n.dateModified, value: 'updatedAt', format: true },
@@ -100,6 +100,38 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				count: 500,
 				expanded: [],
 				loading: false,
+			},
+			historyOverrideTableOpts: {
+				"elastalert": {
+					sortBy: 'updatedAt',
+					sortDesc: false,
+					headers: [
+						{ text: this.$root.i18n.actions, width: '10.0em' },
+						{ text: this.$root.i18n.kind, value: 'type' },
+						{ text: this.$root.i18n.time, value: 'updatedAt' },
+						{ text: this.$root.i18n.enabled, value: 'isEnabled' },
+					],
+					itemsPerPage: 10,
+					footerProps: { 'items-per-page-options': [10, 50, 250, 1000] },
+					count: 500,
+					expanded: [],
+					loading: false,
+				},
+				"suricata": {
+					sortBy: 'updatedAt',
+					sortDesc: false,
+					headers: [
+						{ text: this.$root.i18n.actions, width: '10.0em' },
+						{ text: this.$root.i18n.kind, value: 'type' },
+						{ text: this.$root.i18n.time, value: 'updatedAt' },
+						{ text: this.$root.i18n.enabled, value: 'isEnabled' },
+					],
+					itemsPerPage: 10,
+					footerProps: { 'items-per-page-options': [10, 50, 250, 1000] },
+					count: 500,
+					expanded: [],
+					loading: false,
+				},
 			},
 			extractedSummary: '',
 			extractedReferences: [],
@@ -140,6 +172,21 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				'yara': 'strelka',
 			},
 			changedKeys: {},
+			changedOverrideKeys: {},
+			ruleValidators: {
+				sigma: [
+					{ pattern: /^id:\s*[^$]+?$/m, message: this.$root.i18n.invalidDetectionElastAlertMissingID, match: false },
+				],
+				suricata: [
+					{ pattern: /\n/, message: this.$root.i18n.invalidDetectionSuricataNewLine, match: true },
+					{ pattern: /sid:\s?(["']?)\d+\1;/, message: this.$root.i18n.invalidDetectionSuricataMissingSID, match: false },
+				],
+				yara: [
+					{ pattern: /rule\s+[a-zA-Z0-9][a-zA-Z0-9_]*/, message: this.$root.i18n.invalidDetectionStrelkaMissingRuleName, match: false },
+					{ pattern: /condition:/m, message: this.$root.i18n.invalidDetectionStrelkaMissingCondition, match: false },
+				],
+			},
+			showUnreviewedAiSummaries: false,
 	}},
 	created() {
 		this.$root.initializeEditor();
@@ -165,6 +212,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.renderAbbreviatedCount = params["renderAbbreviatedCount"];
 			this.severityTranslations = params['severityTranslations'];
 			this.ruleTemplates = params['templateDetections'];
+			this.showUnreviewedAiSummaries = params['showUnreviewedAiSummaries'];
 
 			if (this.$route.params.id === 'create') {
 				this.detect = this.newDetection();
@@ -504,10 +552,9 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			if (response && response.data) {
 				this.history = response.data;
 
-				//this.changedKeys[this.history[this.history.length - 1]['id']] = this.findHistoryChange(this.history);
-
 				for (var i = 0; i < this.history.length; i++) {
 					this.$root.populateUserDetails(this.history[i], "userId", "owner");
+					this.history[i].overrides = this.history[i].overrides || [];
 				}
 			}
 			if (showLoadingIndicator) this.$root.stopLoading();
@@ -563,7 +610,40 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					}
 				}
 			}
+
 			this.changedKeys[id] = retList;
+
+			this.findOverrideHistoryChange(id);
+		},
+		findOverrideHistoryChange(historyID) {
+			let index = this.history.findIndex((row) => row.id === historyID);
+
+			if (index <= 0) return;
+
+			let prev = this.history[index - 1];
+			let parent = this.history[index];
+			let releventKeys = ['isEnabled', 'customFilter', 'regex', 'value', 'track', 'ip', 'count', 'seconds'];
+			let overrideRetList = [];
+
+			for (let i = 0; i < parent.overrides.length; i++) {
+				let retList = [];
+				let newOverride = parent.overrides[i];
+				let oldOverride = prev.overrides.find(o => o.createdAt === newOverride.createdAt);
+
+				if (oldOverride == null) {
+					return;
+				}
+
+				for (let key of releventKeys) {
+					if (oldOverride[key] !== newOverride[key]) {
+						retList.push(key);
+					}
+				}
+
+				overrideRetList.push(retList);
+			}
+
+			this.changedOverrideKeys[historyID] = overrideRetList;
 		},
 		getDefaultPreset(preset) {
 			if (this.presets) {
@@ -701,11 +781,11 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			}
 
 			let err;
-			switch (this.detect.engine) {
-				case 'strelka':
+			switch (this.detect.language.toLowerCase()) {
+				case 'yara':
 					err = this.validateStrelka();
 					break;
-				case 'elastalert':
+				case 'sigma':
 					err = this.validateElastAlert();
 					break;
 				case 'suricata':
@@ -804,18 +884,43 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				this.$root.stopLoading();
 			}
 		},
-		validateStrelka() {
+		verifyRuleSyntax() {
+			const rules = this.ruleValidators[this.detect.language.toLowerCase()];
+			for (let i = 0; i < rules.length; i++) {
+				if (rules[i].pattern.test(this.detect.content) === rules[i].match) {
+					return rules[i].message;
+				}
+			}
+
 			return null;
+		},
+		validateStrelka() {
+			try {
+				let err = this.verifyRuleSyntax();
+				if (err) {
+					return err;
+				}
+
+				return null;
+			} catch (e) {
+				return e;
+			}
 		},
 		validateElastAlert() {
 			try {
-				const id = this.extractElastAlertPublicID();
-				if (!id) {
-					throw this.i18n.idMissingErr;
+				let err = this.verifyRuleSyntax();
+				if (err) {
+					return err;
 				}
 
+				const id = this.extractElastAlertPublicID();
 				if (this.detect.publicId && this.detect.publicId !== id) {
 					throw this.i18n.idMismatchErr;
+				}
+
+				const detLogic = this.extractElastAlertDetection();
+				if (!detLogic) {
+					throw this.i18n.invalidDetectionElastAlertMissingDetectionLogic;
 				}
 
 				return null;
@@ -825,11 +930,16 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		validateSuricata() {
 			try {
+				let err = this.verifyRuleSyntax();
+				if (err) {
+					return err;
+				}
+
 				const sid = this.extractSuricataPublicID();
 
-				if (this.detect.publicId !== sid) {
+				if (!this.isNew() && this.detect.publicId !== sid) {
 					// sid doesn't match metadata
-					return this.i18n.sidMismatchErr;
+					return this.i18n.invalidDetectionSuricataSIDMismatch;
 				}
 			} catch (e) {
 				return e;
@@ -888,7 +998,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		extractSuricataSeverity() {
 			const results = this.severityExtract.exec(this.detect.content);
 
-			let sev = (results[1] || '').toLowerCase();
+			let sev = (results && results[1] || '').toLowerCase();
 			if (this.severityTranslations[sev]) {
 				sev = this.severityTranslations[sev]
 			}
@@ -902,6 +1012,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		extractElastAlertPublicID() {
 			const yaml = jsyaml.load(this.detect.content, {schema: jsyaml.FAILSAFE_SCHEMA});
 			return yaml['id'];
+		},
+		extractElastAlertDetection() {
+			const yaml = jsyaml.load(this.detect.content, {schema: jsyaml.FAILSAFE_SCHEMA});
+			return yaml['detection'];
 		},
 		extractElastAlertSeverity() {
 			const yaml = jsyaml.load(this.detect.content, {schema: jsyaml.FAILSAFE_SCHEMA});
@@ -929,7 +1043,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					}
 				}
 
-				this.detect.content = this.ruleTemplates[engine].replaceAll('[publicId]', publicId);
+				this.detect.content = this.ruleTemplates[engine].replaceAll('[publicId]', publicId).trim();
 			}
 
 			this.onDetectionChange();
@@ -1290,7 +1404,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				this.$root.stopLoading();
 			}
 		},
-		async convertDetection(content) {
+		async convertDetection() {
 			this.$root.startLoading();
 			try {
 				const response = await this.$root.papi.post('detection/convert', this.detect);
@@ -1354,6 +1468,12 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		checkChangedKey(id, key) {
 			return this.changedKeys[id]?.includes(key);
+		},
+		checkOverrideChangedKey(id, index, key) {
+			return this.changedOverrideKeys?.[id]?.[index]?.includes(key);
+		},
+		showAiSummary() {
+			return !!(this?.detect?.aiSummary && (this.detect.aiSummaryReviewed || this.showUnreviewedAiSummaries));
 		}
 	}
 }});

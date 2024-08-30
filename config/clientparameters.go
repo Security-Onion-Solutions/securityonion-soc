@@ -196,9 +196,10 @@ type DetectionsParameters struct {
 }
 
 type DetectionParameters struct {
-	Presets              map[string]PresetParameters `json:"presets"`
-	SeverityTranslations map[string]string           `json:"severityTranslations"`
-	TemplateDetections   map[string]string           `json:"templateDetections"`
+	Presets                   map[string]PresetParameters `json:"presets"`
+	SeverityTranslations      map[string]string           `json:"severityTranslations"`
+	TemplateDetections        map[string]string           `json:"templateDetections"`
+	ShowUnreviewedAiSummaries bool                        `json:"showUnreviewedAiSummaries"`
 }
 
 func (params *DetectionsParameters) Verify() error {
