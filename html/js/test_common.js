@@ -17,18 +17,29 @@ global.location = { hash: "" };
 // Mock Vue
 ////////////////////////////////////
 var app = null;
-global.Vue = function(obj) {
+global.Vue = {};
+global.Vue.createApp = function(obj) {
   app = this;
   app.$root = this;
   app.$vuetify = {
     theme: {
-      dark: false,
-      currentTheme: {}
+      current: {
+        colors: [],
+        dark: false,
+      }
     }
   };
   app.debug = true;
-  Object.assign(app, obj.data, obj.methods);
+  Object.assign(app, obj.data(), obj.methods);
   this.ensureConnected = jest.fn();
+
+  app.use = () => { };
+  app.config = { globalProperties: {} };
+  app.mount = () => { };
+
+  app.i18n = global.i18n.getLocalizedTranslations('en-US');
+
+  return app;
 };
 global.Vue.delete = function(data, i) {
   data.splice(i, 1);
@@ -36,9 +47,15 @@ global.Vue.delete = function(data, i) {
 global.Vue.set = function(array, idx, value) {
   array[idx] = value;
 };
-global.Vue.filter = () => { };
-global.Vuetify = function(obj) {};
-global.VueRouter = function(obj) {};
+global.Vuetify = {
+  components: { VClassIcon: {} },
+  createVuetify: () => { },
+  useTheme: () => { return { global: { name: 'dark' } } },
+};
+global.VueRouter = {
+  createRouter: () => { },
+  createWebHashHistory: () => { },
+};
 
 ////////////////////////////////////
 // Test Helper Functions
@@ -66,8 +83,14 @@ global.getComponent = function(name) {
   comp.$nextTick = (fun) => { fun(); }
 
   // Setup route mock data
-  comp.$route = { params: {}};
-  comp.$router = [];
+  comp.$route = { params: {} };
+  const arr = [];
+  arr._push = arr.push;
+  comp.$router = arr;
+  comp.$router.push = (obj) => {
+    arr._push(obj);
+    return { then: () => { } }
+  }
 
   const data = global.initComponentData(comp);
   Object.assign(comp, data, comp.methods, comp.computed);

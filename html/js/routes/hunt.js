@@ -1177,7 +1177,7 @@ const huntComponent = {
         fields.forEach(function(item, index) {
           var i18nKey = "field_" + item;
           var header = {
-            text: i18n[i18nKey] ? i18n[i18nKey] : item,
+            title: i18n[i18nKey] ? i18n[i18nKey] : item,
             value: item,
           };
           headers.push(header);
@@ -1994,7 +1994,7 @@ const huntComponent = {
 
       this.relativeTimeUnits.forEach((unit) => {
         if (unit.value == this.relativeTimeUnit) {
-          text = unit.text;
+          text = unit.title;
           return false;
         }
       });

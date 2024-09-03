@@ -772,6 +772,10 @@ $(document).ready(function () {
       saveTheme() {
         localStorage['settings.app.dark'] = this.$vuetify.theme.current.dark;
       },
+      saveLocalSettings() {
+        this.saveTheme();
+        this.saveToolbar();
+      },
       loadLocalSettings() {
         if (localStorage['settings.app.dark'] != undefined) {
           this.theme.global.name = localStorage['settings.app.dark'] == 'true' ? 'dark' : 'light';

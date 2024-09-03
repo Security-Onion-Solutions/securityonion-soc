@@ -218,12 +218,11 @@ test('formatSafeString', () => {
 
 test('toggleEscalationMenu', () => {
   comp.escalateRelatedEventsEnabled = true;
-  const domEvent = {clientX: 12, clientY: 34};
+  const domEvent = {target: 'target'};
   const event = {id:"33",foo:"bar"};
   comp.$nextTick = function(fn) { fn(); };
   comp.toggleEscalationMenu(domEvent, event, 2);
-  expect(comp.escalationMenuX).toBe(12);
-  expect(comp.escalationMenuY).toBe(34);
+  expect(comp.escalationMenuTarget).toBe('target');
   expect(comp.escalationItem).toBe(event);
   expect(comp.escalationGroupIdx).toBe(2);
   expect(comp.escalationMenuVisible).toBe(true);
@@ -386,26 +385,24 @@ test('populateGroupByTables', () => {
   expect(comp.groupBys[0].data[0].count).toBe(23);
   expect(comp.groupBys[0].data[0].foo).toBe('moo');
   expect(comp.groupBys[0].data[0].bar).toBe('mar');
-  expect(comp.groupBys[0].headers).toStrictEqual([{text: 'Count', value:'count'}, {text: 'foo', value: 'foo'}, {text: 'bar', value: 'bar'}]);
+  expect(comp.groupBys[0].headers).toStrictEqual([{title: 'Count', value:'count'}, {title: 'foo', value: 'foo'}, {title: 'bar', value: 'bar'}]);
   expect(comp.groupBys[0].chart_metrics).toStrictEqual([{value: 23, keys:['moo, mar']}]);
-  expect(comp.groupBys[0].sortBy).toBe('foo');
-  expect(comp.groupBys[0].sortDesc).toBe(false);
+  expect(comp.groupBys[0].sortBy).toStrictEqual([{ key: "foo", order: "asc" }]);
   expect(comp.groupBys[0].maximized).toBe(false);
   expect(comp.groupBys[1].title).toBe("car");
   expect(comp.groupBys[1].fields.length).toBe(1);
   expect(comp.groupBys[1].data[0].count).toBe(9);
   expect(comp.groupBys[1].data[0].car).toBe('mis');
-  expect(comp.groupBys[1].headers).toStrictEqual([{text: 'Count', value:'count'}, {text: 'car', value: 'car'}]);
+  expect(comp.groupBys[1].headers).toStrictEqual([{title: 'Count', value:'count'}, {title: 'car', value: 'car'}]);
   expect(comp.groupBys[1].chart_metrics).toStrictEqual([{value: 9, keys:['mis']}]);
-  expect(comp.groupBys[1].sortBy).toBe('count');
-  expect(comp.groupBys[1].sortDesc).toBe(true);
+  expect(comp.groupBys[1].sortBy).toStrictEqual([{ key: "count", order: "desc" }]);
   expect(comp.groupBys[1].maximized).toBe(true);
 
   // Now include action column
   comp.aggregationActionsEnabled = true;
   result = comp.populateGroupByTables(metrics);
-  expect(comp.groupBys[0].headers).toStrictEqual([{text: '', value: ''}, {text: 'Count', value:'count'}, {text: 'foo', value: 'foo'}, {text: 'bar', value: 'bar'}]);
-  expect(comp.groupBys[1].headers).toStrictEqual([{text: '', value: ''}, {text: 'Count', value:'count'}, {text: 'car', value: 'car'}]);
+  expect(comp.groupBys[0].headers).toStrictEqual([{title: '', value: ''}, {title: 'Count', value:'count'}, {title: 'foo', value: 'foo'}, {title: 'bar', value: 'bar'}]);
+  expect(comp.groupBys[1].headers).toStrictEqual([{title: '', value: ''}, {title: 'Count', value:'count'}, {title: 'car', value: 'car'}]);
 });
 
 test('displayTable', () => {
@@ -825,7 +822,7 @@ test('getRelativeTimeUnits', () => {
 
 test('setRelativeTimeUnits', () => {
   for (let i = 0; i < comp.relativeTimeUnits.length; i++) {
-    comp.setRelativeTimeUnits(comp.relativeTimeUnits[i].text);
+    comp.setRelativeTimeUnits(comp.relativeTimeUnits[i].title);
     expect(comp.relativeTimeUnit).toBe(comp.relativeTimeUnits[i].value);
   }
 
@@ -997,7 +994,7 @@ test('openAddToCaseDialog', () => {
   comp.openAddToCaseDialog();
 
   expect(comp.addToCaseDialogVisible).toBe(true);
-  expect(comp.mruCases).toEqual([{ value: 'New Case', text: comp.i18n.createNewCase }, { value: { id: "1", title: 'Case 1' }, text: 'Case 1' }, { value: { id: "2", title: 'Case 2' }, text: 'Case 2' }]);
+  expect(comp.mruCases).toEqual([{ value: 'New Case', title: comp.i18n.createNewCase }, { value: { id: "1", title: 'Case 1' }, title: 'Case 1' }, { value: { id: "2", title: 'Case 2' }, title: 'Case 2' }]);
   expect(comp.selectedMruCase).toBe('New Case');
   expect(comp.$refs.evidence.resetValidation).toHaveBeenCalledTimes(1);
 });
@@ -1041,11 +1038,11 @@ test('addToCase', () => {
 test('populateEventHeaders', () => {
   const defs = ["x", "y"];
   comp.populateEventHeaders(defs);
-  expect(comp.eventHeaders).toStrictEqual([{"text":"x", "value":"x"},{"text":"y", "value": "y"}]);
+  expect(comp.eventHeaders).toStrictEqual([{"title":"x", "value":"x"},{"title":"y", "value": "y"}]);
 
   comp.queryTableFields = ["b", "c"];
   comp.populateEventHeaders(defs);
-  expect(comp.eventHeaders).toStrictEqual([{"text":"b", "value":"b"},{"text":"c", "value": "c"}]);
+  expect(comp.eventHeaders).toStrictEqual([{"title":"b", "value":"b"},{"title":"c", "value": "c"}]);
 });
 
 test('repopulateEventHeaders', () => {
@@ -1055,7 +1052,7 @@ test('repopulateEventHeaders', () => {
   expect(comp.disableRouteLoad).toBe(false);
   comp.repopulateEventHeaders();
   expect(comp.disableRouteLoad).toBe(true);
-  expect(comp.eventHeaders).toStrictEqual([{"text":"b", "value":"b"},{"text":"c", "value": "c"}]);
+  expect(comp.eventHeaders).toStrictEqual([{"title":"b", "value":"b"},{"title":"c", "value": "c"}]);
   expect(comp.query).toBe('foo: bar | table b c');
   expect(comp.$router.length).toBe(1);
 });
@@ -1063,15 +1060,15 @@ test('repopulateEventHeaders', () => {
 test('toggleColumnHeader', () => {
   expect(comp.eventHeaders).toStrictEqual([]);
   comp.toggleColumnHeader('x');
-  expect(comp.eventHeaders).toStrictEqual([{value:'x', text:'x'}]);
+  expect(comp.eventHeaders).toStrictEqual([{value:'x', title:'x'}]);
   comp.toggleColumnHeader('x');
   expect(comp.eventHeaders).toStrictEqual([]);
   comp.toggleColumnHeader('x');
-  expect(comp.eventHeaders).toStrictEqual([{value:'x', text:'x'}]);
+  expect(comp.eventHeaders).toStrictEqual([{value:'x', title:'x'}]);
   comp.toggleColumnHeader('y');
-  expect(comp.eventHeaders).toStrictEqual([{value:'x', text:'x'},{value:'y', text:'y'}]);
+  expect(comp.eventHeaders).toStrictEqual([{value:'x', title:'x'},{value:'y', title:'y'}]);
   comp.toggleColumnHeader('x');
-  expect(comp.eventHeaders).toStrictEqual([{value:'y', text:'y'}]);
+  expect(comp.eventHeaders).toStrictEqual([{value:'y', title:'y'}]);
 });
 
 test('moveColumnHeader', () => {
@@ -1089,7 +1086,7 @@ test('moveColumnHeader', () => {
   expect(comp.queryTableFields).toStrictEqual(['y', 'z', 'x']);
 
   // double check that repopulateEventHeaders was invoked
-  expect(comp.eventHeaders).toStrictEqual([{"text":"y", "value":"y"},{"text":"z", "value":"z"},{"text":"x", "value": "x"}]);
+  expect(comp.eventHeaders).toStrictEqual([{"title":"y", "value":"y"},{"title":"z", "value":"z"},{"title":"x", "value": "x"}]);
 
   comp.moveColumnHeader('x', false);
   expect(comp.queryTableFields).toStrictEqual(['y', 'z', 'x']);
@@ -1101,7 +1098,7 @@ test('moveColumnHeader', () => {
   expect(comp.queryTableFields).toStrictEqual(['x', 'y', 'z']);
 
   // double check that repopulateEventHeaders was invoked
-  expect(comp.eventHeaders).toStrictEqual([{"text":"x", "value":"x"},{"text":"y", "value":"y"},{"text":"z", "value": "z"}]);
+  expect(comp.eventHeaders).toStrictEqual([{"title":"x", "value":"x"},{"title":"y", "value":"y"},{"title":"z", "value": "z"}]);
 });
 
 test('updateBulkSelector', () => {
