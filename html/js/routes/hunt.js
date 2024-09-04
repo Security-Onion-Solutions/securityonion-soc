@@ -1472,7 +1472,7 @@ const huntComponent = {
     },
     displayTable(group, groupIdx) {
       group.chart_type = "";
-      Vue.set(this.groupBys, groupIdx, group);
+      this.groupBys[groupIdx] = group;
     },
     displayPieChart(group, groupIdx) {
       group.chart_type = "pie";
@@ -1481,7 +1481,7 @@ const huntComponent = {
       this.setupPieChart(group.chart_options, group.chart_data, group.title);
       this.applyLegendOption(group, groupIdx);
       this.populateChart(group.chart_data, group.chart_metrics);
-      Vue.set(this.groupBys, groupIdx, group);
+      this.groupBys[groupIdx] = group;
     },
     displayBarChart(group, groupIdx) {
       group.chart_type = "bar";
@@ -1490,7 +1490,7 @@ const huntComponent = {
       this.setupBarChart(group.chart_options, group.chart_data, group.title, groupIdx);
       this.applyLegendOption(group, groupIdx);
       this.populateChart(group.chart_data, group.chart_metrics);
-      Vue.set(this.groupBys, groupIdx, group);
+      this.groupBys[groupIdx] = group;
     },
     displaySankeyChart(group, groupIdx) {
       if (!this.isGroupSankeyCapable(group)) {
@@ -1557,7 +1557,7 @@ const huntComponent = {
 
       group.chart_data.datasets[0].data = data;
       group.chart_data.flowMax = flowMax;
-      Vue.set(this.groupBys, groupIdx, group);
+      this.groupBys[groupIdx] = group;
     },
     isGroupSankeyCapable(group, groupIdx) {
       return group.fields != undefined && group.fields.length >= 2;
@@ -1579,9 +1579,6 @@ const huntComponent = {
         chart.labels.push(route.$root.truncate(route.localizeValue(route.lookupSocId(item.keys[0])), route.chartLabelMaxLength));
         chart.datasets[0].data.push(item.value);
       });
-      if (chart.obj) {
-        setTimeout(function() { chart.obj.renderChart(chart.obj.chartdata, chart.obj.options); }, 100);
-      }
     },
     isMultiSelect() {
       return this.isCategory('detections');
@@ -1797,9 +1794,10 @@ const huntComponent = {
       data.datasets = [{
         data: [],
         label: this.i18n.field_count,
-        color: this.$root.$vuetify && this.$root.$vuetify.theme.dark ? 'white' : 'black',
+        color: this.$root.$vuetify && this.$root.$vuetify.theme.current.dark ? 'white' : 'black',
         colorFrom: c => route.getSankeyColor('from', 'out', c, data.flowMax),
         colorTo: c => route.getSankeyColor('to', 'in', c, data.flowMax),
+        size: 'max',
       }];
     },
     getSankeyColor(tag, dir, source, max) {

@@ -517,14 +517,21 @@ td {
   color: rgb(var(--v-theme-primary));
 }
 
+.chart-container {
+  max-width: 528px;
+  max-height: 400px;
+}
+
 .maximized {
   position: absolute;
-  left: 0px;
-  top: 0px;
-  width: 100%;
-  height: calc(100vh - 100px);
+  left: 200px;
+  top: 60px;
+  width: calc(100vw - 200px) !important;
+  height: calc(100vh - 40px) !important;
   background-color: rgb(var(--v-theme-background));
   z-index: 1;
+  max-width: unset !important;
+  max-height: unset !important;
 }
 
 .maximized-bg {

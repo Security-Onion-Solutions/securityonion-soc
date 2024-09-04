@@ -956,7 +956,7 @@ $(document).ready(function () {
           },
           mounted () {
             this.data.obj = this;
-          }
+          },
         })
       },
       initializeCharts() {
@@ -966,7 +966,7 @@ $(document).ready(function () {
         this.registerChart(VueChartJs.Pie, 'pie-chart');
 
         // Sankey is a separate third-party lib, so use the VueChartJs helper to add the custom chart
-        const Sankey = VueChartJs.createTypedChart('sankey-chart', 'sankey', Chart.controllers['sankey']);
+        const Sankey = VueChartJs.createTypedChart('sankey', Chart.controllers['sankey']);
         this.registerChart(Sankey, 'sankey-chart');
 
         this.chartsInitialized = true;

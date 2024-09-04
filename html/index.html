@@ -573,22 +573,22 @@
                   </v-row>
                   <v-row>
                     <v-col v-for="(group, groupIdx) in groupBys" class="groupBy">
-                      <div v-if="group.chart_type">
-                        <router-link class="mx-1" :to="buildGroupWithoutOptionsRoute(groupIdx)" :title="i18n.showTable" style="text-decoration: none; cursor: 'pointer'" :data-aid="'groups_table_toggle_' + category">
+                      <div v-if="group.chart_type" class="chart-container">
+                        <router-link class="mx-1 theme-text" :to="buildGroupWithoutOptionsRoute(groupIdx)" :title="i18n.showTable" style="text-decoration: none; cursor: 'pointer'" :data-aid="'groups_table_toggle_' + category">
                           <v-icon>fa-table-cells</v-icon>
                         </router-link>
-                        <router-link class="mx-1" :to="buildToggleLegendRoute(group, groupIdx)" :title="i18n.toggleLegend" style="text-decoration: none; cursor: 'pointer'" :data-aid="'groups_legend_toggle_' + category">
+                        <router-link class="mx-1 theme-text" :to="buildToggleLegendRoute(group, groupIdx)" :title="i18n.toggleLegend" style="text-decoration: none; cursor: 'pointer'" :data-aid="'groups_legend_toggle_' + category">
                           <v-icon>fa-list</v-icon>
                         </router-link>
-                        <router-link class="mx-1" :to="buildMaximizeRoute(group, groupIdx)" :title="i18n.maximize" style="text-decoration: none; cursor: 'pointer'" :data-aid="'groups_maximize_toggle_' + category">
+                        <router-link class="mx-1 theme-text" :to="buildMaximizeRoute(group, groupIdx)" :title="i18n.maximize" style="text-decoration: none; cursor: 'pointer'" :data-aid="'groups_maximize_toggle_' + category">
                           <v-icon>fa-expand</v-icon>
                         </router-link>
-                        <v-btn icon class="mx-1" @click="removeGroupBy(groupIdx, -1)" :title="i18n.remove" :data-aid="'groups_graph_remove_' + category">
+                        <v-btn variant="text" size="x-small" @click="removeGroupBy(groupIdx, -1)" :title="i18n.remove" :data-aid="'groups_graph_remove_' + category">
                           <v-icon class="tiny-icon">fa-circle-xmark</v-icon>
                         </v-btn>
-                        <pie-chart v-if="group.chart_type == 'pie'" :id="'group-' + groupIdx" :chartdata="group.chart_data" :options="group.chart_options" :data-aid="'groups_pie_display_' + category"/>
-                        <bar-chart v-if="group.chart_type == 'bar'" :id="'group-' + groupIdx" :chartdata="group.chart_data" :options="group.chart_options" :data-aid="'groups_bar_display_' + category"/>
-                        <sankey-chart v-if="group.chart_type == 'sankey'" :id="'group-' + groupIdx" :chartdata="group.chart_data" :options="group.chart_options" :data-aid="'groups_sankey_display_' + category"/>
+                        <pie-chart v-if="group.chart_type == 'pie'" :id="'group-' + groupIdx" :data="group.chart_data" :options="group.chart_options" :data-aid="'groups_pie_display_' + category"/>
+                        <bar-chart v-else-if="group.chart_type == 'bar'" :id="'group-' + groupIdx" :data="group.chart_data" :options="group.chart_options" :data-aid="'groups_bar_display_' + category"/>
+                        <sankey-chart v-else-if="group.chart_type == 'sankey'" :id="'group-' + groupIdx" :data="group.chart_data" :options="group.chart_options" :data-aid="'groups_sankey_display_' + category"/>
                       </div>
                       <v-data-table v-if="!group.chart_type" :id="'group-' + groupIdx" class="elevation-1"
                         :search="groupByFilter" density="compact"
@@ -601,7 +601,7 @@
                             <template v-for="header in columns" :key="header.key">
                               <th :class="{'is-sorted': isSorted(header)}">
                                 <span @click="toggleSort(header)">
-                                  {{ header.text }}
+                                  {{ header.title }}
                                 </span>
                                 <span class="table-header-actions ml-2">
                                   <router-link v-if="header.value == 'count' && isAdvanced()" :to="buildGroupOptionRoute(groupIdx, [], 'pie')" :title="i18n.showPieChart" style="text-decoration: none; cursor: 'pointer'" :data-aid="'groups_pie_toggle_' + category">
