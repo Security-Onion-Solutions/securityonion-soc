@@ -635,6 +635,7 @@ test('selectList_CustomEnabledAndCustomVal', () => {
     'new value'
   ]
 
+  debugger;
   expect(comp.selectList('severity', 'new value')).toStrictEqual(expectedList)
 })
 

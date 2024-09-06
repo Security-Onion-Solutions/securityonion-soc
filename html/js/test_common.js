@@ -167,6 +167,7 @@ global.mockShowError = function(logError = false) {
 require('./i18n.js');
 require('./app.js');
 
+global.FEAT_TTR = 'ttr';
 global.JobStatusPending = 0;
 global.JobStatusCompleted = 1;
 global.JobStatusIncomplete = 2;

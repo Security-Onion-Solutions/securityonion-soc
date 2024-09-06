@@ -14,12 +14,16 @@
   margin-bottom: 16px;
 }
 
-.v-application a {
+.v-application a, .theme-primary {
   color: rgb(var(--v-theme-primary));
 }
 
 .theme-background {
   background-color: rgb(var(--v-theme-background)) !important;
+}
+
+.theme-background-lighten-1 {
+  background-color: rgb(var(--v-theme-background-lighten-1)) !important;
 }
 
 .card-shadow {
@@ -56,7 +60,7 @@
   font-size: 18px !important;
 }
 
-.mdi-menu-down {
+.mdi-menu-down, .mdi-paperclip {
   display: none;
 }
 
@@ -395,7 +399,7 @@ td {
   color: white;
 }
 
-.comment-body {
+.comment-body, .full-width {
   width: 100%;
 }
 
@@ -463,20 +467,19 @@ td {
 }
 
 /* motd background is darker, so some markdown table colors need to be different */
-.v-theme--dark.v-application #motd.markdown-body th {
+.v-theme--dark #motd.markdown-body th {
   background-color: rgba(0,0,0,.25);
 }
 
-.theme--light.v-application  #motd.markdown-body th {
+.v-theme--light  #motd.markdown-body th {
   background-color: rgba(0,0,0,.1);
 }
 
-
-.v-theme--dark.v-application .comment-body .markdown-body {
+.v-theme--dark .comment-body .markdown-body {
   background-color: rgba(0,0,0,.2);
 }
 
-.theme--light.v-application .comment-body .markdown-body {
+.v-theme--light .comment-body .markdown-body {
   background-color: rgba(0,0,0,.03);
 }
 
@@ -530,8 +533,8 @@ td {
   height: calc(100vh - 40px) !important;
   background-color: rgb(var(--v-theme-background));
   z-index: 1;
-  max-width: unset !important;
-  max-height: unset !important;
+  max-width: calc(100vw - 200px) !important;
+  max-height: calc(100vh - 40px) !important;
 }
 
 .maximized-bg {

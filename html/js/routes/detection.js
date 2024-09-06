@@ -43,9 +43,9 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				minLength: limit => value => (value && value.length >= limit) || this.$root.i18n.ruleMinLen,
 				shortLengthLimit: value => (value.length < 100) || this.$root.i18n.required,
 				longLengthLimit: value => (encodeURI(value).split(/%..|./).length - 1 < 10000000) || this.$root.i18n.required,
-				fileSizeLimit: value => (value == null || value.size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
-				fileNotEmpty: value => (value == null || value.size > 0) || this.$root.i18n.fileEmpty,
-				fileRequired: value => (value != null) || this.$root.i18n.required,
+				fileSizeLimit: value => (value == null || value.length == 0 || value[0].size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
+				fileNotEmpty: value => (value == null || value.length == 0 || value[0].size > 0) || this.$root.i18n.fileEmpty,
+				fileRequired: value => (value != null && value.length != 0) || this.$root.i18n.required,
 				cidrFormat: value => (!value ||
 					/^!?\$[a-z_][a-z0-9_]*$/i.test(value) || // Suricata variable
 					/^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\/(3[0-2]|[12]\d|\d)$/.test(value) || // IPv4 CIDR

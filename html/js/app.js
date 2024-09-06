@@ -30,9 +30,28 @@ if (typeof global !== 'undefined') global.routes = routes;
 $(document).ready(function () {
   const vuetify = Vuetify.createVuetify({
     defaults: {
-      'VIcon': {
+      VIcon: {
         class: 'fa',
       },
+      VCheckbox: {
+        trueIcon: 'mb-1 fa-square-check',
+        falseIcon: 'mb-1 fa-regular fa-square',
+      },
+      VSelect: {
+        menuIcon: 'fas fa-caret-down',
+      },
+      VCombobox: {
+        menuIcon: 'fas fa-caret-down',
+      },
+      VFileInput: {
+        prependIcon: 'fa-paperclip'
+      },
+      VDataTable: {
+        firstIcon: 'fa-backward-step',
+        prevIcon: 'fa-chevron-left',
+        nextIcon: 'fa-chevron-right',
+        lastIcon: 'fa-forward-step',
+      }
     },
     icons: {
       defaultSet: 'fa',
@@ -48,7 +67,7 @@ $(document).ready(function () {
         customProperties: true,
       },
       variations: {
-        colors: ['primary', 'secondary', 'drawer_background'],
+        colors: ['primary', 'secondary', 'drawer_background', 'background'],
         lighten: 3,
         darken: 2,
       },
@@ -954,10 +973,7 @@ $(document).ready(function () {
           setup(props, context) {
             return chartType.setup(props, context);
           },
-          mounted () {
-            this.data.obj = this;
-          },
-        })
+        });
       },
       initializeCharts() {
         if (this.chartsInitialized) return;
@@ -1054,13 +1070,13 @@ $(document).ready(function () {
         if (obj[idField] && obj[idField].length > 0) {
           const id = obj[idField];
           if (id === SYSTEM_USER_ID || id === "agent") {
-            Vue.set(obj, outputField, this.i18n.systemUser);
+            obj[outputField] = this.i18n.systemUser;
             return
           }
 
           const user = await this.$root.getUserById(id);
           if (user) {
-            Vue.set(obj, outputField, user.email);
+            obj[outputField] = user.email;
           }
         }
       },
@@ -1294,6 +1310,24 @@ $(document).ready(function () {
     },
     mounted() {
       this.setFavicon();
+
+      const filters = {
+        formatDateTime: this.formatDateTime,
+        formatDuration: this.formatDuration,
+        formatHours: this.formatHours,
+        formatDecimal1: this.formatDecimal1,
+        formatDecimal2: this.formatDecimal2,
+        formatCount: this.formatCount,
+        formatMarkdown: this.formatMarkdown,
+        formatTimestamp: this.formatTimestamp,
+        colorSeverity: this.colorSeverity,
+      };
+
+      // Register filters globally
+      Object.keys(filters).forEach(key => {
+        app.config.globalProperties[key] = filters[key];
+      });
+
       window.matchMedia('(prefers-color-scheme: dark)').addListener(() => this.setFavicon());
       this.loadServerSettings(false);
       this.loadLocalSettings();
@@ -1301,26 +1335,9 @@ $(document).ready(function () {
     },
   };
 
-  const filters = {
-    formatDateTime: comp.methods.formatDateTime,
-    formatDuration: comp.methods.formatDuration,
-    formatHours: comp.methods.formatHours,
-    formatDecimal1: comp.methods.formatDecimal1,
-    formatDecimal2: comp.methods.formatDecimal2,
-    formatCount: comp.methods.formatCount,
-    formatMarkdown: comp.methods.formatMarkdown,
-    formatTimestamp: comp.methods.formatTimestamp,
-    colorSeverity: comp.methods.colorSeverity,
-  };
-
   const app = Vue.createApp(comp);
   app.use(vuetify);
   app.use(router);
-
-  // Register filters globally
-  Object.keys(filters).forEach(key => {
-    app.config.globalProperties[key] = filters[key];
-  });
 
   app.mount('#app');
 });

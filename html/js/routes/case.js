@@ -30,15 +30,14 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     associatedTable: {
       comments: {
         showAll: false,
-        sortBy: 'createTime',
-        sortDesc: false,
+        sortBy: [{key: 'createTime', order: 'asc'}],
         search: '',
         headers: [
-          { text: this.$root.i18n.username, value: 'owner' },
-          { text: this.$root.i18n.dateCreated, value: 'createTime' },
-          { text: this.$root.i18n.dateModified, value: 'updateTime' },
-          { text: this.$root.i18n.commentDescription, value: 'description' },
-          { text: this.$root.i18n.commentHours, value: 'hours' },
+          { title: this.$root.i18n.username, value: 'owner' },
+          { title: this.$root.i18n.dateCreated, value: 'createTime' },
+          { title: this.$root.i18n.dateModified, value: 'updateTime' },
+          { title: this.$root.i18n.commentDescription, value: 'description' },
+          { title: this.$root.i18n.commentHours, value: 'hours' },
         ],
         itemsPerPage: 10,
         footerProps: { 'items-per-page-options': [10,50,250,1000] },
@@ -47,31 +46,30 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         loading: false,
       },
       attachments: {
-        sortBy: 'createTime',
-        sortDesc: false,
+        sortBy: [{ key: 'createTime', order: 'asc' }],
         search: '',
         headers: [
-          { text: this.$root.i18n.actions, width: '10.0em' },
-          { text: this.$root.i18n.dateCreated, value: 'createTime' },
-          { text: this.$root.i18n.dateModified, value: 'updateTime' },
-          { text: this.$root.i18n.filename, value: 'value' },
+          { title: this.$root.i18n.actions, width: '10.0em' },
+          { title: this.$root.i18n.dateCreated, value: 'createTime' },
+          { title: this.$root.i18n.dateModified, value: 'updateTime' },
+          { title: this.$root.i18n.filename, value: 'value' },
         ],
         itemsPerPage: 10,
         footerProps: { 'items-per-page-options': [10,50,250,1000] },
         count: 500,
         expanded: [],
         loading: false,
+        tags: [],
       },
       evidence: {
-        sortBy: 'createTime',
-        sortDesc: false,
+        sortBy: [{key: 'createTime', order: 'asc'}],
         search: '',
         headers: [
-          { text: this.$root.i18n.actions, width: '10.0em' },
-          { text: this.$root.i18n.dateCreated, value: 'createTime' },
-          { text: this.$root.i18n.dateModified, value: 'updateTime' },
-          { text: this.$root.i18n.artifactType, value: 'artifactType' },
-          { text: this.$root.i18n.value, value: 'value' },
+          { title: this.$root.i18n.actions, width: '10.0em' },
+          { title: this.$root.i18n.dateCreated, value: 'createTime' },
+          { title: this.$root.i18n.dateModified, value: 'updateTime' },
+          { title: this.$root.i18n.artifactType, value: 'artifactType' },
+          { title: this.$root.i18n.value, value: 'value' },
         ],
         itemsPerPage: 10,
         footerProps: { 'items-per-page-options': [10,50,250,1000] },
@@ -80,16 +78,15 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         loading: false,
       },
       events: {
-        sortBy: 'fields.soc_timestamp',
-        sortDesc: false,
+        sortBy: [{key: 'fields.soc_timestamp', order: 'asc'}],
         search: '',
         headers: [
-          { text: this.$root.i18n.actions, width: '10.0em' },
-          { text: this.$root.i18n.timestamp, value: 'fields.soc_timestamp' },
-          { text: this.$root.i18n.id, value: 'fields.soc_id' },
-          { text: this.$root.i18n.category, value: 'fields.' + internalPrefix + 'event_category' },
-          { text: this.$root.i18n.module, value: 'fields.' + internalPrefix + 'event_module' },
-          { text: this.$root.i18n.dataset, value: 'fields.' + internalPrefix + 'event_dataset' },
+          { title: this.$root.i18n.actions, width: '10.0em' },
+          { title: this.$root.i18n.timestamp, value: 'fields.soc_timestamp' },
+          { title: this.$root.i18n.id, value: 'fields.soc_id' },
+          { title: this.$root.i18n.category, value: 'fields.' + internalPrefix + 'event_category' },
+          { title: this.$root.i18n.module, value: 'fields.' + internalPrefix + 'event_module' },
+          { title: this.$root.i18n.dataset, value: 'fields.' + internalPrefix + 'event_dataset' },
         ],
         itemsPerPage: 10,
         footerProps: { 'items-per-page-options': [10,50,250,1000] },
@@ -98,12 +95,11 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         loading: false,
       },
       tasks: {
-        sortBy: 'order',
-        sortDesc: false,
+        sortBy: [{key: "order", order: "asc"}],
         search: '',
         headers: [
-          { text: this.$root.i18n.order, value: 'order' },
-          { text: this.$root.i18n.summary, value: 'summary' },
+          { title: this.$root.i18n.order, value: 'order' },
+          { title: this.$root.i18n.summary, value: 'summary' },
         ],
         itemsPerPage: 10,
         footerProps: { 'items-per-page-options': [10,50,250,1000] },
@@ -112,15 +108,14 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         loading: false,
       },
       history: {
-        sortBy: 'updateTime',
-        sortDesc: false,
+        sortBy: [{key: 'updateTime', order: 'asc'}],
         search: '',
         headers: [
-          { text: this.$root.i18n.actions, width: '10.0em' },
-          { text: this.$root.i18n.username, value: 'owner' },
-          { text: this.$root.i18n.time, value: 'updateTime' },
-          { text: this.$root.i18n.kind, value: 'kind' },
-          { text: this.$root.i18n.operation, value: 'operation' },
+          { title: this.$root.i18n.actions, width: '10.0em' },
+          { title: this.$root.i18n.username, value: 'owner' },
+          { title: this.$root.i18n.time, value: 'updateTime' },
+          { title: this.$root.i18n.kind, value: 'kind' },
+          { title: this.$root.i18n.operation, value: 'operation' },
         ],
         itemsPerPage: 10,
         footerProps: { 'items-per-page-options': [10,50,250,1000] },
@@ -146,9 +141,9 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       hours: value => (!value || /^\d{1,4}(\.\d{1,4})?$/.test(value)) || this.$root.i18n.invalidHours,
       shortLengthLimit: value => (value.length < 100) || this.$root.i18n.required,
       longLengthLimit: value => (encodeURI(value).split(/%..|./).length - 1 < 10000000) || this.$root.i18n.required,
-      fileSizeLimit: value => (value == null || value.size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
-      fileNotEmpty: value => (value == null || value.size > 0) || this.$root.i18n.fileEmpty,
-      fileRequired: value => (value != null) || this.$root.i18n.required,
+      fileSizeLimit: value => (value == null || value.length == 0 || value[0].size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
+      fileNotEmpty: value => (value == null || value.length == 0 || value[0].size > 0) || this.$root.i18n.fileEmpty,
+      fileRequired: value => (value != null && value.length != 0) || this.$root.i18n.required,
     },
     attachment: null,
     maxUploadSizeBytes: 26214400,
@@ -157,6 +152,13 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     renderAbbreviatedCount: 30,
     analyzerNodeId: null,
     analyzeJobs: {},
+    // constants
+    FEAT_TTR: FEAT_TTR,
+    JobStatusPending: JobStatusPending,
+    JobStatusCompleted: JobStatusCompleted,
+    JobStatusIncomplete: JobStatusIncomplete,
+    JobStatusDeleted: JobStatusDeleted,
+    internalPrefix: internalPrefix,
   }},
   computed: {
   },
@@ -395,10 +397,24 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       return value;
     },
     selectList(field, value) {
-      const presets = this.getPresets(field);
-      return this.isPresetCustomEnabled(field) && value
-        ? presets.concat(value)
-        : presets
+      let presets = this.getPresets(field);
+
+      if (this.isPresetCustomEnabled(field) && value) {
+        // add existing custom values to list
+        if (Array.isArray(value)) {
+          for (let v of value) {
+            if (!presets.includes(v)) {
+              presets.push(v);
+            }
+          }
+        } else {
+          if (!presets.includes(value)) {
+            presets.push(value);
+          }
+        }
+      }
+
+      return presets
     },
     getPresets(kind) {
       if (this.presets && this.presets[kind]) {
@@ -606,7 +622,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
             const response = await this.$root.papi.put('case/' + this.mapAssociatedPath(association), JSON.stringify(form));
             if (response.data) {
               await this.$root.populateUserDetails(response.data, "userId", "owner");
-              Vue.set(this.associations[association], idx, response.data);
+              this.associations[association][idx] = response.data;
               success = true;
             }
           } else {
@@ -711,6 +727,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         case "attachments":
           form.tlp = this.getTlp();
           form.protected = false;
+          form.tags = [];
           break;
         case "evidence":
           form.tlp = this.getTlp();
@@ -729,7 +746,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       this.attachment = null;
       this.resetFormDefaults(form, ref);
       this.addingAssociation = null;
-      Vue.set(this.associatedForms, ref, form)
+      this.associatedForms[ref] = form;
     },
     isEdited(association) {
       const createTime = Date.parse(association.createTime);
@@ -847,7 +864,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       var existingResults = this.analyzeJobs[artifactId];
       if (!existingResults) {
         existingResults = [];
-        Vue.set(this.analyzeJobs, artifactId, existingResults);
+        this.analyzeJobs[artifactId] = existingResults;
 
         try {
           const response = await this.$root.papi.get('jobs/', { params: {
@@ -924,7 +941,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
                 if (job.status == JobStatusDeleted) {
                   Vue.delete(existingResults, jobIndex);
                 } else {
-                  Vue.set(existingResults, jobIndex, job);
+                  existingResults[jobIndex] = job;
                 }
                 found = true;
                 break;
@@ -941,7 +958,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
                 }
                 return 0;
               });
-              Vue.set(this.analyzeJobs, artifactId, existingResults);
+              this.analyzeJobs[artifactId] = existingResults;
             }
 
             break;
