@@ -121,14 +121,17 @@ func (mgr *JobManager) CleanupJob(job *model.Job) {
 
 func (mgr *JobManager) updateOnlineTime(src string) {
 	cmd := exec.Command("stat", src, "-c", "%W")
-	var out strings.Builder
-	cmd.Stdout = &out
-	err := cmd.Run()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		log.WithField("statSrcFile", src).WithError(err).Error("unable to run stat against original dir")
+		log.WithFields(log.Fields{"statSrcFile": src, "statOutput": out}).WithError(err).Error("unable to run stat against original dir")
 		return
 	}
-	secondsSinceEpochStr := strings.TrimSpace(out.String())
+	log.WithFields(log.Fields{
+		"statSrcFile":  src,
+		"statOutput":   out,
+		"statExitCode": cmd.ProcessState.ExitCode(),
+	}).Debug("ran stat against original dir")
+	secondsSinceEpochStr := strings.TrimSpace(string(out))
 	secondsSinceEpoch, parseerr := strconv.ParseInt(secondsSinceEpochStr, 10, 64)
 	if parseerr != nil {
 		log.WithField("statOutput", secondsSinceEpochStr).WithError(parseerr).Error("unable to convert stat output to number")
