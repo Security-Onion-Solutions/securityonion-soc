@@ -96,6 +96,7 @@ func (status *SoStatus) Refresh(ctx context.Context) {
 func (status *SoStatus) refreshGrid(ctx context.Context) {
 	unhealthyNodes := 0
 	nonCriticalNodes := 0
+	awaitingRebootCount := 0
 
 	nodes := status.server.Datastore.GetNodes(ctx)
 	for _, node := range nodes {
@@ -134,16 +135,70 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 		if node.NonCriticalNode {
 			nonCriticalNodes++
 		}
+
+		if node.OsNeedsRestart == 1 {
+			awaitingRebootCount++
+		}
 	}
 	status.currentStatus.Grid.TotalNodeCount = len(nodes)
+	if status.currentStatus.Grid.UnhealthyNodeCount == 0 && unhealthyNodes > 0 {
+		log.WithFields(log.Fields{
+			"unhealthyNodes": unhealthyNodes,
+			"totalNodes":     len(nodes),
+		}).Warn("Grid has entered an unhealthy state")
+	} else if status.currentStatus.Grid.UnhealthyNodeCount > 0 && unhealthyNodes == 0 {
+		log.WithFields(log.Fields{
+			"unhealthyNodes": unhealthyNodes,
+			"totalNodes":     len(nodes),
+		}).Info("Grid has returned to a healthy state")
+	}
 	status.currentStatus.Grid.UnhealthyNodeCount = unhealthyNodes
 	status.currentStatus.Grid.Eps = status.server.Metrics.GetGridEps(ctx)
+	if status.currentStatus.Grid.AwaitingRebootNodeCount == 0 && awaitingRebootCount > 0 {
+		log.WithFields(log.Fields{
+			"awaitingRebootCount": awaitingRebootCount,
+			"totalNodes":          len(nodes),
+		}).Info("Grid nodes are awaiting reboot")
+	}
+	status.currentStatus.Grid.AwaitingRebootNodeCount = awaitingRebootCount
 
 	licensing.ValidateNodeCount(status.currentStatus.Grid.TotalNodeCount - nonCriticalNodes)
 }
 
 func (status *SoStatus) refreshDetections(ctx context.Context) {
-	status.currentStatus.Detections.ElastAlert = status.server.DetectionEngines[model.EngineNameElastAlert].GetState()
-	status.currentStatus.Detections.Suricata = status.server.DetectionEngines[model.EngineNameSuricata].GetState()
-	status.currentStatus.Detections.Strelka = status.server.DetectionEngines[model.EngineNameStrelka].GetState()
+	status.currentStatus.Detections.ElastAlert = status.checkDetectionEngineStatus("ElastAlert2",
+		status.currentStatus.Detections.ElastAlert,
+		status.server.DetectionEngines[model.EngineNameElastAlert].GetState())
+	status.currentStatus.Detections.Suricata = status.checkDetectionEngineStatus("Suricata",
+		status.currentStatus.Detections.Suricata,
+		status.server.DetectionEngines[model.EngineNameSuricata].GetState())
+	status.currentStatus.Detections.Strelka = status.checkDetectionEngineStatus("Strelka",
+		status.currentStatus.Detections.Strelka,
+		status.server.DetectionEngines[model.EngineNameStrelka].GetState())
+}
+
+func (status *SoStatus) checkDetectionEngineStatus(engineName string, oldState *model.EngineState, newState *model.EngineState) *model.EngineState {
+	if !oldState.IsFailureState() && newState.IsFailureState() {
+		log.WithFields(log.Fields{
+			"currentStateIntegrityFailure": oldState.IntegrityFailure,
+			"currentStateMigrationFailure": oldState.MigrationFailure,
+			"currentStateSyncFailure":      oldState.SyncFailure,
+			"newStateIntegrityFailure":     newState.IntegrityFailure,
+			"newStateMigrationFailure":     newState.MigrationFailure,
+			"newStateSyncFailure":          newState.SyncFailure,
+			"engineName":                   engineName,
+		}).Warn("Detection engine has entered a failure state")
+	} else if oldState.IsFailureState() && !newState.IsFailureState() {
+		log.WithFields(log.Fields{
+			"currentStateIntegrityFailure": oldState.IntegrityFailure,
+			"currentStateMigrationFailure": oldState.MigrationFailure,
+			"currentStateSyncFailure":      oldState.SyncFailure,
+			"newStateIntegrityFailure":     newState.IntegrityFailure,
+			"newStateMigrationFailure":     newState.MigrationFailure,
+			"newStateSyncFailure":          newState.SyncFailure,
+			"engineName":                   engineName,
+		}).Warn("Detection engine has returned to a healthy state")
+	}
+
+	return newState
 }
