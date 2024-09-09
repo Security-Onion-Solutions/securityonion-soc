@@ -152,14 +152,15 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 			"totalNodes":     len(nodes),
 		}).Info("Grid has returned to a healthy state")
 	}
+	status.currentStatus.Grid.UnhealthyNodeCount = unhealthyNodes
+	status.currentStatus.Grid.Eps = status.server.Metrics.GetGridEps(ctx)
 	if status.currentStatus.Grid.AwaitingRebootNodeCount == 0 && awaitingRebootCount > 0 {
 		log.WithFields(log.Fields{
 			"awaitingRebootCount": awaitingRebootCount,
 			"totalNodes":          len(nodes),
 		}).Info("Grid nodes are awaiting reboot")
 	}
-	status.currentStatus.Grid.UnhealthyNodeCount = unhealthyNodes
-	status.currentStatus.Grid.Eps = status.server.Metrics.GetGridEps(ctx)
+	status.currentStatus.Grid.AwaitingRebootNodeCount = awaitingRebootCount
 
 	licensing.ValidateNodeCount(status.currentStatus.Grid.TotalNodeCount - nonCriticalNodes)
 }
