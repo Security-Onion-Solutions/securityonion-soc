@@ -142,6 +142,7 @@ const huntComponent = {
     selectedMruCase: null,
     disableRouteLoad: false,
     selectAllState: false,
+    selectAllIndeterminate: false,
     selectedCount: 0,
     selectedAction: 'enable',
     bulkActions: [
@@ -154,6 +155,7 @@ const huntComponent = {
     manualSyncTargetEngine: null,
     showBulkDeleteConfirmDialog: false,
     tuneDetectionTabTarget: null,
+    eventCurrentItems: [],
   }},
   created() {
     this.$root.initializeCharts();
@@ -214,6 +216,7 @@ const huntComponent = {
     'autoRefreshInterval': 'resetRefreshTimer',
   },
   methods: {
+    moment: moment,
     isAdvanced() {
       return this.advanced;
     },
@@ -2132,30 +2135,34 @@ const huntComponent = {
       switch (this.selectedCount) {
         case 0:
           this.selectAllState = false;
+          this.selectAllIndeterminate = false;
           break;
         case this.totalEvents:
           this.selectAllState = true;
+          this.selectAllIndeterminate = false;
           break;
         default:
-          this.selectAllState = 'indeterminate';
+          this.selectAllState = false;
+          this.selectAllIndeterminate = true;
           break;
       }
     },
     toggleSelectAll() {
-      switch (this.selectAllState) {
-        case 'indeterminate':
+      if (this.selectAllIndeterminate) {
+        this.selectAllState = false;
+        this.selectAllIndeterminate = false;
+        this.selectAllEvents(false);
+        this.selectedCount = 0;
+      } else {
+        if (this.selectAllState) {
           this.selectAllState = false;
+          this.selectAllIndeterminate = false;
           this.selectAllEvents(false);
-          this.selectedCount = 0;
-          break;
-        case false:
-          this.selectAllState = 'indeterminate';
+        } else {
+          this.selectAllState = false;
+          this.selectAllIndeterminate = true;
           this.selectCurrentPage(true);
-          break;
-        case true:
-          this.selectAllState = false;
-          this.selectAllEvents(false);
-          break;
+        }
       }
     },
     selectAllEvents(selection = true, ALL = false) {
@@ -2174,10 +2181,11 @@ const huntComponent = {
 
       if (ALL && selection) {
         this.selectAllState = true;
+        this.selectAllIndeterminate = false;
       }
     },
     selectCurrentPage(selection = true) {
-      this.$refs.eventTable._data.internalCurrentItems.forEach((item) => {
+      this.eventCurrentItems.forEach((item) => {
         if (item._isSelected !== selection) {
           item._isSelected = selection;
           if (selection) {
@@ -2191,7 +2199,7 @@ const huntComponent = {
       this.selectedCount = Math.max(Math.min(this.selectedCount, this.totalEvents), 0);
     },
     isPageSelected() {
-      return this.$refs.eventTable._data.internalCurrentItems.every((item) => item._isSelected);
+      return this.eventCurrentItems.every((item) => item._isSelected);
     },
     countSelected() {
       let count = 0;

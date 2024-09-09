@@ -36,6 +36,7 @@ $(document).ready(function () {
       VCheckbox: {
         trueIcon: 'mb-1 fa-square-check',
         falseIcon: 'mb-1 fa-regular fa-square',
+        indeterminateIcon: 'mb-1 fa-square-minus'
       },
       VSelect: {
         menuIcon: 'fas fa-caret-down',
@@ -1108,12 +1109,12 @@ $(document).ready(function () {
       },
       getDetectionEngineStatusClass(engine) {
         switch (this.getDetectionEngineStatus(engine)) {
-          case "MigrationFailure": return "warning--text";
-          case "SyncFailure": return "warning--text";
-          case "IntegrityFailure": return "warning--text";
-          case "Healthy": return "success--text";
+          case "MigrationFailure": return "text-warning";
+          case "SyncFailure": return "text-warning";
+          case "IntegrityFailure": return "text-warning";
+          case "Healthy": return "text-success";
         }
-        return "normal--text";
+        return "text-normal";
       },
       getDetectionEngineStatus(engine) {
         if (!this.currentStatus || !this.currentStatus.detections || !this.currentStatus.detections[engine]) {

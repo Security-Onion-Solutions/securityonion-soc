@@ -471,7 +471,7 @@
                 </v-btn>
               </template>
             </v-text-field>
-            <v-btn id="hunt" :class="isCategory('detections') ? 'detection-hunt-btn' : ''" class="align-self-start" :disabled="loading()" :color="huntPending ? 'light-green accent-4' : (autoRefreshInterval ? 'secondary' : 'primary')" @click.stop="hunt" :data-aid="'run_query_' + category">
+            <v-btn id="hunt" class="align-self-start" :disabled="loading()" :color="huntPending ? 'light-green accent-4' : (autoRefreshInterval ? 'secondary' : 'primary')" @click.stop="hunt" :data-aid="'run_query_' + category">
               <span v-if="isCategory('hunt')" class="d-sm-none d-lg-inline pr-2" v-text="i18n.hunt"></span>
               <span v-if="!isCategory('hunt')" class="d-sm-none d-lg-inline pr-2" v-text="i18n.refresh"></span>
               <v-icon v-if="isCategory('hunt') && !autoRefreshInterval">fa-crosshairs</v-icon>
@@ -687,10 +687,10 @@
                     </v-col>
                   </v-row>
                 </v-container>
-                <v-container v-if="isCategory('detections') && selectAllState !== false">
+                <v-container v-if="isCategory('detections') && (selectAllState || selectAllIndeterminate)">
                   <div>
                       {{ i18n.selected }} {{ (selectAllState === true ? totalEvents : selectedCount).toLocaleString() }}
-                    <span class="ml-2" v-if="selectAllState === 'indeterminate' && isPageSelected() && totalEvents >= itemsPerPage" :data-aid="'events_select_all_' + category">
+                    <span class="ml-2" v-if="selectAllIndeterminate && !selectAllState && isPageSelected() && totalEvents >= itemsPerPage" :data-aid="'events_select_all_' + category">
                       {{ i18n.selectAll.replaceAll('[[count]]', totalEvents.toLocaleString()) }}
                       <v-btn @click="selectAllEvents(true, true)">
                         {{ i18n.yes }}
@@ -700,50 +700,56 @@
 
                   <span :data-aid="'events_bulk_select_action_' + category">
                     {{ i18n.bulkAction }}
-                    <v-select class="bulk-actions" :disabled="loading()" v-model="selectedAction" :items="bulkActions"></v-select>
-                    <v-btn :disabled="selectAllState === false" @click="bulkAction()" :data-aid="'events_bulk_apply_' + category">{{ i18n.go }}</v-btn>
+                    <v-select variant="underlined" class="bulk-actions no-details" :disabled="loading()" v-model="selectedAction" :items="bulkActions"></v-select>
+                    <v-btn @click="bulkAction()" :data-aid="'events_bulk_apply_' + category">{{ i18n.go }}</v-btn>
                   </span>
                 </v-container>
               </template>
               <v-col cols="12">
                 <v-data-table ref="eventTable" :search="eventFilter" v-model:sort-by="sortBy" item-value="soc_id" :footer-props="footerProps" :data-aid="'events_table_' + category"
-                  :items-per-page.sync="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" :page.sync="eventPage" show-select :custom-sort="sortEvents" density="compact">
-                  <template v-slot:header.data-table-select="{ on, props }">
-                    <div v-if="isMultiSelect()" class="multiselect-container" :data-aid="'events_checkbox_' + category">
-                      <v-checkbox id="multiselect-checkbox"
-                        color="blue"
-                        v-bind="props"
-                        v-on="on"
-                        :indeterminate="selectAllState === 'indeterminate'"
-                        :value="selectAllState"
-                        @click="toggleSelectAll()"
-                      ></v-checkbox>
-                    </div>
+                  :items-per-page="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" :page.sync="eventPage" show-select :custom-sort="sortEvents" density="compact" @current-items="updateEventsPage">
+                  <template #top="data">
+                    <!-- not fancy way to access the current page of items:
+                     https://stackoverflow.com/questions/76008941/vuetify-3-data-table-current-items
+                     NOTE: Moved to top because if it were bottom we lose paging controls -->
+                    <template name="top" :any_name="eventCurrentItems = data.items" />
                   </template>
                   <template v-slot:headers="{ columns, isSorted, getSortIcon, toggleSort }">
                     <tr>
                       <template v-for="header in columns" :key="header.key">
                         <th :class="{'is-sorted': isSorted(header)}">
-                          <span v-if="header.key !== 'data-table-select'" class="table-header-actions" :data-aid="'events_col_move_left_' + category">
-                            <v-btn :id="'col_move_left_' + header.value" variant="text" size="x-small" @click.stop="moveColumnHeader(header.value, true)" :title="i18n.moveLeft">
-                              <v-icon class="tiny-icon">fa-caret-left</v-icon>
-                            </v-btn>
-                          </span>
-                          <span @click="toggleSort(header)">
-                            {{ header.text }}
-                          </span>
-                          <span v-if="header.key !== 'data-table-select'" class="table-header-actions" :data-aid="'events_move_right_' + category">
-                            <v-btn :id="'col_move_right_' + header.value" variant="text" size="x-small" @click.stop="moveColumnHeader(header.value, false)" :title="i18n.moveRight">
-                              <v-icon class="tiny-icon">fa-caret-right</v-icon>
-                            </v-btn>
-                            <v-btn :id="'col_del_' + header.value" variant="text" size="x-small" @click.stop="removeColumnHeader(header.value)" :title="i18n.remove" :data-aid="'events_col_del_' + category">
-                              <v-icon class="tiny-icon">fa-circle-xmark</v-icon>
-                            </v-btn>
-                          </span>
-                          <template v-if="isSorted(header)">
-                            <v-icon>
-                              {{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
-                            </v-icon>
+                          <template v-if="header.key === 'data-table-select'">
+                            <div v-if="isMultiSelect()" class="multiselect-container justify-center" :data-aid="'events_checkbox_' + category">
+                              <v-checkbox id="multiselect-checkbox" class="no-details" :class="{ 'text-blue': selectAllState || selectAllIndeterminate }"
+                                v-bind="props"
+                                :indeterminate="selectAllIndeterminate"
+                                v-model="selectAllState"
+                                @click.prevent="toggleSelectAll()"
+                              ></v-checkbox>
+                            </div>
+                          </template>
+                          <template v-else>
+                            <span class="table-header-actions" :data-aid="'events_col_move_left_' + category">
+                              <v-btn :id="'col_move_left_' + header.value" variant="text" size="x-small" @click.stop="moveColumnHeader(header.value, true)" :title="i18n.moveLeft">
+                                <v-icon class="tiny-icon">fa-caret-left</v-icon>
+                              </v-btn>
+                            </span>
+                            <span @click="toggleSort(header)">
+                              {{ header.title }}
+                            </span>
+                            <span class="table-header-actions" :data-aid="'events_move_right_' + category">
+                              <v-btn :id="'col_move_right_' + header.value" variant="text" size="x-small" @click.stop="moveColumnHeader(header.value, false)" :title="i18n.moveRight">
+                                <v-icon class="tiny-icon">fa-caret-right</v-icon>
+                              </v-btn>
+                              <v-btn :id="'col_del_' + header.value" variant="text" size="x-small" @click.stop="removeColumnHeader(header.value)" :title="i18n.remove" :data-aid="'events_col_del_' + category">
+                                <v-icon class="tiny-icon">fa-circle-xmark</v-icon>
+                              </v-btn>
+                            </span>
+                            <template v-if="isSorted(header)">
+                              <v-icon>
+                                {{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
+                              </v-icon>
+                            </template>
                           </template>
                         </th>
                       </template>
@@ -769,7 +775,7 @@
                           <v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate">fa-exclamation-triangle</v-icon>
                         </v-btn>
                         <span :data-aid="'events_select_' + category">
-                          <v-checkbox class="detection-selection" @change="updateBulkSelector(item)" v-if="isMultiSelect()" v-model="item._isSelected">
+                          <v-checkbox class="detection-selection no-details" color="primary" @change="updateBulkSelector(item)" v-if="isMultiSelect()" v-model="item._isSelected">
                           </v-checkbox>
                         </span>
                         <router-link :to="{ name: 'case', params: {id: item.soc_id}}" style="text-decoration: none; cursor: 'pointer'" v-if="viewEnabled && category === 'cases'" :data-aid="'events_open_' + category">
@@ -1067,7 +1073,7 @@
           </v-card>
         </v-dialog>
 
-        <!-- <v-dialog v-model="showBulkDeleteConfirmDialog" persistent max-width="400" data-aid="bulk_delete_confirmation">
+        <v-dialog v-model="showBulkDeleteConfirmDialog" persistent max-width="400" data-aid="bulk_delete_confirmation">
           <v-card>
             <v-card-title class="text-h5" v-text="i18n.detectionDeleteConfirmationTitle" />
             <v-card-text>
@@ -1079,7 +1085,7 @@
               <v-btn text id="detections-bulk-cancel" @click="bulkDeleteDialogCancel()" v-text="i18n.cancel" data-aid="detection_bulk_action_cancel" />
             </v-card-actions>
           </v-card>
-        </v-dialog> -->
+        </v-dialog>
       </v-container>
     </script>
 

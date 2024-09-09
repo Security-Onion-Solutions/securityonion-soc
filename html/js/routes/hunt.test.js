@@ -1109,44 +1109,43 @@ test('updateBulkSelector', () => {
 
   expect(comp.selectedCount).toBe(0);
   expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(false);
 
   comp.updateBulkSelector(selected);
 
   expect(comp.selectedCount).toBe(1);
-  expect(comp.selectAllState).toBe('indeterminate');
+  expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(true);
 
   comp.updateBulkSelector(selected);
 
   expect(comp.selectedCount).toBe(2);
   expect(comp.selectAllState).toBe(true);
+  expect(comp.selectAllIndeterminate).toBe(false);
 
   comp.updateBulkSelector(unselected);
 
   expect(comp.selectedCount).toBe(1);
-  expect(comp.selectAllState).toBe('indeterminate');
+  expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(true);
 
   comp.updateBulkSelector(unselected);
 
   expect(comp.selectedCount).toBe(0);
   expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(false);
 });
 
 test('toggleSelectAll', () => {
   comp.totalEvents = 11;
   comp.eventData = [];
-  comp.$refs = {
-    eventTable: {
-      _data: {
-        internalCurrentItems: []
-      }
-    }
-  };
+  comp.eventCurrentItems = [];
 
   for (let i = 0; i < comp.totalEvents; i++) {
     let obj = { _isSelected: i === 0 };
     comp.eventData.push(obj);
-    if (comp.$refs.eventTable._data.internalCurrentItems.length < 10) {
-      comp.$refs.eventTable._data.internalCurrentItems.push(obj);
+    if (comp.eventCurrentItems.length < 10) {
+      comp.eventCurrentItems.push(obj);
     }
   }
 
@@ -1156,13 +1155,14 @@ test('toggleSelectAll', () => {
   expect(comp.selectedCount).toBe(1);
   expect(comp.isPageSelected()).toBe(false);
 
-  // the comp has 11 eventData, the first 10 are in the eventTable's internalCurrentItems
+  // the comp has 11 eventData, the first 10 are in eventCurrentItems
   // eventData[0] is the only one selected
 
   // some selected => none selected
   comp.toggleSelectAll();
 
   expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(false);
   expect(comp.selectedCount).toBe(0);
   expect(comp.eventData[0]._isSelected).toBe(false);
   comp.countSelected();
@@ -1172,7 +1172,8 @@ test('toggleSelectAll', () => {
   // none selected => page selected
   comp.toggleSelectAll();
 
-  expect(comp.selectAllState).toBe('indeterminate');
+  expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(true);
   expect(comp.selectedCount).toBe(10);
   expect(comp.eventData[10]._isSelected).toBe(false);
   comp.countSelected();
@@ -1183,6 +1184,7 @@ test('toggleSelectAll', () => {
   comp.selectAllEvents(true, true);
 
   expect(comp.selectAllState).toBe(true);
+  expect(comp.selectAllIndeterminate).toBe(false);
   expect(comp.selectedCount).toBe(11);
   expect(comp.eventData[10]._isSelected).toBe(true);
   comp.countSelected();
@@ -1193,6 +1195,7 @@ test('toggleSelectAll', () => {
   comp.toggleSelectAll();
 
   expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(false);
   expect(comp.selectedCount).toBe(0);
   comp.countSelected();
   expect(comp.selectedCount).toBe(0);

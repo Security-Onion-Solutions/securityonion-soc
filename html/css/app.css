@@ -630,7 +630,7 @@ td {
 
 .detection-selection {
   display: inline-block;
-  vertical-align: sub;
+  vertical-align: middle;
 }
 
 .selection-counter {
@@ -642,6 +642,7 @@ td {
   display: inline-block;
   max-width: 100px;
   margin: 0 4px;
+  vertical-align: bottom;
 }
 
 .detection-hunt-btn {

@@ -619,21 +619,21 @@ test('getDetectionEngines', () => {
 });
 
 test('getDetectionEngineStatusClass', () => {
-  expect(app.getDetectionEngineStatusClass('unknown')).toBe('normal--text');
+  expect(app.getDetectionEngineStatusClass('unknown')).toBe('text-normal');
   app.currentStatus = { detections: { strelka: { syncing: true }}};
-  expect(app.getDetectionEngineStatusClass('strelka')).toBe('normal--text');
+  expect(app.getDetectionEngineStatusClass('strelka')).toBe('text-normal');
   app.currentStatus = { detections: { strelka: { migrationFailure: true, syncFailure: true }}};
-  expect(app.getDetectionEngineStatusClass('strelka')).toBe('warning--text');
+  expect(app.getDetectionEngineStatusClass('strelka')).toBe('text-warning');
   app.currentStatus = { detections: { strelka: { syncFailure: true, integrityFailure: true }}};
-  expect(app.getDetectionEngineStatusClass('strelka')).toBe('warning--text');
+  expect(app.getDetectionEngineStatusClass('strelka')).toBe('text-warning');
   app.currentStatus = { detections: { strelka: { integrityFailure: true, syncing: true }}};
-  expect(app.getDetectionEngineStatusClass('strelka')).toBe('warning--text');
+  expect(app.getDetectionEngineStatusClass('strelka')).toBe('text-warning');
   app.currentStatus = { detections: { strelka: { migrating: true, integrityFailure: true }}};
-  expect(app.getDetectionEngineStatusClass('strelka')).toBe('normal--text');
+  expect(app.getDetectionEngineStatusClass('strelka')).toBe('text-normal');
   app.currentStatus = { detections: { strelka: { importing: true, migrating: true }}};
-  expect(app.getDetectionEngineStatusClass('strelka')).toBe('normal--text');
+  expect(app.getDetectionEngineStatusClass('strelka')).toBe('text-normal');
   app.currentStatus = { detections: { strelka: { importing: false }}};
-  expect(app.getDetectionEngineStatusClass('strelka')).toBe('success--text');
+  expect(app.getDetectionEngineStatusClass('strelka')).toBe('text-success');
 });
 
 test('getDetectionEngineStatus', () => {
