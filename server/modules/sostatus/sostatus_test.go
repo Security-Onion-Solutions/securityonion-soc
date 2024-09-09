@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
+	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/stretchr/testify/assert"
 )
@@ -52,5 +53,15 @@ func TestRefreshGrid(tester *testing.T) {
 	status.refreshGrid(context.Background())
 	assert.Equal(tester, 2, status.currentStatus.Grid.UnhealthyNodeCount)
 	assert.Equal(tester, 3, status.currentStatus.Grid.TotalNodeCount)
+	assert.Equal(tester, 0, status.currentStatus.Grid.AwaitingRebootNodeCount)
 	assert.Equal(tester, 12, status.currentStatus.Grid.Eps)
+}
+
+func TestCheckDetectionEngineStatus(tester *testing.T) {
+	status, _ := NewTestStatus()
+	bad := &model.EngineState{
+		SyncFailure: true,
+	}
+	good := &model.EngineState{}
+	assert.Equal(tester, bad, status.checkDetectionEngineStatus("foo", good, bad))
 }

@@ -13,9 +13,10 @@ type Status struct {
 }
 
 type GridStatus struct {
-	TotalNodeCount     int `json:"totalNodeCount"`
-	UnhealthyNodeCount int `json:"unhealthyNodeCount"`
-	Eps                int `json:"eps"`
+	TotalNodeCount          int `json:"totalNodeCount"`
+	UnhealthyNodeCount      int `json:"unhealthyNodeCount"`
+	AwaitingRebootNodeCount int `json:"awaitingRebootNodeCount"`
+	Eps                     int `json:"eps"`
 }
 
 type AlertsStatus struct {
@@ -37,11 +38,19 @@ type EngineState struct {
 	SyncFailure      bool `json:"syncFailure"`
 }
 
+func (state *EngineState) IsFailureState() bool {
+	return state.IntegrityFailure || state.MigrationFailure || state.SyncFailure
+}
+
 func NewStatus() *Status {
 	newStatus := &Status{
-		Grid:       &GridStatus{},
-		Alerts:     &AlertsStatus{},
-		Detections: &DetectionsStatus{},
+		Grid:   &GridStatus{},
+		Alerts: &AlertsStatus{},
+		Detections: &DetectionsStatus{
+			ElastAlert: &EngineState{},
+			Strelka:    &EngineState{},
+			Suricata:   &EngineState{},
+		},
 	}
 	return newStatus
 }
