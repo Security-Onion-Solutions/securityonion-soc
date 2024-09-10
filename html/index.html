@@ -412,17 +412,15 @@
                   <v-list class="overflow-y-auto" style="max-height: 600px" id="hunt-query-dropdown-list">
                     <template v-if="isAdvanced() && mruQueryLimit > 0">
                       <v-list-item v-for="query in mruQueries" :key="query" :data-aid="'query_mru_item_' + category" @click="huntQuery(query)" style="cursor: 'pointer'">
-                        <template>
-                          <v-list-item-title v-text="query"></v-list-item-title>
-                          <v-list-item-subtitle>
-                            <span class="theme-text">{{ i18n.mruQuery }} &mdash;</span>
-                            {{ i18n.mruQueryHelp }}
-                          </v-list-item-subtitle>
-                        </template>
+                        <v-list-item-title>{{query}}</v-list-item-title>
+                        <v-list-item-subtitle>
+                          <span class="theme-text">{{ i18n.mruQuery }} &mdash;</span>
+                          {{ i18n.mruQueryHelp }}
+                        </v-list-item-subtitle>
                       </v-list-item>
                     </template>
                     <v-divider v-if="isAdvanced()"></v-divider>
-                    <v-list-item v-for="query in queries" :key="query.query" :id="'query_item_' + category + '_' + query.name" :data-aid="'query_item_' + category" @click="huntQuery(query.query)" style="cursor: 'pointer'; color: white;" :title="query.description">
+                    <v-list-item v-for="query in queries" :key="query.query" :id="'query_item_' + category + '_' + query.name" :data-aid="'query_item_' + category" @click="huntQuery(query.query)" style="cursor: 'pointer'; color: white;">
                       <v-list-item-title class="theme-text">
                         {{ query.name }}
                       </v-list-item-title>
@@ -707,7 +705,7 @@
               </template>
               <v-col cols="12">
                 <v-data-table ref="eventTable" :search="eventFilter" v-model:sort-by="sortBy" item-value="soc_id" :footer-props="footerProps" :data-aid="'events_table_' + category"
-                  :items-per-page="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" :page.sync="eventPage" show-select :custom-sort="sortEvents" density="compact" @current-items="updateEventsPage">
+                  :items-per-page="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" :page.sync="eventPage" show-select :custom-sort="sortEvents" density="compact" @current-items="val => eventCurrentItems = val">
                   <template #top="data">
                     <!-- not fancy way to access the current page of items:
                      https://stackoverflow.com/questions/76008941/vuetify-3-data-table-current-items
@@ -1089,32 +1087,32 @@
       </v-container>
     </script>
 
-    <!-- <script type="text/x-template" id="page-detection">
+    <script type="text/x-template" id="page-detection">
       <v-container fluid v-if="detect" data-aid="detections_screen">
         <div v-if="!isNew()" class="mx-sm-12 mx-lg-6 mt-2 mb-6 mb-md-1" data-aid="detection_title_input">
-          <!-- Title ->
+          <!-- Title -->
           <h2 id="detection-title">{{ detect.title }}</h2>
         </div>
 
-        <div class="row mx-sm-8 mx-md-12 mx-lg-4 flex-column flex-md-row">
-          <div class="main col-md-9 order-md-1 col-12 order-2">
+        <v-row class="mx-sm-8 mx-md-12 mx-lg-4 flex-column flex-md-row">
+          <v-col class="main v-col-md-9 v-order-md-1 v-col-12 v-order-2" order="2" order-md="1">
             <div v-if="isNew()">
-              <!-- Create View ->
+              <!-- Create View -->
               <v-form ref="detection" v-model="editForm.valid">
-                <div class="col pt-5 contrast-bg rounded rounded-md">
+                <div class="col pa-4 contrast-bg rounded rounded-md">
                   <div class="header">{{ i18n.add }} {{ i18n.detection }}</div>
-                  <!-- Language ->
+                  <!-- Language -->
                   <span data-aid="detection_new_language_select">
-                    <v-select id="detection-language-create" v-model="detect.language" :items="getPresets('language')" persistent-hint :hint="i18n.language" :rules="[rules.required]" v-on:change="onNewDetectionLanguageChange"/>
+                    <v-select variant="underlined" id="detection-language-create" v-model="detect.language" :items="getPresets('language')" persistent-hint :hint="i18n.language" :rules="[rules.required]" @update:model-value="onNewDetectionLanguageChange"/>
                   </span>
 
-                  <!-- License ->
+                  <!-- License -->
                   <span data-aid="detection_new_license_select">
-                    <v-select id="detection-license-create" v-if="!isPresetCustomEnabled('license')" v-model="detect.license" :items="getPresets('license')" persistent-hint :hint="i18n.license" :rules="[rules.required]"/>
-                    <v-combobox id="detection-license-create" v-if="isPresetCustomEnabled('license')" v-model="detect.license" :items="getPresets('license')" persistent-hint :hint="i18n.license" :rules="[rules.required]"/>
+                    <v-select variant="underlined" id="detection-license-create" v-if="!isPresetCustomEnabled('license')" v-model="detect.license" :items="getPresets('license')" persistent-hint :hint="i18n.license" :rules="[rules.required]"/>
+                    <v-combobox variant="underlined" id="detection-license-create" v-if="isPresetCustomEnabled('license')" v-model="detect.license" :items="getPresets('license')" persistent-hint :hint="i18n.license" :rules="[rules.required]"/>
                   </span>
 
-                  <!-- Signature ->
+                  <!-- Signature -->
                   <div class="font-weight-bold mb-1">{{ i18n.signature }}:</div>
                   <span data-aid="detection_signature_input">
                     <prism-editor class="prism" :highlight="highlighter" v-model="detect.content"></prism-editor>
@@ -1122,42 +1120,43 @@
                 </div>
                 <div class="d-flex align-center align-self-end text-body-2 mt-2">
                   <div class="d-inline-flex justify-end">
-                    <v-btn id="detection-create-cancel" text small color="primary" class="align-self-end" @click="cancelDetection()" data-aid="detection_new_cancel">
+                    <v-btn id="detection-create-cancel" variant="text" size="small" color="primary" class="align-self-end" @click="cancelDetection()" data-aid="detection_new_cancel">
                       {{ i18n.cancel }}
                     </v-btn>
-                    <v-btn id="detection-create-create" text small color="primary" class="align-self-end" @click="saveDetection(true)" data-aid="detection_new_save">
+                    <v-btn id="detection-create-create" variant="text" size="small" color="primary" class="align-self-end" @click="saveDetection(true)" data-aid="detection_new_save">
                       {{ i18n.create }}
                     </v-btn>
-                    <v-btn id="detection-create-convert" v-if="canConvert()" text small color="primary" class="align-self-end" @click="convertDetection()" data-aid="detection_convert">
+                    <v-btn id="detection-create-convert" v-if="canConvert()" variant="text" size="small" color="primary" class="align-self-end" @click="convertDetection()" data-aid="detection_convert">
                       {{ i18n.convert }}
                     </v-btn>
                   </div>
                 </div>
               </v-form>
             </div>
-
-            <v-tabs grow v-model="activeTab" v-else>
-              <v-tab id="detection_summaryTab" href="#summary" data-aid="detection_summary_tab">
-                <v-icon left>fa-circle-nodes</v-icon>
+            <v-tabs grow v-model="activeTab" class="full-width" v-else>
+              <v-tab id="detection_summaryTab" value="summary" :class="{ 'theme-primary': activeTab === 'summary' }" data-aid="detection_summary_tab">
+                <v-icon class="detection-tab-icon">fa-circle-nodes</v-icon>
                 <div class="d-none d-lg-block">{{ i18n.overview }}</div>
               </v-tab>
-              <v-tab id="detection_commentsTab" href="#comments" data-aid="detection_comments_tab">
-                <v-icon left>fa-paperclip</v-icon>
+              <v-tab id="detection_commentsTab" value="comments" :class="{ 'theme-primary': activeTab === 'comments' }" data-aid="detection_comments_tab">
+                <v-icon class="detection-tab-icon">fa-paperclip</v-icon>
                 <div class="d-none d-lg-block">{{ i18n.detectionComments }}</div>
               </v-tab>
-              <v-tab id="detection_signatureTab" href="#source" data-aid="detection_source_tab">
-                <v-icon left>fa-code</v-icon>
+              <v-tab id="detection_signatureTab" value="source" :class="{ 'theme-primary': activeTab === 'source' }" data-aid="detection_source_tab">
+                <v-icon class="detection-tab-icon">fa-code</v-icon>
                 <div class="d-none d-lg-block">{{ i18n.detectionSource }}</div>
               </v-tab>
-              <v-tab id="detection_tuningTab" href="#tuning" data-aid="detection_tuning_tab">
-                <v-icon left>fa-wrench</v-icon>
+              <v-tab id="detection_tuningTab" value="tuning" :class="{ 'theme-primary': activeTab === 'tuning' }" data-aid="detection_tuning_tab">
+                <v-icon class="detection-tab-icon">fa-wrench</v-icon>
                 <div class="d-none d-lg-block">{{ i18n.tuning }}</div>
               </v-tab>
-              <v-tab id="detection_historyTab" href="#history" data-aid="detection_history_tab">
-                <v-icon left>fa-history</v-icon>
+              <v-tab id="detection_historyTab" value="history" :class="{ 'theme-primary': activeTab === 'history' }" data-aid="detection_history_tab">
+                <v-icon class="detection-tab-icon">fa-history</v-icon>
                 <div class="d-none d-lg-block">{{ i18n.history }}</div>
               </v-tab>
-              <v-tab-item value="summary" data-aid="detection_summary">
+            </v-tabs>
+            <v-tabs-window v-model="activeTab" class="full-width">
+              <v-tabs-window-item value="summary" data-aid="detection_summary">
                 <v-row class="contrast-bg rounded rounded-md pa-4">
                   <v-col>
                     <div class="header">{{i18n.summary}} <v-icon v-if="showAiSummary()" :title="i18n.aiGenSummary" class="unset-vertical-align" data-aid="detection_summary_ai_indicator">fa-flask</v-icon></div>
@@ -1170,7 +1169,6 @@
                     <div class="summary" v-else data-aid="detection_summary_display">
                       {{ extractedSummary }}
                     </div>
-                    </template>
                     <div class="header">{{i18n.references}}</div>
                     <div class="reference-links" data-aid="detection_references_display">
                       <div v-for="r in extractedReferences">
@@ -1187,111 +1185,113 @@
                     </div>
                   </v-col>
                 </v-row>
-              </v-tab-item>
-              <v-tab-item value="comments" data-aid="detection_comments">
+              </v-tabs-window-item>
+              <v-tabs-window-item value="comments" data-aid="detection_comments">
                 <v-row>
                   <v-col>
-                    <v-toolbar class="elevation-0" fixed>
-                      <v-btn :title="i18n.addCommentHelp" color="primary" @click.stop="prepareForInput('comment-input')" id="add-comment-button" data-aid="detection_comments_new">
+                    <v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
+                      <v-btn variant="flat" class="ml-3" :title="i18n.addCommentHelp" color="primary" @click.stop="prepareForInput('comment-input')" id="add-comment-button" data-aid="detection_comments_new">
                         <v-icon>fa-plus</v-icon>
                       </v-btn>
-                      <v-btn class="mx-1" :title="i18n.refreshCommentsHelp" color="secondary" @click.stop="loadComments(true)" id="refresh-comments-button" data-aid="detection_comments_refresh">
+                      <v-btn variant="flat" class="mx-1" :title="i18n.refreshCommentsHelp" color="secondary" @click.stop="loadComments(true)" id="refresh-comments-button" data-aid="detection_comments_refresh">
                         <v-icon>fa-sync</v-icon>
                       </v-btn>
                     </v-toolbar>
                   </v-col>
                 </v-row>
                 <div id="comment-list">
-                  <div v-for="(comment, index) in comments" class="mb-8" v-if="shouldRenderComment(comment, index)">
-                    <div class="d-flex flex-column align-start my-4">
-                      <v-col class="d-flex flex-column align-start pt-2 pt-md-0">
-                        <div class="mt-1 mt-md-3 pt-1 pb-2 px-2 contrast-bg rounded rounded-md" style="width: 100%;">
-                          <div class="d-flex flex-column align-start">
-                            <div v-if="!isEdit(`comment-${index}`)" class="case d-block comment-body mt-2" data-aid="detection_comment_display">
-                              <div class="mb-2">
-                                <div :id="`comment-${index}`" class="markdown-body" :inner-html.prop="comment.value | formatMarkdown"></div>
-                              </div>
-                            </div>
-                            <div v-else class="d-flex flex-column" style="width: 100%;">
-                              <div class="d-flex flex-column flex-sm-row align-sm-center align-self-start text-body-2 mb-1 ml-1">
-                                <a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" :target="$root.target('_blank')" :title="i18n.markdownFormattingSupported" data-aid="detection_comment_markdown_help"><v-icon>fab fa-markdown</v-icon></a>
-                              </div>
-                              <div class="mb-3">
-                                <v-form v-model="editForm.valid" @submit.prevent>
-                                  <v-textarea id="comment-value-input" solo flat hide-details="auto" rows="5" dense color="text--black" v-model="editForm.val" class="mb-1" :rules="[rules.required]" data-aid="detection_comment_edit"/>
-                                </v-form>
-                                <div class="d-inline-flex justify-end">
-                                  <v-btn text small color="primary" class="align-self-end" @click="stopEdit()" data-aid="detection_comment_cancel">
-                                    {{ i18n.cancel }}
-                                  </v-btn>
-                                  <v-btn :disabled="!editForm.valid" text small color="primary" class="align-self-end" @click="stopEdit(true)" data-aid="detection_comment_save">
-                                    {{ i18n.update }}
-                                  </v-btn>
+                  <template v-for="(comment, index) in comments">
+                    <div class="mb-8" v-if="shouldRenderComment(comment, index)">
+                      <div class="d-flex flex-column align-start my-4">
+                        <v-col class="d-flex flex-column align-start pt-2 pt-md-0">
+                          <div class="mt-1 mt-md-3 pt-1 pb-2 px-2 contrast-bg rounded rounded-md" style="width: 100%;">
+                            <div class="d-flex flex-column align-start">
+                              <div v-if="!isEdit(`comment-${index}`)" class="case d-block comment-body mt-2" data-aid="detection_comment_display">
+                                <div class="mb-2">
+                                  <div :id="`comment-${index}`" class="markdown-body" v-html="formatMarkdown(comment.value)"></div>
                                 </div>
                               </div>
-                            </div>
-
-                            <div class="d-flex flex-column flex-sm-row align-self-end text-body-2">
-                              <div class="d-inline-flex align-center mr-1">
-                                <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text" data-aid="detection_comment_avatar_display">
-                                  <div class="case avatar-font" :title="comment.owner">
-                                    {{ $root.getAvatar(comment.owner) }}
+                              <div v-else class="d-flex flex-column" style="width: 100%;">
+                                <div class="d-flex flex-column flex-sm-row align-sm-center align-self-start text-body-2 mb-1 ml-1">
+                                  <a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" :target="$root.target('_blank')" :title="i18n.markdownFormattingSupported" data-aid="detection_comment_markdown_help"><v-icon>fab fa-markdown</v-icon></a>
+                                </div>
+                                <div class="mb-3">
+                                  <v-form v-model="editForm.valid" @submit.prevent>
+                                    <v-textarea id="comment-value-input" solo variant="flat" hide-details="auto" rows="5" density="compact" color="text--black" v-model="editForm.val" class="mb-1" :rules="[rules.required]" data-aid="detection_comment_edit"/>
+                                  </v-form>
+                                  <div class="d-inline-flex justify-end">
+                                    <v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="detection_comment_cancel">
+                                      {{ i18n.cancel }}
+                                    </v-btn>
+                                    <v-btn :disabled="!editForm.valid" variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit(true)" data-aid="detection_comment_save">
+                                      {{ i18n.update }}
+                                    </v-btn>
                                   </div>
-                                </v-avatar>
-                                <div data-aid="detection_comment_owner_display">
-                                  {{ comment.owner }}
                                 </div>
                               </div>
-                              <div class="mt-1 mr-1 d-none d-sm-block">
-                                &bull;
-                              </div>
-                              <div class="mt-1" data-aid="detection_comment_timestamp_display">
-                                {{ comment.createTime | formatDateTime }}
-                              </div>
-                              <div v-if="isEdited(comment)" :title="$root.formatDateTime(comment.updateTime)" class="mx-sm-2" data-aid="detection_comment_edited_display">
-                                {{ i18n.edited }}
-                              </div>
-                              <div class="ml-1 d-flex mt-1 mt-sm-0">
-                                <v-btn text small icon color="primary" v-if="!isEdit(`comment-${index}`)" @click="startCommentEdit(`comment-${index}`, 'comment-input', comment)" data-aid="detection_comment_edit"
-                                  @keypress.space.prevent="startCommentEdit(`comment-${index}`, 'comment-input', comment)">
-                                  <v-icon class="tiny-icon">fa-edit</v-icon>
-                                </v-btn>
-                                <v-btn text small color="red" @click="deleteComment(comment)" icon><v-icon class="tiny-icon" data-aid="detection_comment_delete">fa-circle-xmark</v-icon></v-btn>
+
+                              <div class="d-flex flex-column flex-sm-row align-self-end text-body-2 align-baseline">
+                                <div class="d-inline-flex align-center mr-1">
+                                  <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text" data-aid="detection_comment_avatar_display">
+                                    <div class="case avatar-font" :title="comment.owner">
+                                      {{ $root.getAvatar(comment.owner) }}
+                                    </div>
+                                  </v-avatar>
+                                  <div data-aid="detection_comment_owner_display">
+                                    {{ comment.owner }}
+                                  </div>
+                                </div>
+                                <div class="mt-1 mr-1 d-none d-sm-block">
+                                  &bull;
+                                </div>
+                                <div class="mt-1" data-aid="detection_comment_timestamp_display">
+                                  {{ formatDateTime(comment.createTime) }}
+                                </div>
+                                <div v-if="isEdited(comment)" :title="$root.formatDateTime(comment.updateTime)" class="mx-sm-2" data-aid="detection_comment_edited_display">
+                                  {{ i18n.edited }}
+                                </div>
+                                <div class="ml-1 d-flex mt-1 mt-sm-0">
+                                  <v-btn variant="text" size="x-small" icon color="primary" v-if="!isEdit(`comment-${index}`)" @click="startCommentEdit(`comment-${index}`, 'comment-input', comment)" data-aid="detection_comment_edit"
+                                    @keypress.space.prevent="startCommentEdit(`comment-${index}`, 'comment-input', comment)">
+                                    <v-icon class="tiny-icon">fa-edit</v-icon>
+                                  </v-btn>
+                                  <v-btn variant="text" size="x-small" icon color="red" @click="deleteComment(comment)"><v-icon class="tiny-icon" data-aid="detection_comment_delete">fa-circle-xmark</v-icon></v-btn>
+                                </div>
                               </div>
                             </div>
                           </div>
+                        </v-col>
+                      </div>
+                      <div v-if="shouldRenderShowAll(index)" class="d-flex-block justify-center my-4 show-all">
+                        <div class="d-flex justify-center" data-aid="detection_comments_truncated_display">
+                          <div>{{ getUnrenderedCount('comments') }} {{ i18n.hidden }} {{ i18n.comments }}</div>
                         </div>
-                      </v-col>
-                    </div>
-                    <div v-if="shouldRenderShowAll(index)" class="d-flex-block justify-center my-4 show-all">
-                      <div class="d-flex justify-center" data-aid="detection_comments_truncated_display">
-                        <div>{{ getUnrenderedCount('comments') }} {{ i18n.hidden }} {{ i18n.comments }}</div>
-                      </div>
-                      <div class="d-flex justify-center">
-                        <v-btn @click="renderAllComments()" data-aid="detection_comments_show_all">{{ i18n.showAll }}</v-btn>
+                        <div class="d-flex justify-center">
+                          <v-btn @click="renderAllComments()" data-aid="detection_comments_show_all">{{ i18n.showAll }}</v-btn>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  </template>
                 </div>
                 <div class="d-flex flex-column align-start my-4">
                   <v-col id="new-comment" class="d-flex flex-column align-start pt-2 pt-md-0">
-                    <div class="mt-1 mt-md-3 pb-3 pt-1 contrast-bg rounded rounded-md" style="width: 100%;">
+                    <div class="mt-1 mt-md-3 pb-3 pt-1 contrast-bg rounded rounded-md full-width">
                       <div class="d-flex flex-column align-start">
                         <div class="d-inline-flex align-center mt-3 mx-2 mb-4">
-                          <v-avatar color="primary" size="28" class="mr-2 white--text" data-aid="detection_comment_new_avatar_display">
+                          <v-avatar color="primary" size="28" class="mr-2 text-white" data-aid="detection_comment_new_avatar_display">
                             <div class="font-weight-bold" :title="$root.username">
                             {{ $root.getAvatar($root.username) }}
                             </div>
                           </v-avatar>
-                          <h3 class="text--primary">{{ i18n.commentAddDetection }}</h3>
+                          <h3 class="primary-text">{{ i18n.commentAddDetection }}</h3>
                         </div>
-                        <div class="d-flex flex-column" style="width: 100%;">
+                        <div class="d-flex flex-column full-width">
                           <div class="d-flex flex-column flex-sm-row align-sm-center align-self-start text-body-2 mb-1 ml-3">
                             <a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" :target="$root.target('_blank')" :title="i18n.markdownFormattingSupported" data-aid="detection_comment_new_markdown_help"><v-icon>fab fa-markdown</v-icon></a>
                           </div>
                           <div class="mx-2">
                             <v-form ref="detection-comment" v-model="commentsForm.valid" @submit.prevent>
-                              <v-textarea id="comment-input" solo flat hide-details="auto" rows="5" color="text--black" :value="commentsForm.value" @change="val => commentsForm.value = val" :rules="[rules.required]" class="mb-1" persistent-hint :hint="i18n.commentDescriptionDetectionHelp" data-aid="detection_comment_new_input"/>
+                              <v-textarea id="comment-input" solo variant="outlined" hide-details="auto" rows="5" color="black-text" v-model="commentsForm.value" :rules="[rules.required]" class="mb-1" persistent-hint :hint="i18n.commentDescriptionDetectionHelp" data-aid="detection_comment_new_input"/>
                             </v-form>
                           </div>
                         </div>
@@ -1299,43 +1299,43 @@
                     </div>
                     <div class="d-flex align-center align-self-end text-body-2 mt-2">
                       <div class="d-inline-flex justify-end">
-                        <v-btn id="detection-comment-cancel" text small color="primary" class="align-self-end" @click="resetForm()" data-aid="detection_comment_new_cancel">
+                        <v-btn id="detection-comment-cancel" variant="text" size="small" color="primary" class="align-self-end" @click="resetForm()" data-aid="detection_comment_new_cancel">
                         {{ i18n.cancel }}
                         </v-btn>
-                        <v-btn id="detection-comment-add" :disabled="!commentsForm.valid" text small color="primary" class="align-self-end" @click="addComment()" data-aid="detection_comment_new_save">
+                        <v-btn id="detection-comment-add" :disabled="!commentsForm.valid" variant="text" size="small" color="primary" class="align-self-end" @click="addComment()" data-aid="detection_comment_new_save">
                         {{ origComment ? i18n.update : i18n.add }}
                         </v-btn>
                       </div>
                     </div>
                   </v-col>
                 </div>
-              </v-tab-item>
-              <v-tab-item value="source" data-aid="detection_source">
+              </v-tabs-window-item>
+              <v-tabs-window-item value="source" data-aid="detection_source">
                 <v-col class="contrast-bg rounded rounded-md pa-4">
-                  <!-- Signature ->
+                  <!-- Signature -->
                   <span data-aid="detection_source_input">
                     <prism-editor class="prism" :highlight="highlighter" v-model="detect.content" :readonly="detect.isCommunity"></prism-editor>
                   </span>
                   <div class="d-flex align-self-end justify-end detection-source-button-row">
                     <div class="d-inline-flex">
-                      <v-btn v-if="canConvert()" id="detection-convert" text small color="primary" class="align-self-end" @click="convertDetection()" data-aid="detection_source_convert">
+                      <v-btn v-if="canConvert()" id="detection-convert" variant="text" size="small" color="primary" class="align-self-end" @click="convertDetection()" data-aid="detection_source_convert">
                         {{ i18n.convert }}
                       </v-btn>
-                      <v-btn id="detection-cancel" v-if="!detect.isCommunity && isDetectionSourceDirty()" text small color="primary" class="align-self-end" @click="cancelDetection()" data-aid="detection_source_cancel">
+                      <v-btn id="detection-cancel" v-if="!detect.isCommunity && isDetectionSourceDirty()" variant="text" size="small" color="primary" class="align-self-end" @click="cancelDetection()" data-aid="detection_source_cancel">
                         {{ i18n.cancel }}
                       </v-btn>
-                      <v-btn id="detection-update" v-if="!detect.isCommunity && isDetectionSourceDirty()" text small color="primary" class="align-self-end" @click="saveDetection(false, true)" data-aid="detection_source_save">
+                      <v-btn id="detection-update" v-if="!detect.isCommunity && isDetectionSourceDirty()" variant="text" size="small" color="primary" class="align-self-end" @click="saveDetection(false, true)" data-aid="detection_source_save">
                         {{i18n.update}}
                       </v-btn>
                     </div>
                   </div>
                 </v-col>
-              </v-tab-item>
-              <v-tab-item value="tuning" data-aid="detection_tuning">
+              </v-tabs-window-item>
+              <v-tabs-window-item value="tuning" data-aid="detection_tuning">
                 <v-row v-if="canAddOverride()">
                   <v-col>
-                    <v-toolbar class="elevation-0" fixed>
-                      <v-btn color="primary" id="add-override-button" style="text-decoration: none; cursor: 'pointer'" @click="createNewOverride()" data-aid="detection_new_override">
+                    <v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
+                      <v-btn variant="flat" class="ml-3" color="primary" id="add-override-button" style="text-decoration: none; cursor: 'pointer'" @click="createNewOverride()" data-aid="detection_new_override">
                         <v-icon :title="i18n.create">fa-plus</v-icon>
                       </v-btn>
                     </v-toolbar>
@@ -1344,7 +1344,7 @@
                 <div v-if="newOverride != null">
                   <v-form ref="OverrideCreate" v-model="newOverrideValid">
                     <span data-aid="detection_new_override_type_select">
-                      <v-select id="new-override-type" v-model="newOverride.type" :items="getOverrideTypes()" persistent-hint :hint="i18n.type" @change="createOverrideTypeChange()"></v-select>
+                      <v-select variant="underlined" id="new-override-type" v-model="newOverride.type" :items="getOverrideTypes()" persistent-hint :hint="i18n.type" @change="createOverrideTypeChange()"></v-select>
                     </span>
                     <!--
                       1. Regex   - modify
@@ -1355,76 +1355,96 @@
                       5. Count   - threshold
                       6. Seconds - threshold
                       7. Custom Filter - engine:elastalert
-                    ->
-                    <!-- Suricata ->
+                    -->
+                    <!-- Suricata -->
                     <div v-if="!!newOverride.type && detect.engine === 'suricata'">
-                      <!-- regex ->
-                      <v-text-field v-if="newOverride.type === 'modify'" id="new-override-regex-edit" v-model="newOverride.regex" :rules="[rules.required]" persistent-hint :hint="i18n.regex" data-aid="detection_new_override_regex_input"></v-text-field>
-                      <!-- value ->
-                      <v-text-field v-if="newOverride.type === 'modify'" id="new-override-value-edit" v-model="newOverride.value" :rules="[rules.required]" persistent-hint :hint="i18n.value" data-aid="detection_new_override_value_input"></v-text-field>
-                      <!-- (threshold) type ->
+                      <!-- regex -->
+                      <v-text-field variant="underlined" v-if="newOverride.type === 'modify'" id="new-override-regex-edit" v-model="newOverride.regex" :rules="[rules.required]" persistent-hint :hint="i18n.regex" data-aid="detection_new_override_regex_input"></v-text-field>
+                      <!-- value -->
+                      <v-text-field variant="underlined" v-if="newOverride.type === 'modify'" id="new-override-value-edit" v-model="newOverride.value" :rules="[rules.required]" persistent-hint :hint="i18n.value" data-aid="detection_new_override_value_input"></v-text-field>
+                      <!-- (threshold) type -->
                       <span data-aid="detection_new_override_threshold_type_select">
-                        <v-select v-if="newOverride.type === 'threshold'" id="new-override-threshold-type-edit" v-model="newOverride.thresholdType" :items="thresholdTypes" :rules="[rules.required]" persistent-hint :hint="i18n.thresholdType"></v-select>
+                        <v-select variant="underlined" v-if="newOverride.type === 'threshold'" id="new-override-threshold-type-edit" v-model="newOverride.thresholdType" :items="thresholdTypes" :rules="[rules.required]" persistent-hint :hint="i18n.thresholdType"></v-select>
                       </span>
-                      <!-- track ->
+                      <!-- track -->
                       <span data-aid="detection_new_override_track_type_select">
-                        <v-select v-if="['threshold', 'suppress'].includes(newOverride.type)" id="new-override-track-edit" v-model="newOverride.track" :items="getTrackOptions(newOverride.type)" :rules="[rules.required]" persistent-hint :hint="i18n.track"></v-select>
+                        <v-select variant="underlined" v-if="['threshold', 'suppress'].includes(newOverride.type)" id="new-override-track-edit" v-model="newOverride.track" :items="getTrackOptions(newOverride.type)" :rules="[rules.required]" persistent-hint :hint="i18n.track"></v-select>
                       </span>
-                      <!-- ip ->
-                      <v-text-field v-if="newOverride.type === 'suppress'" id="new-override-ip-edit" v-model="newOverride.ip" :rules="[rules.required, rules.cidrFormat]" persistent-hint :hint="i18n.ipCidr" data-aid="detection_new_override_suppress_ip_input">
+                      <!-- ip -->
+                      <v-text-field variant="underlined" v-if="newOverride.type === 'suppress'" id="new-override-ip-edit" v-model="newOverride.ip" :rules="[rules.required, rules.cidrFormat]" persistent-hint :hint="i18n.ipCidr" data-aid="detection_new_override_suppress_ip_input">
                         <template v-slot:append-outer>
                           <router-link :to="{ name: 'config', query: { s: 'suricata.config.vars', a: '1', e: '1' }}" target="_blank" data-aid="new_override_ip_edit_config_shortcut">
                             <v-icon>fa fa-gear</v-icon>
                           </router-link>
                         </template>
                       </v-text-field>
-                      <!-- count ->
-                      <v-text-field v-if="newOverride.type === 'threshold'" id="new-override-count-edit" v-model="newOverride.count" :rules="[rules.required, rules.number]" persistent-hint :hint="i18n.count" data-aid="detection_new_override_threshold_count_input"></v-text-field>
-                      <!-- seconds ->
-                      <v-text-field v-if="newOverride.type === 'threshold'" id="new-override-seconds-edit" v-model="newOverride.seconds" :rules="[rules.required, rules.number]" persistent-hint :hint="i18n.secondsLabel" data-aid="detection_new_override_threshold_seconds_input"></v-text-field>
+                      <!-- count -->
+                      <v-text-field variant="underlined" v-if="newOverride.type === 'threshold'" id="new-override-count-edit" v-model="newOverride.count" :rules="[rules.required, rules.number]" persistent-hint :hint="i18n.count" data-aid="detection_new_override_threshold_count_input"></v-text-field>
+                      <!-- seconds -->
+                      <v-text-field variant="underlined" v-if="newOverride.type === 'threshold'" id="new-override-seconds-edit" v-model="newOverride.seconds" :rules="[rules.required, rules.number]" persistent-hint :hint="i18n.secondsLabel" data-aid="detection_new_override_threshold_seconds_input"></v-text-field>
                     </div>
-                    <!-- ElastAlert ->
+                    <!-- ElastAlert -->
                     <div v-if="!!newOverride.type && detect.engine === 'elastalert'">
-                      <!-- custom filter ->
-                      <v-textarea v-if="newOverride.type === 'customFilter'" id="new-override-custom-filter-edit" v-model="newOverride.customFilter" :rules="[rules.required]" auto-grow rows="2" persistent-hint :hint="i18n.customFilter" data-aid="detection_new_override_filter_input"></v-textarea>
+                      <!-- custom filter -->
+                      <v-textarea variant="underlined" v-if="newOverride.type === 'customFilter'" id="new-override-custom-filter-edit" v-model="newOverride.customFilter" :rules="[rules.required]" auto-grow rows="2" persistent-hint :hint="i18n.customFilter" data-aid="detection_new_override_filter_input"></v-textarea>
                     </div>
                     <div v-if="newOverride" class="d-flex align-center align-self-end text-body-2 mt-2">
-                      <div class="d-inline-flex justify-end">
-                        <v-btn id="detection-create-cancel" text small color="primary" class="align-self-end" @click="newOverride = null" data-aid="detection_new_override_cancel">
+                      <div class="justify-end">
+                        <v-btn id="detection-create-cancel" variant="text" size="small" color="primary" class="align-self-end" @click="newOverride = null" data-aid="detection_new_override_cancel">
                           {{ i18n.cancel }}
                         </v-btn>
-                        <v-btn v-if="newOverride.type" id="detection-create-create" :disabled="!newOverrideValid" text small color="primary" class="align-self-end" @click="addNewOverride()" data-aid="detection_new_override_save">
+                        <v-btn v-if="newOverride.type" id="detection-create-create" :disabled="!newOverrideValid" variant="text" size="small" color="primary" class="align-self-end" @click="addNewOverride()" data-aid="detection_new_override_save">
                           {{ i18n.create }}
                         </v-btn>
-                        <v-btn icon :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'detections.html#managing-detections'" :title="i18n.overrideDocumentationHelp" data-aid="detection_override_help_new">
-                          <v-icon>fa-regular fa-circle-question</v-icon>
+                        <v-btn variant="text" size="small" icon class="theme-text" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'detections.html#managing-detections'" :title="i18n.overrideDocumentationHelp" data-aid="detection_override_help_new">
+                          <v-icon class="mb-1">fa-regular fa-circle-question</v-icon>
                         </v-btn>
                       </div>
                     </div>
                   </v-form>
                 </div>
-                <v-data-table :sort-by.sync="sortBy" :expanded.sync="expanded" :sort-desc.sync="sortDesc" must-sort :headers="overrideHeaders[detect.engine]"
-                  :items="detect.overrides" item-key="index" show-expand single-expand :custom-sort="sortOverrides" hide-default-footer="true">
-                  <template v-slot:item="{ item, index, expand, isExpanded }">
+                <v-data-table :sort-by="sortBy" must-sort :headers="overrideHeaders[detect.engine]"
+                  :items="detect.overrides" item-value="index" show-expand :custom-sort="sortOverrides" hide-default-footer>
+                  <template v-slot:headers="{ columns, isSorted, getSortIcon, toggleSort }">
+                    <tr>
+                      <template v-for="header in columns" :key="header.key">
+                        <th :class="{'is-sorted': isSorted(header)}">
+                          <template v-if="header.key">
+                            <span @click="toggleSort(header)">
+                              {{ header.title }}
+                            </span>
+                            <template v-if="isSorted(header)">
+                              <v-icon>
+                                {{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
+                              </v-icon>
+                            </template>
+                          </template>
+                        </th>
+                      </template>
+                    </tr>
+                  </template>
+                  <template v-slot:item="{ item, index, isExpanded, toggleExpand, internalItem }">
                     <tr>
                       <td>
-                        <v-btn id="expandOverrideArrow" icon small @click="expand(!isExpanded)">
-                          <v-icon v-if="isExpanded" :alt="i18n.overrideExpand" :title="i18n.eventExpandHelp" data-aid="detection_overrides_collapse">fa-angle-down</v-icon>
+                        <v-btn id="expandOverrideArrow" icon variant="text" size="small" @click="toggleExpand(internalItem)">
+                          <v-icon v-if="isExpanded(internalItem)" :alt="i18n.overrideExpand" :title="i18n.eventExpandHelp" data-aid="detection_overrides_collapse">fa-angle-down</v-icon>
                           <v-icon v-else :alt="i18n.overrideExpand" :title="i18n.eventExpandHelp" data-aid="detection_overrides_expand">fa-angle-right</v-icon>
                         </v-btn>
                       </td>
-                      <td v-for="field in overrideHeaders[detect.engine]" :key="field.value" data-aid="detection_overrides_headers_display">
-                        <div class="d-inline-block">
-                          <span v-if="field.format" v-text="$root.formatLocalTimestamp(item[field.value], zone)"/>
-                          <span v-else-if="field.localize">{{ $root.tryLocalize(item[field.value]) }}</span>
-                          <span v-else>{{ item[field.value] }}</span>
-                        </div>
-                      </td>
+                      <template v-for="field in overrideHeaders[detect.engine]" :key="field.value">
+                        <td v-if="field.value" data-aid="detection_overrides_headers_display">
+                          <div class="d-inline-block">
+                            <span v-if="field.format" v-text="$root.formatLocalTimestamp(item[field.value], zone)"/>
+                            <span v-else-if="field.localize">{{ $root.tryLocalize(item[field.value]) }}</span>
+                            <span v-else>{{ item[field.value] }}</span>
+                          </div>
+                        </td>
+                      </template>
                     </tr>
                   </template>
-                  <template v-slot:expanded-item="{ headers, item }">
+                  <template v-slot:expanded-row="{ columns, item }">
                     <tr>
-                      <td :colspan="headers.length" class="pa-4" v-if="detect.engine === 'suricata'">
+                      <td :colspan="columns.length" class="pa-4" v-if="detect.engine === 'suricata'">
                         <!--
                           1. Regex   - modify
                           2. Value   - modify
@@ -1434,8 +1454,8 @@
                           5. Count   - threshold
                           6. Seconds - threshold
                           7. Custom Filter - engine:elastalert
-                        ->
-                        <!-- isEnabled ->
+                        -->
+                        <!-- isEnabled -->
                         <div data-aid="detection_override_enabled_toggle">
                           <div class="font-weight-bold mt-4">
                             {{i18n.enabled}}: {{item.isEnabled}}
@@ -1443,28 +1463,28 @@
                           <v-switch id="override-enabled-edit" ref="override-enabled" hide-details="auto" v-model="item.isEnabled"
                             inset @change="saveDetection(false)"></v-switch>
                         </div>
-                        <!-- regex ->
+                        <!-- regex -->
                         <div v-if="item.type === 'modify'" @click="startOverrideEdit('override-regex', item, 'regex')" :class="{ clicktoedit: !isOverrideEdit('override-regex') }">
                           <div class="font-weight-bold mt-4">
-                            Regex:
+                            {{i18n.regex}}:
                           </div>
                           <span id="override-regex" v-if="!isOverrideEdit('override-regex')">
                             {{item.regex}}
                           </span>
                           <span v-else>
-                            <v-text-field id="override-regex-edit" ref="override-regex" hide-details="auto" outlined v-model="item.regex" :rules="[rules.required]"
-                              persistent-hint :hint="i18n.regex" v-on:keyup.enter="isFieldValid('override-regex') && stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)" data-aid="detection_override_regex_input"></v-text-field>
+                            <v-text-field variant="underlined" id="override-regex-edit" ref="override-regex" hide-details="auto" outlined v-model="item.regex" :rules="[rules.required]"
+                              persistent-hint :hint="i18n.regex" @keyup.enter="isFieldValid('override-regex') && stopOverrideEdit(true)" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_override_regex_input"></v-text-field>
                             <div id="override-count-regex-buttons">
-                              <v-btn @click.stop="stopOverrideEdit(false)" text small class="align-self-end" data-aid="detection_override_regex_cancel">
+                              <v-btn @click.stop="stopOverrideEdit(false)" variant="text" size="small" class="align-self-end" data-aid="detection_override_regex_cancel">
                                 {{ i18n.cancel }}
                               </v-btn>
-                              <v-btn @click.stop="stopOverrideEdit(true)" :disabled="!isFieldValid('override-regex')" color="primary" text small class="align-self-end" data-aid="detection_override_regex_save">
+                              <v-btn @click.stop="stopOverrideEdit(true)" :disabled="!isFieldValid('override-regex')" color="primary" variant="text" size="small" class="align-self-end" data-aid="detection_override_regex_save">
                                 {{ i18n.save }}
                               </v-btn>
                             </div>
                           </span>
                         </div>
-                        <!-- value ->
+                        <!-- value -->
                         <div v-if="item.type === 'modify'" @click="startOverrideEdit('override-value', item, 'value')" :class="{ clicktoedit: !isOverrideEdit('override-value') }">
                           <div class="font-weight-bold mt-4">
                             Value:
@@ -1473,39 +1493,39 @@
                             {{item.value}}
                           </span>
                           <span v-else>
-                            <v-text-field id="override-value-edit" ref="override-value" hide-details="auto" outlined v-model="item.value" :rules="[rules.required]"
-                              persistent-hint :hint="i18n.value" v-on:keyup.enter="isFieldValid('override-value') && stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)" data-aid="detection_override_value_input"></v-text-field>
+                            <v-text-field variant="outlined" id="override-value-edit" ref="override-value" hide-details="auto" v-model="item.value" :rules="[rules.required]"
+                              persistent-hint :hint="i18n.value" @keyup.enter="isFieldValid('override-value') && stopOverrideEdit(true)" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_override_value_input"></v-text-field>
                             <div id="override-value-edit-buttons">
-                              <v-btn @click.stop="stopOverrideEdit(false)" text small class="align-self-end" data-aid="detection_override_value_cancel">
+                              <v-btn @click.stop="stopOverrideEdit(false)" variant="text" size="small" class="align-self-end" data-aid="detection_override_value_cancel">
                                 {{ i18n.cancel }}
                               </v-btn>
-                              <v-btn @click.stop="stopOverrideEdit(true)" :disabled="!isFieldValid('override-value')" color="primary" text small class="align-self-end" data-aid="detection_override_value_save">
+                              <v-btn @click.stop="stopOverrideEdit(true)" :disabled="!isFieldValid('override-value')" color="primary" variant="text" size="small" class="align-self-end" data-aid="detection_override_value_save">
                                 {{ i18n.save }}
                               </v-btn>
                             </div>
                           </span>
                         </div>
-                        <!-- type (threshold) ->
+                        <!-- type (threshold) -->
                         <div v-if="item.type === 'threshold'" @click="startOverrideEdit('override-threshold-type', item, 'thresholdType')" :class="{ clicktoedit: !isOverrideEdit('override-threshold-type') }" data-aid="detection_override_threshold_type_select">
                           <div class="font-weight-bold mt-4">
-                            Type:
+                            {{i18n.type}}:
                           </div>
                           <span id="override-threshold-type" v-if="!isOverrideEdit('override-threshold-type')">
                             {{item.thresholdType}}
                           </span>
-                          <v-select v-else id="override-threshold-type-edit" ref="override-threshold-type" v-model="item.thresholdType" :items="thresholdTypes" :rules="[rules.required]" persistent-hint :hint="i18n.type" @change="stopOverrideEdit(true)"></v-select>
+                          <v-select variant="underlined" v-else id="override-threshold-type-edit" ref="override-threshold-type" v-model="item.thresholdType" :items="thresholdTypes" :rules="[rules.required]" persistent-hint :hint="i18n.type" @change="stopOverrideEdit(true)"></v-select>
                         </div>
-                        <!-- track ->
+                        <!-- track -->
                         <div v-if="['suppress', 'threshold'].includes(item.type)" @click="startOverrideEdit('override-track', item, 'track')" :class="{ clicktoedit: !isOverrideEdit('override-track') }" data-aid="detection_override_threshold_track_select">
                           <div class="font-weight-bold mt-4">
-                            Track:
+                            {{i18n.track}}:
                           </div>
                           <span id="override-track" v-if="!isOverrideEdit('override-track')">
                             {{item.track}}
                           </span>
-                          <v-select v-else id="override-track-edit" ref="override-track" v-model="item.track" :items="getTrackOptions(item.type)" :rules="[rules.required]" persistent-hint :hint="i18n.type" @change="stopOverrideEdit(true)"></v-select>
+                          <v-select variant="underlined" v-else id="override-track-edit" ref="override-track" v-model="item.track" :items="getTrackOptions(item.type)" :rules="[rules.required]" persistent-hint :hint="i18n.type" @change="stopOverrideEdit(true)"></v-select>
                         </div>
-                        <!-- ip ->
+                        <!-- ip -->
                         <div v-if="item.type === 'suppress'" @click="startOverrideEdit('override-ip', item, 'ip')" :class="{ clicktoedit: !isOverrideEdit('override-ip') }">
                           <div class="font-weight-bold mt-4">
                             {{i18n.ip}}:
@@ -1514,8 +1534,8 @@
                             {{item.ip}}
                           </span>
                           <span v-else>
-                            <v-text-field id="override-ip-edit" ref="override-ip" hide-details="auto" outlined v-model="item.ip" :rules="[rules.required, rules.cidrFormat]"
-                              persistent-hint :hint="i18n.ipCidr" v-on:keyup.enter="isFieldValid('override-ip') && stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)" data-aid="detection_override_suppress_ip_input">
+                            <v-text-field id="override-ip-edit" ref="override-ip" hide-details="auto" variant="outlined" v-model="item.ip" :rules="[rules.required, rules.cidrFormat]"
+                              persistent-hint :hint="i18n.ipCidr" @keyup.enter="isFieldValid('override-ip') && stopOverrideEdit(true)" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_override_suppress_ip_input">
                             <template v-slot:append-outer>
                               <router-link :to="{ name: 'config', query: { s: 'suricata.config.vars', a: '1', e: '1' }}" target="_blank" data-aid="override_ip_edit_config_shortcut">
                                 <v-icon>fa fa-gear</v-icon>
@@ -1523,52 +1543,52 @@
                             </template>
                             </v-text-field>
                             <div id="override-ip-edit-buttons">
-                              <v-btn @click.stop="stopOverrideEdit(false)" text small class="align-self-end" data-aid="detection_override_ip_cancel">
+                              <v-btn @click.stop="stopOverrideEdit(false)" variant="text" size="small" class="align-self-end" data-aid="detection_override_ip_cancel">
                                 {{ i18n.cancel }}
                               </v-btn>
-                              <v-btn @click.stop="stopOverrideEdit(true)" :disabled="!isFieldValid('override-ip')" color="primary" text small class="align-self-end" data-aid="detection_override_ip_save">
+                              <v-btn @click.stop="stopOverrideEdit(true)" :disabled="!isFieldValid('override-ip')" color="primary" variant="text" size="small" class="align-self-end" data-aid="detection_override_ip_save">
                                 {{ i18n.save }}
                               </v-btn>
                             </div>
                           </span>
                         </div>
-                        <!-- count ->
+                        <!-- count -->
                         <div v-if="item.type === 'threshold'" @click="startOverrideEdit('override-count', item, 'count')" :class="{ clicktoedit: !isOverrideEdit('override-count') }">
                           <div class="font-weight-bold mt-4">
-                            Count:
+                            {{i18n.count}}:
                           </div>
                           <span id="override-count" v-if="!isOverrideEdit('override-count')">
                             {{item.count}}
                           </span>
                           <span v-else>
-                            <v-text-field id="override-count-edit" ref="override-count" hide-details="auto" outlined v-model="item.count" :rules="[rules.required, rules.number]"
-                              persistent-hint :hint="i18n.count" v-on:keyup.enter="isFieldValid('override-count') && stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)" data-aid="detection_override_threshold_count_input"></v-text-field>
+                            <v-text-field id="override-count-edit" ref="override-count" hide-details="auto" variant="outlined" v-model="item.count" :rules="[rules.required, rules.number]"
+                              persistent-hint :hint="i18n.count" @keyup.enter="isFieldValid('override-count') && stopOverrideEdit(true)" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_override_threshold_count_input"></v-text-field>
                             <div id="override-count-edit-buttons">
-                              <v-btn @click.stop="stopOverrideEdit(false)" text small class="align-self-end" data-aid="detection_override_count_cancel">
+                              <v-btn @click.stop="stopOverrideEdit(false)" variant="text" size="small" class="align-self-end" data-aid="detection_override_count_cancel">
                                 {{ i18n.cancel }}
                               </v-btn>
-                              <v-btn @click.stop="stopOverrideEdit(true)" :disabled="!isFieldValid('override-count')" color="primary" text small class="align-self-end" data-aid="detection_override_count_save">
+                              <v-btn @click.stop="stopOverrideEdit(true)" :disabled="!isFieldValid('override-count')" color="primary" variant="text" size="small" class="align-self-end" data-aid="detection_override_count_save">
                                 {{ i18n.save }}
                               </v-btn>
                             </div>
                           </span>
                         </div>
-                        <!-- seconds ->
+                        <!-- seconds -->
                         <div v-if="item.type === 'threshold'" @click="startOverrideEdit('override-seconds', item, 'seconds')" :class="{ clicktoedit: !isOverrideEdit('override-seconds') }">
                           <div class="font-weight-bold mt-4">
-                            Seconds:
+                            {{i18n.secondsLabel}}:
                           </div>
                           <span id="override-seconds" v-if="!isOverrideEdit('override-seconds')">
                             {{item.seconds}}
                           </span>
                           <span v-else>
-                            <v-text-field id="override-seconds-edit" ref="override-seconds" hide-details="auto" outlined v-model="item.seconds" :rules="[rules.required, rules.number]"
-                              persistent-hint :hint="i18n.secondsLabel" v-on:keyup.enter="isFieldValid('override-seconds') && stopOverrideEdit(true)" v-on:keyup.esc="stopOverrideEdit(false)" data-aid="detection_override_threshold_seconds_input"></v-text-field>
+                            <v-text-field id="override-seconds-edit" ref="override-seconds" hide-details="auto" variant="outlined" v-model="item.seconds" :rules="[rules.required, rules.number]"
+                              persistent-hint :hint="i18n.secondsLabel" @keyup.enter="isFieldValid('override-seconds') && stopOverrideEdit(true)" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_override_threshold_seconds_input"></v-text-field>
                             <div id="override-seconds-edit-buttons">
-                              <v-btn @click.stop="stopOverrideEdit(false)" text small class="align-self-end" data-aid="detection_override_seconds_cancel">
+                              <v-btn @click.stop="stopOverrideEdit(false)" variant="text" size="small" class="align-self-end" data-aid="detection_override_seconds_cancel">
                                 {{ i18n.cancel }}
                               </v-btn>
-                              <v-btn @click.stop="stopOverrideEdit(true)" :disabled="!isFieldValid('override-seconds')" color="primary" text small class="align-self-end" data-aid="detection_override_seconds_save">
+                              <v-btn @click.stop="stopOverrideEdit(true)" :disabled="!isFieldValid('override-seconds')" color="primary" variant="text" size="small" class="align-self-end" data-aid="detection_override_seconds_save">
                                 {{ i18n.save }}
                               </v-btn>
                             </div>
@@ -1576,25 +1596,25 @@
                         </div>
                         <div class="d-flex justify-end text-body-2 mt-4">
                           <div class="d-inline-flex">
-                            <v-btn icon :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'nids.html#managing-nids-rules'" :title="i18n.overrideDocumentationHelp" data-aid="detection_override_help_suricata">
+                            <v-btn variant="text" size="small" icon :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'nids.html#managing-nids-rules'" :title="i18n.overrideDocumentationHelp" data-aid="detection_override_help_suricata">
                               <v-icon>fa-regular fa-circle-question</v-icon>
                             </v-btn>
-                            <v-btn color="red" @click="deleteOverride(item)" icon :title="i18n.overrideDeleteHelp" data-aid="override_edit_delete_suricata">
+                            <v-btn color="red" @click="deleteOverride(item)" variant="text" size="small" icon :title="i18n.overrideDeleteHelp" data-aid="override_edit_delete_suricata">
                               <v-icon>fa-circle-xmark</v-icon>
                             </v-btn>
                           </div>
                         </div>
                       </td>
                       <td :colspan="headers.length" class="pa-4" v-else-if="detect.engine === 'elastalert'">
-                        <!-- isEnabled ->
+                        <!-- isEnabled -->
                         <div @click="startOverrideEdit('override-enabled', item, 'isEnabled')" :class="{ clicktoedit: !isOverrideEdit('override-enabled') }" data-aid="detection_override_enabled_toggle">
                           <div class="font-weight-bold mt-2">
                             {{i18n.enabled}}: {{item.isEnabled}}
                           </div>
-                          <v-switch id="override-enabled-edit" ref="override-enabled" hide-details="auto" v-model="item.isEnabled"
+                          <v-switch variant="underlined" id="override-enabled-edit" ref="override-enabled" hide-details="auto" v-model="item.isEnabled"
                             inset @change="saveDetection(false)"></v-switch>
                         </div>
-                        <!-- custom filter ->
+                        <!-- custom filter -->
                         <div @click="startOverrideEdit('override-custom-filter', item, 'customFilter')" :class="{ clicktoedit: !isOverrideEdit('override-custom-filter') }">
                           <div class="font-weight-bold mt-2">
                             {{i18n.customFilter}}:
@@ -1604,14 +1624,14 @@
                           </span>
                           <span v-else>
                             <span data-aid="detection_override_filter_input">
-                              <v-textarea id="override-custom-filter-edit" ref="override-custom-filter" hide-details="auto" rows="2" auto-grow v-model="item.customFilter" :rules="[rules.required]"
+                              <v-textarea variant="underlined" id="override-custom-filter-edit" ref="override-custom-filter" hide-details="auto" rows="2" auto-grow v-model="item.customFilter" :rules="[rules.required]"
                               persistent-hint :hint="i18n.customFilter" v-on:keyup.esc="stopOverrideEdit(false)"></v-textarea>
                             </span>
                             <div id="override-filter-edit-buttons">
-                              <v-btn @click.stop="stopOverrideEdit(false)" text small class="align-self-end" data-aid="detection_override_filter_cancel">
+                              <v-btn @click.stop="stopOverrideEdit(false)" variant="text" size="small" class="align-self-end" data-aid="detection_override_filter_cancel">
                                 {{ i18n.cancel }}
                               </v-btn>
-                              <v-btn @click.stop="stopOverrideEdit(true)" :disabled="!isFieldValid('override-custom-filter')" text small color="primary" class="align-self-end" data-aid="detection_override_filter_save">
+                              <v-btn @click.stop="stopOverrideEdit(true)" :disabled="!isFieldValid('override-custom-filter')" variant="text" size="small" color="primary" class="align-self-end" data-aid="detection_override_filter_save">
                                 {{ i18n.save }}
                               </v-btn>
                             </div>
@@ -1619,10 +1639,10 @@
                         </div>
                         <div class="d-flex justify-end text-body-2 mt-2">
                           <div class="d-inline-flex">
-                            <v-btn icon :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'sigma.html#managing-sigma-rules'" :title="i18n.overrideDocumentationHelp" data-aid="detection_override_help_elastalert">
+                            <v-btn variant="text" size="small" icon :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'sigma.html#managing-sigma-rules'" :title="i18n.overrideDocumentationHelp" data-aid="detection_override_help_elastalert">
                               <v-icon>fa-regular fa-circle-question</v-icon>
                             </v-btn>
-                            <v-btn color="red" @click="deleteOverride(item)" icon :title="i18n.overrideDeleteHelp" data-aid="override_edit_delete_elastalert">
+                            <v-btn color="red" @click="deleteOverride(item)" variant="text" size="small" icon :title="i18n.overrideDeleteHelp" data-aid="override_edit_delete_elastalert">
                               <v-icon>fa-circle-xmark</v-icon>
                             </v-btn>
                           </div>
@@ -1632,232 +1652,232 @@
                     </tr>
                   </template>
                 </v-data-table>
-              </v-tab-item>
-              <v-tab-item value="history" data-aid="detection_history">
+              </v-tabs-window-item>
+              <v-tabs-window-item value="history" data-aid="detection_history">
                 <v-row>
                   <v-col>
-                    <v-toolbar class="elevation-0" fixed>
-                      <v-btn :title="i18n.refreshDetectionHistoryHelp" color="secondary" @click.stop="loadHistory(true)" id="refresh-history-button" data-aid="detection_history_refresh">
+                    <v-toolbar class="elevation-0 theme-background-lighten-1 " fixed>
+                      <v-btn variant="flat" class="ml-3" :title="i18n.refreshDetectionHistoryHelp" color="secondary" @click.stop="loadHistory(true)" id="refresh-history-button" data-aid="detection_history_refresh">
                         <v-icon>fa-sync</v-icon>
                       </v-btn>
                     </v-toolbar>
                   </v-col>
                 </v-row>
-                <v-text-field v-model="historyTableOpts.search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="detection_history_filter_input"></v-text-field>
-                <v-data-table ref="historyTable" :sort-by.sync="historyTableOpts.sortBy" :sort-desc.sync="historyTableOpts.sortDesc" :items-per-page.sync="historyTableOpts.itemsPerPage"
+                <v-text-field variant="underlined" v-model="historyTableOpts.search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="detection_history_filter_input"></v-text-field>
+                <v-data-table ref="historyTable" :sort-by="historyTableOpts.sortBy" :items-per-page.sync="historyTableOpts.itemsPerPage"
                   :search="historyTableOpts.search" :footer-props="historyTableOpts.footerProps" must-sort :headers="historyTableOpts.headers"
                   :items="history" item-key="id" :loading="historyTableOpts.loading" :expanded="historyTableOpts.expanded" class="history-table" :custom-sort="$root.dateAwareSort">
-                  <template v-slot:item="{item, index, expand, isExpanded}">
+                  <template v-slot:item="{item, index, isExpanded, toggleExpand, internalItem }">
                     <tr>
                       <td class="associated actions">
-                        <v-btn :id="`history-${index}-expand`" icon small @click="expand(!isExpanded); findHistoryChange(item.id);">
-                          <v-icon v-if="isExpanded" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="detection_history_collapse">fa-angle-down</v-icon>
+                        <v-btn :id="`history-${index}-expand`" icon variant="text" size="small" @click="toggleExpand(internalItem); findHistoryChange(item.id);">
+                          <v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="detection_history_collapse">fa-angle-down</v-icon>
                           <v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="detection_history_expand">fa-angle-right</v-icon>
                         </v-btn>
                       </td>
                       <td class="associated" data-aid="detection_history_owner_display">
-                        <v-avatar color="primary" class="mr-2 white--text" size="28" data-aid="detection_history_avatar_display">
+                        <v-avatar color="primary" class="mr-2 text-white" size="28" data-aid="detection_history_avatar_display">
                           <div class="font-weight-bold" :title="item.owner">
                             {{ $root.getAvatar(item.owner) }}
                           </div>
                         </v-avatar>
                         {{ item.owner }}
                       </td>
-                      <td class="associated" data-aid="detection_history_timestamp_display">{{ item.updateTime | formatDateTime }}</td>
+                      <td class="associated" data-aid="detection_history_timestamp_display">{{ formatDateTime(item.updateTime) }}</td>
                       <td class="associated" data-aid="detection_history_kind_display">
                         <v-icon>fa-magnifying-glass</v-icon>
                         <span class="rounded ml-2">{{ item.kind }}</span>
                       </td>
                       <td class="associated" data-aid="detection_history_operation_display">
-                        <v-icon v-if="item.operation.toLowerCase() == i18n.create.toLowerCase()">fa-plus</v-icon>
-                        <v-icon v-if="item.operation.toLowerCase() == i18n.delete.toLowerCase()">fa-circle-xmark</v-icon>
-                        <v-icon v-if="item.operation.toLowerCase() == i18n.update.toLowerCase()">fa-pencil-alt</v-icon>
+                        <v-icon v-if="item.operation.toLowerCase() === i18n.create.toLowerCase()">fa-plus</v-icon>
+                        <v-icon v-if="item.operation.toLowerCase() === i18n.delete.toLowerCase()">fa-circle-xmark</v-icon>
+                        <v-icon v-if="item.operation.toLowerCase() === i18n.update.toLowerCase()">fa-pencil-alt</v-icon>
                         <span class="rounded ml-2">{{ item.operation }}</span>
                       </td>
                     </tr>
                   </template>
-                  <template v-slot:expanded-item="props">
+                  <template v-slot:expanded-row="{ item }">
                     <tr>
                       <td colspan="5" class="case">
                         <div class="mt-2">
                           <v-row no-gutters class="py-1 case tabular-row">
                             <v-col cols="4"><span class="case tabular-label">{{ i18n.id }}:</span></v-col>
-                            <v-col cols="8"><span class="case">{{ props.item.id }}</span></v-col>
+                            <v-col cols="8"><span class="case">{{ item.id }}</span></v-col>
                           </v-row>
                         </div>
                         <div>
                           <v-row no-gutters class="py-1 case tabular-row">
                             <v-col cols="4"><span class="case tabular-label">{{ i18n.kind }}:</span></v-col>
-                            <v-col cols="8"><span class="case">{{ props.item.kind }}</span></v-col>
+                            <v-col cols="8"><span class="case">{{ item.kind }}</span></v-col>
                           </v-row>
                         </div>
                         <div>
                           <v-row no-gutters class="py-1 case tabular-row">
                             <v-col cols="4"><span class="case tabular-label">{{ i18n.operation }}:</span></v-col>
-                            <v-col cols="8"><span class="case">{{ props.item.operation }}</span></v-col>
+                            <v-col cols="8"><span class="case">{{ item.operation }}</span></v-col>
                           </v-row>
                         </div>
                         <div>
                           <v-row no-gutters class="py-1 case tabular-row">
                             <v-col cols="4"><span class="case tabular-label">{{ i18n.dateCreated }}:</span></v-col>
-                            <v-col cols="8"><span class="case">{{ props.item.createTime | formatDateTime }}</span></v-col>
+                            <v-col cols="8"><span class="case">{{ formatDateTime(item.createTime) }}</span></v-col>
                           </v-row>
                         </div>
                         <div>
                           <v-row no-gutters class="py-1 case tabular-row">
                             <v-col cols="4"><span class="case tabular-label">{{ i18n.dateModified }}:</span></v-col>
-                            <v-col cols="8"><span class="case">{{ props.item.updateTime | formatDateTime }}</span></v-col>
+                            <v-col cols="8"><span class="case">{{ formatDateTime(item.updateTime) }}</span></v-col>
                           </v-row>
                         </div>
                         <div>
                           <v-row no-gutters class="py-1 case tabular-row">
-                            <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'title') ? 'key-changed' : ''">{{ i18n.title }}:</span></v-col>
-                            <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'title') ? 'key-changed' : ''">{{ props.item.title }}</span></v-col>
+                            <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(item.id, 'title') ? 'key-changed' : ''">{{ i18n.title }}:</span></v-col>
+                            <v-col cols="8"><span class="case" :class="checkChangedKey(item.id, 'title') ? 'key-changed' : ''">{{ item.title }}</span></v-col>
                           </v-row>
                         </div>
                         <div>
                           <v-row no-gutters class="py-1 case tabular-row">
-                            <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'description') ? 'key-changed' : ''">{{ i18n.description }}:</span></v-col>
-                            <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'description') ? 'key-changed' : ''">{{ props.item.description }}</span></v-col>
+                            <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(item.id, 'description') ? 'key-changed' : ''">{{ i18n.description }}:</span></v-col>
+                            <v-col cols="8"><span class="case" :class="checkChangedKey(item.id, 'description') ? 'key-changed' : ''">{{ item.description }}</span></v-col>
                           </v-row>
                         </div>
                         <div>
                           <v-row no-gutters class="py-1 case tabular-row">
                             <v-col cols="4"><span class="case tabular-label">{{ i18n.author }}:</span></v-col>
-                            <v-col cols="8"><span class="case">{{ $root.tryLocalize(props.item.author) }}</span></v-col>
+                            <v-col cols="8"><span class="case">{{ $root.tryLocalize(item.author) }}</span></v-col>
                           </v-row>
                         </div>
                         <div>
                           <v-row no-gutters class="py-1 case tabular-row">
-                            <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'isEnabled') ? 'key-changed' : ''">{{ i18n.enabled }}:</span></v-col>
-                            <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'isEnabled') ? 'key-changed' : ''">{{ props.item.isEnabled ? 'True' : 'False' }}</span></v-col>
+                            <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(item.id, 'isEnabled') ? 'key-changed' : ''">{{ i18n.enabled }}:</span></v-col>
+                            <v-col cols="8"><span class="case" :class="checkChangedKey(item.id, 'isEnabled') ? 'key-changed' : ''">{{ item.isEnabled ? 'True' : 'False' }}</span></v-col>
                           </v-row>
                         </div>
                         <div>
                           <v-row no-gutters class="py-1 case tabular-row">
                             <v-col cols="4"><span class="case tabular-label">{{ i18n.community }}:</span></v-col>
-                            <v-col cols="8"><span class="case">{{ props.item.isCommunity ? 'True' : 'False' }}</span></v-col>
+                            <v-col cols="8"><span class="case">{{ item.isCommunity ? 'True' : 'False' }}</span></v-col>
                           </v-row>
                         </div>
                         <div>
                           <v-row no-gutters class="py-1 case tabular-row">
                             <v-col cols="4"><span class="case tabular-label">{{ i18n.reporting }}:</span></v-col>
-                            <v-col cols="8"><span class="case">{{ props.item.isReporting ? 'True' : 'False' }}</span></v-col>
+                            <v-col cols="8"><span class="case">{{ item.isReporting ? 'True' : 'False' }}</span></v-col>
                           </v-row>
                         </div>
                         <div>
                           <v-row no-gutters class="py-1 case tabular-row">
-                            <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'severity') ? 'key-changed' : ''">{{ i18n.severity }}:</span></v-col>
-                            <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'severity') ? 'key-changed' : ''">{{ $root.correctCasing(props.item.severity) }}</span></v-col>
+                            <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(item.id, 'severity') ? 'key-changed' : ''">{{ i18n.severity }}:</span></v-col>
+                            <v-col cols="8"><span class="case" :class="checkChangedKey(item.id, 'severity') ? 'key-changed' : ''">{{ $root.correctCasing(item.severity) }}</span></v-col>
                           </v-row>
                         </div>
                         <div>
                           <v-row no-gutters class="py-1 case tabular-row">
                             <v-col cols="4"><span class="case tabular-label">{{ i18n.engine }}:</span></v-col>
-                            <v-col cols="8"><span class="case">{{ $root.correctCasing(props.item.engine) }}</span></v-col>
+                            <v-col cols="8"><span class="case">{{ $root.correctCasing(item.engine) }}</span></v-col>
                           </v-row>
                         </div>
                         <div>
                           <v-row no-gutters class="py-1 case tabular-row">
-                            <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(props.item.id, 'content') ? 'key-changed' : ''">{{ i18n.content }}:</span></v-col>
-                            <v-col cols="8"><span class="case" :class="checkChangedKey(props.item.id, 'content') ? 'key-changed' : ''">{{ props.item.content }}</span></v-col>
+                            <v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(item.id, 'content') ? 'key-changed' : ''">{{ i18n.content }}:</span></v-col>
+                            <v-col cols="8"><span class="case" :class="checkChangedKey(item.id, 'content') ? 'key-changed' : ''">{{ item.content }}</span></v-col>
                           </v-row>
                         </div>
                         <div v-if="detect.engine !== 'strelka'">
                           <v-row no-gutters class="py-1 case tabular-row">
                             <v-col cols="4"><span class="case tabular-label">{{ i18n.overrides }}:</span></v-col>
-                            <v-col cols="8"><span class="case">{{ props.item.overrides.length }}</span></v-col>
+                            <v-col cols="8"><span class="case">{{ item.overrides.length }}</span></v-col>
                           </v-row>
                         </div>
 
-                        <v-data-table v-if="detect.engine !== 'strelka' && props.item && props.item.overrides.length" ref="historyOverridesTable" :sort-by.sync="historyOverrideTableOpts[props.item.engine].sortBy" :sort-desc.sync="historyOverrideTableOpts[props.item.engine].sortDesc"
-                          :items-per-page.sync="historyOverrideTableOpts[props.item.engine].itemsPerPage" :footer-props="historyOverrideTableOpts[props.item.engine].footerProps" must-sort :headers="historyOverrideTableOpts[props.item.engine].headers"
-                          :items="props.item.overrides || []" item-key="updatedAt" :expanded="historyOverrideTableOpts[props.item.engine].expanded" class="history-override-table" :custom-sort="$root.dateAwareSort">
-                          <template v-slot:item="overrideProps">
+                        <v-data-table v-if="detect.engine !== 'strelka' && item && item.overrides.length" ref="historyOverridesTable" :sort-by.sync="historyOverrideTableOpts[item.engine].sortBy" :sort-desc.sync="historyOverrideTableOpts[item.engine].sortDesc"
+                          :items-per-page.sync="historyOverrideTableOpts[item.engine].itemsPerPage" :footer-props="historyOverrideTableOpts[item.engine].footerProps" must-sort :headers="historyOverrideTableOpts[item.engine].headers"
+                          :items="item.overrides || []" item-value="updatedAt" :expanded="historyOverrideTableOpts[item.engine].expanded" class="history-override-table" :custom-sort="$root.dateAwareSort">
+                          <template v-slot:item="{ index, item, isExpanded, toggleExpand, internalItem }">
                             <tr>
                               <td class="associated actions">
-                                <v-btn :id="`history-${overrideProps.index}-expand`" icon small @click="overrideProps.expand(!overrideProps.isExpanded);">
-                                  <v-icon v-if="overrideProps.isExpanded" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="detection_override_history_collapse">fa-angle-down</v-icon>
+                                <v-btn :id="`history-${index}-expand`" icon variant="text" size="small" @click="toggleExpand(internalItem)">
+                                  <v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="detection_override_history_collapse">fa-angle-down</v-icon>
                                   <v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="detection_override_history_expand">fa-angle-right</v-icon>
                                 </v-btn>
                               </td>
                               <td class="associated" data-aid="detection_override_history_type">
-                                {{ i18n[overrideProps.item.type] }}
+                                {{ i18n[item.type] }}
                               </td>
-                              <td class="associated" data-aid="detection_override_history_timestamp_display">{{ overrideProps.item.updatedAt | formatDateTime }}</td>
+                              <td class="associated" data-aid="detection_override_history_timestamp_display">{{ formatDateTime(item.updatedAt) }}</td>
                               <td class="associated" data-aid="detection_override_history_operation_display">
-                                <v-icon v-if="overrideProps.item.isEnabled">fa-check</v-icon>
+                                <v-icon v-if="item.isEnabled">fa-check</v-icon>
                                 <v-icon v-else>fa-xmark</v-icon>
                               </td>
                             </tr>
                           </template>
-                          <template v-slot:expanded-item="overrideProps">
+                          <template v-slot:expanded-row="{ index, item }">
                             <tr>
                               <td colspan="5" class="case">
                                 <div class="mt-2">
                                   <v-row no-gutters class="py-1 case tabular-row">
-                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'isEnabled') ? 'key-changed' : ''">{{ i18n.enabled }}:</span></v-col>
-                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'isEnabled') ? 'key-changed' : ''">{{ overrideProps.item.isEnabled ? 'True' : 'False' }}</pre></v-col>
+                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(item.id, index, 'isEnabled') ? 'key-changed' : ''">{{ i18n.enabled }}:</span></v-col>
+                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(item.id, index, 'isEnabled') ? 'key-changed' : ''">{{ item.isEnabled ? 'True' : 'False' }}</pre></v-col>
                                   </v-row>
                                 </div>
                                 <div>
                                   <v-row no-gutters class="py-1 case tabular-row">
                                     <v-col cols="4"><span class="case tabular-label">{{ i18n.dateCreated }}:</span></v-col>
-                                    <v-col cols="8"><span class="case">{{ overrideProps.item.createdAt | formatDateTime }}</span></v-col>
+                                    <v-col cols="8"><span class="case">{{ formatDateTime(item.createdAt) }}</span></v-col>
                                   </v-row>
                                 </div>
                                 <div>
                                   <v-row no-gutters class="py-1 case tabular-row">
                                     <v-col cols="4"><span class="case tabular-label">{{ i18n.dateModified }}:</span></v-col>
-                                    <v-col cols="8"><span class="case">{{ overrideProps.item.updatedAt | formatDateTime }}</span></v-col>
+                                    <v-col cols="8"><span class="case">{{ formatDateTime(item.updatedAt) }}</span></v-col>
                                   </v-row>
                                 </div>
                                 <div>
                                   <v-row no-gutters class="py-1 case tabular-row">
                                     <v-col cols="4"><span class="case tabular-label">{{ i18n.kind }}:</span></v-col>
-                                    <v-col cols="8"><span class="case">{{ i18n[overrideProps.item.type] }}</span></v-col>
+                                    <v-col cols="8"><span class="case">{{ i18n[item.type] }}</span></v-col>
                                   </v-row>
                                 </div>
-                                <div v-if="overrideProps.item.type === 'customFilter'">
+                                <div v-if="item.type === 'customFilter'">
                                   <v-row no-gutters class="py-1 case tabular-row">
-                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'customFilter') ? 'key-changed' : ''">{{ i18n.customFilter }}:</span></v-col>
-                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'customFilter') ? 'key-changed' : ''">{{ overrideProps.item.customFilter }}</pre></v-col>
+                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(item.id, index, 'customFilter') ? 'key-changed' : ''">{{ i18n.customFilter }}:</span></v-col>
+                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(item.id, index, 'customFilter') ? 'key-changed' : ''">{{ item.customFilter }}</pre></v-col>
                                   </v-row>
                                 </div>
-                                <div v-if="overrideProps.item.type === 'modify'">
+                                <div v-if="item.type === 'modify'">
                                   <v-row no-gutters class="py-1 case tabular-row">
-                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'regex') ? 'key-changed' : ''">{{ i18n.regex }}:</span></v-col>
-                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'regex') ? 'key-changed' : ''">{{ overrideProps.item.regex }}</pre></v-col>
+                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(item.id, index, 'regex') ? 'key-changed' : ''">{{ i18n.regex }}:</span></v-col>
+                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(item.id, index, 'regex') ? 'key-changed' : ''">{{ item.regex }}</pre></v-col>
                                   </v-row>
                                 </div>
-                                <div v-if="overrideProps.item.type === 'modify'">
+                                <div v-if="item.type === 'modify'">
                                   <v-row no-gutters class="py-1 case tabular-row">
-                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'value') ? 'key-changed' : ''">{{ i18n.value }}:</span></v-col>
-                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'value') ? 'key-changed' : ''">{{ overrideProps.item.value }}</pre></v-col>
+                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(item.id, index, 'value') ? 'key-changed' : ''">{{ i18n.value }}:</span></v-col>
+                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(item.id, index, 'value') ? 'key-changed' : ''">{{ item.value }}</pre></v-col>
                                   </v-row>
                                 </div>
-                                <div v-if="['suppress', 'threshold'].includes(overrideProps.item.type)">
+                                <div v-if="['suppress', 'threshold'].includes(item.type)">
                                   <v-row no-gutters class="py-1 case tabular-row">
-                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'track') ? 'key-changed' : ''">{{ i18n.track }}:</span></v-col>
-                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'track') ? 'key-changed' : ''">{{ overrideProps.item.track }}</pre></v-col>
+                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(item.id, index, 'track') ? 'key-changed' : ''">{{ i18n.track }}:</span></v-col>
+                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(item.id, index, 'track') ? 'key-changed' : ''">{{ item.track }}</pre></v-col>
                                   </v-row>
                                 </div>
-                                <div v-if="overrideProps.item.type === 'suppress'">
+                                <div v-if="item.type === 'suppress'">
                                   <v-row no-gutters class="py-1 case tabular-row">
-                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'ip') ? 'key-changed' : ''">{{ i18n.ip }}:</span></v-col>
-                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'ip') ? 'key-changed' : ''">{{ overrideProps.item.ip }}</pre></v-col>
+                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(item.id, index, 'ip') ? 'key-changed' : ''">{{ i18n.ip }}:</span></v-col>
+                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(item.id, index, 'ip') ? 'key-changed' : ''">{{ item.ip }}</pre></v-col>
                                   </v-row>
                                 </div>
-                                <div v-if="overrideProps.item.type === 'threshold'">
+                                <div v-if="item.type === 'threshold'">
                                   <v-row no-gutters class="py-1 case tabular-row">
-                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'count') ? 'key-changed' : ''">{{ i18n.count }}:</span></v-col>
-                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'count') ? 'key-changed' : ''">{{ overrideProps.item.count }}</pre></v-col>
+                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(item.id, index, 'count') ? 'key-changed' : ''">{{ i18n.count }}:</span></v-col>
+                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(item.id, index, 'count') ? 'key-changed' : ''">{{ item.count }}</pre></v-col>
                                   </v-row>
                                 </div>
-                                <div v-if="overrideProps.item.type === 'threshold'">
+                                <div v-if="item.type === 'threshold'">
                                   <v-row no-gutters class="py-1 case tabular-row">
-                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'seconds') ? 'key-changed' : ''">{{ i18n.secondsLabel }}:</span></v-col>
-                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(props.item.id, overrideProps.index, 'seconds') ? 'key-changed' : ''">{{ overrideProps.item.seconds }}</pre></v-col>
+                                    <v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(item.id, index, 'seconds') ? 'key-changed' : ''">{{ i18n.secondsLabel }}:</span></v-col>
+                                    <v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(item.id, index, 'seconds') ? 'key-changed' : ''">{{ item.seconds }}</pre></v-col>
                                   </v-row>
                                 </div>
                               </td>
@@ -1868,18 +1888,18 @@
                         <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
                           <v-spacer/>
                           <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text" data-aid="detection_history_record_avatar_display">
-                            <div class="case avatar-font" :title="props.item.owner">
-                              {{ $root.getAvatar(props.item.owner) }}
+                            <div class="case avatar-font" :title="item.owner">
+                              {{ $root.getAvatar(item.owner) }}
                             </div>
                           </v-avatar>
                           <div class="mr-1" data-aid="detection_history_record_owner_display">
-                            {{ props.item.owner }}
+                            {{ item.owner }}
                           </div>
                           <div class="mr-1 d-none d-sm-block">
                             &bull;
                           </div>
                           <div data-aid="detection_history_timestamp_display">
-                            {{ props.item.updateTime | formatDateTime }}
+                            {{ formatDateTime(item.updateTime) }}
                           </div>
                         </div>
                       </td>
@@ -1894,8 +1914,8 @@
                 <div class="text-xs-center pt-2 d-none">
                     <v-btn v-text="i18n.loadMore" @click="loadHistory()" data-aid="detection_history_load_more"></v-btn>
                 </div>
-              </v-tab-item>
-            </v-tabs>
+              </v-tabs-window-item>
+            </v-tabs-window>
             <v-dialog v-model="showSigmaDialog" persistent width="800px" data-aid="detection_sigma_dialog">
               <v-card>
                 <v-card-title class="lighten-4 py-4 title">{{ i18n.convertToElasticsearch }}</v-card-title>
@@ -1905,13 +1925,13 @@
                   </div>
                 </v-container>
                 <div id="convert-button-container">
-                  <v-btn outlined color="primary" @click="cancelConvert()" data-aid="detection_sigma_dialog_cancel">
+                  <v-btn variant="outlined" color="primary" @click="cancelConvert()" data-aid="detection_sigma_dialog_cancel">
                     {{ i18n.cancel }}
                   </v-btn>
-                  <v-btn outlined color="primary" @click="copyConvertToClipboard()" data-aid="detection_sigma_dialog_copy">
+                  <v-btn variant="outlined" color="primary" @click="copyConvertToClipboard()" data-aid="detection_sigma_dialog_copy">
                     {{ i18n.copyToClipboard }}
                   </v-btn>
-                  <v-btn outlined color="primary" @click="runQueryInDiscover()" data-aid="detection_sigma_dialog_discover">
+                  <v-btn variant="outlined" color="primary" @click="runQueryInDiscover()" data-aid="detection_sigma_dialog_discover">
                     {{ i18n.viewInDiscover }}
                   </v-btn>
                 </div>
@@ -1923,23 +1943,23 @@
                 <v-card-text v-text="i18n.detectionDirtyBody" />
                 <v-card-actions>
                   <v-spacer></v-spacer>
-                  <v-btn text @click="saveDetection(false, true)" data-aid="detection_dirty_source_save">
+                  <v-btn variant="text" @click="saveDetection(false, true)" data-aid="detection_dirty_source_save">
                     {{ i18n.yes }}
                   </v-btn>
-                  <v-btn text @click="cancelDetection()" data-aid="detection_dirty_source_cancel">
+                  <v-btn variant="text" @click="cancelDetection()" data-aid="detection_dirty_source_cancel">
                     {{ i18n.no }}
                   </v-btn>
                 </v-card-actions>
               </v-card>
             </v-dialog>
-          </div>
-          <div class="col-md-3 order-md-2 col-12 order-1">
+          </v-col>
+          <v-col class="v-col-md-3 v-order-md-2 v-col-12 v-order-1" order="1" order-md="2">
             <v-expansion-panels focusable multiple v-model="panel">
               <v-expansion-panel v-if="!isNew()" data-aid="detection_metadata_summary">
-                <v-expansion-panel-header>
+                <v-expansion-panel-title>
                   <h3>{{ i18n.operations }}</h3>
-                </v-expansion-panel-header>
-                <v-expansion-panel-content>
+                </v-expansion-panel-title>
+                <div class="pa-4">
                   <span>
                     <div class="ops-header">
                       {{ i18n.status }}: {{ detect.isEnabled ? i18n.enabled : i18n.disabled }}
@@ -1949,31 +1969,20 @@
                     </div>
                   </span>
                   <div id="ops-buttons">
-                    <v-btn id="detection-duplicate" color="primary" @click="duplicateDetection()" data-aid="detection_metadata_duplicate">
+                    <v-btn id="detection-duplicate" color="primary" @click="duplicateDetection()" data-aid="detection_metadata_duplicate" class="flex-basis-50">
                       {{i18n.duplicate}}
                     </v-btn>
-                    <v-btn :disabled="detect.isCommunity" id="detection-delete" color="error" @click="deleteDetection()" data-aid="detection_metadata_delete">
+                    <v-btn :disabled="detect.isCommunity" id="detection-delete" color="error" @click="deleteDetection()" data-aid="detection_metadata_delete" class="flex-basis-50">
                       {{i18n.delete}}
                     </v-btn>
-                    <v-dialog v-model="confirmDeleteDialog" persistent max-width="350" data-aid="detection_confirm_delete_dialog">
-                      <v-card>
-                        <v-card-title class="text-h5" v-text="i18n.detectionConfirmDelete" />
-                        <v-card-text v-html="i18n.detectionConfirmDeleteHelp" />
-                        <v-card-actions>
-                          <v-spacer></v-spacer>
-                          <v-btn text id="detection-delete-proceed-button" @click="confirmDeleteDetection()" v-text="i18n.yes" data-aid="detection_delete_dialog_confirm" />
-                          <v-btn text id="detection-delete-cancel-button" @click="cancelDeleteDetection()" v-text="i18n.no" data-aid="detection_delete_dialog_abort" />
-                        </v-card-actions>
-                      </v-card>
-                    </v-dialog>
                   </div>
-                </v-expansion-panel-content>
+                </div>
               </v-expansion-panel>
               <v-expansion-panel v-if="!isNew()" data-aid="detection_metadata_details">
-                <v-expansion-panel-header id="detection-extracted-details">
+                <v-expansion-panel-title id="detection-extracted-details">
                   <h3>{{ i18n.details }}</h3>
-                </v-expansion-panel-header>
-                <v-expansion-panel-content>
+                </v-expansion-panel-title>
+                <div class="pa-4">
                   <div class="ops-header">
                     {{ i18n.publicId }}:
                   </div>
@@ -2030,8 +2039,8 @@
                       <v-chip class="mx-1" v-for="tag in detect.tags" color="primary">{{ tag }}</v-chip>
                       <span v-if="detect.tags === null || detect.tags.length === 0">None</span>
                     </div>
-                  </div> ->
-                </v-expansion-panel-content>
+                  </div> -->
+                </div>
               </v-expansion-panel>
             </v-expansion-panels>
 
@@ -2046,17 +2055,28 @@
               </div>
               <div class="case summary">
                 <span class="case label">{{i18n.dateCreated}}:</span>
-                <span class="case value" data-aid="detection_metadata_create_time_display">{{ detect.createTime | formatDateTime}}</span>
+                <span class="case value" data-aid="detection_metadata_create_time_display">{{ formatDateTime(detect.createTime)}}</span>
               </div>
               <div class="case summary">
                 <span class="case label">{{i18n.dateModified}}:</span>
-                <span class="case value" data-aid="detection_metadata_update_time_display">{{ detect.updateTime | formatDateTime }}</span>
+                <span class="case value" data-aid="detection_metadata_update_time_display">{{ formatDateTime(detect.updateTime) }}</span>
               </div>
             </div>
-          </div>
-        </div>
+          </v-col>
+        </v-row>
       </v-container>
-    </script> -->
+      <v-dialog v-model="confirmDeleteDialog" persistent max-width="350" data-aid="detection_confirm_delete_dialog">
+        <v-card>
+          <v-card-title class="text-h5" v-text="i18n.detectionConfirmDelete" />
+          <v-card-text v-html="i18n.detectionConfirmDeleteHelp" />
+          <v-card-actions>
+            <v-spacer></v-spacer>
+            <v-btn text id="detection-delete-proceed-button" @click="confirmDeleteDetection()" v-text="i18n.yes" data-aid="detection_delete_dialog_confirm" />
+            <v-btn text id="detection-delete-cancel-button" @click="cancelDeleteDetection()" v-text="i18n.no" data-aid="detection_delete_dialog_abort" />
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+    </script>
 
     <!-- <script type="text/x-template" id="page-terms">
       <v-container fluid data-aid="terms_screen">

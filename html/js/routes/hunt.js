@@ -337,6 +337,10 @@ const huntComponent = {
     },
     hunt(replaceHistory = false) {
       this.huntPending = false;
+      this.selectAllState = false;
+      this.selectAllIndeterminate = false;
+      this.selectedCount = 0;
+
       var route = this;
       var onSuccess = function() {};
       var onFail = function() {

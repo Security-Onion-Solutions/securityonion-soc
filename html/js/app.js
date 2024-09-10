@@ -989,7 +989,8 @@ $(document).ready(function () {
         this.chartsInitialized = true;
       },
       registerEditor() {
-        Vue.component('prism-editor', PrismEditor.component);
+        const app = Vue.getCurrentInstance().appContext.app;
+        app.component('prism-editor', PrismEditor.PrismEditor);
       },
       initializeEditor() {
         if (this.editorInitialized) return;

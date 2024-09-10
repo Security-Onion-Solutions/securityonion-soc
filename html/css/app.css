@@ -633,6 +633,11 @@ td {
   vertical-align: middle;
 }
 
+.detection-tab-icon {
+  margin-right: 8px;
+  vertical-align: baseline;
+}
+
 .selection-counter {
   margin-left: auto;
   padding-right: 12px;
@@ -689,12 +694,12 @@ td {
 }
 
 #ops-buttons {
-  margin-top: 12px;
-  display: grid;
-  grid-auto-flow: column;
-  justify-items: stretch;
-  grid-template-columns: 50% 50%;
-  grid-gap: 12px;
+  display: flex;
+  column-gap: 8px;
+}
+
+#ops-buttons > * {
+  flex-basis: calc(50% - 4px);
 }
 
 .case-title {

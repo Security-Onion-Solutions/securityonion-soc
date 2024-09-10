@@ -56,44 +56,44 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			activeTab: '',
 			sidExtract: /\bsid: ?['"]?(.*?)['"]?;/, // option
 			severityExtract: /\bsignature_severity ['"]?(.*?)['"]?[,;]/, // metadata
-			sortBy: 'createdAt',
-			sortDesc: false,
+			sortBy: [{ key: 'createdAt', order: 'asc' }],
 			expanded: [],
 			overrideHeaders: {
 				'elastalert': [
-					{ text: this.$root.i18n.enabled, value: 'isEnabled' },
-					{ text: this.$root.i18n.type, value: 'type', localize: true },
-					{ text: this.$root.i18n.track, value: 'track' },
-					{ text: this.$root.i18n.dateCreated, value: 'createdAt', format: true },
-					{ text: this.$root.i18n.dateModified, value: 'updatedAt', format: true },
+					{},
+					{ title: this.$root.i18n.enabled, value: 'isEnabled' },
+					{ title: this.$root.i18n.type, value: 'type', localize: true },
+					{ title: this.$root.i18n.track, value: 'track' },
+					{ title: this.$root.i18n.dateCreated, value: 'createdAt', format: true },
+					{ title: this.$root.i18n.dateModified, value: 'updatedAt', format: true },
 				],
 				'strelka': [], // no overrides
 				'suricata': [
-					{ text: this.$root.i18n.enabled, value: 'isEnabled' },
-					{ text: this.$root.i18n.type, value: 'type', localize: true },
-					{ text: this.$root.i18n.ipVar, value: 'ip' },
-					{ text: this.$root.i18n.dateCreated, value: 'createdAt', format: true },
-					{ text: this.$root.i18n.dateModified, value: 'updatedAt', format: true },
+					{},
+					{ title: this.$root.i18n.enabled, value: 'isEnabled' },
+					{ title: this.$root.i18n.type, value: 'type', localize: true },
+					{ title: this.$root.i18n.ipVar, value: 'ip' },
+					{ title: this.$root.i18n.dateCreated, value: 'createdAt', format: true },
+					{ title: this.$root.i18n.dateModified, value: 'updatedAt', format: true },
 				],
 			},
 			zone: moment.tz.guess(),
 			newOverride: null,
 			newOverrideValid: false,
 			thresholdTypes: [
-				{ value: 'threshold', text: this.$root.i18n.threshold },
-				{ value: 'limit', text: this.$root.i18n.limit },
-				{ value: 'both', text: this.$root.i18n.both }
+				{ title: this.$root.i18n.threshold, value: 'threshold' },
+				{ title: this.$root.i18n.limit, value: 'limit' },
+				{ title: this.$root.i18n.both, value: 'both' }
 			],
 			historyTableOpts: {
-				sortBy: 'updateTime',
-				sortDesc: false,
+				sortBy: [{ key: 'updateTime', order: 'asc' }],
 				search: '',
 				headers: [
-					{ text: this.$root.i18n.actions, width: '10.0em' },
-					{ text: this.$root.i18n.username, value: 'owner' },
-					{ text: this.$root.i18n.time, value: 'updateTime' },
-					{ text: this.$root.i18n.kind, value: 'kind' },
-					{ text: this.$root.i18n.operation, value: 'operation' },
+					{ title: this.$root.i18n.actions, width: '10.0em' },
+					{ title: this.$root.i18n.username, value: 'owner' },
+					{ title: this.$root.i18n.time, value: 'updateTime' },
+					{ title: this.$root.i18n.kind, value: 'kind' },
+					{ title: this.$root.i18n.operation, value: 'operation' },
 				],
 				itemsPerPage: 10,
 				footerProps: { 'items-per-page-options': [10, 50, 250, 1000] },
@@ -103,13 +103,12 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			},
 			historyOverrideTableOpts: {
 				"elastalert": {
-					sortBy: 'updatedAt',
-					sortDesc: false,
+					sortBy: [{ key: 'updatedAt', order: 'asc' }],
 					headers: [
-						{ text: this.$root.i18n.actions, width: '10.0em' },
-						{ text: this.$root.i18n.kind, value: 'type' },
-						{ text: this.$root.i18n.time, value: 'updatedAt' },
-						{ text: this.$root.i18n.enabled, value: 'isEnabled' },
+						{ title: this.$root.i18n.actions, width: '10.0em' },
+						{ title: this.$root.i18n.kind, value: 'type' },
+						{ title: this.$root.i18n.time, value: 'updatedAt' },
+						{ title: this.$root.i18n.enabled, value: 'isEnabled' },
 					],
 					itemsPerPage: 10,
 					footerProps: { 'items-per-page-options': [10, 50, 250, 1000] },
@@ -118,13 +117,12 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					loading: false,
 				},
 				"suricata": {
-					sortBy: 'updatedAt',
-					sortDesc: false,
+					sortBy: [{ key: 'updatedAt', order: 'asc' }],
 					headers: [
-						{ text: this.$root.i18n.actions, width: '10.0em' },
-						{ text: this.$root.i18n.kind, value: 'type' },
-						{ text: this.$root.i18n.time, value: 'updatedAt' },
-						{ text: this.$root.i18n.enabled, value: 'isEnabled' },
+						{ title: this.$root.i18n.actions, width: '10.0em' },
+						{ title: this.$root.i18n.kind, value: 'type' },
+						{ title: this.$root.i18n.time, value: 'updatedAt' },
+						{ title: this.$root.i18n.enabled, value: 'isEnabled' },
 					],
 					itemsPerPage: 10,
 					footerProps: { 'items-per-page-options': [10, 50, 250, 1000] },
@@ -143,14 +141,13 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			comments: [],
 			commentsTable: {
 				showAll: false,
-				sortBy: 'createTime',
-				sortDesc: false,
+				sortBy: [{ key: 'createTime', order: 'asc' }],
 				search: '',
 				headers: [
-					{ text: this.$root.i18n.username, value: 'owner' },
-					{ text: this.$root.i18n.dateCreated, value: 'createTime' },
-					{ text: this.$root.i18n.dateModified, value: 'updateTime' },
-					{ text: this.$root.i18n.commentDescription, value: 'description' },
+					{ title: this.$root.i18n.username, value: 'owner' },
+					{ title: this.$root.i18n.dateCreated, value: 'createTime' },
+					{ title: this.$root.i18n.dateModified, value: 'updateTime' },
+					{ title: this.$root.i18n.commentDescription, value: 'description' },
 				],
 				itemsPerPage: 10,
 				footerProps: { 'items-per-page-options': [10, 50, 250, 1000] },
@@ -203,7 +200,9 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		this.$root.loadParameters('detection', this.initDetection);
 	},
 	updated() {
-		Prism.highlightAll();
+		this.$nextTick(() => {
+			Prism.highlightAll();
+		});
 	},
 	methods: {
 		async initDetection(params) {
@@ -1109,13 +1108,13 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			switch (engine) {
 				case 'suricata':
 					return [
-						{ value: 'modify', text: this.i18n.modify },
-						{ value: 'suppress', text: this.i18n.suppress },
-						{ value: 'threshold', text: this.i18n.threshold }
+						{ title: this.i18n.modify, value: 'modify' },
+						{ title: this.i18n.suppress, value: 'suppress' },
+						{ title: this.i18n.threshold, value: 'threshold' }
 					];
 				case 'elastalert':
 					return [
-						{ value: 'customFilter', text: this.i18n.customFilter }
+						{ title: this.i18n.customFilter, value: 'customFilter' }
 					];
 			}
 
