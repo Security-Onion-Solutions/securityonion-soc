@@ -32,6 +32,7 @@ type Setting struct {
 	Syntax              string `json:"syntax"`
 	ForcedType          string `json:"forcedType"`
 	Duplicates          bool   `json:"duplicates"`
+	JinjaEscaped        bool   `json:"jinjaEscaped"`
 }
 
 func NewSetting(id string) *Setting {
@@ -42,6 +43,16 @@ func NewSetting(id string) *Setting {
 
 func (setting *Setting) SetId(id string) {
 	setting.Id = id
+}
+
+func (setting *Setting) SupportsJinja() bool {
+	// Assume duplicated settings should support Jinja, since those lose their annotations.
+	return setting.JinjaEscaped || setting.IsDuplicatedSetting()
+}
+
+func (setting *Setting) IsDuplicatedSetting() bool {
+	// Assume descriptionless settings are duplicated, since annotations are lost for duplicated settings
+	return len(setting.Description) == 0
 }
 
 func IsValidMinionId(id string) bool {
