@@ -239,10 +239,7 @@ func (store *Saltstore) postProcess(settings []*model.Setting) {
 			setting.Advanced = true
 		}
 
-		// Assume descriptionless settings are duplicated, and then assume duplicated
-		// settings should unescape Jinja, since those lose their annotations.
-		// We could unescape all settings but that would cost extra processing.
-		if setting.JinjaEscaped || len(setting.Description) == 0 {
+		if setting.SupportsJinja() {
 			setting.Value = syntax.UnescapeJinja(setting.Value)
 		}
 	}
@@ -680,7 +677,7 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 	}
 
 	if !remove {
-		if setting.JinjaEscaped {
+		if setting.SupportsJinja() {
 			setting.Value = syntax.EscapeJinja(setting.Value)
 		}
 		err = syntax.Validate(setting.Value, setting.Syntax)

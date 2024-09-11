@@ -45,6 +45,16 @@ func (setting *Setting) SetId(id string) {
 	setting.Id = id
 }
 
+func (setting *Setting) SupportsJinja() bool {
+	// Assume duplicated settings should support Jinja, since those lose their annotations.
+	return setting.JinjaEscaped || setting.IsDuplicatedSetting()
+}
+
+func (setting *Setting) IsDuplicatedSetting() bool {
+	// Assume descriptionless settings are duplicated, since annotations are lost for duplicated settings
+	return len(setting.Description) == 0
+}
+
 func IsValidMinionId(id string) bool {
 	return regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`).MatchString(id)
 }
