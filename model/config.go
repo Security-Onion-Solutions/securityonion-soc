@@ -32,6 +32,7 @@ type Setting struct {
 	Syntax              string `json:"syntax"`
 	ForcedType          string `json:"forcedType"`
 	Duplicates          bool   `json:"duplicates"`
+	JinjaEscaped        bool   `json:"jinjaEscaped"`
 }
 
 func NewSetting(id string) *Setting {

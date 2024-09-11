@@ -1,4 +1,6 @@
 myapp:
+  my_def:
+    jinjaEscaped: True
   foo__txt:
     description: Test file annotation
     file: True

@@ -227,16 +227,23 @@ func (store *Saltstore) GetSettings(ctx context.Context, advanced bool) ([]*mode
 		})
 	}
 
-	store.markAdvanced(settings)
+	store.postProcess(settings)
 
 	return store.sortSettings(store.filter(settings, advanced)), err
 }
 
-func (store *Saltstore) markAdvanced(settings []*model.Setting) {
-	// Mark all settings missing descriptions as advanced
+func (store *Saltstore) postProcess(settings []*model.Setting) {
 	for _, setting := range settings {
+		// Mark all settings missing descriptions as advanced
 		if len(setting.Description) == 0 {
 			setting.Advanced = true
+		}
+
+		// Assume descriptionless settings are duplicated, and then assume duplicated
+		// settings should unescape Jinja, since those lose their annotations.
+		// We could unescape all settings but that would cost extra processing.
+		if setting.JinjaEscaped || len(setting.Description) == 0 {
+			setting.Value = syntax.UnescapeJinja(setting.Value)
 		}
 	}
 }
@@ -496,6 +503,8 @@ func (store *Saltstore) updateSettingWithAnnotation(setting *model.Setting, anno
 			}
 		case "duplicates":
 			setting.Duplicates = value.(bool)
+		case "jinjaEscaped":
+			setting.JinjaEscaped = value.(bool)
 		}
 	}
 }
@@ -666,10 +675,14 @@ func (store *Saltstore) UpdateSetting(ctx context.Context, setting *model.Settin
 			setting.Default = settingDef.Default
 			setting.DefaultAvailable = settingDef.DefaultAvailable
 			setting.File = settingDef.File
+			setting.JinjaEscaped = settingDef.JinjaEscaped
 		}
 	}
 
 	if !remove {
+		if setting.JinjaEscaped {
+			setting.Value = syntax.EscapeJinja(setting.Value)
+		}
 		err = syntax.Validate(setting.Value, setting.Syntax)
 		if err != nil {
 			return err

@@ -380,6 +380,24 @@ func TestUpdateSetting_OverrideDefault(tester *testing.T) {
 	assert.Equal(tester, "new setting\n", new_setting.Value)
 }
 
+func TestUpdateSetting_OverrideWithJinjaEscaped(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSalt()
+
+	// Add new setting
+	setting := model.NewSetting("myapp.my_def")
+	setting.Value = "new setting {{foo}} {# comment #} {% multiline %}"
+	err := salt.UpdateSetting(ctx(), setting, false)
+	assert.NoError(tester, err)
+
+	// Ensure there's an additional setting listed
+	settings, get_err := salt.GetSettings(ctx(), true)
+	assert.NoError(tester, get_err)
+
+	new_setting := findSetting(settings, "myapp.my_def", "")
+	assert.Equal(tester, "new setting {{foo}} {# comment #} {% multiline %}\n", new_setting.Value)
+}
+
 func TestUpdateSetting_AddGlobal(tester *testing.T) {
 	defer Cleanup()
 	salt := NewTestSalt()
@@ -1071,6 +1089,7 @@ func TestUpdateSettingWithAnnotation(tester *testing.T) {
 	annotations["helpLink"] = "My help link"
 	annotations["syntax"] = "yaml"
 	annotations["duplicates"] = true
+	annotations["jinjaEscaped"] = true
 
 	assert.False(tester, setting.Multiline)
 	salt.updateSettingWithAnnotation(setting, annotations)
@@ -1092,6 +1111,7 @@ func TestUpdateSettingWithAnnotation(tester *testing.T) {
 	assert.Equal(tester, "some local", setting.Value)
 	assert.Equal(tester, "yaml", setting.Syntax)
 	assert.True(tester, setting.Duplicates)
+	assert.True(tester, setting.JinjaEscaped)
 }
 
 func TestManageUser_AddUser(tester *testing.T) {
