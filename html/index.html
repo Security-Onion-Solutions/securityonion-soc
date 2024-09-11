@@ -704,7 +704,7 @@
                 </v-container>
               </template>
               <v-col cols="12">
-                <v-data-table ref="eventTable" :search="eventFilter" v-model:sort-by="sortBy" item-value="soc_id" :footer-props="footerProps" :data-aid="'events_table_' + category"
+                <v-data-table ref="eventTable" :search="eventFilter" :sort-by="sortBy" @update:sort-by="val => sortBy = val" item-value="soc_id" :footer-props="footerProps" :data-aid="'events_table_' + category"
                   :items-per-page="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" :page.sync="eventPage" show-select :custom-sort="sortEvents" density="compact" @current-items="val => eventCurrentItems = val">
                   <template #top="data">
                     <!-- not fancy way to access the current page of items:
@@ -1403,7 +1403,7 @@
                     </div>
                   </v-form>
                 </div>
-                <v-data-table :sort-by="sortBy" must-sort :headers="overrideHeaders[detect.engine]"
+                <v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" must-sort :headers="overrideHeaders[detect.engine]"
                   :items="detect.overrides" item-value="index" show-expand :custom-sort="sortOverrides" hide-default-footer>
                   <template v-slot:headers="{ columns, isSorted, getSortIcon, toggleSort }">
                     <tr>
@@ -2432,7 +2432,7 @@
       </v-container>
     </script> -->
 
-    <!-- <script type="text/x-template" id="page-jobs">
+    <script type="text/x-template" id="page-jobs">
       <v-container fluid data-aid="jobs_screen">
         <v-row>
           <v-col>
@@ -2443,29 +2443,29 @@
         <v-row>
           <v-col>
             <v-toolbar v-if="isKind('pcap')" class="elevation-0" fixed>
-              <v-btn color="primary" @click.stop="dialog = !dialog" id="add-pcap-job-button" data-aid="jobs_create_new">
+              <v-btn variant="flat" color="primary" @click.stop="dialog = !dialog" id="add-pcap-job-button" class="ml-3" data-aid="jobs_create_new">
                 <v-icon>fa-plus</v-icon>
               </v-btn>
             </v-toolbar>
-            <v-data-table :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps" :items-per-page.sync="itemsPerPage"
+            <v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" :footer-props="footerProps" :items-per-page.sync="itemsPerPage"
               must-sort :headers="headers" :items="jobs">
-              <template v-slot:item="props">
+              <template v-slot:item="{ item }">
                 <tr>
                   <td>
-                    <router-link :to="{ name: 'job', params: {jobId: props.item.id}}" :style="{ cursor: 'pointer'}" data-aid="jobs_open_id">
-                      {{ props.item.id }}
+                    <router-link :to="{ name: 'job', params: {jobId: item.id}}" :style="{ cursor: 'pointer'}" data-aid="jobs_open_id">
+                      {{ item.id }}
                     </router-link>
                   </td>
-                  <td>{{ props.item.owner }}</td>
-                  <td>{{ props.item.createTime | formatTimestamp }}</td>
-                  <td>{{ props.item.completeTime | formatTimestamp }}</td>
-                  <td v-text="props.item.nodeId"></td>
-                  <td><v-chip :color="props.item | colorJobStatus" data-aid="jobs_status">{{ props.item | formatJobStatus }}</v-chip></td>
+                  <td>{{ item.owner }}</td>
+                  <td>{{ formatTimestamp(item.createTime) }}</td>
+                  <td>{{ formatTimestamp(item.completeTime) }}</td>
+                  <td v-text="item.nodeId"></td>
+                  <td><v-chip :color="colorJobStatus(item)" data-aid="jobs_status">{{ formatJobStatus(item) }}</v-chip></td>
                   <td>
-                    <router-link :to="{ name: 'job', params: {jobId: props.item.id}}" style="text-decoration: none; cursor: 'pointer'" data-aid="jobs_open">
+                    <router-link :to="{ name: 'job', params: {jobId: item.id}}" style="text-decoration: none; cursor: 'pointer'" data-aid="jobs_open">
                       <v-icon class="mr-2" :title="i18n.view">fa-binoculars</v-icon>
                     </router-link>
-                    <v-icon class="mr-2" :title="i18n.delete" @click.stop="deleteJob(props.item)" data-aid="jobs_delete">fa-times-circle</v-icon>
+                    <v-icon class="mr-2" :title="i18n.delete" @click.stop="deleteJob(item)" data-aid="jobs_delete">fa-times-circle</v-icon>
                   </td>
                 </tr>
               </template>
@@ -2477,22 +2477,22 @@
                   <v-container grid-list-sm class="pa-4">
                     <v-row>
                       <v-col xs12>
-                        <v-text-field v-model="form.sensorId" :placeholder="i18n.sensorId" persistent-hint :hint="i18n.sensorIdHelp" data-aid="jobs_create_dialog_sensor_id"></v-text-field>
-                        <v-text-field v-model="form.importId" :placeholder="i18n.importId" persistent-hint :hint="i18n.importIdHelp" data-aid="jobs_create_dialog_import_id"></v-text-field>
-                        <v-text-field v-model="form.protocol" :placeholder="i18n.protocol" persistent-hint :hint="i18n.protocolHelp" data-aid="jobs_create_dialog_protocol"></v-text-field>
-                        <v-text-field v-model="form.srcIp" :placeholder="i18n.srcIp" persistent-hint :hint="i18n.srcIpHelp" data-aid="jobs_create_dialog_src_ip"></v-text-field>
-                        <v-text-field v-model="form.srcPort" :placeholder="i18n.srcPort" persistent-hint :hint="i18n.srcPortHelp" data-aid="jobs_create_dialog_src_port"></v-text-field>
-                        <v-text-field v-model="form.dstIp" :placeholder="i18n.dstIp" persistent-hint :hint="i18n.dstIpHelp" data-aid="jobs_create_dialog_dst_ip"></v-text-field>
-                        <v-text-field v-model="form.dstPort" :placeholder="i18n.dstPort" persistent-hint :hint="i18n.dstPortHelp" data-aid="jobs_create_dialog_dst_port"></v-text-field>
-                        <v-text-field v-model="form.beginTime" :placeholder="i18n.beginTime" persistent-hint :hint="i18n.beginTimeHelp" data-aid="jobs_create_dialog_begin_time"></v-text-field>
-                        <v-text-field v-model="form.endTime" :placeholder="i18n.endTime" persistent-hint :hint="i18n.endTimeHelp" data-aid="jobs_create_dialog_end_time"></v-text-field>
+                        <v-text-field variant="underlined" v-model="form.sensorId" :placeholder="i18n.sensorId" persistent-hint :hint="i18n.sensorIdHelp" data-aid="jobs_create_dialog_sensor_id"></v-text-field>
+                        <v-text-field variant="underlined" v-model="form.importId" :placeholder="i18n.importId" persistent-hint :hint="i18n.importIdHelp" data-aid="jobs_create_dialog_import_id"></v-text-field>
+                        <v-text-field variant="underlined" v-model="form.protocol" :placeholder="i18n.protocol" persistent-hint :hint="i18n.protocolHelp" data-aid="jobs_create_dialog_protocol"></v-text-field>
+                        <v-text-field variant="underlined" v-model="form.srcIp" :placeholder="i18n.srcIp" persistent-hint :hint="i18n.srcIpHelp" data-aid="jobs_create_dialog_src_ip"></v-text-field>
+                        <v-text-field variant="underlined" v-model="form.srcPort" :placeholder="i18n.srcPort" persistent-hint :hint="i18n.srcPortHelp" data-aid="jobs_create_dialog_src_port"></v-text-field>
+                        <v-text-field variant="underlined" v-model="form.dstIp" :placeholder="i18n.dstIp" persistent-hint :hint="i18n.dstIpHelp" data-aid="jobs_create_dialog_dst_ip"></v-text-field>
+                        <v-text-field variant="underlined" v-model="form.dstPort" :placeholder="i18n.dstPort" persistent-hint :hint="i18n.dstPortHelp" data-aid="jobs_create_dialog_dst_port"></v-text-field>
+                        <v-text-field variant="underlined" v-model="form.beginTime" :placeholder="i18n.beginTime" persistent-hint :hint="i18n.beginTimeHelp" data-aid="jobs_create_dialog_begin_time"></v-text-field>
+                        <v-text-field variant="underlined" v-model="form.endTime" :placeholder="i18n.endTime" persistent-hint :hint="i18n.endTimeHelp" data-aid="jobs_create_dialog_end_time"></v-text-field>
                       </v-col>
                     </v-row>
                   </v-container>
                   <v-card-actions>
                     <v-spacer></v-spacer>
-                    <v-btn text @click="clearAddJobForm()" v-text="i18n.clear" data-aid="jobs_create_dialog_clear"></v-btn>
-                    <v-btn text @click="dialog = false" v-text="i18n.cancel" data-aid="jobs_create_dialog_cancel"></v-btn>
+                    <v-btn variant="text" @click="clearAddJobForm()" v-text="i18n.clear" data-aid="jobs_create_dialog_clear"></v-btn>
+                    <v-btn variant="text" @click="dialog = false" v-text="i18n.cancel" data-aid="jobs_create_dialog_cancel"></v-btn>
                     <v-btn :disabled="!form.valid" text color="primary" @click="submitAddJob" v-text="i18n.add" data-aid="jobs_create_dialog_add"></v-btn>
                   </v-card-actions>
                 </v-form>
@@ -2501,9 +2501,9 @@
           </v-col>
         </v-row>
       </v-container>
-    </script> -->
+    </script>
 
-    <!-- <script type="text/x-template" id="page-job">
+    <script type="text/x-template" id="page-job">
       <v-container fluid @click="jobClickHandler()" data-aid="job_screen">
         <v-row>
           <v-col>
@@ -2514,33 +2514,25 @@
           <v-col>
             <v-expansion-panels>
               <v-expansion-panel data-aid="job_expand_filter">
-                <v-expansion-panel-header>
+                <v-expansion-panel-title id="job-details" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">
                   <v-chip label class="mx-2">
-                    <v-avatar>
-                      <v-icon>fa-hashtag</v-icon>
-                    </v-avatar>
+                    <v-icon class="mb-1 mr-2">fa-hashtag</v-icon>
                     <span id="jobDetailsId">{{ job.id }}</span>
                   </v-chip>
                   <v-chip label class="mx-2">
-                    <v-avatar>
-                      <v-icon>fa-ethernet</v-icon>
-                    </v-avatar>
+                    <v-icon class="mb-1 mr-2">fa-ethernet</v-icon>
                     <span id="jobDetailsSensorId">{{ job.nodeId }}</span>
                   </v-chip>
                   <v-chip v-if="job.filter" label class="mx-2">
-                    <v-avatar>
-                      <v-icon>fa-file-export</v-icon>
-                    </v-avatar>
+                    <v-icon class="mb-1 mr-2">fa-file-export</v-icon>
                     <span id="jobDetailsSrc">{{ job.filter.srcIp }}<span v-if="job.filter.srcPort != 0">:{{ job.filter.srcPort }}</span><span class="resolved-host" v-if="$root.pickHostname(job.filter.srcIp)"> - {{ $root.pickHostname(job.filter.srcIp) }}</span></span>
                   </v-chip>
                   <v-chip v-if="job.filter" label class="mx-2">
-                    <v-avatar>
-                      <v-icon>fa-file-import</v-icon>
-                    </v-avatar>
+                    <v-icon class="mb-1 mr-2">fa-file-import</v-icon>
                     <span id="jobDetailsDst">{{ job.filter.dstIp }}<span v-if="job.filter.dstPort != 0">:{{ job.filter.dstPort }}</span><span class="resolved-host" v-if="$root.pickHostname(job.filter.dstIp)"> - {{ $root.pickHostname(job.filter.dstIp) }}</span></span>
                   </v-chip>
-                </v-expansion-panel-header>
-                <v-expansion-panel-content>
+                </v-expansion-panel-title>
+                <v-expansion-panel-text>
                   <v-container fluid grid-list-sm class="pa-4">
                     <v-row>
                       <v-col>
@@ -2582,28 +2574,28 @@
                         </div>
                         <div>
                           <span class="filter label">{{ i18n.dateQueued }}:</span>
-                          <span class="filter value">{{ job.createTime | formatDateTime}}&nbsp;</span>
+                          <span class="filter value">{{ formatDateTime(job.createTime)}}&nbsp;</span>
                         </div>
                         <div>
                           <span class="filter label">{{ i18n.dateCompleted }}:</span>
-                          <span class="filter value">{{ job.completeTime | formatDateTime}}&nbsp;</span>
+                          <span class="filter value">{{ formatDateTime(job.completeTime)}}&nbsp;</span>
                         </div>
                         <div>
                           <span class="filter label">{{ i18n.dateFailed }}:</span>
-                          <span class="filter value">{{ job.failTime | formatDateTime}}&nbsp;</span>
+                          <span class="filter value">{{ formatDateTime(job.failTime)}}&nbsp;</span>
                         </div>
                         <div>
                           <span class="filter label">{{ i18n.beginTime }}:</span>
-                          <span v-if="job.filter" class="filter value">{{ job.filter.beginTime | formatTimestamp }}&nbsp;</span>
+                          <span v-if="job.filter" class="filter value">{{ formatTimestamp(job.filter.beginTime) }}&nbsp;</span>
                         </div>
                         <div>
                           <span class="filter label">{{ i18n.endTime }}:</span>
-                          <span v-if="job.filter" class="filter value">{{ job.filter.endTime | formatTimestamp }}&nbsp;</span>
+                          <span v-if="job.filter" class="filter value">{{ formatTimestamp(job.filter.endTime) }}&nbsp;</span>
                         </div>
                       </v-col>
                     </v-row>
                   </v-container>
-                </v-expansion-panel-content>
+                </v-expansion-panel-text>
               </v-expansion-panel>
             </v-expansion-panels>
           </v-col>
@@ -2617,8 +2609,8 @@
         </v-row>
         <v-row v-if="job.status == 1" data-aid="job_details_completed">
           <v-col>
-            <v-toolbar fixed class="elevation-0">
-              <v-text-field v-model="search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="job_details_filter"></v-text-field>
+            <v-toolbar fixed class="elevation-0 pl-5">
+              <v-text-field variant="underlined" density="compact" v-model="search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="job_details_filter"></v-text-field>
               <v-spacer></v-spacer>
               <v-btn-toggle v-model="packetOptions" class="transparent" multiple>
                 <v-btn value="packets" icon :title="i18n.packetStreamHelp" text @click="captureLayoutAsStream()" data-aid="job_details_stream_toggle">
@@ -2646,26 +2638,46 @@
                 <v-icon>fa-download</v-icon>
               </v-btn>
             </v-toolbar>
-            <v-data-table ref="packetTable" :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :items-per-page.sync="itemsPerPage"
+            <v-data-table ref="packetTable" :sort-by="sortBy" @update:sort-by="val => sortBy = val" :items-per-page.sync="itemsPerPage"
               :search="search" :footer-props="footerProps" must-sort :headers="headers" :hide-default-header="!isOptionEnabled('packets')"
-              :items="packets" item-key="number" :loading="packetsLoading" :expanded="expanded">
-              <template v-slot:item="props">
-                <tr @click="expandRow(props.item)" v-if="isOptionEnabled('packets')" data-aid="job_details_expand_packet">
-                  <td v-text="props.item.number"></td>
-                  <td>{{ props.item.timestamp | formatTimestamp }}</td>
-                  <td><v-chip :color="props.item.type | colorType" data-aid="job_details_packet_type">{{ props.item.type }}</v-chip></td>
-                  <td>{{ props.item.srcIp }}<span class="resolved-host" v-if="$root.pickHostname(props.item.srcIp)"> - {{ $root.pickHostname(props.item.srcIp) }}</span></td>
-                  <td>{{ props.item.srcPort }}</td>
-                  <td>{{ props.item.dstIp }}<span class="resolved-host" v-if="$root.pickHostname(props.item.dstIp)"> - {{ $root.pickHostname(props.item.dstIp) }}</span></td>
-                  <td>{{ props.item.dstPort }}</td>
-                  <td><v-chip v-for="flag in props.item.flags" :color="flag | colorFlag" :key="flag" data-aid="job_details_packet_flag">{{ flag }}</v-chip></td>
-                  <td>{{ props.item.length }}</td>
+              :items="packets" item-value="number" :loading="packetsLoading" :expanded="expanded" @update:expanded="val => expanded = val">
+              <template v-slot:headers="{ columns, isSorted, getSortIcon, toggleSort }">
+                <tr>
+                  <template v-for="header in columns" :key="header.key">
+                    <th :class="{'is-sorted': isSorted(header)}">
+                      <span @click="toggleSort(header)">
+                        {{ header.title }}
+                      </span>
+                      <template v-if="isSorted(header)">
+                        <v-icon>
+                          {{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
+                        </v-icon>
+                      </template>
+                    </th>
+                  </template>
                 </tr>
               </template>
-              <template v-slot:expanded-item="props">
-                <tr v-if="isOptionEnabled('packets') || props.item.payloadOffset > 0" data-aid="job_details_packet_bytes">
-                  <td :colspan="getPacketColumnSpan()" :class="getPacketClass(props.item)">
-                    <pre class="hardwrap">{{ props.item | formatPacketView }}</pre>
+              <template v-slot:item="{ item, toggleExpand, internalItem }">
+                <tr @click="toggleExpand(internalItem)" v-if="isOptionEnabled('packets')" data-aid="job_details_expand_packet">
+                  <td v-text="item.number"></td>
+                  <td>{{ formatTimestamp(item.timestamp) }}</td>
+                  <td><v-chip :color="colorType(item.type)" data-aid="job_details_packet_type">{{ item.type }}</v-chip></td>
+                  <td>{{ item.srcIp }}<span class="resolved-host" v-if="$root.pickHostname(item.srcIp)"> - {{ $root.pickHostname(item.srcIp) }}</span></td>
+                  <td>{{ item.srcPort }}</td>
+                  <td>{{ item.dstIp }}<span class="resolved-host" v-if="$root.pickHostname(item.dstIp)"> - {{ $root.pickHostname(item.dstIp) }}</span></td>
+                  <td>{{ item.dstPort }}</td>
+                  <td>
+                    <template v-for="flag in item.flags" :key="flag">
+                      <v-chip :color="colorFlag(flag)" data-aid="job_details_packet_flag">{{ flag }}</v-chip>
+                    </template>
+                  </td>
+                  <td>{{ item.length }}</td>
+                </tr>
+              </template>
+              <template v-slot:expanded-row="{ item }">
+                <tr v-if="isOptionEnabled('packets') || item.payloadOffset > 0" data-aid="job_details_packet_bytes">
+                  <td :colspan="getPacketColumnSpan()" :class="getPacketClass(item)">
+                    <pre class="hardwrap">{{ formatPacketView(item) }}</pre>
                   </td>
                 </tr>
               </template>
@@ -2680,12 +2692,12 @@
             </div>
           </v-col>
         </v-row>
-        <v-row v-if="job.status == 2" data-aid="job_details_incomplete">
+        <!-- <v-row v-if="job.status == 2" data-aid="job_details_incomplete">
           <v-col>
             <v-alert :value="true" color="info" icon="fa-exclamation-triangle">
               {{ i18n.jobIncomplete }}
               <hr>
-              {{ job.failTime | formatDateTime }}
+              {{ formatDateTime(job.failTime) }}
               <br>
               {{ i18n.attempt }} {{ job.failCount }}: {{ job.failure }}
             </v-alert>
@@ -2694,35 +2706,38 @@
         <v-menu v-model="quickActionVisible" :position-x="quickActionX" :position-y="quickActionY" absolute data-aid="job_details_context_menu">
           <v-list id="job-common-action" color="secondary">
               <v-list-item id="actionCopyValue" dense @click="$root.copyToClipboard(quickActionValue)" data-aid="job_details_context_menu_copy">
-                <v-list-item-icon>
+                <template v-slot:prepend>
                   <v-icon color="white">fa-copy</v-icon>
-                </v-list-item-icon>
-                <v-list-item-title class="white--text">
+                </template>
+                <v-list-item-title class="text-white">
                   {{ i18n.copyToClipboard }}
                 </v-list-item-title>
               </v-list-item>
           </v-list>
           <v-list id="job-quick-action" color="secondary">
-              <template v-slot:activator>
-                <v-list-item-icon>
-                  <v-icon color="white">fa-external-link-alt</v-icon>
-                </v-list-item-icon>
-                <v-list-item-title class="white--text">
-                  {{ i18n.quickActions }}
-                </v-list-item-title>
+            <template v-slot:activator>
+              <template v-slot:prepend>
+                <v-icon color="white">fa-external-link-alt</v-icon>
               </template>
-              <v-list-item dense v-for="action in actions" class="custom-quick-action-button" v-if="action.enabled" :key="action.link" :href="action.background ? '' : action.linkFormatted" :title="$root.localizeMessage(action.description)" :target="$root.target(action.target)" @click="$root.performAction($event, action)" :data-aid="'job_details_context_menu_action' + action.name">
-                <v-list-item-icon>
+              <v-list-item-title class="text-white">
+                {{ i18n.quickActions }}
+              </v-list-item-title>
+            </template>
+            <template v-for="action in actions" :key="action.link">
+              <v-list-item dense class="custom-quick-action-button" v-if="action.enabled" :href="action.background ? '' : action.linkFormatted"
+                :title="$root.localizeMessage(action.description)" :target="$root.target(action.target)" @click="$root.performAction($event, action)" :data-aid="'job_details_context_menu_action' + action.name">
+                <template v-slot:prepend>
                   <v-icon :alt="action.name" color="white">{{ action.icon }}</v-icon>
-                </v-list-item-icon>
-                <v-list-item-title class="white--text">
+                </template>
+                <v-list-item-title class="text-white">
                   {{ $root.localizeMessage(action.name) }}
                 </v-list-item-title>
               </v-list-item>
+            </template>
           </v-list>
-        </v-menu>
+        </v-menu> -->
       </v-container>
-    </script> -->
+    </script>
 
     <script type="text/x-template" id="page-case">
       <v-container fluid data-aid="case_screen">
@@ -3049,7 +3064,7 @@
                       <v-icon v-bind="props">fa-circle-xmark</v-icon>
                     </template>
                   </v-text-field>
-                  <v-data-table ref="attachmentsTable" must-sort v-model:sort-by="associatedTable['attachments'].sortBy" :items-per-page.sync="associatedTable['attachments'].itemsPerPage"
+                  <v-data-table ref="attachmentsTable" must-sort :sort-by="associatedTable['attachments'].sortBy" :items-per-page.sync="associatedTable['attachments'].itemsPerPage"
                     :search="associatedTable['attachments'].search" :footer-props="associatedTable['attachments'].footerProps" :headers="associatedTable['attachments'].headers"
                     :items="associations['attachments']" item-key="id" :loading="associatedTable['attachments'].loading" class="case-table">
                     <template v-slot:headers="{ columns, isSorted, getSortIcon, toggleSort }">
@@ -3609,7 +3624,7 @@
                     </v-col>
                   </v-row>
                   <v-text-field variant="underlined" v-model="associatedTable['events'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="case_events_filter"></v-text-field>
-                  <v-data-table ref="eventsTable" v-model:sort-by="associatedTable['events'].sortBy" :items-per-page.sync="associatedTable['events'].itemsPerPage"
+                  <v-data-table ref="eventsTable" :sort-by="associatedTable['events'].sortBy" :items-per-page.sync="associatedTable['events'].itemsPerPage"
                     :search="associatedTable['events'].search" :footer-props="associatedTable['events'].footerProps" must-sort :headers="associatedTable['events'].headers"
                     :items="associations['events']" item-key="id" :loading="associatedTable['events'].loading" :expanded="associatedTable['events'].expanded" class="case-table">
                     <template v-slot:headers="{ columns, isSorted, getSortIcon, toggleSort }">
@@ -3711,7 +3726,7 @@
                     </v-col>
                   </v-row>
                   <v-text-field variant="underlined" v-model="associatedTable['history'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="case_history_filter_input"></v-text-field>
-                  <v-data-table ref="historyTable" v-model:sort-by="associatedTable['history'].sortBy" :items-per-page.sync="associatedTable['history'].itemsPerPage"
+                  <v-data-table ref="historyTable" :sort-by="associatedTable['history'].sortBy" :items-per-page.sync="associatedTable['history'].itemsPerPage"
                     :search="associatedTable['history'].search" :footer-props="associatedTable['history'].footerProps" must-sort :headers="associatedTable['history'].headers"
                     :items="associations['history']" item-key="id" :loading="associatedTable['history'].loading" :expanded="associatedTable['history'].expanded" class="case-table" :custom-sort="$root.dateAwareSort">
                     <template v-slot:headers="{ columns, isSorted, getSortIcon, toggleSort }">

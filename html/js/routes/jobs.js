@@ -15,16 +15,15 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
     i18n: this.$root.i18n,
     jobs: [],
     headers: [
-      { text: this.$root.i18n.id, value: 'id' },
-      { text: this.$root.i18n.owner, value: 'owner' },
-      { text: this.$root.i18n.dateQueued, value: 'createTime' },
-      { text: this.$root.i18n.dateCompleted, value: 'completeTime' },
-      { text: this.$root.i18n.sensorId, value: 'sensorId' },
-      { text: this.$root.i18n.status, value: 'status' },
-      { text: this.$root.i18n.actions },
+      { title: this.$root.i18n.id, value: 'id' },
+      { title: this.$root.i18n.owner, value: 'owner' },
+      { title: this.$root.i18n.dateQueued, value: 'createTime' },
+      { title: this.$root.i18n.dateCompleted, value: 'completeTime' },
+      { title: this.$root.i18n.sensorId, value: 'sensorId' },
+      { title: this.$root.i18n.status, value: 'status' },
+      { title: this.$root.i18n.actions },
     ],
-    sortBy: 'id',
-    sortDesc: false,
+    sortBy: [{ key: 'id', order: 'asc' }],
     itemsPerPage: 10,
     dialog: false,
     form: {
@@ -43,8 +42,6 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
     kind: "",
   }},
   created() {
-    Vue.filter('formatJobStatus', this.formatJobStatus);
-    Vue.filter('colorJobStatus', this.colorJobStatus);
     this.loadData();
   },
   destroyed() {
@@ -53,7 +50,6 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
   watch: {
     '$route': 'loadData',
     'sortBy': 'saveLocalSettings',
-    'sortDesc': 'saveLocalSettings',
     'itemsPerPage': 'saveLocalSettings',
   },
   methods: {
@@ -80,13 +76,11 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
     },
     saveLocalSettings() {
       localStorage['settings.jobs.sortBy'] = this.sortBy;
-      localStorage['settings.jobs.sortDesc'] = this.sortDesc;
       localStorage['settings.jobs.itemsPerPage'] = this.itemsPerPage;
     },
     loadLocalSettings() {
       if (localStorage['settings.jobs.sortBy']) {
         this.sortBy = localStorage['settings.jobs.sortBy'];
-        this.sortDesc = localStorage['settings.jobs.sortDesc'] == "true";
         this.itemsPerPage = parseInt(localStorage['settings.jobs.itemsPerPage']);
       }
       this.form.sensorId = localStorage['settings.jobs.addJobForm.sensorId'];
@@ -127,7 +121,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       if (this.form.dstPort) localStorage['settings.jobs.addJobForm.dstPort'] = this.form.dstPort;
       if (this.form.beginTime) localStorage['settings.jobs.addJobForm.beginTime'] = this.form.beginTime;
       if (this.form.endTime) localStorage['settings.jobs.addJobForm.endTime'] = this.form.endTime;
-    },    
+    },
     clearAddJobForm() {
       this.form.sensorId = null;
       this.form.importId = null;

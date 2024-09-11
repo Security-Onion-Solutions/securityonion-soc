@@ -16,18 +16,17 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     packetOptions: ['packets', 'hex', 'unwrap'],
     packets: [],
     headers: [
-      { text: this.$root.i18n.number, value: 'number' },
-      { text: this.$root.i18n.timestamp, value: 'timestamp' },
-      { text: this.$root.i18n.type, value: 'type' },
-      { text: this.$root.i18n.srcIp, value: 'srcIp' },
-      { text: this.$root.i18n.srcPort, value: 'srcPort' },
-      { text: this.$root.i18n.dstIp, value: 'dstIp' },
-      { text: this.$root.i18n.dstPort, value: 'dstPort' },
-      { text: this.$root.i18n.flags, value: 'flags' },
-      { text: this.$root.i18n.length, value: 'length' },
+      { title: this.$root.i18n.number, value: 'number' },
+      { title: this.$root.i18n.timestamp, value: 'timestamp' },
+      { title: this.$root.i18n.type, value: 'type' },
+      { title: this.$root.i18n.srcIp, value: 'srcIp' },
+      { title: this.$root.i18n.srcPort, value: 'srcPort' },
+      { title: this.$root.i18n.dstIp, value: 'dstIp' },
+      { title: this.$root.i18n.dstPort, value: 'dstPort' },
+      { title: this.$root.i18n.flags, value: 'flags' },
+      { title: this.$root.i18n.length, value: 'length' },
     ],
-    sortBy: 'number',
-    sortDesc: false,
+    sortBy: [{ key: 'number', order: 'asc' }],
     itemsPerPage: 10,
     footerProps: { 'items-per-page-options': [10,50,250,1000] },
     count: 500,
@@ -40,9 +39,6 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     actions: [],
   }},
   created() {
-    Vue.filter('formatPacketView', this.formatPacketView);
-    Vue.filter('colorType', this.colorType);
-    Vue.filter('colorFlag', this.colorFlag);
   },
   mounted() {
     this.loadData();
@@ -60,7 +56,6 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     'packetOptions': 'saveLocalSettings',
     'expandAll': 'saveLocalSettings',
     'sortBy': 'saveLocalSettings',
-    'sortDesc': 'saveLocalSettings',
     'itemsPerPage': 'saveLocalSettings',
   },
   methods: {
@@ -127,21 +122,12 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       }
       return "packet " + cls;
     },
-    expandRow(row) {
-      for (var i = 0; i < this.expanded.length; i++) {
-        if (this.expanded[i] == row) {
-          this.expanded.splice(i, 1);
-          return;
-        }
-      }
-      this.expanded.push(row);
-    },
     expandPackets(enabled) {
       this.expandAll = enabled;
-      this.expanded = [];
+      this.expanded.length = 0;
       if (enabled) {
         for (var i = 0; i < this.packets.length; i++) {
-          this.expandRow(this.packets[i]);
+          this.expanded.push(this.packets[i].number);
         }
       } else {
         this.enableOption('packets');
@@ -166,8 +152,7 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       if (!this.isOptionEnabled('packets')) return;
 
       this.expandPackets(true);
-      this.sortBy = 'number';
-      this.sortDesc = false;
+      this.sortBy = [{ key: 'number', order: 'asc' }];
     },
     packetsUpdated() {
       if (this.expandAll) {
@@ -258,8 +243,8 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       if (!this.packetsLoading) {
         localStorage['settings.job.packetOptions'] = this.packetOptions;
         localStorage['settings.job.expandAll'] = this.expandAll;
-        localStorage['settings.job.sortBy'] = this.sortBy;
-        localStorage['settings.job.sortDesc'] = this.sortDesc;
+        localStorage['settings.job.sortBy'] = this.sortBy[0].key;
+        localStorage['settings.job.sortDesc'] = this.sortBy[0].order;
         localStorage['settings.job.itemsPerPage'] = this.itemsPerPage;
       }
     },
@@ -270,8 +255,8 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
           this.packetOptions = options.split(",");
         }
         this.expandAll = localStorage['settings.job.expandAll'] == "true";
-        this.sortBy = localStorage['settings.job.sortBy'];
-        this.sortDesc = localStorage['settings.job.sortDesc'] == "true";
+        this.sortBy[0].key = localStorage['settings.job.sortBy'];
+        this.sortBy[0].order = localStorage['settings.job.sortDesc'];
         this.itemsPerPage = parseInt(localStorage['settings.job.itemsPerPage']);
       }
     },
@@ -349,7 +334,7 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
         view += (code < 32 || code > 126) && code != 13 && code != 10 ? "." : input[idx];
       }
       return view;
-    }  
+    }
   }
 }});
 

@@ -778,12 +778,21 @@ code {
   background-color: unset !important;
 }
 
-.theme--light .key-changed {
+.v-theme--light .key-changed {
   color: rgb(102, 153, 0)
 }
 
 .v-theme--dark .key-changed {
   color: rgb(204, 153, 205)
+}
+
+#job-details {
+  display: flex;
+  column-gap: 4px;
+}
+
+#job-details > *:nth-child(-n+5) {
+  flex-basis: calc(25% - 4px);
 }
 
 .warning-message a {
