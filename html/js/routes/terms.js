@@ -9,6 +9,12 @@ const termsComponent = {
   data() { return {
     i18n: this.$root.i18n,
     tab: null,
+    LICENSE_STATUS_ACTIVE: LICENSE_STATUS_ACTIVE,
+    LICENSE_STATUS_EXCEEDED: LICENSE_STATUS_EXCEEDED,
+    LICENSE_STATUS_EXPIRED: LICENSE_STATUS_EXPIRED,
+    LICENSE_STATUS_INVALID: LICENSE_STATUS_INVALID,
+    LICENSE_STATUS_PENDING: LICENSE_STATUS_PENDING,
+    LICENSE_STATUS_UNPROVISIONED: LICENSE_STATUS_UNPROVISIONED,
   }},
   created() {
   },
@@ -22,5 +28,5 @@ const termsComponent = {
 };
 
 routes.push({ path: '/terms', name: 'terms', component: termsComponent});
-routes.push({ path: '/license', name: 'terms', component: termsComponent});
-routes.push({ path: '/licensekey', name: 'terms', component: termsComponent});
+routes.push({ path: '/license', name: 'terms-license', component: termsComponent});
+routes.push({ path: '/licensekey', name: 'terms-license-key', component: termsComponent});

@@ -818,3 +818,25 @@ tbody tr:hover {
 .unset-vertical-align {
   vertical-align: unset !important;
 }
+
+[data-aid="terms_screen"] .v-tab--selected {
+  color: rgb(var(--v-theme-primary)) !important;
+}
+
+[data-aid="terms_screen"] .fa {
+  margin-bottom: 4px;
+}
+
+.v-theme--dark .subtle-border {
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+  border-left-color: rgba(255, 255, 255, 0.12);
+  border-right-color: rgba(255, 255, 255, 0.12);
+  border-top-color: rgba(255, 255, 255, 0.12);
+}
+
+.v-theme--light .subtle-border {
+  border-bottom-color: rgba(0, 0, 0, 0.12);
+  border-left-color: rgba(0, 0, 0, 0.12);
+  border-right-color: rgba(0, 0, 0, 0.12);
+  border-top-color: rgba(0, 0, 0, 0.12);
+}

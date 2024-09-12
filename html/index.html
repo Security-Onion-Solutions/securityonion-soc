@@ -2078,7 +2078,7 @@
       </v-dialog>
     </script>
 
-    <!-- <script type="text/x-template" id="page-terms">
+    <script type="text/x-template" id="page-terms">
       <v-container fluid data-aid="terms_screen">
         <v-row>
           <v-col>
@@ -2088,25 +2088,26 @@
         <v-row>
           <v-col>
             <v-tabs v-model="tab">
-
-              <v-tab id="license_key" href="#key" data-aid="terms_key_tab">
-                <v-icon left>fa-key</v-icon>
+              <v-tab id="license_key" value="key" data-aid="terms_key_tab">
+                <v-icon class="mr-2">fa-key</v-icon>
                 {{ i18n.licenseKey }}
               </v-tab>
-              <v-tab id="license_terms" href="#terms" data-aid="terms_license_tab">
-                <v-icon left>fa-file-lines</v-icon>
+              <v-tab id="license_terms" value="terms" data-aid="terms_license_tab">
+                <v-icon class="mr-2">fa-file-lines</v-icon>
                 {{ i18n.licenseTerms }}
               </v-tab>
+            </v-tabs>
 
-              <v-tab-item value="key">
-                <v-card outlined class="my-2 pt-2 pb-10">
+            <v-tabs-window v-model="tab">
+              <v-tabs-window-item value="key">
+                <v-card variant="outlined" class="my-2 pt-2 pb-10 subtle-border">
                   <v-card-title>
                     <span class="mr-2">
                       {{ i18n.licenseKey }}
                     </span>
                     <router-link v-if="$root.isUserAdmin()" :to="{ name: 'config', query: {s: 'soc.config.licenseKey'}}" style="text-decoration: none; cursor: 'pointer'">
-                      <v-btn icon>
-                        <v-icon class="mx-2" :title="i18n.view">fa-pencil</v-icon>
+                      <v-btn icon variant="text" size="small">
+                        <v-icon class="mx-2 theme-text" :title="i18n.view">fa-pencil</v-icon>
                       </v-btn>
                     </router-link>
                   </v-card-title>
@@ -2135,11 +2136,11 @@
                         </v-row>
                         <v-row class="my-1">
                           <v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseEffective }}:</v-col>
-                          <v-col cols="9" class="pa-1">{{ $root.licenseKey.effective | formatDateTime }}</v-col>
+                          <v-col cols="9" class="pa-1">{{ formatDateTime($root.licenseKey.effective) }}</v-col>
                         </v-row>
                         <v-row class="my-1">
                           <v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseExpiration }}:</v-col>
-                          <v-col cols="9" class="pa-1">{{ $root.licenseKey.expiration | formatDateTime }}</v-col>
+                          <v-col cols="9" class="pa-1">{{ formatDateTime($root.licenseKey.expiration) }}</v-col>
                         </v-row>
                       </span>
                     </v-container>
@@ -2176,12 +2177,12 @@
                     </v-container>
                   </v-card-text>
                 </v-card>
-              </v-tab-item>
+              </v-tabs-window-item>
 
-              <v-tab-item value="terms">
-                <v-card outlined class="my-4">
-                  <v-card-text>
-                    <div class="text-h5 mt-8 mb-3 grey--text">
+              <v-tabs-window-item value="terms">
+                <v-card variant="outlined" class="my-4 subtle-border">
+                  <v-card-text class="text-grey">
+                    <div class="text-h5 mt-8 mb-3">
                       Elastic License 2.0 (ELv2) Terms
                     </div>
 
@@ -2245,16 +2246,16 @@
                     <b>use</b> means anything you do with the software requiring one of your licenses.
                     <p class="mb-3" />
                     <b>trademark</b> means trademarks, service marks, and similar rights.
-                  </v-card-text>
+                  </v-card-content>
                 </v-card>
-              </v-tab-item>
-            </v-tabs>
+              </v-tabs-window-item>
+            </v-tabs-window>
           </v-col>
         </v-row>
       </v-container>
-    </script> -->
+    </script>
 
-    <!-- <script type="text/x-template" id="page-downloads">
+    <script type="text/x-template" id="page-downloads">
       <v-container fluid data-aid="downloads_screen">
         <v-row>
           <v-col>
@@ -2266,7 +2267,7 @@
             <h3 class="my-2" v-text="i18n.downloadsElasticAgent" id="download-elasticagent"></h3>
             <v-alert v-if="remoteAgentSupported" id="firewallTip" type="info" v-html="i18n.downloadsFirewallTip" data-aid="downloads_fw_tip"></v-alert>
             <v-alert v-else type="error" id="agentUnavailable" v-html="i18n.downloadsAgentUnavailable" data-aid="downloads_agent_unavailable"></v-alert>
-            <ul id="installer-list">
+            <ul id="installer-list" class="ml-5 mt-3">
               <li><a href="/packages/so-elastic-agent_windows_amd64" download="so-elastic-agent_windows_amd64.exe" data-aid="downloads_windows_agent">Windows x86_64 Installer</a></li>
               <li><a href="/packages/so-elastic-agent_linux_amd64" download="so-elastic-agent_linux_amd64" data-aid="downloads_linux_agent">Linux x86_64 Installer</a></li>
               <li><a href="/packages/so-elastic-agent_darwin_amd64" download="so-elastic-agent_darwin_amd64" data-aid="downloads_mac_intel_agent">macOS x86_64 Installer</a></li>
@@ -2277,7 +2278,7 @@
           </v-col>
         </v-row>
       </v-container>
-    </script> -->
+    </script>
 
     <!-- <script type="text/x-template" id="page-users">
       <v-container fluid data-aid="users_screen">
