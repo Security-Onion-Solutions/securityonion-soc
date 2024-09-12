@@ -781,7 +781,9 @@ func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detects []*mod
 		}
 	}()
 
-	allSettings, err := e.srv.Configstore.GetSettings(ctx, true)
+	// incoming context was checked for detections/write perms already, using server
+	// context to complete ConfigStore actions.
+	allSettings, err := e.srv.Configstore.GetSettings(e.srv.Context, true)
 	if err != nil {
 		return nil, err
 	}
@@ -913,27 +915,27 @@ func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detects []*mod
 
 	threshold.Value = string(yamlThreshold)
 
-	err = e.srv.Configstore.UpdateSetting(ctx, local, false)
+	err = e.srv.Configstore.UpdateSetting(e.srv.Context, local, false)
 	if err != nil {
 		return errMap, err
 	}
 
-	err = e.srv.Configstore.UpdateSetting(ctx, enabled, false)
+	err = e.srv.Configstore.UpdateSetting(e.srv.Context, enabled, false)
 	if err != nil {
 		return errMap, err
 	}
 
-	err = e.srv.Configstore.UpdateSetting(ctx, disabled, false)
+	err = e.srv.Configstore.UpdateSetting(e.srv.Context, disabled, false)
 	if err != nil {
 		return errMap, err
 	}
 
-	err = e.srv.Configstore.UpdateSetting(ctx, modify, false)
+	err = e.srv.Configstore.UpdateSetting(e.srv.Context, modify, false)
 	if err != nil {
 		return errMap, err
 	}
 
-	err = e.srv.Configstore.UpdateSetting(ctx, threshold, false)
+	err = e.srv.Configstore.UpdateSetting(e.srv.Context, threshold, false)
 	if err != nil {
 		return errMap, err
 	}
@@ -1507,22 +1509,22 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 
 	threshold.Value = string(yamlThreshold)
 
-	err = e.srv.Configstore.UpdateSetting(ctx, enabled, false)
+	err = e.srv.Configstore.UpdateSetting(e.srv.Context, enabled, false)
 	if err != nil {
 		return errMap, err
 	}
 
-	err = e.srv.Configstore.UpdateSetting(ctx, disabled, false)
+	err = e.srv.Configstore.UpdateSetting(e.srv.Context, disabled, false)
 	if err != nil {
 		return errMap, err
 	}
 
-	err = e.srv.Configstore.UpdateSetting(ctx, modify, false)
+	err = e.srv.Configstore.UpdateSetting(e.srv.Context, modify, false)
 	if err != nil {
 		return errMap, err
 	}
 
-	err = e.srv.Configstore.UpdateSetting(ctx, threshold, false)
+	err = e.srv.Configstore.UpdateSetting(e.srv.Context, threshold, false)
 	if err != nil {
 		return errMap, err
 	}
