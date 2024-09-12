@@ -17,8 +17,6 @@ const LICENSE_STATUS_UNPROVISIONED = "unprovisioned";
 
 const LICENSE_EXPIRES_SOON_DAYS = 45;
 
-const UNREALISTIC_AGE = 1700000000; // About 54 years
-
 const USER_PASSWORD_LENGTH_MIN = 8;
 const USER_PASSWORD_LENGTH_MAX = 72;
 const USER_PASSWORD_INVALID_RX = /["'$&!]/;
@@ -52,6 +50,9 @@ $(document).ready(function () {
         prevIcon: 'fa-chevron-left',
         nextIcon: 'fa-chevron-right',
         lastIcon: 'fa-forward-step',
+      },
+      VTextField: {
+        clearIcon: 'fas fa-circle-xmark',
       }
     },
     icons: {

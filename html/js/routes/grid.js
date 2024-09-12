@@ -9,42 +9,44 @@ const NodeStatusFault = "fault";
 const NodeStatusOk = "ok";
 const NodeStatusPending = "pending";
 const NodeStatusRestart = "restart";
+const UNREALISTIC_AGE = 1700000000; // About 54 years
 
 routes.push({ path: '/grid', name: 'grid', component: {
   template: '#page-grid',
   data() { return {
     i18n: this.$root.i18n,
+    moment: moment,
     nodes: [],
     gridFilter: '',
     headers: [
-      { text: "", value: 'indicators' },
-      { text: this.$root.i18n.id, value: 'id' },
-      { text: this.$root.i18n.role, value: 'role', align: ' d-none d-md-table-cell' },
-      { text: this.$root.i18n.address, value: 'address', align: ' d-none d-lg-table-cell' },
-      { text: this.$root.i18n.version, value: 'version', align: ' d-none d-lg-table-cell' },
-      { text: this.$root.i18n.model, value: 'model', align: ' d-none d-lg-table-cell' },
-      { text: this.$root.i18n.eps, value: 'consumptionEps', align: ' d-none d-lg-table-cell' },
-      { text: this.$root.i18n.memUsageAbbr, value: 'memoryUsedPct', align: ' d-none d-xl-table-cell' },
-      { text: this.$root.i18n.diskUsageRootAbbr, value: 'diskUsedRootPct', align: ' d-none d-xl-table-cell' },
-      { text: this.$root.i18n.diskUsageNsmAbbr, value: 'diskUsedNsmPct', align: ' d-none d-xl-table-cell' },
-      { text: this.$root.i18n.cpuUsageAbbr, value: 'cpuUsedPct', align: ' d-none d-xl-table-cell' },
-      { text: this.$root.i18n.trafficManInAbbr, value: 'trafficManInMbs', align: ' d-none d-xl-table-cell' },
-      { text: this.$root.i18n.trafficManOutAbbr, value: 'trafficManOutMbs', align: ' d-none d-xl-table-cell' },
-      { text: this.$root.i18n.trafficMonInAbbr, value: 'trafficMonInMbs', align: ' d-none d-xl-table-cell' },
-      { text: this.$root.i18n.trafficMonInDropsAbbr, value: 'trafficMonInDropsMbs', align: ' d-none d-xl-table-cell' },
-      { text: this.$root.i18n.captureLossAbbr, value: 'captureLossPct', align: ' d-none d-xl-table-cell' },
-      { text: this.$root.i18n.zeekLossAbbr, value: 'zeekLossPct', align: ' d-none d-xl-table-cell' },
-      { text: this.$root.i18n.suricataLossAbbr, value: 'suriLossPct', align: ' d-none d-xl-table-cell' },
-      { text: this.$root.i18n.stenoLossAbbr, value: 'stenoLossPct', align: ' d-none d-xl-table-cell' },
-      { text: this.$root.i18n.pcapRetentionAbbr, value: 'pcapDays', align: ' d-none d-xl-table-cell' },
-      { text: this.$root.i18n.dateUpdated, value: 'updateTime', align: ' d-none d-lg-table-cell' },
-      { text: this.$root.i18n.uptime, value: 'uptimeSeconds', align: ' d-none d-lg-table-cell' },
-      { text: this.$root.i18n.status, value: 'status' },
-      { text: '', value: 'keywords', align: ' d-none' },
+      { title: "", value: 'expand' },
+      { title: "", value: 'indicators' },
+      { title: this.$root.i18n.id, value: 'id' },
+      { title: this.$root.i18n.role, value: 'role', align: ' d-none d-md-table-cell' },
+      { title: this.$root.i18n.address, value: 'address', align: ' d-none d-lg-table-cell' },
+      { title: this.$root.i18n.version, value: 'version', align: ' d-none d-lg-table-cell' },
+      { title: this.$root.i18n.model, value: 'model', align: ' d-none d-lg-table-cell' },
+      { title: this.$root.i18n.eps, value: 'consumptionEps', align: ' d-none d-lg-table-cell', metricsEnabled: true },
+      { title: this.$root.i18n.memUsageAbbr, value: 'memoryUsedPct', align: ' d-none d-xl-table-cell', metricsEnabled: true },
+      { title: this.$root.i18n.diskUsageRootAbbr, value: 'diskUsedRootPct', align: ' d-none d-xl-table-cell', metricsEnabled: true },
+      { title: this.$root.i18n.diskUsageNsmAbbr, value: 'diskUsedNsmPct', align: ' d-none d-xl-table-cell', metricsEnabled: true },
+      { title: this.$root.i18n.cpuUsageAbbr, value: 'cpuUsedPct', align: ' d-none d-xl-table-cell', metricsEnabled: true },
+      { title: this.$root.i18n.trafficManInAbbr, value: 'trafficManInMbs', align: ' d-none d-xl-table-cell', metricsEnabled: true },
+      { title: this.$root.i18n.trafficManOutAbbr, value: 'trafficManOutMbs', align: ' d-none d-xl-table-cell', metricsEnabled: true },
+      { title: this.$root.i18n.trafficMonInAbbr, value: 'trafficMonInMbs', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
+      { title: this.$root.i18n.trafficMonInDropsAbbr, value: 'trafficMonInDropsMbs', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
+      { title: this.$root.i18n.captureLossAbbr, value: 'captureLossPct', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
+      { title: this.$root.i18n.zeekLossAbbr, value: 'zeekLossPct', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
+      { title: this.$root.i18n.suricataLossAbbr, value: 'suriLossPct', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
+      { title: this.$root.i18n.stenoLossAbbr, value: 'stenoLossPct', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
+      { title: this.$root.i18n.pcapRetentionAbbr, value: 'pcapDays', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
+      { title: this.$root.i18n.dateUpdated, value: 'updateTime', align: ' d-none d-lg-table-cell' },
+      { title: this.$root.i18n.uptime, value: 'uptimeSeconds', align: ' d-none d-lg-table-cell' },
+      { title: this.$root.i18n.status, value: 'status' },
+      { title: '', value: 'keywords', align: ' d-none' },
     ],
     expanded: [],
-    sortBy: 'id',
-    sortDesc: false,
+    sortBy: [{ key: 'id', order: 'asc' }],
     itemsPerPage: 10,
     footerProps: { 'items-per-page-options': [10,25,50,100,250,1000] },
     gridEps: 0,
@@ -65,11 +67,14 @@ routes.push({ path: '/grid', name: 'grid', component: {
     attachment: null,
     zone: '',
     moreColumns: false,
+    NodeStatusUnknown: NodeStatusUnknown,
+    NodeStatusFault: NodeStatusFault,
+    NodeStatusOk: NodeStatusOk,
+    NodeStatusPending: NodeStatusPending,
+    NodeStatusRestart: NodeStatusRestart,
+    UNREALISTIC_AGE: UNREALISTIC_AGE,
   }},
   created() {
-    Vue.filter('colorNodeStatus', this.colorNodeStatus);
-    Vue.filter('iconNodeStatus', this.iconNodeStatus);
-    Vue.filter('toTZ', this.toTZ);
   },
   beforeDestroy() {
   },
@@ -83,7 +88,6 @@ routes.push({ path: '/grid', name: 'grid', component: {
   watch: {
     '$route': 'loadData',
     'sortBy': 'saveLocalSettings',
-    'sortDesc': 'saveLocalSettings',
     'itemsPerPage': 'saveLocalSettings',
     'moreColumns': 'saveLocalSettings',
   },
@@ -120,7 +124,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
     },
     updateColumnClass(text, wide, size) {
       const column = this.headers.find(function(item) {
-        return item.text == text
+        return item.title == text
       });
       if (column) {
         if (!wide) {
@@ -154,20 +158,21 @@ routes.push({ path: '/grid', name: 'grid', component: {
       this.updateColumnClass(this.i18n.stenoLossAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
       this.updateColumnClass(this.i18n.pcapRetentionAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
     },
-    expand(item) {
-      if (this.isExpanded(item)) {
-        this.expanded = [];
-      } else {
-        this.expanded = [item];
+    showHeader(header) {
+      let show = true;
+      if (header.moreColumns) {
+        show = show && this.moreColumns;
       }
-    },
-    isExpanded(item) {
-      return (this.expanded.length > 0 && this.expanded[0] == item);
+      if (header.metricsEnabled) {
+        show = show && this.metricsEnabled;
+      }
+
+      return show;
     },
     saveLocalSettings() {
       localStorage['settings.grid.moreColumns'] = this.moreColumns;
-      localStorage['settings.grid.sortBy'] = this.sortBy;
-      localStorage['settings.grid.sortDesc'] = this.sortDesc;
+      localStorage['settings.grid.sortBy'] = this.sortBy[0].key;
+      localStorage['settings.grid.sortDesc'] = this.sortBy[0].order;
       localStorage['settings.grid.itemsPerPage'] = this.itemsPerPage;
     },
     loadLocalSettings() {
@@ -175,8 +180,8 @@ routes.push({ path: '/grid', name: 'grid', component: {
       if (localStorage['settings.grid.moreColumns']) this.moreColumns = localStorage['settings.grid.moreColumns'] == "true";
 
       if (localStorage['settings.grid.sortBy']) {
-        this.sortBy = localStorage['settings.grid.sortBy'];
-        this.sortDesc = localStorage['settings.grid.sortDesc'] == "true";
+        this.sortBy[0].key = localStorage['settings.grid.sortBy'];
+        this.sortBy[0].order = localStorage['settings.grid.sortDesc'];
         this.itemsPerPage = parseInt(localStorage['settings.grid.itemsPerPage']);
       }
     },
@@ -189,7 +194,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
       for (var i = 0; i < this.nodes.length; i++) {
         if (this.nodes[i].id == node.id) {
           const exp = this.isExpanded(this.nodes[i]);
-          this.$set(this.nodes, i, this.formatNode(node));
+          this.nodes[i] = this.formatNode(node);
           if (exp) {
             this.expand(this.nodes[i]);
           }
@@ -199,6 +204,14 @@ routes.push({ path: '/grid', name: 'grid', component: {
       }
       if (!found) {
         this.nodes.push(this.formatNode(node));
+      }
+    },
+    isExpanded(node) {
+      return this.expanded.includes(node.id);
+    },
+    expand(node) {
+      if (!this.isExpanded(node)) {
+        this.expanded.push(node.id);
       }
     },
     updateStatus(status) {

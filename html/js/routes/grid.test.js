@@ -37,9 +37,9 @@ function testUpdateMetricsEnabled(node1MetricsEnabled, node2MetricsEnabled, expe
 	expect(comp.metricsEnabled).toBe(expectedMetricsEnabled);
 
 	const validateColumn = (label, size, moreCols) => {
+		const trans = comp.i18n[label];
 		const column = comp.headers.find(function(item) {
-			const trans = comp.i18n[label]
-			return item.text == trans;
+			return item.title == trans;
 		});
 		if (!expectedMetricsEnabled || (moreCols && !moreColumnsEnabled)) {
 			expect(column.align).toBe(' d-none');
