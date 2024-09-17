@@ -53,6 +53,10 @@ $(document).ready(function () {
       },
       VTextField: {
         clearIcon: 'fas fa-circle-xmark',
+      },
+      VTreeview: {
+        collapseIcon: 'fas fa-caret-down',
+        expandIcon: 'fas fa-caret-right',
       }
     },
     icons: {

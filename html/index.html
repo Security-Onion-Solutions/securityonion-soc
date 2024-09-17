@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="css/external/daterangepicker-3.1.css">
     <link rel="stylesheet" href="css/external/vue-prism-editor-v1.3.0.min.css" />
     <link rel="stylesheet" href="css/external/prism-custom-dark-v1.29.0.css" />
+    <link rel="stylesheet" href="css/external/vuetify-labs-v3.7.0.min.css" />
     <link rel="stylesheet" href="css/app.css?v=VERSION_PLACEHOLDER">
     <title>Security Onion</title>
     <script src="js/analytics.js?v=VERSION_PLACEHOLDER"></script>
@@ -2280,7 +2281,7 @@
       </v-container>
     </script>
 
-    <!-- <script type="text/x-template" id="page-users">
+    <script type="text/x-template" id="page-users">
       <v-container fluid data-aid="users_screen">
         <v-row>
           <v-col cols="12" lg="3">
@@ -2289,13 +2290,13 @@
           <v-col cols="12" lg="5">
             <v-expansion-panels v-if="$root.isUserAdmin()">
               <v-expansion-panel data-aid="users_options_expand">
-                <v-expansion-panel-header id="users-options-header">{{i18n.options}}</v-expansion-panel-header>
-                <v-expansion-panel-content>
-                  <v-btn id="users-sync-button" @click.stop="sync()" class="mt-6 mb-1" data-aid="users_options_synchronize">
+                <v-expansion-panel-title id="users-options-header">{{i18n.options}}</v-expansion-panel-title>
+                <v-expansion-panel-text>
+                  <v-btn id="users-sync-button" @click.stop="sync()" class="mt-6 mb-1 theme-background-lighten-1" data-aid="users_options_synchronize">
                     {{ i18n.usersSynchronize }}
                   </v-btn>
                   <div class="text-caption" v-text="i18n.usersSynchronizeHelp"/>
-                </v-expansion-panel-content>
+                </v-expansion-panel-text>
               </v-expansion-panel>
             </v-expansion-panels>
           </v-col>
@@ -2306,8 +2307,8 @@
         </v-row>
         <v-row>
           <v-col>
-            <v-toolbar v-if="$root.isUserAdmin()" class="elevation-0">
-              <v-btn id="add-user-button" class="action" color="blue" @click.stop="showAdd()" data-aid="users_create_new">
+            <v-toolbar v-if="$root.isUserAdmin()" class="elevation-0 theme-background-lighten-1">
+              <v-btn variant="flat" id="add-user-button" class="action ml-3" color="blue" @click.stop="showAdd()" data-aid="users_create_new">
                 <v-icon>fa-plus</v-icon>
               </v-btn>
             </v-toolbar>
@@ -2318,16 +2319,16 @@
                   <v-container grid-list-sm class="pa-4">
                     <v-row>
                       <v-col xs12>
-                        <v-text-field id="email-input" v-model="form.email" :placeholder="i18n.email" autofocus="true" :rules="[rules.required]" data-aid="users_create_dialog_email"></v-text-field>
-                        <v-text-field id="password-input" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" data-aid="users_create_dialog_password"
+                        <v-text-field variant="underlined" id="email-input" v-model="form.email" :placeholder="i18n.email" :autofocus="true" :rules="[rules.required]" data-aid="users_create_dialog_email"></v-text-field>
+                        <v-text-field variant="underlined" id="password-input" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" data-aid="users_create_dialog_password"
                           @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'"
                           :rules="[rules.required, rules.maxpasslen, rules.minpasslen, rules.badpasschs]"></v-text-field>
                         <span data-aid="users_create_dialog_roles">
-                          <v-select id="roles-select" v-model="form.role" :items="roles" :label="i18n.role" :rules="[rules.required]"></v-select>
+                          <v-select variant="underlined" id="roles-select" v-model="form.role" :items="roles" :label="i18n.role" :rules="[rules.required]"></v-select>
                         </span>
-                        <v-text-field id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName" data-aid="users_create_dialog_firstname"></v-text-field>
-                        <v-text-field id="lastname-input" v-model="form.lastName" :placeholder="i18n.lastName" data-aid="users_create_dialog_lastname"></v-text-field>
-                        <v-text-field id="note-input" v-model="form.note" :placeholder="i18n.note" data-aid="users_create_dialog_note"></v-text-field>
+                        <v-text-field variant="underlined" id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName" data-aid="users_create_dialog_firstname"></v-text-field>
+                        <v-text-field variant="underlined" id="lastname-input" v-model="form.lastName" :placeholder="i18n.lastName" data-aid="users_create_dialog_lastname"></v-text-field>
+                        <v-text-field variant="underlined" id="note-input" v-model="form.note" :placeholder="i18n.note" data-aid="users_create_dialog_note"></v-text-field>
                       </v-col>
                     </v-row>
                   </v-container>
@@ -2352,33 +2353,49 @@
                 </v-card-actions>
               </v-card>
             </v-dialog>
-            <v-data-table :sort-by.sync="sortBy" :sort-desc.sync="sortDesc" :footer-props="footerProps" data-aid="users_details"
-              :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="users" :expanded.sync="expanded" :show-expand="$root.isUserAdmin()">
-              <template v-slot:item="props">
+            <v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" :footer-props="footerProps" data-aid="users_details"
+              :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="users">
+              <template v-slot:headers="{ columns, isSorted, getSortIcon, toggleSort }">
+                <tr>
+                  <template v-for="header in columns" :key="header.key">
+                    <th :class="{'is-sorted': isSorted(header)}" v-if="header.value != 'expand' || $root.isUserAdmin()">
+                      <span @click="toggleSort(header)">
+                        {{ header.title }}
+                      </span>
+                      <template v-if="isSorted(header)">
+                        <v-icon>
+                          {{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
+                        </v-icon>
+                      </template>
+                    </th>
+                  </template>
+                </tr>
+              </template>
+              <template v-slot:item="{ item, isExpanded, toggleExpand, internalItem }">
                 <tr>
                   <td v-if="$root.isUserAdmin()">
-                    <v-btn id="expandNode" icon small @click="expand(props.item)" data-aid="users_details_expand">
-                      <v-icon v-if="isExpanded(props.item)" :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="users_details_collapse">fa-angle-down</v-icon>
-                      <v-icon v-if="!isExpanded(props.item)" :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="users_details_expand">fa-angle-right</v-icon>
+                    <v-btn id="expandNode" icon variant="text" size="small" @click="toggleExpand(internalItem)" data-aid="users_details_expand">
+                      <v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="users_details_collapse">fa-angle-down</v-icon>
+                      <v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="users_details_expand">fa-angle-right</v-icon>
                     </v-btn>
                   </td>
-                  <td v-text="props.item.email"></td>
-                  <td v-text="props.item.firstName" class="d-none d-lg-table-cell"></td>
-                  <td v-text="props.item.lastName" class="d-none d-lg-table-cell"></td>
-                  <td v-text="props.item.note" class="d-none d-lg-table-cell"></td>
-                  <td v-text="$root.formatStringArray(props.item.roles)" class="d-none d-lg-table-cell"></td>
+                  <td v-text="item.email"></td>
+                  <td v-text="item.firstName" class="d-none d-lg-table-cell"></td>
+                  <td v-text="item.lastName" class="d-none d-lg-table-cell"></td>
+                  <td v-text="item.note" class="d-none d-lg-table-cell"></td>
+                  <td v-text="$root.formatStringArray(item.roles)" class="d-none d-lg-table-cell"></td>
                   <td>
-                    <div v-if="$root.isUserAdmin() || $root.isMyUser(props.item)">
-                      <v-icon v-if="props.item.oidcStatus == 'enabled'" color="info" class="px-1" :title="i18n.oidcLinked" data-aid="users_details_link_indicator">fa-link</v-icon>
-                      <v-icon v-if="props.item.totpStatus == 'enabled'" color="info" :title="i18n.totpActive" data-aid="users_details_totp_indicator">fa-user-shield</v-icon>
-                      <v-icon v-if="props.item.webauthnStatus == 'unused-due-to-always-showing-enabled'" color="info" class="px-1" :title="i18n.webauthnActive" data-aid="users_details_webauthn_indicator">fa-fingerprint</v-icon>
-                      <v-icon v-if="props.item.status == 'locked'" color="grey" :title="i18n.loginDisabled" data-aid="users_details_locked_indicator">fa-user-slash</v-icon>
-                      <v-icon v-if="!props.item.passwordChanged && props.item.oidcStatus != 'enabled'" color="warning" class="px-1" :title="i18n.passwordNeedsChanged" data-aid="users_details_unmodified_indicator">fa-exclamation-triangle</v-icon>
+                    <div v-if="$root.isUserAdmin() || $root.isMyUser(item)">
+                      <v-icon v-if="item.oidcStatus == 'enabled'" color="info" class="px-1" :title="i18n.oidcLinked" data-aid="users_details_link_indicator">fa-link</v-icon>
+                      <v-icon v-if="item.totpStatus == 'enabled'" color="info" :title="i18n.totpActive" data-aid="users_details_totp_indicator">fa-user-shield</v-icon>
+                      <v-icon v-if="item.webauthnStatus == 'unused-due-to-always-showing-enabled'" color="info" class="px-1" :title="i18n.webauthnActive" data-aid="users_details_webauthn_indicator">fa-fingerprint</v-icon>
+                      <v-icon v-if="item.status == 'locked'" color="grey" :title="i18n.loginDisabled" data-aid="users_details_locked_indicator">fa-user-slash</v-icon>
+                      <v-icon v-if="!item.passwordChanged && item.oidcStatus != 'enabled'" color="warning" class="px-1" :title="i18n.passwordNeedsChanged" data-aid="users_details_unmodified_indicator">fa-exclamation-triangle</v-icon>
                     </div>
                   </td>
                 </tr>
               </template>
-              <template v-slot:expanded-item="{ item }">
+              <template v-slot:expanded-row="{ item }">
                 <tr data-aid="users_details_expanded">
                   <td :colspan="headers.length + 1" class="px-0">
                     <v-container fluid grid-list-sm class="pa-4">
@@ -2387,9 +2404,9 @@
                           <v-card>
                             <v-card-title v-text="i18n.profile"/>
                             <v-card-text>
-                              <v-text-field id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName" data-aid="users_details_firstname_input"></v-text-field>
-                              <v-text-field id="lastname-input" v-model="form.lastName" :placeholder="i18n.lastName" data-aid="users_details_lastname_input"></v-text-field>
-                              <v-text-field id="note-input" v-model="form.note" :placeholder="i18n.note" data-aid="users_details_note_input"></v-text-field>
+                              <v-text-field variant="underlined" id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName" data-aid="users_details_firstname_input"></v-text-field>
+                              <v-text-field variant="underlined" id="lastname-input" v-model="form.lastName" :placeholder="i18n.lastName" data-aid="users_details_lastname_input"></v-text-field>
+                              <v-text-field variant="underlined" id="note-input" v-model="form.note" :placeholder="i18n.note" data-aid="users_details_note_input"></v-text-field>
 
                               <v-btn id="update-profile-button" @click="updateProfile(item)" v-text="i18n.update" data-aid="users_details_submit"></v-btn>
                             </v-card-text>
@@ -2399,7 +2416,7 @@
                           <v-card>
                             <v-card-title>{{ i18n.roles }}</v-card-title>
                             <v-card-text data-aid="users_details_role_toggle">
-                              <v-checkbox v-for="role in roles" :key="role" :id="'role-checkbox-' + role" dense :input-value="hasRole(item, role)" :label="role" @click.stop="return toggleRole(item, role)">
+                              <v-checkbox v-for="role in roles" :key="role" :id="'role-checkbox-' + role" density="compact" class="no-details" :input-value="hasRole(item, role)" :label="role" @click.stop="toggleRole(item, role)" />
                             </v-card-text>
                           </v-card>
                         </v-col>
@@ -2412,7 +2429,7 @@
                               </v-alert>
 
                               <v-form v-model="form.valid">
-                                <v-text-field id="password-input" v-model="form.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" data-aid="users_details_password_input"
+                                <v-text-field variant="underlined" id="password-input" v-model="form.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" data-aid="users_details_password_input"
                                   @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'"
                                   :rules="[rules.required, rules.maxpasslen, rules.minpasslen, rules.badpasschs]"></v-text-field>
                               </v-form>
@@ -2431,7 +2448,7 @@
           </v-col>
         </v-row>
       </v-container>
-    </script> -->
+    </script>
 
     <script type="text/x-template" id="page-jobs">
       <v-container fluid data-aid="jobs_screen">
@@ -4759,7 +4776,7 @@
       </v-container>
     </script>
 
-    <!-- <script type="text/x-template" id="page-settings">
+    <script type="text/x-template" id="page-settings">
       <v-container v-if="showSettingsForm" fluid data-aid="user_settings_screen">
         <v-row>
           <v-col>
@@ -4771,23 +4788,23 @@
             <v-alert v-if="$root.forceUserOtp" class="mt-2" type="error" icon="fa-shield-halved"  border="left" colored-border text dense data-aid="user_settings_force_otp_alert">
               {{ i18n.forceUserOtp }}
             </v-alert>
-            <v-tabs grow v-model="activeTab">
-
-              <v-tab id="userSettings_generalTab" href="#general" data-aid="user_settings_general_tab">
-                <v-icon left>fa-cogs</v-icon>
+            <v-tabs v-model="activeTab">
+              <v-tab id="userSettings_generalTab" value="general" :class="{ 'theme-primary': activeTab === 'general' }" data-aid="user_settings_general_tab">
+                <v-icon class="mb-1 mr-3">fa-cogs</v-icon>
                 {{ i18n.settings }}
               </v-tab>
-              <v-tab id="userSettings_profileTab" href="#profile" data-aid="user_settings_profile_tab">
-                <v-icon left>fa-id-card</v-icon>
+              <v-tab id="userSettings_profileTab" value="profile" :class="{ 'theme-primary': activeTab === 'profile' }" data-aid="user_settings_profile_tab">
+                <v-icon class="mb-1 mr-3">fa-id-card</v-icon>
                 {{ i18n.profile }}
               </v-tab>
-              <v-tab id="userSettings_securityTab" href="#security" data-aid="user_settings_security_tab">
-                <v-icon left>fa-shield-halved</v-icon>
+              <v-tab id="userSettings_securityTab" value="security" :class="{ 'theme-primary': activeTab === 'security' }" data-aid="user_settings_security_tab">
+                <v-icon class="mb-1 mr-3">fa-shield-halved</v-icon>
                 {{ i18n.security }}
               </v-tab>
-
-              <v-tab-item value="general" data-aid="user_settings_general">
-                <v-card outlined class="my-4">
+            </v-tabs>
+            <v-tabs-window v-model="activeTab" class="full-width">
+              <v-tabs-window-item value="general" data-aid="user_settings_general">
+                <v-card class="my-4 border subtle-border">
                   <v-card-title>{{ i18n.defaults }}</v-card-title>
                   <v-card-text>
                     <div v-text="i18n.resetDefaultsHint"></div>
@@ -4795,30 +4812,30 @@
                     <v-btn id="settingsResetDefaults" color="primary" :disabled="usingDefaults" v-text="i18n.resetDefaults" @click="resetDefaults"></v-btn>
                   </v-card-text>
                 </v-card>
-              </v-tab-item>
+              </v-tabs-window-item>
 
-              <v-tab-item value="profile" data-aid="user_settings_profile">
-                <v-alert class="mt-2" type="warning" icon="fa-shield-halved" text dense>
+              <v-tabs-window-item value="profile" data-aid="user_settings_profile">
+                <v-alert class="mt-2" type="warning" icon="fa-shield-halved" variant="tonal" density="compact">
                   {{ i18n.profileInstructions }}
                 </v-alert>
-                <v-card outlined class="my-4">
+                <v-card outlined class="my-4 border subtle-border">
                   <v-card-title>{{ i18n.profileDetails }}</v-card-title>
                   <v-card-text>
                     <v-form v-model="profileForm.valid" method="post" :action="authSettingsUrl">
-                      <v-text-field name="traits.email" v-model="profileForm.email" :placeholder="i18n.email" :rules="[rules.required, rules.minemaillen]" class="d-none" data-aid="user_settings_email"></v-text-field>
-                      <v-text-field name="traits.firstName" v-model="profileForm.firstName" :placeholder="i18n.firstName" type="text":rules="[rules.maxlen]" data-aid="user_settings_firstname"></v-text-field>
-                      <v-text-field name="traits.lastName" v-model="profileForm.lastName" :placeholder="i18n.lastName" type="text" type="text":rules="[rules.maxlen]" data-aid="user_settings_lastname"></v-text-field>
-                      <v-text-field name="traits.note" v-model="profileForm.note" :placeholder="i18n.note" type="text" type="text":rules="[rules.maxlen]" data-aid="user_settings_note"></v-text-field>
-                      <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
-                      <v-text-field name="method" value="profile" class="d-none"></v-text-field>
+                      <v-text-field variant="underlined" name="traits.email" v-model="profileForm.email" :placeholder="i18n.email" :rules="[rules.required, rules.minemaillen]" class="d-none" data-aid="user_settings_email"></v-text-field>
+                      <v-text-field variant="underlined" name="traits.firstName" v-model="profileForm.firstName" :placeholder="i18n.firstName" type="text":rules="[rules.maxlen]" data-aid="user_settings_firstname"></v-text-field>
+                      <v-text-field variant="underlined" name="traits.lastName" v-model="profileForm.lastName" :placeholder="i18n.lastName" type="text" :rules="[rules.maxlen]" data-aid="user_settings_lastname"></v-text-field>
+                      <v-text-field variant="underlined" name="traits.note" v-model="profileForm.note" :placeholder="i18n.note" type="text" :rules="[rules.maxlen]" data-aid="user_settings_note"></v-text-field>
+                      <v-text-field variant="underlined" name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
+                      <v-text-field variant="underlined" name="method" value="profile" class="d-none"></v-text-field>
                       <v-btn id="settingsProfileChangeSubmit" type="submit" color="primary" :disabled="!profileForm.valid" v-text="i18n.save"></v-btn>
                     </v-form>
                   </v-card-text>
                 </v-card>
-              </v-tab-item>
+              </v-tabs-window-item>
 
-              <v-tab-item value="security" data-aid="user_settings_security">
-                <v-alert class="mt-2" type="warning" icon="fa-shield-halved" text dense>
+              <v-tabs-window-item value="security" data-aid="user_settings_security">
+                <v-alert class="mt-2" type="warning" icon="fa-shield-halved" variant="tonal" density="compact">
                   {{ i18n.securityInstructions }}
                 </v-alert>
                 <v-card v-if="oidcEnabled" outlined class="my-4">
@@ -4836,22 +4853,22 @@
                   </v-card-text>
                 </v-card>
 
-                <v-card v-if="passwordEnabled" outlined class="my-4">
+                <v-card v-if="passwordEnabled" class="my-4 border subtle-border">
                   <v-card-title>{{ i18n.password }}</v-card-title>
                   <v-card-subtitle v-text="i18n.passwordInstructions"></v-card-subtitle>
                   <v-card-text>
                     <v-form v-model="passwordForm.valid" method="post" :action="authSettingsUrl">
-                      <v-text-field name="password" v-model="passwordForm.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.minpasslen, rules.maxpasslen, rules.badpasschs]" data-aid="user_settings_password_input"></v-text-field>
-                      <v-text-field :placeholder="i18n.passwordConfirm" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.maxpasslen, rules.matches, rules.badpasschs]" data-aid="user_settings_password_confirm_input"></v-text-field>
-                      <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
-                      <v-text-field name="method" value="password" class="d-none"></v-text-field>
+                      <v-text-field variant="underlined" name="password" v-model="passwordForm.password" :placeholder="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.minpasslen, rules.maxpasslen, rules.badpasschs]" data-aid="user_settings_password_input"></v-text-field>
+                      <v-text-field variant="underlined" :placeholder="i18n.passwordConfirm" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[rules.required, rules.maxpasslen, rules.matches, rules.badpasschs]" data-aid="user_settings_password_confirm_input"></v-text-field>
+                      <v-text-field variant="underlined" name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
+                      <v-text-field variant="underlined" name="method" value="password" class="d-none"></v-text-field>
                       <v-btn id="settingsPasswordChangeSubmit" type="submit" color="primary" :disabled="!passwordForm.valid" v-text="i18n.save"></v-btn>
                     </v-form>
                   </v-card-text>
                 </v-card>
 
-                <v-card v-if="passwordEnabled && passwordSet" outlined class="my-4" v-if="totpForm.qr && totpForm.secret">
-                  <v-alert type="error" border="left" colored-border text dense>
+                <v-card v-if="passwordEnabled && totpForm.qr && totpForm.secret" outlined class="my-4 border subtle-border">
+                  <v-alert class="theme-background-lighten-1" border="start" border-color="error" variant="text" density="compact" icon="fas fa-exclamation-triangle text-error">
                     {{ i18n.securityInstructionsTotp }}
                   </v-alert>
                   <v-card-title>{{ i18n.totp }}</v-card-title>
@@ -4864,34 +4881,34 @@
                         {{ totpForm.secret }}
                         <v-icon class="ml-1" @click="$root.copyToClipboard(totpForm.secret)" :title="i18n.copyToClipboard" data-aid="user_settings_security_totp_secret_copy">fa-copy</v-icon>
                       </div>
-                      <v-text-field name="totp_code" autocomplete="off" v-model="totpForm.code" :placeholder="i18n.totpCodeHelp" type="text" :rules="[rules.required, rules.mintotplen, rules.maxtotplen]" data-aid="user_settings_security_totp_input"></v-text-field>
-                      <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
-                      <v-text-field name="method" value="totp" class="d-none"></v-text-field>
+                      <v-text-field variant="underlined" name="totp_code" autocomplete="off" v-model="totpForm.code" :placeholder="i18n.totpCodeHelp" type="text" :rules="[rules.required, rules.mintotplen, rules.maxtotplen]" data-aid="user_settings_security_totp_input"></v-text-field>
+                      <v-text-field variant="underlined" name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
+                      <v-text-field variant="underlined" name="method" value="totp" class="d-none"></v-text-field>
                       <v-btn id="settingsTotpActivateSubmit" type="submit" color="primary" :disabled="!totpForm.valid" v-text="i18n.totpActivate"></v-btn>
                     </v-form>
                   </v-card-text>
                 </v-card>
 
-                <v-card v-if="unlink_totp_available" outlined class="my-4">
+                <v-card v-if="unlink_totp_available" outlined class="my-4 border subtle-border">
                   <v-card-title>{{ i18n.totp }}</v-card-title>
                   <v-card-text>
                     <v-form method="post" :action="authSettingsUrl">
                       <div class="mb-4" v-text="i18n.totpUnlinkInstructions"></div>
-                      <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
-                      <v-text-field name="totp_unlink" value="true" class="d-none"></v-text-field>
+                      <v-text-field variant="underlined" name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
+                      <v-text-field variant="underlined" name="totp_unlink" value="true" class="d-none"></v-text-field>
                       <v-btn id="settingsTotpDeactivateSubmit" type="submit" color="primary" v-text="i18n.totpDeactivate"></v-btn>
                     </v-form>
                   </v-card-text>
                 </v-card>
 
-                <v-card v-if="webauthnForm.script" outlined class="my-4">
+                <v-card v-if="webauthnForm.script" outlined class="my-4 border subtle-border">
                   <v-card-title>{{ i18n.webauthn }}</v-card-title>
                   <v-card-subtitle v-text="i18n.webauthnInstructions"></v-card-subtitle>
                   <v-card-text>
                     <v-form v-model="webauthnForm.valid" method="post" :action="authSettingsUrl">
-                      <v-text-field name="webauthn_register_displayname" autocomplete="off" v-model="webauthnForm.name" :placeholder="i18n.webauthnNameHelp" type="text" :rules="[rules.required]" data-aid="user_settings_webauth_name_input"></v-text-field>
-                      <v-text-field name="webauthn_register" v-model="webauthnForm.key" class="d-none"></v-text-field>
-                      <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
+                      <v-text-field variant="underlined" name="webauthn_register_displayname" autocomplete="off" v-model="webauthnForm.name" :placeholder="i18n.webauthnNameHelp" type="text" :rules="[rules.required]" data-aid="user_settings_webauth_name_input"></v-text-field>
+                      <v-text-field variant="underlined" name="webauthn_register" v-model="webauthnForm.key" class="d-none"></v-text-field>
+                      <v-text-field variant="underlined" name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
                       <v-btn class="mb-4" name="webauthn_register_trigger" id="settingsWebauthnActivate" type="button" color="primary" v-text="i18n.webauthnAddKey" :disabled="!webauthnForm.valid" @click="runWebauthn()" data-aid="user_settings_webauth_add"></v-btn>
                     </v-form>
                   </v-card-text>
@@ -4903,7 +4920,7 @@
                         <v-text-field name="csrf_token" v-model="csrfToken" class="d-none"></v-text-field>
                         <div :id="'settingsWebauthnExistingKey_' + key.id" class="ml-2">
                           {{ key.name }}
-                          <v-btn name="webauthn_remove" icon :value="key.value" :id="'settingsWebauthnDelete_' + key.id" type="submit" color="primary" data-aid="user_settings_webauth_unlink" >
+                          <v-btn name="webauthn_remove" icon variant="text" size="small" :value="key.value" :id="'settingsWebauthnDelete_' + key.id" type="submit" color="primary" data-aid="user_settings_webauth_unlink" >
                             <v-icon>fa-circle-xmark</v-icon>
                           </v-btn>
                         </div>
@@ -4912,15 +4929,15 @@
                   </div>
                 </v-card>
 
-              </v-tab-item>
+              </v-tabs-window-item>
 
-            <v-tabs>
+            </v-tabs-window>
           </v-col>
         </v-row>
       </v-container>
-    </script> -->
+    </script>
 
-    <!-- <script type="text/x-template" id="page-config">
+    <script type="text/x-template" id="page-config">
       <v-container fluid data-aid="grid_config_screen">
         <v-row>
           <v-col cols="12" lg="3">
@@ -4929,14 +4946,14 @@
           <v-col cols="12" lg="5">
             <v-expansion-panels>
               <v-expansion-panel>
-                <v-expansion-panel-header id="configOptionsHeader">{{i18n.options}}</v-expansion-panel-header>
-                <v-expansion-panel-content>
+                <v-expansion-panel-title id="configOptionsHeader" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
+                <v-expansion-panel-text>
                   <v-switch id="option-advanced" :disabled="$root.loading" v-model="advanced" dense class="my-0" :label="i18n.settingsAdvanced" :hint="i18n.settingsAdvancedHelp" persistent-hint data-aid="config_option_advanced_toggle"></v-switch>
                   <v-btn id="option-synchronize" @click.stop="sync()" class="mt-6 mb-1" data-aid="config_option_synchronize_toggle">
                     {{ i18n.settingsSynchronize }}
                   </v-btn>
                   <div class="text-caption" v-text="i18n.settingsSynchronizeHelp"/>
-                </v-expansion-panel-content>
+                </v-expansion-panel-text>
               </v-expansion-panel>
             </v-expansion-panels>
           </v-col>
@@ -4952,23 +4969,23 @@
             <v-container fluid>
               <v-row>
                 <v-col>
-                  <v-text-field id="filter-input" :label="i18n.filter" v-model="search" clearable :hint="i18n.filterHelp" persistent-hint @click:clear="clearFilter()" @keydown.enter="applySearchFilter()" class="mb-3" data-aid="config_filter_input" />
+                  <v-text-field variant="underlined" id="filter-input" :label="i18n.filter" v-model="search" clearable :hint="i18n.filterHelp" persistent-hint @click:clear="clearFilter()" @keydown.enter="applySearchFilter()" class="mb-3" data-aid="config_filter_input" />
                 </v-col>
                 <v-col>
                   <div class="mt-3 text-no-wrap overflow-x-hidden">
-                    <v-btn id="apply-search-button" icon @click="applySearchFilter()" :title="i18n.search" data-aid="config_apply_search_filter">
+                    <v-btn variant="text" size="small" id="apply-search-button" icon @click="applySearchFilter()" :title="i18n.search" data-aid="config_apply_search_filter">
                       <v-icon>fa-magnifying-glass</v-icon>
                     </v-btn>
-                    <v-btn id="expand-all-button" icon @click="expand()" :title="i18n.expandAll" data-aid="config_expand_all">
+                    <v-btn variant="text" size="small" id="expand-all-button" icon @click="expand()" :title="i18n.expandAll" data-aid="config_expand_all">
                       <v-icon>fa-angles-down</v-icon>
                     </v-btn>
-                    <v-btn id="collapse-all-button" icon @click="collapse()" :title="i18n.collapseAll" data-aid="config_collapse_all">
+                    <v-btn variant="text" size="small" id="collapse-all-button" icon @click="collapse()" :title="i18n.collapseAll" data-aid="config_collapse_all">
                       <v-icon>fa-angles-up</v-icon>
                     </v-btn>
-                    <v-btn id="show-modified-button" icon @click="expand(null, isSettingModified)" :title="i18n.settingIsModifiedHelp" data-aid="config_show_modified">
+                    <v-btn variant="text" size="small" id="show-modified-button" icon @click="expand(null, isSettingModified)" :title="i18n.settingIsModifiedHelp" data-aid="config_show_modified">
                       <v-icon color="primary">fa-pencil</v-icon>
                     </v-btn>
-                    <v-btn id="show-node-modified-button" icon @click="expand(null, isSettingModifiedPerNode)" :title="i18n.settingHasNodeValuesHelp" data-aid="config_show_node_modified">
+                    <v-btn variant="text" size="small" id="show-node-modified-button" icon @click="expand(null, isSettingModifiedPerNode)" :title="i18n.settingHasNodeValuesHelp" data-aid="config_show_node_modified">
                       <v-icon color="warning">fa-circle-nodes</v-icon>
                     </v-btn>
                   </div>
@@ -4977,18 +4994,21 @@
             </v-container>
             <v-treeview
               id="config-tree"
-              :active.sync="active"
+              :activated="active"
+              @update:activated="val => active = val"
               :items="hierarchy"
-              :open.sync="open"
+              :opened="open"
+              @update:opened="val => open = val"
               :search="searchFilter"
-              :filter="filter"
+              :custom-filter="filter"
+              item-value="id"
               activatable
               color="primary"
               open-on-click
               transition
               data-aid="config_tree"
             >
-              <template v-slot:label="{item}">
+              <template v-slot:title="{item}">
                 <span :id="'config-item-' + item.id">{{ getSettingName(item) }}</span>
                 <v-icon v-if="isSettingModified(item)" class="ml-1" color="primary" :title="i18n.settingIsModified">fa-pencil</v-icon>
                 <v-icon v-if="isSettingModifiedPerNode(item)" class="ml-1" color="warning" :title="i18n.settingHasNodeValues">fa-circle-nodes</v-icon>
@@ -5081,8 +5101,9 @@
                         </li>
                         <li>
                           <router-link data-aid="config_quicklink_suricata_oinkcode" :to="{name: 'config', query: {s: 'idstools.config.oinkcode'}}">{{i18n.configQLNIDSOinkCode}}</router-link>
-                        </ul>
                         </li>
+                      </ul>
+                    </li>
                     <li>
                       {{i18n.configQLZeekHeader}}
                       <ul>
@@ -5136,17 +5157,17 @@
                   <div class="d-inline-flex mb-4 " style="width: 100%">
                     <span class="text-caption font-weight-thin" data-aid="config_breadcrumbs">
                       {{ getSettingBreadcrumbs(selected) }}
-                      <v-btn icon small @click.stop="$root.copyToClipboard(getSettingBreadcrumbs(selected))" :title="i18n.copyToClipboard" data-aid="config_breadcrumb_copy">
+                      <v-btn icon variant="text" size="small" @click.stop="$root.copyToClipboard(getSettingBreadcrumbs(selected))" :title="i18n.copyToClipboard" data-aid="config_breadcrumb_copy">
                         <v-icon>fa-copy</v-icon>
-                      </a>
+                      </v-btn>
                     </span>
                     <v-spacer/>
                     <span class="justify-end">
-                      <v-btn icon small :title="i18n.toggleFullsizeHelp" @click="treeVisible = !treeVisible" data-aid="config_toggle_treeview">
+                      <v-btn icon variant="text" size="small" :title="i18n.toggleFullsizeHelp" @click="treeVisible = !treeVisible" data-aid="config_toggle_treeview">
                         <v-icon v-if="treeVisible">fa-up-right-and-down-left-from-center</v-icon>
                         <v-icon v-else color="primary">fa-down-left-and-up-right-to-center</v-icon>
                       </v-btn>
-                      <v-btn icon small @click="active = []" data-aid="config_close_setting">
+                      <v-btn icon variant="text" size="small" @click="active = []" data-aid="config_close_setting">
                         <v-icon>fa-times</v-icon>
                       </v-btn>
                     </span>
@@ -5159,7 +5180,7 @@
                   </div>
                   <div v-if="isReadOnly(selected)" :title="i18n.settingReadOnlyHelp" data-aid="config_item_readonly_warning">
                     <v-icon class="ma-2" color="warning">fa-ban</v-icon>
-                    <v-subtitle v-text="i18n.settingReadOnly" />
+                    <span v-text="i18n.settingReadOnly" />
                   </div>
                   <v-container fluid>
                     <v-row v-if="selected.duplicates && !isReadOnly(selected) && advanced">
@@ -5178,64 +5199,64 @@
                       <v-col>
                         <v-btn id="config-toggle-default-button" @click="showDefault = !showDefault" v-text="showDefault ? i18n.settingHideDefault : i18n.settingShowDefault" data-aid="config_item_show_default"/>
                         <div v-if="showDefault" class="mt-8">
-                          <v-textarea v-if="isMultiline(selected)" id="default-output" :label="i18n.settingDefault" :value="selected.default" readonly class="config-editor" data-aid="config_item_default_display" />
-                          <v-text-field v-if="!isMultiline(selected)" id="default-output" :label="i18n.settingDefault" :value="selected.default" readonly data-aid="config_item_default_display" />
+                          <v-textarea variant="underlined" v-if="isMultiline(selected)" id="default-output" :label="i18n.settingDefault" v-model="selected.default" readonly class="config-editor" data-aid="config_item_default_display" />
+                          <v-text-field variant="underlined" v-if="!isMultiline(selected)" id="default-output" :label="i18n.settingDefault" v-model="selected.default" readonly data-aid="config_item_default_display" />
                         </div>
                       </v-col>
                     </v-row>
                     <v-row v-if="selected.global || !selected.node">
                       <v-col>
                         <div v-if="!isReadOnly(selected)" class="mb-n1 text-right">
-                          <v-btn id="setting-global-reset" icon @click="remove(selected)" :title="i18n.settingResetHelp" :disabled="!isSettingModified(selected) || isPendingSave(selected)" data-aid="config_item_reset" >
+                          <v-btn id="setting-global-reset" icon variant="text" size="small" @click="remove(selected)" :title="i18n.settingResetHelp" :disabled="!isSettingModified(selected) || isPendingSave(selected)" data-aid="config_item_reset" >
                             <v-icon color="primary">fa-circle-arrow-left</v-icon>
                           </v-btn>
-                          <v-btn id="setting-global-save" icon @click="save(selected)" :disabled="!isPendingSave(selected)" :title="i18n.settingSaveHelp" data-aid="config_item_save">
+                          <v-btn id="setting-global-save" icon variant="text" size="small" @click="save(selected)" :disabled="!isPendingSave(selected)" :title="i18n.settingSaveHelp" data-aid="config_item_save">
                             <v-icon color="success">fa-check</v-icon>
                           </v-btn>
-                          <v-btn id="setting-global-cancel" icon @click="cancel(true)" :disabled="!isPendingSave(selected)" :title="i18n.settingCancelHelp" data-aid="config_item_cancel">
+                          <v-btn id="setting-global-cancel" icon variant="text" size="small" @click="cancel(true)" :disabled="!isPendingSave(selected)" :title="i18n.settingCancelHelp" data-aid="config_item_cancel">
                             <v-icon color="error">fa-xmark</v-icon>
                           </v-btn>
                         </div>
                         <div v-if="isMultiline(selected)">
-                          <v-textarea v-if="form.key != selected.id" id="value-output" outlined :label="i18n.settingGlobal" @focus="edit(selected)" :value="selected.value" readonly :disabled="isReadOnly(selected)" class="config-editor" data-aid="config_item_customize_multiline_display" />
-                          <v-textarea v-else id="value-input" outlined :label="i18n.settingGlobal" v-model="form.value" class="editing config-editor" data-aid="config_item_customize_multiline_input" />
+                          <v-textarea v-if="form.key != selected.id" id="value-output" variant="outlined" :label="i18n.settingGlobal" @focus="edit(selected)" v-model="selected.value" readonly :disabled="isReadOnly(selected)" class="config-editor" data-aid="config_item_customize_multiline_display" />
+                          <v-textarea v-else id="value-input" variant="outlined" :label="i18n.settingGlobal" v-model="form.value" class="editing config-editor" data-aid="config_item_customize_multiline_input" />
                         </div>
                         <div v-else>
-                          <v-text-field v-if="form.key != selected.id" id="value-output" outlined :label="i18n.settingGlobal" @focus="edit(selected)" :value="selected.value" readonly :disabled="isReadOnly(selected)" :type="selected.sensitive ? 'password' : 'text'" data-aid="config_item_customize_singleline_display" />
-                          <v-text-field v-else id="value-input" outlined :label="i18n.settingGlobal" v-model="form.value" class="editing"  @keydown.enter.prevent="save(selected)" data-aid="config_item_singleline_input" />
+                          <v-text-field v-if="form.key != selected.id" id="value-output" variant="outlined" :label="i18n.settingGlobal" @focus="edit(selected)" v-model="selected.value" readonly :disabled="isReadOnly(selected)" :type="selected.sensitive ? 'password' : 'text'" data-aid="config_item_customize_singleline_display" />
+                          <v-text-field v-else id="value-input" variant="outlined" :label="i18n.settingGlobal" v-model="form.value" class="editing"  @keydown.enter.prevent="save(selected)" data-aid="config_item_singleline_input" />
                         </div>
                       </v-col>
                     </v-row>
                     <v-row v-for="item in selected.nodeValues" :key="item[0]">
                       <v-col>
                         <div class="mb-n1 text-right">
-                          <v-btn :id="'setting-node-reset-' + item[0]" icon @click="remove(selected, item[0])" :title="i18n.settingRemoveHelp" :disabled="isPendingSave(selected, item[0])" data-aid="config_item_node_remove" >
+                          <v-btn :id="'setting-node-reset-' + item[0]" icon variant="text" size="small" @click="remove(selected, item[0])" :title="i18n.settingRemoveHelp" :disabled="isPendingSave(selected, item[0])" data-aid="config_item_node_remove" >
                             <v-icon color="warning">fa-circle-xmark</v-icon>
                           </v-btn>
-                          <v-btn :id="'setting-node-save-' + item[0]" icon @click="save(selected, item[0])" :disabled="!isPendingSave(selected, item[0])" :title="i18n.settingSaveHelp" data-aid="config_item_node_save">
+                          <v-btn :id="'setting-node-save-' + item[0]" icon variant="text" size="small" @click="save(selected, item[0])" :disabled="!isPendingSave(selected, item[0])" :title="i18n.settingSaveHelp" data-aid="config_item_node_save">
                             <v-icon color="success">fa-check</v-icon>
                           </v-btn>
-                          <v-btn :id="'setting-node-cancel-' + item[0]" icon @click="cancel(true)" :disabled="!isPendingSave(selected, item[0])" :title="i18n.settingCancelHelp" data-aid="config_item_node_cancel">
+                          <v-btn :id="'setting-node-cancel-' + item[0]" icon variant="text" size="small" @click="cancel(true)" :disabled="!isPendingSave(selected, item[0])" :title="i18n.settingCancelHelp" data-aid="config_item_node_cancel">
                             <v-icon color="error">fa-xmark</v-icon>
                           </v-btn>
                         </div>
                         <div v-if="isMultiline(selected)">
-                          <v-textarea v-if="form.key != item[0]" :id="'node-value-output-' + item[0]" outlined :label="item[0]" @focus="edit(selected, item[0])" :value="item[1]"  readonly :disabled="isReadOnly(selected)" class="config-editor" data-aid="config_item_customize_node_multiline_display" />
-                          <v-textarea v-else outlined :id="'node-value-input-' + item[0]" :label="item[0]" v-model="form.value" class="editing config-editor" data-aid="config_item_customize_node_multiline_input" />
+                          <v-textarea v-if="form.key != item[0]" :id="'node-value-output-' + item[0]" variant="outlined" :label="item[0]" @focus="edit(selected, item[0])" v-model="item[1]"  readonly :disabled="isReadOnly(selected)" class="config-editor" data-aid="config_item_customize_node_multiline_display" />
+                          <v-textarea v-else variant="outlined" :id="'node-value-input-' + item[0]" :label="item[0]" v-model="form.value" class="editing config-editor" data-aid="config_item_customize_node_multiline_input" />
                         </div>
                         <div v-else>
-                          <v-text-field v-if="form.key != item[0]" :id="'node-value-output-' + item[0]" outlined :label="item[0]" @focus="edit(selected, item[0])" :value="item[1]" readonly :disabled="isReadOnly(selected)" :type="selected.sensitive ? 'password' : 'text'" data-aid="config_item_customize_node_singleline_display" />
-                          <v-text-field v-else outlined :label="item[0]" :id="'node-value-input-' + item[0]" v-model="form.value" class="editing"  @keydown.enter.prevent="save(selected, item[0])" data-aid="config_item_customize_node_singleline_display" />
+                          <v-text-field v-if="form.key != item[0]" :id="'node-value-output-' + item[0]" variant="outlined" :label="item[0]" @focus="edit(selected, item[0])" v-model="item[1]" readonly :disabled="isReadOnly(selected)" :type="selected.sensitive ? 'password' : 'text'" data-aid="config_item_customize_node_singleline_display" />
+                          <v-text-field v-else variant="outlined" :label="item[0]" :id="'node-value-input-' + item[0]" v-model="form.value" class="editing"  @keydown.enter.prevent="save(selected, item[0])" data-aid="config_item_customize_node_singleline_display" />
                         </div>
                       </v-col>
                     </v-row>
                   </v-container>
                   <span data-aid="config_item_customize_node_select">
-                    <v-select v-if="(selected.node || !selected.global) && availableNodes.length > 0" outlined id="config-select-node" :label="i18n.settingSelectNode" :items="availableNodes" :title="i18n.settingSelectNodeHelp" @change="addNode(selected, $event)" v-model.sync="selectedNode" />
+                    <v-select v-if="(selected.node || !selected.global) && availableNodes.length > 0" variant="outlined" id="config-select-node" :label="i18n.settingSelectNode" :items="availableNodes" :title="i18n.settingSelectNodeHelp" @change="addNode(selected, $event)" v-model.sync="selectedNode" />
                   </span>
                 </v-card-text>
               </v-card>
-            </v-scroll-y-transition>
+            </v-fade-transition>
           </v-col>
         </v-row>
         <v-dialog v-model="cancelDialog" persistent max-width="290" data-aid="config_cancel_dialog">
@@ -5255,15 +5276,15 @@
             <v-card-text v-text="i18n.settingConfirmResetHelp" />
             <v-card-actions>
               <v-spacer></v-spacer>
-              <v-btn text id="config-reset-proceed-button" @click="confirmRemove()" v-text="i18n.yes" data-aid="config_reset_dialog_confirm" />
-              <v-btn text id="config-reset-cancel-button" @click="cancelRemove()" v-text="i18n.no" data-aid="config_reset_dialog_abort" />
+              <v-btn variant="text" id="config-reset-proceed-button" @click="confirmRemove()" v-text="i18n.yes" data-aid="config_reset_dialog_confirm" />
+              <v-btn variant="text" id="config-reset-cancel-button" @click="cancelRemove()" v-text="i18n.no" data-aid="config_reset_dialog_abort" />
             </v-card-actions>
           </v-card>
         </v-dialog>
       </v-container>
-    </script> -->
+    </script>
 
-    <!-- <script type="text/x-template" id="page-gridmembers">
+    <script type="text/x-template" id="page-gridmembers">
       <v-container fluid data-aid="grid_members_screen">
         <v-row>
           <v-col>
@@ -5271,7 +5292,7 @@
               <v-row>
                 <v-col cols="12">
                   <h2 v-text="i18n.gridMembers"></h2>
-                  <v-subheader v-text="i18n.gridMembersHelp" class="my-12 my-lg-3" />
+                  <v-list-subheader v-text="i18n.gridMembersHelp" class="my-12 my-lg-3 px-4" />
                 </v-col>
               </v-row>
             </v-container>
@@ -5279,104 +5300,96 @@
         </v-row>
         <v-row>
           <v-col cols="12" lg="6">
-            <v-list flat class="mb-4" outlined>
-              <v-header v-text="i18n.gridMembersPending" class="ml-2" />
-              <v-list-item-group id="gridmembers-pending">
-                <v-subheader v-if="unaccepted.length == 0" v-text="i18n.none" />
+            <v-list class="mb-4 border subtle-border" :opened="['pending']">
+              <span v-text="i18n.gridMembersPending" class="ml-2" />
+              <v-list-subheader v-if="unaccepted.length == 0" v-text="i18n.none" />
+              <v-list-group id="gridmembers-pending" value="pending">
                 <v-list-item v-for="node in unaccepted" @click="show(node)" data-aid="gridmembers_review_unaccepted">
-                  <v-list-item-icon>
-                    <v-icon class="mt-1" :title="i18n.gridMembersPendingHelp">fa-circle-question</v-icon>
-                  </v-list-item-icon>
-                  <v-list-item-content>
-                    <v-list-item-title :id="'pending-output-' + node.id">
+                  <template v-slot:prepend>
+                    <v-icon :title="i18n.gridMembersPendingHelp">fa-circle-question</v-icon>
+                  </template>
+                  <div class="d-flex justify-space-between align-baseline">
+                    <span :id="'pending-output-' + node.id">
                       {{ node.id }}
-                    </v-list-item-title>
-                  </v-list-item-content>
-                  <v-list-item-action>
-                    <v-btn :title="i18n.gridMemberShow" class="review" :id="'review-pending-button-' + node.id">
+                    </span>
+                    <v-btn :title="i18n.gridMemberShow" class="review theme-background-lighten-1" :id="'review-pending-button-' + node.id">
                       {{ i18n.review }}
-                      <v-icon right>fa-binoculars</v-icon>
+                      <v-icon class="ml-1 mb-2">fa-binoculars</v-icon>
                     </v-btn>
-                  </v-list-item-action>
+                  </div>
                 </v-list-item>
-              </v-list-item-group>
+              </v-list-group>
             </v-list>
 
-            <v-list flat class="mb-4" outlined>
-              <v-header v-text="i18n.gridMembersDenied" class="ml-2" />
-              <v-list-item-group id="gridmembers-denied">
-                <v-subheader v-if="denied.length == 0" v-text="i18n.none" />
+            <v-list class="mb-4 border subtle-border" :opened="['denied']">
+              <span v-text="i18n.gridMembersDenied" class="ml-2" />
+              <v-list-subheader v-if="denied.length == 0" v-text="i18n.none" />
+              <v-list-group id="gridmembers-denied" value="denied">
                 <v-list-item v-for="node in denied" @click="show(node)" data-aid="gridmembers_review_denied">
-                  <v-list-item-icon>
-                    <v-icon color="warning" class="mt-1" :title="i18n.gridMembersDeniedHelp">fa-circle-minus</v-icon>
-                  </v-list-item-icon>
-                  <v-list-item-content>
-                    <v-list-item-title :id="'denied-output-' + node.id">
+                  <template v-slot:prepend>
+                    <v-icon color="warning" :title="i18n.gridMembersDeniedHelp">fa-circle-minus</v-icon>
+                  </template>
+                  <div class="d-flex justify-space-between align-baseline">
+                    <span :id="'denied-output-' + node.id">
                       {{ node.id }}
-                    </v-list-item-title>
-                  </v-list-item-content>
-                  <v-list-item-action>
-                    <v-btn :title="i18n.gridMemberShow" class="review" :id="'review-denied-button-' + node.id">
+                    </span>
+                    <v-btn :title="i18n.gridMemberShow" class="review theme-background-lighten-1" :id="'review-denied-button-' + node.id">
                       {{ i18n.review }}
-                      <v-icon right>fa-binoculars</v-icon>
+                      <v-icon class="ml-1 mb-2">fa-binoculars</v-icon>
                     </v-btn>
-                  </v-list-item-action>
+                  </div>
                 </v-list-item>
-              </v-list-item-group>
+              </v-list-group>
             </v-list>
 
-            <v-list flat class="mb-4" outlined>
-              <v-header v-text="i18n.gridMembersRejected" class="ml-2" />
-              <v-list-item-group id="gridmembers-rejected">
-                <v-subheader v-if="rejected.length == 0" v-text="i18n.none" />
+            <v-list class="mb-4 border subtle-border" :opened="['rejected']">
+              <span v-text="i18n.gridMembersRejected" class="ml-2" />
+              <v-list-subheader v-if="rejected.length == 0" v-text="i18n.none" />
+              <v-list-group id="gridmembers-rejected" value="rejected">
                 <v-list-item v-for="node in rejected" @click="show(node)" data-aid="gridmembers_review_rejected">
-                  <v-list-item-icon>
-                    <v-icon color="error" class="mt-1" :title="i18n.gridMembersRejectedHelp">fa-circle-xmark</v-icon>
-                  </v-list-item-icon>
-                  <v-list-item-content>
-                    <v-list-item-title :id="'rejected-output-' + node.id">
+                  <template v-slot:prepend>
+                    <v-icon color="error" :title="i18n.gridMembersRejectedHelp">fa-circle-xmark</v-icon>
+                  </template>
+                  <div class="d-flex justify-space-between align-baseline">
+                    <span :id="'rejected-output-' + node.id">
                       {{ node.id }}
-                    </v-list-item-title>
-                  </v-list-item-content>
-                  <v-list-item-action>
-                    <v-btn :title="i18n.gridMemberShow" class="review" :id="'review-rejected-button-' + node.id">
+                    </span>
+                    <v-btn :title="i18n.gridMemberShow" class="review theme-background-lighten-1" id="'review-rejected-button-' + node.id">
                       {{ i18n.review }}
-                      <v-icon right>fa-binoculars</v-icon>
+                      <v-icon class="ml-1 mb-2">fa-binoculars</v-icon>
                     </v-btn>
-                  </v-list-item-action>
+                  </div>
                 </v-list-item>
-              </v-list-item-group>
+              </v-list-group>
             </v-list>
 
           </v-col>
           <v-col cols="12" lg="6">
-            <v-list flat outlined>
-              <v-header v-text="i18n.gridMembersAccepted" class="ml-2" />
-              <v-list-item-group id="gridmembers-accepted">
-                <v-subheader v-if="accepted.length == 0" v-text="i18n.none" />
+            <v-list class="border subtle-border" :opened="['accepted']">
+              <span v-text="i18n.gridMembersAccepted" class="ml-2" />
+              <v-list-subheader v-if="accepted.length == 0" v-text="i18n.none" />
+              <v-list-group id="gridmembers-accepted" value="accepted">
                 <v-list-item v-for="node in accepted" @click="show(node)" data-aid="gridmembers_review_accepted">
-                  <v-list-item-icon>
-                    <v-icon color="green" class="mt-1" :title="i18n.gridMembersAcceptedHelp">fa-circle-check</v-icon>
-                  </v-list-item-icon>
-                  <v-list-item-content>
-                    <v-list-item-title :id="'accepted-output-' + node.id">
+                  <template v-slot:prepend>
+                    <v-icon color="green" :title="i18n.gridMembersAcceptedHelp">fa-circle-check</v-icon>
+                  </template>
+                  <div class="d-flex justify-space-between align-baseline">
+                    <span :id="'accepted-output-' + node.id">
                       {{ node.id }}
-                    </v-list-item-title>
-                  </v-list-item-content>
-                  <v-list-item-action>
-                    <v-btn :title="i18n.gridMemberShow" class="review" :id="'review-accepted-button-' + node.id">
+                    </span>
+                    <v-btn :title="i18n.gridMemberShow" class="review theme-background-lighten-1" :id="'review-accepted-button-' + node.id">
                       {{ i18n.review }}
-                      <v-icon right>fa-binoculars</v-icon>
+                      <v-icon class="ml-1 mb-2">fa-binoculars</v-icon>
                     </v-btn>
-                  </v-list-item-action>
+                  </div>
                 </v-list-item>
-              </v-list-item-group>
+              </v-list-group>
             </v-list>
           </v-col>
         </v-row>
         <v-dialog v-model="dialog" max-width="600" data-aid="gridmember_dialog">
           <v-card v-if="selected">
-            <v-card-title class="headline" v-text="i18n.gridMemberReviewTitle"></v-card-title>
+            <v-card-title class="headline pb-0" v-text="i18n.gridMemberReviewTitle"></v-card-title>
             <v-card-subtitle v-text="selected.id" />
             <v-container fluid>
               <v-row class="my-0">
@@ -5426,7 +5439,7 @@
                 </v-col>
                 <v-col cols="8" class="pa-0">
                   <v-card-text>
-                    <v-chip :color="selected.status | colorNodeStatus" v-text="i18n[selected.status]" />
+                    <v-chip variant="flat" :color="colorNodeStatus(selected.status)" v-text="i18n[selected.status]" />
                   </v-card-text>
                 </v-col>
               </v-row>
@@ -5449,7 +5462,7 @@
               </v-btn>
               <v-btn id="gridmember-remove"  @click.stop="confirmRemove()">
                 {{ i18n.delete }}
-                <v-icon right>fa-circle-xmark</v-icon>
+                <v-icon class="mb-1 ml-2">fa-circle-xmark</v-icon>
               </v-btn>
             </v-card-actions>
           </v-card>
@@ -5466,12 +5479,13 @@
           </v-card>
         </v-dialog>
       </v-container>
-    </script> -->
+    </script>
 
     <script src="js/external/jquery-3.7.1.min.js"></script>
     <script src="js/external/vue-3.4.38.min.js"></script>
     <script src="js/external/vue-router-4.4.3.min.js"></script>
     <script src="js/external/vuetify-v3.7.0.min.js"></script>
+    <script src="js/external/vuetify-labs-v3.7.0.min.js"></script>
     <script src="js/external/axios-1.7.4.min.js"></script>
     <script src="js/external/moment-2.30.1.min.js"></script>
     <script src="js/external/moment-timezone-with-data-0.5.45.min.js"></script>
