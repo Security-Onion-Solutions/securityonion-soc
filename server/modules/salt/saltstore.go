@@ -370,7 +370,7 @@ func (store *Saltstore) recursivelyParseSettings(
 			merged := false
 			if minion == "" {
 				for _, existing := range settings {
-					if existing.Id == newId {
+					if existing.Id == newId && existing.NodeId == "" {
 						existing.Value = newValue
 						if existing.Multiline != multiline {
 							log.WithFields(log.Fields{
