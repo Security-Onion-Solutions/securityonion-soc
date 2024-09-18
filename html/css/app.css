@@ -523,6 +523,11 @@ td {
 .chart-container {
   max-width: 528px;
   max-height: 400px;
+  height: 100%;
+}
+
+.chart-container [id^="group-"] {
+  height: 100%;
 }
 
 .maximized {
@@ -530,11 +535,11 @@ td {
   left: 200px;
   top: 60px;
   width: calc(100vw - 200px) !important;
-  height: calc(100vh - 40px) !important;
+  height: calc(100vh - 100px) !important;
   background-color: rgb(var(--v-theme-background));
   z-index: 1;
   max-width: calc(100vw - 200px) !important;
-  max-height: calc(100vh - 40px) !important;
+  max-height: calc(100vh - 100px) !important;
 }
 
 .maximized-bg {

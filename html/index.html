@@ -569,9 +569,11 @@
                         <v-btn variant="text" size="x-small" @click="removeGroupBy(groupIdx, -1)" :title="i18n.remove" :data-aid="'groups_graph_remove_' + category">
                           <v-icon class="tiny-icon">fa-circle-xmark</v-icon>
                         </v-btn>
-                        <pie-chart v-if="group.chart_type == 'pie'" :id="'group-' + groupIdx" :data="group.chart_data" :options="group.chart_options" :data-aid="'groups_pie_display_' + category" ref="chart" />
-                        <bar-chart v-else-if="group.chart_type == 'bar'" :id="'group-' + groupIdx" :data="group.chart_data" :options="group.chart_options" :data-aid="'groups_bar_display_' + category" ref="chart" />
-                        <sankey-chart v-else-if="group.chart_type == 'sankey'" :id="'group-' + groupIdx" :data="group.chart_data" :options="group.chart_options" :data-aid="'groups_sankey_display_' + category" ref="chart" />
+                        <div :id="'group-' + groupIdx">
+                          <pie-chart v-if="group.chart_type == 'pie'" :data="group.chart_data" :options="group.chart_options" :data-aid="'groups_pie_display_' + category" ref="chart" />
+                          <bar-chart v-else-if="group.chart_type == 'bar'" :data="group.chart_data" :options="group.chart_options" :data-aid="'groups_bar_display_' + category" ref="chart" />
+                          <sankey-chart v-else-if="group.chart_type == 'sankey'" :data="group.chart_data" :options="group.chart_options" :data-aid="'groups_sankey_display_' + category" ref="chart" />
+                        </div>
                       </div>
                       <v-data-table v-if="!group.chart_type" :id="'group-' + groupIdx" class="elevation-1"
                         :search="groupByFilter" density="compact"
