@@ -2,3 +2,4 @@ myapp:
   my_def:
   - item1
   - item2
+  zdef: vanilla

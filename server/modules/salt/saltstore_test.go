@@ -7,11 +7,13 @@
 package salt
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -23,7 +25,7 @@ import (
 const TMP_SALTSTACK_PATH = "/tmp/gotest-soc-saltstore"
 const TMP_QUEUE_DIR = "/tmp/gotest-soc-salt-relay-queue"
 const TMP_REQUEST_FILE = "req"
-const TEST_SETTINGS_COUNT = 24
+const TEST_SETTINGS_COUNT = 26
 
 func Cleanup() {
 	exec.Command("rm", "-fr", TMP_SALTSTACK_PATH).Run()
@@ -200,9 +202,19 @@ func TestGetSettings(tester *testing.T) {
 
 	salt := NewTestSalt()
 	settings, err := salt.GetSettings(ctx(), true)
+	slices.SortFunc(settings,
+		func(a, b *model.Setting) int {
+			return cmp.Compare(a.Id, b.Id)
+		})
 	assert.NoError(tester, err)
 
 	count := 0
+
+	assert.Equal(tester, "myapp.advanced", settings[count].Id)
+	assert.Equal(tester, "myapp:\n  global: advanced\n", settings[count].Value)
+	assert.Equal(tester, "", settings[count].NodeId)
+	count++
+
 	assert.Equal(tester, "myapp.bar", settings[count].Id)
 	assert.Equal(tester, "minion-override", settings[count].Value)
 	assert.Equal(tester, "normal_import", settings[count].NodeId)
@@ -329,8 +341,14 @@ func TestGetSettings(tester *testing.T) {
 	assert.Equal(tester, "", settings[count].NodeId)
 	count++
 
-	assert.Equal(tester, "myapp.advanced", settings[count].Id)
-	assert.Equal(tester, "myapp:\n  global: advanced\n", settings[count].Value)
+	assert.Equal(tester, "myapp.zdef", settings[count].Id)
+	assert.Equal(tester, "strawberry", settings[count].Value)
+	assert.Equal(tester, "normal_import", settings[count].NodeId)
+	count++
+
+	assert.Equal(tester, "myapp.zdef", settings[count].Id)
+	assert.Equal(tester, "chocolate", settings[count].Value)
+	assert.Equal(tester, "vanilla", settings[count].Default)
 	assert.Equal(tester, "", settings[count].NodeId)
 	count++
 
