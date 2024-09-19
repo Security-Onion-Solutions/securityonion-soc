@@ -20,7 +20,6 @@
     <link rel="stylesheet" href="css/external/daterangepicker-3.1.css">
     <link rel="stylesheet" href="css/external/vue-prism-editor-v1.3.0.min.css" />
     <link rel="stylesheet" href="css/external/prism-custom-dark-v1.29.0.css" />
-    <link rel="stylesheet" href="css/external/vuetify-labs-v3.7.0.min.css" />
     <link rel="stylesheet" href="css/app.css?v=VERSION_PLACEHOLDER">
     <title>Security Onion</title>
     <script src="js/analytics.js?v=VERSION_PLACEHOLDER"></script>
@@ -4994,7 +4993,7 @@
                 </v-col>
               </v-row>
             </v-container>
-            <v-treeview
+            <!-- <v-treeview
               id="config-tree"
               :activated="active"
               @update:activated="val => active = val"
@@ -5015,7 +5014,9 @@
                 <v-icon v-if="isSettingModified(item)" class="ml-1" color="primary" :title="i18n.settingIsModified">fa-pencil</v-icon>
                 <v-icon v-if="isSettingModifiedPerNode(item)" class="ml-1" color="warning" :title="i18n.settingHasNodeValues">fa-circle-nodes</v-icon>
               </template>
-            </v-treeview>
+            </v-treeview> -->
+            <tree-view id="config-tree" :items="hierarchy" :selected="active" @update:selected="val => active = val" :search="searchFilter"
+              :item-title="getSettingName" :setting-modified="isSettingModified" :setting-modified-per-node="isSettingModifiedPerNode" :i18n="i18n" />
           </v-col>
           <v-divider vertical />
           <v-col cols="12" :lg="treeVisible ? 8 : 12">
@@ -5154,7 +5155,7 @@
                   </ul>
                 </div>
               </div>
-              <v-card v-else :key="selected.id" class="mx-auto config-setting" flat>
+              <v-card v-else :key="selected?.id" class="mx-auto config-setting" flat>
                 <v-card-text>
                   <div class="d-inline-flex mb-4 " style="width: 100%">
                     <span class="text-caption font-weight-thin" data-aid="config_breadcrumbs">
@@ -5483,11 +5484,30 @@
       </v-container>
     </script>
 
+    <script type="text/x-template" id="component-treeview">
+      <div v-bind="$attrs">
+        <template v-for="(item, index) in items" :key="item.id">
+          <div v-if="filter(item)" @click="click(item, index)" class="d-flex pa-3 treeview-item" :class="{ 'treeview-item--active': item.id === this.selectedId }" style="cursor: pointer; user-select: none;" :style="{ 'padding-left': calcGutter() + ' !important' }">
+            <span v-if="item.children">
+              <v-icon v-if="item.open" variant="text" size="small" icon>fas fa-caret-down</v-icon>
+              <v-icon v-else variant="text" size="small" icon>fas fa-caret-right</v-icon>
+            </span>
+            <span class="ml-2">
+              <span :id="'config-item-' + item.id">{{ getSettingName(item) }}</span>
+              <v-icon v-if="isSettingModified(item)" class="ml-2" color="primary" :title="i18n.settingIsModified">fa-pencil</v-icon>
+              <v-icon v-if="isSettingModifiedPerNode(item)" class="ml-2" color="warning" :title="i18n.settingHasNodeValues">fa-circle-nodes</v-icon>
+            </span>
+          </div>
+          <tree-view :items="item.children" :class="{ 'd-none': !item.open }" :depth="depth+1" :selected="selected" @update:selected="passthrough" :search="search"
+            :item-title="itemTitle" :setting-modified="settingModified" :setting-modified-per-node="settingModifiedPerNode" :i18n="i18n" :deep-search-findings="whitelist" />
+        </template>
+      </div>
+    </script>
+
     <script src="js/external/jquery-3.7.1.min.js"></script>
     <script src="js/external/vue-3.4.38.min.js"></script>
     <script src="js/external/vue-router-4.4.3.min.js"></script>
     <script src="js/external/vuetify-v3.7.0.min.js"></script>
-    <script src="js/external/vuetify-labs-v3.7.0.min.js"></script>
     <script src="js/external/axios-1.7.4.min.js"></script>
     <script src="js/external/moment-2.30.1.min.js"></script>
     <script src="js/external/moment-timezone-with-data-0.5.45.min.js"></script>
@@ -5505,6 +5525,7 @@
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/components/treeview.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/case.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/config.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/downloads.js?v=VERSION_PLACEHOLDER"></script>

@@ -30,7 +30,7 @@ routes.push({
         open: [],
         active: [],
         activeBackup: [],
-        hierarchy: [],
+        hierarchy: Vue.ref([]),
         nodes: [],
         availableNodes: [],
         advanced: false,
@@ -219,11 +219,12 @@ routes.push({
     expand(node = null, filterFn=() => true) {
       if (!node) {
         this.open = [];
-        this.hierarchy.forEach(s => this.expand(s, filterFn));
+        this.hierarchy.forEach(i => this.expand(i, filterFn));
       } else if (node.children) {
         shouldExpand = false;
         node.children.forEach(s => shouldExpand |= this.expand(s, filterFn));
         if (shouldExpand) {
+          node.open = true;
           this.open.push(node.id);
         }
         return shouldExpand;
@@ -246,6 +247,14 @@ routes.push({
     },
     collapse() {
       this.open = [];
+      const col = (item) => {
+        item.open = false;
+        if (item.children) {
+          item.children.forEach(i => col(i));
+        }
+      }
+
+      this.hierarchy.forEach(i => col(i));
     },
     async loadData() {
       this.$root.startLoading();

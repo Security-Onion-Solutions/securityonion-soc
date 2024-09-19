@@ -860,3 +860,12 @@ ul ul ul {
   list-style-type: square;
   padding-left: 20px;
 }
+
+.treeview-item:hover {
+  background-color:rgba(var(--v-theme-text), 0.12);
+}
+
+.treeview-item--active {
+  color: rgb(var(--v-theme-primary));
+  background-color: rgba(var(--v-theme-primary), 0.12) !important;
+}

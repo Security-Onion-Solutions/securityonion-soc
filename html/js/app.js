@@ -5,6 +5,7 @@
 // Elastic License 2.0.
 
 const routes = [];
+const components = [];
 
 const FEAT_TTR = 'ttr';
 
@@ -55,7 +56,7 @@ $(document).ready(function () {
         clearIcon: 'fas fa-circle-xmark',
       },
       VTreeview: {
-        collapseIcon: 'fas fa-caret-down',
+        collapseIcon: '',
         expandIcon: 'fas fa-caret-right',
       }
     },
@@ -1345,6 +1346,10 @@ $(document).ready(function () {
   const app = Vue.createApp(comp);
   app.use(vuetify);
   app.use(router);
+
+  for (let i = 0; i < components.length; i++) {
+    app.component(components[i].name, components[i].component);
+  }
 
   app.mount('#app');
 });
