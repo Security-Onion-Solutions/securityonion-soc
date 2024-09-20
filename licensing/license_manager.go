@@ -46,6 +46,7 @@ const FEAT_NTF = "ntf"
 const FEAT_ODC = "odc"
 const FEAT_STG = "stg"
 const FEAT_TTR = "ttr"
+const FEAT_RPT = "rpt"
 
 const PUBLIC_KEY = `
 -----BEGIN PUBLIC KEY-----
@@ -173,6 +174,7 @@ func CreateAvailableFeatureList() []string {
 	available = append(available, FEAT_ODC)
 	available = append(available, FEAT_STG)
 	available = append(available, FEAT_TTR)
+	available = append(available, FEAT_RPT)
 	return available
 }
 

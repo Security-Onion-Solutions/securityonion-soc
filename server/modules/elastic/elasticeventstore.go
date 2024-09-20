@@ -21,6 +21,7 @@ import (
 	"github.com/apex/log"
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/elastic/go-elasticsearch/v8/esapi"
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -954,6 +955,44 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 	return nil
 }
 
+func (store *ElasticEventstore) addUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, ack bool, esc bool) {
+	if ack {
+		trackTiming := strconv.FormatBool(licensing.IsEnabled(licensing.FEAT_RPT))
+		escBool := strconv.FormatBool(esc)
+		nowMillis := timeNow.UnixMilli()
+		nowMillisStr := strconv.FormatInt(nowMillis, 10)
+		updateCriteria.AddUpdateScript(`
+			boolean track_timing = ` + trackTiming + `;
+			boolean esc_bool = ` + escBool + `;
+			Instant now_instant = Instant.ofEpochMilli(` + nowMillisStr + `L);
+			ZonedDateTime now_date = ZonedDateTime.ofInstant(now_instant, ZoneId.of('Z'));
+			long elapsed_seconds = 0;
+			if (ctx._source.containsKey('@timestamp')) {
+				ZonedDateTime event_date = ZonedDateTime.parse(ctx._source['@timestamp']);
+				elapsed_seconds = ChronoUnit.SECONDS.between(event_date, now_date)
+			}
+
+			if (ctx._source.event.acknowledged != true) {
+				ctx._source.event.acknowledged = true;
+				if (track_timing) {
+					ctx._source.event.acknowledged_timestamp = now_date;
+					ctx._source.event.acknowledged_elapsed_seconds = elapsed_seconds;
+				}
+			}
+
+			if (ctx._source.event.escalated != true && esc_bool) {
+				ctx._source.event.escalated = esc_bool;
+				if (track_timing) {
+					ctx._source.event.escalated_timestamp = now_date;
+					ctx._source.event.escalated_elapsed_seconds = elapsed_seconds;
+				}
+			}
+			`)
+	} else {
+		updateCriteria.AddUpdateScript(`ctx._source.event.acknowledged = false;`)
+	}
+}
+
 func (store *ElasticEventstore) Acknowledge(ctx context.Context, ackCriteria *model.EventAckCriteria) (*model.EventUpdateResults, error) {
 	var results *model.EventUpdateResults
 	var err error
@@ -968,10 +1007,7 @@ func (store *ElasticEventstore) Acknowledge(ctx context.Context, ackCriteria *mo
 			}).Info("Acknowledging event")
 
 			updateCriteria := model.NewEventUpdateCriteria()
-			updateCriteria.AddUpdateScript("ctx._source.event.acknowledged=" + strconv.FormatBool(ackCriteria.Acknowledge))
-			if ackCriteria.Escalate && ackCriteria.Acknowledge {
-				updateCriteria.AddUpdateScript("ctx._source.event.escalated=true")
-			}
+			store.addUpdateScripts(updateCriteria, time.Now(), ackCriteria.Acknowledge, ackCriteria.Escalate)
 			updateCriteria.Populate(ackCriteria.SearchFilter,
 				ackCriteria.DateRange,
 				ackCriteria.DateRangeFormat,
