@@ -429,13 +429,13 @@
                   </v-list>
                 </v-menu>
               </template>
-              <template v-if="isAdvanced()" v-slot:append>
+              <template v-if="isAdvanced()" v-slot:append-inner>
                 <v-btn variant="text" id="toggle-full-query-button" :title="i18n.toggleFullQueryHelp" @click="showFullQuery = !showFullQuery" :disabled="queryAltered" :data-aid="'toggle_full_query_' + category">
                   <v-icon>fa-ellipsis</v-icon>
                 </v-btn>
               </template>
-              <template v-if="!isCategory('hunt')" v-slot:append-outer>
-                <v-btn small icon id="switch-to-hunt-button" :title="i18n.huntHelp" @click="switchToHunt()" :data-aid="'nav_hunt_' + category">
+              <template v-if="!isCategory('hunt')" v-slot:append>
+                <v-btn variant="text" size="small" icon id="switch-to-hunt-button" :title="i18n.huntHelp" @click="switchToHunt()" :data-aid="'nav_hunt_' + category">
                   <v-icon>fa-crosshairs</v-icon>
                 </v-btn>
               </template>
@@ -582,7 +582,7 @@
                         :items-per-page.sync="groupByItemsPerPage" :headers="group.headers" :items="group.data" :custom-sort="sortEvents">
                         <template v-slot:headers="{ columns, isSorted, getSortIcon, toggleSort }">
                           <tr>
-                            <template v-for="header in columns" :key="header.key">
+                            <template v-for="(header, headerIdx) in columns" :key="header.key">
                               <th :class="{'is-sorted': isSorted(header)}">
                                 <span @click="toggleSort(header)">
                                   {{ header.title }}

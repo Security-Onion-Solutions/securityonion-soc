@@ -939,7 +939,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
               const existingJob = existingResults[jobIndex];
               if (existingJob.id == job.id) {
                 if (job.status == JobStatusDeleted) {
-                  Vue.delete(existingResults, jobIndex);
+                  existingResults.splice(jobIndex, 1);
                 } else {
                   existingResults[jobIndex] = job;
                 }

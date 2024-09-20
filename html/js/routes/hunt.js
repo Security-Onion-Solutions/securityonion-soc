@@ -699,7 +699,7 @@ const huntComponent = {
     removeDataItemFromView(data, item) {
       for (var j = 0; j < data.length; j++) {
         if (data[j] == item) {
-          Vue.delete(data, j);
+          data.splice(j, 1);
           if (item["count"]) {
             this.totalEvents -= item["count"];
           } else {
