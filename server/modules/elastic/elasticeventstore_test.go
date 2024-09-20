@@ -720,3 +720,60 @@ func TestScrollMidScrollError(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, `{"scroll_id":"MyScrollID"}`, string(body))
 }
+
+func TestAddUpdateScript(t *testing.T) {
+	client, _ := modmock.NewMockClient(t)
+
+	store := &ElasticEventstore{
+		esClient:      client,
+		cacheTime:     time.Now().Add(time.Hour),
+		fieldDefs:     make(map[string]*FieldDefinition),
+		maxScrollSize: 10000,
+		maxLogLength:  math.MaxInt,
+		index:         "myIndex",
+	}
+
+	timeNow := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
+
+	criteria := &model.EventUpdateCriteria{}
+	store.addUpdateScripts(criteria, timeNow, false, false)
+	assert.Len(t, criteria.UpdateScripts, 1)
+	assert.Equal(t, "ctx._source.event.acknowledged = false;", criteria.UpdateScripts[0])
+
+	criteria = &model.EventUpdateCriteria{}
+	store.addUpdateScripts(criteria, timeNow, true, false)
+	assert.Len(t, criteria.UpdateScripts, 1)
+	expected := `
+			boolean track_timing = false;
+			boolean esc_bool = false;
+			Instant now_instant = Instant.ofEpochMilli(1257894000000L);
+			ZonedDateTime now_date = ZonedDateTime.ofInstant(now_instant, ZoneId.of('Z'));
+			long elapsed_seconds = 0;
+			if (ctx._source.containsKey('@timestamp')) {
+				ZonedDateTime event_date = ZonedDateTime.parse(ctx._source['@timestamp']);
+				elapsed_seconds = ChronoUnit.SECONDS.between(event_date, now_date)
+			}
+
+			if (ctx._source.event.acknowledged != true) {
+				ctx._source.event.acknowledged = true;
+				if (track_timing) {
+					ctx._source.event.acknowledged_timestamp = now_date;
+					ctx._source.event.acknowledged_elapsed_seconds = elapsed_seconds;
+				}
+			}
+
+			if (ctx._source.event.escalated != true && esc_bool) {
+				ctx._source.event.escalated = esc_bool;
+				if (track_timing) {
+					ctx._source.event.escalated_timestamp = now_date;
+					ctx._source.event.escalated_elapsed_seconds = elapsed_seconds;
+				}
+			}
+			`
+	assert.Equal(t, expected, criteria.UpdateScripts[0])
+
+	criteria = &model.EventUpdateCriteria{}
+	store.addUpdateScripts(criteria, timeNow, true, true)
+	assert.Len(t, criteria.UpdateScripts, 1)
+	assert.Contains(t, criteria.UpdateScripts[0], "esc_bool = true")
+}

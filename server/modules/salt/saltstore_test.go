@@ -204,7 +204,11 @@ func TestGetSettings(tester *testing.T) {
 	settings, err := salt.GetSettings(ctx(), true)
 	slices.SortFunc(settings,
 		func(a, b *model.Setting) int {
-			return cmp.Compare(a.Id, b.Id)
+			r := cmp.Compare(a.Id, b.Id)
+			if r == 0 {
+				r = cmp.Compare(a.NodeId, b.NodeId)
+			}
+			return r
 		})
 	assert.NoError(tester, err)
 
@@ -342,14 +346,14 @@ func TestGetSettings(tester *testing.T) {
 	count++
 
 	assert.Equal(tester, "myapp.zdef", settings[count].Id)
-	assert.Equal(tester, "strawberry", settings[count].Value)
-	assert.Equal(tester, "normal_import", settings[count].NodeId)
-	count++
-
-	assert.Equal(tester, "myapp.zdef", settings[count].Id)
 	assert.Equal(tester, "chocolate", settings[count].Value)
 	assert.Equal(tester, "vanilla", settings[count].Default)
 	assert.Equal(tester, "", settings[count].NodeId)
+	count++
+
+	assert.Equal(tester, "myapp.zdef", settings[count].Id)
+	assert.Equal(tester, "strawberry", settings[count].Value)
+	assert.Equal(tester, "normal_import", settings[count].NodeId)
 	count++
 
 	assert.Equal(tester, count, len(settings))

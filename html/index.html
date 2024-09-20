@@ -2131,7 +2131,7 @@
                       <v-row class="my-1">
                         <v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.features }}:</v-col>
                         <v-col v-if="$root.licenseKey.features" cols="9" class="pa-1">
-                          <v-chip v-for="feature in $root.licenseKey.features" small class="mx-1">
+                          <v-chip v-for="feature in $root.licenseKey.features" v-if="$root.localizeMessage(feature) != feature" small class="mx-1">
                             {{ $root.localizeMessage(feature) }}
                           </v-chip>
                         </v-col>
