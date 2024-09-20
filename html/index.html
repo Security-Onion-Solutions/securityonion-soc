@@ -5015,7 +5015,7 @@
                 <v-icon v-if="isSettingModifiedPerNode(item)" class="ml-1" color="warning" :title="i18n.settingHasNodeValues">fa-circle-nodes</v-icon>
               </template>
             </v-treeview> -->
-            <tree-view id="config-tree" :items="hierarchy" :selected="active" @update:selected="val => active = val" :search="searchFilter"
+            <tree-view id="config-tree" :items="hierarchy" :leaves="settings" :selected="active" @update:selected="val => active = val" :search="searchFilter"
               :item-title="getSettingName" :setting-modified="isSettingModified" :setting-modified-per-node="isSettingModifiedPerNode" :i18n="i18n" />
           </v-col>
           <v-divider vertical />
@@ -5023,7 +5023,7 @@
             <v-fade-transition mode="out-in" duration="100">
               <div v-if="!selected" id="config-quick-links">
                 <v-alert v-text="i18n.settingSelect" type="info" />
-                <div>
+                <div class="mt-4">
                   <p class="font-weight-bold">{{i18n.configQLGridTitle}}</p>
                   <ul>
                     <li>
@@ -5077,7 +5077,6 @@
                         </li>
                       </ul>
                     </li>
-
                   </ul>
                   <br/>
                   <p class="font-weight-bold">{{i18n.configQLAnalystTitle}}</p>
@@ -5486,16 +5485,16 @@
 
     <script type="text/x-template" id="component-treeview">
       <div v-bind="$attrs">
-        <template v-for="(item, index) in items" :key="item.id">
-          <div v-if="filter(item)" @click="click(item, index)" class="d-flex pa-3 treeview-item" :class="{ 'treeview-item--active': item.id === this.selectedId }" style="cursor: pointer; user-select: none;" :style="{ 'padding-left': calcGutter() + ' !important' }">
+        <template v-for="item in items" :key="item.id">
+          <div v-if="filter(item)" @click="click(item)" class="d-flex pa-3 treeview-item" :class="{ 'treeview-item--active': item.id === this.selectedId }" style="cursor: pointer; user-select: none;" :style="{ 'padding-left': calcGutter() + ' !important' }">
             <span v-if="item.children">
               <v-icon v-if="item.open" variant="text" size="small" icon>fas fa-caret-down</v-icon>
               <v-icon v-else variant="text" size="small" icon>fas fa-caret-right</v-icon>
             </span>
             <span class="ml-2">
-              <span :id="'config-item-' + item.id">{{ getSettingName(item) }}</span>
-              <v-icon v-if="isSettingModified(item)" class="ml-2" color="primary" :title="i18n.settingIsModified">fa-pencil</v-icon>
-              <v-icon v-if="isSettingModifiedPerNode(item)" class="ml-2" color="warning" :title="i18n.settingHasNodeValues">fa-circle-nodes</v-icon>
+              <span :id="'config-item-' + item.id">{{ itemTitle(item) }}</span>
+              <v-icon v-if="settingModified(item)" class="ml-2" color="primary" :title="i18n.settingIsModified">fa-pencil</v-icon>
+              <v-icon v-if="settingModifiedPerNode(item)" class="ml-2" color="warning" :title="i18n.settingHasNodeValues">fa-circle-nodes</v-icon>
             </span>
           </div>
           <tree-view :items="item.children" :class="{ 'd-none': !item.open }" :depth="depth+1" :selected="selected" @update:selected="passthrough" :search="search"

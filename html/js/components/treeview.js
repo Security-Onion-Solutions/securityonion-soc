@@ -1,9 +1,22 @@
 components.push({
 	name: "TreeView", component: {
 		props: {
+			'item-title': {
+				type: Function,
+				required: true,
+			},
+			'setting-modified': {
+				type: Function,
+				required: true,
+			},
+			'setting-modified-per-node': {
+				type: Function,
+				required: true,
+			},
 			'items': {
 				type: Array,
 				default: [],
+				required: true,
 			},
 			'depth': {
 				type: Number,
@@ -13,28 +26,20 @@ components.push({
 				type: Array,
 				default: [],
 			},
+			'leaves': {
+				type: Array,
+				default: [],
+			},
 			'search': String,
-			'item-title': Function,
-			'setting-modified': Function,
-			'setting-modified-per-node': Function,
 			'i18n': Object,
 			'deep-search-findings': Array,
 		},
 		emits: ['update:selected'],
 		watch: {
-			selected: function() {
-				this.selectedId = this.selected[0];
-				this.openSelected();
-			},
-			items: function () {
-				if (this.depth === 0) {
-					this.leaves = [];
-					this.collectLeaves(this.items);
-				}
-			},
 			'deepSearchFindings': function () {
 				this.whitelist = this.deepSearchFindings || [];
 			},
+			selected: 'processSelected',
 			search: 'deepSearch',
 		},
 		setup(_, { emit }) {
@@ -43,31 +48,16 @@ components.push({
 		template: '#component-treeview',
 		data() { return {
 			selectedId: '',
-			leaves: [],
 			whitelist: [],
 		}},
 		mounted() {
-			this.selectedId = this.selected[0];
-			this.openSelected();
-
-			if (this.depth === 0) {
-				this.leaves = [];
-				this.collectLeaves(this.items);
-			}
+			this.processSelected();
 
 			this.whitelist = this.deepSearchFindings || [];
 		},
 		methods: {
-			collectLeaves(items) {
-				for (let i = 0; i < items.length; i++) {
-					if (items[i].children) {
-						this.collectLeaves(items[i].children);
-					} else {
-						this.leaves.push(items[i]);
-					}
-				}
-			},
-			openSelected() {
+			processSelected() {
+				this.selectedId = this.selected[0];
 				if (!this.selectedId) return;
 				for (let i = 0; i < this.items.length; i++) {
 					if (this.selectedId.startsWith(this.items[i].id)) {
@@ -78,7 +68,7 @@ components.push({
 			toggle(item) {
 				item.open = !item.open;
 			},
-			click(item, index) {
+			click(item) {
 				if (item.children) {
 					this.toggle(item);
 				} else {
@@ -102,31 +92,23 @@ components.push({
 					item.id.toLowerCase().startsWith(this.search.toLowerCase());
 			},
 			deepSearch() {
+				this.whitelist = [];
 				if (this.depth === 0) {
-					this.whitelist = [];
 
 					if (this.search) {
+						const s = this.search.toLowerCase();
 						this.leaves.forEach(leaf => {
-							if ((leaf?.name && leaf?.name.toLowerCase().indexOf(this.search) > -1) ||
-									(leaf?.id && leaf?.id.toLowerCase().indexOf(this.search) > -1) ||
-									(leaf?.value && leaf?.value.toLowerCase().indexOf(this.search) > -1) ||
-									(leaf?.nodeValues && [...leaf?.nodeValues.keys()].find(k => k.indexOf(this.search) > -1)) ||
-									(leaf?.title && leaf?.title.toLowerCase().indexOf(this.search) > -1) ||
-									(leaf?.description && leaf?.description.toLowerCase().indexOf(this.search) > -1)) {
+							if ((leaf?.name && leaf?.name.toLowerCase().indexOf(s) > -1) ||
+									(leaf?.id && leaf?.id.toLowerCase().indexOf(s) > -1) ||
+									(leaf?.value && leaf?.value.toLowerCase().indexOf(s) > -1) ||
+									(leaf?.nodeValues && [...leaf?.nodeValues.keys()].find(k => k.toLowerCase().indexOf(s) > -1)) ||
+									(leaf?.title && leaf?.title.toLowerCase().indexOf(s) > -1) ||
+									(leaf?.description && leaf?.description.toLowerCase().indexOf(s) > -1)) {
 								this.whitelist.push(leaf.id);
 							}
 						});
 					}
 				}
-			},
-			getSettingName(item) {
-				return this.itemTitle(item);
-			},
-			isSettingModified(setting) {
-				return this.settingModified(setting);
-			},
-			isSettingModifiedPerNode(setting) {
-				return this.settingModifiedPerNode(setting);
 			},
 		},
 	}

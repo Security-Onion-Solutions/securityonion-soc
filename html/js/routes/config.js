@@ -30,7 +30,7 @@ routes.push({
         open: [],
         active: [],
         activeBackup: [],
-        hierarchy: Vue.ref([]),
+        hierarchy: [],
         nodes: [],
         availableNodes: [],
         advanced: false,
@@ -132,7 +132,7 @@ routes.push({
         child = node.children.find(n => n.name == name);
         const id = parent ? parent + "." + name : name;
         if (!child) {
-          child = {id: id, name: name, children:[]};
+          child = {id: id, name: name, children: []};
           node.children.push(child);
         }
         this.addToNode(child, id, path, setting);

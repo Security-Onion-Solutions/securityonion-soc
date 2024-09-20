@@ -24,7 +24,10 @@ const USER_PASSWORD_INVALID_RX = /["'$&!]/;
 
 const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
 
-if (typeof global !== 'undefined') global.routes = routes;
+if (typeof global !== 'undefined') {
+  global.routes = routes;
+  global.components = components;
+}
 
 $(document).ready(function () {
   const vuetify = Vuetify.createVuetify({

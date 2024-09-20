@@ -68,11 +68,44 @@ global.initComponentData = function(comp) {
   return comp.data();
 }
 
+global.initComponentProps = function (comp) {
+  if (!comp.props) return {};
+
+  let props = {};
+  if (comp.props instanceof Object) {
+    for (let prop in comp.props) {
+      const def = comp.props[prop];
+      if (def.default !== undefined) {
+        props[prop] = def.default;
+      } else if (def.type !== undefined) {
+        props[prop] = new def.type();
+      } else {
+        props[prop] = new def();
+      }
+    }
+  }
+
+  return props;
+}
+
+global.initComponentSetup = function (comp, props) {
+  if (!comp.setup) return {};
+
+  return comp.setup(props, { emit: jest.fn() });
+}
+
 global.getComponent = function(name) {
   var comp = null;
   for (var i = 0; i < global.routes.length; i++) {
     if (global.routes[i].name == name) {
       comp = global.routes[i].component;
+      break;
+    }
+  }
+
+  for (var i = 0; i < global.components.length; i++) {
+    if (global.components[i].name == name) {
+      comp = global.components[i].component;
       break;
     }
   }
@@ -93,7 +126,9 @@ global.getComponent = function(name) {
   }
 
   const data = global.initComponentData(comp);
-  Object.assign(comp, data, comp.methods, comp.computed);
+  const props = global.initComponentProps(comp);
+  const setup = global.initComponentSetup(comp, props);
+  Object.assign(comp, data, comp.methods, comp.computed, props, setup);
 
   return comp;
 }
