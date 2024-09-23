@@ -3384,7 +3384,7 @@
                         <td class="associated" data-aid="case_evidence_create_time_display">{{ formatDateTime(item.createTime) }}</td>
                         <td class="associated" data-aid="case_evidence_update_time_display">{{ formatDateTime(item.updateTime) }}</td>
                         <td class="associated" data-aid="case_evidence_type_display">{{ item.artifactType }}</td>
-                        <td class="associated" data-aid="case_evidence_value_display">{{ item.value }}<span class="resolved-host" v-if="item.artifactType === 'ip' && $root.pickHostname(props.item.value)"><br/>- {{ $root.pickHostname(props.item.value) }}</span></td>
+                        <td class="associated" data-aid="case_evidence_value_display">{{ item.value }}<span class="resolved-host" v-if="item.artifactType === 'ip' && $root.pickHostname(item.value)"><br/>- {{ $root.pickHostname(item.value) }}</span></td>
                       </tr>
                     </template>
                     <template v-slot:expanded-row="{ index, item }">
@@ -3741,7 +3741,7 @@
                     </v-col>
                   </v-row>
                   <v-text-field variant="underlined" v-model="associatedTable['history'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="case_history_filter_input"></v-text-field>
-                  <v-data-table ref="historyTable" :sort-by="associatedTable['history'].sortBy" :items-per-page.sync="associatedTable['history'].itemsPerPage"
+                  <v-data-table id="history" ref="historyTable" :sort-by="associatedTable['history'].sortBy" :items-per-page.sync="associatedTable['history'].itemsPerPage"
                     :search="associatedTable['history'].search" :footer-props="associatedTable['history'].footerProps" must-sort :headers="associatedTable['history'].headers"
                     :items="associations['history']" item-key="id" :loading="associatedTable['history'].loading" :expanded="associatedTable['history'].expanded" class="case-table" :custom-sort="$root.dateAwareSort">
                     <template v-slot:headers="{ columns, isSorted, getSortIcon, toggleSort }">
@@ -4076,13 +4076,13 @@
                                   density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseStatusHelp"
                                   v-model="editForm.val"
                                   :items="selectList('status', caseObj.status)"
-                                  v-on:change="stopEdit(true)"
+                                  @update:model-value="stopEdit(true)"
                                 />
                                 <v-combobox id="case-status-input" v-if="isEdit('case-status') && isPresetCustomEnabled('status')"
                                   density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseStatusHelp"
                                   v-model="editForm.val"
                                   :items="selectList('status', caseObj.status)"
-                                  v-on:change="stopEdit(true)"
+                                  @update:model-value="stopEdit(true)"
                                 />
                               </div>
                             </v-col>
@@ -4115,13 +4115,13 @@
                                 density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseSeverityHelp"
                                 v-model="editForm.val"
                                 :items="selectList('severity', caseObj.severity)"
-                                v-on:change="stopEdit(true)"
+                                @update:model-value="stopEdit(true)"
                               />
                               <v-combobox id="case-severity-input" v-if="isEdit('case-severity') && isPresetCustomEnabled('severity')"
                                 density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseSeverityHelp"
                                 v-model="editForm.val"
                                 :items="selectList('severity', caseObj.severity)"
-                                v-on:change="stopEdit(true)"
+                                @update:model-value="stopEdit(true)"
                               />
                             </v-col>
                           </v-row>
@@ -4160,12 +4160,12 @@
                                 density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
                                 v-model="editForm.val"
                                 :items="selectList('tlp', caseObj.tlp)"
-                                v-on:change="stopEdit(true)"></v-select>
+                                @update:model-value="stopEdit(true)"></v-select>
                               <v-combobox id="case-tlp-input" v-if="isEdit('case-tlp') && isPresetCustomEnabled('tlp')"
                                 density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
                                 v-model="editForm.val"
                                 :items="selectList('tlp', caseObj.tlp)"
-                                v-on:change="stopEdit(true)"></v-combobox>
+                                @update:model-value="stopEdit(true)"></v-combobox>
                             </v-col>
                           </v-row>
                           <v-row>
@@ -4179,13 +4179,13 @@
                                 density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.casePapHelp"
                                 v-model="editForm.val"
                                 :items="selectList('pap', caseObj.pap)"
-                                v-on:change="stopEdit(true)"
+                                @update:model-value="stopEdit(true)"
                               />
                               <v-combobox id="case-pap-input" v-if="isEdit('case-pap') && isPresetCustomEnabled('pap')"
                                 density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.casePapHelp"
                                 v-model="editForm.val"
                                 :items="selectList('pap', caseObj.pap)"
-                                v-on:change="stopEdit(true)"
+                                @update:model-value="stopEdit(true)"
                               />
                             </v-col>
                           </v-row>
@@ -4200,13 +4200,13 @@
                                 density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseCategoryHelp"
                                 v-model="editForm.val"
                                 :items="selectList('category', caseObj.category)"
-                                v-on:change="stopEdit(true)"
+                                @update:model-value="stopEdit(true)"
                               />
                               <v-combobox id="case-category-input" v-if="isEdit('case-category') && isPresetCustomEnabled('category')"
                                 density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseCategoryHelp"
                                 v-model="editForm.val"
                                 :items="selectList('category', caseObj.category)"
-                                v-on:change="stopEdit(true)"
+                                @update:model-value="stopEdit(true)"
                               />
                             </v-col>
                           </v-row>
