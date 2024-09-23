@@ -66,8 +66,8 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         search: '',
         headers: [
           { title: this.$root.i18n.actions, width: '10.0em' },
-          { title: this.$root.i18n.dateCreated, value: 'createTime' },
-          { title: this.$root.i18n.dateModified, value: 'updateTime' },
+          { title: this.$root.i18n.dateCreated, value: 'createTime', key: 'createTime', sortRaw: this.$root.dateAwareCompare('createTime') },
+          { title: this.$root.i18n.dateModified, value: 'updateTime', key: 'updateTime', sortRaw: this.$root.dateAwareCompare('updateTime') },
           { title: this.$root.i18n.artifactType, value: 'artifactType' },
           { title: this.$root.i18n.value, value: 'value' },
         ],
@@ -113,7 +113,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         headers: [
           { title: this.$root.i18n.actions, width: '10.0em' },
           { title: this.$root.i18n.username, value: 'owner' },
-          { title: this.$root.i18n.time, value: 'updateTime' },
+          { title: this.$root.i18n.time, value: 'updateTime', key: 'updateTime', sortRaw: this.$root.dateAwareCompare('updateTime') },
           { title: this.$root.i18n.kind, value: 'kind' },
           { title: this.$root.i18n.operation, value: 'operation' },
         ],

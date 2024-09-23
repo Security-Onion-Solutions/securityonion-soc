@@ -167,7 +167,7 @@ td.expansion:last-child {
   display: none;
 }
 
-table th {
+th {
   cursor: pointer;
   opacity: 0.8;
   font-size: 12px;
@@ -175,7 +175,7 @@ table th {
   white-space: nowrap;
 }
 
-table th:hover, table th.is-sorted, .solid {
+th:hover, th.is-sorted, .solid {
   opacity: 1 !important;
 }
 

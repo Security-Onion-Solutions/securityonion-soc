@@ -91,7 +91,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				headers: [
 					{ title: this.$root.i18n.actions, width: '10.0em' },
 					{ title: this.$root.i18n.username, value: 'owner' },
-					{ title: this.$root.i18n.time, value: 'updateTime' },
+					{ title: this.$root.i18n.time, value: 'updateTime', key: 'updateTime', sortRaw: this.$root.dateAwareCompare('updateTime') },
 					{ title: this.$root.i18n.kind, value: 'kind' },
 					{ title: this.$root.i18n.operation, value: 'operation' },
 				],
@@ -107,7 +107,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					headers: [
 						{ title: this.$root.i18n.actions, width: '10.0em' },
 						{ title: this.$root.i18n.kind, value: 'type' },
-						{ title: this.$root.i18n.time, value: 'updatedAt' },
+						{ title: this.$root.i18n.time, value: 'updatedAt', key: 'updatedAt', rawSort: this.$root.dateAwareCompare('updatedAt') },
 						{ title: this.$root.i18n.enabled, value: 'isEnabled' },
 					],
 					itemsPerPage: 10,

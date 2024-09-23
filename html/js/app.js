@@ -1289,26 +1289,10 @@ $(document).ready(function () {
 
         return '';
       },
-      dateAwareSort(items, index, isDesc) {
-        items.sort((a, b) => {
-          if (index[0] === 'createTime' || index[0] === 'updateTime' || index[0] === 'createdAt' || index[0] === 'updatedAt') {
-            if (!isDesc[0]) {
-              return new Date(a[index]) - new Date(b[index]);
-            }
-
-            return new Date(b[index]) - new Date(a[index]);
-          }
-
-          if (typeof a[index] !== 'undefined') {
-            if (!isDesc[0]) {
-              return (a[index]+'').toLowerCase().localeCompare((b[index]+'').toLowerCase());
-            }
-
-            return (b[index]+'').toLowerCase().localeCompare((a[index]+'').toLowerCase());
-          }
-        });
-
-        return items;
+      dateAwareCompare(field) {
+        return (a, b) => {
+          return new Date(a[field]) - new Date(b[field]);
+        }
       },
     },
     created() {

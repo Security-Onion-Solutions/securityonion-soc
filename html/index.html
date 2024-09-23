@@ -140,8 +140,8 @@
           </v-snackbar>
           <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" v-html="infoMessage" data-aid="banner_info"></v-alert>
           <v-snackbar id="tip" top centered rounded close :timeout="tipTimeout" v-model="tip" color="info" data-aid="banner_tip">
-            <template v-slot:action="{ attrs }">
-              <v-btn icon small v-bind="attrs" @click="tip = false" data-aid="banner_tip_close">
+            <template v-slot:actions="{ attrs }">
+              <v-btn icon variant="text" size="small" v-bind="attrs" @click="tip = false" data-aid="banner_tip_close">
                 <v-icon>fa-times</v-icon>
               </v-btn>
             </template>
@@ -1668,7 +1668,23 @@
                 <v-text-field variant="underlined" v-model="historyTableOpts.search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="detection_history_filter_input"></v-text-field>
                 <v-data-table ref="historyTable" :sort-by="historyTableOpts.sortBy" :items-per-page.sync="historyTableOpts.itemsPerPage"
                   :search="historyTableOpts.search" :footer-props="historyTableOpts.footerProps" must-sort :headers="historyTableOpts.headers"
-                  :items="history" item-key="id" :loading="historyTableOpts.loading" :expanded="historyTableOpts.expanded" class="history-table" :custom-sort="$root.dateAwareSort">
+                  :items="history" item-key="id" :loading="historyTableOpts.loading" :expanded="historyTableOpts.expanded" class="history-table">
+                  <template v-slot:headers="{ columns, isSorted, getSortIcon, toggleSort }">
+                    <tr>
+                      <template v-for="header in columns" :key="header.key">
+                        <th :class="{'is-sorted': isSorted(header)}" v-if="header.value != 'expand' || $root.isUserAdmin()">
+                          <span @click="toggleSort(header)">
+                            {{ header.title }}
+                          </span>
+                          <template v-if="isSorted(header)">
+                            <v-icon>
+                              {{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
+                            </v-icon>
+                          </template>
+                        </th>
+                      </template>
+                    </tr>
+                  </template>
                   <template v-slot:item="{item, index, isExpanded, toggleExpand, internalItem }">
                     <tr>
                       <td class="associated actions">
@@ -1794,7 +1810,7 @@
 
                         <v-data-table v-if="detect.engine !== 'strelka' && item && item.overrides.length" ref="historyOverridesTable" :sort-by.sync="historyOverrideTableOpts[item.engine].sortBy" :sort-desc.sync="historyOverrideTableOpts[item.engine].sortDesc"
                           :items-per-page.sync="historyOverrideTableOpts[item.engine].itemsPerPage" :footer-props="historyOverrideTableOpts[item.engine].footerProps" must-sort :headers="historyOverrideTableOpts[item.engine].headers"
-                          :items="item.overrides || []" item-value="updatedAt" :expanded="historyOverrideTableOpts[item.engine].expanded" class="history-override-table" :custom-sort="$root.dateAwareSort">
+                          :items="item.overrides || []" item-value="updatedAt" :expanded="historyOverrideTableOpts[item.engine].expanded" class="history-override-table">
                           <template v-slot:item="{ index, item, isExpanded, toggleExpand, internalItem }">
                             <tr>
                               <td class="associated actions">
@@ -3349,7 +3365,7 @@
                   <v-text-field variant="underlined" v-model="associatedTable['evidence'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details></v-text-field>
                   <v-data-table ref="evidenceTable" :sort-by.sync="associatedTable['evidence'].sortBy" :items-per-page.sync="associatedTable['evidence'].itemsPerPage"
                     :search="associatedTable['evidence'].search" :footer-props="associatedTable['evidence'].footerProps" must-sort :headers="associatedTable['evidence'].headers"
-                    :items="associations['evidence']" item-key="id" :loading="associatedTable['evidence'].loading" class="case-table" :custom-sort="$root.dateAwareSort">
+                    :items="associations['evidence']" item-key="id" :loading="associatedTable['evidence'].loading" class="case-table">
                     <template v-slot:headers="{ columns, isSorted, getSortIcon, toggleSort }">
                       <tr>
                         <template v-for="header in columns" :key="header.key">
@@ -3743,7 +3759,7 @@
                   <v-text-field variant="underlined" v-model="associatedTable['history'].search" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details data-aid="case_history_filter_input"></v-text-field>
                   <v-data-table id="history" ref="historyTable" :sort-by="associatedTable['history'].sortBy" :items-per-page.sync="associatedTable['history'].itemsPerPage"
                     :search="associatedTable['history'].search" :footer-props="associatedTable['history'].footerProps" must-sort :headers="associatedTable['history'].headers"
-                    :items="associations['history']" item-key="id" :loading="associatedTable['history'].loading" :expanded="associatedTable['history'].expanded" class="case-table" :custom-sort="$root.dateAwareSort">
+                    :items="associations['history']" item-key="id" :loading="associatedTable['history'].loading" :expanded="associatedTable['history'].expanded" class="case-table">
                     <template v-slot:headers="{ columns, isSorted, getSortIcon, toggleSort }">
                       <tr>
                         <template v-for="header in columns" :key="header.key">
