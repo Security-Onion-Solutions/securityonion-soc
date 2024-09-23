@@ -36,6 +36,8 @@ FROM ghcr.io/security-onion-solutions/ubuntu:24.10
 
 RUN apt-get update && apt-get upgrade -y
 
+RUN apt-get update && apt-get install -y ca-certificates
+
 ENV DSN=sqlite:///kratos-data/db.sqlite?_fk=true
 
 ARG UID=928
