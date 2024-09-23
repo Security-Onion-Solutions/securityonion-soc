@@ -109,6 +109,7 @@ test('filter', () => {
 });
 
 test('click', () => {
+	comp.emit = jest.fn();
 	let item = { id: 'a', children: [{ id: 'a.b' }] };
 
 	comp.click(item);
@@ -125,6 +126,12 @@ test('click', () => {
 	comp.click(item);
 	expect(item.open).toBe(true);
 	expect(comp.selectedId).toBe('a');
+	expect(comp.emit).toHaveBeenCalledWith('update:selected', ['a']);
+
+	comp.click(item);
+	expect(item.open).toBe(true);
+	expect(comp.selectedId).toBe('');
+	expect(comp.emit).toHaveBeenCalledWith('update:selected', []);
 });
 
 test('calcGutter', () => {
@@ -146,6 +153,8 @@ test('toggle', () => {
 });
 
 test('passthrough', () => {
+	comp.emit = jest.fn();
+
 	comp.passthrough(['a']);
 	expect(comp.selectedId).toBe('a');
 	expect(comp.emit).toHaveBeenCalledWith('update:selected', ['a']);

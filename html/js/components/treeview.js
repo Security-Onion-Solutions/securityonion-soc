@@ -70,10 +70,18 @@ components.push({
 			},
 			click(item) {
 				if (item.children) {
+					// non-leaf
 					this.toggle(item);
 				} else {
-					this.selectedId = item.id;
-					this.emit('update:selected', [item.id]);
+					if (this.selectedId !== item.id) {
+						// select
+						this.selectedId = item.id;
+						this.emit('update:selected', [item.id]);
+					} else {
+						// deselect
+						this.selectedId = '';
+						this.emit('update:selected', []);
+					}
 				}
 			},
 			calcGutter() {

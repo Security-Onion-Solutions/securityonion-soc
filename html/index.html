@@ -5254,7 +5254,7 @@
                     </v-row>
                   </v-container>
                   <span data-aid="config_item_customize_node_select">
-                    <v-select v-if="(selected.node || !selected.global) && availableNodes.length > 0" variant="outlined" id="config-select-node" :label="i18n.settingSelectNode" :items="availableNodes" :title="i18n.settingSelectNodeHelp" @change="addNode(selected, $event)" v-model.sync="selectedNode" />
+                    <v-select v-if="(selected.node || !selected.global) && availableNodes.length > 0" variant="outlined" id="config-select-node" :label="i18n.settingSelectNode" :items="availableNodes" :title="i18n.settingSelectNodeHelp" @update:model-value="addNode(selected, $event)" v-model.sync="selectedNode" />
                   </span>
                 </v-card-text>
               </v-card>
