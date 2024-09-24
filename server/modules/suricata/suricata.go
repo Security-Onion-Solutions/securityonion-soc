@@ -1746,6 +1746,10 @@ func (e *SuricataEngine) DuplicateDetection(ctx context.Context, detection *mode
 	return det, nil
 }
 
+func (e *SuricataEngine) IsAirgapped() bool {
+	return e.srv.Config.AirgapEnabled
+}
+
 func (e *SuricataEngine) LoadAuxiliaryData(summaries []*model.AiSummary) error {
 	sum := &sync.Map{}
 	for _, summary := range summaries {

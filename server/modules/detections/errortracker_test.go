@@ -9,7 +9,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/tj/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestErrorTracker(t *testing.T) {

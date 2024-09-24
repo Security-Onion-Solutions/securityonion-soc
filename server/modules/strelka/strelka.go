@@ -1136,6 +1136,10 @@ func (e *StrelkaEngine) DuplicateDetection(ctx context.Context, detection *model
 	return det, nil
 }
 
+func (e *StrelkaEngine) IsAirgapped() bool {
+	return e.srv.Config.AirgapEnabled
+}
+
 func (e *StrelkaEngine) LoadAuxiliaryData(summaries []*model.AiSummary) error {
 	sum := &sync.Map{}
 	for _, summary := range summaries {

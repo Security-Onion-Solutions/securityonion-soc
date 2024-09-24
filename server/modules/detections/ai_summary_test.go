@@ -6,11 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 
-	"github.com/tj/assert"
+	"github.com/apex/log"
+	"github.com/apex/log/handlers/memory"
+	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
 
@@ -26,6 +27,22 @@ func TestRefreshAiSummaries(t *testing.T) {
 	iom := mock.NewMockIOManager(ctrl)
 	loader := mock.NewMockAiLoader(ctrl)
 
+	h := memory.New()
+	lg := &log.Logger{Handler: h, Level: log.DebugLevel}
+	logger := lg.WithField("test", true)
+
+	loader.EXPECT().IsAirgapped().Return(true)
+
+	err := RefreshAiSummaries(loader, model.SigLanguage(""), nil, "", "", "", logger, nil)
+	assert.NoError(t, err)
+
+	assert.Equal(t, len(h.Entries), 1)
+
+	msg := h.Entries[0]
+	assert.Equal(t, msg.Message, "skipping AI summary update because airgap is enabled")
+	assert.Equal(t, msg.Level, log.DebugLevel)
+
+	loader.EXPECT().IsAirgapped().Return(false)
 	iom.EXPECT().ReadDir("baseRepoFolder").Return([]fs.DirEntry{}, nil)
 	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo1", repo, &branch).Return(nil)
 	iom.EXPECT().ReadFile("baseRepoFolder/repo1/detections-ai/sigma_summaries.yaml").Return([]byte(summaries), nil)
@@ -54,10 +71,8 @@ func TestRefreshAiSummaries(t *testing.T) {
 		return nil
 	})
 
-	logger := log.WithField("test", true)
-
 	lastSuccessfulAiUpdate = time.Time{}
 
-	err := RefreshAiSummaries(loader, model.SigLangSigma, &isRunning, "baseRepoFolder", repo, branch, logger, iom)
+	err = RefreshAiSummaries(loader, model.SigLangSigma, &isRunning, "baseRepoFolder", repo, branch, logger, iom)
 	assert.NoError(t, err)
 }

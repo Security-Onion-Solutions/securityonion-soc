@@ -9,7 +9,8 @@ import (
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/util"
-	"github.com/tj/assert"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDetectionOverrideValidate(t *testing.T) {

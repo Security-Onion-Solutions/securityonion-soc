@@ -25,7 +25,6 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.21
 	github.com/pkg/errors v0.9.1
 	github.com/samber/lo v1.47.0
-	github.com/tj/assert v0.0.3
 	go.uber.org/mock v0.4.0
 	golang.org/x/mod v0.20.0
 )

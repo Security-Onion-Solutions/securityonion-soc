@@ -20,7 +20,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
 	"github.com/go-git/go-git/v5/plumbing/transport"
-	"github.com/tj/assert"
+	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
 
