@@ -1556,6 +1556,10 @@ func (e *ElastAlertEngine) DuplicateDetection(ctx context.Context, detection *mo
 	return det, nil
 }
 
+func (e *ElastAlertEngine) IsAirgapped() bool {
+	return e.srv.Config.AirgapEnabled
+}
+
 func (e *ElastAlertEngine) LoadAuxiliaryData(summaries []*model.AiSummary) error {
 	sum := &sync.Map{}
 	for _, summary := range summaries {

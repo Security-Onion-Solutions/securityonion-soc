@@ -38,6 +38,20 @@ func (m *MockAiLoader) EXPECT() *MockAiLoaderMockRecorder {
 	return m.recorder
 }
 
+// IsAirgapped mocks base method.
+func (m *MockAiLoader) IsAirgapped() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsAirgapped")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsAirgapped indicates an expected call of IsAirgapped.
+func (mr *MockAiLoaderMockRecorder) IsAirgapped() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsAirgapped", reflect.TypeOf((*MockAiLoader)(nil).IsAirgapped))
+}
+
 // LoadAuxiliaryData mocks base method.
 func (m *MockAiLoader) LoadAuxiliaryData(arg0 []*model.AiSummary) error {
 	m.ctrl.T.Helper()

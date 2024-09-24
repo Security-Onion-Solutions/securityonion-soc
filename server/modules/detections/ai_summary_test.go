@@ -25,7 +25,14 @@ func TestRefreshAiSummaries(t *testing.T) {
 
 	iom := mock.NewMockIOManager(ctrl)
 	loader := mock.NewMockAiLoader(ctrl)
+	logger := log.WithField("test", true)
 
+	loader.EXPECT().IsAirgapped().Return(true)
+
+	err := RefreshAiSummaries(loader, model.SigLangSigma, &isRunning, "baseRepoFolder", repo, branch, logger, iom)
+	assert.NoError(t, err)
+
+	loader.EXPECT().IsAirgapped().Return(false)
 	iom.EXPECT().ReadDir("baseRepoFolder").Return([]fs.DirEntry{}, nil)
 	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo1", repo, &branch).Return(nil)
 	iom.EXPECT().ReadFile("baseRepoFolder/repo1/detections-ai/sigma_summaries.yaml").Return([]byte(summaries), nil)
@@ -54,10 +61,8 @@ func TestRefreshAiSummaries(t *testing.T) {
 		return nil
 	})
 
-	logger := log.WithField("test", true)
-
 	lastSuccessfulAiUpdate = time.Time{}
 
-	err := RefreshAiSummaries(loader, model.SigLangSigma, &isRunning, "baseRepoFolder", repo, branch, logger, iom)
+	err = RefreshAiSummaries(loader, model.SigLangSigma, &isRunning, "baseRepoFolder", repo, branch, logger, iom)
 	assert.NoError(t, err)
 }

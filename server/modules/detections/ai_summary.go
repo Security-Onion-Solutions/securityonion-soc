@@ -20,11 +20,17 @@ var lastSuccessfulAiUpdate time.Time
 
 type AiLoader interface {
 	LoadAuxiliaryData(summaries []*model.AiSummary) error
+	IsAirgapped() bool
 }
 
 //go:generate mockgen -destination mock/mock_ailoader.go -package mock . AiLoader
 
 func RefreshAiSummaries(eng AiLoader, lang model.SigLanguage, isRunning *bool, aiRepoPath string, aiRepoUrl string, aiRepoBranch string, logger *log.Entry, iom IOManager) error {
+	if eng.IsAirgapped() {
+		logger.Debug("skipping AI summary update because airgap is enabled")
+		return nil
+	}
+
 	err := updateAiRepo(isRunning, aiRepoPath, aiRepoUrl, aiRepoBranch, iom)
 	if err != nil {
 		if errors.Is(err, ErrModuleStopped) {
