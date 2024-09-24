@@ -2227,20 +2227,19 @@ const huntComponent = {
 
       this.$root.startLoading();
 
-      switch (this.selectAllState) {
-        case true:
-          payload.query = this.query;
-          break;
-        case 'indeterminate':
-          let ids = [];
-          for (let i = 0; i < this.eventData.length; i++) {
-            if (this.eventData[i]._isSelected) {
-              ids.push(this.eventData[i].soc_id);
-            }
+      if (this.selectAllState) {
+        payload.query = this.query;
+      } else if (this.selectAllIndeterminate) {
+        let ids = [];
+        for (let i = 0; i < this.eventData.length; i++) {
+          if (this.eventData[i]._isSelected) {
+            ids.push(this.eventData[i].soc_id);
           }
+        }
 
-          payload.ids = ids;
-          break;
+        payload.ids = ids;
+      } else {
+        return;
       }
 
       try {

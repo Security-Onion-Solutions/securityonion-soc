@@ -1216,7 +1216,7 @@ test('bulkAction - delete - pre-confirm', async () => {
 test('bulkAction - enable', async () => {
   comp.selectedAction = 'enable';
   comp.selectedCount = 2;
-  comp.selectAllState = 'indeterminate';
+  comp.selectAllIndeterminate = true;
   comp.eventData = [{ _isSelected: true, soc_id: "1" }, { _isSelected: false, soc_id: "2" }, { _isSelected: true, soc_id: "3" }];
   comp.hunt = jest.fn();
   const mock = resetPapi().mockPapi('post', { data: { count: 2 }, }, null);
@@ -1237,7 +1237,7 @@ test('bulkAction - enable', async () => {
 test('bulkAction - disable', async () => {
   comp.selectedAction = 'disable';
   comp.selectedCount = 2;
-  comp.selectAllState = 'indeterminate';
+  comp.selectAllIndeterminate = true;
   comp.eventData = [{ _isSelected: true, soc_id: "1" }, { _isSelected: false, soc_id: "2" }, { _isSelected: true, soc_id: "3" }];
   comp.hunt = jest.fn();
   const mock = resetPapi().mockPapi('post', { data: { count: 2 } }, null);
@@ -1259,7 +1259,7 @@ test('bulkAction - delete - confirm - success', async () => {
   comp.selectedAction = 'delete';
   comp.showBulkDeleteConfirmDialog = true;
   comp.selectedCount = 2;
-  comp.selectAllState = 'indeterminate';
+  comp.selectAllIndeterminate = true;
   comp.eventData = [{ _isSelected: true, soc_id: "1" }, { _isSelected: false, soc_id: "2" }, { _isSelected: true, soc_id: "3" }];
   comp.hunt = jest.fn();
   const mock = resetPapi().mockPapi('post', { data: { count: 2 } }, null);
@@ -1281,7 +1281,7 @@ test('bulkAction - delete - confirm - failure', async () => {
   comp.selectedAction = 'delete';
   comp.showBulkDeleteConfirmDialog = true;
   comp.selectedCount = 2;
-  comp.selectAllState = 'indeterminate';
+  comp.selectAllIndeterminate = true;
   comp.eventData = [{ _isSelected: true, soc_id: "1" }, { _isSelected: false, soc_id: "2" }, { _isSelected: true, soc_id: "3" }];
   const err = { response: { data: "ERROR_BULK_COMMUNITY" } }
   const mock = resetPapi().mockPapi('post', null, err);
@@ -1289,7 +1289,8 @@ test('bulkAction - delete - confirm - failure', async () => {
   await comp.bulkAction(true);
 
   expect(comp.showBulkDeleteConfirmDialog).toBe(false);
-  expect(comp.selectAllState).toBe('indeterminate');
+  expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(true);
   expect(comp.selectedCount).toBe(2);
   expect(mock).toHaveBeenCalledTimes(1);
   expect(mock).toHaveBeenCalledWith('detection/bulk/delete', { ids: ["1", "3"] });

@@ -1607,7 +1607,7 @@
                           </div>
                         </div>
                       </td>
-                      <td :colspan="headers.length" class="pa-4" v-else-if="detect.engine === 'elastalert'">
+                      <td :colspan="overrideHeaders[detect.engine].length" class="pa-4" v-else-if="detect.engine === 'elastalert'">
                         <!-- isEnabled -->
                         <div @click="startOverrideEdit('override-enabled', item, 'isEnabled')" :class="{ clicktoedit: !isOverrideEdit('override-enabled') }" data-aid="detection_override_enabled_toggle">
                           <div class="font-weight-bold mt-2">
