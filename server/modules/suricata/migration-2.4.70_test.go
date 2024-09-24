@@ -16,7 +16,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 
-	"github.com/tj/assert"
+	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
 
