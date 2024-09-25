@@ -2390,7 +2390,7 @@
               <template v-slot:item="{ item, isExpanded, toggleExpand, internalItem }">
                 <tr>
                   <td v-if="$root.isUserAdmin()">
-                    <v-btn id="expandNode" icon variant="text" size="small" @click="toggleExpand(internalItem)" data-aid="users_details_expand">
+                    <v-btn id="expandNode" icon variant="text" size="small" @click="toggleExpand(internalItem); if (isExpanded(internalItem)) updateForm(item)" data-aid="users_details_expand">
                       <v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="users_details_collapse">fa-angle-down</v-icon>
                       <v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="users_details_expand">fa-angle-right</v-icon>
                     </v-btn>
@@ -2432,7 +2432,7 @@
                           <v-card>
                             <v-card-title>{{ i18n.roles }}</v-card-title>
                             <v-card-text data-aid="users_details_role_toggle">
-                              <v-checkbox v-for="role in roles" :key="role" :id="'role-checkbox-' + role" density="compact" class="no-details" :input-value="hasRole(item, role)" :label="role" @click.stop="toggleRole(item, role)" />
+                              <v-checkbox v-for="role in roles" :key="role" :id="'role-checkbox-' + role" density="compact" class="no-details" :model-value="hasRole(item, role)" :label="role" @click.stop="toggleRole(item, role)" />
                             </v-card-text>
                           </v-card>
                         </v-col>

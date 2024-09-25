@@ -86,21 +86,13 @@ routes.push({ path: '/users', name: 'users', component: {
         }
       }
     },
-    expand(user) {
-      if (this.isExpanded(user)) {
-        this.expanded = [];
-      } else {
-        this.form.id = user.id;
-        this.form.email = user.email;
-        this.form.password = null;
-        this.form.firstName = user.firstName;
-        this.form.lastName = user.lastName;
-        this.form.note = user.note;
-        this.expanded = [user];
-      }
-    },
-    isExpanded(user) {
-      return this.expanded.length > 0 && this.expanded[0] == user;
+    updateForm(user) {
+      this.form.id = user.id;
+      this.form.email = user.email;
+      this.form.password = null;
+      this.form.firstName = user.firstName;
+      this.form.lastName = user.lastName;
+      this.form.note = user.note;
     },
     hideAdd() {
       this.dialog = false;
@@ -219,7 +211,7 @@ routes.push({ path: '/users', name: 'users', component: {
         const response = await this.$root.papi.delete('users/' + id);
         for (var i = 0; i < this.users.length; i++) {
           if (this.users[i].id == id) {
-            this.$delete(this.users, i);
+            this.users.splice(i, 1);
             break;
           }
         }
