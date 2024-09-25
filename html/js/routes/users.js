@@ -107,7 +107,7 @@ routes.push({ path: '/users', name: 'users', component: {
       this.form.note = null;
       this.dialog = true;
     },
-    showDeleteConfirm(user) {
+    showDeleteConfirm() {
       this.deleteUserDialog = true;
     },
     hideDeleteConfirm() {

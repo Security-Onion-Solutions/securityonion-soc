@@ -1004,7 +1004,7 @@
                     <template v-slot:prepend>
                       <v-icon :alt="action.name" class="solid">{{ action.icon }}</v-icon>
                     </template>
-                    <v-list-item-title class="white--text">
+                    <v-list-item-title class="white-text">
                       {{ $root.localizeMessage(action.name) }}
                     </v-list-item-title>
                 </v-list-item>
@@ -1218,7 +1218,7 @@
                                 </div>
                                 <div class="mb-3">
                                   <v-form v-model="editForm.valid" @submit.prevent>
-                                    <v-textarea id="comment-value-input" solo variant="flat" hide-details="auto" rows="5" density="compact" color="text--black" v-model="editForm.val" class="mb-1" :rules="[rules.required]" data-aid="detection_comment_edit"/>
+                                    <v-textarea id="comment-value-input" solo variant="flat" hide-details="auto" rows="5" density="compact" color="black-text" v-model="editForm.val" class="mb-1" :rules="[rules.required]" data-aid="detection_comment_edit"/>
                                   </v-form>
                                   <div class="d-inline-flex justify-end">
                                     <v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="detection_comment_cancel">
@@ -1233,7 +1233,7 @@
 
                               <div class="d-flex flex-column flex-sm-row align-self-end text-body-2 align-baseline">
                                 <div class="d-inline-flex align-center mr-1">
-                                  <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text" data-aid="detection_comment_avatar_display">
+                                  <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white-text" data-aid="detection_comment_avatar_display">
                                     <div class="case avatar-font" :title="comment.owner">
                                       {{ $root.getAvatar(comment.owner) }}
                                     </div>
@@ -1904,7 +1904,7 @@
 
                         <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
                           <v-spacer/>
-                          <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text" data-aid="detection_history_record_avatar_display">
+                          <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white-text" data-aid="detection_history_record_avatar_display">
                             <div class="case avatar-font" :title="item.owner">
                               {{ $root.getAvatar(item.owner) }}
                             </div>
@@ -2451,7 +2451,7 @@
                               </v-form>
                               <v-btn id="update-password-button" :disabled="!form.valid" @click="updatePassword(item)" v-text="i18n.passwordReset" class="mr-2 mb-2" data-aid="users_details_password_update"></v-btn>
                               <v-btn id="toggle-locked-button" v-text="item.status == 'locked' ? i18n.unlock : i18n.lock" @click.stop="toggleStatus(item)" class="mr-2 mb-2" data-aid="users_details_lock_toggle"/>
-                              <v-btn id="delete-user-button" v-text="i18n.delete" color="error" @click.stop="showDeleteConfirm(item)" class="mb-2" data-aid="users_details_delete"/>
+                              <v-btn id="delete-user-button" v-text="i18n.delete" color="error" @click.stop="showDeleteConfirm()" class="mb-2" data-aid="users_details_delete"/>
                             </v-card-text>
                           </v-card>
                         </v-col>
@@ -2726,7 +2726,7 @@
             </div>
           </v-col>
         </v-row>
-        <!-- <v-row v-if="job.status == 2" data-aid="job_details_incomplete">
+        <v-row v-if="job.status == 2" data-aid="job_details_incomplete">
           <v-col>
             <v-alert :value="true" color="info" icon="fa-exclamation-triangle">
               {{ i18n.jobIncomplete }}
@@ -2739,26 +2739,24 @@
         </v-row>
         <v-menu v-model="quickActionVisible" :position-x="quickActionX" :position-y="quickActionY" absolute data-aid="job_details_context_menu">
           <v-list id="job-common-action" color="secondary">
-              <v-list-item id="actionCopyValue" dense @click="$root.copyToClipboard(quickActionValue)" data-aid="job_details_context_menu_copy">
-                <template v-slot:prepend>
-                  <v-icon color="white">fa-copy</v-icon>
-                </template>
-                <v-list-item-title class="text-white">
-                  {{ i18n.copyToClipboard }}
-                </v-list-item-title>
-              </v-list-item>
+            <v-list-item id="actionCopyValue" density="compact" @click="$root.copyToClipboard(quickActionValue)" data-aid="job_details_context_menu_copy">
+              <template v-slot:prepend>
+                <v-icon color="white">fa-copy</v-icon>
+              </template>
+              <v-list-item-title class="text-white">
+                {{ i18n.copyToClipboard }}
+              </v-list-item-title>
+            </v-list-item>
           </v-list>
           <v-list id="job-quick-action" color="secondary">
             <template v-slot:activator>
-              <template v-slot:prepend>
-                <v-icon color="white">fa-external-link-alt</v-icon>
-              </template>
+              <v-icon color="white">fa-external-link-alt</v-icon>
               <v-list-item-title class="text-white">
                 {{ i18n.quickActions }}
               </v-list-item-title>
             </template>
             <template v-for="action in actions" :key="action.link">
-              <v-list-item dense class="custom-quick-action-button" v-if="action.enabled" :href="action.background ? '' : action.linkFormatted"
+              <v-list-item density="compact" class="custom-quick-action-button" v-if="action.enabled" :href="action.background ? '' : action.linkFormatted"
                 :title="$root.localizeMessage(action.description)" :target="$root.target(action.target)" @click="$root.performAction($event, action)" :data-aid="'job_details_context_menu_action' + action.name">
                 <template v-slot:prepend>
                   <v-icon :alt="action.name" color="white">{{ action.icon }}</v-icon>
@@ -2769,7 +2767,7 @@
               </v-list-item>
             </template>
           </v-list>
-        </v-menu> -->
+        </v-menu>
       </v-container>
     </script>
 
@@ -2814,7 +2812,7 @@
                     <a class="case markdown-icon" href="https://www.markdownguide.org/cheat-sheet/" target="_blank" :title="i18n.markdownFormattingSupported"><v-icon>fab fa-markdown</v-icon></a>
                   </div>
                   <v-form v-model="editForm.valid" @submit.prevent>
-                    <v-textarea id="case-desc-input" solo variant="outlined" hide-details="auto" rows="5" density="compact" color="text--black" v-model="editForm.val" :rules="[rules.required]" persistent-hint :hint="i18n.caseDescriptionHelp"/>
+                    <v-textarea id="case-desc-input" solo variant="outlined" hide-details="auto" rows="5" density="compact" color="black-text" v-model="editForm.val" :rules="[rules.required]" persistent-hint :hint="i18n.caseDescriptionHelp"/>
                   </v-form>
                 </div>
                 <div class="d-inline-flex justify-end">
@@ -2883,7 +2881,7 @@
                                   </div>
                                   <div class="mb-3">
                                     <v-form v-model="editForm.valid" @submit.prevent>
-                                      <v-textarea id="comment-desc-input" variant="outlined" hide-details="auto" rows="5" dense color="text--black" v-model="editForm.val" class="mb-1" :rules="[rules.required]" data-aid="case_comment_edit_input" />
+                                      <v-textarea id="comment-desc-input" variant="outlined" hide-details="auto" rows="5" dense color="black-text" v-model="editForm.val" class="mb-1" :rules="[rules.required]" data-aid="case_comment_edit_input" />
                                     </v-form>
                                     <div class="d-inline-flex justify-end">
                                       <v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_comment_cancel">
@@ -2907,7 +2905,7 @@
                                   <div v-else class="d-flex flex-column" style="width: 100%;" data-aid="case_comment_hours_edit">
                                     <div class="mb-3">
                                       <v-form v-model="editForm.valid" @submit.prevent>
-                                        <v-text-field id="comment-hours-input" solo flat dense color="text--black" v-model="editForm.val" class="mb-1" :rules="[rules.hours]" data-aid="case_comment_hours_input"/>
+                                        <v-text-field id="comment-hours-input" solo flat dense color="black-text" v-model="editForm.val" class="mb-1" :rules="[rules.hours]" data-aid="case_comment_hours_input"/>
                                       </v-form>
                                       <div class="d-inline-flex justify-end">
                                         <v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_comment_hours_cancel">
@@ -2923,7 +2921,7 @@
 
                                 <div class="d-flex flex-column flex-sm-row align-self-end align-center text-body-2">
                                   <div class="d-inline-flex align-center mr-1" data-aid="case_comment_avatar_display">
-                                    <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text">
+                                    <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white-text">
                                       <div class="case avatar-font" :title="comment.owner">
                                         {{ $root.getAvatar(comment.owner) }}
                                       </div>
@@ -2971,12 +2969,12 @@
                       <div class="mt-1 mt-md-3 pb-3 pt-1 contrast-bg rounded rounded-md" style="width: 100%;">
                         <div class="d-flex flex-column align-start">
                           <div class="d-inline-flex align-center mt-3 mx-2 mb-4">
-                            <v-avatar color="primary" size="28" class="mr-2 white--text" data-aid="case_new_comment_avatar">
+                            <v-avatar color="primary" size="28" class="mr-2 white-text" data-aid="case_new_comment_avatar">
                               <div class="font-weight-bold" :title="$root.username">
                               {{ $root.getAvatar($root.username) }}
                               </div>
                             </v-avatar>
-                            <h3 class="text--primary">{{ i18n.commentAdd }}</h3>
+                            <h3 class="primary-text">{{ i18n.commentAdd }}</h3>
                           </div>
                           <div class="d-flex flex-column" style="width: 100%;">
                             <div class="d-flex flex-column flex-sm-row align-sm-center align-self-start text-body-2 mb-1 ml-3">
@@ -3030,12 +3028,12 @@
                         <div class="d-flex flex-column" style="width: 100%;">
                         <div class="mb-2">
                           <div class="d-inline-flex align-center mb-3">
-                            <v-avatar color="primary" size="28" class="mr-2 white--text" data-aid="case_attachments_new_avatar_display">
+                            <v-avatar color="primary" size="28" class="mr-2 white-text" data-aid="case_attachments_new_avatar_display">
                               <div class="font-weight-bold" :title="$root.username">
                               {{ $root.getAvatar($root.username) }}
                               </div>
                             </v-avatar>
-                            <h3 class="text--primary">{{ i18n.attachmentAdd }}</h3>
+                            <h3 class="primary-text">{{ i18n.attachmentAdd }}</h3>
                           </div>
                           <v-form ref="attachments" v-model="associatedForms['attachments'].valid" @submit.prevent>
                             <v-file-input variant="underlined" id="attachments-file" show-size v-model="attachment" persistent-hint :hint="getAttachmentHelp()"
@@ -3245,7 +3243,7 @@
 
                           <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
                             <v-spacer/>
-                            <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text" data-aid="case_attachment_avatar_display">
+                            <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white-text" data-aid="case_attachment_avatar_display">
                               <div class="case avatar-font" :title="item.owner">
                                 {{ $root.getAvatar(item.owner) }}
                               </div>
@@ -3300,12 +3298,12 @@
                         <div class="d-flex flex-column" style="width: 100%;">
                         <div class="mb-2">
                           <div class="d-inline-flex align-center mb-3">
-                            <v-avatar color="primary" size="28" class="mr-2 white--text" data-aid="case_evidence_new_avatar">
+                            <v-avatar color="primary" size="28" class="mr-2 white-text" data-aid="case_evidence_new_avatar">
                               <div class="font-weight-bold" :title="$root.username">
                               {{ $root.getAvatar($root.username) }}
                               </div>
                             </v-avatar>
-                            <h3 class="text--primary">{{ i18n.evidenceAdd }}</h3>
+                            <h3 class="primary-text">{{ i18n.evidenceAdd }}</h3>
                           </div>
                           <v-form ref="evidence" v-model="associatedForms['evidence'].valid" @submit.prevent>
                             <span data-aid="case_evidence_new_type_select">
@@ -3580,7 +3578,7 @@
                                     </v-expansion-panels>
 
                                     <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
-                                      <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text" data-aid="case_evidence_analyze_job_avatar_display">
+                                      <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white-text" data-aid="case_evidence_analyze_job_avatar_display">
                                         <div class="case avatar-font" :title="job.owner">
                                           {{ $root.getAvatar(job.owner) }}
                                         </div>
@@ -3608,7 +3606,7 @@
 
                           <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
                             <v-spacer/>
-                            <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text" data-aid="case_evidence_avatar_display">
+                            <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white-text" data-aid="case_evidence_avatar_display">
                               <div class="case avatar-font" :title="item.owner">
                                 {{ $root.getAvatar(item.owner) }}
                               </div>
@@ -3713,7 +3711,7 @@
 
                           <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
                             <v-spacer/>
-                            <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text" data-aid="case_event_avatar_display">
+                            <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white-text" data-aid="case_event_avatar_display">
                               <div class="case avatar-font" :title="item.owner">
                                 {{ $root.getAvatar(item.owner) }}
                               </div>
@@ -4023,7 +4021,7 @@
 
                           <div class="d-flex flex-column flex-sm-row align-end align-sm-center align-self-end text-body-2">
                             <v-spacer/>
-                            <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white--text" data-aid="case_history_record_avatar_display">
+                            <v-avatar color="primary" size="24" class="mr-2 d-none d-sm-inline-flex white-text" data-aid="case_history_record_avatar_display">
                               <div class="case avatar-font" :title="item.owner">
                                 {{ $root.getAvatar(item.owner) }}
                               </div>
@@ -4470,7 +4468,7 @@
                                 <span class="filter label">{{ i18n.osUptime }}:</span>
                                 <span id="node_uptime" :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'">
                                   {{ formatDuration(item.osUptimeSeconds) }}
-                                  <span v-if="item.osNeedsRestart" id="node_restart-required-note" :class="areMetricsCurrent(item) ? 'info--text' : 'info--text stale'">
+                                  <span v-if="item.osNeedsRestart" id="node_restart-required-note" :class="areMetricsCurrent(item) ? 'info-text' : 'info-text stale'">
                                     {{ i18n.restartRequired }}
                                   </span>
                                 </span>
