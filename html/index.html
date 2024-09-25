@@ -507,7 +507,7 @@
             <div v-if="isExpandedSection('hunt-graphs')">
               <v-row v-if="!metricsEnabled" :data-aid="'timeline_' + category">
                 <v-col cols="12">
-                  <line-chart :height="chartHeight" :data="timelineChartData" :options="timelineChartOptions"/>
+                  <line-chart id="timelineChart" :height="chartHeight" :data="timelineChartData" :options="timelineChartOptions"/>
                 </v-col>
               </v-row>
               <v-row v-if="metricsEnabled">
@@ -734,7 +734,7 @@
                                 <v-icon class="tiny-icon">fa-caret-left</v-icon>
                               </v-btn>
                             </span>
-                            <span @click="toggleSort(header)">
+                            <span :id="'col_label_' + header.value" :data-aid="'events_col_sort_' + category" @click="toggleSort(header)">
                               {{ header.title }}
                             </span>
                             <span class="table-header-actions" :data-aid="'events_move_right_' + category">
@@ -1061,7 +1061,6 @@
           <v-card>
             <v-card-title class="text-h5" v-text="i18n.actionAddToCase" />
             <v-card-text data-aid="add_to_case_dialog_select">
-              {{ selectedMruCase }}
               <v-select id="case-select" v-if="addToCaseDialogVisible" v-model="selectedMruCase" :items="mruCases" :label="i18n.mruCases"></v-select>
             </v-card-text>
             <v-card-actions>

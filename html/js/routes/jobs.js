@@ -100,7 +100,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
             this.jobs.splice(i, 1);
           } else {
             this.$root.populateUserDetails(job, "userId", "owner");
-            this.$set(this.jobs, i, job);
+            this.jobs[i] = job;
           }
           break;
         }

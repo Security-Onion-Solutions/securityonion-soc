@@ -81,7 +81,7 @@ routes.push({ path: '/users', name: 'users', component: {
     updateUser(user) {
       for (var i = 0; i < this.users.length; i++) {
         if (this.users[i].id == user.id) {
-          this.$set(this.users, i, user);
+          this.users[i] = user;
           break;
         }
       }
