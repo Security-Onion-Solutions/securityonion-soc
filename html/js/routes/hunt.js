@@ -70,7 +70,7 @@ const huntComponent = {
     groupByLimit: 10,
     groupByFilter: '',
     groupByItemsPerPage: 10,
-    groupByFooters: { 'items-per-page-options': [10,25,50,100,200,500] },
+    groupByFooters: [10,25,50,100,200,500],
     groupByPage: 1,
     groupBySortBy: 'count',
     groupBySortDesc: true,

@@ -402,7 +402,7 @@
                   <template v-slot:activator="{ props: menu }">
                     <v-tooltip location="bottom">
                       <template v-slot:activator="{ props: tooltip }">
-                        <v-btn variant="text" size="x-small" v-bind="{ ...tooltip, ...menu }" id="hunt-query-dropdown-button" :data-aid="'query_dropdown_' + category">
+                        <v-btn variant="text" size="x-small" icon v-bind="{ ...tooltip, ...menu }" id="hunt-query-dropdown-button" :data-aid="'query_dropdown_' + category">
                           <v-icon>fa-angle-down</v-icon>
                         </v-btn>
                       </template>
@@ -577,9 +577,8 @@
                       <v-data-table v-if="!group.chart_type" :id="'group-' + groupIdx" class="elevation-1"
                         :search="groupByFilter" density="compact"
                         :data-aid="'groups_table_' + category" v-model:sort-by="group.sortBy"
-                        :footer-props="groupByFooters" :item-value="group.sortBy.key"
-                        @update:sort-by="updateGroupBySort" @update:sort-desc="updateGroupBySort"
-                        :items-per-page.sync="groupByItemsPerPage" :headers="group.headers" :items="group.data" :custom-sort="sortEvents">
+                        :items-per-page-options="groupByFooters" :item-value="group.sortBy.key"
+                        :items-per-page="groupByItemsPerPage" @update:items-per-page="val => groupByItemsPerPage = val" :headers="group.headers" :items="group.data" :custom-sort="sortEvents">
                         <template v-slot:headers="{ columns, isSorted, getSortIcon, toggleSort }">
                           <tr>
                             <template v-for="(header, headerIdx) in columns" :key="header.key">
@@ -714,7 +713,7 @@
                      NOTE: Moved to top because if it were bottom we lose paging controls -->
                     <template name="top" :any_name="eventCurrentItems = data.items" />
                   </template>
-                  <template v-slot:headers="{ columns, isSorted, getSortIcon, toggleSort }">
+                  <template v-slot:headers="{ props, columns, isSorted, getSortIcon, toggleSort }">
                     <tr>
                       <template v-for="header in columns" :key="header.key">
                         <th :class="{'is-sorted': isSorted(header)}">
@@ -801,10 +800,10 @@
                             <tr :data-aid="'events_field_' + category + '_' + kvp.key" class="pt-3">
                               <td class="expansion">
                                 <div class="d-inline-block semi-transparent">
-                                  <v-btn :id="'groupby_' + kvp.key" :disabled="!canQuery(kvp.key)" variant="text" size="x-small" :to="buildGroupByNewRoute(kvp.key)" :data-aid="'events_field_groupby_toggle_' + category">
+                                  <v-btn :id="'groupby_' + kvp.key" :disabled="!canQuery(kvp.key)" variant="text" size="x-small" icon :to="buildGroupByNewRoute(kvp.key)" :data-aid="'events_field_groupby_toggle_' + category" class="remove-overlay">
                                     <v-icon :alt="i18n.groupNew" :title="i18n.groupNewHelp" class="text-white">fa-layer-group</v-icon>
                                   </v-btn>
-                                  <v-btn :id="'col_toggle_' + kvp.key" variant="text" size="x-small" @click="toggleColumnHeader(kvp.key)" :data-aid="'events_field_header_toggle_' + category">
+                                  <v-btn :id="'col_toggle_' + kvp.key" variant="text" size="x-small" icon @click="toggleColumnHeader(kvp.key)" :data-aid="'events_field_header_toggle_' + category">
                                     <v-icon :alt="i18n.addColumnHeader" :color="isColumnHeader(kvp.key) ? 'info' : ''" :title="i18n.addColumnHeaderHelp">fa-table-columns</v-icon>
                                   </v-btn>
                                 </div>
@@ -2081,18 +2080,18 @@
             </div>
           </v-col>
         </v-row>
+        <v-dialog v-model="confirmDeleteDialog" persistent max-width="350" data-aid="detection_confirm_delete_dialog">
+          <v-card>
+            <v-card-title class="text-h5" v-text="i18n.detectionConfirmDelete" />
+            <v-card-text v-html="i18n.detectionConfirmDeleteHelp" />
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn variant="text" id="detection-delete-proceed-button" @click="confirmDeleteDetection()" v-text="i18n.yes" data-aid="detection_delete_dialog_confirm" />
+              <v-btn variant="text" id="detection-delete-cancel-button" @click="cancelDeleteDetection()" v-text="i18n.no" data-aid="detection_delete_dialog_abort" />
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
       </v-container>
-      <v-dialog v-model="confirmDeleteDialog" persistent max-width="350" data-aid="detection_confirm_delete_dialog">
-        <v-card>
-          <v-card-title class="text-h5" v-text="i18n.detectionConfirmDelete" />
-          <v-card-text v-html="i18n.detectionConfirmDeleteHelp" />
-          <v-card-actions>
-            <v-spacer></v-spacer>
-            <v-btn text id="detection-delete-proceed-button" @click="confirmDeleteDetection()" v-text="i18n.yes" data-aid="detection_delete_dialog_confirm" />
-            <v-btn text id="detection-delete-cancel-button" @click="cancelDeleteDetection()" v-text="i18n.no" data-aid="detection_delete_dialog_abort" />
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
     </script>
 
     <script type="text/x-template" id="page-terms">
@@ -2263,7 +2262,7 @@
                     <b>use</b> means anything you do with the software requiring one of your licenses.
                     <p class="mb-3" />
                     <b>trademark</b> means trademarks, service marks, and similar rights.
-                  </v-card-content>
+                  </v-card-text>
                 </v-card>
               </v-tabs-window-item>
             </v-tabs-window>

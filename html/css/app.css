@@ -162,7 +162,6 @@ td.expansion:last-child {
   color: rgb(var(--v-theme-text)) !important;
 }
 
-
 .no-details .v-input__details {
   display: none;
 }
@@ -868,4 +867,8 @@ ul ul ul {
 .treeview-item--active {
   color: rgb(var(--v-theme-primary));
   background-color: rgba(var(--v-theme-primary), 0.12) !important;
+}
+
+.remove-overlay .v-btn__overlay {
+  opacity: 0;
 }
