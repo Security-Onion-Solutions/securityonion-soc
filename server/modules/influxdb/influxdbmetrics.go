@@ -450,7 +450,7 @@ func (metrics *InfluxDBMetrics) getEventstoreStatus(host string) string {
 		log.WithFields(log.Fields{
 			"host":             host,
 			"eventStoreStatus": metrics.eventstoreStatus,
-		}).Warn("Host not found in process status metrics")
+		}).Debug("Host not found in eventstore status metrics")
 	}
 	return status
 }
