@@ -93,6 +93,7 @@ $(document).ready(function () {
             drawer_background: '#f4f4f4',
             background: '#ffffff',
             text: '#000000',
+            icon: '#7f7f7f',
           },
         },
         dark: {
@@ -107,6 +108,7 @@ $(document).ready(function () {
             drawer_background: '#353535',
             background: '#1e1e1e',
             text: '#ffffff',
+            icon: '#929292',
           },
         },
       },

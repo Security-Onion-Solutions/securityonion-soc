@@ -162,6 +162,10 @@ td.expansion:last-child {
   color: rgb(var(--v-theme-text)) !important;
 }
 
+.theme-icon {
+  color: rgb(var(--v-theme-icon)) !important;
+}
+
 .no-details .v-input__details {
   display: none;
 }

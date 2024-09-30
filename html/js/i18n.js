@@ -740,7 +740,7 @@ const i18n = {
       security: 'Security',
       securityInstructions: 'You may be prompted to login again when updating your security settings. If submitting a new password, you will need to verify your identity first with the old password. This is a security measure to protect your account.',
       securityInstructionsTotp: 'IMPORTANT: If you changed your password recently you must logout and login again with the new password before attempting to activate TOTP. Failure to relogin will result in the TOTP validation failing. If this occurs you will need to remove the TOTP code from your authenticator app, login to SOC with the new password, and then activate TOTP again.',
-      selected: 'Selected: ',
+      selected: 'Selected',
       selectAll: 'Would you like to select all [[count]] Detections?',
       sensor: 'Sensor',
       sensorId: 'Sensor ID',
