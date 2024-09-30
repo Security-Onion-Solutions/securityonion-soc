@@ -489,7 +489,7 @@ const i18n = {
       gridMemberUploadConflict: 'A file with that name is currently being imported. Please wait for the current import to complete before trying again.',
       gridMemberUploadFailure: 'Something went wrong while uploading the file. The file was not imported.',
       gridMemberImportNoChanges: 'A recent import made no changes.',
-      gridMemberImportSuccess: 'A recent import has completed and the <a id="view-results" href="{url}">results</a> will be available in Dashboards momentarily.',
+      gridMemberImportSuccess: '<span class="d-block">A recent import has completed and the <a id="view-results" class="text-white" href="{url}">results</a> will be available in Dashboards momentarily.</span>',
       gridMemberRestartConfirmTitle: 'Reboot Node',
       gridMemberRestartConfirmHelp: 'Rebooting a node may be required for various reasons, such as if the node has installed new kernel updates.<p class="my-3"/>The grid may show a fault for several minutes while the node reboots and starts the Security Onion services.<p class="my-3"/>⚠️ Rebooting the manager node will temporarily prevent access to this web application and may show an error similar to <b>502 Bad Gateway</b>. Wait a few minutes and then refresh the browser window to regain access.',
       gridMemberRestartSuccess: 'Successfully issued a reboot request to the node.',
