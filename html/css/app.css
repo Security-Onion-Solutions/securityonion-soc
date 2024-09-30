@@ -166,6 +166,10 @@ td.expansion:last-child {
   color: rgb(var(--v-theme-icon)) !important;
 }
 
+.short-spacer .v-list-item__spacer {
+  max-width: 16px;
+}
+
 .no-details .v-input__details {
   display: none;
 }

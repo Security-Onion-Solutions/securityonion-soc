@@ -210,7 +210,7 @@
               </template>
               <v-list-item-title v-text="i18n.cases"></v-list-item-title>
             </v-list-item>
-            <v-list-item data-aid="nav_detections" @click="" to="/detections" v-if="detectionsEnabled">
+            <v-list-item data-aid="nav_detections" @click="" to="/detections" v-if="detectionsEnabled" class="short-spacer">
               <template #prepend>
                 <v-icon>fa-magnifying-glass</v-icon>
               </template>
@@ -228,7 +228,7 @@
               </template>
               <v-list-item-title v-text="i18n.jobs"></v-list-item-title>
             </v-list-item>
-            <v-list-item data-aid="nav_grid" @click="" to="/grid">
+            <v-list-item data-aid="nav_grid" @click="" to="/grid" class="short-spacer">
               <template #prepend>
                 <v-icon>fa-network-wired</v-icon>
               </template>
