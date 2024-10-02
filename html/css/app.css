@@ -880,3 +880,8 @@ ul ul ul {
 .remove-overlay .v-btn__overlay {
   opacity: 0;
 }
+
+.sticky-config {
+  position: sticky;
+  top: 154px;
+}

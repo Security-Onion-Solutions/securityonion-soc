@@ -4959,7 +4959,7 @@
         </v-row>
         <v-row>
           <v-col cols="12" lg="4" :class="treeVisible ? 'd-block' : 'd-none'">
-            <v-container fluid>
+            <v-container class="sticky-config">
               <v-row>
                 <v-col>
                   <v-text-field variant="underlined" id="filter-input" :label="i18n.filter" v-model="search" clearable :hint="i18n.filterHelp" persistent-hint @click:clear="clearFilter()" @keydown.enter="applySearchFilter()" class="mb-3" data-aid="config_filter_input" />
@@ -4984,7 +4984,7 @@
                   </div>
                 </v-col>
               </v-row>
-            </v-container>
+
             <!-- <v-treeview
               id="config-tree"
               :activated="active"
@@ -5007,8 +5007,9 @@
                 <v-icon v-if="isSettingModifiedPerNode(item)" class="ml-1" color="warning" :title="i18n.settingHasNodeValues">fa-circle-nodes</v-icon>
               </template>
             </v-treeview> -->
-            <tree-view id="config-tree" :items="hierarchy" :leaves="settings" :selected="active" @update:selected="val => active = val" :search="searchFilter"
-              :item-title="getSettingName" :setting-modified="isSettingModified" :setting-modified-per-node="isSettingModifiedPerNode" :i18n="i18n" data-aid="config_tree" />
+              <tree-view id="config-tree" :items="hierarchy" :leaves="settings" :selected="active" @update:selected="val => active = val" :search="searchFilter"
+                :item-title="getSettingName" :setting-modified="isSettingModified" :setting-modified-per-node="isSettingModifiedPerNode" :i18n="i18n" data-aid="config_tree" />
+            </v-container>
           </v-col>
           <v-divider vertical />
           <v-col cols="12" :lg="treeVisible ? 8 : 12">
