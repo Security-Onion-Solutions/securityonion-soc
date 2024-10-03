@@ -911,6 +911,7 @@ const i18n = {
       totpSecretInstructions: 'If you are unable to scan the QR code, use the secret provided below instead.',
       totpUnlinkInstructions: 'If you no longer have access to your authenticator app, you can deactivate the TOTP.',
       track: 'Track',
+      trackRegex: 'Track/Regex',
       trafficMonIn: 'Inbound Monitor Traffic',
       trafficMonInAbbr: 'Mon In',
       trafficMonInDrops: 'Dropped Monitor Traffic',
