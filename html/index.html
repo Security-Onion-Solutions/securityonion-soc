@@ -1398,7 +1398,7 @@
                           <div class="d-inline-block">
                             <span v-if="field.format" v-text="$root.formatLocalTimestamp(item[field.value], zone)"/>
                             <span v-else-if="field.localize">{{ $root.tryLocalize(item[field.value]) }}</span>
-                            <span v-else>{{ item[field.value] }}</span>
+                            <span v-else>{{ item?.[field.value] || item?.[field.altValue] || '' }}</span>
                           </div>
                         </td>
                       </template>
