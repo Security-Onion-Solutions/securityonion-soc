@@ -146,6 +146,7 @@ type DetectionComment struct {
 type Override struct {
 	Type               OverrideType `json:"type" yaml:"type"`
 	IsEnabled          bool         `json:"isEnabled" yaml:"-"`
+	Note               string       `json:"note" yaml:"-"`
 	CreatedAt          time.Time    `json:"createdAt" yaml:"-"`
 	UpdatedAt          time.Time    `json:"updatedAt" yaml:"-"`
 	OverrideParameters `yaml:",inline"`
@@ -164,6 +165,10 @@ type OverrideParameters struct {
 
 	// elastalert
 	CustomFilter *string `json:"customFilter,omitempty" yaml:"-"` // customFilter
+}
+
+type OverrideNoteUpdate struct {
+	Note string `json:"note"`
 }
 
 func (o Override) PrepareForSigma() (map[string]interface{}, error) {

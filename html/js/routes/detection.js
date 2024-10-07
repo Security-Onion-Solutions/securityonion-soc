@@ -17,6 +17,8 @@ function debounce(fn, wait) {
 	}
 }
 
+const MAX_OVERRIDE_NOTE_LENGTH = 150;
+
 routes.push({ path: '/detection/:id', name: 'detection', component: {
 	template: '#page-detection',
 	data() {
@@ -42,6 +44,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				hours: value => (!value || /^\d{1,4}(\.\d{1,4})?$/.test(value)) || this.$root.i18n.invalidHours,
 				minLength: limit => value => (value && value.length >= limit) || this.$root.i18n.ruleMinLen,
 				shortLengthLimit: value => (value.length < 100) || this.$root.i18n.required,
+				noteLengthLimit: value => (value.length <= MAX_OVERRIDE_NOTE_LENGTH) || this.$root.i18n.required,
 				longLengthLimit: value => (encodeURI(value).split(/%..|./).length - 1 < 10000000) || this.$root.i18n.required,
 				fileSizeLimit: value => (value == null || value.length == 0 || value[0].size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
 				fileNotEmpty: value => (value == null || value.length == 0 || value[0].size > 0) || this.$root.i18n.fileEmpty,
@@ -184,6 +187,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				],
 			},
 			showUnreviewedAiSummaries: false,
+			MAX_OVERRIDE_NOTE_LENGTH: MAX_OVERRIDE_NOTE_LENGTH,
 	}},
 	created() {
 		this.$root.initializeEditor();
@@ -892,6 +896,16 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		cancelDeleteDetection() {
 			this.confirmDeleteDialog = false;
 		},
+		async saveOverrideNote(item) {
+			try {
+				this.$root.startLoading();
+				await this.$root.papi.put('/detection/' + this.detect.id + '/override/' + item.index + '/note', { note: item.note });
+			} catch (error) {
+				this.$root.showError(error);
+			} finally {
+				this.$root.stopLoading();
+			}
+		},
 		async confirmDeleteDetection() {
 			this.cancelDeleteDetection();
 			try {
@@ -1122,6 +1136,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				count: null,
 				seconds: null,
 				customFilter: null,
+				note: '',
 			};
 		},
 		getOverrideTypes(engine) {
@@ -1164,6 +1179,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			if (o.updatedAt) {
 				out.updatedAt = o.updatedAt;
+			}
+
+			if (typeof o.note === 'string') {
+				out.note = o.note;
 			}
 
 			if (engine === 'elastalert') {
@@ -1236,14 +1255,15 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		isOverrideEdit(target) {
 			return this.curOverrideEditTarget === target;
 		},
-		stopOverrideEdit(commit) {
+		stopOverrideEdit(commit, saveFunc) {
+			saveFunc = saveFunc || this.saveDetection;
 			if (commit && this.$refs[this.curOverrideEditTarget].hasError) return;
 
 			if (!commit) {
 				this.editOverride[this.overrideEditField] = this.origOverrideValue;
 			} else {
 				this.$nextTick(async () => {
-					await this.saveDetection(false);
+					await saveFunc(false);
 					this.curOverrideEditTarget = null;
 				});
 			}
@@ -1460,7 +1480,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		isFieldValid(refName) {
 			const ref = this.$refs[refName];
 			if (ref) {
-				return ref.valid;
+				return !ref._.vnode.el.classList.contains('v-input--error');
 			}
 			return true;
 		},

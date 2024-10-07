@@ -1186,9 +1186,10 @@ const huntComponent = {
     },
     constructHeaders(fields) {
       var headers = [];
+
       if (fields && fields.length > 0) {
         var i18n = this.i18n;
-        fields.forEach(function(item, index) {
+        fields.forEach((item) => {
           var i18nKey = "field_" + item;
           var header = {
             title: i18n[i18nKey] ? i18n[i18nKey] : item,
@@ -1382,6 +1383,7 @@ const huntComponent = {
           fields.push(key);
         }
       }
+
       this.populateEventHeaders(this.filterVisibleFields(eventModule, eventDataset, fields));
       this.eventData = records;
     },
@@ -1390,7 +1392,21 @@ const huntComponent = {
       if (this.queryTableFields.length > 0) {
         fields = this.queryTableFields;
       }
-      this.eventHeaders = this.constructHeaders(fields);
+
+      let headers = this.constructHeaders(fields);
+
+      if (this.isCategory('detections')) {
+        const enabledCol = headers.findIndex(h => h.value === 'so_detection.isEnabled');
+        const overrideHeader = { title: this.i18n.overrides, value: 'override_count' };
+
+        if (enabledCol > -1) {
+          headers = [...headers.slice(0, enabledCol+1), overrideHeader, ...headers.slice(enabledCol+1)];
+        } else {
+          headers.push(overrideHeader);
+        }
+      }
+
+      this.eventHeaders = headers;
     },
     repopulateEventHeaders() {
       this.populateEventHeaders();

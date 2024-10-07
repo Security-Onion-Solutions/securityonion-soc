@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -64,6 +65,7 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Post("/convert", h.convertContent)
 
 		r.Put("/", h.updateDetection)
+		r.Put("/{id}/override/{overrideIndex}/note", h.updateOverrideNote)
 
 		r.Delete("/{id}", h.deleteDetection)
 
@@ -407,6 +409,39 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 	}
 
 	web.Respond(w, r, http.StatusOK, detect)
+}
+
+func (h *DetectionHandler) updateOverrideNote(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	detectId := chi.URLParam(r, "id")
+	param := chi.URLParam(r, "overrideIndex")
+
+	overrideIndex, err := strconv.Atoi(param)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	body := model.OverrideNoteUpdate{}
+
+	err = web.ReadJson(r, &body)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	valid, err := detections.UpdateOverrideNote(ctx, h.server.Detectionstore, detectId, overrideIndex, body.Note)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if !valid {
+			status = http.StatusBadRequest
+		}
+
+		web.Respond(w, r, status, err)
+
+		return
+	}
 }
 
 func (h *DetectionHandler) deleteDetection(w http.ResponseWriter, r *http.Request) {
