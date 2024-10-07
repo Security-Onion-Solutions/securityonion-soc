@@ -17,10 +17,10 @@ func TestGetString(tester *testing.T) {
 	_, err := GetString(options, "MyKey")
 	assert.Error(tester, err)
 
-	options["MyKey"] = "MyValue"
+	options["MyKey"] = "MyValue [SO_JINJA_SL_START] foo [SO_JINJA_SL_END]"
 	actual, err := GetString(options, "MyKey")
 	if assert.Nil(tester, err) {
-		assert.Equal(tester, "MyValue", actual)
+		assert.Equal(tester, "MyValue {{ foo }}", actual)
 	}
 }
 

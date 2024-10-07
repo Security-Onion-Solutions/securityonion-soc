@@ -10,6 +10,7 @@ import (
 	"crypto/tls"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/apex/log"
@@ -49,7 +50,7 @@ func (transport *ElasticTransport) RoundTrip(req *http.Request) (*http.Response,
 				"searchUsername": user.SearchUsername,
 				"requestId":      req.Context().Value(web.ContextKeyRequestId),
 			}).Debug("Executing Elastic request on behalf of user")
-			username := user.Email
+			username := strings.ToLower(user.Email)
 			if user.SearchUsername != "" {
 				username = user.SearchUsername
 			}

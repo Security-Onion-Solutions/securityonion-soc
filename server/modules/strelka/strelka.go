@@ -51,7 +51,7 @@ const (
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT       = 10
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS        = 600
 	DEFAULT_AI_REPO                                  = "https://github.com/Security-Onion-Solutions/securityonion-resources"
-	DEFAULT_AI_REPO_BRANCH                           = "generated-summaries-stable"
+	DEFAULT_AI_REPO_BRANCH                           = "generated-summaries-published"
 	DEFAULT_AI_REPO_PATH                             = "/opt/sensoroni/ai_summary_repos"
 	DEFAULT_SHOW_AI_SUMMARIES                        = true
 )
@@ -1134,6 +1134,10 @@ func (e *StrelkaEngine) DuplicateDetection(ctx context.Context, detection *model
 	det.Author = detections.AddUser(det.Author, user, "; ")
 
 	return det, nil
+}
+
+func (e *StrelkaEngine) IsAirgapped() bool {
+	return e.srv.Config.AirgapEnabled
 }
 
 func (e *StrelkaEngine) LoadAuxiliaryData(summaries []*model.AiSummary) error {

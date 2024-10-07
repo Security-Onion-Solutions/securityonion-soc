@@ -8,6 +8,8 @@ package module
 
 import (
 	"errors"
+
+	"github.com/security-onion-solutions/securityonion-soc/syntax"
 )
 
 func GetString(options map[string]interface{}, key string) (string, error) {
@@ -33,6 +35,7 @@ func GetString(options map[string]interface{}, key string) (string, error) {
 	} else {
 		err = errors.New("Required option is missing: " + key + " (string)")
 	}
+	value = syntax.UnescapeJinja(value)
 	return value, err
 }
 

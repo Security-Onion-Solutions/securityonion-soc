@@ -30,7 +30,7 @@ import (
 	"github.com/apex/log"
 	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/samber/lo"
-	"github.com/tj/assert"
+	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
 

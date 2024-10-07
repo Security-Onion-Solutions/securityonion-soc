@@ -35,3 +35,4 @@ myapp:
   float: 3.5
   str: my_str
   bool: true
+  zdef: chocolate

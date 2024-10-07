@@ -151,6 +151,10 @@ func (metrics *InfluxDBMetrics) fetchLatestValuesByHostDirect(filter string, val
 					} else {
 						values[hostname] = result.Record().ValueByKey(valueField)
 					}
+					log.WithFields(log.Fields{
+						"hostname": hostname,
+						"value":    values[hostname],
+					}).Debug("Got value from InflubDB for host")
 				} else {
 					log.Warn("Host key is not of the expected type 'string'")
 				}
@@ -316,7 +320,7 @@ func (metrics *InfluxDBMetrics) updateOsStatus() {
 		metrics.swapTotalGB = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("swap", "total", "", ""), bytesToGB)
 		metrics.swapUsedPct = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("swap", "used_percent", "", ""), identity)
 		metrics.pcapDays = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("pcapage", "seconds", "", ""), secondsToDays)
-		metrics.stenoLossPct = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("stenodrop", "drop", "", ""), toPercent)
+		metrics.stenoLossPct = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("stenodrop", "drop", "", ""), identity)
 		metrics.suriLossPct = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("suridrop", "drop", "", ""), toPercent)
 		metrics.zeekLossPct = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("zeekdrop", "drop", "", ""), toPercent)
 		metrics.captureLossPct = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("zeekcaptureloss", "loss", "", ""), identity)
@@ -446,7 +450,7 @@ func (metrics *InfluxDBMetrics) getEventstoreStatus(host string) string {
 		log.WithFields(log.Fields{
 			"host":             host,
 			"eventStoreStatus": metrics.eventstoreStatus,
-		}).Warn("Host not found in process status metrics")
+		}).Debug("Host not found in eventstore status metrics")
 	}
 	return status
 }

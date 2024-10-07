@@ -10,7 +10,8 @@ import (
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/config"
-	"github.com/tj/assert"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestBuildHttpClient(t *testing.T) {

@@ -7,7 +7,7 @@
 FROM ghcr.io/security-onion-solutions/golang:1.22.6 AS builder
 
 ARG OWNER=ory
-ARG VERSION=v1.2.0
+ARG VERSION=v1.3.0
 
 RUN addgroup --system ory; \
     adduser --system ory --no-create-home --disabled-password --ingroup ory --disabled-login
@@ -35,6 +35,8 @@ RUN go build -tags sqlite -ldflags="-X 'github.com/ory/kratos/driver/config.Vers
 FROM ghcr.io/security-onion-solutions/ubuntu:24.10
 
 RUN apt-get update && apt-get upgrade -y
+
+RUN apt-get update && apt-get install -y ca-certificates
 
 ENV DSN=sqlite:///kratos-data/db.sqlite?_fk=true
 

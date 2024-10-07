@@ -57,7 +57,7 @@ const (
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT    = 10
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS     = 600
 	DEFAULT_AI_REPO                               = "https://github.com/Security-Onion-Solutions/securityonion-resources"
-	DEFAULT_AI_REPO_BRANCH                        = "generated-summaries-stable"
+	DEFAULT_AI_REPO_BRANCH                        = "generated-summaries-published"
 	DEFAULT_AI_REPO_PATH                          = "/opt/sensoroni/ai_summary_repos"
 	DEFAULT_SHOW_AI_SUMMARIES                     = true
 
@@ -781,7 +781,9 @@ func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detects []*mod
 		}
 	}()
 
-	allSettings, err := e.srv.Configstore.GetSettings(ctx, true)
+	// incoming context was checked for detections/write perms already, using server
+	// context to complete ConfigStore actions.
+	allSettings, err := e.srv.Configstore.GetSettings(e.srv.Context, true)
 	if err != nil {
 		return nil, err
 	}
@@ -913,27 +915,27 @@ func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detects []*mod
 
 	threshold.Value = string(yamlThreshold)
 
-	err = e.srv.Configstore.UpdateSetting(ctx, local, false)
+	err = e.srv.Configstore.UpdateSetting(e.srv.Context, local, false)
 	if err != nil {
 		return errMap, err
 	}
 
-	err = e.srv.Configstore.UpdateSetting(ctx, enabled, false)
+	err = e.srv.Configstore.UpdateSetting(e.srv.Context, enabled, false)
 	if err != nil {
 		return errMap, err
 	}
 
-	err = e.srv.Configstore.UpdateSetting(ctx, disabled, false)
+	err = e.srv.Configstore.UpdateSetting(e.srv.Context, disabled, false)
 	if err != nil {
 		return errMap, err
 	}
 
-	err = e.srv.Configstore.UpdateSetting(ctx, modify, false)
+	err = e.srv.Configstore.UpdateSetting(e.srv.Context, modify, false)
 	if err != nil {
 		return errMap, err
 	}
 
-	err = e.srv.Configstore.UpdateSetting(ctx, threshold, false)
+	err = e.srv.Configstore.UpdateSetting(e.srv.Context, threshold, false)
 	if err != nil {
 		return errMap, err
 	}
@@ -1507,22 +1509,22 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 
 	threshold.Value = string(yamlThreshold)
 
-	err = e.srv.Configstore.UpdateSetting(ctx, enabled, false)
+	err = e.srv.Configstore.UpdateSetting(e.srv.Context, enabled, false)
 	if err != nil {
 		return errMap, err
 	}
 
-	err = e.srv.Configstore.UpdateSetting(ctx, disabled, false)
+	err = e.srv.Configstore.UpdateSetting(e.srv.Context, disabled, false)
 	if err != nil {
 		return errMap, err
 	}
 
-	err = e.srv.Configstore.UpdateSetting(ctx, modify, false)
+	err = e.srv.Configstore.UpdateSetting(e.srv.Context, modify, false)
 	if err != nil {
 		return errMap, err
 	}
 
-	err = e.srv.Configstore.UpdateSetting(ctx, threshold, false)
+	err = e.srv.Configstore.UpdateSetting(e.srv.Context, threshold, false)
 	if err != nil {
 		return errMap, err
 	}
@@ -1742,6 +1744,10 @@ func (e *SuricataEngine) DuplicateDetection(ctx context.Context, detection *mode
 	det.IsEnabled = false
 
 	return det, nil
+}
+
+func (e *SuricataEngine) IsAirgapped() bool {
+	return e.srv.Config.AirgapEnabled
 }
 
 func (e *SuricataEngine) LoadAuxiliaryData(summaries []*model.AiSummary) error {

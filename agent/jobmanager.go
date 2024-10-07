@@ -9,10 +9,10 @@ package agent
 import (
 	"errors"
 	"io"
-	"os"
+	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/apex/log"
@@ -120,12 +120,24 @@ func (mgr *JobManager) CleanupJob(job *model.Job) {
 }
 
 func (mgr *JobManager) updateOnlineTime(src string) {
-	fi, err := os.Stat(src)
+	cmd := exec.Command("stat", src, "-c", "%W")
+	out, err := cmd.CombinedOutput()
 	if err != nil {
+		log.WithFields(log.Fields{"statSrcFile": src, "statOutput": out}).WithError(err).Error("unable to run stat against original dir")
 		return
 	}
-	stat := fi.Sys().(*syscall.Stat_t)
-	mgr.node.OnlineTime = time.Unix(int64(stat.Ctim.Sec), int64(stat.Ctim.Nsec))
+	log.WithFields(log.Fields{
+		"statSrcFile":  src,
+		"statOutput":   out,
+		"statExitCode": cmd.ProcessState.ExitCode(),
+	}).Debug("ran stat against original dir")
+	secondsSinceEpochStr := strings.TrimSpace(string(out))
+	secondsSinceEpoch, parseerr := strconv.ParseInt(secondsSinceEpochStr, 10, 64)
+	if parseerr != nil {
+		log.WithField("statOutput", secondsSinceEpochStr).WithError(parseerr).Error("unable to convert stat output to number")
+		return
+	}
+	mgr.node.OnlineTime = time.Unix(int64(secondsSinceEpoch), 0)
 	log.WithField("onlineTime", mgr.node.OnlineTime).Info("Updated online time (node installation time)")
 }
 

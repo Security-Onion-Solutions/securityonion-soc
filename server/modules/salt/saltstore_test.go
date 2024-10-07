@@ -7,11 +7,13 @@
 package salt
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -23,7 +25,7 @@ import (
 const TMP_SALTSTACK_PATH = "/tmp/gotest-soc-saltstore"
 const TMP_QUEUE_DIR = "/tmp/gotest-soc-salt-relay-queue"
 const TMP_REQUEST_FILE = "req"
-const TEST_SETTINGS_COUNT = 24
+const TEST_SETTINGS_COUNT = 26
 
 func Cleanup() {
 	exec.Command("rm", "-fr", TMP_SALTSTACK_PATH).Run()
@@ -200,9 +202,23 @@ func TestGetSettings(tester *testing.T) {
 
 	salt := NewTestSalt()
 	settings, err := salt.GetSettings(ctx(), true)
+	slices.SortFunc(settings,
+		func(a, b *model.Setting) int {
+			r := cmp.Compare(a.Id, b.Id)
+			if r == 0 {
+				r = cmp.Compare(a.NodeId, b.NodeId)
+			}
+			return r
+		})
 	assert.NoError(tester, err)
 
 	count := 0
+
+	assert.Equal(tester, "myapp.advanced", settings[count].Id)
+	assert.Equal(tester, "myapp:\n  global: advanced\n", settings[count].Value)
+	assert.Equal(tester, "", settings[count].NodeId)
+	count++
+
 	assert.Equal(tester, "myapp.bar", settings[count].Id)
 	assert.Equal(tester, "minion-override", settings[count].Value)
 	assert.Equal(tester, "normal_import", settings[count].NodeId)
@@ -329,9 +345,15 @@ func TestGetSettings(tester *testing.T) {
 	assert.Equal(tester, "", settings[count].NodeId)
 	count++
 
-	assert.Equal(tester, "myapp.advanced", settings[count].Id)
-	assert.Equal(tester, "myapp:\n  global: advanced\n", settings[count].Value)
+	assert.Equal(tester, "myapp.zdef", settings[count].Id)
+	assert.Equal(tester, "chocolate", settings[count].Value)
+	assert.Equal(tester, "vanilla", settings[count].Default)
 	assert.Equal(tester, "", settings[count].NodeId)
+	count++
+
+	assert.Equal(tester, "myapp.zdef", settings[count].Id)
+	assert.Equal(tester, "strawberry", settings[count].Value)
+	assert.Equal(tester, "normal_import", settings[count].NodeId)
 	count++
 
 	assert.Equal(tester, count, len(settings))
@@ -378,6 +400,24 @@ func TestUpdateSetting_OverrideDefault(tester *testing.T) {
 
 	new_setting := findSetting(settings, "myapp.my_def", "")
 	assert.Equal(tester, "new setting\n", new_setting.Value)
+}
+
+func TestUpdateSetting_OverrideWithJinjaEscaped(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSalt()
+
+	// Add new setting
+	setting := model.NewSetting("myapp.my_def")
+	setting.Value = "new setting {{foo}} {# comment #} {% multiline %}"
+	err := salt.UpdateSetting(ctx(), setting, false)
+	assert.NoError(tester, err)
+
+	// Ensure there's an additional setting listed
+	settings, get_err := salt.GetSettings(ctx(), true)
+	assert.NoError(tester, get_err)
+
+	new_setting := findSetting(settings, "myapp.my_def", "")
+	assert.Equal(tester, "new setting {{foo}} {# comment #} {% multiline %}\n", new_setting.Value)
 }
 
 func TestUpdateSetting_AddGlobal(tester *testing.T) {
@@ -1071,6 +1111,7 @@ func TestUpdateSettingWithAnnotation(tester *testing.T) {
 	annotations["helpLink"] = "My help link"
 	annotations["syntax"] = "yaml"
 	annotations["duplicates"] = true
+	annotations["jinjaEscaped"] = true
 
 	assert.False(tester, setting.Multiline)
 	salt.updateSettingWithAnnotation(setting, annotations)
@@ -1092,6 +1133,7 @@ func TestUpdateSettingWithAnnotation(tester *testing.T) {
 	assert.Equal(tester, "some local", setting.Value)
 	assert.Equal(tester, "yaml", setting.Syntax)
 	assert.True(tester, setting.Duplicates)
+	assert.True(tester, setting.JinjaEscaped)
 }
 
 func TestManageUser_AddUser(tester *testing.T) {

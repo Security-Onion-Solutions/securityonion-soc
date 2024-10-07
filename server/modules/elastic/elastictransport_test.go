@@ -31,7 +31,7 @@ func TestRoundTrip(tester *testing.T) {
 	transport.internal = dummy
 
 	user := model.NewUser()
-	user.Email = "test"
+	user.Email = "Test"
 	request, _ := http.NewRequest("GET", "", nil)
 	request = request.WithContext(context.WithValue(context.Background(), web.ContextKeyRequestor, user))
 	transport.RoundTrip(request)
@@ -44,10 +44,10 @@ func TestRoundTripSearchUsername(tester *testing.T) {
 	transport.internal = dummy
 
 	user := model.NewUser()
-	user.Email = "test"
-	user.SearchUsername = "mysearchuser"
+	user.Email = "Test"
+	user.SearchUsername = "Mysearchuser"
 	request, _ := http.NewRequest("GET", "", nil)
 	request = request.WithContext(context.WithValue(context.Background(), web.ContextKeyRequestor, user))
 	transport.RoundTrip(request)
-	assert.Equal(tester, "mysearchuser", dummy.username)
+	assert.Equal(tester, "Mysearchuser", dummy.username)
 }

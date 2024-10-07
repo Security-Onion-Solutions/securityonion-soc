@@ -229,7 +229,7 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	errMap, err := SyncLocalDetections(ctx, h.server, []*model.Detection{detect})
+	errMap, err := syncLocalDetections(ctx, h.server, []*model.Detection{detect})
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
@@ -368,7 +368,7 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 
 	detect.PersistChange = true
 
-	errMap, err := SyncLocalDetections(ctx, h.server, []*model.Detection{detect})
+	errMap, err := syncLocalDetections(ctx, h.server, []*model.Detection{detect})
 	if err != nil {
 		fixed := false
 		if detect.IsEnabled && !filterApplied {
@@ -380,7 +380,7 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 
 			detect, uerr = h.server.Detectionstore.UpdateDetection(ctx, detect)
 			if uerr == nil {
-				errMap, err = SyncLocalDetections(ctx, h.server, []*model.Detection{detect})
+				errMap, err = syncLocalDetections(ctx, h.server, []*model.Detection{detect})
 				fixed = true
 			}
 		}
@@ -434,7 +434,7 @@ func (h *DetectionHandler) deleteDetection(w http.ResponseWriter, r *http.Reques
 	old.IsEnabled = false
 	old.PendingDelete = true
 
-	errMap, err := SyncLocalDetections(ctx, h.server, []*model.Detection{old})
+	errMap, err := syncLocalDetections(ctx, h.server, []*model.Detection{old})
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
@@ -746,7 +746,7 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 
 	start = time.Now()
 
-	errMap, err = SyncLocalDetections(ctx, h.server, dirty)
+	errMap, err = syncLocalDetections(ctx, h.server, dirty)
 	if err != nil {
 		logger.WithError(err).WithField("errMap", detections.TruncateMap(errMap, 5)).Error("unable to sync detections after bulk update")
 		return
@@ -763,13 +763,18 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 	syncDur = time.Since(start)
 }
 
-func SyncLocalDetections(ctx context.Context, srv *Server, detections []*model.Detection) (errMap map[string]string, err error) {
+func syncLocalDetections(ctx context.Context, srv *Server, detections []*model.Detection) (errMap map[string]string, err error) {
 	errMap = map[string]string{} // map[det.PublicID]error
 	defer func() {
 		if len(errMap) == 0 {
 			errMap = nil
 		}
 	}()
+
+	err = srv.CheckAuthorized(ctx, "write", "detections")
+	if err != nil {
+		return nil, err
+	}
 
 	byEngine := map[model.EngineName][]*model.Detection{}
 	for _, detect := range detections {
