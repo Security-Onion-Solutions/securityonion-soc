@@ -855,6 +855,9 @@ func convertElasticEventToOverride(overrides []interface{}) []*model.Override {
 		if value, ok := override["isEnabled"]; ok {
 			over.IsEnabled = value.(bool)
 		}
+		if value, ok := override["note"]; ok {
+			over.Note = value.(string)
+		}
 		if value, ok := override["createdAt"]; ok {
 			over.CreatedAt, _ = time.Parse(time.RFC3339, value.(string))
 		}

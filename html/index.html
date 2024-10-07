@@ -692,7 +692,7 @@
                 <v-data-table ref="eventTable" :search="eventFilter" :sort-by="sortBy" @update:sort-by="val => sortBy = val" item-value="soc_id" :footer-props="footerProps" :data-aid="'events_table_' + category"
                   :items-per-page="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" :page.sync="eventPage" show-select :custom-sort="sortEvents" density="compact" @current-items="val => eventCurrentItems = val">
                   <template #top="data">
-                    <!-- not fancy way to access the current page of items:
+                    <!-- not-fancy way to access the current page of items:
                      https://stackoverflow.com/questions/76008941/vuetify-3-data-table-current-items
                      NOTE: Moved to top because if it were bottom we lose paging controls -->
                     <template name="top" :any_name="eventCurrentItems = data.items" />
@@ -770,8 +770,9 @@
                       </td>
                       <td v-for="field in eventHeaders" :key="field.value">
                         <div :id="'events_quick_action_' + category + '_' + field.value" class="quick-action-trigger d-inline-block" @click="toggleQuickAction($event, item, field.value, item[field.value])" :data-aid="'events_quick_action_' + category">
-                          <span v-if="field.value != 'soc_timestamp'">{{ (item[field.value]+'').startsWith('__') ? $root.tryLocalize(item[field.value]) : $root.correctCasing(item[field.value]) }}<span class="resolved-host" v-if="$root.pickHostname(item[field.value])"><br/>- {{ $root.pickHostname(item[field.value]) }}</span></span>
-                          <span v-if="field.value == 'soc_timestamp'" v-text="$root.formatLocalTimestamp(item[field.value], zone)"/>
+                          <span v-if="field.value === 'soc_timestamp'" v-text="$root.formatLocalTimestamp(item[field.value], zone)"/>
+                          <span v-else-if="field.value === 'override_count'">{{ (item['so_detection.overrides'] || []).length }}</span>
+                          <span v-else>{{ (item[field.value]+'').startsWith('__') ? $root.tryLocalize(item[field.value]) : $root.correctCasing(item[field.value]) }}<span class="resolved-host" v-if="$root.pickHostname(item[field.value])"><br/>- {{ $root.pickHostname(item[field.value]) }}</span></span>
                         </div>
                       </td>
                     </tr>
@@ -1131,7 +1132,12 @@
               </v-tab>
               <v-tab id="detection_tuningTab" value="tuning" :class="{ 'theme-primary': activeTab === 'tuning' }" data-aid="detection_tuning_tab">
                 <v-icon class="detection-tab-icon">fa-wrench</v-icon>
-                <div class="d-none d-lg-block">{{ i18n.tuning }}</div>
+                <div class="d-none d-lg-block">
+                  {{ i18n.tuning }}
+                  <span v-if="detect">
+                    ({{ (detect.overrides || []).length }})
+                  </span>
+                </div>
               </v-tab>
               <v-tab id="detection_historyTab" value="history" :class="{ 'theme-primary': activeTab === 'history' }" data-aid="detection_history_tab">
                 <v-icon class="detection-tab-icon">fa-history</v-icon>
@@ -1350,6 +1356,9 @@
                     <div v-if="!!newOverride.type && detect.engine === 'elastalert'">
                       <v-textarea variant="underlined" v-if="newOverride.type === 'customFilter'" id="new-override-custom-filter-edit" v-model="newOverride.customFilter" :rules="[rules.required]" auto-grow rows="2" persistent-hint :hint="i18n.customFilter" data-aid="detection_new_override_filter_input"></v-textarea>
                     </div>
+                    <div v-if="!!newOverride.type">
+                      <v-text-field variant="underlined" id="new-override-note-edit" v-model="newOverride.note" :rules="[rules.noteLengthLimit]" persistent-hint :hint="i18n.note" data-aid="detection_new_override_note_input"></v-text-field>
+                    </div>
                     <div v-if="newOverride" class="d-flex align-center align-self-end text-body-2 mt-2">
                       <div class="justify-end">
                         <v-btn id="detection-create-cancel" variant="text" size="small" color="primary" class="align-self-end" @click="newOverride = null" data-aid="detection_new_override_cancel">
@@ -1436,7 +1445,7 @@
                         </div>
                         <div v-if="item.type === 'modify'" @click="startOverrideEdit('override-value', item, 'value')" :class="{ clicktoedit: !isOverrideEdit('override-value') }">
                           <div class="font-weight-bold mt-4">
-                            Value:
+                            {{i18n.value}}:
                           </div>
                           <span id="override-value" v-if="!isOverrideEdit('override-value')">
                             {{item.value}}
@@ -1538,6 +1547,26 @@
                             </div>
                           </span>
                         </div>
+                        <div @click="startOverrideEdit('override-note', item, 'note')" :class="{ clicktoedit: !isOverrideEdit('override-note') }">
+                          <div class="font-weight-bold mt-4">
+                            {{i18n.note}}:
+                          </div>
+                          <span id="override-note" v-if="!isOverrideEdit('override-note')">
+                            {{item.note}}
+                          </span>
+                          <span v-else>
+                            <v-text-field variant="outlined" id="override-note-edit" ref="override-note" hide-details="auto" v-model="item.note" :rules="[rules.noteLengthLimit]"
+                              persistent-hint :hint="i18n.note" @keyup.enter="isFieldValid('override-note') && stopOverrideEdit(true, () => { this.saveOverrideNote(item) })" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_override_note_input"></v-text-field>
+                            <div id="override-note-edit-buttons">
+                              <v-btn @click.stop="stopOverrideEdit(false)" variant="text" size="small" class="align-self-end" data-aid="detection_override_note_cancel">
+                                {{ i18n.cancel }}
+                              </v-btn>
+                              <v-btn @click.stop="stopOverrideEdit(true, () => { this.saveOverrideNote(item) })" :disabled="!isFieldValid('override-note')" color="primary" variant="text" size="small" class="align-self-end" data-aid="detection_override_note_save">
+                                {{ i18n.save }}
+                              </v-btn>
+                            </div>
+                          </span>
+                        </div>
                         <div class="d-flex justify-end text-body-2 mt-4">
                           <div class="d-inline-flex">
                             <v-btn variant="text" size="small" icon :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'nids.html#managing-nids-rules'" :title="i18n.overrideDocumentationHelp" data-aid="detection_override_help_suricata">
@@ -1557,7 +1586,6 @@
                           <v-switch variant="underlined" id="override-enabled-edit" ref="override-enabled" hide-details="auto" v-model="item.isEnabled"
                             inset @change="saveDetection(false)"></v-switch>
                         </div>
-                        <!-- custom filter -->
                         <div @click="startOverrideEdit('override-custom-filter', item, 'customFilter')" :class="{ clicktoedit: !isOverrideEdit('override-custom-filter') }">
                           <div class="font-weight-bold mt-2">
                             {{i18n.customFilter}}:
@@ -1575,6 +1603,26 @@
                                 {{ i18n.cancel }}
                               </v-btn>
                               <v-btn @click.stop="stopOverrideEdit(true)" :disabled="!isFieldValid('override-custom-filter')" variant="text" size="small" color="primary" class="align-self-end" data-aid="detection_override_filter_save">
+                                {{ i18n.save }}
+                              </v-btn>
+                            </div>
+                          </span>
+                        </div>
+                        <div @click="startOverrideEdit('override-note', item, 'note')" :class="{ clicktoedit: !isOverrideEdit('override-note') }">
+                          <div class="font-weight-bold mt-4">
+                            {{i18n.note}}:
+                          </div>
+                          <span id="override-note" v-if="!isOverrideEdit('override-note')">
+                            {{item.note}}
+                          </span>
+                          <span v-else>
+                            <v-text-field variant="outlined" id="override-note-edit" ref="override-note" hide-details="auto" v-model="item.note" :rules="[rules.noteLengthLimit]"
+                              persistent-hint :hint="i18n.note" @keyup.enter="isFieldValid('override-note') && stopOverrideEdit(true, () => { this.saveOverrideNote(item) })" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_override_note_input" :maxlength="MAX_OVERRIDE_NOTE_LENGTH"></v-text-field>
+                            <div id="override-note-edit-buttons">
+                              <v-btn @click.stop="stopOverrideEdit(false)" variant="text" size="small" class="align-self-end" data-aid="detection_override_note_cancel">
+                                {{ i18n.cancel }}
+                              </v-btn>
+                              <v-btn @click.stop="stopOverrideEdit(true, () => { this.saveOverrideNote(item) })" :disabled="!isFieldValid('override-note')" color="primary" variant="text" size="small" class="align-self-end" data-aid="detection_override_note_save">
                                 {{ i18n.save }}
                               </v-btn>
                             </div>
