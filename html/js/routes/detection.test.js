@@ -454,15 +454,22 @@ test('revertEnabled', () => {
 	expect(comp.origDetect.isEnabled).toBe(false);
 });
 
+function ClassList(arr) {
+	this.arr = arr;
+	this.contains = (cls) => {
+		return this.arr.includes(cls);
+	}
+}
+
 test('isFieldValid', () => {
 	comp.$refs = {};
 	expect(comp.isFieldValid('foo')).toBe(true);
 
-	comp.$refs = { bar: { _: { vnode: { el: { classList: ['a', 'b', 'c'] } } } } };
+	comp.$refs = { bar: { classList: new ClassList(['a', 'v-input--error', 'b', 'c']) } };
 	expect(comp.isFieldValid('foo')).toBe(true);
 	expect(comp.isFieldValid('bar')).toBe(false);
 
-	comp.$refs = { bar: { _: { vnode: { el: { classList: ['d', 'v-input--error', 'e', 'f'] } } } } };
+	comp.$refs = { bar: { classList: new ClassList(['a', 'b', 'c']) } };
 	expect(comp.isFieldValid('bar')).toBe(true);
 
 	comp.$refs = { bar: {} };

@@ -1480,8 +1480,13 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		isFieldValid(refName) {
 			const ref = this.$refs[refName];
 			if (ref) {
-				return (ref?._?.vnode?.el?.classList || []).indexOf('v-input--error') !== -1;
+				if (ref?.classList) {
+					return !ref.classList.contains('v-input--error');
+				}
+
+				return false;
 			}
+
 			return true;
 		},
 		highlighter(code) {
