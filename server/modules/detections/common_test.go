@@ -7,6 +7,7 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
+	modcontext "github.com/security-onion-solutions/securityonion-soc/server/modules/context"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -38,7 +39,10 @@ func TestUpdateOverrideNote(t *testing.T) {
 
 	// Sunny day success
 	detStore.EXPECT().GetDetection(ctx, "detectId").Return(&model.Detection{Overrides: []*model.Override{{}}}, nil)
-	detStore.EXPECT().UpdateDetection(ctx, &model.Detection{Overrides: []*model.Override{{Note: note}}}).Return(nil, nil)
+	detStore.EXPECT().UpdateDetection(gomock.Any(), &model.Detection{Overrides: []*model.Override{{Note: note}}}).DoAndReturn(func(c context.Context, det *model.Detection) (*model.Detection, error) {
+		assert.True(t, modcontext.ReadSkipAudit(c))
+		return nil, nil
+	})
 
 	valid, err = UpdateOverrideNote(ctx, detStore, "detectId", 0, note)
 

@@ -1038,11 +1038,19 @@ test('addToCase', () => {
 test('populateEventHeaders', () => {
   const defs = ["x", "y"];
   comp.populateEventHeaders(defs);
-  expect(comp.eventHeaders).toStrictEqual([{"title":"x", "value":"x"},{"title":"y", "value": "y"}]);
+  expect(comp.eventHeaders).toStrictEqual([{title:'x', value:'x'},{title:'y', value: 'y'}]);
 
-  comp.queryTableFields = ["b", "c"];
+  comp.queryTableFields = ['b', 'c'];
   comp.populateEventHeaders(defs);
-  expect(comp.eventHeaders).toStrictEqual([{"title":"b", "value":"b"},{"title":"c", "value": "c"}]);
+  expect(comp.eventHeaders).toStrictEqual([{ title: 'b', value: 'b' }, { title: 'c', value: 'c' }]);
+
+  comp.queryTableFields = ['a', 'b', 'so_detection.isEnabled', 'c'];
+  comp.populateEventHeaders(defs);
+  expect(comp.eventHeaders).toStrictEqual([{ title: 'a', value: 'a' }, { title: 'b', value: 'b' }, { title: 'Enabled', value: 'so_detection.isEnabled' }, { title: 'c', value: 'c' }]);
+
+  comp.category = 'detections';
+  comp.populateEventHeaders(defs);
+  expect(comp.eventHeaders).toStrictEqual([{ title: 'a', value: 'a' }, { title: 'b', value: 'b' }, { title: 'Enabled', value: 'so_detection.isEnabled'}, { title: 'Overrides', value: 'override_count' }, { title: 'c', value: 'c' }]);
 });
 
 test('repopulateEventHeaders', () => {
