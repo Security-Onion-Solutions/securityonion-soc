@@ -1441,3 +1441,42 @@ test('toggleQuickAction - Tune Detection, Yara => Source Tab, Other Engines => T
   expect(comp.quickActionDetId).toBe('onionId');
   expect(comp.tuneDetectionTabTarget).toBe('source');
 });
+
+test('buildDetectionEngineHuntQuery', () => {
+  comp.detectionEngineStatusQueries = {
+    elastalert: {
+      default: 'default',
+      IntegrityFailure: 'IntegrityFailure',
+    },
+    suricata: {
+      default: 'default',
+      Healthy: 'Healthy',
+    },
+    strelka: {
+      SyncFailure: 'SyncFailure',
+    }
+  };
+  comp.$root.currentStatus = {
+    detections: {
+      elastalert: {
+        syncFailure: 1,
+      },
+      suricata: {}, // Healthy
+      strelka: {
+        syncing: 1,
+      },
+    }
+  };
+
+  // miss, fallback to default
+  let query = comp.buildDetectionEngineHuntQuery('elastalert');
+  expect(query).toBe('default');
+
+  // hit
+  query = comp.buildDetectionEngineHuntQuery('suricata');
+  expect(query).toBe('Healthy');
+
+  // miss, no default specified, fallback to simple query
+  query = comp.buildDetectionEngineHuntQuery('strelka');
+  expect(query).toBe(`tags:so-soc AND strelka | groupby log.level | groupby event.action | groupby soc.fields.error`);
+});
