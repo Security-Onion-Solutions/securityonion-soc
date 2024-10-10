@@ -677,19 +677,18 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			return [];
 		},
 		pickValue(item, field) {
-			if (item[field.value]) {
-				return item[field.value];
-			}
-
 			let value = '';
-
-			for (let i = 0; i < field.altValues.length; i++) {
-				if (field.altValues[i] === 'countPerSecond') {
-					value = `${item.count} / ${item.seconds}`;
-					break;
-				} else if (item[field.altValues[i]]) {
-					value = item[field.altValues[i]];
-					break;
+			if (item[field.value]) {
+				value = item[field.value];
+			} else {
+				for (let i = 0; i < field.altValues.length; i++) {
+					if (field.altValues[i] === 'countPerSecond') {
+						value = `${item.count} / ${item.seconds}`;
+						break;
+					} else if (item[field.altValues[i]]) {
+						value = item[field.altValues[i]];
+						break;
+					}
 				}
 			}
 
@@ -697,7 +696,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				value = this.$root.tryLocalize(value);
 			}
 
-			return '';
+			return value;
 		},
 		translateOptions(opts) {
 			return opts.map(opt => this.$root.correctCasing(opt))
