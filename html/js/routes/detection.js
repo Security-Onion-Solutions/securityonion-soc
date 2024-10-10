@@ -63,8 +63,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					{},
 					{ title: this.$root.i18n.enabled, value: 'isEnabled' },
 					{ title: this.$root.i18n.type, value: 'type', localize: true },
-					{ title: this.$root.i18n.trackRegex, value: 'track', altValue: 'regex' },
-					{ title: this.$root.i18n.ipVar, value: 'ip', altValue: 'value' },
 					{ title: this.$root.i18n.dateCreated, value: 'createdAt', format: true },
 					{ title: this.$root.i18n.dateModified, value: 'updatedAt', format: true },
 				],
@@ -73,8 +71,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					{},
 					{ title: this.$root.i18n.enabled, value: 'isEnabled' },
 					{ title: this.$root.i18n.type, value: 'type', localize: true },
-					{ title: this.$root.i18n.trackRegex, value: 'track', altValue: 'regex' },
-					{ title: this.$root.i18n.ipVar, value: 'ip', altValue: 'value' },
+					{ title: this.$root.i18n.trackRegex, value: 'track', altValues: ['regex'] },
+					{ title: this.$root.i18n.ipVar, value: 'ip', altValues: ['value', 'countPerSecond'] },
 					{ title: this.$root.i18n.dateCreated, value: 'createdAt', format: true },
 					{ title: this.$root.i18n.dateModified, value: 'updatedAt', format: true },
 				],
@@ -677,6 +675,29 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			}
 
 			return [];
+		},
+		pickValue(item, field) {
+			if (item[field.value]) {
+				return item[field.value];
+			}
+
+			let value = '';
+
+			for (let i = 0; i < field.altValues.length; i++) {
+				if (field.altValues[i] === 'countPerSecond') {
+					value = `${item.count} / ${item.seconds}`;
+					break;
+				} else if (item[field.altValues[i]]) {
+					value = item[field.altValues[i]];
+					break;
+				}
+			}
+
+			if (field.localize) {
+				value = this.$root.tryLocalize(value);
+			}
+
+			return '';
 		},
 		translateOptions(opts) {
 			return opts.map(opt => this.$root.correctCasing(opt))
