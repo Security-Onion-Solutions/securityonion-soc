@@ -1305,4 +1305,10 @@ test('pickValue', () => {
 
 	val = comp.pickValue(obj, opt);
 	expect(val).toBe('');
+
+	obj.value = 'track';
+	opt.localize = true;
+
+	val = comp.pickValue(obj, opt);
+	expect(val).toBe('Track');
 });
