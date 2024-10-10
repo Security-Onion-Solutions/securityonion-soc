@@ -1276,3 +1276,33 @@ test('loadHistory', async () => {
 	expect(comp.$root.populateUserDetails).toHaveBeenCalledTimes(1);
 	expect(comp.history).toStrictEqual([{overrides: []}]);
 });
+
+test('pickValue', () => {
+	let opt = {
+		value: 'value',
+		altValues: ['alt1', 'alt2'],
+	};
+	let obj = {
+		value: 'value',
+		alt1: 'ALT1',
+		alt2: 'ALT2',
+	}
+
+	let val = comp.pickValue(obj, opt);
+	expect(val).toBe('value');
+
+	delete obj.value;
+
+	val = comp.pickValue(obj, opt);
+	expect(val).toBe('ALT1');
+
+	delete obj.alt1;
+
+	val = comp.pickValue(obj, opt);
+	expect(val).toBe('ALT2');
+
+	delete obj.alt2;
+
+	val = comp.pickValue(obj, opt);
+	expect(val).toBe('');
+});
