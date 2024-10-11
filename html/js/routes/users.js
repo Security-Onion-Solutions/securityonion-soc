@@ -7,18 +7,18 @@
 routes.push({ path: '/users', name: 'users', component: {
   template: '#page-users',
   data() { return {
-    i18n: this.$root.i18n,  
+    i18n: this.$root.i18n,
     users: [],
     headers: [
-      { text: this.$root.i18n.email, value: 'email' },
-      { text: this.$root.i18n.firstName, value: 'firstName', align: ' d-none d-lg-table-cell' },
-      { text: this.$root.i18n.lastName, value: 'lastName', align: ' d-none d-lg-table-cell' },
-      { text: this.$root.i18n.note, value: 'note', align: ' d-none d-lg-table-cell' },
-      { text: this.$root.i18n.role, value: 'role', align: ' d-none d-lg-table-cell' },
-      { text: this.$root.i18n.status, value: 'status' },
+      { value: 'expand' },
+      { title: this.$root.i18n.email, value: 'email' },
+      { title: this.$root.i18n.firstName, value: 'firstName', align: ' d-none d-lg-table-cell' },
+      { title: this.$root.i18n.lastName, value: 'lastName', align: ' d-none d-lg-table-cell' },
+      { title: this.$root.i18n.note, value: 'note', align: ' d-none d-lg-table-cell' },
+      { title: this.$root.i18n.role, value: 'role', align: ' d-none d-lg-table-cell' },
+      { title: this.$root.i18n.status, value: 'status' },
     ],
-    sortBy: 'email',
-    sortDesc: false,
+    sortBy: [{ key: 'email', order: 'asc' }],
     itemsPerPage: 10,
     dialog: false,
     deleteUserDialog: false,
@@ -49,7 +49,6 @@ routes.push({ path: '/users', name: 'users', component: {
   watch: {
     '$route': 'loadData',
     'sortBy': 'saveLocalSettings',
-    'sortDesc': 'saveLocalSettings',
     'itemsPerPage': 'saveLocalSettings',
   },
   methods: {
@@ -68,40 +67,32 @@ routes.push({ path: '/users', name: 'users', component: {
       this.$root.stopLoading();
     },
     saveLocalSettings() {
-      localStorage['settings.users.sortBy'] = this.sortBy;
-      localStorage['settings.users.sortDesc'] = this.sortDesc;
+      localStorage['settings.users.sortBy'] = this.sortBy[0].key;
+      localStorage['settings.users.sortDesc'] = this.sortDesc[0].order;
       localStorage['settings.users.itemsPerPage'] = this.itemsPerPage;
     },
     loadLocalSettings() {
       if (localStorage['settings.users.sortBy']) {
-        this.sortBy = localStorage['settings.users.sortBy'];
-        this.sortDesc = localStorage['settings.users.sortDesc'] == "true";
+        this.sortBy[0].key = localStorage['settings.users.sortBy'];
+        this.sortBy[0].order = localStorage['settings.users.sortDesc'];
         this.itemsPerPage = parseInt(localStorage['settings.users.itemsPerPage']);
       }
     },
     updateUser(user) {
       for (var i = 0; i < this.users.length; i++) {
         if (this.users[i].id == user.id) {
-          this.$set(this.users, i, user);
+          this.users[i] = user;
           break;
         }
       }
     },
-    expand(user) {
-      if (this.isExpanded(user)) {
-        this.expanded = [];
-      } else {
-        this.form.id = user.id;
-        this.form.email = user.email;
-        this.form.password = null;
-        this.form.firstName = user.firstName;
-        this.form.lastName = user.lastName;
-        this.form.note = user.note;
-        this.expanded = [user];
-      }
-    },
-    isExpanded(user) {
-      return this.expanded.length > 0 && this.expanded[0] == user;
+    updateForm(user) {
+      this.form.id = user.id;
+      this.form.email = user.email;
+      this.form.password = null;
+      this.form.firstName = user.firstName;
+      this.form.lastName = user.lastName;
+      this.form.note = user.note;
     },
     hideAdd() {
       this.dialog = false;
@@ -116,7 +107,7 @@ routes.push({ path: '/users', name: 'users', component: {
       this.form.note = null;
       this.dialog = true;
     },
-    showDeleteConfirm(user) {
+    showDeleteConfirm() {
       this.deleteUserDialog = true;
     },
     hideDeleteConfirm() {
@@ -220,14 +211,14 @@ routes.push({ path: '/users', name: 'users', component: {
         const response = await this.$root.papi.delete('users/' + id);
         for (var i = 0; i < this.users.length; i++) {
           if (this.users[i].id == id) {
-            this.$delete(this.users, i);
+            this.users.splice(i, 1);
             break;
           }
-        }  
+        }
         this.$root.showTip(this.i18n.userDeleted);
       } catch (error) {
          this.$root.showError(error);
-      }      
+      }
       this.$root.stopLoading();
     },
     async toggleStatus(user) {
@@ -239,7 +230,7 @@ routes.push({ path: '/users', name: 'users', component: {
         this.hideDeleteConfirm();
       } catch (error) {
          this.$root.showError(error);
-      }      
+      }
       this.$root.stopLoading();
     },
     async sync() {

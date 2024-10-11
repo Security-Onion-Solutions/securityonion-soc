@@ -4,7 +4,7 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-routes.push({ path: '*', name: 'login', component: {
+routes.push({ path: '/:pathMatch(.*)*', name: 'login', component: {
   template: '#page-login',
   data() { return {
     i18n: this.$root.i18n,

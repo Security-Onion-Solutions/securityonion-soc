@@ -5,6 +5,7 @@
 // Elastic License 2.0.
 
 const routes = [];
+const components = [];
 
 const FEAT_TTR = 'ttr';
 
@@ -17,105 +18,170 @@ const LICENSE_STATUS_UNPROVISIONED = "unprovisioned";
 
 const LICENSE_EXPIRES_SOON_DAYS = 45;
 
-const UNREALISTIC_AGE = 1700000000; // About 54 years
-
 const USER_PASSWORD_LENGTH_MIN = 8;
 const USER_PASSWORD_LENGTH_MAX = 72;
 const USER_PASSWORD_INVALID_RX = /["'$&!]/;
 
 const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
 
-if (typeof global !== 'undefined') global.routes = routes;
+if (typeof global !== 'undefined') {
+  global.routes = routes;
+  global.components = components;
+}
 
-$(document).ready(function() {
-  new Vue({
-    el: '#app',
-    vuetify: new Vuetify({
-      icons: {
-        iconfont: 'fa',
+$(document).ready(function () {
+  const vuetify = Vuetify.createVuetify({
+    defaults: {
+      VIcon: {
+        class: 'fa',
       },
-      theme: {
-        dark: true,
-        options: {
-          customProperties: true,
-        },
-        themes: {
-          light: {
+      VCheckbox: {
+        trueIcon: 'mb-1 fa-square-check',
+        falseIcon: 'mb-1 fa-regular fa-square',
+        indeterminateIcon: 'mb-1 fa-square-minus'
+      },
+      VSelect: {
+        menuIcon: 'fas fa-caret-down',
+      },
+      VCombobox: {
+        menuIcon: 'fas fa-caret-down',
+      },
+      VFileInput: {
+        prependIcon: 'fa-paperclip'
+      },
+      VDataTable: {
+        firstIcon: 'fa-backward-step',
+        prevIcon: 'fa-chevron-left',
+        nextIcon: 'fa-chevron-right',
+        lastIcon: 'fa-forward-step',
+      },
+      VTextField: {
+        clearIcon: 'fas fa-circle-xmark',
+      },
+      VTreeview: {
+        collapseIcon: '',
+        expandIcon: 'fas fa-caret-right',
+      }
+    },
+    icons: {
+      defaultSet: 'fa',
+      sets: {
+        fa: {
+          component: Vuetify.components.VClassIcon,
+        }
+      }
+    },
+    theme: {
+      defaultTheme: 'dark',
+      options: {
+        customProperties: true,
+      },
+      variations: {
+        colors: ['primary', 'secondary', 'drawer_background', 'background'],
+        lighten: 3,
+        darken: 2,
+      },
+      themes: {
+        light: {
+          colors: {
+            primary: '#2196f3',
+            secondary: '#424242',
+            info: '#2196f3',
+            error: '#ff5252',
             nav_background: '#12110d',
             nav: '#ffffff',
             drawer_background: '#f4f4f4',
             background: '#ffffff',
+            text: '#000000',
+            icon: '#7f7f7f',
           },
-          dark: {
+        },
+        dark: {
+          dark: true,
+          colors: {
+            primary: '#2196f3',
+            secondary: '#424242',
+            info: '#2196f3',
+            error: '#ff5252',
             nav_background: '#12110d',
             nav: '#ffffff',
             drawer_background: '#353535',
             background: '#1e1e1e',
+            text: '#ffffff',
+            icon: '#929292',
           },
         },
       },
-    }),
-    router: new VueRouter({ routes }),
-    data: {
-      timestamp: Date.now(),
-      i18n: i18n.getLocalizedTranslations(navigator.language),
-      loading: false,
-      error: false,
-      warning: false,
-      info: false,
-      tip: false,
-      errorMessage: "",
-      warningMessage: "",
-      infoMessage: "",
-      tipMessage: "",
-      tipTimeout: 6000,
-      warningTimeout: 30000,
-      errorTimeout: 120000,
-      toolbar: null,
-      wsUrl: (location.protocol == 'https:' ?  'wss://' : 'ws://') + location.host + location.pathname + 'ws',
-      apiUrl: location.origin + location.pathname + 'api/',
-      authUrl: '/auth/self-service/',
-      settingsUrl: null,
-      version: '0.0.0',
-      elasticVersion: '0.0.0',
-      papi: null,
-      connectionTimeout: 300000,
-      wsConnectionTimeout: 15000,
-      socket: null,
-      subscriptions: [],
-      parameters: {},
-      parametersLoaded: false,
-      parameterCallback: null,
-      parameterSection: null,
-      chartsInitialized: false,
-      editorInitialized: false,
-      tools: [],
-      casesEnabled: false,
-      detectionsEnabled: false,
-      subtitle: '',
-      currentStatus: null,
-      connected: false,
-      reconnecting: false,
-      users: [],
-      usersLoadedDate: null,
-      cacheRefreshIntervalMs: 300000,
-      loadServerSettingsTime: 0,
-      user: null,
-      username: '',
-      maximizedParent: null,
-      maximizedOrigWidth: null,
-      maximizedOrigHeight: null,
-      maximizedCancelFn: null,
-      licenseKey: null,
-      licenseStatus: null,
-      enableReverseLookup: false,
-      ip2host: {},
-      securitySettingsAlreadyChecked: false,
-      forceUserOtp: false,
+    },
+  });
+  const router = VueRouter.createRouter({ routes, history: VueRouter.createWebHashHistory() })
+
+  const comp = {
+    el: '#app',
+    router: router,
+    data: () => {
+      return {
+        timestamp: Date.now(),
+        theme: Vuetify.useTheme(),
+        i18n: i18n.getLocalizedTranslations(navigator.language),
+        loading: false,
+        error: false,
+        warning: false,
+        info: false,
+        tip: false,
+        errorMessage: "",
+        warningMessage: "",
+        infoMessage: "",
+        tipMessage: "",
+        tipTimeout: 6000,
+        warningTimeout: 30000,
+        errorTimeout: 120000,
+        toolbar: null,
+        wsUrl: (location.protocol == 'https:' ? 'wss://' : 'ws://') + location.host + location.pathname + 'ws',
+        apiUrl: location.origin + location.pathname + 'api/',
+        authUrl: '/auth/self-service/',
+        settingsUrl: null,
+        version: '0.0.0',
+        elasticVersion: '0.0.0',
+        papi: null,
+        connectionTimeout: 300000,
+        wsConnectionTimeout: 15000,
+        socket: null,
+        subscriptions: [],
+        parameters: {},
+        parametersLoaded: false,
+        parameterCallback: null,
+        parameterSection: null,
+        chartsInitialized: false,
+        editorInitialized: false,
+        tools: [],
+        casesEnabled: false,
+        detectionsEnabled: false,
+        subtitle: '',
+        currentStatus: null,
+        connected: false,
+        reconnecting: false,
+        users: [],
+        usersLoadedDate: null,
+        cacheRefreshIntervalMs: 300000,
+        loadServerSettingsTime: 0,
+        user: null,
+        username: '',
+        maximizedParent: null,
+        maximizedOrigWidth: null,
+        maximizedOrigHeight: null,
+        maximizedCancelFn: null,
+        licenseKey: null,
+        licenseStatus: null,
+        enableReverseLookup: false,
+        ip2host: {},
+        securitySettingsAlreadyChecked: false,
+        forceUserOtp: false,
+      }
     },
     watch: {
-      '$vuetify.theme.dark': 'saveLocalSettings',
-      'toolbar': 'saveLocalSettings',
+      '$vuetify.theme.current.dark': 'saveTheme',
+      'toolbar': 'saveToolbar',
     },
     methods: {
       getMetricsUrl() {
@@ -431,10 +497,10 @@ $(document).ready(function() {
         }
       },
       checkUserSecuritySettings(infoResponse) {
-        // Only force OTP on initial login, otherwise risk user losing data 
-        // on a case comment, etc. This only applies if the ForceUserOtp 
-        // setting was enabled after a user had already been logged in. Users 
-        // that login after that setting is enabled will repeatedly be taken 
+        // Only force OTP on initial login, otherwise risk user losing data
+        // on a case comment, etc. This only applies if the ForceUserOtp
+        // setting was enabled after a user had already been logged in. Users
+        // that login after that setting is enabled will repeatedly be taken
         // back to the settings until the user complies.
         if (this.securitySettingsAlreadyChecked) return;
 
@@ -493,7 +559,7 @@ $(document).ready(function() {
         }
       },
       toggleTheme() {
-        this.$vuetify.theme.dark = !this.$vuetify.theme.dark
+        this.theme.global.name = this.theme.global.current.dark ? 'light' : 'dark';
         this.timestamp = Date.now();
         this.updateEditorTheme();
       },
@@ -632,6 +698,13 @@ $(document).ready(function() {
         }
         return md;
       },
+      colorSeverity(value) {
+        if (value == "low_false") return "yellow";
+        if (value == "medium_false") return "amber darken-1";
+        if (value == "high_false") return "red darken-1";
+        if (value == "critical_false") return "red darken-4";
+        return "secondary";
+      },
       generateDatePickerPreselects() {
         var preselects = {};
         preselects[this.i18n.datePreselectToday] = [moment().startOf('day'), moment().endOf('day')];
@@ -724,13 +797,19 @@ $(document).ready(function() {
       stopLoading() {
         this.loading = false;
       },
-      saveLocalSettings() {
-        localStorage['settings.app.dark'] = this.$vuetify.theme.dark;
+      saveToolbar() {
         localStorage['settings.app.navbar'] = this.toolbar;
+      },
+      saveTheme() {
+        localStorage['settings.app.dark'] = this.$vuetify.theme.current.dark;
+      },
+      saveLocalSettings() {
+        this.saveTheme();
+        this.saveToolbar();
       },
       loadLocalSettings() {
         if (localStorage['settings.app.dark'] != undefined) {
-          this.$vuetify.theme.dark = localStorage['settings.app.dark'] == "true";
+          this.theme.global.name = localStorage['settings.app.dark'] == 'true' ? 'dark' : 'light';
           this.updateEditorTheme();
         }
         if (localStorage['settings.app.navbar'] != undefined) {
@@ -740,7 +819,7 @@ $(document).ready(function() {
       updateEditorTheme() {
         var link = $('link[href^="css/external/prism-custom-"]')[0];
         if (link) {
-          if (this.$vuetify.theme.dark) {
+          if (this.$vuetify.theme.current.dark) {
             link.href = "css/external/prism-custom-dark-v1.29.0.css";
           } else {
             link.href = "css/external/prism-custom-light-v1.29.0.css";
@@ -890,18 +969,23 @@ $(document).ready(function() {
         this.setCookie(name, "", -1);
       },
       registerChart(chartType, chartName) {
-        var app = this;
-        Vue.component(chartName, {
+        const app = Vue.getCurrentInstance().appContext.app;
+        app.component(chartName, {
           extends: chartType,
           props: {
-            chartdata: { type: Object },
+            data: { type: Object },
             options: { type: Object }
           },
-          mounted () {
-            this.renderChart(this.chartdata, this.options)
-            this.chartdata.obj = this;
-          }
-        })
+          data() {
+            return {
+              chartData: this.data,
+              chartOptions: this.options,
+            };
+          },
+          setup(props, context) {
+            return chartType.setup(props, context);
+          },
+        });
       },
       initializeCharts() {
         if (this.chartsInitialized) return;
@@ -910,13 +994,14 @@ $(document).ready(function() {
         this.registerChart(VueChartJs.Pie, 'pie-chart');
 
         // Sankey is a separate third-party lib, so use the VueChartJs helper to add the custom chart
-        const Sankey = VueChartJs.generateChart('sankey-chart', 'sankey', Chart.controllers['sankey']);
+        const Sankey = VueChartJs.createTypedChart('sankey', Chart.controllers['sankey']);
         this.registerChart(Sankey, 'sankey-chart');
 
         this.chartsInitialized = true;
       },
       registerEditor() {
-        Vue.component('prism-editor', PrismEditor.component);
+        const app = Vue.getCurrentInstance().appContext.app;
+        app.component('prism-editor', PrismEditor.PrismEditor);
       },
       initializeEditor() {
         if (this.editorInitialized) return;
@@ -925,10 +1010,10 @@ $(document).ready(function() {
         this.editorInitialized = true;
       },
       getColor(colorName, percent = 0) {
-        percent = this.$root.$vuetify && this.$root.$vuetify.theme.dark ? percent * -1 : percent;
+        percent = this.$root.$vuetify && this.$root.$vuetify.theme.current.dark ? percent * -1 : percent;
         var color = colorName;
-        if (this.$root.$vuetify && this.$root.$vuetify.theme.currentTheme[colorName]) {
-          color = this.$root.$vuetify.theme.currentTheme[colorName];
+        if (this.$root.$vuetify && this.$root.$vuetify.theme.current.colors[colorName]) {
+          color = this.$root.$vuetify.theme.current.colors[colorName];
         }
         var R = parseInt(color.substring(1,3),16);
         var G = parseInt(color.substring(3,5),16);
@@ -998,13 +1083,13 @@ $(document).ready(function() {
         if (obj[idField] && obj[idField].length > 0) {
           const id = obj[idField];
           if (id === SYSTEM_USER_ID || id === "agent") {
-            Vue.set(obj, outputField, this.i18n.systemUser);
+            obj[outputField] = this.i18n.systemUser;
             return
           }
 
           const user = await this.$root.getUserById(id);
           if (user) {
-            Vue.set(obj, outputField, user.email);
+            obj[outputField] = user.email;
           }
         }
       },
@@ -1036,12 +1121,12 @@ $(document).ready(function() {
       },
       getDetectionEngineStatusClass(engine) {
         switch (this.getDetectionEngineStatus(engine)) {
-          case "MigrationFailure": return "warning--text";
-          case "SyncFailure": return "warning--text";
-          case "IntegrityFailure": return "warning--text";
-          case "Healthy": return "success--text";
+          case "MigrationFailure": return "text-warning";
+          case "SyncFailure": return "text-warning";
+          case "IntegrityFailure": return "text-warning";
+          case "Healthy": return "text-success";
         }
-        return "normal--text";
+        return "text-normal";
       },
       getDetectionEngineStatus(engine) {
         if (!this.currentStatus || !this.currentStatus.detections || !this.currentStatus.detections[engine]) {
@@ -1206,26 +1291,10 @@ $(document).ready(function() {
 
         return '';
       },
-      dateAwareSort(items, index, isDesc) {
-        items.sort((a, b) => {
-          if (index[0] === 'createTime' || index[0] === 'updateTime' || index[0] === 'createdAt' || index[0] === 'updatedAt') {
-            if (!isDesc[0]) {
-              return new Date(a[index]) - new Date(b[index]);
-            }
-
-            return new Date(b[index]) - new Date(a[index]);
-          }
-
-          if (typeof a[index] !== 'undefined') {
-            if (!isDesc[0]) {
-              return (a[index]+'').toLowerCase().localeCompare((b[index]+'').toLowerCase());
-            }
-
-            return (b[index]+'').toLowerCase().localeCompare((a[index]+'').toLowerCase());
-          }
-        });
-
-        return items;
+      dateAwareCompare(field) {
+        return (a, b) => {
+          return new Date(a[field]) - new Date(b[field]);
+        }
       },
     },
     created() {
@@ -1234,22 +1303,42 @@ $(document).ready(function() {
       if (this.redirectRoute()) return;
       this.setupApi();
       this.setupAuth();
-      this.loadServerSettings(false);
-      this.loadLocalSettings();
-      Vue.filter('formatDateTime', this.formatDateTime);
-      Vue.filter('formatDuration', this.formatDuration);
-      Vue.filter('formatHours', this.formatHours);
-      Vue.filter('formatDecimal1', this.formatDecimal1);
-      Vue.filter('formatDecimal2', this.formatDecimal2);
-      Vue.filter('formatCount', this.formatCount);
-      Vue.filter('formatMarkdown', this.formatMarkdown);
-      Vue.filter('formatTimestamp', this.formatTimestamp);
-      $('#app')[0].style.display = "block";
       this.log("Initialization complete");
     },
     mounted() {
       this.setFavicon();
+
+      const filters = {
+        formatDateTime: this.formatDateTime,
+        formatDuration: this.formatDuration,
+        formatHours: this.formatHours,
+        formatDecimal1: this.formatDecimal1,
+        formatDecimal2: this.formatDecimal2,
+        formatCount: this.formatCount,
+        formatMarkdown: this.formatMarkdown,
+        formatTimestamp: this.formatTimestamp,
+        colorSeverity: this.colorSeverity,
+      };
+
+      // Register filters globally
+      Object.keys(filters).forEach(key => {
+        app.config.globalProperties[key] = filters[key];
+      });
+
       window.matchMedia('(prefers-color-scheme: dark)').addListener(() => this.setFavicon());
+      this.loadServerSettings(false);
+      this.loadLocalSettings();
+      $('#app')[0].style.display = "block";
     },
-  });
+  };
+
+  const app = Vue.createApp(comp);
+  app.use(vuetify);
+  app.use(router);
+
+  for (let i = 0; i < components.length; i++) {
+    app.component(components[i].name, components[i].component);
+  }
+
+  app.mount('#app');
 });

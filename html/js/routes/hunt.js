@@ -45,7 +45,6 @@ const huntComponent = {
     autoRefreshIntervals: [],
     autoRefreshTimer: null,
     loaded: false,
-    expanded: [],
     chartHeight: 200,
     zone: '',
     huntPending: false,
@@ -71,7 +70,7 @@ const huntComponent = {
     groupByLimit: 10,
     groupByFilter: '',
     groupByItemsPerPage: 10,
-    groupByFooters: { 'items-per-page-options': [10,25,50,100,200,500] },
+    groupByFooters: [10,25,50,100,200,500],
     groupByPage: 1,
     groupBySortBy: 'count',
     groupBySortDesc: true,
@@ -85,14 +84,14 @@ const huntComponent = {
     eventFilter: '',
     eventHeaders: [],
     eventPage: 1,
-    sortBy: 'soc_timestamp',
+    sortBy: [{ key: 'soc_timestamp', order: 'desc' }],
     sortDesc: true,
     itemsPerPage: 10,
     footerProps: { 'items-per-page-options': [10,25,50,100,200,500,1000] },
 
     expandedHeaders: [
-      { text: "key", value: "key" },
-      { text: "value", value: "value" }
+      { title: "key", value: "key" },
+      { title: "value", value: "value" }
     ],
 
     totalEvents: 0,
@@ -115,15 +114,13 @@ const huntComponent = {
     groupByRoute: "",
     groupByNewRoute: "",
     quickActionVisible: false,
-    quickActionX: 0,
-    quickActionY: 0,
+    quickActionTarget: null,
     quickActionEvent: null,
     quickActionField: "",
     quickActionValue: "",
     quickActionIsNumeric: false,
     escalationMenuVisible: false,
-    escalationMenuX: 0,
-    escalationMenuY: 0,
+    escalationMenuTarget: null,
     escalationItem: null,
     escalationGroupIdx: -1,
     escalateRelatedEventsEnabled: false,
@@ -137,56 +134,57 @@ const huntComponent = {
     betweenEndEquals: false,
     betweenError: '',
     equalityOperators: [
-      { text: '<', value: false },
-      { text: '≤', value: true }
+      { title: '<', value: false },
+      { title: '≤', value: true }
     ],
     addToCaseDialogVisible: false,
     mruCases: [],
     selectedMruCase: null,
     disableRouteLoad: false,
     selectAllState: false,
+    selectAllIndeterminate: false,
     selectedCount: 0,
     selectedAction: 'enable',
     bulkActions: [
-      { text: this.$root.i18n.enable, value: 'enable' },
-      { text: this.$root.i18n.disable, value: 'disable' },
-      { text: this.$root.i18n.delete, value: 'delete' },
+      { title: this.$root.i18n.enable, value: 'enable' },
+      { title: this.$root.i18n.disable, value: 'disable' },
+      { title: this.$root.i18n.delete, value: 'delete' },
     ],
     quickActionDetId: null,
     presets: {},
     manualSyncTargetEngine: null,
     showBulkDeleteConfirmDialog: false,
     tuneDetectionTabTarget: null,
+    eventCurrentItems: [],
   }},
   created() {
     this.$root.initializeCharts();
     this.relativeTimeUnits = [
-      { text: this.i18n.seconds, value: RELATIVE_TIME_SECONDS },
-      { text: this.i18n.minutes, value: RELATIVE_TIME_MINUTES },
-      { text: this.i18n.hours, value: RELATIVE_TIME_HOURS },
-      { text: this.i18n.days, value: RELATIVE_TIME_DAYS },
-      { text: this.i18n.weeks, value: RELATIVE_TIME_WEEKS },
-      { text: this.i18n.months, value: RELATIVE_TIME_MONTHS }
+      { title: this.i18n.seconds, value: RELATIVE_TIME_SECONDS },
+      { title: this.i18n.minutes, value: RELATIVE_TIME_MINUTES },
+      { title: this.i18n.hours, value: RELATIVE_TIME_HOURS },
+      { title: this.i18n.days, value: RELATIVE_TIME_DAYS },
+      { title: this.i18n.weeks, value: RELATIVE_TIME_WEEKS },
+      { title: this.i18n.months, value: RELATIVE_TIME_MONTHS }
     ];
     this.autoRefreshIntervals = [
-      { text: this.i18n.interval0s, value: 0 },
-      { text: this.i18n.interval5s, value: 5 },
-      { text: this.i18n.interval10s, value: 10 },
-      { text: this.i18n.interval15s, value: 15 },
-      { text: this.i18n.interval30s, value: 30 },
-      { text: this.i18n.interval1m, value: 60 },
-      { text: this.i18n.interval2m, value: 120 },
-      { text: this.i18n.interval5m, value: 300 },
-      { text: this.i18n.interval10m, value: 600 },
-      { text: this.i18n.interval15m, value: 900 },
-      { text: this.i18n.interval30m, value: 1800 },
-      { text: this.i18n.interval1h, value: 3600 },
-      { text: this.i18n.interval2h, value: 7200 },
-      { text: this.i18n.interval5h, value: 18000 },
-      { text: this.i18n.interval10h, value: 36000 },
-      { text: this.i18n.interval24h, value: 86400 },
+      { title: this.i18n.interval0s, value: 0 },
+      { title: this.i18n.interval5s, value: 5 },
+      { title: this.i18n.interval10s, value: 10 },
+      { title: this.i18n.interval15s, value: 15 },
+      { title: this.i18n.interval30s, value: 30 },
+      { title: this.i18n.interval1m, value: 60 },
+      { title: this.i18n.interval2m, value: 120 },
+      { title: this.i18n.interval5m, value: 300 },
+      { title: this.i18n.interval10m, value: 600 },
+      { title: this.i18n.interval15m, value: 900 },
+      { title: this.i18n.interval30m, value: 1800 },
+      { title: this.i18n.interval1h, value: 3600 },
+      { title: this.i18n.interval2h, value: 7200 },
+      { title: this.i18n.interval5h, value: 18000 },
+      { title: this.i18n.interval10h, value: 36000 },
+      { title: this.i18n.interval24h, value: 86400 },
     ];
-    Vue.filter('colorSeverity', this.colorSeverity);
   },
   beforeDestroy() {
     this.$root.setSubtitle("");
@@ -218,6 +216,7 @@ const huntComponent = {
     'autoRefreshInterval': 'resetRefreshTimer',
   },
   methods: {
+    moment: moment,
     isAdvanced() {
       return this.advanced;
     },
@@ -282,6 +281,8 @@ const huntComponent = {
       if (this.$route.query.q || (this.shouldAutohunt() && this.query)) {
         this.hunt(true);
       }
+
+      this.loadData();
     },
     applyQuerySubstitutions(queries) {
       if (Array.isArray(queries)) {
@@ -336,6 +337,10 @@ const huntComponent = {
     },
     hunt(replaceHistory = false) {
       this.huntPending = false;
+      this.selectAllState = false;
+      this.selectAllIndeterminate = false;
+      this.selectedCount = 0;
+
       var route = this;
       var onSuccess = function() {};
       var onFail = function() {
@@ -349,7 +354,11 @@ const huntComponent = {
       if (replaceHistory === true) {
         this.$router.replace(this.buildCurrentRoute(), onSuccess, onFail);
       } else {
-        this.$router.push(this.buildCurrentRoute(), onSuccess, onFail);
+        this.$router.push(this.buildCurrentRoute()).then((result) => {
+          if (result?.message?.includes('redundant navigation')) {
+            this.loadData();
+          }
+        });
       }
       this.resetRefreshTimer();
 
@@ -533,7 +542,6 @@ const huntComponent = {
           this.populateChart(this.bottomChartData, response.data.metrics["bottom"]);
         }
         this.loaded = true;
-        this.expanded = [];
         this.addMRUQuery(this.query);
 
         var subtitle = this.isAdvanced() ? this.query : this.queryName;
@@ -691,7 +699,7 @@ const huntComponent = {
     removeDataItemFromView(data, item) {
       for (var j = 0; j < data.length; j++) {
         if (data[j] == item) {
-          Vue.delete(data, j);
+          data.splice(j, 1);
           if (item["count"]) {
             this.totalEvents -= item["count"];
           } else {
@@ -1045,8 +1053,7 @@ const huntComponent = {
         this.escalationMenuVisible = false;
         return;
       }
-      this.escalationMenuX = domEvent.clientX;
-      this.escalationMenuY = domEvent.clientY;
+      this.escalationMenuTarget = domEvent.target;
       this.escalationItem = event;
       this.escalationGroupIdx = groupIdx;
       this.$nextTick(() => {
@@ -1132,8 +1139,7 @@ const huntComponent = {
         this.quickActionEvent = event;
         this.quickActionField = field;
         this.quickActionValue = value;
-        this.quickActionX = domEvent.native && domEvent.native.clientX ? domEvent.native.clientX : domEvent.clientX;
-        this.quickActionY = domEvent.native && domEvent.native.clientY ? domEvent.native.clientY : domEvent.clientY;
+        this.quickActionTarget = domEvent.target;
         this.$nextTick(() => {
           this.quickActionVisible = true;
         });
@@ -1178,7 +1184,7 @@ const huntComponent = {
         fields.forEach(function(item, index) {
           var i18nKey = "field_" + item;
           var header = {
-            text: i18n[i18nKey] ? i18n[i18nKey] : item,
+            title: i18n[i18nKey] ? i18n[i18nKey] : item,
             value: item,
           };
           headers.push(header);
@@ -1284,11 +1290,9 @@ const huntComponent = {
           group.chart_metrics = this.constructChartMetrics(metrics[key]);
 
           // Preserve group-by sort settings only for first group. Useful for non-advanced views.
-          group.sortBy = 'count';
-          group.sortDesc = true;
+          group.sortBy = [{ key: 'count', order: 'desc' }];
           if (this.groupBys.length == 0 && this.groupBySortBy) {
-            group.sortBy = this.groupBySortBy;
-            group.sortDesc = this.groupBySortDesc;
+            group.sortBy = [{key: this.groupBySortBy, order: this.groupBySortDesc ? 'desc' : 'asc'}];
           }
 
           this.groupBys.push(group);
@@ -1312,14 +1316,15 @@ const huntComponent = {
             });
           }
         }
+
         return true;
       }
       return false;
     },
     updateGroupBySort() {
       if (this.groupBys.length > 0) {
-        this.groupBySortBy = this.groupBys[0].sortBy;
-        this.groupBySortDesc = this.groupBys[0].sortDesc;
+        this.groupBySortBy = this.groupBys[0].sortBy[0].key;
+        this.groupBySortDesc = this.groupBys[0].sortBy[0].order === 'desc';
       }
     },
     populateEventTable(events) {
@@ -1474,7 +1479,7 @@ const huntComponent = {
     },
     displayTable(group, groupIdx) {
       group.chart_type = "";
-      Vue.set(this.groupBys, groupIdx, group);
+      this.groupBys[groupIdx] = group;
     },
     displayPieChart(group, groupIdx) {
       group.chart_type = "pie";
@@ -1483,7 +1488,7 @@ const huntComponent = {
       this.setupPieChart(group.chart_options, group.chart_data, group.title);
       this.applyLegendOption(group, groupIdx);
       this.populateChart(group.chart_data, group.chart_metrics);
-      Vue.set(this.groupBys, groupIdx, group);
+      this.groupBys[groupIdx] = group;
     },
     displayBarChart(group, groupIdx) {
       group.chart_type = "bar";
@@ -1492,7 +1497,7 @@ const huntComponent = {
       this.setupBarChart(group.chart_options, group.chart_data, group.title, groupIdx);
       this.applyLegendOption(group, groupIdx);
       this.populateChart(group.chart_data, group.chart_metrics);
-      Vue.set(this.groupBys, groupIdx, group);
+      this.groupBys[groupIdx] = group;
     },
     displaySankeyChart(group, groupIdx) {
       if (!this.isGroupSankeyCapable(group)) {
@@ -1559,7 +1564,7 @@ const huntComponent = {
 
       group.chart_data.datasets[0].data = data;
       group.chart_data.flowMax = flowMax;
-      Vue.set(this.groupBys, groupIdx, group);
+      this.groupBys[groupIdx] = group;
     },
     isGroupSankeyCapable(group, groupIdx) {
       return group.fields != undefined && group.fields.length >= 2;
@@ -1581,38 +1586,21 @@ const huntComponent = {
         chart.labels.push(route.$root.truncate(route.localizeValue(route.lookupSocId(item.keys[0])), route.chartLabelMaxLength));
         chart.datasets[0].data.push(item.value);
       });
-      if (chart.obj) {
-        setTimeout(function() { chart.obj.renderChart(chart.obj.chartdata, chart.obj.options); }, 100);
-      }
-    },
-    expand(item) {
-      if (this.isExpanded(item)) {
-        this.expanded = [];
-      } else {
-        this.expanded = [item];
-      }
-    },
-    isExpanded(item) {
-      return (this.expanded.length > 0 && this.expanded[0] == item);
     },
     isMultiSelect() {
       return this.isCategory('detections');
     },
-    getExpandedData() {
-      var records = []
-      if (this.expanded.length > 0) {
-        var data = this.expanded[0];
-        for (key in data) {
-          if (key === '_isSelected') {
-            // Should we exclude all fields beginning with an underscore?
-            continue;
-          }
-
-          var record = {};
-          record.key = key;
-          record.value = data[key];
-          records.push(record);
+    getExpandedData(data) {
+      var records = [];
+      for (key in data) {
+        if (key === '_isSelected') {
+          continue;
         }
+
+        records.push({
+          key: key,
+          value: data[key],
+        });
       }
       return records;
     },
@@ -1813,9 +1801,10 @@ const huntComponent = {
       data.datasets = [{
         data: [],
         label: this.i18n.field_count,
-        color: this.$root.$vuetify && this.$root.$vuetify.theme.dark ? 'white' : 'black',
+        color: this.$root.$vuetify && this.$root.$vuetify.theme.current.dark ? 'white' : 'black',
         colorFrom: c => route.getSankeyColor('from', 'out', c, data.flowMax),
         colorTo: c => route.getSankeyColor('to', 'in', c, data.flowMax),
+        size: 'max',
       }];
     },
     getSankeyColor(tag, dir, source, max) {
@@ -1900,13 +1889,6 @@ const huntComponent = {
       }
       this.saveLocalSettings();
     },
-    colorSeverity(value) {
-      if (value == "low_false") return "yellow";
-      if (value == "medium_false") return "amber darken-1";
-      if (value == "high_false") return "red darken-1";
-      if (value == "critical_false") return "red darken-4";
-      return "secondary";
-    },
     lookupAlertSeverityScore(sev) {
       if (sev.toLowerCase) {
         sev = sev.toLowerCase();
@@ -1965,8 +1947,8 @@ const huntComponent = {
       this.saveSetting('groupBySortDesc', this.groupBySortDesc, true);
       this.saveSetting('groupByItemsPerPage', this.groupByItemsPerPage, this.params['groupItemsPerPage']);
       this.saveSetting('groupByLimit', this.groupByLimit, this.params['groupFetchLimit']);
-      this.saveSetting('sortBy', this.sortBy, 'timestamp');
-      this.saveSetting('sortDesc', this.sortDesc, true);
+      this.saveSetting('sortBy', this.sortBy[0].key, 'timestamp');
+      this.saveSetting('sortDesc', this.sortBy[0].order, 'desc');
       this.saveSetting('itemsPerPage', this.itemsPerPage, this.params['eventItemsPerPage']);
       this.saveSetting('eventLimit', this.eventLimit, this.params['eventFetchLimit']);
       this.saveSetting('mruQueries', JSON.stringify(this.mruQueries), '[]');
@@ -1984,8 +1966,8 @@ const huntComponent = {
       if (localStorage[prefix + '.groupBySortDesc']) this.groupBySortDesc = localStorage[prefix + '.groupBySortDesc'] == "true";
       if (localStorage[prefix + '.groupByItemsPerPage']) this.groupByItemsPerPage = parseInt(localStorage[prefix + '.groupByItemsPerPage']);
       if (localStorage[prefix + '.groupByLimit']) this.groupByLimit = parseInt(localStorage[prefix + '.groupByLimit']);
-      if (localStorage[prefix + '.sortBy']) this.sortBy = localStorage[prefix + '.sortBy'];
-      if (localStorage[prefix + '.sortDesc']) this.sortDesc = localStorage[prefix + '.sortDesc'] == "true";
+      if (localStorage[prefix + '.sortBy']) this.sortBy[0].key = localStorage[prefix + '.sortBy'];
+      if (localStorage[prefix + '.sortDesc']) this.sortBy[0].order = localStorage[prefix + '.sortDesc'];
       if (localStorage[prefix + '.itemsPerPage']) this.itemsPerPage = parseInt(localStorage[prefix + '.itemsPerPage']);
       if (localStorage[prefix + '.eventLimit']) this.eventLimit = parseInt(localStorage[prefix + '.eventLimit']);
       if (localStorage[prefix + '.mruQueries']) this.mruQueries = JSON.parse(localStorage[prefix + '.mruQueries']);
@@ -2017,7 +1999,7 @@ const huntComponent = {
 
       this.relativeTimeUnits.forEach((unit) => {
         if (unit.value == this.relativeTimeUnit) {
-          text = unit.text;
+          text = unit.title;
           return false;
         }
       });
@@ -2028,7 +2010,7 @@ const huntComponent = {
       let value = 30;
 
       this.relativeTimeUnits.forEach((unit) => {
-        if (unit.text.toLowerCase() == m.toLowerCase()) {
+        if (unit.title.toLowerCase() == m.toLowerCase()) {
           value = unit.value;
           return false;
         }
@@ -2101,7 +2083,7 @@ const huntComponent = {
 
       this.mruCases = [
         {
-          text: this.i18n.createNewCase,
+          title: this.i18n.createNewCase,
           value: 'New Case',
         }
       ];
@@ -2112,7 +2094,7 @@ const huntComponent = {
         const cases = JSON.parse(rawMRU);
         for (let i = 0; i < cases.length; i++) {
           this.mruCases.push({
-            text: cases[i].title,
+            title: cases[i].title,
             value: cases[i],
           });
         }
@@ -2157,30 +2139,34 @@ const huntComponent = {
       switch (this.selectedCount) {
         case 0:
           this.selectAllState = false;
+          this.selectAllIndeterminate = false;
           break;
         case this.totalEvents:
           this.selectAllState = true;
+          this.selectAllIndeterminate = false;
           break;
         default:
-          this.selectAllState = 'indeterminate';
+          this.selectAllState = false;
+          this.selectAllIndeterminate = true;
           break;
       }
     },
     toggleSelectAll() {
-      switch (this.selectAllState) {
-        case 'indeterminate':
+      if (this.selectAllIndeterminate) {
+        this.selectAllState = false;
+        this.selectAllIndeterminate = false;
+        this.selectAllEvents(false);
+        this.selectedCount = 0;
+      } else {
+        if (this.selectAllState) {
           this.selectAllState = false;
+          this.selectAllIndeterminate = false;
           this.selectAllEvents(false);
-          this.selectedCount = 0;
-          break;
-        case false:
-          this.selectAllState = 'indeterminate';
+        } else {
+          this.selectAllState = false;
+          this.selectAllIndeterminate = true;
           this.selectCurrentPage(true);
-          break;
-        case true:
-          this.selectAllState = false;
-          this.selectAllEvents(false);
-          break;
+        }
       }
     },
     selectAllEvents(selection = true, ALL = false) {
@@ -2199,10 +2185,11 @@ const huntComponent = {
 
       if (ALL && selection) {
         this.selectAllState = true;
+        this.selectAllIndeterminate = false;
       }
     },
     selectCurrentPage(selection = true) {
-      this.$refs.eventTable._data.internalCurrentItems.forEach((item) => {
+      this.eventCurrentItems.forEach((item) => {
         if (item._isSelected !== selection) {
           item._isSelected = selection;
           if (selection) {
@@ -2216,7 +2203,7 @@ const huntComponent = {
       this.selectedCount = Math.max(Math.min(this.selectedCount, this.totalEvents), 0);
     },
     isPageSelected() {
-      return this.$refs.eventTable._data.internalCurrentItems.every((item) => item._isSelected);
+      return this.eventCurrentItems.every((item) => item._isSelected);
     },
     countSelected() {
       let count = 0;
@@ -2240,20 +2227,19 @@ const huntComponent = {
 
       this.$root.startLoading();
 
-      switch (this.selectAllState) {
-        case true:
-          payload.query = this.query;
-          break;
-        case 'indeterminate':
-          let ids = [];
-          for (let i = 0; i < this.eventData.length; i++) {
-            if (this.eventData[i]._isSelected) {
-              ids.push(this.eventData[i].soc_id);
-            }
+      if (this.selectAllState) {
+        payload.query = this.query;
+      } else if (this.selectAllIndeterminate) {
+        let ids = [];
+        for (let i = 0; i < this.eventData.length; i++) {
+          if (this.eventData[i]._isSelected) {
+            ids.push(this.eventData[i].soc_id);
           }
+        }
 
-          payload.ids = ids;
-          break;
+        payload.ids = ids;
+      } else {
+        return;
       }
 
       try {

@@ -17,18 +17,29 @@ global.location = { hash: "" };
 // Mock Vue
 ////////////////////////////////////
 var app = null;
-global.Vue = function(obj) {
+global.Vue = {};
+global.Vue.createApp = function(obj) {
   app = this;
   app.$root = this;
   app.$vuetify = {
     theme: {
-      dark: false,
-      currentTheme: {}
+      current: {
+        colors: [],
+        dark: false,
+      }
     }
   };
   app.debug = true;
-  Object.assign(app, obj.data, obj.methods);
+  Object.assign(app, obj.data(), obj.methods);
   this.ensureConnected = jest.fn();
+
+  app.use = () => { };
+  app.config = { globalProperties: {} };
+  app.mount = () => { };
+
+  app.i18n = global.i18n.getLocalizedTranslations('en-US');
+
+  return app;
 };
 global.Vue.delete = function(data, i) {
   data.splice(i, 1);
@@ -36,9 +47,15 @@ global.Vue.delete = function(data, i) {
 global.Vue.set = function(array, idx, value) {
   array[idx] = value;
 };
-global.Vue.filter = () => { };
-global.Vuetify = function(obj) {};
-global.VueRouter = function(obj) {};
+global.Vuetify = {
+  components: { VClassIcon: {} },
+  createVuetify: () => { },
+  useTheme: () => { return { global: { name: 'dark' } } },
+};
+global.VueRouter = {
+  createRouter: () => { },
+  createWebHashHistory: () => { },
+};
 
 ////////////////////////////////////
 // Test Helper Functions
@@ -51,11 +68,44 @@ global.initComponentData = function(comp) {
   return comp.data();
 }
 
+global.initComponentProps = function (comp) {
+  if (!comp.props) return {};
+
+  let props = {};
+  if (comp.props instanceof Object) {
+    for (let prop in comp.props) {
+      const def = comp.props[prop];
+      if (def.default !== undefined) {
+        props[prop] = def.default;
+      } else if (def.type !== undefined) {
+        props[prop] = new def.type();
+      } else {
+        props[prop] = new def();
+      }
+    }
+  }
+
+  return props;
+}
+
+global.initComponentSetup = function (comp, props) {
+  if (!comp.setup) return {};
+
+  return comp.setup(props, { emit: jest.fn() });
+}
+
 global.getComponent = function(name) {
   var comp = null;
   for (var i = 0; i < global.routes.length; i++) {
     if (global.routes[i].name == name) {
       comp = global.routes[i].component;
+      break;
+    }
+  }
+
+  for (var i = 0; i < global.components.length; i++) {
+    if (global.components[i].name == name) {
+      comp = global.components[i].component;
       break;
     }
   }
@@ -66,11 +116,19 @@ global.getComponent = function(name) {
   comp.$nextTick = (fun) => { fun(); }
 
   // Setup route mock data
-  comp.$route = { params: {}};
-  comp.$router = [];
+  comp.$route = { params: {} };
+  const arr = [];
+  arr._push = arr.push;
+  comp.$router = arr;
+  comp.$router.push = (obj) => {
+    arr._push(obj);
+    return { then: () => { } }
+  }
 
   const data = global.initComponentData(comp);
-  Object.assign(comp, data, comp.methods, comp.computed);
+  const props = global.initComponentProps(comp);
+  const setup = global.initComponentSetup(comp, props);
+  Object.assign(comp, data, comp.methods, comp.computed, props, setup);
 
   return comp;
 }
@@ -144,6 +202,7 @@ global.mockShowError = function(logError = false) {
 require('./i18n.js');
 require('./app.js');
 
+global.FEAT_TTR = 'ttr';
 global.JobStatusPending = 0;
 global.JobStatusCompleted = 1;
 global.JobStatusIncomplete = 2;
