@@ -2067,7 +2067,13 @@ const huntComponent = {
     },
     performAction($event, action) {
       if (action && action.jsCall && this[action.jsCall]) {
+        this.quickActionVisible = false;
         this[action.jsCall](action);
+        return false;
+      }
+
+      if (!this.$root.performAction($event, action) && action && !action.background) {
+        this.quickActionVisible = false;
         return true;
       }
 

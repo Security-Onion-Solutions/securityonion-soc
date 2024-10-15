@@ -971,7 +971,7 @@ test('performAction', () => {
   let result = comp.performAction(undefined, action);
 
   expect(mock).toHaveBeenCalledTimes(0);
-  expect(result).toBe(false);
+  expect(result).toBe(true); // true means allow the href property to navigate
 
   action.jsCall = 'testFunc';
 
@@ -979,7 +979,7 @@ test('performAction', () => {
 
   expect(mock).toHaveBeenCalledTimes(1);
   expect(mock).toHaveBeenCalledWith(action);
-  expect(result).toBe(true);
+  expect(result).toBe(false);
 
   delete comp.testFunc;
 });
