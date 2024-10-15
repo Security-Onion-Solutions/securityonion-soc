@@ -218,7 +218,7 @@ $(document).ready(function () {
         return content;
       },
       performAction(event, action) {
-        if (action && !action.background) return false;
+        if (action && !action.background) return true;
         const options = action.options ? action.options : { mode: 'no-cors' };
         options.method = action.method;
         if (action.method != 'GET') {
@@ -251,6 +251,7 @@ $(document).ready(function () {
             route.$root.showTip(route.i18n.actionFailure + route.$root.localizeMessage(action.name));
           }
         });
+        return true;
       },
       base64encode(content) {
         try {

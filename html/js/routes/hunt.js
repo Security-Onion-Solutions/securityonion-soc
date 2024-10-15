@@ -2066,18 +2066,19 @@ const huntComponent = {
       this.$router.push(this.buildFilterRoute(this.quickActionField, range, FILTER_INCLUDE, true));
     },
     performAction($event, action) {
+      let shouldNavigate = true;
+
       if (action && action.jsCall && this[action.jsCall]) {
-        this.quickActionVisible = false;
+        // no need to navigate, made JS call instead
         this[action.jsCall](action);
-        return false;
+        shouldNavigate = false;
       }
 
-      if (!this.$root.performAction($event, action) && action && !action.background) {
-        this.quickActionVisible = false;
-        return true;
-      }
+      this.$root.performAction($event, action);
 
-      return false;
+      this.quickActionVisible = false;
+
+      return shouldNavigate;
     },
     async openAddToCaseDialog() {
       // this function is meant to be called by performAction($event, action)
