@@ -680,7 +680,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			let value = '';
 			if (item[field.value]) {
 				value = item[field.value];
-			} else {
+			} else if (field.altValues) {
 				for (let i = 0; i < field.altValues.length; i++) {
 					if (field.altValues[i] === 'countPerSecond') {
 						value = `${item.count} / ${item.seconds}`;
