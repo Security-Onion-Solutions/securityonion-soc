@@ -121,6 +121,7 @@ type HuntingParameters struct {
 	ChartLabelOtherLimit         int                 `json:"chartLabelOtherLimit"`
 	ChartLabelFieldSeparator     string              `json:"chartLabelFieldSeparator"`
 	AggregationActionsEnabled    bool                `json:"aggregationActionsEnabled"`
+	DetectionEngineStatusQueries string              `json:"detectionEngineStatusQueries"`
 }
 
 func (params *HuntingParameters) Verify() error {

@@ -156,6 +156,7 @@ const huntComponent = {
     showBulkDeleteConfirmDialog: false,
     tuneDetectionTabTarget: null,
     eventCurrentItems: [],
+    detectionEngineStatusQueries: {},
   }},
   created() {
     this.$root.initializeCharts();
@@ -255,6 +256,13 @@ const huntComponent = {
       this.chartLabelFieldSeparator = params["chartLabelFieldSeparator"]
       this.presets = params["presets"];
       this.manualSyncTargetEngine = this.getPresets("manualSync")[0];
+      if (params["detectionEngineStatusQueries"]) {
+        try {
+          this.detectionEngineStatusQueries = jsyaml.load(params["detectionEngineStatusQueries"], { schema: jsyaml.FAILSAFE_SCHEMA })
+        } catch {
+          this.detectionEngineStatusQueries = {};
+        }
+      }
       if (this.queries != null && this.queries.length > 0) {
         this.query = this.queries[0].query;
       }
@@ -473,7 +481,6 @@ const huntComponent = {
         for (const q in this.$route.query) {
           this.filterToggles.forEach(toggle => {
             if (toggle.name === q) {
-              const orig = toggle.enabled;
               let enabled = this.$route.query[q];
               if (typeof enabled === 'string') {
                 enabled = enabled.toLowerCase() === 'true';
@@ -2338,6 +2345,21 @@ const huntComponent = {
         this.$root.showError(e);
       }
     },
+    buildDetectionEngineHuntQuery(engine) {
+      const status = this.$root.getDetectionEngineStatus(engine);
+
+      let query = `tags:so-soc AND ` + engine + ` | groupby log.level | groupby event.action | groupby soc.fields.error`;
+
+      if (this.detectionEngineStatusQueries?.[engine]?.default) {
+        query = this.detectionEngineStatusQueries[engine].default;
+      }
+
+      if (this.detectionEngineStatusQueries?.[engine]?.[status]) {
+        query = this.detectionEngineStatusQueries[engine][status];
+      }
+
+      return query;
+    }
   }
 };
 
