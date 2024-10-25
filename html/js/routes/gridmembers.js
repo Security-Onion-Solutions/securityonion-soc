@@ -24,9 +24,12 @@ routes.push({ path: '/gridmembers', name: 'gridmembers', component: {
     rules: {
       required: value => !!value || this.$root.i18n.required,
     },
+    GridMemberAccepted: GridMemberAccepted,
+    GridMemberUnaccepted: GridMemberUnaccepted,
+    GridMemberRejected: GridMemberRejected,
+    GridMemberDenied: GridMemberDenied,
   }},
-  created() { 
-    Vue.filter('colorNodeStatus', this.colorNodeStatus);
+  created() {
   },
   mounted() {
     this.$root.loadParameters("gridmembers", this.initGrid);

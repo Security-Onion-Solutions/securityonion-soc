@@ -4,65 +4,68 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-routes.push({ path: '/config', name: 'config', component: {
-  template: '#page-config',
-  data() { return {
-    i18n: this.$root.i18n,
-    settings: [],
-    search: "",
-    searchFilter: null,
-    autoExpand: false,
-    autoSelect: "",
-    form: {
-      valid: true,
-      key: "",
-      value: "",
-    },
-    duplicate_id_rules: [
-      value => !!value || this.$root.i18n.required,
-      value => (!!value && /^[a-zA-Z0-9_]{3,50}$/.test(value)) || this.$root.i18n.settingDuplicateNameInvalid,
-    ],
+routes.push({
+  path: '/config', name: 'config', component: {
+    template: '#page-config',
+    data() {
+      return {
+        i18n: this.$root.i18n,
+        settings: [],
+        search: "",
+        searchFilter: null,
+        autoExpand: false,
+        autoSelect: "",
+        form: {
+          valid: true,
+          key: "",
+          value: "",
+        },
+        duplicate_id_rules: [
+          value => !!value || this.$root.i18n.required,
+          value => (!!value && /^[a-zA-Z0-9_]{3,50}$/.test(value)) || this.$root.i18n.settingDuplicateNameInvalid,
+        ],
 
-    selectedNode: null,
-    cancelDialog: false,
-    open: [],
-    active: [],
-    activeBackup: [],
-    hierarchy: [],
-    nodes: [],
-    availableNodes: [],
-    advanced: false,
-    settingsCustomized: 0,
-    settingsAvailable: 0,
-    showDefault: false,
-    nextStopId: null,
-    showDuplicate: false,
-    duplicateId: null,
-    duplicateIdValid: false,
-    resetSetting: null,
-    resetNodeId: null,
-    confirmResetDialog: false,
-    treeVisible: true,
-  }},
-  mounted() {
-    this.processRouteParameters();
-    this.loadData();
-  },
-  watch: {
-    "active": "selectSetting",
-    "advanced": "loadData",
+        selectedNode: null,
+        cancelDialog: false,
+        open: [],
+        active: [],
+        activeBackup: [],
+        hierarchy: [],
+        nodes: [],
+        availableNodes: [],
+        advanced: false,
+        settingsCustomized: 0,
+        settingsAvailable: 0,
+        showDefault: false,
+        nextStopId: null,
+        showDuplicate: false,
+        duplicateId: null,
+        duplicateIdValid: false,
+        resetSetting: null,
+        resetNodeId: null,
+        confirmResetDialog: false,
+        treeVisible: true,
+      }
+    },
+    mounted() {
+      this.processRouteParameters();
+      this.loadData();
+    },
+    watch: {
+      "active": "selectSetting",
+      "advanced": "loadData",
+      '$route': "onRouteUpdate",
   },
   computed: {
     selected() {
       return this.findActiveSetting();
     },
   },
-  beforeRouteUpdate(to, from, next) {
-    next();
-    this.processRouteParameters();
-    this.refreshTree();
-  },
   methods: {
+    onRouteUpdate() {
+      this.processRouteParameters();
+      this.refreshTree();
+    },
     processRouteParameters() {
       if (this.$route.query.a == "1") {
         this.advanced = true;
@@ -102,15 +105,17 @@ routes.push({ path: '/config', name: 'config', component: {
       this.search = "";
       this.searchFilter = "";
     },
-    filter(item, search, textKey) {
+    filter(value, search, internalItem) {
       if (!search) return true;
       search = search.toLowerCase();
-      return (item.name && item.name.toLowerCase().indexOf(search) > -1) ||
-             (item.id && item.id.toLowerCase().indexOf(search) > -1) ||
-             (item.value && item.value.toLowerCase().indexOf(search) > -1) ||
-             (item.nodeValues && [...item.nodeValues.keys()].find(k => k.indexOf(search) > -1)) ||
-             (item.title && item.title.toLowerCase().indexOf(search) > -1) ||
-             (item.description && item.description.toLowerCase().indexOf(search) > -1);
+      const item = internalItem.raw;
+      return !!((value && value.toLowerCase().indexOf(search) > -1) ||
+                (item?.name && item?.name.toLowerCase().indexOf(search) > -1) ||
+                (item?.id && item?.id.toLowerCase().indexOf(search) > -1) ||
+                (item?.value && item?.value.toLowerCase().indexOf(search) > -1) ||
+                (item?.nodeValues && [...item?.nodeValues.keys()].find(k => k.indexOf(search) > -1)) ||
+                (item?.title && item?.title.toLowerCase().indexOf(search) > -1) ||
+                (item?.description && item?.description.toLowerCase().indexOf(search) > -1));
     },
     addToNode(node, parent, path, setting) {
       if (node.children == undefined) {
@@ -127,7 +132,7 @@ routes.push({ path: '/config', name: 'config', component: {
         child = node.children.find(n => n.name == name);
         const id = parent ? parent + "." + name : name;
         if (!child) {
-          child = {id: id, name: name, children:[]};
+          child = {id: id, name: name, children: []};
           node.children.push(child);
         }
         this.addToNode(child, id, path, setting);
@@ -214,11 +219,12 @@ routes.push({ path: '/config', name: 'config', component: {
     expand(node = null, filterFn=() => true) {
       if (!node) {
         this.open = [];
-        this.hierarchy.forEach(s => this.expand(s, filterFn));
+        this.hierarchy.forEach(i => this.expand(i, filterFn));
       } else if (node.children) {
         shouldExpand = false;
         node.children.forEach(s => shouldExpand |= this.expand(s, filterFn));
         if (shouldExpand) {
+          node.open = true;
           this.open.push(node.id);
         }
         return shouldExpand;
@@ -241,6 +247,14 @@ routes.push({ path: '/config', name: 'config', component: {
     },
     collapse() {
       this.open = [];
+      const col = (item) => {
+        item.open = false;
+        if (item.children) {
+          item.children.forEach(i => col(i));
+        }
+      }
+
+      this.hierarchy.forEach(i => col(i));
     },
     async loadData() {
       this.$root.startLoading();
@@ -524,7 +538,7 @@ routes.push({ path: '/config', name: 'config', component: {
       const eligible = this.nodes.filter(n => {
         return n.status == GridMemberAccepted && !setting.nodeValues.has(n.id);
       });
-      this.availableNodes = eligible.map(n => { return { text: n.name + " (" + n.role + ")", value: n.id } });
+      this.availableNodes = eligible.map(n => { return { title: n.name + " (" + n.role + ")", value: n.id } });
     },
     toggleDuplicate(setting) {
       this.duplicateId = this.suggestDuplicateName(setting);

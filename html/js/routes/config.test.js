@@ -206,8 +206,8 @@ test('loadData', async () => {
 });
 
 test('getSettingName', () => {
-  expect(comp.getSettingName({id:"fake.setting.foo", name: 'fake'})).toBe("Fake Setting Translated");
-  expect(comp.getSettingName({id:"fake.setting.untranslated", name: "Untranslated Name"})).toBe("Untranslated Name");
+  expect(comp.getSettingName({id:"fake.setting.foo", title: 'fake'})).toBe("Fake Setting Translated");
+  expect(comp.getSettingName({id:"fake.setting.untranslated", title: "Untranslated Name"})).toBe("Untranslated Name");
   expect(comp.getSettingName({id:"fake.setting.untranslated"})).toBe(undefined);
 });
 
@@ -228,20 +228,23 @@ test('findActiveSetting', () => {
 
 test('clearFilter', () => {
   comp.search = "foo";
+  comp.searchFilter = "foo";
   comp.clearFilter();
   expect(comp.search).toBe("");
+  expect(comp.searchFilter).toBe("");
 });
 
 test('filter', () => {
   a.nodeValues['mia-test-001'] = 'hi';
   a.value = 'a1';
-  expect(comp.filter(a, 'foO')).toBe(true);
-  expect(comp.filter(a, 'bY')).toBe(true);
-  expect(comp.filter(a, 'OUt')).toBe(true);
-  expect(comp.filter(a, 'A1')).toBe(true);
-  expect(comp.filter(a, 'FaROut')).toBe(true);
-  expect(comp.filter(a, 'bar')).toBe(false);
-  expect(comp.filter(a)).toBe(true);
+  let ii = { raw: a };
+  expect(comp.filter(a.id, 'foO', ii)).toBe(true);
+  expect(comp.filter(a.id, 'bY', ii)).toBe(true);
+  expect(comp.filter(a.id, 'OUt', ii)).toBe(true);
+  expect(comp.filter(a.id, 'A1', ii)).toBe(true);
+  expect(comp.filter(a.id, 'FaROut', ii)).toBe(true);
+  expect(comp.filter(a.id, 'bar', ii)).toBe(false);
+  expect(comp.filter(a.id, null, ii)).toBe(true);
 });
 
 test('isMultiline', () => {
@@ -325,7 +328,7 @@ test('selectSetting', () => {
   comp.selectSetting();
 
   expect(comp.activeBackup).toStrictEqual(["s-id"]);
-  expect(comp.availableNodes).toStrictEqual([{text: "node2 (standalone)", value: "n2"}]);
+  expect(comp.availableNodes).toStrictEqual([{title: "node2 (standalone)", value: "n2"}]);
   expect(comp.cancelDialog).toBe(false);
   expect(comp.confirmResetDialog).toBe(false);
 });
