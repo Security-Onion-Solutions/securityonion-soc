@@ -21,7 +21,7 @@ func prepareTest(tester *testing.T, email string, id string) (*StaticRbacAuthori
 	user := model.NewUser()
 	user.Email = email
 	user.Id = id
-	ctx = context.WithValue(ctx, web.ContextKeyRequestor, user)
+	ctx = context.WithValue(ctx, web.ContextKeyRequestorId, id)
 
 	auth := NewStaticRbacAuthorizer(server.NewFakeAuthorizedServer(nil))
 	userFiles := []string{"rbac_users.test"}
@@ -136,14 +136,14 @@ func TestGetAssignments_Self(tester *testing.T) {
 	assert.ElementsMatch(tester, expectedRoles, roleMap[auth.identifyUser(user)])
 }
 
-func TestPopulateUserRoles(tester *testing.T) {
+func TestGetRolesForAuthId(tester *testing.T) {
 	auth, ctx, user := prepareTest(tester, "some@one.invalid", "a1-id")
 
-	err := auth.PopulateUserRoles(ctx, user)
+	err, roles := auth.GetRolesForAuthId(ctx, user.Id)
 	assert.NoError(tester, err)
 
 	var expectedRoles = [...]string{"user"}
-	assert.ElementsMatch(tester, expectedRoles, user.Roles)
+	assert.ElementsMatch(tester, expectedRoles, roles)
 }
 
 func TestAddRemoveRole(tester *testing.T) {

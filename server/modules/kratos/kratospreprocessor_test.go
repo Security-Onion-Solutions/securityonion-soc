@@ -45,6 +45,21 @@ func TestPreprocess(tester *testing.T) {
       }
     ]`
 	userstore.client.MockStringResponse(kratosUsersResponseJson, 200, nil)
+	kratosUserResponseJson := `
+	{
+		"credentials": {},
+		"id": "112233",
+		"recovery_addresses": [],
+		"state": "active",
+		"traits": {
+			"email": "",
+			"firstname": "",
+			"lastname": "",
+			"note": ""
+		},
+		"verifiable_addresses": []
+	}`
+	userstore.client.MockStringResponse(kratosUserResponseJson, 200, nil)
 
 	handler := NewKratosPreprocessor(userstore)
 	request, _ := http.NewRequest("GET", "", nil)

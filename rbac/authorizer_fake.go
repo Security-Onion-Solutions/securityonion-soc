@@ -23,7 +23,7 @@ func (fake FakeAuthorizer) CheckContextOperationAuthorized(ctx context.Context, 
 	return model.NewUnauthorized("fake-subject", operation, target)
 }
 
-func (fake FakeAuthorizer) CheckUserOperationAuthorized(user *model.User, operation string, target string) error {
+func (fake FakeAuthorizer) CheckUserOperationAuthorized(userId string, operation string, target string) error {
 	if fake.Authorized {
 
 		return nil

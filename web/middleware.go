@@ -87,8 +87,8 @@ func Respond(w http.ResponseWriter, r *http.Request, statusCode int, obj interfa
 	err, isErr := obj.(error)
 	if isErr {
 		log.WithError(err).WithFields(log.Fields{
-			"requestId": ctx.Value(ContextKeyRequestId),
-			"requestor": ctx.Value(ContextKeyRequestor),
+			"requestId":   ctx.Value(ContextKeyRequestId),
+			"requestorId": ctx.Value(ContextKeyRequestorId),
 		}).Warn("Request did not complete successfully")
 
 		var unauthorizedError *model.Unauthorized
@@ -150,7 +150,7 @@ func Respond(w http.ResponseWriter, r *http.Request, statusCode int, obj interfa
 		"requestMethod": r.Method,
 		"elapsedMs":     elapsed,
 		"requestId":     ctx.Value(ContextKeyRequestId),
-		"requestor":     ctx.Value(ContextKeyRequestor),
+		"requestorId":   ctx.Value(ContextKeyRequestorId),
 	}).Info("Handled request")
 }
 

@@ -26,7 +26,7 @@ type rejectAuthorizer struct{}
 func (auth *rejectAuthorizer) CheckContextOperationAuthorized(ctx context.Context, operation string, target string) error {
 	return model.NewUnauthorized("", operation, target)
 }
-func (auth *rejectAuthorizer) CheckUserOperationAuthorized(user *model.User, operation string, target string) error {
+func (auth *rejectAuthorizer) CheckUserOperationAuthorized(userId string, operation string, target string) error {
 	return model.NewUnauthorized("", operation, target)
 }
 

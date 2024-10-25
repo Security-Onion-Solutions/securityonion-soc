@@ -24,7 +24,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
 )
 
-const GENERIC_ERROR_MESSAGE = "The request could not be processed. Contact a server admin for assistance with reviewing error details in SOC logs."
+const GENERIC_ERROR_MESSAGE = "The request could not be processed."
 
 type ContextKey string
 
@@ -158,7 +158,7 @@ func (host *Host) Broadcast(kind string, reqPermission string, obj interface{}) 
 		Object: obj,
 	}
 	for _, connection := range host.connections {
-		if err := host.Authorizer.CheckUserOperationAuthorized(connection.user, "read", reqPermission); err == nil {
+		if err := host.Authorizer.CheckUserOperationAuthorized(connection.user.Id, "read", reqPermission); err == nil {
 			log.WithFields(log.Fields{
 				"messageKind": kind,
 				// "remoteAddr": connection.websocket.RemoteAddr().String(),

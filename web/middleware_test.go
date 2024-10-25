@@ -123,14 +123,14 @@ func TestRespond(t *testing.T) {
 			Name:         "Unauthorized - 401",
 			StatusCode:   http.StatusOK,
 			Obj:          &model.Unauthorized{},
-			ExpectedBody: []byte(`The request could not be processed. Contact a server admin for assistance with reviewing error details in SOC logs.`),
+			ExpectedBody: []byte(`The request could not be processed.`),
 			ExpectedCode: http.StatusUnauthorized,
 		},
 		{
 			Name:         "200 but Error",
 			StatusCode:   http.StatusOK,
 			Obj:          io.EOF,
-			ExpectedBody: []byte(`The request could not be processed. Contact a server admin for assistance with reviewing error details in SOC logs.`),
+			ExpectedBody: []byte(`The request could not be processed.`),
 			ExpectedCode: http.StatusInternalServerError,
 		},
 		{
@@ -144,7 +144,7 @@ func TestRespond(t *testing.T) {
 			Name:         "Error Writing - 500",
 			StatusCode:   http.StatusOK,
 			Obj:          circle,
-			ExpectedBody: []byte(`The request could not be processed. Contact a server admin for assistance with reviewing error details in SOC logs.`),
+			ExpectedBody: []byte(`The request could not be processed.`),
 			ExpectedCode: http.StatusInternalServerError,
 		},
 	}

@@ -123,15 +123,26 @@ func TestListAvailableFeatures(tester *testing.T) {
 
 	Init(EXPIRED_KEY)
 	manager.status = LICENSE_STATUS_ACTIVE
-	assert.Len(tester, ListAvailableFeatures(), 8)
-	assert.Equal(tester, ListAvailableFeatures()[0], FEAT_FPS)
-	assert.Equal(tester, ListAvailableFeatures()[1], FEAT_GMD)
-	assert.Equal(tester, ListAvailableFeatures()[2], FEAT_LKS)
-	assert.Equal(tester, ListAvailableFeatures()[3], FEAT_NTF)
-	assert.Equal(tester, ListAvailableFeatures()[4], FEAT_ODC)
-	assert.Equal(tester, ListAvailableFeatures()[5], FEAT_STG)
-	assert.Equal(tester, ListAvailableFeatures()[6], FEAT_TTR)
-	assert.Equal(tester, ListAvailableFeatures()[7], FEAT_RPT)
+	idx := 0
+	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_API)
+	idx += 1
+	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_FPS)
+	idx += 1
+	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_GMD)
+	idx += 1
+	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_LKS)
+	idx += 1
+	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_NTF)
+	idx += 1
+	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_ODC)
+	idx += 1
+	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_STG)
+	idx += 1
+	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_TTR)
+	idx += 1
+	assert.Equal(tester, ListAvailableFeatures()[idx], FEAT_RPT)
+	idx += 1
+	assert.Len(tester, ListAvailableFeatures(), idx)
 }
 
 func TestListEnabledFeaturesUnprovisioned(tester *testing.T) {
@@ -157,14 +168,14 @@ func TestGetLicenseKey(tester *testing.T) {
 	assert.Equal(tester, key.Nodes, 1)
 	assert.Equal(tester, key.SocUrl, "https://somewhere.invalid")
 	assert.Equal(tester, key.DataUrl, "https://another.place")
-	assert.Len(tester, key.Features, 8)
+	assert.Len(tester, key.Features, 9)
 
 	// Modify the returned object and make sure it doesn't affect the orig object
 	key.Users = 100
 	key.Features = append(key.Features, "foo")
 	assert.Equal(tester, GetLicenseKey().Users, 1)
-	assert.Len(tester, key.Features, 9)
-	assert.Len(tester, GetLicenseKey().Features, 8)
+	assert.Len(tester, key.Features, 10)
+	assert.Len(tester, GetLicenseKey().Features, 9)
 }
 
 func TestGetStatus(tester *testing.T) {

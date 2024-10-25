@@ -35,7 +35,7 @@ func RegisterInfoRoutes(srv *Server, r chi.Router, prefix string) {
 }
 
 func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(web.ContextKeyRequestor).(*model.User)
+	userId, ok := r.Context().Value(web.ContextKeyRequestorId).(string)
 	if !ok {
 		err := errors.New("Unable to determine logged in user from context")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -43,7 +43,13 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	srvToken, err := model.GenerateSrvToken(h.server.Config.SrvKeyBytes, user.Id, h.server.Config.SrvExpSeconds)
+	srvToken, err := model.GenerateSrvToken(h.server.Config.SrvKeyBytes, userId, h.server.Config.SrvExpSeconds)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	user, err := h.server.Userstore.GetUserById(r.Context(), userId)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
@@ -58,7 +64,7 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 		LicenseStatus:  licensing.GetStatus(),
 		Parameters:     &h.server.Config.ClientParams,
 		ElasticVersion: os.Getenv("ELASTIC_VERSION"),
-		UserId:         user.Id,
+		UserId:         userId,
 		Timezones:      h.timezones,
 		SrvToken:       srvToken,
 		ForceUserOtp:   forceUserOtp,

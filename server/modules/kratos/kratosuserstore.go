@@ -68,7 +68,7 @@ func (kratos *KratosUserstore) GetUserById(ctx context.Context, id string) (*mod
 
 		kratosUser.copyToUser(user)
 		if kratos.server.Rolestore != nil {
-			kratos.server.Rolestore.PopulateUserRoles(ctx, user)
+			_, user.Roles = kratos.server.Rolestore.GetRolesForAuthId(ctx, user.Id)
 		}
 	}
 
@@ -76,11 +76,11 @@ func (kratos *KratosUserstore) GetUserById(ctx context.Context, id string) (*mod
 }
 
 func (kratos *KratosUserstore) GetUsers(ctx context.Context) ([]*model.User, error) {
-	users := make([]*model.User, 0, 0)
-	myUserOnly := make([]*model.User, 0, 0)
+	users := make([]*model.User, 0)
+	myUserOnly := make([]*model.User, 0)
 
 	if requestorId, ok := ctx.Value(web.ContextKeyRequestorId).(string); ok {
-		kratosUsers := make([]*KratosUser, 0, 0)
+		kratosUsers := make([]*KratosUser, 0)
 		_, err := kratos.client.SendObject("GET", "/identities", "", &kratosUsers, false)
 		if err != nil {
 			log.WithError(err).WithFields(log.Fields{
@@ -102,7 +102,7 @@ func (kratos *KratosUserstore) GetUsers(ctx context.Context) ([]*model.User, err
 
 			kratosUser.copyToUser(user)
 			if kratos.server.Rolestore != nil {
-				kratos.server.Rolestore.PopulateUserRoles(ctx, user)
+				_, user.Roles = kratos.server.Rolestore.GetRolesForAuthId(ctx, user.Id)
 			}
 			users = append(users, user)
 			if user.Status != "locked" {

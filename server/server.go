@@ -28,7 +28,9 @@ type Server struct {
 	Config           *config.ServerConfig
 	Host             *web.Host
 	Datastore        Datastore
+	AdminClientstore AdminClientstore
 	AdminUserstore   AdminUserstore
+	Clientstore      Clientstore
 	Userstore        Userstore
 	Rolestore        Rolestore
 	Eventstore       Eventstore
@@ -65,7 +67,7 @@ func (server *Server) initContext() {
 	server.Agent.Email = server.Agent.Id
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestor, server.Agent)
-	ctx = context.WithValue(ctx, web.ContextKeyRequestorId, AGENT_ID)
+	ctx = context.WithValue(context.Background(), web.ContextKeyRequestorId, AGENT_ID)
 
 	server.Context = ctx
 }
@@ -91,6 +93,7 @@ func (server *Server) Start() {
 		RegisterGridRoutes(server, r, "/api/grid")
 		RegisterStreamRoutes(server, r, "/api/stream")
 		RegisterUsersRoutes(server, r, "/api/users")
+		RegisterClientsRoutes(server, r, "/api/clients")
 		RegisterConfigRoutes(server, r, "/api/config")
 		RegisterGridMemberRoutes(server, r, "/api/gridmembers")
 		RegisterRolesRoutes(server, r, "/api/roles")

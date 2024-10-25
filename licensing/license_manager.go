@@ -39,6 +39,7 @@ const LICENSE_STATUS_INVALID = "invalid"
 const LICENSE_STATUS_PENDING = "pending"
 const LICENSE_STATUS_UNPROVISIONED = "unprovisioned"
 
+const FEAT_API = "api"
 const FEAT_FPS = "fps"
 const FEAT_GMD = "gmd"
 const FEAT_LKS = "lks"
@@ -166,7 +167,8 @@ func verify(key string) (*LicenseKey, error) {
 }
 
 func CreateAvailableFeatureList() []string {
-	available := make([]string, 0, 0)
+	available := make([]string, 0)
+	available = append(available, FEAT_API)
 	available = append(available, FEAT_FPS)
 	available = append(available, FEAT_GMD)
 	available = append(available, FEAT_LKS)

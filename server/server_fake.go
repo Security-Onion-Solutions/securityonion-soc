@@ -44,9 +44,8 @@ func (impl *FakeRolestore) GetAssignments(ctx context.Context) (map[string][]str
 	return impl.roleMap, nil
 }
 
-func (impl *FakeRolestore) PopulateUserRoles(ctx context.Context, user *model.User) error {
-	user.Roles = impl.roleMap[user.Email]
-	return nil
+func (impl *FakeRolestore) GetRolesForAuthId(ctx context.Context, id string) (error, []string) {
+	return nil, impl.roleMap[id]
 }
 
 func (impl *FakeRolestore) GetRoles(ctx context.Context) []string {

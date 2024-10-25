@@ -8,14 +8,12 @@ package server
 
 import (
 	"context"
-
-	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type Rolestore interface {
 	Reload()
 	GetAssignments(ctx context.Context) (map[string][]string, error)
-	PopulateUserRoles(ctx context.Context, user *model.User) error
+	GetRolesForAuthId(ctx context.Context, id string) (error, []string)
 
 	/**
 	 * Return only top-level roles (roles that are not a child of another role.
