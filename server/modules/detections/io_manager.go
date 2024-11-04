@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -21,6 +22,7 @@ import (
 	"github.com/apex/log"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/security-onion-solutions/securityonion-soc/config"
 )
 
@@ -37,7 +39,7 @@ type IOManager interface {
 	ExecCommand(cmd *exec.Cmd) ([]byte, int, time.Duration, error)
 	WalkDir(root string, fn fs.WalkDirFunc) error
 	CloneRepo(ctx context.Context, path string, repo string, branch *string) (err error)
-	PullRepo(ctx context.Context, path string, branch *string) (pulled bool, reclone bool)
+	PullRepo(ctx context.Context, path string, branch *string) (pulled bool, reclone bool, failSync bool)
 }
 
 type ResourceManager struct {
@@ -146,19 +148,19 @@ func (rm *ResourceManager) CloneRepo(ctx context.Context, path string, repo stri
 	return err
 }
 
-func (rm *ResourceManager) PullRepo(ctx context.Context, path string, branch *string) (pulled bool, reclone bool) {
+func (rm *ResourceManager) PullRepo(ctx context.Context, path string, branch *string) (pulled bool, reclone bool, failSync bool) {
 	gitrepo, err := git.PlainOpen(path)
 	if err != nil {
 		log.WithError(err).WithField("repoPath", path).Error("failed to open repo, doing nothing with it")
 
-		return false, true
+		return false, true, false
 	}
 
 	work, err := gitrepo.Worktree()
 	if err != nil {
 		log.WithError(err).WithField("repoPath", path).Error("failed to get worktree, doing nothing with it")
 
-		return false, true
+		return false, true, false
 	}
 
 	err = work.Reset(&git.ResetOptions{
@@ -167,7 +169,7 @@ func (rm *ResourceManager) PullRepo(ctx context.Context, path string, branch *st
 	if err != nil {
 		log.WithError(err).WithField("repoPath", path).Error("failed to reset worktree, doing nothing with it")
 
-		return false, true
+		return false, true, false
 	}
 
 	proxyOpts, err := proxyToTransportOptions(rm.Config.Proxy)
@@ -191,8 +193,10 @@ func (rm *ResourceManager) PullRepo(ctx context.Context, path string, branch *st
 	if err != nil && err != git.NoErrAlreadyUpToDate {
 		log.WithError(err).WithField("repoPath", path).Error("failed to pull repo, doing nothing with it")
 
-		return false, true
+		failSync = errors.Is(err, transport.ErrRepositoryNotFound)
+
+		return false, !failSync, failSync
 	}
 
-	return err == nil, false
+	return err == nil, false, false
 }
