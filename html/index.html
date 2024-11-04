@@ -2396,7 +2396,7 @@
               <template #item="{ item, isExpanded, toggleExpand, internalItem }">
                 <tr>
                   <td v-if="$root.isUserAdmin()">
-                    <v-btn id="expandNode" icon variant="text" size="small" @click="if (!isExpanded(internalItem)) updateForm(item); toggleExpand(internalItem)" data-aid="users_details_expand">
+                    <v-btn id="expandNode" icon variant="text" size="small" @click="if (!isExpanded(internalItem)) { updateForm(item); } toggleExpand(internalItem)" data-aid="users_details_expand">
                       <v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="users_details_collapse">fa-angle-down</v-icon>
                       <v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="users_details_expand">fa-angle-right</v-icon>
                     </v-btn>
