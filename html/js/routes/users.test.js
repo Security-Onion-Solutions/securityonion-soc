@@ -100,3 +100,21 @@ test('hasRole', () => {
   expect(comp.hasRole({roles: ['foo']}, 'test')).toBe(false);
   expect(comp.hasRole({roles: ['foo','test']}, 'test')).toBe(true);
 });
+
+test('onlyExpandOneRow', () => {
+  comp.expanded = [];
+  comp.onlyExpandOneRow();
+  expect(comp.expanded).toEqual([]);
+
+  comp.expanded = ['1'];
+  comp.onlyExpandOneRow();
+  expect(comp.expanded).toEqual(['1']);
+
+  comp.expanded = ['1', '2'];
+  comp.onlyExpandOneRow();
+  expect(comp.expanded).toEqual(['2']);
+
+  comp.expanded = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
+  comp.onlyExpandOneRow();
+  expect(comp.expanded).toEqual(['10']);
+});
