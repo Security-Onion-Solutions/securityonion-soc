@@ -2007,7 +2007,7 @@ func parseIgnoredSidRanges(settingValue string) []Range {
 
 		parts := strings.Split(line, "-")
 		if len(parts) != 2 {
-			log.WithField("line", line).Warn("invalid SID range to ignore, expected format is 'lower-upper', skipping this range")
+			log.WithField("ignoredSidLine", line).Warn("invalid SID range to ignore, expected format is 'lower-upper', skipping this range")
 			continue
 		}
 
@@ -2015,27 +2015,40 @@ func parseIgnoredSidRanges(settingValue string) []Range {
 
 		lower, err := strconv.ParseUint(num, 10, 64)
 		if err != nil {
-			log.WithField("lower", num).Warn("invalid SID range to ignore, lower limit is not a valid number, skipping this range")
+			log.WithFields(log.Fields{
+				"lowerLimit":     num,
+				"ignoredSidLine": line,
+			}).Warn("invalid SID range to ignore, lower limit is not a valid number, skipping this range")
+
+			continue
 		}
 
 		num = strings.TrimSpace(parts[1])
 
 		upper, err := strconv.ParseUint(num, 10, 64)
 		if err != nil {
-			log.WithField("upper", num).Warn("invalid SID range to ignore, upper limit is not a valid number, skipping this range")
+			log.WithFields(log.Fields{
+				"upperLimit":     num,
+				"ignoredSidLine": line,
+			}).Warn("invalid SID range to ignore, upper limit is not a valid number, skipping this range")
+
+			continue
 		}
 
-		if lower <= upper {
-			ranges = append(ranges, Range{
-				LowerLimit: lower,
-				UpperLimit: upper,
-			})
-		} else {
+		if lower > upper {
 			log.WithFields(log.Fields{
-				"lower": lower,
-				"upper": upper,
-			}).Warn("invalid SID range to ignore, lower is greater than upper, skipping this range")
+				"lowerLimit":     lower,
+				"upperLimit":     upper,
+				"ignoredSidLine": line,
+			}).Warn("invalid SID range to ignore, lowerLimit is greater than upperLimit, skipping this range")
+
+			continue
 		}
+
+		ranges = append(ranges, Range{
+			LowerLimit: lower,
+			UpperLimit: upper,
+		})
 	}
 
 	return ranges
