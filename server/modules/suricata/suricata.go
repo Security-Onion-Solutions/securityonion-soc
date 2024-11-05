@@ -2060,7 +2060,7 @@ func filterOutSIDsInRanges(sids []string, ranges []Range) []string {
 	for _, sid := range sids {
 		num, err := strconv.ParseUint(sid, 10, 64)
 		if err != nil {
-			log.WithField("sid", sid).Warn("unable to parse SID, skipping")
+			log.WithField("unparsedSid", sid).Warn("unable to parse SID, skipping")
 			continue
 		}
 
