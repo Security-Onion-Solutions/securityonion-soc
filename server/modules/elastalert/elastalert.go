@@ -391,8 +391,10 @@ func (e *ElastAlertEngine) ExtractDetails(detect *model.Detection) error {
 		detect.Author = *rule.Author
 	}
 
+	formats := []string{"2006-01-02", "2006/01/02", "2006_01_02"}
+
 	if rule.Date != nil {
-		t, dateErr := time.Parse("2006-01-02", *rule.Date)
+		t, dateErr := detections.ParseDate(*rule.Date, formats)
 		if dateErr == nil {
 			detect.SourceCreated = &t
 		} else {
@@ -401,7 +403,7 @@ func (e *ElastAlertEngine) ExtractDetails(detect *model.Detection) error {
 	}
 
 	if rule.Modified != nil {
-		t, dateErr := time.Parse("2006-01-02", *rule.Modified)
+		t, dateErr := detections.ParseDate(*rule.Modified, formats)
 		if dateErr == nil {
 			detect.SourceUpdated = &t
 		} else {

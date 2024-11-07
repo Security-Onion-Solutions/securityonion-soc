@@ -314,6 +314,8 @@ func (e *SuricataEngine) ExtractDetails(detect *model.Detection) error {
 
 	detect.Severity = model.SeverityUnknown
 
+	formats := []string{"2006-01-02", "2006/01/02", "2006_01_02"}
+
 	md := rule.ParseMetaData()
 	for _, meta := range md {
 		if strings.EqualFold(meta.Key, "signature_severity") {
@@ -328,14 +330,14 @@ func (e *SuricataEngine) ExtractDetails(detect *model.Detection) error {
 				detect.Severity = model.SeverityCritical
 			}
 		} else if strings.EqualFold(meta.Key, "created_at") {
-			t, err := time.Parse("2006_01_02", meta.Value)
+			t, err := detections.ParseDate(meta.Value, formats)
 			if err == nil {
 				detect.SourceCreated = &t
 			} else {
 				log.WithField("created_at", meta.Value).WithError(err).Warn("unable to parse date")
 			}
 		} else if strings.EqualFold(meta.Key, "updated_at") {
-			t, err := time.Parse("2006_01_02", meta.Value)
+			t, err := detections.ParseDate(meta.Value, formats)
 			if err == nil {
 				detect.SourceUpdated = &t
 			} else {
