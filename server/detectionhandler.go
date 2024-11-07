@@ -185,6 +185,12 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	_, err = engine.ApplyFilters(detect)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
 	err = engine.ExtractDetails(detect)
 	if err != nil {
 		if err.Error() == "rule does not contain a public Id" {
@@ -193,12 +199,6 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 			web.Respond(w, r, http.StatusBadRequest, err)
 		}
 
-		return
-	}
-
-	_, err = engine.ApplyFilters(detect)
-	if err != nil {
-		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
@@ -335,6 +335,17 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 	filterApplied, err := engine.ApplyFilters(detect)
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	err = engine.ExtractDetails(detect)
+	if err != nil {
+		if err.Error() == "rule does not contain a public Id" {
+			web.Respond(w, r, http.StatusBadRequest, "missingPublicIdErr")
+		} else {
+			web.Respond(w, r, http.StatusBadRequest, err)
+		}
+
 		return
 	}
 

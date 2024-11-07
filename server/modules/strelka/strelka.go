@@ -276,7 +276,7 @@ func (s *StrelkaEngine) ExtractDetails(detect *model.Detection) error {
 		formats := []string{"2006-01-02", "2006/01/02", "2006_01_02"}
 		t, err := detections.ParseDate(*rule.Meta.Date, formats)
 		if err == nil {
-			detect.CreateTime = &t
+			detect.SourceCreated = &t
 		} else {
 			log.WithField("meta.date", *rule.Meta.Date).WithError(err).Warn("unable to parse date")
 		}
