@@ -657,6 +657,25 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 			}
 		}
 
+		engine, ok := h.server.DetectionEngines[detect.Engine]
+		if !ok {
+			logger.WithFields(log.Fields{
+				"publicId": detect.PublicID,
+				"engine":   detect.Engine,
+			}).Error("detection has unsupported engine, skipping")
+			errMap[detect.PublicID] = "unsupported engine"
+
+			continue
+		}
+
+		exErr := engine.ExtractDetails(detect)
+		if exErr != nil {
+			logger.WithField("publicId", detect.PublicID).WithError(exErr).Warn("unable to extract details from detection, skipping")
+			errMap[detect.PublicID] = fmt.Sprintf("unable to extract details: %s", exErr.Error())
+
+			continue
+		}
+
 		document, index, err := h.server.Detectionstore.ConvertObjectToDocument(ctx, "detection", detect, &detect.Auditable, !body.Delete, nil, nil)
 		if err != nil {
 			errMap[detect.PublicID] = err.Error()

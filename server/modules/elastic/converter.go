@@ -880,6 +880,18 @@ func convertElasticEventToDetection(event *model.EventRecord, schemaPrefix strin
 					obj.Tags = append(obj.Tags, tag.(string))
 				}
 			}
+			if value, ok := event.Payload[schemaPrefix+"detection.sourceCreated"]; ok && value != nil {
+				t, dateErr := time.Parse(time.RFC3339, value.(string))
+				if dateErr == nil {
+					obj.SourceCreated = &t
+				}
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.sourceUpdated"]; ok && value != nil {
+				t, dateErr := time.Parse(time.RFC3339, value.(string))
+				if dateErr == nil {
+					obj.SourceUpdated = &t
+				}
+			}
 			if value, ok := event.Payload[schemaPrefix+"detection.overrides"]; ok && value != nil {
 				obj.Overrides = convertElasticEventToOverride(value.([]interface{}))
 			}

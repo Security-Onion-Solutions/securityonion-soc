@@ -272,6 +272,15 @@ func (s *StrelkaEngine) ExtractDetails(detect *model.Detection) error {
 		detect.Author = *rule.Meta.Author
 	}
 
+	if rule.Meta.Date != nil {
+		t, err := time.Parse("2006-01-02", *rule.Meta.Date)
+		if err == nil {
+			detect.CreateTime = &t
+		} else {
+			log.WithField("meta.date", *rule.Meta.Date).WithError(err).Warn("unable to parse date")
+		}
+	}
+
 	return nil
 }
 
@@ -476,6 +485,14 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 			"rule.name": detect.Title,
 		}).Info("syncing YARA detection")
 
+		exErr := e.ExtractDetails(detect)
+		if exErr != nil {
+			logger.WithField("publicId", detect.PublicID).WithError(exErr).Warn("unable to extract details from detection, skipping")
+			errMap[detect.PublicID] = exErr
+
+			continue
+		}
+
 		orig, exists := communityDetections[detect.PublicID]
 		if exists {
 			// pre-existing detection, update it
@@ -501,7 +518,13 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 		}
 
 		if exists {
-			if orig.Content != detect.Content || orig.Ruleset != detect.Ruleset || len(detect.Overrides) != 0 {
+			hasChanged := orig.Content != detect.Content
+			hasChanged = hasChanged || orig.Ruleset != detect.Ruleset
+			hasChanged = hasChanged || len(detect.Overrides) != 0
+			hasChanged = hasChanged || !util.Equal(orig.SourceCreated, detect.SourceCreated)
+			hasChanged = hasChanged || !util.Equal(orig.SourceUpdated, detect.SourceUpdated)
+
+			if hasChanged {
 				logger.WithFields(log.Fields{
 					"rule.uuid": detect.PublicID,
 					"rule.name": detect.Title,

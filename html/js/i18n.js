@@ -284,6 +284,7 @@ const i18n = {
       datePreselect7dToNow: '7 Days ago to Now',
       datePreselect30dToNow: '30 Days ago to Now',
       dateTimeFormat: 'lll',
+      dateFormat: 'YYYY-MM-DD',
       dateUnknown: '',
       dateUpdated: 'Last Heard From',
       days: 'days',

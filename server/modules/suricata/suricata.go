@@ -327,8 +327,20 @@ func (e *SuricataEngine) ExtractDetails(detect *model.Detection) error {
 			case "critical":
 				detect.Severity = model.SeverityCritical
 			}
-
-			break
+		} else if strings.EqualFold(meta.Key, "created_at") {
+			t, err := time.Parse("2006_01_02", meta.Value)
+			if err == nil {
+				detect.SourceCreated = &t
+			} else {
+				log.WithField("created_at", meta.Value).WithError(err).Warn("unable to parse date")
+			}
+		} else if strings.EqualFold(meta.Key, "updated_at") {
+			t, err := time.Parse("2006_01_02", meta.Value)
+			if err == nil {
+				detect.SourceUpdated = &t
+			} else {
+				log.WithField("updated_at", meta.Value).WithError(err).Warn("unable to parse date")
+			}
 		}
 	}
 
@@ -1207,6 +1219,14 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 			"rule.name": detect.Title,
 		}).Info("syncing rule")
 
+		exErr := e.ExtractDetails(detect)
+		if exErr != nil {
+			logger.WithField("publicId", detect.PublicID).WithError(exErr).Warn("unable to extract details from detection, skipping")
+			errMap[detect.PublicID] = fmt.Sprintf("unable to extract details; reason=%s", exErr.Error())
+
+			continue
+		}
+
 		orig, exists := commSIDs[detect.PublicID]
 		if exists {
 			_, isSpecificallyEnabled := enabledIndex[detect.PublicID]
@@ -1266,7 +1286,13 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 		}
 
 		if exists {
-			if orig.Content != detect.Content || orig.Ruleset != detect.Ruleset || len(detect.Overrides) != 0 || orig.IsEnabled != detect.IsEnabled {
+			hasChanged := orig.Content != detect.Content
+			hasChanged = hasChanged || orig.Ruleset != detect.Ruleset
+			hasChanged = hasChanged || len(detect.Overrides) != 0
+			hasChanged = hasChanged || !util.Equal(orig.SourceCreated, detect.SourceCreated)
+			hasChanged = hasChanged || !util.Equal(orig.SourceUpdated, detect.SourceUpdated)
+
+			if hasChanged {
 				logger.WithFields(log.Fields{
 					"rule.uuid": detect.PublicID,
 					"rule.name": detect.Title,

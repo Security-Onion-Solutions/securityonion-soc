@@ -2040,13 +2040,13 @@
                     {{ i18n.dateCreated }}:
                   </div>
                   <div class="ops-value" data-aid="detection_metadata_public_created_time_display">
-                    {{ extractedCreated }}
+                    {{ formatUTCDate(detect.sourceCreated) }}
                   </div>
                   <div class="ops-header">
                     {{ i18n.dateModified }}:
                   </div>
                   <div class="ops-value" data-aid="detection_metadata_public_updated_time_display">
-                    {{ extractedUpdated }}
+                    {{ formatUTCDate(detect.sourceUpdated) }}
                   </div>
                   <div class="ops-header">
                     {{ i18n.author }}:
