@@ -185,6 +185,12 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	_, err = engine.ApplyFilters(detect)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
 	err = engine.ExtractDetails(detect)
 	if err != nil {
 		if err.Error() == "rule does not contain a public Id" {
@@ -193,12 +199,6 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 			web.Respond(w, r, http.StatusBadRequest, err)
 		}
 
-		return
-	}
-
-	_, err = engine.ApplyFilters(detect)
-	if err != nil {
-		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
@@ -335,6 +335,17 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 	filterApplied, err := engine.ApplyFilters(detect)
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	err = engine.ExtractDetails(detect)
+	if err != nil {
+		if err.Error() == "rule does not contain a public Id" {
+			web.Respond(w, r, http.StatusBadRequest, "missingPublicIdErr")
+		} else {
+			web.Respond(w, r, http.StatusBadRequest, err)
+		}
+
 		return
 	}
 
@@ -655,6 +666,25 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 			if filterApplied && detect.IsEnabled != body.NewStatus {
 				filtered++
 			}
+		}
+
+		engine, ok := h.server.DetectionEngines[detect.Engine]
+		if !ok {
+			logger.WithFields(log.Fields{
+				"publicId": detect.PublicID,
+				"engine":   detect.Engine,
+			}).Error("detection has unsupported engine, skipping")
+			errMap[detect.PublicID] = "unsupported engine"
+
+			continue
+		}
+
+		exErr := engine.ExtractDetails(detect)
+		if exErr != nil {
+			logger.WithField("publicId", detect.PublicID).WithError(exErr).Warn("unable to extract details from detection, skipping")
+			errMap[detect.PublicID] = fmt.Sprintf("unable to extract details: %s", exErr.Error())
+
+			continue
 		}
 
 		document, index, err := h.server.Detectionstore.ConvertObjectToDocument(ctx, "detection", detect, &detect.Auditable, !body.Delete, nil, nil)

@@ -650,6 +650,16 @@ $(document).ready(function () {
         }
         return formatted;
       },
+      formatUTCDate(date) {
+        let formatted = '';
+        if (date) {
+          const dateObj = moment.utc(String(date));
+          if (dateObj.isAfter('1000-01-01')) {
+            formatted = dateObj.format(this.i18n.dateFormat);
+          }
+        }
+        return formatted;
+      },
       formatDuration(duration) {
         if (duration != null) {
           return moment.duration(duration,"s").humanize();
@@ -1310,6 +1320,7 @@ $(document).ready(function () {
       this.setFavicon();
 
       const filters = {
+        formatUTCDate: this.formatUTCDate,
         formatDateTime: this.formatDateTime,
         formatDuration: this.formatDuration,
         formatHours: this.formatHours,

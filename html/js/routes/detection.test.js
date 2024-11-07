@@ -27,9 +27,6 @@ test('extract suricata', () => {
 	expect(comp.extractedSummary).toBe('test');
 	comp.extractLogic();
 	expect(comp.extractedLogic).toBe('');
-	comp.extractDetails();
-	expect(comp.extractedCreated).toBe('');
-	expect(comp.extractedUpdated).toBe('');
 
 	comp.detect = {
 		engine: 'suricata',
@@ -40,7 +37,6 @@ test('extract suricata', () => {
 	comp.extractSummary();
 	comp.extractReferences();
 	comp.extractLogic();
-	comp.extractDetails();
 
 	expect(comp.extractedSummary).toBe('Summary');
 	expect(comp.extractedReferences).toEqual([
@@ -49,8 +45,6 @@ test('extract suricata', () => {
 	]);
 	expect(comp.extractedLogic).toBe('any any <> any any');
 	expect(comp.extractedLogicClass).toBe('language-suricata-logic');
-	expect(comp.extractedCreated).toBe('2020-01-01');
-	expect(comp.extractedUpdated).toBe('2020-01-02');
 });
 
 test('extract strelka', () => {
@@ -85,7 +79,6 @@ test('extract strelka', () => {
 	comp.extractSummary();
 	comp.extractReferences();
 	comp.extractLogic();
-	comp.extractDetails();
 
 	expect(comp.extractedSummary).toBe('Example Rule');
 	expect(comp.extractedReferences).toEqual([
@@ -94,8 +87,6 @@ test('extract strelka', () => {
 	]);
 	expect(comp.extractedLogic).toBe('strings:\n$a = "test"\ncondition:\n$a');
 	expect(comp.extractedLogicClass).toBe('language-yara');
-	expect(comp.extractedCreated).toBe('2020-01-01');
-	expect(comp.extractedUpdated).toBe('');
 });
 
 test('extract elastalert', () => {
@@ -118,7 +109,6 @@ test('extract elastalert', () => {
 	comp.extractSummary();
 	comp.extractReferences();
 	comp.extractLogic();
-	comp.extractDetails();
 
 	expect(comp.extractedSummary).toBe('Detects indicators of APT 29 (Cozy Bear) phishing-campaign as reported by mandiant');
 	expect(comp.extractedReferences).toEqual([
@@ -127,8 +117,6 @@ test('extract elastalert', () => {
 	]);
 	expect(comp.extractedLogic).toBe('logsource:\n  product: windows\n  category: file_event\ndetection:\n  selection:\n    TargetFilename|contains:\n      - ds7002.lnk\n      - ds7002.pdf\n      - ds7002.zip\n    condition: selection');
 	expect(comp.extractedLogicClass).toBe('language-yaml');
-	expect(comp.extractedCreated).toBe('2018/11/20');
-	expect(comp.extractedUpdated).toBe('2023/02/20');
 
 	// content with no description
 	comp.detect.content = `title: APT29 2018 Phishing Campaign File Indicators\nid: 3a3f81ca-652c-482b-adeb-b1c804727f74\nrelated:\n  - id: 7453575c-a747-40b9-839b-125a0aae324b # ProcessCreation\n    type: derived\nstatus: stable\nreferences:\n  - https://twitter.com/DrunkBinary/status/1063075530180886529\n  - https://www.mandiant.com/resources/blog/not-so-cozy-an-uncomfortable-examination-of-a-suspected-apt29-phishing-campaign\nauthor: '@41thexplorer'\ndate: 2018/11/20\nmodified: 2023/02/20\ntags:\n  - attack.defense_evasion\n  - attack.t1218.011\n  - detection.emerging_threats\nlogsource:\n  product: windows\n  category: file_event\ndetection:\n  selection:\n    TargetFilename|contains:\n      - 'ds7002.lnk'\n      - 'ds7002.pdf'\n      - 'ds7002.zip'\n    condition: selection\nfalsepositives:\n  - Unlikely\nlevel: critical`;

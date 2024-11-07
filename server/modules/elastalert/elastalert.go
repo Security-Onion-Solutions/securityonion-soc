@@ -391,6 +391,26 @@ func (e *ElastAlertEngine) ExtractDetails(detect *model.Detection) error {
 		detect.Author = *rule.Author
 	}
 
+	formats := []string{"2006-01-02", "2006/01/02", "2006_01_02"}
+
+	if rule.Date != nil {
+		t, dateErr := detections.ParseDate(*rule.Date, formats)
+		if dateErr == nil {
+			detect.SourceCreated = &t
+		} else {
+			log.WithField("date", *rule.Date).WithError(dateErr).Warn("unable to parse date")
+		}
+	}
+
+	if rule.Modified != nil {
+		t, dateErr := detections.ParseDate(*rule.Modified, formats)
+		if dateErr == nil {
+			detect.SourceUpdated = &t
+		} else {
+			log.WithField("modified", *rule.Modified).WithError(dateErr).Warn("unable to parse date")
+		}
+	}
+
 	return nil
 }
 
@@ -1013,6 +1033,14 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 			"rule.name": detect.Title,
 		}).Info("syncing rule")
 
+		exErr := e.ExtractDetails(detect)
+		if exErr != nil {
+			logger.WithField("publicId", detect.PublicID).WithError(exErr).Warn("unable to extract details from detection, skipping")
+			errMap[detect.PublicID] = exErr
+
+			continue
+		}
+
 		path, ok := index[detect.PublicID]
 		if !ok {
 			path = index[detect.Title]
@@ -1043,7 +1071,13 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 		}
 
 		if exists {
-			if orig.Content != detect.Content || orig.Ruleset != detect.Ruleset || len(detect.Overrides) != 0 {
+			hasChanged := orig.Content != detect.Content
+			hasChanged = hasChanged || orig.Ruleset != detect.Ruleset
+			hasChanged = hasChanged || len(detect.Overrides) != 0
+			hasChanged = hasChanged || !util.Equal(orig.SourceCreated, detect.SourceCreated)
+			hasChanged = hasChanged || !util.Equal(orig.SourceUpdated, detect.SourceUpdated)
+
+			if hasChanged {
 				logger.WithFields(log.Fields{
 					"rule.uuid": detect.PublicID,
 					"rule.name": detect.Title,
