@@ -139,7 +139,7 @@
             <div class="warning-message" v-html="warningMessage"></div>
           </v-snackbar>
           <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" v-html="infoMessage" data-aid="banner_info"></v-alert>
-          <v-snackbar id="tip" top centered rounded close :timeout="tipTimeout" v-model="tip" color="info" data-aid="banner_tip">
+          <v-snackbar id="tip" location="center top" rounded close :timeout="tipTimeout" v-model="tip" color="info" data-aid="banner_tip">
             <template #actions="{ attrs }">
               <v-btn icon variant="text" size="small" v-bind="attrs" @click="tip = false" data-aid="banner_tip_close">
                 <v-icon>fa-times</v-icon>
