@@ -61,7 +61,10 @@ $(document).ready(function () {
       VTreeview: {
         collapseIcon: '',
         expandIcon: 'fas fa-caret-right',
-      }
+      },
+      VChip: {
+        closeIcon: 'fa-xmark va-baseline',
+      },
     },
     icons: {
       defaultSet: 'fa',
