@@ -139,7 +139,7 @@
             <div class="warning-message" v-html="warningMessage"></div>
           </v-snackbar>
           <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" v-html="infoMessage" data-aid="banner_info"></v-alert>
-          <v-snackbar id="tip" top centered rounded close :timeout="tipTimeout" v-model="tip" color="info" data-aid="banner_tip">
+          <v-snackbar id="tip" location="center top" rounded close :timeout="tipTimeout" v-model="tip" color="info" data-aid="banner_tip">
             <template #actions="{ attrs }">
               <v-btn icon variant="text" size="small" v-bind="attrs" @click="tip = false" data-aid="banner_tip_close">
                 <v-icon>fa-times</v-icon>
@@ -815,186 +815,188 @@
           <v-spacer></v-spacer>
         </v-row>
         <v-menu v-model="quickActionVisible" :target="quickActionTarget" :data-aid="'context_menu_' + category">
-          <v-list id="hunt-quick-action">
-            <v-list-item density="compact" id="actionFilterInclude" :to="filterRouteInclude" v-bind:title.attr="i18n.filterIncludeHelp" :data-aid="'context_menu_filter_include_' + category" active-class="">
-              <template #prepend>
-                <v-icon :alt="i18n.filterInclude" class="theme-icon">fa-search-plus</v-icon>
-              </template>
-              <v-list-item-title>
-                {{ i18n.filterInclude }}
-              </v-list-item-title>
-            </v-list-item>
-            <v-list-item density="compact" id="actionFilterExclude" :to="filterRouteExclude" v-bind:title.attr="i18n.filterExcludeHelp" :data-aid="'context_menu_filter_exclude_' + category">
-              <template #prepend>
-                <v-icon :alt="i18n.filterExclude" class="theme-icon">fa-search-minus</v-icon>
-              </template>
-              <v-list-item-title>
-                {{ i18n.filterExclude }}
-              </v-list-item-title>
-            </v-list-item>
-            <v-list-item density="compact" id="actionFilterExact" :to="filterRouteExact" v-bind:title.attr="i18n.filterExactHelp" :data-aid="'context_menu_filter_exact_' + category">
-              <template #prepend>
-                <v-icon :alt="i18n.filterExact" class="theme-icon">fa-search</v-icon>
-              </template>
-              <v-list-item-title>
-                {{ i18n.filterExact }}
-              </v-list-item-title>
-            </v-list-item>
-            <v-list-item density="compact" id="actionDrilldown" :to="filterRouteDrilldown" v-bind:title.attr="i18n.filterDrilldownHelp" v-if="!isAdvanced() && metricsEnabled" :data-aid="'context_menu_drilldown_' + category">
-              <template #prepend>
-                <v-icon :alt="i18n.filterDrilldown" class="theme-icon">fa-angle-double-down</v-icon>
-              </template>
-              <v-list-item-title>
-                {{ i18n.filterDrilldown }}
-              </v-list-item-title>
-            </v-list-item>
-            <v-list-item density="compact" id="actionTuneDetection" v-if="quickActionDetId && $root.detectionsEnabled && isCategory('alerts')" :to='{ name: "detection", params: { id: quickActionDetId }, query: { tab: tuneDetectionTabTarget } }' class="v-list-item--active" v-bind:title.attr="i18n.tuneDetectionHelp" :data-aid="'context_menu_tuning_' + category">
-              <template #prepend>
-                <v-icon :alt="i18n.tuneDetection" class="theme-icon">fa-wrench</v-icon>
-              </template>
-              <v-list-item-title>
-                {{ i18n.tuneDetection }}
-              </v-list-item-title>
-            </v-list-item>
-            <v-list-item density="compact" id="actionTuneDetection-disabled" v-if="!quickActionDetId && $root.detectionsEnabled && isCategory('alerts')" v-bind:title.attr="i18n.tuneDetectionHelp" :data-aid="'context_menu_tuning_disabled_' + category">
-              <template #prepend>
-                <v-icon :alt="i18n.tuneDetection" class="theme-icon">fa-wrench</v-icon>
-              </template>
-              <v-list-item-title>
-                {{ i18n.tuneDetection }}
-              </v-list-item-title>
-            </v-list-item>
-            <v-list-item density="compact" id="actionGroupBy" :to="groupByRoute" v-bind:title.attr="i18n.groupIncludeHelp" :data-aid="'context_menu_groupby_' + category">
-              <template #prepend>
-                <v-icon :alt="i18n.groupInclude" class="theme-icon">fa-layer-group</v-icon>
-              </template>
-              <v-list-item-title>
-                {{ i18n.groupInclude }}
-              </v-list-item-title>
-            </v-list-item>
-            <v-list-item density="compact" id="actionGroupByNew" :to="groupByNewRoute" v-bind:title.attr="i18n.groupNewHelp" :data-aid="'context_menu_groupby_new_' + category">
-              <template #prepend>
-                <v-icon :alt="i18n.groupNew" class="theme-icon">fa-layer-group</v-icon>
-              </template>
-              <v-list-item-title>
-                {{ i18n.groupNew }}
-              </v-list-item-title>
-            </v-list-item>
-            <v-list-group density="compact" :value="false" @click.stop v-if="quickActionVisible && quickActionIsNumeric" :data-aid="'context_menu_compare_' + category" class="deep-theme-text">
-              <template #activator="{ props, isOpen }">
-                <v-list-item v-bind="props" class="v-list-item--active">
-                  <template #prepend>
-                    <v-icon :alt="i18n.groupNumeric" class="theme-icon">fa-calculator</v-icon>
-                  </template>
-                  <template #append>
-                    <v-icon class="theme-icon">{{ isOpen ? 'fa-caret-up' : 'fa-caret-down' }}</v-icon>
-                  </template>
-                  <v-list-item-title>{{ i18n.numericOps }}</v-list-item-title>
-                </v-list-item>
-              </template>
-              <v-list-item density="compact" id="filterLessThan" class="half-width" :to="filterRouteLessThan" :data-aid="'context_menu_lt_' + category">
-                <v-list-item-title class="text-center">
-                  &lt;
-                </v-list-item-title>
-              </v-list-item>
-              <v-list-item density="compact" id="filterLessThanEqual" class="half-width" :to="filterRouteLessThanEqual" :data-aid="'context_menu_lte_' + category">
-                <v-list-item-title class="text-center">
-                  &le;
-                </v-list-item-title>
-              </v-list-item>
-              <div class="flex-break"></div>
-              <v-list-item density="compact" id="filterGreaterThan" class="half-width" :to="filterRouteGreaterThan" :data-aid="'context_menu_gt_' + category">
-                <v-list-item-title class="text-center">
-                  &gt;
-                </v-list-item-title>
-              </v-list-item>
-              <v-list-item density="compact" id="filterGreaterThanEqual" class="half-width" :to="filterRouteGreaterThanEqual" :data-aid="'context_menu_gte_' + category">
-                <v-list-item-title class="text-center">
-                  &ge;
-                </v-list-item-title>
-              </v-list-item>
-              <v-list-item density="compact" id="filterBetween" @click="showBetweenDialog()" :data-aid="'context_menu_between_' + category">
-                <v-list-item-title class="text-center">
-                  {{ i18n.betweenOp }}
-                </v-list-item-title>
-              </v-list-item>
-            </v-list-group>
-            <v-list-group density="compact" @click.stop class="deep-theme-text" :data-aid="'context_menu_clipboard_' + category">
-              <template #activator="{ props, isOpen }">
-                <v-list-item v-bind="props" class="v-list-item--active">
-                  <template #prepend>
-                    <v-icon class="theme-icon">fa-clipboard</v-icon>
-                  </template>
-                  <template #append>
-                    <v-icon class="theme-icon">{{ isOpen ? 'fa-caret-up' : 'fa-caret-down' }}</v-icon>
-                  </template>
-                  <v-list-item-title>
-                    {{ i18n.share }}
-                  </v-list-item-title>
-                </v-list-item>
-              </template>
-              <v-list-item id="actionCopyValue" density="compact" @click="$root.copyToClipboard(quickActionValue)" :data-aid="'context_menu_copy_' + category">
+          <div class="d-flex">
+            <v-list id="hunt-quick-action">
+              <v-list-item density="compact" id="actionFilterInclude" :to="filterRouteInclude" v-bind:title.attr="i18n.filterIncludeHelp" :data-aid="'context_menu_filter_include_' + category" active-class="">
                 <template #prepend>
-                  <v-icon class="solid" class="theme-icon">fa-copy</v-icon>
+                  <v-icon :alt="i18n.filterInclude" class="theme-icon">fa-search-plus</v-icon>
                 </template>
                 <v-list-item-title>
-                  {{ i18n.copyFieldToClipboard }}
+                  {{ i18n.filterInclude }}
                 </v-list-item-title>
               </v-list-item>
-              <v-list-item id="actionCopyFieldValue" density="compact" @click="$root.copyToClipboard(quickActionField + ': ' + quickActionValue)" :data-aid="'context_menu_paste_' + category">
+              <v-list-item density="compact" id="actionFilterExclude" :to="filterRouteExclude" v-bind:title.attr="i18n.filterExcludeHelp" :data-aid="'context_menu_filter_exclude_' + category">
                 <template #prepend>
-                  <v-icon class="solid" class="theme-icon">fa-copy</v-icon>
+                  <v-icon :alt="i18n.filterExclude" class="theme-icon">fa-search-minus</v-icon>
                 </template>
                 <v-list-item-title>
-                  {{ i18n.copyFieldValueToClipboard }}
+                  {{ i18n.filterExclude }}
                 </v-list-item-title>
               </v-list-item>
-              <v-list-item id="actionCopyEventAsJson" density="compact" @click="$root.copyToClipboard(quickActionEvent, 'json')" :data-aid="'context_menu_copyjson_' + category">
+              <v-list-item density="compact" id="actionFilterExact" :to="filterRouteExact" v-bind:title.attr="i18n.filterExactHelp" :data-aid="'context_menu_filter_exact_' + category">
                 <template #prepend>
-                  <v-icon class="solid" class="theme-icon">fa-copy</v-icon>
+                  <v-icon :alt="i18n.filterExact" class="theme-icon">fa-search</v-icon>
                 </template>
                 <v-list-item-title>
-                  {{ i18n.copyEventToClipboardAsJson }}
+                  {{ i18n.filterExact }}
                 </v-list-item-title>
               </v-list-item>
-              <v-list-item id="actionCopyEventAsKvp" density="compact" @click="$root.copyToClipboard(quickActionEvent, 'kvp')" :data-aid="'context_menu_copykvp_' + category">
+              <v-list-item density="compact" id="actionDrilldown" :to="filterRouteDrilldown" v-bind:title.attr="i18n.filterDrilldownHelp" v-if="!isAdvanced() && metricsEnabled" :data-aid="'context_menu_drilldown_' + category">
                 <template #prepend>
-                  <v-icon class="solid" class="theme-icon">fa-copy</v-icon>
+                  <v-icon :alt="i18n.filterDrilldown" class="theme-icon">fa-angle-double-down</v-icon>
                 </template>
                 <v-list-item-title>
-                  {{ i18n.copyEventToClipboardAsKvp }}
+                  {{ i18n.filterDrilldown }}
                 </v-list-item-title>
               </v-list-item>
-            </v-list-group>
-            <v-list-group v-if="!!actions && actions.length" density="compact" @click.stop class="deep-theme-text" :data-aid="'context_menu_quickaction_' + category">
-              <template #activator="{ props, isOpen }">
-                <v-list-item v-bind="props" class="v-list-item--active">
-                  <template #prepend>
-                    <v-icon class="theme-icon">fa-external-link-alt</v-icon>
-                  </template>
-                  <template #append>
-                    <v-icon class="theme-icon">{{ isOpen ? 'fa-caret-up' : 'fa-caret-down' }}</v-icon>
-                  </template>
-                  <v-list-item-title>
-                    {{ i18n.quickActions }}
-                  </v-list-item-title>
-                </v-list-item>
-              </template>
-              <template v-for="action in actions">
-                <v-list-item v-if="action.enabled" density="compact" class="custom-quick-action-button" :key="action.name"
-                  :href="action.background ? '' : action.linkFormatted" v-bind:title.attr="$root.localizeMessage(action.description)"
-                  :target="$root.target(action.target)" @click="performAction($event, action)"
-                  :data-aid="'context_menu_quickaction_' + category + '_' + action.name">
+              <v-list-item density="compact" id="actionTuneDetection" v-if="quickActionDetId && $root.detectionsEnabled && isCategory('alerts')" :to='{ name: "detection", params: { id: quickActionDetId }, query: { tab: tuneDetectionTabTarget } }' class="v-list-item--active" v-bind:title.attr="i18n.tuneDetectionHelp" :data-aid="'context_menu_tuning_' + category">
+                <template #prepend>
+                  <v-icon :alt="i18n.tuneDetection" class="theme-icon">fa-wrench</v-icon>
+                </template>
+                <v-list-item-title>
+                  {{ i18n.tuneDetection }}
+                </v-list-item-title>
+              </v-list-item>
+              <v-list-item density="compact" id="actionTuneDetection-disabled" v-if="!quickActionDetId && $root.detectionsEnabled && isCategory('alerts')" v-bind:title.attr="i18n.tuneDetectionHelp" :data-aid="'context_menu_tuning_disabled_' + category">
+                <template #prepend>
+                  <v-icon :alt="i18n.tuneDetection" class="theme-icon">fa-wrench</v-icon>
+                </template>
+                <v-list-item-title>
+                  {{ i18n.tuneDetection }}
+                </v-list-item-title>
+              </v-list-item>
+              <v-list-item density="compact" id="actionGroupBy" :to="groupByRoute" v-bind:title.attr="i18n.groupIncludeHelp" :data-aid="'context_menu_groupby_' + category">
+                <template #prepend>
+                  <v-icon :alt="i18n.groupInclude" class="theme-icon">fa-layer-group</v-icon>
+                </template>
+                <v-list-item-title>
+                  {{ i18n.groupInclude }}
+                </v-list-item-title>
+              </v-list-item>
+              <v-list-item density="compact" id="actionGroupByNew" :to="groupByNewRoute" v-bind:title.attr="i18n.groupNewHelp" :data-aid="'context_menu_groupby_new_' + category">
+                <template #prepend>
+                  <v-icon :alt="i18n.groupNew" class="theme-icon">fa-layer-group</v-icon>
+                </template>
+                <v-list-item-title>
+                  {{ i18n.groupNew }}
+                </v-list-item-title>
+              </v-list-item>
+              <v-list-group density="compact" :value="false" @click.stop v-if="quickActionVisible && quickActionIsNumeric" :data-aid="'context_menu_compare_' + category" class="deep-theme-text">
+                <template #activator="{ props, isOpen }">
+                  <v-list-item v-bind="props" class="v-list-item--active">
                     <template #prepend>
-                      <v-icon :alt="action.name" class="solid" class="theme-icon">{{ action.icon }}</v-icon>
+                      <v-icon :alt="i18n.groupNumeric" class="theme-icon">fa-calculator</v-icon>
                     </template>
-                    <v-list-item-title class="theme-text">
-                      {{ $root.localizeMessage(action.name) }}
-                    </v-list-item-title>
+                    <template #append>
+                      <v-icon class="theme-icon">{{ isOpen ? 'fa-caret-up' : 'fa-caret-down' }}</v-icon>
+                    </template>
+                    <v-list-item-title>{{ i18n.numericOps }}</v-list-item-title>
+                  </v-list-item>
+                </template>
+                <v-list-item density="compact" id="filterLessThan" class="half-width" :to="filterRouteLessThan" :data-aid="'context_menu_lt_' + category">
+                  <v-list-item-title class="text-center">
+                    &lt;
+                  </v-list-item-title>
                 </v-list-item>
-              </template>
-            </v-list-group>
-          </v-list>
+                <v-list-item density="compact" id="filterLessThanEqual" class="half-width" :to="filterRouteLessThanEqual" :data-aid="'context_menu_lte_' + category">
+                  <v-list-item-title class="text-center">
+                    &le;
+                  </v-list-item-title>
+                </v-list-item>
+                <div class="flex-break"></div>
+                <v-list-item density="compact" id="filterGreaterThan" class="half-width" :to="filterRouteGreaterThan" :data-aid="'context_menu_gt_' + category">
+                  <v-list-item-title class="text-center">
+                    &gt;
+                  </v-list-item-title>
+                </v-list-item>
+                <v-list-item density="compact" id="filterGreaterThanEqual" class="half-width" :to="filterRouteGreaterThanEqual" :data-aid="'context_menu_gte_' + category">
+                  <v-list-item-title class="text-center">
+                    &ge;
+                  </v-list-item-title>
+                </v-list-item>
+                <v-list-item density="compact" id="filterBetween" @click="showBetweenDialog()" :data-aid="'context_menu_between_' + category">
+                  <v-list-item-title class="text-center">
+                    {{ i18n.betweenOp }}
+                  </v-list-item-title>
+                </v-list-item>
+              </v-list-group>
+              <v-list-group density="compact" @click.stop class="deep-theme-text" :data-aid="'context_menu_clipboard_' + category">
+                <template #activator="{ props, isOpen }">
+                  <v-list-item v-bind="props" class="v-list-item--active">
+                    <template #prepend>
+                      <v-icon class="theme-icon">fa-clipboard</v-icon>
+                    </template>
+                    <template #append>
+                      <v-icon class="theme-icon">{{ isOpen ? 'fa-caret-up' : 'fa-caret-down' }}</v-icon>
+                    </template>
+                    <v-list-item-title>
+                      {{ i18n.share }}
+                    </v-list-item-title>
+                  </v-list-item>
+                </template>
+                <v-list-item id="actionCopyValue" density="compact" @click="$root.copyToClipboard(quickActionValue)" :data-aid="'context_menu_copy_' + category">
+                  <template #prepend>
+                    <v-icon class="solid" class="theme-icon">fa-copy</v-icon>
+                  </template>
+                  <v-list-item-title>
+                    {{ i18n.copyFieldToClipboard }}
+                  </v-list-item-title>
+                </v-list-item>
+                <v-list-item id="actionCopyFieldValue" density="compact" @click="$root.copyToClipboard(quickActionField + ': ' + quickActionValue)" :data-aid="'context_menu_paste_' + category">
+                  <template #prepend>
+                    <v-icon class="solid" class="theme-icon">fa-copy</v-icon>
+                  </template>
+                  <v-list-item-title>
+                    {{ i18n.copyFieldValueToClipboard }}
+                  </v-list-item-title>
+                </v-list-item>
+                <v-list-item id="actionCopyEventAsJson" density="compact" @click="$root.copyToClipboard(quickActionEvent, 'json')" :data-aid="'context_menu_copyjson_' + category">
+                  <template #prepend>
+                    <v-icon class="solid" class="theme-icon">fa-copy</v-icon>
+                  </template>
+                  <v-list-item-title>
+                    {{ i18n.copyEventToClipboardAsJson }}
+                  </v-list-item-title>
+                </v-list-item>
+                <v-list-item id="actionCopyEventAsKvp" density="compact" @click="$root.copyToClipboard(quickActionEvent, 'kvp')" :data-aid="'context_menu_copykvp_' + category">
+                  <template #prepend>
+                    <v-icon class="solid" class="theme-icon">fa-copy</v-icon>
+                  </template>
+                  <v-list-item-title>
+                    {{ i18n.copyEventToClipboardAsKvp }}
+                  </v-list-item-title>
+                </v-list-item>
+              </v-list-group>
+              <v-list-group v-if="!!actions && actions.length" density="compact" @click.stop class="deep-theme-text" :data-aid="'context_menu_quickaction_' + category">
+                <template #activator="{ props, isOpen }">
+                  <v-list-item v-bind="props" class="v-list-item--active">
+                    <template #prepend>
+                      <v-icon class="theme-icon">fa-external-link-alt</v-icon>
+                    </template>
+                    <template #append>
+                      <v-icon class="theme-icon">{{ isOpen ? 'fa-caret-up' : 'fa-caret-down' }}</v-icon>
+                    </template>
+                    <v-list-item-title>
+                      {{ i18n.quickActions }}
+                    </v-list-item-title>
+                  </v-list-item>
+                </template>
+                <template v-for="action in actions">
+                  <v-list-item v-if="action.enabled" density="compact" class="custom-quick-action-button" :key="action.name"
+                    :href="action.background ? '' : action.linkFormatted" v-bind:title.attr="$root.localizeMessage(action.description)"
+                    :target="$root.target(action.target)" @click="performAction($event, action)"
+                    :data-aid="'context_menu_quickaction_' + category + '_' + action.name">
+                      <template #prepend>
+                        <v-icon :alt="action.name" class="solid" class="theme-icon">{{ action.icon }}</v-icon>
+                      </template>
+                      <v-list-item-title class="theme-text">
+                        {{ $root.localizeMessage(action.name) }}
+                      </v-list-item-title>
+                  </v-list-item>
+                </template>
+              </v-list-group>
+            </v-list>
+          </div>
         </v-menu>
 
         <v-menu v-model="escalationMenuVisible" :target="escalationMenuTarget" :data-aid="'escalate_menu_' + category">
