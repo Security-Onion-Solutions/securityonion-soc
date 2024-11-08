@@ -141,10 +141,6 @@ td.expansion:last-child {
   padding-right: 0px;
 }
 
-#hunt-quick-action {
-  width: 320px;
-}
-
 #hunt-quick-action a .v-list-item__overlay {
   opacity: 0 !important;
   background-color: rgb(var(--v-theme-secondary));
