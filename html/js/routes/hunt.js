@@ -1063,8 +1063,7 @@ const huntComponent = {
       });
     },
     toggleQuickAction(domEvent, event, field, value) {
-      const selection = window.getSelection();
-      if (!domEvent || this.quickActionVisible || this.escalationMenuVisible || selection.type === 'Range') {
+      if (!domEvent || this.quickActionVisible || this.escalationMenuVisible || window?.getSelection()?.type === 'Range') {
         this.quickActionVisible = false;
         this.escalationMenuVisible = false;
         return;
