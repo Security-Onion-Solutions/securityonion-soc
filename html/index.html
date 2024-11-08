@@ -815,7 +815,7 @@
           <v-spacer></v-spacer>
         </v-row>
         <v-menu v-model="quickActionVisible" :target="quickActionTarget" :data-aid="'context_menu_' + category">
-          <div>
+          <div class="d-flex">
             <v-list id="hunt-quick-action">
               <v-list-item density="compact" id="actionFilterInclude" :to="filterRouteInclude" v-bind:title.attr="i18n.filterIncludeHelp" :data-aid="'context_menu_filter_include_' + category" active-class="">
                 <template #prepend>
