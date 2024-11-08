@@ -31,7 +31,7 @@ type Detectionstore interface {
 	DeleteComment(ctx context.Context, id string) error
 
 	DoesTemplateExist(ctx context.Context, tmpl string) (bool, error)
-	BuildBulkIndexer(ctx context.Context, logger *log.Entry) (esutil.BulkIndexer, error)
+	BuildBulkIndexer(ctx context.Context, logger log.Interface) (esutil.BulkIndexer, error)
 	ConvertObjectToDocument(ctx context.Context, kind string, obj any, auditable *model.Auditable, isEdit bool, auditDocId *string, op *string) (doc []byte, index string, err error)
 }
 

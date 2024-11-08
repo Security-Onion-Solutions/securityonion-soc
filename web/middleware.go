@@ -81,12 +81,14 @@ func Respond(w http.ResponseWriter, r *http.Request, statusCode int, obj interfa
 	var contentLength int
 
 	ctx := r.Context()
+	logger := log.FromContext(ctx)
+	
 	start := ctx.Value(ContextKeyRequestStart).(time.Time)
 	elapsed := time.Since(start).Milliseconds()
 
 	err, isErr := obj.(error)
 	if isErr {
-		log.WithError(err).WithFields(log.Fields{
+		logger.WithError(err).WithFields(log.Fields{
 			"requestId": ctx.Value(ContextKeyRequestId),
 			"requestor": ctx.Value(ContextKeyRequestor),
 		}).Warn("Request did not complete successfully")
@@ -139,7 +141,7 @@ func Respond(w http.ResponseWriter, r *http.Request, statusCode int, obj interfa
 		impl = fmt.Sprintf("%s:%d:%s", file, line, fnc)
 	}
 
-	log.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"remoteAddr":    r.RemoteAddr,
 		"sourceIp":      GetSourceIp(r),
 		"requestPath":   r.URL.Path,

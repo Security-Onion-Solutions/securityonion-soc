@@ -78,6 +78,7 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 
 func (h *DetectionHandler) getDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	logger := log.FromContext(ctx)
 
 	detectId := chi.URLParam(r, "id")
 
@@ -94,14 +95,14 @@ func (h *DetectionHandler) getDetection(w http.ResponseWriter, r *http.Request) 
 
 	eng, ok := h.server.DetectionEngines[detect.Engine]
 	if !ok {
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"detectionEngine":   detect.Engine,
 			"detectionPublicId": detectId,
 		}).Error("retrieved detection with unsupported engine")
 	} else {
 		err = eng.MergeAuxiliaryData(detect)
 		if err != nil {
-			log.WithError(err).WithFields(log.Fields{
+			logger.WithError(err).WithFields(log.Fields{
 				"detectionEngine":   detect.Engine,
 				"detectionPublicId": detectId,
 			}).Error("unable to merge auxiliary data into detection")
@@ -303,6 +304,7 @@ func (h *DetectionHandler) duplicateDetection(w http.ResponseWriter, r *http.Req
 
 func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	logger := log.FromContext(ctx)
 
 	detect := &model.Detection{}
 
@@ -386,7 +388,7 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 		fixed := false
 		if detect.IsEnabled && !filterApplied {
 			var uerr error
-			log.WithError(err).WithField("detection", detect).Error("unable to sync detection; attempting to disable and resync")
+			logger.WithError(err).WithField("detection", detect).Error("unable to sync detection; attempting to disable and resync")
 
 			detect.IsEnabled = false
 			detect.Kind = ""
@@ -491,6 +493,7 @@ func (h *DetectionHandler) deleteDetection(w http.ResponseWriter, r *http.Reques
 
 func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	logger := log.FromContext(ctx)
 
 	newStatus := chi.URLParam(r, "newStatus") // "enable" or "disable"
 
@@ -522,7 +525,7 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	logger := log.WithField("bulkUpdate", true)
+	logger = logger.WithField("bulkUpdate", true)
 
 	detects := []*model.Detection{}
 	containsCommunity := false
@@ -581,7 +584,7 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 	})
 }
 
-func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *BulkOp, detects []*model.Detection, logger *log.Entry) {
+func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *BulkOp, detects []*model.Detection, logger log.Interface) {
 	totalTimeStart := time.Now()
 	errMap := map[string]string{}
 	updated := 0
@@ -595,7 +598,7 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 	defer func() {
 		totalTime := time.Since(totalTimeStart)
 
-		withStats := log.WithFields(log.Fields{
+		withStats := logger.WithFields(log.Fields{
 			"errMap":     detections.TruncateMap(errMap, 5),
 			"total":      len(detects),
 			"modified":   updated,
@@ -1036,6 +1039,8 @@ func (h *DetectionHandler) genPublicId(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *DetectionHandler) PrepareForSave(ctx context.Context, detect *model.Detection, e DetectionEngine) error {
+	logger := log.FromContext(ctx)
+
 	err := e.ExtractDetails(detect)
 	if err != nil {
 		return err
@@ -1113,7 +1118,7 @@ func (h *DetectionHandler) PrepareForSave(ctx context.Context, detect *model.Det
 
 		*detect = *old
 
-		log.Infof("existing detection %s is a community rule, only updating select fields", detect.Id)
+		logger.Infof("existing detection %s is a community rule, only updating select fields", detect.Id)
 	} else if detect.IsCommunity {
 		return errors.New("cannot update an existing non-community detection to make it a community detection")
 	}
