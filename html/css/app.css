@@ -886,3 +886,7 @@ ul ul ul {
   position: sticky;
   top: 154px;
 }
+
+.va-baseline {
+  vertical-align: baseline;
+}
