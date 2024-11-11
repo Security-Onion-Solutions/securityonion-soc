@@ -115,7 +115,7 @@ test('populateUserDetailsNonEmptyNoUser', async () => {
   app.users = [{id:'111',email:'hi@there.net'}];
   app.usersLoadedTime = new Date().time;
   await app.populateUserDetails(obj, "userId", "owner")
-  expect(obj.owner).toBe(undefined);
+  expect(obj.owner).toBe("123");
 });
 
 test('populateUserDetails', async () => {

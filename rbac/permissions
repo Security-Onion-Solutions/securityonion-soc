@@ -10,6 +10,9 @@
 
 cases/read:       case-monitor
 cases/write:      case-admin
+clients/read:     client-monitor
+clients/write:    client-admin
+clients/delete:   client-admin
 config/read:      config-monitor
 config/write:     config-admin
 detections/read:  detection-monitor
@@ -26,6 +29,8 @@ jobs/delete:      job-admin
 jobs/process:     job-processor
 nodes/read:       node-monitor
 nodes/write:      node-admin
+permissions/read: client-monitor
+permissions/write: client-admin
 roles/read:       user-monitor
 roles/write:      user-admin
 users/read:       user-monitor
@@ -36,6 +41,7 @@ users/delete:     user-admin
 # Syntax      => roleB: roleA
 # Explanation => roleA inherits all of roleB's permissions
 
+client-monitor:    client-admin
 case-monitor:      case-admin
 config-monitor:    config-admin
 detection-monitor: detection-admin

@@ -14,6 +14,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/elasticcases"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/filedatastore"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/generichttp"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/hydra"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/influxdb"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/kratos"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/salt"
@@ -31,6 +32,7 @@ func BuildModuleMap(srv *server.Server) map[string]module.Module {
 	moduleMap["httpcase"] = generichttp.NewHttpCase(srv)
 	moduleMap["influxdb"] = influxdb.NewInfluxDB(srv)
 	moduleMap["kratos"] = kratos.NewKratos(srv)
+	moduleMap["hydra"] = hydra.NewHydra(srv)
 	moduleMap["elastic"] = elastic.NewElastic(srv)
 	moduleMap["elasticcases"] = elasticcases.NewElasticCases(srv)
 	moduleMap["salt"] = salt.NewSalt(srv)

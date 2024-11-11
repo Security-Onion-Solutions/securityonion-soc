@@ -1,0 +1,63 @@
+# Copyright 2019 Jason Ertel (github.com/jertel).
+# Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+# or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+# https://securityonion.net/license; you may not use this file except in compliance with the
+# Elastic License 2.0.
+
+FROM ghcr.io/security-onion-solutions/golang:1.22.6 AS builder
+
+ARG OWNER=ory
+ARG VERSION=v2.2.0
+
+RUN addgroup --system ory; \
+    adduser --system ory --no-create-home --disabled-password --ingroup ory --disabled-login
+
+RUN apt-get update && apt-get upgrade -y && apt-get install -y git gcc bash
+RUN mkdir -p /var/lib/sqlite
+
+
+RUN mkdir -p /go/src/github.com/$OWNER
+WORKDIR /go/src/github.com/$OWNER
+RUN git clone https://github.com/$OWNER/hydra.git
+
+WORKDIR /go/src/github.com/$OWNER/hydra
+
+RUN git checkout $VERSION
+
+ENV GO111MODULE on
+ENV CGO_ENABLED 1
+ENV CGO_CPPFLAGS -DSQLITE_DEFAULT_FILE_PERMISSIONS=0600
+
+RUN go mod download
+RUN go build -tags sqlite -ldflags="-X 'github.com/ory/hydra/driver/config.Version=${VERSION}' -X 'github.com/ory/hydra/driver/config.Date=$(date -I)' -X 'github.com/ory/hydra/driver/config.Commit=$(git rev-parse --short HEAD)'"
+
+
+FROM ghcr.io/security-onion-solutions/ubuntu:24.10
+
+RUN apt-get update && apt-get upgrade -y
+
+RUN apt-get update && apt-get install -y ca-certificates
+
+ENV DSN=sqlite:///hydra-data/db.sqlite?_fk=true
+
+ARG UID=928
+ARG GID=928
+ARG OWNER=ory
+
+RUN groupadd --system hydra --gid "$GID" ; \
+    useradd --system hydra --no-create-home -g hydra --uid "$UID"
+
+RUN echo "#!/bin/sh" > /start-hydra.sh
+RUN echo "hydra -c /hydra-conf/hydra.yaml migrate sql -e --yes >> /hydra-log/hydra-migrate.log 2>&1" >> /start-hydra.sh
+RUN echo "chown hydra:hydra /hydra-data/db.sqlite" >> /start-hydra.sh
+RUN echo "chmod 600 /hydra-data/db.sqlite" >> /start-hydra.sh
+RUN echo "hydra -c /hydra-conf/hydra.yaml serve all --sqa-opt-out=true >> /hydra-log/hydra.log 2>&1" >> /start-hydra.sh
+RUN chmod a+x /start-hydra.sh
+
+COPY --from=builder /go/src/github.com/$OWNER/hydra/hydra /usr/bin/hydra
+USER hydra
+
+
+EXPOSE 4435
+
+ENTRYPOINT ["/start-hydra.sh"]

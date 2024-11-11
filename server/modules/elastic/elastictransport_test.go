@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
 )
@@ -30,12 +29,9 @@ func TestRoundTrip(tester *testing.T) {
 	transport := &ElasticTransport{}
 	transport.internal = dummy
 
-	user := model.NewUser()
-	user.Email = "Test"
 	request, _ := http.NewRequest("GET", "", nil)
-	request = request.WithContext(context.WithValue(context.Background(), web.ContextKeyRequestor, user))
 	transport.RoundTrip(request)
-	assert.Equal(tester, "test", dummy.username)
+	assert.Equal(tester, "", dummy.username)
 }
 
 func TestRoundTripSearchUsername(tester *testing.T) {
@@ -43,11 +39,8 @@ func TestRoundTripSearchUsername(tester *testing.T) {
 	transport := &ElasticTransport{}
 	transport.internal = dummy
 
-	user := model.NewUser()
-	user.Email = "Test"
-	user.SearchUsername = "Mysearchuser"
 	request, _ := http.NewRequest("GET", "", nil)
-	request = request.WithContext(context.WithValue(context.Background(), web.ContextKeyRequestor, user))
+	request = request.WithContext(context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "Mysearchuser"))
 	transport.RoundTrip(request)
 	assert.Equal(tester, "Mysearchuser", dummy.username)
 }

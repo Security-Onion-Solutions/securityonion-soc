@@ -258,6 +258,12 @@
                 </template>
                 <v-list-item-title v-text="i18n.users"></v-list-item-title>
               </v-list-item>
+              <v-list-item v-if="isLicensed('api')" data-aid="nav_admin_clients" @click="" to="/clients">
+                <template #prepend>
+                  <v-icon>fa-robot</v-icon>
+                </template>
+                <v-list-item-title v-text="i18n.clients"></v-list-item-title>
+              </v-list-item>
               <v-list-item data-aid="nav_admin_members" v-if="$root.isUserAdmin()" @click="" to="/gridmembers">
                 <template #prepend>
                   <v-icon>fa-circle-nodes</v-icon>
@@ -2343,16 +2349,16 @@
                   <v-container grid-list-sm class="pa-4">
                     <v-row>
                       <v-col xs12>
-                        <v-text-field variant="underlined" id="email-input" v-model="form.email" :placeholder="i18n.email" :autofocus="true" :rules="[rules.required]" data-aid="users_create_dialog_email"></v-text-field>
+                        <v-text-field variant="underlined" id="email-input" v-model="form.email" :placeholder="i18n.email" :autofocus="true" :rules="[rules.required,rules.email]" data-aid="users_create_dialog_email"></v-text-field>
                         <v-text-field variant="underlined" id="password-input" v-model="form.password" :placeholder="i18n.password" :type="showPassword ? 'text' : 'password'" data-aid="users_create_dialog_password"
                           @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'"
                           :rules="[rules.required, rules.maxpasslen, rules.minpasslen, rules.badpasschs]"></v-text-field>
                         <span data-aid="users_create_dialog_roles">
                           <v-select variant="underlined" id="roles-select" v-model="form.role" :items="roles" :label="i18n.role" :rules="[rules.required]"></v-select>
                         </span>
-                        <v-text-field variant="underlined" id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName" data-aid="users_create_dialog_firstname"></v-text-field>
-                        <v-text-field variant="underlined" id="lastname-input" v-model="form.lastName" :placeholder="i18n.lastName" data-aid="users_create_dialog_lastname"></v-text-field>
-                        <v-text-field variant="underlined" id="note-input" v-model="form.note" :placeholder="i18n.note" data-aid="users_create_dialog_note"></v-text-field>
+                        <v-text-field variant="underlined" id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName" :rules="[rules.name]" data-aid="users_create_dialog_firstname"></v-text-field>
+                        <v-text-field variant="underlined" id="lastname-input" v-model="form.lastName" :placeholder="i18n.lastName" :rules="[rules.name]" data-aid="users_create_dialog_lastname"></v-text-field>
+                        <v-text-field variant="underlined" id="note-input" v-model="form.note" :placeholder="i18n.note" :rules="[rules.note]" data-aid="users_create_dialog_note"></v-text-field>
                       </v-col>
                     </v-row>
                   </v-container>
@@ -2428,11 +2434,13 @@
                           <v-card>
                             <v-card-title v-text="i18n.profile"/>
                             <v-card-text>
-                              <v-text-field variant="underlined" id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName" data-aid="users_details_firstname_input"></v-text-field>
-                              <v-text-field variant="underlined" id="lastname-input" v-model="form.lastName" :placeholder="i18n.lastName" data-aid="users_details_lastname_input"></v-text-field>
-                              <v-text-field variant="underlined" id="note-input" v-model="form.note" :placeholder="i18n.note" data-aid="users_details_note_input"></v-text-field>
+                              <v-form v-model="form.valid">
+                                <v-text-field variant="underlined" id="firstname-input" v-model="form.firstName" :placeholder="i18n.firstName" :rules="[rules.name]" data-aid="users_details_firstname_input"></v-text-field>
+                                <v-text-field variant="underlined" id="lastname-input" v-model="form.lastName" :placeholder="i18n.lastName" :rules="[rules.name]" data-aid="users_details_lastname_input"></v-text-field>
+                                <v-text-field variant="underlined" id="note-input" v-model="form.note" :placeholder="i18n.note" :rules="[rules.note]" data-aid="users_details_note_input"></v-text-field>
 
-                              <v-btn id="update-profile-button" @click="updateProfile(item)" v-text="i18n.update" data-aid="users_details_submit"></v-btn>
+                                <v-btn id="update-profile-button" :disabled="!form.valid" @click="updateProfile(item)" v-text="i18n.update" data-aid="users_details_submit"></v-btn>
+                              </v-form>
                             </v-card-text>
                           </v-card>
                         </v-col>
@@ -2464,6 +2472,169 @@
                               <v-btn id="update-password-button" :disabled="!form.valid" @click="updatePassword(item)" v-text="i18n.passwordReset" class="mr-2 mb-2" data-aid="users_details_password_update"></v-btn>
                               <v-btn id="toggle-locked-button" v-text="item.status == 'locked' ? i18n.unlock : i18n.lock" @click.stop="toggleStatus(item)" class="mr-2 mb-2" data-aid="users_details_lock_toggle"/>
                               <v-btn id="delete-user-button" v-text="i18n.delete" color="error" @click.stop="showDeleteConfirm()" class="mb-2" data-aid="users_details_delete"/>
+                            </v-card-text>
+                          </v-card>
+                        </v-col>
+                      </v-row>
+                    </v-container>
+                  </td>
+                </tr>
+              </template>
+            </v-data-table>
+          </v-col>
+        </v-row>
+      </v-container>
+    </script>
+
+    <script type="text/x-template" id="page-clients">
+      <v-container fluid data-aid="clients_screen">
+        <v-row>
+          <v-col cols="12" lg="3">
+            <h2 v-text="i18n.clients"></h2>
+          </v-col>
+          <v-spacer></v-spacer>
+          <v-col cols="12" lg="2" align="end" data-aid="clients_summary">
+            <h4 v-if="!$root.loading">{{ i18n.clients }} {{ countClients() }} </h4>
+          </v-col>
+        </v-row>
+        <v-row>
+          <v-col>
+            <v-toolbar v-if="$root.isClientAdmin()" class="elevation-0 theme-background-lighten-1">
+              <v-btn variant="flat" id="add-client-button" class="action ml-3" color="blue" @click.stop="showAdd()" data-aid="clients_create_new">
+                <v-icon>fa-plus</v-icon>
+              </v-btn>
+            </v-toolbar>
+            <v-dialog v-model="dialog" persistent width="800px" data-aid="clients_create_dialog">
+              <v-card>
+                <v-card-title class="lighten-4 py-4 title">{{ i18n.add }} {{ i18n.client }}</v-card-title>
+                <v-form v-model="form.valid">
+                  <v-container grid-list-sm class="pa-4">
+                    <v-row>
+                      <v-col xs12>
+                        <v-text-field variant="underlined" id="name-input" v-model="form.name" :placeholder="i18n.name" :autofocus="true" :rules="[rules.required, rules.name]" data-aid="clients_create_dialog_name"></v-text-field>
+                        <v-text-field variant="underlined" id="note-input" v-model="form.note" :placeholder="i18n.note" :rules="[rules.note]" data-aid="clients_create_dialog_note"></v-text-field>
+                      </v-col>
+                    </v-row>
+                  </v-container>
+                  <v-card-actions>
+                    <v-spacer></v-spacer>
+                    <v-btn id="add-cancel-button" text @click="dialog = false" data-aid="clients_create_dialog_cancel">{{ i18n.cancel }}</v-btn>
+                    <v-btn id="add-confirm-button" :disabled="!form.valid" color="primary" @click="add()" v-text="i18n.add" data-aid="clients_create_dialog_confirm"></v-btn>
+                  </v-card-actions>
+                </v-form>
+              </v-card>
+            </v-dialog>
+            <v-dialog v-model="deleteClientDialog" persistent max-width="390" data-aid="clients_delete_dialog">
+              <v-card>
+                <v-card-title class="headline" v-text="i18n.deleteClientTitle"></v-card-title>
+                <v-card-text v-text="i18n.deleteClientConfirm"></v-card-text>
+                <v-card-text id="name-output" v-text="form.name" class="font-weight-bold"></v-card-text>
+                <v-card-text id="id-output" v-text="form.id"></v-card-text>
+                <v-card-text v-text="i18n.continue"></v-card-text>
+                <v-card-actions>
+                  <v-spacer></v-spacer>
+                  <v-btn id="delete-cancel-button" text @click.stop="hideDeleteConfirm()" v-text="i18n.cancel" data-aid="clients_delete_dialog_cancel"></v-btn>
+                  <v-btn id="delete-confirm-button" color="warning" text @click.stop="removeClient(form.id)" v-text="i18n.delete" data-aid="clients_delete_dialog_confirm"></v-btn>
+                </v-card-actions>
+              </v-card>
+            </v-dialog>
+            <v-dialog v-model="showCredentialsDialog" persistent max-width="390" data-aid="clients_credentials_dialog">
+              <v-card>
+                <v-card-title class="headline" v-text="i18n.clientCredentialsTitle"></v-card-title>
+                <v-card-text v-text="i18n.clientCredentialsHelp"></v-card-text>
+                <v-card-text>
+                  <div class="font-weight-bold">{{ i18n.clientId }}:</div>
+                  <div>
+                    <span id="credentials-id-output" data-aid="clients-credentials-id-output">{{ new_client_credentials.id }}</span>
+                    <v-btn icon variant="text" size="small" @click="$root.copyToClipboard(new_client_credentials.id)" data-aid="clients_credentials-copy-id">
+                      <v-icon>fa-copy</v-icon>
+                    </v-btn>
+                </div>
+                </v-card-text>
+                <v-card-text>
+                  <div class="font-weight-bold">{{ i18n.clientSecret }}:</div>
+                  <div>
+                    <span id="credentials-secret-output" data-aid="clients-credentials-secret-output">{{ new_client_credentials.secret }}</span>
+                    <v-btn icon variant="text" size="small" @click="$root.copyToClipboard(new_client_credentials.secret)" data-aid="clients_credentials-copy-secret">
+                      <v-icon>fa-copy</v-icon>
+                    </v-btn>
+                  </div>
+                </v-card-text>
+                <v-card-text v-text="i18n.clientCredentialsFooter"></v-card-text>
+                <v-card-actions>
+                  <v-spacer></v-spacer>
+                  <v-btn id="clients-credentials-dismiss-button" text @click.stop="dismissCredentials()" v-text="i18n.close" data-aid="clients_credentials_dialog_dismiss"></v-btn>
+                </v-card-actions>
+              </v-card>
+            </v-dialog>
+            <v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" :footer-props="footerProps" data-aid="clients_details"
+              :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="clients" v-model:expanded="expanded">
+              <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
+                <tr>
+                  <template v-for="header in columns" :key="header.key">
+                    <th :class="{'is-sorted': isSorted(header)}" v-if="header.value != 'expand' || $root.isClientAdmin()" :data-aid="'clients_details_header_' + header?.value?.toLowerCase()">
+                      <span @click="toggleSort(header)">
+                        {{ header.title }}
+                      </span>
+                      <template v-if="isSorted(header)">
+                        <v-icon>
+                          {{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down'}}
+                        </v-icon>
+                      </template>
+                    </th>
+                  </template>
+                </tr>
+              </template>
+              <template #item="{ item, isExpanded, toggleExpand, internalItem }">
+                <tr>
+                  <td v-if="$root.isClientAdmin()">
+                    <v-btn id="expandNode" icon variant="text" size="small" @click="if (!isExpanded(internalItem)) { updateForm(item); } toggleExpand(internalItem)" data-aid="clients_details_expand">
+                      <v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="clients_details_collapse">fa-angle-down</v-icon>
+                      <v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="clients_details_expand">fa-angle-right</v-icon>
+                    </v-btn>
+                  </td>
+                  <td v-text="item.id"></td>
+                  <td v-text="item.name"></td>
+                  <td v-text="truncateNote(item.note)" class="d-none d-lg-table-cell"></td>
+                </tr>
+              </template>
+              <template #expanded-row="{ item }">
+                <tr data-aid="clients_details_expanded">
+                  <td :colspan="headers.length + 1" class="px-0">
+                    <v-container fluid grid-list-sm class="pa-4">
+                      <v-row>
+                        <v-col cols="12" lg="4">
+                          <v-card>
+                            <v-card-title v-text="i18n.profile"/>
+                            <v-card-text>
+                              <v-form v-model="form.valid">
+                                <v-text-field variant="underlined" id="name-input" v-model="form.name" :placeholder="i18n.name" :rules="[rules.required,rules.name]" data-aid="clients_details_name_input"></v-text-field>
+                                <v-text-field variant="underlined" id="note-input" v-model="form.note" :placeholder="i18n.note" :rules="[rules.note]" data-aid="clients_details_note_input"></v-text-field>
+                                <v-text-field variant="underlined" id="search-username-input" v-model="form.searchUsername" :placeholder="i18n.searchUsername" persistent-hint :hint="i18n.searchUsernameHelp" :rules="[rules.searchUsername]" data-aid="clients_details_searchusername_input"></v-text-field>
+                                <v-btn :disabled="!form.valid" id="update-client-button" @click="update(item)" v-text="i18n.update" data-aid="clients_details_submit" class="mt-3" ></v-btn>
+                              </v-form>
+                            </v-card-text>
+                          </v-card>
+                        </v-col>
+                        <v-col cols="12" lg="4">
+                          <v-card>
+                            <v-card-title>{{ i18n.permissions }}</v-card-title>
+                            <v-card-text data-aid="clients_details_permission_toggle">
+                              <template v-for="(privileges, resource) in perms" :key="resource">
+                                <h4 class="text-capitalize mt-3">{{ resource }}</h4>
+                                <span v-for="priv in privileges" :key="priv" :data-aid="'clients_details_permission_toggle_' + resource + '_' + priv">
+                                  <v-checkbox :id="'perm-checkbox-' + resource + '-' + priv" density="compact" class="text-capitalize ml-5 no-details" :model-value="hasPermission(item, resource, priv)" :label="priv" @click.stop="togglePermission(item, resource, priv)" />
+                                </span>
+                              </template>
+                            </v-card-text>
+                          </v-card>
+                        </v-col>
+                        <v-col cols="12" lg="4">
+                          <v-card>
+                            <v-card-title>{{ i18n.access }}</v-card-title>
+                            <v-card-text>
+                              <v-btn id="generate-secret-button" v-text="i18n.generateSecret" color="primary" @click.stop="generateSecret(item)" class="mr-2 mb-2" data-aid="clients_details_generate_secret"></v-btn>
+                              <v-btn id="delete-client-button" v-text="i18n.delete" color="error" @click.stop="showDeleteConfirm()" class="mb-2" data-aid="clients_details_delete"/>
                             </v-card-text>
                           </v-card>
                         </v-col>
@@ -5569,6 +5740,7 @@
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/components/treeview.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/case.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/clients.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/config.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/downloads.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/home.js?v=VERSION_PLACEHOLDER"></script>

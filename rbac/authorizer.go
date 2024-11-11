@@ -8,11 +8,9 @@ package rbac
 
 import (
 	"context"
-
-	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type Authorizer interface {
 	CheckContextOperationAuthorized(ctx context.Context, operation string, target string) error
-	CheckUserOperationAuthorized(user *model.User, operation string, target string) error
+	CheckUserOperationAuthorized(userId string, operation string, target string) error
 }

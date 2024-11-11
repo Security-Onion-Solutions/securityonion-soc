@@ -23,9 +23,7 @@ const ANOTHER_USER_ID = "124"
 const JOB_DIR = "/tmp/sensoroni.jobs"
 
 func newContext() context.Context {
-	user := model.NewUser()
-	user.Id = MY_USER_ID
-	return context.WithValue(context.Background(), web.ContextKeyRequestor, user)
+	return context.WithValue(context.Background(), web.ContextKeyRequestorId, MY_USER_ID)
 }
 
 func cleanup() {

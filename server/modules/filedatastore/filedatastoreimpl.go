@@ -180,8 +180,8 @@ func (datastore *FileDatastoreImpl) jobIsAllowed(ctx context.Context, job *model
 			allowed = true
 		} else {
 			// User is only authorized against their own jobs.
-			if user, ok := ctx.Value(web.ContextKeyRequestor).(*model.User); ok {
-				if job.UserId == user.Id {
+			if userId, ok := ctx.Value(web.ContextKeyRequestorId).(string); ok {
+				if job.UserId == userId {
 					allowed = true
 				}
 			}
@@ -269,10 +269,10 @@ func (datastore *FileDatastoreImpl) AddPivotJob(ctx context.Context, job *model.
 
 func (datastore *FileDatastoreImpl) addAndSaveJob(ctx context.Context, job *model.Job) error {
 	var err error
-	if user, ok := ctx.Value(web.ContextKeyRequestor).(*model.User); ok {
-		job.UserId = user.Id
+	if userId, ok := ctx.Value(web.ContextKeyRequestorId).(string); ok {
+		job.UserId = userId
 	} else {
-		err = errors.New("User not found in context")
+		return errors.New("User ID not found in context")
 	}
 	datastore.lock.Lock()
 	defer datastore.lock.Unlock()

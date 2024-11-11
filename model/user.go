@@ -7,8 +7,17 @@
 package model
 
 import (
+	"errors"
 	"time"
 )
+
+const MAX_EMAIL_LEN = 100
+const MAX_FIRSTNAME_LEN = 100
+const MAX_LASTNAME_LEN = 100
+const MAX_NOTE_LEN = 100
+const MAX_ROLE_LEN = 50
+const MAX_USER_ID_LEN = 36
+const MAX_SEARCH_USERNAME_LEN = 50
 
 type User struct {
 	Id              string    `json:"id"`
@@ -43,4 +52,34 @@ func NewUser() *User {
 
 func (user *User) String() string {
 	return user.Id
+}
+
+func (user *User) Verify() error {
+	if len(user.Id) > MAX_USER_ID_LEN {
+		return errors.New("ERROR_USER_ID_TOO_LONG")
+	}
+
+	if len(user.FirstName) > MAX_FIRSTNAME_LEN {
+		return errors.New("ERROR_FIRSTNAME_TOO_LONG")
+	}
+
+	if len(user.LastName) > MAX_LASTNAME_LEN {
+		return errors.New("ERROR_LASTNAME_TOO_LONG")
+	}
+
+	if len(user.Note) > MAX_NOTE_LEN {
+		return errors.New("ERROR_NOTE_TOO_LONG")
+	}
+
+	if len(user.SearchUsername) > MAX_SEARCH_USERNAME_LEN {
+		return errors.New("ERROR_SEARCH_USERNAME_TOO_LONG")
+	}
+
+	for _, role := range user.Roles {
+		if len(role) > MAX_ROLE_LEN {
+			return errors.New("ERROR_ROLE_TOO_LONG")
+		}
+	}
+
+	return nil
 }

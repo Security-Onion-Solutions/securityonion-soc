@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
@@ -79,13 +78,8 @@ func TestPreprocess(tester *testing.T) {
 	if assert.Nil(tester, err) {
 		assert.Zero(tester, statusCode)
 		if assert.NotNil(tester, ctx) {
-			requestor := ctx.Value(web.ContextKeyRequestor)
-			if assert.NotNil(tester, requestor) {
-				sensorUser := requestor.(*model.User)
-				assert.NotNil(tester, sensorUser)
-				assert.Equal(tester, "00000000-0000-0000-0000-000000000000", sensorUser.Id)
-				assert.Equal(tester, "00000000-0000-0000-0000-000000000000", sensorUser.Email)
-			}
+			requestorId := ctx.Value(web.ContextKeyRequestorId)
+			assert.Equal(tester, "00000000-0000-0000-0000-000000000000", requestorId)
 		}
 	}
 

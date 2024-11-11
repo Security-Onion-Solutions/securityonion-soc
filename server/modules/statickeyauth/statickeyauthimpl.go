@@ -58,8 +58,8 @@ func (auth *StaticKeyAuthImpl) Preprocess(ctx context.Context, req *http.Request
 	} else {
 		// Remote agents will assume the role of this server until the implementation
 		// is enhanced to support unique agent keys and roles.
-		ctx = context.WithValue(ctx, web.ContextKeyRequestor, auth.server.Agent)
 		ctx = context.WithValue(ctx, web.ContextKeyRequestorId, auth.server.Agent.Id)
+		ctx = context.WithValue(ctx, web.ContextKeyRequestCSRFExempt, true)
 	}
 	return ctx, statusCode, err
 }
@@ -74,7 +74,7 @@ func (auth *StaticKeyAuthImpl) validateAuthorization(ctx context.Context, key st
 	logger := log.FromContext(ctx)
 
 	// If API key has been provided, it must match
-	if len(key) > 0 {
+	if len(key) > 0 && !strings.HasPrefix(key, "Bearer ") {
 		isApiKeyAccepted := auth.validateApiKey(key)
 		logger.WithFields(log.Fields{
 			"isApiKeyAccepted": isApiKeyAccepted,

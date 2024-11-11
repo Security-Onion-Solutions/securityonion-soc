@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -44,9 +45,8 @@ func (impl *FakeRolestore) GetAssignments(ctx context.Context) (map[string][]str
 	return impl.roleMap, nil
 }
 
-func (impl *FakeRolestore) PopulateUserRoles(ctx context.Context, user *model.User) error {
-	user.Roles = impl.roleMap[user.Email]
-	return nil
+func (impl *FakeRolestore) GetRolesForAuthId(ctx context.Context, id string) (error, []string) {
+	return nil, impl.roleMap[id]
 }
 
 func (impl *FakeRolestore) GetRoles(ctx context.Context) []string {
@@ -55,6 +55,26 @@ func (impl *FakeRolestore) GetRoles(ctx context.Context) []string {
 		roles = append(roles, role)
 	}
 	return roles
+}
+
+func (impl *FakeRolestore) GetPermissions(ctx context.Context) map[string][]string {
+	perm_map := make(map[string]bool)
+	final_map := make(map[string][]string)
+	for _, perms := range impl.roleMap {
+		for _, perm := range perms {
+			if _, exists := perm_map[perm]; !exists && strings.Contains(perm, "/") {
+				pairs := strings.Split(perm, "/")
+				resource := pairs[0]
+				privilege := pairs[1]
+				if _, exists := final_map[resource]; !exists {
+					final_map[resource] = make([]string, 0)
+				}
+				final_map[resource] = append(final_map[resource], privilege)
+				perm_map[perm] = true
+			}
+		}
+	}
+	return final_map
 }
 
 type FakeDatastore struct {

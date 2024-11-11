@@ -117,7 +117,10 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 			}
 		}
 
-		updated := status.server.Metrics.UpdateNodeMetrics(ctx, node)
+		updated := false
+		if status.server.Metrics != nil {
+			updated = status.server.Metrics.UpdateNodeMetrics(ctx, node)
+		}
 
 		logger.WithFields(log.Fields{
 			"Id":               node.Id,
@@ -157,7 +160,9 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 		}).Info("Grid has returned to a healthy state")
 	}
 	status.currentStatus.Grid.UnhealthyNodeCount = unhealthyNodes
-	status.currentStatus.Grid.Eps = status.server.Metrics.GetGridEps(ctx)
+	if status.server.Metrics != nil {
+		status.currentStatus.Grid.Eps = status.server.Metrics.GetGridEps(ctx)
+	}
 	if status.currentStatus.Grid.AwaitingRebootNodeCount == 0 && awaitingRebootCount > 0 {
 		logger.WithFields(log.Fields{
 			"awaitingRebootCount": awaitingRebootCount,
@@ -170,15 +175,21 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 }
 
 func (status *SoStatus) refreshDetections(ctx context.Context) {
-	status.currentStatus.Detections.ElastAlert = status.checkDetectionEngineStatus("ElastAlert2",
-		status.currentStatus.Detections.ElastAlert,
-		status.server.DetectionEngines[model.EngineNameElastAlert].GetState())
-	status.currentStatus.Detections.Suricata = status.checkDetectionEngineStatus("Suricata",
-		status.currentStatus.Detections.Suricata,
-		status.server.DetectionEngines[model.EngineNameSuricata].GetState())
-	status.currentStatus.Detections.Strelka = status.checkDetectionEngineStatus("Strelka",
-		status.currentStatus.Detections.Strelka,
-		status.server.DetectionEngines[model.EngineNameStrelka].GetState())
+	if _, exists := status.server.DetectionEngines[model.EngineNameElastAlert]; exists {
+		status.currentStatus.Detections.ElastAlert = status.checkDetectionEngineStatus("ElastAlert2",
+			status.currentStatus.Detections.ElastAlert,
+			status.server.DetectionEngines[model.EngineNameElastAlert].GetState())
+	}
+	if _, exists := status.server.DetectionEngines[model.EngineNameSuricata]; exists {
+		status.currentStatus.Detections.Suricata = status.checkDetectionEngineStatus("Suricata",
+			status.currentStatus.Detections.Suricata,
+			status.server.DetectionEngines[model.EngineNameSuricata].GetState())
+	}
+	if _, exists := status.server.DetectionEngines[model.EngineNameStrelka]; exists {
+		status.currentStatus.Detections.Strelka = status.checkDetectionEngineStatus("Strelka",
+			status.currentStatus.Detections.Strelka,
+			status.server.DetectionEngines[model.EngineNameStrelka].GetState())
+	}
 }
 
 func (status *SoStatus) checkDetectionEngineStatus(engineName string, oldState *model.EngineState, newState *model.EngineState) *model.EngineState {

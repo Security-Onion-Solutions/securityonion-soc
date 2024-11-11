@@ -9,6 +9,7 @@ package kratos
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/security-onion-solutions/securityonion-soc/web"
 )
@@ -34,9 +35,14 @@ func (proc *KratosPreprocessor) Preprocess(ctx context.Context, request *http.Re
 	userId := request.Header.Get("x-user-id")
 	if userId != "" {
 		ctx = context.WithValue(ctx, web.ContextKeyRequestorId, userId)
+		ctx = context.WithValue(ctx, web.ContextKeyRequestCSRFExempt, false)
 		user, err := proc.userstore.GetUser(ctx, userId)
 		if err == nil {
-			ctx = context.WithValue(ctx, web.ContextKeyRequestor, user)
+			username := strings.ToLower(user.Email)
+			if strings.TrimSpace(user.SearchUsername) != "" {
+				username = user.SearchUsername
+			}
+			ctx = context.WithValue(ctx, web.ContextKeyRunAsUsername, username)
 		}
 	}
 

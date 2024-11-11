@@ -1104,8 +1104,13 @@ $(document).ready(function () {
           const user = await this.$root.getUserById(id);
           if (user) {
             obj[outputField] = user.email;
+          } else {
+            obj[outputField] = id;
           }
         }
+      },
+      isClientAdmin(user = null) {
+        return this.isUserAdmin(user);
       },
       isUserAdmin(user = null) {
         return this.userHasRole("superuser", user);
