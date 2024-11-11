@@ -38,7 +38,7 @@ func TestValidateRequest(tester *testing.T) {
 	testKey := []byte("some key")
 	testExpirationSeconds := 60
 
-	host := NewHost("http://some.where", "mydir", 1000, "1.2.3", testKey, "exemptId")
+	host := NewHost("http://some.where", "mydir", 1000, "1.2.3", testKey)
 
 	ctx := context.WithValue(context.Background(), ContextKeyRequestorId, "foo")
 
@@ -49,38 +49,39 @@ func TestValidateRequest(tester *testing.T) {
 
 	// Test POST, with exempt ID - no validate
 	request = MustRequest(tester, http.MethodPost, "somewhere", nil)
-	ctx = context.WithValue(context.Background(), ContextKeyRequestorId, "exemptId")
+	ctx = context.WithValue(context.Background(), ContextKeyRequestCSRFExempt, true)
 	err = validateRequest(ctx, host, request)
 	assert.NoError(tester, err)
 
 	// Test DELETE - fail since missing token in req header
 	request = MustRequest(tester, http.MethodDelete, "somewhere", nil)
-	ctx = context.WithValue(context.Background(), ContextKeyRequestorId, "nonExemptId")
+	ctx = context.WithValue(context.Background(), ContextKeyRequestCSRFExempt, false)
 	err = validateRequest(ctx, host, request)
 	assert.EqualError(tester, err, "Missing SRV token on request")
 
 	// Test PUT - fail since missing token in req header
 	request = MustRequest(tester, http.MethodPut, "somewhere", nil)
-	ctx = context.WithValue(context.Background(), ContextKeyRequestorId, "nonExemptId")
+	ctx = context.WithValue(context.Background(), ContextKeyRequestCSRFExempt, false)
 	err = validateRequest(ctx, host, request)
 	assert.EqualError(tester, err, "Missing SRV token on request")
 
 	// Test POST - fail since missing token in req header
 	request = MustRequest(tester, http.MethodPost, "somewhere", nil)
-	ctx = context.WithValue(context.Background(), ContextKeyRequestorId, "nonExemptId")
+	ctx = context.WithValue(context.Background(), ContextKeyRequestCSRFExempt, false)
 	err = validateRequest(ctx, host, request)
 	assert.EqualError(tester, err, "Missing SRV token on request")
 
 	// Test PATCH - fail since missing token in req header
 	request = MustRequest(tester, http.MethodPatch, "somewhere", nil)
-	ctx = context.WithValue(context.Background(), ContextKeyRequestorId, "nonExemptId")
+	ctx = context.WithValue(context.Background(), ContextKeyRequestCSRFExempt, false)
 	err = validateRequest(ctx, host, request)
 	assert.EqualError(tester, err, "Missing SRV token on request")
 
 	// Test POST - fail due to bad token
 	request = MustRequest(tester, http.MethodPost, "somewhere", nil)
 	request.Header.Set("x-srv-token", "e30K")
-	ctx = context.WithValue(context.Background(), ContextKeyRequestorId, "nonExemptId")
+	ctx = context.WithValue(context.Background(), ContextKeyRequestCSRFExempt, false)
+	ctx = context.WithValue(ctx, ContextKeyRequestorId, "123")
 	err = validateRequest(ctx, host, request)
 	assert.EqualError(tester, err, "SRV token HMAC failed validation")
 
@@ -88,7 +89,8 @@ func TestValidateRequest(tester *testing.T) {
 	request = MustRequest(tester, http.MethodPost, "somewhere", nil)
 	token, _ := model.GenerateSrvToken(testKey, "nonExemptId", testExpirationSeconds)
 	request.Header.Set("x-srv-token", token)
-	ctx = context.WithValue(context.Background(), ContextKeyRequestorId, "nonExemptId")
+	ctx = context.WithValue(context.Background(), ContextKeyRequestCSRFExempt, false)
+	ctx = context.WithValue(ctx, ContextKeyRequestorId, "nonExemptId")
 	err = validateRequest(ctx, host, request)
 	assert.NoError(tester, err)
 }
@@ -152,7 +154,6 @@ func TestRespond(t *testing.T) {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, ContextKeyRequestStart, time.Now())
 	ctx = context.WithValue(ctx, ContextKeyRequestId, "x")
-	ctx = context.WithValue(ctx, ContextKeyRequestor, "x")
 
 	for _, tt := range table {
 		t.Run(tt.Name, func(t *testing.T) {

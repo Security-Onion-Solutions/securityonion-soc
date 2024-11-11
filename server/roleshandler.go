@@ -27,6 +27,7 @@ func RegisterRolesRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Use(rolesEnabled(srv))
 
 		r.Get("/", h.getRoles)
+		r.Get("/permissions", h.getPermissions)
 	})
 }
 
@@ -49,4 +50,12 @@ func (h *RolesHandler) getRoles(w http.ResponseWriter, r *http.Request) {
 	roles := h.server.Rolestore.GetRoles(ctx)
 
 	web.Respond(w, r, http.StatusOK, roles)
+}
+
+func (h *RolesHandler) getPermissions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	perms := h.server.Rolestore.GetPermissions(ctx)
+
+	web.Respond(w, r, http.StatusOK, perms)
 }

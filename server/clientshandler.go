@@ -9,12 +9,16 @@ package server
 import (
 	"errors"
 	"net/http"
+	"regexp"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/go-chi/chi/v5"
 )
+
+var clientIdVerifier = regexp.MustCompile(`^[A-Za-z0-9_]{6,55}$`)
+var permissionVerifier = regexp.MustCompile(`^[a-z]+/[a-z]+$`)
 
 type ClientsHandler struct {
 	server *Server
@@ -30,13 +34,12 @@ func RegisterClientsRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Get("/{id}/secret", h.getGeneratedSecret)
 
 		r.Post("/", h.postClient)
-		r.Post("/{id}/role/{role}", h.postAddRole)
+		r.Post("/{id}/permission/{resource}/{privilege}", h.postAddPermission)
 
-		r.Put("/sync", h.putSync)
 		r.Put("/{id}", h.putClient)
 
 		r.Delete("/{id}", h.deleteClient)
-		r.Delete("/{id}/role/{role}", h.deleteClientRole)
+		r.Delete("/{id}/permission/{resource}/{privilege}", h.deleteClientPermission)
 	})
 }
 
@@ -63,36 +66,43 @@ func (h *ClientsHandler) postClient(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var secret string
-	secret, err = h.server.AdminClientstore.AddClient(ctx, client)
+	err = client.Verify()
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	var new_client *model.Client
+	new_client, err = h.server.AdminClientstore.AddClient(ctx, client)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	client.Secret = secret
-	web.Respond(w, r, http.StatusOK, client)
+	web.Respond(w, r, http.StatusOK, new_client)
 }
 
-func (h *ClientsHandler) postAddRole(w http.ResponseWriter, r *http.Request) {
+func (h *ClientsHandler) postAddPermission(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	id := chi.URLParam(r, "id")
-	role := chi.URLParam(r, "role")
+	resource := chi.URLParam(r, "resource")
+	privilege := chi.URLParam(r, "privilege")
 
-	safe := idVerifier.MatchString(id)
+	safe := clientIdVerifier.MatchString(id)
 	if !safe {
 		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid id"))
 		return
 	}
 
-	safe = roleVerifier.MatchString(role)
+	perm := resource + "/" + privilege
+	safe = permissionVerifier.MatchString(perm)
 	if !safe {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid role"))
+		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid permission"))
 		return
 	}
 
-	err := h.server.AdminClientstore.AddRole(ctx, id, role)
+	err := h.server.AdminClientstore.AddClientPermission(ctx, id, perm)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
@@ -105,24 +115,18 @@ func (h *ClientsHandler) getGeneratedSecret(w http.ResponseWriter, r *http.Reque
 	ctx := r.Context()
 
 	id := chi.URLParam(r, "id")
-
-	client := model.NewClient()
-	err := web.ReadJson(r, client)
-	if err != nil {
-		web.Respond(w, r, http.StatusBadRequest, err)
+	safe := clientIdVerifier.MatchString(id)
+	if !safe {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid id"))
 		return
 	}
 
-	client.Id = id
-
-	var secret string
-	secret, err = h.server.AdminClientstore.GenerateSecret(ctx, id)
+	client, err := h.server.AdminClientstore.GenerateSecret(ctx, id)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	client.Secret = secret
 	web.Respond(w, r, http.StatusOK, client)
 }
 
@@ -130,6 +134,11 @@ func (h *ClientsHandler) putClient(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	id := chi.URLParam(r, "id")
+	safe := clientIdVerifier.MatchString(id)
+	if !safe {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid id"))
+		return
+	}
 
 	client := model.NewClient()
 	err := web.ReadJson(r, client)
@@ -139,6 +148,11 @@ func (h *ClientsHandler) putClient(w http.ResponseWriter, r *http.Request) {
 	}
 
 	client.Id = id
+	err = client.Verify()
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
 
 	err = h.server.AdminClientstore.UpdateClient(ctx, client)
 	if err != nil {
@@ -149,23 +163,11 @@ func (h *ClientsHandler) putClient(w http.ResponseWriter, r *http.Request) {
 	web.Respond(w, r, http.StatusOK, client)
 }
 
-func (h *ClientsHandler) putSync(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	err := h.server.AdminClientstore.SyncClients(ctx)
-	if err != nil {
-		web.Respond(w, r, http.StatusInternalServerError, err)
-		return
-	}
-
-	web.Respond(w, r, http.StatusOK, nil)
-}
-
 func (h *ClientsHandler) deleteClient(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	id := chi.URLParam(r, "id")
-	safe := idVerifier.MatchString(id)
+	safe := clientIdVerifier.MatchString(id)
 	if !safe {
 		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid id"))
 		return
@@ -180,25 +182,27 @@ func (h *ClientsHandler) deleteClient(w http.ResponseWriter, r *http.Request) {
 	web.Respond(w, r, http.StatusOK, nil)
 }
 
-func (h *ClientsHandler) deleteClientRole(w http.ResponseWriter, r *http.Request) {
+func (h *ClientsHandler) deleteClientPermission(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	id := chi.URLParam(r, "id")
-	role := chi.URLParam(r, "role")
+	resource := chi.URLParam(r, "resource")
+	privilege := chi.URLParam(r, "privilege")
 
-	safe := idVerifier.MatchString(id)
+	safe := clientIdVerifier.MatchString(id)
 	if !safe {
 		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid id"))
 		return
 	}
 
-	safe = roleVerifier.MatchString(role)
+	perm := resource + "/" + privilege
+	safe = permissionVerifier.MatchString(perm)
 	if !safe {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid role"))
+		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid permission"))
 		return
 	}
 
-	err := h.server.AdminClientstore.DeleteRole(ctx, id, role)
+	err := h.server.AdminClientstore.DeleteClientPermission(ctx, id, perm)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return

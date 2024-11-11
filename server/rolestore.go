@@ -19,4 +19,6 @@ type Rolestore interface {
 	 * Return only top-level roles (roles that are not a child of another role.
 	 */
 	GetRoles(ctx context.Context) []string
+
+	GetPermissions(ctx context.Context) map[string][]string
 }

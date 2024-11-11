@@ -32,6 +32,10 @@ func Middleware(host *Host, isWS bool) func(http.Handler) http.Handler {
 			if err != nil {
 				r = r.WithContext(ctx)
 				Respond(w, r, statusCode, err)
+				log.WithError(err).WithFields(log.Fields{
+					"requestId":   ctx.Value(ContextKeyRequestId),
+					"requestorId": ctx.Value(ContextKeyRequestorId),
+				}).Warn("Request did not pass preprocessing")
 				return
 			}
 
@@ -41,9 +45,18 @@ func Middleware(host *Host, isWS bool) func(http.Handler) http.Handler {
 				err = validateRequest(ctx, host, r)
 				if err != nil {
 					Respond(w, r, http.StatusBadRequest, err)
+					log.WithError(err).WithFields(log.Fields{
+						"requestId":   ctx.Value(ContextKeyRequestId),
+						"requestorId": ctx.Value(ContextKeyRequestorId),
+					}).Warn("Request did not pass request validation")
 					return
 				}
 			}
+
+			log.WithFields(log.Fields{
+				"requestId":   ctx.Value(ContextKeyRequestId),
+				"requestorId": ctx.Value(ContextKeyRequestorId),
+			}).Debug("Serving HTTP request")
 
 			next.ServeHTTP(w, r)
 		})
@@ -56,16 +69,18 @@ func validateRequest(ctx context.Context, host *Host, request *http.Request) err
 		request.Method == http.MethodPatch ||
 		request.Method == http.MethodDelete {
 
-		userId := ctx.Value(ContextKeyRequestorId).(string)
-		if userId != host.SrvExemptId {
-
-			token := request.Header.Get("x-srv-token")
-			if len(token) == 0 {
-				return errors.New("Missing SRV token on request")
-			}
-
-			return model.ValidateSrvToken(host.SrvKey, userId, token)
+		exempt := ctx.Value(ContextKeyRequestCSRFExempt).(bool)
+		if exempt {
+			return nil
 		}
+
+		token := request.Header.Get("x-srv-token")
+		if len(token) == 0 {
+			return errors.New("Missing SRV token on request")
+		}
+
+		userId := ctx.Value(ContextKeyRequestorId).(string)
+		return model.ValidateSrvToken(host.SrvKey, userId, token)
 	}
 	return nil
 }

@@ -16,13 +16,14 @@ type HydraClient struct {
 	Id         string          `json:"client_id"`
 	CreateDate time.Time       `json:"created_at"`
 	UpdateDate time.Time       `json:"updated_at"`
-	Name       string          `json:"name"`
+	Name       string          `json:"client_name"`
 	Secret     string          `json:"client_secret"`
 	Metadata   *ClientMetadata `json:"metadata"`
 }
 
 type ClientMetadata struct {
-	Note string `json:"note"`
+	Note           string `json:"note"`
+	SearchUsername string `json:"searchUsername"`
 }
 
 func NewHydraClient(name string) *HydraClient {
@@ -38,12 +39,14 @@ func (hydraClient *HydraClient) copyToClient(client *model.Client) {
 	client.Secret = hydraClient.Secret
 	if hydraClient.Metadata != nil {
 		client.Note = hydraClient.Metadata.Note
+		client.SearchUsername = hydraClient.Metadata.SearchUsername
 	}
 }
 
 func (hydraClient *HydraClient) copyFromClient(client *model.Client) {
 	metadata := ClientMetadata{
-		Note: client.Note,
+		Note:           client.Note,
+		SearchUsername: client.SearchUsername,
 	}
 	hydraClient.Name = client.Name
 	hydraClient.Secret = client.Secret

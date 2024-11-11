@@ -10,21 +10,20 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type Connection struct {
 	websocket    *websocket.Conn
 	lastPingTime time.Time
 	ip           string
-	user         *model.User
+	userId       string
 }
 
-func NewConnection(user *model.User, wsConn *websocket.Conn, ip string) *Connection {
+func NewConnection(userId string, wsConn *websocket.Conn, ip string) *Connection {
 	conn := &Connection{
 		websocket: wsConn,
 		ip:        ip,
-		user:      user,
+		userId:    userId,
 	}
 	conn.UpdatePingTime()
 	return conn

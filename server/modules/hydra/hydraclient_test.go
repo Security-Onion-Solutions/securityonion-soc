@@ -17,13 +17,23 @@ func TestCopyFromClient(tester *testing.T) {
 	hydraClient := &HydraClient{}
 	client := model.NewClient()
 	client.Name = "test"
+	client.SearchUsername = "sn"
+	client.Note = "notes"
 	hydraClient.copyFromClient(client)
 	assert.Equal(tester, client.Name, hydraClient.Name)
+	assert.Equal(tester, client.SearchUsername, hydraClient.Metadata.SearchUsername)
+	assert.Equal(tester, client.Note, hydraClient.Metadata.Note)
 }
 
 func TestCopyToClient(tester *testing.T) {
 	hydraClient := NewHydraClient("test")
+	hydraClient.Metadata = &ClientMetadata{
+		Note:           "notes",
+		SearchUsername: "sn",
+	}
 	client := model.NewClient()
 	hydraClient.copyToClient(client)
 	assert.Equal(tester, hydraClient.Name, client.Name)
+	assert.Equal(tester, hydraClient.Metadata.SearchUsername, client.SearchUsername)
+	assert.Equal(tester, hydraClient.Metadata.Note, client.Note)
 }

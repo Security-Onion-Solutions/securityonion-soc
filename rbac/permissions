@@ -29,6 +29,8 @@ jobs/delete:      job-admin
 jobs/process:     job-processor
 nodes/read:       node-monitor
 nodes/write:      node-admin
+permissions/read: client-monitor
+permissions/write: client-admin
 roles/read:       user-monitor
 roles/write:      user-admin
 users/read:       user-monitor

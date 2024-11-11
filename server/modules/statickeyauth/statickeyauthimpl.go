@@ -59,6 +59,7 @@ func (auth *StaticKeyAuthImpl) Preprocess(ctx context.Context, req *http.Request
 		// Remote agents will assume the role of this server until the implementation
 		// is enhanced to support unique agent keys and roles.
 		ctx = context.WithValue(ctx, web.ContextKeyRequestorId, auth.server.Agent.Id)
+		ctx = context.WithValue(ctx, web.ContextKeyRequestCSRFExempt, true)
 	}
 	return ctx, statusCode, err
 }

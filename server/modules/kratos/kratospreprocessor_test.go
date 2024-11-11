@@ -72,10 +72,7 @@ func TestPreprocess(tester *testing.T) {
 		assert.NotNil(tester, ctx)
 	}
 
-	requestor := ctx.Value(web.ContextKeyRequestor)
-	assert.NotNil(tester, requestor)
-
-	actualId := requestor.(*model.User).Id
+	actualId := ctx.Value(web.ContextKeyRequestorId)
 	assert.Equal(tester, expectedId, actualId)
 
 	requestorId := ctx.Value(web.ContextKeyRequestorId)

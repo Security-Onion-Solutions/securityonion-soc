@@ -14,7 +14,7 @@ import (
 )
 
 func TestUpdatePingTime(tester *testing.T) {
-	conn := NewConnection(nil, nil, "")
+	conn := NewConnection("", nil, "")
 	oldPingTime := conn.lastPingTime
 	time.Sleep(3 * time.Millisecond)
 	conn.UpdatePingTime()

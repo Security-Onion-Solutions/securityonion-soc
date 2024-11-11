@@ -47,6 +47,11 @@ func (proc *HydraPreprocessor) Preprocess(ctx context.Context, request *http.Req
 	}
 
 	ctx = context.WithValue(ctx, web.ContextKeyRequestorId, client.Id)
+	ctx = context.WithValue(ctx, web.ContextKeyRequestCSRFExempt, true)
+	searchUsername := strings.TrimSpace(client.SearchUsername)
+	if searchUsername != "" {
+		ctx = context.WithValue(ctx, web.ContextKeyRunAsUsername, searchUsername)
+	}
 
 	return ctx, 0, nil
 }

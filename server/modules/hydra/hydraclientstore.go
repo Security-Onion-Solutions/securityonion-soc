@@ -73,7 +73,7 @@ func (hydra *HydraClientstore) fetchClient(ctx context.Context, id string) (*mod
 
 	hydraClient.copyToClient(client)
 	if hydra.server.Rolestore != nil {
-		_, client.Roles = hydra.server.Rolestore.GetRolesForAuthId(ctx, client.Id)
+		_, client.Permissions = hydra.server.Rolestore.GetRolesForAuthId(ctx, client.Id)
 	}
 	return client, nil
 }
@@ -115,7 +115,7 @@ func (hydra *HydraClientstore) GetClientByToken(ctx context.Context, token strin
 }
 
 func (hydra *HydraClientstore) GetClientById(ctx context.Context, id string) (*model.Client, error) {
-	if err := hydra.server.CheckAuthorized(ctx, "read", "api"); err != nil {
+	if err := hydra.server.CheckAuthorized(ctx, "read", "clients"); err != nil {
 		return nil, err
 	}
 
@@ -123,10 +123,17 @@ func (hydra *HydraClientstore) GetClientById(ctx context.Context, id string) (*m
 }
 
 func (hydra *HydraClientstore) GetClients(ctx context.Context) ([]*model.Client, error) {
-	clients := make([]*model.Client, 0)
-	myClientOnly := make([]*model.Client, 0)
+	if err := hydra.server.CheckAuthorized(ctx, "read", "clients"); err != nil {
+		log.WithFields(log.Fields{
+			"requestId":   ctx.Value(web.ContextKeyRequestId),
+			"requestorId": ctx.Value(web.ContextKeyRequestorId),
+		}).Debug("Requestor does not have read access to clients")
+		return nil, nil
+	}
 
-	if requestorId, ok := ctx.Value(web.ContextKeyRequestorId).(string); ok {
+	clients := make([]*model.Client, 0)
+
+	if _, ok := ctx.Value(web.ContextKeyRequestorId).(string); ok {
 		hydraClients := make([]*HydraClient, 0)
 		_, err := hydra.client.SendObject("GET", "/admin/clients", "", &hydraClients, false)
 		if err != nil {
@@ -142,18 +149,10 @@ func (hydra *HydraClientstore) GetClients(ctx context.Context) ([]*model.Client,
 
 			hydraClient.copyToClient(client)
 			if hydra.server.Rolestore != nil {
-				_, client.Roles = hydra.server.Rolestore.GetRolesForAuthId(ctx, client.Id)
+				_, client.Permissions = hydra.server.Rolestore.GetRolesForAuthId(ctx, client.Id)
 			}
 			clients = append(clients, client)
-			if client.Id == requestorId {
-				myClientOnly = append(myClientOnly, client)
-			}
 		}
-	}
-
-	if err := hydra.server.CheckAuthorized(ctx, "read", "api"); err != nil {
-		// Client does not have access to read all users, return only that user
-		return myClientOnly, nil
 	}
 
 	return clients, nil

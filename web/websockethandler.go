@@ -14,7 +14,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 	"github.com/security-onion-solutions/securityonion-soc/json"
-	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
 type WebSocketHandler struct {
@@ -45,9 +44,7 @@ func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.
 
 	ip := GetSourceIp(r)
 
-	var user *model.User
-	var ok bool
-	user, ok = ctx.Value(ContextKeyRequestor).(*model.User)
+	userId, ok := ctx.Value(ContextKeyRequestorId).(string)
 	if !ok {
 		log.WithFields(log.Fields{
 			"messageRemoteAddr": r.RemoteAddr,
@@ -78,7 +75,7 @@ func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.
 		"messagePath":       r.URL.Path,
 	}).Info("WebSocket connected")
 
-	conn := webSocketHandler.Host.AddConnection(user, connection, ip)
+	conn := webSocketHandler.Host.AddConnection(userId, connection, ip)
 
 	defer connection.Close()
 	for {

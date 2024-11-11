@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -43,26 +44,34 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	srvToken, err := model.GenerateSrvToken(h.server.Config.SrvKeyBytes, userId, h.server.Config.SrvExpSeconds)
-	if err != nil {
-		web.Respond(w, r, http.StatusInternalServerError, err)
-		return
-	}
+	var srvToken string
+	var forceUserOtp bool
+	var params *config.ClientParameters
+	exempt := r.Context().Value(web.ContextKeyRequestCSRFExempt).(bool)
+	if !exempt {
+		var err error
+		srvToken, err = model.GenerateSrvToken(h.server.Config.SrvKeyBytes, userId, h.server.Config.SrvExpSeconds)
+		if err != nil {
+			web.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
 
-	user, err := h.server.Userstore.GetUserById(r.Context(), userId)
-	if err != nil {
-		web.Respond(w, r, http.StatusInternalServerError, err)
-		return
-	}
+		user, err := h.server.Userstore.GetUserById(r.Context(), userId)
+		if err != nil {
+			web.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
 
-	forceUserOtp := user.TotpStatus != "enabled" && h.server.Config.ForceUserOtp
+		forceUserOtp = user.TotpStatus != "enabled" && h.server.Config.ForceUserOtp
+		params = &h.server.Config.ClientParams
+	}
 
 	info := &model.Info{
 		Version:        h.server.Host.Version,
 		License:        "Elastic License 2.0 (ELv2)",
 		LicenseKey:     licensing.GetLicenseKey(),
 		LicenseStatus:  licensing.GetStatus(),
-		Parameters:     &h.server.Config.ClientParams,
+		Parameters:     params,
 		ElasticVersion: os.Getenv("ELASTIC_VERSION"),
 		UserId:         userId,
 		Timezones:      h.timezones,

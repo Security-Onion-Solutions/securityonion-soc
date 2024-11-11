@@ -10,31 +10,32 @@ import (
 	"context"
 	"errors"
 
+	"github.com/security-onion-solutions/securityonion-soc/json"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
-func (store *Saltstore) AddClient(ctx context.Context, client *model.Client) (string, error) {
+func (store *Saltstore) AddClient(ctx context.Context, client *model.Client) (*model.Client, error) {
 	if err := store.server.CheckAuthorized(ctx, "write", "clients"); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	args := make(map[string]string)
-	args["command"] = "manage-user"
-	args["operation"] = "add-client"
-	if len(client.Roles) > 0 {
-		args["role"] = client.Roles[0]
-	}
+	args["command"] = "manage-client"
+	args["operation"] = "add"
 	args["name"] = client.Name
+	args["note"] = client.Note
 	output, err := store.execCommand(ctx, args)
-	if err == nil {
-		if output == "false" {
-			err = errors.New("ERROR_SALT_MANAGE_CLIENT")
-		}
+	if err != nil {
+		return nil, err
 	}
 
-	store.server.Rolestore.Reload()
+	if output == "false" {
+		err = errors.New("ERROR_SALT_MANAGE_CLIENT")
+		return nil, err
+	}
 
-	return output, err
+	err = json.LoadJson([]byte(output), client)
+	return client, err
 }
 
 func (store *Saltstore) DeleteClient(ctx context.Context, id string) error {
@@ -67,6 +68,7 @@ func (store *Saltstore) UpdateClient(ctx context.Context, client *model.Client) 
 	args["id"] = client.Id
 	args["name"] = client.Name
 	args["note"] = client.Note
+	args["searchusername"] = client.SearchUsername
 	output, err := store.execCommand(ctx, args)
 	if err == nil {
 		if output == "false" {
@@ -77,9 +79,9 @@ func (store *Saltstore) UpdateClient(ctx context.Context, client *model.Client) 
 	return err
 }
 
-func (store *Saltstore) GenerateSecret(ctx context.Context, id string) (string, error) {
+func (store *Saltstore) GenerateSecret(ctx context.Context, id string) (*model.Client, error) {
 	if err := store.server.CheckAuthorized(ctx, "write", "clients"); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	args := make(map[string]string)
@@ -87,25 +89,30 @@ func (store *Saltstore) GenerateSecret(ctx context.Context, id string) (string, 
 	args["operation"] = "generate-secret"
 	args["id"] = id
 	output, err := store.execCommand(ctx, args)
-	if err == nil {
-		if output == "false" {
-			err = errors.New("ERROR_SALT_MANAGE_CLIENT")
-		}
+	if err != nil {
+		return nil, err
+	}
+	if output == "false" {
+		err = errors.New("ERROR_SALT_MANAGE_CLIENT")
+		return nil, err
 	}
 
-	return output, err
+	client := &model.Client{}
+	client.Id = id
+	err = json.LoadJson([]byte(output), client)
+	return client, err
 }
 
-func (store *Saltstore) AddClientRole(ctx context.Context, id string, role string) error {
+func (store *Saltstore) AddClientPermission(ctx context.Context, id string, perm string) error {
 	if err := store.server.CheckAuthorized(ctx, "write", "clients"); err != nil {
 		return err
 	}
 
 	args := make(map[string]string)
 	args["command"] = "manage-client"
-	args["operation"] = "addrole"
+	args["operation"] = "addperm"
 	args["id"] = id
-	args["role"] = role
+	args["permission"] = perm
 	output, err := store.execCommand(ctx, args)
 	if err == nil {
 		if output == "false" {
@@ -118,16 +125,16 @@ func (store *Saltstore) AddClientRole(ctx context.Context, id string, role strin
 	return err
 }
 
-func (store *Saltstore) DeleteClientRole(ctx context.Context, id string, role string) error {
+func (store *Saltstore) DeleteClientPermission(ctx context.Context, id string, perm string) error {
 	if err := store.server.CheckAuthorized(ctx, "write", "clients"); err != nil {
 		return err
 	}
 
 	args := make(map[string]string)
 	args["command"] = "manage-client"
-	args["operation"] = "delrole"
+	args["operation"] = "delperm"
 	args["id"] = id
-	args["role"] = role
+	args["permission"] = perm
 	output, err := store.execCommand(ctx, args)
 	if err == nil {
 		if output == "false" {
@@ -136,24 +143,6 @@ func (store *Saltstore) DeleteClientRole(ctx context.Context, id string, role st
 	}
 
 	store.server.Rolestore.Reload()
-
-	return err
-}
-
-func (store *Saltstore) SyncClients(ctx context.Context) error {
-	if err := store.server.CheckAuthorized(ctx, "write", "clients"); err != nil {
-		return err
-	}
-
-	args := make(map[string]string)
-	args["command"] = "manage-client"
-	args["operation"] = "sync"
-	output, err := store.execCommand(ctx, args)
-	if err == nil {
-		if output == "false" {
-			err = errors.New("ERROR_SALT_MANAGE_CLIENT")
-		}
-	}
 
 	return err
 }

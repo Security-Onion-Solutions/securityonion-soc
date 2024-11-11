@@ -18,8 +18,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-var idVerifier = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
-var roleVerifier = regexp.MustCompile(`^[A-Za-z0-9-_]+$`)
+var idVerifier = regexp.MustCompile(`^[A-Za-z0-9-]{36}$`)
+var roleVerifier = regexp.MustCompile(`^[A-Za-z0-9-_]{3,50}$`)
 
 type UsersHandler struct {
 	server *Server
@@ -87,6 +87,12 @@ func (h *UsersHandler) postUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = user.Verify()
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
 	err = h.server.AdminUserstore.AddUser(ctx, user)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -136,7 +142,11 @@ func (h *UsersHandler) putUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user.Id = id
-
+	err = user.Verify()
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
 	err = h.server.AdminUserstore.UpdateProfile(ctx, user)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -162,10 +172,20 @@ func (h *UsersHandler) putPassword(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	id := chi.URLParam(r, "id")
+	safe := idVerifier.MatchString(id)
+	if !safe {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid id"))
+		return
+	}
 
 	user := model.NewUser()
 
 	err := web.ReadJson(r, user)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+	err = user.Verify()
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
 		return
@@ -185,6 +205,11 @@ func (h *UsersHandler) putToggleUser(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	id := chi.URLParam(r, "id")
+	safe := idVerifier.MatchString(id)
+	if !safe {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid id"))
+		return
+	}
 
 	toggle := chi.URLParam(r, "toggle")
 	switch strings.ToLower(toggle) {

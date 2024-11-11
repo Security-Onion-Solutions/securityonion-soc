@@ -13,11 +13,10 @@ import (
 )
 
 type AdminClientstore interface {
-	AddClient(ctx context.Context, client *model.Client) (string, error)
+	AddClient(ctx context.Context, client *model.Client) (*model.Client, error)
 	DeleteClient(ctx context.Context, id string) error
-	GenerateSecret(ct context.Context, id string) (string, error)
+	GenerateSecret(ct context.Context, id string) (*model.Client, error)
 	UpdateClient(ctx context.Context, client *model.Client) error
-	AddRole(ctx context.Context, id string, role string) error
-	DeleteRole(ctx context.Context, id string, role string) error
-	SyncClients(ctx context.Context) error
+	AddClientPermission(ctx context.Context, id string, perm string) error
+	DeleteClientPermission(ctx context.Context, id string, perm string) error
 }

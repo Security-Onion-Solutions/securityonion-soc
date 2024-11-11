@@ -102,9 +102,32 @@ func (impl *StaticRbacAuthorizer) GetAssignments(ctx context.Context) (map[strin
 	return userMap, nil
 }
 
+func (impl *StaticRbacAuthorizer) GetPermissions(ctx context.Context) map[string][]string {
+	perm_map := make(map[string]bool)
+	final_map := make(map[string][]string)
+	if err := impl.CheckContextOperationAuthorized(ctx, "read", "permissions"); err == nil {
+		for _, perms := range impl.roleMap {
+			for _, perm := range perms {
+				if _, exists := perm_map[perm]; !exists && strings.Contains(perm, "/") {
+					pairs := strings.Split(perm, "/")
+					resource := pairs[0]
+					privilege := pairs[1]
+					if _, exists := final_map[resource]; !exists {
+						final_map[resource] = make([]string, 0)
+					}
+					final_map[resource] = append(final_map[resource], privilege)
+					sort.Strings(final_map[resource])
+					perm_map[perm] = true
+				}
+			}
+		}
+	}
+	return final_map
+}
+
 func (impl *StaticRbacAuthorizer) GetRoles(ctx context.Context) []string {
-	roles := make([]string, 0, 0)
-	tmp_roles := make([]string, 0, 0)
+	roles := make([]string, 0)
+	tmp_roles := make([]string, 0)
 	perm_map := make(map[string]bool)
 	if err := impl.CheckContextOperationAuthorized(ctx, "read", "roles"); err == nil {
 		for role, perms := range impl.roleMap {
@@ -137,6 +160,7 @@ func (impl *StaticRbacAuthorizer) GetRolesForAuthId(ctx context.Context, id stri
 	} else {
 		log.WithField("authId", id).Debug("No roles found")
 	}
+	sort.Strings(returnedRoles)
 	return nil, returnedRoles
 }
 
@@ -171,7 +195,7 @@ func (impl *StaticRbacAuthorizer) RemoveRoleFromUser(user *model.User, role stri
 func (impl *StaticRbacAuthorizer) adjustMap(mp map[string][]string, subject string, permission string, operation string) {
 	perms := mp[subject]
 	if perms == nil {
-		perms = make([]string, 0, 0)
+		perms = make([]string, 0)
 	}
 	existsAtIdx := -1
 	for idx, value := range perms {

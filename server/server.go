@@ -9,6 +9,7 @@ package server
 import (
 	"context"
 	"errors"
+	"net/http"
 	"os/exec"
 	"strings"
 
@@ -49,7 +50,7 @@ type Server struct {
 func NewServer(cfg *config.ServerConfig, version string) *Server {
 	server := &Server{
 		Config:           cfg,
-		Host:             web.NewHost(cfg.BindAddress, cfg.HtmlDir, cfg.IdleConnectionTimeoutMs, version, cfg.SrvKeyBytes, AGENT_ID),
+		Host:             web.NewHost(cfg.BindAddress, cfg.HtmlDir, cfg.IdleConnectionTimeoutMs, version, cfg.SrvKeyBytes),
 		stoppedChan:      make(chan bool, 1),
 		DetectionEngines: map[model.EngineName]DetectionEngine{},
 	}
@@ -66,8 +67,8 @@ func (server *Server) initContext() {
 	server.Agent.Id = AGENT_ID
 	server.Agent.Email = server.Agent.Id
 
-	ctx := context.WithValue(context.Background(), web.ContextKeyRequestor, server.Agent)
-	ctx = context.WithValue(context.Background(), web.ContextKeyRequestorId, AGENT_ID)
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, AGENT_ID)
+	ctx = context.WithValue(ctx, web.ContextKeyRequestCSRFExempt, true)
 
 	server.Context = ctx
 }
@@ -81,6 +82,14 @@ func (server *Server) Start() {
 		r := chi.NewMux()
 
 		r.Use(web.Middleware(server.Host, false))
+		r.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log.WithFields(log.Fields{
+				"url":         r.URL,
+				"requestId":   r.Context().Value(web.ContextKeyRequestId),
+				"requestorId": r.Context().Value(web.ContextKeyRequestorId),
+			}).Warn("404 Not Found")
+			web.Respond(w, r, http.StatusNotFound, nil)
+		}))
 
 		RegisterCaseRoutes(server, r, "/api/case")
 		RegisterEventRoutes(server, r, "/api/events")

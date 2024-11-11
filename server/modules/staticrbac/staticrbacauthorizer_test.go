@@ -44,21 +44,9 @@ func TestCheckContextOperationAuthorized_EmptyContext(tester *testing.T) {
 	assert.Error(tester, err, "Expected error due to missing context data")
 }
 
-func TestCheckContextOperationAuthorized_Collision(tester *testing.T) {
-	ctx := context.Background()
-	user := model.NewUser()
-	user.Email = "mytarget/myop"
-	user.Id = "a1-id"
-	ctx = context.WithValue(ctx, web.ContextKeyRequestor, user)
-
-	auth := NewStaticRbacAuthorizer(server.NewFakeAuthorizedServer(nil))
-	err := auth.CheckContextOperationAuthorized(ctx, "myop", "mytarget")
-	assert.Error(tester, err)
-}
-
 func TestCheckContextOperationAuthorized_Fail(tester *testing.T) {
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, web.ContextKeyRequestor, model.NewUser())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestorId, "someId")
 
 	auth := NewStaticRbacAuthorizer(server.NewFakeAuthorizedServer(nil))
 	err := auth.CheckContextOperationAuthorized(ctx, "myop", "mytarget")
