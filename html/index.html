@@ -139,7 +139,7 @@
             <div class="warning-message" v-html="warningMessage"></div>
           </v-snackbar>
           <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" v-html="infoMessage" data-aid="banner_info"></v-alert>
-          <v-snackbar id="tip" top centered rounded close :timeout="tipTimeout" v-model="tip" color="info" data-aid="banner_tip">
+          <v-snackbar id="tip" location="center top" rounded close :timeout="tipTimeout" v-model="tip" color="info" data-aid="banner_tip">
             <template #actions="{ attrs }">
               <v-btn icon variant="text" size="small" v-bind="attrs" @click="tip = false" data-aid="banner_tip_close">
                 <v-icon>fa-times</v-icon>
@@ -487,10 +487,10 @@
         <v-row v-if="loaded && (queryFilters.length > 0 || queryGroupBys.length > 0 || querySortBys.length > 0)">
           <v-col cols="12">
             <span v-for="filter in queryFilters" :key="filter" :data-aid="'filter_chip_' + category">
-              <v-chip class="filter mx-1 my-1" color="primary" close @click:close="removeFilter(filter)">{{ formatSafeString(filter) }}</v-chip>
+              <v-chip class="filter mx-1 my-1" color="primary" closable="true" @click:close="removeFilter(filter)">{{ formatSafeString(filter) }}</v-chip>
             </span>
             <span v-for="sortBy in querySortBys" :key="sortBy" :data-aid="'sort_chip_' + category">
-              <v-chip class="sortBy mx-1 my-1" color="secondary" close @click:close="removeSortBy(sortBy)">{{ i18n.sortedBy }} {{ formatSafeString(sortBy) }}</v-chip>
+              <v-chip class="sortBy mx-1 my-1" color="secondary" closable="true" @click:close="removeSortBy(sortBy)">{{ i18n.sortedBy }} {{ formatSafeString(sortBy) }}</v-chip>
             </span>
           </v-col>
         </v-row>
@@ -698,7 +698,7 @@
                 <v-data-table ref="eventTable" :search="eventFilter" :sort-by="sortBy" @update:sort-by="val => sortBy = val" item-value="soc_id" :footer-props="footerProps" :data-aid="'events_table_' + category"
                   :items-per-page="itemsPerPage" must-sort :headers="eventHeaders" :items="eventData" :page.sync="eventPage" show-select :custom-sort="sortEvents" density="compact" @current-items="val => eventCurrentItems = val">
                   <template #top="data">
-                    <!-- not fancy way to access the current page of items:
+                    <!-- not-fancy way to access the current page of items:
                      https://stackoverflow.com/questions/76008941/vuetify-3-data-table-current-items
                      NOTE: Moved to top because if it were bottom we lose paging controls -->
                     <template name="top" :any_name="eventCurrentItems = data.items" />
@@ -776,8 +776,9 @@
                       </td>
                       <td v-for="field in eventHeaders" :key="field.value">
                         <div :id="'events_quick_action_' + category + '_' + field.value" class="quick-action-trigger d-inline-block" @click="toggleQuickAction($event, item, field.value, item[field.value])" :data-aid="'events_quick_action_' + category">
-                          <span v-if="field.value != 'soc_timestamp'">{{ (item[field.value]+'').startsWith('__') ? $root.tryLocalize(item[field.value]) : $root.correctCasing(item[field.value]) }}<span class="resolved-host" v-if="$root.pickHostname(item[field.value])"><br/>- {{ $root.pickHostname(item[field.value]) }}</span></span>
-                          <span v-if="field.value == 'soc_timestamp'" v-text="$root.formatLocalTimestamp(item[field.value], zone)"/>
+                          <span v-if="field.value === 'soc_timestamp'" v-text="$root.formatLocalTimestamp(item[field.value], zone)"/>
+                          <span v-else-if="field.value === 'override_count'">{{ (item['so_detection.overrides'] || []).length }}</span>
+                          <span v-else>{{ (item[field.value]+'').startsWith('__') ? $root.tryLocalize(item[field.value]) : $root.correctCasing(item[field.value]) }}<span class="resolved-host" v-if="$root.pickHostname(item[field.value])"><br/>- {{ $root.pickHostname(item[field.value]) }}</span></span>
                         </div>
                       </td>
                     </tr>
@@ -820,186 +821,188 @@
           <v-spacer></v-spacer>
         </v-row>
         <v-menu v-model="quickActionVisible" :target="quickActionTarget" :data-aid="'context_menu_' + category">
-          <v-list id="hunt-quick-action">
-            <v-list-item density="compact" id="actionFilterInclude" :to="filterRouteInclude" v-bind:title.attr="i18n.filterIncludeHelp" :data-aid="'context_menu_filter_include_' + category" active-class="">
-              <template #prepend>
-                <v-icon :alt="i18n.filterInclude" class="theme-icon">fa-search-plus</v-icon>
-              </template>
-              <v-list-item-title>
-                {{ i18n.filterInclude }}
-              </v-list-item-title>
-            </v-list-item>
-            <v-list-item density="compact" id="actionFilterExclude" :to="filterRouteExclude" v-bind:title.attr="i18n.filterExcludeHelp" :data-aid="'context_menu_filter_exclude_' + category">
-              <template #prepend>
-                <v-icon :alt="i18n.filterExclude" class="theme-icon">fa-search-minus</v-icon>
-              </template>
-              <v-list-item-title>
-                {{ i18n.filterExclude }}
-              </v-list-item-title>
-            </v-list-item>
-            <v-list-item density="compact" id="actionFilterExact" :to="filterRouteExact" v-bind:title.attr="i18n.filterExactHelp" :data-aid="'context_menu_filter_exact_' + category">
-              <template #prepend>
-                <v-icon :alt="i18n.filterExact" class="theme-icon">fa-search</v-icon>
-              </template>
-              <v-list-item-title>
-                {{ i18n.filterExact }}
-              </v-list-item-title>
-            </v-list-item>
-            <v-list-item density="compact" id="actionDrilldown" :to="filterRouteDrilldown" v-bind:title.attr="i18n.filterDrilldownHelp" v-if="!isAdvanced() && metricsEnabled" :data-aid="'context_menu_drilldown_' + category">
-              <template #prepend>
-                <v-icon :alt="i18n.filterDrilldown" class="theme-icon">fa-angle-double-down</v-icon>
-              </template>
-              <v-list-item-title>
-                {{ i18n.filterDrilldown }}
-              </v-list-item-title>
-            </v-list-item>
-            <v-list-item density="compact" id="actionTuneDetection" v-if="quickActionDetId && $root.detectionsEnabled && isCategory('alerts')" :to='{ name: "detection", params: { id: quickActionDetId }, query: { tab: tuneDetectionTabTarget } }' class="v-list-item--active" v-bind:title.attr="i18n.tuneDetectionHelp" :data-aid="'context_menu_tuning_' + category">
-              <template #prepend>
-                <v-icon :alt="i18n.tuneDetection" class="theme-icon">fa-wrench</v-icon>
-              </template>
-              <v-list-item-title>
-                {{ i18n.tuneDetection }}
-              </v-list-item-title>
-            </v-list-item>
-            <v-list-item density="compact" id="actionTuneDetection-disabled" v-if="!quickActionDetId && $root.detectionsEnabled && isCategory('alerts')" v-bind:title.attr="i18n.tuneDetectionHelp" :data-aid="'context_menu_tuning_disabled_' + category">
-              <template #prepend>
-                <v-icon :alt="i18n.tuneDetection" class="theme-icon">fa-wrench</v-icon>
-              </template>
-              <v-list-item-title>
-                {{ i18n.tuneDetection }}
-              </v-list-item-title>
-            </v-list-item>
-            <v-list-item density="compact" id="actionGroupBy" :to="groupByRoute" v-bind:title.attr="i18n.groupIncludeHelp" :data-aid="'context_menu_groupby_' + category">
-              <template #prepend>
-                <v-icon :alt="i18n.groupInclude" class="theme-icon">fa-layer-group</v-icon>
-              </template>
-              <v-list-item-title>
-                {{ i18n.groupInclude }}
-              </v-list-item-title>
-            </v-list-item>
-            <v-list-item density="compact" id="actionGroupByNew" :to="groupByNewRoute" v-bind:title.attr="i18n.groupNewHelp" :data-aid="'context_menu_groupby_new_' + category">
-              <template #prepend>
-                <v-icon :alt="i18n.groupNew" class="theme-icon">fa-layer-group</v-icon>
-              </template>
-              <v-list-item-title>
-                {{ i18n.groupNew }}
-              </v-list-item-title>
-            </v-list-item>
-            <v-list-group density="compact" :value="false" @click.stop v-if="quickActionVisible && quickActionIsNumeric" :data-aid="'context_menu_compare_' + category" class="deep-theme-text">
-              <template #activator="{ props, isOpen }">
-                <v-list-item v-bind="props" class="v-list-item--active">
-                  <template #prepend>
-                    <v-icon :alt="i18n.groupNumeric" class="theme-icon">fa-calculator</v-icon>
-                  </template>
-                  <template #append>
-                    <v-icon class="theme-icon">{{ isOpen ? 'fa-caret-up' : 'fa-caret-down' }}</v-icon>
-                  </template>
-                  <v-list-item-title>{{ i18n.numericOps }}</v-list-item-title>
-                </v-list-item>
-              </template>
-              <v-list-item density="compact" id="filterLessThan" class="half-width" :to="filterRouteLessThan" :data-aid="'context_menu_lt_' + category">
-                <v-list-item-title class="text-center">
-                  &lt;
-                </v-list-item-title>
-              </v-list-item>
-              <v-list-item density="compact" id="filterLessThanEqual" class="half-width" :to="filterRouteLessThanEqual" :data-aid="'context_menu_lte_' + category">
-                <v-list-item-title class="text-center">
-                  &le;
-                </v-list-item-title>
-              </v-list-item>
-              <div class="flex-break"></div>
-              <v-list-item density="compact" id="filterGreaterThan" class="half-width" :to="filterRouteGreaterThan" :data-aid="'context_menu_gt_' + category">
-                <v-list-item-title class="text-center">
-                  &gt;
-                </v-list-item-title>
-              </v-list-item>
-              <v-list-item density="compact" id="filterGreaterThanEqual" class="half-width" :to="filterRouteGreaterThanEqual" :data-aid="'context_menu_gte_' + category">
-                <v-list-item-title class="text-center">
-                  &ge;
-                </v-list-item-title>
-              </v-list-item>
-              <v-list-item density="compact" id="filterBetween" @click="showBetweenDialog()" :data-aid="'context_menu_between_' + category">
-                <v-list-item-title class="text-center">
-                  {{ i18n.betweenOp }}
-                </v-list-item-title>
-              </v-list-item>
-            </v-list-group>
-            <v-list-group density="compact" @click.stop class="deep-theme-text" :data-aid="'context_menu_clipboard_' + category">
-              <template #activator="{ props, isOpen }">
-                <v-list-item v-bind="props" class="v-list-item--active">
-                  <template #prepend>
-                    <v-icon class="theme-icon">fa-clipboard</v-icon>
-                  </template>
-                  <template #append>
-                    <v-icon class="theme-icon">{{ isOpen ? 'fa-caret-up' : 'fa-caret-down' }}</v-icon>
-                  </template>
-                  <v-list-item-title>
-                    {{ i18n.share }}
-                  </v-list-item-title>
-                </v-list-item>
-              </template>
-              <v-list-item id="actionCopyValue" density="compact" @click="$root.copyToClipboard(quickActionValue)" :data-aid="'context_menu_copy_' + category">
+          <div class="d-flex">
+            <v-list id="hunt-quick-action">
+              <v-list-item density="compact" id="actionFilterInclude" :to="filterRouteInclude" v-bind:title.attr="i18n.filterIncludeHelp" :data-aid="'context_menu_filter_include_' + category" active-class="">
                 <template #prepend>
-                  <v-icon class="solid" class="theme-icon">fa-copy</v-icon>
+                  <v-icon :alt="i18n.filterInclude" class="theme-icon">fa-search-plus</v-icon>
                 </template>
                 <v-list-item-title>
-                  {{ i18n.copyFieldToClipboard }}
+                  {{ i18n.filterInclude }}
                 </v-list-item-title>
               </v-list-item>
-              <v-list-item id="actionCopyFieldValue" density="compact" @click="$root.copyToClipboard(quickActionField + ': ' + quickActionValue)" :data-aid="'context_menu_paste_' + category">
+              <v-list-item density="compact" id="actionFilterExclude" :to="filterRouteExclude" v-bind:title.attr="i18n.filterExcludeHelp" :data-aid="'context_menu_filter_exclude_' + category">
                 <template #prepend>
-                  <v-icon class="solid" class="theme-icon">fa-copy</v-icon>
+                  <v-icon :alt="i18n.filterExclude" class="theme-icon">fa-search-minus</v-icon>
                 </template>
                 <v-list-item-title>
-                  {{ i18n.copyFieldValueToClipboard }}
+                  {{ i18n.filterExclude }}
                 </v-list-item-title>
               </v-list-item>
-              <v-list-item id="actionCopyEventAsJson" density="compact" @click="$root.copyToClipboard(quickActionEvent, 'json')" :data-aid="'context_menu_copyjson_' + category">
+              <v-list-item density="compact" id="actionFilterExact" :to="filterRouteExact" v-bind:title.attr="i18n.filterExactHelp" :data-aid="'context_menu_filter_exact_' + category">
                 <template #prepend>
-                  <v-icon class="solid" class="theme-icon">fa-copy</v-icon>
+                  <v-icon :alt="i18n.filterExact" class="theme-icon">fa-search</v-icon>
                 </template>
                 <v-list-item-title>
-                  {{ i18n.copyEventToClipboardAsJson }}
+                  {{ i18n.filterExact }}
                 </v-list-item-title>
               </v-list-item>
-              <v-list-item id="actionCopyEventAsKvp" density="compact" @click="$root.copyToClipboard(quickActionEvent, 'kvp')" :data-aid="'context_menu_copykvp_' + category">
+              <v-list-item density="compact" id="actionDrilldown" :to="filterRouteDrilldown" v-bind:title.attr="i18n.filterDrilldownHelp" v-if="!isAdvanced() && metricsEnabled" :data-aid="'context_menu_drilldown_' + category">
                 <template #prepend>
-                  <v-icon class="solid" class="theme-icon">fa-copy</v-icon>
+                  <v-icon :alt="i18n.filterDrilldown" class="theme-icon">fa-angle-double-down</v-icon>
                 </template>
                 <v-list-item-title>
-                  {{ i18n.copyEventToClipboardAsKvp }}
+                  {{ i18n.filterDrilldown }}
                 </v-list-item-title>
               </v-list-item>
-            </v-list-group>
-            <v-list-group v-if="!!actions && actions.length" density="compact" @click.stop class="deep-theme-text" :data-aid="'context_menu_quickaction_' + category">
-              <template #activator="{ props, isOpen }">
-                <v-list-item v-bind="props" class="v-list-item--active">
-                  <template #prepend>
-                    <v-icon class="theme-icon">fa-external-link-alt</v-icon>
-                  </template>
-                  <template #append>
-                    <v-icon class="theme-icon">{{ isOpen ? 'fa-caret-up' : 'fa-caret-down' }}</v-icon>
-                  </template>
-                  <v-list-item-title>
-                    {{ i18n.quickActions }}
-                  </v-list-item-title>
-                </v-list-item>
-              </template>
-              <template v-for="action in actions">
-                <v-list-item v-if="action.enabled" density="compact" class="custom-quick-action-button" :key="action.name"
-                  :href="action.background ? '' : action.linkFormatted" v-bind:title.attr="$root.localizeMessage(action.description)"
-                  :target="$root.target(action.target)" @click="performAction($event, action)"
-                  :data-aid="'context_menu_quickaction_' + category + '_' + action.name">
+              <v-list-item density="compact" id="actionTuneDetection" v-if="quickActionDetId && $root.detectionsEnabled && isCategory('alerts')" :to='{ name: "detection", params: { id: quickActionDetId }, query: { tab: tuneDetectionTabTarget } }' class="v-list-item--active" v-bind:title.attr="i18n.tuneDetectionHelp" :data-aid="'context_menu_tuning_' + category">
+                <template #prepend>
+                  <v-icon :alt="i18n.tuneDetection" class="theme-icon">fa-wrench</v-icon>
+                </template>
+                <v-list-item-title>
+                  {{ i18n.tuneDetection }}
+                </v-list-item-title>
+              </v-list-item>
+              <v-list-item density="compact" id="actionTuneDetection-disabled" v-if="!quickActionDetId && $root.detectionsEnabled && isCategory('alerts')" v-bind:title.attr="i18n.tuneDetectionHelp" :data-aid="'context_menu_tuning_disabled_' + category">
+                <template #prepend>
+                  <v-icon :alt="i18n.tuneDetection" class="theme-icon">fa-wrench</v-icon>
+                </template>
+                <v-list-item-title>
+                  {{ i18n.tuneDetection }}
+                </v-list-item-title>
+              </v-list-item>
+              <v-list-item density="compact" id="actionGroupBy" :to="groupByRoute" v-bind:title.attr="i18n.groupIncludeHelp" :data-aid="'context_menu_groupby_' + category">
+                <template #prepend>
+                  <v-icon :alt="i18n.groupInclude" class="theme-icon">fa-layer-group</v-icon>
+                </template>
+                <v-list-item-title>
+                  {{ i18n.groupInclude }}
+                </v-list-item-title>
+              </v-list-item>
+              <v-list-item density="compact" id="actionGroupByNew" :to="groupByNewRoute" v-bind:title.attr="i18n.groupNewHelp" :data-aid="'context_menu_groupby_new_' + category">
+                <template #prepend>
+                  <v-icon :alt="i18n.groupNew" class="theme-icon">fa-layer-group</v-icon>
+                </template>
+                <v-list-item-title>
+                  {{ i18n.groupNew }}
+                </v-list-item-title>
+              </v-list-item>
+              <v-list-group density="compact" :value="false" @click.stop v-if="quickActionVisible && quickActionIsNumeric" :data-aid="'context_menu_compare_' + category" class="deep-theme-text">
+                <template #activator="{ props, isOpen }">
+                  <v-list-item v-bind="props" class="v-list-item--active">
                     <template #prepend>
-                      <v-icon :alt="action.name" class="solid" class="theme-icon">{{ action.icon }}</v-icon>
+                      <v-icon :alt="i18n.groupNumeric" class="theme-icon">fa-calculator</v-icon>
                     </template>
-                    <v-list-item-title class="theme-text">
-                      {{ $root.localizeMessage(action.name) }}
-                    </v-list-item-title>
+                    <template #append>
+                      <v-icon class="theme-icon">{{ isOpen ? 'fa-caret-up' : 'fa-caret-down' }}</v-icon>
+                    </template>
+                    <v-list-item-title>{{ i18n.numericOps }}</v-list-item-title>
+                  </v-list-item>
+                </template>
+                <v-list-item density="compact" id="filterLessThan" class="half-width" :to="filterRouteLessThan" :data-aid="'context_menu_lt_' + category">
+                  <v-list-item-title class="text-center">
+                    &lt;
+                  </v-list-item-title>
                 </v-list-item>
-              </template>
-            </v-list-group>
-          </v-list>
+                <v-list-item density="compact" id="filterLessThanEqual" class="half-width" :to="filterRouteLessThanEqual" :data-aid="'context_menu_lte_' + category">
+                  <v-list-item-title class="text-center">
+                    &le;
+                  </v-list-item-title>
+                </v-list-item>
+                <div class="flex-break"></div>
+                <v-list-item density="compact" id="filterGreaterThan" class="half-width" :to="filterRouteGreaterThan" :data-aid="'context_menu_gt_' + category">
+                  <v-list-item-title class="text-center">
+                    &gt;
+                  </v-list-item-title>
+                </v-list-item>
+                <v-list-item density="compact" id="filterGreaterThanEqual" class="half-width" :to="filterRouteGreaterThanEqual" :data-aid="'context_menu_gte_' + category">
+                  <v-list-item-title class="text-center">
+                    &ge;
+                  </v-list-item-title>
+                </v-list-item>
+                <v-list-item density="compact" id="filterBetween" @click="showBetweenDialog()" :data-aid="'context_menu_between_' + category">
+                  <v-list-item-title class="text-center">
+                    {{ i18n.betweenOp }}
+                  </v-list-item-title>
+                </v-list-item>
+              </v-list-group>
+              <v-list-group density="compact" @click.stop class="deep-theme-text" :data-aid="'context_menu_clipboard_' + category">
+                <template #activator="{ props, isOpen }">
+                  <v-list-item v-bind="props" class="v-list-item--active">
+                    <template #prepend>
+                      <v-icon class="theme-icon">fa-clipboard</v-icon>
+                    </template>
+                    <template #append>
+                      <v-icon class="theme-icon">{{ isOpen ? 'fa-caret-up' : 'fa-caret-down' }}</v-icon>
+                    </template>
+                    <v-list-item-title>
+                      {{ i18n.share }}
+                    </v-list-item-title>
+                  </v-list-item>
+                </template>
+                <v-list-item id="actionCopyValue" density="compact" @click="$root.copyToClipboard(quickActionValue)" :data-aid="'context_menu_copy_' + category">
+                  <template #prepend>
+                    <v-icon class="solid" class="theme-icon">fa-copy</v-icon>
+                  </template>
+                  <v-list-item-title>
+                    {{ i18n.copyFieldToClipboard }}
+                  </v-list-item-title>
+                </v-list-item>
+                <v-list-item id="actionCopyFieldValue" density="compact" @click="$root.copyToClipboard(quickActionField + ': ' + quickActionValue)" :data-aid="'context_menu_paste_' + category">
+                  <template #prepend>
+                    <v-icon class="solid" class="theme-icon">fa-copy</v-icon>
+                  </template>
+                  <v-list-item-title>
+                    {{ i18n.copyFieldValueToClipboard }}
+                  </v-list-item-title>
+                </v-list-item>
+                <v-list-item id="actionCopyEventAsJson" density="compact" @click="$root.copyToClipboard(quickActionEvent, 'json')" :data-aid="'context_menu_copyjson_' + category">
+                  <template #prepend>
+                    <v-icon class="solid" class="theme-icon">fa-copy</v-icon>
+                  </template>
+                  <v-list-item-title>
+                    {{ i18n.copyEventToClipboardAsJson }}
+                  </v-list-item-title>
+                </v-list-item>
+                <v-list-item id="actionCopyEventAsKvp" density="compact" @click="$root.copyToClipboard(quickActionEvent, 'kvp')" :data-aid="'context_menu_copykvp_' + category">
+                  <template #prepend>
+                    <v-icon class="solid" class="theme-icon">fa-copy</v-icon>
+                  </template>
+                  <v-list-item-title>
+                    {{ i18n.copyEventToClipboardAsKvp }}
+                  </v-list-item-title>
+                </v-list-item>
+              </v-list-group>
+              <v-list-group v-if="!!actions && actions.length" density="compact" @click.stop class="deep-theme-text" :data-aid="'context_menu_quickaction_' + category">
+                <template #activator="{ props, isOpen }">
+                  <v-list-item v-bind="props" class="v-list-item--active">
+                    <template #prepend>
+                      <v-icon class="theme-icon">fa-external-link-alt</v-icon>
+                    </template>
+                    <template #append>
+                      <v-icon class="theme-icon">{{ isOpen ? 'fa-caret-up' : 'fa-caret-down' }}</v-icon>
+                    </template>
+                    <v-list-item-title>
+                      {{ i18n.quickActions }}
+                    </v-list-item-title>
+                  </v-list-item>
+                </template>
+                <template v-for="action in actions">
+                  <v-list-item v-if="action.enabled" density="compact" class="custom-quick-action-button" :key="action.name"
+                    :href="action.background ? '' : action.linkFormatted" v-bind:title.attr="$root.localizeMessage(action.description)"
+                    :target="$root.target(action.target)" @click="performAction($event, action)"
+                    :data-aid="'context_menu_quickaction_' + category + '_' + action.name">
+                      <template #prepend>
+                        <v-icon :alt="action.name" class="solid" class="theme-icon">{{ action.icon }}</v-icon>
+                      </template>
+                      <v-list-item-title class="theme-text">
+                        {{ $root.localizeMessage(action.name) }}
+                      </v-list-item-title>
+                  </v-list-item>
+                </template>
+              </v-list-group>
+            </v-list>
+          </div>
         </v-menu>
 
         <v-menu v-model="escalationMenuVisible" :target="escalationMenuTarget" :data-aid="'escalate_menu_' + category">
@@ -1137,7 +1140,12 @@
               </v-tab>
               <v-tab id="detection_tuningTab" value="tuning" :class="{ 'theme-primary': activeTab === 'tuning' }" data-aid="detection_tuning_tab">
                 <v-icon class="detection-tab-icon">fa-wrench</v-icon>
-                <div class="d-none d-lg-block">{{ i18n.tuning }}</div>
+                <div class="d-none d-lg-block">
+                  {{ i18n.tuning }}
+                  <span v-if="detect">
+                    ({{ (detect.overrides || []).length }})
+                  </span>
+                </div>
               </v-tab>
               <v-tab id="detection_historyTab" value="history" :class="{ 'theme-primary': activeTab === 'history' }" data-aid="detection_history_tab">
                 <v-icon class="detection-tab-icon">fa-history</v-icon>
@@ -1356,6 +1364,9 @@
                     <div v-if="!!newOverride.type && detect.engine === 'elastalert'">
                       <v-textarea variant="underlined" v-if="newOverride.type === 'customFilter'" id="new-override-custom-filter-edit" v-model="newOverride.customFilter" :rules="[rules.required]" auto-grow rows="2" persistent-hint :hint="i18n.customFilter" data-aid="detection_new_override_filter_input"></v-textarea>
                     </div>
+                    <div v-if="!!newOverride.type">
+                      <v-text-field variant="underlined" id="new-override-note-edit" v-model="newOverride.note" :rules="[rules.noteLengthLimit]" persistent-hint :hint="i18n.note" data-aid="detection_new_override_note_input"></v-text-field>
+                    </div>
                     <div v-if="newOverride" class="d-flex align-center align-self-end text-body-2 mt-2">
                       <div class="justify-end">
                         <v-btn id="detection-create-cancel" variant="text" size="small" color="primary" class="align-self-end" @click="newOverride = null" data-aid="detection_new_override_cancel">
@@ -1442,7 +1453,7 @@
                         </div>
                         <div v-if="item.type === 'modify'" @click="startOverrideEdit('override-value', item, 'value')" :class="{ clicktoedit: !isOverrideEdit('override-value') }">
                           <div class="font-weight-bold mt-4">
-                            Value:
+                            {{i18n.value}}:
                           </div>
                           <span id="override-value" v-if="!isOverrideEdit('override-value')">
                             {{item.value}}
@@ -1544,6 +1555,26 @@
                             </div>
                           </span>
                         </div>
+                        <div @click="startOverrideEdit('override-note', item, 'note')" :class="{ clicktoedit: !isOverrideEdit('override-note') }">
+                          <div class="font-weight-bold mt-4">
+                            {{i18n.note}}:
+                          </div>
+                          <span id="override-note" v-if="!isOverrideEdit('override-note')">
+                            {{item.note}}
+                          </span>
+                          <span v-else>
+                            <v-text-field variant="outlined" id="override-note-edit" ref="override-note" hide-details="auto" v-model="item.note" :rules="[rules.noteLengthLimit]"
+                              persistent-hint :hint="i18n.note" @keyup.enter="isFieldValid('override-note') && stopOverrideEdit(true, () => { this.saveOverrideNote(item) })" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_override_note_input"></v-text-field>
+                            <div id="override-note-edit-buttons">
+                              <v-btn @click.stop="stopOverrideEdit(false)" variant="text" size="small" class="align-self-end" data-aid="detection_override_note_cancel">
+                                {{ i18n.cancel }}
+                              </v-btn>
+                              <v-btn @click.stop="stopOverrideEdit(true, () => { this.saveOverrideNote(item) })" :disabled="!isFieldValid('override-note')" color="primary" variant="text" size="small" class="align-self-end" data-aid="detection_override_note_save">
+                                {{ i18n.save }}
+                              </v-btn>
+                            </div>
+                          </span>
+                        </div>
                         <div class="d-flex justify-end text-body-2 mt-4">
                           <div class="d-inline-flex">
                             <v-btn variant="text" size="small" icon :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'nids.html#managing-nids-rules'" :title="i18n.overrideDocumentationHelp" data-aid="detection_override_help_suricata">
@@ -1563,7 +1594,6 @@
                           <v-switch variant="underlined" id="override-enabled-edit" ref="override-enabled" hide-details="auto" v-model="item.isEnabled"
                             inset @change="saveDetection(false)"></v-switch>
                         </div>
-                        <!-- custom filter -->
                         <div @click="startOverrideEdit('override-custom-filter', item, 'customFilter')" :class="{ clicktoedit: !isOverrideEdit('override-custom-filter') }">
                           <div class="font-weight-bold mt-2">
                             {{i18n.customFilter}}:
@@ -1581,6 +1611,26 @@
                                 {{ i18n.cancel }}
                               </v-btn>
                               <v-btn @click.stop="stopOverrideEdit(true)" :disabled="!isFieldValid('override-custom-filter')" variant="text" size="small" color="primary" class="align-self-end" data-aid="detection_override_filter_save">
+                                {{ i18n.save }}
+                              </v-btn>
+                            </div>
+                          </span>
+                        </div>
+                        <div @click="startOverrideEdit('override-note', item, 'note')" :class="{ clicktoedit: !isOverrideEdit('override-note') }">
+                          <div class="font-weight-bold mt-4">
+                            {{i18n.note}}:
+                          </div>
+                          <span id="override-note" v-if="!isOverrideEdit('override-note')">
+                            {{item.note}}
+                          </span>
+                          <span v-else>
+                            <v-text-field variant="outlined" id="override-note-edit" ref="override-note" hide-details="auto" v-model="item.note" :rules="[rules.noteLengthLimit]"
+                              persistent-hint :hint="i18n.note" @keyup.enter="isFieldValid('override-note') && stopOverrideEdit(true, () => { this.saveOverrideNote(item) })" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_override_note_input" :maxlength="MAX_OVERRIDE_NOTE_LENGTH"></v-text-field>
+                            <div id="override-note-edit-buttons">
+                              <v-btn @click.stop="stopOverrideEdit(false)" variant="text" size="small" class="align-self-end" data-aid="detection_override_note_cancel">
+                                {{ i18n.cancel }}
+                              </v-btn>
+                              <v-btn @click.stop="stopOverrideEdit(true, () => { this.saveOverrideNote(item) })" :disabled="!isFieldValid('override-note')" color="primary" variant="text" size="small" class="align-self-end" data-aid="detection_override_note_save">
                                 {{ i18n.save }}
                               </v-btn>
                             </div>
@@ -1946,14 +1996,14 @@
                       {{ i18n.status }}: {{ detect.isEnabled ? i18n.enabled : i18n.disabled }}
                     </div>
                     <div data-aid="detection_metadata_enabled_toggle">
-                      <v-switch id="detection-enabled-edit" inset v-model="detect.isEnabled" @change="saveDetection(false)"></v-switch>
+                      <v-switch id="detection-enabled-edit" inset v-model="detect.isEnabled" color="primary" @change="saveDetection(false)"></v-switch>
                     </div>
                   </span>
                   <div id="ops-buttons">
                     <v-btn id="detection-duplicate" color="primary" @click="duplicateDetection()" data-aid="detection_metadata_duplicate" class="flex-basis-50">
                       {{i18n.duplicate}}
                     </v-btn>
-                    <v-btn :disabled="detect.isCommunity" id="detection-delete" color="error" @click="deleteDetection()" data-aid="detection_metadata_delete" class="flex-basis-50">
+                    <v-btn :disabled="detect.isCommunity" id="detection-delete" :color="detect.isCommunity ? 'black' : 'error'" @click="deleteDetection()" data-aid="detection_metadata_delete" class="flex-basis-50">
                       {{i18n.delete}}
                     </v-btn>
                   </div>
@@ -1998,13 +2048,13 @@
                     {{ i18n.dateCreated }}:
                   </div>
                   <div class="ops-value" data-aid="detection_metadata_public_created_time_display">
-                    {{ extractedCreated }}
+                    {{ formatUTCDate(detect.sourceCreated) }}
                   </div>
                   <div class="ops-header">
                     {{ i18n.dateModified }}:
                   </div>
                   <div class="ops-value" data-aid="detection_metadata_public_updated_time_display">
-                    {{ extractedUpdated }}
+                    {{ formatUTCDate(detect.sourceUpdated) }}
                   </div>
                   <div class="ops-header">
                     {{ i18n.author }}:
@@ -2334,7 +2384,7 @@
               </v-card>
             </v-dialog>
             <v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" :footer-props="footerProps" data-aid="users_details"
-              :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="users">
+              :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="users" v-model:expanded="expanded">
               <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
                 <tr>
                   <template v-for="header in columns" :key="header.key">
@@ -2354,7 +2404,7 @@
               <template #item="{ item, isExpanded, toggleExpand, internalItem }">
                 <tr>
                   <td v-if="$root.isUserAdmin()">
-                    <v-btn id="expandNode" icon variant="text" size="small" @click="toggleExpand(internalItem); if (isExpanded(internalItem)) updateForm(item)" data-aid="users_details_expand">
+                    <v-btn id="expandNode" icon variant="text" size="small" @click="if (!isExpanded(internalItem)) { updateForm(item); } toggleExpand(internalItem)" data-aid="users_details_expand">
                       <v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="users_details_collapse">fa-angle-down</v-icon>
                       <v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="users_details_expand">fa-angle-right</v-icon>
                     </v-btn>
@@ -5112,7 +5162,7 @@
               <v-expansion-panel>
                 <v-expansion-panel-title id="configOptionsHeader" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
                 <v-expansion-panel-text>
-                  <v-switch id="option-advanced" :disabled="$root.loading" v-model="advanced" dense class="my-0" :label="i18n.settingsAdvanced" :hint="i18n.settingsAdvancedHelp" persistent-hint data-aid="config_option_advanced_toggle"></v-switch>
+                  <v-switch id="option-advanced" color="primary" :disabled="$root.loading" v-model="advanced" dense class="my-0" :label="i18n.settingsAdvanced" :hint="i18n.settingsAdvancedHelp" persistent-hint data-aid="config_option_advanced_toggle"></v-switch>
                   <v-btn id="option-synchronize" @click.stop="sync()" class="mt-6 mb-1" data-aid="config_option_synchronize_toggle">
                     {{ i18n.settingsSynchronize }}
                   </v-btn>
@@ -5384,7 +5434,7 @@
                           </v-btn>
                         </div>
                         <div v-if="isMultiline(selected)">
-                          <v-textarea v-if="form.key != selected.id" id="value-output" variant="outlined" :label="i18n.settingGlobal" @focus="edit(selected)" v-model="selected.value" readonly :disabled="isReadOnly(selected)" class="config-editor" data-aid="config_item_customize_multiline_display" />
+                          <v-textarea v-if="form.key != selected.id" id="value-output" variant="outlined" :label="i18n.settingGlobal" @focus="edit(selected)" v-model="selected.value" readonly :disabled="isReadOnly(selected)" :no-resize="!isReadOnly(selected)" class="config-editor" data-aid="config_item_customize_multiline_display" />
                           <v-textarea v-else id="value-input" variant="outlined" :label="i18n.settingGlobal" v-model="form.value" class="editing config-editor" data-aid="config_item_customize_multiline_input" />
                         </div>
                         <div v-else>

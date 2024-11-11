@@ -61,7 +61,10 @@ $(document).ready(function () {
       VTreeview: {
         collapseIcon: '',
         expandIcon: 'fas fa-caret-right',
-      }
+      },
+      VChip: {
+        closeIcon: 'fa-xmark va-baseline',
+      },
     },
     icons: {
       defaultSet: 'fa',
@@ -646,6 +649,16 @@ $(document).ready(function () {
           const dateObj = moment(String(date));
           if (dateObj.isAfter('1000-01-01')) {
             formatted = dateObj.format(format);
+          }
+        }
+        return formatted;
+      },
+      formatUTCDate(date) {
+        let formatted = '';
+        if (date) {
+          const dateObj = moment.utc(String(date));
+          if (dateObj.isAfter('1000-01-01')) {
+            formatted = dateObj.format(this.i18n.dateFormat);
           }
         }
         return formatted;
@@ -1315,6 +1328,7 @@ $(document).ready(function () {
       this.setFavicon();
 
       const filters = {
+        formatUTCDate: this.formatUTCDate,
         formatDateTime: this.formatDateTime,
         formatDuration: this.formatDuration,
         formatHours: this.formatHours,

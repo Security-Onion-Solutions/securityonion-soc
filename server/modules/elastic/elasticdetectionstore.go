@@ -18,6 +18,7 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	modcontext "github.com/security-onion-solutions/securityonion-soc/server/modules/context"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
@@ -187,11 +188,13 @@ func (store *ElasticDetectionstore) save(ctx context.Context, obj interface{}, k
 		return nil, err
 	}
 
+	skipAudit := modcontext.ReadSkipAudit(ctx)
+
 	document := ConvertObjectToDocumentMap(kind, obj, store.schemaPrefix)
 	document[store.schemaPrefix+"kind"] = kind
 
 	results, err := store.Index(ctx, store.index, document, id)
-	if err == nil {
+	if err == nil && !skipAudit {
 		document[store.schemaPrefix+AUDIT_DOC_ID] = results.DocumentId
 
 		if id == "" {

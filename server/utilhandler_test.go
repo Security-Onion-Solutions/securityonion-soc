@@ -14,20 +14,42 @@ import (
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/config"
+	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+
 	"github.com/stretchr/testify/assert"
 )
 
 func TestReverseLookupHandler(t *testing.T) {
+	fakeEventStore := &FakeEventstore{}
 	h := UtilHandler{
 		server: &Server{
+			Eventstore: fakeEventStore,
 			Config: &config.ServerConfig{
 				Dns: "",
 			},
 		},
 	}
 
-	body := []byte(`["1.0.0.1", "2.0.0.2", "3.0.0.3", "4.0.0.4"]`)
+	fakeEventStore.MSearchResults = append(fakeEventStore.MSearchResults, &model.EventMSearchResults{
+		Responses: []*model.EventSearchResults{
+			{},
+			{},
+			{},
+			{
+				Events: []*model.EventRecord{
+					{
+						Payload: map[string]interface{}{
+							"so.ip_address":  "4.0.0.4",
+							"so.description": "host4",
+						},
+					},
+				},
+			},
+		},
+	})
+
+	body := []byte(`["1.0.0.1", "2.0.0.2", "3.0.0.3", "4.0.0.4", "badip"]`)
 
 	r := httptest.NewRequest("PUT", "/reverse-lookup", bytes.NewReader(body))
 
@@ -48,4 +70,6 @@ func TestReverseLookupHandler(t *testing.T) {
 	for _, names := range results {
 		assert.NotEmpty(t, names)
 	}
+
+	assert.Equal(t, []string{"host4"}, results["4.0.0.4"])
 }

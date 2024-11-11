@@ -224,3 +224,38 @@ func NewEventScrollCriteria() *EventScrollCriteria {
 	criteria.initScrollCriteria()
 	return criteria
 }
+
+type EventMSearchCriteria struct {
+	Index       string
+	RawQuery    string
+	ParsedQuery *Query
+}
+
+func NewEventMSearchCriteria() *EventMSearchCriteria {
+	criteria := &EventMSearchCriteria{}
+	criteria.ParsedQuery = NewQuery()
+
+	return criteria
+}
+
+func (criteria *EventMSearchCriteria) Populate(index string, query string) error {
+	criteria.Index = index
+
+	criteria.RawQuery = strings.TrimSpace(query)
+	err := criteria.ParsedQuery.Parse(query)
+
+	return err
+}
+
+type EventMSearchResults struct {
+	ElapsedMs int                   `json:"elapsedMs"`
+	Responses []*EventSearchResults `json:"responses"`
+}
+
+func NewEventMSearchResults() *EventMSearchResults {
+	results := &EventMSearchResults{
+		Responses: make([]*EventSearchResults, 0),
+	}
+
+	return results
+}

@@ -314,6 +314,8 @@ func (e *SuricataEngine) ExtractDetails(detect *model.Detection) error {
 
 	detect.Severity = model.SeverityUnknown
 
+	formats := []string{"2006-01-02", "2006/01/02", "2006_01_02"}
+
 	md := rule.ParseMetaData()
 	for _, meta := range md {
 		if strings.EqualFold(meta.Key, "signature_severity") {
@@ -327,8 +329,20 @@ func (e *SuricataEngine) ExtractDetails(detect *model.Detection) error {
 			case "critical":
 				detect.Severity = model.SeverityCritical
 			}
-
-			break
+		} else if strings.EqualFold(meta.Key, "created_at") {
+			t, err := detections.ParseDate(meta.Value, formats)
+			if err == nil {
+				detect.SourceCreated = &t
+			} else {
+				log.WithField("created_at", meta.Value).WithError(err).Warn("unable to parse date")
+			}
+		} else if strings.EqualFold(meta.Key, "updated_at") {
+			t, err := detections.ParseDate(meta.Value, formats)
+			if err == nil {
+				detect.SourceUpdated = &t
+			} else {
+				log.WithField("updated_at", meta.Value).WithError(err).Warn("unable to parse date")
+			}
 		}
 	}
 
@@ -1207,6 +1221,14 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 			"rule.name": detect.Title,
 		}).Info("syncing rule")
 
+		exErr := e.ExtractDetails(detect)
+		if exErr != nil {
+			logger.WithField("publicId", detect.PublicID).WithError(exErr).Warn("unable to extract details from detection, skipping")
+			errMap[detect.PublicID] = fmt.Sprintf("unable to extract details; reason=%s", exErr.Error())
+
+			continue
+		}
+
 		orig, exists := commSIDs[detect.PublicID]
 		if exists {
 			_, isSpecificallyEnabled := enabledIndex[detect.PublicID]
@@ -1266,7 +1288,13 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 		}
 
 		if exists {
-			if orig.Content != detect.Content || orig.Ruleset != detect.Ruleset || len(detect.Overrides) != 0 || orig.IsEnabled != detect.IsEnabled {
+			hasChanged := orig.Content != detect.Content
+			hasChanged = hasChanged || orig.Ruleset != detect.Ruleset
+			hasChanged = hasChanged || len(detect.Overrides) != 0
+			hasChanged = hasChanged || !util.Equal(orig.SourceCreated, detect.SourceCreated)
+			hasChanged = hasChanged || !util.Equal(orig.SourceUpdated, detect.SourceUpdated)
+
+			if hasChanged {
 				logger.WithFields(log.Fields{
 					"rule.uuid": detect.PublicID,
 					"rule.name": detect.Title,
@@ -1874,6 +1902,11 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (d
 		return nil, nil, fmt.Errorf("unable to find modify setting")
 	}
 
+	ignored := settingByID(allSettings, "soc.config.server.modules.suricataengine.ignoredSidRanges")
+	if ignored == nil {
+		return nil, nil, fmt.Errorf("unable to find ignored setting")
+	}
+
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		return nil, nil, detections.ErrIntCheckerStopped
@@ -1887,6 +1920,8 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (d
 	disabledIndex := indexEnabled(disabledLines, true)
 	modifyIndex := indexModify(modifyLines, true, true)
 	rulesIndex := indexRules(rulesLines, true)
+
+	sidRangesToIgnore := parseIgnoredSidRanges(ignored.Value)
 
 	// modifyIndex is filtered for flowbits rules meaning the index is equivalent
 	// in function to a list of disabled flowbits rules
@@ -1932,6 +1967,18 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (d
 		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
+	deployedBefore := len(deployed)
+	enabledBefore := len(enabled)
+
+	deployed = filterOutSIDsInRanges(deployed, sidRangesToIgnore)
+	enabled = filterOutSIDsInRanges(enabled, sidRangesToIgnore)
+
+	logger.WithFields(log.Fields{
+		"deployedFilteredOutCount": deployedBefore - len(deployed),
+		"enabledFilteredOutCount":  enabledBefore - len(enabled),
+		"rangesToIgnore":           sidRangesToIgnore,
+	}).Info("ignoring SIDs")
+
 	deployedButNotEnabled, enabledButNotDeployed, _ = detections.DiffLists(deployed, enabled)
 
 	intCheckReport := logger.WithFields(log.Fields{
@@ -1962,4 +2009,101 @@ func consolidateEnabled(rulesIndex map[string]int, disabledIndex map[string]int)
 	}
 
 	return pids
+}
+
+type Range struct {
+	LowerLimit uint64
+	UpperLimit uint64
+}
+
+func (r *Range) Contains(val uint64) bool {
+	return val >= r.LowerLimit && val <= r.UpperLimit
+}
+
+func (r Range) String() string {
+	return fmt.Sprintf("[%d, %d]", r.LowerLimit, r.UpperLimit)
+}
+
+func parseIgnoredSidRanges(settingValue string) []Range {
+	ranges := []Range{}
+
+	for _, line := range strings.Split(settingValue, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		parts := strings.Split(line, "-")
+		if len(parts) != 2 {
+			log.WithField("ignoredSidLine", line).Warn("invalid SID range to ignore, expected format is 'lower-upper', skipping this range")
+			continue
+		}
+
+		num := strings.TrimSpace(parts[0])
+
+		lower, err := strconv.ParseUint(num, 10, 64)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"lowerLimit":     num,
+				"ignoredSidLine": line,
+			}).Warn("invalid SID range to ignore, lower limit is not a valid number, skipping this range")
+
+			continue
+		}
+
+		num = strings.TrimSpace(parts[1])
+
+		upper, err := strconv.ParseUint(num, 10, 64)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"upperLimit":     num,
+				"ignoredSidLine": line,
+			}).Warn("invalid SID range to ignore, upper limit is not a valid number, skipping this range")
+
+			continue
+		}
+
+		if lower > upper {
+			log.WithFields(log.Fields{
+				"lowerLimit":     lower,
+				"upperLimit":     upper,
+				"ignoredSidLine": line,
+			}).Warn("invalid SID range to ignore, lowerLimit is greater than upperLimit, skipping this range")
+
+			continue
+		}
+
+		ranges = append(ranges, Range{
+			LowerLimit: lower,
+			UpperLimit: upper,
+		})
+	}
+
+	return ranges
+}
+
+func filterOutSIDsInRanges(sids []string, ranges []Range) []string {
+	filtered := []string{}
+
+	for _, sid := range sids {
+		num, err := strconv.ParseUint(sid, 10, 64)
+		if err != nil {
+			log.WithField("unparsedSid", sid).Warn("unable to parse SID, skipping")
+			continue
+		}
+
+		keep := true
+		for _, r := range ranges {
+			if r.Contains(num) {
+				keep = false
+				break
+			}
+		}
+
+		if keep {
+			filtered = append(filtered, sid)
+		}
+	}
+
+	return filtered
 }

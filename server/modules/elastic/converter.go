@@ -17,6 +17,8 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/util"
+
+	"github.com/tidwall/gjson"
 )
 
 func stripSegmentOptions(keys []string) []string {
@@ -271,6 +273,21 @@ func convertToElasticRequest(fieldDefs map[string]*FieldDefinition, intervals in
 	return esJson, err
 }
 
+func convertToElasticMSearchRequest(fieldDefs map[string]*FieldDefinition, criteria *model.EventMSearchCriteria) (string, error) {
+	var err error
+	var esJson string
+
+	esMap := make(map[string]interface{})
+	esMap["query"] = makeQuery(fieldDefs, criteria.ParsedQuery, time.Time{}, time.Time{})
+
+	bytes, err := json.WriteJson(esMap)
+	if err == nil {
+		esJson = string(bytes)
+	}
+
+	return esJson, err
+}
+
 func convertToElasticScrollRequest(fieldDefs map[string]*FieldDefinition, criteria *model.EventScrollCriteria, maxScrollSize int) (string, error) {
 	var err error
 	var esJson string
@@ -493,6 +510,37 @@ func convertFromElasticScrollResults(fieldDefs map[string]*FieldDefinition, esJs
 	}
 
 	return err
+}
+
+func convertFromElasticMSearchResults(fieldDefs map[string]*FieldDefinition, esJson string, results *model.EventMSearchResults) (err error) {
+	responseCount := int(gjson.Get(esJson, "responses.#").Num)
+
+	results.ElapsedMs = int(gjson.Get(esJson, "took").Num)
+	results.Responses = make([]*model.EventSearchResults, 0, responseCount)
+
+	for i := range responseCount {
+		response := gjson.Get(esJson, fmt.Sprintf("responses.%d", i))
+		res := model.NewEventSearchResults()
+
+		errField := response.Get("error")
+		if errField.String() != "" {
+			msg := response.Get("error.reason").String()
+			if msg == "" {
+				msg = errField.String()
+			}
+
+			return errors.New(msg)
+		}
+
+		err = convertFromElasticResults(fieldDefs, response.String(), res)
+		if err != nil {
+			return err
+		}
+
+		results.Responses = append(results.Responses, res)
+	}
+
+	return nil
 }
 
 func parseTime(fieldmap map[string]interface{}, key string) *time.Time {
@@ -832,6 +880,18 @@ func convertElasticEventToDetection(event *model.EventRecord, schemaPrefix strin
 					obj.Tags = append(obj.Tags, tag.(string))
 				}
 			}
+			if value, ok := event.Payload[schemaPrefix+"detection.sourceCreated"]; ok && value != nil {
+				t, dateErr := time.Parse(time.RFC3339, value.(string))
+				if dateErr == nil {
+					obj.SourceCreated = &t
+				}
+			}
+			if value, ok := event.Payload[schemaPrefix+"detection.sourceUpdated"]; ok && value != nil {
+				t, dateErr := time.Parse(time.RFC3339, value.(string))
+				if dateErr == nil {
+					obj.SourceUpdated = &t
+				}
+			}
 			if value, ok := event.Payload[schemaPrefix+"detection.overrides"]; ok && value != nil {
 				obj.Overrides = convertElasticEventToOverride(value.([]interface{}))
 			}
@@ -854,6 +914,9 @@ func convertElasticEventToOverride(overrides []interface{}) []*model.Override {
 		}
 		if value, ok := override["isEnabled"]; ok {
 			over.IsEnabled = value.(bool)
+		}
+		if value, ok := override["note"]; ok {
+			over.Note = value.(string)
 		}
 		if value, ok := override["createdAt"]; ok {
 			over.CreatedAt, _ = time.Parse(time.RFC3339, value.(string))

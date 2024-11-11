@@ -310,6 +310,7 @@ a#title, a#title:visited, a#title:active, a#title:hover {
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
+  margin-left: 4px;
 }
 
 .case.summary {
@@ -884,4 +885,8 @@ ul ul ul {
 .sticky-config {
   position: sticky;
   top: 154px;
+}
+
+.va-baseline {
+  vertical-align: baseline;
 }

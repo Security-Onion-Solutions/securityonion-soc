@@ -17,6 +17,8 @@ function debounce(fn, wait) {
 	}
 }
 
+const MAX_OVERRIDE_NOTE_LENGTH = 150;
+
 routes.push({ path: '/detection/:id', name: 'detection', component: {
 	template: '#page-detection',
 	data() {
@@ -42,6 +44,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				hours: value => (!value || /^\d{1,4}(\.\d{1,4})?$/.test(value)) || this.$root.i18n.invalidHours,
 				minLength: limit => value => (value && value.length >= limit) || this.$root.i18n.ruleMinLen,
 				shortLengthLimit: value => (value.length < 100) || this.$root.i18n.required,
+				noteLengthLimit: value => (value.length <= MAX_OVERRIDE_NOTE_LENGTH) || this.$root.i18n.required,
 				longLengthLimit: value => (encodeURI(value).split(/%..|./).length - 1 < 10000000) || this.$root.i18n.required,
 				fileSizeLimit: value => (value == null || value.length == 0 || value[0].size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
 				fileNotEmpty: value => (value == null || value.length == 0 || value[0].size > 0) || this.$root.i18n.fileEmpty,
@@ -136,8 +139,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			extractedLogic: '',
 			extractedLogicClass: '',
 			history: [],
-			extractedCreated: '',
-			extractedUpdated: '',
 			comments: [],
 			commentsTable: {
 				showAll: false,
@@ -184,6 +185,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				],
 			},
 			showUnreviewedAiSummaries: false,
+			MAX_OVERRIDE_NOTE_LENGTH: MAX_OVERRIDE_NOTE_LENGTH,
 	}},
 	created() {
 		this.$root.initializeEditor();
@@ -275,7 +277,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.extractSummary();
 			this.extractReferences();
 			this.extractLogic();
-			this.extractDetails();
 			this.loadHistory();
 			this.loadComments();
 		},
@@ -482,65 +483,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			const detection = yaml['detection'];
 
 			this.extractedLogic = jsyaml.dump({ logsource: logSource, detection: detection }).trim();
-		},
-		extractDetails() {
-			this.extractedCreated = this.extractedUpdated = '';
-
-			switch (this.detect.engine) {
-				case 'suricata':
-					this.extractSuricataDetails();
-					break;
-				case 'strelka':
-					this.extractStrelkaDetails();
-					break;
-				case 'elastalert':
-					this.extractElastAlertDetails();
-					break;
-			}
-		},
-		extractSuricataDetails() {
-			const metadataExtractor = /metadata:([^;]+);/i;
-			const match = this.detect.content.match(metadataExtractor);
-
-			if (!match) {
-				return;
-			}
-
-			const metadata = match[1].split(',').map(opt => opt.trim());
-			const ymd = /\d{4}[-_]\d{1,2}[-_]\d{1,2}/;
-			const leading0 = /^0/;
-
-			for (let i = 0; i < metadata.length; i++) {
-				let md = metadata[i];
-
-				if (md.indexOf('created_at') > -1) {
-					let date = md.match(ymd);
-					if (date) {
-						this.extractedCreated = date[0];
-					}
-				}
-
-				if (md.indexOf('updated_at') > -1) {
-					let date = md.match(ymd);
-					if (date) {
-						this.extractedUpdated = date[0];
-					}
-				}
-			}
-		},
-		extractStrelkaDetails() {
-			const dateExtractor = /^\s*date\s*=\s*"(.*)"/im;
-			const dateMatch = dateExtractor.exec(this.detect.content);
-
-			if (dateMatch) {
-				this.extractedCreated = dateMatch[1];
-			}
-		},
-		extractElastAlertDetails() {
-			const yaml = jsyaml.load(this.detect.content, { schema: jsyaml.FAILSAFE_SCHEMA });
-
-			this.extractedCreated = yaml['date'];
-			this.extractedUpdated = yaml['modified'];
 		},
 		async loadHistory(showLoadingIndicator = false) {
 			if (showLoadingIndicator) this.$root.startLoading();
@@ -892,6 +834,16 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		cancelDeleteDetection() {
 			this.confirmDeleteDialog = false;
 		},
+		async saveOverrideNote(item) {
+			try {
+				this.$root.startLoading();
+				await this.$root.papi.put('/detection/' + this.detect.id + '/override/' + item.index + '/note', { note: item.note });
+			} catch (error) {
+				this.$root.showError(error);
+			} finally {
+				this.$root.stopLoading();
+			}
+		},
 		async confirmDeleteDetection() {
 			this.cancelDeleteDetection();
 			try {
@@ -1122,6 +1074,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				count: null,
 				seconds: null,
 				customFilter: null,
+				note: '',
 			};
 		},
 		getOverrideTypes(engine) {
@@ -1164,6 +1117,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			if (o.updatedAt) {
 				out.updatedAt = o.updatedAt;
+			}
+
+			if (typeof o.note === 'string') {
+				out.note = o.note;
 			}
 
 			if (engine === 'elastalert') {
@@ -1236,14 +1193,15 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		isOverrideEdit(target) {
 			return this.curOverrideEditTarget === target;
 		},
-		stopOverrideEdit(commit) {
+		stopOverrideEdit(commit, saveFunc) {
+			saveFunc = saveFunc || this.saveDetection;
 			if (commit && this.$refs[this.curOverrideEditTarget].hasError) return;
 
 			if (!commit) {
 				this.editOverride[this.overrideEditField] = this.origOverrideValue;
 			} else {
 				this.$nextTick(async () => {
-					await this.saveDetection(false);
+					await saveFunc(false);
 					this.curOverrideEditTarget = null;
 				});
 			}
@@ -1460,8 +1418,13 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		isFieldValid(refName) {
 			const ref = this.$refs[refName];
 			if (ref) {
-				return ref.valid;
+				if (ref?.classList) {
+					return !ref.classList.contains('v-input--error');
+				}
+
+				return false;
 			}
+
 			return true;
 		},
 		highlighter(code) {

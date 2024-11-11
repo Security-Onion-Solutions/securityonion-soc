@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -64,6 +65,7 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Post("/convert", h.convertContent)
 
 		r.Put("/", h.updateDetection)
+		r.Put("/{id}/override/{overrideIndex}/note", h.updateOverrideNote)
 
 		r.Delete("/{id}", h.deleteDetection)
 
@@ -183,6 +185,12 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	_, err = engine.ApplyFilters(detect)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
 	err = engine.ExtractDetails(detect)
 	if err != nil {
 		if err.Error() == "rule does not contain a public Id" {
@@ -191,12 +199,6 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 			web.Respond(w, r, http.StatusBadRequest, err)
 		}
 
-		return
-	}
-
-	_, err = engine.ApplyFilters(detect)
-	if err != nil {
-		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
@@ -336,6 +338,17 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	err = engine.ExtractDetails(detect)
+	if err != nil {
+		if err.Error() == "rule does not contain a public Id" {
+			web.Respond(w, r, http.StatusBadRequest, "missingPublicIdErr")
+		} else {
+			web.Respond(w, r, http.StatusBadRequest, err)
+		}
+
+		return
+	}
+
 	statusModifiedByFilter := detect.IsEnabled != specifiedStatus
 
 	err = h.PrepareForSave(ctx, detect, engine)
@@ -407,6 +420,39 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 	}
 
 	web.Respond(w, r, http.StatusOK, detect)
+}
+
+func (h *DetectionHandler) updateOverrideNote(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	detectId := chi.URLParam(r, "id")
+	param := chi.URLParam(r, "overrideIndex")
+
+	overrideIndex, err := strconv.Atoi(param)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	body := model.OverrideNoteUpdate{}
+
+	err = web.ReadJson(r, &body)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	valid, err := detections.UpdateOverrideNote(ctx, h.server.Detectionstore, detectId, overrideIndex, body.Note)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if !valid {
+			status = http.StatusBadRequest
+		}
+
+		web.Respond(w, r, status, err)
+
+		return
+	}
 }
 
 func (h *DetectionHandler) deleteDetection(w http.ResponseWriter, r *http.Request) {
@@ -620,6 +666,25 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 			if filterApplied && detect.IsEnabled != body.NewStatus {
 				filtered++
 			}
+		}
+
+		engine, ok := h.server.DetectionEngines[detect.Engine]
+		if !ok {
+			logger.WithFields(log.Fields{
+				"publicId": detect.PublicID,
+				"engine":   detect.Engine,
+			}).Error("detection has unsupported engine, skipping")
+			errMap[detect.PublicID] = "unsupported engine"
+
+			continue
+		}
+
+		exErr := engine.ExtractDetails(detect)
+		if exErr != nil {
+			logger.WithField("publicId", detect.PublicID).WithError(exErr).Warn("unable to extract details from detection, skipping")
+			errMap[detect.PublicID] = fmt.Sprintf("unable to extract details: %s", exErr.Error())
+
+			continue
 		}
 
 		document, index, err := h.server.Detectionstore.ConvertObjectToDocument(ctx, "detection", detect, &detect.Auditable, !body.Delete, nil, nil)

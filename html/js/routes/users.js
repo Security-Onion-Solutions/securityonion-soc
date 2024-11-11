@@ -53,6 +53,7 @@ routes.push({ path: '/users', name: 'users', component: {
     '$route': 'loadData',
     'sortBy': 'saveLocalSettings',
     'itemsPerPage': 'saveLocalSettings',
+    'expanded': 'onlyExpandOneRow',
   },
   methods: {
     async loadData() {
@@ -252,6 +253,11 @@ routes.push({ path: '/users', name: 'users', component: {
     },
     countUsers() {
       return this.users.length;
+    },
+    onlyExpandOneRow() {
+      if (this.expanded.length > 1) {
+        this.expanded = [this.expanded[this.expanded.length - 1]];
+      }
     },
   }
 }});

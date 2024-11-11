@@ -18,6 +18,7 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	modcontext "github.com/security-onion-solutions/securityonion-soc/server/modules/context"
 	modmock "github.com/security-onion-solutions/securityonion-soc/server/modules/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -732,6 +733,131 @@ func TestUpdateDetectionValid(t *testing.T) {
 	assert.Equal(t, "update", op)
 }
 
+func TestUpdateDetectionSkipAuditValid(t *testing.T) {
+	t.Parallel()
+
+	client, mocktrans := modmock.NewMockClient(t)
+	fakesrv := server.NewFakeAuthorizedServer(nil)
+	fakeStore := server.NewFakeEventstore()
+
+	now := time.Now()
+	nowStr := now.Format(time.RFC3339)
+	now, err := time.Parse(time.RFC3339, nowStr)
+	assert.NoError(t, err)
+
+	fakeStore.SearchResults = []*model.EventSearchResults{
+		{
+			TotalEvents: 1,
+			Events: []*model.EventRecord{
+				{
+					Id: "hJFpC44Bm7lAWCSuSwHa",
+					Payload: map[string]interface{}{
+						"so_detection.userId":      "myRequestorId",
+						"so_detection.publicId":    "",
+						"so_detection.title":       "myTitle",
+						"so_detection.severity":    "low",
+						"so_detection.author":      "Jane Doe",
+						"so_detection.description": "myDescription",
+						"so_detection.content":     "myContent",
+						"so_detection.isEnabled":   true,
+						"so_detection.isReporting": true,
+						"so_detection.ruleset":     "myRuleset",
+						"so_detection.engine":      "suricata",
+						"so_detection.language":    "suricata",
+						"so_detection.license":     "DRL",
+						"so_detection.tags":        []interface{}{"myTag"},
+						"so_detection.overrides": []interface{}{
+							map[string]interface{}{
+								"type":      "modify",
+								"createdAt": nowStr,
+							},
+						},
+						"so_detection.createTime": "2021-08-01T00:00:00Z",
+						"so_kind":                 "detection",
+					},
+				},
+			},
+		},
+	}
+
+	fakesrv.Eventstore = fakeStore
+	store := NewElasticDetectionstore(fakesrv, client, 100)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, 10)
+
+	det := &model.Detection{
+		Auditable: model.Auditable{
+			Id:         "hJFpC44Bm7lAWCSuSwHa",
+			CreateTime: util.Ptr(now),
+		},
+		Title:       "myTitle",
+		Severity:    "low",
+		Author:      "Jane Doe",
+		Description: "myDescription",
+		Content:     "myContent",
+		IsEnabled:   true,
+		IsReporting: true,
+		Ruleset:     "myRuleset",
+		Engine:      "suricata",
+		Language:    "suricata",
+		License:     "DRL",
+		Tags:        []string{"myTag"},
+		Overrides: []*model.Override{
+			{
+				Type:      "modify",
+				CreatedAt: now,
+			},
+		},
+	}
+
+	body := `{"result":"updated", "_id":"ABC123"}`
+
+	mocktrans.AddResponse(&http.Response{
+		Body: io.NopCloser(strings.NewReader(body)),
+	}, nil)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+	ctx = modcontext.WriteSkipAudit(ctx, true)
+
+	postDet, err := store.UpdateDetection(ctx, det)
+	assert.NoError(t, err)
+
+	assert.Equal(t, 1, len(postDet.Overrides))
+	assert.NotNil(t, postDet.Overrides[0].CreatedAt)
+	assert.NotNil(t, postDet.Overrides[0].UpdatedAt)
+	postDet.Overrides = nil
+	det.Overrides = nil
+
+	detWithoutId := util.Copy(det)
+
+	assert.NotNil(t, det.CreateTime)
+	assert.Nil(t, det.UpdateTime)
+	assert.NotNil(t, postDet.CreateTime)
+	assert.NotNil(t, postDet.UpdateTime)
+	assert.Equal(t, "detection", postDet.Kind)
+	det.CreateTime = nil
+	postDet.CreateTime = nil
+	postDet.UpdateTime = nil
+	det.UserId = "myRequestorId"
+	det.Kind = "detection"
+	det.Id = "hJFpC44Bm7lAWCSuSwHa"
+
+	assert.Equal(t, det, postDet)
+
+	reqs := mocktrans.GetRequests()
+
+	assert.Equal(t, 1, len(reqs))
+
+	reqDet := extractSoDetectionFromRequestBody(t, reqs[0])
+	assert.NotNil(t, reqDet.CreateTime)
+	assert.Nil(t, reqDet.UpdateTime)
+	reqDet.CreateTime = nil
+	reqDet.UpdateTime = nil
+	reqDet.Overrides = nil
+	detWithoutId.CreateTime = nil
+	detWithoutId.Id = ""
+	assert.Equal(t, detWithoutId, reqDet)
+}
+
 func TestUpdateDetectionInvalid404(t *testing.T) {
 	t.Parallel()
 
@@ -1401,7 +1527,7 @@ func TestConvertObjectToDocument(t *testing.T) {
 			Kind:     "detection",
 			Object:   &model.Detection{},
 			AuditObj: model.Auditable{},
-			ExpDoc:   []byte(`{"@timestamp":"","schemaPrefixdetection":{"createTime":null,"userId":"","publicId":"","title":"","severity":"","author":"","description":"","content":"","isEnabled":false,"isReporting":false,"isCommunity":false,"engine":"","language":"","overrides":null,"tags":null,"ruleset":"","license":""},"schemaPrefixkind":"detection"}`),
+			ExpDoc:   []byte(`{"@timestamp":"","schemaPrefixdetection":{"createTime":null,"userId":"","publicId":"","title":"","severity":"","author":"","description":"","content":"","isEnabled":false,"isReporting":false,"isCommunity":false,"engine":"","language":"","overrides":null,"tags":null,"ruleset":"","license":"","sourceCreated":null,"sourceUpdated":null},"schemaPrefixkind":"detection"}`),
 			ExpIndex: "so-detection",
 		},
 		{
@@ -1410,7 +1536,7 @@ func TestConvertObjectToDocument(t *testing.T) {
 			Object:   &model.Detection{},
 			AuditObj: model.Auditable{},
 			IsEdit:   true,
-			ExpDoc:   []byte(`{"doc":{"@timestamp":"","schemaPrefixdetection":{"createTime":null,"userId":"","publicId":"","title":"","severity":"","author":"","description":"","content":"","isEnabled":false,"isReporting":false,"isCommunity":false,"engine":"","language":"","overrides":null,"tags":null,"ruleset":"","license":""},"schemaPrefixkind":"detection"}}`),
+			ExpDoc:   []byte(`{"doc":{"@timestamp":"","schemaPrefixdetection":{"createTime":null,"userId":"","publicId":"","title":"","severity":"","author":"","description":"","content":"","isEnabled":false,"isReporting":false,"isCommunity":false,"engine":"","language":"","overrides":null,"tags":null,"ruleset":"","license":"","sourceCreated":null,"sourceUpdated":null},"schemaPrefixkind":"detection"}}`),
 			ExpIndex: "so-detection",
 		},
 		{
@@ -1421,7 +1547,7 @@ func TestConvertObjectToDocument(t *testing.T) {
 			IsEdit:     false, // audits are only ever "create"
 			AuditDocID: util.Ptr("id"),
 			Op:         util.Ptr("operation"),
-			ExpDoc:     []byte(`{"@timestamp":"","schemaPrefixaudit_doc_id":"id","schemaPrefixdetection":{"createTime":null,"userId":"","publicId":"","title":"","severity":"","author":"","description":"","content":"","isEnabled":false,"isReporting":false,"isCommunity":false,"engine":"","language":"","overrides":null,"tags":null,"ruleset":"","license":""},"schemaPrefixkind":"detection","schemaPrefixoperation":"operation"}`),
+			ExpDoc:     []byte(`{"@timestamp":"","schemaPrefixaudit_doc_id":"id","schemaPrefixdetection":{"createTime":null,"userId":"","publicId":"","title":"","severity":"","author":"","description":"","content":"","isEnabled":false,"isReporting":false,"isCommunity":false,"engine":"","language":"","overrides":null,"tags":null,"ruleset":"","license":"","sourceCreated":null,"sourceUpdated":null},"schemaPrefixkind":"detection","schemaPrefixoperation":"operation"}`),
 			ExpIndex:   "so-detectionhistory",
 		},
 		{
@@ -1447,6 +1573,8 @@ func TestConvertObjectToDocument(t *testing.T) {
 				PendingDelete: true, // shouldn't show up in doc
 				Product:       "product",
 				Service:       "service",
+				SourceCreated: util.Ptr(time.Date(2024, 6, 9, 0, 0, 0, 0, time.UTC)),
+				SourceUpdated: util.Ptr(time.Date(2024, 6, 11, 0, 0, 0, 0, time.UTC)),
 			},
 			AuditObj: model.Auditable{
 				Id:         "id",
@@ -1456,7 +1584,7 @@ func TestConvertObjectToDocument(t *testing.T) {
 				Kind:       "detection",
 				Operation:  "operation",
 			},
-			ExpDoc:   []byte(`{"@timestamp":"","schemaPrefixdetection":{"id":"id","createTime":"2024-07-15T13:22:46.318510436-06:00","updateTime":"2024-07-15T13:22:46.318510436-06:00","userId":"178f8ab1-a5f3-470f-9e8c-85445405220e","kind":"detection","operation":"operation","publicId":"publicId","title":"title","severity":"critical","author":"author","category":"category","description":"description","content":"content","isEnabled":true,"isReporting":true,"isCommunity":true,"engine":"engine","language":"language","overrides":[],"tags":["tag1","tag2"],"ruleset":"ruleset","license":"license","product":"product","service":"service"},"schemaPrefixkind":"detection"}`),
+			ExpDoc:   []byte(`{"@timestamp":"","schemaPrefixdetection":{"id":"id","createTime":"2024-07-15T13:22:46.318510436-06:00","updateTime":"2024-07-15T13:22:46.318510436-06:00","userId":"178f8ab1-a5f3-470f-9e8c-85445405220e","kind":"detection","operation":"operation","publicId":"publicId","title":"title","severity":"critical","author":"author","category":"category","description":"description","content":"content","isEnabled":true,"isReporting":true,"isCommunity":true,"engine":"engine","language":"language","overrides":[],"tags":["tag1","tag2"],"ruleset":"ruleset","license":"license","sourceCreated":"2024-06-09T00:00:00Z","sourceUpdated":"2024-06-11T00:00:00Z","product":"product","service":"service"},"schemaPrefixkind":"detection"}`),
 			ExpIndex: "so-detection",
 		},
 		{
@@ -1482,6 +1610,8 @@ func TestConvertObjectToDocument(t *testing.T) {
 				PendingDelete: true, // shouldn't show up in doc
 				Product:       "product",
 				Service:       "service",
+				SourceCreated: util.Ptr(time.Date(2024, 6, 9, 0, 0, 0, 0, time.UTC)),
+				SourceUpdated: util.Ptr(time.Date(2024, 6, 11, 0, 0, 0, 0, time.UTC)),
 			},
 			AuditObj: model.Auditable{
 				Id:         "id",
@@ -1492,7 +1622,7 @@ func TestConvertObjectToDocument(t *testing.T) {
 				Operation:  "operation",
 			},
 			IsEdit:   true,
-			ExpDoc:   []byte(`{"doc":{"@timestamp":"","schemaPrefixdetection":{"id":"id","createTime":"2024-07-15T13:22:46.318510436-06:00","updateTime":"2024-07-15T13:22:46.318510436-06:00","userId":"178f8ab1-a5f3-470f-9e8c-85445405220e","kind":"detection","operation":"operation","publicId":"publicId","title":"title","severity":"critical","author":"author","category":"category","description":"description","content":"content","isEnabled":true,"isReporting":true,"isCommunity":true,"engine":"engine","language":"language","overrides":[],"tags":["tag1","tag2"],"ruleset":"ruleset","license":"license","product":"product","service":"service"},"schemaPrefixkind":"detection"}}`),
+			ExpDoc:   []byte(`{"doc":{"@timestamp":"","schemaPrefixdetection":{"id":"id","createTime":"2024-07-15T13:22:46.318510436-06:00","updateTime":"2024-07-15T13:22:46.318510436-06:00","userId":"178f8ab1-a5f3-470f-9e8c-85445405220e","kind":"detection","operation":"operation","publicId":"publicId","title":"title","severity":"critical","author":"author","category":"category","description":"description","content":"content","isEnabled":true,"isReporting":true,"isCommunity":true,"engine":"engine","language":"language","overrides":[],"tags":["tag1","tag2"],"ruleset":"ruleset","license":"license","sourceCreated":"2024-06-09T00:00:00Z","sourceUpdated":"2024-06-11T00:00:00Z","product":"product","service":"service"},"schemaPrefixkind":"detection"}}`),
 			ExpIndex: "so-detection",
 		},
 	}

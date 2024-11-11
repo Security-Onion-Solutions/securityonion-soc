@@ -15,6 +15,7 @@ import (
 type Eventstore interface {
 	EventSearch(context context.Context, criteria *model.EventSearchCriteria) (*model.EventSearchResults, error)
 	Search(context context.Context, criteria *model.EventSearchCriteria) (*model.EventSearchResults, error)
+	MSearch(context context.Context, criteria []*model.EventMSearchCriteria) (*model.EventMSearchResults, error)
 	Scroll(context context.Context, criteria *model.EventScrollCriteria, indexes []string) (*model.EventScrollResults, error)
 	Index(ctx context.Context, index string, document map[string]interface{}, id string) (*model.EventIndexResults, error)
 	Update(context context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error)

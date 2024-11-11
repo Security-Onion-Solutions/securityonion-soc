@@ -7,6 +7,7 @@ package detections
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -24,9 +25,13 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/transport"
 )
 
-var doubleQuoteEscaper = regexp.MustCompile(`\\([\s\S])|(")`)
-var templateMutex = &sync.Mutex{}
-var templateFound = false
+var (
+	doubleQuoteEscaper = regexp.MustCompile(`\\([\s\S])|(")`)
+	templateMutex      = &sync.Mutex{}
+	templateFound      = false
+
+	ErrRepoRemoteGone = errors.New("repo remote no longer exists")
+)
 
 type GetterByPublicId interface {
 	GetDetectionByPublicId(ctx context.Context, publicId string) (*model.Detection, error)
@@ -161,16 +166,23 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 			Path: repoPath,
 		}
 
-		allRepos = append(allRepos, dirty)
 		reclone := false
+		skipRepo := false
 
 		_, ok := existingRepos[lastFolder]
 		if ok {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 			defer cancel()
 
+			var failSync bool
+
 			// repo already exists, pull
-			dirty.WasModified, reclone = iom.PullRepo(ctx, repoPath, repo.Branch)
+			dirty.WasModified, reclone, failSync = iom.PullRepo(ctx, repoPath, repo.Branch)
+			if failSync {
+				log.WithField("repoPath", repoPath).Error("existing repo's remote no longer exists, failing sync")
+				return nil, false, ErrRepoRemoteGone
+			}
+
 			if dirty.WasModified {
 				anythingNew = true
 			}
@@ -195,12 +207,24 @@ func UpdateRepos(isRunning *bool, baseRepoFolder string, rulesRepos []*model.Rul
 
 			err = iom.CloneRepo(ctx, repoPath, repo.Repo, repo.Branch)
 			if err != nil {
-				log.WithError(err).WithField("repoPath", repoPath).Error("failed to clone repo")
-				return nil, false, err
+				if errors.Is(err, transport.ErrRepositoryNotFound) {
+					log.WithField("repoPath", repoPath).Warn("repo not found, skipping")
+					skipRepo = true
+				} else if errors.Is(err, transport.ErrEmptyRemoteRepository) {
+					log.WithField("repoPath", repoPath).Warn("repo is empty, skipping")
+					skipRepo = true
+				} else {
+					log.WithError(err).WithField("repoPath", repoPath).Error("failed to clone repo")
+					return nil, false, err
+				}
+			} else {
+				anythingNew = true
+				dirty.WasModified = true
 			}
+		}
 
-			anythingNew = true
-			dirty.WasModified = true
+		if !skipRepo {
+			allRepos = append(allRepos, dirty)
 		}
 	}
 

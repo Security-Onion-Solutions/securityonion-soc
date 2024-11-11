@@ -13,24 +13,27 @@ import (
 )
 
 type FakeEventstore struct {
-	InputDocuments       []map[string]interface{}
-	InputContexts        []context.Context
-	InputIndexes         []string
-	InputIds             []string
-	InputSearchCriterias []*model.EventSearchCriteria
-	InputUpdateCriterias []*model.EventUpdateCriteria
-	InputAckCriterias    []*model.EventAckCriteria
-	InputScrollCriterias []*model.EventScrollCriteria
-	InputScrollIndexes   [][]string
-	Err                  error
-	SearchResults        []*model.EventSearchResults
-	IndexResults         []*model.EventIndexResults
-	UpdateResults        []*model.EventUpdateResults
-	ScrollResults        []*model.EventScrollResults
-	searchCount          int
-	indexCount           int
-	updateCount          int
-	scrollCount          int
+	InputDocuments        []map[string]interface{}
+	InputContexts         []context.Context
+	InputIndexes          []string
+	InputIds              []string
+	InputSearchCriterias  []*model.EventSearchCriteria
+	InputMSearchCriterias [][]*model.EventMSearchCriteria
+	InputUpdateCriterias  []*model.EventUpdateCriteria
+	InputAckCriterias     []*model.EventAckCriteria
+	InputScrollCriterias  []*model.EventScrollCriteria
+	InputScrollIndexes    [][]string
+	Err                   error
+	SearchResults         []*model.EventSearchResults
+	MSearchResults        []*model.EventMSearchResults
+	IndexResults          []*model.EventIndexResults
+	UpdateResults         []*model.EventUpdateResults
+	ScrollResults         []*model.EventScrollResults
+	searchCount           int
+	msearchCount          int
+	indexCount            int
+	updateCount           int
+	scrollCount           int
 }
 
 func NewFakeEventstore() *FakeEventstore {
@@ -62,6 +65,17 @@ func (store *FakeEventstore) Search(context context.Context, criteria *model.Eve
 	}
 	result := store.SearchResults[store.searchCount]
 	store.searchCount += 1
+	return result, store.Err
+}
+
+func (store *FakeEventstore) MSearch(context context.Context, criteria []*model.EventMSearchCriteria) (*model.EventMSearchResults, error) {
+	store.InputContexts = append(store.InputContexts, context)
+	store.InputMSearchCriterias = append(store.InputMSearchCriterias, criteria)
+	if store.msearchCount >= len(store.MSearchResults) {
+		store.msearchCount = len(store.MSearchResults) - 1
+	}
+	result := store.MSearchResults[store.msearchCount]
+	store.msearchCount += 1
 	return result, store.Err
 }
 

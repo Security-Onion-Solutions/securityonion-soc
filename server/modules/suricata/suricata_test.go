@@ -40,6 +40,8 @@ const (
 	FlowbitsRuleA    = `alert http any any -> any any ( msg:"RULE A"; flow: established,to_server; http.method; content:"POST"; http.content_type; content:"x-www-form-urlencoded"; flowbits: set, test; sid:50000;)`
 	FlowbitsRuleBSID = "60000"
 	FlowbitsRuleB    = `alert http any any -> any any (msg:"RULE B"; flowbits: isset, test; flow: established,to_client; content:"uid=0"; sid:60000;)`
+	IgnoredSIDRange  = "1100000-1101000\n"
+	IgnoredSID       = "1100001"
 )
 
 func emptySettings() []*model.Setting {
@@ -49,6 +51,7 @@ func emptySettings() []*model.Setting {
 		{Id: "idstools.sids.disabled"},
 		{Id: "idstools.sids.modify"},
 		{Id: "suricata.thresholding.sids__yaml"},
+		{Id: "soc.config.server.modules.suricataengine.ignoredSidRanges"},
 	}
 }
 
@@ -2051,13 +2054,14 @@ func TestIntegrityCheck(t *testing.T) {
 		{
 			Name: "Deployed As Disabled",
 			InitMock: func(iom *mock.MockIOManager, detStore *servermock.MockDetectionstore) (cfgStore *server.MemConfigStore) {
-				iom.EXPECT().ReadFile("allrules").Return([]byte(SimpleRule+"\n"+FlowbitsRuleA), nil)
+				iom.EXPECT().ReadFile("allrules").Return([]byte(SimpleRule+"\n"+FlowbitsRuleA+"\n"+IgnoredSID), nil)
 
 				detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil)
 
 				return server.NewMemConfigStore([]*model.Setting{
 					{Id: "idstools.sids.disabled", Value: SimpleRuleSID},
 					{Id: "idstools.sids.modify", Value: FlowbitsRuleASID + " " + modifyFromTo},
+					{Id: "soc.config.server.modules.suricataengine.ignoredSidRanges", Value: IgnoredSIDRange},
 				})
 			},
 			DbnE: []string{},
@@ -2092,6 +2096,7 @@ func TestIntegrityCheck(t *testing.T) {
 				return server.NewMemConfigStore([]*model.Setting{
 					{Id: "idstools.sids.disabled"},
 					{Id: "idstools.sids.modify", Value: FlowbitsRuleBSID + " " + modifyFromTo},
+					{Id: "soc.config.server.modules.suricataengine.ignoredSidRanges"},
 				})
 			},
 			DbnE: []string{},
@@ -2168,6 +2173,7 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 		{Id: "idstools.sids.disabled"},
 		{Id: "idstools.sids.modify"},
 		{Id: "suricata.thresholding.sids__yaml"},
+		{Id: "soc.config.server.modules.suricataengine.ignoredSidRanges"},
 	})
 
 	migrationChecked := false
@@ -2238,6 +2244,7 @@ func TestSyncChanges(t *testing.T) {
 		{Id: "idstools.sids.modify", Value: FlowbitsRuleASID + " " + modifyFromTo}, // used to be disabled, will be enabled
 		{Id: "suricata.thresholding.sids__yaml"},
 		{Id: "idstools.config.ruleset", Value: "repo"},
+		{Id: "soc.config.server.modules.suricataengine.ignoredSidRanges", Value: IgnoredSIDRange},
 	})
 
 	migrationChecked := false
@@ -2325,7 +2332,7 @@ func TestSyncChanges(t *testing.T) {
 	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)
 	iom.EXPECT().WriteFile("rulesFingerprintFile", gomock.Any(), fs.FileMode(0644)).Return(nil)
 	// IntegrityCheck
-	iom.EXPECT().ReadFile("allRulesFile").Return([]byte(SimpleRule+"\n"+FlowbitsRuleA), nil)
+	iom.EXPECT().ReadFile("allRulesFile").Return([]byte(SimpleRule+"\n"+FlowbitsRuleA+"\n"+IgnoredSID), nil)
 	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
 		"10000": nil,
 		"50000": nil,
@@ -2574,6 +2581,184 @@ func TestLoadAndMergeAuxiliaryData(t *testing.T) {
 			err = e.MergeAuxiliaryData(det)
 			assert.NoError(t, err)
 			assert.Nil(t, det.AiFields)
+		})
+	}
+}
+
+func TestRangeContains(t *testing.T) {
+	tests := []struct {
+		Name    string
+		Range   Range
+		Value   uint64
+		InRange bool
+	}{
+		{
+			Name:    "In Normal Range",
+			Range:   Range{LowerLimit: 10, UpperLimit: 20},
+			Value:   15,
+			InRange: true,
+		},
+		{
+			Name:  "Below Normal Range",
+			Range: Range{LowerLimit: 20, UpperLimit: 25},
+			Value: 5,
+		},
+		{
+			Name:  "Above Normal Range",
+			Range: Range{LowerLimit: 5, UpperLimit: 10},
+			Value: 25,
+		},
+		{
+			Name:    "Match Lower Limit",
+			Range:   Range{LowerLimit: 10, UpperLimit: 20},
+			Value:   10,
+			InRange: true,
+		},
+		{
+			Name:    "Match Upper Limit",
+			Range:   Range{LowerLimit: 10, UpperLimit: 20},
+			Value:   20,
+			InRange: true,
+		},
+		{
+			Name:    "Inside Single-Value Range",
+			Range:   Range{LowerLimit: 10, UpperLimit: 10},
+			Value:   10,
+			InRange: true,
+		},
+		{
+			Name:  "Outside Single-Value Range",
+			Range: Range{LowerLimit: 20, UpperLimit: 20},
+			Value: 10,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			assert.Equal(t, test.InRange, test.Range.Contains(test.Value))
+		})
+	}
+}
+
+func TestParseRanges(t *testing.T) {
+	tests := []struct {
+		Name           string
+		Input          string
+		ExpectedRanges []Range
+	}{
+		{
+			Name:           "Empty",
+			Input:          "",
+			ExpectedRanges: []Range{},
+		},
+		{
+			Name:  "Single Range",
+			Input: "1100000-1101000\n",
+			ExpectedRanges: []Range{
+				{LowerLimit: 1100000, UpperLimit: 1101000},
+			},
+		},
+		{
+			Name:  "Multiple Ranges",
+			Input: "1100000-1101000\n1102000-1103000\n1104000-1105000\n",
+			ExpectedRanges: []Range{
+				{LowerLimit: 1100000, UpperLimit: 1101000},
+				{LowerLimit: 1102000, UpperLimit: 1103000},
+				{LowerLimit: 1104000, UpperLimit: 1105000},
+			},
+		},
+		{
+			Name:  "Blank Lines",
+			Input: "1100000-1101000\n\n1102000-1103000\n\n1104000-1105000\n",
+			ExpectedRanges: []Range{
+				{LowerLimit: 1100000, UpperLimit: 1101000},
+				{LowerLimit: 1102000, UpperLimit: 1103000},
+				{LowerLimit: 1104000, UpperLimit: 1105000},
+			},
+		},
+		{
+			Name:  "Inverse Range",
+			Input: "1000000-1100000\n1101000-1100000\n1200000-1300000",
+			ExpectedRanges: []Range{
+				{LowerLimit: 1000000, UpperLimit: 1100000},
+				{LowerLimit: 1200000, UpperLimit: 1300000},
+			},
+		},
+		{
+			Name:  "Overlapping Ranges",
+			Input: "1000000-1100000\n900000-1200000\n",
+			ExpectedRanges: []Range{
+				{LowerLimit: 1000000, UpperLimit: 1100000},
+				{LowerLimit: 900000, UpperLimit: 1200000},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			ranges := parseIgnoredSidRanges(test.Input)
+			assert.Equal(t, test.ExpectedRanges, ranges)
+		})
+	}
+}
+
+func TestFilterOutSIDsInRanges(t *testing.T) {
+	tests := []struct {
+		Name         string
+		Sids         []string
+		Ranges       []Range
+		FilteredSids []string
+	}{
+		{
+			Name: "Filter Nothing Out",
+			Sids: []string{"100000", "100001", "100002"},
+			Ranges: []Range{
+				{LowerLimit: 1100000, UpperLimit: 1101000},
+			},
+			FilteredSids: []string{"100000", "100001", "100002"},
+		},
+		{
+			Name: "Filter Everything Out",
+			Sids: []string{"100000", "100001", "100002"},
+			Ranges: []Range{
+				{LowerLimit: 100000, UpperLimit: 100002},
+			},
+			FilteredSids: []string{},
+		},
+		{
+			Name: "Filter Some Out",
+			Sids: []string{"100000", "100001", "100002"},
+			Ranges: []Range{
+				{LowerLimit: 100000, UpperLimit: 100001},
+			},
+			FilteredSids: []string{"100002"},
+		},
+		{
+			Name: "Filter Some Out (Multiple Ranges)",
+			Sids: []string{"100000", "100001", "100002", "100003", "100004"},
+			Ranges: []Range{
+				{LowerLimit: 100000, UpperLimit: 100001},
+				{LowerLimit: 100003, UpperLimit: 100004},
+			},
+			FilteredSids: []string{"100002"},
+		},
+		{
+			Name: "Filter Out Bad SIDs",
+			Sids: []string{"100000", "100001", "100002", "bad", "100003"},
+			Ranges: []Range{
+				{LowerLimit: 100000, UpperLimit: 100001},
+			},
+			FilteredSids: []string{"100002", "100003"},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			filtered := filterOutSIDsInRanges(test.Sids, test.Ranges)
+			assert.Equal(t, test.FilteredSids, filtered)
 		})
 	}
 }

@@ -7,6 +7,7 @@
 package elastic
 
 import (
+	"bytes"
 	"os"
 	"testing"
 	"time"
@@ -629,4 +630,33 @@ func TestConvertToElasticScrollRequestWithQuery(t *testing.T) {
 
 	expectedJson := `{"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"_index: \"*:so-detection\" AND so_kind: \"detection\" AND so_detection.engine: \"strelka\" AND so_detection.isEnabled: \"true\""}}],"must_not":[],"should":[]}},"size":5000}`
 	assert.Equal(t, expectedJson, actualJson)
+}
+
+func TestConvertFromElasticMSearchResults(t *testing.T) {
+	esData, err := os.ReadFile("converter_response.json")
+	assert.Nil(t, err)
+
+	buf := bytes.Buffer{}
+	buf.WriteString(`{ "took": 10, "responses": [`)
+	buf.Write(esData)
+	buf.WriteString(`]}`)
+
+	results := model.NewEventMSearchResults()
+	err = convertFromElasticMSearchResults(NewTestStore().fieldDefs, buf.String(), results)
+	if assert.Nil(t, err) {
+		assert.Equal(t, 10, results.ElapsedMs)
+		assert.Equal(t, 1, len(results.Responses))
+
+		response := results.Responses[0]
+		assert.Equal(t, 9534, response.ElapsedMs)
+		assert.Equal(t, 23689430, response.TotalEvents)
+		assert.Len(t, response.Events, 25)
+		assert.Equal(t, "2020-04-24T03:00:55.300Z", response.Events[0].Timestamp)
+		assert.Equal(t, "2020-04-24T03:00:55.038Z", response.Events[1].Timestamp) // Check for alternate timestamp field
+		assert.Equal(t, "so16:logstash-bro-2020.04.24", response.Events[0].Source)
+		assert.NotNil(t, response.Metrics["groupby_0|source_ip"])
+		assert.NotNil(t, response.Metrics["groupby_0|source_ip|destination_ip"])
+		assert.NotNil(t, response.Metrics["groupby_0|source_ip|destination_ip|protocol"])
+		assert.NotNil(t, response.Metrics["groupby_0|source_ip|destination_ip|protocol|destination_port"])
+	}
 }

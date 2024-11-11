@@ -423,7 +423,7 @@ func TestUpdateRepos(t *testing.T) {
 			Dir:      true,
 		},
 	}, nil)
-	iom.EXPECT().PullRepo(gomock.Any(), "baseRepoFolder/repo1", nil).Return(false, false)
+	iom.EXPECT().PullRepo(gomock.Any(), "baseRepoFolder/repo1", nil).Return(false, false, false)
 	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo2", "http://github.com/user/repo2", &branch).Return(nil)
 	iom.EXPECT().RemoveAll("baseRepoFolder/repo3").Return(nil)
 
@@ -489,4 +489,84 @@ func TestUpdateReposFailToClone(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, allRepos)
 	assert.False(t, anythingNew)
+}
+
+func TestUpdateReposAllowedRepoErrors(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	branch := "branch"
+
+	iom := mock.NewMockIOManager(ctrl)
+	iom.EXPECT().ReadDir("baseRepoFolder").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: "repo1",
+			Dir:      true,
+		},
+	}, nil)
+	iom.EXPECT().PullRepo(gomock.Any(), "baseRepoFolder/repo1", &branch).Return(true, false, false)
+	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo2", "http://github.com/user/repo2", nil).Return(transport.ErrEmptyRemoteRepository)
+	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo3", "file:///nsm/rules/repo3", nil).Return(transport.ErrRepositoryNotFound)
+
+	isRunning := true
+
+	repos := []*model.RuleRepo{
+		{
+			Repo:   "http://github.com/user/repo1",
+			Branch: &branch,
+		},
+		{
+			Repo: "http://github.com/user/repo2",
+		},
+		{
+			Repo: "file:///nsm/rules/repo3",
+		},
+	}
+
+	allRepos, anythingNew, err := UpdateRepos(&isRunning, "baseRepoFolder", repos, iom)
+	assert.NoError(t, err)
+	assert.Len(t, allRepos, 1)
+	assert.Equal(t, &RepoOnDisk{
+		Repo:        repos[0],
+		Path:        "baseRepoFolder/repo1",
+		WasModified: true,
+	}, allRepos[0])
+	assert.True(t, anythingNew)
+}
+
+func TestUpdateReposRepoRemoteGoneError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	branch := "branch"
+
+	iom := mock.NewMockIOManager(ctrl)
+	// 1. repo has been cloned before and exists on disk
+	iom.EXPECT().ReadDir("baseRepoFolder").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: "repo1",
+			Dir:      true,
+		},
+	}, nil)
+	// 2. the remote repository no longer exists
+	iom.EXPECT().PullRepo(gomock.Any(), "baseRepoFolder/repo1", &branch).Return(false, false, true)
+	// 3. We DO NOT delete the repo for recloning, we do not process other repos in the config's list
+
+	isRunning := true
+
+	repos := []*model.RuleRepo{
+		{
+			Repo:   "http://github.com/user/repo1",
+			Branch: &branch,
+		},
+		{
+			Repo: "http://github.com/user/repo2",
+		},
+	}
+
+	allRepos, anythingNew, err := UpdateRepos(&isRunning, "baseRepoFolder", repos, iom)
+	assert.Len(t, allRepos, 0)
+	assert.False(t, anythingNew)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrRepoRemoteGone)
 }

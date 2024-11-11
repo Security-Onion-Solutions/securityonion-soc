@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"strconv"
 	"strings"
@@ -207,6 +208,42 @@ func (store *ElasticEventstore) Search(ctx context.Context, criteria *model.Even
 	}
 
 	results.Complete()
+
+	return results, err
+}
+
+func (store *ElasticEventstore) MSearch(ctx context.Context, criteria []*model.EventMSearchCriteria) (results *model.EventMSearchResults, err error) {
+	results = model.NewEventMSearchResults()
+
+	buf := bytes.Buffer{}
+	for _, criteria := range criteria {
+		buf.WriteString(fmt.Sprintf(`{"index":"%s"}`, criteria.Index))
+		buf.WriteString("\r\n")
+
+		query, err := convertToElasticMSearchRequest(store.fieldDefs, criteria)
+		if err != nil {
+			return results, err
+		}
+
+		buf.WriteString(query)
+		buf.WriteString("\r\n")
+	}
+
+	buf.WriteString("\n")
+
+	response, err := store.esClient.Msearch(strings.NewReader(buf.String()), store.esClient.Msearch.WithContext(ctx))
+	if err != nil {
+		return results, err
+	}
+
+	defer response.Body.Close()
+
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return results, err
+	}
+
+	err = convertFromElasticMSearchResults(store.fieldDefs, string(body), results)
 
 	return results, err
 }
