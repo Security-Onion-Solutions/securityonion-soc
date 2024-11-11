@@ -279,12 +279,12 @@ a#title, a#title:visited, a#title:active, a#title:hover {
 }
 
 .src {
-  border-left: 3px solid var(--v-theme-info);
+  border-left: 3px solid rgb(var(--v-theme-info));
   font-weight: bold;
 }
 
 .dst {
-  border-left: 3px solid var(--v-theme-error);
+  border-left: 3px solid rgb(var(--v-theme-error));
   font-weight: bold;
 }
 
