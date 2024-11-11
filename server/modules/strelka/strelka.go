@@ -1036,6 +1036,8 @@ func buildImportChecker(pkg string) *regexp.Regexp {
 }
 
 func (e *StrelkaEngine) syncDetections(ctx context.Context) (err error) {
+	logger := log.FromContext(ctx)
+
 	results, err := e.srv.Detectionstore.GetAllDetections(ctx, model.WithEngine(model.EngineNameStrelka), model.WithEnabled(true))
 	if err != nil {
 		return err
@@ -1090,7 +1092,7 @@ func (e *StrelkaEngine) syncDetections(ctx context.Context) (err error) {
 
 	raw, code, dur, err := e.ExecCommand(cmd)
 
-	log.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"yaraCommand":  cmd.String(),
 		"yaraOutput":   string(raw),
 		"yaraCode":     code,

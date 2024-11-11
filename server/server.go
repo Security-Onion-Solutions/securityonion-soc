@@ -116,13 +116,14 @@ func (server *Server) Wait() {
 	<-server.stoppedChan
 }
 
-func (server *Server) CheckAuthorized(ctx context.Context, operation string, target string) error {
-	var err error
+func (server *Server) CheckAuthorized(ctx context.Context, operation string, target string) (err error) {
+	logger := log.FromContext(ctx)
+
 	if server.Authorizer == nil {
 		if server.Config.DeveloperEnabled {
-			log.Info("Using developer mode; all authorization requests will succeed")
+			logger.Info("Using developer mode; all authorization requests will succeed")
 		} else {
-			log.Warn("No authorizer module has been configured; assuming no authorization")
+			logger.Warn("No authorizer module has been configured; assuming no authorization")
 			err = errors.New("Missing Authorizer module")
 		}
 	} else {

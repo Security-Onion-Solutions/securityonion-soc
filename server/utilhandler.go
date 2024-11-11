@@ -39,8 +39,7 @@ func RegisterUtilRoutes(srv *Server, r chi.Router, prefix string) {
 
 func (h *UtilHandler) putReverseLookup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-
-	logger := log.WithField("handler", "putReverseLookup")
+	logger := log.FromContext(ctx)
 
 	var body []string
 	results := map[string][]string{}
@@ -159,7 +158,7 @@ func (h *UtilHandler) putReverseLookup(w http.ResponseWriter, r *http.Request) {
 		lop.ForEach(ips, func(ip string, _ int) {
 			addrs, err := resolver.LookupAddr(ctx, ip)
 			if err != nil && !strings.Contains(err.Error(), "Name or service not known") {
-				log.WithField("ip", ip).WithError(err).Warn("Failed to lookup address")
+				logger.WithField("ip", ip).WithError(err).Warn("Failed to lookup address")
 			}
 			if len(addrs) == 0 {
 				addrs = []string{ip}

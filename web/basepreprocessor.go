@@ -10,6 +10,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/apex/log"
 	"github.com/google/uuid"
 )
 
@@ -27,5 +28,7 @@ func (Processor *BasePreprocessor) PreprocessPriority() int {
 func (processor *BasePreprocessor) Preprocess(ctx context.Context, req *http.Request) (context.Context, int, error) {
 	uuid := uuid.New().String()
 	ctx = context.WithValue(ctx, ContextKeyRequestId, uuid)
+	ctx = log.NewContext(ctx, log.WithField("requestId", uuid))
+
 	return ctx, 0, nil
 }

@@ -144,12 +144,13 @@ func (h *CaseHandler) createComment(w http.ResponseWriter, r *http.Request) {
 
 func (h *CaseHandler) createArtifact(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	logger := log.FromContext(ctx)
 	inputArtifact := model.NewArtifact()
 
 	contentType, ok := r.Header["Content-Type"]
 	if !ok || !strings.Contains(contentType[0], "multipart") {
 		// Fallback to plain JSON
-		log.WithField("contentType", contentType).Debug("Multipart content type not found")
+		logger.WithField("contentType", contentType).Debug("Multipart content type not found")
 		err := json.NewDecoder(r.Body).Decode(&inputArtifact)
 		if err != nil {
 			web.Respond(w, r, http.StatusBadRequest, err)
@@ -169,7 +170,7 @@ func (h *CaseHandler) createArtifact(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		log.Debug("Successfully parsed multipart form")
+		logger.Debug("Successfully parsed multipart form")
 
 		// Try pulling an attachment file
 		file, handler, err := r.FormFile("attachment")
@@ -183,7 +184,7 @@ func (h *CaseHandler) createArtifact(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		log.Debug("Found attachment")
+		logger.Debug("Found attachment")
 		defer file.Close()
 
 		if len(inputArtifact.Value) > 0 {
@@ -202,14 +203,14 @@ func (h *CaseHandler) createArtifact(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if inputArtifact.StreamLen != int(handler.Size) {
-			log.WithFields(log.Fields{
+			logger.WithFields(log.Fields{
 				"requestId": ctx.Value(web.ContextKeyRequestId),
 				"mimeType":  inputArtifact.MimeType,
 				"formLen":   handler.Size,
 				"copyLen":   inputArtifact.StreamLen,
 			}).Warn("Mismatch of stream size detected")
 		} else {
-			log.WithFields(log.Fields{
+			logger.WithFields(log.Fields{
 				"requestId":   ctx.Value(web.ContextKeyRequestId),
 				"formFileLen": handler.Size,
 				"streamLen":   inputArtifact.StreamLen,
@@ -447,6 +448,8 @@ func (h *CaseHandler) getHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (caseHandler *CaseHandler) copyArtifactStream(ctx context.Context, writer http.ResponseWriter, artifactId string) error {
+	logger := log.FromContext(ctx)
+
 	artifact, err := caseHandler.server.Casestore.GetArtifact(ctx, artifactId)
 	if err != nil {
 		return err
@@ -492,7 +495,7 @@ func (caseHandler *CaseHandler) copyArtifactStream(ctx context.Context, writer h
 
 	written, err := io.Copy(writer, content)
 	if err != nil {
-		log.WithError(err).WithFields(log.Fields{
+		logger.WithError(err).WithFields(log.Fields{
 			"artifactName": artifact.Value,
 			"artifactId":   artifactId,
 		}).Error("Failed to copy artifact stream")
@@ -500,7 +503,7 @@ func (caseHandler *CaseHandler) copyArtifactStream(ctx context.Context, writer h
 		return err
 	}
 
-	log.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"artifactName":      artifact.Value,
 		"artifactSize":      written,
 		"artifactId":        artifactId,
