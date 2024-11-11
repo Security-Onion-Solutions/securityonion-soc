@@ -43,6 +43,7 @@ func RegisterStreamRoutes(srv *Server, r chi.Router, prefix string) {
 
 func (h *StreamHandler) getStream(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	logger := log.FromContext(ctx)
 
 	id := chi.URLParam(r, "jobId")
 	if id == "" {
@@ -90,7 +91,7 @@ func (h *StreamHandler) getStream(w http.ResponseWriter, r *http.Request) {
 
 	written, err := io.Copy(w, reader)
 	if err != nil {
-		log.WithError(err).WithFields(log.Fields{
+		logger.WithError(err).WithFields(log.Fields{
 			"streamFilename": filename,
 		}).Error("Failed to copy stream")
 		web.Respond(nil, r, http.StatusInternalServerError, err)
@@ -98,7 +99,7 @@ func (h *StreamHandler) getStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"streamFilename": filename,
 		"streamSize":     written,
 	}).Info("Copied stream to response")

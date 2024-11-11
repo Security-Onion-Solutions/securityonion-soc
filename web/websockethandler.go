@@ -41,12 +41,13 @@ func RegisterWebSocketRoutes(host *Host, r chi.Router) {
 
 func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	logger := log.FromContext(ctx)
 
 	ip := GetSourceIp(r)
 
 	userId, ok := ctx.Value(ContextKeyRequestorId).(string)
 	if !ok {
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"messageRemoteAddr": r.RemoteAddr,
 			"messageSourceIp":   ip,
 			"messagePath":       r.URL.Path,
@@ -59,7 +60,7 @@ func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.
 	upgrader := websocket.Upgrader{}
 	connection, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.WithError(err).WithFields(log.Fields{
+		logger.WithError(err).WithFields(log.Fields{
 			"messageRemoteAddr": r.RemoteAddr,
 			"messageSourceIp":   ip,
 			"messagePath":       r.URL.Path,
@@ -69,7 +70,7 @@ func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.
 		return
 	}
 
-	log.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"messageRemoteAddr": r.RemoteAddr,
 		"messageSourceIp":   ip,
 		"messagePath":       r.URL.Path,
@@ -83,7 +84,7 @@ func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.
 		if err != nil {
 			break
 		}
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"messageRemoteAddr": r.RemoteAddr,
 			"messageSourceIp":   ip,
 			"messagePath":       r.URL.Path,
@@ -95,7 +96,7 @@ func (webSocketHandler *WebSocketHandler) Handle(w http.ResponseWriter, r *http.
 		json.LoadJson(messageBytes, msg)
 		webSocketHandler.handleMessage(msg, conn)
 	}
-	log.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"messageRemoteAddr": r.RemoteAddr,
 		"messageSourceIp":   ip,
 		"messagePath":       r.URL.Path,

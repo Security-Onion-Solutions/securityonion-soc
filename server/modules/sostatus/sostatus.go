@@ -87,13 +87,17 @@ func (status *SoStatus) IsRunning() bool {
 }
 
 func (status *SoStatus) Refresh(ctx context.Context) {
-	log.Debug("Updating grid status")
+	logger := log.FromContext(ctx)
+
+	logger.Debug("Updating grid status")
 	status.refreshGrid(ctx)
 	status.refreshDetections(ctx)
 	status.server.Host.Broadcast("status", "nodes", status.currentStatus)
 }
 
 func (status *SoStatus) refreshGrid(ctx context.Context) {
+	logger := log.FromContext(ctx)
+
 	unhealthyNodes := 0
 	nonCriticalNodes := 0
 	awaitingRebootCount := 0
@@ -104,7 +108,7 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 		staleMs := int(time.Since(node.UpdateTime) / time.Millisecond)
 		if staleMs > status.offlineThresholdMs {
 			if node.ConnectionStatus != model.NodeStatusFault {
-				log.WithFields(log.Fields{
+				logger.WithFields(log.Fields{
 					"nodeId":             node.Id,
 					"staleMs":            staleMs,
 					"offlineThresholdMs": status.offlineThresholdMs,
@@ -118,7 +122,7 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 			updated = status.server.Metrics.UpdateNodeMetrics(ctx, node)
 		}
 
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"Id":               node.Id,
 			"processStatus":    node.ProcessStatus,
 			"raidStatus":       node.RaidStatus,
@@ -145,12 +149,12 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 	}
 	status.currentStatus.Grid.TotalNodeCount = len(nodes)
 	if status.currentStatus.Grid.UnhealthyNodeCount == 0 && unhealthyNodes > 0 {
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"unhealthyNodes": unhealthyNodes,
 			"totalNodes":     len(nodes),
 		}).Warn("Grid has entered an unhealthy state")
 	} else if status.currentStatus.Grid.UnhealthyNodeCount > 0 && unhealthyNodes == 0 {
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"unhealthyNodes": unhealthyNodes,
 			"totalNodes":     len(nodes),
 		}).Info("Grid has returned to a healthy state")
@@ -160,7 +164,7 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 		status.currentStatus.Grid.Eps = status.server.Metrics.GetGridEps(ctx)
 	}
 	if status.currentStatus.Grid.AwaitingRebootNodeCount == 0 && awaitingRebootCount > 0 {
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"awaitingRebootCount": awaitingRebootCount,
 			"totalNodes":          len(nodes),
 		}).Info("Grid nodes are awaiting reboot")

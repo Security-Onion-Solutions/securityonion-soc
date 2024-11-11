@@ -69,6 +69,8 @@ func (impl *StaticRbacAuthorizer) identifyUser(user *model.User) string {
 }
 
 func (impl *StaticRbacAuthorizer) GetAssignments(ctx context.Context) (map[string][]string, error) {
+	logger := log.FromContext(ctx)
+
 	userMap := make(map[string][]string)
 
 	if err := impl.CheckContextOperationAuthorized(ctx, "read", "roles"); err != nil {
@@ -82,7 +84,7 @@ func (impl *StaticRbacAuthorizer) GetAssignments(ctx context.Context) (map[strin
 			newRoles := make([]string, len(roles))
 			copy(newRoles, roles)
 			userMap[userIdentifier] = newRoles
-			log.WithFields(log.Fields{
+			logger.WithFields(log.Fields{
 				"user":      userIdentifier,
 				"roles":     roles,
 				"requestId": ctx.Value(web.ContextKeyRequestId),
@@ -147,18 +149,20 @@ func (impl *StaticRbacAuthorizer) GetRoles(ctx context.Context) []string {
 }
 
 func (impl *StaticRbacAuthorizer) GetRolesForAuthId(ctx context.Context, id string) (error, []string) {
+	logger := log.FromContext(ctx)
+
 	// Use the returned roles instead of the struct roles so that they are filtered for access permissions
 	userMap, _ := impl.GetAssignments(ctx)
 	var returnedRoles []string
 
 	if roles, ok := userMap[id]; ok {
 		returnedRoles = roles
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"authId": id,
 			"roles":  returnedRoles,
 		}).Debug("Populated roles for ID")
 	} else {
-		log.WithField("authId", id).Debug("No roles found")
+		logger.WithField("authId", id).Debug("No roles found")
 	}
 	sort.Strings(returnedRoles)
 	return nil, returnedRoles
@@ -219,12 +223,13 @@ func (impl *StaticRbacAuthorizer) adjustMap(mp map[string][]string, subject stri
 	mp[subject] = perms
 }
 
-func (impl *StaticRbacAuthorizer) CheckContextOperationAuthorized(ctx context.Context, operation string, target string) error {
-	var err error
+func (impl *StaticRbacAuthorizer) CheckContextOperationAuthorized(ctx context.Context, operation string, target string) (err error) {
+	logger := log.FromContext(ctx)
+
 	if userId, ok := ctx.Value(web.ContextKeyRequestorId).(string); ok {
 		err = impl.CheckUserOperationAuthorized(userId, operation, target)
 	} else {
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"requestId": ctx.Value(web.ContextKeyRequestId),
 			"operation": operation,
 			"target":    target,
@@ -235,8 +240,7 @@ func (impl *StaticRbacAuthorizer) CheckContextOperationAuthorized(ctx context.Co
 	return err
 }
 
-func (impl *StaticRbacAuthorizer) CheckUserOperationAuthorized(userIdentifier string, operation string, target string) error {
-	var err error
+func (impl *StaticRbacAuthorizer) CheckUserOperationAuthorized(userIdentifier string, operation string, target string) (err error) {
 	permission := target + "/" + operation
 
 	impl.mutex.Lock()

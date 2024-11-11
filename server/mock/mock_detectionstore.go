@@ -42,7 +42,7 @@ func (m *MockDetectionstore) EXPECT() *MockDetectionstoreMockRecorder {
 }
 
 // BuildBulkIndexer mocks base method.
-func (m *MockDetectionstore) BuildBulkIndexer(arg0 context.Context, arg1 *log.Entry) (esutil.BulkIndexer, error) {
+func (m *MockDetectionstore) BuildBulkIndexer(arg0 context.Context, arg1 log.Interface) (esutil.BulkIndexer, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "BuildBulkIndexer", arg0, arg1)
 	ret0, _ := ret[0].(esutil.BulkIndexer)

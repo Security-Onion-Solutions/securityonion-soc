@@ -71,10 +71,12 @@ func (auth *StaticKeyAuthImpl) IsAuthorized(ctx context.Context, request *http.R
 }
 
 func (auth *StaticKeyAuthImpl) validateAuthorization(ctx context.Context, key string, ipStr string) bool {
+	logger := log.FromContext(ctx)
+
 	// If API key has been provided, it must match
 	if len(key) > 0 && !strings.HasPrefix(key, "Bearer ") {
 		isApiKeyAccepted := auth.validateApiKey(key)
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"isApiKeyAccepted": isApiKeyAccepted,
 			"requestId":        ctx.Value(web.ContextKeyRequestId),
 		}).Debug("Authorization check via API key")
@@ -94,7 +96,7 @@ func (auth *StaticKeyAuthImpl) validateAuthorization(ctx context.Context, key st
 	}
 	remoteIp := net.ParseIP(ipStr)
 	isAnonymousIp := auth.anonymousNetwork.Contains(remoteIp)
-	log.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"anonymousNetwork": auth.anonymousNetwork,
 		"remoteIp":         remoteIp,
 		"ipStr":            ipStr,

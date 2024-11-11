@@ -285,9 +285,8 @@ func (store *ElasticCasestore) prepareForSave(ctx context.Context, obj *model.Au
 	return id
 }
 
-func (store *ElasticCasestore) save(ctx context.Context, obj interface{}, kind string, id string) (*model.EventIndexResults, error) {
-	var results *model.EventIndexResults
-	var err error
+func (store *ElasticCasestore) save(ctx context.Context, obj interface{}, kind string, id string) (results *model.EventIndexResults, err error) {
+	logger := log.FromContext(ctx)
 
 	if err = store.server.CheckAuthorized(ctx, "write", "cases"); err == nil {
 		document := ConvertObjectToDocumentMap(kind, obj, store.schemaPrefix)
@@ -302,7 +301,7 @@ func (store *ElasticCasestore) save(ctx context.Context, obj interface{}, kind s
 			}
 			_, err = store.server.Eventstore.Index(ctx, store.auditIndex, document, "")
 			if err != nil {
-				log.WithFields(log.Fields{
+				logger.WithFields(log.Fields{
 					"documentId": results.DocumentId,
 					"kind":       kind,
 				}).WithError(err).Error("Object indexed successfully however audit record failed to index")
@@ -313,8 +312,8 @@ func (store *ElasticCasestore) save(ctx context.Context, obj interface{}, kind s
 	return results, err
 }
 
-func (store *ElasticCasestore) delete(ctx context.Context, obj interface{}, kind string, id string) error {
-	var err error
+func (store *ElasticCasestore) delete(ctx context.Context, obj interface{}, kind string, id string) (err error) {
+	logger := log.FromContext(ctx)
 
 	if err = store.server.CheckAuthorized(ctx, "write", "cases"); err == nil {
 		err = store.server.Eventstore.Delete(ctx, store.index, id)
@@ -325,7 +324,7 @@ func (store *ElasticCasestore) delete(ctx context.Context, obj interface{}, kind
 			document[store.schemaPrefix+"operation"] = "delete"
 			_, err = store.server.Eventstore.Index(ctx, store.auditIndex, document, "")
 			if err != nil {
-				log.WithFields(log.Fields{
+				logger.WithFields(log.Fields{
 					"documentId": id,
 					"kind":       kind,
 				}).WithError(err).Error("Object deleted successfully however audit record failed to index")
@@ -348,9 +347,8 @@ func (store *ElasticCasestore) get(ctx context.Context, id string, kind string) 
 	return nil, err
 }
 
-func (store *ElasticCasestore) getAll(ctx context.Context, query string, max int) ([]interface{}, error) {
-	var err error
-	var objects []interface{}
+func (store *ElasticCasestore) getAll(ctx context.Context, query string, max int) (objects []interface{}, err error) {
+	logger := log.FromContext(ctx)
 
 	if err = store.server.CheckAuthorized(ctx, "read", "cases"); err == nil {
 		criteria := model.NewEventSearchCriteria()
@@ -377,7 +375,7 @@ func (store *ElasticCasestore) getAll(ctx context.Context, query string, max int
 					if err == nil {
 						objects = append(objects, obj)
 					} else {
-						log.WithField("event", event).WithError(err).Error("Unable to convert case object")
+						logger.WithField("event", event).WithError(err).Error("Unable to convert case object")
 					}
 				}
 			}
@@ -789,12 +787,14 @@ func (store *ElasticCasestore) UpdateArtifact(ctx context.Context, artifact *mod
 }
 
 func (store *ElasticCasestore) DeleteArtifact(ctx context.Context, id string) error {
+	logger := log.FromContext(ctx)
+
 	artifact, err := store.GetArtifact(ctx, id)
 	if err == nil {
 		if len(artifact.StreamId) > 0 {
 			err = store.DeleteArtifactStream(ctx, artifact.StreamId)
 			if err != nil {
-				log.WithError(err).WithFields(log.Fields{
+				logger.WithError(err).WithFields(log.Fields{
 					"artifactStreamId": artifact.StreamId,
 					"artifactId":       artifact.Id,
 				}).Error("Unable to delete artifact stream; proceeding with artifact deletion anyway")
@@ -811,7 +811,7 @@ func (store *ElasticCasestore) DeleteArtifact(ctx context.Context, id string) er
 			for _, job := range jobs {
 				job, err := store.server.Datastore.DeleteJob(ctx, job.Id)
 				if err != nil {
-					log.WithError(err).WithFields(log.Fields{
+					logger.WithError(err).WithFields(log.Fields{
 						"artifactId": artifact.Id,
 						"jobId":      job.Id,
 					}).Error("Unable to delete analyze job; continuing")
@@ -869,6 +869,8 @@ func (store *ElasticCasestore) DeleteArtifactStream(ctx context.Context, id stri
 }
 
 func (store *ElasticCasestore) ExtractCommonObservables(ctx context.Context, event *model.RelatedEvent) error {
+	logger := log.FromContext(ctx)
+
 	existingArtifacts, _ := store.GetArtifacts(ctx, event.CaseId, "evidence", "")
 	existingValueMap := make(map[string]bool)
 	for _, artifact := range existingArtifacts {
@@ -889,7 +891,7 @@ func (store *ElasticCasestore) ExtractCommonObservables(ctx context.Context, eve
 				artifact.GroupType = "evidence"
 				_, err := store.CreateArtifact(ctx, artifact)
 				if err != nil {
-					log.WithFields(log.Fields{
+					logger.WithFields(log.Fields{
 						"key":          key,
 						"caseId":       event.CaseId,
 						"artifactType": artifact.ArtifactType,

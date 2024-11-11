@@ -392,9 +392,10 @@ func (store *ElasticEventstore) disableCrossClusterIndexing(indexes []string) []
 	return indexes
 }
 
-func (store *ElasticEventstore) Update(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
-	var err error
-	results := model.NewEventUpdateResults()
+func (store *ElasticEventstore) Update(ctx context.Context, criteria *model.EventUpdateCriteria) (results *model.EventUpdateResults, err error) {
+	logger := log.FromContext(ctx)
+
+	results = model.NewEventUpdateResults()
 	if err = store.server.CheckAuthorized(ctx, "write", "events"); err == nil {
 		store.refreshCache(ctx)
 
@@ -405,7 +406,7 @@ func (store *ElasticEventstore) Update(ctx context.Context, criteria *model.Even
 			var response string
 
 			for idx, client := range store.esAllClients {
-				log.WithField("clientHost", store.hostUrls[idx]).Debug("Sending request to client")
+				logger.WithField("clientHost", store.hostUrls[idx]).Debug("Sending request to client")
 				response, err = store.updateDocuments(ctx, client, query, store.disableCrossClusterIndexing(strings.Split(store.index, ",")), !criteria.Asynchronous)
 				if err == nil {
 					if !criteria.Asynchronous {
@@ -414,12 +415,12 @@ func (store *ElasticEventstore) Update(ctx context.Context, criteria *model.Even
 						if err == nil {
 							results.AddEventUpdateResults(currentResults)
 						} else {
-							log.WithError(err).WithField("clientHost", store.hostUrls[idx]).Error("Encountered error while updating elasticsearch")
+							logger.WithError(err).WithField("clientHost", store.hostUrls[idx]).Error("Encountered error while updating elasticsearch")
 							results.Errors = append(results.Errors, err.Error())
 						}
 					}
 				} else {
-					log.WithError(err).WithField("clientHost", store.hostUrls[idx]).Error("Encountered error while updating elasticsearch")
+					logger.WithError(err).WithField("clientHost", store.hostUrls[idx]).Error("Encountered error while updating elasticsearch")
 					results.Errors = append(results.Errors, err.Error())
 				}
 			}
@@ -436,9 +437,10 @@ func (store *ElasticEventstore) Update(ctx context.Context, criteria *model.Even
 	return results, err
 }
 
-func (store *ElasticEventstore) Index(ctx context.Context, index string, document map[string]interface{}, id string) (*model.EventIndexResults, error) {
-	var err error
-	results := model.NewEventIndexResults()
+func (store *ElasticEventstore) Index(ctx context.Context, index string, document map[string]interface{}, id string) (results *model.EventIndexResults, err error) {
+	logger := log.FromContext(ctx)
+
+	results = model.NewEventIndexResults()
 	if err = store.server.CheckAuthorized(ctx, "write", "events"); err == nil {
 		store.refreshCache(ctx)
 
@@ -447,35 +449,36 @@ func (store *ElasticEventstore) Index(ctx context.Context, index string, documen
 		if err == nil {
 			var response string
 
-			log.Debug("Sending index request to primary Elasticsearch client")
+			logger.Debug("Sending index request to primary Elasticsearch client")
 			response, err = store.indexDocument(ctx, store.disableCrossClusterIndex(index), request, id)
 			if err == nil {
 				err = convertFromElasticIndexResults(response, results)
 				if err != nil {
-					log.WithError(err).Error("Encountered error while converting document index results")
+					logger.WithError(err).Error("Encountered error while converting document index results")
 				}
 			} else {
-				log.WithError(err).Error("Encountered error while indexing document into elasticsearch")
+				logger.WithError(err).Error("Encountered error while indexing document into elasticsearch")
 			}
 		}
 	}
 	return results, err
 }
 
-func (store *ElasticEventstore) Delete(ctx context.Context, index string, id string) error {
-	var err error
+func (store *ElasticEventstore) Delete(ctx context.Context, index string, id string) (err error) {
+	logger := log.FromContext(ctx)
+
 	results := model.NewEventIndexResults()
 	if err = store.server.CheckAuthorized(ctx, "write", "events"); err == nil {
 		var response string
-		log.Debug("Sending delete request to primary Elasticsearch client")
+		logger.Debug("Sending delete request to primary Elasticsearch client")
 		response, err = store.deleteDocument(ctx, store.disableCrossClusterIndex(index), id)
 		if err == nil {
 			err = convertFromElasticIndexResults(response, results)
 			if err != nil {
-				log.WithError(err).Error("Encountered error while converting document index results")
+				logger.WithError(err).Error("Encountered error while converting document index results")
 			}
 		} else {
-			log.WithError(err).Error("Encountered error while deleting document from elasticsearch")
+			logger.WithError(err).Error("Encountered error while deleting document from elasticsearch")
 		}
 	}
 	return err
@@ -514,7 +517,9 @@ func readJsonFromResponse(res *esapi.Response) (string, error) {
 }
 
 func (store *ElasticEventstore) indexSearch(ctx context.Context, query string, indexes []string) (string, error) {
-	log.WithFields(log.Fields{
+	logger := log.FromContext(ctx)
+
+	logger.WithFields(log.Fields{
 		"query":     store.truncate(query),
 		"requestId": ctx.Value(web.ContextKeyRequestId),
 	}).Info("Searching Elasticsearch")
@@ -533,15 +538,19 @@ func (store *ElasticEventstore) indexSearch(ctx context.Context, query string, i
 		defer res.Body.Close()
 		json, err = readJsonFromResponse(res)
 	}
-	log.WithFields(log.Fields{
+
+	logger.WithFields(log.Fields{
 		"response":  store.truncate(json),
 		"requestId": ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Search finished")
+
 	return json, err
 }
 
 func (store *ElasticEventstore) indexDocument(ctx context.Context, index string, document string, id string) (string, error) {
-	log.WithFields(log.Fields{
+	logger := log.FromContext(ctx)
+
+	logger.WithFields(log.Fields{
 		"index":     index,
 		"id":        id,
 		"document":  store.truncate(document),
@@ -556,21 +565,25 @@ func (store *ElasticEventstore) indexDocument(ctx context.Context, index string,
 	)
 
 	if err != nil {
-		log.WithError(err).Error("Unable to index document into Elasticsearch")
+		logger.WithError(err).Error("Unable to index document into Elasticsearch")
 		return "", err
 	}
 	defer res.Body.Close()
+
 	json, err := readJsonFromResponse(res)
 
-	log.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"response":  store.truncate(json),
 		"requestId": ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Index new document finished")
+
 	return json, err
 }
 
 func (store *ElasticEventstore) deleteDocument(ctx context.Context, index string, id string) (string, error) {
-	log.WithFields(log.Fields{
+	logger := log.FromContext(ctx)
+
+	logger.WithFields(log.Fields{
 		"index":     index,
 		"id":        id,
 		"requestId": ctx.Value(web.ContextKeyRequestId),
@@ -579,7 +592,7 @@ func (store *ElasticEventstore) deleteDocument(ctx context.Context, index string
 	res, err := store.esClient.Delete(transformIndex(index), id, store.esClient.Delete.WithContext(ctx))
 
 	if err != nil {
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"index":     index,
 			"id":        id,
 			"requestId": ctx.Value(web.ContextKeyRequestId),
@@ -587,19 +600,23 @@ func (store *ElasticEventstore) deleteDocument(ctx context.Context, index string
 		return "", err
 	}
 	defer res.Body.Close()
+
 	json, err := readJsonFromResponse(res)
 
-	log.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"index":     index,
 		"id":        id,
 		"response":  store.truncate(json),
 		"requestId": ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Delete document finished")
+
 	return json, err
 }
 
 func (store *ElasticEventstore) updateDocuments(ctx context.Context, client *elasticsearch.Client, query string, indexes []string, waitForCompletion bool) (string, error) {
-	log.WithFields(log.Fields{
+	logger := log.FromContext(ctx)
+
+	logger.WithFields(log.Fields{
 		"query":     store.truncate(query),
 		"requestId": ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Updating documents in Elasticsearch")
@@ -617,10 +634,12 @@ func (store *ElasticEventstore) updateDocuments(ctx context.Context, client *ela
 		defer res.Body.Close()
 		json, err = readJsonFromResponse(res)
 	}
-	log.WithFields(log.Fields{
+
+	logger.WithFields(log.Fields{
 		"response":  store.truncate(json),
 		"requestId": ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Update finished")
+
 	return json, err
 }
 
@@ -636,7 +655,9 @@ func (store *ElasticEventstore) refreshCache(ctx context.Context) {
 }
 
 func (store *ElasticEventstore) refreshCacheFromFieldCaps(ctx context.Context) error {
-	log.Info("Fetching Field Capabilities from Elasticsearch")
+	logger := log.FromContext(ctx)
+
+	logger.Info("Fetching Field Capabilities from Elasticsearch")
 	indexes := strings.Split(store.index, ",")
 	var json string
 	res, err := store.esClient.FieldCaps(
@@ -648,11 +669,12 @@ func (store *ElasticEventstore) refreshCacheFromFieldCaps(ctx context.Context) e
 	if err == nil {
 		defer res.Body.Close()
 		json, err = readJsonFromResponse(res)
-		log.WithFields(log.Fields{"response": store.truncate(json)}).Debug("Fetch finished")
+		logger.WithFields(log.Fields{"response": store.truncate(json)}).Debug("Fetch finished")
 		store.cacheFieldsFromJson(json)
 	} else {
-		log.WithError(err).Error("Failed to refresh cache from index patterns")
+		logger.WithError(err).Error("Failed to refresh cache from index patterns")
 	}
+
 	return err
 }
 
@@ -697,7 +719,9 @@ func cacheFields(fieldDefs map[string]*FieldDefinition, name gjson.Result, detai
 }
 
 func (store *ElasticEventstore) clusterState(ctx context.Context) (string, error) {
-	log.WithField("cacheMs", store.cacheMs).Debug("Refreshing field definitions")
+	logger := log.FromContext(ctx)
+
+	logger.WithField("cacheMs", store.cacheMs).Debug("Refreshing field definitions")
 	indexes := strings.Split(store.index, ",")
 	var json string
 	res, err := store.esClient.Cluster.State(
@@ -721,7 +745,9 @@ func (store *ElasticEventstore) clusterState(ctx context.Context) (string, error
 			err = errors.New(errorType + ": " + errorReason + " -> " + errorDetails)
 		}
 	}
-	log.WithFields(log.Fields{"response": store.truncate(json)}).Debug("Refresh Finished")
+
+	logger.WithFields(log.Fields{"response": store.truncate(json)}).Debug("Refresh Finished")
+
 	return json, err
 }
 
@@ -763,6 +789,8 @@ func (store *ElasticEventstore) buildRangeFilter(timestampStr string) (string, t
     to the original ES ID record and use the IP/port details as the filter.
 */
 func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idField string, idValue string, timestampStr string, job *model.Job) error {
+	logger := log.FromContext(ctx)
+
 	rangeFilter, timestamp := store.buildRangeFilter(timestampStr)
 
 	query := fmt.Sprintf(`
@@ -779,19 +807,19 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 	var outputSensorId string
 	filter := model.NewFilter()
 	json, err := store.luceneSearch(ctx, query)
-	log.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"query":     store.truncate(query),
 		"response":  store.truncate(json),
 		"requestId": ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Elasticsearch primary search finished")
 	if err != nil {
-		log.WithField("query", store.truncate(query)).WithError(err).Error("Unable to lookup initial document record")
+		logger.WithField("query", store.truncate(query)).WithError(err).Error("Unable to lookup initial document record")
 		return err
 	}
 
 	hits := gjson.Get(json, "hits.total.value").Int()
 	if hits == 0 {
-		log.WithField("query", store.truncate(query)).Error("Pivoted document record was not found")
+		logger.WithField("query", store.truncate(query)).Error("Pivoted document record was not found")
 		return errors.New("Unable to locate document record")
 	}
 
@@ -806,7 +834,7 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 		// can do in this situation is respond with the tunnel PCAP data, which could be excessive.
 		tunnelParent := gjson.Get(json, "hits.hits.0._source.log.id.tunnel_parents").String()
 		if len(tunnelParent) > 0 {
-			log.Info("Document is inside of a tunnel; attempting to lookup tunnel connection log")
+			logger.Info("Document is inside of a tunnel; attempting to lookup tunnel connection log")
 			if tunnelParent[0] == '[' {
 				tunnelParent = gjson.Get(json, "hits.hits.0._source.log.id.tunnel_parents.0").String()
 			}
@@ -822,17 +850,17 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 		}`, tunnelParent, rangeFilter)
 
 			json, err = store.luceneSearch(ctx, query)
-			log.WithFields(log.Fields{
+			logger.WithFields(log.Fields{
 				"query":    store.truncate(query),
 				"response": store.truncate(json),
 			}).Debug("Elasticsearch tunnel search finished")
 			if err != nil {
-				log.WithField("query", store.truncate(query)).WithError(err).Error("Unable to lookup tunnel record")
+				logger.WithField("query", store.truncate(query)).WithError(err).Error("Unable to lookup tunnel record")
 				return err
 			}
 			hits := gjson.Get(json, "hits.total.value").Int()
 			if hits == 0 {
-				log.WithField("query", store.truncate(query)).Error("Tunnel record was not found")
+				logger.WithField("query", store.truncate(query)).Error("Tunnel record was not found")
 				return errors.New("Unable to locate encapsulating tunnel record")
 			}
 		}
@@ -864,14 +892,14 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 				query = fmt.Sprintf(`{"query":{"bool":{"must":[{"query_string":{"query":"event.dataset:zeek.file AND %s","analyze_wildcard":true}}%s]}}}`,
 					zeekFileQuery, rangeFilter)
 				json, err = store.luceneSearch(ctx, query)
-				log.WithFields(log.Fields{
+				logger.WithFields(log.Fields{
 					"query":     store.truncate(query),
 					"response":  store.truncate(json),
 					"requestId": ctx.Value(web.ContextKeyRequestId),
 				}).Debug("Elasticsearch Zeek File search finished")
 
 				if err != nil {
-					log.WithFields(log.Fields{
+					logger.WithFields(log.Fields{
 						"query":         store.truncate(query),
 						"zeekFileQuery": store.truncate(zeekFileQuery),
 						"requestId":     ctx.Value(web.ContextKeyRequestId),
@@ -881,7 +909,7 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 
 				hits = gjson.Get(json, "hits.total.value").Int()
 				if hits == 0 {
-					log.WithFields(log.Fields{
+					logger.WithFields(log.Fields{
 						"query":         store.truncate(query),
 						"zeekFileQuery": store.truncate(zeekFileQuery),
 						"requestId":     ctx.Value(web.ContextKeyRequestId),
@@ -893,7 +921,7 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 			}
 
 			if len(uid) == 0 {
-				log.WithFields(log.Fields{
+				logger.WithFields(log.Fields{
 					"query":         store.truncate(query),
 					"zeekFileQuery": store.truncate(zeekFileQuery),
 					"requestId":     ctx.Value(web.ContextKeyRequestId),
@@ -906,14 +934,14 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 		query = fmt.Sprintf(`{"query":{"bool":{"must":[{"query_string":{"query":"event.module:zeek AND %s","analyze_wildcard":true}}%s]}}}`,
 			uid, rangeFilter)
 		json, err = store.luceneSearch(ctx, query)
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"query":     store.truncate(query),
 			"response":  store.truncate(json),
 			"requestId": ctx.Value(web.ContextKeyRequestId),
 		}).Debug("Elasticsearch Zeek search finished")
 
 		if err != nil {
-			log.WithFields(log.Fields{
+			logger.WithFields(log.Fields{
 				"query":     store.truncate(query),
 				"uid":       uid,
 				"requestId": ctx.Value(web.ContextKeyRequestId),
@@ -923,7 +951,7 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 
 		hits = gjson.Get(json, "hits.total.value").Int()
 		if hits == 0 {
-			log.WithFields(log.Fields{
+			logger.WithFields(log.Fields{
 				"query":     store.truncate(query),
 				"uid":       uid,
 				"requestId": ctx.Value(web.ContextKeyRequestId),
@@ -969,14 +997,14 @@ func (store *ElasticEventstore) PopulateJobFromDocQuery(ctx context.Context, idF
 			}
 		}
 
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"sensorId":  outputSensorId,
 			"requestId": ctx.Value(web.ContextKeyRequestId),
 		}).Info("Obtained output parameters")
 	}
 
 	if len(filter.SrcIp) == 0 || len(filter.DstIp) == 0 || ((filter.SrcPort == 0 || filter.DstPort == 0) && filter.Protocol != model.PROTOCOL_ICMP) {
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"query":     store.truncate(query),
 			"uid":       uid,
 			"requestId": ctx.Value(web.ContextKeyRequestId),
@@ -1030,12 +1058,12 @@ func (store *ElasticEventstore) addUpdateScripts(updateCriteria *model.EventUpda
 	}
 }
 
-func (store *ElasticEventstore) Acknowledge(ctx context.Context, ackCriteria *model.EventAckCriteria) (*model.EventUpdateResults, error) {
-	var results *model.EventUpdateResults
-	var err error
+func (store *ElasticEventstore) Acknowledge(ctx context.Context, ackCriteria *model.EventAckCriteria) (results *model.EventUpdateResults, err error) {
+	logger := log.FromContext(ctx)
+
 	if len(ackCriteria.EventFilter) > 0 {
 		if err = store.server.CheckAuthorized(ctx, "ack", "events"); err == nil {
-			log.WithFields(log.Fields{
+			logger.WithFields(log.Fields{
 				"searchFilter": ackCriteria.SearchFilter,
 				"eventFilter":  ackCriteria.EventFilter,
 				"escalate":     ackCriteria.Escalate,
@@ -1067,7 +1095,7 @@ func (store *ElasticEventstore) Acknowledge(ctx context.Context, ackCriteria *mo
 					valueStr := fmt.Sprintf("%v", value)
 					searchSegment.AddFilter(mapElasticField(store.fieldDefs, key), valueStr, model.IsScalar(value), true, false)
 				} else if int(value.(float64)) > store.asyncThreshold {
-					log.WithFields(log.Fields{
+					logger.WithFields(log.Fields{
 						key:         value,
 						"threshold": store.asyncThreshold,
 						"requestId": ctx.Value(web.ContextKeyRequestId),
