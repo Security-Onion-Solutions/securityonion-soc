@@ -599,10 +599,16 @@ test('duplicate', () => {
     name: "c",
     duplicates: true,
   }
+
+  Vue = {
+    toRaw: jest.fn().mockReturnValueOnce(setting),
+  };
   global.structuredClone = jest.fn().mockReturnValueOnce(setting2);
+
   comp.settings = [setting];
   comp.duplicateId = "foo"
   expect(comp.settings.length).toBe(1);
+
   comp.duplicate(setting);
   expect(comp.settings.length).toBe(2);
   expect(comp.settings[1].id).toBe("a.b.foo");
