@@ -103,8 +103,7 @@ a.v-list-item.v-theme--light {
 }
 
 .v-list-group__items .v-list-item {
-  margin-left: 20px !important;
-  padding-inline-start: 20px !important;
+  padding-inline-start: 32px !important;
 }
 
 .v-list-item-title {
@@ -590,10 +589,6 @@ td {
 .flex-break {
   flex-basis: 100%;
   height: 0;
-}
-
-.v-list-group .v-list-item {
-  margin-left: unset !important;
 }
 
 .half-width {
