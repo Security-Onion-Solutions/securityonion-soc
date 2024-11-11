@@ -598,7 +598,6 @@ const i18n = {
       markdownFormattingSupported: 'Markdown formatting supported',
       maximize: 'Maximize View (ESC to cancel)',
       maxUploadSize: 'Maximum upload size',
-      maxLengthFormat: 'Max length is {length} characters',
       mbps: 'Mb/s',
       md5: 'MD5',
       memUsage: 'Memory Usage',
