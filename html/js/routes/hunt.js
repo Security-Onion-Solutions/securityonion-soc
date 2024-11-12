@@ -1141,7 +1141,7 @@ const huntComponent = {
         this.quickActionEvent = event;
         this.quickActionField = field;
         this.quickActionValue = value;
-        this.quickActionTarget = domEvent.target;
+        this.quickActionTarget = [domEvent.clientX, domEvent.clientY];
         this.$nextTick(() => {
           this.quickActionVisible = true;
         });
@@ -1596,6 +1596,7 @@ const huntComponent = {
       }
     },
     populateChart(chart, data) {
+      chart.key++;
       chart.labels = [];
       chart.datasets[0].data = [];
       if (!data) return;
@@ -1715,6 +1716,10 @@ const huntComponent = {
       this.setupBarChart(this.topChartOptions, this.topChartData, this.i18n.chartTitleTop);
       this.setupTimelineChart(this.timelineChartOptions, this.timelineChartData, this.i18n.chartTitleTimeline);
       this.setupBarChart(this.bottomChartOptions, this.bottomChartData, this.i18n.chartTitleBottom);
+
+      this.topChartData.key = 0;
+      this.timelineChartData.key = 0;
+      this.bottomChartData.key = 0;
     },
     setupBarChart(options, data, title, groupIdx) {
       var fontColor = this.$root.getColor("#888888", -40);
