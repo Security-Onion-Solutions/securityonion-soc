@@ -334,10 +334,10 @@
                 <v-expansion-panel-title id="huntOptionsHeader" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
                 <v-expansion-panel-text>
                   <span :data-aid="'advanced_toggle_' + category">
-                    <v-switch v-if="isCategory('alerts') || isCategory('cases')" id="enable-advanced" :disabled="loading()" v-model="advanced" density="compact" hide-details class="my-0" :label="i18n.advanced" :data-aid="'advanced_toggle' + category" color="primary"></v-switch>
+                    <v-switch v-if="isCategory('alerts') || isCategory('cases')" id="enable-advanced" :disabled="loading()" v-model="advanced" density="compact" hide-details class="my-0" :label="i18n.advanced" :data-aid="'advanced_toggle' + category"></v-switch>
                   </span>
                   <span :data-aid="'autohunt_toggle_' + category">
-                    <v-switch v-if="isAdvanced()" id="auto-hunt" :disabled="loading()" v-model="autohunt" density="compact" hide-details class="my-0" :label="i18n.autohunt" :data-aid="'autohunt_toggle_' + category" color="primary"></v-switch>
+                    <v-switch v-if="isAdvanced()" id="auto-hunt" :disabled="loading()" v-model="autohunt" density="compact" hide-details class="my-0" :label="i18n.autohunt" :data-aid="'autohunt_toggle_' + category"></v-switch>
                   </span>
                   <span v-for="toggle in filterToggles" :key="toggle.name" :data-aid="'filter_toggle_' + category + '_' + toggle.name">
                     <v-switch
@@ -512,13 +512,13 @@
               </v-row>
               <v-row v-if="metricsEnabled">
                 <v-col cols="12" md="4" :data-aid="'graph_top_' + category">
-                  <bar-chart id="topChart" :height="chartHeight" :data="topChartData" :options="topChartOptions"/>
+                  <bar-chart id="topChart" :height="chartHeight" :key="topChartData.key" :data="topChartData" :options="topChartOptions"/>
                 </v-col>
                 <v-col cols="12" md="4" :data-aid="'graph_timeline_' + category">
-                  <line-chart id="timelineChart" :height="chartHeight" :data="timelineChartData" :options="timelineChartOptions"/>
+                  <line-chart id="timelineChart" :height="chartHeight" :key="timelineChartData.key" :data="timelineChartData" :options="timelineChartOptions"/>
                 </v-col>
                 <v-col cols="12" md="4" :data-aid="'graphs_bottom_' + category">
-                  <bar-chart id="bottomChart" :height="chartHeight" :data="bottomChartData" :options="bottomChartOptions"/>
+                  <bar-chart id="bottomChart" :height="chartHeight" :key="bottomChartData.key" :data="bottomChartData" :options="bottomChartOptions"/>
                 </v-col>
               </v-row>
             </div>
@@ -1591,7 +1591,7 @@
                           <div class="font-weight-bold mt-2">
                             {{i18n.enabled}}: {{item.isEnabled}}
                           </div>
-                          <v-switch variant="underlined" id="override-enabled-edit" ref="override-enabled" hide-details="auto" v-model="item.isEnabled"
+                          <v-switch id="override-enabled-edit" ref="override-enabled" hide-details="auto" v-model="item.isEnabled"
                             inset @change="saveDetection(false)"></v-switch>
                         </div>
                         <div @click="startOverrideEdit('override-custom-filter', item, 'customFilter')" :class="{ clicktoedit: !isOverrideEdit('override-custom-filter') }">
@@ -1996,7 +1996,7 @@
                       {{ i18n.status }}: {{ detect.isEnabled ? i18n.enabled : i18n.disabled }}
                     </div>
                     <div data-aid="detection_metadata_enabled_toggle">
-                      <v-switch id="detection-enabled-edit" inset v-model="detect.isEnabled" color="primary" @change="saveDetection(false)"></v-switch>
+                      <v-switch id="detection-enabled-edit" inset v-model="detect.isEnabled" @change="saveDetection(false)"></v-switch>
                     </div>
                   </span>
                   <div id="ops-buttons">
@@ -5162,7 +5162,7 @@
               <v-expansion-panel>
                 <v-expansion-panel-title id="configOptionsHeader" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
                 <v-expansion-panel-text>
-                  <v-switch id="option-advanced" color="primary" :disabled="$root.loading" v-model="advanced" dense class="my-0" :label="i18n.settingsAdvanced" :hint="i18n.settingsAdvancedHelp" persistent-hint data-aid="config_option_advanced_toggle"></v-switch>
+                  <v-switch id="option-advanced" :disabled="$root.loading" v-model="advanced" dense class="my-0" :label="i18n.settingsAdvanced" :hint="i18n.settingsAdvancedHelp" persistent-hint data-aid="config_option_advanced_toggle"></v-switch>
                   <v-btn id="option-synchronize" @click.stop="sync()" class="mt-6 mb-1" data-aid="config_option_synchronize_toggle">
                     {{ i18n.settingsSynchronize }}
                   </v-btn>

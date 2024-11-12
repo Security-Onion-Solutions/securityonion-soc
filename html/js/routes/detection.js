@@ -620,7 +620,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		pickValue(item, field) {
 			let value = '';
-			if (item[field.value]) {
+			if (field.value in item) {
 				value = item[field.value];
 			} else if (field.altValues) {
 				for (let i = 0; i < field.altValues.length; i++) {

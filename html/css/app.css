@@ -885,3 +885,7 @@ ul ul ul {
 .va-baseline {
   vertical-align: baseline;
 }
+
+.text-primary .v-switch__thumb {
+  background-color: rgb(var(--v-theme-primary)) !important;
+}
