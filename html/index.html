@@ -401,10 +401,10 @@
           <v-col cols="12" :md="isCategory('detections') ? 10 : 7">
             <v-textarea :clearable="isAdvanced()" :auto-grow="isAdvanced()" :readonly="!isAdvanced()" :disabled="loading()" @input="queryAltered = true"
               @change="queryModified" class="mx-2" v-model="$data[getDisplayedQueryVar()]" :hint="isAdvanced() ? i18n.queryHelp : ''"
-              rows="1" persistent-hint prepend-icon="fa-search" @keydown.enter.prevent="submitQuery" id="hunt-query-input" :data-aid="'query_input_' + category"
+              rows="1" persistent-hint prepend-icon="fa-search" @keydown.enter.prevent="submitQuery" id="hunt-query-input" ref="huntQueryInput" :data-aid="'query_input_' + category"
               variant="underlined">
               <template #prepend-inner>
-                <v-menu density="compact" bottom three-line offset-y>
+                <v-menu density="compact">
                   <template #activator="{ props: menu }">
                     <v-tooltip location="bottom">
                       <template #activator="{ props: tooltip }">
@@ -415,7 +415,7 @@
                       <span :data-aid="'query_dropdown_help_' + category">{{ i18n.queriesHelp }}</span>
                     </v-tooltip>
                   </template>
-                  <v-list class="overflow-y-auto" style="max-height: 600px" id="hunt-query-dropdown-list">
+                  <v-list class="overflow-y-auto" :style="{ 'max-height': '600px', 'max-width': huntQueryWidth() + 'px'}" id="hunt-query-dropdown-list">
                     <template v-if="isAdvanced() && mruQueryLimit > 0">
                       <v-list-item v-for="query in mruQueries" :key="query" :data-aid="'query_mru_item_' + category" @click="huntQuery(query)" style="cursor: 'pointer'">
                         <v-list-item-title>{{query}}</v-list-item-title>
