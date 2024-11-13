@@ -2375,6 +2375,9 @@ const huntComponent = {
       }
 
       return query;
+    },
+    huntQueryWidth() {
+      return this.$refs.huntQueryInput?.$el?.clientWidth || 0;
     }
   }
 };
