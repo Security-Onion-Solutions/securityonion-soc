@@ -2868,7 +2868,7 @@
                 <v-icon class="theme-icon">fas fa-bread-slice</v-icon>
               </v-btn>
               <v-btn text icon :href="downloadUrl()" download :title="i18n.downloadPackets" data-aid="job_details_download">
-                <v-icon>fa-download</v-icon>
+                <v-icon class="theme-icon">fa-download</v-icon>
               </v-btn>
             </v-toolbar>
             <v-data-table ref="packetTable" :sort-by="sortBy" @update:sort-by="val => sortBy = val" :items-per-page.sync="itemsPerPage"
