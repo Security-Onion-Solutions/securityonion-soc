@@ -4,7 +4,7 @@
 # https://securityonion.net/license; you may not use this file except in compliance with the
 # Elastic License 2.0.
 
-FROM ghcr.io/security-onion-solutions/golang:1.22.6 AS builder
+FROM ghcr.io/security-onion-solutions/golang:1.23.3 AS builder
 
 ARG OWNER=ory
 ARG VERSION=v2.2.0
