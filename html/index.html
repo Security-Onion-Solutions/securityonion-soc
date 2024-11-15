@@ -352,7 +352,7 @@
                     <v-select id="autoRefresh" class="ml-" :disabled="loading()" v-model="autoRefreshInterval" :items="autoRefreshIntervals" :hint="i18n.autoRefresh" persistent-hint variant="underlined" prepend-icon="fa-hourglass-half" />
                   </span>
                   <span :data-aid="'timezone_select_' + category" v-if="!isCategory('detections')">
-                    <v-select :disabled="loading()" @change="saveTimezone" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint variant="underlined" prepend-icon="fa-user-clock" />
+                    <v-select :disabled="loading()" @update:model-value="zone = $event; saveTimezone()" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint variant="underlined" prepend-icon="fa-user-clock" />
                   </span>
                   <div v-if="isCategory('detections')" class="manual-sync">
                     <div data-aid="detections_manualsync_engine_select">
@@ -461,7 +461,7 @@
               </template>
               <template #append>
                 <span :data-aid="'relative_time_units_' + category">
-                  <v-select id="huntrelativetimeunit" class="my-n1 py-0 no-details align-self-start" :disabled="loading()" v-if="relativeTimeEnabled" @change="notifyInputsChanged"
+                  <v-select id="huntrelativetimeunit" class="my-n1 py-0 no-details align-self-start" :disabled="loading()" v-if="relativeTimeEnabled" @update:model-value="relativeTimeUnit = $event; notifyInputsChanged()"
                     v-model="relativeTimeUnit" :items="relativeTimeUnits" variant="plain" />
                 </span>
               </template>
@@ -540,7 +540,7 @@
                   <v-row>
                     <v-col cols="4"></v-col>
                     <v-col cols="2" :data-aid="'groups_limit_' + category">
-                      <v-select :disabled="loading()" @change="notifyInputsChanged" v-model="groupByLimit" :items="groupByLimitOptions" :label="i18n.fetchLimit" variant="underlined" />
+                      <v-select :disabled="loading()" @update:model-value="groupByLimit = $event; notifyInputsChanged();" v-model="groupByLimit" :items="groupByLimitOptions" :label="i18n.fetchLimit" variant="underlined" />
                     </v-col>
                     <v-col cols="6">
                       <v-text-field v-model="groupByFilter" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details :data-aid="'groups_filter_' + category" variant="underlined"></v-text-field>
@@ -682,7 +682,7 @@
                       </template>
                     </v-col>
                     <v-col cols="2" :data-aid="'events_limit_' + category">
-                      <v-select :disabled="loading()" @change="notifyInputsChanged" v-model="eventLimit" :items="eventLimitOptions" :label="i18n.fetchLimit" variant="underlined"></v-select>
+                      <v-select :disabled="loading()" @update:model-value="eventLimit = $event; notifyInputsChanged()" v-model="eventLimit" :items="eventLimitOptions" :label="i18n.fetchLimit" variant="underlined"></v-select>
                     </v-col>
                     <v-col cols="6">
                       <v-text-field v-model="eventFilter" variant="underlined" clearable prepend-icon="fa-filter" :label="i18n.filterResults" single-line hide-details :data-aid="'events_filter_' + category">
@@ -1478,7 +1478,7 @@
                           <span id="override-threshold-type" v-if="!isOverrideEdit('override-threshold-type')">
                             {{item.thresholdType}}
                           </span>
-                          <v-select variant="underlined" v-else id="override-threshold-type-edit" ref="override-threshold-type" v-model="item.thresholdType" :items="thresholdTypes" :rules="[rules.required]" persistent-hint :hint="i18n.type" @change="stopOverrideEdit(true)"></v-select>
+                          <v-select variant="underlined" v-else id="override-threshold-type-edit" ref="override-threshold-type" v-model="item.thresholdType" :items="thresholdTypes" :rules="[rules.required]" persistent-hint :hint="i18n.type" @update:model-value="stopOverrideEdit(true)"></v-select>
                         </div>
                         <div v-if="['suppress', 'threshold'].includes(item.type)" @click="startOverrideEdit('override-track', item, 'track')" :class="{ clicktoedit: !isOverrideEdit('override-track') }" data-aid="detection_override_threshold_track_select">
                           <div class="font-weight-bold mt-4">
@@ -1487,7 +1487,7 @@
                           <span id="override-track" v-if="!isOverrideEdit('override-track')">
                             {{item.track}}
                           </span>
-                          <v-select variant="underlined" v-else id="override-track-edit" ref="override-track" v-model="item.track" :items="getTrackOptions(item.type)" :rules="[rules.required]" persistent-hint :hint="i18n.type" @change="stopOverrideEdit(true)"></v-select>
+                          <v-select variant="underlined" v-else id="override-track-edit" ref="override-track" v-model="item.track" :items="getTrackOptions(item.type)" :rules="[rules.required]" persistent-hint :hint="i18n.type" @update:model-value="stopOverrideEdit(true)"></v-select>
                         </div>
                         <div v-if="item.type === 'suppress'" @click="startOverrideEdit('override-ip', item, 'ip')" :class="{ clicktoedit: !isOverrideEdit('override-ip') }">
                           <div class="font-weight-bold mt-4">
@@ -3390,12 +3390,12 @@
                               density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
                               v-model="editForm.val"
                               :items="selectList('tlp', item.tlp)"
-                              @change="stopEdit(true)" />
+                              @update:model-value="stopEdit(true)" />
                             <v-combobox :id="`attachments-${index}-tlp-input`" v-if="isEdit(`attachments-${index}-tlp`) && isPresetCustomEnabled('tlp')"
                               density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
                               v-model="editForm.val"
                               :items="selectList('tlp', item.tlp)"
-                              @change="stopEdit(true)" />
+                              @update:model-value="stopEdit(true)" />
                           </v-container>
                           <v-container fluid class="py-2" data-aid="case_attachments_tags_select">
                             <div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${index}-tags-input`, item.tags, `attachments-${index}-tags`, 'tags', modifyAssociation, ['attachments', item])"
@@ -3409,7 +3409,7 @@
                               density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple persistent-hint :hint="i18n.caseTagsHelp"
                               v-model="editForm.val"
                               :items="selectList('tags', item.tags)"
-                              @change="stopEdit(true)">
+                              @update:model-value="stopEdit(true)">
                               <template #item="{ props, item }">
                                 <v-list-item v-bind="props">
                                   <template #prepend>
@@ -3425,7 +3425,7 @@
                               density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple persistent-hint :hint="i18n.caseTagsHelp"
                               v-model="editForm.val"
                               :items="selectList('tags', item.tags)"
-                              @change="stopEdit(true)">
+                              @update:model-value="stopEdit(true)">
                               <template #selection="{ item }">
                                 <v-chip color="primary">{{item.title}}</v-chip>
                               </template>
@@ -3436,7 +3436,7 @@
                               <div class="font-weight-bold">{{i18n.artifactProtected}}: </div>
                               <div :id="`attachments-${index}-protected`" class="case detail-field" v-if="!isEdit(`attachments-${index}-protected`)">{{ item.protected ? i18n.yes : i18n.no }}</div>
                             </div>
-                            <v-checkbox :id="`attachments-${index}-protected-input`" v-if="isEdit(`attachments-${index}-protected`)" v-model="editForm.val" @change="stopEdit(true)"
+                            <v-checkbox :id="`attachments-${index}-protected-input`" v-if="isEdit(`attachments-${index}-protected`)" v-model="editForm.val" @update:model-value="stopEdit(true)"
                               persistent-hint :hint="i18n.artifactProtectedHint" />
                           </v-container>
 
@@ -3665,7 +3665,7 @@
                               <div class="font-weight-bold">{{i18n.artifactIoc}}: </div>
                               <div :id="`evidence-${index}-ioc`" class="case detail-field" v-if="!isEdit(`evidence-${index}-ioc`)">{{ item.ioc ? i18n.yes : i18n.no }}</div>
                             </div>
-                            <v-checkbox :id="`evidence-${index}-ioc-input`" v-if="isEdit(`evidence-${index}-ioc`)" v-model="editForm.val" @change="stopEdit(true)" persistent-hint :hint="i18n.artifactIocHelp"/>
+                            <v-checkbox :id="`evidence-${index}-ioc-input`" v-if="isEdit(`evidence-${index}-ioc`)" v-model="editForm.val" @update:model-value="stopEdit(true)" persistent-hint :hint="i18n.artifactIocHelp"/>
                           </v-container>
                           <v-container fluid class="py-2" data-aid="case_evidence_tlp_select">
                             <div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${index}-tlp-input`, item.tlp, `evidence-${index}-tlp`, 'tlp', modifyAssociation, ['evidence', item])"
@@ -3677,12 +3677,12 @@
                               density="compact" eager hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
                               v-model="editForm.val"
                               :items="selectList('tlp', item.tlp)"
-                              @change="stopEdit(true)"></v-select>
+                              @update:model-value="stopEdit(true)"></v-select>
                             <v-combobox variant="outlined" :id="`evidence-${index}-tlp-input`" v-if="isEdit(`evidence-${index}-tlp`) && isPresetCustomEnabled('tlp')"
                               density="compact" eager hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
                               v-model="editForm.val"
                               :items="selectList('tlp', item.tlp)"
-                              @change="stopEdit(true)"></v-combobox>
+                              @update:model-value="stopEdit(true)"></v-combobox>
                           </v-container>
                           <v-container fluid class="py-2" data-aid="case_evidence_tags_select">
                             <div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${index}-tags-input`, item.tags, `evidence-${index}-tags`, 'tags', modifyAssociation, ['evidence', item])"
@@ -3696,7 +3696,7 @@
                               density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple persistent-hint :hint="i18n.caseTagsHelp"
                               v-model="editForm.val"
                               :items="selectList('tags', item.tags)"
-                              @change="stopEdit(true)">
+                              @update:model-value="stopEdit(true)">
                               <template #item="{ props, item }">
                                 <v-list-item v-bind="props">
                                   <template #prepend>
@@ -3712,7 +3712,7 @@
                               density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple persistent-hint :hint="i18n.caseTagsHelp"
                               v-model="editForm.val"
                               :items="selectList('tags', item.tags)"
-                              @change="stopEdit(true)">
+                              @update:model-value="stopEdit(true)">
                               <template #item="{ props, item }">
                                 <v-list-item v-bind="props">
                                   <template #prepend>
@@ -4273,7 +4273,7 @@
                                   :items="userList"
                                   item-title="email"
                                   item-value="id"
-                                  @change="stopEdit(true)"
+                                  @update:model-value="stopEdit(true)"
                                 />
                               </div>
                             </v-col>
@@ -4431,38 +4431,48 @@
                                 <v-chip class="mx-1" v-for="tag in caseObj.tags" color="primary">{{ tag }}</v-chip>
                               </div>
                             </div>
-                            <v-select id="case-tags-input" v-if="isEdit('case-tags') && !isPresetCustomEnabled('tags')"
-                              density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple persistent-hint :hint="i18n.caseTagsHelp"
-                              v-model="editForm.val"
-                              :items="selectList('tags', caseObj.tags)"
-                              @change="stopEdit(true)">
-                              <template #item="{ props, item }">
-                                <v-list-item v-bind="props">
-                                  <template #prepend>
-                                    <v-icon>{{ (editForm.val || []).includes(item.value) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
-                                  </template>
-                                </v-list-item>
-                              </template>
-                              <template #selection="{ item }">
-                                <v-chip color="primary">{{item.title}}</v-chip>
-                              </template>
-                            </v-select>
-                            <v-combobox id="case-tags-input" v-if="isEdit('case-tags') && isPresetCustomEnabled('tags')"
-                              density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple persistent-hint :hint="i18n.caseTagsHelp"
-                              v-model="editForm.val"
-                              :items="selectList('tags', caseObj.tags)"
-                              @change="stopEdit(true)">
-                              <template #item="{ props, item }">
-                                <v-list-item v-bind="props">
-                                  <template #prepend>
-                                    <v-icon>{{ (editForm.val || []).includes(item.value) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
-                                  </template>
-                                </v-list-item>
-                              </template>
-                              <template #selection="{ item }">
-                                <v-chip color="primary">{{item.title}}</v-chip>
-                              </template>
-                            </v-combobox>
+                            <div v-if="isEdit('case-tags')">
+                              <v-select id="case-tags-input" v-if="!isPresetCustomEnabled('tags')"
+                                density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple persistent-hint :hint="i18n.caseTagsHelp"
+                                v-model="editForm.val"
+                                :items="selectList('tags', caseObj.tags)"
+                                @update:model-value="stopEdit(true)">
+                                <template #item="{ props, item }">
+                                  <v-list-item v-bind="props">
+                                    <template #prepend>
+                                      <v-icon>{{ (editForm.val || []).includes(item.value) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
+                                    </template>
+                                  </v-list-item>
+                                </template>
+                                <template #selection="{ item }">
+                                  <v-chip color="primary">{{item.title}}</v-chip>
+                                </template>
+                              </v-select>
+                              <v-combobox id="case-tags-input" v-else
+                                density="compact" eager variant="outlined" hide-details="auto" class="case-select" multiple persistent-hint :hint="i18n.caseTagsHelp"
+                                v-model="editForm.val"
+                                :items="selectList('tags', caseObj.tags)"
+                                @update:model-value="stopEdit(true)">
+                                <template #item="{ props, item }">
+                                  <v-list-item v-bind="props">
+                                    <template #prepend>
+                                      <v-icon>{{ (editForm.val || []).includes(item.value) ? 'mb-1 fa-square-check' : 'mb-1 fa-regular fa-square' }}</v-icon>
+                                    </template>
+                                  </v-list-item>
+                                </template>
+                                <template #selection="{ item }">
+                                  <v-chip color="primary">{{item.title}}</v-chip>
+                                </template>
+                              </v-combobox>
+                              <div class="d-inline-flex justify-end">
+                                <v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_metadata_tags_cancel">
+                                  {{ i18n.cancel }}
+                                </v-btn>
+                                <v-btn :disabled="!editForm.valid" variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit(true)" data-aid="case_metadata_tags_save">
+                                  {{ i18n.save }}
+                                </v-btn>
+                              </div>
+                            </div>
                           </v-col>
                         </v-row>
 
@@ -4511,7 +4521,7 @@
                 <v-expansion-panel-title id="gridOptionsHeader">{{i18n.options}}</v-expansion-panel-title>
                 <v-expansion-panel-text>
                   <span data-aid="grid_options_timezone_select">
-                    <v-select variant="underlined" id="gridTimezone" @change="saveTimezone" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint prepend-icon="fa-user-clock" data-aid="grid_options_timezone_select"></v-select>
+                    <v-select variant="underlined" id="gridTimezone" @update:model-value="zone = $event; saveTimezone()" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint prepend-icon="fa-user-clock" data-aid="grid_options_timezone_select"></v-select>
                   </span>
                   <span data-aid="grid_options_more_columns_toggle">
                     <v-checkbox variant="underlined" id="moreColumns" v-model="moreColumns" :hint="i18n.moreColumnsHelp" persistent-hint :label="i18n.moreColumns" data-aid="grid_more_columns_toggle"></v-checkbox>
