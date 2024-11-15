@@ -243,7 +243,7 @@
               </template>
               <v-list-item-title v-text="i18n.downloads"></v-list-item-title>
             </v-list-item>
-            <v-list-group data-aid="nav_admin" :value="false">
+            <v-list-group data-aid="nav_admin">
               <template #activator="{ props }">
                 <v-list-item v-bind="props">
                   <template #prepend>
@@ -334,10 +334,10 @@
                 <v-expansion-panel-title id="huntOptionsHeader" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
                 <v-expansion-panel-text>
                   <span :data-aid="'advanced_toggle_' + category">
-                    <v-switch v-if="isCategory('alerts') || isCategory('cases')" id="enable-advanced" :disabled="loading()" v-model="advanced" density="compact" hide-details class="my-0" :label="i18n.advanced" :data-aid="'advanced_toggle' + category" color="primary"></v-switch>
+                    <v-switch v-if="isCategory('alerts') || isCategory('cases')" id="enable-advanced" :disabled="loading()" v-model="advanced" density="compact" hide-details class="my-0" :label="i18n.advanced" :data-aid="'advanced_toggle' + category"></v-switch>
                   </span>
                   <span :data-aid="'autohunt_toggle_' + category">
-                    <v-switch v-if="isAdvanced()" id="auto-hunt" :disabled="loading()" v-model="autohunt" density="compact" hide-details class="my-0" :label="i18n.autohunt" :data-aid="'autohunt_toggle_' + category" color="primary"></v-switch>
+                    <v-switch v-if="isAdvanced()" id="auto-hunt" :disabled="loading()" v-model="autohunt" density="compact" hide-details class="my-0" :label="i18n.autohunt" :data-aid="'autohunt_toggle_' + category"></v-switch>
                   </span>
                   <span v-for="toggle in filterToggles" :key="toggle.name" :data-aid="'filter_toggle_' + category + '_' + toggle.name">
                     <v-switch
@@ -401,10 +401,10 @@
           <v-col cols="12" :md="isCategory('detections') ? 10 : 7">
             <v-textarea :clearable="isAdvanced()" :auto-grow="isAdvanced()" :readonly="!isAdvanced()" :disabled="loading()" @input="queryAltered = true"
               @change="queryModified" class="mx-2" v-model="$data[getDisplayedQueryVar()]" :hint="isAdvanced() ? i18n.queryHelp : ''"
-              rows="1" persistent-hint prepend-icon="fa-search" @keydown.enter.prevent="submitQuery" id="hunt-query-input" :data-aid="'query_input_' + category"
+              rows="1" persistent-hint prepend-icon="fa-search" @keydown.enter.prevent="submitQuery" id="hunt-query-input" ref="huntQueryInput" :data-aid="'query_input_' + category"
               variant="underlined">
               <template #prepend-inner>
-                <v-menu density="compact" bottom three-line offset-y>
+                <v-menu density="compact">
                   <template #activator="{ props: menu }">
                     <v-tooltip location="bottom">
                       <template #activator="{ props: tooltip }">
@@ -415,7 +415,7 @@
                       <span :data-aid="'query_dropdown_help_' + category">{{ i18n.queriesHelp }}</span>
                     </v-tooltip>
                   </template>
-                  <v-list class="overflow-y-auto" style="max-height: 600px" id="hunt-query-dropdown-list">
+                  <v-list class="overflow-y-auto" :style="{ 'max-height': '600px', 'max-width': huntQueryWidth() + 'px'}" id="hunt-query-dropdown-list">
                     <template v-if="isAdvanced() && mruQueryLimit > 0">
                       <v-list-item v-for="query in mruQueries" :key="query" :data-aid="'query_mru_item_' + category" @click="huntQuery(query)" style="cursor: 'pointer'">
                         <v-list-item-title>{{query}}</v-list-item-title>
@@ -512,13 +512,13 @@
               </v-row>
               <v-row v-if="metricsEnabled">
                 <v-col cols="12" md="4" :data-aid="'graph_top_' + category">
-                  <bar-chart id="topChart" :height="chartHeight" :data="topChartData" :options="topChartOptions"/>
+                  <bar-chart id="topChart" :height="chartHeight" :key="topChartData.key" :data="topChartData" :options="topChartOptions"/>
                 </v-col>
                 <v-col cols="12" md="4" :data-aid="'graph_timeline_' + category">
-                  <line-chart id="timelineChart" :height="chartHeight" :data="timelineChartData" :options="timelineChartOptions"/>
+                  <line-chart id="timelineChart" :height="chartHeight" :key="timelineChartData.key" :data="timelineChartData" :options="timelineChartOptions"/>
                 </v-col>
                 <v-col cols="12" md="4" :data-aid="'graphs_bottom_' + category">
-                  <bar-chart id="bottomChart" :height="chartHeight" :data="bottomChartData" :options="bottomChartOptions"/>
+                  <bar-chart id="bottomChart" :height="chartHeight" :key="bottomChartData.key" :data="bottomChartData" :options="bottomChartOptions"/>
                 </v-col>
               </v-row>
             </div>
@@ -1352,8 +1352,8 @@
                         <v-select variant="underlined" v-if="['threshold', 'suppress'].includes(newOverride.type)" id="new-override-track-edit" v-model="newOverride.track" :items="getTrackOptions(newOverride.type)" :rules="[rules.required]" persistent-hint :hint="i18n.track"></v-select>
                       </span>
                       <v-text-field variant="underlined" v-if="newOverride.type === 'suppress'" id="new-override-ip-edit" v-model="newOverride.ip" :rules="[rules.required, rules.cidrFormat]" persistent-hint :hint="i18n.ipCidr" data-aid="detection_new_override_suppress_ip_input">
-                        <template #append-outer>
-                          <router-link :to="{ name: 'config', query: { s: 'suricata.config.vars', a: '1', e: '1' }}" target="_blank" data-aid="new_override_ip_edit_config_shortcut">
+                        <template #append>
+                          <router-link class="text-white" :to="{ name: 'config', query: { s: 'suricata.config.vars', a: '1', e: '1' }}" target="_blank" data-aid="new_override_ip_edit_config_shortcut">
                             <v-icon>fa fa-gear</v-icon>
                           </router-link>
                         </template>
@@ -1499,8 +1499,8 @@
                           <span v-else>
                             <v-text-field id="override-ip-edit" ref="override-ip" hide-details="auto" variant="outlined" v-model="item.ip" :rules="[rules.required, rules.cidrFormat]"
                               persistent-hint :hint="i18n.ipCidr" @keyup.enter="isFieldValid('override-ip') && stopOverrideEdit(true)" @keyup.esc="stopOverrideEdit(false)" data-aid="detection_override_suppress_ip_input">
-                            <template #append-outer>
-                              <router-link :to="{ name: 'config', query: { s: 'suricata.config.vars', a: '1', e: '1' }}" target="_blank" data-aid="override_ip_edit_config_shortcut">
+                            <template #append>
+                              <router-link class="text-white" :to="{ name: 'config', query: { s: 'suricata.config.vars', a: '1', e: '1' }}" target="_blank" data-aid="override_ip_edit_config_shortcut">
                                 <v-icon>fa fa-gear</v-icon>
                               </router-link>
                             </template>
@@ -1591,7 +1591,7 @@
                           <div class="font-weight-bold mt-2">
                             {{i18n.enabled}}: {{item.isEnabled}}
                           </div>
-                          <v-switch variant="underlined" id="override-enabled-edit" ref="override-enabled" hide-details="auto" v-model="item.isEnabled"
+                          <v-switch id="override-enabled-edit" ref="override-enabled" hide-details="auto" v-model="item.isEnabled"
                             inset @change="saveDetection(false)"></v-switch>
                         </div>
                         <div @click="startOverrideEdit('override-custom-filter', item, 'customFilter')" :class="{ clicktoedit: !isOverrideEdit('override-custom-filter') }">
@@ -1996,7 +1996,7 @@
                       {{ i18n.status }}: {{ detect.isEnabled ? i18n.enabled : i18n.disabled }}
                     </div>
                     <div data-aid="detection_metadata_enabled_toggle">
-                      <v-switch id="detection-enabled-edit" inset v-model="detect.isEnabled" color="primary" @change="saveDetection(false)"></v-switch>
+                      <v-switch id="detection-enabled-edit" inset v-model="detect.isEnabled" @change="saveDetection(false)"></v-switch>
                     </div>
                   </span>
                   <div id="ops-buttons">
@@ -5162,7 +5162,7 @@
               <v-expansion-panel>
                 <v-expansion-panel-title id="configOptionsHeader" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
                 <v-expansion-panel-text>
-                  <v-switch id="option-advanced" color="primary" :disabled="$root.loading" v-model="advanced" dense class="my-0" :label="i18n.settingsAdvanced" :hint="i18n.settingsAdvancedHelp" persistent-hint data-aid="config_option_advanced_toggle"></v-switch>
+                  <v-switch id="option-advanced" :disabled="$root.loading" v-model="advanced" dense class="my-0" :label="i18n.settingsAdvanced" :hint="i18n.settingsAdvancedHelp" persistent-hint data-aid="config_option_advanced_toggle"></v-switch>
                   <v-btn id="option-synchronize" @click.stop="sync()" class="mt-6 mb-1" data-aid="config_option_synchronize_toggle">
                     {{ i18n.settingsSynchronize }}
                   </v-btn>

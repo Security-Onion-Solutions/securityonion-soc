@@ -65,6 +65,9 @@ $(document).ready(function () {
       VChip: {
         closeIcon: 'fa-xmark va-baseline',
       },
+      VSwitch: {
+        color: 'primary'
+      },
     },
     icons: {
       defaultSet: 'fa',

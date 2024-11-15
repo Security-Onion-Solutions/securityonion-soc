@@ -558,7 +558,7 @@ routes.push({
         this.$root.showWarning(this.i18n.settingDuplicateInvalid);
         return
       }
-      var new_setting = structuredClone(setting);
+      var new_setting = structuredClone(Vue.toRaw(setting));
       new_setting.id = new_id;
       new_setting.name = new_name;
       this.settings.push(new_setting);
