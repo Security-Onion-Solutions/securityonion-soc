@@ -781,7 +781,7 @@ $(document).ready(function () {
       showError(msg) {
         this.error = true;
         this.errorMessage = this.localizeMessage(msg);
-        if (this.debug) {
+        if (this.debug && msg && msg.stack) {
           console.log(msg.stack);
         }
       },

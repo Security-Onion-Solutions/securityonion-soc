@@ -104,7 +104,11 @@ routes.push({ path: '/clients', name: 'clients', component: {
         const response = await this.$root.papi.get('clients/');
         this.clients = response.data;
       } catch (error) {
-        this.$root.showError(error);
+        if (error.response && error.response.status == 400) {
+          this.$root.showError(this.i18n.clientCheckHydraEnabled);
+        } else {
+          this.$root.showError(error);
+        }
       }
       return this.clients;
     },
