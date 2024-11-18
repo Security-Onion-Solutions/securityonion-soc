@@ -94,7 +94,8 @@ a.v-list-item.v-theme--light {
 
 .v-navigation-drawer__content .v-list-group__header > .v-list-item__append,
 .v-navigation-drawer__content .v-list-item__prepend > .v-list-item__spacer,
-#top-menu .v-list-item__prepend > .v-list-item__spacer {
+#top-menu .v-list-item__prepend > .v-list-item__spacer,
+.remove-spacer .v-list-item__spacer {
   display: none;
 }
 
