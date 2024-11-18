@@ -2749,19 +2749,19 @@
               <v-expansion-panel data-aid="job_expand_filter">
                 <v-expansion-panel-title id="job-details" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">
                   <v-chip label class="mx-2">
-                    <v-icon class="mb-1 mr-2 theme-icon">fa-hashtag</v-icon>
+                    <v-icon class="mb-1 mr-2">fa-hashtag</v-icon>
                     <span id="jobDetailsId">{{ job.id }}</span>
                   </v-chip>
                   <v-chip label class="mx-2">
-                    <v-icon class="mb-1 mr-2 theme-icon">fa-ethernet</v-icon>
+                    <v-icon class="mb-1 mr-2">fa-ethernet</v-icon>
                     <span id="jobDetailsSensorId">{{ job.nodeId }}</span>
                   </v-chip>
                   <v-chip v-if="job.filter" label class="mx-2">
-                    <v-icon class="mb-1 mr-2 theme-icon">fa-file-export</v-icon>
+                    <v-icon class="mb-1 mr-2">fa-file-export</v-icon>
                     <span id="jobDetailsSrc">{{ job.filter.srcIp }}<span v-if="job.filter.srcPort != 0">:{{ job.filter.srcPort }}</span><span class="resolved-host" v-if="$root.pickHostname(job.filter.srcIp)"> - {{ $root.pickHostname(job.filter.srcIp) }}</span></span>
                   </v-chip>
                   <v-chip v-if="job.filter" label class="mx-2">
-                    <v-icon class="mb-1 mr-2 theme-icon">fa-file-import</v-icon>
+                    <v-icon class="mb-1 mr-2">fa-file-import</v-icon>
                     <span id="jobDetailsDst">{{ job.filter.dstIp }}<span v-if="job.filter.dstPort != 0">:{{ job.filter.dstPort }}</span><span class="resolved-host" v-if="$root.pickHostname(job.filter.dstIp)"> - {{ $root.pickHostname(job.filter.dstIp) }}</span></span>
                   </v-chip>
                 </v-expansion-panel-title>
@@ -2858,17 +2858,17 @@
               </v-btn-toggle>
               <v-spacer></v-spacer>
               <v-btn icon @click="expandPackets(false)" :title="i18n.collapseHelp" text data-aid="job_details_collapse_all_packets">
-                <v-icon class="theme-icon">fa-window-minimize</v-icon>
+                <v-icon>fa-window-minimize</v-icon>
               </v-btn>
               <v-btn icon @click="expandPackets(true)" :title="i18n.expandHelp" text data-aid="job_details_expand_all_packets">
-                <v-icon class="theme-icon">fa-window-maximize</v-icon>
+                <v-icon>fa-window-maximize</v-icon>
               </v-btn>
               <v-spacer></v-spacer>
               <v-btn text icon @click="transcriptCyberChef()" :title="i18n.transcriptCyberChefHelp" data-aid="job_details_cyberchef">
-                <v-icon class="theme-icon">fas fa-bread-slice</v-icon>
+                <v-icon>fas fa-bread-slice</v-icon>
               </v-btn>
-              <v-btn text icon :href="downloadUrl()" download :title="i18n.downloadPackets" data-aid="job_details_download">
-                <v-icon class="theme-icon">fa-download</v-icon>
+              <v-btn text plain icon :href="downloadUrl()" download :title="i18n.downloadPackets" data-aid="job_details_download" class="no-link">
+                <v-icon class="theme-text">fa-download</v-icon>
               </v-btn>
             </v-toolbar>
             <v-data-table ref="packetTable" :sort-by="sortBy" @update:sort-by="val => sortBy = val" :items-per-page.sync="itemsPerPage"
