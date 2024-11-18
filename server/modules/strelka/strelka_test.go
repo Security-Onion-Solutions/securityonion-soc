@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -1016,8 +1017,9 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 		IntegrityCheckerData: detections.IntegrityCheckerData{
 			IsRunning: true,
 		},
-		IOManager:       iom,
-		showAiSummaries: false,
+		IOManager:         iom,
+		showAiSummaries:   false,
+		autoUpdateEnabled: true,
 	}
 
 	logger := log.WithField("detectionEngine", "test-strelka")
@@ -1043,6 +1045,37 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.True(t, eng.EngineState.Syncing) // stays true until the SyncScheduler resets it
+	assert.False(t, eng.EngineState.IntegrityFailure)
+	assert.False(t, eng.EngineState.Migrating)
+	assert.False(t, eng.EngineState.MigrationFailure)
+	assert.False(t, eng.EngineState.Importing)
+	assert.False(t, eng.EngineState.SyncFailure)
+}
+
+func TestSyncDisabled(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+
+	eng := &StrelkaEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+			Config:         &config.ServerConfig{},
+		},
+		isRunning:         true,
+		IOManager:         iom,
+		showAiSummaries:   true,
+		autoUpdateEnabled: false,
+	}
+
+	logger := log.WithField("detectionEngine", "test-strelka")
+
+	err := eng.Sync(logger, false)
+	assert.NoError(t, err)
+
+	assert.False(t, eng.EngineState.Syncing)
 	assert.False(t, eng.EngineState.IntegrityFailure)
 	assert.False(t, eng.EngineState.Migrating)
 	assert.False(t, eng.EngineState.MigrationFailure)

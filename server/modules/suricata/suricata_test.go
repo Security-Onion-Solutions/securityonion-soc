@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -2197,8 +2198,9 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 		IntegrityCheckerData: detections.IntegrityCheckerData{
 			IsRunning: true,
 		},
-		IOManager:       iom,
-		showAiSummaries: false,
+		IOManager:         iom,
+		showAiSummaries:   false,
+		autoUpdateEnabled: true,
 	}
 
 	logger := log.WithField("detectionEngine", "test-suricata")
@@ -2225,6 +2227,37 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 	assert.False(t, eng.EngineState.Importing)
 	assert.False(t, eng.EngineState.SyncFailure)
 	assert.True(t, migrationChecked)
+}
+
+func TestSyncDisabled(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+
+	eng := &SuricataEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+			Config:         &config.ServerConfig{},
+		},
+		isRunning:         true,
+		IOManager:         iom,
+		showAiSummaries:   true,
+		autoUpdateEnabled: false,
+	}
+
+	logger := log.WithField("detectionEngine", "test-suricata")
+
+	err := eng.Sync(logger, false)
+	assert.NoError(t, err)
+
+	assert.False(t, eng.EngineState.Syncing)
+	assert.False(t, eng.EngineState.IntegrityFailure)
+	assert.False(t, eng.EngineState.Migrating)
+	assert.False(t, eng.EngineState.MigrationFailure)
+	assert.False(t, eng.EngineState.Importing)
+	assert.False(t, eng.EngineState.SyncFailure)
 }
 
 func TestSyncChanges(t *testing.T) {
