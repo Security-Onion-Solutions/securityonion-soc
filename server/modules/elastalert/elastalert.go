@@ -68,6 +68,14 @@ const (
 	DEFAULT_SHOW_AI_SUMMARIES                        = true
 )
 
+type RuleCriteria struct {
+	Ruleset  []string `yaml:"ruleset" json:"ruleset"`
+	Level    []string `yaml:"level" json:"level"`
+	Product  []string `yaml:"product" json:"product"`
+	Category []string `yaml:"category" json:"category"`
+	Service  []string `yaml:"service" json:"service"`
+}
+
 var ( // treat as constant
 	DEFAULT_RULES_REPOS = []*model.RuleRepo{
 		{
@@ -94,7 +102,7 @@ type ElastAlertEngine struct {
 	sigmaPipelineSO                    string
 	sigmaPipelinesFingerprintFile      string
 	sigmaRulePackages                  []string
-	autoEnabledSigmaRules              []string
+	autoEnabledSigmaRules              []RuleCriteria
 	additionalAlerters                 []string
 	additionalAlerterParams            string
 	informationalSeverityAlerters      []string
@@ -126,20 +134,74 @@ type ElastAlertEngine struct {
 	model.EngineState
 }
 
-func checkRulesetEnabled(e *ElastAlertEngine, det *model.Detection) {
-	det.IsEnabled = false
-	if det.Ruleset == "" || det.Severity == "" {
-		return
+func loadAutoEnabledSigmaRules(config module.ModuleConfig) []RuleCriteria {
+	defaultRuleFilters := []RuleCriteria{
+		{
+			Ruleset:  []string{"securityonion-resources"},
+			Level:    []string{"critical", "high"},
+			Product:  []string{"*"},
+			Category: []string{"*"},
+			Service:  []string{"*"},
+		},
+		{
+			Ruleset:  []string{"core"},
+			Level:    []string{"critical"},
+			Product:  []string{"*"},
+			Category: []string{"*"},
+			Service:  []string{"*"},
+		},
 	}
 
-	// Combine Ruleset and Severity into a single string
-	metaCombined := det.Ruleset + "+" + string(det.Severity)
+	rawRuleFilters, ok := config["autoEnabledSigmaRules"]
+	if !ok {
+		log.Error("autoEnabledSigmaRules not found in config, using defaults.")
+		return defaultRuleFilters
+	}
+
+	var configData struct {
+		AutoEnabledSigmaRules []RuleCriteria `yaml:"Enabled_On_Import"`
+	}
+	err := yaml.Unmarshal([]byte(rawRuleFilters.(string)), &configData)
+	if err != nil {
+		log.WithError(err).Error("Failed to unmarshal YAML data for autoEnabledSigmaRules")
+		return defaultRuleFilters
+	}
+
+	// Use the parsed enabled filters if available, otherwise return defaults
+	if len(configData.AutoEnabledSigmaRules) > 0 {
+		return configData.AutoEnabledSigmaRules
+	}
+
+	return defaultRuleFilters
+}
+
+// Function to check if a rule should be enabled based on criteria
+func checkRulesetEnabled(e *ElastAlertEngine, det *model.Detection) {
+	det.IsEnabled = false
+
 	for _, rule := range e.autoEnabledSigmaRules {
-		if strings.EqualFold(rule, metaCombined) {
+		if matchArrayField(rule.Ruleset, det.Ruleset) &&
+			matchArrayField(rule.Level, string(det.Severity)) &&
+			matchArrayField(rule.Product, det.Product) &&
+			matchArrayField(rule.Category, det.Category) &&
+			matchArrayField(rule.Service, det.Service) {
 			det.IsEnabled = true
 			break
 		}
 	}
+}
+
+// Helper to match array fields with wildcard support
+func matchArrayField(configValues []string, ruleValue string) bool {
+	if len(configValues) == 0 {
+		return true
+	}
+	for _, value := range configValues {
+		if value == "*" || value == ruleValue {
+			return true
+		}
+	}
+	return false
 }
 
 func NewElastAlertEngine(srv *server.Server) *ElastAlertEngine {
@@ -176,7 +238,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.sigmaPipelineSO = module.GetStringDefault(config, "sigmaPipelineSO", DEFAULT_SIGMA_PIPELINE_SO_FILE)
 	e.sigmaPipelinesFingerprintFile = module.GetStringDefault(config, "sigmaPipelinesFingerprintFile", DEFAULT_SIGMA_PIPELINES_FINGERPRINT_FILE)
 	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", DEFAULT_RULES_FINGERPRINT_FILE)
-	e.autoEnabledSigmaRules = module.GetStringArrayDefault(config, "autoEnabledSigmaRules", []string{"securityonion-resources+critical", "securityonion-resources+high"})
+	e.autoEnabledSigmaRules = loadAutoEnabledSigmaRules(config)
 	e.CommunityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 	e.additionalAlerters = module.GetStringArrayDefault(config, "additionalAlerters", []string{})
