@@ -4472,12 +4472,22 @@
                               :items="selectList('category', caseObj.category)"
                               @update:model-value="stopEdit(true)"
                             />
-                            <v-combobox id="case-category-input" v-if="isEdit('case-category') && isPresetCustomEnabled('category')"
-                              density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseCategoryHelp"
-                              v-model="editForm.val"
-                              :items="selectList('category', caseObj.category)"
-                              @change="stopEdit(true)"
-                            />
+                            <template v-if="isEdit('case-category') && isPresetCustomEnabled('category')">
+                              <v-combobox id="case-category-input"
+                                density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseCategoryHelp"
+                                v-model="editForm.val"
+                                :items="selectList('category', caseObj.category)"
+                                @change="stopEdit(true)"
+                              />
+                              <div class="d-inline-flex justify-end">
+                                <v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_category_cancel">
+                                  {{ i18n.cancel }}
+                                </v-btn>
+                                <v-btn :disabled="!editForm.valid" variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit(true)" data-aid="case_category_save">
+                                  {{ i18n.save }}
+                                </v-btn>
+                              </div>
+                            </template>
                           </v-col>
                         </v-row>
                         <v-row>
