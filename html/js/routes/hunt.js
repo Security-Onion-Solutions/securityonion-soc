@@ -157,6 +157,7 @@ const huntComponent = {
     tuneDetectionTabTarget: null,
     eventCurrentItems: [],
     detectionEngineStatusQueries: {},
+    highlightedDetection: null,
   }},
   created() {
     this.$root.initializeCharts();
@@ -346,6 +347,7 @@ const huntComponent = {
       this.selectAllState = false;
       this.selectAllIndeterminate = false;
       this.selectedCount = 0;
+      this.highlightedDetection = null;
 
       var route = this;
       var onSuccess = function() {};
@@ -1076,10 +1078,18 @@ const huntComponent = {
         this.quickActionDetId = null;
         this.tuneDetectionTabTarget = null;
 
+        let oldHighlight = this.highlightedDetection?.publicId;
+        this.highlightedDetection = null;
+
         // don't slow down the UI with this call
         if (id) {
           this.$root.papi.get(`detection/public/${id}`).then(response => {
             this.quickActionDetId = response.data.id;
+
+            if (!oldHighlight || response.data?.publicId !== oldHighlight) {
+              this.highlightedDetection = response.data;
+            }
+
             this.tuneDetectionTabTarget = 'tuning';
             if (response.data.engine === 'strelka') {
               this.tuneDetectionTabTarget = 'source';

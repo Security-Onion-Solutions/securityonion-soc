@@ -898,3 +898,47 @@ ul ul ul {
 .text-primary .v-switch__thumb {
   background-color: rgb(var(--v-theme-primary)) !important;
 }
+
+.groupBy {
+  position: relative;
+}
+
+#detection-col {
+  position: absolute;
+  top: 0px;
+  right: 0px;
+
+  width: 400px;
+}
+
+.v-theme--dark .highlight-row {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.v-theme--light .highlight-row {
+  background-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+.quicklinks {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-around;
+}
+
+.quicklinks > i {
+  cursor: pointer;
+}
+
+.component-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #21212180;
+}
+
+.component-overlay .v-container {
+  height: 100%;
+  width: 100%;
+}

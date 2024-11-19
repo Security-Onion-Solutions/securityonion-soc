@@ -151,6 +151,7 @@ func (h *DetectionHandler) getDetection(w http.ResponseWriter, r *http.Request) 
 // @Router       /connect/detection/public/{id} [get]
 func (h *DetectionHandler) getByPublicId(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	logger := log.FromContext(ctx)
 
 	publicId := chi.URLParam(r, "publicid")
 
@@ -168,6 +169,22 @@ func (h *DetectionHandler) getByPublicId(w http.ResponseWriter, r *http.Request)
 	if detect == nil {
 		web.Respond(w, r, http.StatusNotFound, nil)
 		return
+	}
+
+	eng, ok := h.server.DetectionEngines[detect.Engine]
+	if !ok {
+		logger.WithFields(log.Fields{
+			"detectionEngine":   detect.Engine,
+			"detectionPublicId": publicId,
+		}).Error("retrieved detection with unsupported engine")
+	} else {
+		err = eng.MergeAuxiliaryData(detect)
+		if err != nil {
+			logger.WithError(err).WithFields(log.Fields{
+				"detectionEngine":   detect.Engine,
+				"detectionPublicId": publicId,
+			}).Error("unable to merge auxiliary data into detection")
+		}
 	}
 
 	web.Respond(w, r, http.StatusOK, detect)
