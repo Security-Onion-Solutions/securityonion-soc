@@ -147,29 +147,27 @@ func loadAutoEnabledSigmaRules(config module.ModuleConfig) []RuleCriteria {
 			Ruleset:  []string{"core"},
 			Level:    []string{"critical"},
 			Product:  []string{"*"},
-			Category: []string{"*"},
+			Category: []string{"process_creation", "file_event", "registry_event", "network_connection", "dns_query"},
 			Service:  []string{"*"},
 		},
 	}
 
 	rawRuleFilters, ok := config["autoEnabledSigmaRules"]
 	if !ok {
-		log.Error("autoEnabledSigmaRules not found in config, using defaults.")
+		log.Info("autoEnabledSigmaRules not found in config, using defaults.")
 		return defaultRuleFilters
 	}
 
-	var configData struct {
-		AutoEnabledSigmaRules []RuleCriteria `yaml:"Enabled_On_Import"`
-	}
+	var configData []RuleCriteria
 	err := yaml.Unmarshal([]byte(rawRuleFilters.(string)), &configData)
 	if err != nil {
 		log.WithError(err).Error("Failed to unmarshal YAML data for autoEnabledSigmaRules")
 		return defaultRuleFilters
 	}
 
-	// Use the parsed enabled filters if available, otherwise return defaults
-	if len(configData.AutoEnabledSigmaRules) > 0 {
-		return configData.AutoEnabledSigmaRules
+	// Use the parsed filters if available, otherwise return defaults
+	if len(configData) > 0 {
+		return configData
 	}
 
 	return defaultRuleFilters
@@ -193,10 +191,12 @@ func checkRulesetEnabled(e *ElastAlertEngine, det *model.Detection) {
 
 // Helper to match array fields with wildcard support
 func matchArrayField(configValues []string, ruleValue string) bool {
+	ruleValue = strings.TrimSpace(strings.ToLower(ruleValue))
 	if len(configValues) == 0 {
 		return true
 	}
 	for _, value := range configValues {
+		value = strings.TrimSpace(strings.ToLower(value))
 		if value == "*" || value == ruleValue {
 			return true
 		}
