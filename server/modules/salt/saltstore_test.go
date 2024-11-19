@@ -604,10 +604,10 @@ func TestUpdateSetting_UpdateAdvancedFailToParse(tester *testing.T) {
 
 	// Update setting
 	setting := model.NewSetting("myapp.advanced")
-	setting.Value = "new advanced"
+	setting.Value = "[s new advanced"
 	setting.Syntax = "yaml"
 	err := salt.UpdateSetting(ctx(), setting, false)
-	assert.EqualError(tester, err, "ERROR_MALFORMED_YAML -> yaml: unmarshal errors:\n  line 1: cannot unmarshal !!str `new adv...`")
+	assert.EqualError(tester, err, "ERROR_MALFORMED_YAML -> yaml: line 1: did not find expected ',' or ']'")
 }
 
 ///// INT TYPE
