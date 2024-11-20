@@ -42,7 +42,39 @@ import (
 
 func TestCheckAutoEnabledSigmaRule(t *testing.T) {
 	e := &ElastAlertEngine{
-		autoEnabledSigmaRules: []RuleCriteria{
+		autoEnabledSigmaRules: []string{"securityonion-resources+high", "core+critical"},
+	}
+
+	tests := []struct {
+		name     string
+		ruleset  string
+		severity model.Severity
+		expected bool
+	}{
+		{"securityonion-resources rule with high severity, rule enabled", "securityonion-resources", model.SeverityHigh, true},
+		{"securityonion-resources rule with high severity upper case, rule enabled", "securityonion-RESOURCES", model.SeverityHigh, true},
+		{"core rule with critical severity, rule enabled", "core", model.SeverityCritical, true},
+		{"core rule with high severity, rule not enabled", "core", model.SeverityHigh, false},
+		{"empty ruleset, high severity, rule not enabled", "", model.SeverityHigh, false},
+		{"core ruleset, empty severity, rule not enabled", "core", "", false},
+		{"empty ruleset, empty severity, rule not enabled", "", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			det := &model.Detection{
+				Ruleset:  tt.ruleset,
+				Severity: tt.severity,
+			}
+			checkRulesetEnabled(e, det)
+			assert.Equal(t, tt.expected, det.IsEnabled)
+		})
+	}
+}
+
+func TestCheckEnabledSigmaRule(t *testing.T) {
+	e := &ElastAlertEngine{
+		enabledSigmaRules: []RuleCriteria{
 			{
 				Ruleset:  []string{"securityonion-resources", "core"},
 				Level:    []string{"high"},
