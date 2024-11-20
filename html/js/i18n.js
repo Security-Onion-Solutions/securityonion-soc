@@ -103,7 +103,7 @@ const i18n = {
       analyzer_urlhaus_invalid_url: 'Invalid URL',
       analyzer_urlhaus_malware_download: 'Malware download',
 
-      api: 'API',
+      api: 'Connect API',
 
       artifactBulk: 'Bulk Add',
       artifactBulkHelp: 'Enable this checkbox to have a separate observable added for each line of the provided value above',
@@ -756,6 +756,7 @@ const i18n = {
       roles: 'Roles',
       roleAdmin: 'Administrator',
       roleAnalyst: 'Analyst',
+      rpt: 'TBD',
       ruleMinLen: 'The provided value is too short',
       ruleMaxLen: 'The provided value is too long',
       rulePassBadChars: 'The password must not contain the following characters: " \' $ & !',
