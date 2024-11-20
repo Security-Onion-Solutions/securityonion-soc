@@ -42,22 +42,38 @@ import (
 
 func TestCheckAutoEnabledSigmaRule(t *testing.T) {
 	e := &ElastAlertEngine{
-		autoEnabledSigmaRules: []string{"securityonion-resources+high", "core+critical"},
+		autoEnabledSigmaRules: []RuleCriteria{
+			{
+				Ruleset:  []string{"securityonion-resources", "core"},
+				Level:    []string{"high"},
+				Product:  []string{"windows"},
+				Category: []string{"process_creation"},
+				Service:  []string{"sysmon"},
+			},
+			{
+				Ruleset:  []string{"*"},
+				Level:    []string{"critical"},
+				Product:  []string{"*"},
+				Category: []string{"*"},
+				Service:  []string{"*"},
+			},
+		},
 	}
 
 	tests := []struct {
 		name     string
 		ruleset  string
 		severity model.Severity
+		product  string
+		category string
+		service  string
 		expected bool
 	}{
-		{"securityonion-resources rule with high severity, rule enabled", "securityonion-resources", model.SeverityHigh, true},
-		{"securityonion-resources rule with high severity upper case, rule enabled", "securityonion-RESOURCES", model.SeverityHigh, true},
-		{"core rule with critical severity, rule enabled", "core", model.SeverityCritical, true},
-		{"core rule with high severity, rule not enabled", "core", model.SeverityHigh, false},
-		{"empty ruleset, high severity, rule not enabled", "", model.SeverityHigh, false},
-		{"core ruleset, empty severity, rule not enabled", "core", "", false},
-		{"empty ruleset, empty severity, rule not enabled", "", "", false},
+		{"core rule with matching fields and upper case, rule enabled", "core", model.SeverityHigh, "WINDOWS", "process_creation", "sysmon", true},
+		{"core rule with wrong category, rule disabled", "core", model.SeverityHigh, "windows", "file_creation", "windows", false},
+		{"securityonion-resources rule with matching fields, rule enabled", "securityonion-resources", model.SeverityHigh, "windows", "process_creation", "sysmon", true},
+		{"core++ rule with critical severity, rule enabled", "core++", model.SeverityCritical, "linux", "file_event", "auditd", true},
+		{"core++ rule with medium severity, rule disabled", "core++", model.SeverityMedium, "windows", "process_creation", "sysmon", false},
 	}
 
 	for _, tt := range tests {
@@ -65,6 +81,9 @@ func TestCheckAutoEnabledSigmaRule(t *testing.T) {
 			det := &model.Detection{
 				Ruleset:  tt.ruleset,
 				Severity: tt.severity,
+				Product:  tt.product,
+				Category: tt.category,
+				Service:  tt.service,
 			}
 			checkRulesetEnabled(e, det)
 			assert.Equal(t, tt.expected, det.IsEnabled)
