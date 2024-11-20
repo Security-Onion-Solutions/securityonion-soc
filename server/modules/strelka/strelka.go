@@ -54,6 +54,7 @@ const (
 	DEFAULT_AI_REPO_BRANCH                           = "generated-summaries-published"
 	DEFAULT_AI_REPO_PATH                             = "/opt/sensoroni/ai_summary_repos"
 	DEFAULT_SHOW_AI_SUMMARIES                        = true
+	DEFAULT_AUTO_UPDATE_ENABLED                      = false
 )
 
 var titleUpdater = regexp.MustCompile(`(?im)rule\s+(\w+)(\s+:(\s*[^{]+))?(\s+)(//.*$)?(\n?){`)
@@ -76,6 +77,7 @@ type StrelkaEngine struct {
 	aiRepoUrl                      string
 	aiRepoBranch                   string
 	aiRepoPath                     string
+	autoUpdateEnabled              bool
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
 	detections.IOManager
@@ -123,6 +125,7 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 	e.CommunityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS)
+	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", DEFAULT_AUTO_UPDATE_ENABLED)
 
 	e.rulesRepos, err = model.GetReposDefault(config, "rulesRepos", []*model.RuleRepo{
 		{
@@ -306,6 +309,15 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 	}
 
 	e.writeNoRead = nil
+
+	if !e.autoUpdateEnabled && !forceSync {
+		logger.WithFields(log.Fields{
+			"autoUpdateEnabled": e.autoUpdateEnabled,
+			"forceSync":         forceSync,
+		}).Info("skipping sync")
+
+		return nil
+	}
 
 	if e.showAiSummaries {
 		err := detections.RefreshAiSummaries(e, model.SigLangYara, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.aiRepoBranch, logger, e.IOManager)
