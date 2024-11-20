@@ -94,7 +94,8 @@ a.v-list-item.v-theme--light {
 
 .v-navigation-drawer__content .v-list-group__header > .v-list-item__append,
 .v-navigation-drawer__content .v-list-item__prepend > .v-list-item__spacer,
-#top-menu .v-list-item__prepend > .v-list-item__spacer {
+#top-menu .v-list-item__prepend > .v-list-item__spacer,
+.remove-spacer .v-list-item__spacer {
   display: none;
 }
 
@@ -163,6 +164,15 @@ td.expansion:last-child {
 
 .theme-icon {
   color: rgb(var(--v-theme-icon)) !important;
+}
+
+.no-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.no-link .v-btn__overlay {
+  background-color: rgb(var(--v-theme-text)) !important;
 }
 
 .short-spacer .v-list-item__spacer {
@@ -884,4 +894,8 @@ ul ul ul {
 
 .va-baseline {
   vertical-align: baseline;
+}
+
+.text-primary .v-switch__thumb {
+  background-color: rgb(var(--v-theme-primary)) !important;
 }

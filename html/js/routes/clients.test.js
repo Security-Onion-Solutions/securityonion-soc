@@ -14,6 +14,22 @@ beforeEach(() => {
   resetPapi();
 });
 
+test('getClients400Error', async () => {
+  const mock = mockPapi("get", null, {response: {status: 400}});
+  await comp.getClients();
+  expect(mock).toHaveBeenCalledTimes(1);
+  expect(comp.$root.error).toBe(true);
+  expect(comp.$root.errorMessage).toBe(comp.i18n.clientCheckHydraEnabled);
+});
+
+test('getClients500Error', async () => {
+  const mock = mockPapi("get", null, "failed");
+  await comp.getClients();
+  expect(mock).toHaveBeenCalledTimes(1);
+  expect(comp.$root.error).toBe(true);
+  expect(comp.$root.errorMessage).toBe("failed");
+});
+
 test('removeClient', async () => {
   const mock = mockPapi("delete", {status: 200});
   await comp.removeClient('my-id');

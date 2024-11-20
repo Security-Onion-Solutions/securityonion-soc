@@ -21,7 +21,7 @@ func ValidateYaml(value string) error {
 		"length": len(value),
 	}).Debug("Parsing YAML to verify good syntax")
 
-	mapped := make(map[string]interface{})
+	var mapped interface{}
 	err = yaml.Unmarshal([]byte(value), &mapped)
 	if err != nil {
 		log.WithFields(log.Fields{

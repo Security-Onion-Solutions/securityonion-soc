@@ -66,6 +66,7 @@ const (
 	DEFAULT_AI_REPO_BRANCH                           = "generated-summaries-published"
 	DEFAULT_AI_REPO_PATH                             = "/opt/sensoroni/ai_summary_repos"
 	DEFAULT_SHOW_AI_SUMMARIES                        = true
+	DEFAULT_AUTO_UPDATE_ENABLED                      = false
 )
 
 type RuleCriteria struct {
@@ -128,6 +129,7 @@ type ElastAlertEngine struct {
 	aiRepoBranch                       string
 	aiRepoPath                         string
 	customAlerters                     *map[string]interface{}
+	autoUpdateEnabled                  bool
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
 	detections.IOManager
@@ -253,6 +255,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.highSeverityAlerterParams = module.GetStringDefault(config, "additionalSev4AlertersParams", "")
 	e.criticalSeverityAlerters = module.GetStringArrayDefault(config, "additionalSev5Alerters", []string{})
 	e.criticalSeverityAlerterParams = module.GetStringDefault(config, "additionalSev5AlertersParams", "")
+	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", DEFAULT_AUTO_UPDATE_ENABLED)
 
 	if custom, ok := config["additionalUserDefinedNotifications"]; ok {
 		switch ct := custom.(type) {
@@ -588,6 +591,15 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 	}
 
 	e.writeNoRead = nil
+
+	if !e.autoUpdateEnabled && !forceSync {
+		logger.WithFields(log.Fields{
+			"autoUpdateEnabled": e.autoUpdateEnabled,
+			"forceSync":         forceSync,
+		}).Info("skipping sync")
+
+		return nil
+	}
 
 	if e.showAiSummaries {
 		err := detections.RefreshAiSummaries(e, model.SigLangSigma, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.aiRepoBranch, logger, e.IOManager)

@@ -10,6 +10,7 @@
 
 case-monitor:      auditor limited-auditor
 case-admin:        analyst limited-analyst superuser
+client-monitor:    auditor
 client-admin:      superuser
 config-admin:      superuser
 detection-monitor: limited-analyst auditor limited-auditor
