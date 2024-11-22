@@ -289,8 +289,6 @@ const huntComponent = {
       if (this.$route.query.q || (this.shouldAutohunt() && this.query)) {
         this.hunt(true);
       }
-
-      this.loadData();
     },
     applyQuerySubstitutions(queries) {
       if (Array.isArray(queries)) {
@@ -360,7 +358,11 @@ const huntComponent = {
         this.dateRange = this.getStartDate().format(this.i18n.timePickerFormat) + " - " + this.getEndDate().format(this.i18n.timePickerFormat);
       }
       if (replaceHistory === true) {
-        this.$router.replace(this.buildCurrentRoute(), onSuccess, onFail);
+        this.$router.replace(this.buildCurrentRoute(), onSuccess, onFail).then((result) => {
+          if (result?.message?.includes('redundant navigation')) {
+            this.loadData();
+          }
+        });
       } else {
         this.$router.push(this.buildCurrentRoute()).then((result) => {
           if (result?.message?.includes('redundant navigation')) {
