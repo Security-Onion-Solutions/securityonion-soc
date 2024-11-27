@@ -289,12 +289,9 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           for (var idx = 0; idx < response.data.length; idx++) {
             const obj = response.data[idx];
 
-            // Don't await the user details -- takes too long for the task scheduler to
-            // complete all these futures when looping across hundreds of records. Let
-            // the UI update as they finish, for a better user experience.
-            this.$root.populateUserDetails(obj, "userId", "owner");
+            await this.$root.populateUserDetails(obj, "userId", "owner");
             if (obj.assigneeId) {
-              this.$root.populateUserDetails(obj, "assigneeId", "assignee");
+              await this.$root.populateUserDetails(obj, "assigneeId", "assignee");
             }
             obj.kind = this.$root.localizeMessage(this.mapAssociatedKind(obj));
             obj.operation = this.$root.localizeMessage(obj.operation);
