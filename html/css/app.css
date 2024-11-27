@@ -6,7 +6,7 @@
 // Elastic License 2.0.
 */
 /* Vuetify theme overrides */
-.v-application {
+.v-application, html {
   background-color: rgb(var(--v-theme-background)) !important;
 }
 
@@ -904,10 +904,6 @@ ul ul ul {
 }
 
 #detection-col {
-  position: absolute;
-  top: 0px;
-  right: 0px;
-
   width: 400px;
 }
 
@@ -936,9 +932,15 @@ ul ul ul {
   right: 0;
   bottom: 0;
   background-color: #21212180;
+  z-index: 1000;
 }
 
 .component-overlay .v-container {
   height: 100%;
   width: 100%;
+}
+
+.component-overlay .v-progress-circular {
+  position: sticky;
+  top: 50%;
 }

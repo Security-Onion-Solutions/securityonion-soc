@@ -60,7 +60,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			sidExtract: /\bsid: ?['"]?(.*?)['"]?;/, // option
 			severityExtract: /\bsignature_severity ['"]?(.*?)['"]?[,;]/, // metadata
 			sortBy: [{ key: 'createdAt', order: 'asc' }],
-			expanded: [],
 			overrideHeaders: {
 				'elastalert': [
 					{},

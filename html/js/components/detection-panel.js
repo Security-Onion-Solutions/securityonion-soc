@@ -15,7 +15,7 @@ components.push({
 				required: true,
 			}
 		},
-		emits: [],
+		emits: ['close'],
 		watch: {
 			'detection': 'onDetectionChange',
 		},
@@ -25,7 +25,6 @@ components.push({
 		template: '#component-detection-panel',
 		data() { return {
 			i18n: this.$root.i18n,
-			activeTab: 'summary',
 			loading: false,
 			extractedSummary: '',
 			newOverride: null,
@@ -82,6 +81,17 @@ components.push({
 				'threshold': ['by_src', 'by_dst'],
 				'suppress': ['by_src', 'by_dst', 'by_either'],
 			},
+			overrideTypes: {
+				'suricata': [
+					{ title: this.$root.i18n.modify, value: 'modify' },
+					{ title: this.$root.i18n.suppress, value: 'suppress' },
+					{ title: this.$root.i18n.threshold, value: 'threshold' },
+				],
+				'elastalert': [
+					{ title: this.$root.i18n.customFilter, value: 'customFilter' },
+				],
+				'strelka': [],
+			},
 			thresholdTypes: [
 				{ title: this.$root.i18n.threshold, value: 'threshold' },
 				{ title: this.$root.i18n.limit, value: 'limit' },
@@ -97,7 +107,7 @@ components.push({
 			overrideEditField: null,
 			editOverride: null, // the override we're currently editing
 			editForm: { valid: true },
-			expanded: [],
+			panels: [0, 1],
 		}},
 		mounted() {
 
@@ -105,9 +115,11 @@ components.push({
 		methods: {
 			onDetectionChange() {
 				if (this.detection) {
-					this.cleanupOverrides();
+					this.tagOverrides();
 					this.extractSummary();
 				}
+
+				this.panel = [0, 1];
 			},
 			extractSummary() {
 				switch (this.detection.engine) {
@@ -156,24 +168,6 @@ components.push({
 					customFilter: null,
 					note: '',
 				};
-			},
-			getOverrideTypes(engine) {
-				engine = engine || this.detection.engine;
-
-				switch (engine) {
-					case 'suricata':
-						return [
-							{ title: this.i18n.modify, value: 'modify' },
-							{ title: this.i18n.suppress, value: 'suppress' },
-							{ title: this.i18n.threshold, value: 'threshold' }
-						];
-					case 'elastalert':
-						return [
-							{ title: this.i18n.customFilter, value: 'customFilter' }
-						];
-				}
-
-				return [];
 			},
 			async addNewOverride() {
 				if (!this.newOverride) return;
@@ -471,6 +465,23 @@ components.push({
 
 				return value;
 			},
+			async startOverrideEdit(target, override, field) {
+				if (this.curOverrideEditTarget === target) return;
+				if (this.curOverrideEditTarget !== null) await this.stopOverrideEdit(false);
+
+				this.curOverrideEditTarget = target;
+				this.origOverrideValue = override[field];
+				this.overrideEditField = field;
+				this.editOverride = override;
+
+				this.$nextTick(() => {
+					const el = document.getElementById(target + '-edit');
+					if (el) {
+						el.focus();
+						el.select();
+					}
+				});
+			},
 			isOverrideEdit(target) {
 				return this.curOverrideEditTarget === target;
 			},
@@ -492,10 +503,35 @@ components.push({
 				this.overrideEditField = null;
 				this.editOverride = null;
 			},
+			isFieldValid(refName) {
+				const ref = this.$refs[refName];
+				if (ref) {
+					if (ref?.classList) {
+						return !ref.classList.contains('v-input--error');
+					}
+
+					return false;
+				}
+
+				return true;
+			},
+			async saveOverrideNote(item) {
+				try {
+					this.loading = true;
+					await this.$root.papi.put('/detection/' + this.detection.id + '/override/' + item.index + '/note', { note: item.note });
+				} catch (error) {
+					this.$root.showError(error);
+				} finally {
+					this.loading = false;
+				}
+			},
 			deleteOverride(item) {
 				this.detection.overrides = this.detection.overrides.filter(o => o !== item);
 				this.saveDetection(false);
 			},
+			closeDetectionPanel() {
+				this.emit('close', null);
+			}
 		},
 	}
 });
