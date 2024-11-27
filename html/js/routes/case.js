@@ -288,10 +288,12 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           let batch = [];
           for (var idx = 0; idx < response.data.length; idx++) {
             const obj = response.data[idx];
+            obj.owner = Vue.ref(null);
 
-            await this.$root.populateUserDetails(obj, "userId", "owner");
+            this.$root.populateUserDetails(obj, "userId", "owner");
             if (obj.assigneeId) {
-              await this.$root.populateUserDetails(obj, "assigneeId", "assignee");
+              obj.assignee = Vue.ref(null);
+              this.$root.populateUserDetails(obj, "assigneeId", "assignee");
             }
             obj.kind = this.$root.localizeMessage(this.mapAssociatedKind(obj));
             obj.operation = this.$root.localizeMessage(obj.operation);
