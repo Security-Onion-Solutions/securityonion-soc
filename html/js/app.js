@@ -120,7 +120,7 @@ $(document).ready(function () {
       },
     },
   });
-  const router = VueRouter.createRouter({ routes, history: VueRouter.createWebHashHistory() })
+  const router = VueRouter.createRouter({ routes, history: VueRouter.createWebHashHistory() });
 
   const comp = {
     el: '#app',
@@ -1106,7 +1106,11 @@ $(document).ready(function () {
 
           const user = await this.$root.getUserById(id);
           if (user) {
-            obj[outputField] = user.email;
+            if (Vue.isRef(obj[outputField])) {
+              obj[outputField].value = user.email;
+            } else {
+              obj[outputField] = user.email;
+            }
           } else {
             obj[outputField] = id;
           }

@@ -14,6 +14,75 @@ global.document.ready = function(fn) { fn(); };
 global.window.scrollTo = jest.fn();
 global.location = { hash: "" };
 ////////////////////////////////////
+// Mock Vue Internals (not exported)
+////////////////////////////////////
+class RefImpl {
+  constructor(value, __v_isShallow) {
+    this.__v_isShallow = __v_isShallow;
+    this.dep = void 0;
+    this.__v_isRef = true;
+    this._rawValue = __v_isShallow ? value : toRaw(value);
+    this._value = __v_isShallow ? value : toReactive(value);
+
+    // Wrap _value in a Proxy (handling primitives correctly)
+    this._value = new Proxy(isObject(this._value) ? this._value : { value: this._value }, {
+      get: (target, prop, receiver) => {
+        if (prop === 'value') {
+          return target.value;
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+      set: (target, prop, value, receiver) => {
+        if (prop === 'value') {
+          target.value = value;
+          return true;
+        }
+        return Reflect.set(target, prop, value, receiver);
+      }
+    });
+  }
+  toJSON() {
+    return this.value;
+  }
+  get value() {
+    return this._value;
+  }
+  set value(newVal) {
+    const useDirectValue = this.__v_isShallow || isShallow(newVal) || isReadonly(newVal);
+    newVal = useDirectValue ? newVal : toRaw(newVal);
+    if (hasChanged(newVal, this._rawValue)) {
+      this._rawValue = newVal;
+      this._value = useDirectValue ? newVal : toReactive(newVal);
+    }
+  }
+}
+const hasChanged = (value, oldValue) => !Object.is(value, oldValue);
+const toReactive = (value) => isObject(value) ? reactive(value) : value;
+const isObject = (val) => val !== null && typeof val === "object";
+function isReadonly(value) {
+  return !!(value && value["__v_isReadonly"]);
+}
+function isShallow(value) {
+  return !!(value && value["__v_isShallow"]);
+}
+function toRaw(observed) {
+  const raw = observed && observed["__v_raw"];
+  return raw ? toRaw(raw) : observed;
+}
+function createRef(rawValue, shallow) {
+  if (isRef(rawValue)) {
+    return rawValue;
+  }
+  return new RefImpl(rawValue, shallow);
+}
+function isRef(r) {
+  return !!(r && r.__v_isRef === true);
+}
+function ref(value) {
+  return createRef(value, false);
+}
+
+////////////////////////////////////
 // Mock Vue
 ////////////////////////////////////
 var app = null;
@@ -41,12 +110,8 @@ global.Vue.createApp = function(obj) {
 
   return app;
 };
-global.Vue.delete = function(data, i) {
-  data.splice(i, 1);
-};
-global.Vue.set = function(array, idx, value) {
-  array[idx] = value;
-};
+global.Vue.ref = ref;
+global.Vue.isRef = isRef;
 global.Vuetify = {
   components: { VClassIcon: {} },
   createVuetify: () => { },

@@ -124,6 +124,12 @@ test('populateUserDetails', async () => {
   app.usersLoadedTime = new Date().time;
   await app.populateUserDetails(obj, "userId", "owner")
   expect(obj.owner).toBe('hi@there.net');
+
+  delete obj.owner;
+  obj.owner = global.Vue.ref(null);
+
+  await app.populateUserDetails(obj, "userId", "owner")
+  expect(obj.owner.value).toBe('hi@there.net');
 });
 
 test('populateUserDetailsSystem', async () => {
