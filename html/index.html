@@ -2299,7 +2299,8 @@
             <v-alert v-if="remoteAgentSupported" id="firewallTip" type="info" v-html="i18n.downloadsFirewallTip" data-aid="downloads_fw_tip"></v-alert>
             <v-alert v-else type="error" id="agentUnavailable" v-html="i18n.downloadsAgentUnavailable" data-aid="downloads_agent_unavailable"></v-alert>
             <ul id="installer-list" class="ml-5 mt-3">
-              <li><a href="/packages/so-elastic-agent_windows_amd64" download="so-elastic-agent_windows_amd64.exe" data-aid="downloads_windows_agent">Windows x86_64 Installer</a></li>
+              <li><a href="/packages/so-elastic-agent_windows_amd64" download="so-elastic-agent_windows_amd64.exe" data-aid="downloads_windows_agent">Windows x86_64 Installer (EXE)</a></li>
+              <li><a href="/packages/so-elastic-agent_windows_amd64_msi" download="so-elastic-agent_windows_amd64.msi" data-aid="downloads_windows_agent_msi">Windows x86_64 Installer (MSI)</a></li>
               <li><a href="/packages/so-elastic-agent_linux_amd64" download="so-elastic-agent_linux_amd64" data-aid="downloads_linux_agent">Linux x86_64 Installer</a></li>
               <li><a href="/packages/so-elastic-agent_darwin_amd64" download="so-elastic-agent_darwin_amd64" data-aid="downloads_mac_intel_agent">macOS x86_64 Installer</a></li>
               <li><a href="/packages/so-elastic-agent_darwin_arm64" download="so-elastic-agent_darwin_arm64" data-aid="downloads_mac_arm_agent">macOS arm64 Installer</a></li>
