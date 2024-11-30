@@ -195,3 +195,215 @@ func TestGenerateUnusedPublicId(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, "unable to generate a unique publicId", err.Error())
 }
+
+func TestToDetection(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name      string
+		rule      *SigmaRule
+		ruleset   string
+		license   string
+		community bool
+		expected  *model.Detection
+	}{
+		{
+			name: "nil fields",
+			rule: &SigmaRule{
+				Title:     "Test Rule",      // Title is non-pointer string, can't be nil
+				LogSource: LogSource{},      // LogSource is non-pointer struct
+				Detection: SigmaDetection{}, // Detection is non-pointer struct
+			},
+			ruleset:   "test-ruleset",
+			license:   "test-license",
+			community: false,
+			expected: &model.Detection{
+				Title:       "Test Rule",
+				PublicID:    "Test Rule", // defaults to Title when ID is nil
+				Author:      "unknown",   // default when Author is nil
+				Engine:      model.EngineNameElastAlert,
+				Severity:    model.SeverityUnknown, // default when Level is nil
+				IsCommunity: false,
+				Language:    model.SigLangSigma,
+				Ruleset:     "test-ruleset",
+				License:     "test-license",
+			},
+		},
+		{
+			name: "empty strings",
+			rule: &SigmaRule{
+				Title:       "Test Rule",
+				ID:          util.Ptr(""),
+				Author:      util.Ptr(""),
+				Level:       util.Ptr(SigmaLevelUnknown),
+				Description: util.Ptr(""),
+				LogSource: LogSource{
+					Category: util.Ptr(""),
+					Product:  util.Ptr(""),
+					Service:  util.Ptr(""),
+				},
+				Detection: SigmaDetection{},
+			},
+			ruleset:   "test-ruleset",
+			license:   "test-license",
+			community: true,
+			expected: &model.Detection{
+				Title:       "Test Rule",
+				PublicID:    "", // empty string ID is preserved
+				Author:      "", // empty string Author is preserved
+				Engine:      model.EngineNameElastAlert,
+				Severity:    model.SeverityUnknown,
+				Description: "", // empty string Description is preserved
+				IsCommunity: true,
+				Language:    model.SigLangSigma,
+				Ruleset:     "test-ruleset",
+				License:     "test-license",
+			},
+		},
+		{
+			name: "all fields populated",
+			rule: &SigmaRule{
+				Title:       "Test Rule",
+				ID:          util.Ptr("custom-id"),
+				Author:      util.Ptr("test author"),
+				Level:       util.Ptr(SigmaLevelHigh),
+				Description: util.Ptr("test description"),
+				LogSource: LogSource{
+					Category: util.Ptr("test-category"),
+					Product:  util.Ptr("test-product"),
+					Service:  util.Ptr("test-service"),
+				},
+				Detection: SigmaDetection{},
+			},
+			ruleset:   "test-ruleset",
+			license:   "test-license",
+			community: true,
+			expected: &model.Detection{
+				Title:       "Test Rule",
+				PublicID:    "custom-id",
+				Author:      "test author",
+				Engine:      model.EngineNameElastAlert,
+				Severity:    model.SeverityHigh,
+				Description: "test description",
+				Category:    "test-category",
+				Product:     "test-product",
+				Service:     "test-service",
+				IsCommunity: true,
+				Language:    model.SigLangSigma,
+				Ruleset:     "test-ruleset",
+				License:     "test-license",
+			},
+		},
+		{
+			name: "severity levels",
+			rule: &SigmaRule{
+				Title:     "Test Rule",
+				Level:     util.Ptr(SigmaLevelInformational),
+				LogSource: LogSource{},
+				Detection: SigmaDetection{},
+			},
+			ruleset:   "test-ruleset",
+			license:   "test-license",
+			community: false,
+			expected: &model.Detection{
+				Title:       "Test Rule",
+				PublicID:    "Test Rule",
+				Author:      "unknown",
+				Engine:      model.EngineNameElastAlert,
+				Severity:    model.SeverityInformational,
+				IsCommunity: false,
+				Language:    model.SigLangSigma,
+				Ruleset:     "test-ruleset",
+				License:     "test-license",
+			},
+		},
+		{
+			name: "severity medium",
+			rule: &SigmaRule{
+				Title:     "Test Rule",
+				Level:     util.Ptr(SigmaLevelMedium),
+				LogSource: LogSource{},
+				Detection: SigmaDetection{},
+			},
+			ruleset:   "test-ruleset",
+			license:   "test-license",
+			community: false,
+			expected: &model.Detection{
+				Title:       "Test Rule",
+				PublicID:    "Test Rule",
+				Author:      "unknown",
+				Engine:      model.EngineNameElastAlert,
+				Severity:    model.SeverityMedium,
+				IsCommunity: false,
+				Language:    model.SigLangSigma,
+				Ruleset:     "test-ruleset",
+				License:     "test-license",
+			},
+		},
+		{
+			name: "severity critical",
+			rule: &SigmaRule{
+				Title:     "Test Rule",
+				Level:     util.Ptr(SigmaLevelCritical),
+				LogSource: LogSource{},
+				Detection: SigmaDetection{},
+			},
+			ruleset:   "test-ruleset",
+			license:   "test-license",
+			community: false,
+			expected: &model.Detection{
+				Title:       "Test Rule",
+				PublicID:    "Test Rule",
+				Author:      "unknown",
+				Engine:      model.EngineNameElastAlert,
+				Severity:    model.SeverityCritical,
+				IsCommunity: false,
+				Language:    model.SigLangSigma,
+				Ruleset:     "test-ruleset",
+				License:     "test-license",
+			},
+		},
+		{
+			name: "severity low",
+			rule: &SigmaRule{
+				Title:     "Test Rule",
+				Level:     util.Ptr(SigmaLevelLow),
+				LogSource: LogSource{},
+				Detection: SigmaDetection{},
+			},
+			ruleset:   "test-ruleset",
+			license:   "test-license",
+			community: false,
+			expected: &model.Detection{
+				Title:       "Test Rule",
+				PublicID:    "Test Rule",
+				Author:      "unknown",
+				Engine:      model.EngineNameElastAlert,
+				Severity:    model.SeverityLow,
+				IsCommunity: false,
+				Language:    model.SigLangSigma,
+				Ruleset:     "test-ruleset",
+				License:     "test-license",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			result := tc.rule.ToDetection(tc.ruleset, tc.license, tc.community)
+
+			// First verify the content field separately since it's a YAML marshaled string
+			expectedContent, err := yaml.Marshal(tc.rule)
+			assert.NoError(t, err)
+			assert.Equal(t, string(expectedContent), result.Content, "Content field mismatch")
+
+			// Now clear the content field for the full struct comparison
+			result.Content = ""
+			tc.expected.Content = ""
+
+			assert.Equal(t, tc.expected, result, "Detection struct mismatch")
+		})
+	}
+}
