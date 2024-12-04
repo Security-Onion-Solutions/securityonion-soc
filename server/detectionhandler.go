@@ -425,13 +425,13 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	engine, ok := h.server.DetectionEngines[detect.Engine]
+	eng, ok := h.server.DetectionEngines[detect.Engine]
 	if !ok {
 		web.Respond(w, r, http.StatusBadRequest, errors.New("unsupported engine"))
 		return
 	}
 
-	_, err = engine.ValidateRule(detect.Content)
+	_, err = eng.ValidateRule(detect.Content)
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("invalid rule: %w", err))
 		return
@@ -439,13 +439,13 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 
 	specifiedStatus := detect.IsEnabled
 
-	filterApplied, err := engine.ApplyFilters(detect)
+	filterApplied, err := eng.ApplyFilters(detect)
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
-	err = engine.ExtractDetails(detect)
+	err = eng.ExtractDetails(detect)
 	if err != nil {
 		if err.Error() == "rule does not contain a public Id" {
 			web.Respond(w, r, http.StatusBadRequest, "missingPublicIdErr")
@@ -458,7 +458,7 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 
 	statusModifiedByFilter := detect.IsEnabled != specifiedStatus
 
-	err = h.PrepareForSave(ctx, detect, engine)
+	err = h.PrepareForSave(ctx, detect, eng)
 	if err != nil {
 		if err.Error() == "Object not found" {
 			web.Respond(w, r, http.StatusNotFound, nil)
@@ -517,6 +517,14 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 	if len(errMap) != 0 {
 		web.Respond(w, r, http.StatusInternalServerError, errMap)
 		return
+	}
+
+	err = eng.MergeAuxiliaryData(detect)
+	if err != nil {
+		logger.WithError(err).WithFields(log.Fields{
+			"detectionEngine": detect.Engine,
+			"detectionId":     detect.Id,
+		}).Error("unable to merge auxiliary data into detection")
 	}
 
 	if statusModifiedByFilter {

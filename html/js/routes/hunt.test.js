@@ -957,7 +957,7 @@ test('handleChartClick', () => {
 
   expect(result).toBe(true);
   expect(comp.toggleQuickAction).toHaveBeenCalledTimes(1);
-  expect(comp.toggleQuickAction).toHaveBeenCalledWith(null, {}, 'MyField', 'value');
+  expect(comp.toggleQuickAction).toHaveBeenCalledWith(null, {}, 2, 'MyField', 'value');
 
   comp.toggleQuickAction = orig;
 });
@@ -1423,7 +1423,7 @@ test('toggleQuickAction - Tune Detection, Yara => Source Tab, Other Engines => T
   };
   resetPapi().mockPapi('get', mockPromise, null);
 
-  comp.toggleQuickAction({}, event, null, null);
+  comp.toggleQuickAction({}, event, -1, null, null);
   expect(comp.quickActionDetId).toBe('onionId');
   expect(comp.tuneDetectionTabTarget).toBe('tuning');
 
@@ -1434,7 +1434,7 @@ test('toggleQuickAction - Tune Detection, Yara => Source Tab, Other Engines => T
   };
   resetPapi().mockPapi('get', mockPromise, null);
 
-  comp.toggleQuickAction({}, event, null, null);
+  comp.toggleQuickAction({}, event, -1, null, null);
   expect(comp.quickActionDetId).toBe('onionId');
   expect(comp.tuneDetectionTabTarget).toBe('tuning');
 
@@ -1445,7 +1445,7 @@ test('toggleQuickAction - Tune Detection, Yara => Source Tab, Other Engines => T
   };
   resetPapi().mockPapi('get', mockPromise, null);
 
-  comp.toggleQuickAction({}, event, null, null);
+  comp.toggleQuickAction({}, event, -1, null, null);
   expect(comp.quickActionDetId).toBe('onionId');
   expect(comp.tuneDetectionTabTarget).toBe('source');
 });

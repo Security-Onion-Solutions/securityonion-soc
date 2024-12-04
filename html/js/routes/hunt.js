@@ -158,6 +158,7 @@ const huntComponent = {
     eventCurrentItems: [],
     detectionEngineStatusQueries: {},
     highlightedDetection: null,
+    highlightedAlertInfo: null,
   }},
   created() {
     this.$root.initializeCharts();
@@ -636,7 +637,11 @@ const huntComponent = {
         template: template,
       };
     },
-    async ack(event, item, idx, acknowledge, escalate, caseId, groupIdx) {
+    panelAck(args) {
+      args[1] = !this.isFilterToggleEnabled('acknowledged');
+      console.log(args);
+    },
+    async ack(item, acknowledge, escalate, caseId, groupIdx) {
       this.$root.startLoading();
       try {
         var docEvent = item;
@@ -1050,7 +1055,7 @@ const huntComponent = {
     },
     toggleEscalationMenu(domEvent, event, groupIdx) {
       if (!this.escalateRelatedEventsEnabled) {
-        this.ack(domEvent, event, 0, true, true, null, groupIdx);
+        this.ack(event, true, true, null, groupIdx);
         return;
       }
 
@@ -1066,7 +1071,7 @@ const huntComponent = {
         this.escalationMenuVisible = true;
       });
     },
-    toggleQuickAction(domEvent, event, field, value) {
+    toggleQuickAction(domEvent, event, groupIdx, field, value) {
       if (!domEvent || this.quickActionVisible || this.escalationMenuVisible || window?.getSelection()?.type === 'Range') {
         this.quickActionVisible = false;
         this.escalationMenuVisible = false;
@@ -1088,6 +1093,10 @@ const huntComponent = {
 
             if (!oldHighlight || response.data?.publicId !== oldHighlight) {
               this.highlightedDetection = response.data;
+              this.highlightedAlertInfo = {
+                item: event,
+                groupIndex: typeof groupIdx === 'number' ? groupIdx : -1,
+              };
             }
 
             this.tuneDetectionTabTarget = 'tuning';
@@ -1892,7 +1901,7 @@ const huntComponent = {
           if (clickedValue && clickedValue.length > 0) {
             if (this.canQuery(clickedValue)) {
               var chartGroupByField = this.groupBys[groupIdx].fields[0];
-              this.toggleQuickAction(e, {}, chartGroupByField, clickedValue);
+              this.toggleQuickAction(e, {}, groupIdx, chartGroupByField, clickedValue);
             }
           }
           return true;
@@ -2390,7 +2399,7 @@ const huntComponent = {
     },
     huntQueryWidth() {
       return this.$refs.huntQueryInput?.$el?.clientWidth || 0;
-    }
+    },
   }
 };
 

@@ -817,6 +817,12 @@ func (store *ElasticDetectionstore) ConvertObjectToDocument(ctx context.Context,
 	}
 
 	id := auditable.Id
+	updateTime := auditable.UpdateTime
+
+	defer func() {
+		auditable.Id = id
+		auditable.UpdateTime = updateTime
+	}()
 
 	store.prepareForSave(ctx, auditable)
 	document := ConvertObjectToDocumentMap(kind, obj, store.schemaPrefix)
@@ -836,8 +842,6 @@ func (store *ElasticDetectionstore) ConvertObjectToDocument(ctx context.Context,
 	}
 
 	rawDoc, err := json.Marshal(document)
-
-	auditable.Id = id
 
 	return rawDoc, index, err
 }
