@@ -525,7 +525,7 @@
           </v-expand-transition>
         </v-col>
         <v-col id="group-metrics" v-if="metricsEnabled" :data-aid="'groups_' + category">
-          <v-toolbar v-if="isAdvanced()" dense flat>
+          <v-toolbar v-if="isAdvanced()" density="compact" variant="flat">
             <v-toolbar-title>{{ i18n.groups }}</v-toolbar-title>
             <v-spacer />
             <v-btn variant="text" size="small" icon class="mr-1" @click="toggleShowSection('hunt-groups')" :data-aid="'groups_toggle_' + category">
