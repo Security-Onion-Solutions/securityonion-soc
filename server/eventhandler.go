@@ -45,6 +45,24 @@ func (h *EventHandler) eventsEnabled(next http.Handler) http.Handler {
 	})
 }
 
+// @Summary      Search for Events
+// @Description  Given a search query, fetch all matching results, up to the maximum number requested, or the maximum that the backend data server will provide.
+// @Description.markdown get_events
+// @Tags	     Events
+// @Security     bearer[events/read]
+// @Param        query  query  string  true "User defined search query" example(tags:conn | groupby source.ip destination.ip network.protocol destination.port)
+// @Param        range  query  string  true "Date range, in the specified timezone" example(2024/12/03 03:09:31 PM - 2024/12/04 03:09:31 PM)
+// @Param        zone  query  string  true "Timezone of the date range" example(America/New_York)
+// @Param        format  query  string  true "Date range date format. Use the example, exactly as shown, if not familiar with date formats" example(2006/01/02 3:04:05 PM)
+// @Param        metricLimit  query  integer  true "Maximum number of metrics to include in each aggregation" example(10)
+// @Param        eventLimit  query  integer  true "Maximum number of events to return" example(100)
+// @Produce      json
+// @Success      200  {array}  model.EventSearchResults   "Outputs the list of search results"
+// @Failure      400         "The provided input object or parameters are malformed or invalid"
+// @Failure      401         "Request was not properly authenticated"
+// @Failure      405         "The event module is not loaded on the server"
+// @Failure      500         "Internal SOC error; review SOC logs"
+// @Router       /connect/events/ [get]
 func (h *EventHandler) getEvent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -75,6 +93,19 @@ func (h *EventHandler) getEvent(w http.ResponseWriter, r *http.Request) {
 	web.Respond(w, r, http.StatusOK, results)
 }
 
+// @Summary      Acknowledge Events
+// @Description  Acknowledges the alert event. Note that this will not remove the event from connected SOC users' Alert screens when the same alert event happens to be also present on their Alert screen. However, if they refresh the Alert screen the alert event will no longer be list.
+// @Tags	     Events
+// @Security     bearer[events/ack,events/write]
+// @Param        request  body  model.EventAckCriteria  true "Ack criteria"
+// @Accept       json
+// @Produce      json
+// @Success      200  {object}  model.EventUpdateResults   "Outputs the list of update results"
+// @Failure      400         "The provided input object or parameters are malformed or invalid"
+// @Failure      401         "Request was not properly authenticated"
+// @Failure      405         "The event module is not loaded on the server"
+// @Failure      500         "Internal SOC error; review SOC logs"
+// @Router       /connect/events/ack [post]
 func (h *EventHandler) postAck(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

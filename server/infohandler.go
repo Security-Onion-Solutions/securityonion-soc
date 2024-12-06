@@ -35,6 +35,15 @@ func RegisterInfoRoutes(srv *Server, r chi.Router, prefix string) {
 	})
 }
 
+// @Summary      Get Server Information
+// @Description  Requests the Security Onion grid general details.
+// @Tags	     Grid
+// @Security     bearer
+// @Produce      json
+// @Success      200  {object}  model.Info   "The retrieved Info object"
+// @Failure      401         "Request was not properly authenticated"
+// @Failure      500         "Internal SOC error; review SOC logs"
+// @Router       /connect/info/ [get]
 func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 	userId, ok := r.Context().Value(web.ContextKeyRequestorId).(string)
 	if !ok {

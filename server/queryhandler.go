@@ -31,6 +31,21 @@ func RegisterQueryRoutes(srv *Server, r chi.Router, prefix string) {
 	})
 }
 
+// @Summary      Build Query
+// @Description  Requests the server provide a new query for the client to show, given a particular change needed in the query.
+// @Tags	     Events
+// @Security     bearer
+// @Param        operation  path  string  true  "The type of operation for this query update. Supports: grouped, filtered, sorted" example(grouped)
+// @Param        query formData string  true  "The current query string to be modified" example(somefield: somevalue | groupby anotherfield)
+// @Param        field formData string  true  "The field to be used for the operation" example(newfield)
+// @Param        scalar formData string  true  "Specify true is this field contains scalar values (numerical, etc)" example(true)
+// @Param        mode formData string  true  "The operation mode." example(true)
+// @Produce      plain
+// @Success      200        "The job output stream was successfully saved and is being returned in the response body. Ex: somefield: somevalue | groupby anotherfield | groupby newfield"
+// @Failure      400        "The provided input object or parameters are malformed or invalid"
+// @Failure      401        "Request was not properly authenticated"
+// @Failure      500        "Internal SOC error; review SOC logs"
+// @Router       /connect/query/{operation} [get]
 func (h *QueryHandler) getQuery(w http.ResponseWriter, r *http.Request) {
 	operation := chi.URLParam(r, "operation")
 

@@ -29,6 +29,17 @@ func RegisterNodeRoutes(srv *Server, r chi.Router, prefix string) {
 	})
 }
 
+// @Summary      Node Check-in / Get Pending Jobs
+// @Description  Used by Security Onion agent nodes to check-in with their current metrics and request any pending jobs assigned to it.
+// @Tags	     Grid, Jobs
+// @Security     bearer[nodes/write,jobs/process]
+// @Param        request body  model.Node  true  "The node object with recent metrics"
+// @Produce      json
+// @Success      200  {array}  model.Job       "The array of assigned, pending jobs that this node is responsible for processing, if any"
+// @Failure      400       "The provided input object or parameters are malformed or invalid"
+// @Failure      401       "Request was not properly authenticated"
+// @Failure      500       "Internal SOC error; review SOC logs"
+// @Router       /connect/node/{jobId} [post]
 func (h *NodeHandler) postNode(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

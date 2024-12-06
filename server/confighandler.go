@@ -54,6 +54,18 @@ func (h *ConfigHandler) configEnabled(next http.Handler) http.Handler {
 	})
 }
 
+// @Summary      Get Configuration
+// @Description  Retrieves the full set of configuration settings and associated metadata.
+// @Description  This response can be very large, particularly when the advanced parameter is set to 'true'.
+// @Tags	     Config
+// @Security     bearer[config/read]
+// @param        advanced  query  boolean  false  "If true, all configuration settings will be retrieved, otherwise only the commonly adjusted settings are retrieved" example(true)
+// @Success      200  {array} model.Setting   "The configuration setting objects"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      405                         "Configuration module has not been loaded"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/config/ [get]
 func (h *ConfigHandler) getConfig(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -70,6 +82,17 @@ func (h *ConfigHandler) getConfig(w http.ResponseWriter, r *http.Request) {
 	web.Respond(w, r, http.StatusOK, settings)
 }
 
+// @Summary      Save Setting
+// @Description  Sets a configuration setting to a new value.
+// @Tags	     Config
+// @Security     bearer[config/read,config/write]
+// @param        request  body  model.Setting  true  "The setting to update. Only non-metadata fields are required, specifically 'id' and 'value', and optionally the 'nodeId' field if this is being applied to a specific node"
+// @Success      200                         "The new setting values has been saved"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      405                         "Configuration module has not been loaded"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/config/ [put]
 func (h *ConfigHandler) putSetting(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	setting := model.Setting{}
@@ -94,6 +117,16 @@ func (h *ConfigHandler) putSetting(w http.ResponseWriter, r *http.Request) {
 	web.Respond(w, r, http.StatusOK, nil)
 }
 
+// @Summary      Sync Configuration
+// @Description  Synchronizes the grid to apply recent configuration changes to the grid. Internally this is queuing up a Salt highstate, which can take several minutes to complete, or longer if another highstate is already in progress.
+// @Tags	     Config
+// @Security     bearer[config/write]
+// @Success      200                         "The synchronization request has been successfully queued"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      405                         "Configuration module has not been loaded"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/config/sync [put]
 func (h *ConfigHandler) putSync(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -106,6 +139,18 @@ func (h *ConfigHandler) putSync(w http.ResponseWriter, r *http.Request) {
 	web.Respond(w, r, http.StatusOK, nil)
 }
 
+// @Summary      Delete Setting
+// @Description  Removes a custom setting value. This effectively reverts to the default setting value.
+// @Tags	     Config
+// @Security     bearer[config/read,config/write]
+// @Param        id  path  string  true  "The setting ID to remove" example(elastalert.alerter_parameters)
+// @Param        minion  path  string  false  "The optional node ID from which to remove this setting. If omitted, the setting will be removed from the global grid and any node-specific setting values will remain in place." example(chi-so-001_standalone)
+// @Success      200                         "The setting was successfully removed"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      405                         "Configuration module has not been loaded"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/config/{id}/{minion} [delete]
 func (h *ConfigHandler) deleteConfig(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

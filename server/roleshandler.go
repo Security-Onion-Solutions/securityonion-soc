@@ -44,6 +44,16 @@ func rolesEnabled(server *Server) func(next http.Handler) http.Handler {
 	}
 }
 
+// @Summary      Get Roles
+// @Description  Retrieves the set of available user roles.
+// @Tags	     Users
+// @Security     bearer[roles/read]
+// @Produce      json
+// @Success      200  {array}   string       "List of user role names"
+// @Failure      401         "Request was not properly authenticated"
+// @Failure      405         "Roles module not configured on server"
+// @Failure      500         "Internal SOC error; review SOC logs"
+// @Router       /roles [get]
 func (h *RolesHandler) getRoles(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -52,6 +62,19 @@ func (h *RolesHandler) getRoles(w http.ResponseWriter, r *http.Request) {
 	web.Respond(w, r, http.StatusOK, roles)
 }
 
+// @Summary      Get Permissions
+// @Description  Retrieves the set of available client permissions.
+// @Description  Note: User roles are made up of assigned permissions. API clients do not
+// @Description  use roles and instead are directly assigned individual permissions since
+// @Description  each API client is expected to be configured for a specific task.
+// @Tags	     Clients
+// @Security     bearer[permissions/read]
+// @Produce      json
+// @Success      200  {array}   string       "List of permission names"
+// @Failure      401        "Request was not properly authenticated"
+// @Failure      405        "Roles module not configured on server"
+// @Failure      500        "Internal SOC error; review SOC logs"
+// @Router       /permissions [get]
 func (h *RolesHandler) getPermissions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

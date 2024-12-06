@@ -97,7 +97,7 @@ func Respond(w http.ResponseWriter, r *http.Request, statusCode int, obj interfa
 
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
-	
+
 	start := ctx.Value(ContextKeyRequestStart).(time.Time)
 	elapsed := time.Since(start).Milliseconds()
 
@@ -113,6 +113,8 @@ func Respond(w http.ResponseWriter, r *http.Request, statusCode int, obj interfa
 			statusCode = http.StatusUnauthorized
 		} else if statusCode < http.StatusBadRequest {
 			statusCode = http.StatusInternalServerError
+		} else if err.Error() == "Object not found" {
+			statusCode = http.StatusNotFound
 		}
 
 		bytes := []byte(ConvertErrorToSafeString(err))

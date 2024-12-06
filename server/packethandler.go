@@ -29,6 +29,21 @@ func RegisterPacketRoutes(srv *Server, r chi.Router, prefix string) {
 	})
 }
 
+// @Summary      Get PCAP Packets
+// @Description  Retrieves the packets collected and attached to the job represented by the given job ID. This request assumes the job is a PCAP job.
+// @Tags	     Jobs
+// @Security     bearer[jobs/read]
+// @Param        jobId  path  integer  true  "The job ID" example(1004)
+// @Param        unwrap  query  boolean  false  "If true, and if the stream data is eligible the stream data will be unwrapped. An example of wrapped stream data is VXLAN packet data." example(true)
+// @Param        offset  query  integer  false  "The starting offset of the packet to retrieve; used for paging large packet results. Defaults to 0." example(100)
+// @Param        count  query  integer  false  "The maximum number of packets to retrieve; used for paging large packet results. Defaults to 5000, or an optional server-side configuration value/" example(100)
+// @Produce      json
+// @Success      200  {array}  model.Packet       "The array of retrieved Packet objects"
+// @Failure      400         "The provided input object or parameters are malformed or invalid"
+// @Failure      401         "Request was not properly authenticated"
+// @Failure      404         "The job was not found"
+// @Failure      500         "Internal SOC error; review SOC logs"
+// @Router       /connect/packets/{jobId} [get]
 func (h *PacketHandler) getPackets(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

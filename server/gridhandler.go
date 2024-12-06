@@ -27,6 +27,18 @@ func RegisterGridRoutes(srv *Server, r chi.Router, prefix string) {
 	})
 }
 
+// @Summary      Get Grid Nodes
+// @Description  Retrieves the list of nodes that have recently checked-in with SOC. Nodes are grid members that have recently checked in with SOC.
+// @Description  Under certain scenarios this may not include nodes that are accepted members of the grid but currently offline.
+// @Description  Effectively, the results of this API call will match the view of the Grid screen in SOC (Not the Grid Members screen).
+// @Tags	     Grid
+// @Security     bearer[nodes/read]
+// @Produce      json
+// @Success      200  {array}  model.Node            "The list of grid nodes"
+// @Failure      401                                 "Request was not properly authenticated"
+// @Failure      403                                 "Insufficient permissions for this request"
+// @Failure      500                                 "Internal SOC error; review SOC logs"
+// @Router       /connect/grid/ [get]
 func (h *GridHandler) getNodes(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
