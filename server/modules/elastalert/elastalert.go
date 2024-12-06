@@ -69,6 +69,14 @@ const (
 	DEFAULT_AUTO_UPDATE_ENABLED                      = false
 )
 
+type RuleCriteria struct {
+	Ruleset  []string `yaml:"ruleset" json:"ruleset"`
+	Level    []string `yaml:"level" json:"level"`
+	Product  []string `yaml:"product" json:"product"`
+	Category []string `yaml:"category" json:"category"`
+	Service  []string `yaml:"service" json:"service"`
+}
+
 var ( // treat as constant
 	DEFAULT_RULES_REPOS = []*model.RuleRepo{
 		{
@@ -96,6 +104,7 @@ type ElastAlertEngine struct {
 	sigmaPipelinesFingerprintFile      string
 	sigmaRulePackages                  []string
 	autoEnabledSigmaRules              []string
+	enabledSigmaRules                  []RuleCriteria
 	additionalAlerters                 []string
 	additionalAlerterParams            string
 	informationalSeverityAlerters      []string
@@ -128,20 +137,90 @@ type ElastAlertEngine struct {
 	model.EngineState
 }
 
-func checkRulesetEnabled(e *ElastAlertEngine, det *model.Detection) {
-	det.IsEnabled = false
-	if det.Ruleset == "" || det.Severity == "" {
-		return
+func loadEnabledSigmaRules(config module.ModuleConfig) []RuleCriteria {
+	defaultRuleFilters := []RuleCriteria{
+		{
+			Ruleset:  []string{"securityonion-resources"},
+			Level:    []string{"critical", "high"},
+			Product:  []string{"*"},
+			Category: []string{"*"},
+			Service:  []string{"*"},
+		},
+		{
+			Ruleset:  []string{"core"},
+			Level:    []string{"critical"},
+			Product:  []string{"*"},
+			Category: []string{"process_creation", "file_event", "registry_event", "network_connection", "dns_query"},
+			Service:  []string{"*"},
+		},
 	}
 
-	// Combine Ruleset and Severity into a single string
-	metaCombined := det.Ruleset + "+" + string(det.Severity)
-	for _, rule := range e.autoEnabledSigmaRules {
-		if strings.EqualFold(rule, metaCombined) {
-			det.IsEnabled = true
-			break
+	rawRuleFilters, ok := config["enabledSigmaRules"]
+	if !ok {
+		log.Info("enabledSigmaRules not found in config, using defaults.")
+		return defaultRuleFilters
+	}
+
+	var configData []RuleCriteria
+	err := yaml.Unmarshal([]byte(rawRuleFilters.(string)), &configData)
+	if err != nil {
+		log.WithError(err).Error("Failed to unmarshal YAML data for enabledSigmaRules")
+		return defaultRuleFilters
+	}
+
+	// Use the parsed filters if available, otherwise return defaults
+	if len(configData) > 0 {
+		return configData
+	}
+
+	return defaultRuleFilters
+}
+
+// Function to check if a rule should be enabled based on criteria
+func checkRulesetEnabled(e *ElastAlertEngine, det *model.Detection) {
+	det.IsEnabled = false
+
+	if len(e.autoEnabledSigmaRules) != 0 {
+
+		// Deprecated in 2.4.120, will be removed in a future release
+		log.Warn("Use of autoEnabledSigmaRules is deprecated, use enabledSigmaRules instead")
+		// Combine Ruleset and Severity into a single string
+		metaCombined := det.Ruleset + "+" + string(det.Severity)
+		for _, rule := range e.autoEnabledSigmaRules {
+			if strings.EqualFold(rule, metaCombined) {
+				det.IsEnabled = true
+				break
+			}
+		}
+
+	} else {
+
+		for _, rule := range e.enabledSigmaRules {
+			if matchArrayField(rule.Ruleset, det.Ruleset) &&
+				matchArrayField(rule.Level, string(det.Severity)) &&
+				matchArrayField(rule.Product, det.Product) &&
+				matchArrayField(rule.Category, det.Category) &&
+				matchArrayField(rule.Service, det.Service) {
+				det.IsEnabled = true
+				break
+			}
 		}
 	}
+}
+
+// Helper to match array fields with wildcard support
+func matchArrayField(configValues []string, ruleValue string) bool {
+	ruleValue = strings.TrimSpace(strings.ToLower(ruleValue))
+	if len(configValues) == 0 {
+		return true
+	}
+	for _, value := range configValues {
+		value = strings.TrimSpace(strings.ToLower(value))
+		if value == "*" || value == ruleValue {
+			return true
+		}
+	}
+	return false
 }
 
 func NewElastAlertEngine(srv *server.Server) *ElastAlertEngine {
@@ -178,7 +257,8 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.sigmaPipelineSO = module.GetStringDefault(config, "sigmaPipelineSO", DEFAULT_SIGMA_PIPELINE_SO_FILE)
 	e.sigmaPipelinesFingerprintFile = module.GetStringDefault(config, "sigmaPipelinesFingerprintFile", DEFAULT_SIGMA_PIPELINES_FINGERPRINT_FILE)
 	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", DEFAULT_RULES_FINGERPRINT_FILE)
-	e.autoEnabledSigmaRules = module.GetStringArrayDefault(config, "autoEnabledSigmaRules", []string{"securityonion-resources+critical", "securityonion-resources+high"})
+	e.enabledSigmaRules = loadEnabledSigmaRules(config)
+	e.autoEnabledSigmaRules = module.GetStringArrayDefault(config, "autoEnabledSigmaRules", []string{})
 	e.CommunityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 	e.additionalAlerters = module.GetStringArrayDefault(config, "additionalAlerters", []string{})

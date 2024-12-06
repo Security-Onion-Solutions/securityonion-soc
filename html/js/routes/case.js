@@ -288,12 +288,11 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           let batch = [];
           for (var idx = 0; idx < response.data.length; idx++) {
             const obj = response.data[idx];
+            obj.owner = Vue.ref(null);
 
-            // Don't await the user details -- takes too long for the task scheduler to
-            // complete all these futures when looping across hundreds of records. Let
-            // the UI update as they finish, for a better user experience.
             this.$root.populateUserDetails(obj, "userId", "owner");
             if (obj.assigneeId) {
+              obj.assignee = Vue.ref(null);
               this.$root.populateUserDetails(obj, "assigneeId", "assignee");
             }
             obj.kind = this.$root.localizeMessage(this.mapAssociatedKind(obj));

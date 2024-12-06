@@ -72,6 +72,57 @@ func TestCheckAutoEnabledSigmaRule(t *testing.T) {
 	}
 }
 
+func TestCheckEnabledSigmaRule(t *testing.T) {
+	e := &ElastAlertEngine{
+		enabledSigmaRules: []RuleCriteria{
+			{
+				Ruleset:  []string{"securityonion-resources", "core"},
+				Level:    []string{"high"},
+				Product:  []string{"windows"},
+				Category: []string{"process_creation"},
+				Service:  []string{"sysmon"},
+			},
+			{
+				Ruleset:  []string{"*"},
+				Level:    []string{"critical"},
+				Product:  []string{"*"},
+				Category: []string{"*"},
+				Service:  []string{"*"},
+			},
+		},
+	}
+
+	tests := []struct {
+		name     string
+		ruleset  string
+		severity model.Severity
+		product  string
+		category string
+		service  string
+		expected bool
+	}{
+		{"core rule with matching fields and upper case, rule enabled", "core", model.SeverityHigh, "WINDOWS", "process_creation", "sysmon", true},
+		{"core rule with wrong category, rule disabled", "core", model.SeverityHigh, "windows", "file_creation", "windows", false},
+		{"securityonion-resources rule with matching fields, rule enabled", "securityonion-resources", model.SeverityHigh, "windows", "process_creation", "sysmon", true},
+		{"core++ rule with critical severity, rule enabled", "core++", model.SeverityCritical, "linux", "file_event", "auditd", true},
+		{"core++ rule with medium severity, rule disabled", "core++", model.SeverityMedium, "windows", "process_creation", "sysmon", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			det := &model.Detection{
+				Ruleset:  tt.ruleset,
+				Severity: tt.severity,
+				Product:  tt.product,
+				Category: tt.category,
+				Service:  tt.service,
+			}
+			checkRulesetEnabled(e, det)
+			assert.Equal(t, tt.expected, det.IsEnabled)
+		})
+	}
+}
+
 func TestElastAlertModule(t *testing.T) {
 	srv := &server.Server{
 		DetectionEngines: map[model.EngineName]server.DetectionEngine{},
