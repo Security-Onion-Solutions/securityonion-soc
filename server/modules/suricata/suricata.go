@@ -11,6 +11,7 @@ import (
 	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand/v2"
@@ -53,6 +54,7 @@ const (
 	DEFAULT_RULES_FINGERPRINT_FILE                = "/opt/sensoroni/fingerprints/emerging-all.fingerprint"
 	DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECS = 86400
 	DEFAULT_STATE_FILE_PATH                       = "/opt/sensoroni/fingerprints/suricataengine.state"
+	DEFAULT_NAVIGATOR_LAYER_FILE_PATH             = "/opt/sensoroni/navigator/navigator_layer_suricata.json"
 	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS     = 300
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT    = 10
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS     = 600
@@ -91,6 +93,7 @@ type SuricataEngine struct {
 	aiRepoBranch                   string
 	aiRepoPath                     string
 	autoUpdateEnabled              bool
+	navigatorLayerFilePath         string
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
 	detections.IOManager
@@ -135,6 +138,7 @@ func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS)
 	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", DEFAULT_AUTO_UPDATE_ENABLED)
+	e.navigatorLayerFilePath = module.GetStringDefault(config, "navigatorLayerFilePath", DEFAULT_NAVIGATOR_LAYER_FILE_PATH)
 
 	enable := module.GetStringArrayDefault(config, "enableRegex", DEFAULT_ENABLE_REGEX)
 	disable := module.GetStringArrayDefault(config, "disableRegex", DEFAULT_DISABLE_REGEX)
@@ -1579,6 +1583,12 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 		"syncDeleteUnreferenced": deleteUnreferenced,
 	}).Info("suricata community diff")
 
+	// Generate navigator layer after sync
+	err = e.generateNavigatorLayer(e.srv.Context, logger)
+	if err != nil {
+		logger.WithError(err).Error("failed to generate navigator layer")
+	}
+
 	return errMap, nil
 }
 
@@ -2118,4 +2128,70 @@ func filterOutSIDsInRanges(sids []string, ranges []Range) []string {
 	}
 
 	return filtered
+}
+
+func (e *SuricataEngine) generateNavigatorLayer(ctx context.Context, logger *log.Entry) error {
+	// Get all enabled rules
+	enabledRules, err := e.srv.Detectionstore.GetAllDetections(ctx,
+		model.WithEngine(model.EngineNameSuricata),
+		model.WithEnabled(true))
+	if err != nil {
+		return fmt.Errorf("unable to get enabled detections: %w", err)
+	}
+
+	// Parse the template
+	var layer map[string]interface{}
+	if err := json.Unmarshal([]byte(detections.DefaultNavigatorLayer), &layer); err != nil {
+		return fmt.Errorf("failed to parse navigator layer template: %w", err)
+	}
+
+	layer["name"] = "Detections Coverage - Suricata"
+
+	// Track unique techniques
+	uniqueTechniques := make(map[string]struct{})
+
+	// Iterate through enabled rules and collect techniques
+	for _, rule := range enabledRules {
+		if rule.Content == "" {
+			continue
+		}
+
+		// Extract technique ID from metadata field in Suricata rule
+		metadataRegex := regexp.MustCompile(`mitre_technique_id\s+([^,;\s]+)`)
+		if match := metadataRegex.FindStringSubmatch(rule.Content); len(match) > 1 {
+			techniqueID := strings.ToUpper(match[1])
+			uniqueTechniques[techniqueID] = struct{}{}
+		}
+	}
+
+	// Create techniques array
+	techniques := make([]map[string]interface{}, 0)
+	for techniqueID := range uniqueTechniques {
+		technique := map[string]interface{}{
+			"techniqueID": techniqueID,
+			"score":       100,
+			"enabled":     true,
+		}
+		techniques = append(techniques, technique)
+	}
+
+	// Add techniques to layer
+	layer["techniques"] = techniques
+
+	// Convert to JSON and log
+	jsonData, err := json.MarshalIndent(layer, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal navigator layer: %w", err)
+	}
+
+	logger.WithField("navigator_layer", string(jsonData)).Debug("generated navigator layer")
+
+	// Write JSON to file
+	if err := e.WriteFile(e.navigatorLayerFilePath, jsonData, 0644); err != nil {
+		return fmt.Errorf("failed to write navigator layer to file: %w", err)
+	}
+
+	logger.WithField("file_path", e.navigatorLayerFilePath).Info("wrote navigator layer to file")
+
+	return nil
 }

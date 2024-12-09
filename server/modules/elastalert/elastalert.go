@@ -2134,6 +2134,8 @@ func (e *ElastAlertEngine) generateNavigatorLayer(ctx context.Context, logger *l
 		return fmt.Errorf("failed to parse navigator layer template: %w", err)
 	}
 
+	layer["name"] = "Detections Coverage - Sigma"
+
 	// Use a map to track unique techniques
 	uniqueTechniques := make(map[string]struct{})
 
@@ -2186,7 +2188,7 @@ func (e *ElastAlertEngine) generateNavigatorLayer(ctx context.Context, logger *l
 		return fmt.Errorf("failed to marshal navigator layer: %w", err)
 	}
 
-	logger.WithField("navigator_layer", string(jsonData)).Info("generated navigator layer")
+	logger.WithField("navigator_layer", string(jsonData)).Debug("generated navigator layer")
 
 	// Write JSON to file
 	if err := e.WriteFile(e.navigatorLayerFilePath, jsonData, 0644); err != nil {
