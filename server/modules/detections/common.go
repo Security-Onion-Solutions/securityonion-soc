@@ -19,6 +19,60 @@ const (
 	MAX_OVERRIDE_NOTE_LENGTH = 150
 )
 
+var DefaultNavigatorLayer = `{
+	"name": "Detections Coverage",
+	"versions": {
+		"attack": "16",
+		"navigator": "5.1.0",
+		"layer": "4.5"
+	},
+	"domain": "enterprise-attack",
+	"description": "",
+	"filters": {
+		"platforms": [
+			"Linux",
+			"macOS",
+			"Windows",
+			"Network",
+			"PRE",
+			"Containers",
+			"Office 365",
+			"SaaS",
+			"Google Workspace",
+			"IaaS",
+			"Azure AD"
+		]
+	},
+	"sorting": 0,
+	"layout": {
+		"layout": "side",
+		"aggregateFunction": "average",
+		"showID": false,
+		"showName": true,
+		"showAggregateScores": false,
+		"countUnscored": false,
+		"expandedSubtechniques": "none"
+	},
+	"hideDisabled": false,
+	"techniques": [],
+	"gradient": {
+		"colors": [
+			"#ffffff00",
+			"#66b1ffff"
+		],
+		"minValue": 0,
+		"maxValue": 100
+	},
+	"legendItems": [],
+	"metadata": [],
+	"links": [],
+	"showTacticRowBackground": false,
+	"tacticRowBackground": "#dddddd",
+	"selectTechniquesAcrossTactics": true,
+	"selectSubtechniquesWithParent": false,
+	"selectVisibleTechniques": false
+}`
+
 type Detectionstore interface {
 	GetDetection(ctx context.Context, detectId string) (*model.Detection, error)
 	UpdateDetection(ctx context.Context, detect *model.Detection) (*model.Detection, error)

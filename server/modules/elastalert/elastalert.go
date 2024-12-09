@@ -137,61 +137,8 @@ type ElastAlertEngine struct {
 	detections.IntegrityCheckerData
 	detections.IOManager
 	model.EngineState
+	navigatorLayerFilePath string
 }
-
-var defaultNavigatorLayer = `{
-	"name": "Detections Coverage",
-	"versions": {
-		"attack": "14",
-		"navigator": "5.1.0",
-		"layer": "4.5"
-	},
-	"domain": "enterprise-attack",
-	"description": "",
-	"filters": {
-		"platforms": [
-			"Linux",
-			"macOS",
-			"Windows",
-			"Network",
-			"PRE",
-			"Containers",
-			"Office 365",
-			"SaaS",
-			"Google Workspace",
-			"IaaS",
-			"Azure AD"
-		]
-	},
-	"sorting": 0,
-	"layout": {
-		"layout": "side",
-		"aggregateFunction": "average",
-		"showID": false,
-		"showName": true,
-		"showAggregateScores": false,
-		"countUnscored": false,
-		"expandedSubtechniques": "none"
-	},
-	"hideDisabled": false,
-	"techniques": [],
-	"gradient": {
-		"colors": [
-			"#ffffff00",
-			"#66b1ffff"
-		],
-		"minValue": 0,
-		"maxValue": 100
-	},
-	"legendItems": [],
-	"metadata": [],
-	"links": [],
-	"showTacticRowBackground": false,
-	"tacticRowBackground": "#dddddd",
-	"selectTechniquesAcrossTactics": true,
-	"selectSubtechniquesWithParent": false,
-	"selectVisibleTechniques": false
-}`
 
 func loadEnabledSigmaRules(config module.ModuleConfig) []RuleCriteria {
 	defaultRuleFilters := []RuleCriteria{
@@ -365,6 +312,8 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.aiRepoUrl = module.GetStringDefault(config, "aiRepoUrl", DEFAULT_AI_REPO)
 	e.aiRepoBranch = module.GetStringDefault(config, "aiRepoBranch", DEFAULT_AI_REPO_BRANCH)
 	e.aiRepoPath = module.GetStringDefault(config, "aiRepoPath", DEFAULT_AI_REPO_PATH)
+
+	e.navigatorLayerFilePath = module.GetStringDefault(config, "navigatorLayerFilePath", DEFAULT_NAVIGATOR_LAYER_FILE_PATH)
 
 	return nil
 }
@@ -2181,7 +2130,7 @@ func (e *ElastAlertEngine) generateNavigatorLayer(ctx context.Context, logger *l
 
 	// Parse the template
 	var layer map[string]interface{}
-	if err := json.Unmarshal([]byte(defaultNavigatorLayer), &layer); err != nil {
+	if err := json.Unmarshal([]byte(detections.DefaultNavigatorLayer), &layer); err != nil {
 		return fmt.Errorf("failed to parse navigator layer template: %w", err)
 	}
 
@@ -2240,11 +2189,11 @@ func (e *ElastAlertEngine) generateNavigatorLayer(ctx context.Context, logger *l
 	logger.WithField("navigator_layer", string(jsonData)).Info("generated navigator layer")
 
 	// Write JSON to file
-	if err := e.WriteFile(DEFAULT_NAVIGATOR_LAYER_FILE_PATH, jsonData, 0644); err != nil {
+	if err := e.WriteFile(e.navigatorLayerFilePath, jsonData, 0644); err != nil {
 		return fmt.Errorf("failed to write navigator layer to file: %w", err)
 	}
 
-	logger.WithField("file_path", DEFAULT_NAVIGATOR_LAYER_FILE_PATH).Info("wrote navigator layer to file")
+	logger.WithField("file_path", e.navigatorLayerFilePath).Info("wrote navigator layer to file")
 
 	return nil
 }
