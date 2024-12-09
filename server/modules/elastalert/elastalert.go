@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -59,6 +60,7 @@ const (
 	DEFAULT_SIGMA_PIPELINE_SO_FILE                   = "/opt/sensoroni/sigma_so_pipeline.yaml"
 	DEFAULT_REPOS_FOLDER                             = "/opt/sensoroni/sigma/repos"
 	DEFAULT_STATE_FILE_PATH                          = "/opt/sensoroni/fingerprints/elastalertengine.state"
+	DEFAULT_NAVIGATOR_LAYER_FILE_PATH                = "/opt/sensoroni/navigator/navigator_layer_sigma.json"
 	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS        = 300
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT       = 10
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS        = 600
@@ -136,6 +138,60 @@ type ElastAlertEngine struct {
 	detections.IOManager
 	model.EngineState
 }
+
+var defaultNavigatorLayer = `{
+	"name": "Detections Coverage",
+	"versions": {
+		"attack": "14",
+		"navigator": "5.1.0",
+		"layer": "4.5"
+	},
+	"domain": "enterprise-attack",
+	"description": "",
+	"filters": {
+		"platforms": [
+			"Linux",
+			"macOS",
+			"Windows",
+			"Network",
+			"PRE",
+			"Containers",
+			"Office 365",
+			"SaaS",
+			"Google Workspace",
+			"IaaS",
+			"Azure AD"
+		]
+	},
+	"sorting": 0,
+	"layout": {
+		"layout": "side",
+		"aggregateFunction": "average",
+		"showID": false,
+		"showName": true,
+		"showAggregateScores": false,
+		"countUnscored": false,
+		"expandedSubtechniques": "none"
+	},
+	"hideDisabled": false,
+	"techniques": [],
+	"gradient": {
+		"colors": [
+			"#ffffff00",
+			"#66b1ffff"
+		],
+		"minValue": 0,
+		"maxValue": 100
+	},
+	"legendItems": [],
+	"metadata": [],
+	"links": [],
+	"showTacticRowBackground": false,
+	"tacticRowBackground": "#dddddd",
+	"selectTechniquesAcrossTactics": true,
+	"selectSubtechniquesWithParent": false,
+	"selectVisibleTechniques": false
+}`
 
 func loadEnabledSigmaRules(config module.ModuleConfig) []RuleCriteria {
 	defaultRuleFilters := []RuleCriteria{
@@ -898,6 +954,12 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 		} else {
 			logger.Info("post-sync integrity check passed")
 		}
+	}
+
+	// Generate navigator layer with enabled rules
+	err = e.generateNavigatorLayer(e.srv.Context, logger)
+	if err != nil {
+		logger.WithError(err).Error("failed to generate navigator layer")
 	}
 
 	return nil
@@ -2106,4 +2168,83 @@ func (e *ElastAlertEngine) getDeployedPublicIds() (publicIds []string, err error
 	}
 
 	return publicIds, nil
+}
+
+func (e *ElastAlertEngine) generateNavigatorLayer(ctx context.Context, logger *log.Entry) error {
+	// Get all enabled rules
+	enabledRules, err := e.srv.Detectionstore.GetAllDetections(ctx,
+		model.WithEngine(model.EngineNameElastAlert),
+		model.WithEnabled(true))
+	if err != nil {
+		return fmt.Errorf("unable to get enabled detections: %w", err)
+	}
+
+	// Parse the template
+	var layer map[string]interface{}
+	if err := json.Unmarshal([]byte(defaultNavigatorLayer), &layer); err != nil {
+		return fmt.Errorf("failed to parse navigator layer template: %w", err)
+	}
+
+	// Use a map to track unique techniques
+	uniqueTechniques := make(map[string]struct{})
+
+	// Compile regex for matching MITRE ATT&CK technique IDs
+	techniqueRegex := regexp.MustCompile(`(?i)t\d{4}(?:\.\d{3})?`)
+
+	// Iterate through enabled rules and collect techniques
+	for _, rule := range enabledRules {
+		if rule.Content == "" {
+			continue
+		}
+
+		// Parse YAML content
+		var content struct {
+			Tags []string `yaml:"tags"`
+		}
+		err := yaml.Unmarshal([]byte(rule.Content), &content)
+		if err != nil {
+			logger.WithError(err).WithField("rule.uuid", rule.PublicID).Warn("failed to parse rule content")
+			continue
+		}
+
+		// Extract technique IDs from tags
+		for _, tag := range content.Tags {
+			if match := techniqueRegex.FindString(tag); match != "" {
+				// Extract just the base technique ID (t1234) if it has a sub-technique
+				baseTechnique := strings.ToUpper(strings.Split(match, ".")[0])
+				uniqueTechniques[baseTechnique] = struct{}{}
+			}
+		}
+	}
+
+	// Create techniques array
+	techniques := make([]map[string]interface{}, 0)
+	for techniqueID := range uniqueTechniques {
+		technique := map[string]interface{}{
+			"techniqueID": techniqueID,
+			"score":       100,
+			"enabled":     true,
+		}
+		techniques = append(techniques, technique)
+	}
+
+	// Add techniques to layer
+	layer["techniques"] = techniques
+
+	// Convert to JSON and log
+	jsonData, err := json.MarshalIndent(layer, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal navigator layer: %w", err)
+	}
+
+	logger.WithField("navigator_layer", string(jsonData)).Info("generated navigator layer")
+
+	// Write JSON to file
+	if err := e.WriteFile(DEFAULT_NAVIGATOR_LAYER_FILE_PATH, jsonData, 0644); err != nil {
+		return fmt.Errorf("failed to write navigator layer to file: %w", err)
+	}
+
+	logger.WithField("file_path", DEFAULT_NAVIGATOR_LAYER_FILE_PATH).Info("wrote navigator layer to file")
+
+	return nil
 }
