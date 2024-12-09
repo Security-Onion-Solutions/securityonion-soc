@@ -21,9 +21,9 @@ components.push({
 			'alertInfo': {
 				type: Object, // { item: obj, groupIndex: ?num }
 				required: true,
-			}
+			},
 		},
-		emits: ['close', 'ack'],
+		emits: ['close', 'ack', 'chooseCase', 'highlightPrevAlertDetection', 'highlightNextAlertDetection'],
 		watch: {
 			'detection': 'onDetectionChange',
 		},
@@ -135,8 +135,8 @@ components.push({
 			ack() {
 				this.emit('ack', [this.alertInfo.item, null, false, null, this.alertInfo.groupIndex]);
 			},
-			escalate() {
-				this.emit('ack', [this.alertInfo.item, null, true, /* ToDo: case id */null, this.alertInfo.groupIndex]);
+			escalate(e) {
+				this.emit('chooseCase', [e, this.alertInfo.item, this.alertInfo.groupIndex]);
 			},
 			extractSummary() {
 				switch (this.detection.engine) {
@@ -267,7 +267,6 @@ components.push({
 				}
 			},
 			toggleStatus() {
-				console.log(this.detection.isEnabled);
 				if (!this.detection.isEnabled) {
 					this.ackExistingDialog = true;
 				} else {
@@ -302,10 +301,9 @@ components.push({
 				this.cleanupOverrides();
 
 				try {
-					let response;
 					this.loading = true;
 
-					response = await this.$root.papi.put('/detection', this.detection, {
+					let response = await this.$root.papi.put('/detection', this.detection, {
 						validateStatus: (s) => (s >= 200 && s < 300)
 					});
 

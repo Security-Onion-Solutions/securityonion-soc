@@ -747,7 +747,7 @@
                         </tr>
                       </template>
                       <template #item="{ item, index, isExpanded, toggleExpand, internalItem }">
-                        <tr :data-aid="'events_item_' + category">
+                        <tr :data-aid="'events_item_' + category" :class="{'highlight-row': highlightedDetection && highlightedDetection.publicId === item['rule.uuid']}">
                           <td>
                             <v-btn id="expandEvent" variant="text" icon size="x-small" @click="toggleExpand(internalItem)" class="theme-icon">
                               <v-icon v-if="isExpanded(internalItem)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp" :data-aid="'events_item_collapse_' + category">fa-angle-down</v-icon>
@@ -823,8 +823,16 @@
               <v-spacer></v-spacer>
             </v-row>
           </v-col>
-          <v-col v-if="isCategory('alerts') && highlightedDetection" cols="3">
-            <Detection-Panel :detection="highlightedDetection" :zone="zone" :alertInfo="highlightedAlertInfo" :ackColor="colorSeverity(highlightedAlertInfo.item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged'))" @close="highlightedDetection = highlightedAlertInfo = null;" @ack="panelAck($event)" />
+          <v-col v-if="isCategory('alerts') && highlightedDetection" cols="3" class="pa-0">
+            <Detection-Panel
+            :detection="highlightedDetection"
+            :zone="zone"
+            :alertInfo="highlightedAlertInfo"
+            :ackColor="colorSeverity(highlightedAlertInfo.item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged'))"
+            @close="highlightedDetection = highlightedAlertInfo = null;"
+            @ack="panelAck($event)"
+            @chooseCase="toggleEscalationMenu(...$event)"
+             />
           </v-col>
         </v-row>
         <v-menu v-model="quickActionVisible" :target="quickActionTarget" :data-aid="'context_menu_' + category">
@@ -5804,7 +5812,7 @@
     </script>
 
     <script type="text/x-template" id="component-detection-panel">
-      <div v-if="detection" id="detection-col" class="theme-background theme-text" style="position:relative;">
+      <div v-if="detection" id="detection-col" class="theme-background theme-text pa-0" style="top: 64px; position:sticky; width: 100%; max-height: calc(100vh - 64px - 40px); overflow-y: auto;">
         <v-btn icon variant="text" size="small" class="float-end">
           <v-icon @click="closeDetectionPanel()">fa-times</v-icon>
         </v-btn>
@@ -5816,6 +5824,7 @@
               </h3>
             </v-expansion-panel-title>
             <v-expansion-panel-text>
+              <h3 class="my-2">{{detection.title}}</h3>
               <div class="contrast-bg pa-4">
                 <div class="header">{{i18n.summary}} <v-icon v-if="showAiSummary()" :title="i18n.aiGenSummary" class="unset-vertical-align" data-aid="detection_summary_ai_indicator">fa-flask</v-icon></div>
                 <div class="summary" data-aid="detection_ai_summary_display" v-if="showAiSummary()">
@@ -5830,7 +5839,7 @@
               </div>
               <div class="quicklinks pt-2">
                 <v-btn icon variant="text" size="small" @click="ack()"><v-icon :color="ackColor">fa-bell</v-icon></v-btn>
-                <v-btn icon variant="text" size="small" @click="escalate()"><v-icon color="primary">fa-exclamation-triangle</v-icon></v-btn>
+                <v-btn icon variant="text" size="small" @click="escalate($event)"><v-icon color="primary">fa-exclamation-triangle</v-icon></v-btn>
                 <v-btn icon variant="text" size="small" class="no-link" :to="{name:'detection',params: {id:detection.id}}" target="_blank"><v-icon color="primary">fa-magnifying-glass</v-icon></v-btn>
               </div>
               <div class="pa-4">

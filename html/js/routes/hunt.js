@@ -640,6 +640,7 @@ const huntComponent = {
     panelAck(args) {
       args[1] = !this.isFilterToggleEnabled('acknowledged');
       console.log(args);
+      this.ack(...args);
     },
     async ack(item, acknowledge, escalate, caseId, groupIdx) {
       this.$root.startLoading();
@@ -1071,7 +1072,7 @@ const huntComponent = {
         this.escalationMenuVisible = true;
       });
     },
-    toggleQuickAction(domEvent, event, groupIdx, field, value) {
+    async toggleQuickAction(domEvent, event, groupIdx, field, value) {
       if (!domEvent || this.quickActionVisible || this.escalationMenuVisible || window?.getSelection()?.type === 'Range') {
         this.quickActionVisible = false;
         this.escalationMenuVisible = false;
@@ -1083,27 +1084,8 @@ const huntComponent = {
         this.quickActionDetId = null;
         this.tuneDetectionTabTarget = null;
 
-        let oldHighlight = this.highlightedDetection?.publicId;
-        this.highlightedDetection = null;
-
-        // don't slow down the UI with this call
         if (id) {
-          this.$root.papi.get(`detection/public/${id}`).then(response => {
-            this.quickActionDetId = response.data.id;
-
-            if (!oldHighlight || response.data?.publicId !== oldHighlight) {
-              this.highlightedDetection = response.data;
-              this.highlightedAlertInfo = {
-                item: event,
-                groupIndex: typeof groupIdx === 'number' ? groupIdx : -1,
-              };
-            }
-
-            this.tuneDetectionTabTarget = 'tuning';
-            if (response.data.engine === 'strelka') {
-              this.tuneDetectionTabTarget = 'source';
-            }
-          });
+          this.highlightDetection(id, event, groupIdx);
         }
       }
 
@@ -2399,6 +2381,26 @@ const huntComponent = {
     },
     huntQueryWidth() {
       return this.$refs.huntQueryInput?.$el?.clientWidth || 0;
+    },
+    async highlightDetection(publicId, event, groupIdx) {
+      let oldHighlight = this.highlightedDetection?.publicId;
+      this.highlightedDetection = null;
+
+      const response = await this.$root.papi.get(`detection/public/${publicId}`);
+      this.quickActionDetId = response.data.id;
+
+      if (!oldHighlight || response.data?.publicId !== oldHighlight) {
+        this.highlightedDetection = response.data;
+        this.highlightedAlertInfo = {
+          item: event,
+          groupIndex: typeof groupIdx === 'number' ? groupIdx : -1,
+        };
+      }
+
+      this.tuneDetectionTabTarget = 'tuning';
+      if (response.data.engine === 'strelka') {
+        this.tuneDetectionTabTarget = 'source';
+      }
     },
   }
 };
