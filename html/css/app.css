@@ -904,7 +904,12 @@ ul ul ul {
 }
 
 #detection-col {
-  width: 400px;
+  top: 70px;
+  position: sticky;
+  width: 100%;
+  max-height: calc(100vh - 64px - 40px - 10px);
+  overflow-y: auto;
+  padding-right: 12px !important;
 }
 
 .v-theme--dark .highlight-row {
