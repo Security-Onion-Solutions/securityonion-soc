@@ -657,7 +657,7 @@ func (h *CaseHandler) getArtifact(w http.ResponseWriter, r *http.Request) {
 // @Security     bearer[cases/read, events/read]
 // @Param        id  path  string  true  "The case ID"
 // @Produce      json
-// @Success      200  {array}   object		 "The array of history objects. Note that each object can contain completely different fields as other history objects."
+// @Success      200  {array}  model.Auditable  "The array of history audit objects. Note that these objects will also contain either the Case fields, Comment fields, Artifact fields, or RelatedEvent fields."
 // @Failure      400        "The provided input object or parameters are malformed or invalid"
 // @Failure      401        "Request was not properly authenticated"
 // @Failure      403        "Insufficient permissions for this request"

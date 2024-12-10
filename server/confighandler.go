@@ -75,7 +75,7 @@ func (h *ConfigHandler) getConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	settings, err := h.server.Configstore.GetSettings(ctx, advanced)
 	if err != nil {
-		web.Respond(w, r, http.StatusBadRequest, err)
+		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -88,6 +88,7 @@ func (h *ConfigHandler) getConfig(w http.ResponseWriter, r *http.Request) {
 // @Security     bearer[config/read,config/write]
 // @param        request  body  model.Setting  true  "The setting to update. Only non-metadata fields are required, specifically 'id' and 'value', and optionally the 'nodeId' field if this is being applied to a specific node"
 // @Success      200                         "The new setting values has been saved"
+// @Failure      400         "The provided input object or parameters are malformed or invalid"
 // @Failure      401                         "Request was not properly authenticated"
 // @Failure      403                         "Insufficient permissions for this request"
 // @Failure      405                         "Configuration module has not been loaded"
@@ -146,6 +147,7 @@ func (h *ConfigHandler) putSync(w http.ResponseWriter, r *http.Request) {
 // @Param        id  path  string  true  "The setting ID to remove" example(elastalert.alerter_parameters)
 // @Param        minion  path  string  false  "The optional node ID from which to remove this setting. If omitted, the setting will be removed from the global grid and any node-specific setting values will remain in place." example(chi-so-001_standalone)
 // @Success      200                         "The setting was successfully removed"
+// @Failure      400         "The provided input object or parameters are malformed or invalid"
 // @Failure      401                         "Request was not properly authenticated"
 // @Failure      403                         "Insufficient permissions for this request"
 // @Failure      405                         "Configuration module has not been loaded"

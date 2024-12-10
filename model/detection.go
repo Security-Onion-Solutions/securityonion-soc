@@ -91,86 +91,126 @@ var (
 )
 
 type DetectionEngine struct {
-	Name        string      `json:"name"`
-	IDType      IDType      `json:"idType"`
-	ScanType    ScanType    `json:"scanType"`
-	SigLanguage SigLanguage `json:"sigLanguage"`
+	// The name of the detection engine
+	Name string `json:"name" enum:"elastalert,strelka,suricata"`
+	// Which ID methodology is used by this detection engine
+	IDType IDType `json:"idType" enum:"sid,uuid"`
+	// Which scan methodology is used by this detection engine
+	ScanType ScanType `json:"scanType" enum:"files,packets,elastic"`
+	// The language that this detection engine uses.
+	SigLanguage SigLanguage `json:"sigLanguage" enums:"sigma,suricata,yara"`
 }
 
 type Detection struct {
 	Auditable
-	PublicID      string      `json:"publicId"`
-	Title         string      `json:"title"`
-	Severity      Severity    `json:"severity"`
-	Author        string      `json:"author"`
-	Category      string      `json:"category,omitempty"`
-	Description   string      `json:"description"`
-	Content       string      `json:"content"`
-	IsEnabled     bool        `json:"isEnabled"`
-	IsReporting   bool        `json:"isReporting"`
-	IsCommunity   bool        `json:"isCommunity"`
-	Engine        EngineName  `json:"engine"`
-	Language      SigLanguage `json:"language"`
-	Overrides     []*Override `json:"overrides"` // Tuning
-	Tags          []string    `json:"tags"`
-	Ruleset       string      `json:"ruleset"`
-	License       string      `json:"license"`
-	SourceCreated *time.Time  `json:"sourceCreated"`
-	SourceUpdated *time.Time  `json:"sourceUpdated"`
+	// The public ID shared across all Security Onion grids
+	PublicID string `json:"publicId" example:"923421c7-9b1e-45d4-80cc-e21d060c8723"`
+	// Summarized title of the detection
+	Title string `json:"title" example:"Security Onion - Grid Node Login Failure (SSH)"`
+	// The severity classification of this detection
+	Severity Severity `json:"severity" enums:"unknown,informational,low,medium,high,critical"`
+	// The original author of this detection. This can be a mixture of email address, organization name, first name, or any freeform value
+	Author string `json:"author" example:"Security Onion Solutions"`
+	// Used for categorizing this detection into a broader grouping such as firewalls or web servers
+	Category string `json:"category,omitempty" example:"ps_script"`
+	// Brief explanation of this detection
+	Description string `json:"description" example:"Detects when a user fails to login to a grid node via SSH. Review associated logs for username and source IP."`
+	// The underlying detection rule source content
+	Content string `json:"content" example:"title: CobaltStrike Named Pipe\nid: ...\n logsource:\n ...\ncondition: selection\nfalsepositives:\n..."`
+	// Indicates whether this detection is currently enabled in the Security Onion grid
+	IsEnabled bool `json:"isEnabled" example:"true"`
+	// Indicates whether this detection is currently triggering alerts. Not yet fully implemented.
+	IsReporting bool `json:"isReporting" example:"false"`
+	// Indicates whether this detection originated from a community ruleset. Duplicated detections will show 'false'.
+	IsCommunity bool `json:"isCommunity" example:"true"`
+	// The engine that processes this detection
+	Engine EngineName `json:"engine"`
+	// The language that this detection uses.
+	Language SigLanguage `json:"language" enums:"sigma,suricata,yara"`
+	// A list of tuning overrides that apply to this detection.
+	Overrides []*Override `json:"overrides"` // Tuning
+	// An optional list of user-defined tags, useful for grouping similar detections together
+	Tags []string `json:"tags"`
+	// The name of the ruleset from which this detection originated, or __custom__ if the ruleset was created outside of a ruleset
+	Ruleset string `json:"ruleset" example:"__custom__"`
+	// The license that applies to this detection
+	License string `json:"license" example:"DRL"`
+	// The date and time when the underlying detection rule source was created. This is not when the detection was added to this grid.
+	SourceCreated *time.Time `json:"sourceCreated"`
+	// The date and time when the underlying detection rule source was last updated. This is not when the detection was updated in this grid.
+	SourceUpdated *time.Time `json:"sourceUpdated"`
 
 	// these are transient fields, not stored in the database
 	PendingDelete bool `json:"-"`
 	PersistChange bool `json:"-"`
 
-	// elastalert - sigma only
-	Product string `json:"product,omitempty"`
-	Service string `json:"service,omitempty"`
+	// Used by Sigma rules for filtering log outputs to a specific product, such as the Windows eventlog types
+	Product string `json:"product,omitempty" example:"windows"`
+	// Used by Sigma rules for filtering a subset of log ouputs to a specific server.
+	Service string `json:"service,omitempty" example:"sshd"`
 
 	// AI Description fields
 	*AiFields `json:",omitempty"`
 }
 
 type AiFields struct {
-	AiSummary         string `json:"aiSummary"`
-	AiSummaryReviewed bool   `json:"aiSummaryReviewed"`
-	IsAiSummaryStale  bool   `json:"isSummaryStale"`
+	// The detection summary generated by artificial intelligence
+	AiSummary string `json:"aiSummary" example:"This rule detects antivirus alerts reporting the presence of ransomware,..."`
+	// Reserved for future use
+	AiSummaryReviewed bool `json:"aiSummaryReviewed" example:"false"`
+	// Indicates whether this detection's AI summary is current (true) or if the detection source has changed but the generated summary has not yet been updated to reflect the change"
+	IsAiSummaryStale bool `json:"isSummaryStale" example:"false"`
 }
 
 type DetectionComment struct {
 	Auditable
-	DetectionId string `json:"detectionId"`
-	Value       string `json:"value"`
+	// The detection ID to which this comment was added
+	DetectionId string `json:"detectionId" example:"CwR86o8B-vS4HfrbMV5Y"`
+	// The comment text or markdown content
+	Value string `json:"value" example:"This detection is known to trigger FPs on the first of the month"`
 }
 
 // Note: JSON tags are used when storing the object in ElasticSearch,
 // YAML tags are used when storing the object in a YAML config file (Suricata).
 
 type Override struct {
-	Type               OverrideType `json:"type" yaml:"type"`
-	IsEnabled          bool         `json:"isEnabled" yaml:"-"`
-	Note               string       `json:"note" yaml:"-"`
-	CreatedAt          time.Time    `json:"createdAt" yaml:"-"`
-	UpdatedAt          time.Time    `json:"updatedAt" yaml:"-"`
+	// The type of override; available values vary between detection engines
+	Type OverrideType `json:"type" yaml:"type" enums:"customFilter,modify,suppress,threshold"`
+	// Indicates whether this override is enabled
+	IsEnabled bool `json:"isEnabled" yaml:"-" example:"true"`
+	// An optional operational note for this override
+	Note string `json:"note" yaml:"-" example:"Exclude the SMTP server due to FPs"`
+	// The date and time when this override was created
+	CreatedAt time.Time `json:"createdAt" yaml:"-" example:"2024-12-06T14:36:45.579994541Z"`
+	// The date and time when this override was last modified
+	UpdatedAt          time.Time `json:"updatedAt" yaml:"-" example:"2024-12-06T14:36:45.579994541Z"`
 	OverrideParameters `yaml:",inline"`
 }
 
 type OverrideParameters struct {
-	// suricata
-	Regex         *string `json:"regex,omitempty" yaml:"regex,omitempty"`        // modify
-	Value         *string `json:"value,omitempty" yaml:"value,omitempty"`        // modify
-	GenID         *int    `json:"-" yaml:"gen_id,omitempty"`                     // suppress, threshold
-	ThresholdType *string `json:"thresholdType,omitempty" yaml:"type,omitempty"` // threshold
-	Track         *string `json:"track,omitempty" yaml:"track,omitempty"`        // suppress, threshold
-	IP            *string `json:"ip,omitempty" yaml:"ip,omitempty"`              // suppress
-	Count         *int    `json:"count,omitempty" yaml:"count,omitempty"`        // threshold
-	Seconds       *int    `json:"seconds,omitempty" yaml:"seconds,omitempty"`    // threshold
+	// (suricata only) Regular expression for matching modify overrides
+	Regex *string `json:"regex,omitempty" yaml:"regex,omitempty" example:"content:xyz"` // modify
+	// (suricata only) The value needing to match the regex in order for this override to apply
+	Value *string `json:"value,omitempty" yaml:"value,omitempty" example:"content:xyz content:!1.2.3.4/32"` // modify
+	GenID *int    `json:"-" yaml:"gen_id,omitempty"`                                                        // suppress, threshold
+	// (suricata only) Threshold type, for threshold overrides
+	ThresholdType *string `json:"thresholdType,omitempty" yaml:"type,omitempty" enums:"threshold,limit,both"` // threshold
+	// (suricata only) Track type for suppress and threshold overrides (by_either only applies to suppress overrides)
+	Track *string `json:"track,omitempty" yaml:"track,omitempty" enums:"by_src,by_dst,by_either"` // suppress, threshold
+	// (suricata only) The IP address or network value, must be in CIDR format: x.x.x.x/y
+	IP *string `json:"ip,omitempty" yaml:"ip,omitempty" example:"1.2.3.4/32"` // suppress
+	// (suricata only) For treshold overrides, this is the number of occurrences allowed, within the given seconds interval, before this detection triggers an alert. Must be non-negative and greater than 0.
+	Count *int `json:"count,omitempty" yaml:"count,omitempty" example:"10"` // threshold
+	// (suricata only) For treshold overrides, this is the number of seconds that the occurrence threshold must occur within. Must be non-negative and greater than 0.
+	Seconds *int `json:"seconds,omitempty" yaml:"seconds,omitempty" example:"120"` // threshold
 
-	// elastalert
-	CustomFilter *string `json:"customFilter,omitempty" yaml:"-"` // customFilter
+	// (elastalert only) The custom filter applied to Sigma detections before the detection will trigger an alert.
+	CustomFilter *string `json:"customFilter,omitempty" yaml:"-" example:"sofilter:\n  user.name: dresden"` // customFilter
 }
 
 type OverrideNoteUpdate struct {
-	Note string `json:"note"`
+	// The note content to replace on an existing override.
+	Note string `json:"note" example:"corrected note"`
 }
 
 func (o Override) PrepareForSigma() (map[string]interface{}, error) {
