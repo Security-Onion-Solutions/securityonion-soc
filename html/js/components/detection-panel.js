@@ -59,14 +59,6 @@ components.push({
 				rules: {
 					required: value => (value && value.length > 0) || this.$root.i18n.required,
 					number: value => (!isNaN(+value) && Number.isInteger(parseFloat(value))) || this.$root.i18n.required,
-					hours: value => (!value || /^\d{1,4}(\.\d{1,4})?$/.test(value)) || this.$root.i18n.invalidHours,
-					minLength: limit => value => (value && value.length >= limit) || this.$root.i18n.ruleMinLen,
-					shortLengthLimit: value => (value.length < 100) || this.$root.i18n.required,
-					noteLengthLimit: value => (value.length <= MAX_OVERRIDE_NOTE_LENGTH) || this.$root.i18n.ruleMaxLen,
-					longLengthLimit: value => (encodeURI(value).split(/%..|./).length - 1 < 10000000) || this.$root.i18n.required,
-					fileSizeLimit: value => (value == null || value.length == 0 || value[0].size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
-					fileNotEmpty: value => (value == null || value.length == 0 || value[0].size > 0) || this.$root.i18n.fileEmpty,
-					fileRequired: value => (value != null && value.length != 0) || this.$root.i18n.required,
 					cidrFormat: value => (!value ||
 						/^!?\$[a-z_][a-z0-9_]*$/i.test(value) || // Suricata variable
 						/^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\/(3[0-2]|[12]\d|\d)$/.test(value) || // IPv4 CIDR
@@ -118,10 +110,11 @@ components.push({
 				editForm: { valid: true },
 				panels: [0, 1],
 				ackExistingDialog: false,
+				showUnreviewedAiSummaries: false,
 			}
 		},
 		mounted() {
-
+			this.$root.loadParameters('detection', this.initParams);
 		},
 		methods: {
 			onDetectionChange() {
@@ -131,6 +124,9 @@ components.push({
 				}
 
 				this.panel = [0, 1];
+			},
+			initParams(params) {
+				this.showUnreviewedAiSummaries = !!params?.['showUnreviewedAiSummaries'];
 			},
 			ack() {
 				this.emit('ack', [this.alertInfo.item, null, false, null, this.alertInfo.groupIndex]);
@@ -168,7 +164,7 @@ components.push({
 				}
 			},
 			showAiSummary() {
-				return !!(this.detection?.aiSummary && this.detection?.aiSummaryReviewed);
+				return !!(this?.detection?.aiSummary && (this.detection.aiSummaryReviewed || this.showUnreviewedAiSummaries));
 			},
 			canAddOverride() {
 				return this.detection.engine !== 'strelka';
@@ -423,11 +419,6 @@ components.push({
 						throw this.i18n.idMismatchErr;
 					}
 
-					const detLogic = this.extractElastAlertDetection();
-					if (!detLogic) {
-						throw this.i18n.invalidDetectionElastAlertMissingDetectionLogic;
-					}
-
 					return null;
 				} catch (e) {
 					return e;
@@ -555,7 +546,7 @@ components.push({
 				this.saveDetection(false);
 			},
 			closeDetectionPanel() {
-				this.emit('close', null);
+				this.emit('close');
 			}
 		},
 	}
