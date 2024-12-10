@@ -39,10 +39,20 @@ func RegisterClientsRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Put("/{id}", h.putClient)
 
 		r.Delete("/{id}", h.deleteClient)
-		r.Delete("/{id}/permission/{resource}/{privilege}", h.deleteClientPermission)
+		r.Delete("/{id}/permission/{privilege}/{privilege}", h.deleteClientPermission)
 	})
 }
 
+// @Summary      Get API Clients
+// @Description  Returns all existing API clients.
+// @Tags	     Clients
+// @Security     bearer[clients/read]
+// @Produce      json
+// @Success      200  {array}   model.Client		 "The array of Client objects"
+// @Failure      401                                 "Request was not properly authenticated"
+// @Failure      403                                 "Insufficient permissions for this request"
+// @Failure      500                                 "Internal SOC error; review SOC logs"
+// @Router       /connect/clients/ [get]
 func (h *ClientsHandler) getClients(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -55,6 +65,17 @@ func (h *ClientsHandler) getClients(w http.ResponseWriter, r *http.Request) {
 	web.Respond(w, r, http.StatusOK, clients)
 }
 
+// @Summary      Create API Clients
+// @Description  Creates a new API client with the given Client object
+// @Tags	     Clients
+// @Security     bearer[clients/write]
+// @param        request body model.Client true "The Client object to create. Only the 'name' and 'note' properties are used."
+// @Produce      json
+// @Success      200  {object}  model.Client		 "The new Client object with its newly assigned ID and secret included"
+// @Failure      401                                 "Request was not properly authenticated"
+// @Failure      403                                 "Insufficient permissions for this request"
+// @Failure      500                                 "Internal SOC error; review SOC logs"
+// @Router       /connect/clients/ [post]
 func (h *ClientsHandler) postClient(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -82,6 +103,18 @@ func (h *ClientsHandler) postClient(w http.ResponseWriter, r *http.Request) {
 	web.Respond(w, r, http.StatusOK, new_client)
 }
 
+// @Summary      Assign Client Permission
+// @Description  Assigns a permission to an existing API client.
+// @Description  A new access token is not required. Future API calls will immediately be affected.
+// @Tags	     Clients
+// @Security     bearer[clients/write]
+// @param        id  path  string  true  "The API client ID to which the permission will be assigned" example(socl_my_new_api_client)
+// @param        perm  path  string  true  "The permission to assign" example(events/read)
+// @Success      200                         "The permission was successfully assigned"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/clients/{id}/permission/{perm} [post]
 func (h *ClientsHandler) postAddPermission(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -111,6 +144,18 @@ func (h *ClientsHandler) postAddPermission(w http.ResponseWriter, r *http.Reques
 	web.Respond(w, r, http.StatusOK, nil)
 }
 
+// @Summary      Regenerate Client Secret
+// @Description  Regenerates a new client secret for the given API client ID.
+// @Description  Pre-existing access tokens that have not yet expired will remain valid through their expiration.
+// @Tags	     Clients
+// @Security     bearer[clients/write]
+// @param        id  path  string  true  "The API client ID" example(socl_my_new_api_client)
+// @Produce      json
+// @Success      200  {object}   model.Client		 "A client object with the new secret populated"
+// @Failure      401                                 "Request was not properly authenticated"
+// @Failure      403                                 "Insufficient permissions for this request"
+// @Failure      500                                 "Internal SOC error; review SOC logs"
+// @Router       /connect/clients/{id}/secret/ [get]
 func (h *ClientsHandler) getGeneratedSecret(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -130,6 +175,17 @@ func (h *ClientsHandler) getGeneratedSecret(w http.ResponseWriter, r *http.Reque
 	web.Respond(w, r, http.StatusOK, client)
 }
 
+// @Summary      Update API Clients
+// @Description  Updates an existing API client with the given Client object
+// @Tags	     Clients
+// @Security     bearer[clients/write]
+// @param        request body model.Client true "The Client object to update. Only the 'name', and 'note' properties are used."
+// @Produce      json
+// @Success      200  {object}  model.Client		 "The updated Client object"
+// @Failure      401                                 "Request was not properly authenticated"
+// @Failure      403                                 "Insufficient permissions for this request"
+// @Failure      500                                 "Internal SOC error; review SOC logs"
+// @Router       /connect/clients/{id} [put]
 func (h *ClientsHandler) putClient(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -163,6 +219,16 @@ func (h *ClientsHandler) putClient(w http.ResponseWriter, r *http.Request) {
 	web.Respond(w, r, http.StatusOK, client)
 }
 
+// @Summary      Remove API Client
+// @Description  Removes an API client. Future API requests from this client will immediately be rejected.
+// @Tags	     Clients
+// @Security     bearer[clients/write]
+// @param        id  path  string  true  "The API client ID" example(socl_my_new_api_client)
+// @Success      200                         "The API client was successfully removed"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/clients/{id}/ [delete]
 func (h *ClientsHandler) deleteClient(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -182,6 +248,18 @@ func (h *ClientsHandler) deleteClient(w http.ResponseWriter, r *http.Request) {
 	web.Respond(w, r, http.StatusOK, nil)
 }
 
+// @Summary      Remove Client Permission
+// @Description  Removes a permission from an existing API client.
+// @Description  A new access token is not required. Future API calls will immediately be affected.
+// @Tags	     Clients
+// @Security     bearer[clients/write]
+// @param        id  path  string  true  "The API client ID from which the permission will be removed" example(socl_my_new_api_client)
+// @param        perm  path  string  true  "The permission to remove" example(events/read)
+// @Success      200                         "The permission was successfully removed"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/clients/{id}/permission/{perm} [delete]
 func (h *ClientsHandler) deleteClientPermission(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

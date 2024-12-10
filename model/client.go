@@ -16,14 +16,22 @@ const MAX_CLIENT_NAME_LEN = 50
 const MAX_PERMISSION_LEN = 50
 
 type Client struct {
-	Id             string    `json:"id"`
-	CreateTime     time.Time `json:"createTime"`
-	UpdateTime     time.Time `json:"updateTime"`
-	Name           string    `json:"name"`
-	Secret         string    `json:"secret"`
-	Permissions    []string  `json:"permissions"`
-	Note           string    `json:"note"`
-	SearchUsername string    `json:"searchUsername"`
+	// The ID assigned to this API client
+	Id string `json:"id" example:"socl_my_new_api_client"`
+	// The date and time when this API client was created
+	CreateTime time.Time `json:"createTime" example:"2024-12-03T21:04:59.970640998Z"`
+	// The date and time when this API client was last modified
+	UpdateTime time.Time `json:"updateTime" example:"0001-01-01T00:00:00Z"`
+	// The client name
+	Name string `json:"name" example:"My New API Client"`
+	// The generated client secret (only returned on new client creation and regeneration of the secret)
+	Secret string `json:"secret" example:"ERa5jp9Z6WbLm1YC5FCM"`
+	// The list of permissions assigned to this client
+	Permissions []string `json:"permissions" example:"events/read,cases/read,cases/write"`
+	// An optional note to associate with this API client
+	Note string `json:"note" example:"This client is used for automating case observable attachments"`
+	// An optional Elasticsearch user that this client will run as when accessing event data
+	SearchUsername string `json:"searchUsername" example:""`
 }
 
 func NewClient() *Client {

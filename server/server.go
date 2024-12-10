@@ -3,7 +3,6 @@
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
-
 package server
 
 import (
@@ -755,4 +754,60 @@ func (server *Server) GetTimezones() []string {
 		zones = append(zones, "Zulu")
 	}
 	return zones
+}
+
+// @title           Security Onion Connect API
+// @version         1.0
+// @description     Perform SOC operations via server-to-server integration using a client API account via OAuth2.0.
+// @termsOfService  https://securityonion.net/terms/
+
+// @contact.name   Community Support
+// @contact.url    http://github.com/security-onion-solutions/securityonion/discussions
+
+// @license.name  Elastic 2.0
+// @license.url   https://securityonion.net/terms/
+
+// @securityDefinitions.oauth2.application bearer
+// @in header
+// @name Authorization
+// @tokenUrl /oauth2/token
+// @description This API call requires an access token be provided in the Authorization header via the Bearer scheme. Obtain an access token as documented in the /oauth2/token authorization endpoint. The required RBAC permissions for this API method are listed above.
+
+// @securityDefinitions.basic basic
+
+// @externalDocs.description  Security Onion Documentation Online
+// @externalDocs.url          https://docs.securityonion.net
+
+// @Summary      Obtain Access Token
+// @Description  Exchanges a client ID and client secret for a temporary access token needed for calling Security Onion Connect API methods.
+// @Description  The client ID and client secret are provided within the SOC Administration -> API Clients screen, when creating a new API client or when regenerating an API client's secret.
+// @Description  The client secrets are only temporarily visible during those two specific times.
+// @Description  The returned access token will expire within 1-2 hours, by default. Ensure the custom integration application is capable of exchanging for a new access token prior to the expiration.
+// @Accept       x-www-form-urlencoded
+// @Produce      json
+// @Tags	     Authentication
+// @Security     basic
+// @Param        request  body  AccessTokenRequest true "The body of this POST request must contain the required fields as shown below."
+// @Success      200  {object}  AccessTokenResponse "The access token response object."
+// @Failure      400         "Missing basic authorization credentials or missing grant_type form parameter in request body"
+// @Failure      401         "Invalid client credentials"
+// @Failure      500         "Internal error; review Hydra logs"
+// @Router       /oauth2/token [post]
+func obtain_access_token_unused_for_docs() {
+}
+
+type AccessTokenRequest struct {
+	// Must be set to client_credentials
+	GrantType string `json:"grant_type" example:"client_credentials" validate:"required"`
+}
+
+type AccessTokenResponse struct {
+	// The access token to be used for all other Connect API requests."
+	AccessToken string `json:"access_token" example:"ory_at_arkgYuJXYp5zwU8Xyh8-URW6QIUbaZVf4JwDPoNZh0g.YcF4W5i2qoQ2RTWZvLYLNIeUjGaUhYuewz9Gua0y7YA"`
+	// Amount of time, in seconds, before the access token expires."
+	ExpiresIn int `json:"expires_in" example:"3599"`
+	// Scope will be blank due to the use of application-level RBAC for authorization.
+	Scope string `json:"scope" example:""`
+	// Token type will always be 'bearer' for access token exchanges.
+	TokenType string `json:"token_type" example:"bearer"`
 }

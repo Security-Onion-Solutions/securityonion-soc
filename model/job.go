@@ -19,9 +19,12 @@ const JobStatusDeleted = 3
 const DEFAULT_JOB_KIND = "pcap"
 
 type JobResult struct {
-	Id      string      `json:"id"`
-	Data    interface{} `json:"data"`
-	Summary string      `json:"summary"`
+	// The ID or name of the result; varies depending on the job processor
+	Id string `json:"id" example:"malwarebazaar"`
+	// The job processor specific data outputs; varies depending on the job processor
+	Data interface{} `json:"data"`
+	// Brief summarization of the job result
+	Summary string `json:"summary" example:"no result"`
 }
 
 func NewJobResult(id string, data interface{}, summary string) *JobResult {
@@ -33,22 +36,38 @@ func NewJobResult(id string, data interface{}, summary string) *JobResult {
 }
 
 type Job struct {
-	Id             int          `json:"id"`
-	CreateTime     time.Time    `json:"createTime"`
-	Status         int          `json:"status"`
-	CompleteTime   time.Time    `json:"completeTime"`
-	FailTime       time.Time    `json:"failTime"`
-	Failure        string       `json:"failure"`
-	FailCount      int          `json:"failCount"`
-	Owner          string       `json:"owner"`
-	NodeId         string       `json:"nodeId"`
-	LegacySensorId string       `json:"sensorId"`
-	FileExtension  string       `json:"fileExtension"`
-	Filter         *Filter      `json:"filter"`
-	UserId         string       `json:"userId"`
-	Kind           string       `json:"kind"`
-	Results        []*JobResult `json:"results"`
-	Size           int          `json:"size"`
+	// The unique Job ID
+	Id int `json:"id" example:"1004"`
+	// The date and time when the job was created
+	CreateTime time.Time `json:"createTime" example:"2024-10-07T06:45:49.52456415Z"`
+	// The current state of the job. 0 = pending, 1 = complete, 2 = incomplete, 3 = deleted
+	Status int `json:"status" example:"1"`
+	// The date and time when the job was completed
+	CompleteTime time.Time `json:"completeTime" example:"2024-10-07T12:15:09.12424556Z"`
+	// The date and time when the job last failed and was marked incomplete
+	FailTime time.Time `json:"failTime" example:"0001-01-01T00:00:00Z"`
+	// The failure reason
+	Failure string `json:"failure" example:""`
+	// The number of times the job was processed but failed
+	FailCount int `json:"failCount" example:"0"`
+	// Owner field [not actively used by the API]
+	Owner string `json:"owner" example:""`
+	// The unique node ID that is responsible for completing this job
+	NodeId string `json:"nodeId" example:"sensor-001"`
+	// Legacy sensor ID field
+	LegacySensorId string `json:"sensorId"`
+	// The file extension for any attached job result/output data
+	FileExtension string `json:"fileExtension" example:"bin"`
+	// Optional filter for the job, typically used for packet filtering
+	Filter *Filter `json:"filter"`
+	// The unique user ID that created this job
+	UserId string `json:"userId" example:"39314a6b-0b79-4210-1233-4e3fbcd7bfec"`
+	// The kind of job that this object represents; blank values represent pcap jobs
+	Kind string `json:"kind" example:"analyze"`
+	// The array of job results; will be empty for jobs that only attach output streams
+	Results []*JobResult `json:"results"`
+	// The size of the job stream output, if a stream output was attached
+	Size int `json:"size" example:"3781"`
 }
 
 func NewJob() *Job {

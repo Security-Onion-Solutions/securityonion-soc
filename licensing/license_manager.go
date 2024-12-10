@@ -21,6 +21,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
+	"fmt"
 	"io"
 	"math/rand"
 	"os"
@@ -79,16 +80,26 @@ type licenseManager struct {
 }
 
 type LicenseKey struct {
-	Effective  time.Time `json:"effective"`
-	Expiration time.Time `json:"expiration"`
-	Name       string    `json:"name"`
-	Id         string    `json:"id"`
-	Licensee   string    `json:"licensee"`
-	Features   []string  `json:"features"`
-	Users      int       `json:"users"`
-	Nodes      int       `json:"nodes"`
-	SocUrl     string    `json:"socUrl"`
-	DataUrl    string    `json:"dataUrl"`
+	// The date and time when this license key becomes effective
+	Effective time.Time `json:"effective" example:"2024-08-22T00:00:00Z"`
+	// The date and time when this license key expires
+	Expiration time.Time `json:"expiration" example:"2025-08-22T23:59:59Z"`
+	// The name of the license key.
+	Name string `json:"name" example:"Security Onion Pro"`
+	// The unique ID for this license key
+	Id string `json:"id" example:"acme_corp_20240822"`
+	// The name of the organization to which this license key was issued
+	Licensee string `json:"licensee" example:"Acme Corp"`
+	// The features included with this license key
+	Features []string `json:"features" example:"NTF"`
+	// The count of users supported by this license key; 0 = unlimited
+	Users int `json:"users" example:"0"`
+	// The count of critical grid nodes supported by this license key; 0 = unlimited
+	Nodes int `json:"nodes" example:"5"`
+	// The base URL required to be used by this license key
+	SocUrl string `json:"socUrl" example:"acme-so-manager"`
+	// The backend data event storage hostname required to be used by this license key
+	DataUrl string `json:"dataUrl" example:""`
 }
 
 type SignedLicenseKey struct {
@@ -161,6 +172,8 @@ func verify(key string) (*LicenseKey, error) {
 	if parseErr != nil {
 		return nil, parseErr
 	}
+
+	fmt.Printf("bytes: %x\n", msgBytes)
 
 	hash := sha256.Sum256(msgBytes)
 	return license, rsa.VerifyPKCS1v15(pubKey, crypto.SHA256, hash[:], sigBytes)

@@ -29,10 +29,25 @@ import (
 var errPublicIdExists = errors.New("publicId already exists for this engine")
 
 type BulkOp struct {
-	IDs       []string `json:"ids"`
-	Query     *string  `json:"query"`
-	NewStatus bool     `json:"-"`
-	Delete    bool     `json:"-"`
+	// The list of detection IDs to bulk update when a specific query is not provided
+	IDs []string `json:"ids" example:"zC73PJABrNRFAsnEYkqy,XgaI6o8B-vS4HfrbYcce"`
+	// The query string to use for matching detections, or leave empty if providing a list of internal detection IDs"
+	Query     *string `json:"query" example:"severity: low AND ruleset: ETOPEN"`
+	NewStatus bool    `json:"-"`
+	Delete    bool    `json:"-"`
+}
+
+type BulkResp struct {
+	// The count of detections that were submitted to be updated or deleted in bulk
+	Count int `json:"count" example:"120"`
+}
+
+type ConvertContentResp struct {
+	Query string `json:"query" example:"somefield: somevalue AND anotherfield: 123"`
+}
+
+type GenPublicIdResp struct {
+	PublicId string `json:"publicId" example:"fb58abf3-0a6d-49af-b1a0-1eeabec07716"`
 }
 
 type DetectionHandler struct {
@@ -76,6 +91,17 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 	})
 }
 
+// @Summary      Get Detection
+// @Description  Retrieves a specific detection given an internal detection ID. This ID is unique only to this particular grid.
+// @Tags	     Detections
+// @Security     bearer[detections/read, events/read]
+// @Param        id  path  string  true  "The detection ID to retrieve" example(zC73PJABrNRFAsnEYkqy)
+// @Success      200  {object}  model.Detection  "The detection was successfully retrieved"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      404                         "Detection not found"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/detection/{id} [get]
 func (h *DetectionHandler) getDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
@@ -112,6 +138,17 @@ func (h *DetectionHandler) getDetection(w http.ResponseWriter, r *http.Request) 
 	web.Respond(w, r, http.StatusOK, detect)
 }
 
+// @Summary      Get Detection By Public ID
+// @Description  Retrieves a specific detection given a public detection ID. This ID is assigned by the ruleset author.
+// @Tags	     Detections
+// @Security     bearer[detections/read, events/read]
+// @Param        id  path  string  true  "The detection public ID to retrieve" example(2038279)
+// @Success      200  {object}  model.Detection  "The detection was successfully retrieved"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      404                         "Detection not found"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/detection/public/{id} [get]
 func (h *DetectionHandler) getByPublicId(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -136,6 +173,21 @@ func (h *DetectionHandler) getByPublicId(w http.ResponseWriter, r *http.Request)
 	web.Respond(w, r, http.StatusOK, detect)
 }
 
+// @Summary      Create Detection
+// @Description  Creates a new detection by providing the detection object as the request body, in JSON format.
+// @Description  Detections marked as community detections cannot be created with this API.
+// @Description  While the public ID is required for some engines, the internal ID will always be populated by the server.
+// @Tags	     Detections
+// @Security     bearer[detections/read, events/read, detections/write,events/write, users/read]
+// @Param        request  body  model.Detection  true  "The detection object to create"
+// @Success      200  {object}  model.Detection  "Returns the detection that was successfully created"
+// @Success      205  {object}  model.Detection  "Returns the detection that was successfully created and the status has been modified by a filter"
+// @Failure      400         "The provided input object or parameters are malformed or invalid"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      409                         "Public ID conflicts with existing detection"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/detection/ [post]
 func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -253,6 +305,17 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 	web.Respond(w, r, http.StatusOK, detect)
 }
 
+// @Summary      Get Detection History
+// @Description  Retrieves a specific detection's audit history given an internal detection ID.
+// @Tags	     Detections
+// @Security     bearer[detections/read, events/read]
+// @Param        id  path  string  true  "The detection ID to retrieve" example(zC73PJABrNRFAsnEYkqy)
+// @Success      200  {array}  model.Auditable  "The array of history audit objects. Note that these objects will also contain either the Detection fields or a DetectionComment fields."
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      404                         "Detection not found"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/detection/{id}/history [get]
 func (h *DetectionHandler) getDetectionHistory(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -270,6 +333,17 @@ func (h *DetectionHandler) getDetectionHistory(w http.ResponseWriter, r *http.Re
 	web.Respond(w, r, http.StatusOK, obj)
 }
 
+// @Summary      Duplicate Detection
+// @Description  Copies the detection associated with the given ID into a new detection. A new ID will be assigned to the duplicated detection.
+// @Tags	     Detections
+// @Security     bearer[detections/read, events/read, detections/write, events/write]
+// @Param        id  path  string  true  "The detection ID to duplicate" example(zC73PJABrNRFAsnEYkqy)
+// @Success      200  {object}  model.Detection  "The duplicated detection object."
+// @Failure      400                         "The detection engine specified in the detection object does not support duplicated detections"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/detection/{id}/duplicate [post]
 func (h *DetectionHandler) duplicateDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -302,6 +376,20 @@ func (h *DetectionHandler) duplicateDetection(w http.ResponseWriter, r *http.Req
 	web.Respond(w, r, http.StatusOK, detect)
 }
 
+// @Summary      Update Detection
+// @Description  Updates an existing detection by providing the new detection object as the request body, in JSON format.
+// @Tags	     Detections
+// @Security     bearer[detections/read, events/read, detections/write, events/write]
+// @Param        request  body  model.Detection  true  "The detection object to create"
+// @Success      200  {object}  model.Detection  "Returns the detection that was successfully updated"
+// @Success      205  {object}  model.Detection  "Returns the detection that was successfully updated; note that the status has been modified by a filter"
+// @Success      206  {object}  model.Detection  "Returns the detection that was successfully updated; note that the detection was disabled in order to complete the sync"
+// @Failure      400         "The provided input object or parameters are malformed or invalid"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      409                         "Public ID conflicts with existing detection"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/detection/ [put]
 func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
@@ -424,6 +512,19 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 	web.Respond(w, r, http.StatusOK, detect)
 }
 
+// @Summary      Update Override Note
+// @Description  Updates an existing override note.
+// @Tags	     Detections
+// @Security     bearer[detections/read, events/read, detections/write, events/write]
+// @Param        id  path  string  true  "The internal detection ID" example(zC73PJABrNRFAsnEYkqy)
+// @Param        overrideIndex path number  true  "The 0-based index of the override within the detection" example(0)
+// @Param        request body model.OverrideNoteUpdate true "The note object that will replace the existing override note"
+// @Success      200         "The override note was updated successfully"
+// @Failure      400         "The provided input object or parameters are malformed or invalid"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/detection/{id}/override/{overrideIndex}/note [put]
 func (h *DetectionHandler) updateOverrideNote(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -457,6 +558,17 @@ func (h *DetectionHandler) updateOverrideNote(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// @Summary      Delete Detection
+// @Description  Deletes an existing detection.
+// @Tags	     Detections
+// @Security     bearer[detections/read, events/read, detections/write, events/write]
+// @Param        id  path  string  true  "The internal detection ID" example(zC73PJABrNRFAsnEYkqy)
+// @Success      200         "The override note was deleted successfully"
+// @Failure      400         "The provided input object or parameters are malformed or invalid"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/detection/{id} [delete]
 func (h *DetectionHandler) deleteDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -491,6 +603,18 @@ func (h *DetectionHandler) deleteDetection(w http.ResponseWriter, r *http.Reques
 	web.Respond(w, r, http.StatusOK, errMap)
 }
 
+// @Summary      Manage Detections in Bulk
+// @Description  Enables, disables, or deletes multiple detections asynchronously.
+// @Tags	     Detections
+// @Security     bearer[detections/read, events/read, detections/write, events/write]
+// @Param        newStatus  path  string  true  "The new status of the detection" Enums(enable, disable, delete)
+// @Param        request  body  BulkOp  true  "The bulk detection search criteria"
+// @Success      200  {object}  BulkResp "Returns the bulk operation response"
+// @Failure      400         "The provided input object or parameters are malformed or invalid"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/detection/bulk/{newStatus} [post]
 func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
@@ -864,6 +988,18 @@ func syncLocalDetections(ctx context.Context, srv *Server, detections []*model.D
 	return errMap, nil
 }
 
+// @Summary      Create Detection Comment
+// @Description  Creates a new detection comment for the detection associated with the provided detection ID.
+// @Tags	     Detections
+// @Security     bearer[detections/read, events/read, detections/write, events/write]
+// @Param        id  path  string  true  "The internal detection ID" example(zC73PJABrNRFAsnEYkqy)
+// @Param        request body model.DetectionComment true "A detection comment object with the new content; any provided detection ID will be ignored"
+// @Success      200  {object}  model.DetectionComment       "The comment has been successfully created"
+// @Failure      400                         "The provided input object or parameters are malformed or invalid"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/detection/comment/{id} [post]
 func (h *DetectionHandler) createComment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -888,6 +1024,17 @@ func (h *DetectionHandler) createComment(w http.ResponseWriter, r *http.Request)
 	web.Respond(w, r, http.StatusOK, obj)
 }
 
+// @Summary      Get Detection Comment
+// @Description  Retrieves the comment associated with the given comment ID.
+// @Tags	     Detections
+// @Security     bearer[detections/read, events/read]
+// @Param        id  path  string  true  "The detection comment ID" example(MeEcnpMB4OVrR03M4und)
+// @Success      200  {object}  model.DetectionComment         "The comment has been successfully retrieved"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      404                         "Detection was not found"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/detection/comment/{id} [get]
 func (h *DetectionHandler) getDetectionComment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -902,6 +1049,19 @@ func (h *DetectionHandler) getDetectionComment(w http.ResponseWriter, r *http.Re
 	web.Respond(w, r, http.StatusOK, obj)
 }
 
+// @Summary      Update Detection Comment
+// @Description  Updates the comment associated with the given comment ID with the provided content.
+// @Tags	     Detections
+// @Security     bearer[detections/read, events/read, detections/write, events/write]
+// @Param        id  path  string  true  "The detection comment ID" example(MeEcnpMB4OVrR03M4und)
+// @Param        request body model.DetectionComment true "A detection object with the new content"
+// @Success      200         "The comment has been successfully deleted"
+// @Failure      400                         "The provided input object or parameters are malformed or invalid"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      404                         "Detection was not found"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/detection/comment/{id} [put]
 func (h *DetectionHandler) updateComment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -926,6 +1086,17 @@ func (h *DetectionHandler) updateComment(w http.ResponseWriter, r *http.Request)
 	web.Respond(w, r, http.StatusOK, obj)
 }
 
+// @Summary      Delete Detection Comment
+// @Description  Deletes the comment associated with the given comment ID.
+// @Tags	     Detections
+// @Security     bearer[detections/read, events/read, detections/write, events/write]
+// @Param        id  path  string  true  "The detection comment ID" example(MeEcnpMB4OVrR03M4und)
+// @Success      200         "The comment has been successfully deleted"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      404                         "Detection was not found"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/detection/comment/{id} [delete]
 func (h *DetectionHandler) deleteComment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -940,6 +1111,17 @@ func (h *DetectionHandler) deleteComment(w http.ResponseWriter, r *http.Request)
 	web.Respond(w, r, http.StatusOK, nil)
 }
 
+// @Summary      Get Detection Comments
+// @Description  Retrieves the comments associated with the given detection ID.
+// @Tags	     Detections
+// @Security     bearer[detections/read, events/read]
+// @Param        id  path  string  true  "The internal detection ID" example(zC73PJABrNRFAsnEYkqy)
+// @Success      200 {array}  model.DetectionComment  "The comments have been successfully retrieved"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      404                         "Detection was not found"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/detection/{id}/comment [get]
 func (h *DetectionHandler) getDetectionComments(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -959,6 +1141,18 @@ func (h *DetectionHandler) getDetectionComments(w http.ResponseWriter, r *http.R
 	web.Respond(w, r, http.StatusOK, obj)
 }
 
+// @Summary      Convert Rule Query
+// @Description  Converts the given Sigma Detection rule into an Elasticsearch query.
+// @Description  NOTE: The API method only works with Sigma rules.
+// @Tags	     Detections
+// @Security     bearer
+// @Param        request  body  model.Detection  true  "The Sigma detection object with the Content and optional Overrides populated"
+// @Success      200  {object}  ConvertContentResp  "The rule has been converted successfully"
+// @Failure      400                         "The provided input object or parameters are malformed or invalid"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/detection/convert [post]
 func (h *DetectionHandler) convertContent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -976,11 +1170,21 @@ func (h *DetectionHandler) convertContent(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	web.Respond(w, r, http.StatusOK, map[string]string{
-		"query": eaQuery,
-	})
+	web.Respond(w, r, http.StatusOK, ConvertContentResp{Query: eaQuery})
 }
 
+// @Summary      Sync Detections
+// @Description  Initiates an asynchronous synchronization of the specified detection engine.
+// @Tags	     Detections
+// @Security     bearer[detections/write]
+// @Param        engine  path  string  true  "The detection engine to sync" Enums(all, elastalert, suricata, strelka")
+// @Param        type  path  string  true  "The type of sync to perform" Enums(full, update)
+// @Success      200    "The sync has been queued"
+// @Failure      400         "The provided input object or parameters are malformed or invalid"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Router       /connect/detection/sync/{engine}/{type} [post]
 func (h *DetectionHandler) syncEngineDetections(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -1012,6 +1216,18 @@ func (h *DetectionHandler) syncEngineDetections(w http.ResponseWriter, r *http.R
 	web.Respond(w, r, http.StatusOK, nil)
 }
 
+// @Summary      Generate Public ID
+// @Description  Requests the server generate an unused public ID.
+// @Tags	     Detections
+// @Security     bearer
+// @Param        engine  path  string  true  "The detection engine" Enums(elastalert, suricata")
+// @Success      200  {object}  GenPublicIdResp  "The ID has been generated"
+// @Failure      400         "The provided input object or parameters are malformed or invalid"
+// @Failure      401                         "Request was not properly authenticated"
+// @Failure      403                         "Insufficient permissions for this request"
+// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Failure      501                         "The specified detection engine does not support public IDs"
+// @Router       /connect/detection/{engine}/genpublicid [get]
 func (h *DetectionHandler) genPublicId(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -1033,9 +1249,7 @@ func (h *DetectionHandler) genPublicId(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	web.Respond(w, r, http.StatusOK, map[string]string{
-		"publicId": id,
-	})
+	web.Respond(w, r, http.StatusOK, GenPublicIdResp{PublicId: id})
 }
 
 func (h *DetectionHandler) PrepareForSave(ctx context.Context, detect *model.Detection, e DetectionEngine) error {

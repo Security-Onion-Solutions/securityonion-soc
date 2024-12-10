@@ -29,6 +29,18 @@ func RegisterJobsRoutes(srv *Server, r chi.Router, prefix string) {
 	})
 }
 
+// @Summary      Get Jobs
+// @Description  Retrieves the list of jobs that match the given parameters.
+// @Tags	     Jobs
+// @Security     bearer[jobs/read]
+// @Param        kind  query  string  true  "The job kind, such as 'analyze'. Specify an empty value for PCAP jobs" example(analyzer)
+// @Param        parameters[artifact][id]  query  string  false  "Optional case ID to locate matching analyze jobs" example(P5mgnpEB0JpjNDZz1bIN)
+// @Produce      json
+// @Success      200  {array}  model.Job     "The array of retrieved jobs"
+// @Failure      400       "The provided input object or parameters are malformed or invalid"
+// @Failure      401       "Request was not properly authenticated"
+// @Failure      500       "Internal SOC error; review SOC logs"
+// @Router       /connect/jobs/ [get]
 func (h *JobsHandler) getJobs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

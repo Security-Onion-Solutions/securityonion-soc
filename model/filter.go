@@ -15,14 +15,23 @@ const PROTOCOL_TCP = "tcp"
 const PROTOCOL_UDP = "udp"
 
 type Filter struct {
-	ImportId   string                 `json:"importId"`
-	BeginTime  time.Time              `json:"beginTime"`
-	EndTime    time.Time              `json:"endTime"`
-	SrcIp      string                 `json:"srcIp"`
-	SrcPort    int                    `json:"srcPort"`
-	DstIp      string                 `json:"dstIp"`
-	DstPort    int                    `json:"dstPort"`
-	Protocol   string                 `json:"protocol"`
+	// An optional import ID to use for locating related import packets
+	ImportId string `json:"importId" example:"bd77c8bc7498c795cc6608c5d45bd51b"`
+	// The begin time for the packet filtering; only packets with timestamps between the BeginTime and EndTime will be included in this filter
+	BeginTime time.Time `json:"beginTime" example:"2024-12-03T00:25:09.899Z"`
+	// The end time for the packet filtering; only packets with timestamps between the BeginTime and EndTime will be included in this filter
+	EndTime time.Time `json:"endTime" example:"2024-12-03T00:29:09.899Z"`
+	// The source IP to capture; Note that the PCAP job will allow destination and source data to be interchanged to ensure packets are not missed in certain capture scenarios"
+	SrcIp string `json:"srcIp" example:"44.2.12.63"`
+	// The source port to capture; Note that the PCAP job will allow destination and source data to be interchanged to ensure packets are not missed in certain capture scenarios"
+	SrcPort int `json:"srcPort" example:"55312"`
+	// The destintion IP to capture; Note that the PCAP job will allow destination and source data to be interchanged to ensure packets are not missed in certain capture scenarios"
+	DstIp string `json:"dstIp" example:"1.2.3.4"`
+	// The destination port to capture; Note that the PCAP job will allow destination and source data to be interchanged to ensure packets are not missed in certain capture scenarios"
+	DstPort int `json:"dstPort" example:"80"`
+	// Require the captured packets to be using this protocol"
+	Protocol string `json:"protocol" example:"tcp"`
+	// Additional, untyped filter parameters; used by non-PCAP job processors
 	Parameters map[string]interface{} `json:"parameters"`
 }
 

@@ -37,6 +37,18 @@ func RegisterUtilRoutes(srv *Server, r chi.Router, prefix string) {
 	})
 }
 
+// @Summary      DNS Reverse Lookup
+// @Description  Performs a reverse name lookup on a list of provided IP addresses. The configured list of DNS overrides is checked first, and if no match is found a DNS reverse lookup is performed. The input listed is deduplicated first to avoid repeated lookups in the same request.
+// @Tags	     Events
+// @Security     bearer
+// @Param        request  body  []string  true "List of IP addresses to reverse lookup"
+// @Accept       json
+// @Produce      json
+// @Success      200  {object}  map[string][]string   "Outputs mapping of IP address to a list of resolved domain names"
+// @Failure      400         "The provided input object or parameters are malformed or invalid"
+// @Failure      401         "Request was not properly authenticated"
+// @Failure      500         "Internal SOC error; review SOC logs"
+// @Router       /connect/reverse-lookup [put]
 func (h *UtilHandler) putReverseLookup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
