@@ -39,7 +39,7 @@ func RegisterClientsRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Put("/{id}", h.putClient)
 
 		r.Delete("/{id}", h.deleteClient)
-		r.Delete("/{id}/permission/{privilege}/{privilege}", h.deleteClientPermission)
+		r.Delete("/{id}/permission/{resource}/{privilege}", h.deleteClientPermission)
 	})
 }
 
