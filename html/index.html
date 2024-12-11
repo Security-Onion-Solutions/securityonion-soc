@@ -4622,7 +4622,7 @@
               <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
                 <tr>
                   <template v-for="header in columns" :key="header.key">
-                    <th :class="{'is-sorted': isSorted(header)}" v-if="showHeader(header)" :data-aid="'grid_header_' + header?.value?.toLowerCase()">
+                    <th :class="[ header.align, {'is-sorted': isSorted(header)} ]" v-if="showHeader(header)" :data-aid="'grid_header_' + header?.value?.toLowerCase()">
                       <span @click="toggleSort(header)">
                         {{ header.title }}
                       </span>
