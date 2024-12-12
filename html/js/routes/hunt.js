@@ -639,7 +639,6 @@ const huntComponent = {
     },
     panelAck(args) {
       args[1] = !this.isFilterToggleEnabled('acknowledged');
-      console.log(args);
       this.ack(...args);
     },
     async ack(item, acknowledge, escalate, caseId, groupIdx) {
@@ -702,6 +701,17 @@ const huntComponent = {
         } else if (escalate) {
           this.$root.showTip(this.i18n.escalatedEventTip);
           item['event.escalated'] = true;
+        }
+
+
+        if (this.highlightedAlertInfo) {
+          const inGroup = this.highlightedAlertInfo.groupIndex === -1
+
+          if ((!inGroup && item === this.highlightedAlertInfo.item) ||
+              (inGroup && this.highlightedDetection.publicId === item["rule.uuid"])) {
+            this.highlightedDetection = null;
+            this.highlightedAlertInfo = null;
+          }
         }
       } catch (error) {
         this.$root.showError(error);
