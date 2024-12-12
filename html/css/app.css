@@ -6,7 +6,7 @@
 // Elastic License 2.0.
 */
 /* Vuetify theme overrides */
-.v-application {
+.v-application, html {
   background-color: rgb(var(--v-theme-background)) !important;
 }
 
@@ -897,4 +897,55 @@ ul ul ul {
 
 .text-primary .v-switch__thumb {
   background-color: rgb(var(--v-theme-primary)) !important;
+}
+
+.groupBy {
+  position: relative;
+}
+
+#detection-col {
+  top: 70px;
+  position: sticky;
+  width: 100%;
+  max-height: calc(100vh - 64px - 40px - 10px);
+  overflow-y: auto;
+  padding-right: 12px !important;
+}
+
+.v-theme--dark .highlight-row {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.v-theme--light .highlight-row {
+  background-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+.quicklinks {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-around;
+}
+
+.quicklinks > i {
+  cursor: pointer;
+}
+
+.component-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #21212180;
+  z-index: 1000;
+}
+
+.component-overlay .v-container {
+  height: 100%;
+  width: 100%;
+}
+
+.component-overlay .v-progress-circular {
+  position: sticky;
+  top: 50%;
 }

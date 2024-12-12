@@ -15,6 +15,8 @@ const i18n = {
       acceptingMinionsTakesTime: 'Accepting new minions can take 1-2 minutes to complete.',
       access: 'Access Control',
       acknowledged: 'Acknowledged',
+      acknowledgeExistingAlertsTitle: 'Acknowledge Existing Alerts',
+      acknowledgeExistingAlertsText: 'Would you also like to acknowledge any existing alerts that match this detection?',
       ackMultipleTip: 'Acknowledging groups of alerts may take a while and will continue in the background.',
       ackPartialSuccess: 'The acknowledge request encountered an unexpected problem. Some events may not have been acknowledged.',
       ackSingleTip: 'Acknowledged alert and removed from view.',

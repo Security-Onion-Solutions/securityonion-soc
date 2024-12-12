@@ -957,7 +957,7 @@ test('handleChartClick', () => {
 
   expect(result).toBe(true);
   expect(comp.toggleQuickAction).toHaveBeenCalledTimes(1);
-  expect(comp.toggleQuickAction).toHaveBeenCalledWith(null, {}, 'MyField', 'value');
+  expect(comp.toggleQuickAction).toHaveBeenCalledWith(null, {}, 2, 'MyField', 'value');
 
   comp.toggleQuickAction = orig;
 });
@@ -1411,41 +1411,26 @@ test('bulkUpdateReport - filtered success', () => {
 );
 });
 
-test('toggleQuickAction - Tune Detection, Yara => Source Tab, Other Engines => Tuning Tab', () => {
+test('toggleQuickAction - Tune Detection, Yara => Source Tab, Other Engines => Tuning Tab', async () => {
   comp.category = 'alerts';
   comp.escalationMenuVisible = comp.quickActionVisible = false;
   let event = { "rule.uuid": 'id' }
 
-  let mockPromise = {
-    then: (f) => {
-      f({ data: { id: 'onionId', engine: 'elastalert' } });
-    }
-  };
-  resetPapi().mockPapi('get', mockPromise, null);
+  resetPapi().mockPapi('get', { data: { id: 'onionId', engine: 'elastalert' } }, null);
 
-  comp.toggleQuickAction({}, event, null, null);
+  await comp.toggleQuickAction({}, event, -1, null, null);
   expect(comp.quickActionDetId).toBe('onionId');
   expect(comp.tuneDetectionTabTarget).toBe('tuning');
 
-  mockPromise = {
-    then: (f) => {
-      f({ data: { id: 'onionId', engine: 'suricata' } });
-    }
-  };
-  resetPapi().mockPapi('get', mockPromise, null);
+  resetPapi().mockPapi('get', { data: { id: 'onionId', engine: 'suricata' } }, null);
 
-  comp.toggleQuickAction({}, event, null, null);
+  await comp.toggleQuickAction({}, event, -1, null, null);
   expect(comp.quickActionDetId).toBe('onionId');
   expect(comp.tuneDetectionTabTarget).toBe('tuning');
 
-  mockPromise = {
-    then: (f) => {
-      f({ data: { id: 'onionId', engine: 'strelka' } });
-    }
-  };
-  resetPapi().mockPapi('get', mockPromise, null);
+  resetPapi().mockPapi('get', { data: { id: 'onionId', engine: 'strelka' } }, null);
 
-  comp.toggleQuickAction({}, event, null, null);
+  await comp.toggleQuickAction({}, event, -1, null, null);
   expect(comp.quickActionDetId).toBe('onionId');
   expect(comp.tuneDetectionTabTarget).toBe('source');
 });
