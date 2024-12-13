@@ -23,3 +23,5 @@ type AdminUserstore interface {
 	DeleteRole(ctx context.Context, id string, role string) error
 	SyncUsers(ctx context.Context) error
 }
+
+//go:generate mockgen -destination mock/mock_adminuserstore.go -package mock . AdminUserstore

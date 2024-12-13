@@ -18,3 +18,5 @@ type GridMembersstore interface {
 	SendFile(ctx context.Context, node string, from string, to string, cleanup bool) error
 	Import(ctx context.Context, node string, file string, importer string) (*string, error)
 }
+
+//go:generate mockgen -destination mock/mock_gridmembersstore.go -package mock . GridMembersstore

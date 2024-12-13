@@ -12,8 +12,41 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/rbac"
+	"github.com/security-onion-solutions/securityonion-soc/server/mock"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 )
+
+func NewMockServer(t *testing.T, ctrl *gomock.Controller, cfg *config.ServerConfig) *Server {
+	srv := &Server{
+		Config: cfg,
+		Host: &web.Host{
+			Authorizer: &rbac.FakeAuthorizer{},
+		},
+		Datastore:        &FakeDatastore{},
+		AdminClientstore: mock.NewMockAdminClientstore(ctrl),
+		AdminUserstore:   mock.NewMockAdminUserstore(ctrl),
+		Clientstore:      mock.NewMockClientstore(ctrl),
+		Userstore:        mock.NewMockUserstore(ctrl),
+		Rolestore:        &FakeRolestore{},
+		Eventstore:       &FakeEventstore{},
+		Casestore:        mock.NewMockCasestore(ctrl),
+		Detectionstore:   mock.NewMockDetectionstore(ctrl),
+		Configstore:      &MemConfigStore{},
+		GridMembersstore: mock.NewMockGridMembersstore(ctrl),
+		Metrics:          &FakeMetrics{},
+		stoppedChan:      make(chan bool),
+		Authorizer:       &rbac.FakeAuthorizer{},
+		Agent:            nil,
+		Context:          context.Background(),
+		DetectionEngines: map[model.EngineName]DetectionEngine{},
+	}
+
+	return srv
+}
 
 func TestNewServer(tester *testing.T) {
 	licensing.Test("foo", 0, 0, "", "")
