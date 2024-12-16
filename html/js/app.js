@@ -300,9 +300,11 @@ $(document).ready(function () {
         };
 
         content = content.replace("{" + field + "}", encode(value));
-        content = content.replace("{" + field + "|base64}", encode(this.base64encode(value)));
+        if (content.indexOf("{" + field + "|base64}") !== -1)
+          content = content.replace("{" + field + "|base64}", encode(this.base64encode(value)));
         content = content.replace("{" + field + "|escape}", encode(this.escape(value)));
-        content = content.replace("{" + field + "|escape|base64}", encode(this.base64encode(this.escape(value))));
+        if (content.indexOf("{" + field + "|escape|base64}") !== -1)
+          content = content.replace("{" + field + "|escape|base64}", encode(this.base64encode(this.escape(value))));
         content = content.replace("{" + field + "|processAncestors}", encode(this.processAncestors(value)));
         return content;
       },

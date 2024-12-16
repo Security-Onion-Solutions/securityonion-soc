@@ -159,6 +159,9 @@ const huntComponent = {
     detectionEngineStatusQueries: {},
     highlightedDetection: null,
     highlightedAlertInfo: null,
+    showDetailsPanel: true,
+    openPanel: [0],
+    quickActionsOpen: [],
   }},
   created() {
     this.$root.initializeCharts();
@@ -217,6 +220,7 @@ const huntComponent = {
     'relativeTimeUnit': 'saveLocalSettings',
     'autohunt': 'saveLocalSettings',
     'autoRefreshInterval': 'resetRefreshTimer',
+    'showDetailsPanel': 'saveLocalSettings',
   },
   methods: {
     moment: moment,
@@ -274,6 +278,10 @@ const huntComponent = {
       this.loadLocalSettings();
       if (this.mruQueries.length > 0 && this.isAdvanced()) {
         this.query = this.mruQueries[0];
+      }
+
+      if (!this.isCategory('alerts')) {
+        this.showDetailsPanel = false;
       }
 
       if (this.$route.query.t) {
@@ -1094,8 +1102,20 @@ const huntComponent = {
         this.quickActionDetId = null;
         this.tuneDetectionTabTarget = null;
 
-        if (id) {
-          this.highlightDetection(id, event, groupIdx);
+        const getData = (response) => {
+          const det = response?.data || this.highlightedDetection;
+
+          this.quickActionDetId = det.id;
+          this.tuneDetectionTabTarget = 'tuning';
+          if (det.engine === 'strelka') {
+            this.tuneDetectionTabTarget = 'source';
+          }
+        };
+
+        if (id && !this.highlightedDetection) {
+          this.highlightDetection(id, event, groupIdx).then(getData);
+        } else {
+          this.$root.papi.get(`detection/public/${id}`).then(getData);
         }
       }
 
@@ -1155,8 +1175,13 @@ const huntComponent = {
         this.quickActionField = field;
         this.quickActionValue = value;
         this.quickActionTarget = [domEvent.clientX, domEvent.clientY];
-        this.$nextTick(() => {
+        this.$nextTick(async () => {
           this.quickActionVisible = true;
+
+          // displaying the menu is resetting the "open" array, so we need to un-reset it
+          const openCache = this.quickActionsOpen;
+          await this.$nextTick();
+          this.quickActionsOpen = openCache;
         });
       }
     },
@@ -1991,6 +2016,7 @@ const huntComponent = {
       this.saveSetting('relativeTimeValue', this.relativeTimeValue, this.params['relativeTimeValue']);
       this.saveSetting('relativeTimeUnit', this.relativeTimeUnit, this.params['relativeTimeUnit']);
       this.saveSetting('autohunt', this.autohunt, true);
+      this.saveSetting('showDetailsPanel', this.showDetailsPanel, this.isCategory('alerts'));
     },
     loadLocalSettings() {
       // Global settings
@@ -2010,6 +2036,7 @@ const huntComponent = {
       if (localStorage[prefix + '.relativeTimeValue']) this.relativeTimeValue = parseInt(localStorage[prefix + '.relativeTimeValue']);
       if (localStorage[prefix + '.relativeTimeUnit']) this.relativeTimeUnit = parseInt(localStorage[prefix + '.relativeTimeUnit']);
       if (localStorage[prefix + '.autohunt']) this.autohunt = localStorage[prefix + '.autohunt'] == 'true';
+      if (localStorage[prefix + '.showDetailsPanel']) this.showDetailsPanel = localStorage[prefix + '.showDetailsPanel'] == 'true';
 
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
@@ -2393,24 +2420,22 @@ const huntComponent = {
       return this.$refs.huntQueryInput?.$el?.clientWidth || 0;
     },
     async highlightDetection(publicId, event, groupIdx) {
-      let oldHighlight = this.highlightedDetection?.publicId;
-      this.highlightedDetection = null;
+      if (this.highlightedAlertInfo?.item === event) {
+        return;
+      }
 
-      const response = await this.$root.papi.get(`detection/public/${publicId}`);
-      this.quickActionDetId = response.data.id;
+      if (this.highlightedDetection?.publicId !== publicId) {
+        this.highlightedDetection = null;
 
-      if (!oldHighlight || response.data?.publicId !== oldHighlight) {
+        const response = await this.$root.papi.get(`detection/public/${publicId}`);
+
         this.highlightedDetection = response.data;
-        this.highlightedAlertInfo = {
-          item: event,
-          groupIndex: typeof groupIdx === 'number' ? groupIdx : -1,
-        };
       }
 
-      this.tuneDetectionTabTarget = 'tuning';
-      if (response.data.engine === 'strelka') {
-        this.tuneDetectionTabTarget = 'source';
-      }
+      this.highlightedAlertInfo = {
+        item: event,
+        groupIndex: typeof groupIdx === 'number' ? groupIdx : -1,
+      };
     },
   }
 };

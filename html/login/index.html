@@ -56,7 +56,7 @@
         <v-container v-if="showLoginForm" grid-list-sm class="pa-4">
           <v-row>
             <v-col class="mx-auto px-12" data-aid="login_banner">
-              <div id="banner" class="markdown-body" :inner-html.prop="banner | formatMarkdown"></div>
+              <div id="banner" class="markdown-body" v-html="formatMarkdown(banner)"></div>
             </v-col>
           </v-row>
           <v-row>
