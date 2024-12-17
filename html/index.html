@@ -834,7 +834,7 @@
               <v-spacer></v-spacer>
             </v-row>
           </v-col>
-          <v-col v-if="isCategory('alerts') && showDetailsPanel" cols="3" class="pa-0">
+          <v-col id="details-col" v-if="isCategory('alerts') && showDetailsPanel" cols="3" class="pa-0">
             <Detection-Panel
             v-if="highlightedDetection"
             :detection="highlightedDetection"
