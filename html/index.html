@@ -325,7 +325,7 @@
     <script type="text/x-template" id="page-hunt">
       <v-container fluid data-aid="hunt_screen">
         <v-row>
-          <v-col :cols="highlightedDetection ? 9 : 12">
+          <v-col :cols="showDetailsPanel ? 9 : 12">
             <v-row>
               <v-col cols="12" lg="3">
                 <h2 v-text="i18n[category]"></h2>
@@ -349,6 +349,9 @@
                           density="compact" hide-details class="my-0"
                           @update:modelValue="filterToggled($event, toggle); notifyInputsChanged()"
                           :label="$root.localizeMessage(toggle.name)" color="primary"></v-switch>
+                      </span>
+                      <span data-aid="show_detection_panel">
+                        <v-switch v-if="isCategory('alerts')" id="detection-panel-toggle" :disabled="loading()" v-model="showDetailsPanel" density="compact" hide-details class="my-0" :label="i18n.showDetailsPanel"></v-switch>
                       </span>
                       <span :data-aid="'autorefresh_select_' + category" v-if="!isCategory('detections')">
                         <v-select id="autoRefresh" class="ml-" :disabled="loading()" v-model="autoRefreshInterval" :items="autoRefreshIntervals" :hint="i18n.autoRefresh" persistent-hint variant="underlined" prepend-icon="fa-hourglass-half" />
@@ -609,19 +612,23 @@
                               </tr>
                             </template>
                             <template v-if="!group.maximized" #item="{ item, index }">
-                              <tr :class="{'highlight-row': highlightedDetection && highlightedDetection.publicId === item['rule.uuid']}">
+                              <tr :class="{'highlight-row': highlightedAlertInfo && highlightedAlertInfo.item === item}">
                                 <td v-if="aggregationActionsEnabled">
-                                  <v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" class="mx-2" variant="text" size="x-small" icon
+                                  <v-btn id="alertButton" v-if="ackEnabled && item['event.severity_label']" variant="text" size="x-small" icon
                                     @click="ack(item, !isFilterToggleEnabled('acknowledged'), false, null, groupIdx)"
                                     :color="colorSeverity(item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged'))"
                                     :data-aid="'groups_ack_' + category">
                                     <v-icon :title="isFilterToggleEnabled('acknowledged') ? i18n.alertUndoAcknowledge : i18n.alertAcknowledge">fa-bell</v-icon>
                                   </v-btn>
-                                  <v-btn id="escalateButton" v-if="escalateEnabled" class="mx-2" variant="text" size="x-small" icon
+                                  <v-btn id="escalateButton" v-if="escalateEnabled" variant="text" size="x-small" icon
                                     @click="toggleEscalationMenu($event, item, groupIdx)"
                                     :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'"
                                     :data-aid="'groups_escalate_' + category">
                                     <v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate">fa-exclamation-triangle</v-icon>
+                                  </v-btn>
+                                  <v-btn id="infoButton" v-if="item['rule.uuid'] && showDetailsPanel" variant="text" size="x-small" icon @click="highlightDetection(item['rule.uuid'], item, groupIdx)">
+                                    <v-icon v-if="highlightedDetection && highlightedDetection.publicId === item['rule.uuid']" color="green">fa-thumbtack</v-icon>
+                                    <v-icon v-else>fa-info</v-icon>
                                   </v-btn>
                                 </td>
                                 <td>
@@ -747,7 +754,7 @@
                         </tr>
                       </template>
                       <template #item="{ item, index, isExpanded, toggleExpand, internalItem }">
-                        <tr :data-aid="'events_item_' + category" :class="{'highlight-row': highlightedDetection && highlightedDetection.publicId === item['rule.uuid']}">
+                        <tr :data-aid="'events_item_' + category" :class="{'highlight-row': highlightedAlertInfo && highlightedAlertInfo.item === item}">
                           <td>
                             <v-btn id="expandEvent" variant="text" icon size="x-small" @click="toggleExpand(internalItem)" class="theme-icon">
                               <v-icon v-if="isExpanded(internalItem)" :alt="i18n.eventExpand" :title="i18n.eventExpandHelp" :data-aid="'events_item_collapse_' + category">fa-angle-down</v-icon>
@@ -764,6 +771,10 @@
                               :data-aid="'events_escalate_' + category"
                               :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'secondary' : 'primary'">
                               <v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate">fa-exclamation-triangle</v-icon>
+                            </v-btn>
+                            <v-btn id="infoButton" v-if="item['rule.uuid'] && showDetailsPanel" variant="text" size="x-small" icon @click="highlightDetection(item['rule.uuid'], item, groupIdx)" :title="i18n.openInPanel">
+                              <v-icon v-if="highlightedDetection && highlightedDetection.publicId === item['rule.uuid']" color="primary">fa-thumbtack</v-icon>
+                              <v-icon v-else>fa-info</v-icon>
                             </v-btn>
                             <span :data-aid="'events_select_' + category">
                               <v-checkbox class="detection-selection no-details" color="primary" @change="updateBulkSelector(item)" v-if="isMultiSelect()" v-model="item._isSelected">
@@ -823,21 +834,33 @@
               <v-spacer></v-spacer>
             </v-row>
           </v-col>
-          <v-col v-if="isCategory('alerts') && highlightedDetection" cols="3" class="pa-0">
+          <v-col id="details-col" v-if="isCategory('alerts') && showDetailsPanel" cols="3" class="pa-0">
             <Detection-Panel
+            v-if="highlightedDetection"
             :detection="highlightedDetection"
             :zone="zone"
             :alertInfo="highlightedAlertInfo"
-            :ackColor="colorSeverity(highlightedAlertInfo.item['event.severity_label'] + '_' + isFilterToggleEnabled('acknowledged'))"
+            :ackColor="colorSeverity((highlightedAlertInfo?.item?.['event.severity_label'] || '') + '_' + isFilterToggleEnabled('acknowledged'))"
             @close="highlightedDetection = highlightedAlertInfo = null;"
             @ack="panelAck($event)"
             @chooseCase="toggleEscalationMenu(...$event)"
              />
+            <v-expansion-panels v-else focusable v-model="openPanel" class="mt-2">
+              <v-expansion-panel>
+                <v-expansion-panel-title expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up" data-aid="detection_panel_overview_header">
+                  <h3>
+                    {{ i18n.overview }}
+                  </h3>
+                </v-expansion-panel-title>
+                <v-expansion-panel-text>
+                  {{i18n.detailsPanelHelp}}
+                </v-expansion-panel-text>
+            </v-expansion-panels>
           </v-col>
         </v-row>
         <v-menu v-model="quickActionVisible" :target="quickActionTarget" :data-aid="'context_menu_' + category">
           <div class="d-flex">
-            <v-list id="hunt-quick-action">
+            <v-list id="hunt-quick-action" v-model:opened="quickActionsOpen">
               <v-list-item density="compact" id="actionFilterInclude" :to="filterRouteInclude" v-bind:title.attr="i18n.filterIncludeHelp" :data-aid="'context_menu_filter_include_' + category" active-class="">
                 <template #prepend>
                   <v-icon :alt="i18n.filterInclude" class="theme-icon">fa-search-plus</v-icon>
@@ -902,7 +925,7 @@
                   {{ i18n.groupNew }}
                 </v-list-item-title>
               </v-list-item>
-              <v-list-group density="compact" :value="false" @click.stop v-if="quickActionVisible && quickActionIsNumeric" :data-aid="'context_menu_compare_' + category" class="deep-theme-text">
+              <v-list-group density="compact" :value="'numeric'" @click.stop v-if="quickActionVisible && quickActionIsNumeric" :data-aid="'context_menu_compare_' + category" class="deep-theme-text">
                 <template #activator="{ props, isOpen }">
                   <v-list-item v-bind="props" class="v-list-item--active">
                     <template #prepend>
@@ -941,7 +964,7 @@
                   </v-list-item-title>
                 </v-list-item>
               </v-list-group>
-              <v-list-group density="compact" @click.stop class="deep-theme-text" :data-aid="'context_menu_clipboard_' + category">
+              <v-list-group density="compact" :value="'clipboard'" @click.stop class="deep-theme-text" :data-aid="'context_menu_clipboard_' + category">
                 <template #activator="{ props, isOpen }">
                   <v-list-item v-bind="props" class="v-list-item--active">
                     <template #prepend>
@@ -988,7 +1011,7 @@
                   </v-list-item-title>
                 </v-list-item>
               </v-list-group>
-              <v-list-group v-if="!!actions && actions.length" density="compact" @click.stop class="deep-theme-text" :data-aid="'context_menu_quickaction_' + category">
+              <v-list-group v-if="!!actions && actions.length" :value="'actions'" density="compact" @click.stop class="deep-theme-text" :data-aid="'context_menu_quickaction_' + category">
                 <template #activator="{ props, isOpen }">
                   <v-list-item v-bind="props" class="v-list-item--active">
                     <template #prepend>
@@ -3018,7 +3041,7 @@
               <div tabindex="0" class="clicktoedit d-flex align-start pa-2" v-if="!isEdit('case-description')" @click="startEdit('case-desc-input',  caseObj.description, 'case-description', 'description', modifyCase, [], true)"
                 @keypress.space.prevent="startEdit('case-desc-input',  caseObj.description, 'case-description', 'description', modifyCase, [], true)">
                 <div class="d-block" style="width: 100%;">
-                  <div id="case-description" class="rounded case detail-field markdown-body" :inner-html.prop="formatMarkdown(caseObj.description)"></div>
+                  <div id="case-description" class="rounded case detail-field markdown-body" v-html="formatMarkdown(caseObj.description)"></div>
                 </div>
               </div>
               <div class="d-flex flex-column" v-if="isEdit('case-description')">
@@ -5813,10 +5836,7 @@
 
     <script type="text/x-template" id="component-detection-panel">
       <div v-if="detection" id="detection-col" class="theme-background theme-text pa-0">
-        <v-btn icon variant="text" size="small" class="float-end">
-          <v-icon @click="closeDetectionPanel()" data-aid="detection_panel_close">fa-times</v-icon>
-        </v-btn>
-        <v-expansion-panels multiple focusable v-model="panels">
+        <v-expansion-panels multiple focusable v-model="panels" class="mt-2">
           <v-expansion-panel>
             <v-expansion-panel-title expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up" data-aid="detection_panel_overview_header">
               <h3>
@@ -5838,13 +5858,13 @@
                 </div>
               </div>
               <div class="quicklinks pt-2">
-                <v-btn id="detection-panel-ack" icon variant="text" size="small" @click="ack()" data-aid="detection_panel_ack">
+                <v-btn id="detection-panel-ack" icon variant="text" size="small" @click="ack()" data-aid="detection_panel_ack" :title="i18n.alertAcknowledge">
                   <v-icon :color="ackColor">fa-bell</v-icon>
                 </v-btn>
-                <v-btn id="detection-panel-escalate" icon variant="text" size="small" @click="escalate($event)" data-aid="detection_panel_escalate">
+                <v-btn id="detection-panel-escalate" icon variant="text" size="small" @click="escalate($event)" data-aid="detection_panel_escalate" :title="i18n.escalate">
                   <v-icon color="primary">fa-exclamation-triangle</v-icon>
                 </v-btn>
-                <v-btn id="detection-panel-open" icon variant="text" size="small" class="no-link" :to="{name:'detection',params: {id:detection.id}}" target="_blank" data-aid="detection_panel_open_detection">
+                <v-btn id="detection-panel-open" icon variant="text" size="small" class="no-link" :to="{name:'detection',params: {id:detection.id}}" target="_blank" data-aid="detection_panel_open_detection" :title="i18n.viewDetection">
                   <v-icon color="primary">fa-magnifying-glass</v-icon>
                 </v-btn>
               </div>

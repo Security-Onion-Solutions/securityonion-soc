@@ -923,7 +923,6 @@ ul ul ul {
 .quicklinks {
   display: flex;
   flex-direction: row;
-  justify-content: space-around;
 }
 
 .quicklinks > i {
