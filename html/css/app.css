@@ -912,14 +912,6 @@ ul ul ul {
   padding-right: 12px !important;
 }
 
-.v-theme--dark .highlight-row {
-  background-color: rgba(255, 255, 255, 0.12) !important;
-}
-
-.v-theme--light .highlight-row {
-  background-color: rgba(0, 0, 0, 0.12) !important;
-}
-
 .quicklinks {
   display: flex;
   flex-direction: row;
@@ -947,4 +939,16 @@ ul ul ul {
 .component-overlay .v-progress-circular {
   position: sticky;
   top: 50%;
+}
+
+.plus-icon {
+  position: relative;
+  font-size: 0.6em;
+  top: -0.6em;
+  left: 0.6em;
+  text-shadow: 0 0 0 rgb(var(--v-theme-background)), 0 0 1px rgb(var(--v-theme-background)), 0 0 2px rgb(var(--v-theme-background));
+}
+
+.title-case {
+  text-transform: capitalize;
 }

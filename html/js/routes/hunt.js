@@ -162,6 +162,10 @@ const huntComponent = {
     showDetailsPanel: true,
     openPanel: [0],
     quickActionsOpen: [],
+    escalatingDetectionEvents: false,
+    showAckManyDialog: false,
+    ackManyArgs: [],
+    ackManyVerb: '',
   }},
   created() {
     this.$root.initializeCharts();
@@ -356,7 +360,6 @@ const huntComponent = {
       this.selectAllState = false;
       this.selectAllIndeterminate = false;
       this.selectedCount = 0;
-      this.highlightedDetection = null;
 
       var route = this;
       var onSuccess = function() {};
@@ -649,7 +652,22 @@ const huntComponent = {
       args[1] = !this.isFilterToggleEnabled('acknowledged');
       this.ack(...args);
     },
-    async ack(item, acknowledge, escalate, caseId, groupIdx) {
+    async ack(item, acknowledge, escalate, caseId, groupIdx, detectionRelated = false, skipDialog = false) {
+      if (detectionRelated && !skipDialog) {
+        if (escalate) {
+          this.ackManyVerb = this.i18n.escalate.toLowerCase();
+        } else {
+          this.ackManyVerb = acknowledge ? this.i18n.acknowledge : this.i18n.acknowledgeUndo;
+        }
+
+        this.ackManyArgs = [item, acknowledge, escalate, caseId, groupIdx, detectionRelated, true];
+        this.showAckManyDialog = true;
+
+        return;
+      } else {
+        this.closeAckManyDialog();
+      }
+
       this.$root.startLoading();
       try {
         var docEvent = item;
@@ -676,13 +694,26 @@ const huntComponent = {
           }
         }
         if (isAlert) {
-          for (let prop in docEvent) {
-            docEvent[prop] = this.subMissing(docEvent[prop]);
+          let searchFilter;
+          let eventFilter;
+
+          if (!detectionRelated) {
+            for (let prop in docEvent) {
+              docEvent[prop] = this.subMissing(docEvent[prop]);
+            }
+
+            eventFilter = docEvent;
+            searchFilter = await this.getQuery();
+          } else {
+            searchFilter = (acknowledge ? 'NOT ' : '') + 'event.acknowledged:true';
+            eventFilter = {
+              'rule.uuid': item["rule.uuid"],
+            };
           }
 
           const response = await this.$root.papi.post('events/ack', {
-            searchFilter: await this.getQuery(),
-            eventFilter: docEvent,
+            searchFilter: searchFilter,
+            eventFilter: eventFilter,
             dateRange: this.dateRange,
             dateRangeFormat: this.i18n.timePickerSample,
             timezone: this.zone,
@@ -694,18 +725,20 @@ const huntComponent = {
           }
         }
         if (this.isCategory('alerts')) {
-          if (item["count"] && item["count"] > 1) {
+          if ((item["count"] && item["count"] > 1) || detectionRelated) {
             this.$root.showTip(escalate ? this.i18n.escalatedMultipleTip : (acknowledge ? this.i18n.ackMultipleTip : this.i18n.ackUndoMultipleTip));
           } else {
             this.$root.showTip(escalate ? this.i18n.escalatedSingleTip : (acknowledge ? this.i18n.ackSingleTip : this.i18n.ackUndoSingleTip));
           }
+
           var data;
-          if (item["count"] && groupIdx >= 0) {
+          if (item["count"] && groupIdx >= 0 && this.groupBys?.[groupIdx]?.data) {
             data = this.groupBys[groupIdx].data;
           } else {
             data = this.eventData;
           }
-          this.removeDataItemFromView(data, item);
+
+          this.removeDataItemFromView(data, item, detectionRelated);
         } else if (escalate) {
           this.$root.showTip(this.i18n.escalatedEventTip);
           item['event.escalated'] = true;
@@ -726,9 +759,9 @@ const huntComponent = {
       }
       this.$root.stopLoading();
     },
-    removeDataItemFromView(data, item) {
+    removeDataItemFromView(data, item, detectionRelated) {
       for (var j = 0; j < data.length; j++) {
-        if (data[j] == item) {
+        if (data[j] == item || (detectionRelated && data[j]["rule.uuid"] === item["rule.uuid"])) {
           data.splice(j, 1);
           if (item["count"]) {
             this.totalEvents -= item["count"];
@@ -738,7 +771,10 @@ const huntComponent = {
           if (this.totalEvents < 0) {
             this.totalEvents = 0;
           }
-          break;
+          if (!detectionRelated) {
+            break;
+          }
+          j--;
         }
       }
     },
@@ -1072,7 +1108,7 @@ const huntComponent = {
         this.$router.push(this.filterRouteDrilldown);
       }
     },
-    toggleEscalationMenu(domEvent, event, groupIdx) {
+    toggleEscalationMenu(domEvent, event, groupIdx, detectionRelated = false) {
       if (!this.escalateRelatedEventsEnabled) {
         this.ack(event, true, true, null, groupIdx);
         return;
@@ -1081,12 +1117,14 @@ const huntComponent = {
       if (!domEvent || this.quickActionVisible || this.escalationMenuVisible) {
         this.quickActionVisible = false;
         this.escalationMenuVisible = false;
+        this.escalatingDetectionEvents = false;
         return;
       }
       this.escalationMenuTarget = domEvent.target;
       this.escalationItem = event;
       this.escalationGroupIdx = groupIdx;
       this.$nextTick(() => {
+        this.escalatingDetectionEvents = detectionRelated;
         this.escalationMenuVisible = true;
       });
     },
@@ -2436,6 +2474,10 @@ const huntComponent = {
         item: event,
         groupIndex: typeof groupIdx === 'number' ? groupIdx : -1,
       };
+    },
+    closeAckManyDialog() {
+      this.showAckManyDialog = false;
+      this.ackManyArgs = [];
     },
   }
 };
