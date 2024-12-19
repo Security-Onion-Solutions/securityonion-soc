@@ -830,7 +830,7 @@ test('setRelativeTimeUnits', () => {
   expect(comp.relativeTimeUnit).toBe(30);
 });
 
-test('relative query string', () => {
+test('relative query string', async () => {
   comp.$route = { path: "hunt", query: { rt: 24, rtu: 'hours' } };
   comp.parseUrlParameters();
 
@@ -846,10 +846,17 @@ test('relative query string', () => {
   expect(comp.relativeTimeValue).toBe(10);
 
   comp.$route = { path: "hunt", query: { rt: 24, rtu: 'hours', t: '2021/07/03 01:01:57 PM - 2023/07/03 01:01:57 PM' } };
+  const orig = comp.setupDateRangePicker;
+  comp.setupDateRangePicker = jest.fn();
+
   comp.parseUrlParameters();
+  await new Promise(resolve => setTimeout(resolve, 20)); // Let setTimeouts resolve
 
   expect(comp.relativeTimeEnabled).toBe(false);
   expect(comp.dateRange).toBe('2021/07/03 01:01:57 PM - 2023/07/03 01:01:57 PM');
+  expect(comp.setupDateRangePicker).toHaveBeenCalled();
+
+  comp.setupDateRangePicker = orig;
 });
 
 test('autoRefresh query string', () => {
@@ -957,7 +964,7 @@ test('handleChartClick', () => {
 
   expect(result).toBe(true);
   expect(comp.toggleQuickAction).toHaveBeenCalledTimes(1);
-  expect(comp.toggleQuickAction).toHaveBeenCalledWith(null, {}, 'MyField', 'value');
+  expect(comp.toggleQuickAction).toHaveBeenCalledWith(null, {}, 2, 'MyField', 'value');
 
   comp.toggleQuickAction = orig;
 });
@@ -1411,41 +1418,33 @@ test('bulkUpdateReport - filtered success', () => {
 );
 });
 
-test('toggleQuickAction - Tune Detection, Yara => Source Tab, Other Engines => Tuning Tab', () => {
+test('toggleQuickAction - Tune Detection, Yara => Source Tab, Other Engines => Tuning Tab', async () => {
   comp.category = 'alerts';
   comp.escalationMenuVisible = comp.quickActionVisible = false;
   let event = { "rule.uuid": 'id' }
+  let det = { id: 'onionId', engine: 'elastalert' };
 
-  let mockPromise = {
-    then: (f) => {
-      f({ data: { id: 'onionId', engine: 'elastalert' } });
-    }
-  };
-  resetPapi().mockPapi('get', mockPromise, null);
+  resetPapi().mockPapi('get', { data: det }, null);
 
-  comp.toggleQuickAction({}, event, null, null);
+  await comp.toggleQuickAction({}, event, -1, null, null);
+  await new Promise(resolve => setTimeout(resolve, 0)); // Let promises resolve
+  expect(comp.quickActionDetId).toBe('onionId');
+  expect(comp.tuneDetectionTabTarget).toBe('tuning');
+  expect(comp.highlightedDetection)
+
+  resetPapi().mockPapi('get', { data: { id: 'onionId', engine: 'suricata' } }, null);
+  comp.highlightedAlertInfo = comp.highlightedDetection = null;
+
+  await comp.toggleQuickAction({}, event, -1, null, null);
+  await new Promise(resolve => setTimeout(resolve, 0)); // Let promises resolve
   expect(comp.quickActionDetId).toBe('onionId');
   expect(comp.tuneDetectionTabTarget).toBe('tuning');
 
-  mockPromise = {
-    then: (f) => {
-      f({ data: { id: 'onionId', engine: 'suricata' } });
-    }
-  };
-  resetPapi().mockPapi('get', mockPromise, null);
+  resetPapi().mockPapi('get', { data: { id: 'onionId', engine: 'strelka' } }, null);
+  comp.highlightedAlertInfo = comp.highlightedDetection = null;
 
-  comp.toggleQuickAction({}, event, null, null);
-  expect(comp.quickActionDetId).toBe('onionId');
-  expect(comp.tuneDetectionTabTarget).toBe('tuning');
-
-  mockPromise = {
-    then: (f) => {
-      f({ data: { id: 'onionId', engine: 'strelka' } });
-    }
-  };
-  resetPapi().mockPapi('get', mockPromise, null);
-
-  comp.toggleQuickAction({}, event, null, null);
+  await comp.toggleQuickAction({}, event, -1, null, null);
+  await new Promise(resolve => setTimeout(resolve, 0)); // Let promises resolve
   expect(comp.quickActionDetId).toBe('onionId');
   expect(comp.tuneDetectionTabTarget).toBe('source');
 });

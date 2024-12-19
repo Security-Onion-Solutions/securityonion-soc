@@ -157,6 +157,11 @@ const huntComponent = {
     tuneDetectionTabTarget: null,
     eventCurrentItems: [],
     detectionEngineStatusQueries: {},
+    highlightedDetection: null,
+    highlightedAlertInfo: null,
+    showDetailsPanel: true,
+    openPanel: [0],
+    quickActionsOpen: [],
   }},
   created() {
     this.$root.initializeCharts();
@@ -215,6 +220,7 @@ const huntComponent = {
     'relativeTimeUnit': 'saveLocalSettings',
     'autohunt': 'saveLocalSettings',
     'autoRefreshInterval': 'resetRefreshTimer',
+    'showDetailsPanel': 'saveLocalSettings',
   },
   methods: {
     moment: moment,
@@ -272,6 +278,10 @@ const huntComponent = {
       this.loadLocalSettings();
       if (this.mruQueries.length > 0 && this.isAdvanced()) {
         this.query = this.mruQueries[0];
+      }
+
+      if (!this.isCategory('alerts')) {
+        this.showDetailsPanel = false;
       }
 
       if (this.$route.query.t) {
@@ -346,6 +356,7 @@ const huntComponent = {
       this.selectAllState = false;
       this.selectAllIndeterminate = false;
       this.selectedCount = 0;
+      this.highlightedDetection = null;
 
       var route = this;
       var onSuccess = function() {};
@@ -634,7 +645,11 @@ const huntComponent = {
         template: template,
       };
     },
-    async ack(event, item, idx, acknowledge, escalate, caseId, groupIdx) {
+    panelAck(args) {
+      args[1] = !this.isFilterToggleEnabled('acknowledged');
+      this.ack(...args);
+    },
+    async ack(item, acknowledge, escalate, caseId, groupIdx) {
       this.$root.startLoading();
       try {
         var docEvent = item;
@@ -694,6 +709,17 @@ const huntComponent = {
         } else if (escalate) {
           this.$root.showTip(this.i18n.escalatedEventTip);
           item['event.escalated'] = true;
+        }
+
+
+        if (this.highlightedAlertInfo) {
+          const inGroup = this.highlightedAlertInfo.groupIndex === -1
+
+          if ((!inGroup && item === this.highlightedAlertInfo.item) ||
+              (inGroup && this.highlightedDetection.publicId === item["rule.uuid"])) {
+            this.highlightedDetection = null;
+            this.highlightedAlertInfo = null;
+          }
         }
       } catch (error) {
         this.$root.showError(error);
@@ -1048,7 +1074,7 @@ const huntComponent = {
     },
     toggleEscalationMenu(domEvent, event, groupIdx) {
       if (!this.escalateRelatedEventsEnabled) {
-        this.ack(domEvent, event, 0, true, true, null, groupIdx);
+        this.ack(event, true, true, null, groupIdx);
         return;
       }
 
@@ -1064,7 +1090,7 @@ const huntComponent = {
         this.escalationMenuVisible = true;
       });
     },
-    toggleQuickAction(domEvent, event, field, value) {
+    async toggleQuickAction(domEvent, event, groupIdx, field, value) {
       if (!domEvent || this.quickActionVisible || this.escalationMenuVisible || window?.getSelection()?.type === 'Range') {
         this.quickActionVisible = false;
         this.escalationMenuVisible = false;
@@ -1076,15 +1102,20 @@ const huntComponent = {
         this.quickActionDetId = null;
         this.tuneDetectionTabTarget = null;
 
-        // don't slow down the UI with this call
-        if (id) {
-          this.$root.papi.get(`detection/public/${id}`).then(response => {
-            this.quickActionDetId = response.data.id;
-            this.tuneDetectionTabTarget = 'tuning';
-            if (response.data.engine === 'strelka') {
-              this.tuneDetectionTabTarget = 'source';
-            }
-          });
+        const getData = (response) => {
+          const det = response?.data || this.highlightedDetection;
+
+          this.quickActionDetId = det.id;
+          this.tuneDetectionTabTarget = 'tuning';
+          if (det.engine === 'strelka') {
+            this.tuneDetectionTabTarget = 'source';
+          }
+        };
+
+        if (id && !this.highlightedDetection) {
+          this.highlightDetection(id, event, groupIdx).then(getData);
+        } else {
+          this.$root.papi.get(`detection/public/${id}`).then(getData);
         }
       }
 
@@ -1144,8 +1175,13 @@ const huntComponent = {
         this.quickActionField = field;
         this.quickActionValue = value;
         this.quickActionTarget = [domEvent.clientX, domEvent.clientY];
-        this.$nextTick(() => {
+        this.$nextTick(async () => {
           this.quickActionVisible = true;
+
+          // displaying the menu is resetting the "open" array, so we need to un-reset it
+          const openCache = this.quickActionsOpen;
+          await this.$nextTick();
+          this.quickActionsOpen = openCache;
         });
       }
     },
@@ -1882,7 +1918,7 @@ const huntComponent = {
           if (clickedValue && clickedValue.length > 0) {
             if (this.canQuery(clickedValue)) {
               var chartGroupByField = this.groupBys[groupIdx].fields[0];
-              this.toggleQuickAction(e, {}, chartGroupByField, clickedValue);
+              this.toggleQuickAction(e, {}, groupIdx, chartGroupByField, clickedValue);
             }
           }
           return true;
@@ -1980,6 +2016,7 @@ const huntComponent = {
       this.saveSetting('relativeTimeValue', this.relativeTimeValue, this.params['relativeTimeValue']);
       this.saveSetting('relativeTimeUnit', this.relativeTimeUnit, this.params['relativeTimeUnit']);
       this.saveSetting('autohunt', this.autohunt, true);
+      this.saveSetting('showDetailsPanel', this.showDetailsPanel, this.isCategory('alerts'));
     },
     loadLocalSettings() {
       // Global settings
@@ -1999,6 +2036,7 @@ const huntComponent = {
       if (localStorage[prefix + '.relativeTimeValue']) this.relativeTimeValue = parseInt(localStorage[prefix + '.relativeTimeValue']);
       if (localStorage[prefix + '.relativeTimeUnit']) this.relativeTimeUnit = parseInt(localStorage[prefix + '.relativeTimeUnit']);
       if (localStorage[prefix + '.autohunt']) this.autohunt = localStorage[prefix + '.autohunt'] == 'true';
+      if (localStorage[prefix + '.showDetailsPanel']) this.showDetailsPanel = localStorage[prefix + '.showDetailsPanel'] == 'true';
 
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
@@ -2380,7 +2418,25 @@ const huntComponent = {
     },
     huntQueryWidth() {
       return this.$refs.huntQueryInput?.$el?.clientWidth || 0;
-    }
+    },
+    async highlightDetection(publicId, event, groupIdx) {
+      if (this.highlightedAlertInfo?.item === event) {
+        return;
+      }
+
+      if (this.highlightedDetection?.publicId !== publicId) {
+        this.highlightedDetection = null;
+
+        const response = await this.$root.papi.get(`detection/public/${publicId}`);
+
+        this.highlightedDetection = response.data;
+      }
+
+      this.highlightedAlertInfo = {
+        item: event,
+        groupIndex: typeof groupIdx === 'number' ? groupIdx : -1,
+      };
+    },
   }
 };
 
