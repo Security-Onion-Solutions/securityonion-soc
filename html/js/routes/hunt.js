@@ -654,11 +654,7 @@ const huntComponent = {
     },
     async ack(item, acknowledge, escalate, caseId, groupIdx, detectionRelated = false, skipDialog = false) {
       if (detectionRelated && !skipDialog) {
-        if (escalate) {
-          this.ackManyVerb = this.i18n.escalate.toLowerCase();
-        } else {
-          this.ackManyVerb = acknowledge ? this.i18n.acknowledge : this.i18n.acknowledgeUndo;
-        }
+        this.ackManyVerb = acknowledge ? this.i18n.acknowledge : this.i18n.acknowledgeUndo;
 
         this.ackManyArgs = [item, acknowledge, escalate, caseId, groupIdx, detectionRelated, true];
         this.showAckManyDialog = true;
@@ -705,7 +701,7 @@ const huntComponent = {
             eventFilter = docEvent;
             searchFilter = await this.getQuery();
           } else {
-            searchFilter = (acknowledge ? 'NOT ' : '') + 'event.acknowledged:true';
+            searchFilter = (acknowledge ? 'NOT ' : '') + 'event.acknowledged:true AND tags:alert';
             eventFilter = {
               'rule.uuid': item["rule.uuid"],
             };

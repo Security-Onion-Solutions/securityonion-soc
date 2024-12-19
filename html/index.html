@@ -1122,9 +1122,11 @@
 
         <v-dialog v-model="showAckManyDialog" persistent max-width="400" data-aid="ack_many_dialog">
           <v-card>
-            <v-card-title class="text-h5 title-case" v-text="ackManyVerb + ' Many'" />
+            <v-card-title class="text-h5 title-case">
+              {{ i18n.acknowledgeDetectionsRelatedAlertsTitle.replace('{ackManyVerb}', ackManyVerb) }}
+            </v-card-title>
             <v-card-text>
-              Do you wish to {{ackManyVerb}} every event in {{dateRange}} that matches this detection?
+              {{ i18n.acknowledgeDetectionsRelatedAlertsText.replace('{ackManyVerb}', ackManyVerb) }}
             </v-card-text>
             <v-card-actions>
               <v-spacer></v-spacer>
@@ -5859,7 +5861,7 @@
             </v-expansion-panel-title>
             <v-expansion-panel-text>
               <h3 class="my-2" data-aid="detection_panel_title">
-                <v-icon class="va-baseline" color="green">fa-thumbtack</v-icon>
+                <v-icon class="va-baseline" color="green" data-aid="detection_panel_title_thumbtack">fa-thumbtack</v-icon>
                 {{detection.title}}
               </h3>
               <div class="contrast-bg pa-4">
@@ -5883,14 +5885,14 @@
                     </span>
                   </v-icon>
                 </v-btn>
-                <v-btn id="detection-panel-escalate" icon variant="text" size="small" @click="escalate($event)" data-aid="detection_panel_escalate" :title="i18n.escalate">
+                <!-- <v-btn id="detection-panel-escalate" icon variant="text" size="small" @click="escalate($event)" data-aid="detection_panel_escalate" :title="i18n.escalate">
                   <v-icon color="primary">
                     <span>
                       <i class="fas fa-triangle-exclamation fa-stack-1x"></i>
                       <i class="fas fa-plus fa-stack-1x plus-icon"></i>
                     </span>
                   </v-icon>
-                </v-btn>
+                </v-btn> -->
                 <v-btn id="detection-panel-open" icon variant="text" size="small" class="no-link" :to="{name:'detection',params: {id:detection.id}}" target="_blank" data-aid="detection_panel_open_detection" :title="i18n.viewDetection">
                   <v-icon color="primary">fa-magnifying-glass</v-icon>
                 </v-btn>

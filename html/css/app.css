@@ -950,5 +950,5 @@ ul ul ul {
 }
 
 .title-case {
-  text-transform: capitalize;
+  text-transform: capitalize !important;
 }

@@ -18,6 +18,8 @@ const i18n = {
       acknowledged: 'Acknowledged',
       acknowledgeExistingAlertsTitle: 'Acknowledge Existing Alerts',
       acknowledgeExistingAlertsText: 'Would you also like to acknowledge any existing alerts that match this detection?',
+      acknowledgeDetectionsRelatedAlertsTitle: '{ackManyVerb} Events',
+      acknowledgeDetectionsRelatedAlertsText: 'Are you sure you want to {ackManyVerb} every event within the selected time range that matches this detection?',
       acknowledgeUndo: 'un-acknowledge',
       ackMultipleTip: 'Acknowledging groups of alerts may take a while and will continue in the background.',
       ackPartialSuccess: 'The acknowledge request encountered an unexpected problem. Some events may not have been acknowledged.',
