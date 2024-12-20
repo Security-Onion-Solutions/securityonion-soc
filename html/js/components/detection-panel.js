@@ -129,10 +129,10 @@ components.push({
 				this.showUnreviewedAiSummaries = !!params?.['showUnreviewedAiSummaries'];
 			},
 			ack() {
-				this.emit('ack', [this.alertInfo.item, null, false, null, this.alertInfo.groupIndex]);
+				this.emit('ack', [this.alertInfo.item, null, false, null, this.alertInfo.groupIndex, true]);
 			},
 			escalate(e) {
-				this.emit('chooseCase', [e, this.alertInfo.item, this.alertInfo.groupIndex]);
+				this.emit('chooseCase', [e, this.alertInfo.item, this.alertInfo.groupIndex, true]);
 			},
 			extractSummary() {
 				switch (this.detection.engine) {
