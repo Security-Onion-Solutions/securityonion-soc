@@ -627,7 +627,7 @@
                                     <v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate">fa-exclamation-triangle</v-icon>
                                   </v-btn>
                                   <v-btn id="infoButton" v-if="item['rule.uuid'] && showDetailsPanel" variant="text" size="x-small" icon @click="highlightDetection(item['rule.uuid'], item, groupIdx)">
-                                    <v-icon v-if="highlightedDetection && highlightedDetection.publicId === item['rule.uuid']" color="green">fa-thumbtack</v-icon>
+                                    <v-icon v-if="highlightedDetection && highlightedDetection.publicId === item['rule.uuid']" color="success">fa-thumbtack</v-icon>
                                     <v-icon v-else>fa-info</v-icon>
                                   </v-btn>
                                 </td>
@@ -773,7 +773,7 @@
                               <v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate">fa-exclamation-triangle</v-icon>
                             </v-btn>
                             <v-btn id="infoButton" v-if="item['rule.uuid'] && showDetailsPanel" variant="text" size="x-small" icon @click="highlightDetection(item['rule.uuid'], item, groupIdx)" :title="i18n.openInPanel">
-                              <v-icon v-if="highlightedDetection && highlightedDetection.publicId === item['rule.uuid']" color="green">fa-thumbtack</v-icon>
+                              <v-icon v-if="highlightedDetection && highlightedDetection.publicId === item['rule.uuid']" color="success">fa-thumbtack</v-icon>
                               <v-icon v-else>fa-info</v-icon>
                             </v-btn>
                             <span :data-aid="'events_select_' + category">
@@ -5720,7 +5720,7 @@
               <v-list-group id="gridmembers-accepted" value="accepted">
                 <v-list-item v-for="node in accepted" @click="show(node)" data-aid="gridmembers_review_accepted">
                   <template #prepend>
-                    <v-icon color="green" :title="i18n.gridMembersAcceptedHelp">fa-circle-check</v-icon>
+                    <v-icon color="success" :title="i18n.gridMembersAcceptedHelp">fa-circle-check</v-icon>
                   </template>
                   <div class="d-flex justify-space-between align-baseline">
                     <span :id="'accepted-output-' + node.id">
@@ -5861,7 +5861,7 @@
             </v-expansion-panel-title>
             <v-expansion-panel-text>
               <h3 class="my-2" data-aid="detection_panel_title">
-                <v-icon class="va-baseline" color="green" data-aid="detection_panel_title_thumbtack">fa-thumbtack</v-icon>
+                <v-icon class="va-baseline" color="success" data-aid="detection_panel_title_thumbtack">fa-thumbtack</v-icon>
                 {{detection.title}}
               </h3>
               <div class="contrast-bg pa-4">
@@ -5881,7 +5881,7 @@
                   <v-icon :color="ackColor">
                     <span>
                       <i class="fas fa-bell fa-stack-1x"></i>
-                      <i class="fas fa-plus fa-stack-1x plus-icon"></i>
+                      <i class="fas fa-plus fa-stack-1x icon-overlay-top-right"></i>
                     </span>
                   </v-icon>
                 </v-btn>
@@ -5889,7 +5889,7 @@
                   <v-icon color="primary">
                     <span>
                       <i class="fas fa-triangle-exclamation fa-stack-1x"></i>
-                      <i class="fas fa-plus fa-stack-1x plus-icon"></i>
+                      <i class="fas fa-plus fa-stack-1x icon-overlay-top-right"></i>
                     </span>
                   </v-icon>
                 </v-btn> -->
