@@ -899,10 +899,6 @@ ul ul ul {
   background-color: rgb(var(--v-theme-primary)) !important;
 }
 
-.groupBy {
-  position: relative;
-}
-
 #detection-col {
   top: 70px;
   position: sticky;
