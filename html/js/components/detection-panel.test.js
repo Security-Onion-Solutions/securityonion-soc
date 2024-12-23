@@ -34,13 +34,13 @@ beforeEach(() => {
 
 test('extractSummary for Suricata', () => {
   comp.detection.content = 'alert tcp any any -> any any (msg:"Test"; classtype:test-class; sid:1000;)';
-  comp.onDetectionChange();
+  comp.prepareDetection();
   expect(comp.extractedSummary).toBe('test-class');
 });
 
 test('extractSummary fallback to title', () => {
   comp.detection.content = 'alert tcp any any -> any any (msg:"Test"; sid:1000;)';
-  comp.onDetectionChange();
+  comp.prepareDetection();
   expect(comp.extractedSummary).toBe('Test Detection');
 });
 
@@ -48,7 +48,7 @@ test('extractSummary for ElastAlert with YAML description', () => {
   comp.detection.engine = 'elastalert';
   comp.detection.language = 'sigma';
   comp.detection.content = 'description: Test Description\ndetection:\n  condition: selection';
-  comp.onDetectionChange();
+  comp.prepareDetection();
   expect(comp.extractedSummary).toBe('Test Description');
 });
 
@@ -57,7 +57,7 @@ test('extractSummary for ElastAlert with description field', () => {
   comp.detection.language = 'sigma';
   comp.detection.content = 'title: Test\ndetection:\n  condition: selection';
   comp.detection.description = 'Field Description';
-  comp.onDetectionChange();
+  comp.prepareDetection();
   expect(comp.extractedSummary).toBe('Field Description');
 });
 
@@ -65,7 +65,7 @@ test('extractSummary for ElastAlert fallback to title', () => {
   comp.detection.engine = 'elastalert';
   comp.detection.language = 'sigma';
   comp.detection.content = 'title: Test\ndetection:\n  condition: selection';
-  comp.onDetectionChange();
+  comp.prepareDetection();
   expect(comp.extractedSummary).toBe('Test Detection');
 });
 
@@ -73,14 +73,14 @@ test('extractSummary for Yara with description field', () => {
   comp.detection.engine = 'strelka';
   comp.detection.language = 'yara';
   comp.detection.description = 'Yara Description';
-  comp.onDetectionChange();
+  comp.prepareDetection();
   expect(comp.extractedSummary).toBe('Yara Description');
 });
 
 test('extractSummary for Yara fallback to title', () => {
   comp.detection.engine = 'strelka';
   comp.detection.language = 'yara';
-  comp.onDetectionChange();
+  comp.prepareDetection();
   expect(comp.extractedSummary).toBe('Test Detection');
 });
 
