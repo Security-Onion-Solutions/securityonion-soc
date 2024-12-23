@@ -24,9 +24,6 @@ components.push({
 			},
 		},
 		emits: ['close', 'ack', 'chooseCase', 'highlightPrevAlertDetection', 'highlightNextAlertDetection'],
-		watch: {
-			'detection': 'onDetectionChange',
-		},
 		setup(_, { emit }) {
 			return { emit };
 		},
@@ -115,15 +112,15 @@ components.push({
 		},
 		mounted() {
 			this.$root.loadParameters('detection', this.initParams);
+			this.prepareDetection();
+			this.panels = [0, 1];
 		},
 		methods: {
-			onDetectionChange() {
+			prepareDetection() {
 				if (this.detection) {
 					this.tagOverrides();
 					this.extractSummary();
 				}
-
-				this.panel = [0, 1];
 			},
 			initParams(params) {
 				this.showUnreviewedAiSummaries = !!params?.['showUnreviewedAiSummaries'];
