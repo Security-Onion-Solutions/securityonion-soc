@@ -12,7 +12,7 @@ import (
 
 type Setting struct {
 	// The ID of the configuration setting. Each period represents a nested level.
-	Id string `json:"id" example:"elastalert.alerter_parameters")`
+	Id string `json:"id" example:"elastalert.alerter_parameters"`
 	// (metadata) The configuration setting more human-friendly title, if one is available.
 	Title string `json:"title" example:"Custom Configuration Parameters"`
 	// (metadata) A description explaining the purpose of the configuration setting, if one is available.
