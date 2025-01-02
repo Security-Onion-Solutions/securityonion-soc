@@ -64,10 +64,10 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 	h := NewDetectionHandler(srv)
 
 	r.Route(prefix, func(r chi.Router) {
-		r.Get("/{id}", h.getDetection)
-		r.Get("/public/{publicid}", h.getByPublicId)
+		r.Get("/{id}", h.GetDetection)
+		r.Get("/public/{publicid}", h.GetByPublicId)
 
-		r.Post("/", h.createDetection)
+		r.Post("/", h.CreateDetection)
 		r.Post("/{id}/duplicate", h.duplicateDetection)
 
 		r.Post("/{id}/comment", h.createComment)
@@ -103,7 +103,7 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 // @Failure      404                         "Detection not found"
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Router       /connect/detection/{id} [get]
-func (h *DetectionHandler) getDetection(w http.ResponseWriter, r *http.Request) {
+func (h *DetectionHandler) GetDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
@@ -150,7 +150,7 @@ func (h *DetectionHandler) getDetection(w http.ResponseWriter, r *http.Request) 
 // @Failure      404                         "Detection not found"
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Router       /connect/detection/public/{id} [get]
-func (h *DetectionHandler) getByPublicId(w http.ResponseWriter, r *http.Request) {
+func (h *DetectionHandler) GetByPublicId(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
@@ -206,7 +206,7 @@ func (h *DetectionHandler) getByPublicId(w http.ResponseWriter, r *http.Request)
 // @Failure      409                         "Public ID conflicts with existing detection"
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Router       /connect/detection/ [post]
-func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Request) {
+func (h *DetectionHandler) CreateDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	detect := &model.Detection{}

@@ -28,3 +28,5 @@ type SyncStatus struct {
 	Engine model.EngineName `json:"engine"`
 	Status string           `json:"status"`
 }
+
+//go:generate mockgen -destination mock/mock_detectionengine.go -package mock . DetectionEngine

@@ -9,6 +9,7 @@ package server
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
@@ -16,6 +17,10 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
 	"github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+
+	"github.com/apex/log"
+	"github.com/apex/log/handlers/memory"
+	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -46,6 +51,28 @@ func NewMockServer(t *testing.T, ctrl *gomock.Controller, cfg *config.ServerConf
 	}
 
 	return srv
+}
+
+func NewInMemoryLogger() (h *memory.Handler, l log.Interface) {
+	h = memory.New()
+
+	l = &log.Logger{Handler: h, Level: log.DebugLevel}
+	l = l.WithField("test", true)
+
+	return h, l
+}
+
+func NewTestContext(rctx *chi.Context) context.Context {
+	ctx := context.Background()
+
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "00000000-0000-0000-0000-000000000000")
+
+	if rctx != nil {
+		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	}
+
+	return ctx
 }
 
 func TestNewServer(tester *testing.T) {
