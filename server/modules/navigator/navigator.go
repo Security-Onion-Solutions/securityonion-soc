@@ -52,6 +52,7 @@ type Navigator struct {
 	lookbackDays int
 	stopChan     chan bool
 	techniques   techniqueMap
+	running      bool
 }
 
 func NewNavigator(srv *server.Server) *Navigator {
@@ -76,17 +77,19 @@ func (nav *Navigator) Init(cfg module.ModuleConfig) error {
 }
 
 func (nav *Navigator) Start() error {
+	nav.running = true
 	go nav.run()
 	return nil
 }
 
 func (nav *Navigator) Stop() error {
 	nav.stopChan <- true
+	nav.running = false
 	return nil
 }
 
 func (nav *Navigator) IsRunning() bool {
-	return nav.stopChan != nil
+	return nav.running
 }
 
 func (nav *Navigator) run() {
