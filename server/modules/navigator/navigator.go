@@ -247,7 +247,7 @@ func (nav *Navigator) extractAlertTechniques(ctx context.Context, logger *log.En
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
-				logger.WithField("processed_events", totalProcessed).Warn("alert extraction timed out after 3 minutes")
+				logger.WithField("processed_events", totalProcessed).Warn("alert extraction timed out")
 			}
 			return techniques
 		default:
