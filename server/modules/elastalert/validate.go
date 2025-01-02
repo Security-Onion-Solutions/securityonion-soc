@@ -184,13 +184,13 @@ func (r *SigmaRule) ToDetection(ruleset string, license string, isCommunity bool
 
 	content, _ := yaml.Marshal(r)
 
+	author := "unknown"
+	if r.Author != nil {
+		author = *r.Author
+	}
+
 	det := &model.Detection{
-		Author: func() string {
-			if r.Author != nil {
-				return *r.Author
-			}
-			return "unknown"
-		}(),
+		Author:      author,
 		Engine:      model.EngineNameElastAlert,
 		PublicID:    id,
 		Title:       r.Title,
