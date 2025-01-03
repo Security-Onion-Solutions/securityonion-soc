@@ -68,7 +68,7 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Get("/public/{publicid}", h.GetByPublicId)
 
 		r.Post("/", h.CreateDetection)
-		r.Post("/{id}/duplicate", h.duplicateDetection)
+		r.Post("/{id}/duplicate", h.DuplicateDetection)
 
 		r.Post("/{id}/comment", h.createComment)
 		r.Get("/comment/{id}", h.getDetectionComment)
@@ -76,10 +76,10 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Delete("/comment/{id}", h.deleteComment)
 		r.Get("/{id}/comment", h.getDetectionComments)
 
-		r.Get("/{id}/history", h.getDetectionHistory)
+		r.Get("/{id}/history", h.GetDetectionHistory)
 		r.Post("/convert", h.convertContent)
 
-		r.Put("/", h.updateDetection)
+		r.Put("/", h.UpdateDetection)
 		r.Put("/{id}/override/{overrideIndex}/note", h.updateOverrideNote)
 
 		r.Delete("/{id}", h.deleteDetection)
@@ -256,12 +256,6 @@ func (h *DetectionHandler) CreateDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	_, err = engine.ApplyFilters(detect)
-	if err != nil {
-		web.Respond(w, r, http.StatusBadRequest, err)
-		return
-	}
-
 	err = engine.ExtractDetails(detect)
 	if err != nil {
 		if err.Error() == "rule does not contain a public Id" {
@@ -334,7 +328,7 @@ func (h *DetectionHandler) CreateDetection(w http.ResponseWriter, r *http.Reques
 // @Failure      404                         "Detection not found"
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Router       /connect/detection/{id}/history [get]
-func (h *DetectionHandler) getDetectionHistory(w http.ResponseWriter, r *http.Request) {
+func (h *DetectionHandler) GetDetectionHistory(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	id := chi.URLParam(r, "id")
@@ -362,7 +356,7 @@ func (h *DetectionHandler) getDetectionHistory(w http.ResponseWriter, r *http.Re
 // @Failure      403                         "Insufficient permissions for this request"
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Router       /connect/detection/{id}/duplicate [post]
-func (h *DetectionHandler) duplicateDetection(w http.ResponseWriter, r *http.Request) {
+func (h *DetectionHandler) DuplicateDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	detectId := chi.URLParam(r, "id")
@@ -408,7 +402,7 @@ func (h *DetectionHandler) duplicateDetection(w http.ResponseWriter, r *http.Req
 // @Failure      409                         "Public ID conflicts with existing detection"
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Router       /connect/detection/ [put]
-func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Request) {
+func (h *DetectionHandler) UpdateDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 

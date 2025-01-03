@@ -67,6 +67,7 @@ func NewTestContext(rctx *chi.Context) context.Context {
 
 	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
 	ctx = context.WithValue(ctx, web.ContextKeyRequestId, "00000000-0000-0000-0000-000000000000")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestorId, "00000000-0000-0000-0000-000000000000")
 
 	if rctx != nil {
 		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
