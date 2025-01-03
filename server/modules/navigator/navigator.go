@@ -144,13 +144,13 @@ func (nav *Navigator) writeLayer(layer map[string]interface{}, filePath string, 
 		return fmt.Errorf("failed to marshal navigator layer: %w", err)
 	}
 
-	logger.WithField("navigator_layer", string(jsonData)).Debug("generated navigator layer")
+	logger.WithField("nav_navigator_layer", string(jsonData)).Debug("generated navigator layer")
 
 	if err := os.WriteFile(filePath, jsonData, 0644); err != nil {
 		return fmt.Errorf("failed to write navigator layer to file: %w", err)
 	}
 
-	logger.WithField("file_path", filePath).Info("wrote navigator layer to file")
+	logger.WithField("nav_file_path", filePath).Info("wrote navigator layer to file")
 	return nil
 }
 
@@ -160,7 +160,7 @@ func extractSuricataTechniques(rules map[string]*model.Detection, logger *log.En
 
 	for _, rule := range rules {
 		if rule.Content == "" {
-			logger.WithField("rule.uuid", rule.PublicID).Debug("skipping rule with empty content")
+			logger.WithField("nav_rule.uuid", rule.PublicID).Debug("skipping rule with empty content")
 			continue
 		}
 
@@ -168,11 +168,11 @@ func extractSuricataTechniques(rules map[string]*model.Detection, logger *log.En
 			techniqueID := strings.ToUpper(match[1])
 			techniques[techniqueID] = struct{}{}
 			logger.WithFields(log.Fields{
-				"rule.uuid":    rule.PublicID,
-				"technique_id": techniqueID,
+				"nav_rule.uuid":    rule.PublicID,
+				"nav_technique_id": techniqueID,
 			}).Debug("extracted technique ID from Suricata rule")
 		} else {
-			logger.WithField("rule.uuid", rule.PublicID).Debug("no technique ID found in rule")
+			logger.WithField("nav_rule.uuid", rule.PublicID).Debug("no technique ID found in rule")
 		}
 	}
 
@@ -192,7 +192,7 @@ func extractSigmaTechniques(rules map[string]*model.Detection, logger *log.Entry
 			Tags []string `yaml:"tags"`
 		}
 		if err := yaml.Unmarshal([]byte(rule.Content), &content); err != nil {
-			logger.WithError(err).WithField("rule.uuid", rule.PublicID).Warn("failed to parse rule content")
+			logger.WithError(err).WithField("nav_rule.uuid", rule.PublicID).Warn("failed to parse rule content")
 			continue
 		}
 
@@ -229,16 +229,16 @@ func (nav *Navigator) extractAlertTechniques(ctx context.Context, logger *log.En
 	criteria.SearchAfter = []interface{}{time.Now().UnixNano() / int64(time.Millisecond)}
 
 	// Create the query to filter by index
-	if err := criteria.ParsedQuery.Parse("event.module:suricata AND event.dataset:suricata.alert"); err != nil {
+	if err := criteria.ParsedQuery.Parse("event.dataset:suricata.alert AND _exists_:rule.metadata.mitre_technique_id"); err != nil {
 		logger.WithError(err).Error("failed to parse query")
 		return techniques
 	}
 
 	logger.WithFields(log.Fields{
-		"rawQuery":   criteria.RawQuery,
-		"beginTime":  criteria.BeginTime.Format(time.RFC3339),
-		"endTime":    criteria.EndTime.Format(time.RFC3339),
-		"eventLimit": criteria.EventLimit,
+		"nav_rawQuery":   criteria.RawQuery,
+		"nav_beginTime":  criteria.BeginTime.Format(time.RFC3339),
+		"nav_endTime":    criteria.EndTime.Format(time.RFC3339),
+		"nav_eventLimit": criteria.EventLimit,
 	}).Info("Executing Suricata alert search query")
 
 	var totalProcessed int
@@ -247,7 +247,7 @@ func (nav *Navigator) extractAlertTechniques(ctx context.Context, logger *log.En
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
-				logger.WithField("processed_events", totalProcessed).Warn("alert extraction timed out")
+				logger.WithField("nav_processed_events", totalProcessed).Warn("alert extraction timed out")
 			}
 			return techniques
 		default:
@@ -259,9 +259,9 @@ func (nav *Navigator) extractAlertTechniques(ctx context.Context, logger *log.En
 			}
 
 			logger.WithFields(log.Fields{
-				"totalEvents": searchResult.TotalEvents,
-				"batchSize":   len(searchResult.Events),
-				"processed":   totalProcessed,
+				"nav_totalEvents": searchResult.TotalEvents,
+				"nav_batchSize":   len(searchResult.Events),
+				"nav_processed":   totalProcessed,
 			}).Info("Processing batch of Suricata alerts for navigator layer")
 
 			for _, event := range searchResult.Events {
