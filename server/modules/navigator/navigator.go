@@ -208,88 +208,84 @@ func extractSigmaTechniques(rules map[string]*model.Detection, logger *log.Entry
 	return techniques
 }
 
-// extractAlertTechniques extracts technique IDs from alerts in the last N days
-func (nav *Navigator) extractAlertTechniques(ctx context.Context, logger *log.Entry) techniqueMap {
+func (nav *Navigator) extractAlertTechniques(ctx context.Context, logger *log.Entry) (techniqueMap, error) {
 	// Create a context with timeout
 	ctx, cancel := context.WithTimeout(ctx, ALERT_EXTRACTION_TIMEOUT)
 	defer cancel()
 
-	techniques := make(techniqueMap)
+	techniques := make(techniqueMap, 1000)
 
 	// Query alerts from the last N days
 	lookback := time.Duration(nav.lookbackDays) * 24 * time.Hour
-	startTime := time.Now().Add(-lookback)
+	now := time.Now()
+	startTime := now.Add(-lookback)
 
 	// Build the search criteria
 	criteria := model.NewEventSearchCriteria()
-	criteria.RawQuery = "*"
-	criteria.BeginTime = startTime
-	criteria.EndTime = time.Now()
-	criteria.EventLimit = 10000 // Keep within Elasticsearch limit
-	criteria.SortFields = []*model.SortCriteria{{Field: "@timestamp", Order: "desc"}}
-	criteria.SearchAfter = []interface{}{time.Now().UnixNano() / int64(time.Millisecond)}
+	criteria.EventLimit = 0     // We don't need any hits, just the aggregation
+	criteria.MetricLimit = 1000 // Total number of unique technique IDs to return
+	criteria.ParsedQuery = model.NewQuery()
 
-	// Create the query to filter by index
-	if err := criteria.ParsedQuery.Parse("event.dataset:suricata.alert AND _exists_:rule.metadata.mitre_technique_id"); err != nil {
+	// Set up the query to find alerts with technique IDs and group by them
+	criteria.RawQuery = "event.dataset:suricata.alert AND _exists_:rule.metadata.mitre_technique_id | groupby rule.metadata.mitre_technique_id"
+	criteria.BeginTime = startTime
+	criteria.EndTime = now
+
+	err := criteria.ParsedQuery.Parse(criteria.RawQuery)
+	if err != nil {
 		logger.WithError(err).Error("failed to parse query")
-		return techniques
+		return nil, err
 	}
 
+	// Log the parsed query segments
+	segments := criteria.ParsedQuery.NamedSegments(model.SegmentKind_GroupBy)
 	logger.WithFields(log.Fields{
-		"nav_rawQuery":   criteria.RawQuery,
-		"nav_beginTime":  criteria.BeginTime.Format(time.RFC3339),
-		"nav_endTime":    criteria.EndTime.Format(time.RFC3339),
-		"nav_eventLimit": criteria.EventLimit,
-	}).Info("Executing Suricata alert search query")
+		"nav_query":           criteria.RawQuery,
+		"nav_parsed_segments": len(segments),
+		"nav_beginTime":       criteria.BeginTime.Format(time.RFC3339),
+		"nav_endTime":         criteria.EndTime.Format(time.RFC3339),
+	}).Debug("Executing Suricata alert aggregation query")
 
-	var totalProcessed int
+	// Execute the search
+	searchResult, err := nav.server.Eventstore.Search(ctx, criteria)
+	if err != nil {
+		logger.WithError(err).Error("failed to search alerts")
+		return nil, err
+	}
 
-	for {
-		select {
-		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
-				logger.WithField("nav_processed_events", totalProcessed).Warn("alert extraction timed out")
+	// Log the search results
+	logger.WithFields(log.Fields{
+		"nav_total_metrics":     len(searchResult.Metrics),
+		"nav_total_events":      len(searchResult.Events),
+		"nav_available_metrics": searchResult.Metrics != nil,
+	}).Debug("Received search results")
+
+	// Process the metrics results to get unique technique IDs
+	if searchResult.Metrics == nil {
+		return techniques, nil
+	}
+
+	for metricName, metrics := range searchResult.Metrics {
+		if !strings.Contains(metricName, "rule.metadata.mitre_technique_id") {
+			continue
+		}
+		for _, metric := range metrics {
+			if len(metric.Keys) == 0 {
+				continue
 			}
-			return techniques
-		default:
-			// Execute the search
-			searchResult, err := nav.server.Eventstore.Search(ctx, criteria)
-			if err != nil {
-				logger.WithError(err).Error("failed to search alerts")
-				return techniques
+			key, ok := metric.Keys[0].(string)
+			if !ok || key == "" {
+				continue
 			}
-
+			techniques[strings.ToUpper(key)] = struct{}{}
 			logger.WithFields(log.Fields{
-				"nav_totalEvents": searchResult.TotalEvents,
-				"nav_batchSize":   len(searchResult.Events),
-				"nav_processed":   totalProcessed,
-			}).Info("Processing batch of Suricata alerts for navigator layer")
-
-			for _, event := range searchResult.Events {
-				techniqueIDs, ok := event.Payload["rule.metadata.mitre_technique_id"].([]interface{})
-				if !ok {
-					continue
-				}
-
-				for _, id := range techniqueIDs {
-					if techID, ok := id.(string); ok {
-						techniques[strings.ToUpper(techID)] = struct{}{}
-					}
-				}
-			}
-
-			totalProcessed += len(searchResult.Events)
-
-			// Check if we've processed all events or got an empty batch
-			if totalProcessed >= searchResult.TotalEvents || len(searchResult.Events) == 0 {
-				return techniques
-			}
-
-			// Get the sort values from the last event for the next search
-			lastEvent := searchResult.Events[len(searchResult.Events)-1]
-			criteria.SearchAfter = lastEvent.Sort
+				"nav_technique_id": key,
+			}).Debug("Found technique")
 		}
 	}
+
+	logger.WithField("nav_unique_techniques", len(techniques)).Info("Processed unique technique IDs")
+	return techniques, nil
 }
 
 // mergeTechniques combines multiple technique maps into a single map
@@ -329,10 +325,13 @@ func (nav *Navigator) generateNavigatorLayer(ctx context.Context, logger *log.En
 	// Extract techniques from rule sets and alerts
 	suricataTechniques := extractSuricataTechniques(suricataRules, logger)
 	sigmaTechniques := extractSigmaTechniques(sigmaRules, logger)
-	alertTechniques := nav.extractAlertTechniques(ctx, logger)
+	alertTechniques, err := nav.extractAlertTechniques(ctx, logger)
+	if err != nil {
+		return err
+	}
 
 	// Create combined techniques map
-	combinedTechniques := mergeTechniques(suricataTechniques, sigmaTechniques)
+	combinedTechniques := mergeTechniques(suricataTechniques, sigmaTechniques, alertTechniques)
 
 	// Define layers to generate
 	layers := []layerConfig{
