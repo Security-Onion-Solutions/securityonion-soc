@@ -106,6 +106,7 @@ func (nav *Navigator) run() {
 	for {
 		select {
 		case <-nav.stopChan:
+			logger.Info("Navigator loop exiting")
 			return
 		case <-ticker.C:
 			if err := nav.generateNavigatorLayer(nav.server.Context, logger); err != nil {
