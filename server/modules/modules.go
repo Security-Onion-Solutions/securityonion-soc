@@ -36,7 +36,6 @@ func BuildModuleMap(srv *server.Server) map[string]module.Module {
 	moduleMap["hydra"] = hydra.NewHydra(srv)
 	moduleMap["elastic"] = elastic.NewElastic(srv)
 	moduleMap["elasticcases"] = elasticcases.NewElasticCases(srv)
-	moduleMap["navigator"] = navigator.NewNavigator(srv)
 	moduleMap["salt"] = salt.NewSalt(srv)
 	moduleMap["sostatus"] = sostatus.NewSoStatus(srv)
 	moduleMap["statickeyauth"] = statickeyauth.NewStaticKeyAuth(srv)
@@ -45,6 +44,7 @@ func BuildModuleMap(srv *server.Server) map[string]module.Module {
 	moduleMap["suricataengine"] = suricata.NewSuricataEngine(srv)
 	moduleMap["elastalertengine"] = elastalert.NewElastAlertEngine(srv)
 	moduleMap["strelkaengine"] = strelka.NewStrelkaEngine(srv)
+	moduleMap["navigator"] = navigator.NewNavigator(srv)
 
 	return moduleMap
 }

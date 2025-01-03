@@ -64,7 +64,7 @@ func NewNavigator(srv *server.Server) *Navigator {
 }
 
 func (nav *Navigator) PrerequisiteModules() []string {
-	return nil
+	return []string{"elastic", "suricataengine", "elastalertengine"}
 }
 
 func (nav *Navigator) Init(cfg module.ModuleConfig) error {
