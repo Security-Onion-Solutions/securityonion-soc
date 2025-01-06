@@ -948,3 +948,17 @@ ul ul ul {
 .title-case {
   text-transform: capitalize !important;
 }
+
+#proFeatures {
+  background-image: url('../images/pro-star.png');
+  background-repeat: no-repeat;
+  background-position: right top;
+}
+
+.marketing.v-theme--dark {
+  background-color: rgb(var(--v-theme-background-lighten-1)) !important;
+}
+
+.marketing.v-theme--light {
+  background-color: rgb(var(--v-theme-background-darken-1)) !important;
+}
