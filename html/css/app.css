@@ -899,10 +899,6 @@ ul ul ul {
   background-color: rgb(var(--v-theme-primary)) !important;
 }
 
-.groupBy {
-  position: relative;
-}
-
 #detection-col {
   top: 70px;
   position: sticky;
@@ -910,14 +906,6 @@ ul ul ul {
   max-height: calc(100vh - 64px - 40px - 10px);
   overflow-y: auto;
   padding-right: 12px !important;
-}
-
-.v-theme--dark .highlight-row {
-  background-color: rgba(255, 255, 255, 0.12) !important;
-}
-
-.v-theme--light .highlight-row {
-  background-color: rgba(0, 0, 0, 0.12) !important;
 }
 
 .quicklinks {
@@ -947,4 +935,16 @@ ul ul ul {
 .component-overlay .v-progress-circular {
   position: sticky;
   top: 50%;
+}
+
+.icon-overlay-top-right {
+  position: relative;
+  font-size: 0.6em;
+  top: -0.6em;
+  left: 0.6em;
+  text-shadow: 0 0 0 rgb(var(--v-theme-background)), 0 0 1px rgb(var(--v-theme-background)), 0 0 2px rgb(var(--v-theme-background));
+}
+
+.title-case {
+  text-transform: capitalize !important;
 }

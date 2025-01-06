@@ -34,13 +34,13 @@ beforeEach(() => {
 
 test('extractSummary for Suricata', () => {
   comp.detection.content = 'alert tcp any any -> any any (msg:"Test"; classtype:test-class; sid:1000;)';
-  comp.onDetectionChange();
+  comp.prepareDetection();
   expect(comp.extractedSummary).toBe('test-class');
 });
 
 test('extractSummary fallback to title', () => {
   comp.detection.content = 'alert tcp any any -> any any (msg:"Test"; sid:1000;)';
-  comp.onDetectionChange();
+  comp.prepareDetection();
   expect(comp.extractedSummary).toBe('Test Detection');
 });
 
@@ -48,7 +48,7 @@ test('extractSummary for ElastAlert with YAML description', () => {
   comp.detection.engine = 'elastalert';
   comp.detection.language = 'sigma';
   comp.detection.content = 'description: Test Description\ndetection:\n  condition: selection';
-  comp.onDetectionChange();
+  comp.prepareDetection();
   expect(comp.extractedSummary).toBe('Test Description');
 });
 
@@ -57,7 +57,7 @@ test('extractSummary for ElastAlert with description field', () => {
   comp.detection.language = 'sigma';
   comp.detection.content = 'title: Test\ndetection:\n  condition: selection';
   comp.detection.description = 'Field Description';
-  comp.onDetectionChange();
+  comp.prepareDetection();
   expect(comp.extractedSummary).toBe('Field Description');
 });
 
@@ -65,7 +65,7 @@ test('extractSummary for ElastAlert fallback to title', () => {
   comp.detection.engine = 'elastalert';
   comp.detection.language = 'sigma';
   comp.detection.content = 'title: Test\ndetection:\n  condition: selection';
-  comp.onDetectionChange();
+  comp.prepareDetection();
   expect(comp.extractedSummary).toBe('Test Detection');
 });
 
@@ -73,153 +73,153 @@ test('extractSummary for Yara with description field', () => {
   comp.detection.engine = 'strelka';
   comp.detection.language = 'yara';
   comp.detection.description = 'Yara Description';
-  comp.onDetectionChange();
+  comp.prepareDetection();
   expect(comp.extractedSummary).toBe('Yara Description');
 });
 
 test('extractSummary for Yara fallback to title', () => {
   comp.detection.engine = 'strelka';
   comp.detection.language = 'yara';
-  comp.onDetectionChange();
+  comp.prepareDetection();
   expect(comp.extractedSummary).toBe('Test Detection');
 });
 
 test('canAddOverride suricata', () => {
-	comp.detect = {
-		engine: 'suricata',
-	};
+  comp.detect = {
+    engine: 'suricata',
+  };
 
-	expect(comp.canAddOverride()).toBe(true);
+  expect(comp.canAddOverride()).toBe(true);
 
-	comp.detection.overrides = [
-		{
-			type: 'modify',
-			isEnabled: 'isEnabled',
-			createdAt: 'createdAt',
-			updatedAt: 'updatedAt',
-			customFilter: 'custom filter',
-			regex: 'regex',
-			value: 'value',
-			thresholdType: 'thresholdType',
-			track: 'track',
-			count: '10',
-			seconds: '10',
-			ip: 'ip',
-		},
-		{
-			type: 'threshold',
-			isEnabled: 'isEnabled',
-			createdAt: 'createdAt',
-			updatedAt: 'updatedAt',
-			customFilter: 'custom filter',
-			regex: 'regex',
-			value: 'value',
-			thresholdType: 'thresholdType',
-			track: 'track',
-			count: '10',
-			seconds: '10',
-			ip: 'ip',
-		},
-		{
-			type: 'suppress',
-			isEnabled: 'isEnabled',
-			createdAt: 'createdAt',
-			updatedAt: 'updatedAt',
-			customFilter: 'custom filter',
-			regex: 'regex',
-			value: 'value',
-			thresholdType: 'thresholdType',
-			track: 'track',
-			count: '10',
-			seconds: '10',
-			ip: 'ip',
-		}
-	];
+  comp.detection.overrides = [
+    {
+      type: 'modify',
+      isEnabled: 'isEnabled',
+      createdAt: 'createdAt',
+      updatedAt: 'updatedAt',
+      customFilter: 'custom filter',
+      regex: 'regex',
+      value: 'value',
+      thresholdType: 'thresholdType',
+      track: 'track',
+      count: '10',
+      seconds: '10',
+      ip: 'ip',
+    },
+    {
+      type: 'threshold',
+      isEnabled: 'isEnabled',
+      createdAt: 'createdAt',
+      updatedAt: 'updatedAt',
+      customFilter: 'custom filter',
+      regex: 'regex',
+      value: 'value',
+      thresholdType: 'thresholdType',
+      track: 'track',
+      count: '10',
+      seconds: '10',
+      ip: 'ip',
+    },
+    {
+      type: 'suppress',
+      isEnabled: 'isEnabled',
+      createdAt: 'createdAt',
+      updatedAt: 'updatedAt',
+      customFilter: 'custom filter',
+      regex: 'regex',
+      value: 'value',
+      thresholdType: 'thresholdType',
+      track: 'track',
+      count: '10',
+      seconds: '10',
+      ip: 'ip',
+    }
+  ];
 
-	expect(comp.canAddOverride()).toBe(true);
+  expect(comp.canAddOverride()).toBe(true);
 });
 
 test('canAddOverride strelka', () => {
-	comp.detection.engine = 'strelka';
+  comp.detection.engine = 'strelka';
 
-	expect(comp.canAddOverride()).toBe(false);
+  expect(comp.canAddOverride()).toBe(false);
 });
 
 test('canAddOverride elastalert', () => {
-	comp.detect = {
-		engine: 'elastalert',
-	};
+  comp.detect = {
+    engine: 'elastalert',
+  };
 
-	expect(comp.canAddOverride()).toBe(true);
+  expect(comp.canAddOverride()).toBe(true);
 
-	comp.detection.overrides = [
-		{
-			type: 'customFilter',
-			isEnabled: 'isEnabled',
-			createdAt: 'createdAt',
-			updatedAt: 'updatedAt',
-			customFilter: 'custom filter',
-			regex: 'regex',
-			value: 'value',
-			thresholdType: 'thresholdType',
-			track: 'track',
-			count: '10',
-			seconds: '10',
-			ip: 'ip',
-		},
-	];
+  comp.detection.overrides = [
+    {
+      type: 'customFilter',
+      isEnabled: 'isEnabled',
+      createdAt: 'createdAt',
+      updatedAt: 'updatedAt',
+      customFilter: 'custom filter',
+      regex: 'regex',
+      value: 'value',
+      thresholdType: 'thresholdType',
+      track: 'track',
+      count: '10',
+      seconds: '10',
+      ip: 'ip',
+    },
+  ];
 
-	expect(comp.canAddOverride()).toBe(true);
+  expect(comp.canAddOverride()).toBe(true);
 });
 
 test('tagOverrides', () => {
-	comp.detection = {};
+  comp.detection = {};
 
-	comp.tagOverrides();
+  comp.tagOverrides();
 
-	expect(comp.detection.overrides).toStrictEqual([]);
+  expect(comp.detection.overrides).toStrictEqual([]);
 
-	comp.detection.overrides = [{}, {}, {}];
+  comp.detection.overrides = [{}, {}, {}];
 
-	comp.tagOverrides();
+  comp.tagOverrides();
 
-	for (let i = 0; i < comp.detection.overrides.length; i++) {
-		expect(comp.detection.overrides[i]).toStrictEqual({ index: i });
-	}
+  for (let i = 0; i < comp.detection.overrides.length; i++) {
+    expect(comp.detection.overrides[i]).toStrictEqual({ index: i });
+  }
 });
 
 test('showAiSummary', () => {
-	comp.detection = null;
-	expect(comp.showAiSummary()).toBe(false);
+  comp.detection = null;
+  expect(comp.showAiSummary()).toBe(false);
 
-	comp.detection = { engine: 'strelka' };
-	expect(comp.showAiSummary()).toBe(false);
+  comp.detection = { engine: 'strelka' };
+  expect(comp.showAiSummary()).toBe(false);
 
-	comp.detection.aiSummary = 'aiSummary';
-	expect(comp.showAiSummary()).toBe(false);
+  comp.detection.aiSummary = 'aiSummary';
+  expect(comp.showAiSummary()).toBe(false);
 
-	comp.detection.aiSummaryReviewed = true;
-	expect(comp.showAiSummary()).toBe(true);
+  comp.detection.aiSummaryReviewed = true;
+  expect(comp.showAiSummary()).toBe(true);
 
-	comp.detection.aiSummary = '';
-	expect(comp.showAiSummary()).toBe(false);
+  comp.detection.aiSummary = '';
+  expect(comp.showAiSummary()).toBe(false);
 
-	comp.showUnreviewedAiSummaries = true;
+  comp.showUnreviewedAiSummaries = true;
 
-	comp.detection = null;
-	expect(comp.showAiSummary()).toBe(false);
+  comp.detection = null;
+  expect(comp.showAiSummary()).toBe(false);
 
-	comp.detection = { engine: 'elastalert' };
-	expect(comp.showAiSummary()).toBe(false);
+  comp.detection = { engine: 'elastalert' };
+  expect(comp.showAiSummary()).toBe(false);
 
-	comp.detection.aiSummary = 'aiSummary';
-	expect(comp.showAiSummary()).toBe(true);
+  comp.detection.aiSummary = 'aiSummary';
+  expect(comp.showAiSummary()).toBe(true);
 
-	comp.detection.aiSummaryReviewed = true;
-	expect(comp.showAiSummary()).toBe(true);
+  comp.detection.aiSummaryReviewed = true;
+  expect(comp.showAiSummary()).toBe(true);
 
-	comp.detection.aiSummary = '';
-	expect(comp.showAiSummary()).toBe(false);
+  comp.detection.aiSummary = '';
+  expect(comp.showAiSummary()).toBe(false);
 });
 
 test('validateSuricata success', () => {
@@ -342,114 +342,114 @@ test('addNewOverride', async () => {
 });
 
 test('cleanOverrides suricata', () => {
-	comp.detection = {
-		engine: 'suricata',
-		overrides: [
-			{
-				type: 'modify',
-				isEnabled: 'isEnabled',
-				createdAt: 'createdAt',
-				updatedAt: 'updatedAt',
-				customFilter: 'custom filter',
-				regex: 'regex',
-				value: 'value',
-				thresholdType: 'thresholdType',
-				track: 'track',
-				count: '10',
-				seconds: '10',
-				ip: 'ip',
-			},
-			{
-				type: 'threshold',
-				isEnabled: 'isEnabled',
-				createdAt: 'createdAt',
-				updatedAt: 'updatedAt',
-				customFilter: 'custom filter',
-				regex: 'regex',
-				value: 'value',
-				thresholdType: 'thresholdType',
-				track: 'track',
-				count: '10',
-				seconds: '10',
-				ip: 'ip',
-			},
-			{
-				type: 'suppress',
-				isEnabled: 'isEnabled',
-				createdAt: 'createdAt',
-				updatedAt: 'updatedAt',
-				customFilter: 'custom filter',
-				regex: 'regex',
-				value: 'value',
-				thresholdType: 'thresholdType',
-				track: 'track',
-				count: '10',
-				seconds: '10',
-				ip: 'ip',
-			}
-		],
-	};
+  comp.detection = {
+    engine: 'suricata',
+    overrides: [
+      {
+        type: 'modify',
+        isEnabled: 'isEnabled',
+        createdAt: 'createdAt',
+        updatedAt: 'updatedAt',
+        customFilter: 'custom filter',
+        regex: 'regex',
+        value: 'value',
+        thresholdType: 'thresholdType',
+        track: 'track',
+        count: '10',
+        seconds: '10',
+        ip: 'ip',
+      },
+      {
+        type: 'threshold',
+        isEnabled: 'isEnabled',
+        createdAt: 'createdAt',
+        updatedAt: 'updatedAt',
+        customFilter: 'custom filter',
+        regex: 'regex',
+        value: 'value',
+        thresholdType: 'thresholdType',
+        track: 'track',
+        count: '10',
+        seconds: '10',
+        ip: 'ip',
+      },
+      {
+        type: 'suppress',
+        isEnabled: 'isEnabled',
+        createdAt: 'createdAt',
+        updatedAt: 'updatedAt',
+        customFilter: 'custom filter',
+        regex: 'regex',
+        value: 'value',
+        thresholdType: 'thresholdType',
+        track: 'track',
+        count: '10',
+        seconds: '10',
+        ip: 'ip',
+      }
+    ],
+  };
 
-	comp.cleanupOverrides();
+  comp.cleanupOverrides();
 
-	expect(comp.detection.overrides[0]).toStrictEqual({
-		type: 'modify',
-		isEnabled: 'isEnabled',
-		createdAt: 'createdAt',
-		updatedAt: 'updatedAt',
-		regex: 'regex',
-		value: 'value',
-	});
-	expect(comp.detection.overrides[1]).toStrictEqual({
-		type: 'threshold',
-		isEnabled: 'isEnabled',
-		createdAt: 'createdAt',
-		updatedAt: 'updatedAt',
-		thresholdType: 'thresholdType',
-		track: 'track',
-		count: 10,
-		seconds: 10,
-	});
-	expect(comp.detection.overrides[2]).toStrictEqual({
-		type: 'suppress',
-		isEnabled: 'isEnabled',
-		createdAt: 'createdAt',
-		updatedAt: 'updatedAt',
-		track: 'track',
-		ip: 'ip',
-	});
+  expect(comp.detection.overrides[0]).toStrictEqual({
+    type: 'modify',
+    isEnabled: 'isEnabled',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt',
+    regex: 'regex',
+    value: 'value',
+  });
+  expect(comp.detection.overrides[1]).toStrictEqual({
+    type: 'threshold',
+    isEnabled: 'isEnabled',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt',
+    thresholdType: 'thresholdType',
+    track: 'track',
+    count: 10,
+    seconds: 10,
+  });
+  expect(comp.detection.overrides[2]).toStrictEqual({
+    type: 'suppress',
+    isEnabled: 'isEnabled',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt',
+    track: 'track',
+    ip: 'ip',
+  });
 });
 
 test('cleanOverrides elastalert', () => {
-	comp.detection = {
-		engine: 'elastalert',
-		overrides: [
-			{
-				type: 'custom filter',
-				isEnabled: 'isEnabled',
-				createdAt: 'createdAt',
-				updatedAt: 'updatedAt',
-				customFilter: 'custom filter',
-				regex: 'regex',
-				value: 'value',
-				thresholdType: 'thresholdType',
-				track: 'track',
-				count: '10',
-				seconds: '10',
-				ip: 'ip',
-			},
-		],
-	};
+  comp.detection = {
+    engine: 'elastalert',
+    overrides: [
+      {
+        type: 'custom filter',
+        isEnabled: 'isEnabled',
+        createdAt: 'createdAt',
+        updatedAt: 'updatedAt',
+        customFilter: 'custom filter',
+        regex: 'regex',
+        value: 'value',
+        thresholdType: 'thresholdType',
+        track: 'track',
+        count: '10',
+        seconds: '10',
+        ip: 'ip',
+      },
+    ],
+  };
 
-	comp.cleanupOverrides();
+  comp.cleanupOverrides();
 
-	expect(comp.detection.overrides[0]).toStrictEqual({
-		type: 'custom filter',
-		isEnabled: 'isEnabled',
-		createdAt: 'createdAt',
-		updatedAt: 'updatedAt',
-		customFilter: 'custom filter',
-	});
+  expect(comp.detection.overrides[0]).toStrictEqual({
+    type: 'custom filter',
+    isEnabled: 'isEnabled',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt',
+    customFilter: 'custom filter',
+  });
 });
 
 test('deleteOverride', async () => {
@@ -480,7 +480,8 @@ test('ack emits event', () => {
     null,
     false,
     null,
-    comp.alertInfo.groupIndex
+    comp.alertInfo.groupIndex,
+    true
   ]);
 });
 
@@ -490,7 +491,8 @@ test('escalate emits event', () => {
   expect(comp.emit).toHaveBeenCalledWith('chooseCase', [
     event,
     comp.alertInfo.item,
-    comp.alertInfo.groupIndex
+    comp.alertInfo.groupIndex,
+    true
   ]);
 });
 
@@ -501,39 +503,39 @@ test('closeDetectionPanel emits event', () => {
 
 
 test('pickValue', () => {
-	let opt = {
-		value: 'value',
-		altValues: ['alt1', 'alt2'],
-	};
-	let obj = {
-		value: 'value',
-		alt1: 'ALT1',
-		alt2: 'ALT2',
-	}
+  let opt = {
+    value: 'value',
+    altValues: ['alt1', 'alt2'],
+  };
+  let obj = {
+    value: 'value',
+    alt1: 'ALT1',
+    alt2: 'ALT2',
+  }
 
-	let val = comp.pickValue(obj, opt);
-	expect(val).toBe('value');
+  let val = comp.pickValue(obj, opt);
+  expect(val).toBe('value');
 
-	delete obj.value;
+  delete obj.value;
 
-	val = comp.pickValue(obj, opt);
-	expect(val).toBe('ALT1');
+  val = comp.pickValue(obj, opt);
+  expect(val).toBe('ALT1');
 
-	delete obj.alt1;
+  delete obj.alt1;
 
-	val = comp.pickValue(obj, opt);
-	expect(val).toBe('ALT2');
+  val = comp.pickValue(obj, opt);
+  expect(val).toBe('ALT2');
 
-	delete obj.alt2;
+  delete obj.alt2;
 
-	val = comp.pickValue(obj, opt);
-	expect(val).toBe('');
+  val = comp.pickValue(obj, opt);
+  expect(val).toBe('');
 
-	obj.value = 'track';
-	opt.localize = true;
+  obj.value = 'track';
+  opt.localize = true;
 
-	val = comp.pickValue(obj, opt);
-	expect(val).toBe('Track');
+  val = comp.pickValue(obj, opt);
+  expect(val).toBe('Track');
 });
 
 test('initParams', () => {
