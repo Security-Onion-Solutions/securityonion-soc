@@ -1273,7 +1273,7 @@ func TestHandlerDuplicateDetection(t *testing.T) {
 
 func TestHandlerUpdateDetection(t *testing.T) {
 	handled := NewEntryMatcher(LevelEq(log.InfoLevel), MessageEq("Handled request"))
-	// didNotComplete := NewEntryMatcher(LevelEq(log.WarnLevel), MessageContains("Request did not complete successfully"))
+	didNotComplete := NewEntryMatcher(LevelEq(log.WarnLevel), MessageContains("Request did not complete successfully"))
 	specificTime := time.Date(2025, 1, 1, 12, 30, 0, 0, time.UTC)
 
 	tests := []struct {
@@ -1296,7 +1296,6 @@ func TestHandlerUpdateDetection(t *testing.T) {
 
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
 				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
-				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
 				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
 
 				mDetStore.EXPECT().GetDetectionByPublicId(gomock.Any(), "publicID").Return(nil, nil)
@@ -1342,6 +1341,404 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				Engine:   model.EngineNameElastAlert,
 			},
 			Logs: []EntryMatcher{handled},
+		},
+		{
+			Name:    "Sunny Day - Fail to Merge Aux Data",
+			ReqBody: []byte(`{"id":"12345","publicId":"publicID","language":"sigma","engine":"elastalert","content":"test"}`),
+			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
+
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
+				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
+
+				mDetStore.EXPECT().GetDetectionByPublicId(gomock.Any(), "publicID").Return(nil, nil)
+				orig := &model.Detection{
+					Auditable: model.Auditable{
+						CreateTime: &specificTime,
+					},
+					Author:  "First Last",
+					Ruleset: "__custom__",
+					License: "DRL",
+				}
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(orig, nil)
+
+				mDetStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, det *model.Detection) (*model.Detection, error) {
+					det.UpdateTime = &specificTime
+
+					return det, nil
+				})
+
+				mAuth.Authorized = true
+
+				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
+					assert.True(t, dets[0].PersistChange)
+
+					return nil, nil
+				})
+
+				eng.EXPECT().MergeAuxiliaryData(gomock.Any()).Return(errors.New("something went wrong"))
+			},
+			Code: 200,
+			Response: &model.Detection{
+				Auditable: model.Auditable{
+					Id:         "12345",
+					CreateTime: &specificTime,
+					UpdateTime: &specificTime,
+				},
+				PublicID: "publicID",
+				Author:   "First Last",
+				Content:  "test",
+				Language: "sigma",
+				Ruleset:  "__custom__",
+				License:  "DRL",
+				Engine:   model.EngineNameElastAlert,
+			},
+			Logs: []EntryMatcher{
+				NewEntryMatcher(LevelEq(log.ErrorLevel), MessageEq("unable to merge auxiliary data into detection")),
+				handled,
+			},
+		},
+		{
+			Name:     "Bad Body",
+			ReqBody:  []byte(`not even close to JSON`),
+			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {},
+			Code:     400,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:     "Invalid Detection - Basic",
+			ReqBody:  []byte(`{"engine":"foobar"}`),
+			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {},
+			Code:     400,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:    "Invalid Detection - Engine",
+			ReqBody: []byte(`{"engine":"suricata","content":"test"}`),
+			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameSuricata] = eng
+
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", errors.New("something went wrong"))
+			},
+			Code:     400,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:    "PrepareForSave - Not Found",
+			ReqBody: []byte(`{"engine":"strelka","content":"test","id":"12345"}`),
+			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameStrelka] = eng
+
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
+				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+
+				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
+
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(nil, errors.New("Object not found"))
+			},
+			Code: 404,
+			Logs: []EntryMatcher{
+				handled,
+			},
+		},
+		{
+			Name:    "PrepareForSave - Public ID Exists",
+			ReqBody: []byte(`{"engine":"strelka","content":"test","id":"12345","publicId":"publicID"}`),
+			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameStrelka] = eng
+
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
+				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+
+				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
+
+				mDetStore.EXPECT().GetDetectionByPublicId(gomock.Any(), "publicID").Return(&model.Detection{
+					Auditable: model.Auditable{
+						Id: "67890",
+					},
+				}, nil)
+			},
+			Code:     409,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:    "PrepareForSave - Missing Public ID",
+			ReqBody: []byte(`{"engine":"strelka","content":"test"}`),
+			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameStrelka] = eng
+
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
+				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+
+				eng.EXPECT().ExtractDetails(gomock.Any()).Return(errors.New("rule does not contain a public Id"))
+			},
+			Code:     400,
+			Response: []byte(`"missingPublicIdErr"`),
+			Logs: []EntryMatcher{
+				handled,
+			},
+		},
+		{
+			Name:    "PrepareForSave - Other Errors",
+			ReqBody: []byte(`{"engine":"strelka","content":"test"}`),
+			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameStrelka] = eng
+
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
+				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+
+				eng.EXPECT().ExtractDetails(gomock.Any()).Return(errors.New("something else went wrong"))
+			},
+			Code:     400,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:    "UpdateDetection - Cannot Update IsCommunity",
+			ReqBody: []byte(`{"engine":"strelka","content":"test","id":"12345","isCommunity":true}`),
+			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameStrelka] = eng
+
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
+				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+
+				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
+
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(&model.Detection{}, nil)
+			},
+			Code:     400,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:    "UpdateDetection - Not Found",
+			ReqBody: []byte(`{"engine":"strelka","content":"test","id":"12345"}`),
+			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameStrelka] = eng
+
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
+				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+
+				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
+
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(&model.Detection{}, nil)
+
+				mDetStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).Return(nil, errors.New("Object not found"))
+			},
+			Code:     404,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:    "UpdateDetection - Successful Disable After Bad Sync",
+			ReqBody: []byte(`{"engine":"strelka","content":"test","id":"12345","isEnabled":true}`),
+			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
+
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameStrelka] = eng
+
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
+				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+
+				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
+
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(&model.Detection{IsEnabled: true}, nil)
+
+				mDetStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, det *model.Detection) (*model.Detection, error) {
+					assert.True(t, det.IsEnabled)
+					return det, nil
+				})
+
+				mAuth.Authorized = true
+
+				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).Return(nil, errors.New("something went wrong"))
+
+				mDetStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, det *model.Detection) (*model.Detection, error) {
+					assert.False(t, det.IsEnabled)
+					return det, nil
+				})
+
+				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).Return(nil, nil)
+
+				eng.EXPECT().MergeAuxiliaryData(gomock.Any()).Return(nil)
+			},
+			Code: 206,
+			Response: &model.Detection{
+				Auditable: model.Auditable{
+					Id: "12345",
+				},
+				Content: "test",
+				Engine:  model.EngineNameStrelka,
+			},
+			Logs: []EntryMatcher{
+				NewEntryMatcher(LevelEq(log.ErrorLevel), MessageContains("unable to sync detection; attempting to disable and resync")),
+				handled,
+			},
+		},
+		{
+			Name:    "UpdateDetection - Unsuccessful Disable After Bad Sync",
+			ReqBody: []byte(`{"engine":"strelka","content":"test","id":"12345","isEnabled":true}`),
+			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
+
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameStrelka] = eng
+
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
+				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+
+				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
+
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(&model.Detection{IsEnabled: true}, nil)
+
+				mDetStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, det *model.Detection) (*model.Detection, error) {
+					assert.True(t, det.IsEnabled)
+					return det, nil
+				})
+
+				mAuth.Authorized = true
+
+				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).Return(nil, errors.New("something went wrong"))
+
+				mDetStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, det *model.Detection) (*model.Detection, error) {
+					assert.False(t, det.IsEnabled)
+					return nil, errors.New("something went wrong")
+				})
+			},
+			Code:     500,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				NewEntryMatcher(LevelEq(log.ErrorLevel), MessageContains("unable to sync detection; attempting to disable and resync")),
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:    "Modified By Filters, Bad Sync",
+			ReqBody: []byte(`{"engine":"strelka","content":"test","id":"12345","isEnabled":true}`),
+			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
+
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameStrelka] = eng
+
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
+				eng.EXPECT().ApplyFilters(gomock.Any()).DoAndReturn(func(det *model.Detection) (bool, error) {
+					det.IsEnabled = false
+					return true, nil
+				})
+
+				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
+
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(&model.Detection{IsEnabled: true}, nil)
+
+				mDetStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, det *model.Detection) (*model.Detection, error) {
+					assert.False(t, det.IsEnabled)
+					return det, nil
+				})
+
+				mAuth.Authorized = true
+
+				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).Return(nil, errors.New("something went wrong"))
+			},
+			Code:     500,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:    "Modified By Filters, Good Sync",
+			ReqBody: []byte(`{"engine":"strelka","content":"test","id":"12345","isEnabled":true}`),
+			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
+
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameStrelka] = eng
+
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
+				eng.EXPECT().ApplyFilters(gomock.Any()).DoAndReturn(func(det *model.Detection) (bool, error) {
+					det.IsEnabled = false
+					return true, nil
+				})
+
+				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
+
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(&model.Detection{IsEnabled: true}, nil)
+
+				mDetStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, det *model.Detection) (*model.Detection, error) {
+					assert.False(t, det.IsEnabled)
+					return det, nil
+				})
+
+				mAuth.Authorized = true
+
+				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).Return(nil, nil)
+
+				eng.EXPECT().MergeAuxiliaryData(gomock.Any()).Return(nil)
+			},
+			Code: 205,
+			Response: &model.Detection{
+				Auditable: model.Auditable{
+					Id: "12345",
+				},
+				Content: "test",
+				Engine:  model.EngineNameStrelka,
+			},
+			Logs: []EntryMatcher{
+				handled,
+			},
 		},
 	}
 

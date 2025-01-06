@@ -440,17 +440,6 @@ func (h *DetectionHandler) UpdateDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	err = eng.ExtractDetails(detect)
-	if err != nil {
-		if err.Error() == "rule does not contain a public Id" {
-			web.Respond(w, r, http.StatusBadRequest, "missingPublicIdErr")
-		} else {
-			web.Respond(w, r, http.StatusBadRequest, err)
-		}
-
-		return
-	}
-
 	statusModifiedByFilter := detect.IsEnabled != specifiedStatus
 
 	err = h.PrepareForSave(ctx, detect, eng)
@@ -470,11 +459,7 @@ func (h *DetectionHandler) UpdateDetection(w http.ResponseWriter, r *http.Reques
 
 	detect, err = h.server.Detectionstore.UpdateDetection(ctx, detect)
 	if err != nil {
-		if strings.Contains(err.Error(), "existing non-community detection") {
-			web.Respond(w, r, http.StatusBadRequest, err)
-		} else if strings.Contains(err.Error(), "publicId already exists for this engine") {
-			web.Respond(w, r, http.StatusConflict, err)
-		} else {
+		if err.Error() == "Object not found" {
 			web.Respond(w, r, http.StatusNotFound, err)
 		}
 
@@ -483,9 +468,10 @@ func (h *DetectionHandler) UpdateDetection(w http.ResponseWriter, r *http.Reques
 
 	detect.PersistChange = true
 
+	disabledAfterSync := false
+
 	errMap, err := syncLocalDetections(ctx, h.server, []*model.Detection{detect})
 	if err != nil {
-		fixed := false
 		if detect.IsEnabled && !filterApplied {
 			var uerr error
 			logger.WithError(err).WithField("detection", detect).Error("unable to sync detection; attempting to disable and resync")
@@ -496,15 +482,14 @@ func (h *DetectionHandler) UpdateDetection(w http.ResponseWriter, r *http.Reques
 			detect, uerr = h.server.Detectionstore.UpdateDetection(ctx, detect)
 			if uerr == nil {
 				errMap, err = syncLocalDetections(ctx, h.server, []*model.Detection{detect})
-				fixed = true
+				disabledAfterSync = true
+			} else {
+				err = uerr
 			}
 		}
 
 		if err != nil {
 			web.Respond(w, r, http.StatusInternalServerError, err)
-			return
-		} else if fixed {
-			web.Respond(w, r, http.StatusPartialContent, detect)
 			return
 		}
 	}
@@ -526,6 +511,9 @@ func (h *DetectionHandler) UpdateDetection(w http.ResponseWriter, r *http.Reques
 		// success, but the status was modified by a filter to not be what the user
 		// submitted, send a unique code so the UI can display a message
 		web.Respond(w, r, http.StatusResetContent, detect)
+		return
+	} else if disabledAfterSync {
+		web.Respond(w, r, http.StatusPartialContent, detect)
 		return
 	}
 
