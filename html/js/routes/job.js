@@ -44,10 +44,10 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     this.loadData();
     this.$root.loadParameters('job', this.initActions);
   },
-  beforeDestroy() {
+  beforeUnmount() {
     this.$root.setSubtitle("");
   },
-  destroyed() {
+  unmounted() {
     this.$root.unsubscribe("job", this.updateJob);
   },
   watch: {
@@ -189,7 +189,7 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       this.packetsLoading = true;
       try {
         const response = await this.$root.papi.get('packets', { params: {
-          jobId: this.$route.params.jobId,
+          jobId: this.job.id,
           offset: this.packets.length,
           count: this.count,
           unwrap: unwrap

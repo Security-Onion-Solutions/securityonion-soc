@@ -13,7 +13,7 @@ routes.push({ path: '/downloads', name: 'downloads', component: {
   created() {
     this.$root.subscribe("node", this.updateNode);
   },
-  destroyed() {
+  unmounted() {
     this.$root.unsubscribe("node", this.updateNode);
   },
   watch: {

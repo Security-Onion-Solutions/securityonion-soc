@@ -196,7 +196,7 @@ const huntComponent = {
       { title: this.i18n.interval24h, value: 86400 },
     ];
   },
-  beforeDestroy() {
+  beforeUnmount() {
     this.$root.setSubtitle("");
     this.stopRefreshTimer();
     this.$root.unsubscribe('detections:bulkUpdate', this.bulkUpdateReport);
