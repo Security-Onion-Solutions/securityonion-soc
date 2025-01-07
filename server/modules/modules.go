@@ -17,6 +17,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/hydra"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/influxdb"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/kratos"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/navigator"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/salt"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/sostatus"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/statickeyauth"
@@ -43,6 +44,7 @@ func BuildModuleMap(srv *server.Server) map[string]module.Module {
 	moduleMap["suricataengine"] = suricata.NewSuricataEngine(srv)
 	moduleMap["elastalertengine"] = elastalert.NewElastAlertEngine(srv)
 	moduleMap["strelkaengine"] = strelka.NewStrelkaEngine(srv)
+	moduleMap["navigator"] = navigator.NewNavigator(srv)
 
 	return moduleMap
 }

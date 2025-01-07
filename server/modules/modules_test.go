@@ -22,6 +22,7 @@ func TestBuildModuleMap(t *testing.T) {
 	findModule(t, mm, "salt")
 	findModule(t, mm, "httpcase")
 	findModule(t, mm, "kratos")
+	findModule(t, mm, "navigator")
 	findModule(t, mm, "influxdb")
 	findModule(t, mm, "sostatus")
 	findModule(t, mm, "statickeyauth")
