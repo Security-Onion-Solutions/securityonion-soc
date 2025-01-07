@@ -48,7 +48,18 @@ var (
 	}
 	testSigmaRules = map[string]*model.Detection{
 		"rule1": {
-			Content: "title: Test\ntags:\n  - attack.t1234",
+			Content: `title: Test Sigma Rule
+description: Test rule for navigator
+tags:
+  - attack.t1234
+  - attack.defense_evasion
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4688
+  condition: selection`,
 		},
 	}
 	testAlertMetrics = map[string][]*model.EventMetric{
@@ -87,11 +98,13 @@ func setupTest(t *testing.T) *testSetup {
 }
 
 // Helper for setting up GetAllDetections expectations
-func (ts *testSetup) expectGetAllDetections(returns map[string]*model.Detection, err error) {
-	ts.mockDetectionstore.EXPECT().
-		GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(returns, err).
-		AnyTimes()
+func (ts *testSetup) expectGetAllDetections(engineRules map[model.EngineName]map[string]*model.Detection, err error) {
+	for engineName := range engineRules {
+		ts.mockDetectionstore.EXPECT().
+			GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(engineRules[engineName], err).
+			AnyTimes()
+	}
 }
 
 // Helper for setting up Query expectations
@@ -165,8 +178,15 @@ func TestExtractSuricataTechniques(t *testing.T) {
 	ts := setupTest(t)
 	defer ts.ctrl.Finish()
 
+	// Extract techniques from test rules
+	// testSuricataRules contains:
+	// 1. A rule with a base technique ID (T1234)
+	// 2. A rule with a sub-technique ID (T5678.001) which should be stripped to T5678
 	techniques := extractSuricataTechniques(testSuricataRules, ts.logger)
 
+	// Expected results:
+	// - T1234: directly from rule1
+	// - T5678: stripped from T5678.001 in rule2
 	expected := techniqueMap{
 		"T1234": struct{}{},
 		"T5678": struct{}{}, // Note: sub-technique .001 is stripped
@@ -179,8 +199,14 @@ func TestExtractSigmaTechniques(t *testing.T) {
 	ts := setupTest(t)
 	defer ts.ctrl.Finish()
 
+	// Extract techniques from test rules
+	// testSigmaRules contains a YAML-formatted rule with:
+	// - A technique ID in lowercase (t1234) in the tags section
+	// - The tags section uses the format: attack.<technique_id>
 	techniques := extractSigmaTechniques(testSigmaRules, ts.logger)
 
+	// Expected results:
+	// - T1234: converted from lowercase t1234 in the tags
 	expected := techniqueMap{
 		"T1234": struct{}{},
 	}
@@ -192,45 +218,68 @@ func TestMergeTechniques(t *testing.T) {
 	ts := setupTest(t)
 	defer ts.ctrl.Finish()
 
+	// Create technique maps to merge
+	// map1: contains T1234 and T5678
 	map1 := techniqueMap{
 		"T1234": struct{}{},
-	}
-	map2 := techniqueMap{
 		"T5678": struct{}{},
 	}
+	// map2: contains T5678 (duplicate) and T9012 (new)
+	map2 := techniqueMap{
+		"T5678": struct{}{},
+		"T9012": struct{}{},
+	}
 
+	// Merge the maps together
+	// This tests:
+	// 1. Combining unique techniques (T1234, T9012)
+	// 2. Handling duplicates (T5678 appears in both maps)
 	merged := mergeTechniques(map1, map2)
 
+	// Expected results:
+	// - All unique techniques should be present
+	// - Duplicate T5678 should only appear once
 	expected := techniqueMap{
 		"T1234": struct{}{},
 		"T5678": struct{}{},
+		"T9012": struct{}{},
 	}
 
 	assert.Equal(t, expected, merged)
+	assert.Len(t, merged, 3, "Should have exactly 3 techniques after merging")
 }
 
 func TestCreateLayer(t *testing.T) {
 	ts := setupTest(t)
 	defer ts.ctrl.Finish()
 
+	// This tests the creation of a complete ATT&CK Navigator layer
+	// with all required fields and proper structure
 	layer, err := createLayer("test layer", testTechniques)
 	assert.NoError(t, err)
 
-	// Verify layer structure
+	// Verify layer metadata and version information
 	assert.Equal(t, "test layer", layer["name"])
 	versions := layer["versions"].(map[string]interface{})
 	assert.Equal(t, "4.5", versions["layer"])
 	assert.Equal(t, "5.1.0", versions["navigator"])
 
-	// Verify techniques
+	// Verify technique entries in the layer
+	// Each technique should be:
+	// - Present in the techniques array
+	// - Have enabled=true and score=100
 	techniques := layer["techniques"].([]map[string]interface{})
 	assert.Len(t, techniques, len(testTechniques))
 
-	// Verify each technique is present
+	// Build map of techniques for easy lookup
 	techniqueIDs := make(map[string]bool)
 	for _, tech := range techniques {
 		techniqueIDs[tech["techniqueID"].(string)] = true
+		assert.True(t, tech["enabled"].(bool))
+		assert.Equal(t, 100, tech["score"].(int))
 	}
+
+	// Verify all test techniques are present in the layer
 	for id := range testTechniques {
 		assert.True(t, techniqueIDs[id], "Technique %s should be present", id)
 	}
@@ -294,7 +343,10 @@ func TestStartStop(t *testing.T) {
 	defer ts.ctrl.Finish()
 
 	// Set up expectations
-	ts.expectGetAllDetections(testSuricataRules, nil)
+	ts.expectGetAllDetections(map[model.EngineName]map[string]*model.Detection{
+		model.EngineNameSuricata:   testSuricataRules,
+		model.EngineNameElastAlert: testSigmaRules,
+	}, nil)
 	ts.setupAlertMetrics(testAlertMetrics)
 
 	// Start navigator
@@ -319,6 +371,7 @@ func TestExtractAlertTechniques(t *testing.T) {
 		expectEmpty   bool
 	}{
 		{
+			// Test extracting techniques from alert metrics
 			name:         "Extract techniques from alerts",
 			alertMetrics: testAlertMetrics,
 			expectedTechs: techniqueMap{
@@ -327,6 +380,7 @@ func TestExtractAlertTechniques(t *testing.T) {
 			},
 		},
 		{
+			// Test handling empty alert metrics
 			name:         "Empty alerts",
 			alertMetrics: map[string][]*model.EventMetric{},
 			expectEmpty:  true,
@@ -359,9 +413,15 @@ func TestGenerateNavigatorLayer(t *testing.T) {
 		expectError bool
 	}{
 		{
+			// Test full layer generation with both rules and alerts
 			name: "Generate layer with techniques",
 			setupMocks: func(ts *testSetup) {
-				ts.expectGetAllDetections(testSuricataRules, nil)
+				// Set up detection rules
+				ts.expectGetAllDetections(map[model.EngineName]map[string]*model.Detection{
+					model.EngineNameSuricata:   testSuricataRules,
+					model.EngineNameElastAlert: testSigmaRules,
+				}, nil)
+				// Set up alert metrics
 				ts.setupAlertMetrics(testAlertMetrics)
 			},
 		},
@@ -376,6 +436,7 @@ func TestGenerateNavigatorLayer(t *testing.T) {
 				tt.setupMocks(ts)
 			}
 
+			// Generate layers for all sources
 			err := ts.navigator.generateNavigatorLayer(context.Background(), ts.logger)
 			if tt.expectError {
 				assert.Error(t, err)
@@ -392,9 +453,15 @@ func TestErrorCases(t *testing.T) {
 		setupMocks func(*testSetup)
 	}{
 		{
+			// Test error cases:
+			// - Detection store returns error
+			// - Event store query fails
 			name: "Query error",
 			setupMocks: func(ts *testSetup) {
-				ts.expectGetAllDetections(nil, errors.New("detection error"))
+				ts.expectGetAllDetections(map[model.EngineName]map[string]*model.Detection{
+					model.EngineNameSuricata:   nil,
+					model.EngineNameElastAlert: nil,
+				}, errors.New("detection error"))
 				ts.expectQuery(nil, errors.New("query error"))
 			},
 		},
