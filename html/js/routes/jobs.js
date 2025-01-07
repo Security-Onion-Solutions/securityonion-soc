@@ -44,7 +44,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
   created() {
     this.loadData();
   },
-  destroyed() {
+  unmounted() {
     this.$root.unsubscribe("job", this.updateJob);
   },
   watch: {

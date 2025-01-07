@@ -76,9 +76,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
   }},
   created() {
   },
-  beforeDestroy() {
-  },
-  destroyed() {
+  unmounted() {
     this.$root.unsubscribe("node", this.updateNode);
     this.$root.unsubscribe("status", this.updateStatus);
   },

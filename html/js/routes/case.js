@@ -173,10 +173,10 @@ routes.push({ path: '/case/:id', name: 'case', component: {
         this.loadUrlParameters();
       });
   },
-  beforeDestroy() {
+  beforeUnmount() {
     this.$root.setSubtitle("");
   },
-  destroyed() {
+  unmounted() {
     this.$root.unsubscribe("case", this.updateCase);
     this.$root.unsubscribe("job", this.updateJob);
   },
