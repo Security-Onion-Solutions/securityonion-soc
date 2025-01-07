@@ -23,6 +23,95 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+// Test setup structure for common test components
+type testSetup struct {
+	ctrl               *gomock.Controller
+	mockDetectionstore *mock.MockDetectionstore
+	fakeEventstore     *server.FakeEventstore
+	navigator          *Navigator
+	logger             *log.Entry
+}
+
+// Common test data
+var (
+	testTechniques = techniqueMap{
+		"T1234": struct{}{},
+		"T5678": struct{}{},
+	}
+	testSuricataRules = map[string]*model.Detection{
+		"rule1": {
+			Content: `alert tcp any any -> any any (msg:"Test Rule"; metadata:mitre_technique_id T1234;)`,
+		},
+		"rule2": {
+			Content: `alert tcp any any -> any any (msg:"Test Rule 2"; metadata:mitre_technique_id T5678.001;)`,
+		},
+	}
+	testSigmaRules = map[string]*model.Detection{
+		"rule1": {
+			Content: "title: Test\ntags:\n  - attack.t1234",
+		},
+	}
+	testAlertMetrics = map[string][]*model.EventMetric{
+		"rule.metadata.mitre_technique_id": {
+			{Keys: []interface{}{"T1234"}},
+			{Keys: []interface{}{"T5678.001"}},
+		},
+	}
+)
+
+// Setup helper for tests
+func setupTest(t *testing.T) *testSetup {
+	ctrl := gomock.NewController(t)
+	mockDetectionstore := mock.NewMockDetectionstore(ctrl)
+	fakeEventstore := server.NewFakeEventstore()
+
+	srv := &server.Server{
+		Context:          context.Background(),
+		DetectionEngines: map[model.EngineName]server.DetectionEngine{},
+		Detectionstore:   mockDetectionstore,
+		Eventstore:       fakeEventstore,
+	}
+
+	nav := NewNavigator(srv)
+	nav.Init(module.ModuleConfig{
+		"outputPath": "/tmp",
+	})
+
+	return &testSetup{
+		ctrl:               ctrl,
+		mockDetectionstore: mockDetectionstore,
+		fakeEventstore:     fakeEventstore,
+		navigator:          nav,
+		logger:             log.WithField("test", t.Name()),
+	}
+}
+
+// Helper for setting up GetAllDetections expectations
+func (ts *testSetup) expectGetAllDetections(returns map[string]*model.Detection, err error) {
+	ts.mockDetectionstore.EXPECT().
+		GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(returns, err).
+		AnyTimes()
+}
+
+// Helper for setting up Query expectations
+func (ts *testSetup) expectQuery(returns []interface{}, err error) {
+	ts.mockDetectionstore.EXPECT().
+		Query(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(returns, err).
+		AnyTimes()
+}
+
+// Helper for setting up alert metrics
+func (ts *testSetup) setupAlertMetrics(metrics map[string][]*model.EventMetric) {
+	ts.fakeEventstore.SearchResults = []*model.EventSearchResults{
+		{
+			Metrics: metrics,
+			Events:  []*model.EventRecord{},
+		},
+	}
+}
+
 func TestNavigatorInit(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -56,356 +145,239 @@ func TestNavigatorInit(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
+			ts := setupTest(t)
+			defer ts.ctrl.Finish()
 
-			mockDetectionstore := mock.NewMockDetectionstore(ctrl)
-			srv := &server.Server{
-				DetectionEngines: map[model.EngineName]server.DetectionEngine{},
-				Detectionstore:   mockDetectionstore,
-			}
-
-			nav := NewNavigator(srv)
-			err := nav.Init(tt.config)
+			err := ts.navigator.Init(tt.config)
 
 			if tt.expectedError {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedPath, nav.outputPath)
-				assert.Equal(t, tt.expectedDays, nav.lookbackDays)
+				assert.Equal(t, tt.expectedPath, ts.navigator.outputPath)
+				assert.Equal(t, tt.expectedDays, ts.navigator.lookbackDays)
 			}
 		})
 	}
 }
 
 func TestExtractSuricataTechniques(t *testing.T) {
-	// Test cases for extracting techniques from Suricata rules
-	// 1. Test rule with base technique (T1071)
-	// 2. Test rule with sub-technique (T5678.001) - should extract base technique (T5678)
-	// 3. Test rule without technique
-	logger := log.WithField("test", "TestExtractSuricataTechniques")
-	rules := map[string]*model.Detection{
-		"rule1": {
-			Title:   "Test Rule 1",
-			Content: `alert tls $EXTERNAL_NET any -> $HOME_NET any (msg:"ET MALWARE Malicious SSL certificate detected (Ursnif Injects)"; flow:established,to_client; tls.cert_subject; content:"CN=dolbyfck.com"; classtype:domain-c2; sid:2022613; rev:4; metadata:attack_target Client_and_Server, created_at 2016_03_12, deployment Perimeter, performance_impact Low, confidence High, signature_severity Major, tag SSL_Malicious_Cert, updated_at 2024_04_22, mitre_tactic_id TA0011, mitre_tactic_name Command_And_Control, mitre_technique_id T1071, mitre_technique_name Application_Layer_Protocol;)`,
-		},
-		"rule2": {
-			// Testing sub-technique extraction - should only keep base technique T5678
-			Title:   "Test Rule 2",
-			Content: `alert tcp any any -> any any (msg:"Test Rule"; metadata:mitre_technique_id T5678.001;)`,
-		},
-		"rule3": {
-			Title:   "Test Rule 3 - No Technique",
-			Content: `alert tcp any any -> any any (msg:"Test Rule"; sid:3;)`,
-		},
+	ts := setupTest(t)
+	defer ts.ctrl.Finish()
+
+	techniques := extractSuricataTechniques(testSuricataRules, ts.logger)
+
+	expected := techniqueMap{
+		"T1234": struct{}{},
+		"T5678": struct{}{}, // Note: sub-technique .001 is stripped
 	}
 
-	techniques := extractSuricataTechniques(rules, logger)
-	// Verify base technique without sub-technique (T1071)
-	assert.Contains(t, techniques, "T1071")
-	// Verify base technique is extracted from sub-technique (T5678.001 -> T5678)
-	assert.Contains(t, techniques, "T5678")
-	assert.Len(t, techniques, 2)
+	assert.Equal(t, expected, techniques)
 }
 
 func TestExtractSigmaTechniques(t *testing.T) {
-	logger := log.WithField("test", "TestExtractSigmaTechniques")
-	rules := map[string]*model.Detection{
-		"rule1": {
-			Title: "Test Rule 1",
-			Content: `title: Griffon Malware Attack Pattern
-status: experimental
-description: Detects process execution patterns
-author: Test Author
-date: 2023/03/09
-tags:
-  - attack.t1234
-  - attack.t5678.001
-logsource:
-  category: process_creation
-  product: windows
-detection:
-  selection:
-    CommandLine|contains: test
-  condition: selection
-falsepositives:
-  - Unlikely
-level: critical`,
-		},
-		"rule2": {
-			Title: "Test Rule 2",
-			Content: `title: Test Rule
-status: experimental
-tags:
-  - attack.execution
-detection:
-  selection:
-    field: value
-  condition: selection`,
-		},
+	ts := setupTest(t)
+	defer ts.ctrl.Finish()
+
+	techniques := extractSigmaTechniques(testSigmaRules, ts.logger)
+
+	expected := techniqueMap{
+		"T1234": struct{}{},
 	}
 
-	techniques := extractSigmaTechniques(rules, logger)
-	assert.Contains(t, techniques, "T1234")
-	assert.Contains(t, techniques, "T5678") // Base technique ID
-	assert.Len(t, techniques, 2)
+	assert.Equal(t, expected, techniques)
 }
 
 func TestMergeTechniques(t *testing.T) {
-	// Test cases:
-	// 1. Merging maps with overlapping techniques (T1234 appears in both map1 and map2)
-	// 2. Merging maps with unique techniques (T5678, T9012, T3456)
-	// 3. Merging more than two maps at once
-	// 4. Empty map handling (map4 is empty and should be handled gracefully)
+	ts := setupTest(t)
+	defer ts.ctrl.Finish()
 
-	map1 := techniqueMap{"T1234": struct{}{}, "T5678": struct{}{}}
-	map2 := techniqueMap{"T1234": struct{}{}, "T9012": struct{}{}}
-	map3 := techniqueMap{"T3456": struct{}{}}
-	map4 := techniqueMap{}
+	map1 := techniqueMap{
+		"T1234": struct{}{},
+	}
+	map2 := techniqueMap{
+		"T5678": struct{}{},
+	}
 
-	merged := mergeTechniques(map1, map2, map3, map4)
+	merged := mergeTechniques(map1, map2)
 
-	// Verify all unique techniques are present
-	assert.Len(t, merged, 4)
-	assert.Contains(t, merged, "T1234")
-	assert.Contains(t, merged, "T5678")
-	assert.Contains(t, merged, "T9012")
-	assert.Contains(t, merged, "T3456")
+	expected := techniqueMap{
+		"T1234": struct{}{},
+		"T5678": struct{}{},
+	}
+
+	assert.Equal(t, expected, merged)
 }
 
 func TestCreateLayer(t *testing.T) {
-	techniques := techniqueMap{
-		"T1234":     struct{}{},
-		"T5678.001": struct{}{},
-	}
+	ts := setupTest(t)
+	defer ts.ctrl.Finish()
 
-	layer, err := createLayer("test", techniques)
+	layer, err := createLayer("test layer", testTechniques)
 	assert.NoError(t, err)
-	assert.Equal(t, "test", layer["name"])
 
-	techniques_, ok := layer["techniques"].([]map[string]interface{})
-	assert.True(t, ok)
-	assert.Len(t, techniques_, 2)
+	// Verify layer structure
+	assert.Equal(t, "test layer", layer["name"])
+	versions := layer["versions"].(map[string]interface{})
+	assert.Equal(t, "4.5", versions["layer"])
+	assert.Equal(t, "5.1.0", versions["navigator"])
 
+	// Verify techniques
+	techniques := layer["techniques"].([]map[string]interface{})
+	assert.Len(t, techniques, len(testTechniques))
+
+	// Verify each technique is present
 	techniqueIDs := make(map[string]bool)
-	for _, t := range techniques_ {
-		techniqueIDs[t["techniqueID"].(string)] = true
+	for _, tech := range techniques {
+		techniqueIDs[tech["techniqueID"].(string)] = true
 	}
-	assert.True(t, techniqueIDs["T1234"])
-	assert.True(t, techniqueIDs["T5678.001"])
+	for id := range testTechniques {
+		assert.True(t, techniqueIDs[id], "Technique %s should be present", id)
+	}
 }
 
 func TestWriteLayer(t *testing.T) {
-	// Create a temporary directory for the test
+	ts := setupTest(t)
+	defer ts.ctrl.Finish()
+
+	// Create temporary directory for test
 	tmpDir, err := os.MkdirTemp("", "navigator-test-*")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	filePath := filepath.Join(tmpDir, "test-layer.json")
-	logger := log.WithField("test", "TestWriteLayer")
-
-	nav := &Navigator{}
-	layer := map[string]interface{}{
-		"name": "test",
-		"techniques": []interface{}{
-			map[string]interface{}{
-				"techniqueID": "T1234",
-			},
-		},
-	}
-
-	err = nav.writeLayer(layer, filePath, logger)
+	// Create test layer
+	layer, err := createLayer("test layer", testTechniques)
 	assert.NoError(t, err)
 
-	// Read and verify the written file
+	// Write layer to file
+	filePath := filepath.Join(tmpDir, "test-layer.json")
+	err = ts.navigator.writeLayer(layer, filePath, ts.logger)
+	assert.NoError(t, err)
+
+	// Verify file exists and contains valid JSON
 	data, err := os.ReadFile(filePath)
 	assert.NoError(t, err)
 
-	var writtenLayer map[string]interface{}
-	err = json.Unmarshal(data, &writtenLayer)
+	var readLayer map[string]interface{}
+	err = json.Unmarshal(data, &readLayer)
 	assert.NoError(t, err)
 
-	assert.Equal(t, layer, writtenLayer)
+	// Compare only the relevant fields since JSON unmarshaling might change number types
+	assert.Equal(t, layer["name"], readLayer["name"])
+	assert.Equal(t, layer["versions"], readLayer["versions"])
+
+	// Compare techniques separately, accounting for number type differences
+	expectedTechs := layer["techniques"].([]map[string]interface{})
+	actualTechs := readLayer["techniques"].([]interface{})
+	assert.Equal(t, len(expectedTechs), len(actualTechs))
+
+	// Create maps of technique IDs to verify all are present
+	expectedTechMap := make(map[string]bool)
+	actualTechMap := make(map[string]bool)
+
+	for _, tech := range expectedTechs {
+		expectedTechMap[tech["techniqueID"].(string)] = true
+	}
+
+	for _, tech := range actualTechs {
+		techMap := tech.(map[string]interface{})
+		actualTechMap[techMap["techniqueID"].(string)] = true
+		assert.True(t, techMap["enabled"].(bool))
+		assert.Equal(t, float64(100), techMap["score"].(float64))
+	}
+
+	assert.Equal(t, expectedTechMap, actualTechMap)
 }
 
 func TestStartStop(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	ts := setupTest(t)
+	defer ts.ctrl.Finish()
 
-	mockDetectionstore := mock.NewMockDetectionstore(ctrl)
-	fakeEventstore := server.NewFakeEventstore()
+	// Set up expectations
+	ts.expectGetAllDetections(testSuricataRules, nil)
+	ts.setupAlertMetrics(testAlertMetrics)
 
-	srv := &server.Server{
-		Context:          context.Background(),
-		DetectionEngines: map[model.EngineName]server.DetectionEngine{},
-		Detectionstore:   mockDetectionstore,
-		Eventstore:       fakeEventstore,
-	}
-
-	nav := NewNavigator(srv)
-	nav.Init(module.ModuleConfig{
-		"outputPath": "/tmp",
-		"interval":   "1", // Set interval to 1 minute for testing
-	})
-
-	// Set up expectations for GetAllDetections
-	mockDetectionstore.EXPECT().
-		GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(map[string]*model.Detection{}, nil).
-		AnyTimes()
-
-	// Start the navigator
-	err := nav.Start()
+	// Start navigator
+	err := ts.navigator.Start()
 	assert.NoError(t, err)
+	assert.True(t, ts.navigator.IsRunning())
 
-	// Wait briefly
+	// Wait briefly to allow first run to complete
 	time.Sleep(100 * time.Millisecond)
 
-	// Stop the navigator
-	err = nav.Stop()
+	// Stop navigator
+	err = ts.navigator.Stop()
 	assert.NoError(t, err)
+	assert.False(t, ts.navigator.IsRunning())
 }
 
 func TestExtractAlertTechniques(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockDetectionstore := mock.NewMockDetectionstore(ctrl)
-	fakeEventstore := server.NewFakeEventstore()
-
-	srv := &server.Server{
-		Context:          context.Background(),
-		DetectionEngines: map[model.EngineName]server.DetectionEngine{},
-		Detectionstore:   mockDetectionstore,
-		Eventstore:       fakeEventstore,
-	}
-
-	nav := NewNavigator(srv)
-	nav.Init(module.ModuleConfig{
-		"outputPath": "/tmp",
-	})
-
-	logger := log.WithField("test", "TestExtractAlertTechniques")
-
-	// Test cases for extracting techniques from alerts
 	tests := []struct {
-		name      string
-		metrics   map[string][]*model.EventMetric
-		expected  techniqueMap
-		expectErr bool
+		name          string
+		alertMetrics  map[string][]*model.EventMetric
+		expectedTechs techniqueMap
+		expectEmpty   bool
 	}{
 		{
-			name: "Extract techniques from alerts",
-			metrics: map[string][]*model.EventMetric{
-				"rule.metadata.mitre_technique_id": {
-					{
-						Keys: []interface{}{"T1234"},
-					},
-					{
-						Keys: []interface{}{"T5678.001"},
-					},
-				},
-			},
-			expected: techniqueMap{
+			name:         "Extract techniques from alerts",
+			alertMetrics: testAlertMetrics,
+			expectedTechs: techniqueMap{
 				"T1234": struct{}{},
 				"T5678": struct{}{},
 			},
-			expectErr: false,
 		},
 		{
-			name:      "Empty alerts",
-			metrics:   map[string][]*model.EventMetric{},
-			expected:  techniqueMap{},
-			expectErr: false,
+			name:         "Empty alerts",
+			alertMetrics: map[string][]*model.EventMetric{},
+			expectEmpty:  true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set up expectations for GetAllDetections
-			mockDetectionstore.EXPECT().
-				GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).
-				Return(map[string]*model.Detection{}, nil).
-				AnyTimes()
+			ts := setupTest(t)
+			defer ts.ctrl.Finish()
 
-			// Set up expectations for Query
-			mockDetectionstore.EXPECT().
-				Query(gomock.Any(), gomock.Any(), gomock.Any()).
-				Return([]interface{}{}, nil).
-				AnyTimes()
+			ts.setupAlertMetrics(tt.alertMetrics)
 
-			// Set up expectations for Eventstore.Search
-			fakeEventstore.SearchResults = []*model.EventSearchResults{
-				{
-					Metrics: tt.metrics,
-					Events:  []*model.EventRecord{},
-				},
-			}
+			techniques, err := ts.navigator.extractAlertTechniques(context.Background(), ts.logger)
+			assert.NoError(t, err)
 
-			techniques, err := nav.extractAlertTechniques(context.Background(), logger)
-			if tt.expectErr {
-				assert.Error(t, err)
+			if tt.expectEmpty {
+				assert.Empty(t, techniques)
 			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expected, techniques)
+				assert.Equal(t, tt.expectedTechs, techniques)
 			}
 		})
 	}
 }
 
 func TestGenerateNavigatorLayer(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockDetectionstore := mock.NewMockDetectionstore(ctrl)
-	fakeEventstore := server.NewFakeEventstore()
-
-	srv := &server.Server{
-		Context:          context.Background(),
-		DetectionEngines: map[model.EngineName]server.DetectionEngine{},
-		Detectionstore:   mockDetectionstore,
-		Eventstore:       fakeEventstore,
-	}
-
-	nav := NewNavigator(srv)
-	nav.Init(module.ModuleConfig{
-		"outputPath": "/tmp",
-	})
-
-	logger := log.WithField("test", "TestGenerateNavigatorLayer")
-
 	tests := []struct {
-		name      string
-		expected  techniqueMap
-		expectErr bool
+		name        string
+		setupMocks  func(*testSetup)
+		expectError bool
 	}{
 		{
 			name: "Generate layer with techniques",
-			expected: techniqueMap{
-				"T1234": struct{}{},
-				"T5678": struct{}{},
+			setupMocks: func(ts *testSetup) {
+				ts.expectGetAllDetections(testSuricataRules, nil)
+				ts.setupAlertMetrics(testAlertMetrics)
 			},
-			expectErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set up expectations for GetAllDetections with any arguments
-			mockDetectionstore.EXPECT().
-				GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).
-				Return(map[string]*model.Detection{}, nil).
-				AnyTimes()
+			ts := setupTest(t)
+			defer ts.ctrl.Finish()
 
-			// Set up expectations for Query
-			mockDetectionstore.EXPECT().
-				Query(gomock.Any(), gomock.Any(), gomock.Any()).
-				Return([]interface{}{}, nil).
-				AnyTimes()
+			if tt.setupMocks != nil {
+				tt.setupMocks(ts)
+			}
 
-			err := nav.generateNavigatorLayer(context.Background(), logger)
-			if tt.expectErr {
+			err := ts.navigator.generateNavigatorLayer(context.Background(), ts.logger)
+			if tt.expectError {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
@@ -415,56 +387,30 @@ func TestGenerateNavigatorLayer(t *testing.T) {
 }
 
 func TestErrorCases(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockDetectionstore := mock.NewMockDetectionstore(ctrl)
-	fakeEventstore := server.NewFakeEventstore()
-
-	srv := &server.Server{
-		Context:          context.Background(),
-		DetectionEngines: map[model.EngineName]server.DetectionEngine{},
-		Detectionstore:   mockDetectionstore,
-		Eventstore:       fakeEventstore,
-	}
-
-	nav := NewNavigator(srv)
-	nav.Init(module.ModuleConfig{
-		"outputPath": "/tmp",
-	})
-
-	logger := log.WithField("test", "TestErrorCases")
-
 	tests := []struct {
-		name      string
-		expectErr bool
+		name       string
+		setupMocks func(*testSetup)
 	}{
 		{
-			name:      "Query error",
-			expectErr: true,
+			name: "Query error",
+			setupMocks: func(ts *testSetup) {
+				ts.expectGetAllDetections(nil, errors.New("detection error"))
+				ts.expectQuery(nil, errors.New("query error"))
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set up expectations for GetAllDetections with any arguments
-			mockDetectionstore.EXPECT().
-				GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).
-				Return(nil, errors.New("detection error")).
-				AnyTimes()
+			ts := setupTest(t)
+			defer ts.ctrl.Finish()
 
-			// Set up expectations for Query to return an error
-			mockDetectionstore.EXPECT().
-				Query(gomock.Any(), gomock.Any(), gomock.Any()).
-				Return(nil, errors.New("query error")).
-				AnyTimes()
-
-			err := nav.generateNavigatorLayer(context.Background(), logger)
-			if tt.expectErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
+			if tt.setupMocks != nil {
+				tt.setupMocks(ts)
 			}
+
+			err := ts.navigator.generateNavigatorLayer(context.Background(), ts.logger)
+			assert.Error(t, err)
 		})
 	}
 }

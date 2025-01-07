@@ -31,12 +31,6 @@ var (
 // techniqueMap is a helper type for storing unique technique IDs
 type techniqueMap map[string]struct{}
 
-// navigatorLayer represents the structure for generating ATT&CK Navigator layers
-type navigatorLayer struct {
-	name       string
-	techniques techniqueMap
-}
-
 // layerConfig represents the configuration for a navigator layer including its output path
 type layerConfig struct {
 	name       string
