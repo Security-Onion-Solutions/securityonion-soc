@@ -186,6 +186,8 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       setTimeout(function() { route.loadPackets(unwrap); }, 0); // run async to this event
     },
     async loadPackets(unwrap) {
+      if (!this.job || !this.job.id) return;
+
       this.packetsLoading = true;
       try {
         const response = await this.$root.papi.get('packets', { params: {
