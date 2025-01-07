@@ -58,8 +58,8 @@ type Navigator struct {
 func NewNavigator(srv *server.Server) *Navigator {
 	return &Navigator{
 		server:     srv,
-		techniques: make(techniqueMap),
 		stopChan:   make(chan bool),
+		techniques: make(techniqueMap),
 	}
 }
 

@@ -246,31 +246,21 @@ func TestStartStop(t *testing.T) {
 	nav := NewNavigator(srv)
 	nav.Init(module.ModuleConfig{
 		"outputPath": "/tmp",
+		"interval":   "1", // Set interval to 1 minute for testing
 	})
 
 	// Set up expectations for GetAllDetections
 	mockDetectionstore.EXPECT().
-		GetAllDetections(gomock.Any(), gomock.Eq(model.EngineNameSuricata), gomock.Any()).
+		GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(map[string]*model.Detection{}, nil).
-		AnyTimes()
-
-	mockDetectionstore.EXPECT().
-		GetAllDetections(gomock.Any(), gomock.Eq(model.EngineNameElastAlert), gomock.Any()).
-		Return(map[string]*model.Detection{}, nil).
-		AnyTimes()
-
-	// Set up expectations for Query
-	mockDetectionstore.EXPECT().
-		Query(gomock.Any(), gomock.Any(), gomock.Any()).
-		Return([]interface{}{}, nil).
 		AnyTimes()
 
 	// Start the navigator
 	err := nav.Start()
 	assert.NoError(t, err)
 
-	// Wait for a bit
-	time.Sleep(2 * time.Second)
+	// Wait briefly
+	time.Sleep(100 * time.Millisecond)
 
 	// Stop the navigator
 	err = nav.Stop()
