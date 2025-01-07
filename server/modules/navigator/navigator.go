@@ -287,6 +287,10 @@ func (nav *Navigator) extractAlertTechniques(ctx context.Context, logger *log.En
 			if !ok || key == "" {
 				continue
 			}
+			// Strip sub-technique ID (anything after the dot)
+			if dotIndex := strings.Index(key, "."); dotIndex != -1 {
+				key = key[:dotIndex]
+			}
 			techniques[strings.ToUpper(key)] = struct{}{}
 			logger.WithFields(log.Fields{
 				"nav_technique_id": key,

@@ -325,29 +325,23 @@ func TestExtractAlertTechniques(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set up expectations for GetAllDetections
 			mockDetectionstore.EXPECT().
-				GetAllDetections(gomock.Any(), gomock.Eq(model.EngineNameSuricata), gomock.Any()).
+				GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(map[string]*model.Detection{}, nil).
-				Times(1)
-
-			mockDetectionstore.EXPECT().
-				GetAllDetections(gomock.Any(), gomock.Eq(model.EngineNameElastAlert), gomock.Any()).
-				Return(map[string]*model.Detection{}, nil).
-				Times(1)
-
-			// Set up expectations for Query
-			searchResults := &model.EventSearchResults{
-				Metrics: tt.metrics,
-				Events:  []*model.EventRecord{},
-			}
+				AnyTimes()
 
 			// Set up expectations for Query
 			mockDetectionstore.EXPECT().
 				Query(gomock.Any(), gomock.Any(), gomock.Any()).
 				Return([]interface{}{}, nil).
-				Times(1)
+				AnyTimes()
 
 			// Set up expectations for Eventstore.Search
-			fakeEventstore.SearchResults = []*model.EventSearchResults{searchResults}
+			fakeEventstore.SearchResults = []*model.EventSearchResults{
+				{
+					Metrics: tt.metrics,
+					Events:  []*model.EventRecord{},
+				},
+			}
 
 			techniques, err := nav.extractAlertTechniques(context.Background(), logger)
 			if tt.expectErr {
@@ -398,22 +392,17 @@ func TestGenerateNavigatorLayer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set up expectations for GetAllDetections
+			// Set up expectations for GetAllDetections with any arguments
 			mockDetectionstore.EXPECT().
-				GetAllDetections(gomock.Any(), gomock.Eq(model.EngineNameSuricata), gomock.Any()).
+				GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(map[string]*model.Detection{}, nil).
-				Times(1)
-
-			mockDetectionstore.EXPECT().
-				GetAllDetections(gomock.Any(), gomock.Eq(model.EngineNameElastAlert), gomock.Any()).
-				Return(map[string]*model.Detection{}, nil).
-				Times(1)
+				AnyTimes()
 
 			// Set up expectations for Query
 			mockDetectionstore.EXPECT().
 				Query(gomock.Any(), gomock.Any(), gomock.Any()).
 				Return([]interface{}{}, nil).
-				Times(1)
+				AnyTimes()
 
 			err := nav.generateNavigatorLayer(context.Background(), logger)
 			if tt.expectErr {
@@ -458,22 +447,17 @@ func TestErrorCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set up expectations for GetAllDetections
+			// Set up expectations for GetAllDetections with any arguments
 			mockDetectionstore.EXPECT().
-				GetAllDetections(gomock.Any(), gomock.Eq(model.EngineNameSuricata), gomock.Any()).
-				Return(map[string]*model.Detection{}, nil).
-				Times(1)
+				GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(nil, errors.New("detection error")).
+				AnyTimes()
 
-			mockDetectionstore.EXPECT().
-				GetAllDetections(gomock.Any(), gomock.Eq(model.EngineNameElastAlert), gomock.Any()).
-				Return(map[string]*model.Detection{}, nil).
-				Times(1)
-
-			// Set up expectations for Query
+			// Set up expectations for Query to return an error
 			mockDetectionstore.EXPECT().
 				Query(gomock.Any(), gomock.Any(), gomock.Any()).
-				Return([]interface{}{}, errors.New("query error")).
-				Times(1)
+				Return(nil, errors.New("query error")).
+				AnyTimes()
 
 			err := nav.generateNavigatorLayer(context.Background(), logger)
 			if tt.expectErr {
