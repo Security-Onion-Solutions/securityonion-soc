@@ -68,6 +68,14 @@ func (nav *Navigator) PrerequisiteModules() []string {
 }
 
 func (nav *Navigator) Init(cfg module.ModuleConfig) error {
+	if cfg == nil || len(cfg) == 0 {
+		return fmt.Errorf("empty configuration provided")
+	}
+
+	if _, ok := cfg["outputPath"]; !ok {
+		return fmt.Errorf("outputPath is required")
+	}
+
 	nav.config = cfg
 	intervalMinutes := module.GetIntDefault(cfg, "intervalMinutes", DEFAULT_INTERVAL_MINUTES)
 	nav.interval = time.Duration(intervalMinutes) * time.Minute
@@ -167,10 +175,12 @@ func extractSuricataTechniques(rules map[string]*model.Detection, logger *log.En
 
 		if match := suricataTechniqueRegex.FindStringSubmatch(rule.Content); len(match) > 1 {
 			techniqueID := strings.ToUpper(match[1])
-			techniques[techniqueID] = struct{}{}
+			// Extract base technique ID by splitting on '.' and taking the first part
+			baseTechniqueID := strings.Split(techniqueID, ".")[0]
+			techniques[baseTechniqueID] = struct{}{}
 			logger.WithFields(log.Fields{
 				"nav_rule.uuid":    rule.PublicID,
-				"nav_technique_id": techniqueID,
+				"nav_technique_id": baseTechniqueID,
 			}).Debug("extracted technique ID from Suricata rule")
 		} else {
 			logger.WithField("nav_rule.uuid", rule.PublicID).Debug("no technique ID found in rule")
