@@ -12,18 +12,22 @@ import (
 	"errors"
 	"fmt"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
-	"github.com/security-onion-solutions/securityonion-soc/server"
+	. "github.com/security-onion-solutions/securityonion-soc/server"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
+	modcontext "github.com/security-onion-solutions/securityonion-soc/server/modules/context"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/elastalert"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/strelka"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/suricata"
 	"github.com/security-onion-solutions/securityonion-soc/util"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
 	"github.com/go-chi/chi/v5"
@@ -329,9 +333,9 @@ func TestPrepareForSave(t *testing.T) {
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
 
-	fakeSrv := server.NewFakeAuthorizedServer(nil)
-	handler := server.NewDetectionHandler(fakeSrv)
-	engines := map[model.EngineName]server.DetectionEngine{
+	fakeSrv := NewFakeAuthorizedServer(nil)
+	handler := NewDetectionHandler(fakeSrv)
+	engines := map[model.EngineName]DetectionEngine{
 		model.EngineNameElastAlert: elastalert.NewElastAlertEngine(fakeSrv),
 		model.EngineNameStrelka:    strelka.NewStrelkaEngine(fakeSrv),
 		model.EngineNameSuricata:   suricata.NewSuricataEngine(fakeSrv),
@@ -374,11 +378,11 @@ func TestPrepareForSave(t *testing.T) {
 }
 
 func TestHandlerGetDetection(t *testing.T) {
-	handled := NewEntryMatcher(LevelEq(log.InfoLevel), MessageEq("Handled request"))
+	handled := NewEntryMatcher(LogLevelEq(log.InfoLevel), LogMessageEq("Handled request"))
 	tests := []struct {
 		Name     string
 		Id       string
-		InitMock func(*server.Server, *gomock.Controller)
+		InitMock func(*Server, *gomock.Controller)
 		Code     int
 		Body     any
 		Logs     []EntryMatcher
@@ -386,7 +390,7 @@ func TestHandlerGetDetection(t *testing.T) {
 		{
 			Name: "Sunny Day",
 			Id:   "12345",
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				det := &model.Detection{
@@ -408,7 +412,7 @@ func TestHandlerGetDetection(t *testing.T) {
 		{
 			Name: "Detection Not Found - 404",
 			Id:   "12345",
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(nil, errors.New("Object not found"))
@@ -419,7 +423,7 @@ func TestHandlerGetDetection(t *testing.T) {
 		{
 			Name: "ElasticSearch Error - 500",
 			Id:   "12345",
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(nil, errors.New("all shards failed"))
@@ -427,14 +431,14 @@ func TestHandlerGetDetection(t *testing.T) {
 			Code: 500,
 			Body: []byte(`The request could not be processed.`),
 			Logs: []EntryMatcher{
-				NewEntryMatcher(LevelEq(log.WarnLevel), MessageContains("Request did not complete successfully")),
+				NewEntryMatcher(LogLevelEq(log.WarnLevel), LogMessageContains("Request did not complete successfully")),
 				handled,
 			},
 		},
 		{
 			Name: "Unexpected Engine",
 			Id:   "12345",
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(&model.Detection{Engine: "FooBar"}, nil)
@@ -444,14 +448,14 @@ func TestHandlerGetDetection(t *testing.T) {
 				Engine: "FooBar",
 			},
 			Logs: []EntryMatcher{
-				NewEntryMatcher(LevelEq(log.ErrorLevel), MessageContains("retrieved detection with unsupported engine")),
+				NewEntryMatcher(LogLevelEq(log.ErrorLevel), LogMessageContains("retrieved detection with unsupported engine")),
 				handled,
 			},
 		},
 		{
 			Name: "Merge Aux Data Problem",
 			Id:   "12345",
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				det := &model.Detection{
@@ -469,7 +473,7 @@ func TestHandlerGetDetection(t *testing.T) {
 				Engine: model.EngineNameSuricata,
 			},
 			Logs: []EntryMatcher{
-				NewEntryMatcher(LevelEq(log.ErrorLevel), MessageContains("unable to merge auxiliary data into detection")),
+				NewEntryMatcher(LogLevelEq(log.ErrorLevel), LogMessageContains("unable to merge auxiliary data into detection")),
 				handled,
 			},
 		},
@@ -481,17 +485,17 @@ func TestHandlerGetDetection(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.Name, func(t *testing.T) {
-			srv := server.NewMockServer(t, ctrl, &config.ServerConfig{})
+			srv := NewMockServer(t, ctrl, &config.ServerConfig{})
 
-			h := server.NewDetectionHandler(srv)
+			h := NewDetectionHandler(srv)
 
 			test.InitMock(srv, ctrl)
 
 			rctx := chi.NewRouteContext()
 			rctx.URLParams.Add("id", test.Id)
 
-			ctx := server.NewTestContext(rctx)
-			mem, l := server.NewInMemoryLogger()
+			ctx := NewTestContext(rctx)
+			mem, l := NewInMemoryLogger()
 
 			ctx = log.NewContext(ctx, l)
 
@@ -532,11 +536,11 @@ func TestHandlerGetDetection(t *testing.T) {
 }
 
 func TestHandlerGetByPublicID(t *testing.T) {
-	handled := NewEntryMatcher(LevelEq(log.InfoLevel), MessageEq("Handled request"))
+	handled := NewEntryMatcher(LogLevelEq(log.InfoLevel), LogMessageEq("Handled request"))
 	tests := []struct {
 		Name     string
 		PublicId string
-		InitMock func(*server.Server, *gomock.Controller)
+		InitMock func(*Server, *gomock.Controller)
 		Code     int
 		Body     any
 		Logs     []EntryMatcher
@@ -544,7 +548,7 @@ func TestHandlerGetByPublicID(t *testing.T) {
 		{
 			Name:     "Sunny Day",
 			PublicId: "12345",
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				det := &model.Detection{
@@ -566,7 +570,7 @@ func TestHandlerGetByPublicID(t *testing.T) {
 		{
 			Name:     "Detection Not Found - 404",
 			PublicId: "12345",
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				mDetStore.EXPECT().GetDetectionByPublicId(gomock.Any(), "12345").Return(nil, errors.New("Object not found"))
@@ -577,7 +581,7 @@ func TestHandlerGetByPublicID(t *testing.T) {
 		{
 			Name:     "Detection Not Found 2 - 404",
 			PublicId: "12345",
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				mDetStore.EXPECT().GetDetectionByPublicId(gomock.Any(), "12345").Return(nil, nil)
@@ -588,7 +592,7 @@ func TestHandlerGetByPublicID(t *testing.T) {
 		{
 			Name:     "ElasticSearch Error - 500",
 			PublicId: "12345",
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				mDetStore.EXPECT().GetDetectionByPublicId(gomock.Any(), "12345").Return(nil, errors.New("all shards failed"))
@@ -596,14 +600,14 @@ func TestHandlerGetByPublicID(t *testing.T) {
 			Code: 500,
 			Body: []byte(`The request could not be processed.`),
 			Logs: []EntryMatcher{
-				NewEntryMatcher(LevelEq(log.WarnLevel), MessageContains("Request did not complete successfully")),
+				NewEntryMatcher(LogLevelEq(log.WarnLevel), LogMessageContains("Request did not complete successfully")),
 				handled,
 			},
 		},
 		{
 			Name:     "Unexpected Engine",
 			PublicId: "12345",
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				mDetStore.EXPECT().GetDetectionByPublicId(gomock.Any(), "12345").Return(&model.Detection{Engine: "FooBar"}, nil)
@@ -613,14 +617,14 @@ func TestHandlerGetByPublicID(t *testing.T) {
 				Engine: "FooBar",
 			},
 			Logs: []EntryMatcher{
-				NewEntryMatcher(LevelEq(log.ErrorLevel), MessageContains("retrieved detection with unsupported engine")),
+				NewEntryMatcher(LogLevelEq(log.ErrorLevel), LogMessageContains("retrieved detection with unsupported engine")),
 				handled,
 			},
 		},
 		{
 			Name:     "Merge Aux Data Problem",
 			PublicId: "12345",
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				det := &model.Detection{
@@ -638,7 +642,7 @@ func TestHandlerGetByPublicID(t *testing.T) {
 				Engine: model.EngineNameSuricata,
 			},
 			Logs: []EntryMatcher{
-				NewEntryMatcher(LevelEq(log.ErrorLevel), MessageContains("unable to merge auxiliary data into detection")),
+				NewEntryMatcher(LogLevelEq(log.ErrorLevel), LogMessageContains("unable to merge auxiliary data into detection")),
 				handled,
 			},
 		},
@@ -650,17 +654,17 @@ func TestHandlerGetByPublicID(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.Name, func(t *testing.T) {
-			srv := server.NewMockServer(t, ctrl, &config.ServerConfig{})
+			srv := NewMockServer(t, ctrl, &config.ServerConfig{})
 
-			h := server.NewDetectionHandler(srv)
+			h := NewDetectionHandler(srv)
 
 			test.InitMock(srv, ctrl)
 
 			rctx := chi.NewRouteContext()
 			rctx.URLParams.Add("publicid", test.PublicId)
 
-			ctx := server.NewTestContext(rctx)
-			mem, l := server.NewInMemoryLogger()
+			ctx := NewTestContext(rctx)
+			mem, l := NewInMemoryLogger()
 
 			ctx = log.NewContext(ctx, l)
 
@@ -701,14 +705,14 @@ func TestHandlerGetByPublicID(t *testing.T) {
 }
 
 func TestHandlerCreateDetection(t *testing.T) {
-	handled := NewEntryMatcher(LevelEq(log.InfoLevel), MessageEq("Handled request"))
-	didNotComplete := NewEntryMatcher(LevelEq(log.WarnLevel), MessageContains("Request did not complete successfully"))
+	handled := NewEntryMatcher(LogLevelEq(log.InfoLevel), LogMessageEq("Handled request"))
+	didNotComplete := NewEntryMatcher(LogLevelEq(log.WarnLevel), LogMessageContains("Request did not complete successfully"))
 	specificTime := time.Date(2025, 1, 1, 12, 30, 0, 0, time.UTC)
 
 	tests := []struct {
 		Name     string
 		ReqBody  []byte
-		InitMock func(*server.Server, *gomock.Controller)
+		InitMock func(*Server, *gomock.Controller)
 		Code     int
 		Response any
 		Logs     []EntryMatcher
@@ -716,7 +720,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 		{
 			Name:    "Sunny Day",
 			ReqBody: []byte(`{"language":"sigma","content":"test", "overrides": [{}]}`),
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 				mUserStore := srv.Userstore.(*servermock.MockUserstore)
 				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
@@ -770,7 +774,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 		{
 			Name:     "Reject Creating a Community Rule",
 			ReqBody:  []byte(`{"language":"sigma","content":"test","isCommunity":true}`),
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {},
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {},
 			Code:     400,
 			Response: []byte(`The request could not be processed.`),
 			Logs: []EntryMatcher{
@@ -781,7 +785,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 		{
 			Name:     "Bad Request Body",
 			ReqBody:  []byte(`detection JSON goes here`),
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {},
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {},
 			Code:     400,
 			Response: []byte(`The request could not be processed.`),
 			Logs: []EntryMatcher{
@@ -792,7 +796,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 		{
 			Name:     "Unsupported Language/Engine",
 			ReqBody:  []byte(`{"language": "FooBar"}`),
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {},
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {},
 			Code:     400,
 			Response: []byte(`The request could not be processed.`),
 			Logs: []EntryMatcher{
@@ -803,7 +807,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 		{
 			Name:    "Invalid Rule",
 			ReqBody: []byte(`{"language":"suricata","content":"test"}`),
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
 				srv.DetectionEngines[model.EngineNameSuricata] = eng
 
@@ -819,7 +823,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 		{
 			Name:    "Modified By Filters",
 			ReqBody: []byte(`{"language":"yara","content":"test"}`),
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 				mUserStore := srv.Userstore.(*servermock.MockUserstore)
 				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
@@ -871,7 +875,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 		{
 			Name:    "Extract Details Failure - No Public ID",
 			ReqBody: []byte(`{"language":"sigma","content":"test"}`),
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
 				srv.DetectionEngines[model.EngineNameElastAlert] = eng
 
@@ -885,7 +889,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 		{
 			Name:    "Extract Details Failure - Other",
 			ReqBody: []byte(`{"language":"sigma","content":"test"}`),
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
 				srv.DetectionEngines[model.EngineNameElastAlert] = eng
 
@@ -902,7 +906,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 		{
 			Name:    "Detection Already Exists",
 			ReqBody: []byte(`{"language":"sigma","content":"test"}`),
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 				mUserStore := srv.Userstore.(*servermock.MockUserstore)
 
@@ -933,14 +937,14 @@ func TestHandlerCreateDetection(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.Name, func(t *testing.T) {
-			srv := server.NewMockServer(t, ctrl, &config.ServerConfig{})
+			srv := NewMockServer(t, ctrl, &config.ServerConfig{})
 
-			h := server.NewDetectionHandler(srv)
+			h := NewDetectionHandler(srv)
 
 			test.InitMock(srv, ctrl)
 
-			ctx := server.NewTestContext(nil)
-			mem, l := server.NewInMemoryLogger()
+			ctx := NewTestContext(nil)
+			mem, l := NewInMemoryLogger()
 
 			ctx = log.NewContext(ctx, l)
 
@@ -995,13 +999,13 @@ func TestHandlerCreateDetection(t *testing.T) {
 }
 
 func TestHandlerGetDetectionHistory(t *testing.T) {
-	handled := NewEntryMatcher(LevelEq(log.InfoLevel), MessageEq("Handled request"))
-	didNotComplete := NewEntryMatcher(LevelEq(log.WarnLevel), MessageContains("Request did not complete successfully"))
+	handled := NewEntryMatcher(LogLevelEq(log.InfoLevel), LogMessageEq("Handled request"))
+	didNotComplete := NewEntryMatcher(LogLevelEq(log.WarnLevel), LogMessageContains("Request did not complete successfully"))
 
 	tests := []struct {
 		Name     string
 		Id       string
-		InitMock func(*server.Server, *gomock.Controller)
+		InitMock func(*Server, *gomock.Controller)
 		Code     int
 		Response any
 		Logs     []EntryMatcher
@@ -1009,7 +1013,7 @@ func TestHandlerGetDetectionHistory(t *testing.T) {
 		{
 			Name: "Sunny Day",
 			Id:   "12345",
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				mDetStore.EXPECT().GetDetectionHistory(gomock.Any(), "12345").Return([]any{"Hello", "World"}, nil)
@@ -1021,7 +1025,7 @@ func TestHandlerGetDetectionHistory(t *testing.T) {
 		{
 			Name: "Not Found",
 			Id:   "12345",
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				mDetStore.EXPECT().GetDetectionHistory(gomock.Any(), "12345").Return(nil, errors.New("something went wrong"))
@@ -1041,17 +1045,17 @@ func TestHandlerGetDetectionHistory(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.Name, func(t *testing.T) {
-			srv := server.NewMockServer(t, ctrl, &config.ServerConfig{})
+			srv := NewMockServer(t, ctrl, &config.ServerConfig{})
 
-			h := server.NewDetectionHandler(srv)
+			h := NewDetectionHandler(srv)
 
 			test.InitMock(srv, ctrl)
 
 			rctx := chi.NewRouteContext()
 			rctx.URLParams.Add("id", test.Id)
 
-			ctx := server.NewTestContext(rctx)
-			mem, l := server.NewInMemoryLogger()
+			ctx := NewTestContext(rctx)
+			mem, l := NewInMemoryLogger()
 
 			ctx = log.NewContext(ctx, l)
 
@@ -1086,13 +1090,13 @@ func TestHandlerGetDetectionHistory(t *testing.T) {
 }
 
 func TestHandlerDuplicateDetection(t *testing.T) {
-	handled := NewEntryMatcher(LevelEq(log.InfoLevel), MessageEq("Handled request"))
-	didNotComplete := NewEntryMatcher(LevelEq(log.WarnLevel), MessageContains("Request did not complete successfully"))
+	handled := NewEntryMatcher(LogLevelEq(log.InfoLevel), LogMessageEq("Handled request"))
+	didNotComplete := NewEntryMatcher(LogLevelEq(log.WarnLevel), LogMessageContains("Request did not complete successfully"))
 
 	tests := []struct {
 		Name     string
 		Id       string
-		InitMock func(*server.Server, *gomock.Controller)
+		InitMock func(*Server, *gomock.Controller)
 		Code     int
 		Response any
 		Logs     []EntryMatcher
@@ -1100,7 +1104,7 @@ func TestHandlerDuplicateDetection(t *testing.T) {
 		{
 			Name: "Sunny Day",
 			Id:   "12345",
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
@@ -1130,7 +1134,7 @@ func TestHandlerDuplicateDetection(t *testing.T) {
 		{
 			Name: "Not Found",
 			Id:   "12345",
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(nil, errors.New("not found"))
 			},
@@ -1144,7 +1148,7 @@ func TestHandlerDuplicateDetection(t *testing.T) {
 		{
 			Name: "Unsupported Engine",
 			Id:   "12345",
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				orig := &model.Detection{
@@ -1162,7 +1166,7 @@ func TestHandlerDuplicateDetection(t *testing.T) {
 		{
 			Name: "Failed to Duplicate",
 			Id:   "12345",
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
@@ -1186,7 +1190,7 @@ func TestHandlerDuplicateDetection(t *testing.T) {
 		{
 			Name: "Failed to Create",
 			Id:   "12345",
-			InitMock: func(srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
@@ -1221,17 +1225,17 @@ func TestHandlerDuplicateDetection(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.Name, func(t *testing.T) {
-			srv := server.NewMockServer(t, ctrl, &config.ServerConfig{})
+			srv := NewMockServer(t, ctrl, &config.ServerConfig{})
 
-			h := server.NewDetectionHandler(srv)
+			h := NewDetectionHandler(srv)
 
 			test.InitMock(srv, ctrl)
 
 			rctx := chi.NewRouteContext()
 			rctx.URLParams.Add("id", test.Id)
 
-			ctx := server.NewTestContext(rctx)
-			mem, l := server.NewInMemoryLogger()
+			ctx := NewTestContext(rctx)
+			mem, l := NewInMemoryLogger()
 
 			ctx = log.NewContext(ctx, l)
 
@@ -1272,14 +1276,14 @@ func TestHandlerDuplicateDetection(t *testing.T) {
 }
 
 func TestHandlerUpdateDetection(t *testing.T) {
-	handled := NewEntryMatcher(LevelEq(log.InfoLevel), MessageEq("Handled request"))
-	didNotComplete := NewEntryMatcher(LevelEq(log.WarnLevel), MessageContains("Request did not complete successfully"))
+	handled := NewEntryMatcher(LogLevelEq(log.InfoLevel), LogMessageEq("Handled request"))
+	didNotComplete := NewEntryMatcher(LogLevelEq(log.WarnLevel), LogMessageContains("Request did not complete successfully"))
 	specificTime := time.Date(2025, 1, 1, 12, 30, 0, 0, time.UTC)
 
 	tests := []struct {
 		Name     string
 		ReqBody  []byte
-		InitMock func(*testing.T, *server.Server, *gomock.Controller)
+		InitMock func(*testing.T, *Server, *gomock.Controller)
 		Code     int
 		Response any
 		Logs     []EntryMatcher
@@ -1287,7 +1291,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 		{
 			Name:    "Sunny Day",
 			ReqBody: []byte(`{"id":"12345","publicId":"publicID","language":"sigma","engine":"elastalert","content":"test"}`),
-			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
 
@@ -1345,7 +1349,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 		{
 			Name:    "Sunny Day - Fail to Merge Aux Data",
 			ReqBody: []byte(`{"id":"12345","publicId":"publicID","language":"sigma","engine":"elastalert","content":"test"}`),
-			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
 
@@ -1399,14 +1403,14 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				Engine:   model.EngineNameElastAlert,
 			},
 			Logs: []EntryMatcher{
-				NewEntryMatcher(LevelEq(log.ErrorLevel), MessageEq("unable to merge auxiliary data into detection")),
+				NewEntryMatcher(LogLevelEq(log.ErrorLevel), LogMessageEq("unable to merge auxiliary data into detection")),
 				handled,
 			},
 		},
 		{
 			Name:     "Bad Body",
 			ReqBody:  []byte(`not even close to JSON`),
-			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {},
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {},
 			Code:     400,
 			Response: []byte(`The request could not be processed.`),
 			Logs: []EntryMatcher{
@@ -1417,7 +1421,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 		{
 			Name:     "Invalid Detection - Basic",
 			ReqBody:  []byte(`{"engine":"foobar"}`),
-			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {},
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {},
 			Code:     400,
 			Response: []byte(`The request could not be processed.`),
 			Logs: []EntryMatcher{
@@ -1428,7 +1432,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 		{
 			Name:    "Invalid Detection - Engine",
 			ReqBody: []byte(`{"engine":"suricata","content":"test"}`),
-			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
 				srv.DetectionEngines[model.EngineNameSuricata] = eng
 
@@ -1444,7 +1448,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 		{
 			Name:    "PrepareForSave - Not Found",
 			ReqBody: []byte(`{"engine":"strelka","content":"test","id":"12345"}`),
-			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
@@ -1465,7 +1469,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 		{
 			Name:    "PrepareForSave - Public ID Exists",
 			ReqBody: []byte(`{"engine":"strelka","content":"test","id":"12345","publicId":"publicID"}`),
-			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
@@ -1492,7 +1496,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 		{
 			Name:    "PrepareForSave - Missing Public ID",
 			ReqBody: []byte(`{"engine":"strelka","content":"test"}`),
-			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
 				srv.DetectionEngines[model.EngineNameStrelka] = eng
 
@@ -1510,7 +1514,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 		{
 			Name:    "PrepareForSave - Other Errors",
 			ReqBody: []byte(`{"engine":"strelka","content":"test"}`),
-			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
 				srv.DetectionEngines[model.EngineNameStrelka] = eng
 
@@ -1529,7 +1533,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 		{
 			Name:    "UpdateDetection - Cannot Update IsCommunity",
 			ReqBody: []byte(`{"engine":"strelka","content":"test","id":"12345","isCommunity":true}`),
-			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
@@ -1552,7 +1556,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 		{
 			Name:    "UpdateDetection - Not Found",
 			ReqBody: []byte(`{"engine":"strelka","content":"test","id":"12345"}`),
-			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 
 				eng := servermock.NewMockDetectionEngine(ctrl)
@@ -1577,7 +1581,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 		{
 			Name:    "UpdateDetection - Successful Disable After Bad Sync",
 			ReqBody: []byte(`{"engine":"strelka","content":"test","id":"12345","isEnabled":true}`),
-			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
 
@@ -1618,14 +1622,14 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				Engine:  model.EngineNameStrelka,
 			},
 			Logs: []EntryMatcher{
-				NewEntryMatcher(LevelEq(log.ErrorLevel), MessageContains("unable to sync detection; attempting to disable and resync")),
+				NewEntryMatcher(LogLevelEq(log.ErrorLevel), LogMessageContains("unable to sync detection; attempting to disable and resync")),
 				handled,
 			},
 		},
 		{
 			Name:    "UpdateDetection - Unsuccessful Disable After Bad Sync",
 			ReqBody: []byte(`{"engine":"strelka","content":"test","id":"12345","isEnabled":true}`),
-			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
 
@@ -1656,7 +1660,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 			Code:     500,
 			Response: []byte(`The request could not be processed.`),
 			Logs: []EntryMatcher{
-				NewEntryMatcher(LevelEq(log.ErrorLevel), MessageContains("unable to sync detection; attempting to disable and resync")),
+				NewEntryMatcher(LogLevelEq(log.ErrorLevel), LogMessageContains("unable to sync detection; attempting to disable and resync")),
 				didNotComplete,
 				handled,
 			},
@@ -1664,7 +1668,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 		{
 			Name:    "Modified By Filters, Bad Sync",
 			ReqBody: []byte(`{"engine":"strelka","content":"test","id":"12345","isEnabled":true}`),
-			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
 
@@ -1700,7 +1704,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 		{
 			Name:    "Modified By Filters, Good Sync",
 			ReqBody: []byte(`{"engine":"strelka","content":"test","id":"12345","isEnabled":true}`),
-			InitMock: func(t *testing.T, srv *server.Server, ctrl *gomock.Controller) {
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
 				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
 				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
 
@@ -1748,14 +1752,14 @@ func TestHandlerUpdateDetection(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.Name, func(t *testing.T) {
-			srv := server.NewMockServer(t, ctrl, &config.ServerConfig{})
+			srv := NewMockServer(t, ctrl, &config.ServerConfig{})
 
-			h := server.NewDetectionHandler(srv)
+			h := NewDetectionHandler(srv)
 
 			test.InitMock(t, srv, ctrl)
 
-			ctx := server.NewTestContext(nil)
-			mem, l := server.NewInMemoryLogger()
+			ctx := NewTestContext(nil)
+			mem, l := NewInMemoryLogger()
 
 			ctx = log.NewContext(ctx, l)
 
@@ -1788,6 +1792,593 @@ func TestHandlerUpdateDetection(t *testing.T) {
 					err := matcher.Validate(mem.Entries[i])
 					if err != nil {
 						t.Fatalf("Log entry %d is invalid: %s", i, err)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestHandlerUpdateOverrideNote(t *testing.T) {
+	handled := NewEntryMatcher(LogLevelEq(log.InfoLevel), LogMessageEq("Handled request"))
+	didNotComplete := NewEntryMatcher(LogLevelEq(log.WarnLevel), LogMessageContains("Request did not complete successfully"))
+
+	tests := []struct {
+		Name          string
+		DetectionId   string
+		OverrideIndex string
+		ReqBody       []byte
+		InitMock      func(*testing.T, *Server, *gomock.Controller)
+		Code          int
+		Response      any
+		Logs          []EntryMatcher
+	}{
+		{
+			Name:          "Sunny Day",
+			DetectionId:   "12345",
+			OverrideIndex: "0",
+			ReqBody:       []byte(`{"note":"note goes here"}`),
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(&model.Detection{
+					Overrides: []*model.Override{
+						{},
+					},
+				}, nil)
+
+				mDetStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, det *model.Detection) (*model.Detection, error) {
+					assert.True(t, modcontext.ReadSkipAudit(ctx))
+					assert.Equal(t, "note goes here", det.Overrides[0].Note)
+
+					return det, nil
+				})
+			},
+			Code: 200,
+			Logs: []EntryMatcher{handled},
+		},
+		{
+			Name:          "Bad Params",
+			DetectionId:   "12345",
+			OverrideIndex: "first",
+			ReqBody:       []byte(`{"note":"note goes here"}`),
+			InitMock:      func(t *testing.T, srv *Server, ctrl *gomock.Controller) {},
+			Code:          400,
+			Response:      []byte("The request could not be processed."),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:          "Bad Body",
+			DetectionId:   "12345",
+			OverrideIndex: "0",
+			ReqBody:       []byte(`JSON goes here`),
+			InitMock:      func(t *testing.T, srv *Server, ctrl *gomock.Controller) {},
+			Code:          400,
+			Response:      []byte("The request could not be processed."),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:          "Note Too Long",
+			DetectionId:   "12345",
+			OverrideIndex: "0",
+			ReqBody:       []byte(`{"note":"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aliquam rhoncus efficitur lectus. Aenean a feugiat odio, sit amet tempus ligula viverra fusce."}`),
+			InitMock:      func(t *testing.T, srv *Server, ctrl *gomock.Controller) {},
+			Code:          400,
+			Response:      []byte("The request could not be processed."),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			srv := NewMockServer(t, ctrl, &config.ServerConfig{})
+
+			h := NewDetectionHandler(srv)
+
+			test.InitMock(t, srv, ctrl)
+
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("id", test.DetectionId)
+			rctx.URLParams.Add("overrideIndex", test.OverrideIndex)
+
+			ctx := NewTestContext(rctx)
+			mem, l := NewInMemoryLogger()
+
+			ctx = log.NewContext(ctx, l)
+
+			w := httptest.NewRecorder()
+			r := httptest.NewRequestWithContext(ctx, "PUT", fmt.Sprintf("/detection/%s/override/%s/note", test.DetectionId, test.OverrideIndex), bytes.NewReader(test.ReqBody))
+
+			h.UpdateOverrideNote(w, r)
+
+			assert.Equal(t, test.Code, w.Code)
+
+			switch res := test.Response.(type) {
+			case *model.Detection:
+				actual := &model.Detection{}
+				err := json.NewDecoder(w.Body).Decode(actual)
+				assert.NoError(t, err)
+
+				assert.Equal(t, res, actual)
+			case []byte:
+				assert.Equal(t, res, w.Body.Bytes())
+			case nil:
+				assert.Empty(t, w.Body.String())
+			}
+
+			if test.Logs != nil {
+				if len(test.Logs) != len(mem.Entries) {
+					t.Fatalf("Expected %d log entries, got %d", len(test.Logs), len(mem.Entries))
+				}
+
+				for i, matcher := range test.Logs {
+					err := matcher.Validate(mem.Entries[i])
+					if err != nil {
+						t.Fatalf("Log entry %d is invalid: %s", i, err)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestHandlerDeleteDetection(t *testing.T) {
+	handled := NewEntryMatcher(LogLevelEq(log.InfoLevel), LogMessageEq("Handled request"))
+	didNotComplete := NewEntryMatcher(LogLevelEq(log.WarnLevel), LogMessageContains("Request did not complete successfully"))
+
+	tests := []struct {
+		Name        string
+		DetectionId string
+		InitMock    func(*testing.T, *Server, *gomock.Controller)
+		Code        int
+		Response    any
+		Logs        []EntryMatcher
+	}{
+		{
+			Name:        "Sunny Day",
+			DetectionId: "12345",
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
+
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+
+				orig := &model.Detection{
+					PublicID: "Original",
+					Engine:   model.EngineNameElastAlert,
+				}
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(orig, nil)
+
+				mDetStore.EXPECT().DeleteDetection(gomock.Any(), "12345").Return(orig, nil)
+
+				mAuth.Authorized = true
+
+				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
+					assert.True(t, dets[0].PendingDelete)
+
+					return nil, nil
+				})
+			},
+			Code: 200,
+			Logs: []EntryMatcher{handled},
+		},
+		{
+			Name:        "Unable to Delete Community Detection",
+			DetectionId: "12345",
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+
+				orig := &model.Detection{
+					IsCommunity: true,
+				}
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(orig, nil)
+			},
+			Code:     400,
+			Response: []byte(`"ERROR_DELETE_COMMUNITY"`),
+			Logs: []EntryMatcher{
+				handled,
+			},
+		},
+		{
+			Name:        "Detection Not Found",
+			DetectionId: "12345",
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(nil, errors.New("Object not found"))
+			},
+			Code: 404,
+			Logs: []EntryMatcher{
+				handled,
+			},
+		},
+		{
+			Name:        "Unable to Get Detection",
+			DetectionId: "12345",
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(nil, errors.New("something went wrong"))
+			},
+			Code:     500,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:        "Unable to Delete Detection",
+			DetectionId: "12345",
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(&model.Detection{}, nil)
+
+				mDetStore.EXPECT().DeleteDetection(gomock.Any(), "12345").Return(nil, errors.New("something went wrong"))
+			},
+			Code:     500,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:        "Unable to Sync After Delete",
+			DetectionId: "12345",
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
+
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(&model.Detection{}, nil)
+
+				mDetStore.EXPECT().DeleteDetection(gomock.Any(), "12345").Return(&model.Detection{Engine: model.EngineNameElastAlert}, nil)
+
+				mAuth.Authorized = true
+
+				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).Return(nil, errors.New("something went wrong"))
+			},
+			Code:     500,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:        "Unauthorized",
+			DetectionId: "12345",
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(&model.Detection{}, nil)
+
+				mDetStore.EXPECT().DeleteDetection(gomock.Any(), "12345").Return(nil, model.NewUnauthorized("", "write", "detections"))
+			},
+			Code:     401,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			srv := NewMockServer(t, ctrl, &config.ServerConfig{})
+
+			h := NewDetectionHandler(srv)
+
+			test.InitMock(t, srv, ctrl)
+
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("id", test.DetectionId)
+
+			ctx := NewTestContext(rctx)
+			mem, l := NewInMemoryLogger()
+
+			ctx = log.NewContext(ctx, l)
+
+			w := httptest.NewRecorder()
+			r := httptest.NewRequestWithContext(ctx, "PUT", fmt.Sprintf("/detection/%s", test.DetectionId), nil)
+
+			h.DeleteDetection(w, r)
+
+			assert.Equal(t, test.Code, w.Code)
+
+			switch res := test.Response.(type) {
+			case *model.Detection:
+				actual := &model.Detection{}
+				err := json.NewDecoder(w.Body).Decode(actual)
+				assert.NoError(t, err)
+
+				assert.Equal(t, res, actual)
+			case []byte:
+				assert.Equal(t, res, w.Body.Bytes())
+			case nil:
+				assert.Empty(t, w.Body.String())
+			}
+
+			if test.Logs != nil {
+				if len(test.Logs) != len(mem.Entries) {
+					t.Fatalf("Expected %d log entries, got %d", len(test.Logs), len(mem.Entries))
+				}
+
+				for i, matcher := range test.Logs {
+					err := matcher.Validate(mem.Entries[i])
+					if err != nil {
+						t.Fatalf("Log entry %d is invalid: %s", i, err)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestHandlerBulkUpdateDetection(t *testing.T) {
+	handled := NewEntryMatcher(LogLevelEq(log.InfoLevel), LogMessageEq("Handled request"))
+	// didNotComplete := NewEntryMatcher(LevelEq(log.WarnLevel), MessageContains("Request did not complete successfully"))
+
+	tests := []struct {
+		Name       string
+		NewStatus  string
+		ReqBody    []byte
+		InitMock   func(*testing.T, *Server, *gomock.Controller) (*sync.WaitGroup, *MockBroadcaster)
+		Code       int
+		Response   any
+		Logs       []EntryMatcher
+		Broadcasts []BroadcastMatcher
+	}{
+		{
+			Name:      "Sunny Day",
+			NewStatus: "enable",
+			ReqBody:   []byte(`{"ids":["123","456","789"]}`),
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) (*sync.WaitGroup, *MockBroadcaster) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
+				mHostAuth := srv.Host.Authorizer.(*rbac.FakeAuthorizer)
+
+				engElastAlert := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameElastAlert] = engElastAlert
+
+				engSuricata := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameSuricata] = engSuricata
+
+				engStrelka := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameStrelka] = engStrelka
+
+				mAuth.Authorized = true
+
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "123").Return(&model.Detection{
+					Auditable: model.Auditable{
+						Id: "123",
+					},
+					Engine: model.EngineNameElastAlert,
+				}, nil)
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "456").Return(&model.Detection{
+					Auditable: model.Auditable{
+						Id: "456",
+					},
+					Engine: model.EngineNameSuricata,
+				}, nil)
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "789").Return(&model.Detection{
+					Auditable: model.Auditable{
+						Id: "789",
+					},
+					Engine: model.EngineNameStrelka,
+				}, nil)
+
+				docIndexer := servermock.NewMockBulkIndexer(ctrl)
+
+				mDetStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(docIndexer, nil)
+
+				engElastAlert.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+				engSuricata.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+				engStrelka.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+
+				engElastAlert.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
+				engSuricata.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
+				engStrelka.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
+
+				mDetStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), true, nil, nil).Times(3).Return([]byte("doc"), "so-detection", nil)
+
+				docIndexer.EXPECT().Add(gomock.Any(), gomock.Any()).Times(3).DoAndReturn(func(ctx context.Context, work esutil.BulkIndexerItem) error {
+					assert.Equal(t, "update", work.Action)
+					work.OnSuccess(ctx, work, esutil.BulkIndexerResponseItem{
+						DocumentID: work.DocumentID,
+					})
+
+					return nil
+				})
+
+				docIndexer.EXPECT().Close(gomock.Any()).Return(nil)
+
+				auditIndexer := servermock.NewMockBulkIndexer(ctrl)
+
+				mDetStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(auditIndexer, nil)
+
+				mDetStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), false, util.Ptr("123"), util.Ptr("update")).Return([]byte("doc"), "so-detectionhistory", nil)
+				mDetStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), false, util.Ptr("456"), util.Ptr("update")).Return([]byte("doc"), "so-detectionhistory", nil)
+				mDetStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), false, util.Ptr("789"), util.Ptr("update")).Return([]byte("doc"), "so-detectionhistory", nil)
+
+				auditIndexer.EXPECT().Add(gomock.Any(), gomock.Any()).Times(3).DoAndReturn(func(ctx context.Context, work esutil.BulkIndexerItem) error {
+					assert.Equal(t, "create", work.Action)
+					assert.Equal(t, "so-detectionhistory", work.Index)
+					work.OnSuccess(ctx, work, esutil.BulkIndexerResponseItem{})
+
+					return nil
+				})
+
+				auditIndexer.EXPECT().Close(gomock.Any()).Return(nil)
+
+				engElastAlert.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
+					assert.True(t, dets[0].IsEnabled)
+					assert.True(t, dets[0].PersistChange)
+
+					return nil, nil
+				})
+				engSuricata.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
+					assert.True(t, dets[0].IsEnabled)
+					assert.True(t, dets[0].PersistChange)
+
+					return nil, nil
+				})
+				engStrelka.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
+					assert.True(t, dets[0].IsEnabled)
+					assert.True(t, dets[0].PersistChange)
+
+					return nil, nil
+				})
+
+				mHostAuth.Authorized = true
+
+				wg := &sync.WaitGroup{}
+				wg.Add(1)
+
+				mb := MockBroadcast(t, srv, func(bm BroadcastMessage) {
+					wg.Done()
+				})
+
+				return wg, mb
+			},
+			Code:     202,
+			Response: []byte(`{"count":3}`),
+			Logs: []EntryMatcher{
+				// pre-async portion of work
+				handled,
+				// async portion of work
+				NewEntryMatcher(
+					LogLevelEq(log.InfoLevel),
+					LogMessageEq("bulk operation complete"),
+					LogFieldEq("bulkUpdated", 3),
+					LogFieldEq("bulkAudited", 3),
+					LogFieldEq("bulkUpdate", true),
+				),
+				NewEntryMatcher(
+					LogLevelEq(log.InfoLevel),
+					LogMessageEq("post-bulk sync finished"),
+				),
+				NewEntryMatcher(
+					LogLevelEq(log.InfoLevel),
+					LogMessageEq("bulk action Detections finished"),
+					LogFieldEq("deleted", 0),
+					LogFieldEq("filtered", 0),
+					LogFieldEq("modified", 3),
+					LogFieldEq("total", 3),
+					LogFieldExists("updateTime"),
+					LogFieldExists("syncTime"),
+					LogFieldExists("totalTime"),
+				),
+			},
+			Broadcasts: []BroadcastMatcher{
+				NewBroadcastMatcher(
+					BroadcastKindEq("detections:bulkUpdate"),
+					BroadcastObjectFieldEq("error", 0),
+					BroadcastObjectFieldEq("filtered", 0),
+					BroadcastObjectFieldEq("modified", 3),
+					BroadcastObjectFieldEq("total", 3),
+					BroadcastObjectFieldEq("verb", "update"),
+					BroadcastObjectFieldExists("time"),
+				),
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			srv := NewMockServer(t, ctrl, &config.ServerConfig{})
+
+			h := NewDetectionHandler(srv)
+
+			wg, mb := test.InitMock(t, srv, ctrl)
+			if mb != nil {
+				defer mb.Close()
+			}
+
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("newStatus", test.NewStatus)
+
+			ctx := NewTestContext(rctx)
+			mem, l := NewInMemoryLogger()
+
+			ctx = log.NewContext(ctx, l)
+
+			ctx = context.WithValue(ctx, web.ContextKeyRunAsUsername, "test")
+
+			w := httptest.NewRecorder()
+			r := httptest.NewRequestWithContext(ctx, "PUT", fmt.Sprintf("/detection/bulk/%s", test.NewStatus), bytes.NewReader(test.ReqBody))
+
+			h.BulkUpdateDetection(w, r)
+			if wg != nil {
+				wg.Wait()
+			}
+
+			assert.Equal(t, test.Code, w.Code)
+
+			switch res := test.Response.(type) {
+			case *model.Detection:
+				actual := &model.Detection{}
+				err := json.NewDecoder(w.Body).Decode(actual)
+				assert.NoError(t, err)
+
+				assert.Equal(t, res, actual)
+			case []byte:
+				assert.Equal(t, res, w.Body.Bytes())
+			case nil:
+				assert.Empty(t, w.Body.String())
+			}
+
+			if test.Logs != nil {
+				if len(test.Logs) != len(mem.Entries) {
+					t.Fatalf("Expected %d log entries, got %d", len(test.Logs), len(mem.Entries))
+				}
+
+				for i, matcher := range test.Logs {
+					err := matcher.Validate(mem.Entries[i])
+					if err != nil {
+						t.Fatalf("Log entry %d is invalid: %s", i, err)
+					}
+				}
+			}
+
+			if test.Broadcasts != nil {
+				if len(test.Broadcasts) != len(mb.Messages) {
+					t.Fatalf("Expected %d broadcast messages, got %d", len(test.Broadcasts), len(mb.Messages))
+				}
+
+				for i, matcher := range test.Broadcasts {
+					err := matcher.Validate(mb.Messages[i])
+					if err != nil {
+						t.Fatalf("Broadcast message %d is invalid: %s", i, err)
 					}
 				}
 			}

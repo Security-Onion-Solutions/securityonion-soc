@@ -550,6 +550,11 @@ func (store *ElasticDetectionstore) UpdateDetection(ctx context.Context, detect 
 func (store *ElasticDetectionstore) DeleteDetection(ctx context.Context, id string) (*model.Detection, error) {
 	logger := log.FromContext(ctx)
 
+	err := store.server.CheckAuthorized(ctx, "write", "detections")
+	if err != nil {
+		return nil, err
+	}
+
 	detect, err := store.GetDetection(ctx, id)
 	if err != nil {
 		return nil, err

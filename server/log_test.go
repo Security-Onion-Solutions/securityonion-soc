@@ -1,4 +1,4 @@
-package server_test
+package server
 
 import (
 	"fmt"
@@ -32,7 +32,7 @@ func (m *EntryMatcher) Validate(e *log.Entry) error {
 	return nil
 }
 
-func LevelEq(level log.Level) EntryValidator {
+func LogLevelEq(level log.Level) EntryValidator {
 	return func(e *log.Entry) error {
 		if e.Level != level {
 			return fmt.Errorf("expected level %s, got %s", level, e.Level)
@@ -42,7 +42,7 @@ func LevelEq(level log.Level) EntryValidator {
 	}
 }
 
-func MessageEq(message string) EntryValidator {
+func LogMessageEq(message string) EntryValidator {
 	return func(e *log.Entry) error {
 		if e.Message != message {
 			return fmt.Errorf("expected message %q, got %q", message, e.Message)
@@ -52,7 +52,7 @@ func MessageEq(message string) EntryValidator {
 	}
 }
 
-func MessageContains(substr string) EntryValidator {
+func LogMessageContains(substr string) EntryValidator {
 	return func(e *log.Entry) error {
 		if !strings.Contains(e.Message, substr) {
 			return fmt.Errorf("expected message to contain %q, got %q", substr, e.Message)
@@ -62,7 +62,7 @@ func MessageContains(substr string) EntryValidator {
 	}
 }
 
-func MessageRegex(pattern *regexp.Regexp) EntryValidator {
+func LogMessageRegex(pattern *regexp.Regexp) EntryValidator {
 	return func(e *log.Entry) error {
 		if !pattern.MatchString(e.Message) {
 			return fmt.Errorf("expected message to match %q, got %q", pattern, e.Message)
@@ -72,7 +72,7 @@ func MessageRegex(pattern *regexp.Regexp) EntryValidator {
 	}
 }
 
-func FieldExists(key string) EntryValidator {
+func LogFieldExists(key string) EntryValidator {
 	return func(e *log.Entry) error {
 		_, ok := e.Fields[key]
 		if !ok {
@@ -83,7 +83,7 @@ func FieldExists(key string) EntryValidator {
 	}
 }
 
-func FieldEq(key string, value interface{}) EntryValidator {
+func LogFieldEq(key string, value interface{}) EntryValidator {
 	return func(e *log.Entry) error {
 		if e.Fields[key] != value {
 			return fmt.Errorf("expected field %q to be %v, got %v", key, value, e.Fields[key])
@@ -93,7 +93,7 @@ func FieldEq(key string, value interface{}) EntryValidator {
 	}
 }
 
-func FieldContains(key string, substr string) EntryValidator {
+func LogFieldContains(key string, substr string) EntryValidator {
 	return func(e *log.Entry) error {
 		if !strings.Contains(e.Fields[key].(string), substr) {
 			return fmt.Errorf("expected field %q to contain %q, got %q", key, substr, e.Fields[key])
@@ -103,7 +103,7 @@ func FieldContains(key string, substr string) EntryValidator {
 	}
 }
 
-func FieldRegex(key string, pattern *regexp.Regexp) EntryValidator {
+func LogFieldRegex(key string, pattern *regexp.Regexp) EntryValidator {
 	return func(e *log.Entry) error {
 		if !pattern.MatchString(e.Fields[key].(string)) {
 			return fmt.Errorf("expected field %q to match %q, got %q", key, pattern, e.Fields[key])

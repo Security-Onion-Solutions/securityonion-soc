@@ -80,11 +80,11 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Post("/convert", h.convertContent)
 
 		r.Put("/", h.UpdateDetection)
-		r.Put("/{id}/override/{overrideIndex}/note", h.updateOverrideNote)
+		r.Put("/{id}/override/{overrideIndex}/note", h.UpdateOverrideNote)
 
-		r.Delete("/{id}", h.deleteDetection)
+		r.Delete("/{id}", h.DeleteDetection)
 
-		r.Post("/bulk/{newStatus}", h.bulkUpdateDetection)
+		r.Post("/bulk/{newStatus}", h.BulkUpdateDetection)
 		r.Post("/sync/{engine}/{type}", h.syncEngineDetections)
 
 		r.Get("/{engine}/genpublicid", h.genPublicId)
@@ -533,7 +533,7 @@ func (h *DetectionHandler) UpdateDetection(w http.ResponseWriter, r *http.Reques
 // @Failure      403                         "Insufficient permissions for this request"
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Router       /connect/detection/{id}/override/{overrideIndex}/note [put]
-func (h *DetectionHandler) updateOverrideNote(w http.ResponseWriter, r *http.Request) {
+func (h *DetectionHandler) UpdateOverrideNote(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	detectId := chi.URLParam(r, "id")
@@ -564,6 +564,8 @@ func (h *DetectionHandler) updateOverrideNote(w http.ResponseWriter, r *http.Req
 
 		return
 	}
+
+	web.Respond(w, r, http.StatusOK, nil)
 }
 
 // @Summary      Delete Detection
@@ -575,16 +577,22 @@ func (h *DetectionHandler) updateOverrideNote(w http.ResponseWriter, r *http.Req
 // @Failure      400         "The provided input object or parameters are malformed or invalid"
 // @Failure      401                         "Request was not properly authenticated"
 // @Failure      403                         "Insufficient permissions for this request"
+// @Failure      404                         "Detection not found"
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Router       /connect/detection/{id} [delete]
-func (h *DetectionHandler) deleteDetection(w http.ResponseWriter, r *http.Request) {
+func (h *DetectionHandler) DeleteDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	id := chi.URLParam(r, "id")
 
 	det, err := h.server.Detectionstore.GetDetection(ctx, id)
 	if err != nil {
-		web.Respond(w, r, http.StatusInternalServerError, err)
+		if err.Error() == "Object not found" {
+			web.Respond(w, r, http.StatusNotFound, nil)
+		} else {
+			web.Respond(w, r, http.StatusInternalServerError, err)
+		}
+
 		return
 	}
 
@@ -595,7 +603,13 @@ func (h *DetectionHandler) deleteDetection(w http.ResponseWriter, r *http.Reques
 
 	old, err := h.server.Detectionstore.DeleteDetection(ctx, id)
 	if err != nil {
-		web.Respond(w, r, http.StatusInternalServerError, err)
+		unauth := &model.Unauthorized{}
+		if errors.As(err, &unauth) {
+			web.Respond(w, r, http.StatusForbidden, err)
+		} else {
+			web.Respond(w, r, http.StatusInternalServerError, err)
+		}
+
 		return
 	}
 
@@ -623,11 +637,11 @@ func (h *DetectionHandler) deleteDetection(w http.ResponseWriter, r *http.Reques
 // @Failure      403                         "Insufficient permissions for this request"
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Router       /connect/detection/bulk/{newStatus} [post]
-func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Request) {
+func (h *DetectionHandler) BulkUpdateDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
-	newStatus := chi.URLParam(r, "newStatus") // "enable" or "disable"
+	newStatus := chi.URLParam(r, "newStatus")
 
 	var enabled bool
 	var delete bool
@@ -637,7 +651,7 @@ func (h *DetectionHandler) bulkUpdateDetection(w http.ResponseWriter, r *http.Re
 	case "delete":
 		delete = true
 	default:
-		web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("invalid status; must be 'enable' or 'disable'"))
+		web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("invalid status; must be 'enable', 'disable', or 'delete'"))
 		return
 	}
 
@@ -783,10 +797,19 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 		detect := detects[i]
 		id := detect.Id
 
+		engine, ok := h.server.DetectionEngines[detect.Engine]
+		if !ok {
+			logger.WithFields(log.Fields{
+				"publicId": detect.PublicID,
+				"engine":   detect.Engine,
+			}).Error("detection has unsupported engine, skipping")
+			errMap[detect.PublicID] = "unsupported engine"
+
+			continue
+		}
+
 		if !body.Delete {
 			detect.IsEnabled = body.NewStatus
-
-			engine := h.server.DetectionEngines[detect.Engine]
 
 			filterApplied, err := engine.ApplyFilters(detect)
 			if err != nil {
@@ -801,17 +824,6 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 			if filterApplied && detect.IsEnabled != body.NewStatus {
 				filtered++
 			}
-		}
-
-		engine, ok := h.server.DetectionEngines[detect.Engine]
-		if !ok {
-			logger.WithFields(log.Fields{
-				"publicId": detect.PublicID,
-				"engine":   detect.Engine,
-			}).Error("detection has unsupported engine, skipping")
-			errMap[detect.PublicID] = "unsupported engine"
-
-			continue
 		}
 
 		exErr := engine.ExtractDetails(detect)
