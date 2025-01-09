@@ -523,6 +523,21 @@ routes.push({
         this.form.value = setting.value;
         this.$root.drawAttention('#setting-global-save');
       }
+
+      // transfer caret position from non-edit element to edit element
+      const before = document.getElementById('value-output');
+      const scrollTop = before?.scrollTop || 0;
+      const selStart = before?.selectionStart || 0;
+      const selEnd = before?.selectionEnd || 0;
+      this.$nextTick(() => {
+        const after = document.getElementById('value-input');
+        if (after && typeof scrollTop !== 'undefined' &&
+            typeof selStart !== 'undefined' && typeof selEnd !== 'undefined') {
+          after.focus();
+          after.scrollTop = scrollTop;
+          after.setSelectionRange(selStart, selEnd);
+        }
+      });
     },
     addNode(setting, nodeId) {
       if (this.cancel() && setting && nodeId) {
