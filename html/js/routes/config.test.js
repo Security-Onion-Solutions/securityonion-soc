@@ -508,13 +508,14 @@ test('saveRegexValidMultiline', async () => {
   expect(mock).toHaveBeenCalledWith('config/', {"id": "test.id", "nodeId": null, "value": "123\n456"});
 });
 
-test('edit', () => {
+test('edit', async () => {
   // Global edit, nothing pending
   setupSettings();
   comp.cancelDialog = false;
   comp.form.value = null;
   comp.form.key = null;
   comp.edit(comp.settings[0], null);
+  await new Promise(resolve => setTimeout(resolve, 2));
   expect(comp.form.key).toBe("s-id");
   expect(comp.form.value).toBe("orig-value");
   expect(comp.cancelDialog).toBe(false);
@@ -526,6 +527,7 @@ test('edit', () => {
   comp.form.key = "s-id2";
   comp.activeBackup = ["s-id2"];
   comp.edit(comp.settings[0], null);
+  await new Promise(resolve => setTimeout(resolve, 2));
   expect(comp.form.key).toBe("s-id2");
   expect(comp.form.value).toBe("touched-value");
   expect(comp.cancelDialog).toBe(true);
@@ -535,6 +537,7 @@ test('edit', () => {
   comp.form.value = null;
   comp.form.key = null;
   comp.edit(comp.settings[0], "n1");
+  await new Promise(resolve => setTimeout(resolve, 2));
   expect(comp.form.key).toBe("n1");
   expect(comp.form.value).toBe("123");
   expect(comp.cancelDialog).toBe(false);
@@ -544,6 +547,7 @@ test('edit', () => {
   comp.form.value = "touched-value";
   comp.form.key = "n2";
   comp.edit(comp.settings[0], "n1");
+  await new Promise(resolve => setTimeout(resolve, 2));
   expect(comp.form.key).toBe("n2");
   expect(comp.form.value).toBe("touched-value");
   expect(comp.cancelDialog).toBe(true);
