@@ -451,7 +451,7 @@ routes.push({ path: '/case/:id', name: 'case', component: {
           description: this.i18n.caseDefaultDescription,
         });
         if (response && response.data && response.data.id) {
-          this.$router.replace({ name: 'case', params: { id: response.data.id }, query: this.$route.query });
+          await this.$router.replace({ name: 'case', params: { id: response.data.id }, query: this.$route.query });
         } else {
           this.$root.showError(i18n.createFailed);
         }
