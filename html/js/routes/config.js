@@ -512,6 +512,7 @@ routes.push({
       this.$root.stopLoading();
     },
     edit(setting, nodeId) {
+      setTimeout(() => {
       if (nodeId) {
         if ((this.form.key == nodeId) || !this.cancel()) return;
         this.form.key = nodeId;
@@ -523,6 +524,24 @@ routes.push({
         this.form.value = setting.value;
         this.$root.drawAttention('#setting-global-save');
       }
+
+        // transfer caret position from non-edit element to edit element
+        let selector = nodeId ? 'node-value-output-' + nodeId : 'value-output';
+        const before = document.getElementById(selector);
+        const scrollTop = before?.scrollTop || 0;
+        const selStart = before?.selectionStart || 0;
+        const selEnd = before?.selectionEnd || 0;
+        this.$nextTick(() => {
+          selector = nodeId ? 'node-value-input-' + nodeId : 'value-input';
+          const after = document.getElementById(selector);
+          if (after && typeof scrollTop !== 'undefined' &&
+            typeof selStart !== 'undefined' && typeof selEnd !== 'undefined') {
+            after.focus();
+            after.scrollTop = scrollTop;
+            after.setSelectionRange(selStart, selEnd);
+          }
+        });
+      }, 1);
     },
     addNode(setting, nodeId) {
       if (this.cancel() && setting && nodeId) {
