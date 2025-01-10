@@ -5576,17 +5576,34 @@
                           <v-btn id="setting-global-save" icon variant="text" size="small" @click="save(selected)" :disabled="!isPendingSave(selected)" :title="i18n.settingSaveHelp" data-aid="config_item_save">
                             <v-icon color="success">fa-check</v-icon>
                           </v-btn>
-                          <v-btn id="setting-global-cancel" icon variant="text" size="small" @click="cancel(true)" :disabled="!isPendingSave(selected)" :title="i18n.settingCancelHelp" data-aid="config_item_cancel">
+                          <v-btn id="setting-global-cancel" icon variant="text" size="small" @click="userCancel()" :disabled="!isPendingSave(selected)" :title="i18n.settingCancelHelp" data-aid="config_item_cancel">
                             <v-icon color="error">fa-xmark</v-icon>
                           </v-btn>
                         </div>
-                        <div v-if="isMultiline(selected)">
-                          <v-textarea v-if="form.key != selected.id" id="value-output" variant="outlined" :label="i18n.settingGlobal" @focus="edit(selected)" v-model="selected.value" readonly :disabled="isReadOnly(selected)" :no-resize="!isReadOnly(selected)" class="config-editor" data-aid="config_item_customize_multiline_display" />
-                          <v-textarea v-else id="value-input" variant="outlined" :label="i18n.settingGlobal" v-model="form.value" class="editing config-editor" data-aid="config_item_customize_multiline_input" />
-                        </div>
+                        <v-expansion-panels v-if="hasUiElements(selected)" v-model="form.entriesExpanded">
+                          <v-expansion-panel v-for="(entry, entryIdx) in form.entries" :key="entryIdx" @group:selected="edit(selected)" data-aid="config_item_entry_title">
+                            <v-expansion-panel-title>
+                              {{ entry._title }}
+                            </v-expansion-panel-title>
+                            <v-expansion-panel-text>
+                              <div v-for="(element, elementIdx) in selected.uiElements" :key="elementIdx">
+                                <v-text-field :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:modelValue="markDirtyEntries" :label="element.label" variant="outlined" :label="element.label" v-model="entry[element.field]" class="editing" :data-aid="'config_item_entry_' + element.field" />
+                              </div>
+                              <v-btn v-if="!isEntryEmpty(entry)" id="'setting-element-' + entryIdx + '-delete-' + entry['field']" icon variant="text" size="small" @click="clearEntry(entry, entryIdx)" :title="i18n.settingDeleteEntryHelp" data-aid="config_item_delete_entry">
+                                <v-icon color="error">fa-trash</v-icon>
+                              </v-btn>
+                            </v-expansion-panel-text>
+                          </v-expansion-panel>
+                        </v-expansion-panels>
                         <div v-else>
-                          <v-text-field v-if="form.key != selected.id" id="value-output" variant="outlined" :label="i18n.settingGlobal" @focus="edit(selected)" v-model="selected.value" readonly :disabled="isReadOnly(selected)" :type="selected.sensitive ? 'password' : 'text'" data-aid="config_item_customize_singleline_display" />
-                          <v-text-field v-else id="value-input" variant="outlined" :label="i18n.settingGlobal" v-model="form.value" class="editing"  @keydown.enter.prevent="save(selected)" data-aid="config_item_singleline_input" />
+                          <div v-if="isMultiline(selected)">
+                            <v-textarea v-if="form.key != selected.id" id="value-output" variant="outlined" :label="i18n.settingGlobal" @focus="edit(selected)" v-model="selected.value" readonly :disabled="isReadOnly(selected)" :no-resize="!isReadOnly(selected)" class="config-editor" data-aid="config_item_customize_multiline_display" />
+                            <v-textarea v-else id="value-input" variant="outlined" :label="i18n.settingGlobal" v-model="form.value" class="editing config-editor" data-aid="config_item_customize_multiline_input" />
+                          </div>
+                          <div v-else>
+                            <v-text-field v-if="form.key != selected.id" id="value-output" variant="outlined" :label="i18n.settingGlobal" @focus="edit(selected)" v-model="selected.value" readonly :disabled="isReadOnly(selected)" :type="selected.sensitive ? 'password' : 'text'" data-aid="config_item_customize_singleline_display" />
+                            <v-text-field v-else id="value-input" variant="outlined" :label="i18n.settingGlobal" v-model="form.value" class="editing"  @keydown.enter.prevent="save(selected)" data-aid="config_item_singleline_input" />
+                          </div>
                         </div>
                       </v-col>
                     </v-row>
@@ -5599,7 +5616,7 @@
                           <v-btn :id="'setting-node-save-' + item[0]" icon variant="text" size="small" @click="save(selected, item[0])" :disabled="!isPendingSave(selected, item[0])" :title="i18n.settingSaveHelp" data-aid="config_item_node_save">
                             <v-icon color="success">fa-check</v-icon>
                           </v-btn>
-                          <v-btn :id="'setting-node-cancel-' + item[0]" icon variant="text" size="small" @click="cancel(true)" :disabled="!isPendingSave(selected, item[0])" :title="i18n.settingCancelHelp" data-aid="config_item_node_cancel">
+                          <v-btn :id="'setting-node-cancel-' + item[0]" icon variant="text" size="small" @click="userCancel(true)" :disabled="!isPendingSave(selected, item[0])" :title="i18n.settingCancelHelp" data-aid="config_item_node_cancel">
                             <v-icon color="error">fa-xmark</v-icon>
                           </v-btn>
                         </div>

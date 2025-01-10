@@ -15,6 +15,7 @@ import (
 func TestValidate_Json(tester *testing.T) {
 	for _, syntax := range []string{"json", "suricata"} {
 		assert.NoError(tester, Validate(`{ "valid": "value" }`, syntax))
-		assert.EqualError(tester, Validate("invalid vaue", syntax), "ERROR_MALFORMED_JSON -> invalid character 'i' looking for beginning of value")
+		assert.NoError(tester, Validate(`[{ "valid": "value" }]`, syntax))
+		assert.EqualError(tester, Validate("invalid vaue", syntax), "ERROR_MALFORMED_JSON")
 	}
 }

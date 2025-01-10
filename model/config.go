@@ -10,6 +10,11 @@ import (
 	"regexp"
 )
 
+type UiElement struct {
+	Field string `json:"field" example:"some_key"`
+	Label string `json:"label" example:"An Important Key"`
+}
+
 type Setting struct {
 	// The ID of the configuration setting. Each period represents a nested level.
 	Id string `json:"id" example:"elastalert.alerter_parameters"`
@@ -55,6 +60,8 @@ type Setting struct {
 	Duplicates bool `json:"duplicates" example:"false"`
 	// (metadata) Indicates whether the setting value allows Jinja2 escape characters. By default these are prohibited as a security precaution.
 	JinjaEscaped bool `json:"jinjaEscaped" example:"false"`
+	// (metadata) List of UiElement objects describing how the UI should present the field for input
+	UiElements []UiElement `json:"uiElements"`
 }
 
 func NewSetting(id string) *Setting {
