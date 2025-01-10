@@ -2142,7 +2142,7 @@ func TestHandlerDeleteDetection(t *testing.T) {
 
 func TestHandlerBulkUpdateDetection(t *testing.T) {
 	handled := NewEntryMatcher(LogLevelEq(log.InfoLevel), LogMessageEq("Handled request"))
-	// didNotComplete := NewEntryMatcher(LevelEq(log.WarnLevel), MessageContains("Request did not complete successfully"))
+	didNotComplete := NewEntryMatcher(LogLevelEq(log.WarnLevel), LogMessageContains("Request did not complete successfully"))
 
 	tests := []struct {
 		Name       string
@@ -2155,7 +2155,7 @@ func TestHandlerBulkUpdateDetection(t *testing.T) {
 		Broadcasts []BroadcastMatcher
 	}{
 		{
-			Name:      "Sunny Day",
+			Name:      "Sunny Day - IDs",
 			NewStatus: "enable",
 			ReqBody:   []byte(`{"ids":["123","456","789"]}`),
 			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) (*sync.WaitGroup, *MockBroadcaster) {
@@ -2307,6 +2307,256 @@ func TestHandlerBulkUpdateDetection(t *testing.T) {
 				),
 			},
 		},
+		{
+			Name:      "Sunny Day - Query",
+			NewStatus: "enable",
+			ReqBody:   []byte(`{"query":"severity: low AND ruleset: ETOPEN"}`),
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) (*sync.WaitGroup, *MockBroadcaster) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
+				mHostAuth := srv.Host.Authorizer.(*rbac.FakeAuthorizer)
+
+				engElastAlert := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameElastAlert] = engElastAlert
+
+				engSuricata := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameSuricata] = engSuricata
+
+				engStrelka := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameStrelka] = engStrelka
+
+				mAuth.Authorized = true
+
+				mDetStore.EXPECT().Query(gomock.Any(), `(severity: low AND ruleset: ETOPEN) AND _index:"*:so-detection" AND so_kind:detection`, -1).Return([]interface{}{
+					&model.Detection{
+						Auditable: model.Auditable{
+							Id: "123",
+						},
+						Engine: model.EngineNameElastAlert,
+					},
+					&model.Detection{
+						Auditable: model.Auditable{
+							Id: "456",
+						},
+						Engine: model.EngineNameSuricata,
+					},
+					&model.Detection{
+						Auditable: model.Auditable{
+							Id: "789",
+						},
+						Engine: model.EngineNameStrelka,
+					},
+				}, nil)
+
+				docIndexer := servermock.NewMockBulkIndexer(ctrl)
+
+				mDetStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(docIndexer, nil)
+
+				engElastAlert.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+				engSuricata.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+				engStrelka.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+
+				engElastAlert.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
+				engSuricata.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
+				engStrelka.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
+
+				mDetStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), true, nil, nil).Times(3).Return([]byte("doc"), "so-detection", nil)
+
+				docIndexer.EXPECT().Add(gomock.Any(), gomock.Any()).Times(3).DoAndReturn(func(ctx context.Context, work esutil.BulkIndexerItem) error {
+					assert.Equal(t, "update", work.Action)
+					work.OnSuccess(ctx, work, esutil.BulkIndexerResponseItem{
+						DocumentID: work.DocumentID,
+					})
+
+					return nil
+				})
+
+				docIndexer.EXPECT().Close(gomock.Any()).Return(nil)
+
+				auditIndexer := servermock.NewMockBulkIndexer(ctrl)
+
+				mDetStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(auditIndexer, nil)
+
+				mDetStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), false, util.Ptr("123"), util.Ptr("update")).Return([]byte("doc"), "so-detectionhistory", nil)
+				mDetStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), false, util.Ptr("456"), util.Ptr("update")).Return([]byte("doc"), "so-detectionhistory", nil)
+				mDetStore.EXPECT().ConvertObjectToDocument(gomock.Any(), "detection", gomock.Any(), gomock.Any(), false, util.Ptr("789"), util.Ptr("update")).Return([]byte("doc"), "so-detectionhistory", nil)
+
+				auditIndexer.EXPECT().Add(gomock.Any(), gomock.Any()).Times(3).DoAndReturn(func(ctx context.Context, work esutil.BulkIndexerItem) error {
+					assert.Equal(t, "create", work.Action)
+					assert.Equal(t, "so-detectionhistory", work.Index)
+					work.OnSuccess(ctx, work, esutil.BulkIndexerResponseItem{})
+
+					return nil
+				})
+
+				auditIndexer.EXPECT().Close(gomock.Any()).Return(nil)
+
+				engElastAlert.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
+					assert.True(t, dets[0].IsEnabled)
+					assert.True(t, dets[0].PersistChange)
+
+					return nil, nil
+				})
+				engSuricata.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
+					assert.True(t, dets[0].IsEnabled)
+					assert.True(t, dets[0].PersistChange)
+
+					return nil, nil
+				})
+				engStrelka.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
+					assert.True(t, dets[0].IsEnabled)
+					assert.True(t, dets[0].PersistChange)
+
+					return nil, nil
+				})
+
+				mHostAuth.Authorized = true
+
+				wg := &sync.WaitGroup{}
+				wg.Add(1)
+
+				mb := MockBroadcast(t, srv, func(bm BroadcastMessage) {
+					wg.Done()
+				})
+
+				return wg, mb
+			},
+			Code:     202,
+			Response: []byte(`{"count":3}`),
+			Logs: []EntryMatcher{
+				// pre-async portion of work
+				handled,
+				// async portion of work
+				NewEntryMatcher(
+					LogLevelEq(log.InfoLevel),
+					LogMessageEq("bulk operation complete"),
+					LogFieldEq("bulkUpdated", 3),
+					LogFieldEq("bulkAudited", 3),
+					LogFieldEq("bulkUpdate", true),
+				),
+				NewEntryMatcher(
+					LogLevelEq(log.InfoLevel),
+					LogMessageEq("post-bulk sync finished"),
+				),
+				NewEntryMatcher(
+					LogLevelEq(log.InfoLevel),
+					LogMessageEq("bulk action Detections finished"),
+					LogFieldEq("deleted", 0),
+					LogFieldEq("filtered", 0),
+					LogFieldEq("modified", 3),
+					LogFieldEq("total", 3),
+					LogFieldExists("updateTime"),
+					LogFieldExists("syncTime"),
+					LogFieldExists("totalTime"),
+				),
+			},
+			Broadcasts: []BroadcastMatcher{
+				NewBroadcastMatcher(
+					BroadcastKindEq("detections:bulkUpdate"),
+					BroadcastObjectFieldEq("error", 0),
+					BroadcastObjectFieldEq("filtered", 0),
+					BroadcastObjectFieldEq("modified", 3),
+					BroadcastObjectFieldEq("total", 3),
+					BroadcastObjectFieldEq("verb", "update"),
+					BroadcastObjectFieldExists("time"),
+				),
+			},
+		},
+		{
+			Name:      "Cannot Delete Community Rules - Ids",
+			NewStatus: "delete",
+			ReqBody:   []byte(`{"ids":["123","456","789"]}`),
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) (*sync.WaitGroup, *MockBroadcaster) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
+
+				mAuth.Authorized = true
+
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "123").Return(&model.Detection{
+					Auditable: model.Auditable{
+						Id: "123",
+					},
+					Engine: model.EngineNameElastAlert,
+				}, nil)
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "456").Return(&model.Detection{
+					Auditable: model.Auditable{
+						Id: "456",
+					},
+					Engine:      model.EngineNameSuricata,
+					IsCommunity: true,
+				}, nil)
+				// the 3rd detection is not retrieved because the handler will quit
+				// immediately after a community detection is retrieved
+
+				return nil, nil
+			},
+			Code:     400,
+			Response: []byte(`"ERROR_BULK_COMMUNITY"`),
+			Logs: []EntryMatcher{
+				handled,
+			},
+		},
+		{
+			Name:      "Cannot Delete Community Rules - Query",
+			NewStatus: "delete",
+			ReqBody:   []byte(`{"query":"severity: low AND ruleset: ETOPEN"}`),
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) (*sync.WaitGroup, *MockBroadcaster) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
+
+				mAuth.Authorized = true
+
+				mDetStore.EXPECT().Query(gomock.Any(), `(severity: low AND ruleset: ETOPEN) AND _index:"*:so-detection" AND so_kind:detection`, -1).Return([]interface{}{
+					&model.Detection{
+						Auditable: model.Auditable{
+							Id: "123",
+						},
+						Engine: model.EngineNameElastAlert,
+					},
+					&model.Detection{
+						Auditable: model.Auditable{
+							Id: "456",
+						},
+						Engine:      model.EngineNameSuricata,
+						IsCommunity: true,
+					},
+					&model.Detection{
+						Auditable: model.Auditable{
+							Id: "789",
+						},
+						Engine: model.EngineNameStrelka,
+					},
+				}, nil)
+
+				return nil, nil
+			},
+			Code:     400,
+			Response: []byte(`"ERROR_BULK_COMMUNITY"`),
+			Logs: []EntryMatcher{
+				handled,
+			},
+		},
+		{
+			Name:      "Query Failure",
+			NewStatus: "enable",
+			ReqBody:   []byte(`{"query":"severity: low AND ruleset: ETOPEN"}`),
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) (*sync.WaitGroup, *MockBroadcaster) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
+
+				mAuth.Authorized = true
+
+				mDetStore.EXPECT().Query(gomock.Any(), `(severity: low AND ruleset: ETOPEN) AND _index:"*:so-detection" AND so_kind:detection`, -1).Return(nil, errors.New("something went wrong"))
+
+				return nil, nil
+			},
+			Code:     500,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
 	}
 
 	ctrl := gomock.NewController(t)
@@ -2371,6 +2621,9 @@ func TestHandlerBulkUpdateDetection(t *testing.T) {
 			}
 
 			if test.Broadcasts != nil {
+				if mb == nil {
+					t.Fatalf("Expected broadcast messages, but no broadcaster was created")
+				}
 				if len(test.Broadcasts) != len(mb.Messages) {
 					t.Fatalf("Expected %d broadcast messages, got %d", len(test.Broadcasts), len(mb.Messages))
 				}

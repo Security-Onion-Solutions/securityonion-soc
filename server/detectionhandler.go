@@ -683,6 +683,7 @@ func (h *DetectionHandler) BulkUpdateDetection(w http.ResponseWriter, r *http.Re
 
 		results, err = h.server.Detectionstore.Query(ctx, query, -1)
 		if err != nil {
+			web.Respond(w, r, http.StatusInternalServerError, err)
 			return
 		}
 		for _, d := range results {
