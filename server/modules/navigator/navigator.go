@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/apex/log"
+	"github.com/eapache/go-resiliency/retrier"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -63,7 +64,7 @@ func NewNavigator(srv *server.Server) *Navigator {
 }
 
 func (nav *Navigator) PrerequisiteModules() []string {
-	return []string{"elastic", "suricataengine", "elastalertengine"}
+	return []string{"elastic", "suricataengine", "elastalertengine", "staticrbac"}
 }
 
 func (nav *Navigator) Init(cfg module.ModuleConfig) error {
@@ -105,9 +106,18 @@ func (nav *Navigator) run() {
 
 	logger := log.WithField("component", "navigator")
 
-	// Generate initial set of layers
-	if err := nav.generateNavigatorLayer(nav.server.Context, logger); err != nil {
-		logger.WithError(err).Error("Failed to generate initial navigator layers")
+	// Wait for SOC to be ready
+	time.Sleep(10 * time.Second)
+
+	// Configure exponential backoff
+	r := retrier.New(retrier.ExponentialBackoff(7, 5*time.Second), retrier.DefaultClassifier{})
+
+	// Generate initial set of layers with retry
+	err := r.Run(func() error {
+		return nav.generateNavigatorLayer(nav.server.Context, logger)
+	})
+	if err != nil {
+		logger.WithError(err).Error("Failed to generate initial navigator layers after retries")
 	}
 
 	for {
