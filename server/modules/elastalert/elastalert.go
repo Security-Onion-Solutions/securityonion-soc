@@ -635,6 +635,12 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 	// announce the beginning of the sync
 	e.EngineState.Syncing = true
 
+	// Check to see if the SO Sigma Processing Pipeline needs to be updated
+	pipelineUpdated, err := e.updateSigmaPipeline()
+	if err != nil {
+		logger.WithField("sigmaPipelineUpdateError", err).Error("failed to update SO sigma processing pipeline")
+	}
+
 	// Check to see if the sigma processing pipelines have changed.
 	// If they have, set forceSync to true to regenerate the elastalert rule files.
 	regenNeeded, sigmaPipelineNewHash, err := e.checkSigmaPipelines()
@@ -644,7 +650,7 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 		logger.Info("successfully checked the sigma processing pipelines")
 	}
 
-	if regenNeeded {
+	if regenNeeded || pipelineUpdated {
 		forceSync = true
 	}
 
@@ -2106,4 +2112,45 @@ func (e *ElastAlertEngine) getDeployedPublicIds() (publicIds []string, err error
 	}
 
 	return publicIds, nil
+}
+
+func (e *ElastAlertEngine) updateSigmaPipeline() (bool, error) {
+	sourcePath := filepath.Join(e.reposFolder, "securityonion-resources", "so_sigma_processing_pipeline.yaml")
+
+	// Check if source exists
+	if _, err := os.Stat(sourcePath); os.IsNotExist(err) {
+		return false, fmt.Errorf("source pipeline file does not exist: %s", sourcePath)
+	}
+
+	// Get hash of source file
+	sourceHash, err := e.hashFile(sourcePath)
+	if err != nil {
+		return false, fmt.Errorf("failed to hash source pipeline file: %v", err)
+	}
+
+	// If destination exists, compare hashes
+	if _, err := os.Stat(e.sigmaPipelineSO); err == nil {
+		destHash, err := e.hashFile(e.sigmaPipelineSO)
+		if err != nil {
+			return false, fmt.Errorf("failed to hash destination pipeline file: %v", err)
+		}
+
+		// If hashes match, no update needed
+		if sourceHash == destHash {
+			return false, nil
+		}
+	}
+
+	// Copy the file
+	sourceData, err := os.ReadFile(sourcePath)
+	if err != nil {
+		return false, fmt.Errorf("failed to read source pipeline file: %v", err)
+	}
+
+	err = os.WriteFile(e.sigmaPipelineSO, sourceData, 0644)
+	if err != nil {
+		return false, fmt.Errorf("failed to write destination pipeline file: %v", err)
+	}
+
+	return true, nil
 }
