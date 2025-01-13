@@ -130,7 +130,7 @@
               </router-link>
             </div>
           </v-snackbar>
-          <v-snackbar id="warning" location="center top" rounded="pill" :timeout="warningTimeout" v-model="warning" color="warning" data-aid="banner_warning">
+          <v-snackbar id="warning" location="center top" rounded :timeout="warningTimeout" v-model="warning" color="warning" data-aid="banner_warning">
             <template #actions>
               <v-btn icon small @click="warning = false" data-aid="banner_warning_close">
                 <v-icon>fa-times</v-icon>
