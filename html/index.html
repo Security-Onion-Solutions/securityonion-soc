@@ -799,7 +799,7 @@
                       <template #expanded-row="{ columns, item }">
                         <tr>
                           <td :colspan="columns.length" class="px-0" :data-aid="'events_fields_' + category">
-                            <v-data-table-virtual density="compact" hide-default-header hide-default-footer :headers="expandedHeaders" :items="getExpandedData(item)">
+                            <v-data-table density="compact" hide-default-header hide-default-footer :headers="expandedHeaders" :items="getExpandedData(item)" items-per-page="-1">
                               <template #item="{ item: kvp }">
                                 <tr :data-aid="'events_field_' + category + '_' + kvp.key" class="pt-3">
                                   <td class="expansion">
@@ -818,7 +818,7 @@
                                   </td>
                                 </tr>
                               </template>
-                            </v-data-table-virtual>
+                            </v-data-table>
                           </td>
                         </tr>
                       </template>
