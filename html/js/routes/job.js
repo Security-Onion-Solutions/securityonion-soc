@@ -149,13 +149,10 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       return this.packetOptions.indexOf(option) != -1;
     },
     captureLayoutAsStream() {
-      // wait for v-btn-toggle to update model
-      this.$nextTick(() => {
-        if (!this.isOptionEnabled('packets')) return;
+      if (this.isOptionEnabled('packets')) return;
 
-        this.expandPackets(true);
-        this.sortBy = [{ key: 'number', order: 'asc' }];
-      });
+      this.expandPackets(true);
+      this.sortBy = [{ key: 'number', order: 'asc' }];
     },
     packetsUpdated() {
       if (this.expandAll) {
