@@ -99,6 +99,10 @@ a.v-list-item.v-theme--light {
   display: none;
 }
 
+#external-tools-list a.v-list-item {
+  padding-right: 4px;
+}
+
 [data-aid^="relative_time_input_"] .v-input__append {
   padding-top: 0px !important;
 }
