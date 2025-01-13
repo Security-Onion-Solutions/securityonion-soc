@@ -168,10 +168,13 @@
           </span>
           <v-spacer></v-spacer>
           <span class="text-no-wrap" data-aid="nav_terms">
-            <router-link id="termsLink" to="/terms" class="footer">
+            <router-link v-if="isLicenseUnprovisioned()" id="termsLink" to="/terms" class="footer">
               <span class="d-lg-inline">{{ i18n.license }}:</span>
-              <span v-if="isLicenseUnprovisioned()" data-aid="license_unprovisioned"> {{ i18n.licenseShort }}</span>
-              <v-chip v-else x-small :color="colorLicenseStatus(licenseStatus)" :data-aid="'license_status_' + licenseStatus">{{ localizeMessage(licenseStatus) }}</v-chip>
+              <span data-aid="license_unprovisioned"> {{ i18n.licenseShort }}</span>
+            </router-link>
+            <router-link v-else id="licenseLink" to="/license" class="footer">
+              <span class="d-lg-inline">{{ i18n.license }}:</span>
+              <v-chip x-small density="compact" :color="colorLicenseStatus(licenseStatus)" :data-aid="'license_status_' + licenseStatus">{{ localizeMessage(licenseStatus) }}</v-chip>
             </router-link>
           </span>
         </v-footer>
@@ -2201,7 +2204,7 @@
                       <v-row class="my-1">
                         <v-col cols="3" class="pa-1 text-right font-weight-bold">{{ i18n.licenseStatus }}:</v-col>
                         <v-col cols="9" class="px-1 py-0">
-                          <v-chip small :color="$root.colorLicenseStatus($root.licenseStatus)">
+                          <v-chip density="compact" small :color="$root.colorLicenseStatus($root.licenseStatus)">
                             {{ $root.localizeMessage($root.licenseStatus) }}
                           </v-chip>
                         </v-col>
@@ -2268,7 +2271,7 @@
                       <v-row class="my-1">
                         <v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.features }}:</v-col>
                         <v-col v-if="$root.licenseKey.features" cols="9" class="pa-1">
-                          <v-chip v-for="feature in $root.licenseKey.features" v-if="$root.localizeMessage(feature) != feature" small class="ma-1">
+                          <v-chip v-for="feature in $root.licenseKey.features" v-if="$root.localizeMessage(feature) != feature" small density="compact" class="ma-1">
                             {{ $root.localizeMessage(feature) }}
                           </v-chip>
                         </v-col>
@@ -2762,7 +2765,7 @@
                   <td>{{ formatTimestamp(item.createTime) }}</td>
                   <td>{{ formatTimestamp(item.completeTime) }}</td>
                   <td v-text="item.nodeId"></td>
-                  <td><v-chip :color="colorJobStatus(item)" data-aid="jobs_status">{{ formatJobStatus(item) }}</v-chip></td>
+                  <td><v-chip density="compact" :color="colorJobStatus(item)" data-aid="jobs_status">{{ formatJobStatus(item) }}</v-chip></td>
                   <td>
                     <router-link :to="{ name: 'job', params: {jobId: item.id}}" style="text-decoration: none; cursor: 'pointer'" data-aid="jobs_open">
                       <v-icon class="mr-2" :title="i18n.view">fa-binoculars</v-icon>
@@ -2963,14 +2966,14 @@
                 <tr @click="toggleExpand(internalItem)" v-if="isOptionEnabled('packets')" data-aid="job_details_expand_packet">
                   <td v-text="item.number"></td>
                   <td>{{ formatTimestamp(item.timestamp) }}</td>
-                  <td><v-chip :color="colorType(item.type)" data-aid="job_details_packet_type">{{ item.type }}</v-chip></td>
+                  <td><v-chip density="compact" :color="colorType(item.type)" data-aid="job_details_packet_type">{{ item.type }}</v-chip></td>
                   <td>{{ item.srcIp }}<span class="resolved-host" v-if="$root.pickHostname(item.srcIp)"> - {{ $root.pickHostname(item.srcIp) }}</span></td>
                   <td>{{ item.srcPort }}</td>
                   <td>{{ item.dstIp }}<span class="resolved-host" v-if="$root.pickHostname(item.dstIp)"> - {{ $root.pickHostname(item.dstIp) }}</span></td>
                   <td>{{ item.dstPort }}</td>
                   <td>
                     <template v-for="flag in item.flags" :key="flag">
-                      <v-chip :color="colorFlag(flag)" data-aid="job_details_packet_flag">{{ flag }}</v-chip>
+                      <v-chip density="compact" :color="colorFlag(flag)" data-aid="job_details_packet_flag">{{ flag }}</v-chip>
                     </template>
                   </td>
                   <td>{{ item.length }}</td>
@@ -3326,7 +3329,7 @@
                                       </v-list-item>
                                     </template>
                                     <template #selection="{ item }">
-                                      <v-chip color="primary">{{item.title}}</v-chip>
+                                      <v-chip density="compact" color="primary">{{item.title}}</v-chip>
                                     </template>
                                   </v-select>
                                   <v-combobox variant="underlined" id="attachments-tags" v-if="!isPresetCustomEnabled('tags')" v-model="associatedForms['attachments'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
@@ -3338,7 +3341,7 @@
                                       </v-list-item>
                                     </template>
                                     <template #selection="{ item }">
-                                      <v-chip color="primary">{{item.title}}</v-chip>
+                                      <v-chip density="compact" color="primary">{{item.title}}</v-chip>
                                     </template>
                                   </v-combobox>
                                 </span>
@@ -3453,7 +3456,7 @@
                             <div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${index}-tlp-input`, item.tlp, `attachments-${index}-tlp`, 'tlp', modifyAssociation, ['attachments', item])"
                               @keypress.space.prevent="startEdit(`attachments-${index}-tlp-input`, item.tlp, `attachments-${index}-tlp`, 'tlp', modifyAssociation, ['attachments', item])">
                               <div class="font-weight-bold">{{i18n.caseTlp}}: </div>
-                              <v-chip :id="`attachments-${index}-tlp`" :color="colorizeChip(item.tlp)" v-if="!isEdit(`attachments-${index}-tlp`)">{{ withDefault(item.tlp, i18n.unknown) }}</v-chip>
+                              <v-chip :id="`attachments-${index}-tlp`" density="compact" :color="colorizeChip(item.tlp)" v-if="!isEdit(`attachments-${index}-tlp`)">{{ withDefault(item.tlp, i18n.unknown) }}</v-chip>
                             </div>
                             <v-select :id="`attachments-${index}-tlp-input`" v-if="isEdit(`attachments-${index}-tlp`) && !isPresetCustomEnabled('tlp')"
                               density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
@@ -3481,7 +3484,7 @@
                               @keypress.space.prevent="startEdit(`attachments-${index}-tags-input`, item.tags, `attachments-${index}-tags`, 'tags', modifyAssociation, ['attachments', item])">
                               <div class="font-weight-bold">{{i18n.caseTags}}: </div>
                               <div :id="`attachments-${index}-tags`" class="case detail-field mt-1" v-if="!isEdit(`attachments-${index}-tags`)">
-                                <v-chip class="mx-1" v-for="tag in item.tags" color="primary">{{ tag }}</v-chip>
+                                <v-chip density="compact" class="mx-1" v-for="tag in item.tags" color="primary">{{ tag }}</v-chip>
                               </div>
                             </div>
                             <v-select :id="`attachments-${index}-tags-input`" v-if="isEdit(`attachments-${index}-tags`) && !isPresetCustomEnabled('tags')"
@@ -3497,7 +3500,7 @@
                                 </v-list-item>
                               </template>
                               <template #selection="{ item }">
-                                <v-chip color="primary">{{item.title}}</v-chip>
+                                <v-chip density="compact" color="primary">{{item.title}}</v-chip>
                               </template>
                             </v-select>
                             <template v-if="isEdit(`attachments-${index}-tags`) && isPresetCustomEnabled('tags')">
@@ -3507,7 +3510,7 @@
                                 :items="selectList('tags', item.tags)"
                                 @change="stopEdit(true)">
                                 <template #selection="{ item }">
-                                  <v-chip color="primary">{{item.title}}</v-chip>
+                                  <v-chip density="compact" color="primary">{{item.title}}</v-chip>
                                 </template>
                                 <template #item="{ props, item }">
                                   <v-list-item v-bind="props" class="remove-spacer">
@@ -3621,7 +3624,7 @@
                                 <span data-aid="case_evidence_new_tags_select">
                                   <v-select variant="underlined" id="evidence-tags" v-if="!isPresetCustomEnabled('tags')" v-model="associatedForms['evidence'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
                                     <template #selection="{ item }">
-                                      <v-chip color="primary">{{item.title}}</v-chip>
+                                      <v-chip density="compact" color="primary">{{item.title}}</v-chip>
                                     </template>
                                   </v-select>
                                   <v-combobox variant="underlined" id="evidence-tags" v-if="isPresetCustomEnabled('tags')" v-model="associatedForms['evidence'].tags" :items="selectList('tags')" persistent-hint :hint="i18n.caseTagsHelp" multiple>
@@ -3633,7 +3636,7 @@
                                       </v-list-item>
                                     </template>
                                     <template #selection="{ item }">
-                                      <v-chip color="primary">{{item.title}}</v-chip>
+                                      <v-chip density="compact" color="primary">{{item.title}}</v-chip>
                                     </template>
                                   </v-combobox>
                                 </span>
@@ -3767,7 +3770,7 @@
                             <div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${index}-tlp-input`, item.tlp, `evidence-${index}-tlp`, 'tlp', modifyAssociation, ['evidence', item])"
                               @keypress.space.prevent="startEdit(`evidence-${index}-tlp-input`, item.tlp, `evidence-${index}-tlp`, 'tlp', modifyAssociation, ['evidence', item])">
                               <div class="font-weight-bold">{{i18n.caseTlp}}: </div>
-                              <v-chip :id="`evidence-${index}-tlp`" :color="colorizeChip(item.tlp)" outlined v-if="!isEdit(`evidence-${index}-tlp`)">{{ withDefault(item.tlp, i18n.unknown) }}</v-chip>
+                              <v-chip :id="`evidence-${index}-tlp`" density="compact" :color="colorizeChip(item.tlp)" outlined v-if="!isEdit(`evidence-${index}-tlp`)">{{ withDefault(item.tlp, i18n.unknown) }}</v-chip>
                             </div>
                             <v-select variant="outlined" :id="`evidence-${index}-tlp-input`" v-if="isEdit(`evidence-${index}-tlp`) && !isPresetCustomEnabled('tlp')"
                               density="compact" eager hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
@@ -3796,7 +3799,7 @@
                               @keypress.space.prevent="startEdit(`evidence-${index}-tags-input`, item.tags, `evidence-${index}-tags`, 'tags', modifyAssociation, ['evidence', item])">
                               <div class="font-weight-bold">{{i18n.caseTags}}: </div>
                               <div :id="`evidence-${index}-tags`" class="case detail-field mt-1" v-if="!isEdit(`evidence-${index}-tags`)">
-                                <v-chip class="mx-1" v-for="tag in item.tags" color="primary">{{ tag }}</v-chip>
+                                <v-chip density="compact" class="mx-1" v-for="tag in item.tags" color="primary">{{ tag }}</v-chip>
                               </div>
                             </div>
                             <v-select :id="`evidence-${index}-tags-input`" v-if="isEdit(`evidence-${index}-tags`) && !isPresetCustomEnabled('tags')"
@@ -3812,7 +3815,7 @@
                                 </v-list-item>
                               </template>
                               <template #selection="{ item }">
-                                <v-chip color="primary">{{item.title}}</v-chip>
+                                <v-chip density="compact" color="primary">{{item.title}}</v-chip>
                               </template>
                             </v-select>
                             <template v-if="isEdit(`evidence-${index}-tags`) && isPresetCustomEnabled('tags')">
@@ -3829,7 +3832,7 @@
                                   </v-list-item>
                                 </template>
                                 <template #selection="{ item }">
-                                  <v-chip color="primary">{{item.title}}</v-chip>
+                                  <v-chip density="compact" color="primary">{{item.title}}</v-chip>
                                 </template>
                               </v-combobox>
                               <div class="d-inline-flex justify-end">
@@ -4483,7 +4486,7 @@
                             <div tabindex="0" class="clicktoedit" @click="startEdit('case-tlp-input', caseObj.tlp, 'case-tlp', 'tlp', modifyCase)"
                               @keypress.space.prevent="startEdit('case-tlp-input', caseObj.tlp, 'case-tlp', 'tlp', modifyCase)">
                               <div class="font-weight-bold">{{i18n.caseTlp}}: </div>
-                              <v-chip :color="colorizeChip(caseObj.tlp)" variant="outlined" id="case-tlp" v-if="!isEdit('case-tlp')">{{ withDefault(caseObj.tlp, i18n.unknown) }}</v-chip>
+                              <v-chip density="compact" :color="colorizeChip(caseObj.tlp)" variant="outlined" id="case-tlp" v-if="!isEdit('case-tlp')">{{ withDefault(caseObj.tlp, i18n.unknown) }}</v-chip>
                             </div>
                             <v-select id="case-tlp-input" v-if="isEdit('case-tlp') && !isPresetCustomEnabled('tlp')"
                               density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.caseTlpHelp"
@@ -4512,7 +4515,7 @@
                             <div tabindex="0" class="clicktoedit" @click="startEdit('case-pap-input', caseObj.pap, 'case-pap', 'pap', modifyCase)"
                               @keypress.space.prevent="startEdit('case-pap-input', caseObj.pap, 'case-pap', 'pap', modifyCase)">
                               <div class="font-weight-bold">{{i18n.casePap}}: </div>
-                              <v-chip :color="colorizeChip(caseObj.pap)" variant="outlined" id="case-pap" v-if="!isEdit('case-pap')">{{ withDefault(caseObj.pap, i18n.unknown) }}</v-chip>
+                              <v-chip density="compact" :color="colorizeChip(caseObj.pap)" variant="outlined" id="case-pap" v-if="!isEdit('case-pap')">{{ withDefault(caseObj.pap, i18n.unknown) }}</v-chip>
                             </div>
                             <v-select id="case-pap-input" v-if="isEdit('case-pap') && !isPresetCustomEnabled('pap')"
                               density="compact" eager variant="outlined" hide-details="auto" class="case-select" persistent-hint :hint="i18n.casePapHelp"
@@ -4565,7 +4568,7 @@
                               @keypress.space.prevent="startEdit('case-tags-input', caseObj.tags, 'case-tags', 'tags', modifyCase)">
                               <div class="font-weight-bold">{{i18n.caseTags}}: </div>
                               <div id="case-tags" class="case detail-field mt-1" v-if="!isEdit('case-tags')">
-                                <v-chip class="mx-1" v-for="tag in caseObj.tags" color="primary">{{ tag }}</v-chip>
+                                <v-chip density="compact" class="mx-1" v-for="tag in caseObj.tags" color="primary">{{ tag }}</v-chip>
                               </div>
                             </div>
                             <div v-if="isEdit('case-tags')">
@@ -4582,7 +4585,7 @@
                                   </v-list-item>
                                 </template>
                                 <template #selection="{ item }">
-                                  <v-chip color="primary">{{item.title}}</v-chip>
+                                  <v-chip density="compact" color="primary">{{item.title}}</v-chip>
                                 </template>
                               </v-select>
                               <v-combobox id="case-tags-input" v-else
@@ -4598,7 +4601,7 @@
                                   </v-list-item>
                                 </template>
                                 <template #selection="{ item }">
-                                  <v-chip color="primary">{{item.title}}</v-chip>
+                                  <v-chip density="compact" color="primary">{{item.title}}</v-chip>
                                 </template>
                               </v-combobox>
                               <div class="d-inline-flex justify-end">
@@ -4763,7 +4766,7 @@
                   </td>
                   <td :id="'nodeUpdateTimeAgo_' + item.id" class="d-none d-lg-table-cell">{{ formatDuration(item.updateTime) }} {{i18n.ago}}</td>
                   <td :id="'nodeUptimeSeconds_' + item.id" class="d-none d-lg-table-cell">{{ formatDuration(item.uptimeSeconds) }}</td>
-                  <td><v-chip :id="'nodeStatus_' + item.id" class="nodeStatus" @click="expand(item)" :color="colorNodeStatus(item.status, item.nonCriticalNode)" data-aid="grid_node_status_display">{{ $root.localizeMessage(item.status) }}</v-chip></td>
+                  <td><v-chip :id="'nodeStatus_' + item.id" class="nodeStatus" @click="expand(item)" density="compact" :color="colorNodeStatus(item.status, item.nonCriticalNode)" data-aid="grid_node_status_display">{{ $root.localizeMessage(item.status) }}</v-chip></td>
                 </tr>
               </template>
               <template #expanded-row="{ item }">
@@ -5576,17 +5579,34 @@
                           <v-btn id="setting-global-save" icon variant="text" size="small" @click="save(selected)" :disabled="!isPendingSave(selected)" :title="i18n.settingSaveHelp" data-aid="config_item_save">
                             <v-icon color="success">fa-check</v-icon>
                           </v-btn>
-                          <v-btn id="setting-global-cancel" icon variant="text" size="small" @click="cancel(true)" :disabled="!isPendingSave(selected)" :title="i18n.settingCancelHelp" data-aid="config_item_cancel">
+                          <v-btn id="setting-global-cancel" icon variant="text" size="small" @click="userCancel()" :disabled="!isPendingSave(selected)" :title="i18n.settingCancelHelp" data-aid="config_item_cancel">
                             <v-icon color="error">fa-xmark</v-icon>
                           </v-btn>
                         </div>
-                        <div v-if="isMultiline(selected)">
-                          <v-textarea v-if="form.key != selected.id" id="value-output" variant="outlined" :label="i18n.settingGlobal" @focus="edit(selected)" v-model="selected.value" readonly :disabled="isReadOnly(selected)" :no-resize="!isReadOnly(selected)" class="config-editor" data-aid="config_item_customize_multiline_display" />
-                          <v-textarea v-else id="value-input" variant="outlined" :label="i18n.settingGlobal" v-model="form.value" class="editing config-editor" data-aid="config_item_customize_multiline_input" />
-                        </div>
+                        <v-expansion-panels v-if="hasUiElements(selected)" v-model="form.entriesExpanded">
+                          <v-expansion-panel v-for="(entry, entryIdx) in form.entries" :key="entryIdx" @group:selected="edit(selected)" data-aid="config_item_entry_title">
+                            <v-expansion-panel-title>
+                              {{ entry._title }}
+                            </v-expansion-panel-title>
+                            <v-expansion-panel-text>
+                              <div v-for="(element, elementIdx) in selected.uiElements" :key="elementIdx">
+                                <v-text-field :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:modelValue="markDirtyEntries" :label="element.label" variant="outlined" :label="element.label" v-model="entry[element.field]" class="editing" :data-aid="'config_item_entry_' + element.field" />
+                              </div>
+                              <v-btn v-if="!isEntryEmpty(entry)" id="'setting-element-' + entryIdx + '-delete-' + entry['field']" icon variant="text" size="small" @click="clearEntry(entry, entryIdx)" :title="i18n.settingDeleteEntryHelp" data-aid="config_item_delete_entry">
+                                <v-icon color="error">fa-trash</v-icon>
+                              </v-btn>
+                            </v-expansion-panel-text>
+                          </v-expansion-panel>
+                        </v-expansion-panels>
                         <div v-else>
-                          <v-text-field v-if="form.key != selected.id" id="value-output" variant="outlined" :label="i18n.settingGlobal" @focus="edit(selected)" v-model="selected.value" readonly :disabled="isReadOnly(selected)" :type="selected.sensitive ? 'password' : 'text'" data-aid="config_item_customize_singleline_display" />
-                          <v-text-field v-else id="value-input" variant="outlined" :label="i18n.settingGlobal" v-model="form.value" class="editing"  @keydown.enter.prevent="save(selected)" data-aid="config_item_singleline_input" />
+                          <div v-if="isMultiline(selected)">
+                            <v-textarea v-if="form.key != selected.id" id="value-output" variant="outlined" :label="i18n.settingGlobal" @focus="edit(selected)" v-model="selected.value" readonly :disabled="isReadOnly(selected)" :no-resize="!isReadOnly(selected)" class="config-editor" data-aid="config_item_customize_multiline_display" />
+                            <v-textarea v-else id="value-input" variant="outlined" :label="i18n.settingGlobal" v-model="form.value" class="editing config-editor" data-aid="config_item_customize_multiline_input" />
+                          </div>
+                          <div v-else>
+                            <v-text-field v-if="form.key != selected.id" id="value-output" variant="outlined" :label="i18n.settingGlobal" @focus="edit(selected)" v-model="selected.value" readonly :disabled="isReadOnly(selected)" :type="selected.sensitive ? 'password' : 'text'" data-aid="config_item_customize_singleline_display" />
+                            <v-text-field v-else id="value-input" variant="outlined" :label="i18n.settingGlobal" v-model="form.value" class="editing"  @keydown.enter.prevent="save(selected)" data-aid="config_item_singleline_input" />
+                          </div>
                         </div>
                       </v-col>
                     </v-row>
@@ -5599,7 +5619,7 @@
                           <v-btn :id="'setting-node-save-' + item[0]" icon variant="text" size="small" @click="save(selected, item[0])" :disabled="!isPendingSave(selected, item[0])" :title="i18n.settingSaveHelp" data-aid="config_item_node_save">
                             <v-icon color="success">fa-check</v-icon>
                           </v-btn>
-                          <v-btn :id="'setting-node-cancel-' + item[0]" icon variant="text" size="small" @click="cancel(true)" :disabled="!isPendingSave(selected, item[0])" :title="i18n.settingCancelHelp" data-aid="config_item_node_cancel">
+                          <v-btn :id="'setting-node-cancel-' + item[0]" icon variant="text" size="small" @click="userCancel(true)" :disabled="!isPendingSave(selected, item[0])" :title="i18n.settingCancelHelp" data-aid="config_item_node_cancel">
                             <v-icon color="error">fa-xmark</v-icon>
                           </v-btn>
                         </div>

@@ -36,3 +36,4 @@ myapp:
   str: my_str
   bool: true
   zdef: chocolate
+  ui_json: "{\"something\":\"here\",\"another\":\"else\"},{\"something\":\"here2\",\"another\":\"else2\"}"

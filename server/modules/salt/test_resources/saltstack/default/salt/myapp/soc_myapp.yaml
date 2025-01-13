@@ -7,3 +7,10 @@ myapp:
   ro:
     description: read only setting
     readonly: True
+  ui_json:
+    description: UI elements for JSON packing
+    uiElements:
+    - field: something
+      label: something nice
+    - field: another
+      label: another thing

@@ -68,6 +68,7 @@ test('loadData', async () => {
       "sensitive": undefined,
       "syntax": undefined,
       "title": "Farout",
+      "uiElements": undefined,
       "value": null,
     },
     {
@@ -91,6 +92,7 @@ test('loadData', async () => {
       "sensitive": undefined,
       "syntax": undefined,
       "title": "CCA",
+      "uiElements": undefined,
       "value": undefined,
     },
     {
@@ -114,6 +116,7 @@ test('loadData', async () => {
       "sensitive": undefined,
       "syntax": undefined,
       "title": "Barley",
+      "uiElements": undefined,
       "value": undefined,
     }
   ];
@@ -144,6 +147,7 @@ test('loadData', async () => {
               "sensitive": undefined,
               "syntax": undefined,
               "title": "Farout",
+              "uiElements": undefined,
               "value": null
             },
             {
@@ -167,6 +171,7 @@ test('loadData', async () => {
               "sensitive": undefined,
               "syntax": undefined,
               "title": "Barley",
+              "uiElements": undefined,
               "value": undefined
             }
           ],
@@ -198,6 +203,7 @@ test('loadData', async () => {
       "sensitive": undefined,
       "syntax": undefined,
       "title": "CCA",
+      "uiElements": undefined,
       "value": undefined
     }
   ];
@@ -323,6 +329,7 @@ setupSettings = () => {
 };
 
 test('selectSetting', () => {
+  comp.form.entriesExpanded = 12;
   setupSettings();
 
   comp.selectSetting();
@@ -331,9 +338,11 @@ test('selectSetting', () => {
   expect(comp.availableNodes).toStrictEqual([{title: "node2 (standalone)", value: "n2"}]);
   expect(comp.cancelDialog).toBe(false);
   expect(comp.confirmResetDialog).toBe(false);
+  expect(comp.form.entriesExpanded).toBeNull();
 });
 
 test('cancel', () => {
+  comp.form.entriesExpanded = 12;
   comp.active = ["cancel-id"];
   comp.settings = [{id: "cancel-id", value: "abc"}];
   comp.form.value = "123";
@@ -352,6 +361,13 @@ test('cancel', () => {
   comp.cancel(false);
   expect(comp.cancelDialog).toBe(true);
   expect(comp.form.key).toBe("cancel-id");
+  expect(comp.form.entriesExpanded).toBe(12);
+});
+
+test('userCancel', () => {
+  comp.form.entriesExpanded = 12;
+  comp.userCancel();
+  expect(comp.form.entriesExpanded).toBeNull();
 });
 
 test('remove', () => {
@@ -716,4 +732,78 @@ test('getSettingBreadcrumbs', () => {
   setting = { id: "foo.bar.car", advanced: true };
   expect(comp.getSettingBreadcrumbs(setting)).toBe("foo > bar > car [adv]");
 
+});
+
+test('hasUiElements', () => {
+  setting = {};
+  expect(comp.hasUiElements(setting)).toBe(false);
+
+  setting = { uiElements: [] };
+  expect(comp.hasUiElements(setting)).toBe(false);
+
+  setting = { uiElements: [{}] };
+  expect(comp.hasUiElements(setting)).toBe(false);
+
+  setting = { syntax: 'json' };
+  expect(comp.hasUiElements(setting)).toBe(false);
+
+  setting = { uiElements: [{}], syntax: 'json' };
+  expect(comp.hasUiElements(setting)).toBe(true);
+});
+
+test('pack_unpack', () => {
+  comp.form.value = "{}"
+  comp.form.entries = [{foo: 'bar', _title:'ignore'},{_title:'empty'}];
+  setting = {id: 'myid', uiElements:[{field: 'foo', label:'some fooness'}], syntax: 'json'}
+  comp.pack(setting);
+  expect(comp.form.value).toBe('[{"foo":"bar"}]')
+
+  comp.form.entries = null;
+  setting.value = '[{"foo":"bar"}]';
+  comp.settings = [setting];
+  comp.active = ['myid'];
+  comp.unpack(setting);
+  expect(comp.form.entries.length).toBe(2);
+  expect(comp.form.entries[0].foo).toBe('bar');
+  expect(comp.form.entries[0]._title).toBe('1. bar');
+  expect(comp.form.entries[1]._title).toBe('+');
+});
+
+test('isEntryEmpty', () => {
+  entry = {id: '', foo:'', _title:'title'};
+  expect(comp.isEntryEmpty(entry)).toBe(true);
+
+  entry = {id: 'something', foo:'hi', _title:'title'};
+  expect(comp.isEntryEmpty(entry)).toBe(false);
+});
+
+test('generateEntryTitle', () => {
+  entry = {id: 'something', foo:'hi'};
+  comp.settings = [entry];
+  comp.active = [entry.id];
+  comp.generateEntryTitle(entry, 1);
+  expect(entry._title).toBe('2. ');
+  entry.uiElements = [{field: 'foo'}];
+  comp.generateEntryTitle(entry, 1);
+  expect(entry._title).toBe('2. hi');
+});
+
+test('markDirtyEntries', () => {
+  comp.form.value = 123;
+  comp.markDirtyEntries();
+  expect(comp.form.value.length).toBe(13);
+});
+
+test('clearEntry', () => {
+  entry = {foo: 'bar', some: 'value', _title: 'title'};
+  comp.form.value = 123;
+  comp.clearEntry(entry, 1);
+  expect(comp.form.value.length).toBe(13);
+  expect(entry.foo).toBe('');
+  expect(entry.some).toBe('');
+  expect(entry._title).toBe('2. ');
+
+  entry = {foo: 'bar', some: 'value', _title: '+'};
+  comp.clearEntry(entry, 1);
+  expect(entry._title).toBe('+');
 });

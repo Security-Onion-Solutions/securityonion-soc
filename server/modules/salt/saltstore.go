@@ -506,6 +506,24 @@ func (store *Saltstore) updateSettingWithAnnotation(setting *model.Setting, anno
 			setting.Duplicates = value.(bool)
 		case "jinjaEscaped":
 			setting.JinjaEscaped = value.(bool)
+		case "uiElements":
+			tmpElements := value.([]interface{})
+			for _, tmp := range tmpElements {
+				if tmpMap, ok := tmp.(map[string]interface{}); ok {
+					var element model.UiElement
+					for key, value := range tmpMap {
+						switch key {
+						case "field":
+							element.Field = value.(string)
+						case "label":
+							element.Label = value.(string)
+						}
+					}
+					setting.UiElements = append(setting.UiElements, element)
+				} else {
+					log.Error("Invalid annotation; cannot cast to map")
+				}
+			}
 		}
 	}
 }

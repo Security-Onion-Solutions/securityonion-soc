@@ -197,6 +197,7 @@ routes.push({
         advanced: setting.advanced,
         syntax: setting.syntax,
         duplicates: setting.duplicates,
+        uiElements: setting.uiElements,
       };
       this.merge(created, setting);
       return created;
@@ -359,11 +360,79 @@ routes.push({
         });
         return false;
       }
-      this.recomputeAvailableNodes(this.findActiveSetting());
+      const setting = this.findActiveSetting();
+      this.recomputeAvailableNodes(setting);
       this.activeBackup = [...this.active];
       this.showDuplicate = false;
       this.showDefault = false;
+      this.unpack(setting);
+      this.form.entriesExpanded = null;
       window.scrollTo(0,0);
+    },
+    unpack(setting) {
+      this.form.entries = null
+      if (this.hasUiElements(setting)) {
+        if (setting.syntax.toLowerCase() == 'json' && setting.value && setting.value.trim().length > 0) {
+          this.form.entries = JSON.parse(setting.value);
+          for (let [idx, entry] of this.form.entries.entries()) {
+            this.generateEntryTitle(entry, idx);
+          }
+        } else {
+          this.form.entries = [];
+        }
+        // Add a blank entry so users can fill out new entries
+        this.form.entries.push({_title: "+"});
+      }
+    },
+    pack(setting) {
+      if (this.form.entries && this.hasUiElements(setting)) {
+        if (setting.syntax.toLowerCase() == 'json') {
+          const tmpEntries = []
+          for (let [idx, entry] of this.form.entries.entries()) {
+            const tmpEntry = Object.assign({}, entry);
+            delete tmpEntry._title;
+
+            if (!this.isEntryEmpty(tmpEntry)) {
+              tmpEntries.push(tmpEntry);
+            }
+          }
+          this.form.value = JSON.stringify(tmpEntries)
+        }
+      }
+    },
+    isEntryEmpty(entry) {
+      var value = ""
+      for (prop in entry) {
+        if (prop != "_title") {
+          value += entry[prop];
+        }
+      }
+      return value.trim().length == 0;
+    },
+    clearEntry(entry, idx) {
+      for (prop in entry) {
+        if (prop != "_title") {
+          entry[prop] = "";
+        }
+      }
+      if (entry._title != "+") {
+        this.markDirtyEntries();
+        this.generateEntryTitle(entry, idx);
+      }
+    },
+    markDirtyEntries() {
+      this.form.value = Date.now() + "";
+    },
+    generateEntryTitle(entry, idx) {
+      const setting = this.findActiveSetting();
+      var title = null;
+      if (setting && setting.uiElements && setting.uiElements.length > 0) {
+        title = entry[setting.uiElements[0].field];
+      }
+      entry._title = "" + (idx+1) + ". "
+      if (title) {
+         entry._title += title;
+      }
     },
     cancel(force) {
       var setting = this.findActiveSetting();
@@ -388,6 +457,11 @@ routes.push({
       this.form.key = null;
       this.cancelDialog = false;
 
+      if (setting) {
+        // Unpack on cancel to restore the original entries into the custom UI Elements
+        this.unpack(setting);
+      }
+
       // If the user has discarded the changes, and if there's a next-stop
       // forward the user there now.
       if (force) {
@@ -400,6 +474,10 @@ routes.push({
       }
 
       return true;
+    },
+    userCancel() {
+      this.form.entriesExpanded = null;
+      return this.cancel(true)
     },
     remove(setting, nodeId) {
       this.resetSetting = setting;
@@ -455,6 +533,7 @@ routes.push({
 
       if (setting) {
         this.form.value = this.form.value.trim();
+        this.pack(setting);
         if (setting.regex) {
           var test_values = [this.form.value];
           if (setting.multiline) {
@@ -588,5 +667,11 @@ routes.push({
     isReadOnly(item) {
       return item.readonly || item.readonlyUi;
     },
+    hasUiElements(setting) {
+      if (setting.uiElements && setting.uiElements.length > 0 && setting.syntax == 'json') {
+        return true;
+      }
+      return false;
+    }
   }
 }});
