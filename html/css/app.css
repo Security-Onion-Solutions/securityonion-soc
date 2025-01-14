@@ -899,6 +899,10 @@ ul ul ul {
   vertical-align: baseline;
 }
 
+.va-middle {
+  vertical-align: middle;
+}
+
 .text-primary .v-switch__thumb {
   background-color: rgb(var(--v-theme-primary)) !important;
 }
