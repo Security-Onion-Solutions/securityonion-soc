@@ -31,7 +31,7 @@ func RegisterPacketRoutes(srv *Server, r chi.Router, prefix string) {
 
 // @Summary      Get PCAP Packets
 // @Description  Retrieves the packets collected and attached to the job represented by the given job ID. This request assumes the job is a PCAP job.
-// @Tags	     Jobs
+// @Tags         Jobs
 // @Security     bearer[jobs/read]
 // @Param        jobId  path  integer  true  "The job ID" example(1004)
 // @Param        unwrap  query  boolean  false  "If true, and if the stream data is eligible the stream data will be unwrapped. An example of wrapped stream data is VXLAN packet data." example(true)

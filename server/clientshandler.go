@@ -45,7 +45,7 @@ func RegisterClientsRoutes(srv *Server, r chi.Router, prefix string) {
 
 // @Summary      Get API Clients
 // @Description  Returns all existing API clients.
-// @Tags	     Clients
+// @Tags         Clients
 // @Security     bearer[clients/read]
 // @Produce      json
 // @Success      200  {array}   model.Client		 "The array of Client objects"
@@ -67,7 +67,7 @@ func (h *ClientsHandler) getClients(w http.ResponseWriter, r *http.Request) {
 
 // @Summary      Create API Clients
 // @Description  Creates a new API client with the given Client object
-// @Tags	     Clients
+// @Tags         Clients
 // @Security     bearer[clients/write]
 // @param        request body model.Client true "The Client object to create. Only the 'name' and 'note' properties are used."
 // @Produce      json
@@ -106,7 +106,7 @@ func (h *ClientsHandler) postClient(w http.ResponseWriter, r *http.Request) {
 // @Summary      Assign Client Permission
 // @Description  Assigns a permission to an existing API client.
 // @Description  A new access token is not required. Future API calls will immediately be affected.
-// @Tags	     Clients
+// @Tags         Clients
 // @Security     bearer[clients/write]
 // @param        id  path  string  true  "The API client ID to which the permission will be assigned" example(socl_my_new_api_client)
 // @param        perm  path  string  true  "The permission to assign" example(events/read)
@@ -147,7 +147,7 @@ func (h *ClientsHandler) postAddPermission(w http.ResponseWriter, r *http.Reques
 // @Summary      Regenerate Client Secret
 // @Description  Regenerates a new client secret for the given API client ID.
 // @Description  Pre-existing access tokens that have not yet expired will remain valid through their expiration.
-// @Tags	     Clients
+// @Tags         Clients
 // @Security     bearer[clients/write]
 // @param        id  path  string  true  "The API client ID" example(socl_my_new_api_client)
 // @Produce      json
@@ -177,7 +177,7 @@ func (h *ClientsHandler) getGeneratedSecret(w http.ResponseWriter, r *http.Reque
 
 // @Summary      Update API Clients
 // @Description  Updates an existing API client with the given Client object
-// @Tags	     Clients
+// @Tags         Clients
 // @Security     bearer[clients/write]
 // @param        request body model.Client true "The Client object to update. Only the 'name', and 'note' properties are used."
 // @Produce      json
@@ -221,7 +221,7 @@ func (h *ClientsHandler) putClient(w http.ResponseWriter, r *http.Request) {
 
 // @Summary      Remove API Client
 // @Description  Removes an API client. Future API requests from this client will immediately be rejected.
-// @Tags	     Clients
+// @Tags         Clients
 // @Security     bearer[clients/write]
 // @param        id  path  string  true  "The API client ID" example(socl_my_new_api_client)
 // @Success      200                         "The API client was successfully removed"
@@ -251,7 +251,7 @@ func (h *ClientsHandler) deleteClient(w http.ResponseWriter, r *http.Request) {
 // @Summary      Remove Client Permission
 // @Description  Removes a permission from an existing API client.
 // @Description  A new access token is not required. Future API calls will immediately be affected.
-// @Tags	     Clients
+// @Tags         Clients
 // @Security     bearer[clients/write]
 // @param        id  path  string  true  "The API client ID from which the permission will be removed" example(socl_my_new_api_client)
 // @param        perm  path  string  true  "The permission to remove" example(events/read)

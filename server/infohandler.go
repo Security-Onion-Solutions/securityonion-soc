@@ -37,7 +37,7 @@ func RegisterInfoRoutes(srv *Server, r chi.Router, prefix string) {
 
 // @Summary      Get Server Information
 // @Description  Requests the Security Onion grid general details.
-// @Tags	     Grid
+// @Tags         Grid
 // @Security     bearer
 // @Produce      json
 // @Success      200  {object}  model.Info   "The retrieved Info object"
