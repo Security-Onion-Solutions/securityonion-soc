@@ -2392,7 +2392,7 @@
           <v-col cols="12" lg="5">
             <v-expansion-panels v-if="$root.isUserAdmin()">
               <v-expansion-panel data-aid="users_options_expand">
-                <v-expansion-panel-title id="users-options-header">{{i18n.options}}</v-expansion-panel-title>
+                <v-expansion-panel-title id="users-options-header" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
                 <v-expansion-panel-text>
                   <v-btn id="users-sync-button" @click.stop="sync()" class="mt-6 mb-1 theme-background-lighten-1" data-aid="users_options_synchronize">
                     {{ i18n.usersSynchronize }}
@@ -4658,7 +4658,7 @@
           <v-col cols="5">
             <v-expansion-panels>
               <v-expansion-panel data-aid="grid_options">
-                <v-expansion-panel-title id="gridOptionsHeader">{{i18n.options}}</v-expansion-panel-title>
+                <v-expansion-panel-title id="gridOptionsHeader" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
                 <v-expansion-panel-text>
                   <span data-aid="grid_options_timezone_select">
                     <v-select variant="underlined" id="gridTimezone" @update:model-value="zone = $event; saveTimezone()" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint prepend-icon="fa-user-clock" data-aid="grid_options_timezone_select"></v-select>
@@ -4671,7 +4671,7 @@
             </v-expansion-panels>
           </v-col>
           <v-col cols="3" align="end">
-            <h4 v-if="metricsEnabled" data-aid="grid_summary">{{ i18n.gridEps }} {{ gridEps | formatCount }}</h4>
+            <h4 v-if="metricsEnabled" data-aid="grid_summary">{{ i18n.gridEps }} {{ formatCount(gridEps) }}</h4>
           </v-col>
         </v-row>
         <v-row>
@@ -4986,7 +4986,7 @@
                               </div>
                               <div v-if="item.metricsEnabled && hasQueuestore(item)" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.redisQueueSize }}:</span>
-                                <span :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'" id="node_redisQueue">{{ item.redisQueueSize | formatCount }}</span>
+                                <span :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'" id="node_redisQueue">{{ formatCount(item.redisQueueSize) }}</span>
                               </div>
                               <div v-if="item.metricsEnabled && canTest(item)" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.trafficMonIn }}:</span>
