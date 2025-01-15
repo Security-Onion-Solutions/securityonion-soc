@@ -35,6 +35,12 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+var (
+	handled        = NewEntryMatcher(LogLevelEq(log.InfoLevel), LogMessageEq("Handled request"))
+	didNotComplete = NewEntryMatcher(LogLevelEq(log.WarnLevel), LogMessageContains("Request did not complete successfully"))
+	specificTime   = time.Date(2025, 1, 1, 12, 30, 0, 0, time.UTC)
+)
+
 func TestPrepareForSave(t *testing.T) {
 	now := time.Now()
 
@@ -378,7 +384,6 @@ func TestPrepareForSave(t *testing.T) {
 }
 
 func TestHandlerGetDetection(t *testing.T) {
-	handled := NewEntryMatcher(LogLevelEq(log.InfoLevel), LogMessageEq("Handled request"))
 	tests := []struct {
 		Name     string
 		Id       string
@@ -517,6 +522,9 @@ func TestHandlerGetDetection(t *testing.T) {
 				assert.Equal(t, res, w.Body.Bytes())
 			case nil:
 				assert.Empty(t, w.Body.String())
+			default:
+				t.Log("unexpected response type in test")
+				t.Fail()
 			}
 
 			if test.Logs != nil {
@@ -535,8 +543,7 @@ func TestHandlerGetDetection(t *testing.T) {
 	}
 }
 
-func TestHandlerGetByPublicID(t *testing.T) {
-	handled := NewEntryMatcher(LogLevelEq(log.InfoLevel), LogMessageEq("Handled request"))
+func TestHandlerGetByPublicId(t *testing.T) {
 	tests := []struct {
 		Name     string
 		PublicId string
@@ -686,6 +693,9 @@ func TestHandlerGetByPublicID(t *testing.T) {
 				assert.Equal(t, res, w.Body.Bytes())
 			case nil:
 				assert.Empty(t, w.Body.String())
+			default:
+				t.Log("unexpected response type in test")
+				t.Fail()
 			}
 
 			if test.Logs != nil {
@@ -705,10 +715,6 @@ func TestHandlerGetByPublicID(t *testing.T) {
 }
 
 func TestHandlerCreateDetection(t *testing.T) {
-	handled := NewEntryMatcher(LogLevelEq(log.InfoLevel), LogMessageEq("Handled request"))
-	didNotComplete := NewEntryMatcher(LogLevelEq(log.WarnLevel), LogMessageContains("Request did not complete successfully"))
-	specificTime := time.Date(2025, 1, 1, 12, 30, 0, 0, time.UTC)
-
 	tests := []struct {
 		Name     string
 		ReqBody  []byte
@@ -980,6 +986,9 @@ func TestHandlerCreateDetection(t *testing.T) {
 				assert.Equal(t, res, w.Body.Bytes())
 			case nil:
 				assert.Empty(t, w.Body.String())
+			default:
+				t.Log("unexpected response type in test")
+				t.Fail()
 			}
 
 			if test.Logs != nil {
@@ -999,9 +1008,6 @@ func TestHandlerCreateDetection(t *testing.T) {
 }
 
 func TestHandlerGetDetectionHistory(t *testing.T) {
-	handled := NewEntryMatcher(LogLevelEq(log.InfoLevel), LogMessageEq("Handled request"))
-	didNotComplete := NewEntryMatcher(LogLevelEq(log.WarnLevel), LogMessageContains("Request did not complete successfully"))
-
 	tests := []struct {
 		Name     string
 		Id       string
@@ -1071,6 +1077,9 @@ func TestHandlerGetDetectionHistory(t *testing.T) {
 				assert.Equal(t, res, w.Body.Bytes())
 			case nil:
 				assert.Empty(t, w.Body.String())
+			default:
+				t.Log("unexpected response type in test")
+				t.Fail()
 			}
 
 			if test.Logs != nil {
@@ -1090,9 +1099,6 @@ func TestHandlerGetDetectionHistory(t *testing.T) {
 }
 
 func TestHandlerDuplicateDetection(t *testing.T) {
-	handled := NewEntryMatcher(LogLevelEq(log.InfoLevel), LogMessageEq("Handled request"))
-	didNotComplete := NewEntryMatcher(LogLevelEq(log.WarnLevel), LogMessageContains("Request did not complete successfully"))
-
 	tests := []struct {
 		Name     string
 		Id       string
@@ -1257,6 +1263,9 @@ func TestHandlerDuplicateDetection(t *testing.T) {
 				assert.Equal(t, res, w.Body.Bytes())
 			case nil:
 				assert.Empty(t, w.Body.String())
+			default:
+				t.Log("unexpected response type in test")
+				t.Fail()
 			}
 
 			if test.Logs != nil {
@@ -1276,10 +1285,6 @@ func TestHandlerDuplicateDetection(t *testing.T) {
 }
 
 func TestHandlerUpdateDetection(t *testing.T) {
-	handled := NewEntryMatcher(LogLevelEq(log.InfoLevel), LogMessageEq("Handled request"))
-	didNotComplete := NewEntryMatcher(LogLevelEq(log.WarnLevel), LogMessageContains("Request did not complete successfully"))
-	specificTime := time.Date(2025, 1, 1, 12, 30, 0, 0, time.UTC)
-
 	tests := []struct {
 		Name     string
 		ReqBody  []byte
@@ -1781,6 +1786,9 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				assert.Equal(t, res, w.Body.Bytes())
 			case nil:
 				assert.Empty(t, w.Body.String())
+			default:
+				t.Log("unexpected response type in test")
+				t.Fail()
 			}
 
 			if test.Logs != nil {
@@ -1800,9 +1808,6 @@ func TestHandlerUpdateDetection(t *testing.T) {
 }
 
 func TestHandlerUpdateOverrideNote(t *testing.T) {
-	handled := NewEntryMatcher(LogLevelEq(log.InfoLevel), LogMessageEq("Handled request"))
-	didNotComplete := NewEntryMatcher(LogLevelEq(log.WarnLevel), LogMessageContains("Request did not complete successfully"))
-
 	tests := []struct {
 		Name          string
 		DetectionId   string
@@ -1916,6 +1921,9 @@ func TestHandlerUpdateOverrideNote(t *testing.T) {
 				assert.Equal(t, res, w.Body.Bytes())
 			case nil:
 				assert.Empty(t, w.Body.String())
+			default:
+				t.Log("unexpected response type in test")
+				t.Fail()
 			}
 
 			if test.Logs != nil {
@@ -1935,9 +1943,6 @@ func TestHandlerUpdateOverrideNote(t *testing.T) {
 }
 
 func TestHandlerDeleteDetection(t *testing.T) {
-	handled := NewEntryMatcher(LogLevelEq(log.InfoLevel), LogMessageEq("Handled request"))
-	didNotComplete := NewEntryMatcher(LogLevelEq(log.WarnLevel), LogMessageContains("Request did not complete successfully"))
-
 	tests := []struct {
 		Name        string
 		DetectionId string
@@ -2122,6 +2127,9 @@ func TestHandlerDeleteDetection(t *testing.T) {
 				assert.Equal(t, res, w.Body.Bytes())
 			case nil:
 				assert.Empty(t, w.Body.String())
+			default:
+				t.Log("unexpected response type in test")
+				t.Fail()
 			}
 
 			if test.Logs != nil {
@@ -2141,9 +2149,6 @@ func TestHandlerDeleteDetection(t *testing.T) {
 }
 
 func TestHandlerBulkUpdateDetection(t *testing.T) {
-	handled := NewEntryMatcher(LogLevelEq(log.InfoLevel), LogMessageEq("Handled request"))
-	didNotComplete := NewEntryMatcher(LogLevelEq(log.WarnLevel), LogMessageContains("Request did not complete successfully"))
-
 	tests := []struct {
 		Name       string
 		NewStatus  string
@@ -2557,6 +2562,20 @@ func TestHandlerBulkUpdateDetection(t *testing.T) {
 				handled,
 			},
 		},
+		{
+			Name:      "Unauthorized",
+			NewStatus: "disable",
+			ReqBody:   []byte(`{"query":"severity: low AND ruleset: ETOPEN"}`),
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) (*sync.WaitGroup, *MockBroadcaster) {
+				return nil, nil
+			},
+			Code:     401,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
 	}
 
 	ctrl := gomock.NewController(t)
@@ -2605,6 +2624,9 @@ func TestHandlerBulkUpdateDetection(t *testing.T) {
 				assert.Equal(t, res, w.Body.Bytes())
 			case nil:
 				assert.Empty(t, w.Body.String())
+			default:
+				t.Log("unexpected response type in test")
+				t.Fail()
 			}
 
 			if test.Logs != nil {
@@ -2632,6 +2654,1023 @@ func TestHandlerBulkUpdateDetection(t *testing.T) {
 					err := matcher.Validate(mb.Messages[i])
 					if err != nil {
 						t.Fatalf("Broadcast message %d is invalid: %s", i, err)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestHandlerCreateComment(t *testing.T) {
+	tests := []struct {
+		Name        string
+		DetectionId string
+		ReqBody     []byte
+		InitMock    func(*testing.T, *Server, *gomock.Controller)
+		Code        int
+		Response    any
+		Logs        []EntryMatcher
+	}{
+		{
+			Name:        "Sunny Day",
+			DetectionId: "12345",
+			ReqBody:     []byte(`{"value":"This is a comment"}`),
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+
+				mDetStore.EXPECT().CreateComment(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, comment *model.DetectionComment) (*model.DetectionComment, error) {
+					return comment, nil
+				})
+			},
+			Code: 200,
+			Response: &model.DetectionComment{
+				DetectionId: "12345",
+				Value:       "This is a comment",
+			},
+			Logs: []EntryMatcher{
+				handled,
+			},
+		},
+		{
+			Name:        "Detection Not Found",
+			DetectionId: "12345",
+			ReqBody:     []byte(`{"value":"This is a comment"}`),
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+
+				mDetStore.EXPECT().CreateComment(gomock.Any(), gomock.Any()).Return(nil, errors.New("Object not found"))
+			},
+			Code:     404,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:        "Unable to Create Comment",
+			DetectionId: "12345",
+			ReqBody:     []byte(`{"value":"This is a comment"}`),
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+
+				mDetStore.EXPECT().CreateComment(gomock.Any(), gomock.Any()).Return(nil, errors.New("something went wrong"))
+			},
+			Code:     500,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:        "Request Error",
+			DetectionId: "12345",
+			ReqBody:     []byte(`JSON`),
+			InitMock:    func(t *testing.T, srv *Server, ctrl *gomock.Controller) {},
+			Code:        400,
+			Response:    []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			srv := NewMockServer(t, ctrl, &config.ServerConfig{})
+
+			h := NewDetectionHandler(srv)
+
+			test.InitMock(t, srv, ctrl)
+
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("id", test.DetectionId)
+
+			ctx := NewTestContext(rctx)
+			mem, l := NewInMemoryLogger()
+
+			ctx = log.NewContext(ctx, l)
+
+			w := httptest.NewRecorder()
+			r := httptest.NewRequestWithContext(ctx, "POST", fmt.Sprintf("/detection/comment/%s", test.DetectionId), bytes.NewReader(test.ReqBody))
+
+			h.CreateComment(w, r)
+
+			assert.Equal(t, test.Code, w.Code)
+
+			switch res := test.Response.(type) {
+			case *model.DetectionComment:
+				actual := &model.DetectionComment{}
+				err := json.NewDecoder(w.Body).Decode(actual)
+				assert.NoError(t, err)
+
+				assert.Equal(t, res, actual)
+			case []byte:
+				assert.Equal(t, res, w.Body.Bytes())
+			case nil:
+				assert.Empty(t, w.Body.String())
+			default:
+				t.Log("unexpected response type in test")
+				t.Fail()
+			}
+
+			if test.Logs != nil {
+				if len(test.Logs) != len(mem.Entries) {
+					t.Fatalf("Expected %d log entries, got %d", len(test.Logs), len(mem.Entries))
+				}
+
+				for i, matcher := range test.Logs {
+					err := matcher.Validate(mem.Entries[i])
+					if err != nil {
+						t.Fatalf("Log entry %d is invalid: %s", i, err)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestHandlerGetDetectionComment(t *testing.T) {
+	tests := []struct {
+		Name     string
+		Id       string
+		InitMock func(*Server, *gomock.Controller)
+		Code     int
+		Response any
+		Logs     []EntryMatcher
+	}{
+		{
+			Name: "Sunny Day",
+			Id:   "12345",
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mDetStore.EXPECT().GetComment(gomock.Any(), "12345").Return(&model.DetectionComment{
+					Auditable: model.Auditable{
+						Id: "12345",
+					},
+					DetectionId: "det123",
+					Value:       "Test comment",
+				}, nil)
+			},
+			Code: 200,
+			Response: &model.DetectionComment{
+				Auditable: model.Auditable{
+					Id: "12345",
+				},
+				DetectionId: "det123",
+				Value:       "Test comment",
+			},
+			Logs: []EntryMatcher{handled},
+		},
+		{
+			Name: "Comment Not Found",
+			Id:   "12345",
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mDetStore.EXPECT().GetComment(gomock.Any(), "12345").Return(nil, errors.New("Object not found"))
+			},
+			Code:     404,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			srv := NewMockServer(t, ctrl, &config.ServerConfig{})
+			h := NewDetectionHandler(srv)
+
+			test.InitMock(srv, ctrl)
+
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("id", test.Id)
+
+			ctx := NewTestContext(rctx)
+			mem, l := NewInMemoryLogger()
+
+			ctx = log.NewContext(ctx, l)
+
+			w := httptest.NewRecorder()
+			r := httptest.NewRequestWithContext(ctx, "GET", fmt.Sprintf("/detection/comment/%s", test.Id), nil)
+
+			h.GetDetectionComment(w, r)
+
+			assert.Equal(t, test.Code, w.Code)
+
+			switch res := test.Response.(type) {
+			case *model.DetectionComment:
+				actual := &model.DetectionComment{}
+				err := json.NewDecoder(w.Body).Decode(actual)
+				assert.NoError(t, err)
+				assert.Equal(t, res, actual)
+			case []byte:
+				assert.Equal(t, res, w.Body.Bytes())
+			case nil:
+				assert.Empty(t, w.Body.String())
+			default:
+				t.Log("unexpected response type in test")
+				t.Fail()
+			}
+
+			if test.Logs != nil {
+				if len(test.Logs) != len(mem.Entries) {
+					t.Fatalf("Expected %d log entries, got %d", len(test.Logs), len(mem.Entries))
+				}
+
+				for i, matcher := range test.Logs {
+					err := matcher.Validate(mem.Entries[i])
+					if err != nil {
+						t.Fatalf("Log entry %d is invalid: %s", i, err)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestHandlerUpdateComment(t *testing.T) {
+	tests := []struct {
+		Name      string
+		CommentId string
+		ReqBody   []byte
+		InitMock  func(*Server, *gomock.Controller)
+		Code      int
+		Response  any
+		Logs      []EntryMatcher
+	}{
+		{
+			Name:      "Sunny Day",
+			CommentId: "12345",
+			ReqBody:   []byte(`{"value":"Test comment"}`),
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mDetStore.EXPECT().UpdateComment(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, comment *model.DetectionComment) (*model.DetectionComment, error) {
+					comment.Id = "12345"
+					comment.DetectionId = "det123"
+
+					return comment, nil
+				})
+			},
+			Code: 200,
+			Response: &model.DetectionComment{
+				Auditable: model.Auditable{
+					Id: "12345",
+				},
+				DetectionId: "det123",
+				Value:       "Test comment",
+			},
+			Logs: []EntryMatcher{handled},
+		},
+		{
+			Name:      "Bad Request",
+			CommentId: "12345",
+			ReqBody:   []byte(`JSON`),
+			InitMock:  func(srv *Server, ctrl *gomock.Controller) {},
+			Code:      400,
+			Response:  []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:      "Detection Not Found",
+			CommentId: "12345",
+			ReqBody:   []byte(`{"value":"Test comment"}`),
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+
+				mDetStore.EXPECT().UpdateComment(gomock.Any(), gomock.Any()).Return(nil, errors.New("Object not found"))
+			},
+			Code:     404,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:      "Unexpected Error",
+			CommentId: "12345",
+			ReqBody:   []byte(`{"value":"Test comment"}`),
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+
+				mDetStore.EXPECT().UpdateComment(gomock.Any(), gomock.Any()).Return(nil, errors.New("something went wrong"))
+			},
+			Code:     500,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			srv := NewMockServer(t, ctrl, &config.ServerConfig{})
+			h := NewDetectionHandler(srv)
+
+			test.InitMock(srv, ctrl)
+
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("id", test.CommentId)
+
+			ctx := NewTestContext(rctx)
+			mem, l := NewInMemoryLogger()
+
+			ctx = log.NewContext(ctx, l)
+
+			w := httptest.NewRecorder()
+			r := httptest.NewRequestWithContext(ctx, "PUT", fmt.Sprintf("/detection/comment/%s", test.CommentId), bytes.NewReader(test.ReqBody))
+
+			h.UpdateComment(w, r)
+
+			assert.Equal(t, test.Code, w.Code)
+
+			switch res := test.Response.(type) {
+			case *model.DetectionComment:
+				actual := &model.DetectionComment{}
+				err := json.NewDecoder(w.Body).Decode(actual)
+				assert.NoError(t, err)
+				assert.Equal(t, res, actual)
+			case []byte:
+				assert.Equal(t, res, w.Body.Bytes())
+			case nil:
+				assert.Empty(t, w.Body.String())
+			default:
+				t.Log("unexpected response type in test")
+				t.Fail()
+			}
+
+			if test.Logs != nil {
+				if len(test.Logs) != len(mem.Entries) {
+					t.Fatalf("Expected %d log entries, got %d", len(test.Logs), len(mem.Entries))
+				}
+
+				for i, matcher := range test.Logs {
+					err := matcher.Validate(mem.Entries[i])
+					if err != nil {
+						t.Fatalf("Log entry %d is invalid: %s", i, err)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestHandlerDeleteComment(t *testing.T) {
+	tests := []struct {
+		Name      string
+		CommentId string
+		InitMock  func(*Server, *gomock.Controller)
+		Code      int
+		Response  any
+		Logs      []EntryMatcher
+	}{
+		{
+			Name:      "Sunny Day",
+			CommentId: "12345",
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mDetStore.EXPECT().DeleteComment(gomock.Any(), "12345").Return(nil)
+			},
+			Code: 200,
+			Logs: []EntryMatcher{
+				handled,
+			},
+		},
+		{
+			Name:      "Not Found",
+			CommentId: "12345",
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mDetStore.EXPECT().DeleteComment(gomock.Any(), "12345").Return(errors.New("Object not found"))
+			},
+			Code:     404,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:      "Unexpected Error",
+			CommentId: "12345",
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mDetStore.EXPECT().DeleteComment(gomock.Any(), "12345").Return(errors.New("something went wrong"))
+			},
+			Code:     500,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			srv := NewMockServer(t, ctrl, &config.ServerConfig{})
+			h := NewDetectionHandler(srv)
+
+			test.InitMock(srv, ctrl)
+
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("id", test.CommentId)
+
+			ctx := NewTestContext(rctx)
+			mem, l := NewInMemoryLogger()
+
+			ctx = log.NewContext(ctx, l)
+
+			w := httptest.NewRecorder()
+			r := httptest.NewRequestWithContext(ctx, "DELETE", fmt.Sprintf("/detection/comment/%s", test.CommentId), nil)
+
+			h.DeleteComment(w, r)
+
+			assert.Equal(t, test.Code, w.Code)
+
+			switch res := test.Response.(type) {
+			case *model.DetectionComment:
+				actual := &model.DetectionComment{}
+				err := json.NewDecoder(w.Body).Decode(actual)
+				assert.NoError(t, err)
+				assert.Equal(t, res, actual)
+			case []byte:
+				assert.Equal(t, res, w.Body.Bytes())
+			case nil:
+				assert.Empty(t, w.Body.String())
+			default:
+				t.Log("unexpected response type in test")
+				t.Fail()
+			}
+
+			if test.Logs != nil {
+				if len(test.Logs) != len(mem.Entries) {
+					t.Fatalf("Expected %d log entries, got %d", len(test.Logs), len(mem.Entries))
+				}
+
+				for i, matcher := range test.Logs {
+					err := matcher.Validate(mem.Entries[i])
+					if err != nil {
+						t.Fatalf("Log entry %d is invalid: %s", i, err)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestHandlerGetDetectionComments(t *testing.T) {
+	tests := []struct {
+		Name     string
+		DetectId string
+		InitMock func(*Server, *gomock.Controller)
+		Code     int
+		Response any
+		Logs     []EntryMatcher
+	}{
+		{
+			Name:     "Sunny Day",
+			DetectId: "12345",
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+
+				mDetStore.EXPECT().GetComments(gomock.Any(), "12345").Return([]*model.DetectionComment{
+					{
+						Auditable: model.Auditable{
+							Id: "123",
+						},
+						Value: "Test comment",
+					},
+					{
+						Auditable: model.Auditable{
+							Id: "456",
+						},
+						Value: "Another comment",
+					},
+				}, nil)
+			},
+			Code: 200,
+			Response: []model.DetectionComment{
+				{
+					Auditable: model.Auditable{
+						Id: "123",
+					},
+					Value: "Test comment",
+				},
+				{
+					Auditable: model.Auditable{
+						Id: "456",
+					},
+					Value: "Another comment",
+				},
+			},
+			Logs: []EntryMatcher{
+				handled,
+			},
+		},
+		{
+			Name:     "Not Found",
+			DetectId: "12345",
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+
+				mDetStore.EXPECT().GetComments(gomock.Any(), "12345").Return(nil, errors.New("Object not found"))
+			},
+			Code:     404,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:     "Unexpected Error",
+			DetectId: "12345",
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+
+				mDetStore.EXPECT().GetComments(gomock.Any(), "12345").Return(nil, errors.New("something went wrong"))
+			},
+			Code:     500,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			srv := NewMockServer(t, ctrl, &config.ServerConfig{})
+			h := NewDetectionHandler(srv)
+
+			test.InitMock(srv, ctrl)
+
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("id", test.DetectId)
+
+			ctx := NewTestContext(rctx)
+			mem, l := NewInMemoryLogger()
+
+			ctx = log.NewContext(ctx, l)
+
+			w := httptest.NewRecorder()
+			r := httptest.NewRequestWithContext(ctx, "PUT", fmt.Sprintf("/detection/comment/%s", test.DetectId), nil)
+
+			h.GetDetectionComments(w, r)
+
+			assert.Equal(t, test.Code, w.Code)
+
+			switch res := test.Response.(type) {
+			case []model.DetectionComment:
+				actual := []model.DetectionComment{}
+				err := json.NewDecoder(w.Body).Decode(&actual)
+				assert.NoError(t, err)
+				assert.Equal(t, res, actual)
+			case []byte:
+				assert.Equal(t, res, w.Body.Bytes())
+			case nil:
+				assert.Empty(t, w.Body.String())
+			default:
+				t.Log("unexpected response type in test")
+				t.Fail()
+			}
+
+			if test.Logs != nil {
+				if len(test.Logs) != len(mem.Entries) {
+					t.Fatalf("Expected %d log entries, got %d", len(test.Logs), len(mem.Entries))
+				}
+
+				for i, matcher := range test.Logs {
+					err := matcher.Validate(mem.Entries[i])
+					if err != nil {
+						t.Fatalf("Log entry %d is invalid: %s", i, err)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestHandlerConvertContent(t *testing.T) {
+	tests := []struct {
+		Name     string
+		ReqBody  []byte
+		InitMock func(*Server, *gomock.Controller)
+		Code     int
+		Response any
+		Logs     []EntryMatcher
+	}{
+		{
+			Name:    "Sunny Day",
+			ReqBody: []byte(`{"content": "sigma goes here", "engine": "elastalert"}`),
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+
+				eng.EXPECT().ConvertRule(gomock.Any(), &model.Detection{Content: "sigma goes here", Engine: model.EngineNameElastAlert}).Return("converted query", nil)
+			},
+			Code: 200,
+			Response: &ConvertContentResp{
+				Query: "converted query",
+			},
+			Logs: []EntryMatcher{
+				handled,
+			},
+		},
+		{
+			Name:     "Bad Request",
+			ReqBody:  []byte(`JSON`),
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {},
+			Code:     400,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:     "Bad Engine",
+			ReqBody:  []byte(`{"engine": "suricata"}`),
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {},
+			Code:     400,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:    "Unknown Error",
+			ReqBody: []byte(`{"engine": "elastalert", "content": "sigma goes here"}`),
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+
+				eng.EXPECT().ConvertRule(gomock.Any(), &model.Detection{Content: "sigma goes here", Engine: model.EngineNameElastAlert}).Return("", errors.New("something went wrong"))
+			},
+			Code:     500,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			srv := NewMockServer(t, ctrl, &config.ServerConfig{})
+			h := NewDetectionHandler(srv)
+
+			test.InitMock(srv, ctrl)
+
+			ctx := NewTestContext(nil)
+			mem, l := NewInMemoryLogger()
+
+			ctx = log.NewContext(ctx, l)
+
+			w := httptest.NewRecorder()
+			r := httptest.NewRequestWithContext(ctx, "POST", "/detection/convert/", bytes.NewReader(test.ReqBody))
+
+			h.ConvertContent(w, r)
+
+			assert.Equal(t, test.Code, w.Code)
+
+			switch res := test.Response.(type) {
+			case *ConvertContentResp:
+				actual := &ConvertContentResp{}
+				err := json.NewDecoder(w.Body).Decode(actual)
+				assert.NoError(t, err)
+				assert.Equal(t, res, actual)
+			case []byte:
+				assert.Equal(t, res, w.Body.Bytes())
+			case nil:
+				assert.Empty(t, w.Body.String())
+			default:
+				t.Log("unexpected response type in test")
+				t.Fail()
+			}
+
+			if test.Logs != nil {
+				if len(test.Logs) != len(mem.Entries) {
+					t.Fatalf("Expected %d log entries, got %d", len(test.Logs), len(mem.Entries))
+				}
+
+				for i, matcher := range test.Logs {
+					err := matcher.Validate(mem.Entries[i])
+					if err != nil {
+						t.Fatalf("Log entry %d is invalid: %s", i, err)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestHandlerSyncEngineDetections(t *testing.T) {
+	tests := []struct {
+		Name     string
+		Engine   string
+		SyncType string
+		InitMock func(*Server, *gomock.Controller)
+		Code     int
+		Response any
+		Logs     []EntryMatcher
+	}{
+		{
+			Name:     "Sunny Day",
+			Engine:   string(model.EngineNameElastAlert),
+			SyncType: "full",
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
+
+				mAuth.Authorized = true
+
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+
+				eng.EXPECT().InterruptSync(true, true)
+			},
+			Code: 200,
+			Logs: []EntryMatcher{
+				handled,
+			},
+		},
+		{
+			Name:     "Sunny Day - Sync All",
+			Engine:   "all",
+			SyncType: "update",
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
+
+				mAuth.Authorized = true
+
+				engElastAlert := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameElastAlert] = engElastAlert
+
+				engSuricata := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameSuricata] = engSuricata
+
+				engStrelka := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameStrelka] = engStrelka
+
+				// all means all
+				engWhatever := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines["whatever"] = engWhatever
+
+				engElastAlert.EXPECT().InterruptSync(false, true)
+				engSuricata.EXPECT().InterruptSync(false, true)
+				engStrelka.EXPECT().InterruptSync(false, true)
+				engWhatever.EXPECT().InterruptSync(false, true)
+			},
+			Code: 200,
+			Logs: []EntryMatcher{
+				handled,
+			},
+		},
+		{
+			Name:     "Unauthorized",
+			Engine:   string(model.EngineNameElastAlert),
+			SyncType: "full",
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {},
+			Code:     401,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:     "Unknown Engine",
+			Engine:   "foobar",
+			SyncType: "full",
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
+
+				mAuth.Authorized = true
+			},
+			Code:     400,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			srv := NewMockServer(t, ctrl, &config.ServerConfig{})
+			h := NewDetectionHandler(srv)
+
+			test.InitMock(srv, ctrl)
+
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("engine", test.Engine)
+			rctx.URLParams.Add("type", test.SyncType)
+
+			ctx := NewTestContext(rctx)
+			mem, l := NewInMemoryLogger()
+
+			ctx = log.NewContext(ctx, l)
+
+			w := httptest.NewRecorder()
+			r := httptest.NewRequestWithContext(ctx, "POST", fmt.Sprintf("/detection/sync/%s/%s", test.Engine, test.SyncType), nil)
+
+			h.SyncEngineDetections(w, r)
+
+			assert.Equal(t, test.Code, w.Code)
+
+			switch res := test.Response.(type) {
+			case []model.DetectionComment:
+				actual := []model.DetectionComment{}
+				err := json.NewDecoder(w.Body).Decode(&actual)
+				assert.NoError(t, err)
+				assert.Equal(t, res, actual)
+			case []byte:
+				assert.Equal(t, res, w.Body.Bytes())
+			case nil:
+				assert.Empty(t, w.Body.String())
+			default:
+				t.Log("unexpected response type in test")
+				t.Fail()
+			}
+
+			if test.Logs != nil {
+				if len(test.Logs) != len(mem.Entries) {
+					t.Fatalf("Expected %d log entries, got %d", len(test.Logs), len(mem.Entries))
+				}
+
+				for i, matcher := range test.Logs {
+					err := matcher.Validate(mem.Entries[i])
+					if err != nil {
+						t.Fatalf("Log entry %d is invalid: %s", i, err)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestHandlerGenPublicId(t *testing.T) {
+	tests := []struct {
+		Name     string
+		Engine   string
+		InitMock func(*Server, *gomock.Controller)
+		Code     int
+		Response any
+		Logs     []EntryMatcher
+	}{
+		{
+			Name:   "Sunny Day",
+			Engine: string(model.EngineNameElastAlert),
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+
+				eng.EXPECT().GenerateUnusedPublicId(gomock.Any()).Return("unused-public-id", nil)
+			},
+			Code: 200,
+			Response: GenPublicIdResp{
+				PublicId: "unused-public-id",
+			},
+			Logs: []EntryMatcher{
+				handled,
+			},
+		},
+		{
+			Name:     "Unknown Engine",
+			Engine:   "foobar",
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {},
+			Code:     400,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:   "Engine Doesn't Support Traditional Ids",
+			Engine: string(model.EngineNameStrelka),
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameStrelka] = eng
+
+				eng.EXPECT().GenerateUnusedPublicId(gomock.Any()).Return("", errors.New("not implemented"))
+			},
+			Code: 501,
+			Logs: []EntryMatcher{
+				handled,
+			},
+		},
+		{
+			Name:   "Unexpected Error",
+			Engine: string(model.EngineNameStrelka),
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameStrelka] = eng
+
+				eng.EXPECT().GenerateUnusedPublicId(gomock.Any()).Return("", errors.New("something went wrong"))
+			},
+			Code:     500,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			srv := NewMockServer(t, ctrl, &config.ServerConfig{})
+			h := NewDetectionHandler(srv)
+
+			test.InitMock(srv, ctrl)
+
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("engine", test.Engine)
+
+			ctx := NewTestContext(rctx)
+			mem, l := NewInMemoryLogger()
+
+			ctx = log.NewContext(ctx, l)
+
+			w := httptest.NewRecorder()
+			r := httptest.NewRequestWithContext(ctx, "POST", fmt.Sprintf("/detection/%s/genpublicid", test.Engine), nil)
+
+			h.GenPublicId(w, r)
+
+			assert.Equal(t, test.Code, w.Code)
+
+			switch res := test.Response.(type) {
+			case GenPublicIdResp:
+				actual := GenPublicIdResp{}
+				err := json.NewDecoder(w.Body).Decode(&actual)
+				assert.NoError(t, err)
+				assert.Equal(t, res, actual)
+			case []byte:
+				assert.Equal(t, res, w.Body.Bytes())
+			case nil:
+				assert.Empty(t, w.Body.String())
+			default:
+				t.Log("unexpected response type in test")
+				t.Fail()
+			}
+
+			if test.Logs != nil {
+				if len(test.Logs) != len(mem.Entries) {
+					t.Fatalf("Expected %d log entries, got %d", len(test.Logs), len(mem.Entries))
+				}
+
+				for i, matcher := range test.Logs {
+					err := matcher.Validate(mem.Entries[i])
+					if err != nil {
+						t.Fatalf("Log entry %d is invalid: %s", i, err)
 					}
 				}
 			}

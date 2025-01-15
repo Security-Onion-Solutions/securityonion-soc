@@ -70,14 +70,14 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Post("/", h.CreateDetection)
 		r.Post("/{id}/duplicate", h.DuplicateDetection)
 
-		r.Post("/{id}/comment", h.createComment)
-		r.Get("/comment/{id}", h.getDetectionComment)
-		r.Put("/comment/{id}", h.updateComment)
-		r.Delete("/comment/{id}", h.deleteComment)
-		r.Get("/{id}/comment", h.getDetectionComments)
+		r.Post("/{id}/comment", h.CreateComment)
+		r.Get("/comment/{id}", h.GetDetectionComment)
+		r.Put("/comment/{id}", h.UpdateComment)
+		r.Delete("/comment/{id}", h.DeleteComment)
+		r.Get("/{id}/comment", h.GetDetectionComments)
 
 		r.Get("/{id}/history", h.GetDetectionHistory)
-		r.Post("/convert", h.convertContent)
+		r.Post("/convert", h.ConvertContent)
 
 		r.Put("/", h.UpdateDetection)
 		r.Put("/{id}/override/{overrideIndex}/note", h.UpdateOverrideNote)
@@ -85,9 +85,9 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Delete("/{id}", h.DeleteDetection)
 
 		r.Post("/bulk/{newStatus}", h.BulkUpdateDetection)
-		r.Post("/sync/{engine}/{type}", h.syncEngineDetections)
+		r.Post("/sync/{engine}/{type}", h.SyncEngineDetections)
 
-		r.Get("/{engine}/genpublicid", h.genPublicId)
+		r.Get("/{engine}/genpublicid", h.GenPublicId)
 	})
 }
 
@@ -1021,7 +1021,7 @@ func syncLocalDetections(ctx context.Context, srv *Server, detections []*model.D
 // @Failure      403                         "Insufficient permissions for this request"
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Router       /connect/detection/comment/{id} [post]
-func (h *DetectionHandler) createComment(w http.ResponseWriter, r *http.Request) {
+func (h *DetectionHandler) CreateComment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	detectId := chi.URLParam(r, "id")
@@ -1056,7 +1056,7 @@ func (h *DetectionHandler) createComment(w http.ResponseWriter, r *http.Request)
 // @Failure      404                         "Detection was not found"
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Router       /connect/detection/comment/{id} [get]
-func (h *DetectionHandler) getDetectionComment(w http.ResponseWriter, r *http.Request) {
+func (h *DetectionHandler) GetDetectionComment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	id := chi.URLParam(r, "id")
@@ -1083,7 +1083,7 @@ func (h *DetectionHandler) getDetectionComment(w http.ResponseWriter, r *http.Re
 // @Failure      404                         "Detection was not found"
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Router       /connect/detection/comment/{id} [put]
-func (h *DetectionHandler) updateComment(w http.ResponseWriter, r *http.Request) {
+func (h *DetectionHandler) UpdateComment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	commentId := chi.URLParam(r, "id")
@@ -1100,7 +1100,12 @@ func (h *DetectionHandler) updateComment(w http.ResponseWriter, r *http.Request)
 
 	obj, err := h.server.Detectionstore.UpdateComment(ctx, body)
 	if err != nil {
-		web.Respond(w, r, http.StatusNotFound, err)
+		if err.Error() == "Object not found" {
+			web.Respond(w, r, http.StatusNotFound, err)
+		} else {
+			web.Respond(w, r, http.StatusInternalServerError, err)
+		}
+
 		return
 	}
 
@@ -1118,14 +1123,19 @@ func (h *DetectionHandler) updateComment(w http.ResponseWriter, r *http.Request)
 // @Failure      404                         "Detection was not found"
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Router       /connect/detection/comment/{id} [delete]
-func (h *DetectionHandler) deleteComment(w http.ResponseWriter, r *http.Request) {
+func (h *DetectionHandler) DeleteComment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	commentId := chi.URLParam(r, "id")
 
 	err := h.server.Detectionstore.DeleteComment(ctx, commentId)
 	if err != nil {
-		web.Respond(w, r, http.StatusNotFound, err)
+		if err.Error() == "Object not found" {
+			web.Respond(w, r, http.StatusNotFound, err)
+		} else {
+			web.Respond(w, r, http.StatusInternalServerError, err)
+		}
+
 		return
 	}
 
@@ -1143,7 +1153,7 @@ func (h *DetectionHandler) deleteComment(w http.ResponseWriter, r *http.Request)
 // @Failure      404                         "Detection was not found"
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Router       /connect/detection/{id}/comment [get]
-func (h *DetectionHandler) getDetectionComments(w http.ResponseWriter, r *http.Request) {
+func (h *DetectionHandler) GetDetectionComments(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	detectId := chi.URLParam(r, "id")
@@ -1174,7 +1184,7 @@ func (h *DetectionHandler) getDetectionComments(w http.ResponseWriter, r *http.R
 // @Failure      403                         "Insufficient permissions for this request"
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Router       /connect/detection/convert [post]
-func (h *DetectionHandler) convertContent(w http.ResponseWriter, r *http.Request) {
+func (h *DetectionHandler) ConvertContent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	det := &model.Detection{}
@@ -1182,6 +1192,11 @@ func (h *DetectionHandler) convertContent(w http.ResponseWriter, r *http.Request
 	err := web.ReadJson(r, &det)
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	if det.Engine != model.EngineNameElastAlert {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("that detection's engine doesn't support conversion"))
 		return
 	}
 
@@ -1206,7 +1221,7 @@ func (h *DetectionHandler) convertContent(w http.ResponseWriter, r *http.Request
 // @Failure      403                         "Insufficient permissions for this request"
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Router       /connect/detection/sync/{engine}/{type} [post]
-func (h *DetectionHandler) syncEngineDetections(w http.ResponseWriter, r *http.Request) {
+func (h *DetectionHandler) SyncEngineDetections(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	err := h.server.CheckAuthorized(ctx, "write", "detections")
@@ -1249,7 +1264,7 @@ func (h *DetectionHandler) syncEngineDetections(w http.ResponseWriter, r *http.R
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Failure      501                         "The specified detection engine does not support public IDs"
 // @Router       /connect/detection/{engine}/genpublicid [get]
-func (h *DetectionHandler) genPublicId(w http.ResponseWriter, r *http.Request) {
+func (h *DetectionHandler) GenPublicId(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	engine := chi.URLParam(r, "engine")
