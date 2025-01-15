@@ -49,7 +49,7 @@ func (h *EventHandler) eventsEnabled(next http.Handler) http.Handler {
 // @Description  Given a search query, fetch all matching results, up to the maximum number requested, or the maximum that the backend data server will provide.
 // @Description.markdown get_events
 // @Security     bearer[events/read]
-// @Tags	     Query
+// @Tags         Query
 // @Param        query  query  string  true "User defined search query" example(tags:conn | groupby source.ip destination.ip network.protocol destination.port)
 // @Param        range  query  string  true "Date range, in the specified timezone" example(2024/12/03 03:09:31 PM - 2024/12/04 03:09:31 PM)
 // @Param        zone  query  string  true "Timezone of the date range" example(America/New_York)
@@ -96,7 +96,7 @@ func (h *EventHandler) getEvent(w http.ResponseWriter, r *http.Request) {
 // @Summary      Acknowledge Alerts
 // @Description  Acknowledges the alert event(s) matching the given query. Note that this will not remove the event from connected SOC users' Alert screens when the same alert event happens to be also present on their Alert screen. However, if they refresh the Alert screen the alert event will no longer be listed.
 // @Security     bearer[events/ack,events/write]
-// @Tags	     Query
+// @Tags         Query
 // @Param        request  body  model.EventAckCriteria  true "Ack criteria"
 // @Accept       json
 // @Produce      json

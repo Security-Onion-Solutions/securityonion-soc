@@ -40,7 +40,7 @@ func RegisterUtilRoutes(srv *Server, r chi.Router, prefix string) {
 // @Summary      DNS Reverse Lookup
 // @Description  Performs a reverse name lookup query on a list of provided IP addresses. The configured list of DNS overrides is checked first, and if no match is found a DNS reverse lookup is performed. The input listed is deduplicated first to avoid repeated lookups in the same request.
 // @Security     bearer
-// @Tags	     Query
+// @Tags         Query
 // @Param        request  body  []string  true "List of IP addresses to reverse lookup"
 // @Accept       json
 // @Produce      json
