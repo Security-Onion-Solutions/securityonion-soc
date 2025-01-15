@@ -93,6 +93,7 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 
 // @Summary      Get Detection
 // @Description  Retrieves a specific detection given an internal detection ID. This ID is unique only to this particular grid.
+// @Description  Use the "Query Data" API to search for detections using other criteria, specifying a query parameter that includes the following, at a minimum: _index:"*:so-detection"
 // @Tags	     Detections
 // @Security     bearer[detections/read, events/read]
 // @Param        id  path  string  true  "The detection ID to retrieve" example(zC73PJABrNRFAsnEYkqy)

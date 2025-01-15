@@ -32,9 +32,9 @@ func RegisterQueryRoutes(srv *Server, r chi.Router, prefix string) {
 }
 
 // @Summary      Build Query
-// @Description  Requests the server provide a new query for the client to show, given a particular change needed in the query.
-// @Tags	     Events
+// @Description  Requests the server provide a new query for the SOC client to show, given a particular change needed in the query.
 // @Security     bearer
+// @Tags	     Query
 // @Param        operation  path  string  true  "The type of operation for this query update. Supports: grouped, filtered, sorted" example(grouped)
 // @Param        query formData string  true  "The current query string to be modified" example(somefield: somevalue | groupby anotherfield)
 // @Param        field formData string  true  "The field to be used for the operation" example(newfield)

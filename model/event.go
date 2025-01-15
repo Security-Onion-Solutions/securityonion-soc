@@ -201,7 +201,7 @@ func (results *EventUpdateResults) AddEventUpdateResults(newResults *EventUpdate
 
 type EventAckCriteria struct {
 	// The search filter to utilize when searching for matching events to acknowledge.
-	SearchFilter string `json:"searchFilter" example:"(*) AND tags:alert AND NOT event.acknowledged:true AND NOT event.escalated:true | groupby rule.name event.module* event.severity_label rule.uuid"`
+	SearchFilter string `json:"searchFilter" example:"tags:alert AND NOT event.acknowledged:true AND NOT event.escalated:true | groupby rule.name event.module* event.severity_label rule.uuid"`
 	// Optional event filters to further narrow down matching events to acknowledge. These are field:value pairs.
 	EventFilter map[string]interface{} `json:"eventFilter" example:"event.module:sigma,rule.name:Security Onion - SOC Login Failure,rule.uuid:bf86ef21-41e6-417b-9a05-b9ea6bf28a38"`
 	// The date range to use for searching for matching events

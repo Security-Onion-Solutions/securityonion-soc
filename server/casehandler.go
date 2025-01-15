@@ -491,7 +491,8 @@ func (h *CaseHandler) deleteArtifact(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary      Get Case
-// @Description  Searches for a given case ID and returns the case details.
+// @Description  Retrieves a case given the provided case ID and returns the case details.
+// @Description  Use the "Query Data" API to search for cases using other criteria, specifying a query parameter that includes the following, at a minimum: _index:"*:so-case"
 // @Tags	     Cases
 // @Security     bearer[cases/read, events/read]
 // @Produce      json
