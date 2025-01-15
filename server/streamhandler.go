@@ -43,7 +43,7 @@ func RegisterStreamRoutes(srv *Server, r chi.Router, prefix string) {
 
 // @Summary      Download Job Output
 // @Description  Returns the full job output stream for the given job ID. An example of a job stream is a packet capture (PCAP) file.
-// @Tags	     Jobs
+// @Tags         Jobs
 // @Security     bearer[jobs/read]
 // @Param        jobId  path  integer  true  "The job ID" example(1004)
 // @Param        ext  query  string  false  "Optional filename extension to use on the returned stream. Appends extension to stream name, unless stream name already contains '.bin' in which case it replaces that extension." example(pcap)
@@ -126,7 +126,7 @@ func (h *StreamHandler) getStream(w http.ResponseWriter, r *http.Request) {
 
 // @Summary      Upload Job Output
 // @Description  Sends the job output up to the server for posterity and future retrieval. Not all jobs will have binary job output to upload. The job ID is used to reference the job for this output stream.
-// @Tags	     Jobs
+// @Tags         Jobs
 // @Security     bearer[jobs/process]
 // @Param        jobId  path  integer  true  "The job ID" example(1004)
 // @Param        request body object  true  "The job output stream byte content"

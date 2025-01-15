@@ -93,7 +93,8 @@ func RegisterDetectionRoutes(srv *Server, r chi.Router, prefix string) {
 
 // @Summary      Get Detection
 // @Description  Retrieves a specific detection given an internal detection ID. This ID is unique only to this particular grid.
-// @Tags	     Detections
+// @Description  Use the "Query Data" API to search for detections using other criteria, specifying a query parameter that includes the following, at a minimum: _index:"*:so-detection"
+// @Tags         Detections
 // @Security     bearer[detections/read, events/read]
 // @Param        id  path  string  true  "The detection ID to retrieve" example(zC73PJABrNRFAsnEYkqy)
 // @Success      200  {object}  model.Detection  "The detection was successfully retrieved"
@@ -140,7 +141,7 @@ func (h *DetectionHandler) getDetection(w http.ResponseWriter, r *http.Request) 
 
 // @Summary      Get Detection By Public ID
 // @Description  Retrieves a specific detection given a public detection ID. This ID is assigned by the ruleset author.
-// @Tags	     Detections
+// @Tags         Detections
 // @Security     bearer[detections/read, events/read]
 // @Param        id  path  string  true  "The detection public ID to retrieve" example(2038279)
 // @Success      200  {object}  model.Detection  "The detection was successfully retrieved"
@@ -194,7 +195,7 @@ func (h *DetectionHandler) getByPublicId(w http.ResponseWriter, r *http.Request)
 // @Description  Creates a new detection by providing the detection object as the request body, in JSON format.
 // @Description  Detections marked as community detections cannot be created with this API.
 // @Description  While the public ID is required for some engines, the internal ID will always be populated by the server.
-// @Tags	     Detections
+// @Tags         Detections
 // @Security     bearer[detections/read, events/read, detections/write,events/write, users/read]
 // @Param        request  body  model.Detection  true  "The detection object to create"
 // @Success      200  {object}  model.Detection  "Returns the detection that was successfully created"
@@ -324,7 +325,7 @@ func (h *DetectionHandler) createDetection(w http.ResponseWriter, r *http.Reques
 
 // @Summary      Get Detection History
 // @Description  Retrieves a specific detection's audit history given an internal detection ID.
-// @Tags	     Detections
+// @Tags         Detections
 // @Security     bearer[detections/read, events/read]
 // @Param        id  path  string  true  "The detection ID to retrieve" example(zC73PJABrNRFAsnEYkqy)
 // @Success      200  {array}  model.Auditable  "The array of history audit objects. Note that these objects will also contain either the Detection fields or a DetectionComment fields."
@@ -352,7 +353,7 @@ func (h *DetectionHandler) getDetectionHistory(w http.ResponseWriter, r *http.Re
 
 // @Summary      Duplicate Detection
 // @Description  Copies the detection associated with the given ID into a new detection. A new ID will be assigned to the duplicated detection.
-// @Tags	     Detections
+// @Tags         Detections
 // @Security     bearer[detections/read, events/read, detections/write, events/write]
 // @Param        id  path  string  true  "The detection ID to duplicate" example(zC73PJABrNRFAsnEYkqy)
 // @Success      200  {object}  model.Detection  "The duplicated detection object."
@@ -395,7 +396,7 @@ func (h *DetectionHandler) duplicateDetection(w http.ResponseWriter, r *http.Req
 
 // @Summary      Update Detection
 // @Description  Updates an existing detection by providing the new detection object as the request body, in JSON format.
-// @Tags	     Detections
+// @Tags         Detections
 // @Security     bearer[detections/read, events/read, detections/write, events/write]
 // @Param        request  body  model.Detection  true  "The detection object to create"
 // @Success      200  {object}  model.Detection  "Returns the detection that was successfully updated"
@@ -539,7 +540,7 @@ func (h *DetectionHandler) updateDetection(w http.ResponseWriter, r *http.Reques
 
 // @Summary      Update Override Note
 // @Description  Updates an existing override note.
-// @Tags	     Detections
+// @Tags         Detections
 // @Security     bearer[detections/read, events/read, detections/write, events/write]
 // @Param        id  path  string  true  "The internal detection ID" example(zC73PJABrNRFAsnEYkqy)
 // @Param        overrideIndex path number  true  "The 0-based index of the override within the detection" example(0)
@@ -585,7 +586,7 @@ func (h *DetectionHandler) updateOverrideNote(w http.ResponseWriter, r *http.Req
 
 // @Summary      Delete Detection
 // @Description  Deletes an existing detection.
-// @Tags	     Detections
+// @Tags         Detections
 // @Security     bearer[detections/read, events/read, detections/write, events/write]
 // @Param        id  path  string  true  "The internal detection ID" example(zC73PJABrNRFAsnEYkqy)
 // @Success      200         "The override note was deleted successfully"
@@ -630,7 +631,7 @@ func (h *DetectionHandler) deleteDetection(w http.ResponseWriter, r *http.Reques
 
 // @Summary      Manage Detections in Bulk
 // @Description  Enables, disables, or deletes multiple detections asynchronously.
-// @Tags	     Detections
+// @Tags         Detections
 // @Security     bearer[detections/read, events/read, detections/write, events/write]
 // @Param        newStatus  path  string  true  "The new status of the detection" Enums(enable, disable, delete)
 // @Param        request  body  BulkOp  true  "The bulk detection search criteria"
@@ -1015,7 +1016,7 @@ func syncLocalDetections(ctx context.Context, srv *Server, detections []*model.D
 
 // @Summary      Create Detection Comment
 // @Description  Creates a new detection comment for the detection associated with the provided detection ID.
-// @Tags	     Detections
+// @Tags         Detections
 // @Security     bearer[detections/read, events/read, detections/write, events/write]
 // @Param        id  path  string  true  "The internal detection ID" example(zC73PJABrNRFAsnEYkqy)
 // @Param        request body model.DetectionComment true "A detection comment object with the new content; any provided detection ID will be ignored"
@@ -1051,7 +1052,7 @@ func (h *DetectionHandler) createComment(w http.ResponseWriter, r *http.Request)
 
 // @Summary      Get Detection Comment
 // @Description  Retrieves the comment associated with the given comment ID.
-// @Tags	     Detections
+// @Tags         Detections
 // @Security     bearer[detections/read, events/read]
 // @Param        id  path  string  true  "The detection comment ID" example(MeEcnpMB4OVrR03M4und)
 // @Success      200  {object}  model.DetectionComment         "The comment has been successfully retrieved"
@@ -1076,7 +1077,7 @@ func (h *DetectionHandler) getDetectionComment(w http.ResponseWriter, r *http.Re
 
 // @Summary      Update Detection Comment
 // @Description  Updates the comment associated with the given comment ID with the provided content.
-// @Tags	     Detections
+// @Tags         Detections
 // @Security     bearer[detections/read, events/read, detections/write, events/write]
 // @Param        id  path  string  true  "The detection comment ID" example(MeEcnpMB4OVrR03M4und)
 // @Param        request body model.DetectionComment true "A detection object with the new content"
@@ -1113,7 +1114,7 @@ func (h *DetectionHandler) updateComment(w http.ResponseWriter, r *http.Request)
 
 // @Summary      Delete Detection Comment
 // @Description  Deletes the comment associated with the given comment ID.
-// @Tags	     Detections
+// @Tags         Detections
 // @Security     bearer[detections/read, events/read, detections/write, events/write]
 // @Param        id  path  string  true  "The detection comment ID" example(MeEcnpMB4OVrR03M4und)
 // @Success      200         "The comment has been successfully deleted"
@@ -1138,7 +1139,7 @@ func (h *DetectionHandler) deleteComment(w http.ResponseWriter, r *http.Request)
 
 // @Summary      Get Detection Comments
 // @Description  Retrieves the comments associated with the given detection ID.
-// @Tags	     Detections
+// @Tags         Detections
 // @Security     bearer[detections/read, events/read]
 // @Param        id  path  string  true  "The internal detection ID" example(zC73PJABrNRFAsnEYkqy)
 // @Success      200 {array}  model.DetectionComment  "The comments have been successfully retrieved"
@@ -1169,7 +1170,7 @@ func (h *DetectionHandler) getDetectionComments(w http.ResponseWriter, r *http.R
 // @Summary      Convert Rule Query
 // @Description  Converts the given Sigma Detection rule into an Elasticsearch query.
 // @Description  NOTE: The API method only works with Sigma rules.
-// @Tags	     Detections
+// @Tags         Detections
 // @Security     bearer
 // @Param        request  body  model.Detection  true  "The Sigma detection object with the Content and optional Overrides populated"
 // @Success      200  {object}  ConvertContentResp  "The rule has been converted successfully"
@@ -1200,7 +1201,7 @@ func (h *DetectionHandler) convertContent(w http.ResponseWriter, r *http.Request
 
 // @Summary      Sync Detections
 // @Description  Initiates an asynchronous synchronization of the specified detection engine.
-// @Tags	     Detections
+// @Tags         Detections
 // @Security     bearer[detections/write]
 // @Param        engine  path  string  true  "The detection engine to sync" Enums(all, elastalert, suricata, strelka")
 // @Param        type  path  string  true  "The type of sync to perform" Enums(full, update)
@@ -1243,7 +1244,7 @@ func (h *DetectionHandler) syncEngineDetections(w http.ResponseWriter, r *http.R
 
 // @Summary      Generate Public ID
 // @Description  Requests the server generate an unused public ID.
-// @Tags	     Detections
+// @Tags         Detections
 // @Security     bearer
 // @Param        engine  path  string  true  "The detection engine" Enums(elastalert, suricata")
 // @Success      200  {object}  GenPublicIdResp  "The ID has been generated"

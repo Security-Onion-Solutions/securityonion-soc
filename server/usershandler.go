@@ -66,7 +66,7 @@ func (h *UsersHandler) usersEnabled(next http.Handler) http.Handler {
 
 // @Summary      Get Users
 // @Description  Returns all SOC users.
-// @Tags	     Users
+// @Tags         Users
 // @Security     bearer[users/read]
 // @Produce      json
 // @Success      200  {array}   model.User   "List of user objects, or empty list if not permitted to view user list"
@@ -88,7 +88,7 @@ func (h *UsersHandler) getUsers(w http.ResponseWriter, r *http.Request) {
 
 // @Summary      Create User
 // @Description  Creates a new SOC user.
-// @Tags	     Users
+// @Tags         Users
 // @Security     bearer[users/write]
 // @Param        request  body  model.User true "User object to be created. The provided email address, firstname, lastname, note, roles, and password will be used. All other fields are ignored."
 // @Accept       json
@@ -129,7 +129,7 @@ func (h *UsersHandler) postUser(w http.ResponseWriter, r *http.Request) {
 // @Description  Grants an existing user a role. The user will then have permissions that this role provides.
 // @Param        id    path  string  true  "The user ID"
 // @Param        role  path  string  true  "The role name"
-// @Tags	     Users
+// @Tags         Users
 // @Security     bearer[users/write]
 // @Success      200        "The role was successfully granted to the user"
 // @Failure      400        "The provided input object or parameters are malformed or invalid"
@@ -166,7 +166,7 @@ func (h *UsersHandler) postAddRole(w http.ResponseWriter, r *http.Request) {
 
 // @Summary      Update User
 // @Description  Update a user with the provided user object data.
-// @Tags	     Users
+// @Tags         Users
 // @Security     bearer[users/write]
 // @Param        id    path  string  true  "The user ID"
 // @Param        request  body  model.User true "User object containing new updates. The provided email address, firstname, lastname, and note will be updated. All other fields are ignored."
@@ -208,7 +208,7 @@ func (h *UsersHandler) putUser(w http.ResponseWriter, r *http.Request) {
 // @Summary      Synchronize Users
 // @Description  Synchronizes all SOC users across the grid. This is an asynchronous request.
 // @Description  The background operation can take several minutes to complete.
-// @Tags	     Users
+// @Tags         Users
 // @Security     bearer[users/write]
 // @Success      200         "The synchronization request has been submitted"
 // @Failure      401         "Request was not properly authenticated"
@@ -229,7 +229,7 @@ func (h *UsersHandler) putSync(w http.ResponseWriter, r *http.Request) {
 
 // @Summary      Change Password
 // @Description  Update a user's password with the provided value.
-// @Tags	     Users
+// @Tags         Users
 // @Security     bearer[users/write]
 // @Param        id    path  string  true  "The user ID"
 // @Param        request  body  model.User true "User object containing the new password. All other fields are ignored."
@@ -274,7 +274,7 @@ func (h *UsersHandler) putPassword(w http.ResponseWriter, r *http.Request) {
 
 // @Summary      Toggle User Enabled
 // @Description  Update a user's status to enabled or disabled
-// @Tags	     Users
+// @Tags         Users
 // @Security     bearer[users/write]
 // @Param        id    path  string  true  "The user ID"
 // @Param        toggle    path  string  true  "Desired toggle action. Set to 'enable' or 'disable'."
@@ -316,7 +316,7 @@ func (h *UsersHandler) putToggleUser(w http.ResponseWriter, r *http.Request) {
 
 // @Summary      Delete User
 // @Description  Deletes the provided user ID.
-// @Tags	     Users
+// @Tags         Users
 // @Security     bearer[users/write]
 // @Param        id    path  string  true  "The user ID"
 // @Success      200        "User successfully deleted"
@@ -348,7 +348,7 @@ func (h *UsersHandler) deleteUser(w http.ResponseWriter, r *http.Request) {
 // @Description  Denies an existing user a role. The user will no longer have permissions that this role provides.
 // @Param        id    path  string  true  "The user ID"
 // @Param        role  path  string  true  "The role name"
-// @Tags	     Users
+// @Tags         Users
 // @Security     bearer[users/write]
 // @Success      200         "The role was successfully removed from the user"
 // @Failure      400         "The provided input object or parameters are malformed or invalid"

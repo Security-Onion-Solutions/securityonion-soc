@@ -31,7 +31,7 @@ func RegisterNodeRoutes(srv *Server, r chi.Router, prefix string) {
 
 // @Summary      Node Check-in / Get Pending Jobs
 // @Description  Used by Security Onion agent nodes to check-in with their current metrics and request any pending jobs assigned to it.
-// @Tags	     Grid, Jobs
+// @Tags         Grid, Jobs
 // @Security     bearer[nodes/write,jobs/process]
 // @Param        request body  model.Node  true  "The node object with recent metrics"
 // @Produce      json

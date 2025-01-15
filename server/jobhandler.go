@@ -39,7 +39,7 @@ func RegisterJobRoutes(srv *Server, r chi.Router, prefix string) {
 
 // @Summary      Get Job
 // @Description  Retrieves a specific job that matches the given job ID.
-// @Tags	     Jobs
+// @Tags         Jobs
 // @Security     bearer[jobs/read]
 // @Param        jobId  path  integer  true  "The job ID" example(1004)
 // @Produce      json
@@ -74,7 +74,7 @@ func (h *JobHandler) getJob(w http.ResponseWriter, r *http.Request) {
 
 // @Summary      Create Job
 // @Description  Create a new job.
-// @Tags	     Jobs
+// @Tags         Jobs
 // @Security     bearer[jobs/write]
 // @Param        request  body  model.Job  true  "The job details. The job ID, create timestamp, status, and other processing-related fields will be populated by the server. For a new analyze job, only the kind (analyze), nodeId, and parameters should be specified. For the parameters, the caseId, artifactType, and other relevant fields needed by the analyzers should be submitted."
 // @Produce      json
@@ -107,7 +107,7 @@ func (h *JobHandler) postJob(w http.ResponseWriter, r *http.Request) {
 
 // @Summary      Update Job
 // @Description  Update an existing job with the provided job details.
-// @Tags	     Jobs
+// @Tags         Jobs
 // @Security     bearer[jobs/write]
 // @Param        request  body  model.Job  true  "The job details. Any provided user ID or node ID will be ignored as those fields are read-only after initial job creation."
 // @Produce      json
@@ -141,7 +141,7 @@ func (h *JobHandler) putJob(w http.ResponseWriter, r *http.Request) {
 
 // @Summary      Delete Job
 // @Description  Deletes an existing job and its related output results.
-// @Tags	     Jobs
+// @Tags         Jobs
 // @Security     bearer[jobs/delete]
 // @Param        jobId  path  integer  true  "The job ID" example(1004)
 // @Success      200                         "The job was successfully deleted"

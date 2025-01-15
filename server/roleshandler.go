@@ -46,7 +46,7 @@ func rolesEnabled(server *Server) func(next http.Handler) http.Handler {
 
 // @Summary      Get Roles
 // @Description  Retrieves the set of available user roles.
-// @Tags	     Users
+// @Tags         Users
 // @Security     bearer[roles/read]
 // @Produce      json
 // @Success      200  {array}   string       "List of user role names"
@@ -67,7 +67,7 @@ func (h *RolesHandler) getRoles(w http.ResponseWriter, r *http.Request) {
 // @Description  Note: User roles are made up of assigned permissions. API clients do not
 // @Description  use roles and instead are directly assigned individual permissions since
 // @Description  each API client is expected to be configured for a specific task.
-// @Tags	     Clients
+// @Tags         Clients
 // @Security     bearer[permissions/read]
 // @Produce      json
 // @Success      200  {array}   string       "List of permission names"
