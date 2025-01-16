@@ -39,3 +39,5 @@ type Casestore interface {
 	GetArtifactStream(ctx context.Context, id string) (*model.ArtifactStream, error)
 	DeleteArtifactStream(ctx context.Context, id string) error
 }
+
+//go:generate mockgen -destination mock/mock_casestore.go -package mock . Casestore

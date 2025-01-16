@@ -16,20 +16,26 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+	"go.uber.org/mock/gomock"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestReverseLookupHandler(t *testing.T) {
-	fakeEventStore := &FakeEventstore{}
-	h := UtilHandler{
-		server: &Server{
-			Eventstore: fakeEventStore,
-			Config: &config.ServerConfig{
-				Dns: "",
-			},
-		},
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cfg := &config.ServerConfig{
+		Dns: "",
 	}
+
+	srv := NewMockServer(t, ctrl, cfg)
+
+	h := UtilHandler{
+		server: srv,
+	}
+
+	fakeEventStore := srv.Eventstore.(*FakeEventstore)
 
 	fakeEventStore.MSearchResults = append(fakeEventStore.MSearchResults, &model.EventMSearchResults{
 		Responses: []*model.EventSearchResults{

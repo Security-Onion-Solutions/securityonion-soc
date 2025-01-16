@@ -20,3 +20,5 @@ type AdminClientstore interface {
 	AddClientPermission(ctx context.Context, id string, perm string) error
 	DeleteClientPermission(ctx context.Context, id string, perm string) error
 }
+
+//go:generate mockgen -destination mock/mock_adminclientstore.go -package mock . AdminClientstore
