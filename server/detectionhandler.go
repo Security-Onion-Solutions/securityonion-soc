@@ -399,6 +399,7 @@ func (h *DetectionHandler) DuplicateDetection(w http.ResponseWriter, r *http.Req
 // @Failure      400         "The provided input object or parameters are malformed or invalid"
 // @Failure      401                         "Request was not properly authenticated"
 // @Failure      403                         "Insufficient permissions for this request"
+// @Failure      404                         "Detection not found"
 // @Failure      409                         "Public ID conflicts with existing detection"
 // @Failure      500                         "Internal SOC error; review SOC logs"
 // @Router       /connect/detection/ [put]
@@ -461,6 +462,8 @@ func (h *DetectionHandler) UpdateDetection(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		if err.Error() == "Object not found" {
 			web.Respond(w, r, http.StatusNotFound, err)
+		} else {
+			web.Respond(w, r, http.StatusInternalServerError, err)
 		}
 
 		return

@@ -1584,6 +1584,31 @@ func TestHandlerUpdateDetection(t *testing.T) {
 			},
 		},
 		{
+			Name:    "UpdateDetection - Unexpected Error",
+			ReqBody: []byte(`{"engine":"strelka","content":"test","id":"12345"}`),
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameStrelka] = eng
+
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
+				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+
+				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
+
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(&model.Detection{}, nil)
+
+				mDetStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).Return(nil, errors.New("something went wrong"))
+			},
+			Code:     500,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
 			Name:    "UpdateDetection - Successful Disable After Bad Sync",
 			ReqBody: []byte(`{"engine":"strelka","content":"test","id":"12345","isEnabled":true}`),
 			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
