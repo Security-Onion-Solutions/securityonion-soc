@@ -481,6 +481,7 @@ test('ack emits event', () => {
     false,
     null,
     comp.alertInfo.groupIndex,
+    true,
     true
   ]);
 });
