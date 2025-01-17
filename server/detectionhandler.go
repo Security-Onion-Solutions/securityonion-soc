@@ -1198,7 +1198,8 @@ func (h *DetectionHandler) ConvertContent(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if det.Engine != model.EngineNameElastAlert {
+	if model.EngineName(strings.ToLower(string(det.Engine))) != model.EngineNameElastAlert &&
+		model.SigLanguage(strings.ToLower(string(det.Language))) != model.SigLangSigma {
 		web.Respond(w, r, http.StatusBadRequest, errors.New("that detection's engine doesn't support conversion"))
 		return
 	}

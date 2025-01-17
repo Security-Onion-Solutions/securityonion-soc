@@ -3357,6 +3357,24 @@ func TestHandlerConvertContent(t *testing.T) {
 			},
 		},
 		{
+			// when creating a new detection, the engine isn't specified yet, but language is
+			Name:    "Good Language",
+			ReqBody: []byte(`{"language": "sigma", "content": "sigma goes here"}`),
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines[model.EngineNameElastAlert] = eng
+
+				eng.EXPECT().ConvertRule(gomock.Any(), &model.Detection{Content: "sigma goes here", Language: model.SigLangSigma}).Return("converted query", nil)
+			},
+			Code: 200,
+			Response: &ConvertContentResp{
+				Query: "converted query",
+			},
+			Logs: []EntryMatcher{
+				handled,
+			},
+		},
+		{
 			Name:    "Unknown Error",
 			ReqBody: []byte(`{"engine": "elastalert", "content": "sigma goes here"}`),
 			InitMock: func(srv *Server, ctrl *gomock.Controller) {
