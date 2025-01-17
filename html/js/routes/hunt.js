@@ -166,6 +166,7 @@ const huntComponent = {
     showAckManyDialog: false,
     ackManyArgs: [],
     ackManyVerb: '',
+    menuScrollPos: 0,
   }},
   created() {
     this.$root.initializeCharts();
@@ -2474,6 +2475,23 @@ const huntComponent = {
     closeAckManyDialog() {
       this.showAckManyDialog = false;
       this.ackManyArgs = [];
+    },
+    async saveMenuScrollPos(isOpen, target) {
+      if (isOpen) {
+        // target doesn't exist yet, wait for it to be added to DOM
+        await this.$nextTick();
+      }
+
+      const scrollContainer = document.querySelector(target);
+      if (!scrollContainer) return;
+
+      if (isOpen) {
+        // opening
+        scrollContainer.scrollTop = this.menuScrollPos;
+      } else {
+        // closing
+        this.menuScrollPos = scrollContainer.scrollTop;
+      }
     },
   }
 };

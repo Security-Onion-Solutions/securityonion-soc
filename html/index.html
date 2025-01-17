@@ -412,7 +412,7 @@
                   rows="1" persistent-hint prepend-icon="fa-search" @keydown.enter.prevent="submitQuery" id="hunt-query-input" ref="huntQueryInput" :data-aid="'query_input_' + category"
                   variant="underlined">
                   <template #prepend-inner>
-                    <v-menu density="compact">
+                    <v-menu density="compact" @update:modelValue="saveMenuScrollPos($event, '#hunt-query-dropdown-list')">
                       <template #activator="{ props: menu }">
                         <v-tooltip location="bottom">
                           <template #activator="{ props: tooltip }">
