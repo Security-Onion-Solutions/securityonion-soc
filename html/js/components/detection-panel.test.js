@@ -474,7 +474,18 @@ test('deleteOverride', async () => {
 });
 
 test('ack emits event', () => {
-  comp.ack();
+  comp.ack(false);
+  expect(comp.emit).toHaveBeenCalledWith('ack', [
+    comp.alertInfo.item,
+    null,
+    false,
+    null,
+    comp.alertInfo.groupIndex,
+    true,
+    false
+  ]);
+
+  comp.ack(true);
   expect(comp.emit).toHaveBeenCalledWith('ack', [
     comp.alertInfo.item,
     null,

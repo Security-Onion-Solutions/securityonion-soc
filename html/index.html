@@ -5911,7 +5911,7 @@
                 </div>
               </div>
               <div class="quicklinks pt-2">
-                <v-btn id="detection-panel-ack" icon variant="text" size="small" @click="ack()" data-aid="detection_panel_ack" :title="i18n.alertAcknowledge">
+                <v-btn id="detection-panel-ack" icon variant="text" size="small" @click="ack(false)" data-aid="detection_panel_ack" :title="i18n.alertAcknowledge">
                   <v-icon :color="ackColor">
                     <span>
                       <i class="fas fa-bell fa-stack-1x"></i>
@@ -6287,7 +6287,7 @@
             <v-card-text v-html="i18n.acknowledgeExistingAlertsText" />
             <v-card-actions>
               <v-spacer></v-spacer>
-              <v-btn text id="ack-existing-confirm-yes-button" @click="saveDetection(); ack();" v-text="i18n.yes" data-aid="detection_panel_ack_existing_yes" />
+              <v-btn text id="ack-existing-confirm-yes-button" @click="saveDetection(); ack(true);" v-text="i18n.yes" data-aid="detection_panel_ack_existing_yes" />
               <v-btn text id="ack-existing-confirm-no-button" @click="saveDetection();" v-text="i18n.no" data-aid="detection_panel_ack_existing_no" />
               <v-btn text id="ack-existing-confirm-cancel-button" @click="detection.isEnabled = true; ackExistingDialog = false;" v-text="i18n.cancel" data-aid="detection_panel_ack_existing_cancel" />
             </v-card-actions>
