@@ -193,7 +193,7 @@ test('createCase', async () => {
 
   expect(mock).toHaveBeenCalledWith('case/', params);
   expect(showErrorMock).toHaveBeenCalledTimes(0);
-  expect(comp.$router.replace).toHaveBeenCalledWith({ name: 'case', params: { id: fakeCase.id }});
+  expect(comp.$router.replace).toHaveBeenCalledWith({ name: 'case', params: { id: fakeCase.id }, query: {} });
   expect(comp.$root.loading).toBe(false);
 });
 

@@ -181,7 +181,7 @@ global.getComponent = function(name) {
   comp.$nextTick = (fun) => { fun(); }
 
   // Setup route mock data
-  comp.$route = { params: {} };
+  comp.$route = { path: '', query: {}, params: {} };
   const arr = [];
   arr._push = arr.push;
   comp.$router = arr;
@@ -189,6 +189,7 @@ global.getComponent = function(name) {
     arr._push(obj);
     return { then: () => { } }
   }
+  comp.$router.currentRoute = { value: '' };
 
   const data = global.initComponentData(comp);
   const props = global.initComponentProps(comp);
