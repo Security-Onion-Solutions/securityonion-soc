@@ -769,6 +769,64 @@ test('pack_unpack', () => {
   expect(comp.form.entries[1]._title).toBe('+');
 });
 
+test('pack_unpack_multiple', () => {
+  comp.form.value = "{}"
+  comp.form.entries = [{foo: 'bar', _title:'ignore'},{_title:'empty'},{foo: 'bar2', _title:'ignore2'},{_title:'empty2'}];
+  setting = {id: 'myid', uiElements:[{field: 'foo', label:'some fooness'}], syntax: 'json'}
+  comp.pack(setting);
+  expect(comp.form.value).toBe('[{"foo":"bar"},{"foo":"bar2"}]')
+
+  comp.form.entries = null;
+  setting.value = '[{"foo":"bar"},{"foo":"bar2"}]';
+  comp.settings = [setting];
+  comp.active = ['myid'];
+  comp.unpack(setting);
+  expect(comp.form.entries.length).toBe(3);
+  expect(comp.form.entries[0].foo).toBe('bar');
+  expect(comp.form.entries[0]._title).toBe('1. bar');
+  expect(comp.form.entries[1].foo).toBe('bar2');
+  expect(comp.form.entries[1]._title).toBe('2. bar2');
+  expect(comp.form.entries[2]._title).toBe('+');
+});
+
+test('pack_unpack_array_of_json', () => {
+  comp.form.value = "{}"
+  comp.form.entries = [{foo: 'bar', _title:'ignore'},{_title:'empty'}];
+  setting = {id: 'myid', forcedType: "[]{}", uiElements:[{field: 'foo', label:'some fooness'}], syntax: 'json'}
+  comp.pack(setting);
+  expect(comp.form.value).toBe('{"foo":"bar"}')
+
+  comp.form.entries = null;
+  setting.value = '{"foo":"bar"}';
+  comp.settings = [setting];
+  comp.active = ['myid'];
+  comp.unpack(setting);
+  expect(comp.form.entries.length).toBe(2);
+  expect(comp.form.entries[0].foo).toBe('bar');
+  expect(comp.form.entries[0]._title).toBe('1. bar');
+  expect(comp.form.entries[1]._title).toBe('+');
+});
+
+test('pack_unpack_multiple_array_of_json', () => {
+  comp.form.value = "{}"
+  comp.form.entries = [{foo: 'bar', _title:'ignore'},{_title:'empty'},{foo: 'bar2', _title:'ignore2'},{_title:'empty2'}];
+  setting = {id: 'myid', forcedType: "[]{}", uiElements:[{field: 'foo', label:'some fooness'}], syntax: 'json'}
+  comp.pack(setting);
+  expect(comp.form.value).toBe('{"foo":"bar"}\n{"foo":"bar2"}')
+
+  comp.form.entries = null;
+  setting.value = '{"foo":"bar"}\n{"foo":"bar2"}';
+  comp.settings = [setting];
+  comp.active = ['myid'];
+  comp.unpack(setting);
+  expect(comp.form.entries.length).toBe(3);
+  expect(comp.form.entries[0].foo).toBe('bar');
+  expect(comp.form.entries[0]._title).toBe('1. bar');
+  expect(comp.form.entries[1].foo).toBe('bar2');
+  expect(comp.form.entries[1]._title).toBe('2. bar2');
+  expect(comp.form.entries[2]._title).toBe('+');
+});
+
 test('isEntryEmpty', () => {
   entry = {id: '', foo:'', _title:'title'};
   expect(comp.isEntryEmpty(entry)).toBe(true);
