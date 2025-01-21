@@ -133,73 +133,98 @@ test('saveTimezone', () => {
 
 test('removeFilter', () => {
   comp.query = "abc def | groupby foo bar*";
-  comp.removeFilter('def')
+  comp.$router.resolve = jest.fn();
+  let toggle = false;
+  comp.$router.resolve.mockImplementation(() => {
+    toggle = !toggle;
+    return { fullPath: toggle ? 'A' : 'B' };
+  });
+
+  comp.removeFilter('def');
   expect(comp.query).toBe("abc  | groupby foo bar*");
 
-  comp.removeFilter('abc')
+  comp.removeFilter('abc');
   expect(comp.query).toBe("* | groupby foo bar*");
 
   // no-op
-  comp.removeFilter('*')
+  comp.removeFilter('*');
   expect(comp.query).toBe("* | groupby foo bar*");
 });
 
 test('removeGroupBy', () => {
   comp.query = "abc | groupby foo bar*";
-  comp.queryGroupBys = [['foo','bar*']];
-  comp.removeGroupBy(0, 0)
+  comp.queryGroupBys = [['foo', 'bar*']];
+  comp.$router.resolve = jest.fn();
+  let toggle = false;
+  comp.$router.resolve.mockImplementation(() => {
+    toggle = !toggle;
+    return { fullPath: toggle ? 'A' : 'B' };
+  });
+
+  comp.removeGroupBy(0, 0);
   expect(comp.query).toBe("abc | groupby bar*");
 
   comp.query = "abc | groupby foo bar*";
-  comp.queryGroupBys = [['foo','bar*']];
-  comp.removeGroupBy(0, 1)
+  comp.queryGroupBys = [['foo', 'bar*']];
+  comp.removeGroupBy(0, 1);
   expect(comp.query).toBe("abc | groupby foo");
 
   comp.query = "abc | groupby bar*";
   comp.queryGroupBys = [['bar*']];
-  comp.removeGroupBy(0, 0)
+  comp.removeGroupBy(0, 0);
   expect(comp.query).toBe("abc");
 
   // no-op
   comp.query = "abc";
   comp.queryGroupBys = [];
-  comp.removeGroupBy(0, 0)
+  comp.removeGroupBy(0, 0);
   expect(comp.query).toBe("abc");
 
   comp.query = "abc | groupby foo bar* | groupby a b";
-  comp.queryGroupBys = [['foo','bar*'],['a','b']];
-  comp.removeGroupBy(1, 1)
+  comp.queryGroupBys = [['foo', 'bar*'], ['a', 'b']];
+  comp.removeGroupBy(1, 1);
   expect(comp.query).toBe("abc | groupby foo bar* | groupby a");
 
   // Remove entire group
   comp.query = "abc | groupby foo bar* | groupby a b";
   comp.queryGroupBys = [['foo','bar*'],['a','b']];
-  comp.removeGroupBy(1, -1)
+  comp.removeGroupBy(1, -1);
   expect(comp.query).toBe("abc | groupby foo bar*");
+
+  expect(comp.$router.resolve).toHaveBeenCalledTimes(10);
 });
 
 test('removeSortBy', () => {
   comp.query = "abc | sortby foo bar^";
-  comp.removeSortBy('foo')
+  comp.$router.resolve = jest.fn();
+  let toggle = false;
+  comp.$router.resolve.mockImplementation(() => {
+    toggle = !toggle;
+    return { fullPath: toggle ? 'A' : 'B' };
+  });
+
+  comp.removeSortBy('foo');
   expect(comp.query).toBe("abc | sortby bar^");
 
-  comp.removeSortBy('bar^')
+  comp.removeSortBy('bar^');
   expect(comp.query).toBe("abc");
 
   // no-op
-  comp.removeSortBy('bar^')
+  comp.removeSortBy('bar^');
   expect(comp.query).toBe("abc");
 
   comp.query = "abc | sortby foo bar^ | groupby xyz";
-  comp.removeSortBy('foo')
+  comp.removeSortBy('foo');
   expect(comp.query).toBe("abc | sortby bar^ | groupby xyz");
 
-  comp.removeSortBy('bar^')
+  comp.removeSortBy('bar^');
   expect(comp.query).toBe("abc | groupby xyz");
 
   // no-op
-  comp.removeSortBy('bar^')
+  comp.removeSortBy('bar^');
   expect(comp.query).toBe("abc | groupby xyz");
+
+  expect(comp.$router.resolve).toHaveBeenCalledTimes(12);
 });
 
 test('formatCaseSummary', () => {
@@ -1322,8 +1347,13 @@ test('reconstructQuery', () => {
   // Advanced mode and showFullQuery false so should reconstruct query using new custom filter
   comp.advanced = true;
   comp.showFullQuery = false;
+  comp.$router.resolve = jest.fn();
+  comp.$router.resolve.mockReturnValueOnce({ fullPath: 'A' });
+  comp.$router.resolve.mockReturnValueOnce({ fullPath: 'B' });
   comp.queryModified();
   expect(comp.query).toBe("foo: 1 | groupby x");
+
+  expect(comp.$router.resolve).toHaveBeenCalledTimes(2);
 });
 
 test('queryModified', () => {

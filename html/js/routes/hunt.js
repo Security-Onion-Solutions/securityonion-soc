@@ -371,19 +371,20 @@ const huntComponent = {
         this.dateRange = '';
         this.dateRange = this.getStartDate().format(this.i18n.timePickerFormat) + " - " + this.getEndDate().format(this.i18n.timePickerFormat);
       }
-      if (replaceHistory === true) {
-        this.$router.replace(this.buildCurrentRoute(), onSuccess, onFail).then((result) => {
-          if (result?.message?.includes('redundant navigation')) {
-            this.loadData();
-          }
-        });
+
+      const targetRoute = this.$router.resolve(this.buildCurrentRoute());
+      const currentRoute = this.$router.resolve(this.$router.currentRoute.value);
+
+      if (currentRoute.fullPath === targetRoute.fullPath) {
+        this.loadData();
       } else {
-        this.$router.push(this.buildCurrentRoute()).then((result) => {
-          if (result?.message?.includes('redundant navigation')) {
-            this.loadData();
-          }
-        });
+        if (replaceHistory === true) {
+          this.$router.replace(targetRoute, onSuccess, onFail);
+        } else {
+          this.$router.push(targetRoute);
+        }
       }
+
       this.resetRefreshTimer();
 
       this.selectAllState = false;
