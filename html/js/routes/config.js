@@ -370,10 +370,25 @@ routes.push({
       window.scrollTo(0,0);
     },
     unpack(setting) {
-      this.form.entries = null
+      this.form.entries = []
       if (this.hasUiElements(setting)) {
-        if (setting.syntax.toLowerCase() == 'json' && setting.value && setting.value.trim().length > 0) {
-          this.form.entries = JSON.parse(setting.value);
+        const isArrayOfObjects = setting.forcedType && setting.forcedType.startsWith("[]");
+        if (setting.value && setting.value.trim().length > 0) {
+          if (!isArrayOfObjects) {
+            if (setting.syntax.toLowerCase() == 'json') {
+              this.form.entries = JSON.parse(setting.value);
+            }
+          } else {
+            var objs = setting.value.split("\n");
+            for (var idx = 0; idx < objs.length; idx++) {
+              var obj = objs[idx];
+              var entry = null;
+              if (setting.syntax.toLowerCase() == 'json') {
+                entry = JSON.parse(obj);
+              }
+              this.form.entries.push(entry);
+            }
+          }
           for (let [idx, entry] of this.form.entries.entries()) {
             this.generateEntryTitle(entry, idx);
           }
@@ -386,18 +401,30 @@ routes.push({
     },
     pack(setting) {
       if (this.form.entries && this.hasUiElements(setting)) {
-        if (setting.syntax.toLowerCase() == 'json') {
-          const tmpEntries = []
-          for (let [idx, entry] of this.form.entries.entries()) {
-            const tmpEntry = Object.assign({}, entry);
-            delete tmpEntry._title;
-
-            if (!this.isEntryEmpty(tmpEntry)) {
-              tmpEntries.push(tmpEntry);
+        var value = ""
+        var tmpEntries = []
+        const isArrayOfObjects = setting.forcedType && setting.forcedType.startsWith("[]");
+        for (let [idx, entry] of this.form.entries.entries()) {
+          const tmpEntry = Object.assign({}, entry);
+          delete tmpEntry._title;
+          if (!this.isEntryEmpty(tmpEntry)) {
+            tmpEntries.push(tmpEntry);
+            if (isArrayOfObjects) {
+              if (value.length > 0) {
+                value += "\n";
+              }
+              if (setting.syntax.toLowerCase() == 'json') {
+                value += JSON.stringify(tmpEntry);
+              }
             }
           }
-          this.form.value = JSON.stringify(tmpEntries)
         }
+        if (!isArrayOfObjects) { 
+          if (setting.syntax.toLowerCase() == 'json') {
+            value = JSON.stringify(tmpEntries);
+          }
+        }
+        this.form.value = value;
       }
     },
     isEntryEmpty(entry) {
