@@ -635,25 +635,6 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 	// announce the beginning of the sync
 	e.EngineState.Syncing = true
 
-	// Check to see if the SO Sigma Processing Pipeline needs to be updated
-	pipelineUpdated, err := e.updateSigmaPipeline()
-	if err != nil {
-		logger.WithField("sigmaPipelineUpdateError", err).Error("failed to update SO sigma processing pipeline")
-	}
-
-	// Check to see if the sigma processing pipelines have changed.
-	// If they have, set forceSync to true to regenerate the elastalert rule files.
-	regenNeeded, sigmaPipelineNewHash, err := e.checkSigmaPipelines()
-	if err != nil {
-		logger.WithField("sigmaPipelineError", err).Error("failed to check the sigma processing pipelines")
-	} else {
-		logger.Info("successfully checked the sigma processing pipelines")
-	}
-
-	if regenNeeded || pipelineUpdated {
-		forceSync = true
-	}
-
 	var zips map[string][]byte
 	var errMap map[string]error
 
@@ -701,6 +682,25 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 	for pkg, data := range zips {
 		h := sha256.Sum256(data)
 		zipHashes[pkg] = base64.StdEncoding.EncodeToString(h[:])
+	}
+
+	// Check to see if the SO Sigma Processing Pipeline needs to be updated
+	pipelineUpdated, err := e.updateSigmaPipeline()
+	if err != nil {
+		logger.WithFields(log.Fields{"sigmaPipelineUpdateError": err.Error()}).Error("failed to update SO sigma processing pipeline")
+	}
+
+	// Check to see if the sigma processing pipelines have changed.
+	// If they have, set forceSync to true to regenerate the elastalert rule files.
+	regenNeeded, sigmaPipelineNewHash, err := e.checkSigmaPipelines()
+	if err != nil {
+		logger.WithField("sigmaPipelineError", err).Error("failed to check the sigma processing pipelines")
+	} else {
+		logger.Info("successfully checked the sigma processing pipelines")
+	}
+
+	if pipelineUpdated || regenNeeded {
+		forceSync = true
 	}
 
 	if !forceSync {
