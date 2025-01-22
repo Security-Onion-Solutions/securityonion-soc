@@ -903,6 +903,10 @@ ul ul ul {
   vertical-align: middle;
 }
 
+.multi-line {
+  white-space: pre-line;
+}
+
 .text-primary .v-switch__thumb {
   background-color: rgb(var(--v-theme-primary)) !important;
 }

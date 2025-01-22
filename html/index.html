@@ -2532,7 +2532,7 @@
                           <v-card>
                             <v-card-title>{{ i18n.access }}</v-card-title>
                             <v-card-text>
-                              <v-alert v-if="item.oidcStatus == 'enabled'" class="mt-2" type="warning" icon="fa-shield-halved" variant="text" density="compact" data-aid="users_details_reset_password_help">
+                              <v-alert v-if="item.oidcStatus == 'enabled'" class="mt-2 multi-line" type="warning" icon="fa-shield-halved" variant="text" density="compact" data-aid="users_details_reset_password_help">
                                 {{ i18n.oidcResetPasswordHelp }}
                               </v-alert>
 
@@ -4677,7 +4677,7 @@
         <v-row>
           <v-col>
             <v-data-table :search="gridFilter" :sort-by="sortBy" @update:sort-by="val => sortBy = val"
-              data-aid="grid_list" :footer-props="footerProps" show-expand :expanded="expanded" @update:expanded="val => expanded = val"
+              data-aid="grid_list" :footer-props="footerProps" :expanded="expanded" @update:expanded="val => expanded = val"
               :items-per-page.sync="itemsPerPage" must-sort :headers="headers" :items="nodes">
               <template #top>
                 <v-container fluid>
