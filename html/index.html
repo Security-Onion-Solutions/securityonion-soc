@@ -3176,7 +3176,7 @@
                                   <div v-else class="d-flex flex-column" style="width: 100%;" data-aid="case_comment_hours_edit">
                                     <div class="mb-3">
                                       <v-form v-model="editForm.valid" @submit.prevent>
-                                        <v-text-field id="comment-hours-input" solo flat dense color="black-text" v-model="editForm.val" class="mb-1" :rules="[rules.hours]" data-aid="case_comment_hours_input"/>
+                                        <v-text-field id="comment-hours-input" variant="outlined" color="black-text" v-model="editForm.val" class="mb-1" :rules="[rules.hours]" data-aid="case_comment_hours_input"/>
                                       </v-form>
                                       <div class="d-inline-flex justify-end">
                                         <v-btn variant="text" size="small" color="primary" class="align-self-end" @click="stopEdit()" data-aid="case_comment_hours_cancel">
@@ -3256,7 +3256,7 @@
                                 <v-textarea id="comment-input" variant="outlined" hide-details="auto" rows="5" v-model="associatedForms['comments'].description" :rules="[rules.required]" class="mb-1" persistent-hint :hint="i18n.commentDescriptionHelp" data-aid="case_new_comment_input"/>
                                 <v-row v-if="$root.isLicensed(FEAT_TTR)">
                                   <v-col cols="4">
-                                    <v-text-field id="comment-hours-input" variant="flat" v-model="associatedForms['comments'].hours" class="mb-1" persistent-hint :hint="i18n.commentHoursHelp" :rules="[rules.hours]" data-aid="case_new_comment_hours_input"/>
+                                    <v-text-field id="comment-hours-input" variant="outlined" v-model="associatedForms['comments'].hours" class="mb-1" persistent-hint :hint="i18n.commentHoursHelp" :rules="[rules.hours]" data-aid="case_new_comment_hours_input"/>
                                   </v-col>
                                   <v-col cols="8"></v-col>
                                 </v-row>
