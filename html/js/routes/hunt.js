@@ -656,7 +656,11 @@ const huntComponent = {
     },
     async ack(item, acknowledge, escalate, caseId, groupIdx, detectionRelated = false, skipDialog = false) {
       if (detectionRelated && !skipDialog) {
-        this.ackManyVerb = acknowledge ? this.i18n.acknowledge : this.i18n.acknowledgeUndo;
+        if (escalate) {
+          this.ackManyVerb = this.i18n.escalate.toLowerCase();
+        } else {
+          this.ackManyVerb = acknowledge ? this.i18n.acknowledge : this.i18n.acknowledgeUndo;
+        }
 
         this.ackManyArgs = [item, acknowledge, escalate, caseId, groupIdx, detectionRelated, true];
         this.showAckManyDialog = true;
@@ -685,10 +689,22 @@ const huntComponent = {
 
           // Attach the event to the case
           if (caseId && this.escalateRelatedEventsEnabled) {
-            const response = await this.$root.papi.post('case/events', {
+            let payload = {
               fields: item,
               caseId: caseId,
-            });
+            };
+
+            if (detectionRelated) {
+              payload.dateRange = this.dateRange;
+              payload.dateRangeFormat = this.i18n.timePickerSample;
+              payload.timezone = this.zone;
+
+              payload.fields = {
+                'rule.uuid': item["rule.uuid"],
+              };
+            }
+
+            await this.$root.papi.post('case/events', payload);
           }
         }
         if (isAlert) {

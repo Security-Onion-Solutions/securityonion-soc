@@ -264,6 +264,36 @@ func NewEventScrollCriteria() *EventScrollCriteria {
 	return criteria
 }
 
+func (criteria *EventScrollCriteria) Populate(query string, dateRange string, dateRangeFormat string, timezone string) error {
+	var err error
+	criteria.RawQuery = strings.Trim(query, " ")
+
+	datePieces := strings.SplitN(dateRange, " - ", 2)
+
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		log.WithField("timezone", timezone).Info("Invalid timezone provided by client")
+		loc, _ = time.LoadLocation("UTC")
+	}
+
+	if len(datePieces) == 2 {
+		criteria.BeginTime, err = time.ParseInLocation(dateRangeFormat, strings.Trim(datePieces[0], " "), loc)
+
+		if err == nil {
+			criteria.EndTime, err = time.ParseInLocation(dateRangeFormat, strings.Trim(datePieces[1], " "), loc)
+		}
+	} else {
+		criteria.EndTime = time.Now()
+		criteria.BeginTime = criteria.EndTime.Add(time.Duration(-24) * time.Hour)
+	}
+
+	if err == nil {
+		err = criteria.ParsedQuery.Parse(query)
+	}
+
+	return err
+}
+
 type EventMSearchCriteria struct {
 	Index       string
 	RawQuery    string

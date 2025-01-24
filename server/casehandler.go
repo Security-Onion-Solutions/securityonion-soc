@@ -38,7 +38,7 @@ func RegisterCaseRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Use(h.caseEnabled)
 
 		r.Post("/", h.createCase)
-		r.Post("/events", h.createEvent)
+		r.Post("/events", h.createEvents)
 		r.Post("/comments", h.createComment)
 		r.Post("/tasks", h.createArtifact)
 		r.Post("/artifacts", h.createArtifact)
@@ -133,23 +133,55 @@ func (h *CaseHandler) createCase(w http.ResponseWriter, r *http.Request) {
 // @Failure      405         "Case module not configured on server"
 // @Failure      500         "Internal SOC error; review SOC logs"
 // @Router       /connect/case/events/ [post]
-func (h *CaseHandler) createEvent(w http.ResponseWriter, r *http.Request) {
+func (h *CaseHandler) createEvents(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	inputEvent := model.NewRelatedEvent()
 
-	err := web.ReadJson(r, &inputEvent)
+	body := model.NewRelatedEvent() // change model to a search model
+
+	err := web.ReadJson(r, &body)
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
-	obj, err := h.server.Casestore.CreateRelatedEvent(ctx, inputEvent)
+	criteria := model.NewEventScrollCriteria()
+
+	queryParts := make([]string, 0, len(body.Fields))
+
+	for k, v := range body.Fields {
+		if strings.ToLower(k) != "count" {
+			queryParts = append(queryParts, fmt.Sprintf(`%s:"%s"`, k, v))
+		}
+	}
+
+	query := strings.Join(queryParts, " AND ")
+
+	err = criteria.Populate(query, body.DateRange, body.DateRangeFormat, body.Timezone)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	results, err := h.server.Eventstore.Scroll(ctx, criteria, nil)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
-	web.Respond(w, r, http.StatusOK, obj)
+	for _, event := range results.Events {
+		related := model.NewRelatedEvent()
+		related.CaseId = body.CaseId
+		related.Fields = event.Payload
+		related.Fields["soc_id"] = event.Id
+
+		_, err := h.server.Casestore.CreateRelatedEvent(ctx, related)
+		if err != nil {
+			web.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
+	}
+
+	web.Respond(w, r, http.StatusOK, nil)
 }
 
 // @Summary      Create Case Comment
