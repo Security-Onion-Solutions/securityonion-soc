@@ -9,6 +9,8 @@ package server
 import (
 	"context"
 
+	"github.com/apex/log"
+	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
@@ -24,7 +26,7 @@ type Casestore interface {
 	UpdateComment(ctx context.Context, comment *model.Comment) (*model.Comment, error)
 	DeleteComment(ctx context.Context, id string) error
 
-	CreateRelatedEvent(ctx context.Context, event *model.RelatedEvent) (*model.RelatedEvent, error)
+	CreateRelatedEvents(ctx context.Context, events []*model.RelatedEvent) (map[string]error, error)
 	GetRelatedEvent(ctx context.Context, id string) (*model.RelatedEvent, error)
 	GetRelatedEvents(ctx context.Context, caseId string) ([]*model.RelatedEvent, error)
 	DeleteRelatedEvent(ctx context.Context, id string) error
@@ -38,6 +40,9 @@ type Casestore interface {
 	CreateArtifactStream(ctx context.Context, artifactstream *model.ArtifactStream) (string, error)
 	GetArtifactStream(ctx context.Context, id string) (*model.ArtifactStream, error)
 	DeleteArtifactStream(ctx context.Context, id string) error
+
+	BuildBulkIndexer(ctx context.Context, logger log.Interface) (esutil.BulkIndexer, error)
+	ConvertObjectToDocument(ctx context.Context, kind string, obj any, auditable *model.Auditable, isEdit bool, auditDocId *string, op *string) (doc []byte, index string, err error)
 }
 
 //go:generate mockgen -destination mock/mock_casestore.go -package mock . Casestore

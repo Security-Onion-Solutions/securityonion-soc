@@ -1107,7 +1107,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 		return nil, err
 	}
 
-	createAudit := make([]model.AuditInfo, 0, len(detects))
+	createAudit := make([]model.AuditInfo, 0, len(detects)) // Object => *model.Detection
 	auditMut := sync.Mutex{}
 	errMut := sync.Mutex{}
 
@@ -1187,9 +1187,9 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 						results.Updated++
 
 						createAudit = append(createAudit, model.AuditInfo{
-							Detection: detect,
-							DocId:     resp.DocumentID,
-							Op:        "update",
+							Object: detect,
+							DocId:  resp.DocumentID,
+							Op:     "update",
 						})
 					},
 					OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
@@ -1241,9 +1241,9 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 					results.Added++
 
 					createAudit = append(createAudit, model.AuditInfo{
-						Detection: detect,
-						DocId:     resp.DocumentID,
-						Op:        "create",
+						Object: detect,
+						DocId:  resp.DocumentID,
+						Op:     "create",
 					})
 				},
 				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
@@ -1330,9 +1330,9 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 				results.Removed++
 
 				createAudit = append(createAudit, model.AuditInfo{
-					Detection: community[publicId],
-					DocId:     resp.DocumentID,
-					Op:        "delete",
+					Object: community[publicId],
+					DocId:  resp.DocumentID,
+					Op:     "delete",
 				})
 			},
 			OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
@@ -1385,10 +1385,11 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 		}
 
 		for _, audit := range createAudit {
+			det := audit.Object.(*model.Detection)
 			// prepare audit doc
-			document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", audit.Detection, &audit.Detection.Auditable, false, &audit.DocId, &audit.Op)
+			document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", audit.Object, &det.Auditable, false, &audit.DocId, &audit.Op)
 			if err != nil {
-				errMap[audit.Detection.PublicID] = err
+				errMap[det.PublicID] = err
 				continue
 			}
 
@@ -1405,14 +1406,14 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 					defer errMut.Unlock()
 
 					if err != nil {
-						errMap[audit.Detection.PublicID] = err
+						errMap[det.PublicID] = err
 					} else {
-						errMap[audit.Detection.PublicID] = errors.New(resp.Error.Reason)
+						errMap[det.PublicID] = errors.New(resp.Error.Reason)
 					}
 				},
 			})
 			if err != nil {
-				errMap[audit.Detection.PublicID] = err
+				errMap[det.PublicID] = err
 				continue
 			}
 		}

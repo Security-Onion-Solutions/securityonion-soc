@@ -1324,9 +1324,9 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 						results.Updated++
 
 						createAudit = append(createAudit, model.AuditInfo{
-							Detection: detect,
-							DocId:     resp.DocumentID,
-							Op:        "update",
+							Object: detect,
+							DocId:  resp.DocumentID,
+							Op:     "update",
 						})
 					},
 					OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
@@ -1376,9 +1376,9 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 					results.Added++
 
 					createAudit = append(createAudit, model.AuditInfo{
-						Detection: detect,
-						DocId:     resp.DocumentID,
-						Op:        "create",
+						Object: detect,
+						DocId:  resp.DocumentID,
+						Op:     "create",
 					})
 				},
 				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
@@ -1437,9 +1437,9 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 					results.Removed++
 
 					createAudit = append(createAudit, model.AuditInfo{
-						Detection: commSIDs[sid],
-						DocId:     resp.DocumentID,
-						Op:        "delete",
+						Object: commSIDs[sid],
+						DocId:  resp.DocumentID,
+						Op:     "delete",
 					})
 				},
 				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
@@ -1483,10 +1483,11 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 		}
 
 		for _, audit := range createAudit {
+			det := audit.Object.(*model.Detection)
 			// prepare audit doc
-			document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", audit.Detection, &audit.Detection.Auditable, false, &audit.DocId, &audit.Op)
+			document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", audit.Object, &det.Auditable, false, &audit.DocId, &audit.Op)
 			if err != nil {
-				errMap[audit.Detection.PublicID] = fmt.Sprintf("unable to convert detection to document map for creating an audit doc; reason=%s", err.Error())
+				errMap[det.PublicID] = fmt.Sprintf("unable to convert detection to document map for creating an audit doc; reason=%s", err.Error())
 				continue
 			}
 
@@ -1503,14 +1504,14 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 					defer errMut.Unlock()
 
 					if err != nil {
-						errMap[audit.Detection.PublicID] = fmt.Sprintf("unable to create audit doc; reason=%s", err.Error())
+						errMap[det.PublicID] = fmt.Sprintf("unable to create audit doc; reason=%s", err.Error())
 					} else {
-						errMap[audit.Detection.PublicID] = fmt.Sprintf("unable to create audit doc; reason=%s", resp.Error.Reason)
+						errMap[det.PublicID] = fmt.Sprintf("unable to create audit doc; reason=%s", resp.Error.Reason)
 					}
 				},
 			})
 			if err != nil {
-				errMap[audit.Detection.PublicID] = fmt.Sprintf("unable to add audit doc to bulk indexer; reason=%s", err.Error())
+				errMap[det.PublicID] = fmt.Sprintf("unable to add audit doc to bulk indexer; reason=%s", err.Error())
 				continue
 			}
 		}

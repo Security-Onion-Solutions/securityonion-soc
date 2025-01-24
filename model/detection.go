@@ -408,9 +408,9 @@ func (o *Override) Equal(other *Override) bool {
 }
 
 type AuditInfo struct {
-	DocId     string
-	Op        string
-	Detection *Detection
+	DocId  string
+	Op     string
+	Object interface{}
 }
 
 type AiSummary struct {

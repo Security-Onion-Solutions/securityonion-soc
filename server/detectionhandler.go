@@ -793,7 +793,7 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 		action = "delete"
 	}
 
-	createAudit := []model.AuditInfo{}
+	createAudit := []model.AuditInfo{} // Object => *model.Detection
 	auditMut := sync.Mutex{}
 	errMut := sync.Mutex{}
 
@@ -859,9 +859,9 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 				}
 
 				createAudit = append(createAudit, model.AuditInfo{
-					DocId:     resp.DocumentID,
-					Op:        action,
-					Detection: detect,
+					DocId:  resp.DocumentID,
+					Op:     action,
+					Object: detect,
 				})
 			},
 			OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
@@ -902,9 +902,11 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 	dirty := make([]*model.Detection, 0, len(createAudit))
 
 	for _, audit := range createAudit {
-		document, index, err := h.server.Detectionstore.ConvertObjectToDocument(ctx, "detection", audit.Detection, &audit.Detection.Auditable, false, &audit.DocId, &audit.Op)
+		det := audit.Object.(*model.Detection)
+
+		document, index, err := h.server.Detectionstore.ConvertObjectToDocument(ctx, "detection", audit.Object, &det.Auditable, false, &audit.DocId, &audit.Op)
 		if err != nil {
-			errMap[audit.Detection.PublicID] = err.Error()
+			errMap[det.PublicID] = err.Error()
 			continue
 		}
 
@@ -923,18 +925,16 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 				defer errMut.Unlock()
 
 				if err != nil {
-					errMap[audit.Detection.PublicID] = fmt.Sprintf("AUDIT: %s", err.Error())
+					errMap[det.PublicID] = fmt.Sprintf("AUDIT: %s", err.Error())
 				} else {
-					errMap[audit.Detection.PublicID] = fmt.Sprintf("AUDIT: %s", resp.Error.Reason)
+					errMap[det.PublicID] = fmt.Sprintf("AUDIT: %s", resp.Error.Reason)
 				}
 			},
 		})
 		if err != nil {
-			errMap[audit.Detection.PublicID] = err.Error()
+			errMap[det.PublicID] = err.Error()
 			continue
 		}
-
-		det := audit.Detection
 
 		if audit.Op == "delete" {
 			det.IsEnabled = false

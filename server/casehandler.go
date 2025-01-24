@@ -136,7 +136,7 @@ func (h *CaseHandler) createCase(w http.ResponseWriter, r *http.Request) {
 func (h *CaseHandler) createEvents(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	body := model.NewRelatedEvent() // change model to a search model
+	body := model.NewAttachEventQuery() // change model to a search model
 
 	err := web.ReadJson(r, &body)
 	if err != nil {
@@ -168,20 +168,24 @@ func (h *CaseHandler) createEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// convert EventRecord to RelatedEvent
+	relatedEvents := make([]*model.RelatedEvent, 0, len(results.Events))
 	for _, event := range results.Events {
 		related := model.NewRelatedEvent()
 		related.CaseId = body.CaseId
 		related.Fields = event.Payload
 		related.Fields["soc_id"] = event.Id
 
-		_, err := h.server.Casestore.CreateRelatedEvent(ctx, related)
-		if err != nil {
-			web.Respond(w, r, http.StatusInternalServerError, err)
-			return
-		}
+		relatedEvents = append(relatedEvents, related)
 	}
 
-	web.Respond(w, r, http.StatusOK, nil)
+	errMap, err := h.server.Casestore.CreateRelatedEvents(ctx, relatedEvents)
+	if err != nil {
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, errMap)
 }
 
 // @Summary      Create Case Comment
