@@ -110,7 +110,7 @@ const i18n = {
       analyzer_urlhaus_malware_download: 'Malware download',
 
       api: 'Connect API',
-
+      appliances: 'Enterprise Appliances',
       artifactBulk: 'Bulk Add',
       artifactBulkHelp: 'Enable this checkbox to have a separate observable added for each line of the provided value above',
       artifactDescription: 'Description',
@@ -721,6 +721,8 @@ const i18n = {
       pcapRetention: 'PCAP Retention',
       pcapRetentionAbbr: 'PCAP Avail',
       pending: 'Pending',
+      premiumSupport: 'Premium Support',
+      pro: 'Security Onion Pro',
       product: 'Security Onion',
       profile: 'Profile',
       protocol: 'Protocol',
