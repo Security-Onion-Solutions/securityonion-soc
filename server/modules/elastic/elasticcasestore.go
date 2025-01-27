@@ -16,15 +16,18 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/util"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/elastic/go-elasticsearch/v8/esutil"
-	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/server"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 const AUDIT_DOC_ID = "audit_doc_id"
@@ -48,6 +51,7 @@ type ElasticCasestore struct {
 func NewElasticCasestore(srv *server.Server, client *elasticsearch.Client) *ElasticCasestore {
 	return &ElasticCasestore{
 		server:      srv,
+		esClient:    client,
 		observables: NewObservables(),
 	}
 }
@@ -479,41 +483,58 @@ func (store *ElasticCasestore) GetCaseHistory(ctx context.Context, caseId string
 
 func (store *ElasticCasestore) CreateRelatedEvents(ctx context.Context, events []*model.RelatedEvent) (map[string]error, error) {
 	errMap := map[string]error{}
-
 	logger := log.FromContext(ctx)
 
 	eventsByCase := map[string][]*model.RelatedEvent{}
+
+	// validate events and group by case
 	for _, event := range events {
+		eventId, _ := event.Fields["soc_id"].(string)
+
 		err := store.validateRelatedEvent(event)
 		if err != nil {
-			errMap[event.Id] = err
+			errMap[eventId] = err
 			continue
 		}
 
 		if event.Id != "" {
-			errMap[event.Id] = errors.New("Unexpected ID found in new related event")
+			errMap[eventId] = errors.New("Unexpected ID found in new related event")
+			continue // next event
 		} else if event.CaseId == "" {
-			return nil, errors.New("Missing Case ID in new related event")
+			errMap[eventId] = errors.New("Missing Case ID in new related event")
+			continue // next event
 		}
 
-		eventsByCase[event.Id] = append(eventsByCase[event.Id], event)
+		eventsByCase[event.CaseId] = append(eventsByCase[event.CaseId], event)
 	}
 
 	for caseId, events := range eventsByCase {
+		var created, audited int
+
+		if len(events) == 0 {
+			delete(eventsByCase, caseId)
+			continue // next case
+		}
+
 		// does the case exist?
 		_, err := store.GetCase(ctx, caseId)
 		if err != nil {
+			delete(eventsByCase, caseId)
+
 			for _, event := range events {
-				errMap[event.Id] = err
+				id, _ := event.Fields["soc_id"].(string)
+				errMap[id] = err
 			}
-			continue // try next case
+
+			continue // next case
 		}
 
 		// get existing related events, check if events have already been attached
 		existingEvents, err := store.GetRelatedEvents(ctx, caseId)
 		if err != nil {
 			for _, event := range events {
-				errMap[event.Id] = err
+				id, _ := event.Fields["soc_id"].(string)
+				errMap[id] = err
 			}
 			continue // try next case
 		}
@@ -521,7 +542,8 @@ func (store *ElasticCasestore) CreateRelatedEvents(ctx context.Context, events [
 		// check if events have already been attached
 		setOfExisting := map[string]struct{}{}
 		for _, existingEvent := range existingEvents {
-			if value, ok := existingEvent.Fields["soc_id"]; ok {
+			value, ok := existingEvent.Fields["soc_id"]
+			if ok {
 				existingId := value.(string)
 				setOfExisting[existingId] = struct{}{}
 			}
@@ -536,36 +558,34 @@ func (store *ElasticCasestore) CreateRelatedEvents(ctx context.Context, events [
 			return errMap, err
 		}
 
+		// bulk insert events
 		for _, event := range events {
-			if value, ok := event.Fields["soc_id"]; ok {
-				newId := value.(string)
-				if _, ok := setOfExisting[newId]; ok {
-					errMap[event.Id] = errors.New("ERROR_CASE_EVENT_ALREADY_ATTACHED")
+			eventId, ok := event.Fields["soc_id"].(string)
+
+			if ok {
+				_, ok := setOfExisting[eventId]
+				if ok {
+					errMap[eventId] = errors.New("ERROR_CASE_EVENT_ALREADY_ATTACHED")
 
 					continue // next event
 				}
 			}
 
-			document, index, err := store.ConvertObjectToDocument(ctx, "event", event, &event.Auditable, false, nil, nil)
+			document, index, err := store.ConvertObjectToDocument(ctx, "related", event, &event.Auditable, false, nil, nil)
 			if err != nil {
-				errMap[event.Id] = err
+				errMap[eventId] = err
 				continue // next event
 			}
 
 			work := esutil.BulkIndexerItem{
-				Index:      index,
-				Action:     "create",
-				DocumentID: event.Id,
-				Body:       bytes.NewReader(document),
+				Index:  index,
+				Action: "create",
+				Body:   bytes.NewReader(document),
 				OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem) {
 					auditMut.Lock()
 					defer auditMut.Unlock()
 
-					// if action == "delete" {
-					// 	deleted++
-					// } else {
-					// 	updated++
-					// }
+					created++
 
 					createAudit = append(createAudit, model.AuditInfo{
 						DocId:  resp.DocumentID,
@@ -578,16 +598,16 @@ func (store *ElasticCasestore) CreateRelatedEvents(ctx context.Context, events [
 					defer errMut.Unlock()
 
 					if err != nil {
-						errMap[event.Id] = err
+						errMap[resp.DocumentID] = err
 					} else {
-						errMap[event.Id] = errors.New(resp.Error.Reason)
+						errMap[resp.DocumentID] = errors.New(resp.Error.Reason)
 					}
 				},
 			}
 
 			err = bulk.Add(ctx, work)
 			if err != nil {
-				errMap[event.Id] = err
+				errMap[eventId] = err
 				continue
 			}
 		}
@@ -598,12 +618,20 @@ func (store *ElasticCasestore) CreateRelatedEvents(ctx context.Context, events [
 			continue // next case
 		}
 
-		// create audit records
+		// audit bulk indexer
+		bulk, err = store.BuildBulkIndexer(ctx, logger)
+		if err != nil {
+			return errMap, err
+		}
+
+		// bulk insert audit records
 		for _, audit := range createAudit {
 			event := audit.Object.(*model.RelatedEvent)
-			document, index, err := store.ConvertObjectToDocument(ctx, "event", audit.Object, &event.Auditable, false, &audit.DocId, &audit.Op)
+			eventId, _ := event.Fields["soc_id"].(string)
+
+			document, index, err := store.ConvertObjectToDocument(ctx, "related", audit.Object, &event.Auditable, false, &audit.DocId, &audit.Op)
 			if err != nil {
-				errMap[event.Id] = err
+				errMap[eventId] = err
 				continue // next audit
 			}
 
@@ -615,21 +643,21 @@ func (store *ElasticCasestore) CreateRelatedEvents(ctx context.Context, events [
 					auditMut.Lock()
 					defer auditMut.Unlock()
 
-					// audited++
+					audited++
 				},
 				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
 					errMut.Lock()
 					defer errMut.Unlock()
 
 					if err != nil {
-						errMap[event.Id] = fmt.Errorf("AUDIT: %s", err.Error())
+						errMap[resp.DocumentID] = fmt.Errorf("AUDIT: %s", err.Error())
 					} else {
-						errMap[event.Id] = fmt.Errorf("AUDIT: %s", resp.Error.Reason)
+						errMap[resp.DocumentID] = fmt.Errorf("AUDIT: %s", resp.Error.Reason)
 					}
 				},
 			})
 			if err != nil {
-				errMap[event.Id] = err
+				errMap[eventId] = err
 				continue // next audit
 			}
 		}
@@ -639,49 +667,14 @@ func (store *ElasticCasestore) CreateRelatedEvents(ctx context.Context, events [
 			logger.WithError(err).Error("unable to close bulk indexer for adding audit events for related events added to case")
 			continue // next case
 		}
-	}
 
-	// err = store.validateRelatedEvent(event)
-	// if err == nil {
-	// 	if event.Id != "" {
-	// 		return nil, errors.New("Unexpected ID found in new related event")
-	// 	} else if event.CaseId == "" {
-	// 		return nil, errors.New("Missing Case ID in new related event")
-	// 	} else {
-	// 		_, err = store.GetCase(ctx, event.CaseId)
-	// 		if err == nil {
-	// 			var newId string
-	// 			if value, ok := event.Fields["soc_id"]; ok {
-	// 				newId = value.(string)
-	// 				var existingEvents []*model.RelatedEvent
-	// 				existingEvents, err = store.GetRelatedEvents(ctx, event.CaseId)
-	// 				for _, existingEvent := range existingEvents {
-	// 					if value, ok := existingEvent.Fields["soc_id"]; ok {
-	// 						existingId := value.(string)
-	// 						if existingId == newId {
-	// 							err = errors.New("ERROR_CASE_EVENT_ALREADY_ATTACHED")
-	// 							break
-	// 						}
-	// 					}
-	// 				}
-	// 			}
-	// 			if err == nil {
-	// 				var results *model.EventIndexResults
-	// 				results, err = store.save(ctx, event, "related", store.prepareForSave(ctx, &event.Auditable))
-	// 				if err == nil {
-	// 					// Read object back to get new modify date, etc
-	// 					event, err = store.GetRelatedEvent(ctx, results.DocumentId)
-	// 					if err == nil {
-	// 						// Extraction is a nice-to-have, and failures should not prevent an analyst
-	// 						// from completing their work if some Elastic field mapping conflict
-	// 						// arose. The function itself will log relevant details.
-	// 						store.ExtractCommonObservables(ctx, event)
-	// 					}
-	// 				}
-	// 			}
-	// 		}
-	// 	}
-	// }
+		logger.WithFields(log.Fields{
+			"caseId":  caseId,
+			"created": created,
+			"audited": audited,
+			"errMap":  util.TruncateMap(errMap, 5),
+		}).Info("related events added to case")
+	}
 
 	return errMap, nil
 }
@@ -1097,6 +1090,8 @@ func (store *ElasticCasestore) ConvertObjectToDocument(ctx context.Context, kind
 	} else {
 		index = store.auditIndex
 	}
+
+	index = strings.TrimPrefix(index, "*:")
 
 	id := auditable.Id
 	updateTime := auditable.UpdateTime

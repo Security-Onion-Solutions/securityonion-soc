@@ -784,7 +784,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 		"syncUpdated":   results.Updated,
 		"syncRemoved":   results.Removed,
 		"syncUnchanged": results.Unchanged,
-		"syncErrors":    detections.TruncateMap(errMap, 5),
+		"syncErrors":    util.TruncateMap(errMap, 5),
 	}).Info("strelka community diff")
 
 	err = e.syncDetections(e.srv.Context)
@@ -1304,8 +1304,8 @@ func (e *StrelkaEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (de
 	deployedButNotEnabled, enabledButNotDeployed, _ = detections.DiffLists(deployed, enabled)
 
 	intCheckReport := logger.WithFields(log.Fields{
-		"deployedButNotEnabled":      detections.TruncateList(deployedButNotEnabled, 20),
-		"enabledButNotDeployed":      detections.TruncateList(enabledButNotDeployed, 20),
+		"deployedButNotEnabled":      util.TruncateList(deployedButNotEnabled, 20),
+		"enabledButNotDeployed":      util.TruncateList(enabledButNotDeployed, 20),
 		"deployedButNotEnabledCount": len(deployedButNotEnabled),
 		"enabledButNotDeployedCount": len(enabledButNotDeployed),
 	})

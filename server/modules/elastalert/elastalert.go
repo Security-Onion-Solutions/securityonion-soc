@@ -853,7 +853,7 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 	if len(errMap) > 0 {
 		// there were errors, don't save the fingerprint.
 		// idempotency means we might fix it if we try again later.
-		logger.WithField("elastAlertSyncErrors", detections.TruncateMap(errMap, 5)).Error("unable to sync all ElastAlert community detections")
+		logger.WithField("elastAlertSyncErrors", util.TruncateMap(errMap, 5)).Error("unable to sync all ElastAlert community detections")
 
 		if e.notify {
 			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
@@ -1442,7 +1442,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 		"syncUpdated":   results.Updated,
 		"syncRemoved":   results.Removed,
 		"syncUnchanged": results.Unchanged,
-		"syncErrors":    detections.TruncateMap(errMap, 5),
+		"syncErrors":    util.TruncateMap(errMap, 5),
 	}).Info("elastalert community diff")
 
 	return errMap, nil
@@ -2067,8 +2067,8 @@ func (e *ElastAlertEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) 
 	deployedButNotEnabled, enabledButNotDeployed, _ = detections.DiffLists(deployed, enabled)
 
 	intCheckReport := logger.WithFields(log.Fields{
-		"deployedButNotEnabled":      detections.TruncateList(deployedButNotEnabled, 20),
-		"enabledButNotDeployed":      detections.TruncateList(enabledButNotDeployed, 20),
+		"deployedButNotEnabled":      util.TruncateList(deployedButNotEnabled, 20),
+		"enabledButNotDeployed":      util.TruncateList(enabledButNotDeployed, 20),
 		"deployedButNotEnabledCount": len(deployedButNotEnabled),
 		"enabledButNotDeployedCount": len(enabledButNotDeployed),
 	})

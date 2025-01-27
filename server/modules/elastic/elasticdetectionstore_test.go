@@ -30,8 +30,8 @@ import (
 func TestDetectionInit(t *testing.T) {
 	t.Parallel()
 
-	store := NewElasticCasestore(nil)
-	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, []string{"source.ip", "destination.ip"})
+	store := NewElasticCasestore(nil, nil)
+	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, []string{"source.ip", "destination.ip"}, -1)
 	assert.Equal(t, "myIndex", store.index)
 	assert.Equal(t, "myAuditIndex", store.auditIndex)
 	assert.Equal(t, 45, store.maxAssociations)
@@ -41,7 +41,7 @@ func TestDetectionInit(t *testing.T) {
 func TestDetectionPrepareForSave(t *testing.T) {
 	t.Parallel()
 
-	store := NewElasticCasestore(nil)
+	store := NewElasticCasestore(nil, nil)
 	obj := &model.Auditable{
 		Id: "myId",
 	}

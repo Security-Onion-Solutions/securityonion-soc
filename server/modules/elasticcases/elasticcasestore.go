@@ -15,6 +15,9 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+
+	"github.com/apex/log"
+	"github.com/elastic/go-elasticsearch/v8/esutil"
 )
 
 type ElasticCasestore struct {
@@ -97,7 +100,7 @@ func (store *ElasticCasestore) DeleteComment(ctx context.Context, id string) err
 	return errors.New("Unsupported operation by this module")
 }
 
-func (store *ElasticCasestore) CreateRelatedEvent(ctx context.Context, event *model.RelatedEvent) (*model.RelatedEvent, error) {
+func (store *ElasticCasestore) CreateRelatedEvents(ctx context.Context, event []*model.RelatedEvent) (map[string]error, error) {
 	return nil, errors.New("Unsupported operation by this module")
 }
 
@@ -143,4 +146,12 @@ func (store *ElasticCasestore) GetArtifactStream(ctx context.Context, id string)
 
 func (store *ElasticCasestore) DeleteArtifactStream(ctx context.Context, id string) error {
 	return errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) BuildBulkIndexer(ctx context.Context, logger log.Interface) (esutil.BulkIndexer, error) {
+	return nil, errors.New("Unsupported operation by this module")
+}
+
+func (store *ElasticCasestore) ConvertObjectToDocument(ctx context.Context, kind string, obj any, auditable *model.Auditable, isEdit bool, auditDocId *string, op *string) (doc []byte, index string, err error) {
+	return nil, "", errors.New("Unsupported operation by this module")
 }

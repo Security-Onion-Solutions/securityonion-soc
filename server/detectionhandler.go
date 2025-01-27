@@ -18,6 +18,7 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
+	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
@@ -749,7 +750,7 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 		totalTime := time.Since(totalTimeStart)
 
 		withStats := logger.WithFields(log.Fields{
-			"errMap":     detections.TruncateMap(errMap, 5),
+			"errMap":     util.TruncateMap(errMap, 5),
 			"total":      len(detects),
 			"modified":   updated,
 			"deleted":    deleted,
@@ -957,18 +958,18 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 	logger.WithFields(log.Fields{
 		"bulkUpdated": updated,
 		"bulkAudited": audited,
-		"errMap":      detections.TruncateMap(errMap, 5),
+		"errMap":      util.TruncateMap(errMap, 5),
 	}).Info("bulk operation complete")
 
 	start = time.Now()
 
 	errMap, err = syncLocalDetections(ctx, h.server, dirty)
 	if err != nil {
-		logger.WithError(err).WithField("errMap", detections.TruncateMap(errMap, 5)).Error("unable to sync detections after bulk update")
+		logger.WithError(err).WithField("errMap", util.TruncateMap(errMap, 5)).Error("unable to sync detections after bulk update")
 		return
 	}
 
-	postSync := logger.WithField("errMap", detections.TruncateMap(errMap, 5))
+	postSync := logger.WithField("errMap", util.TruncateMap(errMap, 5))
 
 	if len(errMap) == 0 {
 		postSync.Info("post-bulk sync finished")
