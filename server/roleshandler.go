@@ -53,7 +53,7 @@ func rolesEnabled(server *Server) func(next http.Handler) http.Handler {
 // @Failure      401         "Request was not properly authenticated"
 // @Failure      405         "Roles module not configured on server"
 // @Failure      500         "Internal SOC error; review SOC logs"
-// @Router       /roles [get]
+// @Router       /connect/roles [get]
 func (h *RolesHandler) getRoles(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -74,7 +74,7 @@ func (h *RolesHandler) getRoles(w http.ResponseWriter, r *http.Request) {
 // @Failure      401        "Request was not properly authenticated"
 // @Failure      405        "Roles module not configured on server"
 // @Failure      500        "Internal SOC error; review SOC logs"
-// @Router       /permissions [get]
+// @Router       /connect/roles/permissions [get]
 func (h *RolesHandler) getPermissions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

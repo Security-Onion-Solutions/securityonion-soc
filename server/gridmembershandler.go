@@ -82,11 +82,12 @@ func (h *GridMembersHandler) getGridMembers(w http.ResponseWriter, r *http.Reque
 // @Summary      Import Data
 // @Description  Imports the data from the given file. This is commonly used for importing PCAP and EVTX data directly into the node.
 // @Description  The max file size defaults to 25MB unless customized in the server configuration.
-// @Description  The multipart-form value must include an attachment with a filename and associated data stream.
+// @Description.markdown import_data
 // @Tags         Grid
 // @Security     bearer[events/write]
-// @Param        id path string true "The node ID into which this data will be imported" example(so_standalone)
-// @Param        attachment formData file true "The data to import (note this request must use multipart/form-data content type)"
+// @Accept       mpfd
+// @Param        id path string true "The full node ID (name_role) into which this data will be imported" example(manager_standalone)
+// @Param        attachment formData file true "The raw file data to import. This request must use multipart/form-data content type and the body must include one form part containing form-data content named 'attachment' with a filename attribute, a Content-Type header representing the file stream MIME type, and then the associated raw data stream."
 // @Success      202                                 "The data upload succeeded and the import has started"
 // @Failure      401                                 "Request was not properly authenticated"
 // @Failure      403                                 "Insufficient permissions for this request"
