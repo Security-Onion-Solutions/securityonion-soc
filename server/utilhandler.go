@@ -48,7 +48,7 @@ func RegisterUtilRoutes(srv *Server, r chi.Router, prefix string) {
 // @Failure      400         "The provided input object or parameters are malformed or invalid"
 // @Failure      401         "Request was not properly authenticated"
 // @Failure      500         "Internal SOC error; review SOC logs"
-// @Router       /connect/reverse-lookup [put]
+// @Router       /connect/util/reverse-lookup [put]
 func (h *UtilHandler) putReverseLookup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
