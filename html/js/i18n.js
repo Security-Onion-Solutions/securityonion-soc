@@ -142,6 +142,7 @@ const i18n = {
       bulkActionDeleteStarted: 'Deleting {total} detections. This may take awhile.',
       bulkError: '{error} of the detections during the last bulk update failed. Please check the SOC logs for more information.',
       bulkSuccessFiltered: `Bulk update successfully updated {modified} of {total} events. However, the statuses of {filtered} of the updated detections are controlled by the current regex filter settings and were reverted. <a href="/#/config?s=soc.config.server.modules.suricataengine" data-aid="warning_bulk_update_configure_filters">Click here to configure those filters.</a> ({time})`,
+      bulkSuccessCreate: 'Bulk create successfully created {modified} of {total} events. ({time})',
       bulkSuccessUpdate: 'Bulk update successfully updated {modified} of {total} events. ({time})',
       bulkSuccessDelete: 'Bulk delete successfully deleted {modified} of {total} events. ({time})',
       bytes: 'Bytes',

@@ -26,7 +26,7 @@ type Casestore interface {
 	UpdateComment(ctx context.Context, comment *model.Comment) (*model.Comment, error)
 	DeleteComment(ctx context.Context, id string) error
 
-	CreateRelatedEvents(ctx context.Context, events []*model.RelatedEvent) (map[string]error, error)
+	CreateRelatedEvents(ctx context.Context, events []*model.RelatedEvent) (int, map[string]error, error)
 	GetRelatedEvent(ctx context.Context, id string) (*model.RelatedEvent, error)
 	GetRelatedEvents(ctx context.Context, caseId string) ([]*model.RelatedEvent, error)
 	DeleteRelatedEvent(ctx context.Context, id string) error

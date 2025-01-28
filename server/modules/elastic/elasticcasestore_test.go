@@ -857,8 +857,9 @@ func TestCreateRelatedEventsUnexpectedId(t *testing.T) {
 	event.Id = "123444"
 	event.Fields["foo"] = "bar"
 	event.Fields["soc_id"] = "soc_id"
-	errMap, err := store.CreateRelatedEvents(ctx, []*model.RelatedEvent{event})
+	totalCreated, errMap, err := store.CreateRelatedEvents(ctx, []*model.RelatedEvent{event})
 	assert.NoError(t, err)
+	assert.Equal(t, 0, totalCreated)
 	assert.Equal(t, 1, len(errMap))
 	assert.Equal(t, "Unexpected ID found in new related event", errMap["soc_id"].Error())
 }
@@ -869,8 +870,9 @@ func TestCreateRelatedEventsMissingCaseId(tester *testing.T) {
 	event := model.NewRelatedEvent()
 	event.Fields["foo"] = "bar"
 	event.Fields["soc_id"] = "soc_id"
-	errMap, err := store.CreateRelatedEvents(ctx, []*model.RelatedEvent{event})
+	totalCreated, errMap, err := store.CreateRelatedEvents(ctx, []*model.RelatedEvent{event})
 	assert.NoError(tester, err)
+	assert.Equal(tester, 0, totalCreated)
 	assert.Equal(tester, "Missing Case ID in new related event", errMap["soc_id"].Error())
 }
 
@@ -878,8 +880,9 @@ func TestCreateRelatedEventsMissingFields(tester *testing.T) {
 	store := NewElasticCasestore(server.NewFakeAuthorizedServer(nil), nil)
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 	event := model.NewRelatedEvent()
-	errMap, err := store.CreateRelatedEvents(ctx, []*model.RelatedEvent{event})
+	totalCreated, errMap, err := store.CreateRelatedEvents(ctx, []*model.RelatedEvent{event})
 	assert.NoError(tester, err)
+	assert.Equal(tester, 0, totalCreated)
 	assert.Equal(tester, "Related event fields cannot not be empty", errMap[""].Error())
 }
 
@@ -923,10 +926,12 @@ func TestCreateRelatedEvents(t *testing.T) {
 	}, nil)
 
 	// Perform the actual code execution being tested
-	errMap, err := store.CreateRelatedEvents(ctx, []*model.RelatedEvent{event})
+	totalCreated, errMap, err := store.CreateRelatedEvents(ctx, []*model.RelatedEvent{event})
 
 	assert.NoError(t, err)
 	assert.Empty(t, errMap)
+
+	assert.Equal(t, 1, totalCreated)
 
 	reqs := mocktrans.GetRequests()
 	assert.Equal(t, 2, len(reqs))
@@ -982,8 +987,10 @@ func TestCreateRelatedEventsAlreadyExists(t *testing.T) {
 	event := model.NewRelatedEvent()
 	event.CaseId = "123444"
 	event.Fields["soc_id"] = "myEventId"
-	errMap, err := store.CreateRelatedEvents(ctx, []*model.RelatedEvent{event})
+	totalCreated, errMap, err := store.CreateRelatedEvents(ctx, []*model.RelatedEvent{event})
 	assert.NoError(t, err)
+	assert.Equal(t, 0, totalCreated)
+	assert.Len(t, errMap, 1)
 	assert.Equal(t, "ERROR_CASE_EVENT_ALREADY_ATTACHED", errMap["myEventId"].Error())
 }
 

@@ -105,8 +105,8 @@ func (store *HttpCasestore) DeleteComment(ctx context.Context, id string) error 
 	return errors.New("Unsupported operation by this module")
 }
 
-func (store *HttpCasestore) CreateRelatedEvents(ctx context.Context, events []*model.RelatedEvent) (map[string]error, error) {
-	return nil, errors.New("Unsupported operation by this module")
+func (store *HttpCasestore) CreateRelatedEvents(ctx context.Context, events []*model.RelatedEvent) (int, map[string]error, error) {
+	return 0, nil, errors.New("Unsupported operation by this module")
 }
 
 func (store *HttpCasestore) GetRelatedEvent(ctx context.Context, id string) (*model.RelatedEvent, error) {

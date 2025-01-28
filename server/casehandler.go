@@ -17,8 +17,10 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
@@ -136,7 +138,7 @@ func (h *CaseHandler) createCase(w http.ResponseWriter, r *http.Request) {
 func (h *CaseHandler) createEvents(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	body := model.NewAttachEventQuery() // change model to a search model
+	body := model.NewAttachEventQuery()
 
 	err := web.ReadJson(r, &body)
 	if err != nil {
@@ -179,13 +181,57 @@ func (h *CaseHandler) createEvents(w http.ResponseWriter, r *http.Request) {
 		relatedEvents = append(relatedEvents, related)
 	}
 
-	errMap, err := h.server.Casestore.CreateRelatedEvents(ctx, relatedEvents)
-	if err != nil {
-		web.Respond(w, r, http.StatusInternalServerError, err)
-		return
-	}
+	noTimeOutCtx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, ctx.Value(web.ContextKeyRunAsUsername).(string))
+	noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
+	noTimeOutCtx = log.NewContext(noTimeOutCtx, log.FromContext(ctx))
 
-	web.Respond(w, r, http.StatusOK, errMap)
+	go h.createEventsAsync(noTimeOutCtx, relatedEvents)
+
+	web.Respond(w, r, http.StatusAccepted, map[string]interface{}{
+		"count": len(relatedEvents),
+	})
+}
+
+func (h *CaseHandler) createEventsAsync(ctx context.Context, relatedEvents []*model.RelatedEvent) {
+	logger := log.FromContext(ctx)
+
+	totalTimeStart := time.Now()
+	errMap := map[string]error{}
+	created := 0
+
+	defer func() {
+		totalTime := time.Since(totalTimeStart)
+
+		withStats := logger.WithFields(log.Fields{
+			"errMap":         util.TruncateMap(errMap, 5),
+			"totalRequested": len(relatedEvents),
+			"totalCreated":   created,
+			"totalTime":      totalTime.Seconds(),
+		})
+
+		if len(errMap) != 0 {
+			withStats.Error("bulk create related events finished")
+		} else {
+			withStats.Info("bulk create related events finished")
+		}
+
+		h.server.Host.Broadcast("related:bulkCreate", "cases", map[string]interface{}{
+			"error":    len(errMap),
+			"verb":     "create",
+			"modified": created,
+			"total":    len(relatedEvents),
+			"time":     totalTime.Seconds(),
+		})
+	}()
+
+	var err error
+
+	created, errMap, err = h.server.Casestore.CreateRelatedEvents(ctx, relatedEvents)
+	if err != nil {
+		logger.WithError(err).WithField("errMap", util.TruncateMap(errMap, 20)).Error("failed to create related events")
+	} else {
+		logger.WithField("errMap", util.TruncateMap(errMap, 20)).Info("created related events")
+	}
 }
 
 // @Summary      Create Case Comment

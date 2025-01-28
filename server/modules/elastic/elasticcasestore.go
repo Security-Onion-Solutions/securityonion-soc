@@ -481,9 +481,10 @@ func (store *ElasticCasestore) GetCaseHistory(ctx context.Context, caseId string
 	return history, err
 }
 
-func (store *ElasticCasestore) CreateRelatedEvents(ctx context.Context, events []*model.RelatedEvent) (map[string]error, error) {
+func (store *ElasticCasestore) CreateRelatedEvents(ctx context.Context, events []*model.RelatedEvent) (int, map[string]error, error) {
 	errMap := map[string]error{}
 	logger := log.FromContext(ctx)
+	totalCreated := 0
 
 	eventsByCase := map[string][]*model.RelatedEvent{}
 
@@ -555,7 +556,7 @@ func (store *ElasticCasestore) CreateRelatedEvents(ctx context.Context, events [
 
 		bulk, err := store.BuildBulkIndexer(ctx, logger)
 		if err != nil {
-			return errMap, err
+			return totalCreated, errMap, err
 		}
 
 		// bulk insert events
@@ -621,7 +622,7 @@ func (store *ElasticCasestore) CreateRelatedEvents(ctx context.Context, events [
 		// audit bulk indexer
 		bulk, err = store.BuildBulkIndexer(ctx, logger)
 		if err != nil {
-			return errMap, err
+			return totalCreated, errMap, err
 		}
 
 		// bulk insert audit records
@@ -668,6 +669,45 @@ func (store *ElasticCasestore) CreateRelatedEvents(ctx context.Context, events [
 			continue // next case
 		}
 
+		// extract observables, don't error out if it fails
+		existingArtifacts, _ := store.GetArtifacts(ctx, caseId, "evidence", "")
+		existingValueMap := make(map[string]bool)
+		for _, artifact := range existingArtifacts {
+			existingValueMap[artifact.Value] = true
+		}
+
+		for _, event := range events {
+			for key, value := range event.Fields {
+				valueStr := fmt.Sprintf("%v", value)
+				if len(valueStr) == 0 || existingValueMap[valueStr] {
+					continue
+				}
+
+				for _, obs := range store.commonObservables {
+					if key == obs {
+						artifact := model.NewArtifact()
+						artifact.CaseId = event.CaseId
+						artifact.Value = valueStr
+						artifact.ArtifactType = string(store.observables.GetType(artifact.Value))
+						artifact.GroupType = "evidence"
+
+						existingValueMap[valueStr] = true
+
+						_, err := store.CreateArtifact(ctx, artifact)
+						if err != nil {
+							logger.WithFields(log.Fields{
+								"key":          key,
+								"caseId":       event.CaseId,
+								"artifactType": artifact.ArtifactType,
+							}).WithError(err).Warn("automated observable extraction failed")
+						}
+					}
+				}
+			}
+		}
+
+		totalCreated += created
+
 		logger.WithFields(log.Fields{
 			"caseId":  caseId,
 			"created": created,
@@ -676,7 +716,7 @@ func (store *ElasticCasestore) CreateRelatedEvents(ctx context.Context, events [
 		}).Info("related events added to case")
 	}
 
-	return errMap, nil
+	return totalCreated, errMap, nil
 }
 
 func (store *ElasticCasestore) GetRelatedEvent(ctx context.Context, id string) (*model.RelatedEvent, error) {

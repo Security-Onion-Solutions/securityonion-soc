@@ -100,8 +100,8 @@ func (store *ElasticCasestore) DeleteComment(ctx context.Context, id string) err
 	return errors.New("Unsupported operation by this module")
 }
 
-func (store *ElasticCasestore) CreateRelatedEvents(ctx context.Context, event []*model.RelatedEvent) (map[string]error, error) {
-	return nil, errors.New("Unsupported operation by this module")
+func (store *ElasticCasestore) CreateRelatedEvents(ctx context.Context, event []*model.RelatedEvent) (int, map[string]error, error) {
+	return 0, nil, errors.New("Unsupported operation by this module")
 }
 
 func (store *ElasticCasestore) GetRelatedEvent(ctx context.Context, id string) (*model.RelatedEvent, error) {

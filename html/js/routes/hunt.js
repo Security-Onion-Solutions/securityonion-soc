@@ -201,6 +201,7 @@ const huntComponent = {
     this.$root.setSubtitle("");
     this.stopRefreshTimer();
     this.$root.unsubscribe('detections:bulkUpdate', this.bulkUpdateReport);
+    this.$root.unsubscribe('related:bulkCreate', this.bulkUpdateReport);
   },
   mounted() {
     this.$root.startLoading();
@@ -209,6 +210,10 @@ const huntComponent = {
 
     if (this.isCategory('detections')) {
       this.$root.subscribe('detections:bulkUpdate', this.bulkUpdateReport);
+    }
+
+    if (this.isCategory('alerts')) {
+      this.$root.subscribe('related:bulkCreate', this.bulkUpdateReport);
     }
   },
   watch: {
@@ -2424,7 +2429,17 @@ const huntComponent = {
 
           this.$root.showWarning(msg, true);
         } else {
-          let msg = stats.verb === 'delete' ? this.i18n.bulkSuccessDelete : this.i18n.bulkSuccessUpdate;
+          let msg;
+          switch (stats.verb) {
+            case 'delete':
+              msg = this.i18n.bulkSuccessDelete;
+              break;
+            case 'update':
+              msg = this.i18n.bulkSuccessUpdate;
+              break;
+            case 'create':
+              msg = this.i18n.bulkSuccessCreate;
+          }
 
           msg = msg.replaceAll('{modified}', stats.modified.toLocaleString());
           msg = msg.replaceAll('{total}', stats.total.toLocaleString());

@@ -97,8 +97,8 @@ func (store *TheHiveCasestore) DeleteComment(ctx context.Context, id string) err
 	return errors.New("Unsupported operation by this module")
 }
 
-func (store *TheHiveCasestore) CreateRelatedEvents(ctx context.Context, events []*model.RelatedEvent) (map[string]error, error) {
-	return nil, errors.New("Unsupported operation by this module")
+func (store *TheHiveCasestore) CreateRelatedEvents(ctx context.Context, events []*model.RelatedEvent) (int, map[string]error, error) {
+	return 0, nil, errors.New("Unsupported operation by this module")
 }
 
 func (store *TheHiveCasestore) GetRelatedEvent(ctx context.Context, id string) (*model.RelatedEvent, error) {
