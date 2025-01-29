@@ -146,7 +146,7 @@ func (h *CaseHandler) createEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	criteria := model.NewEventScrollCriteria()
+	criteria := model.NewEventSearchCriteria()
 
 	queryParts := make([]string, 0, len(body.Fields))
 
@@ -158,13 +158,22 @@ func (h *CaseHandler) createEvents(w http.ResponseWriter, r *http.Request) {
 
 	query := strings.Join(queryParts, " AND ")
 
-	err = criteria.Populate(query, body.DateRange, body.DateRangeFormat, body.Timezone)
+	maxStr := strconv.Itoa(h.server.Config.ClientParams.AlertingParams.MaxBulkEscalateEvents)
+
+	err = criteria.Populate(query, body.DateRange, body.DateRangeFormat, body.Timezone, "0", maxStr)
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
-	results, err := h.server.Eventstore.Scroll(ctx, criteria, nil)
+	criteria.SortFields = []*model.SortCriteria{
+		{
+			Field: "@timestamp",
+			Order: "desc",
+		},
+	}
+
+	results, err := h.server.Eventstore.Search(ctx, criteria)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
@@ -177,6 +186,7 @@ func (h *CaseHandler) createEvents(w http.ResponseWriter, r *http.Request) {
 		related.CaseId = body.CaseId
 		related.Fields = event.Payload
 		related.Fields["soc_id"] = event.Id
+		related.Fields["soc_timestamp"] = event.Payload["@timestamp"]
 
 		relatedEvents = append(relatedEvents, related)
 	}

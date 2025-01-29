@@ -486,6 +486,8 @@ func (store *ElasticCasestore) CreateRelatedEvents(ctx context.Context, events [
 	logger := log.FromContext(ctx)
 	totalCreated := 0
 
+	maxBulkEscalateEvents := store.server.Config.ClientParams.AlertingParams.MaxBulkEscalateEvents
+
 	eventsByCase := map[string][]*model.RelatedEvent{}
 
 	// validate events and group by case
@@ -506,7 +508,9 @@ func (store *ElasticCasestore) CreateRelatedEvents(ctx context.Context, events [
 			continue // next event
 		}
 
-		eventsByCase[event.CaseId] = append(eventsByCase[event.CaseId], event)
+		if len(eventsByCase[event.CaseId]) < maxBulkEscalateEvents {
+			eventsByCase[event.CaseId] = append(eventsByCase[event.CaseId], event)
+		}
 	}
 
 	for caseId, events := range eventsByCase {

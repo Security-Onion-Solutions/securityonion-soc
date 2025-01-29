@@ -1044,6 +1044,15 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     loadLocalSettings() {
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
+    huntCase() {
+      return {
+        name: 'hunt',
+        query: {
+          q: 'so_related.caseId:"' + this.caseObj.id + '" AND NOT _exists_:"so_audit_doc_id" | table so_related.fields.@timestamp so_related.fields.event.dataset so_related.fields.source.ip so_related.fields.source.port so_related.fields.destination.ip so_related.fields.destination.port so_related.fields.log.id.uid so_related.fields.network.community_id',
+          caseExcludeToggle: 'false',
+        }
+      };
+    }
   }
 }});
 

@@ -167,6 +167,7 @@ const huntComponent = {
     ackManyArgs: [],
     ackManyVerb: '',
     menuScrollPos: 0,
+    maxEscalate: 100,
   }},
   created() {
     this.$root.initializeCharts();
@@ -272,6 +273,7 @@ const huntComponent = {
       this.chartLabelFieldSeparator = params["chartLabelFieldSeparator"]
       this.presets = params["presets"];
       this.manualSyncTargetEngine = this.getPresets("manualSync")[0];
+      this.maxEscalate = params["maxBulkEscalateEvents"];
       if (params["detectionEngineStatusQueries"]) {
         try {
           this.detectionEngineStatusQueries = jsyaml.load(params["detectionEngineStatusQueries"], { schema: jsyaml.FAILSAFE_SCHEMA })

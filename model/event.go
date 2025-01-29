@@ -236,6 +236,7 @@ type EventScrollCriteria struct {
 	EndTime     time.Time
 	CreateTime  time.Time
 	ParsedQuery *Query
+	SortFields  []*SortCriteria
 }
 
 type EventScrollResults struct {

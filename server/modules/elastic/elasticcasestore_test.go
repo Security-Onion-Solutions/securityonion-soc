@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	modmock "github.com/security-onion-solutions/securityonion-soc/server/modules/mock"
@@ -893,6 +894,13 @@ func TestCreateRelatedEvents(t *testing.T) {
 	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, commonTags, -1)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
+	store.server.Config = &config.ServerConfig{
+		ClientParams: config.ClientParameters{
+			AlertingParams: config.AlertParameters{
+				MaxBulkEscalateEvents: 100,
+			},
+		},
+	}
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
 	// Prepare fake search results for the case
@@ -962,6 +970,13 @@ func TestCreateRelatedEventsAlreadyExists(t *testing.T) {
 	store.Init("myIndex", "myAuditIndex", 45, DEFAULT_CASE_SCHEMA_PREFIX, nil, -1)
 	fakeEventStore := server.NewFakeEventstore()
 	store.server.Eventstore = fakeEventStore
+	store.server.Config = &config.ServerConfig{
+		ClientParams: config.ClientParameters{
+			AlertingParams: config.AlertParameters{
+				MaxBulkEscalateEvents: 100,
+			},
+		},
+	}
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
 
 	// Mock the search for case cll
@@ -983,6 +998,7 @@ func TestCreateRelatedEventsAlreadyExists(t *testing.T) {
 	getRelatedEventsResults := model.NewEventSearchResults()
 	getRelatedEventsResults.Events = append(getRelatedEventsResults.Events, elasticEvent)
 	fakeEventStore.SearchResults = append(fakeEventStore.SearchResults, getRelatedEventsResults)
+	fakeEventStore.SearchResults = append(fakeEventStore.SearchResults, model.NewEventSearchResults())
 
 	event := model.NewRelatedEvent()
 	event.CaseId = "123444"

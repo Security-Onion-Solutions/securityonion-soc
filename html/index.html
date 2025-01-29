@@ -1160,6 +1160,7 @@
             </v-card-title>
             <v-card-text>
               {{ i18n.acknowledgeDetectionsRelatedAlertsText.replace('{ackManyVerb}', ackManyVerb) }}
+              <div v-if="ackManyArgs[0]?.count > maxEscalate" class="mt-4" v-html="i18n.acknowledgeDetectionsRelatedAlertsTextWarning.replaceAll('{maxEscalate}', maxEscalate.toLocaleString())"></div>
             </v-card-text>
             <v-card-actions>
               <v-spacer></v-spacer>
@@ -3996,6 +3997,9 @@
                       <v-toolbar class="elevation-0 theme-background-lighten-1" fixed>
                         <v-btn :title="i18n.refreshEventsHelp" variant="flat" color="secondary" @click.stop="reloadAssociation('events', true)" id="refresh-events-button" class="ml-3" data-aid="case_events_refresh">
                           <v-icon>fa-sync</v-icon>
+                        </v-btn>
+                        <v-btn :title="i18n.huntForCase" variant="flat" color="secondary" id="hunt-events-button" class="ml-3" data-aid="case_events_hunt" :to="huntCase()">
+                          <v-icon>fa-crosshairs</v-icon>
                         </v-btn>
                       </v-toolbar>
                     </v-col>
