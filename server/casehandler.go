@@ -15,6 +15,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -150,9 +152,19 @@ func (h *CaseHandler) createEvents(w http.ResponseWriter, r *http.Request) {
 
 	queryParts := make([]string, 0, len(body.Fields))
 
-	for k, v := range body.Fields {
-		if strings.ToLower(k) != "count" {
-			queryParts = append(queryParts, fmt.Sprintf(`%s:"%s"`, k, v))
+	id, ok := body.Fields["soc_id"].(string)
+	if ok && id != "" {
+		queryParts = append(queryParts, fmt.Sprintf(`_id:"%s"`, id))
+	} else {
+		ignoredFields := []string{"count"}
+		for k, v := range body.Fields {
+			if !strings.HasPrefix(k, "soc_") && // not a special soc_ field
+				!slices.Contains(ignoredFields, strings.ToLower(k)) && // not part of the ignore list
+				reflect.TypeOf(v).Kind() != reflect.Slice && // not a slice
+				reflect.TypeOf(v).Kind() != reflect.Array && // ... or array
+				!reflect.ValueOf(v).IsZero() { // not a default value
+				queryParts = append(queryParts, fmt.Sprintf(`%s:"%v"`, k, v))
+			}
 		}
 	}
 

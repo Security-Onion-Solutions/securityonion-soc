@@ -213,7 +213,7 @@ const huntComponent = {
       this.$root.subscribe('detections:bulkUpdate', this.bulkUpdateReport);
     }
 
-    if (this.isCategory('alerts')) {
+    if (this.isCategory('alerts') || this.isCategory('hunt')) {
       this.$root.subscribe('related:bulkCreate', this.bulkUpdateReport);
     }
   },
