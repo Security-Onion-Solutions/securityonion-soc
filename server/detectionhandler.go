@@ -635,7 +635,7 @@ func (h *DetectionHandler) DeleteDetection(w http.ResponseWriter, r *http.Reques
 // @Security     bearer[detections/read, events/read, detections/write, events/write]
 // @Param        newStatus  path  string  true  "The new status of the detection" Enums(enable, disable, delete)
 // @Param        request  body  BulkOp  true  "The bulk detection search criteria"
-// @Success      200  {object}  BulkResp "Returns the bulk operation response"
+// @Success      202  {object}  BulkResp "Returns the bulk operation response"
 // @Failure      400         "The provided input object or parameters are malformed or invalid"
 // @Failure      401                         "Request was not properly authenticated"
 // @Failure      403                         "Insufficient permissions for this request"

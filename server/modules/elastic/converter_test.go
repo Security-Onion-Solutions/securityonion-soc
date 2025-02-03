@@ -632,6 +632,26 @@ func TestConvertToElasticScrollRequestWithQuery(t *testing.T) {
 	assert.Equal(t, expectedJson, actualJson)
 }
 
+func TestConvertToElasticScrollRequestWithSort(t *testing.T) {
+	criteria := model.NewEventScrollCriteria()
+	err := criteria.Populate(` _index:"*:so-detection" AND so_kind:"detection" AND so_detection.engine:"strelka" AND so_detection.isEnabled:"true"`, "2020-01-02T12:13:14Z - 2020-01-02T13:13:14Z", time.RFC3339, "America/New_York")
+	assert.NoError(t, err)
+
+	criteria.SortFields = []*model.SortCriteria{
+		{
+			Field: "@timestamp",
+			Order: "desc",
+		},
+	}
+
+	teststore := NewTestStore()
+	actualJson, err := convertToElasticScrollRequest(teststore.fieldDefs, criteria, 5000)
+	assert.Nil(t, err)
+
+	expectedJson := `{"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"_index: \"*:so-detection\" AND so_kind: \"detection\" AND so_detection.engine: \"strelka\" AND so_detection.isEnabled: \"true\""}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"2020-01-02T12:13:14Z","lte":"2020-01-02T13:13:14Z"}}}],"must_not":[],"should":[]}},"size":5000,"sort":{"@timestamp":"desc"}}`
+	assert.Equal(t, expectedJson, actualJson)
+}
+
 func TestConvertFromElasticMSearchResults(t *testing.T) {
 	esData, err := os.ReadFile("converter_response.json")
 	assert.Nil(t, err)

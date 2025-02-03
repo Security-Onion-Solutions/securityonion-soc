@@ -27,13 +27,19 @@ type UtilHandler struct {
 	server *Server
 }
 
+func NewUtilHandler(srv *Server) *UtilHandler {
+	return &UtilHandler{
+		server: srv,
+	}
+}
+
 func RegisterUtilRoutes(srv *Server, r chi.Router, prefix string) {
 	h := &UtilHandler{
 		server: srv,
 	}
 
 	r.Route(prefix, func(r chi.Router) {
-		r.Put("/reverse-lookup", h.putReverseLookup)
+		r.Put("/reverse-lookup", h.PutReverseLookup)
 	})
 }
 
@@ -49,7 +55,7 @@ func RegisterUtilRoutes(srv *Server, r chi.Router, prefix string) {
 // @Failure      401         "Request was not properly authenticated"
 // @Failure      500         "Internal SOC error; review SOC logs"
 // @Router       /connect/util/reverse-lookup [put]
-func (h *UtilHandler) putReverseLookup(w http.ResponseWriter, r *http.Request) {
+func (h *UtilHandler) PutReverseLookup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 

@@ -296,6 +296,42 @@ func convertToElasticScrollRequest(fieldDefs map[string]*FieldDefinition, criter
 	esMap["size"] = maxScrollSize
 	esMap["query"] = makeQuery(fieldDefs, criteria.ParsedQuery, criteria.BeginTime, criteria.EndTime)
 
+	segment := criteria.ParsedQuery.NamedSegment(model.SegmentKind_SortBy)
+	if segment != nil {
+		sortBySegment := segment.(*model.SortBySegment)
+		fields := sortBySegment.RawFields()
+		if len(fields) > 0 {
+			sorting := []map[string]map[string]string{}
+			for _, field := range fields {
+				newSort := make(map[string]map[string]string)
+				order := "desc"
+				if strings.HasSuffix(field, "^") {
+					field = strings.TrimSuffix(field, "^")
+					order = "asc"
+				}
+				sortParams := make(map[string]string)
+				sortParams["order"] = order
+				sortParams["missing"] = "_last"
+				sortParams["unmapped_type"] = "date"
+				newSort[field] = sortParams
+				sorting = append(sorting, newSort)
+			}
+
+			if len(sorting) != 0 {
+				esMap["sort"] = sorting
+			}
+		}
+	} else {
+		sort := map[string]string{}
+		for _, field := range criteria.SortFields {
+			sort[field.Field] = field.Order
+		}
+
+		if len(sort) != 0 {
+			esMap["sort"] = sort
+		}
+	}
+
 	bytes, err := json.WriteJson(esMap)
 	if err == nil {
 		esJson = string(bytes)

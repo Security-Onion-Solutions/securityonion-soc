@@ -123,11 +123,11 @@ type AttachEventQuery struct {
 	// A mapping of related event field names and their values.
 	Fields map[string]interface{} `json:"fields" example:"client.ip:1.2.3.4,client.port:1099" validate:"required"`
 	// The date range to use for searching for matching events
-	DateRange string `json:"dateRange,omitEmpty" example:"2024/12/03 02:31:35 PM - 2024/12/04 02:31:35 PM"`
+	DateRange string `json:"dateRange,omitempty" example:"2024/12/03 02:31:35 PM - 2024/12/04 02:31:35 PM"`
 	// The date range format. If unsure how to use this then use the example value exactly as shown.
-	DateRangeFormat string `json:"dateRangeFormat,omitEmpty" example:"2006/01/02 3:04:05 PM"`
+	DateRangeFormat string `json:"dateRangeFormat,omitempty" example:"2006/01/02 3:04:05 PM"`
 	// The timezone to use with the date range
-	Timezone string `json:"timezone,omitEmpty" example:"America/New_York"`
+	Timezone string `json:"timezone,omitempty" example:"America/New_York"`
 }
 
 func NewAttachEventQuery() *AttachEventQuery {

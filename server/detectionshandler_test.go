@@ -16,7 +16,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
@@ -30,15 +29,10 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
+	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-)
-
-var (
-	handled        = NewEntryMatcher(LogLevelEq(log.InfoLevel), LogMessageEq("Handled request"))
-	didNotComplete = NewEntryMatcher(LogLevelEq(log.WarnLevel), LogMessageContains("Request did not complete successfully"))
-	specificTime   = time.Date(2025, 1, 1, 12, 30, 0, 0, time.UTC)
 )
 
 func TestPrepareForSave(t *testing.T) {

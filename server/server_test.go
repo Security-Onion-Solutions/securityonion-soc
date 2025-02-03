@@ -4,7 +4,7 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-package server
+package server_test
 
 import (
 	"context"
@@ -15,6 +15,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
+	. "github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
@@ -23,6 +24,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+)
+
+var (
+	handled        = NewEntryMatcher(LogLevelEq(log.InfoLevel), LogMessageEq("Handled request"))
+	didNotComplete = NewEntryMatcher(LogLevelEq(log.WarnLevel), LogMessageContains("Request did not complete successfully"))
+	specificTime   = time.Date(2025, 1, 1, 12, 30, 0, 0, time.UTC)
 )
 
 func NewMockServer(t *testing.T, ctrl *gomock.Controller, cfg *config.ServerConfig) *Server {
@@ -43,7 +50,6 @@ func NewMockServer(t *testing.T, ctrl *gomock.Controller, cfg *config.ServerConf
 		Configstore:      &MemConfigStore{},
 		GridMembersstore: mock.NewMockGridMembersstore(ctrl),
 		Metrics:          &FakeMetrics{},
-		stoppedChan:      make(chan bool),
 		Authorizer:       &rbac.FakeAuthorizer{},
 		Agent:            nil,
 		Context:          context.Background(),
@@ -81,7 +87,6 @@ func TestNewServer(tester *testing.T) {
 	cfg := &config.ServerConfig{}
 	srv := NewServer(cfg, "")
 	assert.NotNil(tester, srv.Host)
-	assert.NotNil(tester, srv.stoppedChan)
 	assert.Equal(tester, licensing.LICENSE_STATUS_ACTIVE, licensing.GetStatus())
 }
 
@@ -90,7 +95,6 @@ func TestNewServer_SocUrlExceeded(tester *testing.T) {
 	cfg := &config.ServerConfig{}
 	srv := NewServer(cfg, "")
 	assert.NotNil(tester, srv.Host)
-	assert.NotNil(tester, srv.stoppedChan)
 	assert.Equal(tester, licensing.LICENSE_STATUS_EXCEEDED, licensing.GetStatus())
 }
 
