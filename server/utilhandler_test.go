@@ -3,7 +3,7 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-package server
+package server_test
 
 import (
 	"bytes"
@@ -15,6 +15,7 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	. "github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"go.uber.org/mock/gomock"
 
@@ -31,9 +32,7 @@ func TestReverseLookupHandler(t *testing.T) {
 
 	srv := NewMockServer(t, ctrl, cfg)
 
-	h := UtilHandler{
-		server: srv,
-	}
+	h := NewUtilHandler(srv)
 
 	fakeEventStore := srv.Eventstore.(*FakeEventstore)
 
@@ -64,7 +63,7 @@ func TestReverseLookupHandler(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
-	h.putReverseLookup(w, r)
+	h.PutReverseLookup(w, r)
 
 	raw := w.Body.Bytes()
 	results := map[string][]string{}

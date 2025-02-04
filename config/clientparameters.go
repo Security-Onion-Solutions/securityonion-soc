@@ -17,7 +17,7 @@ const DEFAULT_CHART_LABEL_FIELD_SEPARATOR = ", "
 
 type ClientParameters struct {
 	HuntingParams       HuntingParameters    `json:"hunt"`
-	AlertingParams      HuntingParameters    `json:"alerts"`
+	AlertingParams      AlertParameters      `json:"alerts"`
 	CasesParams         HuntingParameters    `json:"cases"`
 	CaseParams          CaseParameters       `json:"case"`
 	DashboardsParams    HuntingParameters    `json:"dashboards"`
@@ -164,6 +164,11 @@ func (params *HuntingParameters) combineDeprecatedLinkIntoLinks() {
 			action.Link = ""
 		}
 	}
+}
+
+type AlertParameters struct {
+	HuntingParameters
+	MaxBulkEscalateEvents int `json:"maxBulkEscalateEvents"`
 }
 
 type PresetParameters struct {

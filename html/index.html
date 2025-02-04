@@ -1160,6 +1160,7 @@
             </v-card-title>
             <v-card-text>
               {{ i18n.acknowledgeDetectionsRelatedAlertsText.replace('{ackManyVerb}', ackManyVerb) }}
+              <div v-if="ackManyArgs[0]?.count > maxEscalate" class="mt-4" v-html="i18n.acknowledgeDetectionsRelatedAlertsTextWarning.replaceAll('{maxEscalate}', maxEscalate.toLocaleString())"></div>
             </v-card-text>
             <v-card-actions>
               <v-spacer></v-spacer>
@@ -3415,7 +3416,7 @@
                     <template #item="{ index, item, isExpanded, toggleExpand, internalItem }">
                       <tr>
                         <td class="associated actions">
-                          <v-btn :id="`attachments-${index}-expand`" variant="text" size="x-small" icon @click="toggleExpand(internalItem)">
+                          <v-btn :id="`attachments-${index}-expand`" icon variant="text" size="x-small" icon @click="toggleExpand(internalItem)">
                             <v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_attachments_collapse">fa-angle-down</v-icon>
                             <v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_attachments_expand">fa-angle-right</v-icon>
                           </v-btn>
@@ -3997,6 +3998,9 @@
                         <v-btn :title="i18n.refreshEventsHelp" variant="flat" color="secondary" @click.stop="reloadAssociation('events', true)" id="refresh-events-button" class="ml-3" data-aid="case_events_refresh">
                           <v-icon>fa-sync</v-icon>
                         </v-btn>
+                        <v-btn :title="i18n.huntForCase" variant="flat" color="secondary" id="hunt-events-button" class="ml-3" data-aid="case_events_hunt" :to="huntCase()">
+                          <v-icon>fa-crosshairs</v-icon>
+                        </v-btn>
                       </v-toolbar>
                     </v-col>
                   </v-row>
@@ -4023,7 +4027,7 @@
                     <template #item="{ index, item, isExpanded, toggleExpand, internalItem }">
                       <tr>
                         <td class="associated actions">
-                          <v-btn :id="`events-${index}-expand`" variant="text" size="x-small" @click="toggleExpand(internalItem)">
+                          <v-btn :id="`events-${index}-expand`" icon variant="text" size="x-small" @click="toggleExpand(internalItem)">
                             <v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_events_collapse">fa-angle-down</v-icon>
                             <v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_events_expand">fa-angle-right</v-icon>
                           </v-btn>
@@ -4125,7 +4129,7 @@
                     <template #item="{ index, item, isExpanded, toggleExpand, internalItem }">
                       <tr>
                         <td class="associated actions">
-                          <v-btn :id="`history-${index}-expand`" variant="text" size="small" @click="toggleExpand(internalItem)">
+                          <v-btn :id="`history-${index}-expand`" icon variant="text" size="x-small" @click="toggleExpand(internalItem)">
                             <v-icon v-if="isExpanded(internalItem)" :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_history_collapse">fa-angle-down</v-icon>
                             <v-icon v-else :alt="i18n.expand" :title="i18n.expandHelp" data-aid="case_history_expand">fa-angle-right</v-icon>
                           </v-btn>
@@ -5949,14 +5953,14 @@
                     </span>
                   </v-icon>
                 </v-btn>
-                <!-- <v-btn id="detection-panel-escalate" icon variant="text" size="small" @click="escalate($event)" data-aid="detection_panel_escalate" :title="i18n.escalate">
+                <v-btn id="detection-panel-escalate" icon variant="text" size="small" @click="escalate($event)" data-aid="detection_panel_escalate" :title="i18n.escalate">
                   <v-icon color="primary">
                     <span>
                       <i class="fas fa-triangle-exclamation fa-stack-1x"></i>
                       <i class="fas fa-plus fa-stack-1x icon-overlay-top-right"></i>
                     </span>
                   </v-icon>
-                </v-btn> -->
+                </v-btn>
                 <v-btn id="detection-panel-open" icon variant="text" size="small" class="no-link" :to="{name:'detection',params: {id:detection.id}}" target="_blank" data-aid="detection_panel_open_detection" :title="i18n.viewDetection">
                   <v-icon color="primary">fa-magnifying-glass</v-icon>
                 </v-btn>

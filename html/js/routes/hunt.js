@@ -167,6 +167,7 @@ const huntComponent = {
     ackManyArgs: [],
     ackManyVerb: '',
     menuScrollPos: 0,
+    maxEscalate: 100,
   }},
   created() {
     this.$root.initializeCharts();
@@ -201,6 +202,7 @@ const huntComponent = {
     this.$root.setSubtitle("");
     this.stopRefreshTimer();
     this.$root.unsubscribe('detections:bulkUpdate', this.bulkUpdateReport);
+    this.$root.unsubscribe('related:bulkCreate', this.bulkUpdateReport);
   },
   mounted() {
     this.$root.startLoading();
@@ -209,6 +211,10 @@ const huntComponent = {
 
     if (this.isCategory('detections')) {
       this.$root.subscribe('detections:bulkUpdate', this.bulkUpdateReport);
+    }
+
+    if (this.isCategory('alerts') || this.isCategory('hunt')) {
+      this.$root.subscribe('related:bulkCreate', this.bulkUpdateReport);
     }
   },
   watch: {
@@ -267,6 +273,7 @@ const huntComponent = {
       this.chartLabelFieldSeparator = params["chartLabelFieldSeparator"]
       this.presets = params["presets"];
       this.manualSyncTargetEngine = this.getPresets("manualSync")[0];
+      this.maxEscalate = params["maxBulkEscalateEvents"];
       if (params["detectionEngineStatusQueries"]) {
         try {
           this.detectionEngineStatusQueries = jsyaml.load(params["detectionEngineStatusQueries"], { schema: jsyaml.FAILSAFE_SCHEMA })
@@ -656,7 +663,11 @@ const huntComponent = {
     },
     async ack(item, acknowledge, escalate, caseId, groupIdx, detectionRelated = false, skipDialog = false) {
       if (detectionRelated && !skipDialog) {
-        this.ackManyVerb = acknowledge ? this.i18n.acknowledge : this.i18n.acknowledgeUndo;
+        if (escalate) {
+          this.ackManyVerb = this.i18n.escalate.toLowerCase();
+        } else {
+          this.ackManyVerb = acknowledge ? this.i18n.acknowledge : this.i18n.acknowledgeUndo;
+        }
 
         this.ackManyArgs = [item, acknowledge, escalate, caseId, groupIdx, detectionRelated, true];
         this.showAckManyDialog = true;
@@ -685,10 +696,22 @@ const huntComponent = {
 
           // Attach the event to the case
           if (caseId && this.escalateRelatedEventsEnabled) {
-            const response = await this.$root.papi.post('case/events', {
+            let payload = {
               fields: item,
               caseId: caseId,
-            });
+            };
+
+            if (detectionRelated) {
+              payload.dateRange = this.dateRange;
+              payload.dateRangeFormat = this.i18n.timePickerSample;
+              payload.timezone = this.zone;
+
+              payload.fields = {
+                'rule.uuid': item["rule.uuid"],
+              };
+            }
+
+            await this.$root.papi.post('case/events', payload);
           }
         }
         if (isAlert) {
@@ -1222,6 +1245,14 @@ const huntComponent = {
       }
     },
     filterVisibleFields(eventModule, eventDataset, fields) {
+      let relatedFields = '';
+      for (const field of fields) {
+        const match = field.match(/so_[^.]*\.fields./);
+        if (match) {
+          relatedFields = match[0];
+          break;
+        }
+      }
       if (this.eventFields) {
         var filteredFields = null;
         if (eventDataset) {
@@ -1243,6 +1274,9 @@ const huntComponent = {
         }
         if (filteredFields && filteredFields.length > 0) {
           fields = filteredFields;
+          if (relatedFields) {
+            fields = fields.map(f => relatedFields + f);
+          }
         }
       }
       return fields;
@@ -1414,7 +1448,7 @@ const huntComponent = {
         let batch = [];
 
         const multiSelect = this.isMultiSelect();
-        events.forEach(function(event, index) {
+        events.forEach((event, index) => {
           var record = event.payload;
           record.soc_id = event.id;
           record.soc_score = event.score;
@@ -1433,16 +1467,15 @@ const huntComponent = {
             batch.push(record[key]);
           }
 
-          var currentModule = record["event.module"];
-          var currentDataset = record["event.dataset"];
-          if (eventModule == null && currentModule) {
-            eventModule = currentModule.toLowerCase();
-            if (currentDataset) {
-              eventDataset = currentDataset.toLowerCase();
+          if (!eventModule) {
+            var currentModule = this.lookupFieldValue(record, "event.module");
+            var currentDataset = this.lookupFieldValue(record, "event.dataset");
+            if (eventModule == null && currentModule) {
+              eventModule = currentModule.toLowerCase();
+              if (currentDataset) {
+                eventDataset = currentDataset.toLowerCase();
+              }
             }
-          } else if (eventModule != currentModule || eventDataset != currentDataset) {
-            // A variety of events returned in this query, can't show event-specific fields
-            inconsistentEvents = true;
           }
         });
 
@@ -1455,6 +1488,19 @@ const huntComponent = {
 
       this.populateEventHeaders(this.filterVisibleFields(eventModule, eventDataset, fields));
       this.eventData = records;
+    },
+    lookupFieldValue(record, field) {
+      if (field in record) {
+        return record[field];
+      }
+
+      for (const key in record) {
+        if (key.endsWith(".fields." + field)) {
+          return record[key];
+        }
+      }
+
+      return '';
     },
     populateEventHeaders(defaultFields) {
       var fields = defaultFields;
@@ -2408,7 +2454,17 @@ const huntComponent = {
 
           this.$root.showWarning(msg, true);
         } else {
-          let msg = stats.verb === 'delete' ? this.i18n.bulkSuccessDelete : this.i18n.bulkSuccessUpdate;
+          let msg;
+          switch (stats.verb) {
+            case 'delete':
+              msg = this.i18n.bulkSuccessDelete;
+              break;
+            case 'update':
+              msg = this.i18n.bulkSuccessUpdate;
+              break;
+            case 'create':
+              msg = this.i18n.bulkSuccessCreate;
+          }
 
           msg = msg.replaceAll('{modified}', stats.modified.toLocaleString());
           msg = msg.replaceAll('{total}', stats.total.toLocaleString());

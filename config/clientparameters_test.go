@@ -23,7 +23,7 @@ func TestVerifyClientParameters(tester *testing.T) {
 	assert.False(tester, params.CasesEnabled)
 	assert.False(tester, params.DetectionsEnabled)
 	verifyInitialHuntingParams(tester, &params.HuntingParams)
-	verifyInitialHuntingParams(tester, &params.AlertingParams)
+	verifyInitialHuntingParams(tester, &params.AlertingParams.HuntingParameters)
 	verifyInitialHuntingParams(tester, &params.CasesParams)
 	verifyInitialHuntingParams(tester, &params.DashboardsParams)
 }

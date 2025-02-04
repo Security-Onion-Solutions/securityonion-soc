@@ -1023,3 +1023,27 @@ test('sumHours', () => {
     ];
   expect(comp.sumHours()).toBe(5.3);
 });
+
+test('huntCase', () => {
+  comp.caseObj.id = 'myCaseId';
+  comp.associations.events = [
+    {
+      fields: {
+        soc_timestamp: '2025-02-03T21:31:02.140Z',
+      },
+    }
+  ];
+  let navObj = comp.huntCase();
+  expect(navObj.name).toBe('hunt');
+  expect(navObj.query.caseExcludeToggle).toBe('false');
+  expect(navObj.query.q).toBe('so_related.caseId:"myCaseId" AND NOT _exists_:"so_audit_doc_id" | groupby so_related.fields.event.module | groupby so_related.fields.event.dataset');
+  expect(navObj.query.t).toMatch('2025/02/03 02:31:02 PM - ');
+
+  comp.caseObj.id = 'myOtherCaseId';
+  comp.associations.events = [];
+  navObj = comp.huntCase();
+  expect(navObj.name).toBe('hunt');
+  expect(navObj.query.caseExcludeToggle).toBe('false');
+  expect(navObj.query.q).toBe('so_related.caseId:"myOtherCaseId" AND NOT _exists_:"so_audit_doc_id" | groupby so_related.fields.event.module | groupby so_related.fields.event.dataset');
+  expect(Boolean(navObj.query.t)).toBe(false);
+});
