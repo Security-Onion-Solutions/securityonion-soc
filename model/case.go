@@ -116,8 +116,7 @@ func NewRelatedEvent() *RelatedEvent {
 	return newRelatedEvent
 }
 
-type AttachEventQuery struct {
-	Auditable
+type AttachEventCriteria struct {
 	// The case ID for which this related event is to be attached, or is already attached.
 	CaseId string `json:"caseId" example:"PdFc-JIBLkNJ8-bDfz47" validate:"required"`
 	// A mapping of related event field names and their values.
@@ -130,12 +129,10 @@ type AttachEventQuery struct {
 	Timezone string `json:"timezone,omitempty" example:"America/New_York"`
 }
 
-func NewAttachEventQuery() *AttachEventQuery {
-	query := &AttachEventQuery{}
-	now := time.Now()
-	query.CreateTime = &now
-	query.Fields = make(map[string]interface{})
-	return query
+func NewAttachEventCriteria() *AttachEventCriteria {
+	criteria := &AttachEventCriteria{}
+	criteria.Fields = make(map[string]interface{})
+	return criteria
 }
 
 type Artifact struct {

@@ -146,7 +146,7 @@ func (h *CaseHandler) createCase(w http.ResponseWriter, r *http.Request) {
 func (h *CaseHandler) CreateEvents(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	body := model.NewAttachEventQuery()
+	body := model.NewAttachEventCriteria()
 
 	err := web.ReadJson(r, &body)
 	if err != nil {

@@ -1245,6 +1245,14 @@ const huntComponent = {
       }
     },
     filterVisibleFields(eventModule, eventDataset, fields) {
+      let relatedFields = '';
+      for (const field of fields) {
+        const match = field.match(/so_[^.]*\.fields./);
+        if (match) {
+          relatedFields = match[0];
+          break;
+        }
+      }
       if (this.eventFields) {
         var filteredFields = null;
         if (eventDataset) {
@@ -1266,6 +1274,9 @@ const huntComponent = {
         }
         if (filteredFields && filteredFields.length > 0) {
           fields = filteredFields;
+          if (relatedFields) {
+            fields = fields.map(f => relatedFields + f);
+          }
         }
       }
       return fields;
@@ -1437,7 +1448,7 @@ const huntComponent = {
         let batch = [];
 
         const multiSelect = this.isMultiSelect();
-        events.forEach(function(event, index) {
+        events.forEach((event, index) => {
           var record = event.payload;
           record.soc_id = event.id;
           record.soc_score = event.score;
@@ -1456,16 +1467,15 @@ const huntComponent = {
             batch.push(record[key]);
           }
 
-          var currentModule = record["event.module"];
-          var currentDataset = record["event.dataset"];
-          if (eventModule == null && currentModule) {
-            eventModule = currentModule.toLowerCase();
-            if (currentDataset) {
-              eventDataset = currentDataset.toLowerCase();
+          if (!eventModule) {
+            var currentModule = this.lookupFieldValue(record, "event.module");
+            var currentDataset = this.lookupFieldValue(record, "event.dataset");
+            if (eventModule == null && currentModule) {
+              eventModule = currentModule.toLowerCase();
+              if (currentDataset) {
+                eventDataset = currentDataset.toLowerCase();
+              }
             }
-          } else if (eventModule != currentModule || eventDataset != currentDataset) {
-            // A variety of events returned in this query, can't show event-specific fields
-            inconsistentEvents = true;
           }
         });
 
@@ -1478,6 +1488,19 @@ const huntComponent = {
 
       this.populateEventHeaders(this.filterVisibleFields(eventModule, eventDataset, fields));
       this.eventData = records;
+    },
+    lookupFieldValue(record, field) {
+      if (field in record) {
+        return record[field];
+      }
+
+      for (const key in record) {
+        if (key.endsWith(".fields." + field)) {
+          return record[key];
+        }
+      }
+
+      return '';
     },
     populateEventHeaders(defaultFields) {
       var fields = defaultFields;

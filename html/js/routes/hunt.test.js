@@ -963,16 +963,21 @@ test('huntBetween', () => {
 
 test('filterVisibleFields', () => {
   comp.eventFields = {
-    ':module:dataset': 'a',
-    '::dataset': 'b',
-    ':module:': 'c',
-    'default': 'default',
+    ':module:dataset': ['a'],
+    '::dataset': ['b'],
+    ':module:': ['c'],
+    'default': ['default'],
+    ':X:Y': ['this', 'that', 'the_other'],
   };
 
-  expect(comp.filterVisibleFields('module', 'module.dataset', [])).toEqual('a');
-  expect(comp.filterVisibleFields('', 'module.dataset', [])).toEqual('b');
-  expect(comp.filterVisibleFields('module', 'otherData', [])).toEqual('c');
-  expect(comp.filterVisibleFields('A', 'B', [])).toEqual('default');
+  expect(comp.filterVisibleFields('module', 'module.dataset', [])).toEqual(['a']);
+  expect(comp.filterVisibleFields('', 'module.dataset', [])).toEqual(['b']);
+  expect(comp.filterVisibleFields('module', 'otherData', [])).toEqual(['c']);
+  expect(comp.filterVisibleFields('A', 'B', [])).toEqual(['default']);
+  // if a field begins with `so_XYZ.fields.`, the resulting fields should also begin with `so_XYZ.fields.`
+  expect(comp.filterVisibleFields('X', '', ['so_whatever.timestamp'])).toEqual(['default']);
+  expect(comp.filterVisibleFields('', 'Y', ['so_whatever.fields.timestamp'])).toEqual(['so_whatever.fields.default']);
+  expect(comp.filterVisibleFields('X', 'Y', ['so_foobar.fields.message'])).toEqual(['so_foobar.fields.this', 'so_foobar.fields.that', 'so_foobar.fields.the_other']);
 });
 
 test('handleChartClick', () => {
@@ -1516,4 +1521,17 @@ test('buildDetectionEngineHuntQuery', () => {
   // miss, no default specified, fallback to simple query
   query = comp.buildDetectionEngineHuntQuery('strelka');
   expect(query).toBe(`tags:so-soc AND strelka | groupby log.level | groupby event.action | groupby soc.fields.error`);
+});
+
+test('lookupFieldValue', () => {
+  const record = {
+    'so_foobar.fields.that': 'bar',
+    'this': 10,
+    'that': 'foo',
+    'so_foobar.fields.message': 100,
+  };
+
+  expect(comp.lookupFieldValue(record, 'this')).toBe(10);
+  expect(comp.lookupFieldValue(record, 'that')).toBe('foo');
+  expect(comp.lookupFieldValue(record, 'message')).toBe(100);
 });
