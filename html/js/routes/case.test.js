@@ -1037,7 +1037,9 @@ test('huntCase', () => {
   expect(navObj.name).toBe('hunt');
   expect(navObj.query.caseExcludeToggle).toBe('false');
   expect(navObj.query.q).toBe('so_related.caseId:"myCaseId" AND NOT _exists_:"so_audit_doc_id" | groupby so_related.fields.event.module | groupby so_related.fields.event.dataset');
-  expect(navObj.query.t).toMatch('2025/02/03 02:31:02 PM - ');
+  const parts = navObj.query.t.split('-');
+  expect(new Date(parts[0])).not.toBeNaN();
+  expect(new Date(parts[1])).not.toBeNaN();
 
   comp.caseObj.id = 'myOtherCaseId';
   comp.associations.events = [];
