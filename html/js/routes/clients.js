@@ -184,7 +184,7 @@ routes.push({ path: '/clients', name: 'clients', component: {
     async generateSecret(client) {
       this.$root.startLoading();
       try {
-          const response = await this.$root.papi.get('clients/' + client.id + '/secret');
+          const response = await this.$root.papi.put('clients/' + client.id + '/secret');
           this.new_client_credentials = response.data;
           this.showCredentialsDialog = true
           this.$root.showTip(this.i18n.clientSecretGenerated);

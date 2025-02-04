@@ -141,6 +141,7 @@ func Respond(w http.ResponseWriter, r *http.Request, statusCode int, obj interfa
 			contentLength = len(bytes)
 
 			if w != nil {
+				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(statusCode)
 				_, _ = w.Write(bytes)
 			}

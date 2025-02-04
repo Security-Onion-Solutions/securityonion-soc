@@ -37,7 +37,7 @@ test('removeClient', async () => {
 });
 
 test('generateSecret', async () => {
-  const mock = mockPapi("get", {status: 200});
+  const mock = mockPapi("put", {status: 200});
   comp.form.password = "test";
   await comp.generateSecret({id: 'my-id'});
   expect(mock).toHaveBeenCalledWith('clients/my-id/secret');

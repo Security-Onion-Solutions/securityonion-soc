@@ -112,6 +112,7 @@ func TestRespond(t *testing.T) {
 		ExpectBodyJSON bool
 		ExpectedBody   []byte
 		ExpectedCode   int
+		ExpectedType   string
 	}{
 		{
 			Name:           "Sunny Day - 200",
@@ -120,6 +121,7 @@ func TestRespond(t *testing.T) {
 			ExpectBodyJSON: true,
 			ExpectedBody:   []byte(`{"foo":"bar","baz":"qux"}`),
 			ExpectedCode:   http.StatusOK,
+			ExpectedType:   "application/json",
 		},
 		{
 			Name:         "Unauthorized - 401",
@@ -141,6 +143,7 @@ func TestRespond(t *testing.T) {
 			Obj:          []byte{1, 2, 3},
 			ExpectedBody: []byte{1, 2, 3},
 			ExpectedCode: http.StatusOK,
+			ExpectedType: "application/octet-stream",
 		},
 		{
 			Name:         "Error Writing - 500",
@@ -178,6 +181,10 @@ func TestRespond(t *testing.T) {
 				assert.True(t, goodResponse)
 			} else {
 				assert.Equal(t, tt.ExpectedBody, w.Body.Bytes())
+			}
+
+			if tt.ExpectedType != "" {
+				assert.Equal(t, []string{tt.ExpectedType}, w.Result().Header["Content-Type"])
 			}
 		})
 	}
