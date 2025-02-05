@@ -2606,6 +2606,9 @@
               <v-btn variant="flat" id="add-client-button" class="action ml-3" color="blue" @click.stop="showAdd()" data-aid="clients_create_new">
                 <v-icon>fa-plus</v-icon>
               </v-btn>
+              <v-btn variant="flat" id="download-ca-crt-button" class="action ml-3" color="secondary" href="/so-ca.crt" :title="i18n.caCrtHelp" data-aid="clients_download_ca">
+                <v-icon>fa-download</v-icon>
+              </v-btn>
             </v-toolbar>
             <v-dialog v-model="dialog" persistent width="800px" data-aid="clients_create_dialog">
               <v-card>
