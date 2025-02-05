@@ -116,6 +116,25 @@ func NewRelatedEvent() *RelatedEvent {
 	return newRelatedEvent
 }
 
+type AttachEventCriteria struct {
+	// The case ID for which this related event is to be attached, or is already attached.
+	CaseId string `json:"caseId" example:"PdFc-JIBLkNJ8-bDfz47" validate:"required"`
+	// A mapping of related event field names and their values.
+	Fields map[string]interface{} `json:"fields" example:"client.ip:1.2.3.4,client.port:1099" validate:"required"`
+	// The date range to use for searching for matching events
+	DateRange string `json:"dateRange,omitempty" example:"2024/12/03 02:31:35 PM - 2024/12/04 02:31:35 PM"`
+	// The date range format. If unsure how to use this then use the example value exactly as shown.
+	DateRangeFormat string `json:"dateRangeFormat,omitempty" example:"2006/01/02 3:04:05 PM"`
+	// The timezone to use with the date range
+	Timezone string `json:"timezone,omitempty" example:"America/New_York"`
+}
+
+func NewAttachEventCriteria() *AttachEventCriteria {
+	criteria := &AttachEventCriteria{}
+	criteria.Fields = make(map[string]interface{})
+	return criteria
+}
+
 type Artifact struct {
 	Auditable
 	// The case ID for which this artifact is to be attached, or is already attached.

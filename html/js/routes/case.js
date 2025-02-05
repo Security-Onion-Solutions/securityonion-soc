@@ -1044,6 +1044,48 @@ routes.push({ path: '/case/:id', name: 'case', component: {
     loadLocalSettings() {
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
+    huntCase() {
+      let earliest;
+      for (let event of this.associations.events) {
+        const ts = new Date(event.fields.soc_timestamp);
+        if (!earliest || ts < earliest) {
+          earliest = ts;
+        }
+      }
+
+      let q = 'so_related.caseId:"' + this.caseObj.id + '" AND NOT _exists_:"so_audit_doc_id" | groupby so_related.fields.event.module | groupby so_related.fields.event.dataset';
+      let obj = {
+        name: 'hunt',
+        query: {
+          q: q,
+          caseExcludeToggle: 'false',
+        }
+      };
+
+      if (earliest) {
+        const from = earliest.toLocaleString('en-US', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true
+        }).replace(/(\d+)\/(\d+)\/(\d+),/, '$3/$1/$2');
+        const to = new Date().toLocaleString('en-US', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true
+        }).replace(/(\d+)\/(\d+)\/(\d+),/, '$3/$1/$2');
+        obj.query.t = from + ' - ' + to;
+      }
+
+      return obj;
+    }
   }
 }});
 

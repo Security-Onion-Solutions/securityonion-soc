@@ -273,7 +273,7 @@ func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.Even
 
 	var res *esapi.Response
 
-	res, err = store.esClient.Search(
+	ops := []func(*esapi.SearchRequest){
 		store.esClient.Search.WithContext(ctx),
 		store.esClient.Search.WithIndex(indexes...),
 		store.esClient.Search.WithBody(strings.NewReader(query)),
@@ -281,7 +281,24 @@ func (store *ElasticEventstore) Scroll(ctx context.Context, criteria *model.Even
 		store.esClient.Search.WithPretty(),
 		store.esClient.Search.WithScroll(time.Minute),
 		store.esClient.Search.WithIgnoreUnavailable(true),
-	)
+	}
+
+	if len(criteria.SortFields) != 0 {
+		sorts := make([]string, 0, len(criteria.SortFields))
+		for _, sortField := range criteria.SortFields {
+			field := mapElasticField(store.fieldDefs, sortField.Field)
+			if field != "" {
+				sort := field + ":" + sortField.Order
+				sorts = append(sorts, sort)
+			}
+		}
+
+		if len(sorts) > 0 {
+			ops = append(ops, store.esClient.Search.WithSort(sorts...))
+		}
+	}
+
+	res, err = store.esClient.Search(ops...)
 	if err != nil {
 		return nil, err
 	}

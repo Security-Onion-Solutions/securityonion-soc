@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"reflect"
 	"regexp"
 	"strings"
 
@@ -85,7 +86,7 @@ func LogFieldExists(key string) EntryValidator {
 
 func LogFieldEq(key string, value interface{}) EntryValidator {
 	return func(e *log.Entry) error {
-		if e.Fields[key] != value {
+		if !reflect.DeepEqual(e.Fields[key], value) {
 			return fmt.Errorf("expected field %q to be %v, got %v", key, value, e.Fields[key])
 		}
 

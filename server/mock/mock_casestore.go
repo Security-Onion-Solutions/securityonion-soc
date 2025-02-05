@@ -12,6 +12,8 @@ import (
 	context "context"
 	reflect "reflect"
 
+	log "github.com/apex/log"
+	esutil "github.com/elastic/go-elasticsearch/v8/esutil"
 	model "github.com/security-onion-solutions/securityonion-soc/model"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -37,6 +39,37 @@ func NewMockCasestore(ctrl *gomock.Controller) *MockCasestore {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockCasestore) EXPECT() *MockCasestoreMockRecorder {
 	return m.recorder
+}
+
+// BuildBulkIndexer mocks base method.
+func (m *MockCasestore) BuildBulkIndexer(arg0 context.Context, arg1 log.Interface) (esutil.BulkIndexer, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BuildBulkIndexer", arg0, arg1)
+	ret0, _ := ret[0].(esutil.BulkIndexer)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// BuildBulkIndexer indicates an expected call of BuildBulkIndexer.
+func (mr *MockCasestoreMockRecorder) BuildBulkIndexer(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildBulkIndexer", reflect.TypeOf((*MockCasestore)(nil).BuildBulkIndexer), arg0, arg1)
+}
+
+// ConvertObjectToDocument mocks base method.
+func (m *MockCasestore) ConvertObjectToDocument(arg0 context.Context, arg1 string, arg2 any, arg3 *model.Auditable, arg4 bool, arg5, arg6 *string) ([]byte, string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ConvertObjectToDocument", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(string)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// ConvertObjectToDocument indicates an expected call of ConvertObjectToDocument.
+func (mr *MockCasestoreMockRecorder) ConvertObjectToDocument(arg0, arg1, arg2, arg3, arg4, arg5, arg6 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConvertObjectToDocument", reflect.TypeOf((*MockCasestore)(nil).ConvertObjectToDocument), arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 }
 
 // Create mocks base method.
@@ -99,19 +132,20 @@ func (mr *MockCasestoreMockRecorder) CreateComment(arg0, arg1 any) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateComment", reflect.TypeOf((*MockCasestore)(nil).CreateComment), arg0, arg1)
 }
 
-// CreateRelatedEvent mocks base method.
-func (m *MockCasestore) CreateRelatedEvent(arg0 context.Context, arg1 *model.RelatedEvent) (*model.RelatedEvent, error) {
+// CreateRelatedEvents mocks base method.
+func (m *MockCasestore) CreateRelatedEvents(arg0 context.Context, arg1 []*model.RelatedEvent) (int, map[string]error, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateRelatedEvent", arg0, arg1)
-	ret0, _ := ret[0].(*model.RelatedEvent)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "CreateRelatedEvents", arg0, arg1)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(map[string]error)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
-// CreateRelatedEvent indicates an expected call of CreateRelatedEvent.
-func (mr *MockCasestoreMockRecorder) CreateRelatedEvent(arg0, arg1 any) *gomock.Call {
+// CreateRelatedEvents indicates an expected call of CreateRelatedEvents.
+func (mr *MockCasestoreMockRecorder) CreateRelatedEvents(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateRelatedEvent", reflect.TypeOf((*MockCasestore)(nil).CreateRelatedEvent), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateRelatedEvents", reflect.TypeOf((*MockCasestore)(nil).CreateRelatedEvents), arg0, arg1)
 }
 
 // DeleteArtifact mocks base method.

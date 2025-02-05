@@ -18,6 +18,7 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
+	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
@@ -634,7 +635,7 @@ func (h *DetectionHandler) DeleteDetection(w http.ResponseWriter, r *http.Reques
 // @Security     bearer[detections/read, events/read, detections/write, events/write]
 // @Param        newStatus  path  string  true  "The new status of the detection" Enums(enable, disable, delete)
 // @Param        request  body  BulkOp  true  "The bulk detection search criteria"
-// @Success      200  {object}  BulkResp "Returns the bulk operation response"
+// @Success      202  {object}  BulkResp "Returns the bulk operation response"
 // @Failure      400         "The provided input object or parameters are malformed or invalid"
 // @Failure      401                         "Request was not properly authenticated"
 // @Failure      403                         "Insufficient permissions for this request"
@@ -749,7 +750,7 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 		totalTime := time.Since(totalTimeStart)
 
 		withStats := logger.WithFields(log.Fields{
-			"errMap":     detections.TruncateMap(errMap, 5),
+			"errMap":     util.TruncateMap(errMap, 5),
 			"total":      len(detects),
 			"modified":   updated,
 			"deleted":    deleted,
@@ -793,7 +794,7 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 		action = "delete"
 	}
 
-	createAudit := []model.AuditInfo{}
+	createAudit := []model.AuditInfo{} // Object => *model.Detection
 	auditMut := sync.Mutex{}
 	errMut := sync.Mutex{}
 
@@ -859,9 +860,9 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 				}
 
 				createAudit = append(createAudit, model.AuditInfo{
-					DocId:     resp.DocumentID,
-					Op:        action,
-					Detection: detect,
+					DocId:  resp.DocumentID,
+					Op:     action,
+					Object: detect,
 				})
 			},
 			OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
@@ -902,9 +903,11 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 	dirty := make([]*model.Detection, 0, len(createAudit))
 
 	for _, audit := range createAudit {
-		document, index, err := h.server.Detectionstore.ConvertObjectToDocument(ctx, "detection", audit.Detection, &audit.Detection.Auditable, false, &audit.DocId, &audit.Op)
+		det := audit.Object.(*model.Detection)
+
+		document, index, err := h.server.Detectionstore.ConvertObjectToDocument(ctx, "detection", audit.Object, &det.Auditable, false, &audit.DocId, &audit.Op)
 		if err != nil {
-			errMap[audit.Detection.PublicID] = err.Error()
+			errMap[det.PublicID] = err.Error()
 			continue
 		}
 
@@ -923,18 +926,16 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 				defer errMut.Unlock()
 
 				if err != nil {
-					errMap[audit.Detection.PublicID] = fmt.Sprintf("AUDIT: %s", err.Error())
+					errMap[det.PublicID] = fmt.Sprintf("AUDIT: %s", err.Error())
 				} else {
-					errMap[audit.Detection.PublicID] = fmt.Sprintf("AUDIT: %s", resp.Error.Reason)
+					errMap[det.PublicID] = fmt.Sprintf("AUDIT: %s", resp.Error.Reason)
 				}
 			},
 		})
 		if err != nil {
-			errMap[audit.Detection.PublicID] = err.Error()
+			errMap[det.PublicID] = err.Error()
 			continue
 		}
-
-		det := audit.Detection
 
 		if audit.Op == "delete" {
 			det.IsEnabled = false
@@ -957,18 +958,18 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 	logger.WithFields(log.Fields{
 		"bulkUpdated": updated,
 		"bulkAudited": audited,
-		"errMap":      detections.TruncateMap(errMap, 5),
+		"errMap":      util.TruncateMap(errMap, 5),
 	}).Info("bulk operation complete")
 
 	start = time.Now()
 
 	errMap, err = syncLocalDetections(ctx, h.server, dirty)
 	if err != nil {
-		logger.WithError(err).WithField("errMap", detections.TruncateMap(errMap, 5)).Error("unable to sync detections after bulk update")
+		logger.WithError(err).WithField("errMap", util.TruncateMap(errMap, 5)).Error("unable to sync detections after bulk update")
 		return
 	}
 
-	postSync := logger.WithField("errMap", detections.TruncateMap(errMap, 5))
+	postSync := logger.WithField("errMap", util.TruncateMap(errMap, 5))
 
 	if len(errMap) == 0 {
 		postSync.Info("post-bulk sync finished")

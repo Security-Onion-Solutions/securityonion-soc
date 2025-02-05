@@ -555,9 +555,9 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 						results.Updated++
 
 						createAudit = append(createAudit, model.AuditInfo{
-							Detection: detect,
-							DocId:     resp.DocumentID,
-							Op:        "update",
+							Object: detect,
+							DocId:  resp.DocumentID,
+							Op:     "update",
 						})
 					},
 					OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
@@ -608,9 +608,9 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 					results.Added++
 
 					createAudit = append(createAudit, model.AuditInfo{
-						Detection: detect,
-						DocId:     resp.DocumentID,
-						Op:        "create",
+						Object: detect,
+						DocId:  resp.DocumentID,
+						Op:     "create",
 					})
 				},
 				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
@@ -681,9 +681,9 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 				results.Removed++
 
 				createAudit = append(createAudit, model.AuditInfo{
-					Detection: communityDetections[publicId],
-					DocId:     resp.DocumentID,
-					Op:        "delete",
+					Object: communityDetections[publicId],
+					DocId:  resp.DocumentID,
+					Op:     "delete",
 				})
 			},
 			OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
@@ -727,10 +727,11 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 		}
 
 		for _, audit := range createAudit {
+			det := audit.Object.(*model.Detection)
 			// prepare audit doc
-			document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(e.srv.Context, "detection", audit.Detection, &audit.Detection.Auditable, false, &audit.DocId, &audit.Op)
+			document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(e.srv.Context, "detection", audit.Object, &det.Auditable, false, &audit.DocId, &audit.Op)
 			if err != nil {
-				errMap[audit.Detection.PublicID] = err
+				errMap[det.PublicID] = err
 				continue
 			}
 
@@ -748,14 +749,14 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 					defer errMut.Unlock()
 
 					if err != nil {
-						errMap[audit.Detection.PublicID] = err
+						errMap[det.PublicID] = err
 					} else {
-						errMap[audit.Detection.PublicID] = errors.New(resp.Error.Reason)
+						errMap[det.PublicID] = errors.New(resp.Error.Reason)
 					}
 				},
 			})
 			if err != nil {
-				errMap[audit.Detection.PublicID] = err
+				errMap[det.PublicID] = err
 				continue
 			}
 		}
@@ -783,7 +784,7 @@ func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 		"syncUpdated":   results.Updated,
 		"syncRemoved":   results.Removed,
 		"syncUnchanged": results.Unchanged,
-		"syncErrors":    detections.TruncateMap(errMap, 5),
+		"syncErrors":    util.TruncateMap(errMap, 5),
 	}).Info("strelka community diff")
 
 	err = e.syncDetections(e.srv.Context)
@@ -1303,8 +1304,8 @@ func (e *StrelkaEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (de
 	deployedButNotEnabled, enabledButNotDeployed, _ = detections.DiffLists(deployed, enabled)
 
 	intCheckReport := logger.WithFields(log.Fields{
-		"deployedButNotEnabled":      detections.TruncateList(deployedButNotEnabled, 20),
-		"enabledButNotDeployed":      detections.TruncateList(enabledButNotDeployed, 20),
+		"deployedButNotEnabled":      util.TruncateList(deployedButNotEnabled, 20),
+		"enabledButNotDeployed":      util.TruncateList(enabledButNotDeployed, 20),
 		"deployedButNotEnabledCount": len(deployedButNotEnabled),
 		"enabledButNotDeployedCount": len(enabledButNotDeployed),
 	})
