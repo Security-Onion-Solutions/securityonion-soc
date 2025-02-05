@@ -147,6 +147,7 @@ const i18n = {
       bulkSuccessUpdate: 'Bulk update successfully updated {modified} of {total} events. ({time})',
       bulkSuccessDelete: 'Bulk delete successfully deleted {modified} of {total} events. ({time})',
       bytes: 'Bytes',
+      caCrtHelp: 'Download this grid\'s self-signed certificate authority (not needed if the grid TLS certificate was replaced by a trusted CA).',
       cancel: 'Cancel',
       captureLoss: 'Capture Loss',
       captureLossAbbr: 'Cap Loss',
