@@ -173,18 +173,17 @@ func (h *CaseHandler) CreateEvents(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-	}
+		if body.Acknowledge {
+			queryParts = append(queryParts, `event.acknowledged:true`)
+		} else {
+			queryParts = append(queryParts, `NOT event.acknowledged:true`)
+		}
 
-	if body.Acknowledge {
-		queryParts = append(queryParts, `event.acknowledged:true`)
-	} else {
-		queryParts = append(queryParts, `NOT event.acknowledged:true`)
-	}
-
-	if body.Escalate {
-		queryParts = append(queryParts, `event.escalated:true`)
-	} else {
-		queryParts = append(queryParts, `NOT event.escalated:true`)
+		if body.Escalate {
+			queryParts = append(queryParts, `event.escalated:true`)
+		} else {
+			queryParts = append(queryParts, `NOT event.escalated:true`)
+		}
 	}
 
 	query := strings.Join(queryParts, " AND ")

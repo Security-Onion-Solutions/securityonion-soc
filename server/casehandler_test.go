@@ -99,6 +99,8 @@ func TestHandlerCreateEvents(t *testing.T) {
 				assert.Contains(t, searchCriteria.RawQuery, `event.severity_label:"low"`)
 				assert.Contains(t, searchCriteria.RawQuery, `rule.uuid:"2102466"`)
 				assert.Contains(t, searchCriteria.RawQuery, ` AND `)
+				assert.Contains(t, searchCriteria.RawQuery, `NOT event.acknowledged:true`)
+				assert.Contains(t, searchCriteria.RawQuery, `NOT event.escalated:true`)
 				assert.NotContains(t, searchCriteria.RawQuery, ` OR `)
 				assert.NotContains(t, searchCriteria.RawQuery, `count:"30"`)
 
@@ -192,9 +194,10 @@ func TestHandlerCreateEvents(t *testing.T) {
 
 				searchCriteria := fakeEventStore.InputSearchCriterias[0]
 				assert.Contains(t, searchCriteria.RawQuery, `_id:"456"`)
-				assert.Contains(t, searchCriteria.RawQuery, `event.acknowledged:true`)
-				assert.Contains(t, searchCriteria.RawQuery, `event.escalated:true`)
 				assert.NotContains(t, searchCriteria.RawQuery, ` OR `)
+				// searching for a single event doesn't care what state that event is in
+				assert.NotContains(t, searchCriteria.RawQuery, `event.acknowledged:true`)
+				assert.NotContains(t, searchCriteria.RawQuery, `event.escalated:true`)
 
 				assert.Equal(t, "2024-12-03T14:31:35Z", searchCriteria.BeginTime.Format("2006-01-02T15:04:05Z"))
 				assert.Equal(t, "2024-12-04T14:31:35Z", searchCriteria.EndTime.Format("2006-01-02T15:04:05Z"))
