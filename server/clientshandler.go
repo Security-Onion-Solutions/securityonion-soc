@@ -31,12 +31,12 @@ func RegisterClientsRoutes(srv *Server, r chi.Router, prefix string) {
 
 	r.Route(prefix, func(r chi.Router) {
 		r.Get("/", h.getClients)
-		r.Get("/{id}/secret", h.getGeneratedSecret)
 
 		r.Post("/", h.postClient)
 		r.Post("/{id}/permission/{resource}/{privilege}", h.postAddPermission)
 
 		r.Put("/{id}", h.putClient)
+		r.Put("/{id}/secret", h.putGeneratedSecret)
 
 		r.Delete("/{id}", h.deleteClient)
 		r.Delete("/{id}/permission/{resource}/{privilege}", h.deleteClientPermission)
@@ -155,8 +155,8 @@ func (h *ClientsHandler) postAddPermission(w http.ResponseWriter, r *http.Reques
 // @Failure      401                                 "Request was not properly authenticated"
 // @Failure      403                                 "Insufficient permissions for this request"
 // @Failure      500                                 "Internal SOC error; review SOC logs"
-// @Router       /connect/clients/{id}/secret/ [get]
-func (h *ClientsHandler) getGeneratedSecret(w http.ResponseWriter, r *http.Request) {
+// @Router       /connect/clients/{id}/secret/ [put]
+func (h *ClientsHandler) putGeneratedSecret(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	id := chi.URLParam(r, "id")
