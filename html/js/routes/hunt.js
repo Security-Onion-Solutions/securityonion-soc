@@ -699,6 +699,8 @@ const huntComponent = {
             let payload = {
               fields: item,
               caseId: caseId,
+              acknowledge: acknowledge,
+              escalate: escalate,
             };
 
             if (detectionRelated) {

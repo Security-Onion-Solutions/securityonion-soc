@@ -681,30 +681,29 @@ func (store *ElasticCasestore) CreateRelatedEvents(ctx context.Context, events [
 		}
 
 		for _, event := range events {
-			for key, value := range event.Fields {
-				valueStr := fmt.Sprintf("%v", value)
-				if len(valueStr) == 0 || existingValueMap[valueStr] {
-					continue
-				}
+			for _, obs := range store.commonObservables {
+				value, exists := event.Fields[obs]
+				if exists {
+					valueStr := fmt.Sprintf("%v", value)
+					if len(valueStr) == 0 || existingValueMap[valueStr] {
+						continue
+					}
 
-				for _, obs := range store.commonObservables {
-					if key == obs {
-						artifact := model.NewArtifact()
-						artifact.CaseId = event.CaseId
-						artifact.Value = valueStr
-						artifact.ArtifactType = string(store.observables.GetType(artifact.Value))
-						artifact.GroupType = "evidence"
+					artifact := model.NewArtifact()
+					artifact.CaseId = event.CaseId
+					artifact.Value = valueStr
+					artifact.ArtifactType = string(store.observables.GetType(artifact.Value))
+					artifact.GroupType = "evidence"
 
-						existingValueMap[valueStr] = true
+					existingValueMap[valueStr] = true
 
-						_, err := store.CreateArtifact(ctx, artifact)
-						if err != nil {
-							logger.WithFields(log.Fields{
-								"key":          key,
-								"caseId":       event.CaseId,
-								"artifactType": artifact.ArtifactType,
-							}).WithError(err).Warn("automated observable extraction failed")
-						}
+					_, err := store.CreateArtifact(ctx, artifact)
+					if err != nil {
+						logger.WithFields(log.Fields{
+							"key":          obs,
+							"caseId":       event.CaseId,
+							"artifactType": artifact.ArtifactType,
+						}).WithError(err).Warn("automated observable extraction failed")
 					}
 				}
 			}
