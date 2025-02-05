@@ -127,6 +127,10 @@ type AttachEventCriteria struct {
 	DateRangeFormat string `json:"dateRangeFormat,omitempty" example:"2006/01/02 3:04:05 PM"`
 	// The timezone to use with the date range
 	Timezone string `json:"timezone,omitempty" example:"America/New_York"`
+	// Whether to attach events that are already escalated to a case: true = act on escalated events, false = act on unescalated events
+	Escalate bool `json:"escalate" example:"false"`
+	// Whether to attach events that are already acknowledged: true = act on acknowledged events, false = act on unacknowledged events
+	Acknowledge bool `json:"acknowledge" example:"true"`
 }
 
 func NewAttachEventCriteria() *AttachEventCriteria {
