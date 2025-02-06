@@ -701,13 +701,12 @@ const huntComponent = {
               caseId: caseId,
               acknowledged: this.isFilterToggleEnabled('acknowledged'),
               escalated: this.isFilterToggleEnabled('escalated'),
+              dateRange: this.dateRange,
+              dateRangeFormat: this.i18n.timePickerSample,
+              timezone: this.zone,
             };
 
             if (detectionRelated) {
-              payload.dateRange = this.dateRange;
-              payload.dateRangeFormat = this.i18n.timePickerSample;
-              payload.timezone = this.zone;
-
               payload.fields = {
                 'rule.uuid': item["rule.uuid"],
               };
