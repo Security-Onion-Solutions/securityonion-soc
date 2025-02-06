@@ -699,8 +699,8 @@ const huntComponent = {
             let payload = {
               fields: item,
               caseId: caseId,
-              acknowledge: acknowledge,
-              escalate: escalate,
+              acknowledged: this.isFilterToggleEnabled('acknowledged'),
+              escalated: this.isFilterToggleEnabled('escalated'),
             };
 
             if (detectionRelated) {

@@ -173,13 +173,13 @@ func (h *CaseHandler) CreateEvents(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		if body.Acknowledge {
+		if body.Acknowledged {
 			queryParts = append(queryParts, `event.acknowledged:true`)
 		} else {
 			queryParts = append(queryParts, `NOT event.acknowledged:true`)
 		}
 
-		if body.Escalate {
+		if body.Escalated {
 			queryParts = append(queryParts, `event.escalated:true`)
 		} else {
 			queryParts = append(queryParts, `NOT event.escalated:true`)
