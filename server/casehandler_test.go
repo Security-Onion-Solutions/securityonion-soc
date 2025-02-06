@@ -32,7 +32,7 @@ func TestHandlerCreateEvents(t *testing.T) {
 	}{
 		{
 			Name:        "Sunny Day",
-			RequestBody: []byte(`{"caseId": "123", "dateRange": "2024/12/03 02:31:35 PM - 2024/12/04 02:31:35 PM", "dateRangeFormat": "2006/01/02 3:04:05 PM", "fields": {"count": "30", "rule.name": "GPL NETBIOS SMB-DS IPC$ unicode share access", "event.module": "suricata", "event.severity_label": "low", "rule.uuid": "2102466"}}`),
+			RequestBody: []byte(`{"caseId": "123", "dateRange": "2024/12/03 02:31:35 PM - 2024/12/04 02:31:35 PM", "dateRangeFormat": "2006/01/02 3:04:05 PM", "fields": {"count": "30", "rule.name": "GPL NETBIOS SMB-DS IPC$ unicode share access", "event.module": "suricata", "event.severity_label": "low", "rule.uuid": "2102466"}, "acknowledged": true, "escalated": true}`),
 			InitMock: func(srv *Server, ctrl *gomock.Controller, nonAsyncWG *sync.WaitGroup) (*sync.WaitGroup, *MockBroadcaster) {
 				fakeEventStore := srv.Eventstore.(*FakeEventstore)
 				mHostAuth := srv.Host.Authorizer.(*rbac.FakeAuthorizer)
@@ -99,8 +99,10 @@ func TestHandlerCreateEvents(t *testing.T) {
 				assert.Contains(t, searchCriteria.RawQuery, `event.severity_label:"low"`)
 				assert.Contains(t, searchCriteria.RawQuery, `rule.uuid:"2102466"`)
 				assert.Contains(t, searchCriteria.RawQuery, ` AND `)
-				assert.Contains(t, searchCriteria.RawQuery, `NOT event.acknowledged:true`)
-				assert.Contains(t, searchCriteria.RawQuery, `NOT event.escalated:true`)
+				assert.Contains(t, searchCriteria.RawQuery, `event.acknowledged:true`)
+				assert.Contains(t, searchCriteria.RawQuery, `event.escalated:true`)
+				assert.NotContains(t, searchCriteria.RawQuery, `NOT event.acknowledged:true`)
+				assert.NotContains(t, searchCriteria.RawQuery, `NOT event.escalated:true`)
 				assert.NotContains(t, searchCriteria.RawQuery, ` OR `)
 				assert.NotContains(t, searchCriteria.RawQuery, `count:"30"`)
 
@@ -145,7 +147,7 @@ func TestHandlerCreateEvents(t *testing.T) {
 		},
 		{
 			Name:        "Escalate Single Event",
-			RequestBody: []byte(`{"caseId": "123", "dateRange": "2024/12/03 02:31:35 PM - 2024/12/04 02:31:35 PM", "dateRangeFormat": "2006/01/02 3:04:05 PM", "fields": {"soc_id": "456", "event.severity_label": "low", "rule.uuid": "2102466"}, "acknowledge": true, "escalate": true}`),
+			RequestBody: []byte(`{"caseId": "123", "dateRange": "2024/12/03 02:31:35 PM - 2024/12/04 02:31:35 PM", "dateRangeFormat": "2006/01/02 3:04:05 PM", "fields": {"soc_id": "456", "event.severity_label": "low", "rule.uuid": "2102466"}, "acknowledged": true, "escalated": true}`),
 			InitMock: func(srv *Server, ctrl *gomock.Controller, nonAsyncWG *sync.WaitGroup) (*sync.WaitGroup, *MockBroadcaster) {
 				fakeEventStore := srv.Eventstore.(*FakeEventstore)
 				mHostAuth := srv.Host.Authorizer.(*rbac.FakeAuthorizer)
@@ -252,7 +254,15 @@ func TestHandlerCreateEvents(t *testing.T) {
 
 				return nil, nil
 			},
-			MockCheck:    func(srv *Server) {},
+			MockCheck: func(srv *Server) {
+				fakeEventStore := srv.Eventstore.(*FakeEventstore)
+
+				assert.Len(t, fakeEventStore.InputSearchCriterias, 1)
+
+				searchCriteria := fakeEventStore.InputSearchCriterias[0]
+				assert.Contains(t, searchCriteria.RawQuery, `NOT event.acknowledged:true`)
+				assert.Contains(t, searchCriteria.RawQuery, `NOT event.escalated:true`)
+			},
 			Code:         500,
 			ResponseBody: []byte(`The request could not be processed.`),
 			Logs: []EntryMatcher{

@@ -1160,7 +1160,7 @@
             </v-card-title>
             <v-card-text>
               {{ i18n.acknowledgeDetectionsRelatedAlertsText.replace('{ackManyVerb}', ackManyVerb) }}
-              <div v-if="ackManyArgs[0]?.count > maxEscalate" class="mt-4" v-html="i18n.acknowledgeDetectionsRelatedAlertsTextWarning.replaceAll('{maxEscalate}', maxEscalate.toLocaleString())"></div>
+              <div v-if="ackManyVerb === 'escalate' && ackManyArgs[0]?.count > maxEscalate" class="mt-4" v-html="i18n.acknowledgeDetectionsRelatedAlertsTextWarning.replaceAll('{maxEscalate}', maxEscalate.toLocaleString())"></div>
             </v-card-text>
             <v-card-actions>
               <v-spacer></v-spacer>
