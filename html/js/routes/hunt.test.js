@@ -1404,7 +1404,7 @@ test('bulkUpdateReport - error', () => {
   comp.bulkUpdateReport(stats)
 
   expect(comp.$root.error).toBe(true);
-  expect(comp.$root.errorMessage).toBe('1 of the detections during the last bulk update failed. Please check the SOC logs for more information.');
+  expect(comp.$root.errorMessage).toBe('1 error(s) arose during a bulk operation. Please check the SOC logs for more information.');
 });
 
 test('bulkUpdateReport - update success', () => {
