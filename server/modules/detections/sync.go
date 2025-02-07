@@ -6,6 +6,7 @@
 package detections
 
 import (
+	"context"
 	"errors"
 	"strconv"
 	"strings"
@@ -30,6 +31,8 @@ type DetailedDetectionEngine interface {
 	IOManager
 }
 
+//go:generate mockgen -destination mock/mock_detaileddetectionengine.go -package mock . DetailedDetectionEngine
+
 type SyncSchedulerParams struct {
 	SyncThread                           *sync.WaitGroup
 	InterruptChan                        chan bool
@@ -38,7 +41,7 @@ type SyncSchedulerParams struct {
 	CommunityRulesImportErrorSeconds     int
 }
 
-func SyncScheduler(e DetailedDetectionEngine, syncParams *SyncSchedulerParams, engineState *model.EngineState, engName model.EngineName, isRunning *bool, iom IOManager) {
+func SyncScheduler(ctx context.Context, detStore TemplateChecker, e DetailedDetectionEngine, syncParams *SyncSchedulerParams, engineState *model.EngineState, engName model.EngineName, isRunning *bool) {
 	syncParams.SyncThread.Add(1)
 	defer func() {
 		syncParams.SyncThread.Done()
@@ -90,6 +93,14 @@ func SyncScheduler(e DetailedDetectionEngine, syncParams *SyncSchedulerParams, e
 		case <-timer.C:
 		case typ := <-syncParams.InterruptChan:
 			forceSync = forceSync || typ
+		}
+
+		haveTemplate := CheckTemplate(ctx, detStore)
+		if !haveTemplate {
+			lastSyncSuccess = util.Ptr(false)
+			log.WithField("detectionEngine", engName).Error("no template found, failing sync")
+
+			continue
 		}
 
 		e.PauseIntegrityChecker()
