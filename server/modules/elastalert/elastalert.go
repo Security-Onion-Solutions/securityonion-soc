@@ -319,7 +319,7 @@ func (e *ElastAlertEngine) Start() error {
 	e.IntegrityCheckerData.IsRunning = true
 
 	// start long running processes
-	go detections.SyncScheduler(e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameElastAlert, &e.isRunning, e.IOManager)
+	go detections.SyncScheduler(e.srv.Context, e.srv.Detectionstore, e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameElastAlert, &e.isRunning)
 	go detections.IntegrityChecker(model.EngineNameElastAlert, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
 
 	// update Ai Summaries once and don't block

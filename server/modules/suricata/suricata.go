@@ -183,7 +183,7 @@ func (e *SuricataEngine) Start() error {
 	e.IntegrityCheckerData.IsRunning = true
 
 	// start long running processes
-	go detections.SyncScheduler(e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameSuricata, &e.isRunning, e.IOManager)
+	go detections.SyncScheduler(e.srv.Context, e.srv.Detectionstore, e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameSuricata, &e.isRunning)
 	go detections.IntegrityChecker(model.EngineNameSuricata, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
 
 	// update Ai Summaries once and don't block

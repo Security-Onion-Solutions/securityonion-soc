@@ -152,7 +152,7 @@ func (e *StrelkaEngine) Start() error {
 	e.isRunning = true
 
 	// start long running processes
-	go detections.SyncScheduler(e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameStrelka, &e.isRunning, e.IOManager)
+	go detections.SyncScheduler(e.srv.Context, e.srv.Detectionstore, e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameStrelka, &e.isRunning)
 	go detections.IntegrityChecker(model.EngineNameStrelka, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
 
 	// update Ai Summaries once and don't block
