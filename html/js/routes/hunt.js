@@ -168,6 +168,7 @@ const huntComponent = {
     ackManyVerb: '',
     menuScrollPos: 0,
     maxEscalate: 100,
+    chartResizeTracker: {},
   }},
   created() {
     this.$root.initializeCharts();
@@ -1433,6 +1434,82 @@ const huntComponent = {
       }
       return false;
     },
+    debounceChartResize(chart, size) {
+      const MAX_RESIZE_METRIC_COUNT = 20;
+      const MAX_RESIZE_METRIC_AGE = 1000; // milliseconds
+      const MAX_RESIZE_METRIC_FLAPS = 1;
+
+      if (!chart.options.responsive) return;
+
+      const now = Date.now();
+
+      // Get this chart's resize metric history, or create a new history
+      var data = this.chartResizeTracker[chart];
+      if (!data) {
+        data = [];
+        this.chartResizeTracker[chart] = data;
+      }
+
+      // Determine how many metrics are expired
+      var pruneCount = 0;
+      for (var idx = 0; idx < data.length; idx++) {
+        var metric = data[idx];
+        if (metric.time < now - MAX_RESIZE_METRIC_AGE) {
+          pruneCount = idx + 1;
+        } else {
+          break
+        }
+      }
+
+      // Remove expired metrics
+      for (var idx = 0; idx < pruneCount; idx++) {
+        data.shift();
+      }
+
+      var newResizeMetric = {
+        size: size,
+        time: now,
+      }
+
+      data.push(newResizeMetric);
+
+      // Limit the number of metrics in history
+      if (data.length > MAX_RESIZE_METRIC_COUNT) {
+        data.shift();
+      }
+
+      // Review the metric history and determine if the chart size is flapping
+      var flapCount = 0;
+      var prevDirection = 0;
+      for (var idx = 0; idx < data.length; idx++) {
+        var prev = data[idx];
+        if (idx < data.length - 1) {
+          var next = data[idx + 1];
+          var nextDirection = 0;
+          if (next.size.width > prev.size.width) {
+            nextDirection = 1;
+          } else if (next.size.width < prev.size.width) {
+            nextDirection = -1;
+          }
+
+          if (prevDirection != 0 && nextDirection != 0) {
+            if (nextDirection != prevDirection) {
+              flapCount++;
+            }
+          }
+          if (nextDirection != 0) {
+            prevDirection = nextDirection;
+          }
+        }
+      }
+      if (flapCount > MAX_RESIZE_METRIC_FLAPS) {
+        chart.options.responsive = false;
+        // for (var idx = 0; idx < data.length; idx++) {
+        //   console.log(idx + " -> " + data[idx].size.width)
+        // }
+        // console.log("Excessive chart flapping detected; disabled chart resizing")
+      }
+    },
     updateGroupBySort() {
       if (this.groupBys.length > 0) {
         this.groupBySortBy = this.groupBys[0].sortBy[0].key;
@@ -1847,6 +1924,7 @@ const huntComponent = {
       var dataColor = this.$root.getColor("primary");
       var gridColor = this.$root.getColor("#888888", 65);
       options.onClick = this.handleChartClick(groupIdx);
+      options.onResize = this.debounceChartResize;
       options.responsive = true;
       options.maintainAspectRatio = false;
       options.plugins = {
@@ -1895,6 +1973,7 @@ const huntComponent = {
       options.scales.x.type = 'timeseries';
     },
     setupPieChart(options, data, title) {
+      options.onResize = this.debounceChartResize;
       options.responsive = true;
       options.maintainAspectRatio = false;
       options.plugins = {
@@ -1929,6 +2008,7 @@ const huntComponent = {
     },
     setupSankeyChart(options, data, title) {
       const route = this;
+      options.onResize = this.debounceChartResize;
       options.responsive = true;
       options.maintainAspectRatio = false;
       options.plugins = {
