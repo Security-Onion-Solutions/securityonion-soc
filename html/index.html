@@ -33,7 +33,7 @@
           </v-app-bar-nav-icon>
           <v-toolbar-title>
             <a href="/" id="title" data-aid="nav_overview">
-              <img class="pt-1" :title="i18n.product" :alt="i18n.product" height="45" src="images/so-logo.svg"></v-img>
+              <img class="pt-1" :title="i18n.product" :alt="i18n.product" height="45" src="images/so-logo.svg"></img>
             </a>
           </v-toolbar-title>
           <v-spacer></v-spacer>
@@ -197,7 +197,7 @@
             </router-link>
           </span>
         </v-footer>
-        <v-navigation-drawer v-model="toolbar" width="200" clipped overflow app>
+        <v-navigation-drawer v-model="toolbar" width="200" clipped overflow app class="theme-links">
           <v-list density="compact" :disabled="forceUserOtp">
             <v-list-item data-aid="nav_overview" @click="" to="/">
               <template #prepend>
@@ -893,7 +893,7 @@
         </v-row>
         <v-menu v-model="quickActionVisible" :target="quickActionTarget" :data-aid="'context_menu_' + category">
           <div class="d-flex">
-            <v-list id="hunt-quick-action" v-model:opened="quickActionsOpen">
+            <v-list id="hunt-quick-action" v-model:opened="quickActionsOpen" class="v-theme--dark">
               <v-list-item density="compact" id="actionFilterInclude" :to="filterRouteInclude" v-bind:title.attr="i18n.filterIncludeHelp" :data-aid="'context_menu_filter_include_' + category" active-class="">
                 <template #prepend>
                   <v-icon :alt="i18n.filterInclude" class="theme-icon">fa-search-plus</v-icon>
@@ -958,7 +958,7 @@
                   {{ i18n.groupNew }}
                 </v-list-item-title>
               </v-list-item>
-              <v-list-group density="compact" :value="'numeric'" @click.stop v-if="quickActionVisible && quickActionIsNumeric" :data-aid="'context_menu_compare_' + category" class="deep-theme-text">
+              <v-list-group density="compact" :value="'numeric'" @click.stop v-if="quickActionVisible && quickActionIsNumeric" :data-aid="'context_menu_compare_' + category">
                 <template #activator="{ props, isOpen }">
                   <v-list-item v-bind="props" class="v-list-item--active">
                     <template #prepend>
@@ -997,7 +997,7 @@
                   </v-list-item-title>
                 </v-list-item>
               </v-list-group>
-              <v-list-group density="compact" :value="'clipboard'" @click.stop class="deep-theme-text" :data-aid="'context_menu_clipboard_' + category">
+              <v-list-group density="compact" :value="'clipboard'" @click.stop :data-aid="'context_menu_clipboard_' + category">
                 <template #activator="{ props, isOpen }">
                   <v-list-item v-bind="props" class="v-list-item--active">
                     <template #prepend>
@@ -1044,7 +1044,7 @@
                   </v-list-item-title>
                 </v-list-item>
               </v-list-group>
-              <v-list-group v-if="!!actions && actions.length" :value="'actions'" density="compact" @click.stop class="deep-theme-text" :data-aid="'context_menu_quickaction_' + category">
+              <v-list-group v-if="!!actions && actions.length" :value="'actions'" density="compact" @click.stop :data-aid="'context_menu_quickaction_' + category">
                 <template #activator="{ props, isOpen }">
                   <v-list-item v-bind="props" class="v-list-item--active">
                     <template #prepend>
@@ -1066,7 +1066,7 @@
                     <template #prepend>
                       <v-icon :alt="action.name" class="solid" class="theme-icon">{{ action.icon }}</v-icon>
                     </template>
-                    <v-list-item-title class="theme-text">
+                    <v-list-item-title>
                       {{ $root.localizeMessage(action.name) }}
                     </v-list-item-title>
                   </v-list-item>
@@ -1080,19 +1080,19 @@
           <v-list id="hunt-escalate-menu" color="secondary">
             <v-list-item id="escalateNewMenuItem" density="compact" @click="ack(escalationItem, true, true, null, escalationGroupIdx, escalatingDetectionEvents)" v-bind:title.attr="i18n.escalateNewCaseHelp" :data-aid="'escalate_menu_new_' + category">
               <template #prepend>
-                <v-icon :alt="i18n.escalateNewCase" color="white">fa-plus</v-icon>
+                <v-icon :alt="i18n.escalateNewCase">fa-plus</v-icon>
               </template>
-              <v-list-item-title class="text-white">
+              <v-list-item-title class="theme-text">
                 {{ i18n.escalateNewCase }}
               </v-list-item-title>
             </v-list-item>
             <v-divider></v-divider>
-            <v-list-subheader class="text-white">{{ i18n.escalateExistingCase }}</v-list-subheader>
+            <v-list-subheader class="theme-text">{{ i18n.escalateExistingCase }}</v-list-subheader>
             <v-list-item v-for="socCase in mruCases" density="compact" v-bind:title.attr="i18n.escalateExistingCaseHelp" @click="ack(escalationItem, true, true, socCase.id, escalationGroupIdx, escalatingDetectionEvents)" :data-aid="'escalate_menu_existing_' + category">
               <template #prepend>
-                <v-icon :alt="i18n.escalateExistingCase" color="white">fa-link</v-icon>
+                <v-icon :alt="i18n.escalateExistingCase">fa-link</v-icon>
               </template>
-              <v-list-item-title class="text-white">
+              <v-list-item-title class="theme-text">
                 {{ formatCaseSummary(socCase) }}
               </v-list-item-title>
             </v-list-item>
@@ -3042,7 +3042,7 @@
             </v-alert>
           </v-col>
         </v-row>
-        <v-menu v-model="quickActionVisible" :position-x="quickActionX" :position-y="quickActionY" absolute data-aid="job_details_context_menu">
+        <v-menu v-model="quickActionVisible" :position-x="quickActionX" :position-y="quickActionY" absolute data-aid="job_details_context_menu" class="text-white">
           <v-list id="job-common-action" color="secondary">
             <v-list-item id="actionCopyValue" density="compact" @click="$root.copyToClipboard(quickActionValue)" data-aid="job_details_context_menu_copy">
               <template #prepend>
