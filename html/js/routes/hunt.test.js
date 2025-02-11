@@ -511,6 +511,7 @@ test('setupPieChart', () => {
   expect(options).toStrictEqual({
       responsive: true,
       maintainAspectRatio: false,
+      onResize: comp.debounceChartResize,
       plugins: {
         legend: {
           display: true,
@@ -552,6 +553,7 @@ test('setupSankeyChart', () => {
   expect(options).toStrictEqual({
       responsive: true,
       maintainAspectRatio: false,
+      onResize: comp.debounceChartResize,
       plugins: {
         legend: {
           display: false,
@@ -1534,4 +1536,53 @@ test('lookupFieldValue', () => {
   expect(comp.lookupFieldValue(record, 'this')).toBe(10);
   expect(comp.lookupFieldValue(record, 'that')).toBe('foo');
   expect(comp.lookupFieldValue(record, 'message')).toBe(100);
+});
+
+test('debounceChartResize', () => {
+  const chart = {
+    options: {
+      responsive: true
+    }
+  };
+  comp.chartResizeTracker = {};
+
+  // Initial call
+  comp.debounceChartResize(chart, { width: 100 });
+  expect(comp.chartResizeTracker[chart].length).toBe(1);
+  expect(comp.chartResizeTracker[chart][0].size.width).toBe(100);
+
+  // Second call with same size
+  comp.debounceChartResize(chart, { width: 100 });
+  expect(comp.chartResizeTracker[chart].length).toBe(2);
+
+  // Simulate flapping
+  for (let i = 0; i < 20; i++) {
+    comp.debounceChartResize(chart, { width: 100 + (i % 2 === 0 ? 1 : -1) });
+  }
+  expect(chart.options.responsive).toBe(false);
+});
+
+test('debounceChartResize - no flapping', () => {
+  const chart = {
+    options: {
+      responsive: true
+    }
+  };
+  comp.chartResizeTracker = {};
+
+  // Initial call
+  comp.debounceChartResize(chart, { width: 100 });
+  expect(comp.chartResizeTracker[chart].length).toBe(1);
+  expect(comp.chartResizeTracker[chart][0].size.width).toBe(100);
+  expect(chart.options.responsive).toBe(true);
+
+  comp.debounceChartResize(chart, { width: 101 });
+  expect(chart.options.responsive).toBe(true);
+
+  comp.debounceChartResize(chart, { width: 101 });
+  expect(chart.options.responsive).toBe(true);
+
+  comp.debounceChartResize(chart, { width: 151 });
+  expect(comp.chartResizeTracker[chart].length).toBe(4);
+  expect(chart.options.responsive).toBe(true);
 });
