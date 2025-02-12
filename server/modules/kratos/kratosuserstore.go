@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -38,12 +38,11 @@ func (kratos *KratosUserstore) fetchUser(id string) (*KratosUser, error) {
 	return kratosUser, err
 }
 
-func (kratos *KratosUserstore) GetUserById(ctx context.Context, id string) (*model.User, error) {
-	var err error
-	var user *model.User
+func (kratos *KratosUserstore) GetUserById(ctx context.Context, id string) (user *model.User, err error) {
+	logger := log.FromContext(ctx)
 
 	if err = kratos.server.CheckAuthorized(ctx, "read", "users"); err == nil {
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"userId":    id,
 			"requestId": ctx.Value(web.ContextKeyRequestId),
 		}).Debug("Fetching user by ID")
@@ -51,7 +50,7 @@ func (kratos *KratosUserstore) GetUserById(ctx context.Context, id string) (*mod
 		var kratosUser KratosUser
 		_, err = kratos.client.SendObject("GET", "/identities/"+id, "", &kratosUser, false)
 		if err != nil {
-			log.WithError(err).WithFields(log.Fields{
+			logger.WithError(err).WithFields(log.Fields{
 				"userId":    id,
 				"requestId": ctx.Value(web.ContextKeyRequestId),
 			}).Error("Failed to fetch user from Kratos")
@@ -68,22 +67,24 @@ func (kratos *KratosUserstore) GetUserById(ctx context.Context, id string) (*mod
 
 		kratosUser.copyToUser(user)
 		if kratos.server.Rolestore != nil {
-			kratos.server.Rolestore.PopulateUserRoles(ctx, user)
+			_, user.Roles = kratos.server.Rolestore.GetRolesForAuthId(ctx, user.Id)
 		}
 	}
 
 	return user, err
 }
 
-func (kratos *KratosUserstore) GetUsers(ctx context.Context) ([]*model.User, error) {
-	users := make([]*model.User, 0, 0)
-	myUserOnly := make([]*model.User, 0, 0)
+func (kratos *KratosUserstore) GetUsers(ctx context.Context) (users []*model.User, err error) {
+	logger := log.FromContext(ctx)
+
+	users = []*model.User{}
+	myUserOnly := []*model.User{}
 
 	if requestorId, ok := ctx.Value(web.ContextKeyRequestorId).(string); ok {
-		kratosUsers := make([]*KratosUser, 0, 0)
+		kratosUsers := []*KratosUser{}
 		_, err := kratos.client.SendObject("GET", "/identities", "", &kratosUsers, false)
 		if err != nil {
-			log.WithError(err).WithFields(log.Fields{
+			logger.WithError(err).WithFields(log.Fields{
 				"requestId": ctx.Value(web.ContextKeyRequestId),
 			}).Error("Failed to fetch users from Kratos")
 			return nil, err
@@ -102,7 +103,7 @@ func (kratos *KratosUserstore) GetUsers(ctx context.Context) ([]*model.User, err
 
 			kratosUser.copyToUser(user)
 			if kratos.server.Rolestore != nil {
-				kratos.server.Rolestore.PopulateUserRoles(ctx, user)
+				_, user.Roles = kratos.server.Rolestore.GetRolesForAuthId(ctx, user.Id)
 			}
 			users = append(users, user)
 			if user.Status != "locked" {
@@ -135,10 +136,12 @@ func (kratos *KratosUserstore) shouldPopulateUserDetails(ctx context.Context, kr
 }
 
 func (kratos *KratosUserstore) populateUserDetails(ctx context.Context, kratosUser *KratosUser) {
-	log.Info("Populating user details for " + kratosUser.Id)
+	logger := log.FromContext(ctx)
+
+	logger.Info("Populating user details for " + kratosUser.Id)
 	_, err := kratos.client.SendObject("GET", "/identities/"+kratosUser.Id, "", &kratosUser, false)
 	if err != nil {
-		log.WithError(err).WithFields(log.Fields{
+		logger.WithError(err).WithFields(log.Fields{
 			"requestId": ctx.Value(web.ContextKeyRequestId),
 		}).Error("Failed to fetch user details from Kratos")
 	}

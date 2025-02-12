@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -24,10 +24,10 @@ import (
 var webSocketReadString string
 
 func TestAddRemoveConnection(tester *testing.T) {
-	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil, "")
+	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil)
 	conn := &websocket.Conn{}
 	tester.Run("testing add connection", func(t *testing.T) {
-		socConn := host.AddConnection(nil, conn, "1.2.3.4")
+		socConn := host.AddConnection("", conn, "1.2.3.4")
 		assert.Len(tester, host.connections, 1)
 		assert.Equal(tester, socConn.ip, "1.2.3.4", socConn.ip)
 		assert.Equal(tester, 123, host.idleConnectionTimeoutMs)
@@ -39,12 +39,12 @@ func TestAddRemoveConnection(tester *testing.T) {
 }
 
 func TestMultipleConnections(tester *testing.T) {
-	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil, "")
+	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil)
 	conn1 := &websocket.Conn{}
 	conn2 := &websocket.Conn{}
 	tester.Run("testing add multiple connections", func(t *testing.T) {
-		host.AddConnection(nil, conn1, "1.2.3.4")
-		host.AddConnection(nil, conn2, "1.2.3.4")
+		host.AddConnection("", conn1, "1.2.3.4")
+		host.AddConnection("", conn2, "1.2.3.4")
 		assert.Len(tester, host.connections, 2)
 	})
 	tester.Run("testing remove first connection", func(t *testing.T) {
@@ -58,8 +58,8 @@ func TestMultipleConnections(tester *testing.T) {
 }
 
 func TestManageConnections(tester *testing.T) {
-	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil, "")
-	conn := host.AddConnection(nil, nil, "")
+	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil)
+	conn := host.AddConnection("", nil, "")
 
 	conn.lastPingTime = time.Time{}
 
@@ -103,7 +103,7 @@ func (dummy *DummyPreprocessor) Preprocess(ctx context.Context, request *http.Re
 }
 
 func TestPreprocessorSetup(tester *testing.T) {
-	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil, "")
+	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil)
 	assert.Len(tester, host.Preprocessors(), 1)
 
 	newPreprocessor := &DummyPreprocessor{priority: 123}
@@ -127,7 +127,7 @@ func TestPreprocessorSetup(tester *testing.T) {
 }
 
 func TestPreprocessExecute(tester *testing.T) {
-	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil, "")
+	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil)
 	newPreprocessor := &DummyPreprocessor{priority: 123, statusCode: 321}
 	host.AddPreprocessor(newPreprocessor)
 	request, _ := http.NewRequest("GET", "", nil)
@@ -138,16 +138,14 @@ func TestPreprocessExecute(tester *testing.T) {
 }
 
 func setupWebsocket(tester *testing.T) *Host {
-	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil, "")
+	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil)
 	srv := httptest.NewServer(http.HandlerFunc(handlerToBeTested))
 	u, _ := url.Parse(srv.URL)
 	u.Scheme = "ws"
 	ws, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	assert.NoError(tester, err)
 
-	user := model.NewUser()
-	user.Roles = append(user.Roles, "jobs/read")
-	conn := NewConnection(user, ws, "1.2.3.4")
+	conn := NewConnection("myUserId", ws, "1.2.3.4")
 	host.connections = append(host.connections, conn)
 	webSocketReadString = ""
 	return host

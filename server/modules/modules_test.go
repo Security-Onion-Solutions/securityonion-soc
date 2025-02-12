@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -22,6 +22,7 @@ func TestBuildModuleMap(t *testing.T) {
 	findModule(t, mm, "salt")
 	findModule(t, mm, "httpcase")
 	findModule(t, mm, "kratos")
+	findModule(t, mm, "navigator")
 	findModule(t, mm, "influxdb")
 	findModule(t, mm, "sostatus")
 	findModule(t, mm, "statickeyauth")

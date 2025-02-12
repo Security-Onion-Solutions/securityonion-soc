@@ -1,4 +1,4 @@
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -28,3 +28,5 @@ type SyncStatus struct {
 	Engine model.EngineName `json:"engine"`
 	Status string           `json:"status"`
 }
+
+//go:generate mockgen -destination mock/mock_detectionengine.go -package mock . DetectionEngine

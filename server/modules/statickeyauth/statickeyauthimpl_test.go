@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
@@ -79,13 +78,8 @@ func TestPreprocess(tester *testing.T) {
 	if assert.Nil(tester, err) {
 		assert.Zero(tester, statusCode)
 		if assert.NotNil(tester, ctx) {
-			requestor := ctx.Value(web.ContextKeyRequestor)
-			if assert.NotNil(tester, requestor) {
-				sensorUser := requestor.(*model.User)
-				assert.NotNil(tester, sensorUser)
-				assert.Equal(tester, "00000000-0000-0000-0000-000000000000", sensorUser.Id)
-				assert.Equal(tester, "00000000-0000-0000-0000-000000000000", sensorUser.Email)
-			}
+			requestorId := ctx.Value(web.ContextKeyRequestorId)
+			assert.Equal(tester, "00000000-0000-0000-0000-000000000000", requestorId)
 		}
 	}
 

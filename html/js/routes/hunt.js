@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -45,7 +45,6 @@ const huntComponent = {
     autoRefreshIntervals: [],
     autoRefreshTimer: null,
     loaded: false,
-    expanded: [],
     chartHeight: 200,
     zone: '',
     huntPending: false,
@@ -71,7 +70,7 @@ const huntComponent = {
     groupByLimit: 10,
     groupByFilter: '',
     groupByItemsPerPage: 10,
-    groupByFooters: { 'items-per-page-options': [10,25,50,100,200,500] },
+    groupByFooters: [10,25,50,100,200,500],
     groupByPage: 1,
     groupBySortBy: 'count',
     groupBySortDesc: true,
@@ -85,14 +84,14 @@ const huntComponent = {
     eventFilter: '',
     eventHeaders: [],
     eventPage: 1,
-    sortBy: 'soc_timestamp',
+    sortBy: [{ key: 'soc_timestamp', order: 'desc' }],
     sortDesc: true,
     itemsPerPage: 10,
     footerProps: { 'items-per-page-options': [10,25,50,100,200,500,1000] },
 
     expandedHeaders: [
-      { text: "key", value: "key" },
-      { text: "value", value: "value" }
+      { title: "key", value: "key" },
+      { title: "value", value: "value" }
     ],
 
     totalEvents: 0,
@@ -115,15 +114,13 @@ const huntComponent = {
     groupByRoute: "",
     groupByNewRoute: "",
     quickActionVisible: false,
-    quickActionX: 0,
-    quickActionY: 0,
+    quickActionTarget: null,
     quickActionEvent: null,
     quickActionField: "",
     quickActionValue: "",
     quickActionIsNumeric: false,
     escalationMenuVisible: false,
-    escalationMenuX: 0,
-    escalationMenuY: 0,
+    escalationMenuTarget: null,
     escalationItem: null,
     escalationGroupIdx: -1,
     escalateRelatedEventsEnabled: false,
@@ -137,61 +134,76 @@ const huntComponent = {
     betweenEndEquals: false,
     betweenError: '',
     equalityOperators: [
-      { text: '<', value: false },
-      { text: '≤', value: true }
+      { title: '<', value: false },
+      { title: '≤', value: true }
     ],
     addToCaseDialogVisible: false,
     mruCases: [],
     selectedMruCase: null,
     disableRouteLoad: false,
     selectAllState: false,
+    selectAllIndeterminate: false,
     selectedCount: 0,
     selectedAction: 'enable',
     bulkActions: [
-      { text: this.$root.i18n.enable, value: 'enable' },
-      { text: this.$root.i18n.disable, value: 'disable' },
-      { text: this.$root.i18n.delete, value: 'delete' },
+      { title: this.$root.i18n.enable, value: 'enable' },
+      { title: this.$root.i18n.disable, value: 'disable' },
+      { title: this.$root.i18n.delete, value: 'delete' },
     ],
     quickActionDetId: null,
     presets: {},
     manualSyncTargetEngine: null,
     showBulkDeleteConfirmDialog: false,
     tuneDetectionTabTarget: null,
+    eventCurrentItems: [],
+    detectionEngineStatusQueries: {},
+    highlightedDetection: null,
+    highlightedAlertInfo: null,
+    showDetailsPanel: true,
+    openPanel: [0],
+    quickActionsOpen: [],
+    escalatingDetectionEvents: false,
+    showAckManyDialog: false,
+    ackManyArgs: [],
+    ackManyVerb: '',
+    menuScrollPos: 0,
+    maxEscalate: 100,
+    chartResizeTracker: {},
   }},
   created() {
     this.$root.initializeCharts();
     this.relativeTimeUnits = [
-      { text: this.i18n.seconds, value: RELATIVE_TIME_SECONDS },
-      { text: this.i18n.minutes, value: RELATIVE_TIME_MINUTES },
-      { text: this.i18n.hours, value: RELATIVE_TIME_HOURS },
-      { text: this.i18n.days, value: RELATIVE_TIME_DAYS },
-      { text: this.i18n.weeks, value: RELATIVE_TIME_WEEKS },
-      { text: this.i18n.months, value: RELATIVE_TIME_MONTHS }
+      { title: this.i18n.seconds, value: RELATIVE_TIME_SECONDS },
+      { title: this.i18n.minutes, value: RELATIVE_TIME_MINUTES },
+      { title: this.i18n.hours, value: RELATIVE_TIME_HOURS },
+      { title: this.i18n.days, value: RELATIVE_TIME_DAYS },
+      { title: this.i18n.weeks, value: RELATIVE_TIME_WEEKS },
+      { title: this.i18n.months, value: RELATIVE_TIME_MONTHS }
     ];
     this.autoRefreshIntervals = [
-      { text: this.i18n.interval0s, value: 0 },
-      { text: this.i18n.interval5s, value: 5 },
-      { text: this.i18n.interval10s, value: 10 },
-      { text: this.i18n.interval15s, value: 15 },
-      { text: this.i18n.interval30s, value: 30 },
-      { text: this.i18n.interval1m, value: 60 },
-      { text: this.i18n.interval2m, value: 120 },
-      { text: this.i18n.interval5m, value: 300 },
-      { text: this.i18n.interval10m, value: 600 },
-      { text: this.i18n.interval15m, value: 900 },
-      { text: this.i18n.interval30m, value: 1800 },
-      { text: this.i18n.interval1h, value: 3600 },
-      { text: this.i18n.interval2h, value: 7200 },
-      { text: this.i18n.interval5h, value: 18000 },
-      { text: this.i18n.interval10h, value: 36000 },
-      { text: this.i18n.interval24h, value: 86400 },
+      { title: this.i18n.interval0s, value: 0 },
+      { title: this.i18n.interval5s, value: 5 },
+      { title: this.i18n.interval10s, value: 10 },
+      { title: this.i18n.interval15s, value: 15 },
+      { title: this.i18n.interval30s, value: 30 },
+      { title: this.i18n.interval1m, value: 60 },
+      { title: this.i18n.interval2m, value: 120 },
+      { title: this.i18n.interval5m, value: 300 },
+      { title: this.i18n.interval10m, value: 600 },
+      { title: this.i18n.interval15m, value: 900 },
+      { title: this.i18n.interval30m, value: 1800 },
+      { title: this.i18n.interval1h, value: 3600 },
+      { title: this.i18n.interval2h, value: 7200 },
+      { title: this.i18n.interval5h, value: 18000 },
+      { title: this.i18n.interval10h, value: 36000 },
+      { title: this.i18n.interval24h, value: 86400 },
     ];
-    Vue.filter('colorSeverity', this.colorSeverity);
   },
-  beforeDestroy() {
+  beforeUnmount() {
     this.$root.setSubtitle("");
     this.stopRefreshTimer();
     this.$root.unsubscribe('detections:bulkUpdate', this.bulkUpdateReport);
+    this.$root.unsubscribe('related:bulkCreate', this.bulkUpdateReport);
   },
   mounted() {
     this.$root.startLoading();
@@ -200,6 +212,10 @@ const huntComponent = {
 
     if (this.isCategory('detections')) {
       this.$root.subscribe('detections:bulkUpdate', this.bulkUpdateReport);
+    }
+
+    if (this.isCategory('alerts') || this.isCategory('hunt')) {
+      this.$root.subscribe('related:bulkCreate', this.bulkUpdateReport);
     }
   },
   watch: {
@@ -216,8 +232,10 @@ const huntComponent = {
     'relativeTimeUnit': 'saveLocalSettings',
     'autohunt': 'saveLocalSettings',
     'autoRefreshInterval': 'resetRefreshTimer',
+    'showDetailsPanel': 'saveLocalSettings',
   },
   methods: {
+    moment: moment,
     isAdvanced() {
       return this.advanced;
     },
@@ -256,6 +274,14 @@ const huntComponent = {
       this.chartLabelFieldSeparator = params["chartLabelFieldSeparator"]
       this.presets = params["presets"];
       this.manualSyncTargetEngine = this.getPresets("manualSync")[0];
+      this.maxEscalate = params["maxBulkEscalateEvents"];
+      if (params["detectionEngineStatusQueries"]) {
+        try {
+          this.detectionEngineStatusQueries = jsyaml.load(params["detectionEngineStatusQueries"], { schema: jsyaml.FAILSAFE_SCHEMA })
+        } catch {
+          this.detectionEngineStatusQueries = {};
+        }
+      }
       if (this.queries != null && this.queries.length > 0) {
         this.query = this.queries[0].query;
       }
@@ -265,6 +291,10 @@ const huntComponent = {
       this.loadLocalSettings();
       if (this.mruQueries.length > 0 && this.isAdvanced()) {
         this.query = this.mruQueries[0];
+      }
+
+      if (!this.isCategory('alerts')) {
+        this.showDetailsPanel = false;
       }
 
       if (this.$route.query.t) {
@@ -336,6 +366,10 @@ const huntComponent = {
     },
     hunt(replaceHistory = false) {
       this.huntPending = false;
+      this.selectAllState = false;
+      this.selectAllIndeterminate = false;
+      this.selectedCount = 0;
+
       var route = this;
       var onSuccess = function() {};
       var onFail = function() {
@@ -346,20 +380,24 @@ const huntComponent = {
         this.dateRange = '';
         this.dateRange = this.getStartDate().format(this.i18n.timePickerFormat) + " - " + this.getEndDate().format(this.i18n.timePickerFormat);
       }
-      if (replaceHistory === true) {
-        this.$router.replace(this.buildCurrentRoute(), onSuccess, onFail);
+
+      const targetRoute = this.$router.resolve(this.buildCurrentRoute());
+      const currentRoute = this.$router.resolve(this.$router.currentRoute.value);
+
+      if (currentRoute.fullPath === targetRoute.fullPath) {
+        this.loadData();
       } else {
-        this.$router.push(this.buildCurrentRoute(), onSuccess, onFail);
+        if (replaceHistory === true) {
+          this.$router.replace(targetRoute, onSuccess, onFail);
+        } else {
+          this.$router.push(targetRoute);
+        }
       }
+
       this.resetRefreshTimer();
 
       this.selectAllState = false;
       this.selectedCount = 0;
-
-      if (document.activeElement) {
-        // Release focus to avoid clicking away causing a second hunt
-        document.activeElement.blur();
-      }
     },
     stopRefreshTimer() {
       if (this.autoRefreshTimer) {
@@ -464,7 +502,6 @@ const huntComponent = {
         for (const q in this.$route.query) {
           this.filterToggles.forEach(toggle => {
             if (toggle.name === q) {
-              const orig = toggle.enabled;
               let enabled = this.$route.query[q];
               if (typeof enabled === 'string') {
                 enabled = enabled.toLowerCase() === 'true';
@@ -533,7 +570,6 @@ const huntComponent = {
           this.populateChart(this.bottomChartData, response.data.metrics["bottom"]);
         }
         this.loaded = true;
-        this.expanded = [];
         this.addMRUQuery(this.query);
 
         var subtitle = this.isAdvanced() ? this.query : this.queryName;
@@ -622,7 +658,26 @@ const huntComponent = {
         template: template,
       };
     },
-    async ack(event, item, idx, acknowledge, escalate, caseId, groupIdx) {
+    panelAck(args) {
+      args[1] = !this.isFilterToggleEnabled('acknowledged');
+      this.ack(...args);
+    },
+    async ack(item, acknowledge, escalate, caseId, groupIdx, detectionRelated = false, skipDialog = false) {
+      if (detectionRelated && !skipDialog) {
+        if (escalate) {
+          this.ackManyVerb = this.i18n.escalate.toLowerCase();
+        } else {
+          this.ackManyVerb = acknowledge ? this.i18n.acknowledge : this.i18n.acknowledgeUndo;
+        }
+
+        this.ackManyArgs = [item, acknowledge, escalate, caseId, groupIdx, detectionRelated, true];
+        this.showAckManyDialog = true;
+
+        return;
+      } else {
+        this.closeAckManyDialog();
+      }
+
       this.$root.startLoading();
       try {
         var docEvent = item;
@@ -642,20 +697,46 @@ const huntComponent = {
 
           // Attach the event to the case
           if (caseId && this.escalateRelatedEventsEnabled) {
-            const response = await this.$root.papi.post('case/events', {
+            let payload = {
               fields: item,
               caseId: caseId,
-            });
+              acknowledged: this.isFilterToggleEnabled('acknowledged'),
+              escalated: this.isFilterToggleEnabled('escalated'),
+              dateRange: this.dateRange,
+              dateRangeFormat: this.i18n.timePickerSample,
+              timezone: this.zone,
+            };
+
+            if (detectionRelated) {
+              payload.fields = {
+                'rule.uuid': item["rule.uuid"],
+              };
+            }
+
+            await this.$root.papi.post('case/events', payload);
           }
         }
         if (isAlert) {
-          for (let prop in docEvent) {
-            docEvent[prop] = this.subMissing(docEvent[prop]);
+          let searchFilter;
+          let eventFilter;
+
+          if (!detectionRelated) {
+            for (let prop in docEvent) {
+              docEvent[prop] = this.subMissing(docEvent[prop]);
+            }
+
+            eventFilter = docEvent;
+            searchFilter = await this.getQuery();
+          } else {
+            searchFilter = (acknowledge ? 'NOT ' : '') + 'event.acknowledged:true AND tags:alert';
+            eventFilter = {
+              'rule.uuid': item["rule.uuid"],
+            };
           }
 
           const response = await this.$root.papi.post('events/ack', {
-            searchFilter: await this.getQuery(),
-            eventFilter: docEvent,
+            searchFilter: searchFilter,
+            eventFilter: eventFilter,
             dateRange: this.dateRange,
             dateRangeFormat: this.i18n.timePickerSample,
             timezone: this.zone,
@@ -667,31 +748,44 @@ const huntComponent = {
           }
         }
         if (this.isCategory('alerts')) {
-          if (item["count"] && item["count"] > 1) {
+          if ((item["count"] && item["count"] > 1) || detectionRelated) {
             this.$root.showTip(escalate ? this.i18n.escalatedMultipleTip : (acknowledge ? this.i18n.ackMultipleTip : this.i18n.ackUndoMultipleTip));
           } else {
             this.$root.showTip(escalate ? this.i18n.escalatedSingleTip : (acknowledge ? this.i18n.ackSingleTip : this.i18n.ackUndoSingleTip));
           }
+
           var data;
-          if (item["count"] && groupIdx >= 0) {
+          if (item["count"] && groupIdx >= 0 && this.groupBys?.[groupIdx]?.data) {
             data = this.groupBys[groupIdx].data;
           } else {
             data = this.eventData;
           }
-          this.removeDataItemFromView(data, item);
+
+          this.removeDataItemFromView(data, item, detectionRelated);
         } else if (escalate) {
           this.$root.showTip(this.i18n.escalatedEventTip);
           item['event.escalated'] = true;
+        }
+
+
+        if (this.highlightedAlertInfo) {
+          const inGroup = this.highlightedAlertInfo.groupIndex === -1
+
+          if ((!inGroup && item === this.highlightedAlertInfo.item) ||
+              (inGroup && this.highlightedDetection.publicId === item["rule.uuid"])) {
+            this.highlightedDetection = null;
+            this.highlightedAlertInfo = null;
+          }
         }
       } catch (error) {
         this.$root.showError(error);
       }
       this.$root.stopLoading();
     },
-    removeDataItemFromView(data, item) {
+    removeDataItemFromView(data, item, detectionRelated) {
       for (var j = 0; j < data.length; j++) {
-        if (data[j] == item) {
-          Vue.delete(data, j);
+        if (data[j] == item || (detectionRelated && data[j]["rule.uuid"] === item["rule.uuid"])) {
+          data.splice(j, 1);
           if (item["count"]) {
             this.totalEvents -= item["count"];
           } else {
@@ -700,7 +794,10 @@ const huntComponent = {
           if (this.totalEvents < 0) {
             this.totalEvents = 0;
           }
-          break;
+          if (!detectionRelated) {
+            break;
+          }
+          j--;
         }
       }
     },
@@ -1034,27 +1131,28 @@ const huntComponent = {
         this.$router.push(this.filterRouteDrilldown);
       }
     },
-    toggleEscalationMenu(domEvent, event, groupIdx) {
+    toggleEscalationMenu(domEvent, event, groupIdx, detectionRelated = false) {
       if (!this.escalateRelatedEventsEnabled) {
-        this.ack(domEvent, event, 0, true, true, null, groupIdx);
+        this.ack(event, true, true, null, groupIdx);
         return;
       }
 
       if (!domEvent || this.quickActionVisible || this.escalationMenuVisible) {
         this.quickActionVisible = false;
         this.escalationMenuVisible = false;
+        this.escalatingDetectionEvents = false;
         return;
       }
-      this.escalationMenuX = domEvent.clientX;
-      this.escalationMenuY = domEvent.clientY;
+      this.escalationMenuTarget = domEvent.target;
       this.escalationItem = event;
       this.escalationGroupIdx = groupIdx;
       this.$nextTick(() => {
+        this.escalatingDetectionEvents = detectionRelated;
         this.escalationMenuVisible = true;
       });
     },
-    toggleQuickAction(domEvent, event, field, value) {
-      if (!domEvent || this.quickActionVisible || this.escalationMenuVisible) {
+    async toggleQuickAction(domEvent, event, groupIdx, field, value) {
+      if (!domEvent || this.quickActionVisible || this.escalationMenuVisible || window?.getSelection()?.type === 'Range') {
         this.quickActionVisible = false;
         this.escalationMenuVisible = false;
         return;
@@ -1065,15 +1163,20 @@ const huntComponent = {
         this.quickActionDetId = null;
         this.tuneDetectionTabTarget = null;
 
-        // don't slow down the UI with this call
-        if (id) {
-          this.$root.papi.get(`detection/public/${id}`).then(response => {
-            this.quickActionDetId = response.data.id;
-            this.tuneDetectionTabTarget = 'tuning';
-            if (response.data.engine === 'strelka') {
-              this.tuneDetectionTabTarget = 'source';
-            }
-          });
+        const getData = (response) => {
+          const det = response?.data || this.highlightedDetection;
+
+          this.quickActionDetId = det.id;
+          this.tuneDetectionTabTarget = 'tuning';
+          if (det.engine === 'strelka') {
+            this.tuneDetectionTabTarget = 'source';
+          }
+        };
+
+        if (id && !this.highlightedDetection) {
+          this.highlightDetection(id, event, groupIdx).then(getData);
+        } else {
+          this.$root.papi.get(`detection/public/${id}`).then(getData);
         }
       }
 
@@ -1132,14 +1235,26 @@ const huntComponent = {
         this.quickActionEvent = event;
         this.quickActionField = field;
         this.quickActionValue = value;
-        this.quickActionX = domEvent.native && domEvent.native.clientX ? domEvent.native.clientX : domEvent.clientX;
-        this.quickActionY = domEvent.native && domEvent.native.clientY ? domEvent.native.clientY : domEvent.clientY;
-        this.$nextTick(() => {
+        this.quickActionTarget = [domEvent.clientX, domEvent.clientY];
+        this.$nextTick(async () => {
           this.quickActionVisible = true;
+
+          // displaying the menu is resetting the "open" array, so we need to un-reset it
+          const openCache = this.quickActionsOpen;
+          await this.$nextTick();
+          this.quickActionsOpen = openCache;
         });
       }
     },
     filterVisibleFields(eventModule, eventDataset, fields) {
+      let relatedFields = '';
+      for (const field of fields) {
+        const match = field.match(/so_[^.]*\.fields./);
+        if (match) {
+          relatedFields = match[0];
+          break;
+        }
+      }
       if (this.eventFields) {
         var filteredFields = null;
         if (eventDataset) {
@@ -1161,6 +1276,9 @@ const huntComponent = {
         }
         if (filteredFields && filteredFields.length > 0) {
           fields = filteredFields;
+          if (relatedFields) {
+            fields = fields.map(f => relatedFields + f);
+          }
         }
       }
       return fields;
@@ -1173,12 +1291,13 @@ const huntComponent = {
     },
     constructHeaders(fields) {
       var headers = [];
+
       if (fields && fields.length > 0) {
         var i18n = this.i18n;
-        fields.forEach(function(item, index) {
+        fields.forEach((item) => {
           var i18nKey = "field_" + item;
           var header = {
-            text: i18n[i18nKey] ? i18n[i18nKey] : item,
+            title: i18n[i18nKey] ? i18n[i18nKey] : item,
             value: item,
           };
           headers.push(header);
@@ -1284,11 +1403,9 @@ const huntComponent = {
           group.chart_metrics = this.constructChartMetrics(metrics[key]);
 
           // Preserve group-by sort settings only for first group. Useful for non-advanced views.
-          group.sortBy = 'count';
-          group.sortDesc = true;
+          group.sortBy = [{ key: 'count', order: 'desc' }];
           if (this.groupBys.length == 0 && this.groupBySortBy) {
-            group.sortBy = this.groupBySortBy;
-            group.sortDesc = this.groupBySortDesc;
+            group.sortBy = [{key: this.groupBySortBy, order: this.groupBySortDesc ? 'desc' : 'asc'}];
           }
 
           this.groupBys.push(group);
@@ -1312,14 +1429,91 @@ const huntComponent = {
             });
           }
         }
+
         return true;
       }
       return false;
     },
+    debounceChartResize(chart, size) {
+      const MAX_RESIZE_METRIC_COUNT = 20;
+      const MAX_RESIZE_METRIC_AGE = 1000; // milliseconds
+      const MAX_RESIZE_METRIC_FLAPS = 1;
+
+      if (!chart.options.responsive) return;
+
+      const now = Date.now();
+
+      // Get this chart's resize metric history, or create a new history
+      var data = this.chartResizeTracker[chart];
+      if (!data) {
+        data = [];
+        this.chartResizeTracker[chart] = data;
+      }
+
+      // Determine how many metrics are expired
+      var pruneCount = 0;
+      for (var idx = 0; idx < data.length; idx++) {
+        var metric = data[idx];
+        if (metric.time < now - MAX_RESIZE_METRIC_AGE) {
+          pruneCount = idx + 1;
+        } else {
+          break
+        }
+      }
+
+      // Remove expired metrics
+      for (var idx = 0; idx < pruneCount; idx++) {
+        data.shift();
+      }
+
+      var newResizeMetric = {
+        size: size,
+        time: now,
+      }
+
+      data.push(newResizeMetric);
+
+      // Limit the number of metrics in history
+      if (data.length > MAX_RESIZE_METRIC_COUNT) {
+        data.shift();
+      }
+
+      // Review the metric history and determine if the chart size is flapping
+      var flapCount = 0;
+      var prevDirection = 0;
+      for (var idx = 0; idx < data.length; idx++) {
+        var prev = data[idx];
+        if (idx < data.length - 1) {
+          var next = data[idx + 1];
+          var nextDirection = 0;
+          if (next.size.width > prev.size.width) {
+            nextDirection = 1;
+          } else if (next.size.width < prev.size.width) {
+            nextDirection = -1;
+          }
+
+          if (prevDirection != 0 && nextDirection != 0) {
+            if (nextDirection != prevDirection) {
+              flapCount++;
+            }
+          }
+          if (nextDirection != 0) {
+            prevDirection = nextDirection;
+          }
+        }
+      }
+      if (flapCount > MAX_RESIZE_METRIC_FLAPS) {
+        chart.options.responsive = false;
+        // for (var idx = 0; idx < data.length; idx++) {
+        //   console.log(idx + " -> " + data[idx].size.width)
+        // }
+        // console.log("Excessive chart flapping detected; disabled chart resizing")
+      }
+    },
     updateGroupBySort() {
       if (this.groupBys.length > 0) {
-        this.groupBySortBy = this.groupBys[0].sortBy;
-        this.groupBySortDesc = this.groupBys[0].sortDesc;
+        this.groupBySortBy = this.groupBys[0].sortBy[0].key;
+        this.groupBySortDesc = this.groupBys[0].sortBy[0].order === 'desc';
       }
     },
     populateEventTable(events) {
@@ -1332,7 +1526,7 @@ const huntComponent = {
         let batch = [];
 
         const multiSelect = this.isMultiSelect();
-        events.forEach(function(event, index) {
+        events.forEach((event, index) => {
           var record = event.payload;
           record.soc_id = event.id;
           record.soc_score = event.score;
@@ -1351,16 +1545,15 @@ const huntComponent = {
             batch.push(record[key]);
           }
 
-          var currentModule = record["event.module"];
-          var currentDataset = record["event.dataset"];
-          if (eventModule == null && currentModule) {
-            eventModule = currentModule.toLowerCase();
-            if (currentDataset) {
-              eventDataset = currentDataset.toLowerCase();
+          if (!eventModule) {
+            var currentModule = this.lookupFieldValue(record, "event.module");
+            var currentDataset = this.lookupFieldValue(record, "event.dataset");
+            if (eventModule == null && currentModule) {
+              eventModule = currentModule.toLowerCase();
+              if (currentDataset) {
+                eventDataset = currentDataset.toLowerCase();
+              }
             }
-          } else if (eventModule != currentModule || eventDataset != currentDataset) {
-            // A variety of events returned in this query, can't show event-specific fields
-            inconsistentEvents = true;
           }
         });
 
@@ -1370,15 +1563,43 @@ const huntComponent = {
           fields.push(key);
         }
       }
+
       this.populateEventHeaders(this.filterVisibleFields(eventModule, eventDataset, fields));
       this.eventData = records;
+    },
+    lookupFieldValue(record, field) {
+      if (field in record) {
+        return record[field];
+      }
+
+      for (const key in record) {
+        if (key.endsWith(".fields." + field)) {
+          return record[key];
+        }
+      }
+
+      return '';
     },
     populateEventHeaders(defaultFields) {
       var fields = defaultFields;
       if (this.queryTableFields.length > 0) {
         fields = this.queryTableFields;
       }
-      this.eventHeaders = this.constructHeaders(fields);
+
+      let headers = this.constructHeaders(fields);
+
+      if (this.isCategory('detections')) {
+        const enabledCol = headers.findIndex(h => h.value === 'so_detection.isEnabled');
+        const overrideHeader = { title: this.i18n.overrides, value: 'override_count' };
+
+        if (enabledCol > -1) {
+          headers = [...headers.slice(0, enabledCol+1), overrideHeader, ...headers.slice(enabledCol+1)];
+        } else {
+          headers.push(overrideHeader);
+        }
+      }
+
+      this.eventHeaders = headers;
     },
     repopulateEventHeaders() {
       this.populateEventHeaders();
@@ -1474,7 +1695,7 @@ const huntComponent = {
     },
     displayTable(group, groupIdx) {
       group.chart_type = "";
-      Vue.set(this.groupBys, groupIdx, group);
+      this.groupBys[groupIdx] = group;
     },
     displayPieChart(group, groupIdx) {
       group.chart_type = "pie";
@@ -1483,7 +1704,7 @@ const huntComponent = {
       this.setupPieChart(group.chart_options, group.chart_data, group.title);
       this.applyLegendOption(group, groupIdx);
       this.populateChart(group.chart_data, group.chart_metrics);
-      Vue.set(this.groupBys, groupIdx, group);
+      this.groupBys[groupIdx] = group;
     },
     displayBarChart(group, groupIdx) {
       group.chart_type = "bar";
@@ -1492,7 +1713,7 @@ const huntComponent = {
       this.setupBarChart(group.chart_options, group.chart_data, group.title, groupIdx);
       this.applyLegendOption(group, groupIdx);
       this.populateChart(group.chart_data, group.chart_metrics);
-      Vue.set(this.groupBys, groupIdx, group);
+      this.groupBys[groupIdx] = group;
     },
     displaySankeyChart(group, groupIdx) {
       if (!this.isGroupSankeyCapable(group)) {
@@ -1559,7 +1780,7 @@ const huntComponent = {
 
       group.chart_data.datasets[0].data = data;
       group.chart_data.flowMax = flowMax;
-      Vue.set(this.groupBys, groupIdx, group);
+      this.groupBys[groupIdx] = group;
     },
     isGroupSankeyCapable(group, groupIdx) {
       return group.fields != undefined && group.fields.length >= 2;
@@ -1573,6 +1794,7 @@ const huntComponent = {
       }
     },
     populateChart(chart, data) {
+      chart.key++;
       chart.labels = [];
       chart.datasets[0].data = [];
       if (!data) return;
@@ -1581,38 +1803,21 @@ const huntComponent = {
         chart.labels.push(route.$root.truncate(route.localizeValue(route.lookupSocId(item.keys[0])), route.chartLabelMaxLength));
         chart.datasets[0].data.push(item.value);
       });
-      if (chart.obj) {
-        setTimeout(function() { chart.obj.renderChart(chart.obj.chartdata, chart.obj.options); }, 100);
-      }
-    },
-    expand(item) {
-      if (this.isExpanded(item)) {
-        this.expanded = [];
-      } else {
-        this.expanded = [item];
-      }
-    },
-    isExpanded(item) {
-      return (this.expanded.length > 0 && this.expanded[0] == item);
     },
     isMultiSelect() {
       return this.isCategory('detections');
     },
-    getExpandedData() {
-      var records = []
-      if (this.expanded.length > 0) {
-        var data = this.expanded[0];
-        for (key in data) {
-          if (key === '_isSelected') {
-            // Should we exclude all fields beginning with an underscore?
-            continue;
-          }
-
-          var record = {};
-          record.key = key;
-          record.value = data[key];
-          records.push(record);
+    getExpandedData(data) {
+      var records = [];
+      for (key in data) {
+        if (key === '_isSelected') {
+          continue;
         }
+
+        records.push({
+          key: key,
+          value: data[key],
+        });
       }
       return records;
     },
@@ -1709,12 +1914,17 @@ const huntComponent = {
       this.setupBarChart(this.topChartOptions, this.topChartData, this.i18n.chartTitleTop);
       this.setupTimelineChart(this.timelineChartOptions, this.timelineChartData, this.i18n.chartTitleTimeline);
       this.setupBarChart(this.bottomChartOptions, this.bottomChartData, this.i18n.chartTitleBottom);
+
+      this.topChartData.key = 0;
+      this.timelineChartData.key = 0;
+      this.bottomChartData.key = 0;
     },
     setupBarChart(options, data, title, groupIdx) {
       var fontColor = this.$root.getColor("#888888", -40);
       var dataColor = this.$root.getColor("primary");
       var gridColor = this.$root.getColor("#888888", 65);
       options.onClick = this.handleChartClick(groupIdx);
+      options.onResize = this.debounceChartResize;
       options.responsive = true;
       options.maintainAspectRatio = false;
       options.plugins = {
@@ -1763,6 +1973,7 @@ const huntComponent = {
       options.scales.x.type = 'timeseries';
     },
     setupPieChart(options, data, title) {
+      options.onResize = this.debounceChartResize;
       options.responsive = true;
       options.maintainAspectRatio = false;
       options.plugins = {
@@ -1797,6 +2008,7 @@ const huntComponent = {
     },
     setupSankeyChart(options, data, title) {
       const route = this;
+      options.onResize = this.debounceChartResize;
       options.responsive = true;
       options.maintainAspectRatio = false;
       options.plugins = {
@@ -1813,9 +2025,10 @@ const huntComponent = {
       data.datasets = [{
         data: [],
         label: this.i18n.field_count,
-        color: this.$root.$vuetify && this.$root.$vuetify.theme.dark ? 'white' : 'black',
+        color: this.$root.$vuetify && this.$root.$vuetify.theme.current.dark ? 'white' : 'black',
         colorFrom: c => route.getSankeyColor('from', 'out', c, data.flowMax),
         colorTo: c => route.getSankeyColor('to', 'in', c, data.flowMax),
+        size: 'max',
       }];
     },
     getSankeyColor(tag, dir, source, max) {
@@ -1868,7 +2081,7 @@ const huntComponent = {
           if (clickedValue && clickedValue.length > 0) {
             if (this.canQuery(clickedValue)) {
               var chartGroupByField = this.groupBys[groupIdx].fields[0];
-              this.toggleQuickAction(e, {}, chartGroupByField, clickedValue);
+              this.toggleQuickAction(e, {}, groupIdx, chartGroupByField, clickedValue);
             }
           }
           return true;
@@ -1899,13 +2112,6 @@ const huntComponent = {
         this.eventLimit = this.itemsPerPage;
       }
       this.saveLocalSettings();
-    },
-    colorSeverity(value) {
-      if (value == "low_false") return "yellow";
-      if (value == "medium_false") return "amber darken-1";
-      if (value == "high_false") return "red darken-1";
-      if (value == "critical_false") return "red darken-4";
-      return "secondary";
     },
     lookupAlertSeverityScore(sev) {
       if (sev.toLowerCase) {
@@ -1965,14 +2171,15 @@ const huntComponent = {
       this.saveSetting('groupBySortDesc', this.groupBySortDesc, true);
       this.saveSetting('groupByItemsPerPage', this.groupByItemsPerPage, this.params['groupItemsPerPage']);
       this.saveSetting('groupByLimit', this.groupByLimit, this.params['groupFetchLimit']);
-      this.saveSetting('sortBy', this.sortBy, 'timestamp');
-      this.saveSetting('sortDesc', this.sortDesc, true);
+      this.saveSetting('sortBy', this.sortBy[0].key, 'timestamp');
+      this.saveSetting('sortDesc', this.sortBy[0].order, 'desc');
       this.saveSetting('itemsPerPage', this.itemsPerPage, this.params['eventItemsPerPage']);
       this.saveSetting('eventLimit', this.eventLimit, this.params['eventFetchLimit']);
       this.saveSetting('mruQueries', JSON.stringify(this.mruQueries), '[]');
       this.saveSetting('relativeTimeValue', this.relativeTimeValue, this.params['relativeTimeValue']);
       this.saveSetting('relativeTimeUnit', this.relativeTimeUnit, this.params['relativeTimeUnit']);
       this.saveSetting('autohunt', this.autohunt, true);
+      this.saveSetting('showDetailsPanel', this.showDetailsPanel, this.isCategory('alerts'));
     },
     loadLocalSettings() {
       // Global settings
@@ -1984,14 +2191,15 @@ const huntComponent = {
       if (localStorage[prefix + '.groupBySortDesc']) this.groupBySortDesc = localStorage[prefix + '.groupBySortDesc'] == "true";
       if (localStorage[prefix + '.groupByItemsPerPage']) this.groupByItemsPerPage = parseInt(localStorage[prefix + '.groupByItemsPerPage']);
       if (localStorage[prefix + '.groupByLimit']) this.groupByLimit = parseInt(localStorage[prefix + '.groupByLimit']);
-      if (localStorage[prefix + '.sortBy']) this.sortBy = localStorage[prefix + '.sortBy'];
-      if (localStorage[prefix + '.sortDesc']) this.sortDesc = localStorage[prefix + '.sortDesc'] == "true";
+      if (localStorage[prefix + '.sortBy']) this.sortBy[0].key = localStorage[prefix + '.sortBy'];
+      if (localStorage[prefix + '.sortDesc']) this.sortBy[0].order = localStorage[prefix + '.sortDesc'];
       if (localStorage[prefix + '.itemsPerPage']) this.itemsPerPage = parseInt(localStorage[prefix + '.itemsPerPage']);
       if (localStorage[prefix + '.eventLimit']) this.eventLimit = parseInt(localStorage[prefix + '.eventLimit']);
       if (localStorage[prefix + '.mruQueries']) this.mruQueries = JSON.parse(localStorage[prefix + '.mruQueries']);
       if (localStorage[prefix + '.relativeTimeValue']) this.relativeTimeValue = parseInt(localStorage[prefix + '.relativeTimeValue']);
       if (localStorage[prefix + '.relativeTimeUnit']) this.relativeTimeUnit = parseInt(localStorage[prefix + '.relativeTimeUnit']);
       if (localStorage[prefix + '.autohunt']) this.autohunt = localStorage[prefix + '.autohunt'] == 'true';
+      if (localStorage[prefix + '.showDetailsPanel']) this.showDetailsPanel = localStorage[prefix + '.showDetailsPanel'] == 'true';
 
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
@@ -2017,7 +2225,7 @@ const huntComponent = {
 
       this.relativeTimeUnits.forEach((unit) => {
         if (unit.value == this.relativeTimeUnit) {
-          text = unit.text;
+          text = unit.title;
           return false;
         }
       });
@@ -2028,7 +2236,7 @@ const huntComponent = {
       let value = 30;
 
       this.relativeTimeUnits.forEach((unit) => {
-        if (unit.text.toLowerCase() == m.toLowerCase()) {
+        if (unit.title.toLowerCase() == m.toLowerCase()) {
           value = unit.value;
           return false;
         }
@@ -2084,12 +2292,19 @@ const huntComponent = {
       this.$router.push(this.buildFilterRoute(this.quickActionField, range, FILTER_INCLUDE, true));
     },
     performAction($event, action) {
+      let shouldNavigate = true;
+
       if (action && action.jsCall && this[action.jsCall]) {
+        // no need to navigate, made JS call instead
         this[action.jsCall](action);
-        return true;
+        shouldNavigate = false;
       }
 
-      return false;
+      this.$root.performAction($event, action);
+
+      this.quickActionVisible = false;
+
+      return shouldNavigate;
     },
     async openAddToCaseDialog() {
       // this function is meant to be called by performAction($event, action)
@@ -2101,7 +2316,7 @@ const huntComponent = {
 
       this.mruCases = [
         {
-          text: this.i18n.createNewCase,
+          title: this.i18n.createNewCase,
           value: 'New Case',
         }
       ];
@@ -2112,7 +2327,7 @@ const huntComponent = {
         const cases = JSON.parse(rawMRU);
         for (let i = 0; i < cases.length; i++) {
           this.mruCases.push({
-            text: cases[i].title,
+            title: cases[i].title,
             value: cases[i],
           });
         }
@@ -2157,30 +2372,34 @@ const huntComponent = {
       switch (this.selectedCount) {
         case 0:
           this.selectAllState = false;
+          this.selectAllIndeterminate = false;
           break;
         case this.totalEvents:
           this.selectAllState = true;
+          this.selectAllIndeterminate = false;
           break;
         default:
-          this.selectAllState = 'indeterminate';
+          this.selectAllState = false;
+          this.selectAllIndeterminate = true;
           break;
       }
     },
     toggleSelectAll() {
-      switch (this.selectAllState) {
-        case 'indeterminate':
+      if (this.selectAllIndeterminate) {
+        this.selectAllState = false;
+        this.selectAllIndeterminate = false;
+        this.selectAllEvents(false);
+        this.selectedCount = 0;
+      } else {
+        if (this.selectAllState) {
           this.selectAllState = false;
+          this.selectAllIndeterminate = false;
           this.selectAllEvents(false);
-          this.selectedCount = 0;
-          break;
-        case false:
-          this.selectAllState = 'indeterminate';
+        } else {
+          this.selectAllState = false;
+          this.selectAllIndeterminate = true;
           this.selectCurrentPage(true);
-          break;
-        case true:
-          this.selectAllState = false;
-          this.selectAllEvents(false);
-          break;
+        }
       }
     },
     selectAllEvents(selection = true, ALL = false) {
@@ -2199,10 +2418,11 @@ const huntComponent = {
 
       if (ALL && selection) {
         this.selectAllState = true;
+        this.selectAllIndeterminate = false;
       }
     },
     selectCurrentPage(selection = true) {
-      this.$refs.eventTable._data.internalCurrentItems.forEach((item) => {
+      this.eventCurrentItems.forEach((item) => {
         if (item._isSelected !== selection) {
           item._isSelected = selection;
           if (selection) {
@@ -2216,7 +2436,7 @@ const huntComponent = {
       this.selectedCount = Math.max(Math.min(this.selectedCount, this.totalEvents), 0);
     },
     isPageSelected() {
-      return this.$refs.eventTable._data.internalCurrentItems.every((item) => item._isSelected);
+      return this.eventCurrentItems.every((item) => item._isSelected);
     },
     countSelected() {
       let count = 0;
@@ -2240,20 +2460,19 @@ const huntComponent = {
 
       this.$root.startLoading();
 
-      switch (this.selectAllState) {
-        case true:
-          payload.query = this.query;
-          break;
-        case 'indeterminate':
-          let ids = [];
-          for (let i = 0; i < this.eventData.length; i++) {
-            if (this.eventData[i]._isSelected) {
-              ids.push(this.eventData[i].soc_id);
-            }
+      if (this.selectAllState) {
+        payload.query = this.query;
+      } else if (this.selectAllIndeterminate) {
+        let ids = [];
+        for (let i = 0; i < this.eventData.length; i++) {
+          if (this.eventData[i]._isSelected) {
+            ids.push(this.eventData[i].soc_id);
           }
+        }
 
-          payload.ids = ids;
-          break;
+        payload.ids = ids;
+      } else {
+        return;
       }
 
       try {
@@ -2316,7 +2535,17 @@ const huntComponent = {
 
           this.$root.showWarning(msg, true);
         } else {
-          let msg = stats.verb === 'delete' ? this.i18n.bulkSuccessDelete : this.i18n.bulkSuccessUpdate;
+          let msg;
+          switch (stats.verb) {
+            case 'delete':
+              msg = this.i18n.bulkSuccessDelete;
+              break;
+            case 'update':
+              msg = this.i18n.bulkSuccessUpdate;
+              break;
+            case 'create':
+              msg = this.i18n.bulkSuccessCreate;
+          }
 
           msg = msg.replaceAll('{modified}', stats.modified.toLocaleString());
           msg = msg.replaceAll('{total}', stats.total.toLocaleString());
@@ -2343,6 +2572,63 @@ const huntComponent = {
         this.$root.showTip(msg);
       } catch (e) {
         this.$root.showError(e);
+      }
+    },
+    buildDetectionEngineHuntQuery(engine) {
+      const status = this.$root.getDetectionEngineStatus(engine);
+
+      let query = `tags:so-soc AND ` + engine + ` | groupby log.level | groupby event.action | groupby soc.fields.error`;
+
+      if (this.detectionEngineStatusQueries?.[engine]?.default) {
+        query = this.detectionEngineStatusQueries[engine].default;
+      }
+
+      if (this.detectionEngineStatusQueries?.[engine]?.[status]) {
+        query = this.detectionEngineStatusQueries[engine][status];
+      }
+
+      return query;
+    },
+    huntQueryWidth() {
+      return this.$refs.huntQueryInput?.$el?.clientWidth || 0;
+    },
+    async highlightDetection(publicId, event, groupIdx) {
+      if (this.highlightedAlertInfo?.item === event) {
+        return;
+      }
+
+      if (this.highlightedDetection?.publicId !== publicId) {
+        this.highlightedDetection = null;
+
+        const response = await this.$root.papi.get(`detection/public/${publicId}`);
+
+        this.highlightedDetection = response.data;
+      }
+
+      this.highlightedAlertInfo = {
+        item: event,
+        groupIndex: typeof groupIdx === 'number' ? groupIdx : -1,
+      };
+    },
+    closeAckManyDialog() {
+      this.showAckManyDialog = false;
+      this.ackManyArgs = [];
+    },
+    async saveMenuScrollPos(isOpen, target) {
+      if (isOpen) {
+        // target doesn't exist yet, wait for it to be added to DOM
+        await this.$nextTick();
+      }
+
+      const scrollContainer = document.querySelector(target);
+      if (!scrollContainer) return;
+
+      if (isOpen) {
+        // opening
+        scrollContainer.scrollTop = this.menuScrollPos;
+      } else {
+        // closing
+        this.menuScrollPos = scrollContainer.scrollTop;
       }
     },
   }

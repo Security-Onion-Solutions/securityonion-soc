@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -99,4 +99,22 @@ test('hasRole', () => {
   expect(comp.hasRole({roles: []}, 'test')).toBe(false);
   expect(comp.hasRole({roles: ['foo']}, 'test')).toBe(false);
   expect(comp.hasRole({roles: ['foo','test']}, 'test')).toBe(true);
+});
+
+test('onlyExpandOneRow', () => {
+  comp.expanded = [];
+  comp.onlyExpandOneRow();
+  expect(comp.expanded).toEqual([]);
+
+  comp.expanded = ['1'];
+  comp.onlyExpandOneRow();
+  expect(comp.expanded).toEqual(['1']);
+
+  comp.expanded = ['1', '2'];
+  comp.onlyExpandOneRow();
+  expect(comp.expanded).toEqual(['2']);
+
+  comp.expanded = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
+  comp.onlyExpandOneRow();
+  expect(comp.expanded).toEqual(['10']);
 });

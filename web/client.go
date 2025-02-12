@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -24,12 +24,12 @@ type ClientAuth interface {
 }
 
 type Client struct {
-	Auth         ClientAuth
-	hostUrl      string
-	impl         *http.Client
-	mock         bool
-	mockResponse *http.Response
-	mockError    error
+	Auth          ClientAuth
+	hostUrl       string
+	impl          *http.Client
+	mock          bool
+	mockResponses []*http.Response
+	mockErrors    []error
 }
 
 func NewClient(url string, verifyCert bool) *Client {
@@ -55,8 +55,8 @@ func (client *Client) MockStringResponse(body string, statusCode int, mockError 
 
 func (client *Client) MockResponse(mockResponse *http.Response, mockError error) {
 	client.mock = true
-	client.mockResponse = mockResponse
-	client.mockError = mockError
+	client.mockResponses = append(client.mockResponses, mockResponse)
+	client.mockErrors = append(client.mockErrors, mockError)
 }
 
 func (client *Client) SendAuthorizedObject(method string, path string, obj interface{}, returnedObj interface{}) (bool, error) {
@@ -119,8 +119,10 @@ func (client *Client) SendRequest(method string, path string, contentType string
 
 			if err == nil {
 				if client.mock {
-					resp = client.mockResponse
-					err = client.mockError
+					resp = client.mockResponses[0]
+					client.mockResponses = client.mockResponses[1:]
+					err = client.mockErrors[0]
+					client.mockErrors = client.mockErrors[1:]
 				} else {
 					resp, err = client.impl.Do(req)
 				}

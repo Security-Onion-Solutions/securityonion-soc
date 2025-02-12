@@ -1,10 +1,10 @@
 # Copyright 2019 Jason Ertel (github.com/jertel).
-# Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+# Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 # or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 # https://securityonion.net/license; you may not use this file except in compliance with the
 # Elastic License 2.0.
 
-FROM ghcr.io/security-onion-solutions/golang:1.22.6-alpine as builder
+FROM ghcr.io/security-onion-solutions/golang:1.23.3-alpine as builder
 ARG VERSION=0.0.0
 ARG ALT_BRANCH=dev
 RUN apk update && apk add libpcap-dev bash git musl-dev gcc npm python3 py3-pip py3-virtualenv python3-dev openssl-dev linux-headers
@@ -18,13 +18,19 @@ RUN if [ "$VERSION" != "0.0.0" ]; then mkdir gitdocs && cd gitdocs && \
 	python3 -mvirtualenv /tmp/virtualenv && \
 	/tmp/virtualenv/bin/python -m pip install --exists-action=w --no-cache-dir -r requirements.txt && \
 	for i in /tmp/virtualenv/lib/python*/site-packages/sphinx_rtd_theme/versions.html; do echo > $i; done && \
+	mkdir -p specs && \
+	cd .. && \
+	go install github.com/swaggo/swag/v2/cmd/swag@latest && \
+	swag init -g server/server.go --md docs/api --v3.1 -ot yaml -o gitdocs/specs && \
+	cd gitdocs && \
+	mv specs/swagger.yaml specs/openapi.yaml && \
 	/tmp/virtualenv/bin/python -m sphinx -T -E -b html -d _build/doctrees -D language=en . _build/html; \
 	else mkdir -p gitdocs/_build/html; fi
 RUN npm install jest jest-environment-jsdom --global
 RUN ./build.sh "$VERSION"
 
 
-FROM ghcr.io/security-onion-solutions/python:3.12.5-slim
+FROM ghcr.io/security-onion-solutions/python:3.13.0-slim
 
 ARG UID=939
 ARG GID=939

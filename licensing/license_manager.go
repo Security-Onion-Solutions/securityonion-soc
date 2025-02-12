@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -21,6 +21,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
+	"fmt"
 	"io"
 	"math/rand"
 	"os"
@@ -39,6 +40,7 @@ const LICENSE_STATUS_INVALID = "invalid"
 const LICENSE_STATUS_PENDING = "pending"
 const LICENSE_STATUS_UNPROVISIONED = "unprovisioned"
 
+const FEAT_API = "api"
 const FEAT_FPS = "fps"
 const FEAT_GMD = "gmd"
 const FEAT_LKS = "lks"
@@ -78,16 +80,26 @@ type licenseManager struct {
 }
 
 type LicenseKey struct {
-	Effective  time.Time `json:"effective"`
-	Expiration time.Time `json:"expiration"`
-	Name       string    `json:"name"`
-	Id         string    `json:"id"`
-	Licensee   string    `json:"licensee"`
-	Features   []string  `json:"features"`
-	Users      int       `json:"users"`
-	Nodes      int       `json:"nodes"`
-	SocUrl     string    `json:"socUrl"`
-	DataUrl    string    `json:"dataUrl"`
+	// The date and time when this license key becomes effective
+	Effective time.Time `json:"effective" example:"2024-08-22T00:00:00Z"`
+	// The date and time when this license key expires
+	Expiration time.Time `json:"expiration" example:"2025-08-22T23:59:59Z"`
+	// The name of the license key.
+	Name string `json:"name" example:"Security Onion Pro"`
+	// The unique ID for this license key
+	Id string `json:"id" example:"acme_corp_20240822"`
+	// The name of the organization to which this license key was issued
+	Licensee string `json:"licensee" example:"Acme Corp"`
+	// The features included with this license key
+	Features []string `json:"features" example:"NTF"`
+	// The count of users supported by this license key; 0 = unlimited
+	Users int `json:"users" example:"0"`
+	// The count of critical grid nodes supported by this license key; 0 = unlimited
+	Nodes int `json:"nodes" example:"5"`
+	// The base URL required to be used by this license key
+	SocUrl string `json:"socUrl" example:"acme-so-manager"`
+	// The backend data event storage hostname required to be used by this license key
+	DataUrl string `json:"dataUrl" example:""`
 }
 
 type SignedLicenseKey struct {
@@ -161,12 +173,15 @@ func verify(key string) (*LicenseKey, error) {
 		return nil, parseErr
 	}
 
+	fmt.Printf("bytes: %x\n", msgBytes)
+
 	hash := sha256.Sum256(msgBytes)
 	return license, rsa.VerifyPKCS1v15(pubKey, crypto.SHA256, hash[:], sigBytes)
 }
 
 func CreateAvailableFeatureList() []string {
-	available := make([]string, 0, 0)
+	available := make([]string, 0)
+	available = append(available, FEAT_API)
 	available = append(available, FEAT_FPS)
 	available = append(available, FEAT_GMD)
 	available = append(available, FEAT_LKS)

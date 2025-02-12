@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -133,73 +133,98 @@ test('saveTimezone', () => {
 
 test('removeFilter', () => {
   comp.query = "abc def | groupby foo bar*";
-  comp.removeFilter('def')
+  comp.$router.resolve = jest.fn();
+  let toggle = false;
+  comp.$router.resolve.mockImplementation(() => {
+    toggle = !toggle;
+    return { fullPath: toggle ? 'A' : 'B' };
+  });
+
+  comp.removeFilter('def');
   expect(comp.query).toBe("abc  | groupby foo bar*");
 
-  comp.removeFilter('abc')
+  comp.removeFilter('abc');
   expect(comp.query).toBe("* | groupby foo bar*");
 
   // no-op
-  comp.removeFilter('*')
+  comp.removeFilter('*');
   expect(comp.query).toBe("* | groupby foo bar*");
 });
 
 test('removeGroupBy', () => {
   comp.query = "abc | groupby foo bar*";
-  comp.queryGroupBys = [['foo','bar*']];
-  comp.removeGroupBy(0, 0)
+  comp.queryGroupBys = [['foo', 'bar*']];
+  comp.$router.resolve = jest.fn();
+  let toggle = false;
+  comp.$router.resolve.mockImplementation(() => {
+    toggle = !toggle;
+    return { fullPath: toggle ? 'A' : 'B' };
+  });
+
+  comp.removeGroupBy(0, 0);
   expect(comp.query).toBe("abc | groupby bar*");
 
   comp.query = "abc | groupby foo bar*";
-  comp.queryGroupBys = [['foo','bar*']];
-  comp.removeGroupBy(0, 1)
+  comp.queryGroupBys = [['foo', 'bar*']];
+  comp.removeGroupBy(0, 1);
   expect(comp.query).toBe("abc | groupby foo");
 
   comp.query = "abc | groupby bar*";
   comp.queryGroupBys = [['bar*']];
-  comp.removeGroupBy(0, 0)
+  comp.removeGroupBy(0, 0);
   expect(comp.query).toBe("abc");
 
   // no-op
   comp.query = "abc";
   comp.queryGroupBys = [];
-  comp.removeGroupBy(0, 0)
+  comp.removeGroupBy(0, 0);
   expect(comp.query).toBe("abc");
 
   comp.query = "abc | groupby foo bar* | groupby a b";
-  comp.queryGroupBys = [['foo','bar*'],['a','b']];
-  comp.removeGroupBy(1, 1)
+  comp.queryGroupBys = [['foo', 'bar*'], ['a', 'b']];
+  comp.removeGroupBy(1, 1);
   expect(comp.query).toBe("abc | groupby foo bar* | groupby a");
 
   // Remove entire group
   comp.query = "abc | groupby foo bar* | groupby a b";
   comp.queryGroupBys = [['foo','bar*'],['a','b']];
-  comp.removeGroupBy(1, -1)
+  comp.removeGroupBy(1, -1);
   expect(comp.query).toBe("abc | groupby foo bar*");
+
+  expect(comp.$router.resolve).toHaveBeenCalledTimes(10);
 });
 
 test('removeSortBy', () => {
   comp.query = "abc | sortby foo bar^";
-  comp.removeSortBy('foo')
+  comp.$router.resolve = jest.fn();
+  let toggle = false;
+  comp.$router.resolve.mockImplementation(() => {
+    toggle = !toggle;
+    return { fullPath: toggle ? 'A' : 'B' };
+  });
+
+  comp.removeSortBy('foo');
   expect(comp.query).toBe("abc | sortby bar^");
 
-  comp.removeSortBy('bar^')
+  comp.removeSortBy('bar^');
   expect(comp.query).toBe("abc");
 
   // no-op
-  comp.removeSortBy('bar^')
+  comp.removeSortBy('bar^');
   expect(comp.query).toBe("abc");
 
   comp.query = "abc | sortby foo bar^ | groupby xyz";
-  comp.removeSortBy('foo')
+  comp.removeSortBy('foo');
   expect(comp.query).toBe("abc | sortby bar^ | groupby xyz");
 
-  comp.removeSortBy('bar^')
+  comp.removeSortBy('bar^');
   expect(comp.query).toBe("abc | groupby xyz");
 
   // no-op
-  comp.removeSortBy('bar^')
+  comp.removeSortBy('bar^');
   expect(comp.query).toBe("abc | groupby xyz");
+
+  expect(comp.$router.resolve).toHaveBeenCalledTimes(12);
 });
 
 test('formatCaseSummary', () => {
@@ -218,12 +243,11 @@ test('formatSafeString', () => {
 
 test('toggleEscalationMenu', () => {
   comp.escalateRelatedEventsEnabled = true;
-  const domEvent = {clientX: 12, clientY: 34};
+  const domEvent = {target: 'target'};
   const event = {id:"33",foo:"bar"};
   comp.$nextTick = function(fn) { fn(); };
   comp.toggleEscalationMenu(domEvent, event, 2);
-  expect(comp.escalationMenuX).toBe(12);
-  expect(comp.escalationMenuY).toBe(34);
+  expect(comp.escalationMenuTarget).toBe('target');
   expect(comp.escalationItem).toBe(event);
   expect(comp.escalationGroupIdx).toBe(2);
   expect(comp.escalationMenuVisible).toBe(true);
@@ -386,26 +410,24 @@ test('populateGroupByTables', () => {
   expect(comp.groupBys[0].data[0].count).toBe(23);
   expect(comp.groupBys[0].data[0].foo).toBe('moo');
   expect(comp.groupBys[0].data[0].bar).toBe('mar');
-  expect(comp.groupBys[0].headers).toStrictEqual([{text: 'Count', value:'count'}, {text: 'foo', value: 'foo'}, {text: 'bar', value: 'bar'}]);
+  expect(comp.groupBys[0].headers).toStrictEqual([{title: 'Count', value:'count'}, {title: 'foo', value: 'foo'}, {title: 'bar', value: 'bar'}]);
   expect(comp.groupBys[0].chart_metrics).toStrictEqual([{value: 23, keys:['moo, mar']}]);
-  expect(comp.groupBys[0].sortBy).toBe('foo');
-  expect(comp.groupBys[0].sortDesc).toBe(false);
+  expect(comp.groupBys[0].sortBy).toStrictEqual([{ key: "foo", order: "asc" }]);
   expect(comp.groupBys[0].maximized).toBe(false);
   expect(comp.groupBys[1].title).toBe("car");
   expect(comp.groupBys[1].fields.length).toBe(1);
   expect(comp.groupBys[1].data[0].count).toBe(9);
   expect(comp.groupBys[1].data[0].car).toBe('mis');
-  expect(comp.groupBys[1].headers).toStrictEqual([{text: 'Count', value:'count'}, {text: 'car', value: 'car'}]);
+  expect(comp.groupBys[1].headers).toStrictEqual([{title: 'Count', value:'count'}, {title: 'car', value: 'car'}]);
   expect(comp.groupBys[1].chart_metrics).toStrictEqual([{value: 9, keys:['mis']}]);
-  expect(comp.groupBys[1].sortBy).toBe('count');
-  expect(comp.groupBys[1].sortDesc).toBe(true);
+  expect(comp.groupBys[1].sortBy).toStrictEqual([{ key: "count", order: "desc" }]);
   expect(comp.groupBys[1].maximized).toBe(true);
 
   // Now include action column
   comp.aggregationActionsEnabled = true;
   result = comp.populateGroupByTables(metrics);
-  expect(comp.groupBys[0].headers).toStrictEqual([{text: '', value: ''}, {text: 'Count', value:'count'}, {text: 'foo', value: 'foo'}, {text: 'bar', value: 'bar'}]);
-  expect(comp.groupBys[1].headers).toStrictEqual([{text: '', value: ''}, {text: 'Count', value:'count'}, {text: 'car', value: 'car'}]);
+  expect(comp.groupBys[0].headers).toStrictEqual([{title: '', value: ''}, {title: 'Count', value:'count'}, {title: 'foo', value: 'foo'}, {title: 'bar', value: 'bar'}]);
+  expect(comp.groupBys[1].headers).toStrictEqual([{title: '', value: ''}, {title: 'Count', value:'count'}, {title: 'car', value: 'car'}]);
 });
 
 test('displayTable', () => {
@@ -489,6 +511,7 @@ test('setupPieChart', () => {
   expect(options).toStrictEqual({
       responsive: true,
       maintainAspectRatio: false,
+      onResize: comp.debounceChartResize,
       plugins: {
         legend: {
           display: true,
@@ -530,6 +553,7 @@ test('setupSankeyChart', () => {
   expect(options).toStrictEqual({
       responsive: true,
       maintainAspectRatio: false,
+      onResize: comp.debounceChartResize,
       plugins: {
         legend: {
           display: false,
@@ -825,7 +849,7 @@ test('getRelativeTimeUnits', () => {
 
 test('setRelativeTimeUnits', () => {
   for (let i = 0; i < comp.relativeTimeUnits.length; i++) {
-    comp.setRelativeTimeUnits(comp.relativeTimeUnits[i].text);
+    comp.setRelativeTimeUnits(comp.relativeTimeUnits[i].title);
     expect(comp.relativeTimeUnit).toBe(comp.relativeTimeUnits[i].value);
   }
 
@@ -833,7 +857,7 @@ test('setRelativeTimeUnits', () => {
   expect(comp.relativeTimeUnit).toBe(30);
 });
 
-test('relative query string', () => {
+test('relative query string', async () => {
   comp.$route = { path: "hunt", query: { rt: 24, rtu: 'hours' } };
   comp.parseUrlParameters();
 
@@ -849,10 +873,17 @@ test('relative query string', () => {
   expect(comp.relativeTimeValue).toBe(10);
 
   comp.$route = { path: "hunt", query: { rt: 24, rtu: 'hours', t: '2021/07/03 01:01:57 PM - 2023/07/03 01:01:57 PM' } };
+  const orig = comp.setupDateRangePicker;
+  comp.setupDateRangePicker = jest.fn();
+
   comp.parseUrlParameters();
+  await new Promise(resolve => setTimeout(resolve, 20)); // Let setTimeouts resolve
 
   expect(comp.relativeTimeEnabled).toBe(false);
   expect(comp.dateRange).toBe('2021/07/03 01:01:57 PM - 2023/07/03 01:01:57 PM');
+  expect(comp.setupDateRangePicker).toHaveBeenCalled();
+
+  comp.setupDateRangePicker = orig;
 });
 
 test('autoRefresh query string', () => {
@@ -934,16 +965,21 @@ test('huntBetween', () => {
 
 test('filterVisibleFields', () => {
   comp.eventFields = {
-    ':module:dataset': 'a',
-    '::dataset': 'b',
-    ':module:': 'c',
-    'default': 'default',
+    ':module:dataset': ['a'],
+    '::dataset': ['b'],
+    ':module:': ['c'],
+    'default': ['default'],
+    ':X:Y': ['this', 'that', 'the_other'],
   };
 
-  expect(comp.filterVisibleFields('module', 'module.dataset', [])).toEqual('a');
-  expect(comp.filterVisibleFields('', 'module.dataset', [])).toEqual('b');
-  expect(comp.filterVisibleFields('module', 'otherData', [])).toEqual('c');
-  expect(comp.filterVisibleFields('A', 'B', [])).toEqual('default');
+  expect(comp.filterVisibleFields('module', 'module.dataset', [])).toEqual(['a']);
+  expect(comp.filterVisibleFields('', 'module.dataset', [])).toEqual(['b']);
+  expect(comp.filterVisibleFields('module', 'otherData', [])).toEqual(['c']);
+  expect(comp.filterVisibleFields('A', 'B', [])).toEqual(['default']);
+  // if a field begins with `so_XYZ.fields.`, the resulting fields should also begin with `so_XYZ.fields.`
+  expect(comp.filterVisibleFields('X', '', ['so_whatever.timestamp'])).toEqual(['default']);
+  expect(comp.filterVisibleFields('', 'Y', ['so_whatever.fields.timestamp'])).toEqual(['so_whatever.fields.default']);
+  expect(comp.filterVisibleFields('X', 'Y', ['so_foobar.fields.message'])).toEqual(['so_foobar.fields.this', 'so_foobar.fields.that', 'so_foobar.fields.the_other']);
 });
 
 test('handleChartClick', () => {
@@ -960,7 +996,7 @@ test('handleChartClick', () => {
 
   expect(result).toBe(true);
   expect(comp.toggleQuickAction).toHaveBeenCalledTimes(1);
-  expect(comp.toggleQuickAction).toHaveBeenCalledWith(null, {}, 'MyField', 'value');
+  expect(comp.toggleQuickAction).toHaveBeenCalledWith(null, {}, 2, 'MyField', 'value');
 
   comp.toggleQuickAction = orig;
 });
@@ -974,7 +1010,7 @@ test('performAction', () => {
   let result = comp.performAction(undefined, action);
 
   expect(mock).toHaveBeenCalledTimes(0);
-  expect(result).toBe(false);
+  expect(result).toBe(true); // true means allow the href property to navigate
 
   action.jsCall = 'testFunc';
 
@@ -982,7 +1018,7 @@ test('performAction', () => {
 
   expect(mock).toHaveBeenCalledTimes(1);
   expect(mock).toHaveBeenCalledWith(action);
-  expect(result).toBe(true);
+  expect(result).toBe(false);
 
   delete comp.testFunc;
 });
@@ -997,7 +1033,7 @@ test('openAddToCaseDialog', () => {
   comp.openAddToCaseDialog();
 
   expect(comp.addToCaseDialogVisible).toBe(true);
-  expect(comp.mruCases).toEqual([{ value: 'New Case', text: comp.i18n.createNewCase }, { value: { id: "1", title: 'Case 1' }, text: 'Case 1' }, { value: { id: "2", title: 'Case 2' }, text: 'Case 2' }]);
+  expect(comp.mruCases).toEqual([{ value: 'New Case', title: comp.i18n.createNewCase }, { value: { id: "1", title: 'Case 1' }, title: 'Case 1' }, { value: { id: "2", title: 'Case 2' }, title: 'Case 2' }]);
   expect(comp.selectedMruCase).toBe('New Case');
   expect(comp.$refs.evidence.resetValidation).toHaveBeenCalledTimes(1);
 });
@@ -1041,11 +1077,19 @@ test('addToCase', () => {
 test('populateEventHeaders', () => {
   const defs = ["x", "y"];
   comp.populateEventHeaders(defs);
-  expect(comp.eventHeaders).toStrictEqual([{"text":"x", "value":"x"},{"text":"y", "value": "y"}]);
+  expect(comp.eventHeaders).toStrictEqual([{title:'x', value:'x'},{title:'y', value: 'y'}]);
 
-  comp.queryTableFields = ["b", "c"];
+  comp.queryTableFields = ['b', 'c'];
   comp.populateEventHeaders(defs);
-  expect(comp.eventHeaders).toStrictEqual([{"text":"b", "value":"b"},{"text":"c", "value": "c"}]);
+  expect(comp.eventHeaders).toStrictEqual([{ title: 'b', value: 'b' }, { title: 'c', value: 'c' }]);
+
+  comp.queryTableFields = ['a', 'b', 'so_detection.isEnabled', 'c'];
+  comp.populateEventHeaders(defs);
+  expect(comp.eventHeaders).toStrictEqual([{ title: 'a', value: 'a' }, { title: 'b', value: 'b' }, { title: 'Enabled', value: 'so_detection.isEnabled' }, { title: 'c', value: 'c' }]);
+
+  comp.category = 'detections';
+  comp.populateEventHeaders(defs);
+  expect(comp.eventHeaders).toStrictEqual([{ title: 'a', value: 'a' }, { title: 'b', value: 'b' }, { title: 'Enabled', value: 'so_detection.isEnabled'}, { title: 'Overrides', value: 'override_count' }, { title: 'c', value: 'c' }]);
 });
 
 test('repopulateEventHeaders', () => {
@@ -1055,7 +1099,7 @@ test('repopulateEventHeaders', () => {
   expect(comp.disableRouteLoad).toBe(false);
   comp.repopulateEventHeaders();
   expect(comp.disableRouteLoad).toBe(true);
-  expect(comp.eventHeaders).toStrictEqual([{"text":"b", "value":"b"},{"text":"c", "value": "c"}]);
+  expect(comp.eventHeaders).toStrictEqual([{"title":"b", "value":"b"},{"title":"c", "value": "c"}]);
   expect(comp.query).toBe('foo: bar | table b c');
   expect(comp.$router.length).toBe(1);
 });
@@ -1063,15 +1107,15 @@ test('repopulateEventHeaders', () => {
 test('toggleColumnHeader', () => {
   expect(comp.eventHeaders).toStrictEqual([]);
   comp.toggleColumnHeader('x');
-  expect(comp.eventHeaders).toStrictEqual([{value:'x', text:'x'}]);
+  expect(comp.eventHeaders).toStrictEqual([{value:'x', title:'x'}]);
   comp.toggleColumnHeader('x');
   expect(comp.eventHeaders).toStrictEqual([]);
   comp.toggleColumnHeader('x');
-  expect(comp.eventHeaders).toStrictEqual([{value:'x', text:'x'}]);
+  expect(comp.eventHeaders).toStrictEqual([{value:'x', title:'x'}]);
   comp.toggleColumnHeader('y');
-  expect(comp.eventHeaders).toStrictEqual([{value:'x', text:'x'},{value:'y', text:'y'}]);
+  expect(comp.eventHeaders).toStrictEqual([{value:'x', title:'x'},{value:'y', title:'y'}]);
   comp.toggleColumnHeader('x');
-  expect(comp.eventHeaders).toStrictEqual([{value:'y', text:'y'}]);
+  expect(comp.eventHeaders).toStrictEqual([{value:'y', title:'y'}]);
 });
 
 test('moveColumnHeader', () => {
@@ -1089,7 +1133,7 @@ test('moveColumnHeader', () => {
   expect(comp.queryTableFields).toStrictEqual(['y', 'z', 'x']);
 
   // double check that repopulateEventHeaders was invoked
-  expect(comp.eventHeaders).toStrictEqual([{"text":"y", "value":"y"},{"text":"z", "value":"z"},{"text":"x", "value": "x"}]);
+  expect(comp.eventHeaders).toStrictEqual([{"title":"y", "value":"y"},{"title":"z", "value":"z"},{"title":"x", "value": "x"}]);
 
   comp.moveColumnHeader('x', false);
   expect(comp.queryTableFields).toStrictEqual(['y', 'z', 'x']);
@@ -1101,7 +1145,7 @@ test('moveColumnHeader', () => {
   expect(comp.queryTableFields).toStrictEqual(['x', 'y', 'z']);
 
   // double check that repopulateEventHeaders was invoked
-  expect(comp.eventHeaders).toStrictEqual([{"text":"x", "value":"x"},{"text":"y", "value":"y"},{"text":"z", "value": "z"}]);
+  expect(comp.eventHeaders).toStrictEqual([{"title":"x", "value":"x"},{"title":"y", "value":"y"},{"title":"z", "value": "z"}]);
 });
 
 test('updateBulkSelector', () => {
@@ -1112,44 +1156,43 @@ test('updateBulkSelector', () => {
 
   expect(comp.selectedCount).toBe(0);
   expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(false);
 
   comp.updateBulkSelector(selected);
 
   expect(comp.selectedCount).toBe(1);
-  expect(comp.selectAllState).toBe('indeterminate');
+  expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(true);
 
   comp.updateBulkSelector(selected);
 
   expect(comp.selectedCount).toBe(2);
   expect(comp.selectAllState).toBe(true);
+  expect(comp.selectAllIndeterminate).toBe(false);
 
   comp.updateBulkSelector(unselected);
 
   expect(comp.selectedCount).toBe(1);
-  expect(comp.selectAllState).toBe('indeterminate');
+  expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(true);
 
   comp.updateBulkSelector(unselected);
 
   expect(comp.selectedCount).toBe(0);
   expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(false);
 });
 
 test('toggleSelectAll', () => {
   comp.totalEvents = 11;
   comp.eventData = [];
-  comp.$refs = {
-    eventTable: {
-      _data: {
-        internalCurrentItems: []
-      }
-    }
-  };
+  comp.eventCurrentItems = [];
 
   for (let i = 0; i < comp.totalEvents; i++) {
     let obj = { _isSelected: i === 0 };
     comp.eventData.push(obj);
-    if (comp.$refs.eventTable._data.internalCurrentItems.length < 10) {
-      comp.$refs.eventTable._data.internalCurrentItems.push(obj);
+    if (comp.eventCurrentItems.length < 10) {
+      comp.eventCurrentItems.push(obj);
     }
   }
 
@@ -1159,13 +1202,14 @@ test('toggleSelectAll', () => {
   expect(comp.selectedCount).toBe(1);
   expect(comp.isPageSelected()).toBe(false);
 
-  // the comp has 11 eventData, the first 10 are in the eventTable's internalCurrentItems
+  // the comp has 11 eventData, the first 10 are in eventCurrentItems
   // eventData[0] is the only one selected
 
   // some selected => none selected
   comp.toggleSelectAll();
 
   expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(false);
   expect(comp.selectedCount).toBe(0);
   expect(comp.eventData[0]._isSelected).toBe(false);
   comp.countSelected();
@@ -1175,7 +1219,8 @@ test('toggleSelectAll', () => {
   // none selected => page selected
   comp.toggleSelectAll();
 
-  expect(comp.selectAllState).toBe('indeterminate');
+  expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(true);
   expect(comp.selectedCount).toBe(10);
   expect(comp.eventData[10]._isSelected).toBe(false);
   comp.countSelected();
@@ -1186,6 +1231,7 @@ test('toggleSelectAll', () => {
   comp.selectAllEvents(true, true);
 
   expect(comp.selectAllState).toBe(true);
+  expect(comp.selectAllIndeterminate).toBe(false);
   expect(comp.selectedCount).toBe(11);
   expect(comp.eventData[10]._isSelected).toBe(true);
   comp.countSelected();
@@ -1196,6 +1242,7 @@ test('toggleSelectAll', () => {
   comp.toggleSelectAll();
 
   expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(false);
   expect(comp.selectedCount).toBe(0);
   comp.countSelected();
   expect(comp.selectedCount).toBe(0);
@@ -1216,7 +1263,7 @@ test('bulkAction - delete - pre-confirm', async () => {
 test('bulkAction - enable', async () => {
   comp.selectedAction = 'enable';
   comp.selectedCount = 2;
-  comp.selectAllState = 'indeterminate';
+  comp.selectAllIndeterminate = true;
   comp.eventData = [{ _isSelected: true, soc_id: "1" }, { _isSelected: false, soc_id: "2" }, { _isSelected: true, soc_id: "3" }];
   comp.hunt = jest.fn();
   const mock = resetPapi().mockPapi('post', { data: { count: 2 }, }, null);
@@ -1237,7 +1284,7 @@ test('bulkAction - enable', async () => {
 test('bulkAction - disable', async () => {
   comp.selectedAction = 'disable';
   comp.selectedCount = 2;
-  comp.selectAllState = 'indeterminate';
+  comp.selectAllIndeterminate = true;
   comp.eventData = [{ _isSelected: true, soc_id: "1" }, { _isSelected: false, soc_id: "2" }, { _isSelected: true, soc_id: "3" }];
   comp.hunt = jest.fn();
   const mock = resetPapi().mockPapi('post', { data: { count: 2 } }, null);
@@ -1259,7 +1306,7 @@ test('bulkAction - delete - confirm - success', async () => {
   comp.selectedAction = 'delete';
   comp.showBulkDeleteConfirmDialog = true;
   comp.selectedCount = 2;
-  comp.selectAllState = 'indeterminate';
+  comp.selectAllIndeterminate = true;
   comp.eventData = [{ _isSelected: true, soc_id: "1" }, { _isSelected: false, soc_id: "2" }, { _isSelected: true, soc_id: "3" }];
   comp.hunt = jest.fn();
   const mock = resetPapi().mockPapi('post', { data: { count: 2 } }, null);
@@ -1281,7 +1328,7 @@ test('bulkAction - delete - confirm - failure', async () => {
   comp.selectedAction = 'delete';
   comp.showBulkDeleteConfirmDialog = true;
   comp.selectedCount = 2;
-  comp.selectAllState = 'indeterminate';
+  comp.selectAllIndeterminate = true;
   comp.eventData = [{ _isSelected: true, soc_id: "1" }, { _isSelected: false, soc_id: "2" }, { _isSelected: true, soc_id: "3" }];
   const err = { response: { data: "ERROR_BULK_COMMUNITY" } }
   const mock = resetPapi().mockPapi('post', null, err);
@@ -1289,7 +1336,8 @@ test('bulkAction - delete - confirm - failure', async () => {
   await comp.bulkAction(true);
 
   expect(comp.showBulkDeleteConfirmDialog).toBe(false);
-  expect(comp.selectAllState).toBe('indeterminate');
+  expect(comp.selectAllState).toBe(false);
+  expect(comp.selectAllIndeterminate).toBe(true);
   expect(comp.selectedCount).toBe(2);
   expect(mock).toHaveBeenCalledTimes(1);
   expect(mock).toHaveBeenCalledWith('detection/bulk/delete', { ids: ["1", "3"] });
@@ -1306,8 +1354,13 @@ test('reconstructQuery', () => {
   // Advanced mode and showFullQuery false so should reconstruct query using new custom filter
   comp.advanced = true;
   comp.showFullQuery = false;
+  comp.$router.resolve = jest.fn();
+  comp.$router.resolve.mockReturnValueOnce({ fullPath: 'A' });
+  comp.$router.resolve.mockReturnValueOnce({ fullPath: 'B' });
   comp.queryModified();
   expect(comp.query).toBe("foo: 1 | groupby x");
+
+  expect(comp.$router.resolve).toHaveBeenCalledTimes(2);
 });
 
 test('queryModified', () => {
@@ -1353,7 +1406,7 @@ test('bulkUpdateReport - error', () => {
   comp.bulkUpdateReport(stats)
 
   expect(comp.$root.error).toBe(true);
-  expect(comp.$root.errorMessage).toBe('1 of the detections during the last bulk update failed. Please check the SOC logs for more information.');
+  expect(comp.$root.errorMessage).toBe('1 error(s) arose during a bulk operation. Please check the SOC logs for more information.');
 });
 
 test('bulkUpdateReport - update success', () => {
@@ -1402,41 +1455,134 @@ test('bulkUpdateReport - filtered success', () => {
 );
 });
 
-test('toggleQuickAction - Tune Detection, Yara => Source Tab, Other Engines => Tuning Tab', () => {
+test('toggleQuickAction - Tune Detection, Yara => Source Tab, Other Engines => Tuning Tab', async () => {
   comp.category = 'alerts';
   comp.escalationMenuVisible = comp.quickActionVisible = false;
   let event = { "rule.uuid": 'id' }
+  let det = { id: 'onionId', engine: 'elastalert' };
 
-  let mockPromise = {
-    then: (f) => {
-      f({ data: { id: 'onionId', engine: 'elastalert' } });
-    }
-  };
-  resetPapi().mockPapi('get', mockPromise, null);
+  resetPapi().mockPapi('get', { data: det }, null);
 
-  comp.toggleQuickAction({}, event, null, null);
+  await comp.toggleQuickAction({}, event, -1, null, null);
+  await new Promise(resolve => setTimeout(resolve, 0)); // Let promises resolve
+  expect(comp.quickActionDetId).toBe('onionId');
+  expect(comp.tuneDetectionTabTarget).toBe('tuning');
+  expect(comp.highlightedDetection)
+
+  resetPapi().mockPapi('get', { data: { id: 'onionId', engine: 'suricata' } }, null);
+  comp.highlightedAlertInfo = comp.highlightedDetection = null;
+
+  await comp.toggleQuickAction({}, event, -1, null, null);
+  await new Promise(resolve => setTimeout(resolve, 0)); // Let promises resolve
   expect(comp.quickActionDetId).toBe('onionId');
   expect(comp.tuneDetectionTabTarget).toBe('tuning');
 
-  mockPromise = {
-    then: (f) => {
-      f({ data: { id: 'onionId', engine: 'suricata' } });
-    }
-  };
-  resetPapi().mockPapi('get', mockPromise, null);
+  resetPapi().mockPapi('get', { data: { id: 'onionId', engine: 'strelka' } }, null);
+  comp.highlightedAlertInfo = comp.highlightedDetection = null;
 
-  comp.toggleQuickAction({}, event, null, null);
-  expect(comp.quickActionDetId).toBe('onionId');
-  expect(comp.tuneDetectionTabTarget).toBe('tuning');
-
-  mockPromise = {
-    then: (f) => {
-      f({ data: { id: 'onionId', engine: 'strelka' } });
-    }
-  };
-  resetPapi().mockPapi('get', mockPromise, null);
-
-  comp.toggleQuickAction({}, event, null, null);
+  await comp.toggleQuickAction({}, event, -1, null, null);
+  await new Promise(resolve => setTimeout(resolve, 0)); // Let promises resolve
   expect(comp.quickActionDetId).toBe('onionId');
   expect(comp.tuneDetectionTabTarget).toBe('source');
+});
+
+test('buildDetectionEngineHuntQuery', () => {
+  comp.detectionEngineStatusQueries = {
+    elastalert: {
+      default: 'default',
+      IntegrityFailure: 'IntegrityFailure',
+    },
+    suricata: {
+      default: 'default',
+      Healthy: 'Healthy',
+    },
+    strelka: {
+      SyncFailure: 'SyncFailure',
+    }
+  };
+  comp.$root.currentStatus = {
+    detections: {
+      elastalert: {
+        syncFailure: 1,
+      },
+      suricata: {}, // Healthy
+      strelka: {
+        syncing: 1,
+      },
+    }
+  };
+
+  // miss, fallback to default
+  let query = comp.buildDetectionEngineHuntQuery('elastalert');
+  expect(query).toBe('default');
+
+  // hit
+  query = comp.buildDetectionEngineHuntQuery('suricata');
+  expect(query).toBe('Healthy');
+
+  // miss, no default specified, fallback to simple query
+  query = comp.buildDetectionEngineHuntQuery('strelka');
+  expect(query).toBe(`tags:so-soc AND strelka | groupby log.level | groupby event.action | groupby soc.fields.error`);
+});
+
+test('lookupFieldValue', () => {
+  const record = {
+    'so_foobar.fields.that': 'bar',
+    'this': 10,
+    'that': 'foo',
+    'so_foobar.fields.message': 100,
+  };
+
+  expect(comp.lookupFieldValue(record, 'this')).toBe(10);
+  expect(comp.lookupFieldValue(record, 'that')).toBe('foo');
+  expect(comp.lookupFieldValue(record, 'message')).toBe(100);
+});
+
+test('debounceChartResize', () => {
+  const chart = {
+    options: {
+      responsive: true
+    }
+  };
+  comp.chartResizeTracker = {};
+
+  // Initial call
+  comp.debounceChartResize(chart, { width: 100 });
+  expect(comp.chartResizeTracker[chart].length).toBe(1);
+  expect(comp.chartResizeTracker[chart][0].size.width).toBe(100);
+
+  // Second call with same size
+  comp.debounceChartResize(chart, { width: 100 });
+  expect(comp.chartResizeTracker[chart].length).toBe(2);
+
+  // Simulate flapping
+  for (let i = 0; i < 20; i++) {
+    comp.debounceChartResize(chart, { width: 100 + (i % 2 === 0 ? 1 : -1) });
+  }
+  expect(chart.options.responsive).toBe(false);
+});
+
+test('debounceChartResize - no flapping', () => {
+  const chart = {
+    options: {
+      responsive: true
+    }
+  };
+  comp.chartResizeTracker = {};
+
+  // Initial call
+  comp.debounceChartResize(chart, { width: 100 });
+  expect(comp.chartResizeTracker[chart].length).toBe(1);
+  expect(comp.chartResizeTracker[chart][0].size.width).toBe(100);
+  expect(chart.options.responsive).toBe(true);
+
+  comp.debounceChartResize(chart, { width: 101 });
+  expect(chart.options.responsive).toBe(true);
+
+  comp.debounceChartResize(chart, { width: 101 });
+  expect(chart.options.responsive).toBe(true);
+
+  comp.debounceChartResize(chart, { width: 151 });
+  expect(comp.chartResizeTracker[chart].length).toBe(4);
+  expect(chart.options.responsive).toBe(true);
 });

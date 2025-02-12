@@ -1,68 +1,71 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-routes.push({ path: '/config', name: 'config', component: {
-  template: '#page-config',
-  data() { return {
-    i18n: this.$root.i18n,
-    settings: [],
-    search: "",
-    searchFilter: null,
-    autoExpand: false,
-    autoSelect: "",
-    form: {
-      valid: true,
-      key: "",
-      value: "",
-    },
-    duplicate_id_rules: [
-      value => !!value || this.$root.i18n.required,
-      value => (!!value && /^[a-zA-Z0-9_]{3,50}$/.test(value)) || this.$root.i18n.settingDuplicateNameInvalid,
-    ],
+routes.push({
+  path: '/config', name: 'config', component: {
+    template: '#page-config',
+    data() {
+      return {
+        i18n: this.$root.i18n,
+        settings: [],
+        search: "",
+        searchFilter: null,
+        autoExpand: false,
+        autoSelect: "",
+        form: {
+          valid: true,
+          key: "",
+          value: "",
+        },
+        duplicate_id_rules: [
+          value => !!value || this.$root.i18n.required,
+          value => (!!value && /^[a-zA-Z0-9_]{3,50}$/.test(value)) || this.$root.i18n.settingDuplicateNameInvalid,
+        ],
 
-    selectedNode: null,
-    cancelDialog: false,
-    open: [],
-    active: [],
-    activeBackup: [],
-    hierarchy: [],
-    nodes: [],
-    availableNodes: [],
-    advanced: false,
-    settingsCustomized: 0,
-    settingsAvailable: 0,
-    showDefault: false,
-    nextStopId: null,
-    showDuplicate: false,
-    duplicateId: null,
-    duplicateIdValid: false,
-    resetSetting: null,
-    resetNodeId: null,
-    confirmResetDialog: false,
-    treeVisible: true,
-  }},
-  mounted() {
-    this.processRouteParameters();
-    this.loadData();
-  },
-  watch: {
-    "active": "selectSetting",
-    "advanced": "loadData",
+        selectedNode: null,
+        cancelDialog: false,
+        open: [],
+        active: [],
+        activeBackup: [],
+        hierarchy: [],
+        nodes: [],
+        availableNodes: [],
+        advanced: false,
+        settingsCustomized: 0,
+        settingsAvailable: 0,
+        showDefault: false,
+        nextStopId: null,
+        showDuplicate: false,
+        duplicateId: null,
+        duplicateIdValid: false,
+        resetSetting: null,
+        resetNodeId: null,
+        confirmResetDialog: false,
+        treeVisible: true,
+      }
+    },
+    mounted() {
+      this.processRouteParameters();
+      this.loadData();
+    },
+    watch: {
+      "active": "selectSetting",
+      "advanced": "loadData",
+      '$route': "onRouteUpdate",
   },
   computed: {
     selected() {
       return this.findActiveSetting();
     },
   },
-  beforeRouteUpdate(to, from, next) {
-    next();
-    this.processRouteParameters();
-    this.refreshTree();
-  },
   methods: {
+    onRouteUpdate() {
+      this.processRouteParameters();
+      this.refreshTree();
+    },
     processRouteParameters() {
       if (this.$route.query.a == "1") {
         this.advanced = true;
@@ -102,15 +105,17 @@ routes.push({ path: '/config', name: 'config', component: {
       this.search = "";
       this.searchFilter = "";
     },
-    filter(item, search, textKey) {
+    filter(value, search, internalItem) {
       if (!search) return true;
       search = search.toLowerCase();
-      return (item.name && item.name.toLowerCase().indexOf(search) > -1) ||
-             (item.id && item.id.toLowerCase().indexOf(search) > -1) ||
-             (item.value && item.value.toLowerCase().indexOf(search) > -1) ||
-             (item.nodeValues && [...item.nodeValues.keys()].find(k => k.indexOf(search) > -1)) ||
-             (item.title && item.title.toLowerCase().indexOf(search) > -1) ||
-             (item.description && item.description.toLowerCase().indexOf(search) > -1);
+      const item = internalItem.raw;
+      return !!((value && value.toLowerCase().indexOf(search) > -1) ||
+                (item?.name && item?.name.toLowerCase().indexOf(search) > -1) ||
+                (item?.id && item?.id.toLowerCase().indexOf(search) > -1) ||
+                (item?.value && item?.value.toLowerCase().indexOf(search) > -1) ||
+                (item?.nodeValues && [...item?.nodeValues.keys()].find(k => k.indexOf(search) > -1)) ||
+                (item?.title && item?.title.toLowerCase().indexOf(search) > -1) ||
+                (item?.description && item?.description.toLowerCase().indexOf(search) > -1));
     },
     addToNode(node, parent, path, setting) {
       if (node.children == undefined) {
@@ -127,7 +132,7 @@ routes.push({ path: '/config', name: 'config', component: {
         child = node.children.find(n => n.name == name);
         const id = parent ? parent + "." + name : name;
         if (!child) {
-          child = {id: id, name: name, children:[]};
+          child = {id: id, name: name, children: []};
           node.children.push(child);
         }
         this.addToNode(child, id, path, setting);
@@ -192,6 +197,7 @@ routes.push({ path: '/config', name: 'config', component: {
         advanced: setting.advanced,
         syntax: setting.syntax,
         duplicates: setting.duplicates,
+        uiElements: setting.uiElements,
       };
       this.merge(created, setting);
       return created;
@@ -214,11 +220,12 @@ routes.push({ path: '/config', name: 'config', component: {
     expand(node = null, filterFn=() => true) {
       if (!node) {
         this.open = [];
-        this.hierarchy.forEach(s => this.expand(s, filterFn));
+        this.hierarchy.forEach(i => this.expand(i, filterFn));
       } else if (node.children) {
         shouldExpand = false;
         node.children.forEach(s => shouldExpand |= this.expand(s, filterFn));
         if (shouldExpand) {
+          node.open = true;
           this.open.push(node.id);
         }
         return shouldExpand;
@@ -241,6 +248,14 @@ routes.push({ path: '/config', name: 'config', component: {
     },
     collapse() {
       this.open = [];
+      const col = (item) => {
+        item.open = false;
+        if (item.children) {
+          item.children.forEach(i => col(i));
+        }
+      }
+
+      this.hierarchy.forEach(i => col(i));
     },
     async loadData() {
       this.$root.startLoading();
@@ -345,11 +360,106 @@ routes.push({ path: '/config', name: 'config', component: {
         });
         return false;
       }
-      this.recomputeAvailableNodes(this.findActiveSetting());
+      const setting = this.findActiveSetting();
+      this.recomputeAvailableNodes(setting);
       this.activeBackup = [...this.active];
       this.showDuplicate = false;
       this.showDefault = false;
+      this.unpack(setting);
+      this.form.entriesExpanded = null;
       window.scrollTo(0,0);
+    },
+    unpack(setting) {
+      this.form.entries = []
+      if (this.hasUiElements(setting)) {
+        const isArrayOfObjects = setting.forcedType && setting.forcedType.startsWith("[]");
+        if (setting.value && setting.value.trim().length > 0) {
+          if (!isArrayOfObjects) {
+            if (setting.syntax.toLowerCase() == 'json') {
+              this.form.entries = JSON.parse(setting.value);
+            }
+          } else {
+            var objs = setting.value.split("\n");
+            for (var idx = 0; idx < objs.length; idx++) {
+              var obj = objs[idx];
+              var entry = null;
+              if (setting.syntax.toLowerCase() == 'json') {
+                entry = JSON.parse(obj);
+              }
+              this.form.entries.push(entry);
+            }
+          }
+          for (let [idx, entry] of this.form.entries.entries()) {
+            this.generateEntryTitle(entry, idx);
+          }
+        } else {
+          this.form.entries = [];
+        }
+        // Add a blank entry so users can fill out new entries
+        this.form.entries.push({_title: "+"});
+      }
+    },
+    pack(setting) {
+      if (this.form.entries && this.hasUiElements(setting)) {
+        var value = ""
+        var tmpEntries = []
+        const isArrayOfObjects = setting.forcedType && setting.forcedType.startsWith("[]");
+        for (let [idx, entry] of this.form.entries.entries()) {
+          const tmpEntry = Object.assign({}, entry);
+          delete tmpEntry._title;
+          if (!this.isEntryEmpty(tmpEntry)) {
+            tmpEntries.push(tmpEntry);
+            if (isArrayOfObjects) {
+              if (value.length > 0) {
+                value += "\n";
+              }
+              if (setting.syntax.toLowerCase() == 'json') {
+                value += JSON.stringify(tmpEntry);
+              }
+            }
+          }
+        }
+        if (!isArrayOfObjects) { 
+          if (setting.syntax.toLowerCase() == 'json') {
+            value = JSON.stringify(tmpEntries);
+          }
+        }
+        this.form.value = value;
+      }
+    },
+    isEntryEmpty(entry) {
+      var value = ""
+      for (prop in entry) {
+        if (prop != "_title") {
+          value += entry[prop];
+        }
+      }
+      return value.trim().length == 0;
+    },
+    clearEntry(entry, idx) {
+      for (prop in entry) {
+        if (prop != "_title") {
+          entry[prop] = "";
+        }
+      }
+      if (entry._title != "+") {
+        this.markDirtyEntries();
+        this.generateEntryTitle(entry, idx);
+      }
+    },
+    markDirtyEntries() {
+      this.form.value = Date.now() + "";
+    },
+    generateEntryTitle(entry, idx) {
+      const setting = this.findActiveSetting();
+      var title = null;
+      if (setting && setting.uiElements && setting.uiElements.length > 0) {
+        title = entry[setting.uiElements[0].field];
+      }
+      entry._title = "" + (idx+1) + ". "
+      if (title) {
+         entry._title += title;
+      }
     },
     cancel(force) {
       var setting = this.findActiveSetting();
@@ -374,6 +484,11 @@ routes.push({ path: '/config', name: 'config', component: {
       this.form.key = null;
       this.cancelDialog = false;
 
+      if (setting) {
+        // Unpack on cancel to restore the original entries into the custom UI Elements
+        this.unpack(setting);
+      }
+
       // If the user has discarded the changes, and if there's a next-stop
       // forward the user there now.
       if (force) {
@@ -386,6 +501,10 @@ routes.push({ path: '/config', name: 'config', component: {
       }
 
       return true;
+    },
+    userCancel() {
+      this.form.entriesExpanded = null;
+      return this.cancel(true)
     },
     remove(setting, nodeId) {
       this.resetSetting = setting;
@@ -441,6 +560,7 @@ routes.push({ path: '/config', name: 'config', component: {
 
       if (setting) {
         this.form.value = this.form.value.trim();
+        this.pack(setting);
         if (setting.regex) {
           var test_values = [this.form.value];
           if (setting.multiline) {
@@ -498,6 +618,7 @@ routes.push({ path: '/config', name: 'config', component: {
       this.$root.stopLoading();
     },
     edit(setting, nodeId) {
+      setTimeout(() => {
       if (nodeId) {
         if ((this.form.key == nodeId) || !this.cancel()) return;
         this.form.key = nodeId;
@@ -509,6 +630,24 @@ routes.push({ path: '/config', name: 'config', component: {
         this.form.value = setting.value;
         this.$root.drawAttention('#setting-global-save');
       }
+
+        // transfer caret position from non-edit element to edit element
+        let selector = nodeId ? 'node-value-output-' + nodeId : 'value-output';
+        const before = document.getElementById(selector);
+        const scrollTop = before?.scrollTop || 0;
+        const selStart = before?.selectionStart || 0;
+        const selEnd = before?.selectionEnd || 0;
+        this.$nextTick(() => {
+          selector = nodeId ? 'node-value-input-' + nodeId : 'value-input';
+          const after = document.getElementById(selector);
+          if (after && typeof scrollTop !== 'undefined' &&
+            typeof selStart !== 'undefined' && typeof selEnd !== 'undefined') {
+            after.focus();
+            after.scrollTop = scrollTop;
+            after.setSelectionRange(selStart, selEnd);
+          }
+        });
+      }, 1);
     },
     addNode(setting, nodeId) {
       if (this.cancel() && setting && nodeId) {
@@ -524,7 +663,7 @@ routes.push({ path: '/config', name: 'config', component: {
       const eligible = this.nodes.filter(n => {
         return n.status == GridMemberAccepted && !setting.nodeValues.has(n.id);
       });
-      this.availableNodes = eligible.map(n => { return { text: n.name + " (" + n.role + ")", value: n.id } });
+      this.availableNodes = eligible.map(n => { return { title: n.name + " (" + n.role + ")", value: n.id } });
     },
     toggleDuplicate(setting) {
       this.duplicateId = this.suggestDuplicateName(setting);
@@ -544,7 +683,7 @@ routes.push({ path: '/config', name: 'config', component: {
         this.$root.showWarning(this.i18n.settingDuplicateInvalid);
         return
       }
-      var new_setting = structuredClone(setting);
+      var new_setting = structuredClone(Vue.toRaw(setting));
       new_setting.id = new_id;
       new_setting.name = new_name;
       this.settings.push(new_setting);
@@ -555,5 +694,11 @@ routes.push({ path: '/config', name: 'config', component: {
     isReadOnly(item) {
       return item.readonly || item.readonlyUi;
     },
+    hasUiElements(setting) {
+      if (setting.uiElements && setting.uiElements.length > 0 && setting.syntax == 'json') {
+        return true;
+      }
+      return false;
+    }
   }
 }});

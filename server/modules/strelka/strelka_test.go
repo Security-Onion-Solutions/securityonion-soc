@@ -1,4 +1,4 @@
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -1016,8 +1017,9 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 		IntegrityCheckerData: detections.IntegrityCheckerData{
 			IsRunning: true,
 		},
-		IOManager:       iom,
-		showAiSummaries: false,
+		IOManager:         iom,
+		showAiSummaries:   false,
+		autoUpdateEnabled: true,
 	}
 
 	logger := log.WithField("detectionEngine", "test-strelka")
@@ -1029,7 +1031,7 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 			Dir:      true,
 		},
 	}, nil)
-	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(false, false)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(false, false, false)
 	// WriteStateFile
 	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)
 	// IntegrityCheck
@@ -1043,6 +1045,37 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.True(t, eng.EngineState.Syncing) // stays true until the SyncScheduler resets it
+	assert.False(t, eng.EngineState.IntegrityFailure)
+	assert.False(t, eng.EngineState.Migrating)
+	assert.False(t, eng.EngineState.MigrationFailure)
+	assert.False(t, eng.EngineState.Importing)
+	assert.False(t, eng.EngineState.SyncFailure)
+}
+
+func TestSyncDisabled(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+
+	eng := &StrelkaEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+			Config:         &config.ServerConfig{},
+		},
+		isRunning:         true,
+		IOManager:         iom,
+		showAiSummaries:   true,
+		autoUpdateEnabled: false,
+	}
+
+	logger := log.WithField("detectionEngine", "test-strelka")
+
+	err := eng.Sync(logger, false)
+	assert.NoError(t, err)
+
+	assert.False(t, eng.EngineState.Syncing)
 	assert.False(t, eng.EngineState.IntegrityFailure)
 	assert.False(t, eng.EngineState.Migrating)
 	assert.False(t, eng.EngineState.MigrationFailure)
@@ -1099,7 +1132,7 @@ func TestSyncChanges(t *testing.T) {
 			Dir:      true,
 		},
 	}, nil)
-	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(true, false)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(true, false, false)
 	// Sync
 	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
 		"dummy": {

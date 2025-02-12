@@ -1,4 +1,4 @@
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
@@ -64,6 +65,57 @@ func TestCheckAutoEnabledSigmaRule(t *testing.T) {
 			det := &model.Detection{
 				Ruleset:  tt.ruleset,
 				Severity: tt.severity,
+			}
+			checkRulesetEnabled(e, det)
+			assert.Equal(t, tt.expected, det.IsEnabled)
+		})
+	}
+}
+
+func TestCheckEnabledSigmaRule(t *testing.T) {
+	e := &ElastAlertEngine{
+		enabledSigmaRules: []RuleCriteria{
+			{
+				Ruleset:  []string{"securityonion-resources", "core"},
+				Level:    []string{"high"},
+				Product:  []string{"windows"},
+				Category: []string{"process_creation"},
+				Service:  []string{"sysmon"},
+			},
+			{
+				Ruleset:  []string{"*"},
+				Level:    []string{"critical"},
+				Product:  []string{"*"},
+				Category: []string{"*"},
+				Service:  []string{"*"},
+			},
+		},
+	}
+
+	tests := []struct {
+		name     string
+		ruleset  string
+		severity model.Severity
+		product  string
+		category string
+		service  string
+		expected bool
+	}{
+		{"core rule with matching fields and upper case, rule enabled", "core", model.SeverityHigh, "WINDOWS", "process_creation", "sysmon", true},
+		{"core rule with wrong category, rule disabled", "core", model.SeverityHigh, "windows", "file_creation", "windows", false},
+		{"securityonion-resources rule with matching fields, rule enabled", "securityonion-resources", model.SeverityHigh, "windows", "process_creation", "sysmon", true},
+		{"core++ rule with critical severity, rule enabled", "core++", model.SeverityCritical, "linux", "file_event", "auditd", true},
+		{"core++ rule with medium severity, rule disabled", "core++", model.SeverityMedium, "windows", "process_creation", "sysmon", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			det := &model.Detection{
+				Ruleset:  tt.ruleset,
+				Severity: tt.severity,
+				Product:  tt.product,
+				Category: tt.category,
+				Service:  tt.service,
 			}
 			checkRulesetEnabled(e, det)
 			assert.Equal(t, tt.expected, det.IsEnabled)
@@ -1501,8 +1553,9 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 		IntegrityCheckerData: detections.IntegrityCheckerData{
 			IsRunning: true,
 		},
-		IOManager:       iom,
-		showAiSummaries: false,
+		IOManager:         iom,
+		showAiSummaries:   false,
+		autoUpdateEnabled: true,
 	}
 
 	logger := log.WithField("detectionEngine", "test-elastalert")
@@ -1523,7 +1576,7 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 			Dir:      true,
 		},
 	}, nil)
-	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(false, false)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(false, false, false)
 	// check for changes before sync
 	iom.EXPECT().ReadFile("rulesFingerprintFile").Return([]byte(`{"core+": "c6OTI9nTQxGEeeNkSZZB9+OESMNvfMXrb+XLtMiVhf0="}`), nil)
 	// WriteStateFile
@@ -1542,6 +1595,37 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.True(t, eng.EngineState.Syncing) // stays true until the SyncScheduler resets it
+	assert.False(t, eng.EngineState.IntegrityFailure)
+	assert.False(t, eng.EngineState.Migrating)
+	assert.False(t, eng.EngineState.MigrationFailure)
+	assert.False(t, eng.EngineState.Importing)
+	assert.False(t, eng.EngineState.SyncFailure)
+}
+
+func TestSyncDisabled(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+
+	eng := &ElastAlertEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+			Config:         &config.ServerConfig{},
+		},
+		isRunning:         true,
+		IOManager:         iom,
+		showAiSummaries:   true,
+		autoUpdateEnabled: false,
+	}
+
+	logger := log.WithField("detectionEngine", "test-elastalert")
+
+	err := eng.Sync(logger, false)
+	assert.NoError(t, err)
+
+	assert.False(t, eng.EngineState.Syncing)
 	assert.False(t, eng.EngineState.IntegrityFailure)
 	assert.False(t, eng.EngineState.Migrating)
 	assert.False(t, eng.EngineState.MigrationFailure)
@@ -1620,7 +1704,7 @@ func TestSyncChanges(t *testing.T) {
 			Dir:      true,
 		},
 	}, nil)
-	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(false, false)
+	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(false, false, false)
 	// parseRepoRules
 	iom.EXPECT().WalkDir("repos/repo", gomock.Any()).DoAndReturn(func(path string, fn fs.WalkDirFunc) error {
 		files := []fs.DirEntry{

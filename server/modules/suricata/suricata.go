@@ -1,4 +1,4 @@
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -60,6 +60,7 @@ const (
 	DEFAULT_AI_REPO_BRANCH                        = "generated-summaries-published"
 	DEFAULT_AI_REPO_PATH                          = "/opt/sensoroni/ai_summary_repos"
 	DEFAULT_SHOW_AI_SUMMARIES                     = true
+	DEFAULT_AUTO_UPDATE_ENABLED                   = false
 
 	CUSTOM_RULE_LOC = "/nsm/rules/detect-suricata/custom_temp"
 )
@@ -89,6 +90,7 @@ type SuricataEngine struct {
 	aiRepoUrl                      string
 	aiRepoBranch                   string
 	aiRepoPath                     string
+	autoUpdateEnabled              bool
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
 	detections.IOManager
@@ -132,6 +134,7 @@ func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 	e.CommunityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS)
+	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", DEFAULT_AUTO_UPDATE_ENABLED)
 
 	enable := module.GetStringArrayDefault(config, "enableRegex", DEFAULT_ENABLE_REGEX)
 	disable := module.GetStringArrayDefault(config, "disableRegex", DEFAULT_DISABLE_REGEX)
@@ -180,7 +183,7 @@ func (e *SuricataEngine) Start() error {
 	e.IntegrityCheckerData.IsRunning = true
 
 	// start long running processes
-	go detections.SyncScheduler(e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameSuricata, &e.isRunning, e.IOManager)
+	go detections.SyncScheduler(e.srv.Context, e.srv.Detectionstore, e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameSuricata, &e.isRunning)
 	go detections.IntegrityChecker(model.EngineNameSuricata, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
 
 	// update Ai Summaries once and don't block
@@ -314,6 +317,8 @@ func (e *SuricataEngine) ExtractDetails(detect *model.Detection) error {
 
 	detect.Severity = model.SeverityUnknown
 
+	formats := []string{"2006-01-02", "2006/01/02", "2006_01_02"}
+
 	md := rule.ParseMetaData()
 	for _, meta := range md {
 		if strings.EqualFold(meta.Key, "signature_severity") {
@@ -327,8 +332,20 @@ func (e *SuricataEngine) ExtractDetails(detect *model.Detection) error {
 			case "critical":
 				detect.Severity = model.SeverityCritical
 			}
-
-			break
+		} else if strings.EqualFold(meta.Key, "created_at") {
+			t, err := detections.ParseDate(meta.Value, formats)
+			if err == nil {
+				detect.SourceCreated = &t
+			} else {
+				log.WithField("created_at", meta.Value).WithError(err).Warn("unable to parse date")
+			}
+		} else if strings.EqualFold(meta.Key, "updated_at") {
+			t, err := detections.ParseDate(meta.Value, formats)
+			if err == nil {
+				detect.SourceUpdated = &t
+			} else {
+				log.WithField("updated_at", meta.Value).WithError(err).Warn("unable to parse date")
+			}
 		}
 	}
 
@@ -352,6 +369,15 @@ func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 	}
 
 	e.writeNoRead = nil
+
+	if !e.autoUpdateEnabled && !forceSync {
+		logger.WithFields(log.Fields{
+			"autoUpdateEnabled": e.autoUpdateEnabled,
+			"forceSync":         forceSync,
+		}).Info("skipping sync")
+
+		return nil
+	}
 
 	if e.showAiSummaries {
 		err := detections.RefreshAiSummaries(e, model.SigLangSuricata, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.aiRepoBranch, logger, e.IOManager)
@@ -1207,6 +1233,14 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 			"rule.name": detect.Title,
 		}).Info("syncing rule")
 
+		exErr := e.ExtractDetails(detect)
+		if exErr != nil {
+			logger.WithField("publicId", detect.PublicID).WithError(exErr).Warn("unable to extract details from detection, skipping")
+			errMap[detect.PublicID] = fmt.Sprintf("unable to extract details; reason=%s", exErr.Error())
+
+			continue
+		}
+
 		orig, exists := commSIDs[detect.PublicID]
 		if exists {
 			_, isSpecificallyEnabled := enabledIndex[detect.PublicID]
@@ -1266,7 +1300,13 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 		}
 
 		if exists {
-			if orig.Content != detect.Content || orig.Ruleset != detect.Ruleset || len(detect.Overrides) != 0 || orig.IsEnabled != detect.IsEnabled {
+			hasChanged := orig.Content != detect.Content
+			hasChanged = hasChanged || orig.Ruleset != detect.Ruleset
+			hasChanged = hasChanged || len(detect.Overrides) != 0
+			hasChanged = hasChanged || !util.Equal(orig.SourceCreated, detect.SourceCreated)
+			hasChanged = hasChanged || !util.Equal(orig.SourceUpdated, detect.SourceUpdated)
+
+			if hasChanged {
 				logger.WithFields(log.Fields{
 					"rule.uuid": detect.PublicID,
 					"rule.name": detect.Title,
@@ -1284,9 +1324,9 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 						results.Updated++
 
 						createAudit = append(createAudit, model.AuditInfo{
-							Detection: detect,
-							DocId:     resp.DocumentID,
-							Op:        "update",
+							Object: detect,
+							DocId:  resp.DocumentID,
+							Op:     "update",
 						})
 					},
 					OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
@@ -1336,9 +1376,9 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 					results.Added++
 
 					createAudit = append(createAudit, model.AuditInfo{
-						Detection: detect,
-						DocId:     resp.DocumentID,
-						Op:        "create",
+						Object: detect,
+						DocId:  resp.DocumentID,
+						Op:     "create",
 					})
 				},
 				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
@@ -1397,9 +1437,9 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 					results.Removed++
 
 					createAudit = append(createAudit, model.AuditInfo{
-						Detection: commSIDs[sid],
-						DocId:     resp.DocumentID,
-						Op:        "delete",
+						Object: commSIDs[sid],
+						DocId:  resp.DocumentID,
+						Op:     "delete",
 					})
 				},
 				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
@@ -1443,10 +1483,11 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 		}
 
 		for _, audit := range createAudit {
+			det := audit.Object.(*model.Detection)
 			// prepare audit doc
-			document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", audit.Detection, &audit.Detection.Auditable, false, &audit.DocId, &audit.Op)
+			document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", audit.Object, &det.Auditable, false, &audit.DocId, &audit.Op)
 			if err != nil {
-				errMap[audit.Detection.PublicID] = fmt.Sprintf("unable to convert detection to document map for creating an audit doc; reason=%s", err.Error())
+				errMap[det.PublicID] = fmt.Sprintf("unable to convert detection to document map for creating an audit doc; reason=%s", err.Error())
 				continue
 			}
 
@@ -1463,14 +1504,14 @@ func (e *SuricataEngine) syncCommunityDetections(ctx context.Context, logger *lo
 					defer errMut.Unlock()
 
 					if err != nil {
-						errMap[audit.Detection.PublicID] = fmt.Sprintf("unable to create audit doc; reason=%s", err.Error())
+						errMap[det.PublicID] = fmt.Sprintf("unable to create audit doc; reason=%s", err.Error())
 					} else {
-						errMap[audit.Detection.PublicID] = fmt.Sprintf("unable to create audit doc; reason=%s", resp.Error.Reason)
+						errMap[det.PublicID] = fmt.Sprintf("unable to create audit doc; reason=%s", resp.Error.Reason)
 					}
 				},
 			})
 			if err != nil {
-				errMap[audit.Detection.PublicID] = fmt.Sprintf("unable to add audit doc to bulk indexer; reason=%s", err.Error())
+				errMap[det.PublicID] = fmt.Sprintf("unable to add audit doc to bulk indexer; reason=%s", err.Error())
 				continue
 			}
 		}
@@ -1874,6 +1915,11 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (d
 		return nil, nil, fmt.Errorf("unable to find modify setting")
 	}
 
+	ignored := settingByID(allSettings, "soc.config.server.modules.suricataengine.ignoredSidRanges")
+	if ignored == nil {
+		return nil, nil, fmt.Errorf("unable to find ignored setting")
+	}
+
 	// escape
 	if canInterrupt && !e.IntegrityCheckerData.IsRunning {
 		return nil, nil, detections.ErrIntCheckerStopped
@@ -1887,6 +1933,8 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (d
 	disabledIndex := indexEnabled(disabledLines, true)
 	modifyIndex := indexModify(modifyLines, true, true)
 	rulesIndex := indexRules(rulesLines, true)
+
+	sidRangesToIgnore := parseIgnoredSidRanges(ignored.Value)
 
 	// modifyIndex is filtered for flowbits rules meaning the index is equivalent
 	// in function to a list of disabled flowbits rules
@@ -1932,11 +1980,23 @@ func (e *SuricataEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) (d
 		return nil, nil, detections.ErrIntCheckerStopped
 	}
 
+	deployedBefore := len(deployed)
+	enabledBefore := len(enabled)
+
+	deployed = filterOutSIDsInRanges(deployed, sidRangesToIgnore)
+	enabled = filterOutSIDsInRanges(enabled, sidRangesToIgnore)
+
+	logger.WithFields(log.Fields{
+		"deployedFilteredOutCount": deployedBefore - len(deployed),
+		"enabledFilteredOutCount":  enabledBefore - len(enabled),
+		"rangesToIgnore":           sidRangesToIgnore,
+	}).Info("ignoring SIDs")
+
 	deployedButNotEnabled, enabledButNotDeployed, _ = detections.DiffLists(deployed, enabled)
 
 	intCheckReport := logger.WithFields(log.Fields{
-		"deployedButNotEnabled":      detections.TruncateList(deployedButNotEnabled, 20),
-		"enabledButNotDeployed":      detections.TruncateList(enabledButNotDeployed, 20),
+		"deployedButNotEnabled":      util.TruncateList(deployedButNotEnabled, 20),
+		"enabledButNotDeployed":      util.TruncateList(enabledButNotDeployed, 20),
 		"deployedButNotEnabledCount": len(deployedButNotEnabled),
 		"enabledButNotDeployedCount": len(enabledButNotDeployed),
 	})
@@ -1962,4 +2022,101 @@ func consolidateEnabled(rulesIndex map[string]int, disabledIndex map[string]int)
 	}
 
 	return pids
+}
+
+type Range struct {
+	LowerLimit uint64
+	UpperLimit uint64
+}
+
+func (r *Range) Contains(val uint64) bool {
+	return val >= r.LowerLimit && val <= r.UpperLimit
+}
+
+func (r Range) String() string {
+	return fmt.Sprintf("[%d, %d]", r.LowerLimit, r.UpperLimit)
+}
+
+func parseIgnoredSidRanges(settingValue string) []Range {
+	ranges := []Range{}
+
+	for _, line := range strings.Split(settingValue, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		parts := strings.Split(line, "-")
+		if len(parts) != 2 {
+			log.WithField("ignoredSidLine", line).Warn("invalid SID range to ignore, expected format is 'lower-upper', skipping this range")
+			continue
+		}
+
+		num := strings.TrimSpace(parts[0])
+
+		lower, err := strconv.ParseUint(num, 10, 64)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"lowerLimit":     num,
+				"ignoredSidLine": line,
+			}).Warn("invalid SID range to ignore, lower limit is not a valid number, skipping this range")
+
+			continue
+		}
+
+		num = strings.TrimSpace(parts[1])
+
+		upper, err := strconv.ParseUint(num, 10, 64)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"upperLimit":     num,
+				"ignoredSidLine": line,
+			}).Warn("invalid SID range to ignore, upper limit is not a valid number, skipping this range")
+
+			continue
+		}
+
+		if lower > upper {
+			log.WithFields(log.Fields{
+				"lowerLimit":     lower,
+				"upperLimit":     upper,
+				"ignoredSidLine": line,
+			}).Warn("invalid SID range to ignore, lowerLimit is greater than upperLimit, skipping this range")
+
+			continue
+		}
+
+		ranges = append(ranges, Range{
+			LowerLimit: lower,
+			UpperLimit: upper,
+		})
+	}
+
+	return ranges
+}
+
+func filterOutSIDsInRanges(sids []string, ranges []Range) []string {
+	filtered := []string{}
+
+	for _, sid := range sids {
+		num, err := strconv.ParseUint(sid, 10, 64)
+		if err != nil {
+			log.WithField("unparsedSid", sid).Warn("unable to parse SID, skipping")
+			continue
+		}
+
+		keep := true
+		for _, r := range ranges {
+			if r.Contains(num) {
+				keep = false
+				break
+			}
+		}
+
+		if keep {
+			filtered = append(filtered, sid)
+		}
+	}
+
+	return filtered
 }

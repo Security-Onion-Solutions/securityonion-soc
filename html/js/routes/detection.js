@@ -1,4 +1,4 @@
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -16,6 +16,8 @@ function debounce(fn, wait) {
 		}, wait);
 	}
 }
+
+const MAX_OVERRIDE_NOTE_LENGTH = 150;
 
 routes.push({ path: '/detection/:id', name: 'detection', component: {
 	template: '#page-detection',
@@ -42,10 +44,11 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				hours: value => (!value || /^\d{1,4}(\.\d{1,4})?$/.test(value)) || this.$root.i18n.invalidHours,
 				minLength: limit => value => (value && value.length >= limit) || this.$root.i18n.ruleMinLen,
 				shortLengthLimit: value => (value.length < 100) || this.$root.i18n.required,
+				noteLengthLimit: value => (value.length <= MAX_OVERRIDE_NOTE_LENGTH) || this.$root.i18n.ruleMaxLen,
 				longLengthLimit: value => (encodeURI(value).split(/%..|./).length - 1 < 10000000) || this.$root.i18n.required,
-				fileSizeLimit: value => (value == null || value.size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
-				fileNotEmpty: value => (value == null || value.size > 0) || this.$root.i18n.fileEmpty,
-				fileRequired: value => (value != null) || this.$root.i18n.required,
+				fileSizeLimit: value => (value == null || value.length == 0 || value[0].size < this.maxUploadSizeBytes) || this.$root.i18n.fileTooLarge.replace("{maxUploadSizeBytes}", this.$root.formatCount(this.maxUploadSizeBytes)),
+				fileNotEmpty: value => (value == null || value.length == 0 || value[0].size > 0) || this.$root.i18n.fileEmpty,
+				fileRequired: value => (value != null && value.length != 0) || this.$root.i18n.required,
 				cidrFormat: value => (!value ||
 					/^!?\$[a-z_][a-z0-9_]*$/i.test(value) || // Suricata variable
 					/^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\/(3[0-2]|[12]\d|\d)$/.test(value) || // IPv4 CIDR
@@ -56,44 +59,43 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			activeTab: '',
 			sidExtract: /\bsid: ?['"]?(.*?)['"]?;/, // option
 			severityExtract: /\bsignature_severity ['"]?(.*?)['"]?[,;]/, // metadata
-			sortBy: 'createdAt',
-			sortDesc: false,
-			expanded: [],
+			sortBy: [{ key: 'createdAt', order: 'asc' }],
 			overrideHeaders: {
 				'elastalert': [
-					{ text: this.$root.i18n.enabled, value: 'isEnabled' },
-					{ text: this.$root.i18n.type, value: 'type', localize: true },
-					{ text: this.$root.i18n.track, value: 'track' },
-					{ text: this.$root.i18n.dateCreated, value: 'createdAt', format: true },
-					{ text: this.$root.i18n.dateModified, value: 'updatedAt', format: true },
+					{},
+					{ title: this.$root.i18n.enabled, value: 'isEnabled' },
+					{ title: this.$root.i18n.type, value: 'type', localize: true },
+					{ title: this.$root.i18n.dateCreated, value: 'createdAt', format: true },
+					{ title: this.$root.i18n.dateModified, value: 'updatedAt', format: true },
 				],
 				'strelka': [], // no overrides
 				'suricata': [
-					{ text: this.$root.i18n.enabled, value: 'isEnabled' },
-					{ text: this.$root.i18n.type, value: 'type', localize: true },
-					{ text: this.$root.i18n.ipVar, value: 'ip' },
-					{ text: this.$root.i18n.dateCreated, value: 'createdAt', format: true },
-					{ text: this.$root.i18n.dateModified, value: 'updatedAt', format: true },
+					{},
+					{ title: this.$root.i18n.enabled, value: 'isEnabled' },
+					{ title: this.$root.i18n.type, value: 'type', localize: true },
+					{ title: this.$root.i18n.trackRegex, value: 'track', altValues: ['regex'] },
+					{ title: this.$root.i18n.ipVar, value: 'ip', altValues: ['value', 'countPerSecond'] },
+					{ title: this.$root.i18n.dateCreated, value: 'createdAt', format: true },
+					{ title: this.$root.i18n.dateModified, value: 'updatedAt', format: true },
 				],
 			},
 			zone: moment.tz.guess(),
 			newOverride: null,
 			newOverrideValid: false,
 			thresholdTypes: [
-				{ value: 'threshold', text: this.$root.i18n.threshold },
-				{ value: 'limit', text: this.$root.i18n.limit },
-				{ value: 'both', text: this.$root.i18n.both }
+				{ title: this.$root.i18n.threshold, value: 'threshold' },
+				{ title: this.$root.i18n.limit, value: 'limit' },
+				{ title: this.$root.i18n.both, value: 'both' }
 			],
 			historyTableOpts: {
-				sortBy: 'updateTime',
-				sortDesc: false,
+				sortBy: [{ key: 'updateTime', order: 'asc' }],
 				search: '',
 				headers: [
-					{ text: this.$root.i18n.actions, width: '10.0em' },
-					{ text: this.$root.i18n.username, value: 'owner' },
-					{ text: this.$root.i18n.time, value: 'updateTime' },
-					{ text: this.$root.i18n.kind, value: 'kind' },
-					{ text: this.$root.i18n.operation, value: 'operation' },
+					{ title: this.$root.i18n.actions, width: '10.0em' },
+					{ title: this.$root.i18n.username, value: 'owner' },
+					{ title: this.$root.i18n.time, value: 'updateTime', key: 'updateTime', sortRaw: this.$root.dateAwareCompare('updateTime') },
+					{ title: this.$root.i18n.kind, value: 'kind' },
+					{ title: this.$root.i18n.operation, value: 'operation' },
 				],
 				itemsPerPage: 10,
 				footerProps: { 'items-per-page-options': [10, 50, 250, 1000] },
@@ -103,13 +105,12 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			},
 			historyOverrideTableOpts: {
 				"elastalert": {
-					sortBy: 'updatedAt',
-					sortDesc: false,
+					sortBy: [{ key: 'updatedAt', order: 'asc' }],
 					headers: [
-						{ text: this.$root.i18n.actions, width: '10.0em' },
-						{ text: this.$root.i18n.kind, value: 'type' },
-						{ text: this.$root.i18n.time, value: 'updatedAt' },
-						{ text: this.$root.i18n.enabled, value: 'isEnabled' },
+						{ title: this.$root.i18n.actions, width: '10.0em' },
+						{ title: this.$root.i18n.kind, value: 'type' },
+						{ title: this.$root.i18n.time, value: 'updatedAt', key: 'updatedAt', rawSort: this.$root.dateAwareCompare('updatedAt') },
+						{ title: this.$root.i18n.enabled, value: 'isEnabled' },
 					],
 					itemsPerPage: 10,
 					footerProps: { 'items-per-page-options': [10, 50, 250, 1000] },
@@ -118,13 +119,12 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					loading: false,
 				},
 				"suricata": {
-					sortBy: 'updatedAt',
-					sortDesc: false,
+					sortBy: [{ key: 'updatedAt', order: 'asc' }],
 					headers: [
-						{ text: this.$root.i18n.actions, width: '10.0em' },
-						{ text: this.$root.i18n.kind, value: 'type' },
-						{ text: this.$root.i18n.time, value: 'updatedAt' },
-						{ text: this.$root.i18n.enabled, value: 'isEnabled' },
+						{ title: this.$root.i18n.actions, width: '10.0em' },
+						{ title: this.$root.i18n.kind, value: 'type' },
+						{ title: this.$root.i18n.time, value: 'updatedAt' },
+						{ title: this.$root.i18n.enabled, value: 'isEnabled' },
 					],
 					itemsPerPage: 10,
 					footerProps: { 'items-per-page-options': [10, 50, 250, 1000] },
@@ -138,19 +138,16 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			extractedLogic: '',
 			extractedLogicClass: '',
 			history: [],
-			extractedCreated: '',
-			extractedUpdated: '',
 			comments: [],
 			commentsTable: {
 				showAll: false,
-				sortBy: 'createTime',
-				sortDesc: false,
+				sortBy: [{ key: 'createTime', order: 'asc' }],
 				search: '',
 				headers: [
-					{ text: this.$root.i18n.username, value: 'owner' },
-					{ text: this.$root.i18n.dateCreated, value: 'createTime' },
-					{ text: this.$root.i18n.dateModified, value: 'updateTime' },
-					{ text: this.$root.i18n.commentDescription, value: 'description' },
+					{ title: this.$root.i18n.username, value: 'owner' },
+					{ title: this.$root.i18n.dateCreated, value: 'createTime' },
+					{ title: this.$root.i18n.dateModified, value: 'updateTime' },
+					{ title: this.$root.i18n.commentDescription, value: 'description' },
 				],
 				itemsPerPage: 10,
 				footerProps: { 'items-per-page-options': [10, 50, 250, 1000] },
@@ -187,6 +184,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				],
 			},
 			showUnreviewedAiSummaries: false,
+			MAX_OVERRIDE_NOTE_LENGTH: MAX_OVERRIDE_NOTE_LENGTH,
 	}},
 	created() {
 		this.$root.initializeEditor();
@@ -203,7 +201,9 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		this.$root.loadParameters('detection', this.initDetection);
 	},
 	updated() {
-		Prism.highlightAll();
+		this.$nextTick(() => {
+			Prism.highlightAll();
+		});
 	},
 	methods: {
 		async initDetection(params) {
@@ -276,7 +276,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.extractSummary();
 			this.extractReferences();
 			this.extractLogic();
-			this.extractDetails();
 			this.loadHistory();
 			this.loadComments();
 		},
@@ -484,65 +483,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			this.extractedLogic = jsyaml.dump({ logsource: logSource, detection: detection }).trim();
 		},
-		extractDetails() {
-			this.extractedCreated = this.extractedUpdated = '';
-
-			switch (this.detect.engine) {
-				case 'suricata':
-					this.extractSuricataDetails();
-					break;
-				case 'strelka':
-					this.extractStrelkaDetails();
-					break;
-				case 'elastalert':
-					this.extractElastAlertDetails();
-					break;
-			}
-		},
-		extractSuricataDetails() {
-			const metadataExtractor = /metadata:([^;]+);/i;
-			const match = this.detect.content.match(metadataExtractor);
-
-			if (!match) {
-				return;
-			}
-
-			const metadata = match[1].split(',').map(opt => opt.trim());
-			const ymd = /\d{4}[-_]\d{1,2}[-_]\d{1,2}/;
-			const leading0 = /^0/;
-
-			for (let i = 0; i < metadata.length; i++) {
-				let md = metadata[i];
-
-				if (md.indexOf('created_at') > -1) {
-					let date = md.match(ymd);
-					if (date) {
-						this.extractedCreated = date[0];
-					}
-				}
-
-				if (md.indexOf('updated_at') > -1) {
-					let date = md.match(ymd);
-					if (date) {
-						this.extractedUpdated = date[0];
-					}
-				}
-			}
-		},
-		extractStrelkaDetails() {
-			const dateExtractor = /^\s*date\s*=\s*"(.*)"/im;
-			const dateMatch = dateExtractor.exec(this.detect.content);
-
-			if (dateMatch) {
-				this.extractedCreated = dateMatch[1];
-			}
-		},
-		extractElastAlertDetails() {
-			const yaml = jsyaml.load(this.detect.content, { schema: jsyaml.FAILSAFE_SCHEMA });
-
-			this.extractedCreated = yaml['date'];
-			this.extractedUpdated = yaml['modified'];
-		},
 		async loadHistory(showLoadingIndicator = false) {
 			if (showLoadingIndicator) this.$root.startLoading();
 
@@ -676,6 +616,28 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			}
 
 			return [];
+		},
+		pickValue(item, field) {
+			let value = '';
+			if (field.value in item) {
+				value = item[field.value];
+			} else if (field.altValues) {
+				for (let i = 0; i < field.altValues.length; i++) {
+					if (field.altValues[i] === 'countPerSecond') {
+						value = `${item.count} / ${item.seconds}`;
+						break;
+					} else if (item[field.altValues[i]]) {
+						value = item[field.altValues[i]];
+						break;
+					}
+				}
+			}
+
+			if (field.localize) {
+				value = this.$root.tryLocalize(value);
+			}
+
+			return value;
 		},
 		translateOptions(opts) {
 			return opts.map(opt => this.$root.correctCasing(opt))
@@ -870,6 +832,16 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		cancelDeleteDetection() {
 			this.confirmDeleteDialog = false;
+		},
+		async saveOverrideNote(item) {
+			try {
+				this.$root.startLoading();
+				await this.$root.papi.put('/detection/' + this.detect.id + '/override/' + item.index + '/note', { note: item.note });
+			} catch (error) {
+				this.$root.showError(error);
+			} finally {
+				this.$root.stopLoading();
+			}
 		},
 		async confirmDeleteDetection() {
 			this.cancelDeleteDetection();
@@ -1101,6 +1073,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				count: null,
 				seconds: null,
 				customFilter: null,
+				note: '',
 			};
 		},
 		getOverrideTypes(engine) {
@@ -1109,13 +1082,13 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			switch (engine) {
 				case 'suricata':
 					return [
-						{ value: 'modify', text: this.i18n.modify },
-						{ value: 'suppress', text: this.i18n.suppress },
-						{ value: 'threshold', text: this.i18n.threshold }
+						{ title: this.i18n.modify, value: 'modify' },
+						{ title: this.i18n.suppress, value: 'suppress' },
+						{ title: this.i18n.threshold, value: 'threshold' }
 					];
 				case 'elastalert':
 					return [
-						{ value: 'customFilter', text: this.i18n.customFilter }
+						{ title: this.i18n.customFilter, value: 'customFilter' }
 					];
 			}
 
@@ -1143,6 +1116,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			if (o.updatedAt) {
 				out.updatedAt = o.updatedAt;
+			}
+
+			if (typeof o.note === 'string') {
+				out.note = o.note;
 			}
 
 			if (engine === 'elastalert') {
@@ -1215,14 +1192,15 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		isOverrideEdit(target) {
 			return this.curOverrideEditTarget === target;
 		},
-		stopOverrideEdit(commit) {
+		stopOverrideEdit(commit, saveFunc) {
+			saveFunc = saveFunc || this.saveDetection;
 			if (commit && this.$refs[this.curOverrideEditTarget].hasError) return;
 
 			if (!commit) {
 				this.editOverride[this.overrideEditField] = this.origOverrideValue;
 			} else {
 				this.$nextTick(async () => {
-					await this.saveDetection(false);
+					await saveFunc(false);
 					this.curOverrideEditTarget = null;
 				});
 			}
@@ -1439,8 +1417,13 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		isFieldValid(refName) {
 			const ref = this.$refs[refName];
 			if (ref) {
-				return ref.valid;
+				if (ref?.classList) {
+					return !ref.classList.contains('v-input--error');
+				}
+
+				return false;
 			}
+
 			return true;
 		},
 		highlighter(code) {

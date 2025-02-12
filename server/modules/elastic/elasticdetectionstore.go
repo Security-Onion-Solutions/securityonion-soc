@@ -1,4 +1,4 @@
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -18,6 +18,7 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	modcontext "github.com/security-onion-solutions/securityonion-soc/server/modules/context"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
@@ -183,15 +184,19 @@ func (store *ElasticDetectionstore) validateDetection(detect *model.Detection) e
 }
 
 func (store *ElasticDetectionstore) save(ctx context.Context, obj interface{}, kind string, id string) (*model.EventIndexResults, error) {
+	logger := log.FromContext(ctx)
+
 	if err := store.server.CheckAuthorized(ctx, "write", "detections"); err != nil {
 		return nil, err
 	}
+
+	skipAudit := modcontext.ReadSkipAudit(ctx)
 
 	document := ConvertObjectToDocumentMap(kind, obj, store.schemaPrefix)
 	document[store.schemaPrefix+"kind"] = kind
 
 	results, err := store.Index(ctx, store.index, document, id)
-	if err == nil {
+	if err == nil && !skipAudit {
 		document[store.schemaPrefix+AUDIT_DOC_ID] = results.DocumentId
 
 		if id == "" {
@@ -202,7 +207,7 @@ func (store *ElasticDetectionstore) save(ctx context.Context, obj interface{}, k
 
 		_, err = store.Index(ctx, store.auditIndex, document, "")
 		if err != nil {
-			log.WithFields(log.Fields{
+			logger.WithFields(log.Fields{
 				"documentId":   results.DocumentId,
 				"documentKind": kind,
 			}).WithError(err).Error("Object indexed successfully however audit record failed to index")
@@ -213,21 +218,23 @@ func (store *ElasticDetectionstore) save(ctx context.Context, obj interface{}, k
 }
 
 func (store *ElasticDetectionstore) Index(ctx context.Context, index string, document map[string]interface{}, id string) (*model.EventIndexResults, error) {
+	logger := log.FromContext(ctx)
+
 	results := model.NewEventIndexResults()
 
 	request, err := convertToElasticIndexRequest(document)
 	if err == nil {
 		var response string
 
-		log.Debug("Sending index request to primary Elasticsearch client")
+		logger.Debug("Sending index request to primary Elasticsearch client")
 		response, err = store.indexDocument(ctx, store.disableCrossClusterIndex(index), request, id)
 		if err == nil {
 			err = convertFromElasticIndexResults(response, results)
 			if err != nil {
-				log.WithError(err).Error("Encountered error while converting document index results")
+				logger.WithError(err).Error("Encountered error while converting document index results")
 			}
 		} else {
-			log.WithError(err).Error("Encountered error while indexing document into elasticsearch")
+			logger.WithError(err).Error("Encountered error while indexing document into elasticsearch")
 		}
 	}
 
@@ -235,12 +242,14 @@ func (store *ElasticDetectionstore) Index(ctx context.Context, index string, doc
 }
 
 func (store *ElasticDetectionstore) deleteDocument(ctx context.Context, index string, obj interface{}, kind string, id string) (string, error) {
+	logger := log.FromContext(ctx)
+
 	err := store.server.CheckAuthorized(ctx, "write", "detections")
 	if err != nil {
 		return "", err
 	}
 
-	log.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"deleteIndex": index,
 		"documentId":  id,
 		"requestId":   ctx.Value(web.ContextKeyRequestId),
@@ -249,7 +258,7 @@ func (store *ElasticDetectionstore) deleteDocument(ctx context.Context, index st
 	res, err := store.esClient.Delete(transformIndex(index), id, store.esClient.Delete.WithContext(ctx))
 
 	if err != nil {
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"deleteIndex": index,
 			"documentId":  id,
 			"requestId":   ctx.Value(web.ContextKeyRequestId),
@@ -264,7 +273,7 @@ func (store *ElasticDetectionstore) deleteDocument(ctx context.Context, index st
 	document[store.schemaPrefix+"operation"] = "delete"
 	err = store.audit(ctx, document, id)
 	if err != nil {
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"documentId":    id,
 			"detectionKind": kind,
 		}).WithError(err).Error("Object deleted successfully however audit record failed to index")
@@ -272,7 +281,7 @@ func (store *ElasticDetectionstore) deleteDocument(ctx context.Context, index st
 
 	json, err := readJsonFromResponse(res)
 
-	log.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"deleteIndex": index,
 		"documentId":  id,
 		"response":    store.truncate(json),
@@ -297,6 +306,8 @@ func (store *ElasticDetectionstore) get(ctx context.Context, id string, kind str
 }
 
 func (store *ElasticDetectionstore) getAll(ctx context.Context, query string, max int) ([]interface{}, error) {
+	logger := log.FromContext(ctx)
+
 	criteria := model.NewEventSearchCriteria()
 	format := "2006-01-02 3:04:05 PM"
 
@@ -326,7 +337,7 @@ func (store *ElasticDetectionstore) getAll(ctx context.Context, query string, ma
 	for _, event := range results.Events {
 		obj, err := convertElasticEventToObject(event, store.schemaPrefix)
 		if err != nil {
-			log.WithField("returnedEvent", event).WithError(err).Error("Unable to convert detection object")
+			logger.WithField("returnedEvent", event).WithError(err).Error("Unable to convert detection object")
 			continue
 		}
 
@@ -336,10 +347,10 @@ func (store *ElasticDetectionstore) getAll(ctx context.Context, query string, ma
 	return objects, err
 }
 
-func (store *ElasticDetectionstore) Query(ctx context.Context, query string, max int) ([]interface{}, error) {
-	var objects []interface{}
+func (store *ElasticDetectionstore) Query(ctx context.Context, query string, max int) (objects []interface{}, err error) {
+	logger := log.FromContext(ctx)
 
-	err := store.server.CheckAuthorized(ctx, "read", "detections")
+	err = store.server.CheckAuthorized(ctx, "read", "detections")
 	if err != nil {
 		return nil, err
 	}
@@ -400,7 +411,7 @@ func (store *ElasticDetectionstore) Query(ctx context.Context, query string, max
 		if err == nil {
 			objects = append(objects, obj)
 		} else {
-			log.WithField("returnedEvent", event).WithError(err).Error("Unable to convert case object")
+			logger.WithField("returnedEvent", event).WithError(err).Error("Unable to convert case object")
 		}
 	}
 
@@ -537,6 +548,13 @@ func (store *ElasticDetectionstore) UpdateDetection(ctx context.Context, detect 
 }
 
 func (store *ElasticDetectionstore) DeleteDetection(ctx context.Context, id string) (*model.Detection, error) {
+	logger := log.FromContext(ctx)
+
+	err := store.server.CheckAuthorized(ctx, "write", "detections")
+	if err != nil {
+		return nil, err
+	}
+
 	detect, err := store.GetDetection(ctx, id)
 	if err != nil {
 		return nil, err
@@ -545,7 +563,7 @@ func (store *ElasticDetectionstore) DeleteDetection(ctx context.Context, id stri
 	_, err = store.deleteDocument(ctx, store.disableCrossClusterIndex(store.index), detect, "detection", id)
 
 	if err == nil {
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"ruleId":       id,
 			"rulePublicId": detect.PublicID,
 			"ruleName":     detect.Title,
@@ -586,12 +604,14 @@ func (store *ElasticDetectionstore) GetDetectionHistory(ctx context.Context, det
 }
 
 func (store *ElasticDetectionstore) audit(ctx context.Context, document map[string]interface{}, id string) error {
+	logger := log.FromContext(ctx)
+
 	request, err := convertToElasticIndexRequest(document)
 	if err == nil {
-		log.Debug("Sending index request to primary Elasticsearch client")
+		logger.Debug("Sending index request to primary Elasticsearch client")
 		_, err = store.indexDocument(ctx, store.disableCrossClusterIndex(store.auditIndex), request, id)
 		if err != nil {
-			log.WithError(err).Error("Encountered error while indexing document into elasticsearch")
+			logger.WithError(err).Error("Encountered error while indexing document into elasticsearch")
 		}
 	}
 
@@ -599,12 +619,14 @@ func (store *ElasticDetectionstore) audit(ctx context.Context, document map[stri
 }
 
 func (store *ElasticDetectionstore) indexDocument(ctx context.Context, index string, document string, id string) (string, error) {
+	logger := log.FromContext(ctx)
+
 	err := store.server.CheckAuthorized(ctx, "write", "detections")
 	if err != nil {
 		return "", err
 	}
 
-	log.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"documentIndex": index,
 		"documentId":    id,
 		"document":      store.truncate(document),
@@ -619,16 +641,18 @@ func (store *ElasticDetectionstore) indexDocument(ctx context.Context, index str
 	)
 
 	if err != nil {
-		log.WithError(err).Error("Unable to index document into Elasticsearch")
+		logger.WithError(err).Error("Unable to index document into Elasticsearch")
 		return "", err
 	}
 	defer res.Body.Close()
+
 	json, err := readJsonFromResponse(res)
 
-	log.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"response":  store.truncate(json),
 		"requestId": ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Index new document finished")
+
 	return json, err
 }
 
@@ -777,7 +801,7 @@ func (store *ElasticDetectionstore) DeleteComment(ctx context.Context, id string
 	return err
 }
 
-func (store *ElasticDetectionstore) BuildBulkIndexer(ctx context.Context, logger *log.Entry) (esutil.BulkIndexer, error) {
+func (store *ElasticDetectionstore) BuildBulkIndexer(ctx context.Context, logger log.Interface) (esutil.BulkIndexer, error) {
 	bulk, err := esutil.NewBulkIndexer(esutil.BulkIndexerConfig{
 		Client:     store.esClient,
 		Refresh:    "wait_for",
@@ -798,6 +822,12 @@ func (store *ElasticDetectionstore) ConvertObjectToDocument(ctx context.Context,
 	}
 
 	id := auditable.Id
+	updateTime := auditable.UpdateTime
+
+	defer func() {
+		auditable.Id = id
+		auditable.UpdateTime = updateTime
+	}()
 
 	store.prepareForSave(ctx, auditable)
 	document := ConvertObjectToDocumentMap(kind, obj, store.schemaPrefix)
@@ -817,8 +847,6 @@ func (store *ElasticDetectionstore) ConvertObjectToDocument(ctx context.Context,
 	}
 
 	rawDoc, err := json.Marshal(document)
-
-	auditable.Id = id
 
 	return rawDoc, index, err
 }

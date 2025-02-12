@@ -1,4 +1,4 @@
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -23,74 +23,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
-
-func TestTruncateMap(t *testing.T) {
-	errMap := map[string]error{
-		"db6c06c4-bf3b-421c-aa88-15672b88c743": errors.New("error 1"),
-		"db92dd33-a3ad-49cf-8c2c-608c3e30ace0": errors.New("error 2"),
-		"dbc1f800-0fe0-4bc0-9c66-292c2abe3f78": errors.New("error 3"),
-		"Random key":                           errors.New("random value"),
-	}
-
-	// Test truncating to one element
-	truncatedErrMap := TruncateMap(errMap, 2)
-	assert.Equal(t, 2, len(truncatedErrMap), "Truncated map should have exactly two elements.")
-
-	// Ensure the key in the truncated map exists in the original map and has the correct error message
-	for key, val := range truncatedErrMap {
-		assert.Equal(t, errMap[key], val, "Error messages should match for truncated keys.")
-	}
-
-	// Test truncating to more elements than exist in the map
-	truncatedErrMap = TruncateMap(errMap, 10)
-	assert.Equal(t, len(errMap), len(truncatedErrMap), "Truncated map should equal the original map in size when the limit exceeds the number of map elements.")
-
-	// Test truncating to zero elements
-	truncatedErrMap = TruncateMap(errMap, 0)
-	assert.Equal(t, 0, len(truncatedErrMap), "Truncated map should have no elements when limit is 0.")
-}
-
-func TestTruncateList(t *testing.T) {
-	tests := []struct {
-		Name       string
-		Array      []int
-		TruncateTo uint
-		ExpArray   []int
-	}{
-		{
-			Name:       "Empty",
-			Array:      []int{},
-			TruncateTo: 10,
-			ExpArray:   []int{},
-		},
-		{
-			Name:       "Below Limit",
-			Array:      []int{0},
-			TruncateTo: 10,
-			ExpArray:   []int{0},
-		},
-		{
-			Name:       "At Limit",
-			Array:      []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
-			TruncateTo: 10,
-			ExpArray:   []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
-		},
-		{
-			Name:       "Above Limit",
-			Array:      []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
-			TruncateTo: 5,
-			ExpArray:   []int{0, 1, 2, 3, 4},
-		},
-	}
-
-	for _, test := range tests {
-		test := test
-		t.Run(test.Name, func(t *testing.T) {
-			truncated := TruncateList(test.Array, test.TruncateTo)
-			assert.Equal(t, test.ExpArray, truncated)
-		})
-	}
-}
 
 func TestDetermineWaitTimeNoState(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -423,7 +355,7 @@ func TestUpdateRepos(t *testing.T) {
 			Dir:      true,
 		},
 	}, nil)
-	iom.EXPECT().PullRepo(gomock.Any(), "baseRepoFolder/repo1", nil).Return(false, false)
+	iom.EXPECT().PullRepo(gomock.Any(), "baseRepoFolder/repo1", nil).Return(false, false, false)
 	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo2", "http://github.com/user/repo2", &branch).Return(nil)
 	iom.EXPECT().RemoveAll("baseRepoFolder/repo3").Return(nil)
 
@@ -489,4 +421,84 @@ func TestUpdateReposFailToClone(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, allRepos)
 	assert.False(t, anythingNew)
+}
+
+func TestUpdateReposAllowedRepoErrors(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	branch := "branch"
+
+	iom := mock.NewMockIOManager(ctrl)
+	iom.EXPECT().ReadDir("baseRepoFolder").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: "repo1",
+			Dir:      true,
+		},
+	}, nil)
+	iom.EXPECT().PullRepo(gomock.Any(), "baseRepoFolder/repo1", &branch).Return(true, false, false)
+	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo2", "http://github.com/user/repo2", nil).Return(transport.ErrEmptyRemoteRepository)
+	iom.EXPECT().CloneRepo(gomock.Any(), "baseRepoFolder/repo3", "file:///nsm/rules/repo3", nil).Return(transport.ErrRepositoryNotFound)
+
+	isRunning := true
+
+	repos := []*model.RuleRepo{
+		{
+			Repo:   "http://github.com/user/repo1",
+			Branch: &branch,
+		},
+		{
+			Repo: "http://github.com/user/repo2",
+		},
+		{
+			Repo: "file:///nsm/rules/repo3",
+		},
+	}
+
+	allRepos, anythingNew, err := UpdateRepos(&isRunning, "baseRepoFolder", repos, iom)
+	assert.NoError(t, err)
+	assert.Len(t, allRepos, 1)
+	assert.Equal(t, &RepoOnDisk{
+		Repo:        repos[0],
+		Path:        "baseRepoFolder/repo1",
+		WasModified: true,
+	}, allRepos[0])
+	assert.True(t, anythingNew)
+}
+
+func TestUpdateReposRepoRemoteGoneError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	branch := "branch"
+
+	iom := mock.NewMockIOManager(ctrl)
+	// 1. repo has been cloned before and exists on disk
+	iom.EXPECT().ReadDir("baseRepoFolder").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{
+			Filename: "repo1",
+			Dir:      true,
+		},
+	}, nil)
+	// 2. the remote repository no longer exists
+	iom.EXPECT().PullRepo(gomock.Any(), "baseRepoFolder/repo1", &branch).Return(false, false, true)
+	// 3. We DO NOT delete the repo for recloning, we do not process other repos in the config's list
+
+	isRunning := true
+
+	repos := []*model.RuleRepo{
+		{
+			Repo:   "http://github.com/user/repo1",
+			Branch: &branch,
+		},
+		{
+			Repo: "http://github.com/user/repo2",
+		},
+	}
+
+	allRepos, anythingNew, err := UpdateRepos(&isRunning, "baseRepoFolder", repos, iom)
+	assert.Len(t, allRepos, 0)
+	assert.False(t, anythingNew)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrRepoRemoteGone)
 }

@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -92,9 +92,9 @@ func (datastore *FileDatastoreImpl) addNode(node *model.Node) *model.Node {
 	return node
 }
 
-func (datastore *FileDatastoreImpl) UpdateNode(ctx context.Context, newNode *model.Node) (*model.Node, error) {
-	var node *model.Node
-	var err error
+func (datastore *FileDatastoreImpl) UpdateNode(ctx context.Context, newNode *model.Node) (node *model.Node, err error) {
+	logger := log.FromContext(ctx)
+
 	if len(newNode.Id) > 0 {
 		if err = datastore.server.CheckAuthorized(ctx, "write", "nodes"); err == nil {
 			datastore.lock.Lock()
@@ -124,11 +124,12 @@ func (datastore *FileDatastoreImpl) UpdateNode(ctx context.Context, newNode *mod
 			node.UptimeSeconds = int(node.UpdateTime.Sub(node.OnlineTime).Seconds())
 		}
 	} else {
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"description": newNode.Description,
 			"requestId":   ctx.Value(web.ContextKeyRequestId),
 		}).Info("Not adding node with missing id")
 	}
+
 	return node, err
 }
 
@@ -153,12 +154,16 @@ func (datastore *FileDatastoreImpl) GetNextJob(ctx context.Context, nodeId strin
 }
 
 func (datastore *FileDatastoreImpl) CreateJob(ctx context.Context) *model.Job {
+	logger := log.FromContext(ctx)
+
 	datastore.lock.Lock()
 	defer datastore.lock.Unlock()
+
 	job := model.NewJob()
 	job.Id = datastore.nextJobId
 	datastore.incrementJobId(job.Id)
-	log.WithFields(log.Fields{
+
+	logger.WithFields(log.Fields{
 		"id":        job.Id,
 		"nextJobId": datastore.nextJobId,
 	}).Debug("Created job")
@@ -175,8 +180,8 @@ func (datastore *FileDatastoreImpl) jobIsAllowed(ctx context.Context, job *model
 			allowed = true
 		} else {
 			// User is only authorized against their own jobs.
-			if user, ok := ctx.Value(web.ContextKeyRequestor).(*model.User); ok {
-				if job.UserId == user.Id {
+			if userId, ok := ctx.Value(web.ContextKeyRequestorId).(string); ok {
+				if job.UserId == userId {
 					allowed = true
 				}
 			}
@@ -264,10 +269,10 @@ func (datastore *FileDatastoreImpl) AddPivotJob(ctx context.Context, job *model.
 
 func (datastore *FileDatastoreImpl) addAndSaveJob(ctx context.Context, job *model.Job) error {
 	var err error
-	if user, ok := ctx.Value(web.ContextKeyRequestor).(*model.User); ok {
-		job.UserId = user.Id
+	if userId, ok := ctx.Value(web.ContextKeyRequestorId).(string); ok {
+		job.UserId = userId
 	} else {
-		err = errors.New("User not found in context")
+		return errors.New("User ID not found in context")
 	}
 	datastore.lock.Lock()
 	defer datastore.lock.Unlock()
@@ -309,6 +314,8 @@ func (datastore *FileDatastoreImpl) getJobById(jobId int) *model.Job {
 }
 
 func (datastore *FileDatastoreImpl) DeleteJob(ctx context.Context, jobId int) (*model.Job, error) {
+	logger := log.FromContext(ctx)
+
 	var err error
 	job := datastore.getJobById(jobId)
 	if job != nil {
@@ -326,7 +333,7 @@ func (datastore *FileDatastoreImpl) DeleteJob(ctx context.Context, jobId int) (*
 				filename = fmt.Sprintf("%d.bin.unwrapped", job.Id)
 				os.Remove(filepath.Join(folder, filename))
 
-				log.WithFields(log.Fields{
+				logger.WithFields(log.Fields{
 					"id":       job.Id,
 					"folder":   folder,
 					"filename": filename,
@@ -421,16 +428,16 @@ func (datastore *FileDatastoreImpl) loadJobs() error {
 	return err
 }
 
-func (datastore *FileDatastoreImpl) GetPackets(ctx context.Context, jobId int, offset int, count int, unwrap bool) ([]*model.Packet, error) {
-	var packets []*model.Packet
-	var err error
+func (datastore *FileDatastoreImpl) GetPackets(ctx context.Context, jobId int, offset int, count int, unwrap bool) (packets []*model.Packet, err error) {
+	logger := log.FromContext(ctx)
+
 	job := datastore.GetJob(ctx, jobId)
 	if job != nil {
 		if datastore.jobIsAllowed(ctx, job, "read") {
 			if job.Status == model.JobStatusCompleted {
 				packets, err = packet.ParsePcap(datastore.getStreamFilename(job), offset, count, unwrap)
 				if err != nil {
-					log.WithError(err).WithField("jobId", job.Id).Warn("Failed to parse captured packets")
+					logger.WithError(err).WithField("jobId", job.Id).Warn("Failed to parse captured packets")
 					err = nil
 				}
 			}
@@ -444,8 +451,9 @@ func (datastore *FileDatastoreImpl) GetPackets(ctx context.Context, jobId int, o
 	return packets, err
 }
 
-func (datastore *FileDatastoreImpl) SavePacketStream(ctx context.Context, jobId int, reader io.ReadCloser) error {
-	var err error
+func (datastore *FileDatastoreImpl) SavePacketStream(ctx context.Context, jobId int, reader io.ReadCloser) (err error) {
+	logger := log.FromContext(ctx)
+
 	if err = datastore.server.CheckAuthorized(ctx, "process", "jobs"); err == nil {
 		job := datastore.getJobById(jobId)
 		if job != nil {
@@ -457,9 +465,9 @@ func (datastore *FileDatastoreImpl) SavePacketStream(ctx context.Context, jobId 
 					count, err = io.Copy(file, reader)
 				}
 				if err != nil {
-					log.WithError(err).WithField("jobId", jobId).Error("Failed to write packet stream to file")
+					logger.WithError(err).WithField("jobId", jobId).Error("Failed to write packet stream to file")
 				} else {
-					log.WithFields(log.Fields{
+					logger.WithFields(log.Fields{
 						"bytes": count,
 						"jobId": jobId,
 					}).Info("Saved packet stream to file")
@@ -474,11 +482,9 @@ func (datastore *FileDatastoreImpl) SavePacketStream(ctx context.Context, jobId 
 	return err
 }
 
-func (datastore *FileDatastoreImpl) GetPacketStream(ctx context.Context, jobId int, unwrap bool) (io.ReadCloser, string, int64, error) {
-	var reader io.ReadCloser
-	var filename string
-	var length int64
-	var err error
+func (datastore *FileDatastoreImpl) GetPacketStream(ctx context.Context, jobId int, unwrap bool) (reader io.ReadCloser, filename string, length int64, err error) {
+	logger := log.FromContext(ctx)
+
 	job := datastore.GetJob(ctx, jobId)
 	if job != nil {
 		if datastore.jobIsAllowed(ctx, job, "read") {
@@ -487,17 +493,17 @@ func (datastore *FileDatastoreImpl) GetPacketStream(ctx context.Context, jobId i
 				var file *os.File
 				file, err = os.Open(datastore.getModifiedStreamFilename(job, unwrap))
 				if err != nil {
-					log.WithError(err).WithField("jobId", job.Id).Error("Failed to open packet stream")
+					logger.WithError(err).WithField("jobId", job.Id).Error("Failed to open packet stream")
 				} else {
 					reader = file
 					info, err := file.Stat()
 					length = info.Size()
-					log.WithFields(log.Fields{
+					logger.WithFields(log.Fields{
 						"streamSize":     length,
 						"streamFilename": info.Name(),
 					}).Info("Streaming file")
 					if err != nil {
-						log.WithError(err).WithField("jobId", job.Id).Error("Failed to open file stats")
+						logger.WithError(err).WithField("jobId", job.Id).Error("Failed to open file stats")
 					}
 				}
 			}

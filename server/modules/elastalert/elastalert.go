@@ -1,4 +1,4 @@
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -66,7 +66,16 @@ const (
 	DEFAULT_AI_REPO_BRANCH                           = "generated-summaries-published"
 	DEFAULT_AI_REPO_PATH                             = "/opt/sensoroni/ai_summary_repos"
 	DEFAULT_SHOW_AI_SUMMARIES                        = true
+	DEFAULT_AUTO_UPDATE_ENABLED                      = false
 )
+
+type RuleCriteria struct {
+	Ruleset  []string `yaml:"ruleset" json:"ruleset"`
+	Level    []string `yaml:"level" json:"level"`
+	Product  []string `yaml:"product" json:"product"`
+	Category []string `yaml:"category" json:"category"`
+	Service  []string `yaml:"service" json:"service"`
+}
 
 var ( // treat as constant
 	DEFAULT_RULES_REPOS = []*model.RuleRepo{
@@ -95,6 +104,7 @@ type ElastAlertEngine struct {
 	sigmaPipelinesFingerprintFile      string
 	sigmaRulePackages                  []string
 	autoEnabledSigmaRules              []string
+	enabledSigmaRules                  []RuleCriteria
 	additionalAlerters                 []string
 	additionalAlerterParams            string
 	informationalSeverityAlerters      []string
@@ -120,26 +130,97 @@ type ElastAlertEngine struct {
 	aiRepoBranch                       string
 	aiRepoPath                         string
 	customAlerters                     *map[string]interface{}
+	autoUpdateEnabled                  bool
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
 	detections.IOManager
 	model.EngineState
 }
 
-func checkRulesetEnabled(e *ElastAlertEngine, det *model.Detection) {
-	det.IsEnabled = false
-	if det.Ruleset == "" || det.Severity == "" {
-		return
+func loadEnabledSigmaRules(config module.ModuleConfig) []RuleCriteria {
+	defaultRuleFilters := []RuleCriteria{
+		{
+			Ruleset:  []string{"securityonion-resources"},
+			Level:    []string{"critical", "high"},
+			Product:  []string{"*"},
+			Category: []string{"*"},
+			Service:  []string{"*"},
+		},
+		{
+			Ruleset:  []string{"core"},
+			Level:    []string{"critical"},
+			Product:  []string{"*"},
+			Category: []string{"process_creation", "file_event", "registry_event", "network_connection", "dns_query"},
+			Service:  []string{"*"},
+		},
 	}
 
-	// Combine Ruleset and Severity into a single string
-	metaCombined := det.Ruleset + "+" + string(det.Severity)
-	for _, rule := range e.autoEnabledSigmaRules {
-		if strings.EqualFold(rule, metaCombined) {
-			det.IsEnabled = true
-			break
+	rawRuleFilters, ok := config["enabledSigmaRules"]
+	if !ok {
+		log.Info("enabledSigmaRules not found in config, using defaults.")
+		return defaultRuleFilters
+	}
+
+	var configData []RuleCriteria
+	err := yaml.Unmarshal([]byte(rawRuleFilters.(string)), &configData)
+	if err != nil {
+		log.WithError(err).Error("Failed to unmarshal YAML data for enabledSigmaRules")
+		return defaultRuleFilters
+	}
+
+	// Use the parsed filters if available, otherwise return defaults
+	if len(configData) > 0 {
+		return configData
+	}
+
+	return defaultRuleFilters
+}
+
+// Function to check if a rule should be enabled based on criteria
+func checkRulesetEnabled(e *ElastAlertEngine, det *model.Detection) {
+	det.IsEnabled = false
+
+	if len(e.autoEnabledSigmaRules) != 0 {
+
+		// Deprecated in 2.4.120, will be removed in a future release
+		log.Warn("Use of autoEnabledSigmaRules is deprecated, use enabledSigmaRules instead")
+		// Combine Ruleset and Severity into a single string
+		metaCombined := det.Ruleset + "+" + string(det.Severity)
+		for _, rule := range e.autoEnabledSigmaRules {
+			if strings.EqualFold(rule, metaCombined) {
+				det.IsEnabled = true
+				break
+			}
+		}
+
+	} else {
+
+		for _, rule := range e.enabledSigmaRules {
+			if matchArrayField(rule.Ruleset, det.Ruleset) &&
+				matchArrayField(rule.Level, string(det.Severity)) &&
+				matchArrayField(rule.Product, det.Product) &&
+				matchArrayField(rule.Category, det.Category) &&
+				matchArrayField(rule.Service, det.Service) {
+				det.IsEnabled = true
+				break
+			}
 		}
 	}
+}
+
+// Helper to match array fields with wildcard support
+func matchArrayField(configValues []string, ruleValue string) bool {
+	ruleValue = strings.TrimSpace(strings.ToLower(ruleValue))
+	if len(configValues) == 0 {
+		return true
+	}
+	for _, value := range configValues {
+		value = strings.TrimSpace(strings.ToLower(value))
+		if value == "*" || value == ruleValue {
+			return true
+		}
+	}
+	return false
 }
 
 func NewElastAlertEngine(srv *server.Server) *ElastAlertEngine {
@@ -176,7 +257,8 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.sigmaPipelineSO = module.GetStringDefault(config, "sigmaPipelineSO", DEFAULT_SIGMA_PIPELINE_SO_FILE)
 	e.sigmaPipelinesFingerprintFile = module.GetStringDefault(config, "sigmaPipelinesFingerprintFile", DEFAULT_SIGMA_PIPELINES_FINGERPRINT_FILE)
 	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", DEFAULT_RULES_FINGERPRINT_FILE)
-	e.autoEnabledSigmaRules = module.GetStringArrayDefault(config, "autoEnabledSigmaRules", []string{"securityonion-resources+critical", "securityonion-resources+high"})
+	e.enabledSigmaRules = loadEnabledSigmaRules(config)
+	e.autoEnabledSigmaRules = module.GetStringArrayDefault(config, "autoEnabledSigmaRules", []string{})
 	e.CommunityRulesImportErrorSeconds = module.GetIntDefault(config, "communityRulesImportErrorSeconds", DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 	e.additionalAlerters = module.GetStringArrayDefault(config, "additionalAlerters", []string{})
@@ -191,6 +273,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.highSeverityAlerterParams = module.GetStringDefault(config, "additionalSev4AlertersParams", "")
 	e.criticalSeverityAlerters = module.GetStringArrayDefault(config, "additionalSev5Alerters", []string{})
 	e.criticalSeverityAlerterParams = module.GetStringDefault(config, "additionalSev5AlertersParams", "")
+	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", DEFAULT_AUTO_UPDATE_ENABLED)
 
 	if custom, ok := config["additionalUserDefinedNotifications"]; ok {
 		switch ct := custom.(type) {
@@ -236,7 +319,7 @@ func (e *ElastAlertEngine) Start() error {
 	e.IntegrityCheckerData.IsRunning = true
 
 	// start long running processes
-	go detections.SyncScheduler(e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameElastAlert, &e.isRunning, e.IOManager)
+	go detections.SyncScheduler(e.srv.Context, e.srv.Detectionstore, e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameElastAlert, &e.isRunning)
 	go detections.IntegrityChecker(model.EngineNameElastAlert, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
 
 	// update Ai Summaries once and don't block
@@ -391,6 +474,26 @@ func (e *ElastAlertEngine) ExtractDetails(detect *model.Detection) error {
 		detect.Author = *rule.Author
 	}
 
+	formats := []string{"2006-01-02", "2006/01/02", "2006_01_02"}
+
+	if rule.Date != nil {
+		t, dateErr := detections.ParseDate(*rule.Date, formats)
+		if dateErr == nil {
+			detect.SourceCreated = &t
+		} else {
+			log.WithField("date", *rule.Date).WithError(dateErr).Warn("unable to parse date")
+		}
+	}
+
+	if rule.Modified != nil {
+		t, dateErr := detections.ParseDate(*rule.Modified, formats)
+		if dateErr == nil {
+			detect.SourceUpdated = &t
+		} else {
+			log.WithField("modified", *rule.Modified).WithError(dateErr).Warn("unable to parse date")
+		}
+	}
+
 	return nil
 }
 
@@ -506,6 +609,15 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 	}
 
 	e.writeNoRead = nil
+
+	if !e.autoUpdateEnabled && !forceSync {
+		logger.WithFields(log.Fields{
+			"autoUpdateEnabled": e.autoUpdateEnabled,
+			"forceSync":         forceSync,
+		}).Info("skipping sync")
+
+		return nil
+	}
 
 	if e.showAiSummaries {
 		err := detections.RefreshAiSummaries(e, model.SigLangSigma, &e.isRunning, e.aiRepoPath, e.aiRepoUrl, e.aiRepoBranch, logger, e.IOManager)
@@ -741,7 +853,7 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 	if len(errMap) > 0 {
 		// there were errors, don't save the fingerprint.
 		// idempotency means we might fix it if we try again later.
-		logger.WithField("elastAlertSyncErrors", detections.TruncateMap(errMap, 5)).Error("unable to sync all ElastAlert community detections")
+		logger.WithField("elastAlertSyncErrors", util.TruncateMap(errMap, 5)).Error("unable to sync all ElastAlert community detections")
 
 		if e.notify {
 			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
@@ -995,7 +1107,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 		return nil, err
 	}
 
-	createAudit := make([]model.AuditInfo, 0, len(detects))
+	createAudit := make([]model.AuditInfo, 0, len(detects)) // Object => *model.Detection
 	auditMut := sync.Mutex{}
 	errMut := sync.Mutex{}
 
@@ -1012,6 +1124,14 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 			"rule.uuid": detect.PublicID,
 			"rule.name": detect.Title,
 		}).Info("syncing rule")
+
+		exErr := e.ExtractDetails(detect)
+		if exErr != nil {
+			logger.WithField("publicId", detect.PublicID).WithError(exErr).Warn("unable to extract details from detection, skipping")
+			errMap[detect.PublicID] = exErr
+
+			continue
+		}
 
 		path, ok := index[detect.PublicID]
 		if !ok {
@@ -1043,7 +1163,13 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 		}
 
 		if exists {
-			if orig.Content != detect.Content || orig.Ruleset != detect.Ruleset || len(detect.Overrides) != 0 {
+			hasChanged := orig.Content != detect.Content
+			hasChanged = hasChanged || orig.Ruleset != detect.Ruleset
+			hasChanged = hasChanged || len(detect.Overrides) != 0
+			hasChanged = hasChanged || !util.Equal(orig.SourceCreated, detect.SourceCreated)
+			hasChanged = hasChanged || !util.Equal(orig.SourceUpdated, detect.SourceUpdated)
+
+			if hasChanged {
 				logger.WithFields(log.Fields{
 					"rule.uuid": detect.PublicID,
 					"rule.name": detect.Title,
@@ -1061,9 +1187,9 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 						results.Updated++
 
 						createAudit = append(createAudit, model.AuditInfo{
-							Detection: detect,
-							DocId:     resp.DocumentID,
-							Op:        "update",
+							Object: detect,
+							DocId:  resp.DocumentID,
+							Op:     "update",
 						})
 					},
 					OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
@@ -1115,9 +1241,9 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 					results.Added++
 
 					createAudit = append(createAudit, model.AuditInfo{
-						Detection: detect,
-						DocId:     resp.DocumentID,
-						Op:        "create",
+						Object: detect,
+						DocId:  resp.DocumentID,
+						Op:     "create",
 					})
 				},
 				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
@@ -1204,9 +1330,9 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 				results.Removed++
 
 				createAudit = append(createAudit, model.AuditInfo{
-					Detection: community[publicId],
-					DocId:     resp.DocumentID,
-					Op:        "delete",
+					Object: community[publicId],
+					DocId:  resp.DocumentID,
+					Op:     "delete",
 				})
 			},
 			OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
@@ -1259,10 +1385,11 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 		}
 
 		for _, audit := range createAudit {
+			det := audit.Object.(*model.Detection)
 			// prepare audit doc
-			document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", audit.Detection, &audit.Detection.Auditable, false, &audit.DocId, &audit.Op)
+			document, index, err := e.srv.Detectionstore.ConvertObjectToDocument(ctx, "detection", audit.Object, &det.Auditable, false, &audit.DocId, &audit.Op)
 			if err != nil {
-				errMap[audit.Detection.PublicID] = err
+				errMap[det.PublicID] = err
 				continue
 			}
 
@@ -1279,14 +1406,14 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 					defer errMut.Unlock()
 
 					if err != nil {
-						errMap[audit.Detection.PublicID] = err
+						errMap[det.PublicID] = err
 					} else {
-						errMap[audit.Detection.PublicID] = errors.New(resp.Error.Reason)
+						errMap[det.PublicID] = errors.New(resp.Error.Reason)
 					}
 				},
 			})
 			if err != nil {
-				errMap[audit.Detection.PublicID] = err
+				errMap[det.PublicID] = err
 				continue
 			}
 		}
@@ -1315,7 +1442,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 		"syncUpdated":   results.Updated,
 		"syncRemoved":   results.Removed,
 		"syncUnchanged": results.Unchanged,
-		"syncErrors":    detections.TruncateMap(errMap, 5),
+		"syncErrors":    util.TruncateMap(errMap, 5),
 	}).Info("elastalert community diff")
 
 	return errMap, nil
@@ -1940,8 +2067,8 @@ func (e *ElastAlertEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) 
 	deployedButNotEnabled, enabledButNotDeployed, _ = detections.DiffLists(deployed, enabled)
 
 	intCheckReport := logger.WithFields(log.Fields{
-		"deployedButNotEnabled":      detections.TruncateList(deployedButNotEnabled, 20),
-		"enabledButNotDeployed":      detections.TruncateList(enabledButNotDeployed, 20),
+		"deployedButNotEnabled":      util.TruncateList(deployedButNotEnabled, 20),
+		"enabledButNotDeployed":      util.TruncateList(enabledButNotDeployed, 20),
 		"deployedButNotEnabledCount": len(deployedButNotEnabled),
 		"enabledButNotDeployedCount": len(enabledButNotDeployed),
 	})

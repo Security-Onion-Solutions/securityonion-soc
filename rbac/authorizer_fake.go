@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -23,7 +23,7 @@ func (fake FakeAuthorizer) CheckContextOperationAuthorized(ctx context.Context, 
 	return model.NewUnauthorized("fake-subject", operation, target)
 }
 
-func (fake FakeAuthorizer) CheckUserOperationAuthorized(user *model.User, operation string, target string) error {
+func (fake FakeAuthorizer) CheckUserOperationAuthorized(userId string, operation string, target string) error {
 	if fake.Authorized {
 
 		return nil

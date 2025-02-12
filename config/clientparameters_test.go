@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -23,7 +23,7 @@ func TestVerifyClientParameters(tester *testing.T) {
 	assert.False(tester, params.CasesEnabled)
 	assert.False(tester, params.DetectionsEnabled)
 	verifyInitialHuntingParams(tester, &params.HuntingParams)
-	verifyInitialHuntingParams(tester, &params.AlertingParams)
+	verifyInitialHuntingParams(tester, &params.AlertingParams.HuntingParameters)
 	verifyInitialHuntingParams(tester, &params.CasesParams)
 	verifyInitialHuntingParams(tester, &params.DashboardsParams)
 }

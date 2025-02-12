@@ -1,9 +1,9 @@
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-package server
+package server_test
 
 import (
 	"bytes"
@@ -14,20 +14,47 @@ import (
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/config"
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	. "github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
+	"go.uber.org/mock/gomock"
+
 	"github.com/stretchr/testify/assert"
 )
 
 func TestReverseLookupHandler(t *testing.T) {
-	h := UtilHandler{
-		server: &Server{
-			Config: &config.ServerConfig{
-				Dns: "",
-			},
-		},
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cfg := &config.ServerConfig{
+		Dns: "",
 	}
 
-	body := []byte(`["1.0.0.1", "2.0.0.2", "3.0.0.3", "4.0.0.4"]`)
+	srv := NewMockServer(t, ctrl, cfg)
+
+	h := NewUtilHandler(srv)
+
+	fakeEventStore := srv.Eventstore.(*FakeEventstore)
+
+	fakeEventStore.MSearchResults = append(fakeEventStore.MSearchResults, &model.EventMSearchResults{
+		Responses: []*model.EventSearchResults{
+			{},
+			{},
+			{},
+			{
+				Events: []*model.EventRecord{
+					{
+						Payload: map[string]interface{}{
+							"so.ip_address":  "4.0.0.4",
+							"so.description": "host4",
+						},
+					},
+				},
+			},
+		},
+	})
+
+	body := []byte(`["1.0.0.1", "2.0.0.2", "3.0.0.3", "4.0.0.4", "badip"]`)
 
 	r := httptest.NewRequest("PUT", "/reverse-lookup", bytes.NewReader(body))
 
@@ -36,7 +63,7 @@ func TestReverseLookupHandler(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
-	h.putReverseLookup(w, r)
+	h.PutReverseLookup(w, r)
 
 	raw := w.Body.Bytes()
 	results := map[string][]string{}
@@ -48,4 +75,6 @@ func TestReverseLookupHandler(t *testing.T) {
 	for _, names := range results {
 		assert.NotEmpty(t, names)
 	}
+
+	assert.Equal(t, []string{"host4"}, results["4.0.0.4"])
 }

@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -23,9 +23,7 @@ const ANOTHER_USER_ID = "124"
 const JOB_DIR = "/tmp/sensoroni.jobs"
 
 func newContext() context.Context {
-	user := model.NewUser()
-	user.Id = MY_USER_ID
-	return context.WithValue(context.Background(), web.ContextKeyRequestor, user)
+	return context.WithValue(context.Background(), web.ContextKeyRequestorId, MY_USER_ID)
 }
 
 func cleanup() {

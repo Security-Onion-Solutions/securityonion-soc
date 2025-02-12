@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -87,13 +87,17 @@ func (status *SoStatus) IsRunning() bool {
 }
 
 func (status *SoStatus) Refresh(ctx context.Context) {
-	log.Debug("Updating grid status")
+	logger := log.FromContext(ctx)
+
+	logger.Debug("Updating grid status")
 	status.refreshGrid(ctx)
 	status.refreshDetections(ctx)
 	status.server.Host.Broadcast("status", "nodes", status.currentStatus)
 }
 
 func (status *SoStatus) refreshGrid(ctx context.Context) {
+	logger := log.FromContext(ctx)
+
 	unhealthyNodes := 0
 	nonCriticalNodes := 0
 	awaitingRebootCount := 0
@@ -104,7 +108,7 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 		staleMs := int(time.Since(node.UpdateTime) / time.Millisecond)
 		if staleMs > status.offlineThresholdMs {
 			if node.ConnectionStatus != model.NodeStatusFault {
-				log.WithFields(log.Fields{
+				logger.WithFields(log.Fields{
 					"nodeId":             node.Id,
 					"staleMs":            staleMs,
 					"offlineThresholdMs": status.offlineThresholdMs,
@@ -113,9 +117,12 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 			}
 		}
 
-		updated := status.server.Metrics.UpdateNodeMetrics(ctx, node)
+		updated := false
+		if status.server.Metrics != nil {
+			updated = status.server.Metrics.UpdateNodeMetrics(ctx, node)
+		}
 
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"Id":               node.Id,
 			"processStatus":    node.ProcessStatus,
 			"raidStatus":       node.RaidStatus,
@@ -142,20 +149,22 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 	}
 	status.currentStatus.Grid.TotalNodeCount = len(nodes)
 	if status.currentStatus.Grid.UnhealthyNodeCount == 0 && unhealthyNodes > 0 {
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"unhealthyNodes": unhealthyNodes,
 			"totalNodes":     len(nodes),
 		}).Warn("Grid has entered an unhealthy state")
 	} else if status.currentStatus.Grid.UnhealthyNodeCount > 0 && unhealthyNodes == 0 {
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"unhealthyNodes": unhealthyNodes,
 			"totalNodes":     len(nodes),
 		}).Info("Grid has returned to a healthy state")
 	}
 	status.currentStatus.Grid.UnhealthyNodeCount = unhealthyNodes
-	status.currentStatus.Grid.Eps = status.server.Metrics.GetGridEps(ctx)
+	if status.server.Metrics != nil {
+		status.currentStatus.Grid.Eps = status.server.Metrics.GetGridEps(ctx)
+	}
 	if status.currentStatus.Grid.AwaitingRebootNodeCount == 0 && awaitingRebootCount > 0 {
-		log.WithFields(log.Fields{
+		logger.WithFields(log.Fields{
 			"awaitingRebootCount": awaitingRebootCount,
 			"totalNodes":          len(nodes),
 		}).Info("Grid nodes are awaiting reboot")
@@ -166,15 +175,21 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 }
 
 func (status *SoStatus) refreshDetections(ctx context.Context) {
-	status.currentStatus.Detections.ElastAlert = status.checkDetectionEngineStatus("ElastAlert2",
-		status.currentStatus.Detections.ElastAlert,
-		status.server.DetectionEngines[model.EngineNameElastAlert].GetState())
-	status.currentStatus.Detections.Suricata = status.checkDetectionEngineStatus("Suricata",
-		status.currentStatus.Detections.Suricata,
-		status.server.DetectionEngines[model.EngineNameSuricata].GetState())
-	status.currentStatus.Detections.Strelka = status.checkDetectionEngineStatus("Strelka",
-		status.currentStatus.Detections.Strelka,
-		status.server.DetectionEngines[model.EngineNameStrelka].GetState())
+	if _, exists := status.server.DetectionEngines[model.EngineNameElastAlert]; exists {
+		status.currentStatus.Detections.ElastAlert = status.checkDetectionEngineStatus("ElastAlert2",
+			status.currentStatus.Detections.ElastAlert,
+			status.server.DetectionEngines[model.EngineNameElastAlert].GetState())
+	}
+	if _, exists := status.server.DetectionEngines[model.EngineNameSuricata]; exists {
+		status.currentStatus.Detections.Suricata = status.checkDetectionEngineStatus("Suricata",
+			status.currentStatus.Detections.Suricata,
+			status.server.DetectionEngines[model.EngineNameSuricata].GetState())
+	}
+	if _, exists := status.server.DetectionEngines[model.EngineNameStrelka]; exists {
+		status.currentStatus.Detections.Strelka = status.checkDetectionEngineStatus("Strelka",
+			status.currentStatus.Detections.Strelka,
+			status.server.DetectionEngines[model.EngineNameStrelka].GetState())
+	}
 }
 
 func (status *SoStatus) checkDetectionEngineStatus(engineName string, oldState *model.EngineState, newState *model.EngineState) *model.EngineState {

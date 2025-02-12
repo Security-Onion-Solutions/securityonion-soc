@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -31,6 +31,21 @@ func RegisterQueryRoutes(srv *Server, r chi.Router, prefix string) {
 	})
 }
 
+// @Summary      Build Query
+// @Description  Requests the server provide a new query for the SOC client to show, given a particular change needed in the query.
+// @Security     bearer
+// @Tags         Query
+// @Param        operation  path  string  true  "The type of operation for this query update. Supports: grouped, filtered, sorted" example(grouped)
+// @Param        query formData string  true  "The current query string to be modified" example(somefield: somevalue | groupby anotherfield)
+// @Param        field formData string  true  "The field to be used for the operation" example(newfield)
+// @Param        scalar formData string  true  "Specify true is this field contains scalar values (numerical, etc)" example(true)
+// @Param        mode formData string  true  "The operation mode." example(true)
+// @Produce      plain
+// @Success      200        "The job output stream was successfully saved and is being returned in the response body. Ex: somefield: somevalue | groupby anotherfield | groupby newfield"
+// @Failure      400        "The provided input object or parameters are malformed or invalid"
+// @Failure      401        "Request was not properly authenticated"
+// @Failure      500        "Internal SOC error; review SOC logs"
+// @Router       /connect/query/{operation} [get]
 func (h *QueryHandler) getQuery(w http.ResponseWriter, r *http.Request) {
 	operation := chi.URLParam(r, "operation")
 

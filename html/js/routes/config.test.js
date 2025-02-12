@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -68,6 +68,7 @@ test('loadData', async () => {
       "sensitive": undefined,
       "syntax": undefined,
       "title": "Farout",
+      "uiElements": undefined,
       "value": null,
     },
     {
@@ -91,6 +92,7 @@ test('loadData', async () => {
       "sensitive": undefined,
       "syntax": undefined,
       "title": "CCA",
+      "uiElements": undefined,
       "value": undefined,
     },
     {
@@ -114,6 +116,7 @@ test('loadData', async () => {
       "sensitive": undefined,
       "syntax": undefined,
       "title": "Barley",
+      "uiElements": undefined,
       "value": undefined,
     }
   ];
@@ -144,6 +147,7 @@ test('loadData', async () => {
               "sensitive": undefined,
               "syntax": undefined,
               "title": "Farout",
+              "uiElements": undefined,
               "value": null
             },
             {
@@ -167,6 +171,7 @@ test('loadData', async () => {
               "sensitive": undefined,
               "syntax": undefined,
               "title": "Barley",
+              "uiElements": undefined,
               "value": undefined
             }
           ],
@@ -198,6 +203,7 @@ test('loadData', async () => {
       "sensitive": undefined,
       "syntax": undefined,
       "title": "CCA",
+      "uiElements": undefined,
       "value": undefined
     }
   ];
@@ -206,8 +212,8 @@ test('loadData', async () => {
 });
 
 test('getSettingName', () => {
-  expect(comp.getSettingName({id:"fake.setting.foo", name: 'fake'})).toBe("Fake Setting Translated");
-  expect(comp.getSettingName({id:"fake.setting.untranslated", name: "Untranslated Name"})).toBe("Untranslated Name");
+  expect(comp.getSettingName({id:"fake.setting.foo", title: 'fake'})).toBe("Fake Setting Translated");
+  expect(comp.getSettingName({id:"fake.setting.untranslated", title: "Untranslated Name"})).toBe("Untranslated Name");
   expect(comp.getSettingName({id:"fake.setting.untranslated"})).toBe(undefined);
 });
 
@@ -228,20 +234,23 @@ test('findActiveSetting', () => {
 
 test('clearFilter', () => {
   comp.search = "foo";
+  comp.searchFilter = "foo";
   comp.clearFilter();
   expect(comp.search).toBe("");
+  expect(comp.searchFilter).toBe("");
 });
 
 test('filter', () => {
   a.nodeValues['mia-test-001'] = 'hi';
   a.value = 'a1';
-  expect(comp.filter(a, 'foO')).toBe(true);
-  expect(comp.filter(a, 'bY')).toBe(true);
-  expect(comp.filter(a, 'OUt')).toBe(true);
-  expect(comp.filter(a, 'A1')).toBe(true);
-  expect(comp.filter(a, 'FaROut')).toBe(true);
-  expect(comp.filter(a, 'bar')).toBe(false);
-  expect(comp.filter(a)).toBe(true);
+  let ii = { raw: a };
+  expect(comp.filter(a.id, 'foO', ii)).toBe(true);
+  expect(comp.filter(a.id, 'bY', ii)).toBe(true);
+  expect(comp.filter(a.id, 'OUt', ii)).toBe(true);
+  expect(comp.filter(a.id, 'A1', ii)).toBe(true);
+  expect(comp.filter(a.id, 'FaROut', ii)).toBe(true);
+  expect(comp.filter(a.id, 'bar', ii)).toBe(false);
+  expect(comp.filter(a.id, null, ii)).toBe(true);
 });
 
 test('isMultiline', () => {
@@ -320,17 +329,20 @@ setupSettings = () => {
 };
 
 test('selectSetting', () => {
+  comp.form.entriesExpanded = 12;
   setupSettings();
 
   comp.selectSetting();
 
   expect(comp.activeBackup).toStrictEqual(["s-id"]);
-  expect(comp.availableNodes).toStrictEqual([{text: "node2 (standalone)", value: "n2"}]);
+  expect(comp.availableNodes).toStrictEqual([{title: "node2 (standalone)", value: "n2"}]);
   expect(comp.cancelDialog).toBe(false);
   expect(comp.confirmResetDialog).toBe(false);
+  expect(comp.form.entriesExpanded).toBeNull();
 });
 
 test('cancel', () => {
+  comp.form.entriesExpanded = 12;
   comp.active = ["cancel-id"];
   comp.settings = [{id: "cancel-id", value: "abc"}];
   comp.form.value = "123";
@@ -349,6 +361,13 @@ test('cancel', () => {
   comp.cancel(false);
   expect(comp.cancelDialog).toBe(true);
   expect(comp.form.key).toBe("cancel-id");
+  expect(comp.form.entriesExpanded).toBe(12);
+});
+
+test('userCancel', () => {
+  comp.form.entriesExpanded = 12;
+  comp.userCancel();
+  expect(comp.form.entriesExpanded).toBeNull();
 });
 
 test('remove', () => {
@@ -505,13 +524,14 @@ test('saveRegexValidMultiline', async () => {
   expect(mock).toHaveBeenCalledWith('config/', {"id": "test.id", "nodeId": null, "value": "123\n456"});
 });
 
-test('edit', () => {
+test('edit', async () => {
   // Global edit, nothing pending
   setupSettings();
   comp.cancelDialog = false;
   comp.form.value = null;
   comp.form.key = null;
   comp.edit(comp.settings[0], null);
+  await new Promise(resolve => setTimeout(resolve, 2));
   expect(comp.form.key).toBe("s-id");
   expect(comp.form.value).toBe("orig-value");
   expect(comp.cancelDialog).toBe(false);
@@ -523,6 +543,7 @@ test('edit', () => {
   comp.form.key = "s-id2";
   comp.activeBackup = ["s-id2"];
   comp.edit(comp.settings[0], null);
+  await new Promise(resolve => setTimeout(resolve, 2));
   expect(comp.form.key).toBe("s-id2");
   expect(comp.form.value).toBe("touched-value");
   expect(comp.cancelDialog).toBe(true);
@@ -532,6 +553,7 @@ test('edit', () => {
   comp.form.value = null;
   comp.form.key = null;
   comp.edit(comp.settings[0], "n1");
+  await new Promise(resolve => setTimeout(resolve, 2));
   expect(comp.form.key).toBe("n1");
   expect(comp.form.value).toBe("123");
   expect(comp.cancelDialog).toBe(false);
@@ -541,6 +563,7 @@ test('edit', () => {
   comp.form.value = "touched-value";
   comp.form.key = "n2";
   comp.edit(comp.settings[0], "n1");
+  await new Promise(resolve => setTimeout(resolve, 2));
   expect(comp.form.key).toBe("n2");
   expect(comp.form.value).toBe("touched-value");
   expect(comp.cancelDialog).toBe(true);
@@ -596,10 +619,16 @@ test('duplicate', () => {
     name: "c",
     duplicates: true,
   }
+
+  Vue = {
+    toRaw: jest.fn().mockReturnValueOnce(setting),
+  };
   global.structuredClone = jest.fn().mockReturnValueOnce(setting2);
+
   comp.settings = [setting];
   comp.duplicateId = "foo"
   expect(comp.settings.length).toBe(1);
+
   comp.duplicate(setting);
   expect(comp.settings.length).toBe(2);
   expect(comp.settings[1].id).toBe("a.b.foo");
@@ -703,4 +732,136 @@ test('getSettingBreadcrumbs', () => {
   setting = { id: "foo.bar.car", advanced: true };
   expect(comp.getSettingBreadcrumbs(setting)).toBe("foo > bar > car [adv]");
 
+});
+
+test('hasUiElements', () => {
+  setting = {};
+  expect(comp.hasUiElements(setting)).toBe(false);
+
+  setting = { uiElements: [] };
+  expect(comp.hasUiElements(setting)).toBe(false);
+
+  setting = { uiElements: [{}] };
+  expect(comp.hasUiElements(setting)).toBe(false);
+
+  setting = { syntax: 'json' };
+  expect(comp.hasUiElements(setting)).toBe(false);
+
+  setting = { uiElements: [{}], syntax: 'json' };
+  expect(comp.hasUiElements(setting)).toBe(true);
+});
+
+test('pack_unpack', () => {
+  comp.form.value = "{}"
+  comp.form.entries = [{foo: 'bar', _title:'ignore'},{_title:'empty'}];
+  setting = {id: 'myid', uiElements:[{field: 'foo', label:'some fooness'}], syntax: 'json'}
+  comp.pack(setting);
+  expect(comp.form.value).toBe('[{"foo":"bar"}]')
+
+  comp.form.entries = null;
+  setting.value = '[{"foo":"bar"}]';
+  comp.settings = [setting];
+  comp.active = ['myid'];
+  comp.unpack(setting);
+  expect(comp.form.entries.length).toBe(2);
+  expect(comp.form.entries[0].foo).toBe('bar');
+  expect(comp.form.entries[0]._title).toBe('1. bar');
+  expect(comp.form.entries[1]._title).toBe('+');
+});
+
+test('pack_unpack_multiple', () => {
+  comp.form.value = "{}"
+  comp.form.entries = [{foo: 'bar', _title:'ignore'},{_title:'empty'},{foo: 'bar2', _title:'ignore2'},{_title:'empty2'}];
+  setting = {id: 'myid', uiElements:[{field: 'foo', label:'some fooness'}], syntax: 'json'}
+  comp.pack(setting);
+  expect(comp.form.value).toBe('[{"foo":"bar"},{"foo":"bar2"}]')
+
+  comp.form.entries = null;
+  setting.value = '[{"foo":"bar"},{"foo":"bar2"}]';
+  comp.settings = [setting];
+  comp.active = ['myid'];
+  comp.unpack(setting);
+  expect(comp.form.entries.length).toBe(3);
+  expect(comp.form.entries[0].foo).toBe('bar');
+  expect(comp.form.entries[0]._title).toBe('1. bar');
+  expect(comp.form.entries[1].foo).toBe('bar2');
+  expect(comp.form.entries[1]._title).toBe('2. bar2');
+  expect(comp.form.entries[2]._title).toBe('+');
+});
+
+test('pack_unpack_array_of_json', () => {
+  comp.form.value = "{}"
+  comp.form.entries = [{foo: 'bar', _title:'ignore'},{_title:'empty'}];
+  setting = {id: 'myid', forcedType: "[]{}", uiElements:[{field: 'foo', label:'some fooness'}], syntax: 'json'}
+  comp.pack(setting);
+  expect(comp.form.value).toBe('{"foo":"bar"}')
+
+  comp.form.entries = null;
+  setting.value = '{"foo":"bar"}';
+  comp.settings = [setting];
+  comp.active = ['myid'];
+  comp.unpack(setting);
+  expect(comp.form.entries.length).toBe(2);
+  expect(comp.form.entries[0].foo).toBe('bar');
+  expect(comp.form.entries[0]._title).toBe('1. bar');
+  expect(comp.form.entries[1]._title).toBe('+');
+});
+
+test('pack_unpack_multiple_array_of_json', () => {
+  comp.form.value = "{}"
+  comp.form.entries = [{foo: 'bar', _title:'ignore'},{_title:'empty'},{foo: 'bar2', _title:'ignore2'},{_title:'empty2'}];
+  setting = {id: 'myid', forcedType: "[]{}", uiElements:[{field: 'foo', label:'some fooness'}], syntax: 'json'}
+  comp.pack(setting);
+  expect(comp.form.value).toBe('{"foo":"bar"}\n{"foo":"bar2"}')
+
+  comp.form.entries = null;
+  setting.value = '{"foo":"bar"}\n{"foo":"bar2"}';
+  comp.settings = [setting];
+  comp.active = ['myid'];
+  comp.unpack(setting);
+  expect(comp.form.entries.length).toBe(3);
+  expect(comp.form.entries[0].foo).toBe('bar');
+  expect(comp.form.entries[0]._title).toBe('1. bar');
+  expect(comp.form.entries[1].foo).toBe('bar2');
+  expect(comp.form.entries[1]._title).toBe('2. bar2');
+  expect(comp.form.entries[2]._title).toBe('+');
+});
+
+test('isEntryEmpty', () => {
+  entry = {id: '', foo:'', _title:'title'};
+  expect(comp.isEntryEmpty(entry)).toBe(true);
+
+  entry = {id: 'something', foo:'hi', _title:'title'};
+  expect(comp.isEntryEmpty(entry)).toBe(false);
+});
+
+test('generateEntryTitle', () => {
+  entry = {id: 'something', foo:'hi'};
+  comp.settings = [entry];
+  comp.active = [entry.id];
+  comp.generateEntryTitle(entry, 1);
+  expect(entry._title).toBe('2. ');
+  entry.uiElements = [{field: 'foo'}];
+  comp.generateEntryTitle(entry, 1);
+  expect(entry._title).toBe('2. hi');
+});
+
+test('markDirtyEntries', () => {
+  comp.form.value = 123;
+  comp.markDirtyEntries();
+  expect(comp.form.value.length).toBe(13);
+});
+
+test('clearEntry', () => {
+  entry = {foo: 'bar', some: 'value', _title: 'title'};
+  comp.form.value = 123;
+  comp.clearEntry(entry, 1);
+  expect(comp.form.value.length).toBe(13);
+  expect(entry.foo).toBe('');
+  expect(entry.some).toBe('');
+  expect(entry._title).toBe('2. ');
+
+  entry = {foo: 'bar', some: 'value', _title: '+'};
+  comp.clearEntry(entry, 1);
+  expect(entry._title).toBe('+');
 });

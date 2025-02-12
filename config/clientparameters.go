@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -17,7 +17,7 @@ const DEFAULT_CHART_LABEL_FIELD_SEPARATOR = ", "
 
 type ClientParameters struct {
 	HuntingParams       HuntingParameters    `json:"hunt"`
-	AlertingParams      HuntingParameters    `json:"alerts"`
+	AlertingParams      AlertParameters      `json:"alerts"`
 	CasesParams         HuntingParameters    `json:"cases"`
 	CaseParams          CaseParameters       `json:"case"`
 	DashboardsParams    HuntingParameters    `json:"dashboards"`
@@ -121,6 +121,7 @@ type HuntingParameters struct {
 	ChartLabelOtherLimit         int                 `json:"chartLabelOtherLimit"`
 	ChartLabelFieldSeparator     string              `json:"chartLabelFieldSeparator"`
 	AggregationActionsEnabled    bool                `json:"aggregationActionsEnabled"`
+	DetectionEngineStatusQueries string              `json:"detectionEngineStatusQueries"`
 }
 
 func (params *HuntingParameters) Verify() error {
@@ -163,6 +164,11 @@ func (params *HuntingParameters) combineDeprecatedLinkIntoLinks() {
 			action.Link = ""
 		}
 	}
+}
+
+type AlertParameters struct {
+	HuntingParameters
+	MaxBulkEscalateEvents int `json:"maxBulkEscalateEvents"`
 }
 
 type PresetParameters struct {

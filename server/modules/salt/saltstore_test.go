@@ -1,5 +1,5 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
@@ -25,7 +25,7 @@ import (
 const TMP_SALTSTACK_PATH = "/tmp/gotest-soc-saltstore"
 const TMP_QUEUE_DIR = "/tmp/gotest-soc-salt-relay-queue"
 const TMP_REQUEST_FILE = "req"
-const TEST_SETTINGS_COUNT = 26
+const TEST_SETTINGS_COUNT = 27
 
 func Cleanup() {
 	exec.Command("rm", "-fr", TMP_SALTSTACK_PATH).Run()
@@ -345,6 +345,11 @@ func TestGetSettings(tester *testing.T) {
 	assert.Equal(tester, "", settings[count].NodeId)
 	count++
 
+	assert.Equal(tester, "myapp.ui_json", settings[count].Id)
+	assert.Equal(tester, "{\"something\":\"here\",\"another\":\"else\"},{\"something\":\"here2\",\"another\":\"else2\"}", settings[count].Value)
+	assert.Equal(tester, "", settings[count].NodeId)
+	count++
+
 	assert.Equal(tester, "myapp.zdef", settings[count].Id)
 	assert.Equal(tester, "chocolate", settings[count].Value)
 	assert.Equal(tester, "vanilla", settings[count].Default)
@@ -604,10 +609,10 @@ func TestUpdateSetting_UpdateAdvancedFailToParse(tester *testing.T) {
 
 	// Update setting
 	setting := model.NewSetting("myapp.advanced")
-	setting.Value = "new advanced"
+	setting.Value = "[s new advanced"
 	setting.Syntax = "yaml"
 	err := salt.UpdateSetting(ctx(), setting, false)
-	assert.EqualError(tester, err, "ERROR_MALFORMED_YAML -> yaml: unmarshal errors:\n  line 1: cannot unmarshal !!str `new adv...`")
+	assert.EqualError(tester, err, "ERROR_MALFORMED_YAML -> yaml: line 1: did not find expected ',' or ']'")
 }
 
 ///// INT TYPE
@@ -1315,4 +1320,18 @@ func TestImportFile(t *testing.T) {
 
 	request := ReadRequest(t, "ctx_import-file")
 	assert.JSONEq(t, `{"command":"import-file","command_id":"ctx_import-file","node":"manager_standalone","file":"/nsm/soc/uploads/file.pcap","importer":"pcap"}`, request)
+}
+
+func TestReadSetting_UiElements(tester *testing.T) {
+	defer Cleanup()
+	salt := NewTestSalt()
+	settings, err := salt.GetSettings(ctx(), true)
+	assert.NoError(tester, err)
+
+	setting := findSetting(settings, "myapp.ui_json", "")
+	assert.Equal(tester, 2, len(setting.UiElements))
+	assert.Equal(tester, "something", setting.UiElements[0].Field)
+	assert.Equal(tester, "something nice", setting.UiElements[0].Label)
+	assert.Equal(tester, "another", setting.UiElements[1].Field)
+	assert.Equal(tester, "another thing", setting.UiElements[1].Label)
 }

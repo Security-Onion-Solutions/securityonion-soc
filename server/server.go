@@ -1,14 +1,14 @@
 // Copyright 2019 Jason Ertel (github.com/jertel).
-// Copyright 2020-2024 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// Copyright 2020-2025 Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
 // or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
-
 package server
 
 import (
 	"context"
 	"errors"
+	"net/http"
 	"os/exec"
 	"strings"
 
@@ -28,7 +28,9 @@ type Server struct {
 	Config           *config.ServerConfig
 	Host             *web.Host
 	Datastore        Datastore
+	AdminClientstore AdminClientstore
 	AdminUserstore   AdminUserstore
+	Clientstore      Clientstore
 	Userstore        Userstore
 	Rolestore        Rolestore
 	Eventstore       Eventstore
@@ -47,7 +49,7 @@ type Server struct {
 func NewServer(cfg *config.ServerConfig, version string) *Server {
 	server := &Server{
 		Config:           cfg,
-		Host:             web.NewHost(cfg.BindAddress, cfg.HtmlDir, cfg.IdleConnectionTimeoutMs, version, cfg.SrvKeyBytes, AGENT_ID),
+		Host:             web.NewHost(cfg.BindAddress, cfg.HtmlDir, cfg.IdleConnectionTimeoutMs, version, cfg.SrvKeyBytes),
 		stoppedChan:      make(chan bool, 1),
 		DetectionEngines: map[model.EngineName]DetectionEngine{},
 	}
@@ -64,8 +66,8 @@ func (server *Server) initContext() {
 	server.Agent.Id = AGENT_ID
 	server.Agent.Email = server.Agent.Id
 
-	ctx := context.WithValue(context.Background(), web.ContextKeyRequestor, server.Agent)
-	ctx = context.WithValue(ctx, web.ContextKeyRequestorId, AGENT_ID)
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, AGENT_ID)
+	ctx = context.WithValue(ctx, web.ContextKeyRequestCSRFExempt, true)
 
 	server.Context = ctx
 }
@@ -79,6 +81,14 @@ func (server *Server) Start() {
 		r := chi.NewMux()
 
 		r.Use(web.Middleware(server.Host, false))
+		r.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log.WithFields(log.Fields{
+				"url":         r.URL,
+				"requestId":   r.Context().Value(web.ContextKeyRequestId),
+				"requestorId": r.Context().Value(web.ContextKeyRequestorId),
+			}).Warn("404 Not Found")
+			web.Respond(w, r, http.StatusNotFound, nil)
+		}))
 
 		RegisterCaseRoutes(server, r, "/api/case")
 		RegisterEventRoutes(server, r, "/api/events")
@@ -91,6 +101,7 @@ func (server *Server) Start() {
 		RegisterGridRoutes(server, r, "/api/grid")
 		RegisterStreamRoutes(server, r, "/api/stream")
 		RegisterUsersRoutes(server, r, "/api/users")
+		RegisterClientsRoutes(server, r, "/api/clients")
 		RegisterConfigRoutes(server, r, "/api/config")
 		RegisterGridMemberRoutes(server, r, "/api/gridmembers")
 		RegisterRolesRoutes(server, r, "/api/roles")
@@ -116,13 +127,14 @@ func (server *Server) Wait() {
 	<-server.stoppedChan
 }
 
-func (server *Server) CheckAuthorized(ctx context.Context, operation string, target string) error {
-	var err error
+func (server *Server) CheckAuthorized(ctx context.Context, operation string, target string) (err error) {
+	logger := log.FromContext(ctx)
+
 	if server.Authorizer == nil {
 		if server.Config.DeveloperEnabled {
-			log.Info("Using developer mode; all authorization requests will succeed")
+			logger.Info("Using developer mode; all authorization requests will succeed")
 		} else {
-			log.Warn("No authorizer module has been configured; assuming no authorization")
+			logger.Warn("No authorizer module has been configured; assuming no authorization")
 			err = errors.New("Missing Authorizer module")
 		}
 	} else {
@@ -742,4 +754,60 @@ func (server *Server) GetTimezones() []string {
 		zones = append(zones, "Zulu")
 	}
 	return zones
+}
+
+// @title           Security Onion Connect API
+// @version         1.0
+// @description     Perform SOC operations via server-to-server integration using a client API account via OAuth2.0.
+// @termsOfService  https://securityonion.net/terms/
+
+// @contact.name   Community Support
+// @contact.url    http://github.com/security-onion-solutions/securityonion/discussions
+
+// @license.name  Elastic 2.0
+// @license.url   https://securityonion.net/terms/
+
+// @securityDefinitions.oauth2.application bearer
+// @in header
+// @name Authorization
+// @tokenUrl /oauth2/token
+// @description This API call requires an access token be provided in the Authorization header via the Bearer scheme. Obtain an access token as documented in the /oauth2/token authorization endpoint. The required RBAC permissions for this API method are listed above.
+
+// @securityDefinitions.basic basic
+
+// @externalDocs.description  Security Onion Documentation Online
+// @externalDocs.url          https://docs.securityonion.net
+
+// @Summary      Obtain Access Token
+// @Description  Exchanges a client ID and client secret for a temporary access token needed for calling Security Onion Connect API methods.
+// @Description  The client ID and client secret are provided within the SOC Administration -> API Clients screen, when creating a new API client or when regenerating an API client's secret.
+// @Description  The client secrets are only temporarily visible during those two specific times.
+// @Description  The returned access token will expire within 1-2 hours, by default. Ensure the custom integration application is capable of exchanging for a new access token prior to the expiration.
+// @Accept       x-www-form-urlencoded
+// @Produce      json
+// @Tags	     Authentication
+// @Security     basic
+// @Param        request  body  AccessTokenRequest true "The body of this POST request must contain the required fields as shown below."
+// @Success      200  {object}  AccessTokenResponse "The access token response object."
+// @Failure      400         "Missing basic authorization credentials or missing grant_type form parameter in request body"
+// @Failure      401         "Invalid client credentials"
+// @Failure      500         "Internal error; review Hydra logs"
+// @Router       /oauth2/token [post]
+func obtain_access_token_unused_for_docs() {
+}
+
+type AccessTokenRequest struct {
+	// Must be set to client_credentials
+	GrantType string `json:"grant_type" example:"client_credentials" validate:"required"`
+}
+
+type AccessTokenResponse struct {
+	// The access token to be used for all other Connect API requests."
+	AccessToken string `json:"access_token" example:"ory_at_arkgYuJXYp5zwU8Xyh8-URW6QIUbaZVf4JwDPoNZh0g.YcF4W5i2qoQ2RTWZvLYLNIeUjGaUhYuewz9Gua0y7YA"`
+	// Amount of time, in seconds, before the access token expires."
+	ExpiresIn int `json:"expires_in" example:"3599"`
+	// Scope will be blank due to the use of application-level RBAC for authorization.
+	Scope string `json:"scope" example:""`
+	// Token type will always be 'bearer' for access token exchanges.
+	TokenType string `json:"token_type" example:"bearer"`
 }
