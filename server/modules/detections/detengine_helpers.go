@@ -37,7 +37,6 @@ type GetterByPublicId interface {
 	GetDetectionByPublicId(ctx context.Context, publicId string) (*model.Detection, error)
 }
 
-// go install go.uber.org/mock/mockgen@latest
 //go:generate mockgen -destination mock/mock_iomanager.go -package mock . IOManager
 
 func DetermineWaitTime(iom IOManager, path string, importFrequency time.Duration) (*uint64, time.Duration) {
