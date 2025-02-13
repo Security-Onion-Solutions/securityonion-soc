@@ -4,7 +4,7 @@
 # https://securityonion.net/license; you may not use this file except in compliance with the
 # Elastic License 2.0.
 
-FROM ghcr.io/security-onion-solutions/golang:1.23.3-alpine as builder
+FROM ghcr.io/security-onion-solutions/golang:1.24.0-alpine as builder
 ARG VERSION=0.0.0
 ARG ALT_BRANCH=dev
 RUN apk update && apk add libpcap-dev bash git musl-dev gcc npm python3 py3-pip py3-virtualenv python3-dev openssl-dev linux-headers
@@ -44,7 +44,7 @@ RUN apt install -y --no-install-recommends bash tzdata ca-certificates wget curl
 RUN pip3 install sigma-cli pysigma-backend-elasticsearch pysigma-pipeline-windows --break-system-packages
 RUN pip3 install yara-python==4.3.1
 RUN apt-get -y remove gcc python3-dev libssl-dev && apt-get -y autoremove
-	
+
 RUN update-ca-certificates
 RUN addgroup --gid "$GID" socore
 RUN adduser --disabled-password --uid "$UID" --ingroup socore --gecos '' socore
