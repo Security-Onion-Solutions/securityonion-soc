@@ -75,12 +75,14 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       }
     },
     saveLocalSettings() {
-      localStorage['settings.jobs.sortBy'] = this.sortBy;
+      localStorage['settings.jobs.sortBy'] = JSON.stringify(this.sortBy);
       localStorage['settings.jobs.itemsPerPage'] = this.itemsPerPage;
     },
     loadLocalSettings() {
       if (localStorage['settings.jobs.sortBy']) {
-        this.sortBy = localStorage['settings.jobs.sortBy'];
+        try {
+          this.sortBy = JSON.parse(localStorage['settings.jobs.sortBy']);
+        } catch {}
         this.itemsPerPage = parseInt(localStorage['settings.jobs.itemsPerPage']);
       }
       this.form.sensorId = localStorage['settings.jobs.addJobForm.sensorId'];
