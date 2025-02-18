@@ -1316,9 +1316,16 @@ const huntComponent = {
       return headers;
     },
     sortBySeverity(a, b) {
+      // normalize
+      const na = (typeof a === 'string' ? a : String(a)).toLowerCase();
+      const nb = (typeof b === 'string' ? b : String(b)).toLowerCase();
+
+      // map
       const levels = ['unknown', 'informational', 'low', 'medium', 'high', 'critical'];
-      const sevA = levels.findIndex(x => x === a);
-      const sevB = levels.findIndex(x => x === b);
+      const sevA = levels.findIndex(x => x === na);
+      const sevB = levels.findIndex(x => x === nb);
+
+      // compare
       return sevA - sevB;
     },
     lookupSocId(data) {

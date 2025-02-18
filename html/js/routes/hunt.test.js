@@ -1586,3 +1586,88 @@ test('debounceChartResize - no flapping', () => {
   expect(comp.chartResizeTracker[chart].length).toBe(4);
   expect(chart.options.responsive).toBe(true);
 });
+
+test('sortBySeverity', () => {
+  const tests = [
+    { A: 'CRITICAL', B: 'CRITICAL', expected: 0 },
+    { A: 'critical', B: 'high', expected: 1 },
+    { A: 'critical', B: 'medium', expected: 2 },
+    { A: 'critical', B: 'low', expected: 3 },
+    { A: 'critical', B: 'informational', expected: 4 },
+    { A: 'critical', B: 'unknown', expected: 5 },
+    { A: 'critical', B: 'foobar', expected: 6 },
+
+    { A: 'high', B: 'high', expected: 0 },
+    { A: 'high', B: 'medium', expected: 1 },
+    { A: 'high', B: 'low', expected: 2 },
+    { A: 'high', B: 'informational', expected: 3 },
+    { A: 'high', B: 'unknown', expected: 4 },
+    { A: 'high', B: 'foobar', expected: 5 },
+
+    { A: 'medium', B: 'medium', expected: 0 },
+    { A: 'medium', B: 'low', expected: 1 },
+    { A: 'medium', B: 'informational', expected: 2 },
+    { A: 'medium', B: 'unknown', expected: 3 },
+    { A: 'medium', B: 'foobar', expected: 4 },
+
+    { A: 'low', B: 'low', expected: 0 },
+    { A: 'low', B: 'informational', expected: 1 },
+    { A: 'low', B: 'unknown', expected: 2},
+    { A: 'low', B: 'foobar', expected: 3 },
+
+    { A: 'unknown', B: 'unknown', expected: 0 },
+    { A: 'unknown', B: 'foobar', expected: 1 },
+
+    { A: 'foobar', B: 'asdf', expected: 0 },
+    { A: 'foobar', B: 'unknown', expected: -1 },
+    { A: 'foobar', B: 'informational', expected: -2 },
+    { A: 'foobar', B: 'low', expected: -3 },
+    { A: 'foobar', B: 'medium', expected: -4 },
+    { A: 'foobar', B: 'high', expected: -5 },
+    { A: 'foobar', B: 'critical', expected: -6 },
+
+    { A: 'critical', B: 'critical', expected: 0 },
+    { A: 'high', B: 'critical', expected: -1 },
+    { A: 'medium', B: 'critical', expected: -2 },
+    { A: 'low', B: 'critical', expected: -3 },
+    { A: 'informational', B: 'critical', expected: -4 },
+    { A: 'unknown', B: 'critical', expected: -5 },
+    { A: 'foobar', B: 'critical', expected: -6 },
+
+    { A: 'high', B: 'high', expected: 0 },
+    { A: 'medium', B: 'high', expected: -1 },
+    { A: 'low', B: 'high', expected: -2 },
+    { A: 'informational', B: 'high', expected: -3 },
+    { A: 'unknown', B: 'high', expected: -4 },
+    { A: 'foobar', B: 'high', expected: -5 },
+
+    { A: 'medium', B: 'medium', expected: 0 },
+    { A: 'low', B: 'medium', expected: -1 },
+    { A: 'informational', B: 'medium', expected: -2 },
+    { A: 'unknown', B: 'medium', expected: -3 },
+    { A: 'foobar', B: 'medium', expected: -4 },
+
+    { A: 'low', B: 'low', expected: 0 },
+    { A: 'informational', B: 'low', expected: -1 },
+    { A: 'unknown', B: 'low', expected: -2},
+    { A: 'foobar', B: 'low', expected: -3 },
+
+    { A: 'unknown', B: 'unknown', expected: 0 },
+    { A: 'foobar', B: 'unknown', expected: -1 },
+
+    { A: 'asdf', B: 'foobar', expected: 0 },
+    { A: 'unknown', B: 'foobar', expected: 1 },
+    { A: 'informational', B: 'foobar', expected: 2 },
+    { A: 'low', B: 'foobar', expected: 3 },
+    { A: 'medium', B: 'foobar', expected: 4 },
+    { A: 'high', B: 'foobar', expected: 5 },
+    { A: 'critical', B: 'foobar', expected: 6 },
+
+    { A: 6, B: 10, expected: 0 },
+  ];
+
+  tests.forEach(({ A, B, expected }) => {
+    const result = comp.sortBySeverity(A, B);
+    expect(result).toBe(expected);
+  });
+});
