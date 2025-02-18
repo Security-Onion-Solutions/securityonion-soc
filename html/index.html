@@ -609,7 +609,7 @@
                             :search="groupByFilter" density="compact"
                             :items-per-page-options="groupByFooters" :item-value="group.sortBy.key" :items-per-page="groupByItemsPerPage"
                             @update:items-per-page="val => groupByItemsPerPage = val" :headers="group.headers"
-                            :items="group.data" v-model:sort-by="group.sortBy"
+                            :items="group.data" v-model:sort-by="group.sortBy" must-sort @update:sort-by="updateGroupBySort(groupIdx)"
                             :data-aid="'groups_table_' + category">
                             <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
                               <tr>
