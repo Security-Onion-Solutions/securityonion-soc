@@ -21,7 +21,6 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
-	"fmt"
 	"io"
 	"math/rand"
 	"os"
@@ -49,6 +48,7 @@ const FEAT_ODC = "odc"
 const FEAT_STG = "stg"
 const FEAT_TTR = "ttr"
 const FEAT_RPT = "rpt"
+const FEAT_VRT = "vrt"
 
 const PUBLIC_KEY = `
 -----BEGIN PUBLIC KEY-----
@@ -100,6 +100,10 @@ type LicenseKey struct {
 	SocUrl string `json:"socUrl" example:"acme-so-manager"`
 	// The backend data event storage hostname required to be used by this license key
 	DataUrl string `json:"dataUrl" example:""`
+	// The maximum allowed count of suboordinate grids managed by this grid
+	Subgrids int `json:"subgrids,omitempty" example:"2"`
+	// The management NIC MAC address pinned to this license
+	MgmtMac string `json:"mgmtMac,omitempty" example:"10:20:30:A0:B0:C0"`
 }
 
 type SignedLicenseKey struct {
@@ -173,8 +177,6 @@ func verify(key string) (*LicenseKey, error) {
 		return nil, parseErr
 	}
 
-	fmt.Printf("bytes: %x\n", msgBytes)
-
 	hash := sha256.Sum256(msgBytes)
 	return license, rsa.VerifyPKCS1v15(pubKey, crypto.SHA256, hash[:], sigBytes)
 }
@@ -190,6 +192,7 @@ func CreateAvailableFeatureList() []string {
 	available = append(available, FEAT_STG)
 	available = append(available, FEAT_TTR)
 	available = append(available, FEAT_RPT)
+	available = append(available, FEAT_VRT)
 	return available
 }
 
@@ -279,6 +282,8 @@ func createManager(status string, available []string, licenseKey *LicenseKey, st
 		"licenseNodes":      manager.licenseKey.Nodes,
 		"licenseSocUrl":     manager.licenseKey.SocUrl,
 		"licenseDataUrl":    manager.licenseKey.DataUrl,
+		"licenseSubgrids":   manager.licenseKey.Subgrids,
+		"licenseMgmtMac":    manager.licenseKey.MgmtMac,
 	}).Info("Initialized license manager")
 }
 
@@ -575,4 +580,24 @@ func ValidateFeature(feature string, detected bool) bool {
 	}
 	ok := IsEnabled(feature)
 	return checkExceeded("feature_"+feature, ok)
+}
+
+func ValidateSubgridCount(count int) bool {
+	if manager == nil {
+		return true
+	}
+	ok := manager.licenseKey.Subgrids >= count
+	return checkExceeded("subgrids", ok)
+}
+
+func ValidateMgmtMac(mac string) bool {
+	if manager == nil {
+		return true
+	}
+	expected := strings.TrimSpace(manager.licenseKey.MgmtMac)
+	expected = strings.ToUpper(expected)
+	actual := strings.TrimSpace(mac)
+	actual = strings.ToUpper(actual)
+	ok := expected == "" || strings.EqualFold(expected, actual)
+	return checkExceeded("mgmtMac", ok)
 }

@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/apex/log"
+	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 )
 
@@ -33,7 +34,7 @@ type ServerConfig struct {
 	MaxPacketCount          int                    `json:"maxPacketCount"`
 	Modules                 module.ModuleConfigMap `json:"modules"`
 	ModuleFailuresIgnored   bool                   `json:"moduleFailuresIgnored"`
-	ClientParams            ClientParameters       `json:"client"`
+	ClientParams            model.ClientParameters `json:"client"`
 	IdleConnectionTimeoutMs int                    `json:"idleConnectionTimeoutMs"`
 	TimezoneScript          string                 `json:"timezoneScript"`
 	MaxUploadSizeBytes      int                    `json:"maxUploadSizeBytes"`
@@ -43,6 +44,7 @@ type ServerConfig struct {
 	ForceUserOtp            bool                   `json:"forceUserOtp"`
 	SrvKey                  string                 `json:"srvKey"`
 	SrvExpSeconds           int                    `json:"srvExpSeconds"`
+	Subgrids                []*model.Subgrid       `json:"subgrids"`
 	SrvKeyBytes             []byte
 }
 
@@ -90,5 +92,43 @@ func (config *ServerConfig) Verify() error {
 		config.SrvKeyBytes = []byte(config.SrvKey)
 	}
 
+	config.verifySubgrids()
+
 	return err
+}
+
+func (config *ServerConfig) verifySubgrids() {
+	finalGrids := make([]*model.Subgrid, 0)
+	usedIds := make(map[string]bool)
+	for idx, grid := range config.Subgrids {
+		if !grid.Enabled {
+			log.WithFields(log.Fields{
+				"subgridIdx": idx,
+				"subgridId":  grid.Id,
+			}).Warn("Found disabled subgrid entry; skipping subgrid")
+			continue
+		}
+		if _, exists := usedIds[grid.Id]; exists {
+			log.WithFields(log.Fields{
+				"subgridIdx": idx,
+				"subgridId":  grid.Id,
+			}).Error("Duplicate subgrid ID; skipping subgrid")
+			continue
+		}
+		usedIds[grid.Id] = true
+		subgridErr := grid.Verify()
+		if subgridErr != nil {
+			log.WithFields(log.Fields{
+				"subgridIdx": idx,
+				"subgridId":  grid.Id,
+			}).WithError(subgridErr).Error("Invalid subgrid configuration; skipping subgrid")
+			continue
+		}
+
+		// Good subgrid
+		finalGrids = append(finalGrids, grid)
+	}
+
+	// Overwrite input subgrids with final validated subgrid set
+	config.Subgrids = finalGrids
 }

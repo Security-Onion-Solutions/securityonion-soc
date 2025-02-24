@@ -10,6 +10,7 @@ import (
 	"errors"
 	"os"
 
+	"github.com/kennygrant/sanitize"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 )
 
@@ -26,6 +27,7 @@ type AgentConfig struct {
 	PollIntervalMs        int                    `json:"pollIntervalMs"`
 	Modules               module.ModuleConfigMap `json:"modules"`
 	ModuleFailuresIgnored bool                   `json:"moduleFailuresIgnored"`
+	MgmtNic               string                 `json:"mgmtNic"`
 }
 
 func (config *AgentConfig) Verify() error {
@@ -38,6 +40,9 @@ func (config *AgentConfig) Verify() error {
 	}
 	if err == nil && config.ServerUrl == "" {
 		err = errors.New("Agent.ServerUrl configuration value is required")
+	}
+	if err == nil && sanitize.BaseName(config.MgmtNic) != config.MgmtNic {
+		err = errors.New("Agent.MgmtNic contains invalid characters")
 	}
 	return err
 }

@@ -32,6 +32,8 @@ type Node struct {
 	UptimeSeconds int `json:"uptimeSeconds" example:"26936696"`
 	// The node's optional description
 	Description string `json:"description" example:"East coast sensor"`
+	// The MAC address assigned to this node's management NIC
+	MgmtMac string `json:"mgmtMac" example:"AA:BB:CC:11:22:33"`
 	// The IP address of this node
 	Address string `json:"address" example:"4.3.2.1"`
 	// The node's assigned role; assigned during node setup
@@ -128,6 +130,8 @@ type Node struct {
 	LksEnabled int `json:"lksEnabled" example:"1"`
 	// Indicates whether federal information processing standards are enabled on this node
 	FpsEnabled int `json:"fpsEnabled" example:"0"`
+	// Grid ID, used for subgrids
+	GridId string `json:"gridId" example:"so1"`
 }
 
 func NewNode(id string) *Node {
@@ -229,6 +233,10 @@ func (node *Node) IsProcessRunning(match string) bool {
 		}
 	}
 	return false
+}
+
+func (node *Node) IsManager() bool {
+	return node.Role == "so-standalone" || node.Role == "so-manager" || node.Role == "so-eval" || node.Role == "so-import" || node.Role == "so-managersearch"
 }
 
 type NodeStatus struct {

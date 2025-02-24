@@ -7,7 +7,6 @@
 package model
 
 import (
-	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 )
 
@@ -17,7 +16,7 @@ type Info struct {
 	// The copyright license applicable to the Security Onion software
 	License string `json:"license" example:"Elastic License 2.0 (ELv2)"`
 	// Web UI parameters; unavailable to API clients
-	Parameters *config.ClientParameters `json:"parameters"`
+	Parameters *ClientParameters `json:"parameters"`
 	// The version of the Elasticsearch cluster
 	ElasticVersion string `json:"elasticVersion" example:"8.14.3"`
 	// The authenticated API client ID
@@ -32,4 +31,8 @@ type Info struct {
 	LicenseStatus string `json:"licenseStatus" example:"active"`
 	// OTP indicator; unavailable to API clients
 	ForceUserOtp bool `json:"forceUserOtp"`
+	// The MAC address assigned to the management interface.
+	MgmtMac string `json:"mgmtMac" example:"11:22:33:AA:BB:CC"`
+	// The list of subordinate grids configured for this grid.
+	Subgrids []*Subgrid `json:"subgrids"`
 }
