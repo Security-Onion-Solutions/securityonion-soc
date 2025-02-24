@@ -966,3 +966,7 @@ ul ul ul {
 .marketing.v-theme--light {
   background-color: rgb(var(--v-theme-background-darken-1)) !important;
 }
+
+#external-tools-list a.v-list-item {
+  padding-right: 4px;
+}

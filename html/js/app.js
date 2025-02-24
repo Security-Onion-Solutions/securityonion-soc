@@ -183,6 +183,7 @@ $(document).ready(function () {
         ip2host: {},
         securitySettingsAlreadyChecked: false,
         forceUserOtp: false,
+        subgrids: null,
       }
     },
     watch: {
@@ -409,8 +410,15 @@ $(document).ready(function () {
               if (response) {
                 this.papi.defaults.headers.common['X-Srv-Token'] = response.data.srvToken;
                 this.version = response.data.version;
+                this.mgmtMac = response.data.mgmtMac;
                 this.license = response.data.license;
                 this.licenseKey = response.data.licenseKey;
+
+                // Fill in empty data for older licenses
+                if (this.licenseKey && !this.licenseKey.subgrids) {
+                  this.licenseKey.subgrids = 0;
+                }
+
                 this.licenseStatus = response.data.licenseStatus;
 
                 if (this.licenseStatus == LICENSE_STATUS_EXCEEDED) {
@@ -426,6 +434,7 @@ $(document).ready(function () {
                 this.elasticVersion = response.data.elasticVersion;
                 this.timezones = response.data.timezones;
                 this.enableReverseLookup = response.data.parameters.enableReverseLookup;
+                this.subgrids = response.data.subgrids;
 
                 this.user = await this.getUserById(response.data.userId);
                 if (this.user) {
@@ -1303,6 +1312,9 @@ $(document).ready(function () {
         }
 
         return false;
+      },
+      isTrue(b) {
+        return b === true || ("" + b).toLowerCase() == "true";
       },
       pickHostname(ip) {
         if (!this.enableReverseLookup) {

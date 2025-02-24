@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -55,7 +54,7 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 
 	var srvToken string
 	var forceUserOtp bool
-	var params *config.ClientParameters
+	var params *model.ClientParameters
 	exempt := r.Context().Value(web.ContextKeyRequestCSRFExempt).(bool)
 	if !exempt {
 		var err error
@@ -75,6 +74,20 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 		params = &h.server.Config.ClientParams
 	}
 
+	mgmtMac := "unknown"
+	if h.server.Datastore != nil {
+		for _, node := range h.server.Datastore.GetNodes(h.server.Context) {
+			if node.IsManager() {
+				mgmtMac = node.MgmtMac
+			}
+		}
+	}
+
+	subgrids := make([]*model.Subgrid, 0, 0)
+	if licensing.ValidateSubgridCount(len(subgrids)) {
+		subgrids = h.server.Config.Subgrids
+	}
+
 	info := &model.Info{
 		Version:        h.server.Host.Version,
 		License:        "Elastic License 2.0 (ELv2)",
@@ -86,6 +99,8 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 		Timezones:      h.timezones,
 		SrvToken:       srvToken,
 		ForceUserOtp:   forceUserOtp,
+		MgmtMac:        mgmtMac,
+		Subgrids:       subgrids,
 	}
 
 	web.Respond(w, r, http.StatusOK, info)

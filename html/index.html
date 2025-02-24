@@ -525,10 +525,10 @@
             <v-row v-if="loaded && (queryFilters.length > 0 || queryGroupBys.length > 0 || querySortBys.length > 0)">
               <v-col cols="12">
                 <span v-for="filter in queryFilters" :key="filter" :data-aid="'filter_chip_' + category">
-                  <v-chip class="filter mx-1 my-1" color="primary" closable="true" @click:close="removeFilter(filter)">{{ formatSafeString(filter) }}</v-chip>
+                  <v-chip density="compact" class="filter mx-1 my-1" color="primary" closable="true" @click:close="removeFilter(filter)">{{ formatSafeString(filter) }}</v-chip>
                 </span>
                 <span v-for="sortBy in querySortBys" :key="sortBy" :data-aid="'sort_chip_' + category">
-                  <v-chip class="sortBy mx-1 my-1" color="secondary" closable="true" @click:close="removeSortBy(sortBy)">{{ i18n.sortedBy }} {{ formatSafeString(sortBy) }}</v-chip>
+                  <v-chip density="compact"class="sortBy mx-1 my-1" color="secondary" closable="true" @click:close="removeSortBy(sortBy)">{{ i18n.sortedBy }} {{ formatSafeString(sortBy) }}</v-chip>
                 </span>
               </v-col>
             </v-row>
@@ -2240,6 +2240,15 @@
                           </v-chip>
                         </v-col>
                       </v-row>
+                      <v-row class="my-1">
+                        <v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.mgmtMac }}:</v-col>
+                        <v-col cols="9" class="pa-1">
+                          {{ $root.mgmtMac }}
+                          <v-btn icon variant="text" class="mx-2" density="compact" size="small" @click="$root.copyToClipboard($root.mgmtMac)" data-aid="terms_license_copy_mac">
+                            <v-icon>fa-copy</v-icon>
+                          </v-btn>      
+                        </v-col>
+                      </v-row>
                       <span v-if="$root.licenseKey && ($root.licenseStatus != LICENSE_STATUS_UNPROVISIONED && $root.licenseStatus != LICENSE_STATUS_INVALID)">
                         <v-row class="my-1">
                           <v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.licenseId }}:</v-col>
@@ -2285,9 +2294,18 @@
                         <v-col v-else cols="9" class="pa-1">{{ i18n.unlimited }}</v-col>
                       </v-row>
                       <v-row class="my-1">
+                        <v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.pinnedMac }}:</v-col>
+                        <v-col v-if="$root.licenseKey.mgmtMac" cols="9" class="pa-1">{{ $root.licenseKey.mgmtMac }}</v-col>
+                        <v-col v-else cols="9" class="pa-1">{{ i18n.unlocked }}</v-col>
+                      </v-row>
+                      <v-row class="my-1">
                         <v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.nodeLimit }}:</v-col>
                         <v-col v-if="$root.licenseKey.nodes > 0" cols="9" class="pa-1">{{ $root.licenseKey.nodes }}</v-col>
                         <v-col v-else cols="9" class="pa-1">{{ i18n.unlimited }}</v-col>
+                      </v-row>
+                      <v-row class="my-1">
+                        <v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.subgridLimit }}:</v-col>
+                        <v-col cols="9" class="pa-1">{{ $root.licenseKey.subgrids }}</v-col>
                       </v-row>
                       <v-row class="my-1">
                         <v-col cols="3" class="pa-1 text-right font-weight-bold text-no-wrap">{{ i18n.socUrl }}:</v-col>
@@ -4754,6 +4772,7 @@
                   <td>
                     <v-icon v-if="item.status != NodeStatusOk" :id="'nodeFaultIcon_' + item.id" :color="colorNodeStatus(item.status, item.nonCriticalNode)" data-aid="grid_node_icon_status_display">{{ iconNodeStatus(item.status) }}</v-icon>
                   </td>
+                  <td v-if="hasSubgrids()" :id="'nodeGridId_' + item.id" v-text="item.gridId ? item.gridId : i18n.gridLocal"></td>
                   <td :id="'nodeId_' + item.id" v-text="item.id"></td>
                   <td :id="'nodeRole_' + item.id" v-text="$root.localizeMessage(item.role)" class="d-none d-md-table-cell"></td>
                   <td :id="'nodeAddress_' + item.id" v-text="item.address" class="d-none d-lg-table-cell"></td>
@@ -4815,6 +4834,10 @@
                           <v-card>
                             <v-card-title v-text="i18n.nodeStatus"/>
                             <v-card-text>
+                              <div v-if="hasSubgrids" class="text-no-wrap">
+                                <span class="filter label">{{ i18n.gridId }}:</span>
+                                <span id="node_grid_id" class="filter value">{{ item.gridId ? item.gridId : i18n.gridLocal }}</span>
+                              </div>
                               <div class="text-no-wrap">
                                 <span class="filter label">{{ i18n.id }}:</span>
                                 <span id="node_id" class="filter value">{{ item.id }}</span>
@@ -5576,7 +5599,7 @@
                     </span>
                   </div>
                   <div class="text-subtitle-1 mb-4" data-aid="config_item_help" >
-                    {{ getSettingDescription(selected) }}
+                    <div class="markdown-body" v-html="formatMarkdown(getSettingDescription(selected))" />
                     <a v-if="selected.helpLink" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + selected.helpLink" style="text-decoration: none; cursor: 'pointer'" :title="i18n.settingHelp">
                       <v-icon color="info" class="mb-2">fa-circle-question</v-icon>
                     </a>
@@ -5601,9 +5624,10 @@
                     <v-row v-if="!isReadOnly(selected) && selected.defaultAvailable">
                       <v-col>
                         <v-btn id="config-toggle-default-button" @click="showDefault = !showDefault" v-text="showDefault ? i18n.settingHideDefault : i18n.settingShowDefault" data-aid="config_item_show_default"/>
-                        <div v-if="showDefault" class="mt-8">
-                          <v-textarea variant="underlined" v-if="isMultiline(selected)" id="default-output" :label="i18n.settingDefault" v-model="selected.default" readonly class="config-editor" data-aid="config_item_default_display" />
-                          <v-text-field variant="underlined" v-if="!isMultiline(selected)" id="default-output" :label="i18n.settingDefault" v-model="selected.default" readonly data-aid="config_item_default_display" />
+                        <div v-if="showDefault" class="mt-8 ml-8">
+                          <v-chip v-if="isToggle(selected)" id="default-output" :color="$root.isTrue(selected.default) ? 'primary' : 'secondary'" data-aid="config_item_default_display">{{$root.isTrue(selected.value) ? i18n.enabled : i18n.disabled }}</v-chip>
+                          <v-textarea v-else-if="isMultiline(selected)" id="default-output" variant="underlined" :label="i18n.settingDefault" v-model="selected.default" readonly class="config-editor" data-aid="config_item_default_display" />
+                          <v-text-field v-else id="default-output" variant="underlined" :label="i18n.settingDefault" v-model="selected.default" readonly data-aid="config_item_default_display" />
                         </div>
                       </v-col>
                     </v-row>
@@ -5624,24 +5648,45 @@
                           <v-expansion-panel v-for="(entry, entryIdx) in form.entries" :key="entryIdx" @group:selected="edit(selected)" data-aid="config_item_entry_title">
                             <v-expansion-panel-title>
                               {{ entry._title }}
+                              <v-chip v-if="!!entry._status" :color="entry._statusColor ? entry._statusColor : 'secondary'" variant="elevated" density="compact" rounted="xs" class="mx-4" v-text="entry._status"/>
                             </v-expansion-panel-title>
                             <v-expansion-panel-text>
-                              <div v-for="(element, elementIdx) in selected.uiElements" :key="elementIdx">
-                                <v-text-field :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:modelValue="markDirtyEntries" :label="element.label" variant="outlined" :label="element.label" v-model="entry[element.field]" class="editing" :data-aid="'config_item_entry_' + element.field" />
-                              </div>
-                              <v-btn v-if="!isEntryEmpty(entry)" id="'setting-element-' + entryIdx + '-delete-' + entry['field']" icon variant="text" size="small" @click="clearEntry(entry, entryIdx)" :title="i18n.settingDeleteEntryHelp" data-aid="config_item_delete_entry">
+                              <v-form v-model="uiElementsValid">
+                                <div class="my-1" v-for="(element, elementIdx) in selected.uiElements" :key="elementIdx">
+                                  <v-textarea v-if="isMultiline(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:modelValue="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing config-editor" :data-aid="'config_item_entry_' + element.field" />
+                                  <v-switch v-else-if="isToggle(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" inset @update:modelValue="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" v-model="entry[element.field]" class="no-details" :data-aid="'config_item_entry_' + element.field" />
+                                  <v-select v-else-if="isSelectList(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" :items="element.options" :multiple="hasMultipleValues(element)" inset @update:modelValue="markDirtyEntries" :label="getElementLabel(element)" variant="outlined" :label="element.label" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="no-details" :data-aid="'config_item_entry_' + element.field" />
+                                  <v-text-field v-else :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:modelValue="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing" :data-aid="'config_item_entry_' + element.field" />
+                                </div>
+                              </v-form>
+                              <p>* {{ i18n.requiredField }}</p>
+                              <v-btn v-if="!isEntryEmpty(selected, entry)" id="'setting-element-' + entryIdx + '-delete-' + entry['field']" icon variant="text" size="small" @click="clearEntry(entry, entryIdx)" :title="i18n.settingDeleteEntryHelp" data-aid="config_item_delete_entry">
                                 <v-icon color="error">fa-trash</v-icon>
                               </v-btn>
                             </v-expansion-panel-text>
                           </v-expansion-panel>
                         </v-expansion-panels>
                         <div v-else>
-                          <div v-if="isMultiline(selected)">
-                            <v-textarea v-if="form.key != selected.id" id="value-output" variant="outlined" :label="i18n.settingGlobal" @focus="edit(selected)" v-model="selected.value" readonly :disabled="isReadOnly(selected)" :no-resize="!isReadOnly(selected)" class="config-editor" data-aid="config_item_customize_multiline_display" />
+                          <div v-if="isToggle(selected)">
+                            <div v-if="form.key != selected.id || isReadOnly(selected)">
+                              <v-chip id="value-output" :color="$root.isTrue(selected.value) ? 'primary' : 'secondary'" append-icon="fa-pencil" @click="edit(selected)" data-aid="config_item_customize_slider_display">{{$root.isTrue(selected.value) ? i18n.enabled : i18n.disabled }}</v-chip>
+                              <span class="setting_label mx-4">{{ i18n.settingGlobal }}</span>
+                            </div>
+                            <v-switch v-else id="value-input" :label="i18n.settingGlobal" true-value="true" v-model="form.value" class="editing config-editor no-details" data-aid="config_item_customize_slider_input" />
+                          </div>
+                          <div v-else-if="isSelectList(selected)">
+                            <div v-if="form.key != selected.id || isReadOnly(selected)">
+                              <v-chip id="value-output" append-icon="fa-pencil" @click="edit(selected)" :data-aid="config_item_customize_select_display">{{selected.value}}</v-chip>
+                              <span class="setting_label mx-4">{{ i18n.settingGlobal }}</span>
+                            </div>
+                            <v-select v-else id="value-input" :items="selected.options" :multiple="hasMultipleValues(selected)" :label="i18n.settingGlobal" v-model="form.value" :rules="buildInputRules(selected)" class="editing config-editor no-details" :data-aid="config_item_customize_select_input" />
+                          </div>
+                          <div v-else-if="isMultiline(selected)">
+                            <v-textarea v-if="form.key != selected.id || isReadOnly(selected)" id="value-output" variant="outlined" :label="i18n.settingGlobal" @focus="edit(selected)" v-model="selected.value" readonly class="config-editor" data-aid="config_item_customize_multiline_display" />
                             <v-textarea v-else id="value-input" variant="outlined" :label="i18n.settingGlobal" v-model="form.value" class="editing config-editor" data-aid="config_item_customize_multiline_input" />
                           </div>
                           <div v-else>
-                            <v-text-field v-if="form.key != selected.id" id="value-output" variant="outlined" :label="i18n.settingGlobal" @focus="edit(selected)" v-model="selected.value" readonly :disabled="isReadOnly(selected)" :type="selected.sensitive ? 'password' : 'text'" data-aid="config_item_customize_singleline_display" />
+                            <v-text-field v-if="form.key != selected.id || isReadOnly(selected)" id="value-output" variant="outlined" :label="i18n.settingGlobal" @focus="edit(selected)" v-model="selected.value" readonly :type="selected.sensitive ? 'password' : 'text'" data-aid="config_item_customize_singleline_display" />
                             <v-text-field v-else id="value-input" variant="outlined" :label="i18n.settingGlobal" v-model="form.value" class="editing"  @keydown.enter.prevent="save(selected)" data-aid="config_item_singleline_input" />
                           </div>
                         </div>
@@ -5660,13 +5705,27 @@
                             <v-icon color="error">fa-xmark</v-icon>
                           </v-btn>
                         </div>
-                        <div v-if="isMultiline(selected)">
-                          <v-textarea v-if="form.key != item[0]" :id="'node-value-output-' + item[0]" variant="outlined" :label="item[0]" @focus="edit(selected, item[0])" v-model="item[1]"  readonly :disabled="isReadOnly(selected)" class="config-editor" data-aid="config_item_customize_node_multiline_display" />
-                          <v-textarea v-else variant="outlined" :id="'node-value-input-' + item[0]" :label="item[0]" v-model="form.value" class="editing config-editor" data-aid="config_item_customize_node_multiline_input" />
+                        <div v-if="isToggle(selected)">
+                          <div v-if="form.key != item[0] || isReadOnly(selected)">
+                            <v-chip :id="'node-value-output-' + item[0]" :color="$root.isTrue(item[1]) ? 'primary' : 'secondary'" append-icon="fa-pencil" @click="edit(selected, item[0])" data-aid="config_item_customize_node_slider_display">{{$root.isTrue(item[1]) ? i18n.enabled : i18n.disabled }}</v-chip>
+                            <span class="setting_label mx-4">{{ item[0] }}</span>
+                          </div>
+                          <v-switch v-else :id="'node-value-input-' + item[0]" :label="item[0]" true-value="true" v-model="form.value" class="editing config-editor no-details" data-aid="config_item_customize_node_slider_input" />
+                        </div>
+                        <div v-else-if="isSelectList(selected)">
+                          <div v-if="form.key != item[0] || isReadOnly(selected)">
+                            <v-chip :id="'node-value-output-' + item[0]" append-icon="fa-pencil" @click="edit(selected, item[0])" :data-aid="config_item_customize_node_select_display">{{item[1]}}</v-chip>
+                            <span class="setting_label mx-4">{{ item[0] }}</span>
+                          </div>
+                          <v-select v-else :id="'node-value-input-' + item[0]" :items="selected.options" :multiple="hasMultipleValues(selected)" :label="item[0]" v-model="form.value" :rules="buildInputRules(selected)" class="editing config-editor no-details" :data-aid="config_item_customize_node_select_input" />
+                        </div>
+                        <div v-else-if="isMultiline(selected)">
+                          <v-textarea v-if="form.key != item[0] || isReadOnly(selected)" :id="'node-value-output-' + item[0]" variant="outlined" :label="item[0]" @focus="edit(selected, item[0])" v-model="item[1]" readonly class="config-editor" data-aid="config_item_customize_node_multiline_display" />
+                          <v-textarea v-else :id="'node-value-input-' + item[0]" variant="outlined" :label="item[0]" v-model="form.value" class="editing config-editor" data-aid="config_item_customize_node_multiline_input" />
                         </div>
                         <div v-else>
-                          <v-text-field v-if="form.key != item[0]" :id="'node-value-output-' + item[0]" variant="outlined" :label="item[0]" @focus="edit(selected, item[0])" v-model="item[1]" readonly :disabled="isReadOnly(selected)" :type="selected.sensitive ? 'password' : 'text'" data-aid="config_item_customize_node_singleline_display" />
-                          <v-text-field v-else variant="outlined" :label="item[0]" :id="'node-value-input-' + item[0]" v-model="form.value" class="editing"  @keydown.enter.prevent="save(selected, item[0])" data-aid="config_item_customize_node_singleline_display" />
+                          <v-text-field v-if="form.key != item[0] || isReadOnly(selected)" :id="'node-value-output-' + item[0]" variant="outlined" :label="item[0]" @focus="edit(selected, item[0])" v-model="item[1]" readonly :type="selected.sensitive ? 'password' : 'text'" data-aid="config_item_customize_node_singleline_display" />
+                          <v-text-field v-else :id="'node-value-input-' + item[0]" variant="outlined" :label="item[0]" v-model="form.value" class="editing"  @keydown.enter.prevent="save(selected, item[0])" data-aid="config_item_customize_node_singleline_input" />
                         </div>
                       </v-col>
                     </v-row>

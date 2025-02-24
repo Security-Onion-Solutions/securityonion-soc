@@ -4,7 +4,7 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-package config
+package model
 
 const DEFAULT_GROUP_FETCH_LIMIT = 10
 const DEFAULT_EVENT_FETCH_LIMIT = 100
@@ -17,7 +17,7 @@ const DEFAULT_CHART_LABEL_FIELD_SEPARATOR = ", "
 
 type ClientParameters struct {
 	HuntingParams       HuntingParameters    `json:"hunt"`
-	AlertingParams      AlertParameters      `json:"alerts"`
+	AlertingParams      AlertingParameters   `json:"alerts"`
 	CasesParams         HuntingParameters    `json:"cases"`
 	CaseParams          CaseParameters       `json:"case"`
 	DashboardsParams    HuntingParameters    `json:"dashboards"`
@@ -166,7 +166,7 @@ func (params *HuntingParameters) combineDeprecatedLinkIntoLinks() {
 	}
 }
 
-type AlertParameters struct {
+type AlertingParameters struct {
 	HuntingParameters
 	MaxBulkEscalateEvents int `json:"maxBulkEscalateEvents"`
 }

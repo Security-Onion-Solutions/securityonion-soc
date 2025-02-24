@@ -8,8 +8,12 @@ package sostatus
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/json"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -55,6 +59,48 @@ func TestRefreshGrid(tester *testing.T) {
 	assert.Equal(tester, 3, status.currentStatus.Grid.TotalNodeCount)
 	assert.Equal(tester, 0, status.currentStatus.Grid.AwaitingRebootNodeCount)
 	assert.Equal(tester, 12, status.currentStatus.Grid.Eps)
+}
+
+func TestRefreshGrid_SubgridNodes(t *testing.T) {
+	status, _ := NewTestStatus()
+
+	// Define the mock subgrid nodes
+	subgridNodes := []*model.Node{
+		{
+			Id:              "subgrid-node-1",
+			Status:          model.NodeStatusOk,
+			NonCriticalNode: false,
+		},
+		{
+			Id:              "subgrid-node-2",
+			Status:          model.NodeStatusFault,
+			NonCriticalNode: false,
+		},
+	}
+
+	// Simple server mock that returns JSON of the above subgridNodes
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		rw.WriteHeader(http.StatusOK)
+		bytes, _ := json.WriteJson(subgridNodes)
+		rw.Write(bytes)
+	}))
+	defer server.Close()
+
+	grid := &model.Subgrid{
+		ManagerUrl:      server.URL,
+		ClientId:        "socl_test",
+		ClientSecret:    "test-secret",
+		AccessToken:     "new-access-token", // Assume token is already refreshed
+		TokenExpiration: time.Now().Add(time.Hour),
+	}
+
+	status.server.Config.Subgrids = []*model.Subgrid{grid}
+
+	status.refreshGrid(context.Background())
+
+	// Assert that the subgrid nodes are included in the total node count
+	assert.Equal(t, 5, status.currentStatus.Grid.TotalNodeCount)     // 3 local + 2 subgrid
+	assert.Equal(t, 3, status.currentStatus.Grid.UnhealthyNodeCount) // 2 local + 1 subgrid
 }
 
 func TestCheckDetectionEngineStatus(tester *testing.T) {

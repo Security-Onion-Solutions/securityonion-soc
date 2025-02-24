@@ -44,6 +44,7 @@ type Server struct {
 	Agent            *model.User
 	Context          context.Context
 	DetectionEngines map[model.EngineName]DetectionEngine
+	SubgridNodes     []*model.Node
 }
 
 func NewServer(cfg *config.ServerConfig, version string) *Server {

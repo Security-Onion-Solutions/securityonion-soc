@@ -54,6 +54,7 @@ test('loadData', async () => {
       "description": "Nearby",
       "duplicates": undefined,
       "file": undefined,
+      "forcedType": undefined,
       "global": false,
       "helpLink": undefined,
       "id": "fake.setting.foo",
@@ -61,10 +62,13 @@ test('loadData', async () => {
       "name": "foo",
       "node": undefined,
       "nodeValues": m1,
+      "optionSeparator": undefined,
+      "options": undefined,
       "readonly": undefined,
       "readonlyUi": undefined,
       "regex": "True|False",
       "regexFailureMessage": "Wrong!",
+      "required": undefined,
       "sensitive": undefined,
       "syntax": undefined,
       "title": "Farout",
@@ -78,6 +82,7 @@ test('loadData', async () => {
       "description": "NADA",
       "duplicates": undefined,
       "file": undefined,
+      "forcedType": undefined,
       "global": undefined,
       "helpLink": undefined,
       "id": "car",
@@ -85,10 +90,13 @@ test('loadData', async () => {
       "name": "car",
       "node": false,
       "nodeValues": new Map(),
+      "optionSeparator": undefined,
+      "options": undefined,
       "readonly": undefined,
       "readonlyUi": undefined,
       "regex": undefined,
       "regexFailureMessage": undefined,
+      "required": undefined,
       "sensitive": undefined,
       "syntax": undefined,
       "title": "CCA",
@@ -102,6 +110,7 @@ test('loadData', async () => {
       "description": "Cocoa",
       "duplicates": undefined,
       "file": undefined,
+      "forcedType": undefined,
       "global": undefined,
       "helpLink": undefined,
       "id": "fake.setting.bar",
@@ -109,10 +118,13 @@ test('loadData', async () => {
       "name": "bar",
       "node": false,
       "nodeValues": new Map(),
+      "optionSeparator": undefined,
+      "options": undefined,
       "readonly": undefined,
       "readonlyUi": undefined,
       "regex": undefined,
       "regexFailureMessage": undefined,
+      "required": undefined,
       "sensitive": undefined,
       "syntax": undefined,
       "title": "Barley",
@@ -133,6 +145,7 @@ test('loadData', async () => {
               "description": "Nearby",
               "duplicates": undefined,
               "file": undefined,
+              "forcedType": undefined,
               "global": false,
               "helpLink": undefined,
               "id": "fake.setting.foo",
@@ -140,10 +153,13 @@ test('loadData', async () => {
               "name": "foo",
               "node": undefined,
               "nodeValues": m1,
+              "optionSeparator": undefined,
+              "options": undefined,
               "readonly": undefined,
               "readonlyUi": undefined,
               "regex": "True|False",
               "regexFailureMessage": "Wrong!",
+              "required": undefined,
               "sensitive": undefined,
               "syntax": undefined,
               "title": "Farout",
@@ -157,6 +173,7 @@ test('loadData', async () => {
               "description": "Cocoa",
               "duplicates": undefined,
               "file": undefined,
+              "forcedType": undefined,
               "global": undefined,
               "helpLink": undefined,
               "id": "fake.setting.bar",
@@ -164,10 +181,13 @@ test('loadData', async () => {
               "name": "bar",
               "node": false,
               "nodeValues": new Map(),
+              "optionSeparator": undefined,
+              "options": undefined,
               "readonly": undefined,
               "readonlyUi": undefined,
               "regex": undefined,
               "regexFailureMessage": undefined,
+              "required": undefined,
               "sensitive": undefined,
               "syntax": undefined,
               "title": "Barley",
@@ -189,6 +209,7 @@ test('loadData', async () => {
       "description": "NADA",
       "duplicates": undefined,
       "file": undefined,
+      "forcedType": undefined,
       "global": undefined,
       "helpLink": undefined,
       "id": "car",
@@ -196,10 +217,13 @@ test('loadData', async () => {
       "name": "car",
       "node": false,
       "nodeValues": new Map(),
+      "optionSeparator": undefined,
+      "options": undefined,
       "readonly": undefined,
       "readonlyUi": undefined,
       "regex": undefined,
       "regexFailureMessage": undefined,
+      "required": undefined,
       "sensitive": undefined,
       "syntax": undefined,
       "title": "CCA",
@@ -827,14 +851,6 @@ test('pack_unpack_multiple_array_of_json', () => {
   expect(comp.form.entries[2]._title).toBe('+');
 });
 
-test('isEntryEmpty', () => {
-  entry = {id: '', foo:'', _title:'title'};
-  expect(comp.isEntryEmpty(entry)).toBe(true);
-
-  entry = {id: 'something', foo:'hi', _title:'title'};
-  expect(comp.isEntryEmpty(entry)).toBe(false);
-});
-
 test('generateEntryTitle', () => {
   entry = {id: 'something', foo:'hi'};
   comp.settings = [entry];
@@ -864,4 +880,111 @@ test('clearEntry', () => {
   entry = {foo: 'bar', some: 'value', _title: '+'};
   comp.clearEntry(entry, 1);
   expect(entry._title).toBe('+');
+});
+
+test('createEmptyUiElementEntry', () => {
+  const setting = {
+    uiElements: [
+      { field: 'field1', default: 'default1' },
+      { field: 'field2' },
+      { field: 'field3', default: 'default3' },
+    ],
+  };
+
+  const emptyEntry = comp.createEmptyUiElementEntry(setting);
+
+  expect(emptyEntry._title).toBe('+');
+  expect(emptyEntry.field1).toBe('default1');
+  expect(emptyEntry.field3).toBe('default3');
+  expect(emptyEntry.field2).toBeUndefined();
+});
+
+test('getElementLabel', () => {
+  let element = { label: 'Test Label', required: false };
+  expect(comp.getElementLabel(element)).toBe('Test Label');
+
+  element = { label: 'Test Label', required: true };
+  expect(comp.getElementLabel(element)).toBe('Test Label *');
+});
+
+test('validateRegexMatch', () => {
+  let setting = { regex: '^test$', regexFailureMessage: 'Regex failed' };
+  expect(comp.validateRegexMatch(setting, 'test')).toBe(true);
+  expect(comp.validateRegexMatch(setting, 'fail')).toBe('Regex failed');
+
+  setting = { regex: '^test$' };
+  expect(comp.validateRegexMatch(setting, 'test')).toBe(true);
+  expect(comp.validateRegexMatch(setting, 'fail')).toBe(comp.i18n.settingValidationFailed);
+});
+
+test('buildInputRules', () => {
+  let setting = { required: false, regex: null };
+  expect(comp.buildInputRules(setting)).toEqual([]);
+
+  setting = { required: true, regex: null };
+  let rules = comp.buildInputRules(setting);
+  expect(rules.length).toBe(1);
+  expect(rules[0]('')).toBe('Required.');
+
+  setting = { required: false, regex: '^test$', regexFailureMessage: 'Regex failed' };
+  rules = comp.buildInputRules(setting);
+  expect(rules.length).toBe(1);
+  expect(rules[0]('test')).toBe(true);
+  expect(rules[0]('fail')).toBe('Regex failed');
+
+  setting = { required: true, regex: '^test$', regexFailureMessage: 'Regex failed' };
+  rules = comp.buildInputRules(setting);
+  expect(rules.length).toBe(2);
+  expect(rules[0]('')).toBe('Required.');
+  expect(rules[1]('test')).toBe(true);
+  expect(rules[1]('fail')).toBe('Regex failed');
+});
+
+test('isUiElementReadonly', () => {
+  let entry = { _title: '1' };
+  let setting = { readonly: false };
+  expect(comp.isUiElementReadonly(entry, setting)).toBe(false);
+
+  setting = { readonly: true };
+  expect(comp.isUiElementReadonly(entry, setting)).toBe(true);
+
+  entry = { _title: '+' };
+  setting = { readonly: true };
+  expect(comp.isUiElementReadonly(entry, setting)).toBe(false);
+});
+
+test('uiElementsHaveValidInputs', () => {
+  comp.form.entries = null;
+  let setting = { uiElements: [{}] };
+  expect(comp.uiElementsHaveValidInputs(setting)).toBe(true);
+
+  comp.form.entries = [{ valid: true }];
+  setting = { uiElements: [{field: "valid", default: true}] };
+  expect(comp.uiElementsHaveValidInputs(setting)).toBe(true);
+
+  comp.form.entries = [{ valid: true }];
+  setting = { uiElements: [{field: "valid", default: true}] };
+  comp.uiElementsValid = false;
+  expect(comp.uiElementsHaveValidInputs(setting)).toBe(true);
+
+  comp.form.entries = [{ valid: false }, { _title: '+' }];
+  setting = { uiElements: [{}] };
+  comp.uiElementsValid = false;
+  expect(comp.uiElementsHaveValidInputs(setting)).toBe(true);
+
+  comp.form.entries = [{ valid: false }, { _title: '+' }];
+  setting = { uiElements: [{}] };
+  comp.uiElementsValid = false;
+  comp.isEntryEmpty = jest.fn().mockReturnValue(false);
+  expect(comp.uiElementsHaveValidInputs(setting)).toBe(false);
+});
+
+test('isEntryEmpty', () => {
+  let setting = { uiElements: [{ field: 'foo', default: 'default' }] };
+  let entry = { foo: 'default', _title: 'title' };
+  expect(comp.isEntryEmpty(setting, entry)).toBe(true);
+
+  setting = { uiElements: [{ field: 'foo', default: 'default' }] };
+  entry = { foo: 'notDefault', _title: 'title' };
+  expect(comp.isEntryEmpty(setting, entry)).toBe(false);
 });

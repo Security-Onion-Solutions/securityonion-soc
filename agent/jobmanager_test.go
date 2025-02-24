@@ -179,3 +179,10 @@ func TestNoJobReady(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Nil(t, job)
 }
+
+func TestLookupMgmtMac(t *testing.T) {
+	nic := "xyz"
+	jm := &JobManager{}
+	mac := jm.lookupMgmtMac(nic)
+	assert.Equal(t, "missing", mac)
+}

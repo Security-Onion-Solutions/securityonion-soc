@@ -74,7 +74,6 @@ func (status *SoStatus) refresher() {
 			return
 		}
 	}
-	status.running = false
 }
 
 func (status *SoStatus) Stop() error {
@@ -101,32 +100,60 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 	unhealthyNodes := 0
 	nonCriticalNodes := 0
 	awaitingRebootCount := 0
+	allNodes := make([]*model.Node, 0, 0)
 
-	nodes := status.server.Datastore.GetNodes(ctx)
-	for _, node := range nodes {
+	// Process local grid nodes.
+	localNodes := status.server.Datastore.GetNodes(ctx)
+	if status.server.Metrics != nil {
+		for _, node := range localNodes {
+			allNodes = append(allNodes, node)
+			staleMs := int(time.Since(node.UpdateTime) / time.Millisecond)
+			if staleMs > status.offlineThresholdMs {
+				if node.ConnectionStatus != model.NodeStatusFault {
+					logger.WithFields(log.Fields{
+						"nodeId":             node.Id,
+						"staleMs":            staleMs,
+						"offlineThresholdMs": status.offlineThresholdMs,
+					}).Warn("Node has gone offline")
+					node.ConnectionStatus = model.NodeStatusFault
+				}
+			}
 
-		staleMs := int(time.Since(node.UpdateTime) / time.Millisecond)
-		if staleMs > status.offlineThresholdMs {
-			if node.ConnectionStatus != model.NodeStatusFault {
-				logger.WithFields(log.Fields{
-					"nodeId":             node.Id,
-					"staleMs":            staleMs,
-					"offlineThresholdMs": status.offlineThresholdMs,
-				}).Warn("Node has gone offline")
-				node.ConnectionStatus = model.NodeStatusFault
+			if status.server.Metrics.UpdateNodeMetrics(ctx, node) {
+				status.server.Host.Broadcast("node", "nodes", node)
+			}
+			if node.NonCriticalNode {
+				nonCriticalNodes++
 			}
 		}
+		status.currentStatus.Grid.Eps = status.server.Metrics.GetGridEps(ctx)
+	}
+	licensing.ValidateNodeCount(len(localNodes) - nonCriticalNodes)
+	licensing.ValidateSubgridCount(len(status.server.Config.Subgrids))
 
-		updated := false
-		if status.server.Metrics != nil {
-			updated = status.server.Metrics.UpdateNodeMetrics(ctx, node)
+	// Collect subgrid nodes from remote subgrids
+	subgridNodes := make([]*model.Node, 0, 0)
+	for _, subgrid := range status.server.Config.Subgrids {
+		log.WithField("subgridId", subgrid.Id).Info("fetching subgrid status")
+		subnodes, err := subgrid.GetGridNodes()
+		if err != nil {
+			log.WithField("subgridId", subgrid.Id).WithError(err).Error("failed to fetch subgrid status, skipping subgrid")
+			continue
 		}
+		subgridNodes = append(subgridNodes, subnodes...)
+	}
+	status.server.SubgridNodes = subgridNodes
+	allNodes = append(allNodes, subgridNodes...)
+
+	for _, node := range allNodes {
+		updated := false
 
 		logger.WithFields(log.Fields{
 			"Id":               node.Id,
 			"processStatus":    node.ProcessStatus,
 			"raidStatus":       node.RaidStatus,
 			"connectionStatus": node.ConnectionStatus,
+			"nonCriticalNode":  node.NonCriticalNode,
 			"overallStatus":    node.Status,
 			"updated":          updated,
 		}).Debug("Node Status")
@@ -139,39 +166,30 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 			unhealthyNodes++
 		}
 
-		if node.NonCriticalNode {
-			nonCriticalNodes++
-		}
-
 		if node.OsNeedsRestart == 1 {
 			awaitingRebootCount++
 		}
 	}
-	status.currentStatus.Grid.TotalNodeCount = len(nodes)
 	if status.currentStatus.Grid.UnhealthyNodeCount == 0 && unhealthyNodes > 0 {
 		logger.WithFields(log.Fields{
 			"unhealthyNodes": unhealthyNodes,
-			"totalNodes":     len(nodes),
+			"totalNodes":     len(allNodes),
 		}).Warn("Grid has entered an unhealthy state")
 	} else if status.currentStatus.Grid.UnhealthyNodeCount > 0 && unhealthyNodes == 0 {
 		logger.WithFields(log.Fields{
 			"unhealthyNodes": unhealthyNodes,
-			"totalNodes":     len(nodes),
+			"totalNodes":     len(allNodes),
 		}).Info("Grid has returned to a healthy state")
 	}
 	status.currentStatus.Grid.UnhealthyNodeCount = unhealthyNodes
-	if status.server.Metrics != nil {
-		status.currentStatus.Grid.Eps = status.server.Metrics.GetGridEps(ctx)
-	}
 	if status.currentStatus.Grid.AwaitingRebootNodeCount == 0 && awaitingRebootCount > 0 {
 		logger.WithFields(log.Fields{
 			"awaitingRebootCount": awaitingRebootCount,
-			"totalNodes":          len(nodes),
+			"totalNodes":          len(allNodes),
 		}).Info("Grid nodes are awaiting reboot")
 	}
 	status.currentStatus.Grid.AwaitingRebootNodeCount = awaitingRebootCount
-
-	licensing.ValidateNodeCount(status.currentStatus.Grid.TotalNodeCount - nonCriticalNodes)
+	status.currentStatus.Grid.TotalNodeCount = len(allNodes)
 }
 
 func (status *SoStatus) refreshDetections(ctx context.Context) {

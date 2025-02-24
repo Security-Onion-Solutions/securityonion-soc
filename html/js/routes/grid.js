@@ -21,6 +21,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
     headers: [
       { title: "", value: 'expand' },
       { title: "", value: 'indicators' },
+      { title: this.$root.i18n.gridId, value: 'gridId', align: '' },
       { title: this.$root.i18n.id, value: 'id' },
       { title: this.$root.i18n.role, value: 'role', align: ' d-none d-md-table-cell' },
       { title: this.$root.i18n.address, value: 'address', align: ' d-none d-lg-table-cell' },
@@ -120,6 +121,9 @@ routes.push({ path: '/grid', name: 'grid', component: {
       this.$root.subscribe("node", this.updateNode);
       this.$root.subscribe("status", this.updateStatus);
     },
+    hasSubgrids() {
+      return this.$root.subgrids && this.$root.subgrids.length > 0;
+    },
     updateColumnClass(text, wide, size) {
       const column = this.headers.find(function(item) {
         return item.title == text
@@ -139,6 +143,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
       return age < this.staleMetricsMs;
     },
     updateMetricsEnabled() {
+      this.updateColumnClass(this.i18n.gridId, this.hasSubgrids(), 'd-sm-table-cell');
       this.metricsEnabled = !this.nodes.every(function(node) { return !node.metricsEnabled; });
 
       this.updateColumnClass(this.i18n.eps, this.metricsEnabled, 'd-lg-table-cell');

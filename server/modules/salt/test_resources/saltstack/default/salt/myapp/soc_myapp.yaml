@@ -12,5 +12,22 @@ myapp:
     uiElements:
     - field: something
       label: something nice
+      forcedType: bool
+      multiline: false
+      default: true
+      required: false
+      readonly: true
     - field: another
       label: another thing
+      forcedType: "[]string"
+      options:
+      - blue
+      - red
+      - green
+      default: red
+    - field: one more
+      label: But wait there's more
+      multiline: True
+      required: true
+      regex: "^abc$"
+      regexFailureMessage: must conform

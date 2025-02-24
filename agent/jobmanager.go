@@ -9,6 +9,7 @@ package agent
 import (
 	"errors"
 	"io"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -40,8 +41,22 @@ func NewJobManager(agent *Agent) *JobManager {
 	mgr.node.Address = agent.Config.Address
 	mgr.node.Version = agent.Version
 	mgr.node.Model = agent.Config.Model
+	mgr.node.MgmtMac = mgr.lookupMgmtMac(agent.Config.MgmtNic)
 
 	return mgr
+}
+
+func (mgr *JobManager) lookupMgmtMac(nic string) string {
+	filename := "/sys/class/net/" + nic + "/address"
+	mac, err := os.ReadFile(filename)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"mgmtNic":     nic,
+			"macFilename": filename,
+		}).WithError(err).Error("Failed to open MAC address file for NIC")
+		return "missing"
+	}
+	return strings.TrimSpace(string(mac))
 }
 
 func (mgr *JobManager) Start() {
