@@ -970,3 +970,15 @@ ul ul ul {
 #external-tools-list a.v-list-item {
   padding-right: 4px;
 }
+
+#job-common-action {
+  padding-bottom: 0px;
+  border-bottom-left-radius: 0px;
+  border-bottom-right-radius: 0px;
+}
+
+#job-quick-action {
+  padding-top: 0px;
+  border-top-left-radius: 0px;
+  border-top-right-radius: 0px;
+}

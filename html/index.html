@@ -2246,7 +2246,7 @@
                           {{ $root.mgmtMac }}
                           <v-btn icon variant="text" class="mx-2" density="compact" size="small" @click="$root.copyToClipboard($root.mgmtMac)" data-aid="terms_license_copy_mac">
                             <v-icon>fa-copy</v-icon>
-                          </v-btn>      
+                          </v-btn>
                         </v-col>
                       </v-row>
                       <span v-if="$root.licenseKey && ($root.licenseStatus != LICENSE_STATUS_UNPROVISIONED && $root.licenseStatus != LICENSE_STATUS_INVALID)">
@@ -3060,8 +3060,8 @@
             </v-alert>
           </v-col>
         </v-row>
-        <v-menu v-model="quickActionVisible" :position-x="quickActionX" :position-y="quickActionY" absolute data-aid="job_details_context_menu" class="text-white">
-          <v-list id="job-common-action" color="secondary">
+        <v-menu v-model="quickActionVisible" :target="quickActionTarget" data-aid="job_details_context_menu" class="text-white remove-spacer">
+          <v-list id="job-common-action" class="v-theme--dark" color="secondary">
             <v-list-item id="actionCopyValue" density="compact" @click="$root.copyToClipboard(quickActionValue)" data-aid="job_details_context_menu_copy">
               <template #prepend>
                 <v-icon color="white">fa-copy</v-icon>
@@ -3071,7 +3071,7 @@
               </v-list-item-title>
             </v-list-item>
           </v-list>
-          <v-list id="job-quick-action" color="secondary">
+          <v-list id="job-quick-action" class="v-theme--dark" color="secondary">
             <template #activator>
               <v-icon color="white">fa-external-link-alt</v-icon>
               <v-list-item-title class="text-white">
@@ -3080,11 +3080,11 @@
             </template>
             <template v-for="action in actions" :key="action.link">
               <v-list-item density="compact" class="custom-quick-action-button" v-if="action.enabled" :href="action.background ? '' : action.linkFormatted"
-                :title="$root.localizeMessage(action.description)" :target="$root.target(action.target)" @click="$root.performAction($event, action)" :data-aid="'job_details_context_menu_action' + action.name">
+                :target="$root.target(action.target)" @click="$root.performAction($event, action)" :data-aid="'job_details_context_menu_action' + action.name">
                 <template #prepend>
                   <v-icon :alt="action.name" color="white">{{ action.icon }}</v-icon>
                 </template>
-                <v-list-item-title class="text-white">
+                <v-list-item-title class="text-white" :title="$root.localizeMessage(action.description)">
                   {{ $root.localizeMessage(action.name) }}
                 </v-list-item-title>
               </v-list-item>
