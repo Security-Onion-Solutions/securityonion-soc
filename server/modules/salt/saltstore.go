@@ -546,6 +546,8 @@ func (store *Saltstore) updateSettingWithAnnotation(setting *model.Setting, anno
 					log.Error("Invalid annotation; cannot cast to map")
 				}
 			}
+		case "uiElementsDeleteMessage":
+			setting.UiElementsDeleteMessage = value.(string)
 		}
 	}
 }
