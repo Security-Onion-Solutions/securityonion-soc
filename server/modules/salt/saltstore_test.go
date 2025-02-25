@@ -1117,6 +1117,7 @@ func TestUpdateSettingWithAnnotation(tester *testing.T) {
 	annotations["syntax"] = "yaml"
 	annotations["duplicates"] = true
 	annotations["jinjaEscaped"] = true
+	annotations["uiElementsDeleteMessage"] = "hi"
 
 	assert.False(tester, setting.Multiline)
 	salt.updateSettingWithAnnotation(setting, annotations)
@@ -1139,6 +1140,7 @@ func TestUpdateSettingWithAnnotation(tester *testing.T) {
 	assert.Equal(tester, "yaml", setting.Syntax)
 	assert.True(tester, setting.Duplicates)
 	assert.True(tester, setting.JinjaEscaped)
+	assert.Equal(tester, "hi", setting.UiElementsDeleteMessage)
 }
 
 func TestManageUser_AddUser(tester *testing.T) {

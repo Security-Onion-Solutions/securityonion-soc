@@ -88,6 +88,8 @@ type Setting struct {
 	OptionSeparator string `json:"optionSeparator"`
 	// (metadata) List of UiElement objects describing how the UI should present the field for input
 	UiElements []UiElement `json:"uiElements"`
+	// (metadata) Confirmation message to show when user clicks the delete button on a ui element. If omitted, no message will be shown.
+	UiElementsDeleteMessage string `json:"uiElementsDeleteMessage"`
 }
 
 func NewSetting(id string) *Setting {

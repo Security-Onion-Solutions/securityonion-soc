@@ -73,6 +73,7 @@ test('loadData', async () => {
       "syntax": undefined,
       "title": "Farout",
       "uiElements": undefined,
+      "uiElementsDeleteMessage": undefined,
       "value": null,
     },
     {
@@ -101,6 +102,7 @@ test('loadData', async () => {
       "syntax": undefined,
       "title": "CCA",
       "uiElements": undefined,
+      "uiElementsDeleteMessage": undefined,
       "value": undefined,
     },
     {
@@ -129,6 +131,7 @@ test('loadData', async () => {
       "syntax": undefined,
       "title": "Barley",
       "uiElements": undefined,
+      "uiElementsDeleteMessage": undefined,
       "value": undefined,
     }
   ];
@@ -164,6 +167,7 @@ test('loadData', async () => {
               "syntax": undefined,
               "title": "Farout",
               "uiElements": undefined,
+              "uiElementsDeleteMessage": undefined,
               "value": null
             },
             {
@@ -192,6 +196,7 @@ test('loadData', async () => {
               "syntax": undefined,
               "title": "Barley",
               "uiElements": undefined,
+              "uiElementsDeleteMessage": undefined,
               "value": undefined
             }
           ],
@@ -228,6 +233,7 @@ test('loadData', async () => {
       "syntax": undefined,
       "title": "CCA",
       "uiElements": undefined,
+      "uiElementsDeleteMessage": undefined,
       "value": undefined
     }
   ];
@@ -868,17 +874,38 @@ test('markDirtyEntries', () => {
   expect(comp.form.value.length).toBe(13);
 });
 
-test('clearEntry', () => {
+test('showClearEntryDialog', () => {
+  expect(comp.confirmRemoveEntryDialog).toBe(false);
+  const setting = {uiElementsDeleteMessage: 'hi'};
+  comp.showClearEntryDialog(setting, 2);
+  expect(comp.confirmRemoveEntryDialog).toBe(true);
+  expect(comp.confirmRemoveEntryMessage).toBe('hi');
+  expect(comp.confirmRemoveEntryIdx).toBe(2);
+});
+
+test('cancelClearEntry', () => {
+  comp.confirmRemoveEntryDialog = true;
+  comp.confirmRemoveEntryMessage = 'hi';
+  comp.confirmRemoveEntryIdx = 2;
+  comp.cancelClearEntry();
+  expect(comp.confirmRemoveEntryDialog).toBe(false);
+  expect(comp.confirmRemoveEntryMessage).toBe('');
+  expect(comp.confirmRemoveEntryIdx).toBe(0);
+});
+
+test('confirmClearEntry', () => {
   entry = {foo: 'bar', some: 'value', _title: 'title'};
   comp.form.value = 123;
-  comp.clearEntry(entry, 1);
+  comp.form.entries = [entry]
+  comp.confirmRemoveEntryIdx = 0;
+  comp.confirmClearEntry();
   expect(comp.form.value.length).toBe(13);
   expect(entry.foo).toBe('');
   expect(entry.some).toBe('');
-  expect(entry._title).toBe('2. ');
+  expect(entry._title).toBe('1. (pending deletion)');
 
   entry = {foo: 'bar', some: 'value', _title: '+'};
-  comp.clearEntry(entry, 1);
+  comp.confirmClearEntry(entry, 1);
   expect(entry._title).toBe('+');
 });
 

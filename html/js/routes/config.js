@@ -46,6 +46,9 @@ routes.push({
         confirmResetDialog: false,
         treeVisible: true,
         uiElementsValid: false,
+        confirmRemoveEntryDialog: false,
+        confirmRemoveEntryMessage: "",
+        confirmRemoveEntryIdx: 0,
       }
     },
     mounted() {
@@ -199,6 +202,7 @@ routes.push({
         syntax: setting.syntax,
         duplicates: setting.duplicates,
         uiElements: setting.uiElements,
+        uiElementsDeleteMessage: setting.uiElementsDeleteMessage,
         forcedType: setting.forcedType,
         options: setting.options,
         optionSeparator: setting.optionSeparator,
@@ -507,7 +511,13 @@ routes.push({
       }
       return value.trim().length == 0;
     },
-    clearEntry(entry, idx) {
+    cancelClearEntry() {
+      this.confirmRemoveEntryDialog = false;
+      this.confirmRemoveEntryIdx = 0;
+      this.confirmRemoveEntryMessage = "";
+    },
+    confirmClearEntry() {
+      const entry = this.form.entries[this.confirmRemoveEntryIdx];
       for (prop in entry) {
         if (prop != "_title") {
           entry[prop] = "";
@@ -515,12 +525,20 @@ routes.push({
       }
       if (entry._title != "+") {
         this.markDirtyEntries();
-        entry._title = "";
-        this.generateEntryTitle(entry, idx);
+        entry._title = this.generateIndexTitle(this.confirmRemoveEntryIdx, this.i18n.pendingDeletion);
       }
+      this.cancelClearEntry();
+    },
+    showClearEntryDialog(setting, idx) {
+      this.confirmRemoveEntryDialog = true;
+      this.confirmRemoveEntryMessage = setting.uiElementsDeleteMessage;
+      this.confirmRemoveEntryIdx = idx;
     },
     markDirtyEntries() {
       this.form.value = Date.now() + "";
+    },
+    generateIndexTitle(idx, title) {
+      return "" + (idx+1) + ". " + (title ? title : "");
     },
     generateEntryTitle(entry, idx) {
       const setting = this.findActiveSetting();
@@ -528,10 +546,7 @@ routes.push({
       if (setting && setting.uiElements && setting.uiElements.length > 0) {
         title = entry[setting.uiElements[0].field];
       }
-      entry._title = "" + (idx+1) + ". "
-      if (title) {
-        entry._title += title;
-      }
+      entry._title = this.generateIndexTitle(idx, title);
     },
     cancel(force) {
       var setting = this.findActiveSetting();
