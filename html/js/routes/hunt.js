@@ -4,17 +4,6 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-const RELATIVE_TIME_SECONDS = 10;
-const RELATIVE_TIME_MINUTES = 20;
-const RELATIVE_TIME_HOURS   = 30;
-const RELATIVE_TIME_DAYS    = 40;
-const RELATIVE_TIME_WEEKS   = 50;
-const RELATIVE_TIME_MONTHS  = 60;
-const FILTER_INCLUDE = 'INCLUDE';
-const FILTER_EXCLUDE = 'EXCLUDE';
-const FILTER_EXACT = 'EXACT';
-const FILTER_DRILLDOWN = 'DRILLDOWN';
-
 const huntComponent = {
   template: '#page-hunt',
   data() { return {
@@ -1907,7 +1896,7 @@ const huntComponent = {
     setupDateRangePicker() {
       if (this.relativeTimeEnabled) return;
 
-      range = document.getElementById('huntdaterange');
+      // range = document.getElementById('huntdaterange');
       $('#huntdaterange').daterangepicker({
         ranges: this.$root.generateDatePickerPreselects(),
         timePicker: true,

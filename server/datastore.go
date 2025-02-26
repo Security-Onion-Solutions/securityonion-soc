@@ -9,6 +9,7 @@ package server
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
@@ -21,7 +22,7 @@ type Datastore interface {
 	GetNextJob(ctx context.Context, nodeId string) *model.Job
 	CreateJob(ctx context.Context) *model.Job
 	GetJob(ctx context.Context, jobId int) *model.Job
-	GetJobs(ctx context.Context, kind string, parameters map[string]interface{}) []*model.Job
+	GetJobs(ctx context.Context, kind string, parameters map[string]interface{}, startTime *time.Time, endTime *time.Time) []*model.Job
 	AddJob(ctx context.Context, job *model.Job) error
 	AddPivotJob(ctx context.Context, job *model.Job) error
 	UpdateJob(ctx context.Context, job *model.Job) error

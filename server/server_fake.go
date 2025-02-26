@@ -11,6 +11,7 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -134,7 +135,7 @@ func (impl *FakeDatastore) GetJob(ctx context.Context, jobId int) *model.Job {
 	return nil
 }
 
-func (impl *FakeDatastore) GetJobs(ctx context.Context, kind string, parameters map[string]interface{}) []*model.Job {
+func (impl *FakeDatastore) GetJobs(ctx context.Context, kind string, parameters map[string]interface{}, startTime *time.Time, endTime *time.Time) []*model.Job {
 	return impl.jobs
 }
 

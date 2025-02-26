@@ -127,18 +127,18 @@ func TestJobs(tester *testing.T) {
 	assert.Nil(tester, job)
 
 	// Test fetching all default jobs
-	jobs := ds.GetJobs(newContext(), "", nil)
+	jobs := ds.GetJobs(newContext(), "", nil, nil, nil)
 	assert.Len(tester, jobs, 2)
 
 	// Test deleting jobs
 	ds.deleteJob(jobs[0])
-	jobs = ds.GetJobs(newContext(), "", nil)
+	jobs = ds.GetJobs(newContext(), "", nil, nil, nil)
 	assert.Len(tester, jobs, 1)
 	ds.deleteJob(jobs[0])
-	jobs = ds.GetJobs(newContext(), "", nil)
+	jobs = ds.GetJobs(newContext(), "", nil, nil, nil)
 	assert.Len(tester, jobs, 0)
 
-	jobs = ds.GetJobs(newContext(), "foo", nil)
+	jobs = ds.GetJobs(newContext(), "foo", nil, nil, nil)
 	assert.Len(tester, jobs, 1)
 }
 
@@ -223,7 +223,7 @@ func TestJobReadAuthorization(tester *testing.T) {
 	assert.Nil(tester, job)
 
 	// Test fetching all jobs
-	jobs := ds.GetJobs(newContext(), "", nil)
+	jobs := ds.GetJobs(newContext(), "", nil, nil, nil)
 	assert.Len(tester, jobs, 1) // Only has my job
 }
 

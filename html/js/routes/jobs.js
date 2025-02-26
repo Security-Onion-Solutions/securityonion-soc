@@ -40,9 +40,24 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
     },
     footerProps: { 'items-per-page-options': [10,50,250,1000] },
     kind: "",
+    relativeTimeEnabled: true,
+    relativeTimeValue: 24,
+    dateRange: '',
+    relativeTimeUnits: [
+      { title: this.$root.i18n.seconds, value: RELATIVE_TIME_SECONDS },
+      { title: this.$root.i18n.minutes, value: RELATIVE_TIME_MINUTES },
+      { title: this.$root.i18n.hours, value: RELATIVE_TIME_HOURS },
+      { title: this.$root.i18n.days, value: RELATIVE_TIME_DAYS },
+      { title: this.$root.i18n.weeks, value: RELATIVE_TIME_WEEKS },
+      { title: this.$root.i18n.months, value: RELATIVE_TIME_MONTHS }
+    ],
+    relativeTimeUnit: RELATIVE_TIME_HOURS,
+    zone: '',
   }},
   created() {
-    this.loadData();
+    this.zone = moment.tz.guess();
+    this.loadLocalSettings();
+    this.notifyInputsChanged();
   },
   unmounted() {
     this.$root.unsubscribe("job", this.updateJob);
@@ -50,6 +65,8 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
   watch: {
     '$route': 'loadData',
     'sortBy': 'saveLocalSettings',
+    'relativeTimeValue': 'saveLocalSettings',
+    'relativeTimeUnit': 'saveLocalSettings',
     'itemsPerPage': 'saveLocalSettings',
   },
   methods: {
@@ -59,10 +76,19 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
         if (this.$route.query.k) {
           this.kind = this.$route.query.k;
         }
-        const response = await this.$root.papi.get('jobs', { params: { kind: this.kind }});
+        if (this.$route.query.z) {
+          this.zone = this.$route.query.z;
+        }
+        const response = await this.$root.papi.get('jobs', {
+          params: {
+            kind: this.kind,
+            dateRange: this.dateRange,
+            dateRangeFormat: this.i18n.timePickerSample,
+            timezone: this.zone,
+          }
+        });
         this.jobs = response.data;
         this.loadUserDetails();
-        this.loadLocalSettings();
       } catch (error) {
         this.$root.showError(error);
       }
@@ -74,11 +100,18 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
         this.$root.populateUserDetails(this.jobs[i], "userId", "owner");
       }
     },
+    saveTimezone() {
+      localStorage['timezone'] = this.zone;
+    },
     saveLocalSettings() {
       localStorage['settings.jobs.sortBy'] = JSON.stringify(this.sortBy);
       localStorage['settings.jobs.itemsPerPage'] = this.itemsPerPage;
+      localStorage['settings.jobs.relativeTimeValue'] = this.relativeTimeValue;
+      localStorage['settings.jobs.relativeTimeUnit'] = this.relativeTimeUnit;
     },
     loadLocalSettings() {
+      if (localStorage['timezone']) this.zone = localStorage['timezone'];
+
       if (localStorage['settings.jobs.sortBy']) {
         try {
           this.sortBy = JSON.parse(localStorage['settings.jobs.sortBy']);
@@ -94,6 +127,9 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       this.form.dstPort = localStorage['settings.jobs.addJobForm.dstPort'];
       this.form.beginTime = localStorage['settings.jobs.addJobForm.beginTime'];
       this.form.endTime = localStorage['settings.jobs.addJobForm.endTime'];
+
+      this.relativeTimeValue = parseInt(localStorage['settings.jobs.relativeTimeValue']) || 24;
+      this.relativeTimeUnit = localStorage['settings.jobs.relativeTimeUnit'] || RELATIVE_TIME_HOURS;
     },
     updateJob(job) {
       for (var i = 0; i < this.jobs.length; i++) {
@@ -210,6 +246,106 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
         return true;
       }
       return this.kind == kind;
-    }
+    },
+    loading() {
+      return this.$root.loading;
+    },
+    showAbsoluteTime() {
+      this.relativeTimeEnabled = false;
+      setTimeout(this.setupDateRangePicker, 10);
+    },
+    showRelativeTime() {
+      this.relativeTimeEnabled = true;
+      this.notifyInputsChanged();
+    },
+    setupDateRangePicker() {
+      if (this.relativeTimeEnabled) return;
+
+      // range = document.getElementById('jobsdaterange');
+      $('#jobsdaterange').daterangepicker({
+        ranges: this.$root.generateDatePickerPreselects(),
+        timePicker: true,
+        timePickerSeconds: true,
+        endDate: this.getEndDate(),
+        startDate: this.getStartDate(),
+        locale: {
+          format: this.i18n.timePickerFormat
+        }
+      });
+      if (this.dateRange == '') {
+        this.dateRange = $('#jobsdaterange')[0].value;
+      }
+      $('#jobsdaterange').on('hide.daterangepicker', (ev, picker) => {
+        this.hideDateRangePicker();
+      });
+    },
+    showDateRangePicker() {
+      if (this.relativeTimeEnabled) return;
+      $('#jobsdaterange').click();
+    },
+    hideDateRangePicker() {
+      if (this.relativeTimeEnabled) return;
+      this.dateRange = $('#jobsdaterange')[0].value;
+      this.notifyInputsChanged();
+    },
+    getEndDate() {
+      if (this.dateRange != '') {
+        var pieces = this.dateRange.split(" - ");
+        if (pieces.length == 2) {
+          return moment(pieces[1], this.i18n.timePickerFormat);
+        }
+      }
+      return moment();
+    },
+    getStartDate() {
+      if (this.dateRange != '') {
+        var pieces = this.dateRange.split(" - ");
+        if (pieces.length == 2) {
+          return moment(pieces[0], this.i18n.timePickerFormat);
+        }
+      }
+      var unit = "hour";
+      switch (this.relativeTimeUnit) {
+        case RELATIVE_TIME_SECONDS: unit = "seconds"; break;
+        case RELATIVE_TIME_MINUTES: unit = "minutes"; break;
+        case RELATIVE_TIME_HOURS: unit = "hours"; break;
+        case RELATIVE_TIME_DAYS: unit = "days"; break;
+        case RELATIVE_TIME_WEEKS: unit = "weeks"; break;
+        case RELATIVE_TIME_MONTHS: unit = "months"; break;
+      }
+      return moment().subtract(this.relativeTimeValue, unit);
+    },
+    getRelativeTimeUnits() {
+      let text = 'hours';
+
+      this.relativeTimeUnits.forEach((unit) => {
+        if (unit.value == this.relativeTimeUnit) {
+          text = unit.title;
+          return false;
+        }
+      });
+
+      return text;
+    },
+    setRelativeTimeUnits(m) {
+      let value = 30;
+
+      this.relativeTimeUnits.forEach((unit) => {
+        if (unit.title.toLowerCase() == m.toLowerCase()) {
+          value = unit.value;
+          return false;
+        }
+      });
+
+      this.relativeTimeUnit = value;
+    },
+    notifyInputsChanged() {
+      if (this.relativeTimeEnabled) {
+        this.dateRange = '';
+        this.dateRange = this.getStartDate().format(this.i18n.timePickerFormat) + " - " + this.getEndDate().format(this.i18n.timePickerFormat);
+      }
+
+      this.loadData();
+    },
   }
 }});

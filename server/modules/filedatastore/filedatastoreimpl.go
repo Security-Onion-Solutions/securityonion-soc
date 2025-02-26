@@ -25,6 +25,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/packet"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
@@ -54,9 +55,8 @@ func NewFileDatastoreImpl(srv *server.Server) *FileDatastoreImpl {
 
 func (datastore *FileDatastoreImpl) Init(cfg module.ModuleConfig) error {
 	var err error
-	if err == nil {
-		datastore.jobDir, err = module.GetString(cfg, "jobDir")
-	}
+
+	datastore.jobDir, err = module.GetString(cfg, "jobDir")
 	if err == nil {
 		datastore.retryFailureIntervalMs = module.GetIntDefault(cfg, "retryFailureIntervalMs", DEFAULT_RETRY_FAILURE_INTERVAL_MS)
 	}
@@ -237,39 +237,42 @@ func (datastore *FileDatastoreImpl) filterParameterMatches(parameters map[string
 	return true // no parameters specified, so all jobs will match
 }
 
-func (datastore *FileDatastoreImpl) GetJobs(ctx context.Context, kind string, parameters map[string]interface{}) []*model.Job {
+func (datastore *FileDatastoreImpl) GetJobs(ctx context.Context, kind string, parameters map[string]interface{}, startTime *time.Time, endTime *time.Time) []*model.Job {
 	if kind == "" {
 		kind = model.DEFAULT_JOB_KIND
 	}
 
 	datastore.lock.RLock()
 	defer datastore.lock.RUnlock()
+
 	allJobs := make([]*model.Job, 0)
 	for _, job := range datastore.jobsById {
 		if datastore.jobIsAllowed(ctx, job, "read") {
-			if job.GetKind() == kind && datastore.filterParameterMatches(parameters, job.Filter.Parameters) {
+			if job.GetKind() == kind && datastore.filterParameterMatches(parameters, job.Filter.Parameters) &&
+				(startTime == nil || endTime == nil || util.Overlap(*startTime, *endTime, job.CreateTime, job.CompleteTime)) {
 				allJobs = append(allJobs, job)
 			}
 		}
 	}
+
 	return allJobs
 }
 
 func (datastore *FileDatastoreImpl) AddJob(ctx context.Context, job *model.Job) error {
-	var err error
-	if err = datastore.server.CheckAuthorized(ctx, "write", "jobs"); err == nil {
-		if err == nil {
-			err = datastore.addAndSaveJob(ctx, job)
-		}
+	err := datastore.server.CheckAuthorized(ctx, "write", "jobs")
+	if err == nil {
+		err = datastore.addAndSaveJob(ctx, job)
 	}
+
 	return err
 }
 
 func (datastore *FileDatastoreImpl) AddPivotJob(ctx context.Context, job *model.Job) error {
-	var err error
-	if err = datastore.server.CheckAuthorized(ctx, "pivot", "jobs"); err == nil {
+	err := datastore.server.CheckAuthorized(ctx, "pivot", "jobs")
+	if err == nil {
 		err = datastore.addAndSaveJob(ctx, job)
 	}
+
 	return err
 }
 

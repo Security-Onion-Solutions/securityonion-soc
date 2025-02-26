@@ -2776,9 +2776,21 @@
     <script type="text/x-template" id="page-jobs">
       <v-container fluid data-aid="jobs_screen">
         <v-row>
-          <v-col>
+          <v-col cols="12" lg="3">
             <h2 v-if="isKind('pcap')" v-text="i18n.jobs"></h2>
             <h2 v-if="!isKind('pcap')" v-text="kind"></h2>
+          </v-col>
+          <v-col cols="12" lg="5">
+            <v-expansion-panels>
+              <v-expansion-panel data-aid="hunt_options">
+                <v-expansion-panel-title id="jobsOptionsHeader" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">{{i18n.options}}</v-expansion-panel-title>
+                <v-expansion-panel-text>
+                  <span data-aid="timezone_select_jobs">
+                    <v-select :disabled="loading()" @update:model-value="zone = $event; saveTimezone()" v-model="zone" :items="$root.timezones" :hint="i18n.timezoneHelp" persistent-hint variant="underlined" prepend-icon="fa-user-clock" />
+                  </span>
+                </v-expansion-panel-text>
+              </v-expansion-panel>
+            </v-expansion-panels>
           </v-col>
         </v-row>
         <v-row>
@@ -2788,6 +2800,35 @@
                 <v-icon>fa-plus</v-icon>
               </v-btn>
             </v-toolbar>
+            <v-col offset-md="7" class="v-col-md-5 v-col-12">
+              <v-text-field :disabled="loading()" v-if="relativeTimeEnabled" id="jobsrelativetimevalue" @change="notifyInputsChanged" class="mx-2"
+                v-model="relativeTimeValue" :hint="i18n.relativeTimeHelp" persistent-hint type="number" data-aid="relative_time_input_jobs"
+                variant="underlined" density="compact">
+                <template #prepend>
+                  <v-btn v-if="relativeTimeEnabled" icon variant="text" size="x-small" @click="showAbsoluteTime" id="show-absolute-time" data-aid="absolute_time_toggle_jobs">
+                    <v-icon class="theme-icon">fa-history</v-icon>
+                  </v-btn>
+                  <div v-if="relativeTimeEnabled" class="px-4">
+                    {{ i18n.last }}
+                  </div>
+                </template>
+                <template #append>
+                  <span data-aid="relative_time_units_jobs">
+                    <v-select id="jobsRelativeTimeUnit" class="my-n1 py-0 no-details align-self-start" :disabled="loading()" v-if="relativeTimeEnabled" @update:model-value="relativeTimeUnit = $event; notifyInputsChanged()"
+                      v-model="relativeTimeUnit" :items="relativeTimeUnits" variant="plain" />
+                  </span>
+                </template>
+              </v-text-field>
+              <v-text-field variant="underlined" :disabled="loading()" v-if="!relativeTimeEnabled" id="jobsdaterange" @change="notifyInputsChanged" class="mx-2"
+                v-model="dateRange" :hint="i18n.timePickerHelp" persistent-hint
+                prepend-inner-icon="fa-angle-down" @click:prepend-inner="showDateRangePicker" :data-aid="'absolute_time_' + category">
+                <template #prepend>
+                  <v-btn v-if="!relativeTimeEnabled" icon variant="text" size="x-small" @click="showRelativeTime" id="show-relative-time" :data-aid="'relative_time_toggle_' + category">
+                    <v-icon class="theme-icon">fa-calendar-alt</v-icon>
+                  </v-btn>
+                </template>
+              </v-text-field>
+            </v-col>
             <v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" :footer-props="footerProps" :items-per-page="itemsPerPage"
               must-sort :headers="headers" :items="jobs">
               <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
@@ -2814,8 +2855,8 @@
                     </router-link>
                   </td>
                   <td>{{ item.owner }}</td>
-                  <td>{{ formatTimestamp(item.createTime) }}</td>
-                  <td>{{ formatTimestamp(item.completeTime) }}</td>
+                  <td>{{ $root.formatLocalTimestamp(item.createTime, zone) }}</td>
+                  <td>{{ $root.formatLocalTimestamp(item.completeTime, zone) }}</td>
                   <td v-text="item.nodeId"></td>
                   <td><v-chip density="compact" :color="colorJobStatus(item)" data-aid="jobs_status">{{ formatJobStatus(item) }}</v-chip></td>
                   <td>

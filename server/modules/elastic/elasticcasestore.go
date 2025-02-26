@@ -1017,7 +1017,7 @@ func (store *ElasticCasestore) DeleteArtifact(ctx context.Context, id string) er
 			idPair["id"] = id
 			params := make(map[string]interface{})
 			params["artifact"] = idPair
-			jobs := store.server.Datastore.GetJobs(ctx, "analyze", params)
+			jobs := store.server.Datastore.GetJobs(ctx, "analyze", params, nil, nil)
 			for _, job := range jobs {
 				job, err := store.server.Datastore.DeleteJob(ctx, job.Id)
 				if err != nil {

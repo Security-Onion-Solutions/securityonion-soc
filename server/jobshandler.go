@@ -8,7 +8,10 @@ package server
 
 import (
 	"net/http"
+	"strings"
+	"time"
 
+	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/json"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
@@ -46,6 +49,41 @@ func (h *JobsHandler) getJobs(w http.ResponseWriter, r *http.Request) {
 
 	kind := r.URL.Query().Get("kind")
 	paramsStr := r.URL.Query().Get("parameters")
+	dateRange := r.URL.Query().Get("dateRange")
+	dateRangeFormat := r.URL.Query().Get("dateRangeFormat")
+	timezone := r.URL.Query().Get("timezone")
+
+	var start, end *time.Time
+
+	if dateRange != "" {
+		datePieces := strings.SplitN(dateRange, " - ", 2)
+
+		loc, err := time.LoadLocation(timezone)
+		if err != nil {
+			log.WithField("timezone", timezone).Info("invalid timezone provided by client")
+			loc, _ = time.LoadLocation("UTC")
+		}
+
+		if len(datePieces) != 2 {
+			web.Respond(w, r, http.StatusBadRequest, "invalid date range format")
+			return
+		}
+
+		s, err := time.ParseInLocation(dateRangeFormat, strings.Trim(datePieces[0], " "), loc)
+		if err != nil {
+			web.Respond(w, r, http.StatusBadRequest, "invalid start date")
+			return
+		}
+
+		e, err := time.ParseInLocation(dateRangeFormat, strings.Trim(datePieces[1], " "), loc)
+		if err != nil {
+			web.Respond(w, r, http.StatusBadRequest, "invalid end date")
+			return
+		}
+
+		start = &s
+		end = &e
+	}
 
 	params := map[string]interface{}{}
 	if paramsStr != "" {
@@ -56,7 +94,7 @@ func (h *JobsHandler) getJobs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	jobs := h.server.Datastore.GetJobs(ctx, kind, params)
+	jobs := h.server.Datastore.GetJobs(ctx, kind, params, start, end)
 
 	web.Respond(w, r, http.StatusOK, jobs)
 }
