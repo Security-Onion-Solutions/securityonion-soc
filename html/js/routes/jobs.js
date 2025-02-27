@@ -35,17 +35,16 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       srcPort: null,
       dstIp: null,
       dstPort: null,
-      beginTime: null,
-      endTime: null,
+      timeframe: '',
     },
     footerProps: { 'items-per-page-options': [10,50,250,1000] },
-    kind: "",
+    kind: '',
   }},
   created() {
     this.loadData();
   },
   unmounted() {
-    this.$root.unsubscribe("job", this.updateJob);
+    this.$root.unsubscribe('job', this.updateJob);
   },
   watch: {
     '$route': 'loadData',
@@ -71,7 +70,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
     },
     loadUserDetails() {
       for (var i = 0; i < this.jobs.length; i++) {
-        this.$root.populateUserDetails(this.jobs[i], "userId", "owner");
+        this.$root.populateUserDetails(this.jobs[i], 'userId', 'owner');
       }
     },
     saveLocalSettings() {
@@ -109,7 +108,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       }
     },
     submitAddJob(event) {
-      this.addJob(this.form.sensorId, this.form.importId, this.form.protocol, this.form.srcIp, this.form.srcPort, this.form.dstIp, this.form.dstPort, this.form.beginTime, this.form.endTime);
+      this.addJob(this.form.sensorId, this.form.importId, this.form.protocol, this.form.srcIp, this.form.srcPort, this.form.dstIp, this.form.dstPort, this.form.timeframe);
       this.dialog = false;
       this.saveAddJobForm();
     },
@@ -121,8 +120,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       if (this.form.srcPort) localStorage['settings.jobs.addJobForm.srcPort'] = this.form.srcPort;
       if (this.form.dstIp) localStorage['settings.jobs.addJobForm.dstIp'] = this.form.dstIp;
       if (this.form.dstPort) localStorage['settings.jobs.addJobForm.dstPort'] = this.form.dstPort;
-      if (this.form.beginTime) localStorage['settings.jobs.addJobForm.beginTime'] = this.form.beginTime;
-      if (this.form.endTime) localStorage['settings.jobs.addJobForm.endTime'] = this.form.endTime;
+      if (this.form.timeframe) localStorage['settings.jobs.addJobForm.timeframe'] = this.form.timeframe;
     },
     clearAddJobForm() {
       this.form.sensorId = null;
@@ -132,8 +130,8 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       this.form.srcPort = null;
       this.form.dstIp = null;
       this.form.dstPort = null;
-      this.form.beginTime = null;
-      this.form.endTime = null;
+      this.form.timeframe = '';
+      $('#jobtimeframe').val('');
       localStorage.removeItem('settings.jobs.addJobForm.sensorId');
       localStorage.removeItem('settings.jobs.addJobForm.importId');
       localStorage.removeItem('settings.jobs.addJobForm.protocol');
@@ -141,10 +139,9 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
       localStorage.removeItem('settings.jobs.addJobForm.srcPort');
       localStorage.removeItem('settings.jobs.addJobForm.dstIp');
       localStorage.removeItem('settings.jobs.addJobForm.dstPort');
-      localStorage.removeItem('settings.jobs.addJobForm.beginTime');
-      localStorage.removeItem('settings.jobs.addJobForm.endTime');
+      localStorage.removeItem('settings.jobs.addJobForm.timeframe');
     },
-    async addJob(sensorId, importId, protocol, srcIp, srcPort, dstIp, dstPort, beginTime, endTime) {
+    async addJob(sensorId, importId, protocol, srcIp, srcPort, dstIp, dstPort, timeframe) {
       try {
         if (!sensorId) {
           this.$root.showError(this.i18n.sensorIdRequired);
@@ -152,6 +149,7 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
           if (protocol) {
             protocol = protocol.toLowerCase();
           }
+          const [beginTime, endTime] = timeframe.split(' - ', 2);
           const beginDate = moment(beginTime);
           const endDate = moment(endTime);
           const response = await this.$root.papi.post('job/', {
@@ -210,6 +208,52 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
         return true;
       }
       return this.kind == kind;
-    }
+    },
+    openNewJobDialog() {
+      this.dialog = true;
+      this.$nextTick(() => {
+        this.setupDateRangePicker();
+      })
+    },
+    setupDateRangePicker() {
+      $('#jobtimeframe').daterangepicker({
+        ranges: this.$root.generateDatePickerPreselects(),
+        timePicker: true,
+        timePickerSeconds: true,
+        alwaysShowCalendars: true,
+        locale: {
+          format: this.i18n.timePickerFormat
+        },
+        drops: 'up',
+        autoUpdateInput: false,
+      });
+      if (this.form.timeframe == '') {
+        this.form.timeframe = $('#jobtimeframe')[0].value;
+      }
+      const route = this;
+      $('#jobtimeframe').on('apply.daterangepicker', function (ev, picker) {
+        const value = picker.startDate.format(route.i18n.timePickerFormat) + ' - ' + picker.endDate.format(route.i18n.timePickerFormat)
+        $(this).val(value);
+      });
+    },
+    getEndDate() {
+      if (this.form.timeframe != '') {
+        var pieces = this.form.timeframe.split(' - ');
+        if (pieces.length == 2) {
+          return moment(pieces[1], this.i18n.timePickerFormat);
+        }
+      }
+      return moment();
+    },
+    getStartDate() {
+      if (this.form.timeframe != '') {
+        var pieces = this.form.timeframe.split(' - ');
+        if (pieces.length == 2) {
+          return moment(pieces[0], this.i18n.timePickerFormat);
+        }
+      }
+
+      return moment().subtract(24, 'hours');
+    },
   }
 }});
