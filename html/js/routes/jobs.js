@@ -149,9 +149,15 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
           if (protocol) {
             protocol = protocol.toLowerCase();
           }
-          const [beginTime, endTime] = timeframe.split(' - ', 2);
-          const beginDate = moment(beginTime);
-          const endDate = moment(endTime);
+
+          let beginDate = ''
+          let endDate = '';
+          if (timeframe) {
+            const [beginTime, endTime] = timeframe.split(' - ', 2);
+            beginDate = moment(beginTime, this.i18n.timePickerFormat).format(this.i18n.timestampFormat);
+            endDate = moment(endTime, this.i18n.timePickerFormat).format(this.i18n.timestampFormat);
+          }
+
           const response = await this.$root.papi.post('job/', {
             nodeId: sensorId,
             filter: {
@@ -235,25 +241,6 @@ routes.push({ path: '/jobs', name: 'jobs', component: {
         const value = picker.startDate.format(route.i18n.timePickerFormat) + ' - ' + picker.endDate.format(route.i18n.timePickerFormat)
         $(this).val(value);
       });
-    },
-    getEndDate() {
-      if (this.form.timeframe != '') {
-        var pieces = this.form.timeframe.split(' - ');
-        if (pieces.length == 2) {
-          return moment(pieces[1], this.i18n.timePickerFormat);
-        }
-      }
-      return moment();
-    },
-    getStartDate() {
-      if (this.form.timeframe != '') {
-        var pieces = this.form.timeframe.split(' - ');
-        if (pieces.length == 2) {
-          return moment(pieces[0], this.i18n.timePickerFormat);
-        }
-      }
-
-      return moment().subtract(24, 'hours');
     },
   }
 }});
