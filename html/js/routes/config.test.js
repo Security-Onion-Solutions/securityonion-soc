@@ -1015,3 +1015,23 @@ test('isEntryEmpty', () => {
   entry = { foo: 'notDefault', _title: 'title' };
   expect(comp.isEntryEmpty(setting, entry)).toBe(false);
 });
+
+test('convertMultilineElement', () => {
+  let element = { field: 'foo', multiline: true, forcedType: '[]string' };
+  let modifiedEntry = { foo: 'bar\ncar\n' };
+
+  comp.convertMultilineElement(element, modifiedEntry, false);
+  expect(modifiedEntry.foo).toEqual(['bar', 'car']);
+
+  comp.convertMultilineElement(element, modifiedEntry, true);
+  expect(modifiedEntry.foo).toBe('bar\ncar');
+
+  element = { field: 'foo', multiline: true, forcedType: '[]string' };
+  modifiedEntry = { foo: null };
+
+  comp.convertMultilineElement(element, modifiedEntry, false);
+  expect(modifiedEntry.foo).toEqual([]);
+
+  comp.convertMultilineElement(element, modifiedEntry, true);
+  expect(modifiedEntry.foo).toBe('');
+});
