@@ -68,6 +68,6 @@ func TestImportAuth(t *testing.T) {
 
 	h.postImport(w, r)
 
-	assert.Equal(t, 401, w.Code)
-	assert.Equal(t, web.GENERIC_ERROR_MESSAGE, w.Body.String())
+	assert.Equal(t, 403, w.Code)
+	assert.Equal(t, "ERROR_PERMISSION_DENIED", w.Body.String())
 }

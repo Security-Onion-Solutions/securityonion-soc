@@ -121,21 +121,6 @@ routes.push({ path: '/grid', name: 'grid', component: {
       this.$root.subscribe("node", this.updateNode);
       this.$root.subscribe("status", this.updateStatus);
     },
-    hasSubgrids() {
-      return this.$root.subgrids && this.$root.subgrids.length > 0;
-    },
-    updateColumnClass(text, wide, size) {
-      const column = this.headers.find(function(item) {
-        return item.title == text
-      });
-      if (column) {
-        if (!wide) {
-          column.align = ' d-none';
-        } else {
-          column.align = ' d-none ' + size;
-        }
-      }
-    },
     areMetricsCurrent(node) {
       const lastUpdated = Date.parse(node["updateTime"]);
       const now = Date.now();
@@ -143,23 +128,23 @@ routes.push({ path: '/grid', name: 'grid', component: {
       return age < this.staleMetricsMs;
     },
     updateMetricsEnabled() {
-      this.updateColumnClass(this.i18n.gridId, this.hasSubgrids(), 'd-sm-table-cell');
+      this.$root.adjustSubgridColVisibility(this.headers);
       this.metricsEnabled = !this.nodes.every(function(node) { return !node.metricsEnabled; });
 
-      this.updateColumnClass(this.i18n.eps, this.metricsEnabled, 'd-lg-table-cell');
-      this.updateColumnClass(this.i18n.memUsageAbbr, this.metricsEnabled, 'd-xl-table-cell');
-      this.updateColumnClass(this.i18n.diskUsageRootAbbr, this.metricsEnabled, 'd-xl-table-cell');
-      this.updateColumnClass(this.i18n.diskUsageNsmAbbr, this.metricsEnabled, 'd-xl-table-cell');
-      this.updateColumnClass(this.i18n.cpuUsageAbbr, this.metricsEnabled, 'd-xl-table-cell');
-      this.updateColumnClass(this.i18n.trafficManInAbbr, this.metricsEnabled, 'd-xl-table-cell');
-      this.updateColumnClass(this.i18n.trafficManOutAbbr, this.metricsEnabled, 'd-xl-table-cell');
-      this.updateColumnClass(this.i18n.trafficMonInAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
-      this.updateColumnClass(this.i18n.trafficMonInDropsAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
-      this.updateColumnClass(this.i18n.captureLossAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
-      this.updateColumnClass(this.i18n.zeekLossAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
-      this.updateColumnClass(this.i18n.suricataLossAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
-      this.updateColumnClass(this.i18n.stenoLossAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
-      this.updateColumnClass(this.i18n.pcapRetentionAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
+      this.$root.updateColumnClass(this.headers, this.i18n.eps, this.metricsEnabled, 'd-lg-table-cell');
+      this.$root.updateColumnClass(this.headers, this.i18n.memUsageAbbr, this.metricsEnabled, 'd-xl-table-cell');
+      this.$root.updateColumnClass(this.headers, this.i18n.diskUsageRootAbbr, this.metricsEnabled, 'd-xl-table-cell');
+      this.$root.updateColumnClass(this.headers, this.i18n.diskUsageNsmAbbr, this.metricsEnabled, 'd-xl-table-cell');
+      this.$root.updateColumnClass(this.headers, this.i18n.cpuUsageAbbr, this.metricsEnabled, 'd-xl-table-cell');
+      this.$root.updateColumnClass(this.headers, this.i18n.trafficManInAbbr, this.metricsEnabled, 'd-xl-table-cell');
+      this.$root.updateColumnClass(this.headers, this.i18n.trafficManOutAbbr, this.metricsEnabled, 'd-xl-table-cell');
+      this.$root.updateColumnClass(this.headers, this.i18n.trafficMonInAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
+      this.$root.updateColumnClass(this.headers, this.i18n.trafficMonInDropsAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
+      this.$root.updateColumnClass(this.headers, this.i18n.captureLossAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
+      this.$root.updateColumnClass(this.headers, this.i18n.zeekLossAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
+      this.$root.updateColumnClass(this.headers, this.i18n.suricataLossAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
+      this.$root.updateColumnClass(this.headers, this.i18n.stenoLossAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
+      this.$root.updateColumnClass(this.headers, this.i18n.pcapRetentionAbbr, this.metricsEnabled && this.moreColumns, 'd-xl-table-cell');
     },
     showHeader(header) {
       let show = true;

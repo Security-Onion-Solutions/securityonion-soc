@@ -45,6 +45,7 @@ const FEAT_GMD = "gmd"
 const FEAT_LKS = "lks"
 const FEAT_NTF = "ntf"
 const FEAT_ODC = "odc"
+const FEAT_QRY = "qry"
 const FEAT_STG = "stg"
 const FEAT_TTR = "ttr"
 const FEAT_RPT = "rpt"
@@ -189,6 +190,7 @@ func CreateAvailableFeatureList() []string {
 	available = append(available, FEAT_LKS)
 	available = append(available, FEAT_NTF)
 	available = append(available, FEAT_ODC)
+	available = append(available, FEAT_QRY)
 	available = append(available, FEAT_STG)
 	available = append(available, FEAT_TTR)
 	available = append(available, FEAT_RPT)
@@ -583,10 +585,10 @@ func ValidateFeature(feature string, detected bool) bool {
 }
 
 func ValidateSubgridCount(count int) bool {
-	if manager == nil {
+	if manager == nil || count == 0 {
 		return true
 	}
-	ok := manager.licenseKey.Subgrids >= count
+	ok := manager.status == LICENSE_STATUS_ACTIVE && manager.licenseKey.Subgrids >= count
 	return checkExceeded("subgrids", ok)
 }
 

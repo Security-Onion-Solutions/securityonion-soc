@@ -2099,8 +2099,8 @@ func TestHandlerDeleteDetection(t *testing.T) {
 
 				mDetStore.EXPECT().DeleteDetection(gomock.Any(), "12345").Return(nil, model.NewUnauthorized("", "write", "detections"))
 			},
-			Code:     401,
-			Response: []byte(`The request could not be processed.`),
+			Code:     403,
+			Response: []byte(`ERROR_PERMISSION_DENIED`),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -2596,8 +2596,8 @@ func TestHandlerBulkUpdateDetection(t *testing.T) {
 			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller, _ *sync.WaitGroup) (*sync.WaitGroup, *MockBroadcaster) {
 				return nil, nil
 			},
-			Code:     401,
-			Response: []byte(`The request could not be processed.`),
+			Code:     403,
+			Response: []byte(`ERROR_PERMISSION_DENIED`),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -3519,8 +3519,8 @@ func TestHandlerSyncEngineDetections(t *testing.T) {
 			Engine:   string(model.EngineNameElastAlert),
 			SyncType: "full",
 			InitMock: func(srv *Server, ctrl *gomock.Controller) {},
-			Code:     401,
-			Response: []byte(`The request could not be processed.`),
+			Code:     403,
+			Response: []byte(`ERROR_PERMISSION_DENIED`),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
