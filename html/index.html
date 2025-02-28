@@ -286,6 +286,12 @@
                 </template>
                 <v-list-item-title v-text="i18n.clients"></v-list-item-title>
               </v-list-item>
+              <v-list-item v-if="isLicensed('qry')" data-aid="nav_admin_active_queries" v-if="$root.isUserAdmin()" @click="" to="/queries">
+                <template #prepend>
+                  <v-icon>fa-clock</v-icon>
+                </template>
+                <v-list-item-title v-text="i18n.activeQueries"></v-list-item-title>
+              </v-list-item>
               <v-list-item data-aid="nav_admin_members" v-if="$root.isUserAdmin()" @click="" to="/gridmembers">
                 <template #prepend>
                   <v-icon>fa-circle-nodes</v-icon>
@@ -4772,7 +4778,7 @@
                   <td>
                     <v-icon v-if="item.status != NodeStatusOk" :id="'nodeFaultIcon_' + item.id" :color="colorNodeStatus(item.status, item.nonCriticalNode)" data-aid="grid_node_icon_status_display">{{ iconNodeStatus(item.status) }}</v-icon>
                   </td>
-                  <td v-if="hasSubgrids()" :id="'nodeGridId_' + item.id" v-text="item.gridId ? item.gridId : i18n.gridLocal"></td>
+                  <td v-if="$root.hasSubgrids()" :id="'nodeGridId_' + item.id" v-text="item.gridId ? item.gridId : i18n.gridLocal"></td>
                   <td :id="'nodeId_' + item.id" v-text="item.id"></td>
                   <td :id="'nodeRole_' + item.id" v-text="$root.localizeMessage(item.role)" class="d-none d-md-table-cell"></td>
                   <td :id="'nodeAddress_' + item.id" v-text="item.address" class="d-none d-lg-table-cell"></td>
@@ -4834,7 +4840,7 @@
                           <v-card>
                             <v-card-title v-text="i18n.nodeStatus"/>
                             <v-card-text>
-                              <div v-if="hasSubgrids" class="text-no-wrap">
+                              <div v-if="$root.hasSubgrids" class="text-no-wrap">
                                 <span class="filter label">{{ i18n.gridId }}:</span>
                                 <span id="node_grid_id" class="filter value">{{ item.gridId ? item.gridId : i18n.gridLocal }}</span>
                               </div>
@@ -6441,6 +6447,7 @@
     <script src="js/routes/terms.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/users.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/detection.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/queries.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/custom.js?v=VERSION_PLACEHOLDER"></script>
   </body>
 </html>

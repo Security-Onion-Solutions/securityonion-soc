@@ -21,4 +21,6 @@ type Eventstore interface {
 	Update(context context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error)
 	Delete(context context.Context, index string, id string) error
 	Acknowledge(context context.Context, criteria *model.EventAckCriteria) (*model.EventUpdateResults, error)
+	GetActiveQueries(context context.Context, filter bool) ([]*model.QueryTask, error)
+	CancelQuery(context context.Context, queryId string) error
 }

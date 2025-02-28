@@ -31,6 +31,8 @@ nodes/read:       node-monitor
 nodes/write:      node-admin
 permissions/read: client-monitor
 permissions/write: client-admin
+queries/read:     query-monitor
+queries/delete:   query-admin
 roles/read:       user-monitor
 roles/write:      user-admin
 users/read:       user-monitor
@@ -50,4 +52,5 @@ grid-monitor:      grid-admin
 job-monitor:       job-admin
 job-user:          job-admin
 node-monitor:      node-admin
+query-monitor:     query-admin
 user-monitor:      user-admin

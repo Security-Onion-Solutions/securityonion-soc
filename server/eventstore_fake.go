@@ -8,6 +8,8 @@ package server
 
 import (
 	"context"
+	"errors"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
@@ -142,4 +144,31 @@ func (store *FakeEventstore) Scroll(context context.Context, criteria *model.Eve
 	result := store.ScrollResults[store.scrollCount]
 	store.scrollCount += 1
 	return result, store.Err
+}
+
+func (store *FakeEventstore) GetActiveQueries(context context.Context, filter bool) ([]*model.QueryTask, error) {
+	fakeTask1 := &model.QueryTask{
+		GridId:      "abc",
+		TaskId:      "abc:123",
+		Details:     "something",
+		Cancellable: false,
+		StartTime:   time.Now(),
+	}
+
+	fakeTask2 := &model.QueryTask{
+		GridId:      "",
+		TaskId:      "xyz:456",
+		Details:     "something else",
+		Cancellable: true,
+		StartTime:   time.Now(),
+	}
+
+	tasks := make([]*model.QueryTask, 0)
+	tasks = append(tasks, fakeTask1)
+	tasks = append(tasks, fakeTask2)
+	return tasks, nil
+}
+
+func (store *FakeEventstore) CancelQuery(context context.Context, queryId string) error {
+	return errors.New("query not found")
 }
