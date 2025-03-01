@@ -783,19 +783,19 @@ test('hasUiElements', () => {
 
 test('pack_unpack', () => {
   comp.form.value = "{}"
-  comp.form.entries = [{foo: 'bar', _title:'ignore'},{_title:'empty'}];
-  setting = {id: 'myid', uiElements:[{field: 'foo', label:'some fooness'}], syntax: 'json'}
+  comp.form.entries = [{foo: 'bar\ncar', _title:'ignore'},{_title:'empty'}];
+  setting = {id: 'myid', uiElements:[{field: 'foo', label:'some fooness', multiline: true, forcedType: "[]string"}], syntax: 'json'}
   comp.pack(setting);
-  expect(comp.form.value).toBe('[{"foo":"bar"}]')
+  expect(comp.form.value).toBe('[{"foo":["bar","car"]}]')
 
   comp.form.entries = null;
-  setting.value = '[{"foo":"bar"}]';
+  setting.value = '[{"foo":["bar", "car"]}]';
   comp.settings = [setting];
   comp.active = ['myid'];
   comp.unpack(setting);
   expect(comp.form.entries.length).toBe(2);
-  expect(comp.form.entries[0].foo).toBe('bar');
-  expect(comp.form.entries[0]._title).toBe('1. bar');
+  expect(comp.form.entries[0].foo).toBe('bar\ncar');
+  expect(comp.form.entries[0]._title).toBe('1. bar,car');
   expect(comp.form.entries[1]._title).toBe('+');
 });
 
@@ -1014,4 +1014,24 @@ test('isEntryEmpty', () => {
   setting = { uiElements: [{ field: 'foo', default: 'default' }] };
   entry = { foo: 'notDefault', _title: 'title' };
   expect(comp.isEntryEmpty(setting, entry)).toBe(false);
+});
+
+test('convertMultilineElement', () => {
+  let element = { field: 'foo', multiline: true, forcedType: '[]string' };
+  let modifiedEntry = { foo: 'bar\ncar\n' };
+
+  comp.convertMultilineElement(element, modifiedEntry, false);
+  expect(modifiedEntry.foo).toEqual(['bar', 'car']);
+
+  comp.convertMultilineElement(element, modifiedEntry, true);
+  expect(modifiedEntry.foo).toBe('bar\ncar');
+
+  element = { field: 'foo', multiline: true, forcedType: '[]string' };
+  modifiedEntry = { foo: null };
+
+  comp.convertMultilineElement(element, modifiedEntry, false);
+  expect(modifiedEntry.foo).toEqual([]);
+
+  comp.convertMultilineElement(element, modifiedEntry, true);
+  expect(modifiedEntry.foo).toBe('');
 });

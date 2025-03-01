@@ -44,9 +44,9 @@ func RegisterQueryRoutes(srv *Server, r chi.Router, prefix string) {
 // @Tags         Query
 // @Param        filter  query  bool  false  "If set to true the internal, child, uncancellable, and related queries will be filtered out of the results" example(true)
 // @Produce      application/json
-// @Success      200        "The list of active queries"
+// @Success      200    {array}  model.QueryTask    "The list of active queries"
 // @Failure      401        "Request was not properly authenticated"
-// @Failure      403        "Insufficiant permissions for this request"
+// @Failure      403        "Insufficient permissions for this request"
 // @Failure      500        "Internal SOC error; review SOC logs"
 // @Router       /connect/query/active [get]
 func (h *QueryHandler) getActiveQueries(w http.ResponseWriter, r *http.Request) {
@@ -76,7 +76,7 @@ func (h *QueryHandler) getActiveQueries(w http.ResponseWriter, r *http.Request) 
 // @Failure      400        "Query could not be cancelled"
 // @Failure      404        "Query was not found"
 // @Failure      401        "Request was not properly authenticated"
-// @Failure      403        "Insufficiant permissions for this request"
+// @Failure      403        "Insufficient permissions for this request"
 // @Failure      500        "Internal SOC error; review SOC logs"
 // @Router       /connect/query/cancel/{queryId} [get]
 func (h *QueryHandler) postCancelQuery(w http.ResponseWriter, r *http.Request) {

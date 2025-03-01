@@ -414,6 +414,9 @@ routes.push({
           }
           for (let [idx, entry] of this.form.entries.entries()) {
             this.generateEntryTitle(entry, idx);
+            setting.uiElements.forEach((element) => {
+              this.convertMultilineElement(element, entry, true);
+            });
           }
         } else {
           this.form.entries = [];
@@ -431,6 +434,9 @@ routes.push({
           const tmpEntry = Object.assign({}, entry);
           delete tmpEntry._title;
           if (!this.isEntryEmpty(setting, tmpEntry)) {
+            setting.uiElements.forEach((element) => {
+              this.convertMultilineElement(element, tmpEntry, false);
+            });
             tmpEntries.push(tmpEntry);
             if (isArrayOfObjects) {
               if (value.length > 0) {
@@ -536,6 +542,26 @@ routes.push({
     },
     markDirtyEntries() {
       this.form.value = Date.now() + "";
+    },
+    convertMultilineElement(element, modifiedEntry, toString) {
+      if (modifiedEntry && this.hasMultipleValues(element) && this.isMultiline(element)) {
+        var value = modifiedEntry[element.field];
+
+        if (toString) {
+          if (value && value.join != null) {
+            value = value.join("\n");
+          } else {
+            value = ""
+          }
+        } else {
+          if (value && value.trim != null) {
+            value = value.trim().split("\n");
+          } else {
+            value = [];
+          }
+        }
+        modifiedEntry[element.field] = value;
+      }
     },
     generateIndexTitle(idx, title) {
       return "" + (idx+1) + ". " + (title ? title : "");
@@ -689,7 +715,13 @@ routes.push({
           } else {
             setting.nodeValues.set(nodeId, this.form.value);
           }
-          this.cancel(true);
+
+          // Do not exit edit mode when working with UI Elements
+          if (!setting.uiElements) {
+            this.cancel(true);
+          } else {
+            this.unpack(setting);
+          }
 
           this.countCustomized();
 
