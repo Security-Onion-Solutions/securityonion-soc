@@ -45,3 +45,26 @@ test('addJob', async () => {
 
 	expect(comp.jobs).toEqual(['addJobResponse']);
 });
+
+test('addJob - minimal', async () => {
+	resetPapi();
+	const mock = mockPapi('post', { data: 'addJobResponse' });
+	comp.jobs = [];
+
+	await comp.addJob('manager');
+
+	expect(mock).toHaveBeenCalledTimes(1);
+	expect(mock).toHaveBeenCalledWith('job/', {
+		nodeId: 'manager',
+		filter: {
+			importId: undefined,
+			protocol: undefined,
+			srcIp: undefined,
+			srcPort: NaN,
+			dstIp: undefined,
+			dstPort: NaN,
+		}
+	});
+
+	expect(comp.jobs).toEqual(['addJobResponse']);
+});
